@@ -74,9 +74,9 @@ git tag 0.1.0a1 && git push origin 0.1.0a1
 The tag has no `v`. The run waits in the `pypi` environment for a reviewer to
 approve the upload.
 
-To try the whole path first, run the `Wheels` workflow by hand with
-`testpypi` checked. It publishes the run's files to TestPyPI and skips a
-version already there.
+`Wheels` runs on a tag and by hand, not on every push. Before a release that
+touched the build (crates, dependencies, `ui-dist/`, the toolchain), run it by
+hand on the branch: it builds and checks every platform without publishing.
 
 ## The changelog
 
@@ -95,7 +95,7 @@ The GitHub release notes carry the same text.
 ## Once, on the publishing side
 
 Trusted publishing needs a publisher on PyPI (owner `tracepanel`, repository
-`tracepanel`, workflow `wheels.yml`, environment `pypi`), the same on TestPyPI
-with the environment `testpypi`, and both environments on GitHub. Without them
-the run is green up to the upload and fails there with `invalid-publisher`. The
-`pypi` environment is where the required reviewer goes.
+`tracepanel`, workflow `wheels.yml`, environment `pypi`) and the `pypi`
+environment on GitHub. Without them the run is green up to the upload and fails
+there with `invalid-publisher`. The `pypi` environment is where the required
+reviewer goes.
