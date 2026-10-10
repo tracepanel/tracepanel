@@ -69,9 +69,10 @@ uv run --no-project --with ruff scripts/lint_docs.py
 ## Build the package
 
 `uv build` makes the sdist and, from it, a wheel for this machine. Maturin is
-the build backend. Release files come from the `Wheels` workflow only: it builds
-every platform's wheel and publishes with `uv publish`. Releasing is described
-in `.claude/skills/release/SKILL.md`.
+the build backend. Release files come from CI only: the `Wheels` workflow builds
+and checks every platform's wheel, and `Release` publishes them with
+`uv publish` on a tag. Releasing is described in
+`.claude/skills/release/SKILL.md`.
 
 ## Update dependencies
 

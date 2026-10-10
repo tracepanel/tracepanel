@@ -6,10 +6,11 @@ description: "Cut a release of the tracepanel-agent package from this repository
 # Releasing tracepanel-agent
 
 A release is a version bump, a changelog entry and a tag. Publishing is
-automatic: `.github/workflows/wheels.yml` runs on a tag that names a version,
-builds a wheel for every platform and the sdist, runs each wheel on its
-platform, checks the tag against the version, and uploads to PyPI with
-`uv publish` through trusted publishing. No token lives in the repository.
+automatic: `.github/workflows/release.yml` runs on a tag that names a version.
+It checks the tag against the version, runs `wheels.yml` to build a wheel for
+every platform and the sdist and to run each wheel on its platform, and uploads
+them to PyPI with `uv publish` through trusted publishing. No token lives in the
+repository.
 
 ## Before you start
 
@@ -74,9 +75,10 @@ git tag 0.1.0a1 && git push origin 0.1.0a1
 The tag has no `v`. The run waits in the `pypi` environment for a reviewer to
 approve the upload.
 
-`Wheels` runs on a tag and by hand, not on every push. Before a release that
-touched the build (crates, dependencies, `ui-dist/`, the toolchain), run it by
-hand on the branch: it builds and checks every platform without publishing.
+`Wheels` publishes nothing and runs by hand or from the release, not on every
+push. Before a release that touched the build (crates, dependencies,
+`ui-dist/`, the toolchain), run it by hand on the branch: it builds and checks
+every platform.
 
 ## The changelog
 
@@ -95,7 +97,7 @@ The GitHub release notes carry the same text.
 ## Once, on the publishing side
 
 Trusted publishing needs a publisher on PyPI (owner `tracepanel`, repository
-`tracepanel`, workflow `wheels.yml`, environment `pypi`) and the `pypi`
+`tracepanel`, workflow `release.yml`, environment `pypi`) and the `pypi`
 environment on GitHub. Without them the run is green up to the upload and fails
 there with `invalid-publisher`. The `pypi` environment is where the required
 reviewer goes.

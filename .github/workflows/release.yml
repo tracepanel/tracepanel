@@ -1,0 +1,61 @@
+name: Release
+
+# A tag that names a version (X.Y.Z, as in pyproject.toml and Cargo.toml) publishes it to PyPI. Nothing else does.
+# Wheels builds and checks every platform's wheel and the sdist; this publishes them, by trusted publishing: the
+# publisher on PyPI names this repository, release.yml and the environment pypi.
+on:
+  push:
+    tags: ["[0-9]+.[0-9]+.[0-9]+*"]
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    # One version three ways: the tag (0.0.1a1), pyproject.toml (PEP 440: 0.0.1a1), Cargo.toml (semver:
+    # 0.0.1-alpha.1). Compared as versions, before anything is built.
+    name: The tag is the version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.3.0
+
+      - run: |
+          uv run --no-project --with packaging python - <<'EOF'
+          import os, sys, tomllib
+          from packaging.version import Version
+          tag = os.environ["GITHUB_REF_NAME"]
+          python = tomllib.load(open("pyproject.toml", "rb"))["project"]["version"]
+          cargo = tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"]
+          if not Version(tag) == Version(python) == Version(cargo):
+              sys.exit(f"::error::tag {tag}, pyproject.toml {python}, Cargo.toml {cargo}: they must agree")
+          print(f"version {Version(python)}")
+          EOF
+
+  wheels:
+    needs: version
+    uses: ./.github/workflows/wheels.yml
+
+  publish:
+    name: Publish to PyPI
+    needs: wheels
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: pypi
+      url: https://pypi.org/project/tracepanel-agent/
+    permissions:
+      # What PyPI's trusted publishing signs the upload with, in place of a token.
+      id-token: write
+    steps:
+      - uses: astral-sh/setup-uv@v10.3.0
+
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish
+        run: uv publish --trusted-publishing always dist/*
