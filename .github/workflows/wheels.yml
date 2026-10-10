@@ -112,7 +112,6 @@ jobs:
     name: Run on ${{ matrix.name }}
     needs: build
     runs-on: ${{ matrix.runner }}
-    container: ${{ matrix.container }}
     timeout-minutes: 10
     strategy:
       fail-fast: false
@@ -120,8 +119,6 @@ jobs:
         include:
           - { name: linux x86_64, runner: ubuntu-latest, wheel: x86_64-unknown-linux-gnu }
           - { name: linux arm64, runner: ubuntu-24.04-arm, wheel: aarch64-unknown-linux-gnu }
-          - { name: alpine x86_64, runner: ubuntu-latest, wheel: x86_64-unknown-linux-musl, container: "python:3.13-alpine" }
-          - { name: alpine arm64, runner: ubuntu-24.04-arm, wheel: aarch64-unknown-linux-musl, container: "python:3.13-alpine" }
           - { name: macOS arm64, runner: macos-latest, wheel: aarch64-apple-darwin }
           - { name: macOS x86_64, runner: macos-15-intel, wheel: x86_64-apple-darwin }
           - { name: windows x86_64, runner: windows-latest, wheel: x86_64-pc-windows-msvc }
@@ -145,24 +142,29 @@ jobs:
           uv run --no-project --python ${{ matrix.python || '3.13' }} --no-index --find-links dist
           --with tracepanel-agent python scripts/smoke.py
 
-  smoke-emulated:
-    # Platforms without a runner, under QEMU: slower, the same check, with the pip of the platform's Python image.
-    name: Run on ${{ matrix.name }} (emulated)
+  smoke-docker:
+    # Platforms checked in their Python image, with its pip: musl (Alpine) on the runners' own CPUs, the rest under
+    # QEMU. Alpine runs in docker rather than as the job's container: actions don't run in Alpine on arm64.
+    name: Run on ${{ matrix.name }}
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner || 'ubuntu-latest' }}
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { name: linux armv7, platform: linux/arm/v7, image: "python:3.13-slim", wheel: armv7-unknown-linux-gnueabihf }
-          - { name: linux x86, platform: linux/386, image: "python:3.13-slim", wheel: i686-unknown-linux-gnu }
-          - { name: linux ppc64le, platform: linux/ppc64le, image: "python:3.13-slim", wheel: powerpc64le-unknown-linux-gnu }
-          - { name: linux s390x, platform: linux/s390x, image: "python:3.13-slim", wheel: s390x-unknown-linux-gnu }
-          - { name: linux riscv64, platform: linux/riscv64, image: "python:3.13-slim", wheel: riscv64gc-unknown-linux-gnu }
-          - { name: alpine armv7, platform: linux/arm/v7, image: "python:3.13-alpine", wheel: armv7-unknown-linux-musleabihf }
-          - { name: alpine x86, platform: linux/386, image: "python:3.13-alpine", wheel: i686-unknown-linux-musl }
-          - { name: alpine armv6, platform: linux/arm/v6, image: "python:3.13-alpine", wheel: arm-unknown-linux-musleabihf }
+          - { name: alpine x86_64, platform: linux/amd64, image: "python:3.13-alpine", wheel: x86_64-unknown-linux-musl }
+          - { name: alpine arm64, runner: ubuntu-24.04-arm, platform: linux/arm64, image: "python:3.13-alpine", wheel: aarch64-unknown-linux-musl }
+          - { name: linux armv7 (QEMU), platform: linux/arm/v7, image: "python:3.13-slim", wheel: armv7-unknown-linux-gnueabihf }
+          - { name: linux x86 (QEMU), platform: linux/386, image: "python:3.13-slim", wheel: i686-unknown-linux-gnu }
+          - { name: linux ppc64le (QEMU), platform: linux/ppc64le, image: "python:3.13-slim", wheel: powerpc64le-unknown-linux-gnu }
+          - { name: linux s390x (QEMU), platform: linux/s390x, image: "python:3.13-slim", wheel: s390x-unknown-linux-gnu }
+          - { name: linux riscv64 (QEMU), platform: linux/riscv64, image: "python:3.13-slim", wheel: riscv64gc-unknown-linux-gnu }
+          - { name: alpine armv7 (QEMU), platform: linux/arm/v7, image: "python:3.13-alpine", wheel: armv7-unknown-linux-musleabihf }
+          - { name: alpine x86 (QEMU), platform: linux/386, image: "python:3.13-alpine", wheel: i686-unknown-linux-musl }
+          # QEMU's ARM CPU says armv7, and pip won't install an armv6l wheel there (a Raspberry Pi 1 or Zero says
+          # armv6l): the binary comes out of the wheel and is run as it is.
+          - { name: alpine armv6 (QEMU), platform: linux/arm/v6, image: "python:3.13-alpine", wheel: arm-unknown-linux-musleabihf, unpack: true }
     steps:
       - uses: actions/checkout@v7
         with:
@@ -176,9 +178,18 @@ jobs:
           path: dist
 
       - name: Install the wheel, receive a trace and serve it
+        if: ${{ !matrix.unpack }}
         run: >
           docker run --rm --platform ${{ matrix.platform }} -v "$PWD:/w" -w /w ${{ matrix.image }}
           sh -c "python -m pip install --no-index --find-links dist tracepanel-agent && python scripts/smoke.py"
+
+      - name: Unpack the binary, receive a trace and serve it
+        if: ${{ matrix.unpack }}
+        run: >
+          docker run --rm --platform ${{ matrix.platform }} -v "$PWD:/w" -w /w ${{ matrix.image }}
+          sh -c "python -m zipfile -e dist/*.whl /tmp/wheel
+          && install -m 755 /tmp/wheel/*.data/scripts/tracepanel-agent /usr/local/bin/
+          && python scripts/smoke.py"
 
   sdist:
     # Where no wheel fits (FreeBSD, …) the installer builds the agent from the sdist: it must hold all a build needs.
@@ -204,7 +215,7 @@ jobs:
   publish:
     name: Publish to ${{ startsWith(github.ref, 'refs/tags/') && 'PyPI' || 'TestPyPI' }}
     if: startsWith(github.ref, 'refs/tags/') || inputs.testpypi
-    needs: [sources, build, smoke, smoke-emulated, sdist]
+    needs: [sources, build, smoke, smoke-docker, sdist]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment:
