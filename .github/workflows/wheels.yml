@@ -3,30 +3,16 @@
 # console's UI (ui-dist/) embedded (maturin, `bindings = "bin"`), built without symbols and with the build's paths
 # mapped away; every wheel is checked for leaks (scripts/check_wheel.py).
 #
-# Publishing: a tag X.Y.Z (the version in pyproject.toml and Cargo.toml) publishes what the run built and checked to
-# PyPI; running the workflow by hand with `testpypi` publishes to TestPyPI. Both by trusted publishing: the publisher
-# on (Test)PyPI names this repository, wheels.yml and the environment (pypi, testpypi). Release files come from this
-# workflow only, never a local build.
+# It builds and checks, and publishes nothing. Run it by hand to check every platform before a release; release.yml
+# runs it on a tag and publishes what it built. CI checks the code on every push.
 name: Wheels
 
 on:
-  push:
-    branches: [main]
-    tags: ["[0-9]+.[0-9]+.[0-9]+*"]
-  pull_request:
+  workflow_call:
   workflow_dispatch:
-    inputs:
-      testpypi:
-        description: Publish this run's files to TestPyPI
-        type: boolean
-        default: false
 
 permissions:
   contents: read
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   sources:
@@ -211,47 +197,3 @@ jobs:
         with:
           name: sdist
           path: dist/*.tar.gz
-
-  publish:
-    name: Publish to ${{ startsWith(github.ref, 'refs/tags/') && 'PyPI' || 'TestPyPI' }}
-    if: startsWith(github.ref, 'refs/tags/') || inputs.testpypi
-    needs: [sources, build, smoke, smoke-docker, sdist]
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    environment:
-      name: ${{ startsWith(github.ref, 'refs/tags/') && 'pypi' || 'testpypi' }}
-      url: https://${{ startsWith(github.ref, 'refs/tags/') && 'pypi.org' || 'test.pypi.org' }}/project/tracepanel-agent/
-    permissions:
-      id-token: write
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: astral-sh/setup-uv@v10.3.0
-
-      - name: The tag is the version
-        if: startsWith(github.ref, 'refs/tags/')
-        # One version three ways: the tag (0.0.1a1), pyproject.toml (PEP 440: 0.0.1a1), Cargo.toml (semver:
-        # 0.0.1-alpha.1). Compared as versions, not strings.
-        run: |
-          uv run --no-project --with packaging python - <<'EOF'
-          import os, sys, tomllib
-          from packaging.version import Version
-          tag = os.environ["GITHUB_REF_NAME"]
-          python = tomllib.load(open("pyproject.toml", "rb"))["project"]["version"]
-          cargo = tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"]
-          if not Version(tag) == Version(python) == Version(cargo):
-              sys.exit(f"::error::tag {tag}, pyproject.toml {python}, Cargo.toml {cargo}: they must agree")
-          print(f"version {Version(python)}")
-          EOF
-
-      - uses: actions/download-artifact@v8
-        with:
-          path: dist
-          merge-multiple: true
-
-      - name: Publish
-        run: >
-          uv publish --trusted-publishing always
-          --publish-url ${{ startsWith(github.ref, 'refs/tags/') && 'https://upload.pypi.org/legacy/' || 'https://test.pypi.org/legacy/' }}
-          ${{ !startsWith(github.ref, 'refs/tags/') && '--check-url https://test.pypi.org/simple/' || '' }}
-          dist/*
