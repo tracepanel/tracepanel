@@ -1,0 +1,296 @@
+{
+  "attrs": {
+    "code.view": "blog.views.duplicates",
+    "http.method": "GET",
+    "http.path": "/duplicates/",
+    "http.route": "/duplicates/",
+    "http.status_code": 200,
+    "process.runtime.name": "cpython",
+    "process.runtime.version": "3.11.16",
+    "service.name": "django-classic",
+    "service.role": "web",
+    "telemetry.sdk.language": "python",
+    "tracepanel.framework": "Django 5.2.18"
+  },
+  "duration": 12282,
+  "errors": [],
+  "id": "01M4GPC1T7F6KS3W2N9KK4K05J",
+  "issues": [],
+  "kind": "http",
+  "links": [],
+  "logs": [
+    {
+      "attrs": {
+        "code.filepath": "blog/views.py",
+        "code.function": "duplicates",
+        "code.lineno": 56,
+        "log.template": "counted categories %d times",
+        "process.pid": 20678,
+        "thread.name": "Thread-15 (process_request_thread)"
+      },
+      "exception": null,
+      "level": "debug",
+      "logger": "blog.views",
+      "message": "counted categories 10 times",
+      "span_id": "01M4GPC1T8GBYE6Y16SYMVP94K",
+      "time": 1791561697107247
+    }
+  ],
+  "name": "GET /duplicates/",
+  "spans": [
+    {
+      "attrs": {},
+      "duration": 12282,
+      "id": "01M4GPC1T7W6E7FX0W6QZWYCCM",
+      "kind": "http",
+      "name": "GET /duplicates/",
+      "parent_id": null,
+      "start": 1791561697095687,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.view": "blog.views.duplicates"
+      },
+      "duration": 11107,
+      "id": "01M4GPC1T8GBYE6Y16SYMVP94K",
+      "kind": "view",
+      "name": "blog.views.duplicates",
+      "parent_id": "01M4GPC1T7W6E7FX0W6QZWYCCM",
+      "start": 1791561697096628,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:55 in <listcomp>",
+        "code.template": null,
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT COUNT(*) AS \"__count\" FROM \"blog_category\"",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [],
+        "db.params_hash": "083a8cae6135",
+        "db.statement": "SELECT COUNT(*) AS \"__count\" FROM \"blog_category\"",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 129,
+      "id": "01M4GPC1TFVTWF9QHH5W4MQ4DY",
+      "kind": "sql",
+      "name": "SELECT COUNT blog_category",
+      "parent_id": "01M4GPC1T8GBYE6Y16SYMVP94K",
+      "start": 1791561697102758,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:55 in <listcomp>",
+        "code.template": null,
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT COUNT(*) AS \"__count\" FROM \"blog_category\"",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [],
+        "db.params_hash": "083a8cae6135",
+        "db.statement": "SELECT COUNT(*) AS \"__count\" FROM \"blog_category\"",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 49,
+      "id": "01M4GPC1TFM4PGQ6XP0M6F6AGF",
+      "kind": "sql",
+      "name": "SELECT COUNT blog_category",
+      "parent_id": "01M4GPC1T8GBYE6Y16SYMVP94K",
+      "start": 1791561697103788,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:55 in <listcomp>",
+        "code.template": null,
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT COUNT(*) AS \"__count\" FROM \"blog_category\"",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [],
+        "db.params_hash": "083a8cae6135",
+        "db.statement": "SELECT COUNT(*) AS \"__count\" FROM \"blog_category\"",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 46,
+      "id": "01M4GPC1TG7M20ETPDD3K8CCCH",
+      "kind": "sql",
+      "name": "SELECT COUNT blog_category",
+      "parent_id": "01M4GPC1T8GBYE6Y16SYMVP94K",
+      "start": 1791561697104261,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:55 in <listcomp>",
+        "code.template": null,
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT COUNT(*) AS \"__count\" FROM \"blog_category\"",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [],
+        "db.params_hash": "083a8cae6135",
+        "db.statement": "SELECT COUNT(*) AS \"__count\" FROM \"blog_category\"",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 43,
+      "id": "01M4GPC1TGNQRS5A84SJHK5CA0",
+      "kind": "sql",
+      "name": "SELECT COUNT blog_category",
+      "parent_id": "01M4GPC1T8GBYE6Y16SYMVP94K",
+      "start": 1791561697104715,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:55 in <listcomp>",
+        "code.template": null,
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT COUNT(*) AS \"__count\" FROM \"blog_category\"",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [],
+        "db.params_hash": "083a8cae6135",
+        "db.statement": "SELECT COUNT(*) AS \"__count\" FROM \"blog_category\"",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 47,
+      "id": "01M4GPC1TH919YCJCK1QWAX0Q3",
+      "kind": "sql",
+      "name": "SELECT COUNT blog_category",
+      "parent_id": "01M4GPC1T8GBYE6Y16SYMVP94K",
+      "start": 1791561697105144,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:55 in <listcomp>",
+        "code.template": null,
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT COUNT(*) AS \"__count\" FROM \"blog_category\"",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [],
+        "db.params_hash": "083a8cae6135",
+        "db.statement": "SELECT COUNT(*) AS \"__count\" FROM \"blog_category\"",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 47,
+      "id": "01M4GPC1THT7KM2K101Z368589",
+      "kind": "sql",
+      "name": "SELECT COUNT blog_category",
+      "parent_id": "01M4GPC1T8GBYE6Y16SYMVP94K",
+      "start": 1791561697105581,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:55 in <listcomp>",
+        "code.template": null,
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT COUNT(*) AS \"__count\" FROM \"blog_category\"",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [],
+        "db.params_hash": "083a8cae6135",
+        "db.statement": "SELECT COUNT(*) AS \"__count\" FROM \"blog_category\"",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 45,
+      "id": "01M4GPC1TJXDETJD3857AZKTK5",
+      "kind": "sql",
+      "name": "SELECT COUNT blog_category",
+      "parent_id": "01M4GPC1T8GBYE6Y16SYMVP94K",
+      "start": 1791561697106028,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:55 in <listcomp>",
+        "code.template": null,
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT COUNT(*) AS \"__count\" FROM \"blog_category\"",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [],
+        "db.params_hash": "083a8cae6135",
+        "db.statement": "SELECT COUNT(*) AS \"__count\" FROM \"blog_category\"",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 38,
+      "id": "01M4GPC1TJJX19MHX3QB4XGA7M",
+      "kind": "sql",
+      "name": "SELECT COUNT blog_category",
+      "parent_id": "01M4GPC1T8GBYE6Y16SYMVP94K",
+      "start": 1791561697106431,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:55 in <listcomp>",
+        "code.template": null,
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT COUNT(*) AS \"__count\" FROM \"blog_category\"",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [],
+        "db.params_hash": "083a8cae6135",
+        "db.statement": "SELECT COUNT(*) AS \"__count\" FROM \"blog_category\"",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 37,
+      "id": "01M4GPC1TJ4B9T4SSKRWSMHA1B",
+      "kind": "sql",
+      "name": "SELECT COUNT blog_category",
+      "parent_id": "01M4GPC1T8GBYE6Y16SYMVP94K",
+      "start": 1791561697106765,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:55 in <listcomp>",
+        "code.template": null,
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT COUNT(*) AS \"__count\" FROM \"blog_category\"",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [],
+        "db.params_hash": "083a8cae6135",
+        "db.statement": "SELECT COUNT(*) AS \"__count\" FROM \"blog_category\"",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 36,
+      "id": "01M4GPC1TKGNXMMACA8T5ZR699",
+      "kind": "sql",
+      "name": "SELECT COUNT blog_category",
+      "parent_id": "01M4GPC1T8GBYE6Y16SYMVP94K",
+      "start": 1791561697107092,
+      "status": "ok"
+    }
+  ],
+  "start": 1791561697095687,
+  "status": "ok"
+}

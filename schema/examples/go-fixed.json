@@ -1,0 +1,68 @@
+{
+  "attrs": {
+    "code.view": "main.(*App).listBooksFixed",
+    "http.method": "GET",
+    "http.path": "/books/fixed",
+    "http.route": "/books/fixed",
+    "http.status_code": 200,
+    "process.runtime.name": "go",
+    "process.runtime.version": "1.27.1",
+    "service.name": "go-api-bin",
+    "service.role": "web",
+    "telemetry.sdk.language": "go",
+    "tracepanel.framework": "net/http"
+  },
+  "duration": 379,
+  "errors": [],
+  "id": "01M4GPCSS3KSESQME6H6J7M540",
+  "issues": [],
+  "kind": "http",
+  "links": [],
+  "logs": [],
+  "name": "GET /books/fixed",
+  "spans": [
+    {
+      "attrs": {
+        "code.origin": "app.go:62 in (*App).listBooksFixed",
+        "db.alias": "default",
+        "db.client": "go",
+        "db.fingerprint": "SELECT books.id, books.title, authors.name FROM books JOIN authors ON authors.id = books.author_id ORDER BY books.id LIMIT 20",
+        "db.many": false,
+        "db.statement": "SELECT books.id, books.title, authors.name FROM books JOIN authors ON authors.id = books.author_id ORDER BY books.id LIMIT 20",
+        "db.system": null,
+        "db.vendor": null
+      },
+      "duration": 132,
+      "id": "01M4GPCSS34M807HWNK23TAFHM",
+      "kind": "sql",
+      "name": "SELECT books",
+      "parent_id": "01M4GPCSS31067WV1XEH187G00",
+      "start": 1791561721635985,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.function": "main.(*App).listBooksFixed"
+      },
+      "duration": 339,
+      "id": "01M4GPCSS31067WV1XEH187G00",
+      "kind": "view",
+      "name": "(*App).listBooksFixed",
+      "parent_id": "01M4GPCSS3C8Q90Z1PRWXFPE4G",
+      "start": 1791561721635859,
+      "status": "ok"
+    },
+    {
+      "attrs": {},
+      "duration": 379,
+      "id": "01M4GPCSS3C8Q90Z1PRWXFPE4G",
+      "kind": "http",
+      "name": "GET /books/fixed",
+      "parent_id": null,
+      "start": 1791561721635833,
+      "status": "ok"
+    }
+  ],
+  "start": 1791561721635833,
+  "status": "ok"
+}

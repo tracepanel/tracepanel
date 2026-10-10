@@ -1,0 +1,7 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "paths": { "@tracepanel/ui/*": ["./src/*"] }
+  },
+  "include": ["src"]
+}

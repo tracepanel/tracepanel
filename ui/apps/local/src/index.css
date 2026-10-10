@@ -1,0 +1,46 @@
+/* Layer order: the pre-Tailwind stylesheets (legacy) sit under components and utilities, so Tailwind classes
+   always win, while Tailwind's reset (base) never undoes them. Legacy rules go away as components move over. */
+@layer theme, base, legacy, components, utilities;
+
+@import "tailwindcss";
+/* Bundled, not fetched: the console works offline and looks the same on every machine. */
+@import "@fontsource-variable/inter/wght.css";
+@import "@fontsource-variable/jetbrains-mono/wght.css";
+@import "tw-animate-css";
+@import "@tracepanel/ui/theme.css";
+@import "@tracepanel/ui/styles.css" layer(legacy);
+@import "./app.css" layer(legacy);
+
+@source "./";
+
+@theme {
+  --animate-loading: loading 1s ease-in-out infinite;
+
+  @keyframes loading {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(250%);
+    }
+  }
+}
+
+@layer base {
+  html {
+    font-family: var(--dt-font);
+    /* Inter: straight-sided digits that line up in tables, a clearer l/1/I, and contextual alternates. */
+    font-feature-settings: "cv05", "cv08", "calt";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+  code,
+  kbd,
+  pre,
+  .font-mono {
+    font-feature-settings:
+      "calt" 0,
+      "liga" 0;
+  }
+}

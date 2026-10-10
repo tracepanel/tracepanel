@@ -1,0 +1,474 @@
+//! `tracepanel-agent`: the project's agent. It receives the traces its processes record (an SDK in each: Python, Go)
+//! over a unix socket (TCP on Windows, or with `--listen tcp:HOST:PORT`), finds their issues, keeps them in the
+//! project's store and, with `--serve`, serves the console. Its addresses go to `<dir>/agent.addr` and
+//! `<dir>/console.addr`, where the SDKs look for them.
+
+#[cfg(all(target_arch = "arm", target_env = "musl"))]
+mod arm_eabi;
+
+#[cfg(unix)]
+use sha1::{Digest, Sha1};
+use std::path::{Path, PathBuf};
+use std::process::ExitCode;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::mpsc::{Receiver, SyncSender, TrySendError, sync_channel};
+use tracepanel_protocol::{Activity, Batch, Listener, Received};
+use tracepanel_store_local::{self as store_local, Store};
+
+/// Frames waiting for the writer; a full queue drops frames rather than slowing the senders down.
+const QUEUE: usize = 1024;
+
+/// Frames dropped because the writer was behind: said once as it starts, counted at exit.
+static DROPPED: AtomicU64 = AtomicU64::new(0);
+
+const USAGE: &str = "usage: tracepanel-agent [--dir DIR] [--listen unix|tcp:HOST:PORT] [--serve HOST:PORT] \
+                     [--idle-exit SECONDS] [--record DIR]
+       tracepanel-agent mcp [--dir DIR] [--values]
+  --dir        the project's store directory (default .tracepanel)
+  --listen     where SDKs connect: a unix socket (default; not on Windows) or TCP, e.g. tcp:127.0.0.1:0
+  --serve      also serve the console (UI and API), e.g. 127.0.0.1:8765 (port 0: any free one)
+  --idle-exit  exit after this many seconds unused (an agent an SDK started)
+  --record     also save each trace as received, before analysis, to DIR/<id>.json (schema/examples)
+  --version    print the version
+
+  mcp          an MCP server on stdin and stdout, for AI coding agents: reads the store, compact
+  --values     with mcp: show SQL parameters and local variables (secrets masked); off by default";
+
+enum Message {
+    Batch(Batch),
+    Stop,
+}
+
+/// What the command line asks for.
+#[derive(Debug, PartialEq)]
+struct Options {
+    dir: PathBuf,
+    listen: Option<String>,
+    serve: Option<String>,
+    idle_exit: Option<i64>,
+    record: Option<PathBuf>,
+}
+
+/// What to do: run, or print something and exit.
+#[derive(Debug, PartialEq)]
+enum Command {
+    Run(Options),
+    /// The MCP server on the store in `dir`.
+    Mcp {
+        dir: PathBuf,
+        values: bool,
+    },
+    Help,
+    Version,
+}
+
+fn parse(args: impl IntoIterator<Item = String>) -> Result<Command, String> {
+    let mut options = Options {
+        dir: PathBuf::from(".tracepanel"),
+        listen: None,
+        serve: None,
+        idle_exit: None,
+        record: None,
+    };
+    let (mut mcp, mut values) = (false, false);
+    let mut args = args.into_iter();
+    while let Some(arg) = args.next() {
+        let mut value = |what: &str| args.next().ok_or_else(|| format!("{arg} needs {what}"));
+        match arg.as_str() {
+            "--help" | "-h" => return Ok(Command::Help),
+            "mcp" => mcp = true,
+            "--values" => values = true,
+            "--version" | "-V" => return Ok(Command::Version),
+            "--dir" => options.dir = PathBuf::from(value("a directory")?),
+            "--serve" => options.serve = Some(value("HOST:PORT")?),
+            "--record" => options.record = Some(PathBuf::from(value("a directory")?)),
+            "--listen" => {
+                let listen = value("unix or tcp:HOST:PORT")?;
+                if listen != "unix" && !listen.starts_with("tcp:") {
+                    return Err(format!(
+                        "--listen takes unix or tcp:HOST:PORT, not {listen}"
+                    ));
+                }
+                options.listen = Some(listen);
+            }
+            "--idle-exit" => {
+                let seconds = value("a number of seconds")?;
+                let seconds = seconds
+                    .parse()
+                    .ok()
+                    .filter(|seconds: &i64| *seconds > 0)
+                    .ok_or_else(|| {
+                        format!("--idle-exit takes a number of seconds, not {seconds}")
+                    })?;
+                options.idle_exit = Some(seconds);
+            }
+            _ => return Err(format!("unknown option {arg}")),
+        }
+    }
+    if mcp {
+        let agent = options.listen.is_some()
+            || options.serve.is_some()
+            || options.idle_exit.is_some()
+            || options.record.is_some();
+        if agent {
+            return Err("mcp takes only --dir and --values".into());
+        }
+        return Ok(Command::Mcp {
+            dir: options.dir,
+            values,
+        });
+    }
+    if values {
+        return Err("--values goes with mcp".into());
+    }
+    Ok(Command::Run(options))
+}
+
+#[tokio::main]
+async fn main() -> ExitCode {
+    match parse(std::env::args().skip(1)) {
+        Ok(Command::Help) => {
+            println!("{USAGE}");
+            ExitCode::SUCCESS
+        }
+        Ok(Command::Version) => {
+            println!("tracepanel-agent {}", env!("CARGO_PKG_VERSION"));
+            ExitCode::SUCCESS
+        }
+        Ok(Command::Mcp { dir, values }) => {
+            // stdout is the protocol's: nothing else is printed there.
+            let server = tracepanel_mcp::Server::new(dir, values);
+            match server.serve(tokio::io::stdin(), tokio::io::stdout()).await {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(error) => {
+                    eprintln!("tracepanel-agent mcp: {error}");
+                    ExitCode::FAILURE
+                }
+            }
+        }
+        Ok(Command::Run(options)) => match run(options).await {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => {
+                eprintln!("tracepanel-agent: {error}");
+                ExitCode::FAILURE
+            }
+        },
+        Err(error) => {
+            eprintln!("tracepanel-agent: {error}\n{USAGE}");
+            ExitCode::from(2)
+        }
+    }
+}
+
+async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
+    let Options {
+        dir,
+        listen,
+        serve,
+        idle_exit,
+        record,
+    } = options;
+    std::fs::create_dir_all(&dir)?;
+    let dir = dir.canonicalize()?;
+    let store_path = store_local::path_in(&dir);
+    let store = Store::open(&store_path)?;
+    let addr_file = dir.join("agent.addr");
+    let running = std::fs::read_to_string(&addr_file).unwrap_or_default();
+    if tracepanel_protocol::answers(running.trim()) {
+        // Two agents on one store would take each other's address file when either exits.
+        return Err(format!("an agent already runs for {}", dir.display()).into());
+    }
+    let listener = bind(&dir, listen.as_deref()).await?;
+    let address = listener.address()?;
+    let console_file = dir.join("console.addr");
+    let activity = Activity::default();
+    activity.touch();
+
+    let (queue, frames) = sync_channel::<Message>(QUEUE);
+    if let Some(record) = &record {
+        std::fs::create_dir_all(record)?;
+    }
+    let writer = std::thread::spawn(move || write(store, &frames, record.as_deref()));
+    let sender = queue.clone();
+    let sink = Arc::new(move |batch: Batch| enqueue(&sender, batch));
+
+    let server = tokio::spawn({
+        let activity = activity.clone();
+        async move { tracepanel_protocol::serve(listener, sink, activity).await }
+    });
+    let console = match serve {
+        Some(addr) => {
+            let listener = tokio::net::TcpListener::bind(&addr).await?;
+            let reader = store_local::Reader::new(&store_path);
+            let url = format!("http://{}/", listener.local_addr()?);
+            // Where an app's own console (Django's /__tracepanel__/) sends its API calls.
+            std::fs::write(&console_file, format!("{url}\n"))?;
+            Some((
+                url,
+                tokio::spawn(serve_console(listener, reader, activity.clone())),
+            ))
+        }
+        None => None,
+    };
+    std::fs::write(&addr_file, format!("{address}\n"))?;
+    println!("tracepanel-agent {}", env!("CARGO_PKG_VERSION"));
+    println!("  store    {}", store_path.display());
+    println!("  traces   {address}");
+    if let Some((url, _)) = &console {
+        println!("  console  {url}");
+    }
+    match idle_exit {
+        Some(seconds) => println!("Ctrl-C stops it; it exits after {seconds} s unused"),
+        None => println!("Ctrl-C stops it"),
+    }
+
+    tokio::select! {
+        result = server => { result??; }
+        () = stopped() => {}
+        () = idle(&activity, idle_exit) => { println!("tracepanel-agent: idle, exiting"); }
+    }
+    if let Some((_, console)) = console {
+        console.abort();
+    }
+    // What was received gets written before exiting.
+    let _ = queue.send(Message::Stop);
+    let _ = writer.join();
+    let _ = std::fs::remove_file(&addr_file);
+    let _ = std::fs::remove_file(&console_file);
+    if let Some(socket) = address.strip_prefix("unix:") {
+        let _ = std::fs::remove_file(socket);
+    }
+    Ok(())
+}
+
+/// A short path in the temp directory, one per store directory: a unix socket's path is limited to ~100 bytes,
+/// which a project's own directory may not leave room for.
+#[cfg(unix)]
+fn socket_path(dir: &Path) -> PathBuf {
+    let digest = Sha1::digest(dir.as_os_str().as_encoded_bytes());
+    let hex: String = digest
+        .iter()
+        .take(6)
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    std::env::temp_dir().join(format!("tracepanel-{hex}.sock"))
+}
+
+/// The listener SDKs connect to: `tcp:HOST:PORT`, else a unix socket where there are any, else TCP on a free port.
+async fn bind(dir: &Path, listen: Option<&str>) -> std::io::Result<Listener> {
+    if let Some(addr) = listen.and_then(|listen| listen.strip_prefix("tcp:")) {
+        return Listener::tcp(addr).await;
+    }
+    #[cfg(unix)]
+    {
+        let socket = socket_path(dir);
+        // A socket left by an agent that didn't exit cleanly.
+        let _ = std::fs::remove_file(&socket);
+        Listener::unix(&socket)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = dir;
+        Listener::tcp("127.0.0.1:0").await
+    }
+}
+
+/// Resolves once nothing has used the agent for `seconds` (never without a limit): an agent an SDK started.
+async fn idle(activity: &Activity, seconds: Option<i64>) {
+    let Some(seconds) = seconds else {
+        return std::future::pending().await;
+    };
+    let check = std::time::Duration::from_secs((seconds as u64 / 4).clamp(1, 30));
+    loop {
+        tokio::time::sleep(check).await;
+        if activity.idle_seconds() >= seconds {
+            return;
+        }
+    }
+}
+
+async fn serve_console(
+    listener: tokio::net::TcpListener,
+    reader: store_local::Reader,
+    activity: Activity,
+) {
+    if let Err(error) = tracepanel_server::serve_on(listener, reader, activity).await {
+        eprintln!("tracepanel-agent: console stopped: {error}");
+    }
+}
+
+fn enqueue(queue: &SyncSender<Message>, batch: Batch) {
+    let full = matches!(
+        queue.try_send(Message::Batch(batch)),
+        Err(TrySendError::Full(_))
+    );
+    if full && DROPPED.fetch_add(1, Ordering::Relaxed) == 0 {
+        eprintln!(
+            "tracepanel-agent: the writer is behind: frames are being dropped (counted at exit)"
+        );
+    }
+}
+
+fn write(mut store: Store, frames: &Receiver<Message>, record: Option<&Path>) {
+    let mut written: u64 = 0;
+    while let Ok(message) = frames.recv() {
+        let Message::Batch(batch) = message else {
+            // Stop: drain what is queued, then exit.
+            while let Ok(Message::Batch(batch)) = frames.try_recv() {
+                written += write_batch(&mut store, &batch, record);
+            }
+            break;
+        };
+        written += write_batch(&mut store, &batch, record);
+    }
+    match DROPPED.load(Ordering::Relaxed) {
+        0 => println!("tracepanel-agent: {written} traces written"),
+        dropped => println!("tracepanel-agent: {written} traces written, {dropped} frames dropped"),
+    }
+}
+
+fn write_batch(store: &mut Store, batch: &Batch, record: Option<&Path>) -> u64 {
+    if let Some(max_traces) = batch.max_traces {
+        store.max_traces = max_traces;
+    }
+    match batch.decode() {
+        Ok(mut traces) => {
+            if let Some(record) = record {
+                save(record, &traces);
+            }
+            for received in &mut traces {
+                tracepanel_analysis::apply(received, &batch.thresholds);
+            }
+            write_traces(store, &traces)
+        }
+        Err(error) => {
+            eprintln!("tracepanel-agent: undecodable frame: {error}");
+            0
+        }
+    }
+}
+
+/// Traces as an SDK sent them (`--record`): what `schema/examples` is made of.
+fn save(dir: &Path, traces: &[Received]) {
+    for received in traces {
+        let pretty = serde_json::from_str::<serde_json::Value>(&received.doc)
+            .and_then(|doc| serde_json::to_string_pretty(&doc));
+        let path = dir.join(format!("{}.json", received.trace.id));
+        if let Err(error) = pretty
+            .map_err(std::io::Error::other)
+            .and_then(|text| std::fs::write(&path, text + "\n"))
+        {
+            eprintln!("tracepanel-agent: can't record {}: {error}", path.display());
+        }
+    }
+}
+
+fn write_traces(store: &mut Store, traces: &[Received]) -> u64 {
+    match store.write(traces) {
+        Ok(()) => traces.len() as u64,
+        Err(error) => {
+            eprintln!("tracepanel-agent: store write failed: {error}");
+            0
+        }
+    }
+}
+
+#[cfg(unix)]
+async fn stopped() {
+    let mut terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+        .expect("SIGTERM handler");
+    tokio::select! {
+        _ = tokio::signal::ctrl_c() => {}
+        _ = terminate.recv() => {}
+    }
+}
+
+#[cfg(not(unix))]
+async fn stopped() {
+    let _ = tokio::signal::ctrl_c().await;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn args(line: &str) -> Vec<String> {
+        line.split_whitespace().map(str::to_owned).collect()
+    }
+
+    #[test]
+    fn the_command_line() {
+        assert_eq!(
+            parse(args(
+                "--dir .tp --serve 127.0.0.1:0 --idle-exit 1800 --listen tcp:127.0.0.1:0"
+            )),
+            Ok(Command::Run(Options {
+                dir: PathBuf::from(".tp"),
+                listen: Some("tcp:127.0.0.1:0".into()),
+                serve: Some("127.0.0.1:0".into()),
+                idle_exit: Some(1800),
+                record: None,
+            }))
+        );
+        assert_eq!(
+            parse(args("")),
+            Ok(Command::Run(Options {
+                dir: PathBuf::from(".tracepanel"),
+                listen: None,
+                serve: None,
+                idle_exit: None,
+                record: None,
+            }))
+        );
+        assert_eq!(parse(args("--help")), Ok(Command::Help));
+        assert_eq!(parse(args("-V")), Ok(Command::Version));
+        // tracepanel's CLI puts --dir first.
+        assert_eq!(
+            parse(args("--dir .tp mcp --values")),
+            Ok(Command::Mcp {
+                dir: PathBuf::from(".tp"),
+                values: true,
+            })
+        );
+        assert_eq!(
+            parse(args("mcp")),
+            Ok(Command::Mcp {
+                dir: PathBuf::from(".tracepanel"),
+                values: false,
+            })
+        );
+    }
+
+    #[test]
+    fn mistakes_say_what_is_wrong() {
+        assert_eq!(
+            parse(args("--serve")),
+            Err("--serve needs HOST:PORT".into())
+        );
+        assert_eq!(
+            parse(args("--listen udp:1")),
+            Err("--listen takes unix or tcp:HOST:PORT, not udp:1".into())
+        );
+        assert_eq!(
+            parse(args("--idle-exit soon")),
+            Err("--idle-exit takes a number of seconds, not soon".into())
+        );
+        assert_eq!(
+            parse(args("--idle-exit 0")),
+            Err("--idle-exit takes a number of seconds, not 0".into())
+        );
+        assert_eq!(
+            parse(args("--colour")),
+            Err("unknown option --colour".into())
+        );
+        assert_eq!(
+            parse(args("mcp --serve 127.0.0.1:0")),
+            Err("mcp takes only --dir and --values".into())
+        );
+        assert_eq!(
+            parse(args("--values")),
+            Err("--values goes with mcp".into())
+        );
+    }
+}

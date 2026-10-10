@@ -1,0 +1,118 @@
+"""THIRD-PARTY-NOTICES: the licenses of the open source code inside the agent's binary, shipped in every wheel.
+
+Two parts: the Rust crates it is compiled from (cargo about, about.toml and about.hbs) and the npm packages the
+embedded console is built from (ui/'s production dependencies). Their licenses (MIT, Apache-2.0, BSD, OFL
+for the fonts…) ask for their texts to go with the program.
+
+    uv run scripts/notices.py            # write THIRD-PARTY-NOTICES
+    uv run scripts/notices.py --check    # fail if it is out of date (CI)
+    uv run scripts/notices.py --ui       # print the UI's part (scripts/ui.sh keeps it in ui-dist/NOTICES)
+
+Needs cargo-about (`cargo install --locked cargo-about --features cli`). The UI's part comes from ui-dist/NOTICES,
+written with the UI by scripts/ui.sh; `--ui` reads ui/ with its packages installed.
+"""
+
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+OUT = ROOT / "THIRD-PARTY-NOTICES"
+UI = ROOT / "ui"
+UI_NOTICES = ROOT / "ui-dist" / "NOTICES"
+LICENSE_FILES = ("LICENSE", "LICENSE.md", "LICENSE.txt", "LICENCE", "LICENSE-MIT", "OFL.txt", "license", "license.md")
+RULE = "-" * 80
+# For a package that declares MIT but ships no license file: the license's text, with its author from package.json.
+MIT = """Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the Software without restriction, including without limitation the
+rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the
+Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE."""
+# Public domain dedications: nothing to reproduce.
+NO_NOTICE = {"CC0-1.0", "Unlicense", "0BSD"}
+
+
+def rust() -> str:
+    return subprocess.run(  # noqa: S603 (cargo, this workspace)
+        ["cargo", "about", "generate", "--fail", "about.hbs"],  # noqa: S607
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
+def license_text(package: Path, license_id: str) -> str | None:
+    for name in LICENSE_FILES:
+        if (package / name).is_file():
+            return (package / name).read_text(errors="replace").strip()
+    if license_id in NO_NOTICE:
+        return f"{license_id}: no notice required."
+    if license_id == "MIT":
+        manifest = json.loads((package / "package.json").read_text())
+        author = manifest.get("author")
+        author = author.get("name") if isinstance(author, dict) else author
+        return f"Copyright (c) {author or 'its authors'}\n\n{MIT}"
+    return None
+
+
+def ui() -> str:
+    listing = subprocess.run(  # noqa: S603 (pnpm, ui/)
+        ["pnpm", "licenses", "list", "--prod", "--json"],  # noqa: S607
+        cwd=UI,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    packages = sorted(
+        (package["name"], version, license_id, Path(path))
+        for license_id, items in json.loads(listing).items()
+        for package in items
+        for version, path in zip(package["versions"], package["paths"], strict=False)
+    )
+    parts = []
+    missing = []
+    for name, version, license_id, path in packages:
+        text = license_text(path, license_id)
+        if text is None:
+            missing.append(f"{name} {version}")
+            continue
+        parts.append(f"{RULE}\n{name} {version} ({license_id})\n\n{text}\n")
+    if missing:
+        sys.exit(f"no license file in: {', '.join(missing)}")
+    return "\n".join(parts).strip()
+
+
+def notices() -> str:
+    return (
+        "tracepanel-agent includes open source software. Their licenses and notices follow: first the Rust crates the\n"
+        "program is compiled from, then the packages of the console it serves.\n\n"
+        f"{'=' * 80}\nRust crates\n{'=' * 80}\n{rust()}\n\n"
+        f"{'=' * 80}\nConsole (JavaScript, fonts)\n{'=' * 80}\n{UI_NOTICES.read_text().strip()}\n"
+    )
+
+
+def main() -> None:
+    if "--ui" in sys.argv:
+        print(ui())
+        return
+    text = notices()
+    if "--check" in sys.argv:
+        if not OUT.exists() or OUT.read_text() != text:
+            sys.exit("THIRD-PARTY-NOTICES is out of date: run uv run scripts/notices.py and commit it")
+        print("THIRD-PARTY-NOTICES: up to date")
+        return
+    OUT.write_text(text)
+    print(f"THIRD-PARTY-NOTICES written ({len(text.splitlines())} lines)")
+
+
+if __name__ == "__main__":
+    main()

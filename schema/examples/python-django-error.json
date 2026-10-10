@@ -1,0 +1,222 @@
+{
+  "attrs": {
+    "code.view": "blog.views.error",
+    "http.method": "GET",
+    "http.path": "/error/",
+    "http.route": "/error/",
+    "http.status_code": 500,
+    "process.runtime.name": "cpython",
+    "process.runtime.version": "3.11.16",
+    "service.name": "django-classic",
+    "service.role": "web",
+    "telemetry.sdk.language": "python",
+    "tracepanel.framework": "Django 5.2.18",
+    "user.id": null
+  },
+  "duration": 29153,
+  "errors": [
+    {
+      "chain": [],
+      "frames": [
+        {
+          "context": [
+            "    else:",
+            "",
+            "        @wraps(get_response)",
+            "        def inner(request):",
+            "            try:",
+            "                response = get_response(request)",
+            "            except Exception as exc:",
+            "                response = response_for_exception(request, exc)",
+            "            return response",
+            "",
+            "        return inner"
+          ],
+          "context_start": 50,
+          "filename": ".venv/lib/python3.11/site-packages/django/core/handlers/exception.py",
+          "function": "inner",
+          "in_app": false,
+          "lineno": 55,
+          "locals": null,
+          "module": "django.core.handlers.exception"
+        },
+        {
+          "context": [
+            "            wrapped_callback = self.make_view_atomic(callback)",
+            "            # If it is an asynchronous view, run it in a subthread.",
+            "            if iscoroutinefunction(wrapped_callback):",
+            "                wrapped_callback = async_to_sync(wrapped_callback)",
+            "            try:",
+            "                response = wrapped_callback(request, *callback_args, **callback_kwargs)",
+            "            except Exception as e:",
+            "                response = self.process_exception_by_middleware(e, request)",
+            "                if response is None:",
+            "                    raise",
+            ""
+          ],
+          "context_start": 192,
+          "filename": ".venv/lib/python3.11/site-packages/django/core/handlers/base.py",
+          "function": "_get_response",
+          "in_app": false,
+          "lineno": 197,
+          "locals": null,
+          "module": "django.core.handlers.base"
+        },
+        {
+          "context": [
+            "        return async_wrapped",
+            "",
+            "    @functools.wraps(view)",
+            "    def wrapped(*args: Any, **kwargs: Any) -> Any:  # noqa: ANN401 (any view signature)",
+            "        with start_span(\"view\", name, attrs):",
+            "            return view(*args, **kwargs)",
+            "",
+            "    setattr(wrapped, MARKER, True)",
+            "    return wrapped",
+            "",
+            ""
+          ],
+          "context_start": 43,
+          "filename": "/home/dev/tracepanel-python/tracepanel/django/structure.py",
+          "function": "wrapped",
+          "in_app": false,
+          "lineno": 48,
+          "locals": null,
+          "module": "tracepanel.django.structure"
+        },
+        {
+          "context": [
+            "",
+            "",
+            "def error(request: HttpRequest) -> JsonResponse:",
+            "    posts = Post.objects.count()",
+            "    logger.info(\"computing ratio over %d posts\", posts)",
+            "    return JsonResponse({\"ratio\": posts / 0})",
+            "",
+            "",
+            "def logs(request: HttpRequest) -> JsonResponse:",
+            "    logger.info(\"rendering logs page for %s\", request.path)",
+            "    logger.warning(\"cache is cold, falling back to the database\")"
+          ],
+          "context_start": 74,
+          "filename": "blog/views.py",
+          "function": "error",
+          "in_app": true,
+          "lineno": 79,
+          "locals": {
+            "posts": "200",
+            "request": "<WSGIRequest: GET '/error/'>"
+          },
+          "module": "blog.views"
+        }
+      ],
+      "handled": false,
+      "message": "division by zero",
+      "span_id": "01M4GPC3BF87PJ8PEQ6YZ8XMJT",
+      "time": 1791561698674353,
+      "type": "builtins.ZeroDivisionError"
+    }
+  ],
+  "id": "01M4GPC3BF07PDY3T2QJEPN5YZ",
+  "issues": [],
+  "kind": "http",
+  "links": [],
+  "logs": [
+    {
+      "attrs": {
+        "code.filepath": "blog/views.py",
+        "code.function": "error",
+        "code.lineno": 78,
+        "log.template": "computing ratio over %d posts",
+        "process.pid": 20678,
+        "thread.name": "Thread-24 (process_request_thread)"
+      },
+      "exception": null,
+      "level": "info",
+      "logger": "blog.views",
+      "message": "computing ratio over 200 posts",
+      "span_id": "01M4GPC3BF9JWRY97A387KK4V2",
+      "time": 1791561698672811
+    },
+    {
+      "attrs": {
+        "code.filepath": ".venv/lib/python3.11/site-packages/django/utils/log.py",
+        "code.function": "log_response",
+        "code.lineno": 253,
+        "extra.request": "<WSGIRequest: GET '/error/'>",
+        "extra.status_code": 500,
+        "log.template": "%s: %s",
+        "process.pid": 20678,
+        "thread.name": "Thread-24 (process_request_thread)"
+      },
+      "exception": "Traceback (most recent call last):\n  File \"/home/dev/django-classic/.venv/lib/python3.11/site-packages/django/core/handlers/exception.py\", line 55, in inner\n    response = get_response(request)\n               ^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/dev/django-classic/.venv/lib/python3.11/site-packages/django/core/handlers/base.py\", line 197, in _get_response\n    response = wrapped_callback(request, *callback_args, **callback_kwargs)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/dev/tracepanel-python/tracepanel/django/structure.py\", line 48, in wrapped\n    return view(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/dev/django-classic/blog/views.py\", line 79, in error\n    return JsonResponse({\"ratio\": posts / 0})\n                                  ~~~~~~^~~\nZeroDivisionError: division by zero\n",
+      "level": "error",
+      "logger": "django.request",
+      "message": "Internal Server Error: /error/",
+      "span_id": "01M4GPC3BF87PJ8PEQ6YZ8XMJT",
+      "time": 1791561698699025
+    }
+  ],
+  "name": "GET /error/",
+  "spans": [
+    {
+      "attrs": {},
+      "duration": 29153,
+      "id": "01M4GPC3BF87PJ8PEQ6YZ8XMJT",
+      "kind": "http",
+      "name": "GET /error/",
+      "parent_id": null,
+      "start": 1791561698671058,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.view": "blog.views.error"
+      },
+      "duration": 1650,
+      "id": "01M4GPC3BF9JWRY97A387KK4V2",
+      "kind": "view",
+      "name": "blog.views.error",
+      "parent_id": "01M4GPC3BF87PJ8PEQ6YZ8XMJT",
+      "start": 1791561698671351,
+      "status": "error"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:77 in error",
+        "code.template": null,
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT COUNT(*) AS \"__count\" FROM \"blog_post\"",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [],
+        "db.params_hash": "083a8cae6135",
+        "db.statement": "SELECT COUNT(*) AS \"__count\" FROM \"blog_post\"",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 54,
+      "id": "01M4GPC3BGX8FP5VH85ND6QS0Y",
+      "kind": "sql",
+      "name": "SELECT COUNT blog_post",
+      "parent_id": "01M4GPC3BF9JWRY97A387KK4V2",
+      "start": 1791561698672553,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "template.name": "<string template>"
+      },
+      "duration": 8864,
+      "id": "01M4GPC3C1NX6T3AWCX5D1JH35",
+      "kind": "template",
+      "name": "<string template>",
+      "parent_id": "01M4GPC3BF87PJ8PEQ6YZ8XMJT",
+      "start": 1791561698689749,
+      "status": "ok"
+    }
+  ],
+  "start": 1791561698671058,
+  "status": "error"
+}

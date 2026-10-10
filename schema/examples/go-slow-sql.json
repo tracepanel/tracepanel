@@ -1,0 +1,68 @@
+{
+  "attrs": {
+    "code.view": "main.(*App).slowReport",
+    "http.method": "GET",
+    "http.path": "/reports/slow",
+    "http.route": "/reports/slow",
+    "http.status_code": 200,
+    "process.runtime.name": "go",
+    "process.runtime.version": "1.27.1",
+    "service.name": "go-api-bin",
+    "service.role": "web",
+    "telemetry.sdk.language": "go",
+    "tracepanel.framework": "net/http"
+  },
+  "duration": 376597,
+  "errors": [],
+  "id": "01M4GPCTFMCF3BED5GHE8RQHX2",
+  "issues": [],
+  "kind": "http",
+  "links": [],
+  "logs": [],
+  "name": "GET /reports/slow",
+  "spans": [
+    {
+      "attrs": {
+        "code.origin": "app.go:130 in (*App).slowReport",
+        "db.alias": "default",
+        "db.client": "go",
+        "db.fingerprint": "WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM n WHERE x < 1000000) SELECT SUM(x) FROM n",
+        "db.many": false,
+        "db.statement": "WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM n WHERE x < 1000000) SELECT SUM(x) FROM n",
+        "db.system": null,
+        "db.vendor": null
+      },
+      "duration": 376091,
+      "id": "01M4GPCTFMF5E4F89Q5JJ5W8B9",
+      "kind": "sql",
+      "name": "WITH n",
+      "parent_id": "01M4GPCTFMWCEEV9AV1JSGGTTB",
+      "start": 1791561722356410,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.function": "main.(*App).slowReport"
+      },
+      "duration": 376466,
+      "id": "01M4GPCTFMWCEEV9AV1JSGGTTB",
+      "kind": "view",
+      "name": "(*App).slowReport",
+      "parent_id": "01M4GPCTFMQTBHR7ZY3K2HRFC7",
+      "start": 1791561722356097,
+      "status": "ok"
+    },
+    {
+      "attrs": {},
+      "duration": 376597,
+      "id": "01M4GPCTFMQTBHR7ZY3K2HRFC7",
+      "kind": "http",
+      "name": "GET /reports/slow",
+      "parent_id": null,
+      "start": 1791561722355977,
+      "status": "ok"
+    }
+  ],
+  "start": 1791561722355977,
+  "status": "ok"
+}

@@ -1,0 +1,30 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+rust-version = "1.99"
+repository = "https://github.com/tracepanel/tracepanel"
+license = "Apache-2.0"
+# Not on crates.io: the agent ships as a binary (and its crates are not in the third-party notices).
+publish = false
+
+[workspace.dependencies]
+tracepanel-protocol = { path = "crates/protocol" }
+tracepanel-analysis = { path = "crates/analysis" }
+tracepanel-store-local = { path = "crates/store-local" }
+tracepanel-server = { path = "crates/server" }
+tracepanel-mcp = { path = "crates/mcp" }
+regex = "1.13"
+rusqlite = { version = "0.40", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["raw_value"] }
+sha1 = "0.11"
+tokio = { version = "1.53", features = ["io-std", "io-util", "macros", "net", "rt-multi-thread", "signal", "sync"] }
+
+# The agent ships as a binary, without symbols. Release wheels are built in CI only (the Wheels workflow),
+# which also maps the build's paths away: panic locations name source files, and a local build's name its user.
+[profile.release]
+strip = true

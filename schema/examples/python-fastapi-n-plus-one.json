@@ -1,0 +1,419 @@
+{
+  "attrs": {
+    "code.view": "app.main.posts",
+    "http.method": "GET",
+    "http.path": "/api/posts",
+    "http.route": "/api/posts",
+    "http.status_code": 200,
+    "process.runtime.name": "cpython",
+    "process.runtime.version": "3.14.0",
+    "service.name": "fastapi-classic",
+    "service.role": "web",
+    "telemetry.sdk.language": "python",
+    "tracepanel.framework": "FastAPI 0.142.4"
+  },
+  "duration": 4802,
+  "errors": [],
+  "id": "01M4GPAPP2WXJQE2FXJ7PSQBG5",
+  "issues": [],
+  "kind": "http",
+  "links": [],
+  "logs": [],
+  "name": "GET /api/posts",
+  "spans": [
+    {
+      "attrs": {},
+      "duration": 4802,
+      "id": "01M4GPAPP24B68GN5ECJ0NZF0J",
+      "kind": "http",
+      "name": "GET /api/posts",
+      "parent_id": null,
+      "start": 1791561652930546,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.function": "app.main.posts"
+      },
+      "duration": 4708,
+      "id": "01M4GPAPP29H6RD4EWA3681K2W",
+      "kind": "view",
+      "name": "app.main.posts",
+      "parent_id": "01M4GPAPP24B68GN5ECJ0NZF0J",
+      "start": 1791561652930630,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "app/main.py:60 in posts",
+        "db.alias": "app.sqlite3",
+        "db.client": "sqlalchemy",
+        "db.namespace": "app.sqlite3",
+        "db.system": "sqlite",
+        "db.transaction.outcome": "rollback",
+        "db.transaction.savepoint": false,
+        "db.vendor": "sqlite"
+      },
+      "duration": 3900,
+      "id": "01M4GPAPP310EMZWWF71X4Z9PP",
+      "kind": "transaction",
+      "name": "transaction app.sqlite3",
+      "parent_id": "01M4GPAPP29H6RD4EWA3681K2W",
+      "start": 1791561652931340,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "app/main.py:60 in posts",
+        "code.template": null,
+        "db.alias": "app.sqlite3",
+        "db.client": "sqlalchemy",
+        "db.fingerprint": "SELECT post.id, post.title, post.views, post.author_id FROM post LIMIT ? OFFSET ?",
+        "db.many": false,
+        "db.namespace": "app.sqlite3",
+        "db.params": [
+          30,
+          0
+        ],
+        "db.params_hash": "2d60518f766b",
+        "db.statement": "SELECT post.id, post.title, post.views, post.author_id FROM post LIMIT ? OFFSET ?",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 100,
+      "id": "01M4GPAPP3SQE7EVCA6DPGHB81",
+      "kind": "sql",
+      "name": "SELECT post",
+      "parent_id": "01M4GPAPP310EMZWWF71X4Z9PP",
+      "start": 1791561652931702,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "app/main.py:60 in posts",
+        "code.template": null,
+        "db.alias": "app.sqlite3",
+        "db.client": "sqlalchemy",
+        "db.fingerprint": "SELECT author.id, author.name FROM author WHERE author.id = ?",
+        "db.many": false,
+        "db.namespace": "app.sqlite3",
+        "db.params": [
+          1
+        ],
+        "db.params_hash": "1069cea999ff",
+        "db.statement": "SELECT author.id, author.name FROM author WHERE author.id = ?",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 17,
+      "id": "01M4GPAPP4KA4VDV6AWPE26PVS",
+      "kind": "sql",
+      "name": "SELECT author",
+      "parent_id": "01M4GPAPP310EMZWWF71X4Z9PP",
+      "start": 1791561652932191,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "app/main.py:60 in posts",
+        "code.template": null,
+        "db.alias": "app.sqlite3",
+        "db.client": "sqlalchemy",
+        "db.fingerprint": "SELECT author.id, author.name FROM author WHERE author.id = ?",
+        "db.many": false,
+        "db.namespace": "app.sqlite3",
+        "db.params": [
+          2
+        ],
+        "db.params_hash": "0fda5da4d22a",
+        "db.statement": "SELECT author.id, author.name FROM author WHERE author.id = ?",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 13,
+      "id": "01M4GPAPP4AKJZ26BQR4QV652Q",
+      "kind": "sql",
+      "name": "SELECT author",
+      "parent_id": "01M4GPAPP310EMZWWF71X4Z9PP",
+      "start": 1791561652932394,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "app/main.py:60 in posts",
+        "code.template": null,
+        "db.alias": "app.sqlite3",
+        "db.client": "sqlalchemy",
+        "db.fingerprint": "SELECT author.id, author.name FROM author WHERE author.id = ?",
+        "db.many": false,
+        "db.namespace": "app.sqlite3",
+        "db.params": [
+          3
+        ],
+        "db.params_hash": "1abedbe3eddf",
+        "db.statement": "SELECT author.id, author.name FROM author WHERE author.id = ?",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 28,
+      "id": "01M4GPAPP4ZGDE9MZTJHEDG72J",
+      "kind": "sql",
+      "name": "SELECT author",
+      "parent_id": "01M4GPAPP310EMZWWF71X4Z9PP",
+      "start": 1791561652932560,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "app/main.py:60 in posts",
+        "code.template": null,
+        "db.alias": "app.sqlite3",
+        "db.client": "sqlalchemy",
+        "db.fingerprint": "SELECT author.id, author.name FROM author WHERE author.id = ?",
+        "db.many": false,
+        "db.namespace": "app.sqlite3",
+        "db.params": [
+          4
+        ],
+        "db.params_hash": "2dd93570f637",
+        "db.statement": "SELECT author.id, author.name FROM author WHERE author.id = ?",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 12,
+      "id": "01M4GPAPP4PAQGNPD8A35WJ47K",
+      "kind": "sql",
+      "name": "SELECT author",
+      "parent_id": "01M4GPAPP310EMZWWF71X4Z9PP",
+      "start": 1791561652932713,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "app/main.py:60 in posts",
+        "code.template": null,
+        "db.alias": "app.sqlite3",
+        "db.client": "sqlalchemy",
+        "db.fingerprint": "SELECT author.id, author.name FROM author WHERE author.id = ?",
+        "db.many": false,
+        "db.namespace": "app.sqlite3",
+        "db.params": [
+          5
+        ],
+        "db.params_hash": "8c52819156d2",
+        "db.statement": "SELECT author.id, author.name FROM author WHERE author.id = ?",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 11,
+      "id": "01M4GPAPP4DFGY297XTE9M8SJS",
+      "kind": "sql",
+      "name": "SELECT author",
+      "parent_id": "01M4GPAPP310EMZWWF71X4Z9PP",
+      "start": 1791561652932841,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "app/main.py:60 in posts",
+        "code.template": null,
+        "db.alias": "app.sqlite3",
+        "db.client": "sqlalchemy",
+        "db.fingerprint": "SELECT author.id, author.name FROM author WHERE author.id = ?",
+        "db.many": false,
+        "db.namespace": "app.sqlite3",
+        "db.params": [
+          6
+        ],
+        "db.params_hash": "7156311954e5",
+        "db.statement": "SELECT author.id, author.name FROM author WHERE author.id = ?",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 11,
+      "id": "01M4GPAPP50DYK9JGN5QEEXY7J",
+      "kind": "sql",
+      "name": "SELECT author",
+      "parent_id": "01M4GPAPP310EMZWWF71X4Z9PP",
+      "start": 1791561652933005,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "app/main.py:60 in posts",
+        "code.template": null,
+        "db.alias": "app.sqlite3",
+        "db.client": "sqlalchemy",
+        "db.fingerprint": "SELECT author.id, author.name FROM author WHERE author.id = ?",
+        "db.many": false,
+        "db.namespace": "app.sqlite3",
+        "db.params": [
+          7
+        ],
+        "db.params_hash": "ff7ebd9287b2",
+        "db.statement": "SELECT author.id, author.name FROM author WHERE author.id = ?",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 11,
+      "id": "01M4GPAPP58KR7W53HB5XKCXPV",
+      "kind": "sql",
+      "name": "SELECT author",
+      "parent_id": "01M4GPAPP310EMZWWF71X4Z9PP",
+      "start": 1791561652933145,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "app/main.py:60 in posts",
+        "code.template": null,
+        "db.alias": "app.sqlite3",
+        "db.client": "sqlalchemy",
+        "db.fingerprint": "SELECT author.id, author.name FROM author WHERE author.id = ?",
+        "db.many": false,
+        "db.namespace": "app.sqlite3",
+        "db.params": [
+          8
+        ],
+        "db.params_hash": "514d2362ea39",
+        "db.statement": "SELECT author.id, author.name FROM author WHERE author.id = ?",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPAPP5KRV3YKAWC46GJK7T",
+      "kind": "sql",
+      "name": "SELECT author",
+      "parent_id": "01M4GPAPP310EMZWWF71X4Z9PP",
+      "start": 1791561652933276,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "app/main.py:60 in posts",
+        "code.template": null,
+        "db.alias": "app.sqlite3",
+        "db.client": "sqlalchemy",
+        "db.fingerprint": "SELECT author.id, author.name FROM author WHERE author.id = ?",
+        "db.many": false,
+        "db.namespace": "app.sqlite3",
+        "db.params": [
+          9
+        ],
+        "db.params_hash": "9ec344ca6de7",
+        "db.statement": "SELECT author.id, author.name FROM author WHERE author.id = ?",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPAPP5YJD3EYBC50HJSPTA",
+      "kind": "sql",
+      "name": "SELECT author",
+      "parent_id": "01M4GPAPP310EMZWWF71X4Z9PP",
+      "start": 1791561652933403,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "app/main.py:60 in posts",
+        "code.template": null,
+        "db.alias": "app.sqlite3",
+        "db.client": "sqlalchemy",
+        "db.fingerprint": "SELECT author.id, author.name FROM author WHERE author.id = ?",
+        "db.many": false,
+        "db.namespace": "app.sqlite3",
+        "db.params": [
+          10
+        ],
+        "db.params_hash": "f7631dc5554d",
+        "db.statement": "SELECT author.id, author.name FROM author WHERE author.id = ?",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 11,
+      "id": "01M4GPAPP5EVWAGK3Y3RXJ26CP",
+      "kind": "sql",
+      "name": "SELECT author",
+      "parent_id": "01M4GPAPP310EMZWWF71X4Z9PP",
+      "start": 1791561652933562,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "app/main.py:60 in posts",
+        "code.template": null,
+        "db.alias": "app.sqlite3",
+        "db.client": "sqlalchemy",
+        "db.fingerprint": "SELECT author.id, author.name FROM author WHERE author.id = ?",
+        "db.many": false,
+        "db.namespace": "app.sqlite3",
+        "db.params": [
+          11
+        ],
+        "db.params_hash": "7a4f97fe8f04",
+        "db.statement": "SELECT author.id, author.name FROM author WHERE author.id = ?",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPAPP5F3HGPKR988YFRMY5",
+      "kind": "sql",
+      "name": "SELECT author",
+      "parent_id": "01M4GPAPP310EMZWWF71X4Z9PP",
+      "start": 1791561652933691,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "app/main.py:60 in posts",
+        "code.template": null,
+        "db.alias": "app.sqlite3",
+        "db.client": "sqlalchemy",
+        "db.fingerprint": "SELECT author.id, author.name FROM author WHERE author.id = ?",
+        "db.many": false,
+        "db.namespace": "app.sqlite3",
+        "db.params": [
+          12
+        ],
+        "db.params_hash": "befa891d3d7b",
+        "db.statement": "SELECT author.id, author.name FROM author WHERE author.id = ?",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPAPP56WTWMG05P61YMKC7",
+      "kind": "sql",
+      "name": "SELECT author",
+      "parent_id": "01M4GPAPP310EMZWWF71X4Z9PP",
+      "start": 1791561652933816,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "app/main.py:60 in posts",
+        "code.template": null,
+        "db.alias": "app.sqlite3",
+        "db.client": "sqlalchemy",
+        "db.fingerprint": "SELECT author.id, author.name FROM author WHERE author.id = ?",
+        "db.many": false,
+        "db.namespace": "app.sqlite3",
+        "db.params": [
+          13
+        ],
+        "db.params_hash": "6621dbb3d8df",
+        "db.statement": "SELECT author.id, author.name FROM author WHERE author.id = ?",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPAPP5KENVWJ7V64G3FXQT",
+      "kind": "sql",
+      "name": "SELECT author",
+      "parent_id": "01M4GPAPP310EMZWWF71X4Z9PP",
+      "start": 1791561652933941,
+      "status": "ok"
+    }
+  ],
+  "start": 1791561652930546,
+  "status": "ok"
+}

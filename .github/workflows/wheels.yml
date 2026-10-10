@@ -1,0 +1,246 @@
+# The tracepanel-agent package: a wheel for every platform Tracepanel supports (ruff's set), each installed and run on
+# its platform, and the sdist, built from and run on Linux. A wheel holds the tracepanel-agent binary alone, with the
+# console's UI (ui-dist/) embedded (maturin, `bindings = "bin"`), built without symbols and with the build's paths
+# mapped away; every wheel is checked for leaks (scripts/check_wheel.py).
+#
+# Publishing: a tag X.Y.Z (the version in pyproject.toml and Cargo.toml) publishes what the run built and checked to
+# PyPI; running the workflow by hand with `testpypi` publishes to TestPyPI. Both by trusted publishing: the publisher
+# on (Test)PyPI names this repository, wheels.yml and the environment (pypi, testpypi). Release files come from this
+# workflow only, never a local build.
+name: Wheels
+
+on:
+  push:
+    branches: [main]
+    tags: ["[0-9]+.[0-9]+.[0-9]+*"]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      testpypi:
+        description: Publish this run's files to TestPyPI
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sources:
+    # Every wheel ships the licenses of the open source code inside it: THIRD-PARTY-NOTICES must match the crates
+    # and the UI's packages (ui-dist/NOTICES, kept with the UI by scripts/ui.sh) this build is made of.
+    name: Notices
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-about
+
+      - uses: astral-sh/setup-uv@v10.3.0
+
+      - name: THIRD-PARTY-NOTICES is up to date
+        run: uv run --no-project scripts/notices.py --check
+
+  build:
+    name: Build ${{ matrix.target }}
+    needs: sources
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: ubuntu-latest, target: x86_64-unknown-linux-gnu, manylinux: auto }
+          - { runner: ubuntu-latest, target: aarch64-unknown-linux-gnu, manylinux: auto }
+          - { runner: ubuntu-latest, target: armv7-unknown-linux-gnueabihf, manylinux: auto }
+          - { runner: ubuntu-latest, target: i686-unknown-linux-gnu, manylinux: auto }
+          - { runner: ubuntu-latest, target: powerpc64le-unknown-linux-gnu, manylinux: auto }
+          - { runner: ubuntu-latest, target: s390x-unknown-linux-gnu, manylinux: auto }
+          - { runner: ubuntu-latest, target: riscv64gc-unknown-linux-gnu, manylinux: "2_31" }
+          - { runner: ubuntu-latest, target: x86_64-unknown-linux-musl, manylinux: musllinux_1_2 }
+          - { runner: ubuntu-latest, target: aarch64-unknown-linux-musl, manylinux: musllinux_1_2 }
+          - { runner: ubuntu-latest, target: armv7-unknown-linux-musleabihf, manylinux: musllinux_1_2 }
+          - { runner: ubuntu-latest, target: i686-unknown-linux-musl, manylinux: musllinux_1_2 }
+          # Raspberry Pi 1 and Zero: a static binary, tagged plain linux_armv6l (no musllinux tag for armv6).
+          - { runner: ubuntu-latest, target: arm-unknown-linux-musleabihf, manylinux: linux, docker: "off", args: "--zig" }
+          - { runner: macos-latest, target: aarch64-apple-darwin }
+          - { runner: macos-latest, target: x86_64-apple-darwin }
+          - { runner: windows-latest, target: x86_64-pc-windows-msvc }
+          - { runner: windows-latest, target: i686-pc-windows-msvc }
+          - { runner: windows-11-arm, target: aarch64-pc-windows-msvc }
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Map the build's paths away
+        # Panic locations name source files: relative paths only, nothing of the machine (or container) that built it.
+        shell: bash
+        run: |
+          home=$(if command -v cygpath > /dev/null; then cygpath -w "$HOME"; else echo "$HOME"; fi)
+          flags="--remap-path-prefix=${GITHUB_WORKSPACE}=tracepanel-agent"
+          for cargo in "$home/.cargo/registry/src" "$home\\.cargo\\registry\\src" /root/.cargo/registry/src /usr/local/cargo/registry/src; do
+            flags="$flags --remap-path-prefix=$cargo=cargo"
+          done
+          echo "RUSTFLAGS=$flags" >> "$GITHUB_ENV"
+
+      - uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          manylinux: ${{ matrix.manylinux || 'auto' }}
+          container: ${{ matrix.docker }}
+          args: --release --locked --out dist ${{ matrix.args }}
+
+      - uses: astral-sh/setup-uv@v10.3.0
+
+      - name: Nothing of the build in the wheel
+        shell: bash
+        run: uv run --no-project scripts/check_wheel.py dist/*.whl
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wheel-${{ matrix.target }}
+          path: dist/*.whl
+
+  smoke:
+    # Each wheel on its own platform: uv installs it, and the binary receives a trace over its socket (TCP on Windows)
+    # and serves it, with its issue, in the console's API.
+    name: Run on ${{ matrix.name }}
+    needs: build
+    runs-on: ${{ matrix.runner }}
+    container: ${{ matrix.container }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux x86_64, runner: ubuntu-latest, wheel: x86_64-unknown-linux-gnu }
+          - { name: linux arm64, runner: ubuntu-24.04-arm, wheel: aarch64-unknown-linux-gnu }
+          - { name: alpine x86_64, runner: ubuntu-latest, wheel: x86_64-unknown-linux-musl, container: "python:3.13-alpine" }
+          - { name: alpine arm64, runner: ubuntu-24.04-arm, wheel: aarch64-unknown-linux-musl, container: "python:3.13-alpine" }
+          - { name: macOS arm64, runner: macos-latest, wheel: aarch64-apple-darwin }
+          - { name: macOS x86_64, runner: macos-15-intel, wheel: x86_64-apple-darwin }
+          - { name: windows x86_64, runner: windows-latest, wheel: x86_64-pc-windows-msvc }
+          - { name: windows x86, runner: windows-latest, wheel: i686-pc-windows-msvc, python: cpython-3.13-windows-x86-none }
+          - { name: windows arm64, runner: windows-11-arm, wheel: aarch64-pc-windows-msvc }
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: scripts
+
+      - uses: astral-sh/setup-uv@v10.3.0
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: wheel-${{ matrix.wheel }}
+          path: dist
+
+      - name: Install the wheel, receive a trace and serve it
+        shell: bash
+        run: >
+          uv run --no-project --python ${{ matrix.python || '3.13' }} --no-index --find-links dist
+          --with tracepanel-agent python scripts/smoke.py
+
+  smoke-emulated:
+    # Platforms without a runner, under QEMU: slower, the same check, with the pip of the platform's Python image.
+    name: Run on ${{ matrix.name }} (emulated)
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux armv7, platform: linux/arm/v7, image: "python:3.13-slim", wheel: armv7-unknown-linux-gnueabihf }
+          - { name: linux x86, platform: linux/386, image: "python:3.13-slim", wheel: i686-unknown-linux-gnu }
+          - { name: linux ppc64le, platform: linux/ppc64le, image: "python:3.13-slim", wheel: powerpc64le-unknown-linux-gnu }
+          - { name: linux s390x, platform: linux/s390x, image: "python:3.13-slim", wheel: s390x-unknown-linux-gnu }
+          - { name: linux riscv64, platform: linux/riscv64, image: "python:3.13-slim", wheel: riscv64gc-unknown-linux-gnu }
+          - { name: alpine armv7, platform: linux/arm/v7, image: "python:3.13-alpine", wheel: armv7-unknown-linux-musleabihf }
+          - { name: alpine x86, platform: linux/386, image: "python:3.13-alpine", wheel: i686-unknown-linux-musl }
+          - { name: alpine armv6, platform: linux/arm/v6, image: "python:3.13-alpine", wheel: arm-unknown-linux-musleabihf }
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: scripts
+
+      - uses: docker/setup-qemu-action@v4
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: wheel-${{ matrix.wheel }}
+          path: dist
+
+      - name: Install the wheel, receive a trace and serve it
+        run: >
+          docker run --rm --platform ${{ matrix.platform }} -v "$PWD:/w" -w /w ${{ matrix.image }}
+          sh -c "python -m pip install --no-index --find-links dist tracepanel-agent && python scripts/smoke.py"
+
+  sdist:
+    # Where no wheel fits (FreeBSD, …) the installer builds the agent from the sdist: it must hold all a build needs.
+    name: sdist
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.3.0
+
+      - name: Build the sdist
+        run: uv build --sdist --out-dir dist
+
+      - name: Build from the sdist, receive a trace and serve it
+        run: uv run --no-project --python 3.13 --with "$(ls dist/*.tar.gz)" python scripts/smoke.py
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+
+  publish:
+    name: Publish to ${{ startsWith(github.ref, 'refs/tags/') && 'PyPI' || 'TestPyPI' }}
+    if: startsWith(github.ref, 'refs/tags/') || inputs.testpypi
+    needs: [sources, build, smoke, smoke-emulated, sdist]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: ${{ startsWith(github.ref, 'refs/tags/') && 'pypi' || 'testpypi' }}
+      url: https://${{ startsWith(github.ref, 'refs/tags/') && 'pypi.org' || 'test.pypi.org' }}/project/tracepanel-agent/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.3.0
+
+      - name: The tag is the version
+        if: startsWith(github.ref, 'refs/tags/')
+        # One version three ways: the tag (0.0.1a1), pyproject.toml (PEP 440: 0.0.1a1), Cargo.toml (semver:
+        # 0.0.1-alpha.1). Compared as versions, not strings.
+        run: |
+          uv run --no-project --with packaging python - <<'EOF'
+          import os, sys, tomllib
+          from packaging.version import Version
+          tag = os.environ["GITHUB_REF_NAME"]
+          python = tomllib.load(open("pyproject.toml", "rb"))["project"]["version"]
+          cargo = tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"]
+          if not Version(tag) == Version(python) == Version(cargo):
+              sys.exit(f"::error::tag {tag}, pyproject.toml {python}, Cargo.toml {cargo}: they must agree")
+          print(f"version {Version(python)}")
+          EOF
+
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish
+        run: >
+          uv publish --trusted-publishing always
+          --publish-url ${{ startsWith(github.ref, 'refs/tags/') && 'https://upload.pypi.org/legacy/' || 'https://test.pypi.org/legacy/' }}
+          ${{ !startsWith(github.ref, 'refs/tags/') && '--check-url https://test.pypi.org/simple/' || '' }}
+          dist/*

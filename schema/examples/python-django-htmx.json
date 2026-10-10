@@ -1,0 +1,52 @@
+{
+  "attrs": {
+    "code.view": "board.views.members",
+    "htmx.redirected_to": "/admin/login/?next=/p/website/members/",
+    "htmx.request": true,
+    "http.method": "GET",
+    "http.path": "/p/website/members/",
+    "http.route": "/p/<slug:slug>/members/",
+    "http.status_code": 302,
+    "process.runtime.name": "cpython",
+    "process.runtime.version": "3.14.0",
+    "service.name": "django-htmx",
+    "service.role": "web",
+    "telemetry.sdk.language": "python",
+    "tracepanel.framework": "Django 6.1.2",
+    "user.id": null
+  },
+  "duration": 1304,
+  "errors": [],
+  "id": "01M4GPABR0H18N4XSXAN3W6NHM",
+  "issues": [],
+  "kind": "http",
+  "links": [],
+  "logs": [],
+  "name": "GET /p/<slug:slug>/members/",
+  "spans": [
+    {
+      "attrs": {},
+      "duration": 1304,
+      "id": "01M4GPABR0XBE6KKGXS5GN4GC3",
+      "kind": "http",
+      "name": "GET /p/<slug:slug>/members/",
+      "parent_id": null,
+      "start": 1791561641728202,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.view": "board.views.members"
+      },
+      "duration": 493,
+      "id": "01M4GPABR03A4CRCC066GYP0GT",
+      "kind": "view",
+      "name": "board.views.members",
+      "parent_id": "01M4GPABR0XBE6KKGXS5GN4GC3",
+      "start": 1791561641728869,
+      "status": "ok"
+    }
+  ],
+  "start": 1791561641728202,
+  "status": "ok"
+}

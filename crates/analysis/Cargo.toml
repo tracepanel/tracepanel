@@ -1,0 +1,15 @@
+[package]
+name = "tracepanel-analysis"
+description = "Finds the issues in a trace: N+1, duplicate and slow SQL, transactions, htmx, errors"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+tracepanel-protocol.workspace = true
+regex.workspace = true
+serde_json.workspace = true
+sha1.workspace = true

@@ -1,0 +1,5 @@
+# The one Rust the agent is built with: here, in CI and for the wheels. Move it forward on purpose (and rust-version
+# in Cargo.toml with it): no older Rust is supported.
+[toolchain]
+channel = "1.99.0"
+components = ["rustfmt", "clippy"]

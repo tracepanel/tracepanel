@@ -1,0 +1,1835 @@
+/* @tracepanel/ui — shared by the console and the panel. Every class is prefixed with dt-. */
+
+/* tracepanel identity: violet accents and a small lime brand mark on calm, GitHub-like neutral surfaces, dark (default) or light.
+   The app sets html[data-theme] from the viewer's choice or the OS preference. */
+:root {
+  color-scheme: dark;
+  --dt-font: "Inter Variable", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --dt-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --dt-ink: rgb(1 4 9 / 0.88);
+  --dt-ink-2: #151b23;
+  --dt-ink-text: #f0f6fc;
+  --dt-ink-muted: #9198a1;
+  --dt-lime: #c8f560;
+  --dt-lime-text: #120e24;
+
+  --dt-page: #0d1117;
+  --dt-bg: #0d1117;
+  --dt-paper: #151b23;
+  --dt-subtle: rgb(255 255 255 / 0.02);
+  --dt-muted-bg: rgb(101 108 118 / 0.2);
+  --dt-hover: rgb(101 108 118 / 0.12);
+  --dt-selected: rgb(163 113 247 / 0.12);
+  --dt-border: #2a313c;
+  --dt-border-strong: #3d444d;
+  --dt-blur: none;
+
+  --dt-text: #f0f6fc;
+  --dt-text-2: #c3ccd6;
+  --dt-text-3: #9198a1;
+
+  --dt-accent: #bc8cff;
+  --dt-accent-strong: #8957e5;
+  --dt-accent-bg: rgb(163 113 247 / 0.15);
+  --dt-glow: 0 0 0 3px rgb(163 113 247 / 0.3);
+
+  --dt-ok: #4ade80;
+  --dt-ok-bg: rgb(74 222 128 / 0.12);
+  --dt-warn: #fb923c;
+  --dt-warn-strong: #ff8a4c;
+  --dt-warn-bg: rgb(251 146 60 / 0.1);
+  --dt-warn-border: rgb(251 146 60 / 0.22);
+  --dt-error: #fb7185;
+  --dt-error-bg: rgb(251 113 133 / 0.1);
+  --dt-error-border: rgb(251 113 133 / 0.32);
+  --dt-info: #7db4ff;
+  --dt-info-bg: rgb(125 180 255 / 0.13);
+
+  --dt-get: #7db4ff;
+  --dt-post: #4ade80;
+  --dt-put: #fbbf24;
+  --dt-delete: #fb7185;
+
+  --dt-k-request: rgb(145 152 161 / 0.35);
+  --dt-k-django: rgb(145 152 161 / 0.35);
+  --dt-k-view: #a78bfa;
+  --dt-k-template: #2dd4bf;
+  --dt-k-sql: #7db4ff;
+  --dt-k-cache: #fbbf24;
+  --dt-k-log: #9a93bd;
+  --dt-k-mail: #f472b6;
+
+  --dt-mark: rgb(145 152 161 / 0.35);
+  --dt-db: #8b7bff;
+
+  --dt-radius: 8px;
+  --dt-radius-sm: 6px;
+  --dt-shadow: 0 8px 24px rgb(1 4 9 / 0.5);
+
+  /* Surfaces the apps build on. */
+  --dt-surface: #0d1117;
+  --dt-chrome: #010409;
+  --dt-chrome-strong: #151b23;
+  --dt-panel: #0d1117;
+  --dt-popover: #151b23;
+  --dt-popover-shadow: 0 8px 24px rgb(1 4 9 / 0.6);
+  --dt-card: #0d1117;
+  --dt-faint: #151b23;
+  --dt-field: #0d1117;
+  --dt-grid: rgb(145 152 161 / 0.15);
+  --dt-scrollbar: rgb(145 152 161 / 0.35);
+  --dt-backdrop: #0d1117;
+
+  /* Chart series: validated with the dataviz palette checker on --dt-surface. */
+  --dt-chart-1: #8b7bff;
+  --dt-chart-2: #13a89a;
+
+  /* SQL highlighting. */
+  --dt-syn-keyword: #c8a8ff;
+  --dt-syn-identifier: #e6edf3;
+  --dt-syn-string: #c8f560;
+  --dt-syn-number: #ffb86b;
+  --dt-syn-comment: #8b949e;
+  --dt-syn-operator: #9198a1;
+  --dt-syn-param-bg: rgb(200 245 96 / 0.16);
+  --dt-alias-text: #5eead4;
+}
+
+/* Light theme: same identity, paper surfaces, darker inks so text and marks keep their contrast. */
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --dt-ink: rgb(255 255 255 / 0.95);
+  --dt-ink-2: #f6f8fa;
+  --dt-ink-text: #1f2328;
+  --dt-ink-muted: #59636e;
+  --dt-lime: #c8f560;
+  --dt-lime-text: #1b2a05;
+
+  --dt-page: #ffffff;
+  --dt-bg: #ffffff;
+  --dt-paper: #f6f8fa;
+  --dt-subtle: #f6f8fa;
+  --dt-muted-bg: rgb(129 139 152 / 0.15);
+  --dt-hover: rgb(129 139 152 / 0.1);
+  --dt-selected: rgb(130 80 223 / 0.08);
+  --dt-border: #d1d9e0;
+  --dt-border-strong: #c1c9d2;
+
+  --dt-text: #1f2328;
+  --dt-text-2: #3d444d;
+  --dt-text-3: #59636e;
+
+  --dt-accent: #8250df;
+  --dt-accent-strong: #8250df;
+  --dt-accent-bg: rgb(130 80 223 / 0.1);
+  --dt-glow: 0 0 0 3px rgb(130 80 223 / 0.2);
+
+  --dt-ok: #15803d;
+  --dt-ok-bg: rgb(22 163 74 / 0.1);
+  --dt-warn: #c2410c;
+  --dt-warn-strong: #c2410c;
+  --dt-warn-bg: rgb(234 88 12 / 0.08);
+  --dt-warn-border: rgb(234 88 12 / 0.25);
+  --dt-error: #e11d48;
+  --dt-error-bg: rgb(225 29 72 / 0.07);
+  --dt-error-border: rgb(225 29 72 / 0.3);
+  --dt-info: #2563eb;
+  --dt-info-bg: rgb(37 99 235 / 0.09);
+
+  --dt-get: #2563eb;
+  --dt-post: #15803d;
+  --dt-put: #b45309;
+  --dt-delete: #e11d48;
+
+  --dt-k-request: rgb(89 99 110 / 0.3);
+  --dt-k-django: rgb(89 99 110 / 0.3);
+  --dt-k-view: #7c5ce6;
+  --dt-k-template: #0d9488;
+  --dt-k-sql: #2563eb;
+  --dt-k-cache: #d97706;
+  --dt-k-log: #8a84a6;
+  --dt-k-mail: #db2777;
+
+  --dt-mark: rgb(89 99 110 / 0.3);
+  --dt-db: #6d5ce7;
+  --dt-shadow: 0 1px 3px rgb(31 35 40 / 0.08);
+
+  --dt-surface: #ffffff;
+  --dt-chrome: #f6f8fa;
+  --dt-chrome-strong: #f6f8fa;
+  --dt-panel: #ffffff;
+  --dt-popover: #ffffff;
+  --dt-popover-shadow: 0 8px 24px rgb(66 74 83 / 0.16);
+  --dt-card: #ffffff;
+  --dt-faint: #f6f8fa;
+  --dt-field: #ffffff;
+  --dt-grid: rgb(31 35 40 / 0.08);
+  --dt-scrollbar: rgb(31 35 40 / 0.25);
+  --dt-backdrop: #ffffff;
+
+  --dt-chart-1: #6d5ce7;
+  --dt-chart-2: #0f8f83;
+
+  --dt-syn-keyword: #6d28d9;
+  --dt-syn-identifier: #1d1830;
+  --dt-syn-string: #3f7d0a;
+  --dt-syn-number: #b45309;
+  --dt-syn-comment: #8a84a6;
+  --dt-syn-operator: #6e6889;
+  --dt-syn-param-bg: rgb(101 163 13 / 0.12);
+  --dt-alias-text: #0f766e;
+}
+
+.dt-icon {
+  flex: none;
+}
+
+code,
+.dt-code {
+  font-family: var(--dt-mono);
+}
+
+/* ---------- Primitives ---------- */
+
+.dt-method {
+  flex: none;
+  min-width: 38px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font: 600 12px / 16px var(--dt-mono);
+  letter-spacing: 0.02em;
+  text-align: center;
+  color: var(--dt-get);
+  background: color-mix(in srgb, var(--dt-get) 12%, transparent);
+}
+.dt-method[data-method="POST"] {
+  color: var(--dt-post);
+  background: color-mix(in srgb, var(--dt-post) 12%, transparent);
+}
+.dt-method[data-method="PUT"],
+.dt-method[data-method="PATCH"] {
+  color: var(--dt-put);
+  background: color-mix(in srgb, var(--dt-put) 14%, transparent);
+}
+.dt-method[data-method="DELETE"] {
+  color: var(--dt-delete);
+  background: color-mix(in srgb, var(--dt-delete) 12%, transparent);
+}
+
+.dt-status {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font: 600 12px / 16px var(--dt-mono);
+  color: var(--dt-ok);
+  background: var(--dt-ok-bg);
+}
+.dt-status[data-tone="info"] {
+  color: var(--dt-info);
+  background: var(--dt-info-bg);
+}
+.dt-status[data-tone="warn"] {
+  color: var(--dt-warn);
+  background: var(--dt-warn-bg);
+}
+.dt-status[data-tone="error"] {
+  color: var(--dt-error);
+  background: var(--dt-error-bg);
+}
+
+.dt-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+  white-space: nowrap;
+  color: var(--dt-warn);
+  background: var(--dt-warn-bg);
+}
+.dt-chip[data-kind="error"] {
+  color: var(--dt-error);
+  background: var(--dt-error-bg);
+}
+.dt-chip-count {
+  opacity: 0.75;
+}
+
+.dt-tag {
+  flex: none;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  color: var(--dt-accent);
+  background: var(--dt-accent-bg);
+}
+
+.dt-path {
+  font-family: var(--dt-mono);
+}
+.dt-path-param {
+  color: var(--dt-text-3);
+}
+
+.dt-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--dt-border-strong);
+  border-radius: var(--dt-radius-sm);
+  background: var(--dt-bg);
+  color: var(--dt-text);
+  font: 500 13px / 16px var(--dt-font);
+  cursor: pointer;
+}
+.dt-button:hover {
+  background: var(--dt-hover);
+}
+.dt-button-small {
+  padding: 3px 8px;
+}
+
+.dt-note {
+  margin: 0;
+  padding: 24px 16px;
+  color: var(--dt-text-3);
+  text-align: center;
+}
+
+.dt-empty {
+  padding: 48px 24px;
+  text-align: center;
+}
+.dt-empty-title {
+  margin: 0 0 4px;
+  font-weight: 600;
+}
+.dt-empty-text {
+  margin: 0;
+  color: var(--dt-text-2);
+}
+
+.dt-section-label {
+  margin: 16px 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--dt-text-3);
+}
+
+button:focus-visible,
+summary:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--dt-accent);
+  outline-offset: 1px;
+}
+
+/* ---------- Request rows ---------- */
+
+.dt-requests {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dt-request-row {
+  position: relative;
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  padding: 9px 16px 9px 18px;
+  border: 0;
+  border-bottom: 1px solid var(--dt-border);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.dt-request-row::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: transparent;
+}
+.dt-request-row[data-tone="warn"]::before {
+  background: var(--dt-warn-strong);
+}
+.dt-request-row[data-tone="error"]::before {
+  background: var(--dt-error);
+}
+.dt-request-row:hover {
+  background: var(--dt-hover);
+}
+.dt-request-row[aria-current="true"] {
+  background: var(--dt-selected);
+}
+.dt-request-row[data-depth="1"] {
+  padding-left: 42px;
+}
+.dt-request-row[data-depth="1"]::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 26px;
+  width: 9px;
+  height: 18px;
+  border-bottom: 1px solid var(--dt-border-strong);
+  border-left: 1px solid var(--dt-border-strong);
+  border-bottom-left-radius: 4px;
+}
+
+.dt-request-row[data-new] {
+  animation: dt-arrive 1.6s ease-out;
+}
+@keyframes dt-arrive {
+  from {
+    background: var(--dt-accent-bg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dt-request-row[data-new] {
+    animation: none;
+  }
+}
+
+.dt-request-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+/* htmx sent it: a small tag after the method. */
+.dt-htmx {
+  flex: none;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--dt-subtle);
+  border: 1px solid var(--dt-border);
+  color: var(--dt-text-2);
+  font-family: var(--dt-mono);
+  font-size: 11px;
+  line-height: 18px;
+}
+.dt-method-group {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+}
+.dt-request-trigger {
+  color: var(--dt-text-3);
+  font-family: var(--dt-font);
+}
+.dt-request-path {
+  overflow: hidden;
+  font-family: var(--dt-mono);
+  font-size: 13.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dt-request-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  padding-left: 46px;
+  color: var(--dt-text-2);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.dt-request-time {
+  margin-left: auto;
+  color: var(--dt-text-3);
+}
+
+.dt-issue-row-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  color: var(--dt-warn);
+}
+.dt-issue-row-icon[data-kind="error"] {
+  color: var(--dt-error);
+}
+.dt-issue-row-title {
+  font-family: var(--dt-font);
+  font-size: 14px;
+  font-weight: 500;
+}
+.dt-issue-row-where {
+  overflow: hidden;
+  max-width: 260px;
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dt-requests[data-compact] .dt-request-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px 6px 14px;
+}
+.dt-requests[data-compact] .dt-request-row[data-depth="1"] {
+  padding-left: 14px;
+}
+.dt-requests[data-compact] .dt-request-row[data-depth="1"]::after {
+  display: none;
+}
+.dt-requests[data-compact] .dt-request-main {
+  flex: 1;
+  /* Narrow: the path keeps a few characters, the tags shrink first, nothing runs into the numbers. */
+  overflow: hidden;
+}
+.dt-requests[data-compact] .dt-request-path {
+  min-width: 5ch;
+}
+.dt-requests[data-compact] .dt-tag {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dt-requests[data-compact] .dt-request-meta {
+  display: grid;
+  grid-auto-columns: auto;
+  grid-auto-flow: column;
+  grid-template-columns: 34px 56px 44px;
+  justify-items: end;
+  padding-left: 0;
+}
+.dt-request-queries {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.dt-request-queries .dt-icon {
+  color: var(--dt-text-3);
+}
+.dt-request-queries[data-zero] {
+  color: var(--dt-text-3);
+}
+.dt-requests[data-compact] .dt-chip {
+  min-width: 40px;
+  justify-content: center;
+}
+/* ---------- Trace ---------- */
+
+.dt-trace-head {
+  padding: 14px 16px 10px;
+}
+.dt-trace-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.dt-trace-title h2 {
+  overflow: hidden;
+  margin: 0;
+  font: 600 16px / 20px var(--dt-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dt-muted-text {
+  color: var(--dt-text-3);
+}
+.dt-trace[data-variant="compact"] .dt-explore {
+  margin-left: 0;
+}
+.dt-trace[data-variant="compact"] .dt-trace-head {
+  padding: 12px 16px 10px;
+}
+.dt-trace[data-variant="compact"] .dt-tabs {
+  margin-top: 0;
+}
+/* The panel docked at the bottom: tabs, metrics, Explore and the panel's buttons in one toolbar row. */
+.dt-trace-strip {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 40px;
+  padding: 0 8px 0 4px;
+  border-bottom: 1px solid var(--dt-border);
+  background: var(--dt-chrome, var(--dt-bg));
+  backdrop-filter: var(--dt-blur);
+}
+.dt-trace-strip .dt-tabs {
+  position: static;
+  align-self: stretch;
+  /* Many tabs in a narrow panel scroll sideways rather than wrap. */
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin: 0;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  backdrop-filter: none;
+}
+.dt-trace-strip .dt-tab {
+  flex: none;
+  margin-bottom: 0;
+  padding: 0 8px;
+  font-size: 13.5px;
+}
+.dt-trace-route {
+  margin: 4px 0 0 46px;
+  color: var(--dt-text-3);
+  font-size: 13px;
+}
+
+.dt-issue-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: calc(100% - 32px);
+  margin: 0 16px 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--dt-warn-border);
+  border-radius: var(--dt-radius);
+  background: var(--dt-warn-bg);
+  color: var(--dt-warn);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.dt-issue-banner span:not(.dt-issue-banner-cta) {
+  overflow: hidden;
+  color: var(--dt-text-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dt-issue-banner-cta {
+  margin-left: auto;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.dt-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0 16px;
+  border: 1px solid var(--dt-border);
+  border-radius: var(--dt-radius);
+  background: var(--dt-subtle);
+}
+.dt-metric {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+}
+.dt-metric + .dt-metric {
+  border-left: 1px solid var(--dt-border);
+}
+.dt-metric-label {
+  color: var(--dt-text-3);
+  font-size: 12px;
+  font-weight: 500;
+}
+.dt-metric-value {
+  font-size: 19px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.dt-metric-sub {
+  color: var(--dt-text-2);
+  font-size: 12.5px;
+}
+/* On a console page the metrics are the same tiles as the summaries of the other pages (Stat): separate cards,
+   larger numbers. The panel keeps the compact strip. */
+.dt-trace[data-variant="full"] .dt-metrics {
+  gap: 10px;
+  border: 0;
+  background: none;
+}
+.dt-trace[data-variant="full"] .dt-metric {
+  align-content: start;
+  gap: 6px;
+  padding: 16px 20px;
+  border: 1px solid var(--dt-border);
+  border-radius: 12px;
+  background: var(--dt-card);
+}
+.dt-trace[data-variant="full"] .dt-metric-label {
+  color: var(--dt-text-2);
+  font-size: 14px;
+}
+.dt-trace[data-variant="full"] .dt-metric-value {
+  font-size: 28px;
+  line-height: 1.25;
+}
+.dt-trace[data-variant="full"] .dt-metric-sub {
+  font-size: 14px;
+}
+.dt-split {
+  display: block;
+  height: 4px;
+  margin-top: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--dt-border-strong);
+}
+.dt-split-db {
+  display: block;
+  height: 100%;
+  background: var(--dt-db);
+}
+
+.dt-timeline {
+  margin: 0;
+  padding: 14px 16px 6px;
+}
+.dt-timeline-axis {
+  position: relative;
+  height: 16px;
+  margin-left: 72px;
+  color: var(--dt-text-3);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.dt-timeline-axis span {
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+.dt-timeline-axis span:first-child {
+  transform: none;
+}
+.dt-timeline-axis span:last-child {
+  transform: translateX(-100%);
+}
+.dt-lane {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  align-items: center;
+  height: 22px;
+}
+.dt-lane-label {
+  display: flex;
+  gap: 4px;
+  color: var(--dt-text-2);
+  font-size: 12.5px;
+}
+.dt-lane-count {
+  color: var(--dt-text-3);
+}
+.dt-lane-track {
+  position: relative;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--dt-muted-bg);
+}
+.dt-lane-grid {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--dt-border);
+}
+.dt-mark {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  min-width: 2px;
+  border-radius: 2px;
+  background: var(--dt-mark);
+}
+.dt-mark[data-tone="warn"] {
+  background: var(--dt-warn-strong);
+}
+.dt-mark[data-tone="error"] {
+  background: var(--dt-error);
+}
+.dt-mark[data-point] {
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: var(--dt-info);
+}
+.dt-mark[data-point][data-tone="warn"] {
+  background: var(--dt-warn-strong);
+}
+.dt-mark[data-point][data-tone="error"] {
+  background: var(--dt-error);
+}
+
+.dt-tabs {
+  backdrop-filter: var(--dt-blur);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  gap: 2px;
+  margin-top: 8px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--dt-border);
+  background: var(--dt-bg);
+}
+.dt-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: -1px;
+  padding: 9px 8px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--dt-text-2);
+  font: 500 14px var(--dt-font);
+  cursor: pointer;
+}
+.dt-tab:hover {
+  color: var(--dt-text);
+}
+.dt-tab[aria-selected="true"] {
+  border-bottom-color: var(--dt-accent);
+  color: var(--dt-text);
+}
+.dt-tab > svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--dt-text-3);
+}
+.dt-tab[aria-selected="true"] > svg {
+  color: var(--dt-accent);
+}
+.dt-tab-detail {
+  color: var(--dt-text-3);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+.dt-tab-count {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--dt-muted-bg);
+  color: var(--dt-text-2);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 17px;
+  text-align: center;
+}
+.dt-tab-count[data-tone="warn"] {
+  background: var(--dt-warn-bg);
+  color: var(--dt-warn);
+}
+.dt-tab-count[data-tone="error"] {
+  background: var(--dt-error-bg);
+  color: var(--dt-error);
+}
+
+/* ---------- Request tab ---------- */
+
+.dt-props {
+  margin: 0;
+  padding: 6px 16px;
+}
+.dt-props div {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 12px;
+  align-items: baseline;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--dt-border);
+}
+.dt-props div:last-child {
+  border-bottom: 0;
+}
+.dt-props dt {
+  color: var(--dt-text-3);
+  font-size: 13px;
+}
+.dt-props dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.dt-props code {
+  font-size: 13px;
+}
+
+.dt-disclosure {
+  margin: 0 16px 16px;
+  border: 1px solid var(--dt-border);
+  border-radius: var(--dt-radius);
+}
+.dt-disclosure summary {
+  padding: 8px 12px;
+  color: var(--dt-text-2);
+  cursor: pointer;
+}
+/* ---------- Issues tab ---------- */
+
+.dt-issue-cards {
+  display: grid;
+  gap: 10px;
+  padding: 12px 16px 16px;
+}
+.dt-issue-card {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--dt-border);
+  border-radius: var(--dt-radius);
+  background: var(--dt-bg);
+  box-shadow: var(--dt-shadow);
+}
+.dt-issue-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--dt-radius-sm);
+  color: var(--dt-warn);
+  background: var(--dt-warn-bg);
+}
+.dt-issue-card[data-kind="error"] .dt-issue-icon {
+  color: var(--dt-error);
+  background: var(--dt-error-bg);
+}
+.dt-issue-body {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.dt-issue-kind {
+  margin: 0;
+  color: var(--dt-warn);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.dt-issue-card[data-kind="error"] .dt-issue-kind {
+  color: var(--dt-error);
+}
+.dt-issue-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.dt-issue-where {
+  justify-self: start;
+  max-width: 100%;
+  padding: 2px 6px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--dt-muted-bg);
+  color: var(--dt-text-2);
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dt-issue-hint {
+  margin: 0;
+  color: var(--dt-text-2);
+}
+.dt-issue-hint code {
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--dt-muted-bg);
+  color: var(--dt-text);
+  font-size: 13px;
+}
+.dt-issue-body .dt-button {
+  justify-self: start;
+}
+
+/* ---------- SQL tab ---------- */
+
+.dt-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+}
+.dt-toolbar-text {
+  color: var(--dt-text-2);
+  font-size: 13px;
+}
+.dt-segmented {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: var(--dt-radius-sm);
+  background: var(--dt-muted-bg);
+}
+.dt-segmented button {
+  padding: 3px 10px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--dt-text-2);
+  font: 500 13px var(--dt-font);
+  cursor: pointer;
+}
+.dt-segmented button[aria-pressed="true"] {
+  background: var(--dt-bg);
+  color: var(--dt-text);
+  box-shadow: var(--dt-shadow);
+}
+
+.dt-sql-groups {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--dt-border);
+}
+.dt-sql-groups > li {
+  border-bottom: 1px solid var(--dt-border);
+}
+.dt-sql-group {
+  display: grid;
+  grid-template-columns: 14px 36px minmax(0, 1fr) auto 64px 60px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  list-style: none;
+  cursor: pointer;
+}
+.dt-sql-group::-webkit-details-marker {
+  display: none;
+}
+.dt-sql-group:hover {
+  background: var(--dt-hover);
+}
+.dt-sql-group .dt-icon {
+  color: var(--dt-text-3);
+  transition: transform 120ms ease;
+}
+details[open] > .dt-sql-group .dt-icon {
+  transform: rotate(90deg);
+}
+details[data-focused] > .dt-sql-group {
+  background: var(--dt-warn-bg);
+}
+.dt-sql-count {
+  color: var(--dt-text-2);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.dt-sql-name {
+  overflow: hidden;
+  font: 13.5px var(--dt-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dt-sql-bar {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--dt-muted-bg);
+}
+.dt-sql-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--dt-db);
+}
+.dt-sql-time {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.dt-code {
+  margin: 0;
+  padding: 10px 16px 10px 40px;
+  overflow-x: auto;
+  background: var(--dt-subtle);
+  color: var(--dt-text);
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.dt-sql-calls {
+  margin: 0;
+  padding: 4px 16px 10px 40px;
+  background: var(--dt-subtle);
+  list-style: none;
+}
+.dt-sql-calls li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 0;
+  color: var(--dt-text-2);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+.dt-sql-calls code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dt-sql-calls li[data-focused] code {
+  color: var(--dt-warn);
+}
+.dt-sql-origin {
+  margin: 0;
+  padding: 0 16px 10px 40px;
+  background: var(--dt-subtle);
+  color: var(--dt-text-2);
+  font-size: 12.5px;
+}
+
+/* ---------- Logs tab ---------- */
+
+.dt-logs {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dt-log {
+  display: grid;
+  grid-template-columns: 56px 64px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: baseline;
+  padding: 7px 16px 7px 13px;
+  border-bottom: 1px solid var(--dt-border);
+  border-left: 3px solid transparent;
+}
+.dt-log[data-level="warning"] {
+  border-left-color: var(--dt-warn-strong);
+  background: color-mix(in srgb, var(--dt-warn-bg) 60%, transparent);
+}
+.dt-log[data-level="error"],
+.dt-log[data-level="critical"] {
+  border-left-color: var(--dt-error);
+  background: color-mix(in srgb, var(--dt-error-bg) 60%, transparent);
+}
+.dt-log-time {
+  color: var(--dt-text-3);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+.dt-log-level {
+  color: var(--dt-text-2);
+  font: 600 12px var(--dt-mono);
+  text-transform: uppercase;
+}
+.dt-log[data-level="warning"] .dt-log-level {
+  color: var(--dt-warn);
+}
+.dt-log[data-level="error"] .dt-log-level,
+.dt-log[data-level="critical"] .dt-log-level {
+  color: var(--dt-error);
+}
+.dt-log-message {
+  font: 13.5px var(--dt-mono);
+  overflow-wrap: anywhere;
+}
+.dt-log-logger {
+  max-width: 140px;
+  overflow: hidden;
+  color: var(--dt-text-3);
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dt-log-exception {
+  grid-column: 1 / -1;
+  margin: 4px -16px -7px -13px;
+  padding-left: 16px;
+}
+
+/* ---------- Error tab ---------- */
+
+.dt-error {
+  padding: 14px 16px 20px;
+}
+.dt-error-head {
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--dt-error-border);
+  border-radius: var(--dt-radius);
+  background: var(--dt-error-bg);
+}
+.dt-error-type {
+  margin: 0;
+  color: var(--dt-error);
+  font: 700 15px var(--dt-mono);
+}
+.dt-error-message {
+  margin: 4px 0 0;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+.dt-error-meta {
+  margin: 8px 0 0;
+  color: var(--dt-text-3);
+  font-size: 12.5px;
+}
+.dt-frames {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--dt-border);
+  border-radius: var(--dt-radius);
+}
+.dt-frame + .dt-frame,
+.dt-frame-group + .dt-frame,
+.dt-frame + .dt-frame-group,
+.dt-frame-group + .dt-frame-group {
+  border-top: 1px solid var(--dt-border);
+}
+.dt-frame summary,
+.dt-frame-group > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  list-style: none;
+  cursor: pointer;
+}
+.dt-frame summary::-webkit-details-marker,
+.dt-frame-group > summary::-webkit-details-marker {
+  display: none;
+}
+.dt-frame summary .dt-icon,
+.dt-frame-group > summary .dt-icon {
+  color: var(--dt-text-3);
+  transition: transform 120ms ease;
+}
+.dt-frame[open] > summary .dt-icon,
+.dt-frame-group[open] > summary .dt-icon {
+  transform: rotate(90deg);
+}
+.dt-frame summary:hover,
+.dt-frame-group > summary:hover {
+  background: var(--dt-hover);
+}
+.dt-frame-group > summary {
+  background: var(--dt-subtle);
+  color: var(--dt-text-3);
+  font-size: 13px;
+}
+.dt-frame-group-names {
+  overflow: hidden;
+  font: 12px var(--dt-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dt-frame-group .dt-frame {
+  border-top: 1px solid var(--dt-border);
+  background: var(--dt-subtle);
+}
+.dt-frame-fn {
+  font: 600 13.5px var(--dt-mono);
+}
+.dt-frame[data-app] > summary .dt-frame-fn {
+  color: var(--dt-text);
+}
+.dt-frame:not([data-app]) .dt-frame-fn {
+  color: var(--dt-text-2);
+  font-weight: 500;
+}
+.dt-frame-loc {
+  margin-left: auto;
+  overflow: hidden;
+  color: var(--dt-text-3);
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dt-source {
+  margin: 0;
+  padding: 6px 0;
+  overflow-x: auto;
+  background: var(--dt-ink);
+  color: var(--dt-ink-text);
+  list-style: none;
+}
+.dt-source li {
+  display: flex;
+  gap: 14px;
+  padding: 0 12px;
+  font: 13px / 1.65 var(--dt-mono);
+  white-space: pre;
+}
+.dt-source li[data-current] {
+  background: rgb(242 100 61 / 0.22);
+  box-shadow: inset 3px 0 var(--dt-warn-strong);
+}
+.dt-source-no {
+  min-width: 28px;
+  color: var(--dt-ink-muted);
+  text-align: right;
+  user-select: none;
+}
+.dt-source code {
+  font: inherit;
+}
+.dt-frame-nosource {
+  margin: 0;
+  padding: 8px 12px;
+  color: var(--dt-text-3);
+  font-size: 13px;
+}
+.dt-locals {
+  margin: 0;
+  padding: 6px 12px 10px;
+  border-top: 1px solid var(--dt-border);
+  background: var(--dt-bg);
+}
+.dt-locals div {
+  display: grid;
+  grid-template-columns: minmax(80px, 0.35fr) 1fr;
+  gap: 10px;
+  padding: 3px 0;
+}
+.dt-locals dt {
+  color: var(--dt-text-2);
+  font: 600 12.5px var(--dt-mono);
+}
+.dt-locals dd {
+  margin: 0;
+  font: 12.5px var(--dt-mono);
+  overflow-wrap: anywhere;
+}
+.dt-chained {
+  margin-top: 18px;
+}
+.dt-chain-relation {
+  margin: 0 0 6px;
+  color: var(--dt-text-3);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.dt-chained .dt-error-message {
+  margin-bottom: 10px;
+}
+
+/* ---------- Explore links ---------- */
+
+.dt-explore {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 0;
+}
+.dt-button-sm {
+  height: 26px;
+  padding: 0 10px;
+  font-size: 12.5px;
+}
+.dt-link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dt-accent);
+  font: 500 13px var(--dt-font);
+  cursor: pointer;
+}
+.dt-link-button:hover {
+  text-decoration: underline;
+}
+
+/* ---------- Call tree ---------- */
+
+.dt-breakdown {
+  padding: 14px 16px 10px;
+}
+.dt-breakdown-bar {
+  display: flex;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: var(--dt-muted-bg);
+}
+.dt-breakdown-bar span + span {
+  box-shadow: inset 1px 0 var(--dt-bg);
+}
+[data-category="django"] {
+  --dt-k: var(--dt-k-django);
+}
+[data-category="view"],
+[data-category="code"] {
+  --dt-k: var(--dt-k-view);
+}
+[data-category="template"] {
+  --dt-k: var(--dt-k-template);
+}
+[data-category="sql"] {
+  --dt-k: var(--dt-k-sql);
+}
+[data-category="cache"] {
+  --dt-k: var(--dt-k-cache);
+}
+.dt-breakdown-bar span {
+  background: var(--dt-k);
+}
+.dt-breakdown-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--dt-text-2);
+  font-size: 13px;
+}
+.dt-breakdown-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.dt-breakdown-legend b {
+  color: var(--dt-text);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.dt-breakdown-share {
+  color: var(--dt-text-3);
+}
+.dt-swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  background: var(--dt-k);
+}
+
+.dt-map-head {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 16px;
+  border-top: 1px solid var(--dt-border);
+  border-bottom: 1px solid var(--dt-border);
+  background: var(--dt-subtle);
+  color: var(--dt-text-3);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.dt-map-row {
+  --dt-k: var(--dt-k-request);
+  display: grid;
+  /* Names first: twice the bars' width, so module paths and SQL read in full more often than they truncate. */
+  grid-template-columns: minmax(0, 2fr) minmax(110px, 1fr) 64px;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 28px;
+  padding: 0 16px 0 0;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--dt-border) 60%, transparent);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.dt-map-row:hover {
+  background: var(--dt-hover);
+}
+.dt-map-row[aria-current="true"] {
+  background: var(--dt-selected);
+}
+.dt-map-row[data-kind="view"] {
+  --dt-k: var(--dt-k-view);
+}
+.dt-map-row[data-kind="template"] {
+  --dt-k: var(--dt-k-template);
+}
+.dt-map-row[data-kind="sql"] {
+  --dt-k: var(--dt-k-sql);
+}
+.dt-map-row[data-kind="cache"] {
+  --dt-k: var(--dt-k-cache);
+}
+.dt-map-row[data-kind="log"] {
+  --dt-k: var(--dt-k-log);
+}
+.dt-map-row[data-level="warning"] {
+  --dt-k: var(--dt-warn-strong);
+}
+.dt-map-row[data-level="error"],
+.dt-map-row[data-level="critical"],
+.dt-map-row[data-kind="error"],
+.dt-map-row[data-status="error"] {
+  --dt-k: var(--dt-error);
+}
+.dt-map-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.dt-map-caret {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 14px;
+  color: var(--dt-text-3);
+}
+.dt-map-caret .dt-icon {
+  transition: transform 120ms ease;
+}
+.dt-map-row[aria-expanded="true"] .dt-map-caret .dt-icon {
+  transform: rotate(90deg);
+}
+.dt-map-kind {
+  flex: none;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--dt-k) 16%, transparent);
+  color: color-mix(in srgb, var(--dt-k) 75%, var(--dt-text));
+  font: 600 11px / 16px var(--dt-mono);
+  text-transform: uppercase;
+}
+.dt-map-text {
+  overflow: hidden;
+  font: 13px var(--dt-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dt-map-times {
+  flex: none;
+  color: var(--dt-text-2);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.dt-map-track {
+  position: relative;
+  height: 12px;
+}
+.dt-map-bar {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  min-width: 2px;
+  border-radius: 2px;
+  background: var(--dt-k);
+}
+.dt-map-bar[data-point],
+.dt-map-bar[data-tick] {
+  top: 0;
+  bottom: 0;
+  width: 2px;
+}
+.dt-map-time {
+  color: var(--dt-text-2);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.dt-map-details {
+  margin: 12px 16px 16px;
+  overflow: hidden;
+  border: 1px solid var(--dt-border);
+  border-radius: var(--dt-radius);
+}
+.dt-map-details .dt-section-label {
+  margin: 0;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--dt-border);
+  background: var(--dt-subtle);
+}
+.dt-map-details .dt-code {
+  padding-left: 12px;
+}
+.dt-map-details .dt-error-message {
+  padding: 10px 12px;
+}
+.dt-map-origin {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 8px 12px;
+  color: var(--dt-text-3);
+  font-size: 13px;
+}
+.dt-map-origin code {
+  color: var(--dt-text-2);
+}
+.dt-map-filters {
+  display: flex;
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px 10px;
+}
+.dt-map-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--dt-border);
+  border-radius: 999px;
+  background: none;
+  color: var(--dt-text-2);
+  font: 500 12.5px var(--dt-font);
+  cursor: pointer;
+}
+.dt-map-filter span {
+  color: var(--dt-text-3);
+  font-variant-numeric: tabular-nums;
+}
+.dt-map-filter:hover {
+  background: var(--dt-hover);
+  color: var(--dt-text);
+}
+.dt-map-filter[aria-pressed="true"] {
+  border-color: var(--dt-accent);
+  background: var(--dt-selected);
+  color: var(--dt-text);
+}
+.dt-map-filter[aria-pressed="true"] span {
+  color: var(--dt-text-2);
+}
+.dt-map-filter-clear {
+  padding: 0 6px;
+  border: 0;
+  background: none;
+  color: var(--dt-text-3);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.dt-map-filter-clear:hover {
+  color: var(--dt-text);
+  text-decoration: underline;
+}
+/* Rows on the way to a filtered one: context, not the point. */
+.dt-map-row[data-dim] {
+  opacity: 0.5;
+}
+.dt-map-waiting {
+  color: var(--dt-text-3);
+  font-style: italic;
+}
+.dt-map-state {
+  padding: 0 6px;
+  border-radius: 5px;
+  background: var(--dt-hover);
+  color: var(--dt-text-2);
+  font-size: 11px;
+}
+.dt-map-state[data-state="success"] {
+  background: var(--dt-ok-bg);
+  color: var(--dt-ok);
+}
+.dt-map-state[data-state="failure"] {
+  background: var(--dt-error-bg);
+  color: var(--dt-error);
+}
+.dt-map-open {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dt-accent-strong);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.dt-map-open:hover {
+  text-decoration: underline;
+}
+.dt-map-hint {
+  margin: 12px 16px 16px;
+  color: var(--dt-text-3);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* ---------- SQL ---------- */
+
+.dt-sql-code {
+  background: var(--dt-ink);
+  color: var(--dt-ink-text);
+  tab-size: 2;
+  white-space: pre;
+}
+.dt-sql-code code {
+  font: inherit;
+}
+.dt-sql-keyword {
+  color: var(--dt-syn-keyword);
+  font-weight: 600;
+}
+.dt-sql-identifier {
+  color: var(--dt-syn-identifier);
+}
+.dt-sql-string {
+  color: var(--dt-syn-string);
+}
+.dt-sql-number {
+  color: var(--dt-syn-number);
+}
+.dt-sql-param {
+  padding: 0 2px;
+  border-radius: 3px;
+  background: var(--dt-syn-param-bg);
+  color: var(--dt-syn-string);
+}
+.dt-sql-comment {
+  color: var(--dt-syn-comment);
+  font-style: italic;
+}
+.dt-gql-keyword {
+  color: var(--dt-syn-keyword);
+  font-weight: 600;
+}
+.dt-gql-type {
+  color: var(--dt-syn-identifier);
+}
+.dt-gql-argument {
+  color: var(--dt-syn-comment);
+}
+.dt-gql-variable {
+  padding: 0 2px;
+  border-radius: 3px;
+  background: var(--dt-syn-param-bg);
+  color: var(--dt-syn-string);
+}
+.dt-gql-directive {
+  color: var(--dt-syn-keyword);
+}
+.dt-gql-string {
+  color: var(--dt-syn-string);
+}
+.dt-gql-number {
+  color: var(--dt-syn-number);
+}
+.dt-gql-punctuation {
+  color: var(--dt-syn-operator);
+}
+.dt-sql-operator {
+  color: var(--dt-syn-operator);
+}
+
+/* Frame headers never overflow the pane: names and paths truncate. */
+.dt-frame summary,
+.dt-frame-group > summary {
+  min-width: 0;
+  white-space: nowrap;
+}
+.dt-frame-fn,
+.dt-frame-group-names,
+.dt-frame-loc {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dt-frame-group-names,
+.dt-frame-loc {
+  flex: 1 1 0;
+  text-align: right;
+}
+.dt-source {
+  max-width: 100%;
+}
+
+/* ---------- Aliases and mail ---------- */
+
+.dt-alias {
+  flex: none;
+  margin-left: 6px;
+  padding: 0 6px;
+  border: 1px solid rgb(45 212 191 / 0.35);
+  border-radius: 4px;
+  color: var(--dt-alias-text);
+  font: 600 11px / 16px var(--dt-mono);
+  vertical-align: 1px;
+}
+[data-category="mail"] {
+  --dt-k: var(--dt-k-mail);
+}
+.dt-map-row[data-kind="mail"] {
+  --dt-k: var(--dt-k-mail);
+}
+.dt-chip[data-kind="ok"] {
+  color: var(--dt-ok);
+  background: var(--dt-ok-bg);
+}
+.dt-mails {
+  display: grid;
+  gap: 14px;
+  padding: 14px 16px 18px;
+}
+.dt-mail {
+  overflow: hidden;
+  border: 1px solid var(--dt-border);
+  border-radius: var(--dt-radius);
+  background: var(--dt-subtle);
+}
+.dt-mail[data-failed] {
+  border-color: var(--dt-error-border);
+}
+.dt-mail-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--dt-border);
+}
+.dt-mail-head h3 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dt-mail-time {
+  color: var(--dt-text-3);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.dt-mail-props {
+  padding: 4px 14px;
+}
+.dt-mail-switch {
+  margin: 10px 14px 0;
+}
+.dt-mail-html {
+  display: block;
+  width: calc(100% - 28px);
+  height: 420px;
+  margin: 10px 14px 14px;
+  border: 1px solid var(--dt-border);
+  border-radius: var(--dt-radius-sm);
+  background: #fff;
+}
+.dt-mail-text {
+  margin: 10px 14px 14px;
+  padding: 12px;
+  border-radius: var(--dt-radius-sm);
+  background: var(--dt-ink);
+  color: var(--dt-ink-text);
+  font: 13.5px / 1.55 var(--dt-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

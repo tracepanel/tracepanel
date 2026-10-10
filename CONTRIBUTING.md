@@ -1,0 +1,83 @@
+# Contributing
+
+This repository holds the Tracepanel agent, written in Rust (`crates/`), and the
+panel, console and widget it serves, written in React (`ui/`). The Python
+package that records traces lives in
+[tracepanel-python](https://github.com/tracepanel/tracepanel-python).
+
+## Build and test the agent
+
+Rust is pinned in `rust-toolchain.toml`. Rustup installs it on the first
+`cargo`.
+
+```bash
+cargo build                                # embeds ui-dist/ and schema/
+cargo test                                 # the crates and schema/examples
+cargo clippy --all-targets -- -D warnings
+cargo fmt --all
+```
+
+To run the agent on a project's traces, with the console on
+http://127.0.0.1:8765/, stop the agent the project started first. A store has
+one agent at a time.
+
+```bash
+cargo run -p tracepanel-agent -- --dir path/to/project/.tracepanel --serve 127.0.0.1:8765
+```
+
+A tracepanel-python checkout next to this repository builds the agent from here
+when you run `uv sync` there. Its tests check the agent through the console's
+API.
+
+## Change the UI
+
+```bash
+cd ui
+pnpm install
+pnpm dev      # the console with hot reload, against an agent on :7700
+pnpm lint     # Biome and strict TypeScript
+pnpm fmt
+pnpm api      # packages/ui/src/api.gen.ts from schema/openapi.yaml
+```
+
+For `pnpm dev`, start the agent with `--serve 127.0.0.1:7700`.
+
+The agent embeds `ui-dist/`, the built UI. After changing `ui/`, run
+`scripts/ui.sh` and commit `ui-dist/` with the change. CI checks that
+`ui-dist/` matches `ui/`.
+
+## Change what an SDK sends
+
+`schema/` holds what the SDKs, the agent and the UI agree on: the trace
+(`trace.schema.json`), the console's API (`openapi.yaml`), the search fields
+(`search.json`), the store (`store.sql`), and real traces from each SDK with the
+issues they must give (`examples/`).
+
+A change in what an SDK sends gets an example. Record it with
+`tracepanel-agent --record DIR`, then add it to `schema/examples/` and to
+`expected.json`.
+
+## Write the documentation
+
+Read `.claude/skills/docs/SKILL.md` for the voice and the rules, then check the
+pages:
+
+```bash
+uv run --no-project --with ruff scripts/lint_docs.py
+```
+
+## Build the package
+
+`uv build` makes the sdist and, from it, a wheel for this machine. Maturin is
+the build backend. Release files come from the `Wheels` workflow only: it builds
+every platform's wheel and publishes with `uv publish`. Releasing is described
+in `.claude/skills/release/SKILL.md`.
+
+## Update dependencies
+
+After changing Rust or UI dependencies, regenerate the licenses the agent ships
+with. This needs `cargo install --locked cargo-about --features cli`.
+
+```bash
+uv run scripts/notices.py
+```

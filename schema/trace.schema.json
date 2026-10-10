@@ -1,0 +1,491 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tracepanel.dev/schema/0.1/trace.schema.json",
+  "title": "Trace",
+  "description": "One unit of work: an HTTP request, a background task or a management command, with its spans, logs, errors and detected issues. Times are Unix epoch microseconds (UTC); durations are microseconds.",
+  "type": "object",
+  "required": [
+    "id",
+    "kind",
+    "name",
+    "start",
+    "duration",
+    "status",
+    "attrs",
+    "spans",
+    "logs",
+    "errors",
+    "links",
+    "issues"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "$ref": "#/$defs/id"
+    },
+    "kind": {
+      "enum": [
+        "http",
+        "task",
+        "command",
+        "websocket"
+      ]
+    },
+    "name": {
+      "type": "string",
+      "description": "Human-readable name, e.g. \"GET /posts/<int:pk>/\"."
+    },
+    "start": {
+      "$ref": "#/$defs/time"
+    },
+    "duration": {
+      "$ref": "#/$defs/duration"
+    },
+    "status": {
+      "$ref": "#/$defs/status"
+    },
+    "attrs": {
+      "$ref": "#/$defs/attrs"
+    },
+    "spans": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/span"
+      }
+    },
+    "logs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/log"
+      }
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/error"
+      }
+    },
+    "links": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/link"
+      }
+    },
+    "issues": {
+      "description": "Found by the agent: SDKs send an empty list, the console's API returns the trace with its issues.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/issue"
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$",
+      "description": "ULID."
+    },
+    "time": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Unix epoch microseconds, UTC."
+    },
+    "duration": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Microseconds."
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "error"
+      ]
+    },
+    "attrs": {
+      "type": "object",
+      "description": "Namespaced attributes (http.*, db.*, cache.*, code.*, user.*, task.*). task.* is shared by every task queue (task.system says which: celery, django, dramatiq, rq). Values are scalars or lists of scalars.",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]*(\\.[a-z0-9_]+)+$"
+      },
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": [
+              "string",
+              "number",
+              "boolean",
+              "null"
+            ]
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "number",
+                "boolean",
+                "null"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "span": {
+      "type": "object",
+      "required": [
+        "id",
+        "parent_id",
+        "kind",
+        "name",
+        "start",
+        "duration",
+        "status",
+        "attrs"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "parent_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "enum": [
+            "http",
+            "middleware",
+            "framework",
+            "view",
+            "template",
+            "sql",
+            "transaction",
+            "cache",
+            "mail",
+            "signal",
+            "http.client",
+            "task.enqueue",
+            "task.run",
+            "command",
+            "function",
+            "event",
+            "websocket",
+            "websocket.send",
+            "channel.send",
+            "graphql"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "start": {
+          "$ref": "#/$defs/time"
+        },
+        "duration": {
+          "$ref": "#/$defs/duration"
+        },
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "attrs": {
+          "$ref": "#/$defs/attrs"
+        }
+      }
+    },
+    "log": {
+      "type": "object",
+      "required": [
+        "span_id",
+        "time",
+        "level",
+        "logger",
+        "message",
+        "exception",
+        "attrs"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "span_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "time": {
+          "$ref": "#/$defs/time"
+        },
+        "level": {
+          "enum": [
+            "debug",
+            "info",
+            "warning",
+            "error",
+            "critical"
+          ]
+        },
+        "logger": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "exception": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Formatted traceback when the record carries exc_info."
+        },
+        "attrs": {
+          "$ref": "#/$defs/attrs",
+          "description": "Where it was logged (code.*), thread.*, process.*, log.template, and the record's extra fields as extra.*."
+        }
+      }
+    },
+    "frame": {
+      "type": "object",
+      "required": [
+        "filename",
+        "module",
+        "function",
+        "lineno",
+        "in_app",
+        "context_start",
+        "context",
+        "locals"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "filename": {
+          "type": "string",
+          "description": "Relative to the project root for application code."
+        },
+        "module": {
+          "type": "string"
+        },
+        "function": {
+          "type": "string"
+        },
+        "lineno": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "in_app": {
+          "type": "boolean",
+          "description": "True for project code, false for the standard library and installed packages."
+        },
+        "context_start": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "description": "Line number of the first line in `context`."
+        },
+        "context": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Source lines around `lineno`."
+        },
+        "locals": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "repr() of local variables, project frames only; sensitive names are masked."
+        }
+      }
+    },
+    "error": {
+      "type": "object",
+      "required": [
+        "span_id",
+        "time",
+        "type",
+        "message",
+        "handled",
+        "frames",
+        "chain"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "span_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "time": {
+          "$ref": "#/$defs/time"
+        },
+        "type": {
+          "type": "string",
+          "description": "Qualified exception class, e.g. \"builtins.ZeroDivisionError\"."
+        },
+        "message": {
+          "type": "string"
+        },
+        "handled": {
+          "type": "boolean"
+        },
+        "frames": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/frame"
+          },
+          "description": "Oldest call first."
+        },
+        "chain": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/chained_error"
+          },
+          "description": "Inner exceptions, nearest first."
+        }
+      }
+    },
+    "link": {
+      "type": "object",
+      "required": [
+        "kind",
+        "trace_id",
+        "span_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "enqueued_by",
+            "connection",
+            "sent_by"
+          ],
+          "description": "enqueued_by: this task trace was enqueued from trace_id/span_id. connection: this WebSocket event belongs to the connection opened in trace_id. sent_by: this event handles a channel layer message sent from trace_id/span_id."
+        },
+        "trace_id": {
+          "$ref": "#/$defs/id"
+        },
+        "span_id": {
+          "$ref": "#/$defs/id"
+        }
+      }
+    },
+    "issue": {
+      "type": "object",
+      "required": [
+        "fingerprint",
+        "fingerprint_version",
+        "kind",
+        "title",
+        "culprit",
+        "hint",
+        "count",
+        "span_ids"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "fingerprint": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{16}$",
+          "description": "Stable group key: the same problem in the same place has the same fingerprint, whichever SDK recorded it."
+        },
+        "fingerprint_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "kind": {
+          "enum": [
+            "n+1",
+            "duplicates",
+            "slow-sql",
+            "error",
+            "long-transaction",
+            "in-transaction",
+            "htmx"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "culprit": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Where in the project code it happens, e.g. \"blog/views.py:21 in post_list\"."
+        },
+        "hint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Occurrences within this trace."
+        },
+        "span_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/id"
+          }
+        }
+      }
+    },
+    "chained_error": {
+      "type": "object",
+      "required": [
+        "relation",
+        "type",
+        "message",
+        "frames"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "relation": {
+          "enum": [
+            "cause",
+            "context"
+          ],
+          "description": "cause: raise ... from; context: raised while handling."
+        },
+        "type": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "frames": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/frame"
+          }
+        }
+      }
+    }
+  }
+}

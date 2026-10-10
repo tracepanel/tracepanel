@@ -1,0 +1,308 @@
+{
+  "traces": {
+    "kind": {
+      "type": "text",
+      "help": "http, task, command or websocket"
+    },
+    "method": {
+      "type": "text",
+      "help": "HTTP method: GET, POST…"
+    },
+    "route": {
+      "type": "text",
+      "help": "URL pattern, * wildcards: /api/*"
+    },
+    "path": {
+      "type": "text",
+      "help": "Requested path, * wildcards"
+    },
+    "view": {
+      "type": "text",
+      "help": "View function: blog.views.*"
+    },
+    "status": {
+      "type": "number",
+      "help": "HTTP status: status>=500"
+    },
+    "duration": {
+      "type": "duration",
+      "help": "Total time: duration>200ms"
+    },
+    "queries": {
+      "type": "number",
+      "help": "SQL queries: queries>20"
+    },
+    "user": {
+      "type": "text",
+      "help": "User id"
+    },
+    "has": {
+      "type": "has",
+      "help": "n+1, duplicates, slow-sql, long-transaction, in-transaction, htmx, error, issues, logs, mail"
+    },
+    "db": {
+      "type": "text",
+      "help": "Used this database alias: db:replica"
+    },
+    "cache": {
+      "type": "text",
+      "help": "Used this cache alias: cache:sessions"
+    },
+    "query": {
+      "type": "text",
+      "help": "Contains this SQL statement (id from Queries)"
+    },
+    "trace": {
+      "type": "text",
+      "help": "Trace id"
+    },
+    "name": {
+      "type": "text",
+      "help": "Trace name, * wildcards: manage.py *, sync-prices"
+    },
+    "operation": {
+      "type": "text",
+      "help": "GraphQL operation, * wildcards: query PostList"
+    },
+    "task": {
+      "type": "text",
+      "help": "Task name, * wildcards: newsletter.tasks.*"
+    },
+    "queue": {
+      "type": "text",
+      "help": "Queue the task ran from"
+    },
+    "state": {
+      "type": "text",
+      "help": "Task outcome: success, failure, retry"
+    },
+    "system": {
+      "type": "text",
+      "help": "Task queue system: celery, dramatiq, rq, django"
+    },
+    "since": {
+      "type": "time",
+      "help": "Started at or after: since:15m, since:2026-10-07T13:30"
+    },
+    "until": {
+      "type": "time",
+      "help": "Started before: until:5m, until:2026-10-07T14:00"
+    }
+  },
+  "logs": {
+    "level": {
+      "type": "level",
+      "help": "debug, info, warning, error, critical: level>=warning"
+    },
+    "logger": {
+      "type": "text",
+      "help": "Logger name, * wildcards: blog.*"
+    },
+    "trace": {
+      "type": "text",
+      "help": "Trace id"
+    },
+    "route": {
+      "type": "text",
+      "help": "Route of the request that logged it"
+    },
+    "path": {
+      "type": "text",
+      "help": "Path of the request that logged it"
+    },
+    "user": {
+      "type": "text",
+      "help": "User id of the request that logged it"
+    },
+    "extra.*": {
+      "type": "text",
+      "help": "A field passed in extra=: extra.order_id:42"
+    },
+    "since": {
+      "type": "time",
+      "help": "Logged at or after: since:15m, since:2026-10-07T13:30"
+    },
+    "until": {
+      "type": "time",
+      "help": "Logged before: until:5m, until:2026-10-07T14:00"
+    }
+  },
+  "queries": {
+    "table": {
+      "type": "text",
+      "help": "Table the statement reads or writes"
+    },
+    "db": {
+      "type": "text",
+      "help": "Database alias"
+    },
+    "query": {
+      "type": "text",
+      "help": "Statement id"
+    },
+    "since": {
+      "type": "time",
+      "help": "Ran at or after: since:15m"
+    },
+    "until": {
+      "type": "time",
+      "help": "Ran before: until:5m"
+    }
+  },
+  "mails": {
+    "to": {
+      "type": "text",
+      "help": "A recipient (to or cc): to:ann@example.com, * wildcards"
+    },
+    "from": {
+      "type": "text",
+      "help": "Sender address"
+    },
+    "since": {
+      "type": "time",
+      "help": "Sent at or after: since:15m"
+    },
+    "until": {
+      "type": "time",
+      "help": "Sent before: until:5m"
+    }
+  },
+  "tasks": {
+    "task": {
+      "type": "text",
+      "help": "Task name, * wildcards: newsletter.tasks.*"
+    },
+    "queue": {
+      "type": "text",
+      "help": "Queue the task ran from"
+    },
+    "state": {
+      "type": "text",
+      "help": "success, failure, retry"
+    },
+    "system": {
+      "type": "text",
+      "help": "Which queue ran it: celery, django"
+    },
+    "since": {
+      "type": "time",
+      "help": "Runs at or after: since:15m"
+    },
+    "until": {
+      "type": "time",
+      "help": "Runs before: until:5m"
+    }
+  },
+  "jobs": {
+    "job": {
+      "type": "text",
+      "help": "Command or tracepanel.trace() name, * wildcards: manage.py *"
+    },
+    "source": {
+      "type": "text",
+      "help": "manage.py or custom (tracepanel.trace)"
+    },
+    "since": {
+      "type": "time",
+      "help": "Runs at or after: since:15m"
+    },
+    "until": {
+      "type": "time",
+      "help": "Runs before: until:5m"
+    }
+  },
+  "graphql": {
+    "operation": {
+      "type": "text",
+      "help": "Operation, * wildcards: query PostList"
+    },
+    "type": {
+      "type": "text",
+      "help": "query, mutation or subscription"
+    },
+    "since": {
+      "type": "time",
+      "help": "Calls at or after: since:15m"
+    },
+    "until": {
+      "type": "time",
+      "help": "Calls before: until:5m"
+    }
+  },
+  "websockets": {
+    "consumer": {
+      "type": "text",
+      "help": "Consumer class, * wildcards: chat.consumers.*"
+    },
+    "event": {
+      "type": "text",
+      "help": "connect, receive, disconnect, or a channel layer message type: chat.message"
+    },
+    "since": {
+      "type": "time",
+      "help": "Events at or after: since:15m"
+    },
+    "until": {
+      "type": "time",
+      "help": "Events before: until:5m"
+    }
+  },
+  "endpoints": {
+    "route": {
+      "type": "text",
+      "help": "URL pattern, * wildcards"
+    },
+    "method": {
+      "type": "text",
+      "help": "HTTP method"
+    },
+    "since": {
+      "type": "time",
+      "help": "Calls at or after: since:15m"
+    },
+    "until": {
+      "type": "time",
+      "help": "Calls before: until:5m"
+    }
+  },
+  "services": {
+    "kind": {
+      "type": "text",
+      "help": "database, cache, mail, queue, http"
+    },
+    "system": {
+      "type": "text",
+      "help": "postgresql, redis, smtp, rabbitmq…"
+    },
+    "role": {
+      "type": "text",
+      "help": "Who calls it: web, worker, command"
+    },
+    "since": {
+      "type": "time",
+      "help": "Calls at or after: since:15m"
+    },
+    "until": {
+      "type": "time",
+      "help": "Calls before: until:5m"
+    }
+  },
+  "issues": {
+    "kind": {
+      "type": "text",
+      "help": "error, n+1, duplicates, slow-sql, long-transaction, in-transaction, htmx"
+    },
+    "route": {
+      "type": "text",
+      "help": "Route of a request it happened in, * wildcards"
+    },
+    "since": {
+      "type": "time",
+      "help": "Last seen at or after: since:15m"
+    },
+    "until": {
+      "type": "time",
+      "help": "Last seen before: until:5m"
+    }
+  }
+}

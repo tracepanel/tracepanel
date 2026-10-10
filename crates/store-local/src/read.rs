@@ -1,0 +1,712 @@
+//! Reading for the console: the reader, row helpers, one trace and its relations, lists with cursors, logs, queries, emails, issues, services, counts.
+
+use super::*;
+
+/// The columns a trace has in lists.
+pub(crate) const LISTING: &str = "id, kind, name, start, duration, status, http_status, method, path, route, view, user_id, \
+    queries, db_time, issues, issue_kinds, errors, logs, mails, db_aliases, cache_aliases, task_state, htmx";
+pub(crate) const LIST_COLUMNS: [&str; 3] = ["issue_kinds", "db_aliases", "cache_aliases"];
+pub(crate) const RELATED_LIMIT: i64 = 100;
+
+/// A connection per call: WAL lets readers run beside the writer.
+pub struct Reader {
+    path: PathBuf,
+}
+
+pub(crate) fn json_value(value: rusqlite::types::ValueRef<'_>) -> Value {
+    use rusqlite::types::ValueRef;
+    match value {
+        ValueRef::Null => Value::Null,
+        ValueRef::Integer(int) => Value::from(int),
+        ValueRef::Real(float) => Value::from(float),
+        ValueRef::Text(text) => Value::from(String::from_utf8_lossy(text).into_owned()),
+        ValueRef::Blob(blob) => Value::from(String::from_utf8_lossy(blob).into_owned()),
+    }
+}
+
+/// A row as a JSON object, column by column (`dict(row)`).
+pub(crate) fn row_object(
+    row: &rusqlite::Row<'_>,
+) -> rusqlite::Result<serde_json::Map<String, Value>> {
+    let statement = row.as_ref();
+    let mut object = serde_json::Map::new();
+    for (index, name) in statement.column_names().iter().enumerate() {
+        object.insert((*name).to_owned(), json_value(row.get_ref(index)?));
+    }
+    Ok(object)
+}
+
+/// A trace in a list: its columns, with ",a,b," lists as arrays (`_trace_row`).
+pub(crate) fn trace_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
+    let mut object = row_object(row)?;
+    for column in LIST_COLUMNS {
+        let raw = object
+            .remove(column)
+            .and_then(|value| value.as_str().map(str::to_owned))
+            .unwrap_or_default();
+        let values: Vec<Value> = raw
+            .split(',')
+            .filter(|part| !part.is_empty())
+            .map(Value::from)
+            .collect();
+        object.insert(column.to_owned(), Value::Array(values));
+    }
+    Ok(Value::Object(object))
+}
+
+/// A search page: rows, and the cursor (`before`) of the next page.
+pub struct Page {
+    pub items: Vec<Value>,
+    pub next: Option<i64>,
+}
+
+/// Errors reading the store: a query the user can fix (400), or the store's own (500).
+#[derive(Debug)]
+pub enum ReadError {
+    Search(String),
+    Store(rusqlite::Error),
+}
+
+impl From<rusqlite::Error> for ReadError {
+    fn from(error: rusqlite::Error) -> Self {
+        Self::Store(error)
+    }
+}
+
+impl From<SearchError> for ReadError {
+    fn from(error: SearchError) -> Self {
+        Self::Search(error.0)
+    }
+}
+
+/// Rows as JSON objects (`dict(row)`).
+pub(crate) fn objects(
+    db: &Connection,
+    sql: &str,
+    params: Vec<Sql>,
+) -> rusqlite::Result<Vec<serde_json::Map<String, Value>>> {
+    let mut statement = db.prepare(sql)?;
+    let rows = statement.query_map(rusqlite::params_from_iter(params), row_object)?;
+    rows.collect()
+}
+
+pub(crate) fn marks(count: usize) -> String {
+    vec!["?"; count].join(", ")
+}
+
+/// Counter(...).most_common(1)[0][0]: the most frequent, the first seen on a tie.
+pub(crate) fn most_common(items: impl IntoIterator<Item = String>) -> Option<String> {
+    let mut order: Vec<String> = Vec::new();
+    let mut counts: HashMap<String, usize> = HashMap::new();
+    for item in items {
+        let count = counts.entry(item.clone()).or_insert(0);
+        if *count == 0 {
+            order.push(item);
+        }
+        *count += 1;
+    }
+    let mut best: Option<(String, usize)> = None;
+    for item in order {
+        let count = counts[&item];
+        if best.as_ref().is_none_or(|(_, top)| count > *top) {
+            best = Some((item, count));
+        }
+    }
+    best.map(|(item, _)| item)
+}
+
+/// A trace row from `SELECT LISTING`, as `_trace_row` makes it for the API.
+pub(crate) fn listed(row: serde_json::Map<String, Value>) -> Value {
+    let mut row = row;
+    for column in LIST_COLUMNS {
+        let raw = row
+            .remove(column)
+            .and_then(|value| value.as_str().map(str::to_owned))
+            .unwrap_or_default();
+        row.insert(
+            column.to_owned(),
+            Value::Array(
+                raw.split(',')
+                    .filter(|p| !p.is_empty())
+                    .map(Value::from)
+                    .collect(),
+            ),
+        );
+    }
+    Value::Object(row)
+}
+
+pub(crate) fn issue_endpoints(db: &Connection, fingerprint: &str) -> rusqlite::Result<Vec<Value>> {
+    let rows = objects(
+        db,
+        "SELECT DISTINCT traces.method, traces.route FROM issue_traces \
+         JOIN traces ON traces.id = issue_traces.trace_id \
+         WHERE issue_traces.fingerprint = ? AND traces.route IS NOT NULL ORDER BY 1, 2",
+        vec![Sql::Text(fingerprint.to_owned())],
+    )?;
+    Ok(rows
+        .into_iter()
+        .map(|row| {
+            let text = |key: &str| match &row[key] {
+                Value::String(text) => text.clone(),
+                Value::Null => "None".into(),
+                other => other.to_string(),
+            };
+            Value::from(format!("{} {}", text("method"), text("route")))
+        })
+        .collect())
+}
+
+impl Reader {
+    /// Sent emails, newest first, with the request that sent them.
+    pub fn list_mails(
+        &self,
+        query: &str,
+        limit: i64,
+        before: Option<i64>,
+    ) -> Result<Page, ReadError> {
+        let (mut condition, mut params) = search::compile_where(query, &MAIL_SEARCH)?;
+        if let Some(before) = before {
+            condition.push_str(" AND mails.time < ?");
+            params.push(Sql::Integer(before));
+        }
+        params.push(Sql::Integer(limit + 1));
+        let db = self.connect()?;
+        let mut rows = objects(
+            &db,
+            &format!(
+                "SELECT mails.*, traces.kind AS trace_kind, traces.htmx AS trace_htmx, traces.method, traces.path, \
+                 traces.name AS trace_name FROM mails \
+                 JOIN traces ON traces.id = mails.trace_id WHERE {condition} ORDER BY mails.time DESC LIMIT ?"
+            ),
+            params,
+        )?;
+        let more = rows.len() as i64 > limit;
+        rows.truncate(limit as usize);
+        let items: Vec<Value> = rows
+            .into_iter()
+            .map(|mut row| {
+                let recipients: Vec<Value> = row["recipients"]
+                    .as_str()
+                    .unwrap_or("")
+                    .split(',')
+                    .filter(|address| !address.is_empty())
+                    .map(Value::from)
+                    .collect();
+                row.insert("recipients".into(), Value::Array(recipients));
+                let sent = match &row["sent"] {
+                    Value::Null => Value::Null,
+                    value => Value::Bool(value.as_i64().unwrap_or(0) != 0),
+                };
+                row.insert("sent".into(), sent);
+                row.insert(
+                    "html".into(),
+                    Value::Bool(row["html"].as_i64().unwrap_or(0) != 0),
+                );
+                Value::Object(row)
+            })
+            .collect();
+        let next = if more {
+            items.last().and_then(|item| item["time"].as_i64())
+        } else {
+            None
+        };
+        Ok(Page { items, next })
+    }
+
+    /// Distinct routes, loggers, database aliases and extra= keys: what the console offers in menus and hints.
+    pub fn known_values(&self) -> Result<Value, ReadError> {
+        let db = self.connect()?;
+        let distinct = |sql: &str| -> rusqlite::Result<Value> {
+            let mut statement = db.prepare(sql)?;
+            let values: Vec<Value> = statement
+                .query_map([], |row| Ok(json_value(row.get_ref(0)?)))?
+                .collect::<Result<Vec<_>, _>>()?
+                .into_iter()
+                .map(|value| match value {
+                    Value::String(text) => Value::String(text),
+                    other => Value::String(other.to_string()),
+                })
+                .collect();
+            Ok(Value::Array(values))
+        };
+        Ok(serde_json::json!({
+            "route": distinct("SELECT DISTINCT route FROM traces WHERE route != '' ORDER BY 1")?,
+            "logger": distinct("SELECT DISTINCT logger FROM logs ORDER BY 1")?,
+            "db": distinct("SELECT DISTINCT alias FROM sql ORDER BY 1")?,
+            "task": distinct("SELECT DISTINCT name FROM traces WHERE kind = 'task' ORDER BY 1")?,
+            "queue": distinct(&format!(
+                "SELECT DISTINCT {QUEUE} FROM traces WHERE kind = 'task' AND {QUEUE} IS NOT NULL ORDER BY 1"
+            ))?,
+            "extra": distinct(
+                "SELECT DISTINCT json_each.key FROM logs, json_each(logs.attrs) WHERE json_each.key LIKE 'extra.%' ORDER BY 1"
+            )?,
+        }))
+    }
+
+    /// Issues by fingerprint, most recent first, with their endpoints.
+    pub fn list_issues(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
+        let (condition, mut params) = search::compile_where(query, &ISSUE_SEARCH)?;
+        params.push(Sql::Integer(limit));
+        let db = self.connect()?;
+        let rows = objects(
+            &db,
+            &format!("SELECT * FROM issues WHERE {condition} ORDER BY last_seen DESC LIMIT ?"),
+            params,
+        )?;
+        rows.into_iter()
+            .map(|mut row| {
+                let fingerprint = row["fingerprint"].as_str().unwrap_or("").to_owned();
+                row.insert(
+                    "endpoints".into(),
+                    Value::Array(issue_endpoints(&db, &fingerprint)?),
+                );
+                Ok(Value::Object(row))
+            })
+            .collect()
+    }
+
+    /// One issue: its group row, endpoints, events over time and the requests it happened in (newest first).
+    pub fn issue_detail(
+        &self,
+        fingerprint: &str,
+        buckets: i64,
+        limit: usize,
+    ) -> Result<Option<Value>, ReadError> {
+        let db = self.connect()?;
+        let Some(mut row) = objects(
+            &db,
+            "SELECT * FROM issues WHERE fingerprint = ?",
+            vec![Sql::Text(fingerprint.to_owned())],
+        )?
+        .pop() else {
+            return Ok(None);
+        };
+        let rows = objects(
+            &db,
+            &format!(
+                "SELECT {LISTING} FROM traces WHERE id IN (SELECT trace_id FROM issue_traces WHERE fingerprint = ?) ORDER BY start"
+            ),
+            vec![Sql::Text(fingerprint.to_owned())],
+        )?;
+        let series = if rows.is_empty() {
+            Value::Array(vec![])
+        } else {
+            stats(&rows, buckets, None, Some(search::now_us()))["series"].clone()
+        };
+        row.insert(
+            "endpoints".into(),
+            Value::Array(issue_endpoints(&db, fingerprint)?),
+        );
+        row.insert("series".into(), series);
+        row.insert(
+            "traces".into(),
+            Value::Array(rows.into_iter().rev().take(limit).map(listed).collect()),
+        );
+        Ok(Some(Value::Object(row)))
+    }
+
+    /// What the project's web, workers and commands call, and how much: the nodes and edges of a service map.
+    pub fn list_services(&self, query: &str) -> Result<Value, ReadError> {
+        let (condition, params) = search::compile_where(query, &SERVICE_SEARCH)?;
+        let db = self.connect()?;
+        let rows = objects(
+            &db,
+            &format!(
+                "SELECT service, role, peer, kind, system, address, port, namespace, direction, \
+                 GROUP_CONCAT(DISTINCT alias) AS aliases, COUNT(DISTINCT trace_id) AS traces, SUM(calls) AS calls, \
+                 SUM(duration) AS total, SUM(errors) AS errors, MAX(start) AS last_seen \
+                 FROM peers WHERE {condition} GROUP BY service, role, peer, direction"
+            ),
+            params,
+        )?;
+        let mut order: Vec<String> = Vec::new();
+        let mut nodes: HashMap<String, serde_json::Map<String, Value>> = HashMap::new();
+        let mut aliases: HashMap<String, BTreeSet<String>> = HashMap::new();
+        let mut totals: HashMap<String, [i64; 4]> = HashMap::new();
+        let mut apps: BTreeSet<(String, String)> = BTreeSet::new();
+        let mut edges: Vec<Value> = Vec::new();
+        for row in rows {
+            let peer = row["peer"].as_str().unwrap_or("").to_owned();
+            if !nodes.contains_key(&peer) {
+                order.push(peer.clone());
+                nodes.insert(peer.clone(), row.clone());
+            }
+            if let Some(text) = row["aliases"].as_str().filter(|text| !text.is_empty()) {
+                aliases
+                    .entry(peer.clone())
+                    .or_default()
+                    .extend(text.split(',').map(str::to_owned));
+            } else {
+                aliases.entry(peer.clone()).or_default();
+            }
+            let total = totals.entry(peer.clone()).or_insert([0; 4]);
+            if row["direction"] == "out" {
+                // A worker taking tasks is not a call to the broker: its queue wait stays on the edge.
+                total[0] += int(&row, "calls");
+                total[1] += int(&row, "total");
+                total[2] += int(&row, "errors");
+            }
+            total[3] = total[3].max(int(&row, "last_seen"));
+            let text = |key: &str| {
+                row[key]
+                    .as_str()
+                    .map_or_else(|| row[key].to_string(), str::to_owned)
+            };
+            apps.insert((text("role"), text("service")));
+            edges.push(serde_json::json!({
+                "service": row["service"],
+                "role": row["role"],
+                "peer": peer,
+                "direction": row["direction"],
+                "traces": int(&row, "traces"),
+                "calls": int(&row, "calls"),
+                "total": int(&row, "total"),
+                "errors": int(&row, "errors"),
+            }));
+        }
+        let mut services: Vec<(String, i64, Value)> = order
+            .into_iter()
+            .map(|peer| {
+                let row = &nodes[&peer];
+                let total = totals[&peer];
+                let node = serde_json::json!({
+                    "kind": row["kind"],
+                    "system": row["system"],
+                    "address": row["address"],
+                    "port": row["port"],
+                    "namespace": row["namespace"],
+                    "id": peer,
+                    "aliases": aliases[&peer].iter().collect::<Vec<_>>(),
+                    "calls": total[0],
+                    "total": total[1],
+                    "errors": total[2],
+                    "last_seen": total[3],
+                });
+                (
+                    row["kind"].as_str().unwrap_or("").to_owned(),
+                    total[1],
+                    node,
+                )
+            })
+            .collect();
+        // Stable sorts, as Python's sorted().
+        services.sort_by(|a, b| a.0.cmp(&b.0).then(b.1.cmp(&a.1)));
+        edges.sort_by_key(|edge| -edge["total"].as_i64().unwrap_or(0));
+        Ok(serde_json::json!({
+            "apps": apps.into_iter().map(|(role, service)| serde_json::json!({"service": service, "role": role})).collect::<Vec<_>>(),
+            "services": services.into_iter().map(|(_, _, node)| node).collect::<Vec<_>>(),
+            "edges": edges,
+        }))
+    }
+
+    pub fn clear(&self) -> Result<i64, ReadError> {
+        let db = self.connect()?;
+        let count: i64 = db.query_row("SELECT COUNT(*) FROM traces", [], |row| row.get(0))?;
+        let fts = db.query_row(
+            "SELECT count(*) FROM sqlite_master WHERE name = 'logs_fts'",
+            [],
+            |row| row.get::<_, i64>(0),
+        )? > 0;
+        let tx = db.unchecked_transaction()?;
+        for table in TABLES {
+            if table == "meta" || (table == "logs_fts" && !fts) {
+                continue;
+            }
+            tx.execute(&format!("DELETE FROM {table}"), [])?;
+        }
+        tx.commit()?;
+        Ok(count)
+    }
+
+    pub fn search_logs(
+        &self,
+        query: &str,
+        limit: i64,
+        before: Option<i64>,
+    ) -> Result<Page, ReadError> {
+        let db = self.connect()?;
+        let fts = db.query_row(
+            "SELECT count(*) FROM sqlite_master WHERE name = 'logs_fts'",
+            [],
+            |row| row.get::<_, i64>(0),
+        )? > 0;
+        let (mut condition, mut params) = search::compile_where(query, &log_search(fts))?;
+        if let Some(before) = before {
+            condition.push_str(" AND logs.time < ?");
+            params.push(Sql::Integer(before));
+        }
+        params.push(Sql::Integer(limit + 1));
+        let mut rows = objects(
+            &db,
+            &format!(
+                "SELECT logs.id, logs.trace_id, logs.time, logs.level, logs.logger, logs.message, logs.exception, \
+                 logs.attrs, traces.kind AS trace_kind, traces.htmx AS trace_htmx, traces.name AS trace_name, \
+                 traces.method, traces.path, traces.http_status, traces.user_id \
+                 FROM logs JOIN traces ON traces.id = logs.trace_id WHERE {condition} \
+                 ORDER BY logs.time DESC, logs.id DESC LIMIT ?"
+            ),
+            params,
+        )?;
+        let more = rows.len() as i64 > limit;
+        rows.truncate(limit as usize);
+        let items: Vec<Value> = rows
+            .into_iter()
+            .map(|mut row| {
+                let attrs = row
+                    .get("attrs")
+                    .and_then(Value::as_str)
+                    .and_then(|text| serde_json::from_str(text).ok());
+                row.insert(
+                    "attrs".into(),
+                    attrs.unwrap_or(Value::Object(serde_json::Map::new())),
+                );
+                Value::Object(row)
+            })
+            .collect();
+        let next = if more {
+            items.last().and_then(|item| item["time"].as_i64())
+        } else {
+            None
+        };
+        Ok(Page { items, next })
+    }
+
+    /// SQL statements aggregated across stored traces, heaviest first.
+    pub fn list_queries(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
+        let (condition, mut params) = search::compile_where(query, &QUERY_SEARCH)?;
+        params.push(Sql::Integer(limit));
+        let db = self.connect()?;
+        let rows = objects(
+            &db,
+            &format!(
+                "SELECT fp, alias, MAX(vendor) AS vendor, statement, name, \
+                 COUNT(*) AS calls, COUNT(DISTINCT trace_id) AS traces, \
+                 SUM(duration) AS total, MAX(duration) AS slowest, MAX(start) AS last_seen \
+                 FROM sql WHERE {condition} GROUP BY fp ORDER BY total DESC LIMIT ?"
+            ),
+            params,
+        )?;
+        if rows.is_empty() {
+            return Ok(Vec::new());
+        }
+        let fps: Vec<Sql> = rows
+            .iter()
+            .map(|row| Sql::Text(row["fp"].as_str().unwrap_or("").to_owned()))
+            .collect();
+        let marks = marks(fps.len());
+        let per_trace: HashMap<String, i64> = objects(
+            &db,
+            &format!(
+                "SELECT fp, MAX(n) AS most FROM (SELECT fp, trace_id, COUNT(*) AS n FROM sql \
+                 WHERE fp IN ({marks}) GROUP BY fp, trace_id) GROUP BY fp"
+            ),
+            fps.clone(),
+        )?
+        .into_iter()
+        .map(|row| {
+            (
+                row["fp"].as_str().unwrap_or("").to_owned(),
+                row["most"].as_i64().unwrap_or(1),
+            )
+        })
+        .collect();
+        let mut origins: HashMap<String, Vec<String>> = HashMap::new();
+        for row in objects(
+            &db,
+            &format!("SELECT fp, origin FROM sql WHERE fp IN ({marks}) AND origin IS NOT NULL"),
+            fps.clone(),
+        )? {
+            origins
+                .entry(row["fp"].as_str().unwrap_or("").to_owned())
+                .or_default()
+                .push(row["origin"].as_str().unwrap_or("").to_owned());
+        }
+        // The latest call of each statement: the console explains and opens it.
+        let samples: HashMap<String, (Value, Value)> = objects(
+            &db,
+            &format!("SELECT fp, trace_id, span_id, MAX(start) FROM sql WHERE fp IN ({marks}) GROUP BY fp"),
+            fps,
+        )?
+        .into_iter()
+        .map(|row| (row["fp"].as_str().unwrap_or("").to_owned(), (row["trace_id"].clone(), row["span_id"].clone())))
+        .collect();
+        Ok(rows
+            .into_iter()
+            .map(|mut row| {
+                let fp = row["fp"].as_str().unwrap_or("").to_owned();
+                let (trace, span) = samples
+                    .get(&fp)
+                    .cloned()
+                    .unwrap_or((Value::Null, Value::Null));
+                row.insert("sample_trace".into(), trace);
+                row.insert("sample_span".into(), span);
+                if row["vendor"].is_null() || row["vendor"] == "" {
+                    row.insert("vendor".into(), Value::from(""));
+                }
+                row.insert(
+                    "most_per_trace".into(),
+                    Value::from(per_trace.get(&fp).copied().unwrap_or(1)),
+                );
+                row.insert(
+                    "origin".into(),
+                    most_common(origins.remove(&fp).unwrap_or_default())
+                        .map_or(Value::Null, Value::from),
+                );
+                Value::Object(row)
+            })
+            .collect())
+    }
+
+    /// Newest first; `before` is the `start` of the last row of the previous page.
+    pub fn search_traces(
+        &self,
+        query: &str,
+        limit: i64,
+        before: Option<i64>,
+    ) -> Result<Page, ReadError> {
+        let (mut condition, mut params) = search::compile_where(query, &TRACE_SEARCH)?;
+        if let Some(before) = before {
+            condition.push_str(" AND start < ?");
+            params.push(Sql::Integer(before));
+        }
+        params.push(Sql::Integer(limit + 1));
+        let db = self.connect()?;
+        let mut statement = db.prepare(&format!(
+            "SELECT {LISTING} FROM traces WHERE {condition} ORDER BY start DESC LIMIT ?"
+        ))?;
+        let mut items: Vec<Value> = statement
+            .query_map(rusqlite::params_from_iter(params), trace_row)?
+            .collect::<Result<_, _>>()?;
+        let more = items.len() as i64 > limit;
+        items.truncate(limit as usize);
+        let next = if more {
+            items.last().and_then(|item| item["start"].as_i64())
+        } else {
+            None
+        };
+        Ok(Page { items, next })
+    }
+
+    pub fn new(path: &Path) -> Self {
+        Self {
+            path: path.to_owned(),
+        }
+    }
+
+    pub(crate) fn connect(&self) -> rusqlite::Result<Connection> {
+        let db = Connection::open(&self.path)?;
+        db.busy_timeout(std::time::Duration::from_secs(5))?;
+        Ok(db)
+    }
+
+    /// Traces by id (the panel's tab history) or the latest ones.
+    pub fn list_traces(&self, ids: &[String], limit: i64) -> rusqlite::Result<Vec<Value>> {
+        let db = self.connect()?;
+        let mut params: Vec<Sql> = ids.iter().map(|id| Sql::Text(id.clone())).collect();
+        let condition = if ids.is_empty() {
+            "1 = 1".to_owned()
+        } else {
+            format!("id IN ({})", vec!["?"; ids.len()].join(", "))
+        };
+        params.push(Sql::Integer(limit));
+        let mut statement = db.prepare(&format!(
+            "SELECT {LISTING} FROM traces WHERE {condition} ORDER BY start DESC LIMIT ?"
+        ))?;
+        let rows = statement.query_map(rusqlite::params_from_iter(params), trace_row)?;
+        rows.collect()
+    }
+
+    /// The trace's document, as stored.
+    pub fn get_trace(&self, id: &str) -> rusqlite::Result<Option<String>> {
+        let db = self.connect()?;
+        let mut statement = db.prepare("SELECT doc FROM traces WHERE id = ?1")?;
+        let mut rows = statement.query([id])?;
+        rows.next()?.map(|row| row.get(0)).transpose()
+    }
+
+    /// Traces linked to this one, by link kind: tasks (enqueued_by), WebSocket connections and layer messages.
+    pub fn related(&self, id: &str) -> rusqlite::Result<Value> {
+        let db = self.connect()?;
+        let mut statement =
+            db.prepare("SELECT kind, linked_trace, linked_span, trace_id FROM links WHERE trace_id = ?1 OR linked_trace = ?1")?;
+        let links: Vec<(String, String, String, String)> = statement
+            .query_map([id], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+            })?
+            .collect::<Result<_, _>>()?;
+        let mut parents: HashMap<String, Vec<String>> = HashMap::new();
+        let mut children: HashMap<String, Vec<String>> = HashMap::new();
+        // Which span of this trace each linked trace came from: the call tree shows a task under its enqueue.
+        let mut via = serde_json::Map::new();
+        for (kind, linked, span, owner) in links {
+            if owner == id {
+                parents.entry(kind).or_default().push(linked);
+            } else {
+                children.entry(kind).or_default().push(owner.clone());
+                via.insert(owner, Value::from(span));
+            }
+        }
+        let one = |kind: &str| -> rusqlite::Result<Value> {
+            match parents.get(kind) {
+                Some(ids) => Ok(self
+                    .list_traces(ids, 100)?
+                    .into_iter()
+                    .next()
+                    .unwrap_or(Value::Null)),
+                None => Ok(Value::Null),
+            }
+        };
+        let many = |kind: &str| -> rusqlite::Result<Value> {
+            let mut found = match children.get(kind) {
+                Some(ids) => self.list_traces(ids, RELATED_LIMIT)?,
+                None => Vec::new(),
+            };
+            found.sort_by_key(|item| item["start"].as_i64().unwrap_or_default());
+            Ok(Value::Array(found))
+        };
+        Ok(serde_json::json!({
+            "enqueued_by": one("enqueued_by")?,
+            "enqueued": many("enqueued_by")?,
+            "connection": one("connection")?,
+            "connection_events": many("connection")?,
+            "sent_by": one("sent_by")?,
+            "delivered": many("sent_by")?,
+            "via": via,
+        }))
+    }
+
+    /// Issue groups (and how many are errors) and traces per entry point: what the console's menu shows.
+    pub fn counts(&self) -> rusqlite::Result<Value> {
+        let db = self.connect()?;
+        let grouped = |sql: &str| -> rusqlite::Result<HashMap<String, i64>> {
+            let mut statement = db.prepare(sql)?;
+            let rows = statement.query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+            })?;
+            rows.collect()
+        };
+        let kinds = grouped("SELECT kind, COUNT(*) FROM issues GROUP BY kind")?;
+        let traces = grouped("SELECT kind, COUNT(*) FROM traces GROUP BY kind")?;
+        // A GraphQL request is named after its operation: the name says it, no JSON to parse.
+        let graphql: i64 = db.query_row(
+            "SELECT COUNT(*) FROM traces WHERE kind = 'http' AND name LIKE 'GraphQL %'",
+            [],
+            |row| row.get(0),
+        )?;
+        let count = |map: &HashMap<String, i64>, key: &str| map.get(key).copied().unwrap_or(0);
+        let errors = count(&kinds, "error");
+        Ok(serde_json::json!({
+            // Two lists in the console: what failed, and what could be better.
+            "issues": kinds.values().sum::<i64>() - errors,
+            "errors": errors,
+            "sections": {
+                "http": count(&traces, "http") - graphql,
+                "graphql": graphql,
+                "tasks": count(&traces, "task"),
+                "websockets": count(&traces, "websocket"),
+                "jobs": count(&traces, "command"),
+            },
+        }))
+    }
+}

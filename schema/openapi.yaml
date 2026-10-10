@@ -1,0 +1,1069 @@
+openapi: 3.1.0
+info:
+  title: tracepanel local API
+  version: "0.1"
+  description: |
+    The JSON API the Tracepanel console and widget read, served by the agent (and under /__tracepanel__/api/ by
+    apps, which forward it to the agent). This file is the contract: the agent's and the Python SDK's tests check
+    responses against it, and the UI (ui/) generates its client types from it.
+
+    Times are Unix epoch microseconds (UTC); durations are microseconds. Lists that grow (traces, logs,
+    mails) page with a cursor: pass the previous response's `next` as `before`.
+servers:
+  - url: /__tracepanel__/api
+paths:
+  /traces:
+    get:
+      operationId: searchTraces
+      summary: Traces matching a search, newest first.
+      parameters:
+        - $ref: "#/components/parameters/q"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/before"
+        - name: ids
+          in: query
+          description: Comma-separated trace ids; returns just those (the widget's tab history).
+          schema: { type: string }
+      responses:
+        "200":
+          description: One page of traces.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [traces, next]
+                additionalProperties: false
+                properties:
+                  traces: { type: array, items: { $ref: "#/components/schemas/TraceSummary" } }
+                  next: { $ref: "#/components/schemas/Cursor" }
+        "400": { $ref: "#/components/responses/BadSearch" }
+  /traces/{id}:
+    get:
+      operationId: getTrace
+      summary: One trace with its spans, logs, errors and issues.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, pattern: "^[0-9A-Z]{26}$" }
+      responses:
+        "200":
+          description: The trace document.
+          content:
+            application/json:
+              schema: { $ref: "trace.schema.json" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /traces/{id}/related:
+    get:
+      operationId: relatedTraces
+      summary: "Traces linked to this one, by kind: task enqueues, WebSocket connections, channel layer messages."
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, pattern: "^[0-9A-Z]{26}$" }
+      responses:
+        "200":
+          description: Linked traces; empty when there are none (or the trace is unknown).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Related" }
+  /traces/overview:
+    get:
+      operationId: tracesOverview
+      summary: Monitoring over every trace matching a search, grouped into operations (kind + name).
+      parameters:
+        - $ref: "#/components/parameters/q"
+        - name: group
+          in: query
+          description: >-
+            How the slowest and failing lists group traces: `operation` (kind + name: a GraphQL operation, a task) or
+            `endpoint` (an HTTP request by method + route, so all GraphQL operations are one `POST /graphql/`).
+          schema: { type: string, enum: [operation, endpoint], default: operation }
+      responses:
+        "200":
+          description: Summary, time series and worst endpoints.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TracesOverview" }
+        "400": { $ref: "#/components/responses/BadSearch" }
+  /logs:
+    get:
+      operationId: searchLogs
+      summary: Log records matching a search, newest first.
+      parameters:
+        - $ref: "#/components/parameters/q"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/before"
+      responses:
+        "200":
+          description: One page of log records.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [logs, next]
+                additionalProperties: false
+                properties:
+                  logs: { type: array, items: { $ref: "#/components/schemas/LogRow" } }
+                  next: { $ref: "#/components/schemas/Cursor" }
+        "400": { $ref: "#/components/responses/BadSearch" }
+  /mails:
+    get:
+      operationId: searchMails
+      summary: Sent emails matching a search, newest first.
+      parameters:
+        - $ref: "#/components/parameters/q"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/before"
+      responses:
+        "200":
+          description: One page of emails.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [mails, next]
+                additionalProperties: false
+                properties:
+                  mails: { type: array, items: { $ref: "#/components/schemas/MailRow" } }
+                  next: { $ref: "#/components/schemas/Cursor" }
+        "400": { $ref: "#/components/responses/BadSearch" }
+  /queries:
+    get:
+      operationId: listQueries
+      summary: SQL statements aggregated across stored traces, heaviest first.
+      parameters:
+        - $ref: "#/components/parameters/q"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: Statements.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [queries]
+                additionalProperties: false
+                properties:
+                  queries: { type: array, items: { $ref: "#/components/schemas/QueryRow" } }
+        "400": { $ref: "#/components/responses/BadSearch" }
+  /explain:
+    get:
+      operationId: explain
+      summary: EXPLAIN (or EXPLAIN ANALYZE) of one captured SELECT, run on its database.
+      parameters:
+        - { name: trace, in: query, required: true, schema: { type: string } }
+        - { name: span, in: query, required: true, schema: { type: string } }
+        - name: analyze
+          in: query
+          description: "1 runs the query to measure it (PostgreSQL, MySQL)."
+          schema: { type: string, enum: ["1"] }
+      responses:
+        "200":
+          description: The query plan.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExplainPlan" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: The query can't be explained (not a SELECT, no captured parameters, database error).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /tasks:
+    get:
+      operationId: listTasks
+      summary: Background tasks by name (Celery, Django Tasks; system names the queue), busiest first.
+      parameters:
+        - $ref: "#/components/parameters/q"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: Tasks.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [tasks]
+                additionalProperties: false
+                properties:
+                  tasks: { type: array, items: { $ref: "#/components/schemas/TaskRow" } }
+        "400": { $ref: "#/components/responses/BadSearch" }
+  /graphql:
+    get:
+      operationId: listGraphqlOperations
+      summary: GraphQL operations (Strawberry) by name, with calls, errors, latency and queries, busiest first.
+      parameters:
+        - $ref: "#/components/parameters/q"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: Operations.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [graphql]
+                additionalProperties: false
+                properties:
+                  graphql: { type: array, items: { $ref: "#/components/schemas/GraphqlRow" } }
+        "400": { $ref: "#/components/responses/BadSearch" }
+  /traces/summary:
+    get:
+      operationId: summarizeTraces
+      summary: >-
+        Any group of traces named by a search (task:x, operation:"query X", kind:command name:y): percentiles,
+        series, histogram, issues, slowest and recent calls. Every group page in the console is one of these.
+      parameters:
+        - $ref: "#/components/parameters/q"
+      responses:
+        "200":
+          description: The group.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TraceGroup" }
+        "400": { $ref: "#/components/responses/BadSearch" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /jobs:
+    get:
+      operationId: listJobs
+      summary: Jobs (management commands and tracepanel.trace() blocks) by name, busiest first.
+      parameters:
+        - $ref: "#/components/parameters/q"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: Jobs.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [jobs]
+                additionalProperties: false
+                properties:
+                  jobs: { type: array, items: { $ref: "#/components/schemas/JobRow" } }
+        "400": { $ref: "#/components/responses/BadSearch" }
+  /graphql/detail:
+    get:
+      operationId: getGraphqlOperation
+      summary: One GraphQL operation, like an endpoint (percentiles, series, issues, calls), plus its resolvers.
+      parameters:
+        - { name: operation, in: query, required: true, schema: { type: string }, description: "query PostList" }
+      responses:
+        "200":
+          description: The operation.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GraphqlDetail" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /websockets:
+    get:
+      operationId: listWebsockets
+      summary: WebSocket consumers (Channels) with their connections, messages, errors and handler time, busiest first.
+      parameters:
+        - $ref: "#/components/parameters/q"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: Consumers.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [websockets]
+                additionalProperties: false
+                properties:
+                  websockets: { type: array, items: { $ref: "#/components/schemas/WebsocketRow" } }
+        "400": { $ref: "#/components/responses/BadSearch" }
+  /services:
+    get:
+      operationId: listServices
+      summary: >-
+        What the project's web, workers and commands talk to (databases, caches, mail, brokers, HTTP APIs) and how
+        much: the nodes and edges of a service map.
+      parameters:
+        - $ref: "#/components/parameters/q"
+      responses:
+        "200":
+          description: Service map.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [apps, services, edges]
+                additionalProperties: false
+                properties:
+                  apps: { type: array, items: { $ref: "#/components/schemas/ServiceApp" } }
+                  services:
+                    type: array
+                    description: By kind, then by total time.
+                    items: { $ref: "#/components/schemas/ServiceNode" }
+                  edges:
+                    type: array
+                    description: Most time first.
+                    items: { $ref: "#/components/schemas/ServiceEdge" }
+        "400": { $ref: "#/components/responses/BadSearch" }
+  /endpoints:
+    get:
+      operationId: listEndpoints
+      summary: HTTP traffic per route.
+      parameters:
+        - $ref: "#/components/parameters/q"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: Endpoints.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [endpoints]
+                additionalProperties: false
+                properties:
+                  endpoints: { type: array, items: { $ref: "#/components/schemas/EndpointRow" } }
+        "400": { $ref: "#/components/responses/BadSearch" }
+  /endpoints/detail:
+    get:
+      operationId: getEndpoint
+      summary: One endpoint with percentiles, time series, issues and calls.
+      parameters:
+        - { name: method, in: query, required: true, schema: { type: string } }
+        - { name: route, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The endpoint.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EndpointDetail" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /issues:
+    get:
+      operationId: listIssues
+      summary: Issues (errors, N+1, duplicate and slow SQL) by fingerprint, most recent first.
+      parameters:
+        - $ref: "#/components/parameters/q"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: Issues.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [issues]
+                additionalProperties: false
+                properties:
+                  issues: { type: array, items: { $ref: "#/components/schemas/IssueRow" } }
+        "400": { $ref: "#/components/responses/BadSearch" }
+  /issues/detail:
+    get:
+      operationId: getIssue
+      summary: One issue with its events over time and the requests it happened in.
+      parameters:
+        - { name: fingerprint, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The issue.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IssueDetail" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /counts:
+    get:
+      operationId: counts
+      summary: Navigation badges.
+      responses:
+        "200":
+          description: Counts.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Counts" }
+  /store:
+    delete:
+      operationId: clearStore
+      summary: Delete every stored trace, log, query, email and issue.
+      description: >-
+        A DELETE, so another site can't send it without a CORS preflight, which the console never allows.
+      responses:
+        "200":
+          description: Deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deleted]
+                additionalProperties: false
+                properties:
+                  deleted: { type: integer, description: How many traces were deleted. }
+  /values:
+    get:
+      operationId: knownValues
+      summary: Distinct routes, loggers, database aliases and extra= keys, for filter menus and hints.
+      responses:
+        "200":
+          description: Known values.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KnownValues" }
+  /search:
+    get:
+      operationId: searchSpec
+      summary: The search fields of every resource (the same data as schema/search.json).
+      responses:
+        "200":
+          description: Fields per resource.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SearchSpec" }
+  /users:
+    get:
+      operationId: searchUsers
+      summary: Users to switch to (development only, from this machine).
+      parameters:
+        - { name: q, in: query, description: Part of the username., schema: { type: string } }
+      responses:
+        "200":
+          description: Up to 20 users, by username.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [users]
+                additionalProperties: false
+                properties:
+                  users: { type: array, items: { $ref: "#/components/schemas/User" } }
+        "403": { $ref: "#/components/responses/NotLocal" }
+  /users/me:
+    get:
+      operationId: currentUser
+      summary: The user logged in to this browser session.
+      responses:
+        "200":
+          description: The user, or null when anonymous.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CurrentUser" }
+        "403": { $ref: "#/components/responses/NotLocal" }
+  /users/switch:
+    post:
+      operationId: switchUser
+      summary: Log this browser session in as another user, or out (development only, from this machine).
+      description: Needs the X-Tracepanel header and a same-origin request, so another site can't trigger it.
+      parameters:
+        - { name: X-Tracepanel, in: header, required: true, schema: { type: string, enum: ["1"] } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id]
+              additionalProperties: false
+              properties:
+                user_id: { type: [string, integer, "null"], description: "The user's primary key; null logs out." }
+      responses:
+        "200":
+          description: Now logged in as this user (null when logged out); the session cookie is set.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CurrentUser" }
+        "403": { $ref: "#/components/responses/NotLocal" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+components:
+  parameters:
+    q:
+      name: q
+      in: query
+      description: 'Search query: free text plus key:value filters, e.g. route:/api/* status>=500 "timed out".'
+      schema: { type: string }
+    limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
+    before:
+      name: before
+      in: query
+      description: The `next` cursor of the previous page.
+      schema: { type: integer }
+  responses:
+    NotFound:
+      description: Nothing with that id.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotLocal:
+      description: User switching is only for requests from this machine (or INTERNAL_IPS) and from the page itself.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    BadSearch:
+      description: The search can't be run; `error` explains it to the user.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      additionalProperties: false
+      properties:
+        error: { type: string }
+    Cursor:
+      description: Pass as `before` for the next page; null on the last one.
+      type: [integer, "null"]
+    Time:
+      description: Unix epoch microseconds (UTC).
+      type: integer
+    Duration:
+      description: Microseconds.
+      type: integer
+      minimum: 0
+    IssueKind:
+      type: string
+      enum: [n+1, duplicates, slow-sql, error, long-transaction, in-transaction, htmx]
+    TraceSummary:
+      type: object
+      description: A trace without its document, as in lists.
+      additionalProperties: false
+      required: [id, kind, name, start, duration, status, http_status, method, path, route, view, user_id, queries,
+        db_time, issues, errors, logs, mails, issue_kinds, db_aliases, cache_aliases, task_state, htmx]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [http, task, command, websocket] }
+        name: { type: string }
+        start: { $ref: "#/components/schemas/Time" }
+        duration: { $ref: "#/components/schemas/Duration" }
+        status: { type: string, enum: [ok, error] }
+        http_status: { type: [integer, "null"] }
+        method: { type: [string, "null"] }
+        path: { type: [string, "null"] }
+        route: { type: [string, "null"] }
+        view: { type: [string, "null"] }
+        user_id: { type: [string, "null"] }
+        queries: { type: integer }
+        db_time: { $ref: "#/components/schemas/Duration" }
+        issues: { type: integer }
+        errors: { type: integer }
+        logs: { type: integer }
+        mails: { type: integer }
+        issue_kinds: { type: array, items: { $ref: "#/components/schemas/IssueKind" } }
+        db_aliases: { type: array, items: { type: string } }
+        cache_aliases: { type: array, items: { type: string } }
+        task_state:
+          type: [string, "null"]
+          enum: [success, failure, retry, null]
+          description: How a Celery task run ended; null for requests and commands.
+        htmx:
+          type: [string, "null"]
+          enum: [request, boosted, null]
+          description: Sent by htmx (HX-Request); boosted when a boosted link or form loaded a whole page.
+    LogRow:
+      type: object
+      additionalProperties: false
+      required: [id, trace_id, time, level, logger, message, exception, attrs, trace_kind, trace_htmx, trace_name, method,
+        path, http_status, user_id]
+      properties:
+        id: { type: integer }
+        trace_id: { type: string }
+        time: { $ref: "#/components/schemas/Time" }
+        level: { type: string, enum: [debug, info, warning, error, critical] }
+        logger: { type: string }
+        message: { type: string }
+        exception: { type: [string, "null"] }
+        attrs: { $ref: "#/components/schemas/Attrs" }
+        trace_kind: { type: string, enum: [http, task, command, websocket] }
+        trace_htmx: { type: [string, "null"], enum: [request, boosted, null], description: As the trace's htmx. }
+        trace_name: { type: string }
+        method: { type: [string, "null"] }
+        path: { type: [string, "null"] }
+        http_status: { type: [integer, "null"] }
+        user_id: { type: [string, "null"] }
+    Attrs:
+      description: Namespaced attributes; values are scalars or lists of scalars.
+      type: object
+      additionalProperties:
+        anyOf:
+          - $ref: "#/components/schemas/Scalar"
+          - { type: array, items: { $ref: "#/components/schemas/Scalar" } }
+    Scalar:
+      type: [string, number, boolean, "null"]
+    MailRow:
+      type: object
+      additionalProperties: false
+      required: [trace_id, span_id, time, subject, sender, recipients, sent, html, trace_kind, trace_htmx, method, path,
+        trace_name]
+      properties:
+        trace_id: { type: string }
+        span_id: { type: string }
+        time: { $ref: "#/components/schemas/Time" }
+        subject: { type: string }
+        sender: { type: [string, "null"] }
+        recipients: { type: array, description: To and cc., items: { type: string } }
+        sent: { type: [boolean, "null"], description: "False when the backend refused it; null when unknown." }
+        html: { type: boolean }
+        trace_kind: { type: string, enum: [http, task, command, websocket] }
+        trace_htmx: { type: [string, "null"], enum: [request, boosted, null], description: As the trace's htmx. }
+        method: { type: [string, "null"] }
+        path: { type: [string, "null"] }
+        trace_name: { type: string }
+    QueryRow:
+      type: object
+      additionalProperties: false
+      required: [fp, alias, vendor, statement, name, calls, traces, total, slowest, last_seen, most_per_trace, origin,
+        sample_trace, sample_span]
+      properties:
+        fp: { type: string, description: "Statement id (search with query:<fp>)." }
+        alias: { type: string, description: Database alias. }
+        vendor: { type: string, description: "sqlite, postgresql, mysql…" }
+        statement: { type: string, description: Normalized SQL with %s placeholders. }
+        name: { type: string }
+        calls: { type: integer }
+        traces: { type: integer }
+        total: { $ref: "#/components/schemas/Duration" }
+        slowest: { $ref: "#/components/schemas/Duration" }
+        last_seen: { $ref: "#/components/schemas/Time" }
+        most_per_trace: { type: integer }
+        origin: { type: [string, "null"] }
+        sample_trace: { type: string, description: The latest call's trace. }
+        sample_span: { type: string, description: The latest call's span. }
+    ExplainPlan:
+      type: object
+      additionalProperties: false
+      required: [vendor, alias, analyzed, lines]
+      properties:
+        vendor: { type: string }
+        alias: { type: string }
+        analyzed: { type: boolean }
+        lines:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [depth, text, warning]
+            properties:
+              depth: { type: integer, minimum: 0 }
+              text: { type: string }
+              warning: { type: [string, "null"] }
+    EndpointRow:
+      type: object
+      additionalProperties: false
+      required: [method, route, calls, p50, p95, total, avg_queries, with_issues, errors, last_seen, graphql_operations]
+      properties:
+        method: { type: string }
+        route: { type: string }
+        calls: { type: integer }
+        p50: { $ref: "#/components/schemas/Duration" }
+        p95: { $ref: "#/components/schemas/Duration" }
+        total: { $ref: "#/components/schemas/Duration" }
+        avg_queries: { type: number }
+        with_issues: { type: integer }
+        errors: { type: integer }
+        last_seen: { $ref: "#/components/schemas/Time" }
+        graphql_operations:
+          type: integer
+          description: Distinct GraphQL operations served by this endpoint (0 for plain HTTP).
+    StatsSummary:
+      type: object
+      additionalProperties: false
+      required: [calls, errors, slow, p50, p75, p90, p95, p99, max, avg_queries, avg_db_time, with_issues, first_seen,
+        last_seen]
+      properties:
+        calls: { type: integer }
+        errors: { type: integer }
+        slow: { type: integer }
+        p50: { $ref: "#/components/schemas/Duration" }
+        p75: { $ref: "#/components/schemas/Duration" }
+        p90: { $ref: "#/components/schemas/Duration" }
+        p95: { $ref: "#/components/schemas/Duration" }
+        p99: { $ref: "#/components/schemas/Duration" }
+        max: { $ref: "#/components/schemas/Duration" }
+        avg_queries: { type: number }
+        avg_db_time: { $ref: "#/components/schemas/Duration" }
+        with_issues: { type: integer }
+        first_seen: { $ref: "#/components/schemas/Time" }
+        last_seen: { $ref: "#/components/schemas/Time" }
+    SeriesBucket:
+      type: object
+      additionalProperties: false
+      required: [start, end, calls, errors, slow, p50, p95]
+      properties:
+        start: { $ref: "#/components/schemas/Time" }
+        end: { $ref: "#/components/schemas/Time" }
+        calls: { type: integer }
+        errors: { type: integer }
+        slow: { type: integer }
+        p50: { type: [integer, "null"] }
+        p95: { type: [integer, "null"] }
+    HistogramBucket:
+      type: object
+      additionalProperties: false
+      required: [from, to, count]
+      properties:
+        from: { $ref: "#/components/schemas/Duration" }
+        to: { $ref: "#/components/schemas/Duration" }
+        count: { type: integer }
+    GroupStats:
+      type: object
+      required: [calls, errors, p95, slow]
+      properties:
+        calls: { type: integer }
+        errors: { type: integer }
+        p95: { $ref: "#/components/schemas/Duration" }
+        slow: { type: integer }
+    KindStats:
+      allOf:
+        - $ref: "#/components/schemas/GroupStats"
+        - type: object
+          required: [kind]
+          properties:
+            kind: { type: string, enum: [http, task, command, websocket] }
+      unevaluatedProperties: false
+    OperationStats:
+      description: 'One operation: a trace kind plus name, e.g. http "GET /posts/<int:pk>/".'
+      allOf:
+        - $ref: "#/components/schemas/GroupStats"
+        - type: object
+          required: [kind, name, method, route]
+          properties:
+            kind: { type: string, enum: [http, task, command, websocket] }
+            name: { type: string }
+            method: { type: [string, "null"], description: For requests. }
+            route: { type: [string, "null"], description: For requests. }
+      unevaluatedProperties: false
+    TracesOverview:
+      type: object
+      additionalProperties: false
+      required: [summary, series, histogram, slow_threshold, kinds, slowest, failing]
+      properties:
+        summary:
+          oneOf:
+            - $ref: "#/components/schemas/StatsSummary"
+            - { type: "null", description: No trace matches. }
+        series: { type: array, items: { $ref: "#/components/schemas/SeriesBucket" } }
+        histogram: { type: array, items: { $ref: "#/components/schemas/HistogramBucket" } }
+        slow_threshold: { $ref: "#/components/schemas/Duration" }
+        kinds: { type: array, items: { $ref: "#/components/schemas/KindStats" } }
+        slowest: { type: array, description: Highest p95 first., items: { $ref: "#/components/schemas/OperationStats" } }
+        failing: { type: array, description: Most errors first., items: { $ref: "#/components/schemas/OperationStats" } }
+    IssueGroup:
+      type: object
+      required: [fingerprint, fingerprint_version, kind, title, culprit, hint, occurrences, first_seen, last_seen,
+        last_trace_id]
+      properties:
+        fingerprint: { type: string, pattern: "^[0-9a-f]{16}$" }
+        fingerprint_version: { type: integer }
+        kind: { $ref: "#/components/schemas/IssueKind" }
+        title: { type: string }
+        culprit: { type: [string, "null"] }
+        hint: { type: [string, "null"] }
+        occurrences: { type: integer }
+        first_seen: { $ref: "#/components/schemas/Time" }
+        last_seen: { $ref: "#/components/schemas/Time" }
+        last_trace_id: { type: string }
+    IssueRow:
+      allOf:
+        - $ref: "#/components/schemas/IssueGroup"
+        - type: object
+          required: [endpoints]
+          properties:
+            endpoints: { type: array, description: '"METHOD route" of the requests it happened in.', items: { type: string } }
+      unevaluatedProperties: false
+    IssueDetail:
+      allOf:
+        - $ref: "#/components/schemas/IssueGroup"
+        - type: object
+          required: [endpoints, series, traces]
+          properties:
+            endpoints: { type: array, items: { type: string } }
+            series: { type: array, items: { $ref: "#/components/schemas/SeriesBucket" } }
+            traces: { type: array, description: Newest first., items: { $ref: "#/components/schemas/TraceSummary" } }
+      unevaluatedProperties: false
+    EndpointIssue:
+      allOf:
+        - $ref: "#/components/schemas/IssueGroup"
+        - type: object
+          required: [calls]
+          properties:
+            calls: { type: integer, description: Calls of this endpoint it happened in. }
+      unevaluatedProperties: false
+    EndpointDetail:
+      type: object
+      additionalProperties: false
+      required: [method, route, summary, series, histogram, issues, slowest, recent]
+      properties:
+        method: { type: string }
+        route: { type: string }
+        summary: { $ref: "#/components/schemas/StatsSummary" }
+        series: { type: array, items: { $ref: "#/components/schemas/SeriesBucket" } }
+        histogram: { type: array, items: { $ref: "#/components/schemas/HistogramBucket" } }
+        issues: { type: array, items: { $ref: "#/components/schemas/EndpointIssue" } }
+        slowest: { type: array, items: { $ref: "#/components/schemas/TraceSummary" } }
+        recent: { type: array, items: { $ref: "#/components/schemas/TraceSummary" } }
+    Counts:
+      type: object
+      additionalProperties: false
+      required: [issues, errors, sections]
+      properties:
+        issues: { type: integer, description: "Issue groups besides errors: N+1, duplicate and slow SQL, transactions, htmx." }
+        errors: { type: integer, description: Error groups. }
+        sections:
+          type: object
+          description: Stored traces per entry point; the console hides entry points with none.
+          additionalProperties: false
+          required: [http, graphql, tasks, websockets, jobs]
+          properties:
+            http: { type: integer, description: HTTP requests that are not GraphQL operations. }
+            graphql: { type: integer }
+            tasks: { type: integer }
+            websockets: { type: integer }
+            jobs: { type: integer, description: Management commands and tracepanel.trace() blocks. }
+    KnownValues:
+      type: object
+      additionalProperties: false
+      required: [route, logger, db, task, queue, extra]
+      properties:
+        task: { type: array, description: Celery task names., items: { type: string } }
+        queue: { type: array, description: Celery queues tasks ran from., items: { type: string } }
+        route: { type: array, items: { type: string } }
+        logger: { type: array, items: { type: string } }
+        db: { type: array, items: { type: string } }
+        extra: { type: array, description: "extra.* keys seen in logs.", items: { type: string } }
+    SearchField:
+      type: object
+      additionalProperties: false
+      required: [type, help]
+      properties:
+        type: { type: string, enum: [text, number, duration, level, has, time] }
+        help: { type: string }
+    SearchSpec:
+      type: object
+      additionalProperties: false
+      required: [traces, logs, mails, queries, endpoints, tasks, services, websockets, graphql, jobs, issues]
+      properties:
+        tasks: { $ref: "#/components/schemas/SearchFields" }
+        services: { $ref: "#/components/schemas/SearchFields" }
+        websockets: { $ref: "#/components/schemas/SearchFields" }
+        graphql: { $ref: "#/components/schemas/SearchFields" }
+        jobs: { $ref: "#/components/schemas/SearchFields" }
+        traces: { $ref: "#/components/schemas/SearchFields" }
+        logs: { $ref: "#/components/schemas/SearchFields" }
+        mails: { $ref: "#/components/schemas/SearchFields" }
+        queries: { $ref: "#/components/schemas/SearchFields" }
+        endpoints: { $ref: "#/components/schemas/SearchFields" }
+        issues: { $ref: "#/components/schemas/SearchFields" }
+    SearchFields:
+      description: 'Field name to its type and help; names ending in ".*" accept any key under that prefix.'
+      type: object
+      additionalProperties: { $ref: "#/components/schemas/SearchField" }
+    User:
+      type: object
+      additionalProperties: false
+      required: [id, username, name, email, is_staff, is_superuser]
+      properties:
+        id: { type: string }
+        username: { type: string }
+        name: { type: [string, "null"] }
+        email: { type: [string, "null"] }
+        is_staff: { type: boolean }
+        is_superuser: { type: boolean }
+    CurrentUser:
+      type: object
+      additionalProperties: false
+      required: [user]
+      properties:
+        user:
+          oneOf:
+            - $ref: "#/components/schemas/User"
+            - { type: "null", description: Anonymous. }
+    TaskRow:
+      type: object
+      additionalProperties: false
+      required: [task, system, runs, failures, retries, p50, p95, total, wait_p50, wait_p95, avg_queries, with_issues,
+        queues, last_seen]
+      properties:
+        task: { type: string, description: Dotted task name. }
+        system: { type: string, description: "task.system: the queue that ran it (celery, django)." }
+        runs: { type: integer }
+        failures: { type: integer }
+        retries: { type: integer, description: Runs that ended in a retry. }
+        p50: { $ref: "#/components/schemas/Duration" }
+        p95: { $ref: "#/components/schemas/Duration" }
+        total: { $ref: "#/components/schemas/Duration" }
+        wait_p50: { type: [integer, "null"], description: Time in the queue before a worker took it (microseconds). }
+        wait_p95: { type: [integer, "null"] }
+        avg_queries: { type: number }
+        with_issues: { type: integer }
+        queues: { type: array, items: { type: string } }
+        last_seen: { $ref: "#/components/schemas/Time" }
+    GraphqlRow:
+      type: object
+      additionalProperties: false
+      required: [operation, type, name, calls, errors, p50, p95, total, avg_queries, with_issues, last_seen]
+      properties:
+        operation: { type: string, description: "Type and name: query PostList; an unnamed operation by its root fields, query { posts }." }
+        type: { type: [string, "null"], description: query, mutation or subscription. }
+        name: { type: [string, "null"], description: "operationName; null for an anonymous operation." }
+        calls: { type: integer }
+        errors: { type: integer, description: Calls with an error (a resolver exception or a 5xx). }
+        p50: { $ref: "#/components/schemas/Duration" }
+        p95: { $ref: "#/components/schemas/Duration" }
+        total: { $ref: "#/components/schemas/Duration" }
+        avg_queries: { type: number }
+        with_issues: { type: integer }
+        last_seen: { $ref: "#/components/schemas/Time" }
+    TraceGroup:
+      type: object
+      additionalProperties: false
+      required: [query, summary, series, histogram, issues, slowest, recent]
+      properties:
+        query: { type: string, description: The search that names the group. }
+        summary: { $ref: "#/components/schemas/StatsSummary" }
+        series: { type: array, items: { $ref: "#/components/schemas/SeriesBucket" } }
+        histogram: { type: array, items: { $ref: "#/components/schemas/HistogramBucket" } }
+        issues: { type: array, items: { $ref: "#/components/schemas/EndpointIssue" } }
+        slowest: { type: array, items: { $ref: "#/components/schemas/TraceSummary" } }
+        recent: { type: array, items: { $ref: "#/components/schemas/TraceSummary" } }
+    JobRow:
+      type: object
+      additionalProperties: false
+      required: [job, source, runs, failures, p50, p95, total, avg_queries, with_issues, last_seen]
+      properties:
+        job: { type: string, description: "manage.py migrate, or the name given to tracepanel.trace()." }
+        source: { type: string, enum: [manage.py, custom] }
+        runs: { type: integer }
+        failures: { type: integer }
+        p50: { $ref: "#/components/schemas/Duration" }
+        p95: { $ref: "#/components/schemas/Duration" }
+        total: { $ref: "#/components/schemas/Duration" }
+        avg_queries: { type: number }
+        with_issues: { type: integer }
+        last_seen: { $ref: "#/components/schemas/Time" }
+    GraphqlDetail:
+      type: object
+      additionalProperties: false
+      required: [operation, type, name, document, summary, series, histogram, resolvers, issues, slowest, recent]
+      properties:
+        operation: { type: string }
+        type: { type: [string, "null"] }
+        name: { type: [string, "null"] }
+        document: { type: [string, "null"], description: The latest query text (whitespace collapsed). }
+        summary: { $ref: "#/components/schemas/StatsSummary" }
+        series: { type: array, items: { $ref: "#/components/schemas/SeriesBucket" } }
+        histogram: { type: array, items: { $ref: "#/components/schemas/HistogramBucket" } }
+        resolvers:
+          type: array
+          description: The project's resolvers in this operation, most time first.
+          items: { $ref: "#/components/schemas/ResolverStats" }
+        issues: { type: array, items: { $ref: "#/components/schemas/EndpointIssue" } }
+        slowest: { type: array, items: { $ref: "#/components/schemas/TraceSummary" } }
+        recent: { type: array, items: { $ref: "#/components/schemas/TraceSummary" } }
+    ResolverStats:
+      type: object
+      additionalProperties: false
+      required: [field, per_call, total, p95, queries_per_call]
+      properties:
+        field: { type: string, description: "Type.field, e.g. PostType.author." }
+        per_call: { type: number, description: How many times it resolves per operation call (N+1 shows here). }
+        total: { $ref: "#/components/schemas/Duration" }
+        p95: { $ref: "#/components/schemas/Duration" }
+        queries_per_call: { type: number, description: SQL queries it runs per operation call. }
+    WebsocketRow:
+      type: object
+      additionalProperties: false
+      required: [consumer, connections, received, delivered, disconnects, errors, p50, p95, total, avg_queries,
+        with_issues, paths, last_seen]
+      properties:
+        consumer: { type: string, description: Dotted consumer class. }
+        connections: { type: integer }
+        received: { type: integer, description: Frames received from clients. }
+        delivered: { type: integer, description: Channel layer messages handled (group_send and send). }
+        disconnects: { type: integer }
+        errors: { type: integer }
+        p50: { $ref: "#/components/schemas/Duration" }
+        p95: { $ref: "#/components/schemas/Duration" }
+        total: { $ref: "#/components/schemas/Duration" }
+        avg_queries: { type: number }
+        with_issues: { type: integer }
+        paths: { type: array, items: { type: string }, description: Up to five paths seen. }
+        last_seen: { $ref: "#/components/schemas/Time" }
+    ServiceApp:
+      type: object
+      additionalProperties: false
+      required: [service, role]
+      properties:
+        service: { type: string, description: "service.name: the project (the TRACEPANEL service setting)." }
+        role: { type: string, description: "web, worker or command." }
+    ServiceNode:
+      type: object
+      additionalProperties: false
+      required: [id, kind, system, address, port, namespace, aliases, calls, total, errors, last_seen]
+      properties:
+        id: { type: string, description: "kind:system/address:port/namespace, e.g. database:postgresql/db:5432/blog." }
+        kind: { type: string, enum: [database, cache, mail, queue, http] }
+        system: { type: string, description: "postgresql, sqlite, redis, locmem, smtp, console, rabbitmq…" }
+        address: { type: [string, "null"], description: Host name, IP or socket path. }
+        port: { type: [integer, "null"] }
+        namespace:
+          type: [string, "null"]
+          description: Database name, Redis database number, or the alias of an in-process cache.
+        aliases: { type: array, items: { type: string }, description: Django aliases (DATABASES / CACHES) using it. }
+        calls: { type: integer, description: Calls made to it (for a broker, tasks published). }
+        total: { $ref: "#/components/schemas/Duration" }
+        errors: { type: integer }
+        last_seen: { $ref: "#/components/schemas/Time" }
+    ServiceEdge:
+      type: object
+      additionalProperties: false
+      required: [service, role, peer, direction, traces, calls, total, errors]
+      properties:
+        service: { type: string }
+        role: { type: string }
+        peer: { type: string, description: ServiceNode id. }
+        direction:
+          type: string
+          enum: [out, in]
+          description: "out: the app calls it; in: a worker takes tasks from this broker."
+        traces: { type: integer }
+        calls: { type: integer }
+        total: { $ref: "#/components/schemas/Duration", description: Time spent in the calls (queue wait for in). }
+        errors: { type: integer }
+    Related:
+      type: object
+      additionalProperties: false
+      required: [enqueued_by, enqueued, connection, connection_events, sent_by, delivered, via]
+      properties:
+        enqueued_by:
+          description: The trace that enqueued this task.
+          oneOf:
+            - $ref: "#/components/schemas/TraceSummary"
+            - { type: "null" }
+        enqueued:
+          type: array
+          description: Tasks this trace enqueued, oldest first.
+          items: { $ref: "#/components/schemas/TraceSummary" }
+        connection:
+          description: The connect event of this WebSocket event's connection.
+          oneOf:
+            - $ref: "#/components/schemas/TraceSummary"
+            - { type: "null" }
+        connection_events:
+          type: array
+          description: For a connect event, the later events of the connection, oldest first (up to 100).
+          items: { $ref: "#/components/schemas/TraceSummary" }
+        sent_by:
+          description: The trace whose channel layer message this event handles.
+          oneOf:
+            - $ref: "#/components/schemas/TraceSummary"
+            - { type: "null" }
+        delivered:
+          type: array
+          description: Events that handled the channel layer messages this trace sent, oldest first.
+          items: { $ref: "#/components/schemas/TraceSummary" }
+        via:
+          type: object
+          description: >-
+            For the traces in enqueued, connection_events and delivered: the span of this trace each came from (the
+            task.enqueue or channel.send span), by trace id. The call tree shows a task under the span that enqueued it.
+          additionalProperties: { type: string }

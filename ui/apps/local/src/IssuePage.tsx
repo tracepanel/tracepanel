@@ -1,0 +1,128 @@
+import { ago, type DataSource, Empty, IssueChip, type IssueDetail, RichText } from "@tracepanel/ui";
+import { Card } from "@tracepanel/ui/components/ui/card";
+import { LightbulbIcon } from "lucide-react";
+import { useEffect, useState } from "react";
+import { CallsChart } from "./Charts";
+import { exploreFor } from "./explore";
+import { go, openTrace } from "./routes";
+import { TraceScreen } from "./TraceScreen";
+import { TracesTable } from "./tables";
+import { Breadcrumbs, Loading, Mono } from "./ui";
+
+/** One issue, Sentry-style: what and where, how often, its latest occurrence, and every request it happened in. */
+export function IssuePage({ fingerprint, source }: { fingerprint: string; source: DataSource }) {
+  const [issue, setIssue] = useState<IssueDetail | null | undefined>(undefined);
+  // Loaded once: an issue is read, not watched (the Issues list refreshes; opening the issue again shows what is new).
+  useEffect(() => {
+    let cancelled = false;
+    source.getIssue(fingerprint).then(
+      (result) => !cancelled && setIssue(result),
+      () => !cancelled && setIssue(null),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [fingerprint, source]);
+
+  if (issue === undefined) return <Loading />;
+  if (issue === null) return <Empty title="Issue not found">It may have been dropped with old traces.</Empty>;
+
+  const error = issue.kind === "error";
+  const [type, ...message] = issue.title.split(": ");
+  return (
+    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-9 px-10 pt-7 pb-16 *:min-w-0">
+      {/* One column no wider than the page: a long error message or SQL wraps instead of widening it. */}
+      <header className="grid grid-cols-[minmax(0,1fr)] gap-3 *:min-w-0">
+        <Breadcrumbs
+          items={[
+            error ? { label: "Errors", href: "#/errors" } : { label: "Issues", href: "#/issues" },
+            { label: issue.title },
+          ]}
+        />
+        <div className="flex items-center gap-2.5">
+          <IssueChip kind={issue.kind} />
+          <span className="text-[14px] text-muted-foreground">
+            {issue.occurrences} {issue.occurrences === 1 ? "event" : "events"} · in {issue.traces.length} stored{" "}
+            {issue.traces.length === 1 ? "request" : "requests"} · first seen {ago(issue.first_seen)} · last seen{" "}
+            {ago(issue.last_seen)}
+          </span>
+        </div>
+        {/* Long messages (a driver's, with every connection attempt) stop at three lines: the error below has it all. */}
+        <h1
+          className="line-clamp-3 text-2xl leading-snug font-semibold tracking-tight [overflow-wrap:anywhere]"
+          title={issue.title}
+        >
+          {error ? (
+            <>
+              <span className="text-error">{type}</span>
+              {message.length ? <span className="font-normal">: {message.join(": ")}</span> : null}
+            </>
+          ) : (
+            issue.title
+          )}
+        </h1>
+        {issue.culprit ? <Mono className="text-sm text-muted-foreground">{issue.culprit}</Mono> : null}
+        {issue.hint ? (
+          <Card className="flex-row items-start gap-3 border-brand/30 bg-brand-soft px-4 py-3 text-sm shadow-none">
+            <LightbulbIcon className="mt-0.5 size-4 shrink-0 text-brand" />
+            <span>
+              <RichText text={issue.hint} />
+            </span>
+          </Card>
+        ) : null}
+      </header>
+
+      {/* How often over time; next to it, the endpoints it happens on (left out when it isn't tied to a route). */}
+      <div
+        className={
+          issue.endpoints.length
+            ? "grid grid-cols-[minmax(0,2fr)_minmax(260px,1fr)] gap-4 max-[1100px]:grid-cols-1"
+            : "grid grid-cols-[minmax(0,1fr)]"
+        }
+      >
+        <CallsChart series={issue.series} title="Events over time" noun="event" errors={error} />
+        {issue.endpoints.length ? (
+          <Card className="gap-2 px-4 py-3.5 shadow-none">
+            <h2 className="text-[16px] font-semibold">Endpoints</h2>
+            <ul className="grid gap-0.5">
+              {issue.endpoints.map((endpoint) => {
+                const [method = "GET", route = "/"] = endpoint.split(" ");
+                return (
+                  <li key={endpoint}>
+                    <button
+                      type="button"
+                      className="w-full rounded-md px-1.5 py-1.5 text-left font-mono text-[14px] hover:bg-accent"
+                      onClick={() => go({ name: "group", section: "endpoints", key: `${method} ${route}` })}
+                    >
+                      {endpoint}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </Card>
+        ) : null}
+      </div>
+
+      <section className="grid grid-cols-[minmax(0,1fr)] gap-2.5">
+        <h2 className="text-[19px] font-semibold">Latest occurrence</h2>
+        <Card className="p-0 shadow-none">
+          <TraceScreen
+            id={issue.last_trace_id}
+            source={source}
+            explore={(trace) => exploreFor(trace, go)}
+            onOpenTrace={(id) => openTrace(id)}
+            initialTab={error ? "error" : "issues"}
+          />
+        </Card>
+      </section>
+
+      <section className="grid grid-cols-[minmax(0,1fr)] gap-2.5">
+        <h2 className="text-[19px] font-semibold">
+          Requests <span className="font-normal text-muted-foreground">· newest first</span>
+        </h2>
+        <TracesTable items={issue.traces} selectedId={null} onSelect={(id) => openTrace(id)} />
+      </section>
+    </div>
+  );
+}

@@ -1,0 +1,71 @@
+{
+  "attrs": {
+    "code.view": "blog.views.slow_sql",
+    "http.method": "GET",
+    "http.path": "/slow-sql/",
+    "http.route": "/slow-sql/",
+    "http.status_code": 200,
+    "process.runtime.name": "cpython",
+    "process.runtime.version": "3.11.16",
+    "service.name": "django-classic",
+    "service.role": "web",
+    "telemetry.sdk.language": "python",
+    "tracepanel.framework": "Django 5.2.18"
+  },
+  "duration": 409816,
+  "errors": [],
+  "id": "01M4GPC1YB2QE9A89EMBS1MABC",
+  "issues": [],
+  "kind": "http",
+  "links": [],
+  "logs": [],
+  "name": "GET /slow-sql/",
+  "spans": [
+    {
+      "attrs": {},
+      "duration": 409816,
+      "id": "01M4GPC1YCS6Q12NZQP8TBZ5WY",
+      "kind": "http",
+      "name": "GET /slow-sql/",
+      "parent_id": null,
+      "start": 1791561697227953,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.view": "blog.views.slow_sql"
+      },
+      "duration": 409315,
+      "id": "01M4GPC1YC2QYF4WWMG1W2MB9T",
+      "kind": "view",
+      "name": "blog.views.slow_sql",
+      "parent_id": "01M4GPC1YCS6Q12NZQP8TBZ5WY",
+      "start": 1791561697228398,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:62 in slow_sql",
+        "code.template": null,
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c WHERE x < 3000000) SELECT count(*) FROM c",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params_hash": "dff88b217460",
+        "db.statement": "WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c WHERE x < 3000000) SELECT count(*) FROM c",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 408084,
+      "id": "01M4GPC2B5Y6D7XB9VSWXBCZ01",
+      "kind": "sql",
+      "name": "WITH c",
+      "parent_id": "01M4GPC1YC2QYF4WWMG1W2MB9T",
+      "start": 1791561697229481,
+      "status": "ok"
+    }
+  ],
+  "start": 1791561697227953,
+  "status": "ok"
+}

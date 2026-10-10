@@ -1,0 +1,102 @@
+import { CircleCheckIcon, TriangleAlertIcon } from "lucide-react";
+import { useState } from "react";
+import { Badge } from "./components/ui/badge";
+import { Button } from "./components/ui/button";
+import { keyed } from "./keys";
+import type { ExplainPlan } from "./types";
+
+export interface ExplainViewProps {
+  /** Runs EXPLAIN (or EXPLAIN ANALYZE) for the query on its database. */
+  load: (analyze: boolean) => Promise<ExplainPlan>;
+  vendor: string;
+}
+
+type State =
+  | { status: "idle" }
+  | { status: "loading"; analyze: boolean }
+  | { status: "done"; plan: ExplainPlan }
+  | { status: "failed"; message: string };
+
+/** Query plan on demand: the database's own EXPLAIN, with full scans and spilled sorts called out. */
+export function ExplainView({ load, vendor }: ExplainViewProps) {
+  const [state, setState] = useState<State>({ status: "idle" });
+  const canAnalyze = vendor === "postgresql" || vendor === "mysql";
+  const run = (analyze: boolean) => {
+    setState({ status: "loading", analyze });
+    load(analyze).then(
+      (plan) => setState({ status: "done", plan }),
+      (error: unknown) =>
+        setState({ status: "failed", message: error instanceof Error ? error.message : String(error) }),
+    );
+  };
+  const loading = state.status === "loading";
+  const plan = state.status === "done" ? state.plan : null;
+  const warnings = plan ? plan.lines.filter((line) => line.warning).length : 0;
+
+  return (
+    <section className="grid gap-2">
+      <div className="flex flex-wrap items-center gap-2.5">
+        <h4 className="text-[13px] font-semibold tracking-wide text-muted-foreground uppercase">Query plan</h4>
+        {plan ? (
+          <>
+            <span className="text-[13px] text-muted-foreground">
+              {plan.vendor} · {plan.alias}
+              {plan.analyzed ? " · analyzed" : ""}
+            </span>
+            {warnings ? (
+              <Badge variant="outline" className="border-warn/30 bg-warn-soft text-warn">
+                <TriangleAlertIcon />
+                {warnings} {warnings === 1 ? "warning" : "warnings"}
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="border-ok/30 bg-ok-soft text-ok">
+                <CircleCheckIcon />
+                Uses indexes
+              </Badge>
+            )}
+          </>
+        ) : null}
+        <div className="ml-auto flex gap-2">
+          <Button variant="outline" size="sm" className="h-7 shadow-none" disabled={loading} onClick={() => run(false)}>
+            {loading && !state.analyze ? "Explaining…" : plan ? "Explain again" : "Explain"}
+          </Button>
+          {canAnalyze ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 shadow-none"
+              disabled={loading}
+              title="Runs the query to measure real time and rows"
+              onClick={() => run(true)}
+            >
+              {loading && state.analyze ? "Analyzing…" : "Explain analyze"}
+            </Button>
+          ) : null}
+        </div>
+      </div>
+      {state.status === "failed" ? <p className="text-sm text-error">{state.message}</p> : null}
+      {state.status === "idle" ? (
+        <p className="text-[13px] text-muted-foreground">
+          Run EXPLAIN on the database to see how it reads the tables{canAnalyze ? ", or ANALYZE to time it" : ""}.
+        </p>
+      ) : null}
+      {plan ? (
+        <ol className="m-0 grid list-none rounded-md border bg-muted/60 py-1.5">
+          {keyed(plan.lines, (line) => `${line.depth}:${line.text}`).map(({ key, item: line }) => (
+            <li key={key} className="grid gap-0.5 py-1 pr-3" style={{ paddingLeft: `${12 + line.depth * 20}px` }}>
+              <code className={`font-mono text-[13px] whitespace-pre-wrap ${line.warning ? "text-warn" : ""}`}>
+                {line.text}
+              </code>
+              {line.warning ? (
+                <span className="flex items-center gap-1.5 text-[13px] text-text-2">
+                  <TriangleAlertIcon className="size-3.5 text-warn" />
+                  {line.warning}
+                </span>
+              ) : null}
+            </li>
+          ))}
+        </ol>
+      ) : null}
+    </section>
+  );
+}

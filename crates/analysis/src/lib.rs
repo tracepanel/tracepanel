@@ -1,0 +1,656 @@
+//! N+1 detection, duplicate and slow SQL, long transactions, htmx mistakes and error grouping: the issues of every
+//! trace, whichever SDK recorded it, with stable fingerprints so a problem groups as one. The SDKs normalize SQL
+//! (`db.fingerprint`) when they record it; tracepanel-python's tests check the issues through the console's API.
+
+use regex::Regex;
+use serde_json::Value;
+use sha1::{Digest, Sha1};
+use std::collections::HashMap;
+use std::sync::LazyLock;
+use tracepanel_protocol::{Attrs, Issue, Span, Thresholds, Trace};
+
+pub const FINGERPRINT_VERSION: i64 = 1;
+const DUPLICATES_MIN: usize = 2;
+const SPAN_IDS: usize = 50;
+const TITLE_LIMIT: usize = 200;
+
+static WHITESPACE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s+").unwrap());
+// A lookup by primary key: `WHERE table.id = ?`, or `WHERE id = ?` (a hand-written query); %s, ? or $1.
+static BY_PK: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"(?i)WHERE (?:[`"]?\w+[`"]?\.)?[`"]?id[`"]? = (?:%s|\?|\$\d+)"#).unwrap()
+});
+static LINE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r":\d+ in ").unwrap());
+
+const SELECT_RELATED: &str = "Load the related object in the same query: add `select_related()` for this ForeignKey \
+    to the queryset that produced these rows.";
+const PREFETCH_RELATED: &str = "Load the related rows in one extra query: add `prefetch_related()` for this reverse \
+    or many-to-many relation to the queryset that produced these rows.";
+const JOINEDLOAD: &str = "Load the related object in the same query: add `joinedload()` for this relationship \
+    to the select() that produced these rows (or `selectinload()` for one extra query).";
+const SELECTINLOAD: &str = "Load the related rows in one extra query: add `selectinload()` for this relationship \
+    to the select() that produced these rows.";
+const N_PLUS_ONE: &str = "Load the related rows with the parent rows (a join, or one batched query) instead of one query per row.";
+const DUPLICATES: &str = "Run the query once and reuse the result, or cache it for the request.";
+const DATALOADER: &str = " In GraphQL, a resolver runs once per object: batch these lookups with a DataLoader \
+    (strawberry.dataloader), or prefetch in the parent resolver.";
+const SLOW_SQL: &str = "Check the query plan (`EXPLAIN`) and add an index or narrow the query.";
+const LONG_TRANSACTION: &str = "Rows locked inside stay locked until COMMIT: keep slow work (HTTP calls, emails, \
+    heavy Python) out of the `atomic()` block.";
+const LONG_TRANSACTION_SQLALCHEMY: &str = "Rows locked inside stay locked until COMMIT: keep slow work (HTTP calls, \
+    emails, heavy Python) out of the transaction: commit first, or do it before the `with session.begin()` / \
+    transaction block.";
+const REDIRECT_HINT: &str = "The browser follows a redirect inside htmx's request, and htmx swaps the page it lands \
+    on into the target. Answer an htmx request with an `HX-Redirect` (or `HX-Location`) header to navigate the \
+    browser, or with a 4xx the page shows.";
+const FULL_PAGE_HINT: &str = "htmx swaps the response into its target element, so a whole page ends up nested in \
+    this one. Render a fragment when the `HX-Request` header is set, or let the link load the page (`hx-boost`).";
+
+fn n_plus_one_hint(client: &str, by_pk: bool) -> &'static str {
+    match (client, by_pk) {
+        ("django", true) => SELECT_RELATED,
+        ("django", false) => PREFETCH_RELATED,
+        ("sqlalchemy", true) => JOINEDLOAD,
+        ("sqlalchemy", false) => SELECTINLOAD,
+        _ => N_PLUS_ONE,
+    }
+}
+
+/// What happens too early before COMMIT: (title, Django's fix, SQLAlchemy's fix).
+fn in_transaction(kind: &str) -> Option<(&'static str, &'static str, &'static str)> {
+    match kind {
+        "task.enqueue" => Some((
+            "Task enqueued inside a transaction",
+            "A worker can pick the task up before COMMIT and not see the data, or run it after a rollback: \
+             enqueue it with `transaction.on_commit(lambda: task.delay(...))`.",
+            "A worker can pick the task up before COMMIT and not see the data, or run it after a rollback: \
+             enqueue it after the commit (after the transaction block, or in an `after_commit` session event).",
+        )),
+        "mail" => Some((
+            "Email sent inside a transaction",
+            "The email goes out even if the transaction rolls back: send it with `transaction.on_commit(...)`.",
+            "The email goes out even if the transaction rolls back: send it after the commit.",
+        )),
+        "http.client" => Some((
+            "HTTP call inside a transaction",
+            "The transaction stays open, holding its locks, while the other service answers: make the call \
+             before `atomic()` or in `transaction.on_commit(...)`.",
+            "The transaction stays open, holding its locks, while the other service answers: make the call before \
+             the transaction, or after the commit.",
+        )),
+        _ => None,
+    }
+}
+
+// ---------- Python's view of values ----------
+
+fn truthy(value: Option<&Value>) -> bool {
+    match value {
+        None | Some(Value::Null) => false,
+        Some(Value::Bool(flag)) => *flag,
+        Some(Value::Number(number)) => number.as_f64() != Some(0.0),
+        Some(Value::String(text)) => !text.is_empty(),
+        Some(Value::Array(items)) => !items.is_empty(),
+        Some(Value::Object(map)) => !map.is_empty(),
+    }
+}
+
+fn py_str(value: Option<&Value>) -> String {
+    match value {
+        None | Some(Value::Null) => "None".into(),
+        Some(Value::String(text)) => text.clone(),
+        Some(Value::Bool(true)) => "True".into(),
+        Some(Value::Bool(false)) => "False".into(),
+        Some(Value::Number(number)) => match (number.as_i64(), number.as_f64()) {
+            (Some(int), _) => int.to_string(),
+            (None, Some(float)) if float.fract() == 0.0 && float.abs() < 1e16 => {
+                format!("{float:.1}")
+            }
+            _ => number.to_string(),
+        },
+        Some(other) => other.to_string(),
+    }
+}
+
+fn text(attrs: &Attrs, key: &str) -> Option<String> {
+    attrs.get(key).and_then(Value::as_str).map(str::to_owned)
+}
+
+/// `str(attrs.get(key) or default)`.
+fn or_default(attrs: &Attrs, key: &str, default: &str) -> String {
+    let value = attrs.get(key);
+    if truthy(value) {
+        py_str(value)
+    } else {
+        default.into()
+    }
+}
+
+/// Python's `f"{microseconds / 1000:.0f}"`: milliseconds, half to even.
+fn milliseconds(micros: i64) -> i64 {
+    let (whole, rest) = (micros.div_euclid(1000), micros.rem_euclid(1000));
+    if rest > 500 || (rest == 500 && whole % 2 != 0) {
+        whole + 1
+    } else {
+        whole
+    }
+}
+
+/// Counter(...).most_common(1): the most frequent, the first seen on a tie.
+fn most_common<T: Clone + Eq + std::hash::Hash>(
+    items: impl IntoIterator<Item = T>,
+) -> Option<(T, usize)> {
+    let mut order: Vec<T> = Vec::new();
+    let mut counts: HashMap<T, usize> = HashMap::new();
+    for item in items {
+        let count = counts.entry(item.clone()).or_insert(0);
+        if *count == 0 {
+            order.push(item);
+        }
+        *count += 1;
+    }
+    order.into_iter().fold(None, |best, item| {
+        let count = counts[&item];
+        match best {
+            Some((_, top)) if top >= count => best,
+            _ => Some((item, count)),
+        }
+    })
+}
+
+pub fn issue_key(kind: &str, parts: &[Option<&str>]) -> String {
+    let mut raw = vec![FINGERPRINT_VERSION.to_string(), kind.to_owned()];
+    raw.extend(parts.iter().map(|part| part.unwrap_or_default().to_owned()));
+    let digest = Sha1::digest(raw.join("|").as_bytes());
+    digest
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>()[..16]
+        .to_owned()
+}
+
+/// Where in project code: the template that issued the queries, if any, rendered from the view's line.
+fn culprit(spans: &[&Span]) -> Option<String> {
+    let origin = most_common(
+        spans
+            .iter()
+            .filter_map(|span| text(&span.attrs, "code.origin")),
+    )
+    .map(|(o, _)| o);
+    let template = most_common(
+        spans
+            .iter()
+            .filter_map(|span| text(&span.attrs, "code.template")),
+    )
+    .map(|(t, _)| t);
+    match (template, origin) {
+        (Some(template), Some(origin)) => Some(format!("{template} (rendered from {origin})")),
+        (Some(template), None) => Some(template),
+        (None, origin) => origin,
+    }
+}
+
+/// "blog/views.py:21 in post_list" -> "blog/views.py in post_list": line numbers shift with edits.
+fn culprit_key(culprit: Option<&str>) -> Option<String> {
+    culprit
+        .filter(|c| !c.is_empty())
+        .map(|c| LINE.replace_all(c, " in ").into_owned())
+}
+
+fn issue(
+    fingerprint: String,
+    kind: &str,
+    title: String,
+    culprit: Option<String>,
+    hint: Option<&str>,
+    count: usize,
+    span_ids: Vec<String>,
+) -> Issue {
+    Issue {
+        fingerprint,
+        fingerprint_version: FINGERPRINT_VERSION,
+        kind: kind.into(),
+        title,
+        culprit,
+        hint: hint.map(str::to_owned),
+        count: count as i64,
+        span_ids: span_ids.into_iter().take(SPAN_IDS).collect(),
+    }
+}
+
+// ---------- SQL ----------
+
+fn sql_issues(trace: &Trace, thresholds: &Thresholds) -> Vec<Issue> {
+    let mut issues = Vec::new();
+    // The same statement on two databases is two different queries.
+    let mut order: Vec<(String, String)> = Vec::new();
+    let mut groups: HashMap<(String, String), Vec<&Span>> = HashMap::new();
+    for span in trace.spans.iter().filter(|span| span.kind == "sql") {
+        let key = (
+            or_default(&span.attrs, "db.alias", "default"),
+            py_str(span.attrs.get("db.fingerprint")),
+        );
+        if !groups.contains_key(&key) {
+            order.push(key.clone());
+        }
+        groups.entry(key).or_default().push(span);
+    }
+    let graphql = trace.attrs.contains_key("graphql.operation");
+    let threshold = thresholds.n_plus_one.max(0) as usize;
+    for (alias, statement) in order {
+        let spans = &groups[&(alias.clone(), statement.clone())];
+        let key = if alias == "default" {
+            statement.clone()
+        } else {
+            format!("{alias}|{statement}")
+        };
+        let mut culprit_text = culprit(spans);
+        // An SDK that can't see the parameters (Go's database/sql through OpenTelemetry) sends no hash: then only the
+        // shape tells (a by-key lookup looped from one line), and repeats can't be called duplicates.
+        let params_known = spans
+            .iter()
+            .all(|span| !matches!(span.attrs.get("db.params_hash"), None | Some(Value::Null)));
+        let params: Vec<String> = spans
+            .iter()
+            .map(|span| py_str(span.attrs.get("db.params_hash")))
+            .collect();
+        let distinct = if params_known {
+            params
+                .iter()
+                .collect::<std::collections::HashSet<_>>()
+                .len()
+        } else {
+            0
+        };
+        let by_pk = BY_PK.is_match(&statement);
+        let select = statement.to_uppercase().starts_with("SELECT");
+        // Only actionable patterns: reads that project code triggers.
+        let mut actionable = culprit_text.is_some() && select;
+        // A loop of by-key lookups run entirely by a library is still the view's N+1.
+        if culprit_text.is_none() && select && by_pk && distinct >= threshold {
+            culprit_text =
+                text(&trace.attrs, "code.view").map(|view| format!("{view} (in library code)"));
+            actionable = culprit_text.is_some();
+        }
+        let origins: std::collections::HashSet<String> = spans
+            .iter()
+            .map(|span| py_str(span.attrs.get("code.origin")))
+            .collect();
+        let looped = spans.len() >= threshold && origins.len() == 1 && by_pk;
+        let first = spans[0];
+        let key_culprit = culprit_key(culprit_text.as_deref());
+        if actionable && (distinct >= threshold || looped) {
+            let hint = format!(
+                "{}{}",
+                n_plus_one_hint(&py_str(first.attrs.get("db.client")), by_pk),
+                if graphql { DATALOADER } else { "" }
+            );
+            issues.push(issue(
+                issue_key("n+1", &[Some(&key), key_culprit.as_deref()]),
+                "n+1",
+                format!("N+1: {} similar queries · {}", spans.len(), first.name),
+                culprit_text.clone(),
+                Some(&hint),
+                spans.len(),
+                spans.iter().map(|span| span.id.clone()).collect(),
+            ));
+        } else if actionable
+            && params_known
+            && most_common(params.iter()).is_some_and(|(_, count)| count >= DUPLICATES_MIN)
+        {
+            let counts =
+                params
+                    .iter()
+                    .fold(HashMap::<&String, usize>::new(), |mut counts, hash| {
+                        *counts.entry(hash).or_default() += 1;
+                        counts
+                    });
+            let repeated: Vec<&&Span> = spans
+                .iter()
+                .zip(&params)
+                .filter(|(_, hash)| counts[hash] >= DUPLICATES_MIN)
+                .map(|(span, _)| span)
+                .collect();
+            issues.push(issue(
+                issue_key("duplicates", &[Some(&key), key_culprit.as_deref()]),
+                "duplicates",
+                format!(
+                    "Duplicate queries: {} identical · {}",
+                    repeated.len(),
+                    first.name
+                ),
+                culprit_text.clone(),
+                Some(DUPLICATES),
+                repeated.len(),
+                repeated.iter().map(|span| span.id.clone()).collect(),
+            ));
+        }
+        let slow: Vec<&Span> = spans
+            .iter()
+            .copied()
+            .filter(|span| span.duration >= thresholds.slow_sql_ms * 1000)
+            .collect();
+        if !slow.is_empty() {
+            let slowest = slow.iter().map(|span| span.duration).max().unwrap_or(0);
+            issues.push(issue(
+                issue_key("slow-sql", &[Some(&key), key_culprit.as_deref()]),
+                "slow-sql",
+                format!("Slow query: {} ms · {}", milliseconds(slowest), first.name),
+                culprit(&slow),
+                Some(SLOW_SQL),
+                slow.len(),
+                slow.iter().map(|span| span.id.clone()).collect(),
+            ));
+        }
+    }
+    issues
+}
+
+// ---------- errors ----------
+
+/// An error's message as an issue title: its first line, on one line, cut at a word.
+pub fn headline(message: &str) -> String {
+    let first = message
+        .lines()
+        .map(|line| line.trim_end_matches('\r'))
+        .find(|line| !line.trim().is_empty())
+        .unwrap_or("");
+    let text = WHITESPACE.replace_all(first, " ").trim().to_owned();
+    let chars: Vec<char> = text.chars().collect();
+    if chars.len() <= TITLE_LIMIT {
+        return text;
+    }
+    let cut: String = chars[..TITLE_LIMIT - 1].iter().collect();
+    let space = cut.rfind(' ');
+    let kept = match space {
+        Some(at) if cut[..at].chars().count() > TITLE_LIMIT / 2 => &cut[..at],
+        _ => cut.as_str(),
+    };
+    format!("{}…", kept.trim_end_matches([' ', ',', '.', ':', ';']))
+}
+
+fn error_issues(trace: &Trace) -> Vec<Issue> {
+    trace
+        .errors
+        .iter()
+        .map(|error| {
+            let frames = error
+                .get("frames")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default();
+            let frame = frames
+                .iter()
+                .rev()
+                .find(|frame| frame.get("in_app") == Some(&Value::Bool(true)))
+                .or_else(|| frames.last());
+            let field = |frame: &Value, key: &str| py_str(frame.get(key));
+            let culprit = frame.map(|f| {
+                format!(
+                    "{}:{} in {}",
+                    field(f, "filename"),
+                    field(f, "lineno"),
+                    field(f, "function")
+                )
+            });
+            let location =
+                frame.map(|f| format!("{}.{}", field(f, "module"), field(f, "function")));
+            let kind = py_str(error.get("type"));
+            let message = py_str(error.get("message"));
+            let span_ids = error
+                .get("span_id")
+                .and_then(Value::as_str)
+                .map(str::to_owned)
+                .into_iter()
+                .collect();
+            issue(
+                issue_key("error", &[Some(&kind), location.as_deref()]),
+                "error",
+                // The message's first line that says something: a driver's may start with blank lines.
+                headline(&format!(
+                    "{}: {}",
+                    kind.strip_prefix("builtins.").unwrap_or(&kind),
+                    message.trim_start()
+                )),
+                culprit,
+                None,
+                1,
+                span_ids,
+            )
+        })
+        .collect()
+}
+
+// ---------- transactions ----------
+
+/// Span id -> the outer transaction it ran in; on_commit callbacks (run after COMMIT) don't count.
+fn in_transactions(trace: &Trace) -> Vec<(&Span, &Span)> {
+    let by_id: HashMap<&str, &Span> = trace
+        .spans
+        .iter()
+        .map(|span| (span.id.as_str(), span))
+        .collect();
+    let mut found = Vec::new();
+    for span in &trace.spans {
+        let mut outer = None;
+        let mut parent = span
+            .parent_id
+            .as_deref()
+            .and_then(|id| by_id.get(id).copied());
+        while let Some(current) = parent {
+            if truthy(current.attrs.get("db.transaction.on_commit")) {
+                outer = None;
+                break;
+            }
+            if current.kind == "transaction"
+                && !truthy(current.attrs.get("db.transaction.savepoint"))
+            {
+                outer = Some(current);
+            }
+            parent = current
+                .parent_id
+                .as_deref()
+                .and_then(|id| by_id.get(id).copied());
+        }
+        if let Some(outer) = outer {
+            found.push((span, outer));
+        }
+    }
+    found
+}
+
+fn transaction_issues(trace: &Trace, thresholds: &Thresholds) -> Vec<Issue> {
+    let mut issues = Vec::new();
+    for span in &trace.spans {
+        let outer =
+            span.kind == "transaction" && !truthy(span.attrs.get("db.transaction.savepoint"));
+        if outer && span.duration >= thresholds.long_transaction_ms * 1000 {
+            let culprit_text = text(&span.attrs, "code.origin");
+            let alias = py_str(span.attrs.get("db.alias"));
+            issues.push(issue(
+                issue_key(
+                    "long-transaction",
+                    &[
+                        Some(&alias),
+                        culprit_key(culprit_text.as_deref()).as_deref(),
+                    ],
+                ),
+                "long-transaction",
+                format!(
+                    "Long transaction: {} ms on {alias}",
+                    milliseconds(span.duration)
+                ),
+                culprit_text,
+                Some(
+                    if text(&span.attrs, "db.client").as_deref() == Some("sqlalchemy") {
+                        LONG_TRANSACTION_SQLALCHEMY
+                    } else {
+                        LONG_TRANSACTION
+                    },
+                ),
+                1,
+                vec![span.id.clone()],
+            ));
+        }
+    }
+    let mut order: Vec<(String, Option<String>, String)> = Vec::new();
+    let mut groups: HashMap<(String, Option<String>, String), Vec<&Span>> = HashMap::new();
+    for (span, outer) in in_transactions(trace) {
+        if in_transaction(&span.kind).is_none() || truthy(span.attrs.get("task.eager")) {
+            continue;
+        }
+        let key = (
+            span.kind.clone(),
+            culprit(&[span]),
+            py_str(outer.attrs.get("db.client")),
+        );
+        if !groups.contains_key(&key) {
+            order.push(key.clone());
+        }
+        groups.entry(key).or_default().push(span);
+    }
+    for key in order {
+        let spans = &groups[&key];
+        let (kind, culprit_text, client) = key;
+        let Some((title, django, sqlalchemy)) = in_transaction(&kind) else {
+            continue;
+        };
+        issues.push(issue(
+            issue_key(
+                "in-transaction",
+                &[Some(&kind), culprit_key(culprit_text.as_deref()).as_deref()],
+            ),
+            "in-transaction",
+            format!("{title} · {}", spans[0].name),
+            culprit_text,
+            Some(if client == "sqlalchemy" {
+                sqlalchemy
+            } else {
+                django
+            }),
+            spans.len(),
+            spans.iter().map(|span| span.id.clone()).collect(),
+        ));
+    }
+    issues
+}
+
+// ---------- htmx (tracepanel/integrations/htmx.py) ----------
+
+fn htmx_issues(trace: &Trace) -> Vec<Issue> {
+    let attrs = &trace.attrs;
+    if !truthy(attrs.get("htmx.request")) {
+        return Vec::new();
+    }
+    let method = or_default(attrs, "http.method", "GET");
+    let route = if truthy(attrs.get("http.route")) {
+        py_str(attrs.get("http.route"))
+    } else {
+        or_default(attrs, "http.path", "")
+    };
+    let view = text(attrs, "code.view");
+    let mut found: Vec<(&str, String, &str)> = Vec::new();
+    if let Some(location) = text(attrs, "htmx.redirected_to") {
+        found.push((
+            "redirect",
+            format!(
+                "htmx request redirected · {} to {location}",
+                py_str(attrs.get("http.status_code"))
+            ),
+            REDIRECT_HINT,
+        ));
+    }
+    if truthy(attrs.get("htmx.full_page")) {
+        found.push((
+            "full-page",
+            format!("Whole page sent to htmx · {method} {route}"),
+            FULL_PAGE_HINT,
+        ));
+    }
+    found
+        .into_iter()
+        .map(|(what, title, hint)| {
+            issue(
+                issue_key("htmx", &[Some(what), Some(&method), Some(&route)]),
+                "htmx",
+                title,
+                view.clone(),
+                Some(hint),
+                1,
+                Vec::new(),
+            )
+        })
+        .collect()
+}
+
+/// A received trace's issues: in its rows, and in its document, which the console shows.
+pub fn apply(received: &mut tracepanel_protocol::Received, thresholds: &Thresholds) {
+    let issues = analyze(&received.trace, thresholds);
+    if issues.is_empty() {
+        return;
+    }
+    if let Ok(mut doc) = serde_json::from_str::<Value>(&received.doc) {
+        doc["issues"] = serde_json::to_value(&issues).unwrap_or_default();
+        received.doc = doc.to_string();
+    }
+    received.trace.issues = issues;
+}
+
+/// Issues in a finished trace: errors first, then the rest by occurrence count.
+pub fn analyze(trace: &Trace, thresholds: &Thresholds) -> Vec<Issue> {
+    let mut found = sql_issues(trace, thresholds);
+    found.extend(transaction_issues(trace, thresholds));
+    found.extend(htmx_issues(trace));
+    // A stable sort, as Python's sorted().
+    found.sort_by_key(|issue| -issue.count);
+    let mut issues = error_issues(trace);
+    issues.extend(found);
+    issues
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn milliseconds_round_half_to_even() {
+        assert_eq!(
+            [
+                milliseconds(2500),
+                milliseconds(3500),
+                milliseconds(2501),
+                milliseconds(1499)
+            ],
+            [2, 4, 3, 1]
+        );
+    }
+
+    #[test]
+    fn culprit_keys_drop_line_numbers() {
+        assert_eq!(
+            culprit_key(Some("blog/views.py:21 in post_list")).as_deref(),
+            Some("blog/views.py in post_list")
+        );
+    }
+
+    #[test]
+    fn by_pk_matches_qualified_and_plain_lookups() {
+        assert!(BY_PK.is_match("SELECT name FROM authors WHERE authors.id = ?"));
+        assert!(BY_PK.is_match("SELECT name FROM authors WHERE id = ?"));
+        assert!(BY_PK.is_match(r#"SELECT * FROM "auth_user" WHERE "auth_user"."id" = %s"#));
+        assert!(BY_PK.is_match("SELECT * FROM users WHERE id = $1"));
+        assert!(!BY_PK.is_match("SELECT * FROM users WHERE author_id = ?"));
+    }
+
+    #[test]
+    fn headlines_cut_at_a_word() {
+        assert_eq!(headline("ValueError: bad\n  detail"), "ValueError: bad");
+        let long = format!("Error: {}", "word ".repeat(60));
+        let title = headline(&long);
+        assert!(title.ends_with("word…") && title.chars().count() <= TITLE_LIMIT);
+    }
+
+    #[test]
+    fn most_common_keeps_the_first_on_a_tie() {
+        assert_eq!(most_common(["b", "a", "a", "b"]), Some(("b", 2)));
+    }
+}

@@ -1,0 +1,182 @@
+{
+  "attrs": {
+    "code.view": "main.(*App).boom",
+    "http.method": "GET",
+    "http.path": "/boom",
+    "http.route": "/boom",
+    "http.status_code": 500,
+    "process.runtime.name": "go",
+    "process.runtime.version": "1.27.1",
+    "service.name": "go-api-bin",
+    "service.role": "web",
+    "telemetry.sdk.language": "go",
+    "tracepanel.framework": "net/http"
+  },
+  "duration": 362,
+  "errors": [
+    {
+      "chain": [],
+      "frames": [
+        {
+          "context": [],
+          "context_start": null,
+          "filename": "/opt/homebrew/Cellar/go/1.27.1/libexec/src/runtime/asm_arm64.s",
+          "function": "goexit",
+          "in_app": false,
+          "lineno": 1039,
+          "locals": null,
+          "module": "runtime"
+        },
+        {
+          "context": [],
+          "context_start": null,
+          "filename": "/opt/homebrew/Cellar/go/1.27.1/libexec/src/net/http/server.go",
+          "function": "(*conn).serve",
+          "in_app": false,
+          "lineno": 2137,
+          "locals": null,
+          "module": "net/http"
+        },
+        {
+          "context": [],
+          "context_start": null,
+          "filename": "/opt/homebrew/Cellar/go/1.27.1/libexec/src/net/http/server.go",
+          "function": "serverHandler.ServeHTTP",
+          "in_app": false,
+          "lineno": 3413,
+          "locals": null,
+          "module": "net/http"
+        },
+        {
+          "context": [],
+          "context_start": null,
+          "filename": "/opt/homebrew/Cellar/go/1.27.1/libexec/src/net/http/server.go",
+          "function": "HandlerFunc.ServeHTTP",
+          "in_app": false,
+          "lineno": 2338,
+          "locals": null,
+          "module": "net/http"
+        },
+        {
+          "context": [],
+          "context_start": null,
+          "filename": "internal/tracepanel/middleware.go",
+          "function": "(*Tracepanel).Middleware.func1",
+          "in_app": false,
+          "lineno": 47,
+          "locals": null,
+          "module": "go-api/internal/tracepanel"
+        },
+        {
+          "context": [],
+          "context_start": null,
+          "filename": "internal/tracepanel/middleware.go",
+          "function": "(*Tracepanel).Middleware.func1.1",
+          "in_app": false,
+          "lineno": 46,
+          "locals": null,
+          "module": "go-api/internal/tracepanel"
+        },
+        {
+          "context": [],
+          "context_start": null,
+          "filename": "internal/tracepanel/middleware.go",
+          "function": "(*Tracepanel).serve",
+          "in_app": false,
+          "lineno": 137,
+          "locals": null,
+          "module": "go-api/internal/tracepanel"
+        },
+        {
+          "context": [],
+          "context_start": null,
+          "filename": "/opt/homebrew/Cellar/go/1.27.1/libexec/src/net/http/server.go",
+          "function": "(*ServeMux).ServeHTTP",
+          "in_app": false,
+          "lineno": 2903,
+          "locals": null,
+          "module": "net/http"
+        },
+        {
+          "context": [],
+          "context_start": null,
+          "filename": "/opt/homebrew/Cellar/go/1.27.1/libexec/src/net/http/server.go",
+          "function": "HandlerFunc.ServeHTTP",
+          "in_app": false,
+          "lineno": 2338,
+          "locals": null,
+          "module": "net/http"
+        },
+        {
+          "context": [
+            "}",
+            "",
+            "// boom: an unhandled panic, a 500 with the stack in the trace.",
+            "func (a *App) boom(w http.ResponseWriter, r *http.Request) {",
+            "\tvar books map[string]int",
+            "\tbooks[\"missing\"]++",
+            "}",
+            "",
+            "func seed(ctx context.Context, db *sql.DB) error {",
+            "\t_, err := db.ExecContext(ctx, `",
+            "\t\tCREATE TABLE IF NOT EXISTS authors (id INTEGER PRIMARY KEY, name TEXT NOT NULL);"
+          ],
+          "context_start": 133,
+          "filename": "app.go",
+          "function": "(*App).boom",
+          "in_app": true,
+          "lineno": 138,
+          "locals": null,
+          "module": "main"
+        },
+        {
+          "context": [],
+          "context_start": null,
+          "filename": "/opt/homebrew/Cellar/go/1.27.1/libexec/src/internal/runtime/maps/runtime_faststr.go",
+          "function": "mapassign_faststr",
+          "in_app": false,
+          "lineno": 263,
+          "locals": null,
+          "module": "runtime"
+        }
+      ],
+      "handled": false,
+      "message": "assignment to entry in nil map",
+      "span_id": "01M4GPCTYTZ4DVJVQD0GQFAE0J",
+      "time": 1791561722842510,
+      "type": "panic(runtime.plainError)"
+    }
+  ],
+  "id": "01M4GPCTYT92XYPE04R6JS5TFH",
+  "issues": [],
+  "kind": "http",
+  "links": [],
+  "logs": [],
+  "name": "GET /boom",
+  "spans": [
+    {
+      "attrs": {
+        "code.function": "main.(*App).boom"
+      },
+      "duration": 17,
+      "id": "01M4GPCTYTJXV31BYGSKEMSZ2C",
+      "kind": "view",
+      "name": "(*App).boom",
+      "parent_id": "01M4GPCTYTZ4DVJVQD0GQFAE0J",
+      "start": 1791561722842248,
+      "status": "ok"
+    },
+    {
+      "attrs": {},
+      "duration": 362,
+      "id": "01M4GPCTYTZ4DVJVQD0GQFAE0J",
+      "kind": "http",
+      "name": "GET /boom",
+      "parent_id": null,
+      "start": 1791561722842167,
+      "status": "error"
+    }
+  ],
+  "start": 1791561722842167,
+  "status": "error"
+}

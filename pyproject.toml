@@ -1,0 +1,56 @@
+[build-system]
+requires = ["maturin>=1.15,<2"]
+build-backend = "maturin"
+
+[project]
+name = "tracepanel-agent"
+version = "0.0.1"
+description = "The Tracepanel agent: receives your app's traces, finds N+1 queries and other issues, serves the local console"
+# The page on the package index (README.md is the repository's).
+readme = "PYPI.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE", "THIRD-PARTY-NOTICES"]
+requires-python = ">=3.11"
+keywords = ["debug toolbar", "tracing", "n+1", "sql", "django", "fastapi", "flask", "observability"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Environment :: Web Environment",
+    "Intended Audience :: Developers",
+    "Programming Language :: Rust",
+    "Topic :: Software Development :: Debuggers",
+    "Topic :: System :: Monitoring",
+]
+
+[project.urls]
+Homepage = "https://github.com/tracepanel/tracepanel"
+Repository = "https://github.com/tracepanel/tracepanel"
+Issues = "https://github.com/tracepanel/tracepanel/issues"
+
+# Only the tracepanel-agent binary, no Python code. The local UI is embedded into it.
+[tool.maturin]
+bindings = "bin"
+manifest-path = "crates/cli/Cargo.toml"
+# The sdist builds the agent where no wheel fits (FreeBSD, …): with the UI it embeds and the schema files compiled in.
+include = [
+    { path = "ui-dist/**/*", format = "sdist" },
+    { path = "schema/store.sql", format = "sdist" },
+    { path = "schema/search.json", format = "sdist" },
+    { path = "rust-toolchain.toml", format = "sdist" },
+]
+
+# No SBOM of the Rust tree in the wheel: it lists the agent's own crates and the build machine's paths.
+[tool.maturin.sbom]
+rust = false
+
+[tool.uv]
+# A checkout installed with uv (tracepanel-python's development) is rebuilt when the sources change, not only this file.
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "Cargo.toml" },
+    { file = "Cargo.lock" },
+    { file = "crates/**/*.rs" },
+    { file = "crates/**/Cargo.toml" },
+    { file = "schema/**" },
+    { file = "ui-dist/**" },
+]

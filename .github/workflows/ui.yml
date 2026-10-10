@@ -1,0 +1,69 @@
+# The console, the panel and the widget (ui/): lint, types, the API contract, and ui-dist/ (what the binary embeds)
+# built from this very ui/.
+name: UI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: ui
+
+jobs:
+  check:
+    name: Lint, types, contract, ui-dist
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      # The pnpm version comes from ui/package.json's packageManager.
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: ui/package.json
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: ui/pnpm-lock.yaml
+
+      # scripts/ui.sh writes the UI's licenses with uv.
+      - uses: astral-sh/setup-uv@v10.3.0
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Biome (format and lint)
+        run: pnpm exec biome ci --reporter=github .
+
+      - name: TypeScript
+        run: pnpm -r typecheck
+
+      - name: The API types match schema/openapi.yaml
+        run: |
+          # The script writes the file formatted (biome ignores api.gen.ts itself).
+          pnpm api
+          git diff --exit-code packages/ui/src/api.gen.ts || {
+            echo "::error file=ui/packages/ui/src/api.gen.ts::Out of date with schema/openapi.yaml: run pnpm api in ui/ and commit."
+            exit 1
+          }
+
+      - name: ui-dist/ is this ui/, built
+        # The build is reproducible: the committed ui-dist/ must be what scripts/ui.sh makes now.
+        working-directory: .
+        run: |
+          scripts/ui.sh
+          git diff --exit-code --stat ui-dist || {
+            echo "::error::ui-dist/ is out of date with ui/: run scripts/ui.sh and commit."
+            exit 1
+          }

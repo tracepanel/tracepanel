@@ -1,0 +1,3868 @@
+{
+  "attrs": {
+    "code.view": "blog.views.post_list",
+    "http.method": "GET",
+    "http.path": "/",
+    "http.route": "/",
+    "http.status_code": 200,
+    "process.runtime.name": "cpython",
+    "process.runtime.version": "3.11.16",
+    "service.name": "django-classic",
+    "service.role": "web",
+    "telemetry.sdk.language": "python",
+    "tracepanel.framework": "Django 5.2.18",
+    "user.id": null
+  },
+  "duration": 27637,
+  "errors": [],
+  "id": "01M4GPC1BHG83SW8X460V23TM0",
+  "issues": [],
+  "kind": "http",
+  "links": [],
+  "logs": [
+    {
+      "attrs": {
+        "code.filepath": "blog/views.py",
+        "code.function": "post_list",
+        "code.lineno": 26,
+        "log.template": "listing %d posts for %s",
+        "process.pid": 20678,
+        "thread.name": "Thread-3 (process_request_thread)"
+      },
+      "exception": null,
+      "level": "info",
+      "logger": "blog.views",
+      "message": "listing 50 posts for AnonymousUser",
+      "span_id": "01M4GPC1BJVQJXPF5AC4X6VK9G",
+      "time": 1791561696628565
+    },
+    {
+      "attrs": {
+        "code.filepath": "blog/views.py",
+        "code.function": "post_list",
+        "code.lineno": 27,
+        "log.template": "query params: %s",
+        "process.pid": 20678,
+        "thread.name": "Thread-3 (process_request_thread)"
+      },
+      "exception": null,
+      "level": "debug",
+      "logger": "blog.views",
+      "message": "query params: {}",
+      "span_id": "01M4GPC1BJVQJXPF5AC4X6VK9G",
+      "time": 1791561696628665
+    }
+  ],
+  "name": "GET /",
+  "spans": [
+    {
+      "attrs": {},
+      "duration": 27637,
+      "id": "01M4GPC1BHV05WF2NGPBGQ21NM",
+      "kind": "http",
+      "name": "GET /",
+      "parent_id": null,
+      "start": 1791561696625979,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.view": "blog.views.post_list"
+      },
+      "duration": 27459,
+      "id": "01M4GPC1BJVQJXPF5AC4X6VK9G",
+      "kind": "view",
+      "name": "blog.views.post_list",
+      "parent_id": "01M4GPC1BHV05WF2NGPBGQ21NM",
+      "start": 1791561696626106,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:26 in post_list",
+        "code.template": null,
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_post\".\"id\", \"blog_post\".\"author_id\", \"blog_post\".\"category_id\", \"blog_post\".\"title\", \"blog_post\".\"body\", \"blog_post\".\"likes\", \"blog_post\".\"created\" FROM \"blog_post\" ORDER BY \"blog_post\".\"created\" DESC LIMIT 50",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [],
+        "db.params_hash": "083a8cae6135",
+        "db.statement": "SELECT \"blog_post\".\"id\", \"blog_post\".\"author_id\", \"blog_post\".\"category_id\", \"blog_post\".\"title\", \"blog_post\".\"body\", \"blog_post\".\"likes\", \"blog_post\".\"created\" FROM \"blog_post\" ORDER BY \"blog_post\".\"created\" DESC LIMIT 50",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 1163,
+      "id": "01M4GPC1BM740Z1WACVKWRJ9XR",
+      "kind": "sql",
+      "name": "SELECT blog_post",
+      "parent_id": "01M4GPC1BJVQJXPF5AC4X6VK9G",
+      "start": 1791561696626989,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "template.name": "blog/post_list.html"
+      },
+      "duration": 24372,
+      "id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "kind": "template",
+      "name": "blog/post_list.html",
+      "parent_id": "01M4GPC1BJVQJXPF5AC4X6VK9G",
+      "start": 1791561696629117,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          21
+        ],
+        "db.params_hash": "95f0c1e10d22",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 40,
+      "id": "01M4GPC1BN9BSYX57N97NFW93B",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696629720,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          5
+        ],
+        "db.params_hash": "893e430a8788",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 164,
+      "id": "01M4GPC1BPXJWCFATDZFSHCCXZ",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696630130,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          200
+        ],
+        "db.params_hash": "0198d8c768e1",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 182,
+      "id": "01M4GPC1BPF9VY56GM9G1TGJP9",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696630635,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          11
+        ],
+        "db.params_hash": "b92041822e16",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 16,
+      "id": "01M4GPC1BQFP0KM4PFF9Q11CCB",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696631078,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          3
+        ],
+        "db.params_hash": "3018300f8078",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 11,
+      "id": "01M4GPC1BQRBZRJNFM3HDTFDDJ",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696631259,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          199
+        ],
+        "db.params_hash": "e10088ce6033",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 11,
+      "id": "01M4GPC1BQ0HN5ADY4JPX24VPS",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696631441,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          3
+        ],
+        "db.params_hash": "3018300f8078",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 14,
+      "id": "01M4GPC1BQZ91KYQ62JTKYXBDP",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696631640,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          2
+        ],
+        "db.params_hash": "a682278aca2d",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1BQHYYFTBYV1QPH0Q2Y",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696631805,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          198
+        ],
+        "db.params_hash": "3078bf76dede",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 12,
+      "id": "01M4GPC1BQSJGT7GPZ0EB60XS0",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696631973,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          20
+        ],
+        "db.params_hash": "c8d82f9ca47a",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 15,
+      "id": "01M4GPC1BR74P7T3DRTZDPVC39",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696632181,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          6
+        ],
+        "db.params_hash": "6b9320b07f06",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 11,
+      "id": "01M4GPC1BR3X10HVEWDE20W159",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696632350,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          197
+        ],
+        "db.params_hash": "bca5fd5dcd71",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 11,
+      "id": "01M4GPC1BRXFA8PEWH1HTG7DDR",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696632522,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          19
+        ],
+        "db.params_hash": "eef02d4c3fe4",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 17,
+      "id": "01M4GPC1BRWZDVW4QXW55E17AX",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696632726,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          7
+        ],
+        "db.params_hash": "ca56876ad160",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1BRXSBR14CQR5HYMBB6",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696632891,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          196
+        ],
+        "db.params_hash": "b7715ecc143c",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 12,
+      "id": "01M4GPC1BSRS6P86H7CKG3848B",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696633053,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          11
+        ],
+        "db.params_hash": "b92041822e16",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 14,
+      "id": "01M4GPC1BS1V33YC421FMX387B",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696633256,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          6
+        ],
+        "db.params_hash": "6b9320b07f06",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1BS2HPF3DDYTADTA4WZ",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696633405,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          195
+        ],
+        "db.params_hash": "2e4be53169bc",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1BSKC249RBVAW2YGG98",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696633557,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          11
+        ],
+        "db.params_hash": "b92041822e16",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 16,
+      "id": "01M4GPC1BSYAY4GN62CYTT2QQE",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696633737,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          2
+        ],
+        "db.params_hash": "a682278aca2d",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1BSPTJDB7VNJ8G7K5D7",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696633880,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          194
+        ],
+        "db.params_hash": "161a6325f9c2",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1BT9P5ZABNY2753B2V3",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696634025,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          15
+        ],
+        "db.params_hash": "f51d03b8fa06",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 15,
+      "id": "01M4GPC1BT73WD5PPJBX0ETHN5",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696634213,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          6
+        ],
+        "db.params_hash": "6b9320b07f06",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 11,
+      "id": "01M4GPC1BTGPVVYZGG8TZ1P9YY",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696634353,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          193
+        ],
+        "db.params_hash": "4c6db1442bdb",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1BTSGW58EVAGR4G3F3D",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696634499,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          3
+        ],
+        "db.params_hash": "3018300f8078",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 15,
+      "id": "01M4GPC1BT0NCCFSQT9GA6T3N9",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696634674,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          4
+        ],
+        "db.params_hash": "75615398d58f",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 9,
+      "id": "01M4GPC1BT3GA27GC4S8BAPKTX",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696634829,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          192
+        ],
+        "db.params_hash": "d290ae07f2bb",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1BT1SJ4KBZD1RK03QNC",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696634970,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          10
+        ],
+        "db.params_hash": "ecb6519e43a9",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 16,
+      "id": "01M4GPC1BVSV2JH97WZYMZJZA4",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696635142,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          4
+        ],
+        "db.params_hash": "75615398d58f",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 9,
+      "id": "01M4GPC1BVA0KTP7HJMTNFMVP6",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696635284,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          191
+        ],
+        "db.params_hash": "17eb85f54341",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1BVK6HXV2ANZCM0CACX",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696635430,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          14
+        ],
+        "db.params_hash": "63a8abd98f94",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 13,
+      "id": "01M4GPC1BVY7QQ35DY8XV7S83S",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696635601,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          5
+        ],
+        "db.params_hash": "893e430a8788",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 9,
+      "id": "01M4GPC1BVVDXWWNMPCDDGKMEF",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696635740,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          190
+        ],
+        "db.params_hash": "83560bebf260",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1BV7YZ9X7MC9WK3J855",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696635877,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          9
+        ],
+        "db.params_hash": "0b51f8cc818b",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 13,
+      "id": "01M4GPC1BWXN3BTYCQ39Q75E6X",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696636046,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          8
+        ],
+        "db.params_hash": "ab5699c15fe7",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1BWDMAMS0FM0BZXFCJE",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696636189,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          189
+        ],
+        "db.params_hash": "4896e2fadd46",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 11,
+      "id": "01M4GPC1BW3CPN95H7WEPX9HWP",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696636331,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          18
+        ],
+        "db.params_hash": "b1d251ccd8bb",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 13,
+      "id": "01M4GPC1BWPPS0MC86T4XW69SQ",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696636505,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          4
+        ],
+        "db.params_hash": "75615398d58f",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 9,
+      "id": "01M4GPC1BW7C7ACGC9TZH8JNY3",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696636648,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          188
+        ],
+        "db.params_hash": "5416041b2909",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1BWCBCV3HT67E6595XZ",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696636785,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          15
+        ],
+        "db.params_hash": "f51d03b8fa06",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 16,
+      "id": "01M4GPC1BW4HFJKVV5Q921VT8E",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696636952,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          1
+        ],
+        "db.params_hash": "05ff4b4fa514",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 9,
+      "id": "01M4GPC1BXA0K2WSMRM0QXD54T",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696637087,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          187
+        ],
+        "db.params_hash": "fe8aff929f74",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1BXH6YGGC6G8W4RAN0X",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696637227,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          8
+        ],
+        "db.params_hash": "ab5699c15fe7",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 13,
+      "id": "01M4GPC1BXM99EP451AP673DJY",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696637399,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          2
+        ],
+        "db.params_hash": "a682278aca2d",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 9,
+      "id": "01M4GPC1BXJ1VQYBBE6E2NFBRA",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696637534,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          186
+        ],
+        "db.params_hash": "b41d53cd8ec5",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1BX9M1R8JJNKWDPH7NS",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696637671,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          10
+        ],
+        "db.params_hash": "ecb6519e43a9",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 14,
+      "id": "01M4GPC1BX3KEWKGNBZ26238SC",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696637847,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          5
+        ],
+        "db.params_hash": "893e430a8788",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1BYWEYA24ZGWK8WAKAS",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696637999,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          185
+        ],
+        "db.params_hash": "69811c91f10f",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1BY6G541SAQPP9WETEY",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696638186,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          13
+        ],
+        "db.params_hash": "826827b74179",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 13,
+      "id": "01M4GPC1BYF1T9WB5VRFRYG18Q",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696638366,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          7
+        ],
+        "db.params_hash": "ca56876ad160",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1BYS4MF3VY0K1G3FX08",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696638508,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          184
+        ],
+        "db.params_hash": "01b2b40d05fe",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 12,
+      "id": "01M4GPC1BYAJ9RH3QPCABSWN77",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696638650,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          3
+        ],
+        "db.params_hash": "3018300f8078",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 15,
+      "id": "01M4GPC1BY0B8ZEK9R90ZDNT8K",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696638826,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          3
+        ],
+        "db.params_hash": "3018300f8078",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1BYTB7MRRGS3V20TAS6",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696638970,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          183
+        ],
+        "db.params_hash": "a569458e8720",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 12,
+      "id": "01M4GPC1BZS1C1XR8EWPQSYZ5Q",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696639116,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          8
+        ],
+        "db.params_hash": "ab5699c15fe7",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 15,
+      "id": "01M4GPC1BZ3QGZHGRPCQMVB74E",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696639303,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          7
+        ],
+        "db.params_hash": "ca56876ad160",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 11,
+      "id": "01M4GPC1BZ26TTCNM8VXAE0EPQ",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696639447,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          182
+        ],
+        "db.params_hash": "0e9a28b5832c",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 11,
+      "id": "01M4GPC1BZBA6HJH5BBF5SB2YW",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696639592,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          10
+        ],
+        "db.params_hash": "ecb6519e43a9",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 17,
+      "id": "01M4GPC1BZ342J9PJHJ8F8ZGKH",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696639775,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          3
+        ],
+        "db.params_hash": "3018300f8078",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1BZ0344VRGGBF6ZYW5K",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696639921,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          181
+        ],
+        "db.params_hash": "ea4c23a08544",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 11,
+      "id": "01M4GPC1C0GZTX2HB207J5SXAR",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696640064,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          22
+        ],
+        "db.params_hash": "0f95b65122d8",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 14,
+      "id": "01M4GPC1C0VAGJWXK6DX0WPDVA",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696640243,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          3
+        ],
+        "db.params_hash": "3018300f8078",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1C0NVE0EFVQR8F5NP6S",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696640386,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          180
+        ],
+        "db.params_hash": "21323dcbc96c",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 11,
+      "id": "01M4GPC1C069KFGA3ZRWXVK802",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696640533,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          14
+        ],
+        "db.params_hash": "63a8abd98f94",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 13,
+      "id": "01M4GPC1C0Q7H8VPZNB0Y7EMM4",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696640706,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          7
+        ],
+        "db.params_hash": "ca56876ad160",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1C0V5RC9XDZYB76ACSX",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696640853,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          179
+        ],
+        "db.params_hash": "7c8753e49998",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1C1H8NEM0SK33M4BR85",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696640989,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          10
+        ],
+        "db.params_hash": "ecb6519e43a9",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 13,
+      "id": "01M4GPC1C1R1KBHWJJTJ4BM802",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696641157,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          2
+        ],
+        "db.params_hash": "a682278aca2d",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1C13QX4YHGT5M7Q435V",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696641292,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          178
+        ],
+        "db.params_hash": "5a935a497efc",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1C11YZZQ8RHGTAM8X2M",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696641427,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          14
+        ],
+        "db.params_hash": "63a8abd98f94",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 13,
+      "id": "01M4GPC1C1K85K7GB7WHCNYJRY",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696641592,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          4
+        ],
+        "db.params_hash": "75615398d58f",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 9,
+      "id": "01M4GPC1C1JN8XDAWZ7ZEPKZY8",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696641724,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          177
+        ],
+        "db.params_hash": "db1a53b75ae6",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1C127B1QFSB8CJJ36WX",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696641860,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          14
+        ],
+        "db.params_hash": "63a8abd98f94",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 12,
+      "id": "01M4GPC1C21DDKYTGKCKQ3X8SZ",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696642028,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          1
+        ],
+        "db.params_hash": "05ff4b4fa514",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 9,
+      "id": "01M4GPC1C21MY7ARBZGFDR7NFV",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696642169,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          176
+        ],
+        "db.params_hash": "673123568366",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1C2AS732W8CC2FA5KKS",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696642304,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          4
+        ],
+        "db.params_hash": "75615398d58f",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 13,
+      "id": "01M4GPC1C2TQ81R6BKNVMDPR49",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696642472,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          5
+        ],
+        "db.params_hash": "893e430a8788",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 9,
+      "id": "01M4GPC1C2REC2G7PGMJ1X0VJG",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696642606,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          175
+        ],
+        "db.params_hash": "a1b66050887f",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1C2Z4T3240CWRB6Y278",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696642739,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          16
+        ],
+        "db.params_hash": "9f64fa11d907",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 12,
+      "id": "01M4GPC1C2WR08XGDV089STWSW",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696642907,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          3
+        ],
+        "db.params_hash": "3018300f8078",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 9,
+      "id": "01M4GPC1C34JYY6H3PV8NEEWS6",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696643040,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          174
+        ],
+        "db.params_hash": "e874c89e9a16",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1C339J4F249J0YTF008",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696643176,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          14
+        ],
+        "db.params_hash": "63a8abd98f94",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 12,
+      "id": "01M4GPC1C3ZY5KTS7QA8G9W75T",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696643340,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          3
+        ],
+        "db.params_hash": "3018300f8078",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 9,
+      "id": "01M4GPC1C3MQXKGP5VD8Q0R3NE",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696643474,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          173
+        ],
+        "db.params_hash": "2942668ca868",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1C3XC27NH6VW7C8S5WP",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696643607,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          7
+        ],
+        "db.params_hash": "ca56876ad160",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 13,
+      "id": "01M4GPC1C3FAY9HMJFXQJE13TN",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696643772,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          1
+        ],
+        "db.params_hash": "05ff4b4fa514",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 9,
+      "id": "01M4GPC1C3P4S5S5Q1RSGK65JJ",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696643906,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          172
+        ],
+        "db.params_hash": "008d46a012a1",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1C4ZYG5QK9643ZPAFY7",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696644043,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          6
+        ],
+        "db.params_hash": "6b9320b07f06",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 12,
+      "id": "01M4GPC1C45XAGRVQ6X5FB5XHR",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696644213,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          2
+        ],
+        "db.params_hash": "a682278aca2d",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 9,
+      "id": "01M4GPC1C4KJVCDS6Y1QJHMT7E",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696644345,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          171
+        ],
+        "db.params_hash": "1bb9dd53a988",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1C4EDA99ZCN7B65K8XP",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696644482,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          20
+        ],
+        "db.params_hash": "c8d82f9ca47a",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 12,
+      "id": "01M4GPC1C4E5128TWFK9HRZ6P2",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696644648,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          1
+        ],
+        "db.params_hash": "05ff4b4fa514",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 9,
+      "id": "01M4GPC1C4AYNTKQ1SXVPF0YPZ",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696644783,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          170
+        ],
+        "db.params_hash": "5597bd9f5177",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1C4WXMJQ8NTJC3P51TB",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696644919,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          20
+        ],
+        "db.params_hash": "c8d82f9ca47a",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 12,
+      "id": "01M4GPC1C5NMV6SHXR311S300X",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696645083,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          7
+        ],
+        "db.params_hash": "ca56876ad160",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 9,
+      "id": "01M4GPC1C5EHC0KR24W82Y9MGB",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696645219,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          169
+        ],
+        "db.params_hash": "0fa64220f9d6",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1C5VAB4646DFDZ0XPY5",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696645353,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          8
+        ],
+        "db.params_hash": "ab5699c15fe7",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 12,
+      "id": "01M4GPC1C5JM4497T00Z45CCJ3",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696645519,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          8
+        ],
+        "db.params_hash": "ab5699c15fe7",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 9,
+      "id": "01M4GPC1C5SJB3DSXPGGVREY26",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696645652,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          168
+        ],
+        "db.params_hash": "f76688d78f7e",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1C5MQYNRJF2R55WCC4W",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696645789,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          7
+        ],
+        "db.params_hash": "ca56876ad160",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 16,
+      "id": "01M4GPC1C5W2B6CFFBC93EPCR3",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696645956,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          5
+        ],
+        "db.params_hash": "893e430a8788",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 9,
+      "id": "01M4GPC1C6AT9M9MK8M2KPRGS8",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696646098,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          167
+        ],
+        "db.params_hash": "3910ea6db81c",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 13,
+      "id": "01M4GPC1C6P8S5DMZ6PBMQY6SV",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696646236,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          3
+        ],
+        "db.params_hash": "3018300f8078",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 13,
+      "id": "01M4GPC1C6KRYAMX9HHXR9PE93",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696646405,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          6
+        ],
+        "db.params_hash": "6b9320b07f06",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 9,
+      "id": "01M4GPC1C6JNHYGG3NC4TPYW3A",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696646542,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          166
+        ],
+        "db.params_hash": "f197bb1161f5",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1C6H4QJT8EA9FTDNXRR",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696646684,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          11
+        ],
+        "db.params_hash": "b92041822e16",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 12,
+      "id": "01M4GPC1C6AM4Y7PH9QJDHFNYS",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696646861,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          1
+        ],
+        "db.params_hash": "05ff4b4fa514",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 9,
+      "id": "01M4GPC1C7FPG29EHGZAXEXDE7",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696647016,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          165
+        ],
+        "db.params_hash": "c3c9020e180e",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1C7RPW930BKDXG6500T",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696647155,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          5
+        ],
+        "db.params_hash": "893e430a8788",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 12,
+      "id": "01M4GPC1C7KQPGB2WHB6V6JDF1",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696647321,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          7
+        ],
+        "db.params_hash": "ca56876ad160",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 9,
+      "id": "01M4GPC1C722CBZZT3373MR615",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696647453,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          164
+        ],
+        "db.params_hash": "28f95f68837d",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1C71N0KTBPH1ZPE7YPJ",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696647591,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          11
+        ],
+        "db.params_hash": "b92041822e16",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 12,
+      "id": "01M4GPC1C76VE9KP1NRKC92VTP",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696647756,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          1
+        ],
+        "db.params_hash": "05ff4b4fa514",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 9,
+      "id": "01M4GPC1C70Q61QN19Q2VPA4G3",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696647892,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          163
+        ],
+        "db.params_hash": "87c6d96b46bc",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1C821ZDVZRSAFG614KK",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696648024,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          11
+        ],
+        "db.params_hash": "b92041822e16",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 12,
+      "id": "01M4GPC1C8156KR5E7SV6G82QJ",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696648194,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          8
+        ],
+        "db.params_hash": "ab5699c15fe7",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 9,
+      "id": "01M4GPC1C82CAWCGGGGH1ES31N",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696648327,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          162
+        ],
+        "db.params_hash": "57e84c1aa96f",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 9,
+      "id": "01M4GPC1C8F18R5TWATRV5YFPM",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696648463,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          13
+        ],
+        "db.params_hash": "826827b74179",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 13,
+      "id": "01M4GPC1C8MVPSS3F4VA09Q4K6",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696648630,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          4
+        ],
+        "db.params_hash": "75615398d58f",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 9,
+      "id": "01M4GPC1C8W3AKBMTDC8RMEQHA",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696648765,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          161
+        ],
+        "db.params_hash": "446f15c183e1",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 9,
+      "id": "01M4GPC1C8W7BJWRDHQ9C2R7QF",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696648899,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          22
+        ],
+        "db.params_hash": "0f95b65122d8",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 12,
+      "id": "01M4GPC1C9T9KJPEFP9N29C3DJ",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696649064,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          4
+        ],
+        "db.params_hash": "75615398d58f",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 9,
+      "id": "01M4GPC1C9DMSMR6NJV1CF7E30",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696649201,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          160
+        ],
+        "db.params_hash": "0ac629197c71",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 9,
+      "id": "01M4GPC1C9VREDA0DP9J3EWESA",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696649337,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          11
+        ],
+        "db.params_hash": "b92041822e16",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 14,
+      "id": "01M4GPC1C9P20RCFPW4EPWJ0DE",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696649527,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          5
+        ],
+        "db.params_hash": "893e430a8788",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 9,
+      "id": "01M4GPC1C963AEYQHHD8WXFDNE",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696649663,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          159
+        ],
+        "db.params_hash": "3a241c68fb2d",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 13,
+      "id": "01M4GPC1C9J70WAJPRG7DZAQ6V",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696649800,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          6
+        ],
+        "db.params_hash": "6b9320b07f06",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 14,
+      "id": "01M4GPC1CAYBHPK52QEQ7E4G25",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696650001,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          3
+        ],
+        "db.params_hash": "3018300f8078",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1CAZBED44CZPE4PT0HC",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696650147,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          158
+        ],
+        "db.params_hash": "92df003436f7",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1CANZ2C8JE3BX9VSV93",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696650290,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          11
+        ],
+        "db.params_hash": "b92041822e16",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 14,
+      "id": "01M4GPC1CAX6ZV5Z4SH8S1X186",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696650463,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          2
+        ],
+        "db.params_hash": "a682278aca2d",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 9,
+      "id": "01M4GPC1CAT0HM7WQXRHZN6VVN",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696650621,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          157
+        ],
+        "db.params_hash": "9f620e8da707",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1CAMYZ7H30TZV6QZZ8J",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696650757,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          6
+        ],
+        "db.params_hash": "6b9320b07f06",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 13,
+      "id": "01M4GPC1CA35ZK27SN7YJPBCBP",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696650922,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          3
+        ],
+        "db.params_hash": "3018300f8078",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 9,
+      "id": "01M4GPC1CBET7KM20AR5B1GYK3",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696651059,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          156
+        ],
+        "db.params_hash": "689b0c261ebc",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 11,
+      "id": "01M4GPC1CB76KDGQ8GK1THATYP",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696651197,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          20
+        ],
+        "db.params_hash": "c8d82f9ca47a",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 13,
+      "id": "01M4GPC1CB3ZABAH7EBS896Y0B",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696651363,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          5
+        ],
+        "db.params_hash": "893e430a8788",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 9,
+      "id": "01M4GPC1CB9Y23ZZ0A5KH21FGJ",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696651502,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          155
+        ],
+        "db.params_hash": "c6dd9d9a0501",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1CB1DW5Q7SS6F7VRRP1",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696651637,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          22
+        ],
+        "db.params_hash": "0f95b65122d8",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 12,
+      "id": "01M4GPC1CBEGNGQHF8TEYP9E4V",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696651802,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          1
+        ],
+        "db.params_hash": "05ff4b4fa514",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 9,
+      "id": "01M4GPC1CBE0GM6MEH7SGNKMRB",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696651936,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          154
+        ],
+        "db.params_hash": "01a5fbcd5a2c",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1CC7CYQSPV52SADRBBY",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696652073,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          20
+        ],
+        "db.params_hash": "c8d82f9ca47a",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 12,
+      "id": "01M4GPC1CCZ1JHYYV9V637HMD0",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696652243,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          5
+        ],
+        "db.params_hash": "893e430a8788",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 9,
+      "id": "01M4GPC1CCA4AM3PSXV094XT9B",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696652380,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          153
+        ],
+        "db.params_hash": "4964535bfad9",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1CCAB70ZY65CSVK45YW",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696652518,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          8
+        ],
+        "db.params_hash": "ab5699c15fe7",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 13,
+      "id": "01M4GPC1CC70JYVNTJPKXER9S1",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696652686,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          8
+        ],
+        "db.params_hash": "ab5699c15fe7",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 9,
+      "id": "01M4GPC1CCTWWF34XG1J20NAD0",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696652827,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          152
+        ],
+        "db.params_hash": "b398921c527a",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1CC1X5NR56Z1JBHZYAA",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696652961,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          14
+        ],
+        "db.params_hash": "63a8abd98f94",
+        "db.statement": "SELECT \"auth_user\".\"id\", \"auth_user\".\"password\", \"auth_user\".\"last_login\", \"auth_user\".\"is_superuser\", \"auth_user\".\"username\", \"auth_user\".\"first_name\", \"auth_user\".\"last_name\", \"auth_user\".\"email\", \"auth_user\".\"is_staff\", \"auth_user\".\"is_active\", \"auth_user\".\"date_joined\" FROM \"auth_user\" WHERE \"auth_user\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 13,
+      "id": "01M4GPC1CDPGCR976877YWV4R4",
+      "kind": "sql",
+      "name": "SELECT auth_user",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696653126,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          5
+        ],
+        "db.params_hash": "893e430a8788",
+        "db.statement": "SELECT \"blog_category\".\"id\", \"blog_category\".\"name\" FROM \"blog_category\" WHERE \"blog_category\".\"id\" = %s LIMIT 21",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 9,
+      "id": "01M4GPC1CD7HKBTFK2TEBJ9AQT",
+      "kind": "sql",
+      "name": "SELECT blog_category",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696653265,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "blog/views.py:28 in post_list",
+        "code.template": "blog/post_list.html",
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [
+          151
+        ],
+        "db.params_hash": "f158b2be3407",
+        "db.statement": "SELECT \"blog_tag\".\"id\", \"blog_tag\".\"name\" FROM \"blog_tag\" INNER JOIN \"blog_post_tags\" ON (\"blog_tag\".\"id\" = \"blog_post_tags\".\"tag_id\") WHERE \"blog_post_tags\".\"post_id\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 10,
+      "id": "01M4GPC1CDEC5EFK8S5ZAVWBEA",
+      "kind": "sql",
+      "name": "SELECT blog_tag",
+      "parent_id": "01M4GPC1BNHPRRN62QP8RS0RTF",
+      "start": 1791561696653405,
+      "status": "ok"
+    }
+  ],
+  "start": 1791561696625979,
+  "status": "ok"
+}

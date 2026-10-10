@@ -1,0 +1,108 @@
+{
+  "attrs": {
+    "code.view": "app.api.report",
+    "http.method": "GET",
+    "http.path": "/api/report",
+    "http.route": "/api/report",
+    "http.status_code": 200,
+    "process.runtime.name": "cpython",
+    "process.runtime.version": "3.14.0",
+    "service.name": "flask-classic",
+    "service.role": "web",
+    "telemetry.sdk.language": "python",
+    "tracepanel.framework": "Flask 3.1.3"
+  },
+  "duration": 602516,
+  "errors": [],
+  "id": "01M4GPB3578QTR3FS1P9G47DTX",
+  "issues": [],
+  "kind": "http",
+  "links": [],
+  "logs": [
+    {
+      "attrs": {
+        "code.filepath": "app/api.py",
+        "code.function": "report",
+        "code.lineno": 59,
+        "log.template": "report scanned %s rows",
+        "process.pid": 20121,
+        "thread.name": "Thread-16 (process_request_thread)"
+      },
+      "exception": null,
+      "level": "warning",
+      "logger": "app.api",
+      "message": "report scanned 2000000 rows",
+      "span_id": "01M4GPB358Y867YF7Y9CF6YBPH",
+      "time": 1791561666304685
+    }
+  ],
+  "name": "GET /api/report",
+  "spans": [
+    {
+      "attrs": {},
+      "duration": 602516,
+      "id": "01M4GPB357B766Q3EFAEMNJCSQ",
+      "kind": "http",
+      "name": "GET /api/report",
+      "parent_id": null,
+      "start": 1791561665703075,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.function": "app.api.report"
+      },
+      "duration": 601736,
+      "id": "01M4GPB3577N361V3BHAKJWJ5E",
+      "kind": "view",
+      "name": "app.api.report",
+      "parent_id": "01M4GPB357B766Q3EFAEMNJCSQ",
+      "start": 1791561665703627,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "app/api.py:56 in report",
+        "db.alias": "app.sqlite3",
+        "db.client": "sqlalchemy",
+        "db.namespace": "app.sqlite3",
+        "db.system": "sqlite",
+        "db.transaction.outcome": "rollback",
+        "db.transaction.savepoint": false,
+        "db.vendor": "sqlite"
+      },
+      "duration": 600949,
+      "id": "01M4GPB358Y867YF7Y9CF6YBPH",
+      "kind": "transaction",
+      "name": "transaction app.sqlite3",
+      "parent_id": "01M4GPB3577N361V3BHAKJWJ5E",
+      "start": 1791561665704558,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "app/api.py:56 in report",
+        "code.template": null,
+        "db.alias": "app.sqlite3",
+        "db.client": "sqlalchemy",
+        "db.fingerprint": "WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c WHERE x < 2000000) SELECT count(*) FROM c",
+        "db.many": false,
+        "db.namespace": "app.sqlite3",
+        "db.params": [],
+        "db.params_hash": "bf011b5269c5",
+        "db.statement": "WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c WHERE x < 2000000) SELECT count(*) FROM c",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 599302,
+      "id": "01M4GPB3R0A6TXA55BM4HMHV73",
+      "kind": "sql",
+      "name": "WITH c",
+      "parent_id": "01M4GPB358Y867YF7Y9CF6YBPH",
+      "start": 1791561665705155,
+      "status": "ok"
+    }
+  ],
+  "start": 1791561665703075,
+  "status": "ok"
+}

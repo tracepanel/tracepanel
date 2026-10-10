@@ -1,0 +1,458 @@
+{
+  "attrs": {
+    "code.view": "main.(*App).listBooks",
+    "http.method": "GET",
+    "http.path": "/books",
+    "http.route": "/books",
+    "http.status_code": 200,
+    "process.runtime.name": "go",
+    "process.runtime.version": "1.27.1",
+    "service.name": "go-api-bin",
+    "service.role": "web",
+    "telemetry.sdk.language": "go",
+    "tracepanel.framework": "net/http"
+  },
+  "duration": 2049,
+  "errors": [],
+  "id": "01M4GPCSNDHYSFJGJK7FY7NGH5",
+  "issues": [],
+  "kind": "http",
+  "links": [],
+  "logs": [
+    {
+      "attrs": {},
+      "exception": null,
+      "level": "info",
+      "logger": "app",
+      "message": "listing books",
+      "span_id": "01M4GPCSNDG15JJKVRYDF41WKT",
+      "time": 1791561721517570
+    }
+  ],
+  "name": "GET /books",
+  "spans": [
+    {
+      "attrs": {
+        "code.origin": "app.go:35 in (*App).listBooks",
+        "db.alias": "default",
+        "db.client": "go",
+        "db.fingerprint": "SELECT id, title, author_id FROM books ORDER BY id LIMIT 20",
+        "db.many": false,
+        "db.statement": "SELECT id, title, author_id FROM books ORDER BY id LIMIT 20",
+        "db.system": null,
+        "db.vendor": null
+      },
+      "duration": 143,
+      "id": "01M4GPCSNDA0VVBY8CANG9AJQS",
+      "kind": "sql",
+      "name": "SELECT books",
+      "parent_id": "01M4GPCSNDG15JJKVRYDF41WKT",
+      "start": 1791561721517749,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "app.go:54 in (*App).listBooks",
+        "db.alias": "default",
+        "db.client": "go",
+        "db.fingerprint": "SELECT name FROM authors WHERE id = ?",
+        "db.many": false,
+        "db.statement": "SELECT name FROM authors WHERE id = ?",
+        "db.system": null,
+        "db.vendor": null
+      },
+      "duration": 45,
+      "id": "01M4GPCSND3Q99D9CJDRSJ7PRG",
+      "kind": "sql",
+      "name": "SELECT authors",
+      "parent_id": "01M4GPCSNDG15JJKVRYDF41WKT",
+      "start": 1791561721517985,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "app.go:54 in (*App).listBooks",
+        "db.alias": "default",
+        "db.client": "go",
+        "db.fingerprint": "SELECT name FROM authors WHERE id = ?",
+        "db.many": false,
+        "db.statement": "SELECT name FROM authors WHERE id = ?",
+        "db.system": null,
+        "db.vendor": null
+      },
+      "duration": 35,
+      "id": "01M4GPCSNEQRHAJSZAGXRRHQ65",
+      "kind": "sql",
+      "name": "SELECT authors",
+      "parent_id": "01M4GPCSNDG15JJKVRYDF41WKT",
+      "start": 1791561721518060,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "app.go:54 in (*App).listBooks",
+        "db.alias": "default",
+        "db.client": "go",
+        "db.fingerprint": "SELECT name FROM authors WHERE id = ?",
+        "db.many": false,
+        "db.statement": "SELECT name FROM authors WHERE id = ?",
+        "db.system": null,
+        "db.vendor": null
+      },
+      "duration": 59,
+      "id": "01M4GPCSNEHSMAHXCZVRSK9Q25",
+      "kind": "sql",
+      "name": "SELECT authors",
+      "parent_id": "01M4GPCSNDG15JJKVRYDF41WKT",
+      "start": 1791561721518153,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "app.go:54 in (*App).listBooks",
+        "db.alias": "default",
+        "db.client": "go",
+        "db.fingerprint": "SELECT name FROM authors WHERE id = ?",
+        "db.many": false,
+        "db.statement": "SELECT name FROM authors WHERE id = ?",
+        "db.system": null,
+        "db.vendor": null
+      },
+      "duration": 38,
+      "id": "01M4GPCSNEEZ3EJCKFWA3RARA5",
+      "kind": "sql",
+      "name": "SELECT authors",
+      "parent_id": "01M4GPCSNDG15JJKVRYDF41WKT",
+      "start": 1791561721518257,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "app.go:54 in (*App).listBooks",
+        "db.alias": "default",
+        "db.client": "go",
+        "db.fingerprint": "SELECT name FROM authors WHERE id = ?",
+        "db.many": false,
+        "db.statement": "SELECT name FROM authors WHERE id = ?",
+        "db.system": null,
+        "db.vendor": null
+      },
+      "duration": 42,
+      "id": "01M4GPCSNE70P1QG9A1J9CPDKS",
+      "kind": "sql",
+      "name": "SELECT authors",
+      "parent_id": "01M4GPCSNDG15JJKVRYDF41WKT",
+      "start": 1791561721518320,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "app.go:54 in (*App).listBooks",
+        "db.alias": "default",
+        "db.client": "go",
+        "db.fingerprint": "SELECT name FROM authors WHERE id = ?",
+        "db.many": false,
+        "db.statement": "SELECT name FROM authors WHERE id = ?",
+        "db.system": null,
+        "db.vendor": null
+      },
+      "duration": 36,
+      "id": "01M4GPCSNE5MN4ZYP32P7AG4KJ",
+      "kind": "sql",
+      "name": "SELECT authors",
+      "parent_id": "01M4GPCSNDG15JJKVRYDF41WKT",
+      "start": 1791561721518386,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "app.go:54 in (*App).listBooks",
+        "db.alias": "default",
+        "db.client": "go",
+        "db.fingerprint": "SELECT name FROM authors WHERE id = ?",
+        "db.many": false,
+        "db.statement": "SELECT name FROM authors WHERE id = ?",
+        "db.system": null,
+        "db.vendor": null
+      },
+      "duration": 33,
+      "id": "01M4GPCSNEJGMMDPNDA1EGB7CB",
+      "kind": "sql",
+      "name": "SELECT authors",
+      "parent_id": "01M4GPCSNDG15JJKVRYDF41WKT",
+      "start": 1791561721518445,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "app.go:54 in (*App).listBooks",
+        "db.alias": "default",
+        "db.client": "go",
+        "db.fingerprint": "SELECT name FROM authors WHERE id = ?",
+        "db.many": false,
+        "db.statement": "SELECT name FROM authors WHERE id = ?",
+        "db.system": null,
+        "db.vendor": null
+      },
+      "duration": 37,
+      "id": "01M4GPCSNE5R5RFDSZEBH7953C",
+      "kind": "sql",
+      "name": "SELECT authors",
+      "parent_id": "01M4GPCSNDG15JJKVRYDF41WKT",
+      "start": 1791561721518506,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "app.go:54 in (*App).listBooks",
+        "db.alias": "default",
+        "db.client": "go",
+        "db.fingerprint": "SELECT name FROM authors WHERE id = ?",
+        "db.many": false,
+        "db.statement": "SELECT name FROM authors WHERE id = ?",
+        "db.system": null,
+        "db.vendor": null
+      },
+      "duration": 32,
+      "id": "01M4GPCSNE55E5QKAG1GK89PGS",
+      "kind": "sql",
+      "name": "SELECT authors",
+      "parent_id": "01M4GPCSNDG15JJKVRYDF41WKT",
+      "start": 1791561721518564,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "app.go:54 in (*App).listBooks",
+        "db.alias": "default",
+        "db.client": "go",
+        "db.fingerprint": "SELECT name FROM authors WHERE id = ?",
+        "db.many": false,
+        "db.statement": "SELECT name FROM authors WHERE id = ?",
+        "db.system": null,
+        "db.vendor": null
+      },
+      "duration": 31,
+      "id": "01M4GPCSNEKTCNRE3ZNZEJMX8Y",
+      "kind": "sql",
+      "name": "SELECT authors",
+      "parent_id": "01M4GPCSNDG15JJKVRYDF41WKT",
+      "start": 1791561721518627,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "app.go:54 in (*App).listBooks",
+        "db.alias": "default",
+        "db.client": "go",
+        "db.fingerprint": "SELECT name FROM authors WHERE id = ?",
+        "db.many": false,
+        "db.statement": "SELECT name FROM authors WHERE id = ?",
+        "db.system": null,
+        "db.vendor": null
+      },
+      "duration": 32,
+      "id": "01M4GPCSNEQ3N15CQ95SQN67PV",
+      "kind": "sql",
+      "name": "SELECT authors",
+      "parent_id": "01M4GPCSNDG15JJKVRYDF41WKT",
+      "start": 1791561721518679,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "app.go:54 in (*App).listBooks",
+        "db.alias": "default",
+        "db.client": "go",
+        "db.fingerprint": "SELECT name FROM authors WHERE id = ?",
+        "db.many": false,
+        "db.statement": "SELECT name FROM authors WHERE id = ?",
+        "db.system": null,
+        "db.vendor": null
+      },
+      "duration": 32,
+      "id": "01M4GPCSNE8MDTNRRCX94VW04W",
+      "kind": "sql",
+      "name": "SELECT authors",
+      "parent_id": "01M4GPCSNDG15JJKVRYDF41WKT",
+      "start": 1791561721518732,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "app.go:54 in (*App).listBooks",
+        "db.alias": "default",
+        "db.client": "go",
+        "db.fingerprint": "SELECT name FROM authors WHERE id = ?",
+        "db.many": false,
+        "db.statement": "SELECT name FROM authors WHERE id = ?",
+        "db.system": null,
+        "db.vendor": null
+      },
+      "duration": 42,
+      "id": "01M4GPCSNER4AC05YRJQEQ8ZVM",
+      "kind": "sql",
+      "name": "SELECT authors",
+      "parent_id": "01M4GPCSNDG15JJKVRYDF41WKT",
+      "start": 1791561721518785,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "app.go:54 in (*App).listBooks",
+        "db.alias": "default",
+        "db.client": "go",
+        "db.fingerprint": "SELECT name FROM authors WHERE id = ?",
+        "db.many": false,
+        "db.statement": "SELECT name FROM authors WHERE id = ?",
+        "db.system": null,
+        "db.vendor": null
+      },
+      "duration": 31,
+      "id": "01M4GPCSNEVNY01XKE1BHSCZJ8",
+      "kind": "sql",
+      "name": "SELECT authors",
+      "parent_id": "01M4GPCSNDG15JJKVRYDF41WKT",
+      "start": 1791561721518849,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "app.go:54 in (*App).listBooks",
+        "db.alias": "default",
+        "db.client": "go",
+        "db.fingerprint": "SELECT name FROM authors WHERE id = ?",
+        "db.many": false,
+        "db.statement": "SELECT name FROM authors WHERE id = ?",
+        "db.system": null,
+        "db.vendor": null
+      },
+      "duration": 31,
+      "id": "01M4GPCSNEBXNJ229Z73C2744K",
+      "kind": "sql",
+      "name": "SELECT authors",
+      "parent_id": "01M4GPCSNDG15JJKVRYDF41WKT",
+      "start": 1791561721518903,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "app.go:54 in (*App).listBooks",
+        "db.alias": "default",
+        "db.client": "go",
+        "db.fingerprint": "SELECT name FROM authors WHERE id = ?",
+        "db.many": false,
+        "db.statement": "SELECT name FROM authors WHERE id = ?",
+        "db.system": null,
+        "db.vendor": null
+      },
+      "duration": 31,
+      "id": "01M4GPCSNEXN2FD2RBQT98XG76",
+      "kind": "sql",
+      "name": "SELECT authors",
+      "parent_id": "01M4GPCSNDG15JJKVRYDF41WKT",
+      "start": 1791561721518955,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "app.go:54 in (*App).listBooks",
+        "db.alias": "default",
+        "db.client": "go",
+        "db.fingerprint": "SELECT name FROM authors WHERE id = ?",
+        "db.many": false,
+        "db.statement": "SELECT name FROM authors WHERE id = ?",
+        "db.system": null,
+        "db.vendor": null
+      },
+      "duration": 31,
+      "id": "01M4GPCSNFRN3K29W40VCTS89W",
+      "kind": "sql",
+      "name": "SELECT authors",
+      "parent_id": "01M4GPCSNDG15JJKVRYDF41WKT",
+      "start": 1791561721519011,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "app.go:54 in (*App).listBooks",
+        "db.alias": "default",
+        "db.client": "go",
+        "db.fingerprint": "SELECT name FROM authors WHERE id = ?",
+        "db.many": false,
+        "db.statement": "SELECT name FROM authors WHERE id = ?",
+        "db.system": null,
+        "db.vendor": null
+      },
+      "duration": 33,
+      "id": "01M4GPCSNFP21HB112YX4RW1KS",
+      "kind": "sql",
+      "name": "SELECT authors",
+      "parent_id": "01M4GPCSNDG15JJKVRYDF41WKT",
+      "start": 1791561721519067,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "app.go:54 in (*App).listBooks",
+        "db.alias": "default",
+        "db.client": "go",
+        "db.fingerprint": "SELECT name FROM authors WHERE id = ?",
+        "db.many": false,
+        "db.statement": "SELECT name FROM authors WHERE id = ?",
+        "db.system": null,
+        "db.vendor": null
+      },
+      "duration": 39,
+      "id": "01M4GPCSNF8PE0X8A7CJZY5B12",
+      "kind": "sql",
+      "name": "SELECT authors",
+      "parent_id": "01M4GPCSNDG15JJKVRYDF41WKT",
+      "start": 1791561721519127,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "app.go:54 in (*App).listBooks",
+        "db.alias": "default",
+        "db.client": "go",
+        "db.fingerprint": "SELECT name FROM authors WHERE id = ?",
+        "db.many": false,
+        "db.statement": "SELECT name FROM authors WHERE id = ?",
+        "db.system": null,
+        "db.vendor": null
+      },
+      "duration": 30,
+      "id": "01M4GPCSNF58FKHSAWV68A32JC",
+      "kind": "sql",
+      "name": "SELECT authors",
+      "parent_id": "01M4GPCSNDG15JJKVRYDF41WKT",
+      "start": 1791561721519186,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.function": "main.(*App).listBooks"
+      },
+      "duration": 1917,
+      "id": "01M4GPCSNDG15JJKVRYDF41WKT",
+      "kind": "view",
+      "name": "(*App).listBooks",
+      "parent_id": "01M4GPCSNDFQC74R1HA2VMMB7F",
+      "start": 1791561721517527,
+      "status": "ok"
+    },
+    {
+      "attrs": {},
+      "duration": 2049,
+      "id": "01M4GPCSNDFQC74R1HA2VMMB7F",
+      "kind": "http",
+      "name": "GET /books",
+      "parent_id": null,
+      "start": 1791561721517414,
+      "status": "ok"
+    }
+  ],
+  "start": 1791561721517414,
+  "status": "ok"
+}

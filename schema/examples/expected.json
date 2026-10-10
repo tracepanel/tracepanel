@@ -1,0 +1,47 @@
+{
+  "python-django-n-plus-one.json": [
+    "n+1"
+  ],
+  "python-django-fixed.json": [],
+  "python-django-duplicates.json": [
+    "duplicates"
+  ],
+  "python-django-slow-sql.json": [
+    "slow-sql"
+  ],
+  "python-django-error.json": [
+    "error"
+  ],
+  "python-django-in-transaction.json": [
+    "in-transaction"
+  ],
+  "python-django-long-transaction.json": [
+    "long-transaction"
+  ],
+  "python-django-async-n-plus-one.json": [
+    "n+1"
+  ],
+  "python-django-htmx.json": [
+    "htmx"
+  ],
+  "python-fastapi-n-plus-one.json": [
+    "n+1"
+  ],
+  "python-fastapi-error.json": [
+    "error"
+  ],
+  "python-flask-slow-report.json": [
+    "long-transaction",
+    "slow-sql"
+  ],
+  "go-n-plus-one.json": [
+    "n+1"
+  ],
+  "go-fixed.json": [],
+  "go-slow-sql.json": [
+    "slow-sql"
+  ],
+  "go-panic.json": [
+    "error"
+  ]
+}
