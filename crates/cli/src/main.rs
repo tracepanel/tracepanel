@@ -1,7 +1,8 @@
 //! `tracepanel-agent`: the project's agent. It receives the traces its processes record (an SDK in each: Python, Go)
 //! over a unix socket (TCP on Windows, or with `--listen tcp:HOST:PORT`), finds their issues, keeps them in the
 //! project's store and, with `--serve`, serves the console. Its addresses go to `<dir>/agent.addr` and
-//! `<dir>/console.addr`, where the SDKs look for them.
+//! `<dir>/console.addr`, where the SDKs look for them. With `TRACEPANEL_KEY` set, it also sends the traces it keeps
+//! to Tracepanel Cloud (`tracepanel-sender`).
 
 #[cfg(all(target_arch = "arm", target_env = "musl"))]
 mod arm_eabi;
@@ -14,6 +15,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{Receiver, SyncSender, TrySendError, sync_channel};
 use tracepanel_protocol::{Activity, Batch, Listener, Received};
+use tracepanel_sender::Sender;
 use tracepanel_store_local::{self as store_local, Store};
 
 /// Frames waiting for the writer; a full queue drops frames rather than slowing the senders down.
@@ -169,6 +171,7 @@ async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
         idle_exit,
         record,
     } = options;
+    let cloud = tracepanel_sender::Config::from_env(|name| std::env::var(name).ok())?;
     std::fs::create_dir_all(&dir)?;
     let dir = dir.canonicalize()?;
     let store_path = store_local::path_in(&dir);
@@ -189,7 +192,19 @@ async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
     if let Some(record) = &record {
         std::fs::create_dir_all(record)?;
     }
-    let writer = std::thread::spawn(move || write(store, &frames, record.as_deref()));
+    let cloud_line = cloud
+        .as_ref()
+        .map(|cloud| format!("{} ({})", cloud.url, cloud.environment));
+    // Batches wait here while the cloud can't take them, for this agent or the next one.
+    let sender = match cloud {
+        Some(cloud) => Some(Sender::start(
+            cloud,
+            dir.join("cloud"),
+            tracepanel_sender::Options::default(),
+        )?),
+        None => None,
+    };
+    let writer = std::thread::spawn(move || write(store, &frames, record.as_deref(), sender));
     let sender = queue.clone();
     let sink = Arc::new(move |batch: Batch| enqueue(&sender, batch));
 
@@ -217,6 +232,9 @@ async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
     println!("  traces   {address}");
     if let Some((url, _)) = &console {
         println!("  console  {url}");
+    }
+    if let Some(cloud) = &cloud_line {
+        println!("  cloud    {cloud}");
     }
     match idle_exit {
         Some(seconds) => println!("Ctrl-C stops it; it exits after {seconds} s unused"),
@@ -310,25 +328,42 @@ fn enqueue(queue: &SyncSender<Message>, batch: Batch) {
     }
 }
 
-fn write(mut store: Store, frames: &Receiver<Message>, record: Option<&Path>) {
+fn write(
+    mut store: Store,
+    frames: &Receiver<Message>,
+    record: Option<&Path>,
+    sender: Option<Sender>,
+) {
     let mut written: u64 = 0;
     while let Ok(message) = frames.recv() {
         let Message::Batch(batch) = message else {
             // Stop: drain what is queued, then exit.
             while let Ok(Message::Batch(batch)) = frames.try_recv() {
-                written += write_batch(&mut store, &batch, record);
+                written += write_batch(&mut store, &batch, record, sender.as_ref());
             }
             break;
         };
-        written += write_batch(&mut store, &batch, record);
+        written += write_batch(&mut store, &batch, record, sender.as_ref());
     }
     match DROPPED.load(Ordering::Relaxed) {
         0 => println!("tracepanel-agent: {written} traces written"),
         dropped => println!("tracepanel-agent: {written} traces written, {dropped} frames dropped"),
     }
+    if let Some(sender) = sender {
+        let report = sender.stop();
+        println!(
+            "tracepanel-agent: {} traces sent to the cloud, {} dropped, {} waiting to be sent",
+            report.sent, report.dropped, report.spooled
+        );
+    }
 }
 
-fn write_batch(store: &mut Store, batch: &Batch, record: Option<&Path>) -> u64 {
+fn write_batch(
+    store: &mut Store,
+    batch: &Batch,
+    record: Option<&Path>,
+    sender: Option<&Sender>,
+) -> u64 {
     if let Some(max_traces) = batch.max_traces {
         store.max_traces = max_traces;
     }
@@ -339,6 +374,12 @@ fn write_batch(store: &mut Store, batch: &Batch, record: Option<&Path>) -> u64 {
             }
             for received in &mut traces {
                 tracepanel_analysis::apply(received, &batch.thresholds);
+            }
+            // As kept here, issues and all; the sender strips what stays local.
+            if let Some(sender) = sender {
+                for received in &traces {
+                    sender.offer(received.doc.clone());
+                }
             }
             write_traces(store, &traces)
         }

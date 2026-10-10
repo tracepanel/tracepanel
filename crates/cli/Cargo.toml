@@ -16,6 +16,7 @@ path = "src/main.rs"
 tracepanel-analysis.workspace = true
 tracepanel-mcp.workspace = true
 tracepanel-protocol.workspace = true
+tracepanel-sender.workspace = true
 tracepanel-server.workspace = true
 serde_json.workspace = true
 tracepanel-store-local.workspace = true
