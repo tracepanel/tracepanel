@@ -6,6 +6,9 @@ import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
 
 const require = createRequire(import.meta.url);
+// `pnpm watch` builds straight into the agent's ui-dist/: a debug build of the agent reads it from disk on every
+// request, so a refresh shows the change.
+const watchOut = process.env.TRACEPANEL_UI_OUT;
 
 /** The page loads `tracepanel.min.js?v=<hash>`: the file keeps its name, a new build is still a new URL. */
 function versioned(): Plugin {
@@ -30,11 +33,15 @@ function versioned(): Plugin {
 
 /** widget.min.js and its source map from @tracepanel/widget, next to the console. */
 function widget(): Plugin {
+  let out = "dist";
   return {
     name: "tracepanel-widget",
+    configResolved(config) {
+      out = config.build.outDir;
+    },
     closeBundle() {
       const dist = require.resolve("@tracepanel/widget").replace(/widget\.mjs$/, "");
-      for (const name of ["widget.min.js", "widget.min.js.map"]) copyFileSync(`${dist}${name}`, `dist/${name}`);
+      for (const name of ["widget.min.js", "widget.min.js.map"]) copyFileSync(`${dist}${name}`, `${out}/${name}`);
     },
   };
 }
@@ -46,6 +53,8 @@ export default defineConfig({
   base: "./",
   plugins: [react(), tailwindcss(), versioned(), widget()],
   build: {
+    // Into ui-dist/ under `pnpm watch`, keeping its NOTICES.
+    ...(watchOut ? { outDir: watchOut, emptyOutDir: false } : {}),
     // Maps next to the files, without a sourceMappingURL in them: the agent embeds the minified files only.
     sourcemap: "hidden",
     rollupOptions: {

@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -p . && vite build",
-    "typecheck": "tsc -p ."
+    "typecheck": "tsc -p .",
+    "watch": "vite build --watch"
   },
   "dependencies": {
     "@tracepanel/ui": "workspace:*",

@@ -3,3 +3,4 @@ target/
 node_modules/
 ui/apps/*/dist/
 ui/packages/*/dist/
+ui-dist/*.map
