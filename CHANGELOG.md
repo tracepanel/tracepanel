@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.0.1a1 (2026-10-10)
 
 The first release of the Tracepanel agent.
 
