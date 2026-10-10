@@ -8,7 +8,8 @@
     "dev": "pnpm --filter @tracepanel/local dev",
     "fmt": "biome check --write .",
     "lint": "biome check . && pnpm -r typecheck",
-    "api": "pnpm --filter @tracepanel/ui api"
+    "api": "pnpm --filter @tracepanel/ui api",
+    "watch": "TRACEPANEL_UI_OUT=\"$(cd .. && pwd)/ui-dist\" pnpm -r --parallel watch"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",

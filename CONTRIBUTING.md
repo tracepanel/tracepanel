@@ -42,6 +42,22 @@ pnpm api      # packages/ui/src/api.gen.ts from schema/openapi.yaml
 
 For `pnpm dev`, start the agent with `--serve 127.0.0.1:7700`.
 
+To work on the UI or the widget against a real app, use a debug build of the
+agent. It reads `ui-dist/` from disk on every request, so a refresh of the page
+shows the change, with no rebuild of the agent:
+
+```bash
+cargo build                    # once: target/debug/tracepanel-agent
+cd ui && pnpm watch            # rebuilds into ui-dist/ on every save
+```
+
+Then start the app with that agent. Stop the agent the app started before, or
+the app keeps using it:
+
+```bash
+TRACEPANEL_AGENT_BIN=path/to/tracepanel/target/debug/tracepanel-agent python manage.py runserver
+```
+
 The agent embeds `ui-dist/`, the built UI. After changing `ui/`, run
 `scripts/ui.sh` and commit `ui-dist/` with the change. CI checks that
 `ui-dist/` matches `ui/`.
