@@ -1,5 +1,7 @@
 # Tracepanel
 
+[![CI](https://github.com/tracepanel/tracepanel/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/tracepanel/tracepanel/actions/workflows/ci.yml)
+
 **See what your app does on every request.** Tracepanel is a debug toolbar for
 Python web apps. It traces every request, query, task and error on your
 machine, finds the N+1 queries and the duplicate and slow SQL, and names the
