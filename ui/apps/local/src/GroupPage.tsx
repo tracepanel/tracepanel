@@ -13,11 +13,11 @@ import { Button } from "@tracepanel/ui/components/ui/button";
 import { ArrowRightIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { CallsChart, Histogram, LatencyChart, Stat } from "./Charts";
+import { PeriodChip } from "./PeriodChip";
 import { RefreshControl, useRefresh } from "./refresh";
 import { type EntrySection, go, href, issueRoute, traceHref, withPeriod } from "./routes";
 import { ENTRY } from "./sections";
 import { TracesTable } from "./tables";
-import { parseAbsolute, shortTime } from "./time";
 import { Breadcrumbs, DataTable, Loading, Meter, Mono, Td, Th, Tr } from "./ui";
 
 type Group = TraceGroup | GraphqlDetail;
@@ -29,39 +29,6 @@ type Group = TraceGroup | GraphqlDetail;
 function load(source: DataSource, section: EntrySection, key: string, period: string): Promise<Group | null> {
   if (section === "graphql") return source.getGraphqlOperation(key);
   return source.summarizeTraces(`${ENTRY[section].group(key)} ${period}`.trim());
-}
-
-/** "since 15:27:14 until 15:42:00", or "the last 1h", for the period chip. */
-function describePeriod(period: string): string {
-  return period
-    .split(" ")
-    .map((term) => {
-      const [key = "", value = ""] = term.split(/:(.*)/s);
-      const at = parseAbsolute(value);
-      if (at) return `${key} ${shortTime(at)}`;
-      return key === "since" ? `the last ${value}` : `until ${value} ago`;
-    })
-    .join(" ");
-}
-
-/** The period a group is summarised over, and the way to see all of it; GraphQL detail has no period. */
-function PeriodChip({ section, groupKey, period }: { section: EntrySection; groupKey: string; period: string }) {
-  if (!period) return null;
-  const all = href({ name: "group", section, key: groupKey });
-  return (
-    <p className="flex items-center gap-2 text-sm text-muted-foreground">
-      {section === "graphql" ? (
-        <span>Showing all time: an operation's detail has no period ({describePeriod(period)} on the list).</span>
-      ) : (
-        <>
-          <span className="rounded-md border px-2 py-0.5 font-medium text-foreground">{describePeriod(period)}</span>
-          <a href={all} className="font-medium text-brand hover:underline">
-            All time
-          </a>
-        </>
-      )}
-    </p>
-  );
 }
 
 function Title({ section, groupKey }: { section: EntrySection; groupKey: string }) {
@@ -83,10 +50,6 @@ function Title({ section, groupKey }: { section: EntrySection; groupKey: string 
   );
 }
 
-/**
- * One group of an entry point (an endpoint, a GraphQL operation, a task, a consumer, a job): percentiles,
- * latency and volume over time, its issues, its slowest and latest calls. A GraphQL operation adds its resolvers.
- */
 export function GroupPage({
   section,
   groupKey,
@@ -163,7 +126,13 @@ export function GroupPage({
             <ArrowRightIcon />
           </Button>
         </div>
-        <PeriodChip section={section} groupKey={groupKey} period={period} />
+        <PeriodChip
+          period={period}
+          allTime={href({ name: "group", section, key: groupKey })}
+          unsupported={
+            section === "graphql" ? "an operation's detail has no period, so this shows all time" : undefined
+          }
+        />
       </header>
 
       <section className="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-2.5" aria-label="Summary">

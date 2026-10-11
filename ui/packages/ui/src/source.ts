@@ -76,7 +76,8 @@ export interface DataSource {
   switchUser(id: string | null): Promise<User | null>;
   explain(traceId: string, spanId: string, analyze: boolean): Promise<ExplainPlan>;
   listIssues(q?: string): Promise<IssueRow[]>;
-  getIssue(fingerprint: string): Promise<IssueDetail | null>;
+  /** One issue; with `q` (since:, until:), its series and requests within that period. */
+  getIssue(fingerprint: string, q?: string): Promise<IssueDetail | null>;
   searchSpec(): Promise<SearchSpec>;
   /** Delete everything stored; resolves to how many traces. Optional: a source may not offer it. */
   clearStore?: () => Promise<number>;
@@ -223,8 +224,8 @@ export function httpSource(base: string | URL): DataSource {
     getEndpoint(method, route) {
       return getJson<EndpointDetail>(url("endpoints/detail", { method, route }));
     },
-    getIssue(fingerprint) {
-      return getJson<IssueDetail>(url("issues/detail", { fingerprint }));
+    getIssue(fingerprint, q = "") {
+      return getJson<IssueDetail>(url("issues/detail", { fingerprint, q }));
     },
     async listIssues(q = "") {
       return (await getJson<{ issues: IssueRow[] }>(url("issues", { q })))?.issues ?? [];

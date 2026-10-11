@@ -30,7 +30,7 @@ export type Route =
   | { name: Section; q: string; view?: EntryView | undefined; open?: string | undefined }
   | { name: "group"; section: EntrySection; key: string; q?: string | undefined }
   | { name: "trace"; id: string; from?: string | undefined; tab?: string | undefined; span?: string | undefined }
-  | { name: "issue"; fingerprint: string; error?: boolean | undefined };
+  | { name: "issue"; fingerprint: string; error?: boolean | undefined; q?: string | undefined };
 
 /** A trace id: a ULID, in Crockford's alphabet (no I, L, O or U). */
 export const TRACE_ID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
@@ -69,7 +69,7 @@ export function endpointGroup(method: string, route: string): Route {
 
 /** An issue's page, remembering whether it is an error (listed under Errors) or another finding. */
 export function issueRoute(fingerprint: string, kind: string): Route {
-  return { name: "issue", fingerprint, error: kind === "error" };
+  return { name: "issue", fingerprint, error: kind === "error", q: currentPeriod() || undefined };
 }
 
 export function isEntry(section: string): section is EntrySection {
@@ -82,7 +82,9 @@ export function parse(hash: string): Route {
   const params = new URLSearchParams(query);
   const q = params.get("q") ?? "";
   const issue = /^issue\/([0-9a-f]{16})$/.exec(path);
-  if (issue?.[1]) return { name: "issue", fingerprint: issue[1], error: params.get("in") === "errors" };
+  if (issue?.[1]) {
+    return { name: "issue", fingerprint: issue[1], error: params.get("in") === "errors", q: q || undefined };
+  }
   // `traces/` is how the widget wrote it before; old links still open.
   const trace = /^(?:t|traces)\/(.+)$/.exec(path);
   if (trace?.[1] && TRACE_ID.test(trace[1])) {
@@ -116,7 +118,12 @@ export function href(route: Route): string {
     return `#/t/${route.id}${query}`;
   }
   // Errors and other issues share a page; `in` says which list it belongs to, for the crumbs and the menu.
-  if (route.name === "issue") return `#/issue/${route.fingerprint}${route.error ? "?in=errors" : ""}`;
+  if (route.name === "issue") {
+    const params = new URLSearchParams();
+    if (route.error) params.set("in", "errors");
+    if (route.q) params.set("q", route.q);
+    return `#/issue/${route.fingerprint}${params.size ? `?${params}` : ""}`;
+  }
   if (route.name === "group") {
     const query = route.q ? `?${new URLSearchParams({ q: route.q })}` : "";
     return `#/group/${route.section}/${encodeURIComponent(route.key)}${query}`;

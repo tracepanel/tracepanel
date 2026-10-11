@@ -11,17 +11,17 @@ import {
   systemName,
 } from "@tracepanel/ui";
 import { Badge } from "@tracepanel/ui/components/ui/badge";
-import { href, type Route } from "./routes";
+import { currentPeriod, href, type Route, withPeriod } from "./routes";
 import { DataTable, Meter, Mono, Td, Th, Tr } from "./ui";
 
-/** Where to look next: the SQL of that database, the traces using that cache, the emails, the tasks. */
+/** Where to look next: the SQL of that database, the traces that used that cache, called that API or broker. */
 function target(node: ServiceNode): Route {
   const aliases = node.aliases.join(",");
   if (node.kind === "database") return { name: "queries", q: aliases ? `db:${aliases}` : "" };
   if (node.kind === "cache") return { name: "traces", q: aliases ? `cache:${aliases}` : "" };
   if (node.kind === "mail") return { name: "mails", q: "" };
-  if (node.kind === "queue") return { name: "tasks", q: "" };
-  return { name: "traces", q: "" };
+  // A broker and an HTTP API: the traces that called it (a worker's tasks taking from the broker included).
+  return { name: "traces", q: withPeriod(`peer:${node.id}`, currentPeriod()) };
 }
 
 /** Where an app's own work is listed: requests for web, tasks for a worker, runs for a command. */

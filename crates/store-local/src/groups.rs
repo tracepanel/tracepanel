@@ -327,7 +327,7 @@ impl Reader {
     pub fn list_graphql(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
         let schema = search::schema_for(
             "graphql",
-            &[("since", "start"), ("until", "start")],
+            &[("route", "route"), ("since", "start"), ("until", "start")],
             Box::new(|words| {
                 (
                     format!("{OPERATION} LIKE ? ESCAPE '\\'"),
@@ -551,15 +551,7 @@ impl Reader {
     ) -> Result<Value, ReadError> {
         let (condition, params) = search::compile_where(query, &TRACE_SEARCH)?;
         let now = search::now_us();
-        let bound = |name: &str| {
-            // The last such term wins, as in a dict built from them.
-            search::parse(query)
-                .into_iter()
-                .rev()
-                .filter(|term| term.key.as_deref() == Some(name) && term.op == ":")
-                .find_map(|term| search::parse_time_us(&term.value, now))
-        };
-        let (since, until) = (bound("since"), bound("until"));
+        let (since, until) = search::period(query, now);
         let db = self.connect()?;
         let rows = objects(
             &db,
@@ -599,6 +591,15 @@ impl Reader {
                     "route".into(),
                     if kind == "http" {
                         members[0]["route"].clone()
+                    } else {
+                        Value::Null
+                    },
+                );
+                // WebSocket events link to their consumer's page.
+                object.insert(
+                    "view".into(),
+                    if kind == "websocket" {
+                        members[0]["view"].clone()
                     } else {
                         Value::Null
                     },

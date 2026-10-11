@@ -52,6 +52,10 @@
       "type": "text",
       "help": "Contains this SQL statement (id from Queries)"
     },
+    "peer": {
+      "type": "text",
+      "help": "Called this service (id from Services)"
+    },
     "trace": {
       "type": "text",
       "help": "Trace id"
@@ -219,6 +223,10 @@
     "type": {
       "type": "text",
       "help": "query, mutation or subscription"
+    },
+    "route": {
+      "type": "text",
+      "help": "The URL it was sent to: route:/graphql/"
     },
     "since": {
       "type": "time",

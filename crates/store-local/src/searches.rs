@@ -73,6 +73,15 @@ pub(crate) fn trace_search() -> search::Schema {
                     ))
                 }),
             ),
+            (
+                "peer",
+                Box::new(|term| {
+                    Ok((
+                        "id IN (SELECT trace_id FROM peers WHERE peer = ?)".into(),
+                        vec![Sql::Text(term.value.clone())],
+                    ))
+                }),
+            ),
             ("db", contains("db_aliases")),
             (
                 "task",

@@ -267,12 +267,17 @@ impl Reader {
     }
 
     /// One issue: its group row, endpoints, events over time and the requests it happened in (newest first).
+    /// One issue: what it is, and its traces and series over the period `query` gives (all of them without one).
     pub fn issue_detail(
         &self,
         fingerprint: &str,
+        query: &str,
         buckets: i64,
         limit: usize,
     ) -> Result<Option<Value>, ReadError> {
+        let (condition, mut params) = search::compile_where(query, &TRACE_SEARCH)?;
+        let now = search::now_us();
+        let (since, until) = search::period(query, now);
         let db = self.connect()?;
         let Some(mut row) = objects(
             &db,
@@ -282,17 +287,19 @@ impl Reader {
         .pop() else {
             return Ok(None);
         };
+        params.insert(0, Sql::Text(fingerprint.to_owned()));
         let rows = objects(
             &db,
             &format!(
-                "SELECT {LISTING} FROM traces WHERE id IN (SELECT trace_id FROM issue_traces WHERE fingerprint = ?) ORDER BY start"
+                "SELECT {LISTING} FROM traces WHERE id IN (SELECT trace_id FROM issue_traces WHERE fingerprint = ?) \
+                 AND ({condition}) ORDER BY start"
             ),
-            vec![Sql::Text(fingerprint.to_owned())],
+            params,
         )?;
         let series = if rows.is_empty() {
             Value::Array(vec![])
         } else {
-            stats(&rows, buckets, None, Some(search::now_us()))["series"].clone()
+            stats(&rows, buckets, since, Some(until.unwrap_or(now)))["series"].clone()
         };
         row.insert(
             "endpoints".into(),

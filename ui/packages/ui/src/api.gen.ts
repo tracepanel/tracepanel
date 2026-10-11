@@ -313,7 +313,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** One issue with its events over time and the requests it happened in. */
+        /**
+         * One issue with its events over time and the requests it happened in.
+         * @description With `q`, its series and requests are those within the search (since:, until:); without it, all of them.
+         */
         get: operations["getIssue"];
         put?: never;
         post?: never;
@@ -644,6 +647,8 @@ export interface components {
             method: string | null;
             /** @description For requests. */
             route: string | null;
+            /** @description For WebSocket events: the consumer, which names their group. */
+            view: string | null;
         };
         TracesOverview: {
             summary: components["schemas"]["StatsSummary"] | null;
@@ -1680,6 +1685,8 @@ export interface operations {
         parameters: {
             query: {
                 fingerprint: string;
+                /** @description Search query: free text plus key:value filters, e.g. route:/api/* status>=500 "timed out". */
+                q?: components["parameters"]["q"];
             };
             header?: never;
             path?: never;
@@ -1696,6 +1703,7 @@ export interface operations {
                     "application/json": components["schemas"]["IssueDetail"];
                 };
             };
+            400: components["responses"]["BadSearch"];
             404: components["responses"]["NotFound"];
         };
     };
