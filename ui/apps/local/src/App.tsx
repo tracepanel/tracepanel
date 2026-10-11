@@ -10,6 +10,9 @@ import {
   httpSource,
   LogoMark,
   MethodBadge,
+  RuntimeIcon,
+  runtimeKind,
+  runtimeName,
   type TabId,
   TraceList,
   type TraceRow,
@@ -241,12 +244,13 @@ function useTabRows(history: TabHistory | null): TraceRow[] {
   return history ? arrange(history, traces ?? []) : [];
 }
 
-/** What served the page: the language and its version, the framework in the tooltip ("Python 3.12 · Django 6.0"). */
+/** What served the page, as its mark and name; the versions in the tooltip ("Python 3.12 · Django 6.0"). */
 function RuntimeChip({ label }: { label: string }) {
-  const [language] = label.split(" · ");
+  const kind = runtimeKind(label);
   return (
     <span className="runtime-chip" title={`Served by ${label}`}>
-      {language}
+      {kind ? <RuntimeIcon kind={kind} /> : null}
+      {kind ? runtimeName(kind) : label.split(" · ")[0]}
     </span>
   );
 }

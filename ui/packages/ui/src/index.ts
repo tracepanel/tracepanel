@@ -15,6 +15,7 @@ export { Metrics } from "./Metrics";
 export * from "./PropTable";
 export { AliasChip, Empty, IssueChip, MethodBadge, RichText, RoutePath, StatusBadge } from "./primitives";
 export { RequestInfo } from "./RequestInfo";
+export { RuntimeIcon, type RuntimeKind, runtimeKind, runtimeName } from "./RuntimeIcon";
 export { SERVICE_KINDS, ServiceGraph, serviceWhere, systemName } from "./ServiceMap";
 export { SqlCode } from "./SqlCode";
 export { SqlList } from "./SqlList";

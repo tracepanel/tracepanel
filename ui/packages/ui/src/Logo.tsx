@@ -1,4 +1,4 @@
-import { cn } from "./lib/utils";
+import { cn } from "@tracepanel/ui/lib/utils";
 
 /**
  * The tracepanel mark: a trace waterfall, three nested spans stepping in; the deepest (the slowest call) is lime.

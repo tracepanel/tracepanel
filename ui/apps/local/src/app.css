@@ -115,6 +115,9 @@ a {
 }
 
 .runtime-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   padding: 0 6px;
   border: 1px solid var(--dt-border);
   border-radius: 6px;
