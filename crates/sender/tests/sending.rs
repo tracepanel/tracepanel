@@ -289,7 +289,7 @@ fn a_batch_refused_for_good_is_not_sent_again() {
 
 #[test]
 fn what_the_cloud_did_not_take_is_sent_by_the_next_agent() {
-    // Nothing listens on a port that was just freed.
+    // Nothing listens on a port freed a moment ago.
     let closed = {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         format!("http://{}", listener.local_addr().unwrap())
