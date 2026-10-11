@@ -62,12 +62,18 @@ export const NAV_GROUPS: { title: string | null; items: NavItem[] }[] = [
   },
   {
     title: "Data",
+    // Most used first: the queries are what tracepanel is about; emails are looked at least.
     items: [
-      { section: "services", label: "Services", icon: NetworkIcon },
       { section: "queries", label: "Database", icon: DatabaseIcon },
-      { section: "mails", label: "Emails", icon: MailIcon },
+      { section: "services", label: "Services", icon: NetworkIcon },
       { section: "logs", label: "Logs", icon: ScrollTextIcon },
-      // Last: what all of the above turned up. What failed, then what could be better.
+      { section: "mails", label: "Emails", icon: MailIcon },
+    ],
+  },
+  {
+    // Last, a group of its own: not data but what all of the above turned up. What failed, then what could be better.
+    title: "Problems",
+    items: [
       { section: "errors", label: "Errors", icon: BugIcon },
       { section: "issues", label: "Issues", icon: CircleAlertIcon },
     ],
