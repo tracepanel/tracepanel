@@ -11,3 +11,9 @@ minimumReleaseAge: 2880
 allowBuilds:
   esbuild: true
   lefthook: true
+# pnpm 12 asks when a package bundles agent skills. The repo's policy is one
+# skills home (.agents/skills/ at the repo root, hand-vendored and pinned in
+# .agents/SOURCES.md), so bundled skills stay denied rather than linked.
+permissions:
+  fallow:
+    skills: false
