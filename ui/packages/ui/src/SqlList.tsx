@@ -1,8 +1,8 @@
+import { cn } from "@tracepanel/ui/lib/utils";
 import { ChevronRightIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 import { ExplainView } from "./ExplainView";
 import { duration } from "./format";
-import { cn } from "./lib/utils";
 import { AliasChip, IssueChip } from "./primitives";
 import { SqlCode } from "./SqlCode";
 import type { ExplainPlan, IssueKind, Span } from "./types";

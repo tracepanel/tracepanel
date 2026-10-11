@@ -1,7 +1,7 @@
+import { cn } from "@tracepanel/ui/lib/utils";
 import { CheckIcon, CopyIcon } from "lucide-react";
 import { useState } from "react";
 import { Button } from "./components/ui/button";
-import { cn } from "./lib/utils";
 
 /** Copies `text` to the clipboard; the icon turns into a check for a moment. */
 export function CopyButton({ text, label = "Copy", className }: { text: string; label?: string; className?: string }) {

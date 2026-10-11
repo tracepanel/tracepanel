@@ -1,3 +1,4 @@
+import { cn } from "@tracepanel/ui/lib/utils";
 import {
   AppWindowIcon,
   CogIcon,
@@ -11,7 +12,6 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { duration } from "./format";
-import { cn } from "./lib/utils";
 import type { ServiceApp, ServiceEdge, ServiceMap, ServiceNode } from "./types";
 
 const SYSTEMS: Record<string, string> = {
