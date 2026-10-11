@@ -35,7 +35,7 @@ jobs:
       - run: cargo test --locked
 
   docs:
-    # The pages and the comments follow the style in .claude/skills/docs/SKILL.md.
+    # The pages and the comments follow the project's docs style; scripts/lint_docs.py checks what it can.
     name: docs
     runs-on: ubuntu-latest
     timeout-minutes: 5
