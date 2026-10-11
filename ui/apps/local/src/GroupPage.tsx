@@ -14,7 +14,7 @@ import { ArrowRightIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { CallsChart, Histogram, LatencyChart, Stat } from "./Charts";
 import { PeriodChip } from "./PeriodChip";
-import { RefreshControl, useRefresh } from "./refresh";
+import { RefreshControl, track, useRefresh } from "./refresh";
 import { type EntrySection, go, href, issueRoute, traceHref, withPeriod } from "./routes";
 import { ENTRY } from "./sections";
 import { TracesTable } from "./tables";
@@ -63,25 +63,19 @@ export function GroupPage({
   source: DataSource;
 }) {
   const [group, setGroup] = useState<Group | null | undefined>(undefined);
-  const { interval, tick } = useRefresh();
+  const { cycle, tick } = useRefresh();
   const entry = ENTRY[section];
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `tick` reloads on "refresh now".
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `tick` reloads on "refresh now", `cycle` on the clock.
   useEffect(() => {
     let cancelled = false;
-    const run = () =>
-      load(source, section, groupKey, period).then(
-        (result) => !cancelled && setGroup(result),
-        () => !cancelled && setGroup(null),
-      );
-    run();
-    const timer = interval
-      ? window.setInterval(() => document.visibilityState === "visible" && run(), interval)
-      : undefined;
+    track(load(source, section, groupKey, period)).then(
+      (result) => !cancelled && setGroup(result),
+      () => !cancelled && setGroup(null),
+    );
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
     };
-  }, [section, groupKey, period, source, interval, tick]);
+  }, [section, groupKey, period, source, cycle, tick]);
 
   if (group === undefined) return <Loading />;
   if (group === null || group.summary === null) {

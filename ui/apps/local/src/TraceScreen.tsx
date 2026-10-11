@@ -8,7 +8,7 @@ import {
   type TraceViewProps,
 } from "@tracepanel/ui";
 import { type ReactNode, useEffect, useState } from "react";
-import { useRefresh } from "./refresh";
+import { track, useRefresh } from "./refresh";
 
 /** A just-finished request may not be stored yet (the SDK writes in the background): retry briefly. */
 const TRACE_RETRIES = 6;
@@ -47,23 +47,19 @@ export function TraceScreen({
 }: TraceScreenProps) {
   const [trace, setTrace] = useState<Trace | null | undefined>(undefined);
   const [related, setRelated] = useState<Related | undefined>(undefined);
-  const { interval, tick } = useRefresh();
+  const { cycle, tick } = useRefresh();
   // Tasks a request enqueued finish later: keep looking while the trace is open.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `tick` reloads on "refresh now".
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `tick` reloads on "refresh now", `cycle` on the clock.
   useEffect(() => {
     let cancelled = false;
-    const load = () =>
-      source.related(id).then(
-        (result) => !cancelled && setRelated(result),
-        () => undefined,
-      );
-    load();
-    const timer = interval ? window.setInterval(load, interval) : undefined;
+    track(source.related(id)).then(
+      (result) => !cancelled && setRelated(result),
+      () => undefined,
+    );
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
     };
-  }, [id, source, interval, tick]);
+  }, [id, source, cycle, tick]);
   useEffect(() => {
     let cancelled = false;
     let timer: number | undefined;

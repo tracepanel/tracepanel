@@ -15,6 +15,17 @@
 
 @theme {
   --animate-loading: loading 1s ease-in-out infinite;
+  /* The refresh interval's progress; its duration is the interval, set where it is used. */
+  --animate-countdown: countdown 1s linear forwards;
+
+  @keyframes countdown {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
 
   @keyframes loading {
     from {

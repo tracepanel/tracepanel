@@ -6,13 +6,14 @@ import {
   type TracesOverview as Overview,
   percent,
   RoutePath,
+  SearchError,
 } from "@tracepanel/ui";
 import { Badge } from "@tracepanel/ui/components/ui/badge";
 import { Card } from "@tracepanel/ui/components/ui/card";
 import { ChevronRightIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { CallsChart, LatencyChart, Stat } from "./Charts";
-import { useRefresh } from "./refresh";
+import { track, useRefresh } from "./refresh";
 import { currentPeriod, endpointGroup, groupRoute, href, withPeriod } from "./routes";
 import { isoWithOffset } from "./time";
 
@@ -87,32 +88,27 @@ export function TracesOverview({
   const [failed, setFailed] = useState<string | null>(null);
   const [open, setOpen] = useState(readOpen);
 
-  const { interval, tick } = useRefresh();
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `tick` reloads on "refresh now".
+  const { cycle, tick } = useRefresh();
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `tick` reloads on "refresh now", `cycle` on the clock.
   useEffect(() => {
     let cancelled = false;
-    const load = () =>
-      source.tracesOverview(query, scope.groupBy).then(
-        (result) => {
-          if (cancelled) return;
-          setOverview(result);
-          setFailed(null);
-        },
-        (reason: unknown) => {
-          if (cancelled) return;
-          setOverview(null);
-          setFailed(reason instanceof Error ? reason.message : String(reason));
-        },
-      );
-    load();
-    const timer = interval
-      ? window.setInterval(() => document.visibilityState === "visible" && load(), interval)
-      : undefined;
+    // A rejected search is the query's fault, not a failed refresh.
+    track(source.tracesOverview(query, scope.groupBy), (error) => !(error instanceof SearchError)).then(
+      (result) => {
+        if (cancelled) return;
+        setOverview(result);
+        setFailed(null);
+      },
+      (reason: unknown) => {
+        if (cancelled) return;
+        setOverview(null);
+        setFailed(reason instanceof Error ? reason.message : String(reason));
+      },
+    );
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
     };
-  }, [query, scope.groupBy, source, interval, tick]);
+  }, [query, scope.groupBy, source, cycle, tick]);
 
   const toggle = () => {
     setOpen(!open);
