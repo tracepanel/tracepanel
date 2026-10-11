@@ -1,0 +1,20 @@
+# Dependabot maintains the ui/ workspace dependencies. The supply-chain window
+# (48 hours after a release) matches minimumReleaseAge in ui/pnpm-workspace.yaml.
+# Renovate owned this job before; Dependabot needs no token or app.
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: /ui/
+    schedule:
+      interval: weekly
+      day: monday
+      time: "02:00"
+    open-pull-requests-limit: 10
+    labels: [dependencies, ui]
+    cooldown:
+      default-days: 2
+    groups:
+      ui-minor-and-patch:
+        applies-to: version-updates
+        update-types: [minor, patch]
