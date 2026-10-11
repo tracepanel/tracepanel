@@ -41,7 +41,7 @@ export function TracePage({
               {
                 label: (
                   <>
-                    Trace <Mono className="text-[14px] font-normal">{id}</Mono>
+                    Trace <Mono className="text-base font-normal">{id}</Mono>
                   </>
                 ),
               },

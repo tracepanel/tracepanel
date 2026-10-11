@@ -114,7 +114,7 @@ export function SearchPalette({
             onValueChange={setText}
             placeholder="Trace id, name, path, or a search: status>=500, task:send_*"
           />
-          <CommandList className="max-h-[420px]">
+          <CommandList className="max-h-[26.25rem]">
             <CommandEmpty>No traces match.</CommandEmpty>
             {TRACE_ID.test(query.toUpperCase()) ? (
               <CommandGroup heading="Trace">
@@ -138,8 +138,8 @@ export function SearchPalette({
                       onSelect={() => close(() => openTo({ name: "trace", id: trace.id }))}
                     >
                       <MethodBadge method={badge} htmx={trace.htmx} />
-                      <span className="min-w-0 flex-1 truncate font-mono text-[14px]">{name}</span>
-                      <span className="text-[13px] text-muted-foreground tabular-nums">
+                      <span className="min-w-0 flex-1 truncate font-mono text-base">{name}</span>
+                      <span className="text-sm text-muted-foreground tabular-nums">
                         {duration(trace.duration)} · {ago(trace.start)}
                       </span>
                     </CommandItem>
@@ -160,10 +160,10 @@ export function SearchPalette({
                     onSelect={() => close(() => openTo(endpointGroup(row.method, row.route)))}
                   >
                     <MethodBadge method={row.method} />
-                    <span className="min-w-0 flex-1 truncate font-mono text-[14px]">
+                    <span className="min-w-0 flex-1 truncate font-mono text-base">
                       <RoutePath path={row.route} />
                     </span>
-                    <span className="text-[13px] text-muted-foreground tabular-nums">{row.calls} calls</span>
+                    <span className="text-sm text-muted-foreground tabular-nums">{row.calls} calls</span>
                   </CommandItem>
                 ))}
               </CommandGroup>
@@ -177,8 +177,8 @@ export function SearchPalette({
                     onSelect={() => close(() => openTo(issueRoute(issue.fingerprint, issue.kind)))}
                   >
                     <IssueIcon kind={issue.kind} />
-                    <span className="min-w-0 flex-1 truncate text-[14px]">{issue.title}</span>
-                    <span className="text-[13px] text-muted-foreground tabular-nums">last {ago(issue.last_seen)}</span>
+                    <span className="min-w-0 flex-1 truncate text-base">{issue.title}</span>
+                    <span className="text-sm text-muted-foreground tabular-nums">last {ago(issue.last_seen)}</span>
                   </CommandItem>
                 ))}
               </CommandGroup>

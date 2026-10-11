@@ -1,7 +1,7 @@
 import { type Counts, Logo, LogoMark } from "@tracepanel/ui";
 import { Button } from "@tracepanel/ui/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@tracepanel/ui/components/ui/tooltip";
-import { cn } from "@tracepanel/ui/lib/utils";
+import { cn, rem } from "@tracepanel/ui/lib/utils";
 import {
   BracesIcon,
   BugIcon,
@@ -121,7 +121,7 @@ export function Sidebar({
             aria-label="Collapse the sidebar"
             onClick={() => onCollapse(true)}
           >
-            <PanelLeftCloseIcon className="size-[18px]" />
+            <PanelLeftCloseIcon className="size-[1.125rem]" />
           </button>
         ) : null}
       </div>
@@ -133,18 +133,18 @@ export function Sidebar({
             aria-label="Search traces"
             className="grid size-11 place-items-center rounded-lg border bg-[var(--dt-field)] text-muted-foreground transition-colors hover:border-[var(--dt-border-strong)] hover:text-foreground"
           >
-            <SearchIcon className="size-[18px]" />
+            <SearchIcon className="size-[1.125rem]" />
           </button>
         </RailTip>
       ) : (
         <button
           type="button"
           onClick={onSearch}
-          className="flex items-center gap-2.5 rounded-lg border bg-[var(--dt-field)] px-3 py-2 text-left whitespace-nowrap text-[15px] text-muted-foreground transition-colors hover:border-[var(--dt-border-strong)] hover:text-foreground"
+          className="flex items-center gap-2.5 rounded-lg border bg-[var(--dt-field)] px-3 py-2 text-left whitespace-nowrap text-md text-muted-foreground transition-colors hover:border-[var(--dt-border-strong)] hover:text-foreground"
         >
           <SearchIcon className="size-4" />
           Search traces
-          <kbd className="ml-auto rounded-md bg-muted px-1.5 py-0.5 font-mono text-[12px] text-text-2">⌘K</kbd>
+          <kbd className="ml-auto rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs text-text-2">⌘K</kbd>
         </button>
       )}
       <nav className={cn("grid", rail ? "justify-items-center gap-4" : "gap-5")}>
@@ -155,7 +155,7 @@ export function Sidebar({
                 <span className="mx-auto mb-3 h-px w-6 bg-border" />
               ) : null
             ) : group.title ? (
-              <span className="px-3.5 pb-1 text-[11.5px] font-semibold tracking-[0.08em] text-muted-foreground/80 uppercase">
+              <span className="px-3.5 pb-1 text-2xs font-semibold tracking-[0.08em] text-muted-foreground/80 uppercase">
                 {group.title}
               </span>
             ) : null}
@@ -172,7 +172,7 @@ export function Sidebar({
                     aria-current={current ? "page" : undefined}
                     aria-label={rail ? (count ? `${label}, ${count}` : label) : undefined}
                     className={cn(
-                      "relative flex items-center rounded-lg text-[17px] font-medium whitespace-nowrap text-sidebar-foreground no-underline",
+                      "relative flex items-center rounded-lg text-lg font-medium whitespace-nowrap text-sidebar-foreground no-underline",
                       rail ? "size-11 justify-center" : "gap-3.5 px-3.5 py-2.5",
                       "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                       "focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none",
@@ -185,7 +185,7 @@ export function Sidebar({
                       count ? (
                         <span
                           className={cn(
-                            "absolute -top-1 -right-1.5 min-w-[18px] rounded-full px-1 text-center font-mono text-[10.5px] leading-[18px] font-semibold tabular-nums ring-2 ring-sidebar",
+                            "absolute -top-1 -right-1.5 min-w-[1.125rem] rounded-full px-1 text-center font-mono text-2xs leading-[1.125rem] font-semibold tabular-nums ring-2 ring-sidebar",
                             tone === "error" ? "bg-error-soft text-error" : "bg-warn-soft text-warn",
                           )}
                         >
@@ -198,7 +198,7 @@ export function Sidebar({
                         {count ? (
                           <span
                             className={cn(
-                              "ml-auto min-w-6 rounded-full px-2 text-center font-mono text-[12.5px] leading-6 font-semibold tabular-nums",
+                              "ml-auto min-w-6 rounded-full px-2 text-center font-mono text-xs leading-6 font-semibold tabular-nums",
                               tone === "error" ? "bg-error-soft text-error" : "bg-warn-soft text-warn",
                             )}
                           >
@@ -243,13 +243,13 @@ export function Sidebar({
                 aria-label="Expand the sidebar"
                 onClick={() => onCollapse(false)}
               >
-                <PanelLeftOpenIcon className="size-[18px]" />
+                <PanelLeftOpenIcon className="size-[1.125rem]" />
               </button>
             </RailTip>
           ) : null}
         </footer>
       ) : (
-        <footer className="mt-auto flex items-center justify-between gap-2 border-t pt-4 pl-2.5 text-[13.5px] text-muted-foreground">
+        <footer className="mt-auto flex items-center justify-between gap-2 border-t pt-4 pl-2.5 text-sm text-muted-foreground">
           <span>
             Local · stored in <code className="font-mono">.tracepanel/</code>
           </span>
@@ -292,13 +292,13 @@ function RailTip({
         side="right"
         sideOffset={12}
         arrow={false}
-        className="flex items-center gap-2 rounded-lg border bg-popover px-3 py-1.5 text-[13.5px] font-medium text-popover-foreground shadow-[var(--dt-popover-shadow)]"
+        className="flex items-center gap-2 rounded-lg border bg-popover px-3 py-1.5 text-sm font-medium text-popover-foreground shadow-[var(--dt-popover-shadow)]"
       >
         {label}
         {detail ? (
           <span
             className={cn(
-              "rounded-md px-1.5 font-mono text-[11.5px] leading-5 tabular-nums",
+              "rounded-md px-1.5 font-mono text-2xs leading-5 tabular-nums",
               tone === "error"
                 ? "bg-error-soft text-error"
                 : tone === "warn"
@@ -366,12 +366,13 @@ export function ThemeToggle({ compact = false, side = "top" }: { compact?: boole
 }
 
 const WIDTH_KEY = "tracepanel:sidebar-width";
-const DEFAULT_WIDTH = 296;
-const MIN_WIDTH = 220;
-const MAX_WIDTH = 440;
+// In rem, so the defaults follow the density; a dragged width is the reader's, in pixels.
+const DEFAULT_WIDTH = () => Math.round(rem(18.5));
+const MIN_WIDTH = () => Math.round(rem(13.75));
+const MAX_WIDTH = () => Math.round(rem(27.5));
 
 function clampWidth(width: number): number {
-  return Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, Math.round(width)));
+  return Math.min(MAX_WIDTH(), Math.max(MIN_WIDTH(), Math.round(width)));
 }
 
 /** The sidebar's width, dragged by its edge and remembered in this browser. */
@@ -379,9 +380,9 @@ export function useSidebarWidth(): { width: number; resize: (width: number) => v
   const [width, setWidth] = useState(() => {
     try {
       const saved = Number(localStorage.getItem(WIDTH_KEY));
-      return saved ? clampWidth(saved) : DEFAULT_WIDTH;
+      return saved ? clampWidth(saved) : DEFAULT_WIDTH();
     } catch {
-      return DEFAULT_WIDTH;
+      return DEFAULT_WIDTH();
     }
   });
   const resize = (next: number) => {
@@ -420,14 +421,14 @@ export function SidebarHandle({ width, resize }: { width: number; resize: (width
       role="separator"
       aria-orientation="vertical"
       aria-label="Resize the sidebar"
-      aria-valuemin={MIN_WIDTH}
-      aria-valuemax={MAX_WIDTH}
+      aria-valuemin={MIN_WIDTH()}
+      aria-valuemax={MAX_WIDTH()}
       aria-valuenow={width}
       tabIndex={0}
       title="Drag to resize · double-click to reset"
-      className="absolute top-0 -right-1 z-10 h-full w-2 cursor-col-resize outline-none after:absolute after:inset-y-0 after:left-[3px] after:w-0.5 after:bg-transparent after:transition-colors hover:after:bg-brand/50 focus-visible:after:bg-brand"
+      className="absolute top-0 -right-1 z-10 h-full w-2 cursor-col-resize outline-none after:absolute after:inset-y-0 after:left-[0.1875rem] after:w-0.5 after:bg-transparent after:transition-colors hover:after:bg-brand/50 focus-visible:after:bg-brand"
       onPointerDown={start}
-      onDoubleClick={() => resize(DEFAULT_WIDTH)}
+      onDoubleClick={() => resize(DEFAULT_WIDTH())}
       onKeyDown={(event) => {
         if (event.key === "ArrowLeft") resize(width - 16);
         if (event.key === "ArrowRight") resize(width + 16);
@@ -437,8 +438,8 @@ export function SidebarHandle({ width, resize }: { width: number; resize: (width
 }
 
 const COLLAPSED_KEY = "tracepanel:sidebar-collapsed";
-/** The rail: 44px items between 12px sides, and the border. */
-export const RAIL_WIDTH = 69;
+/** The rail: its items (2.75rem) between its sides (0.75rem each), and the border. */
+export const RAIL_WIDTH = "calc(4.25rem + 1px)";
 /** How long the column takes to open or close. */
 const COLLAPSE_MS = 200;
 

@@ -64,7 +64,7 @@ function Tooltip({ hover }: { hover: Hover | null }) {
   if (!hover) return null;
   return (
     <div
-      className="pointer-events-none absolute z-10 grid min-w-36 -translate-x-1/2 -translate-y-[calc(100%+10px)] gap-0.5 rounded-md border bg-popover px-2.5 py-2 text-[14px] whitespace-nowrap text-popover-foreground shadow-md [&_i]:inline-block [&_i]:size-2.5 [&_i]:rounded-[3px] [&_span]:flex [&_span]:items-center [&_span]:gap-1.5"
+      className="pointer-events-none absolute z-10 grid min-w-36 -translate-x-1/2 -translate-y-[calc(100%+10px)] gap-0.5 rounded-md border bg-popover px-2.5 py-2 text-base whitespace-nowrap text-popover-foreground shadow-md [&_i]:inline-block [&_i]:size-2.5 [&_i]:rounded-[0.1875rem] [&_span]:flex [&_span]:items-center [&_span]:gap-1.5"
       style={{ left: hover.x, top: hover.y }}
     >
       {hover.content}
@@ -85,7 +85,7 @@ function Frame({
   const [hover, setHover] = useState<Hover | null>(null);
   return (
     <Card className="m-0 gap-2 rounded-xl px-5 pt-4 pb-3 shadow-none">
-      <div className="flex items-center justify-between gap-3 text-[16px] font-semibold">
+      <div className="flex items-center justify-between gap-3 text-md font-semibold">
         <span>{title}</span>
         {legend}
       </div>
@@ -168,7 +168,7 @@ function Legend({
   extra?: ReactNode;
 }) {
   return (
-    <span className="flex items-center gap-1.5 text-[14px] font-medium text-muted-foreground">
+    <span className="flex items-center gap-1.5 text-base font-medium text-muted-foreground">
       {items.map((item) => (
         <button
           key={item.key}
@@ -179,7 +179,7 @@ function Legend({
           className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-0.5 hover:bg-accent hover:text-foreground aria-[pressed=false]:opacity-45 aria-[pressed=false]:[&>span]:line-through"
         >
           <i
-            className={cn("inline-block size-2.5 rounded-[3px]", item.className)}
+            className={cn("inline-block size-2.5 rounded-[0.1875rem]", item.className)}
             style={item.color ? { background: item.color } : undefined}
           />
           <span>{item.label}</span>
@@ -604,17 +604,17 @@ export function Stat({
 }) {
   const body = (
     <>
-      <span className="text-[14px] font-medium text-muted-foreground">{label}</span>
+      <span className="text-base font-medium text-muted-foreground">{label}</span>
       <span
         className={cn(
-          "text-[30px] leading-tight font-semibold tracking-[-0.02em] tabular-nums",
+          "text-4xl leading-tight font-semibold tracking-[-0.02em] tabular-nums",
           tone === "warn" && "text-warn",
           tone === "error" && "text-error",
         )}
       >
         {value}
       </span>
-      {sub ? <span className="text-[14px] text-text-2">{sub}</span> : null}
+      {sub ? <span className="text-base text-text-2">{sub}</span> : null}
     </>
   );
   return onClick ? (

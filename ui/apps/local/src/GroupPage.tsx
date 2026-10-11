@@ -166,7 +166,7 @@ export function GroupPage({
       {/* What failed, then what could be better: the same split as the menu's Errors and Issues. */}
       {errors.length > 0 ? (
         <section>
-          <h2 className="mb-2.5 text-[19px] font-semibold">
+          <h2 className="mb-2.5 text-xl font-semibold">
             Errors{" "}
             <span className="font-normal text-muted-foreground">
               · in {s.errors} of {s.calls} calls
@@ -180,7 +180,7 @@ export function GroupPage({
       ) : null}
       {findings.length > 0 ? (
         <section>
-          <h2 className="mb-2.5 text-[19px] font-semibold">
+          <h2 className="mb-2.5 text-xl font-semibold">
             Issues{" "}
             <span className="font-normal text-muted-foreground">
               · in {s.with_issues} of {s.calls} calls
@@ -195,11 +195,11 @@ export function GroupPage({
 
       <div className="grid gap-7">
         <section>
-          <h2 className="mb-2.5 text-[19px] font-semibold">Slowest calls</h2>
+          <h2 className="mb-2.5 text-xl font-semibold">Slowest calls</h2>
           <TracesTable items={group.slowest} selectedId={null} hrefFor={traceHref} />
         </section>
         <section>
-          <h2 className="mb-2.5 text-[19px] font-semibold">Recent calls</h2>
+          <h2 className="mb-2.5 text-xl font-semibold">Recent calls</h2>
           <TracesTable items={group.recent} selectedId={null} hrefFor={traceHref} />
         </section>
       </div>
@@ -212,12 +212,12 @@ function Resolvers({ operation }: { operation: GraphqlDetail }) {
   const slowest = Math.max(...operation.resolvers.map((row) => row.total), 1);
   return (
     <section className="grid grid-cols-[minmax(0,1fr)] gap-2.5">
-      <h2 className="text-[19px] font-semibold">
+      <h2 className="text-xl font-semibold">
         Resolvers{" "}
         <span className="font-normal text-muted-foreground">· your resolvers in this operation, most time first</span>
       </h2>
       {operation.document ? (
-        <pre className="m-0 overflow-auto rounded-md border bg-muted/60 px-4 py-3 font-mono text-[13px] whitespace-pre-wrap">
+        <pre className="m-0 overflow-auto rounded-md border bg-muted/60 px-4 py-3 font-mono text-sm whitespace-pre-wrap">
           {operation.document}
         </pre>
       ) : null}

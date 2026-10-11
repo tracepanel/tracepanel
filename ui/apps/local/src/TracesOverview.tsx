@@ -125,7 +125,7 @@ export function TracesOverview({
 
   if (failed) {
     return (
-      <p className="pb-6 text-[13px] text-error" role="alert">
+      <p className="pb-6 text-sm text-error" role="alert">
         The overview can't use this search: {failed}
       </p>
     );
@@ -173,14 +173,14 @@ export function TracesOverview({
           <ChevronRightIcon
             className={`size-5 text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`}
           />
-          <h2 className="text-[19px] font-semibold">Overview</h2>
+          <h2 className="text-xl font-semibold">Overview</h2>
           {open ? (
-            <span className="text-[14px] text-muted-foreground">
+            <span className="text-base text-muted-foreground">
               {new Date(s.first_seen / 1000).toLocaleString()} – {new Date(s.last_seen / 1000).toLocaleTimeString()}
             </span>
           ) : (
             // Folded: the numbers that matter, on one line.
-            <span className="flex flex-wrap gap-x-4 text-[15px] text-text-2 tabular-nums">
+            <span className="flex flex-wrap gap-x-4 text-md text-text-2 tabular-nums">
               <span>
                 {s.calls} {s.calls === 1 ? scope.noun : nouns}
               </span>
@@ -292,7 +292,7 @@ function OperationList({
 }) {
   return (
     <Card className="gap-2 px-4 py-3.5 shadow-none">
-      <h3 className="text-[16px] font-semibold">{title}</h3>
+      <h3 className="text-md font-semibold">{title}</h3>
       {items.length === 0 ? <p className="text-sm text-muted-foreground">{empty}</p> : null}
       <ul className="grid">
         {items.map((item) => (
@@ -316,13 +316,13 @@ function OperationList({
                 </>
               ) : (
                 <>
-                  <Badge variant="outline" className="font-mono text-[11px] uppercase">
+                  <Badge variant="outline" className="font-mono text-2xs uppercase">
                     {KIND_BADGES[item.kind] ?? item.kind}
                   </Badge>
                   <span className="min-w-0 flex-1 truncate font-mono">{item.name}</span>
                 </>
               )}
-              <span className="text-[14px] whitespace-nowrap text-muted-foreground">
+              <span className="text-base whitespace-nowrap text-muted-foreground">
                 {item.calls} {item.calls === 1 ? "call" : "calls"}
               </span>
               <b

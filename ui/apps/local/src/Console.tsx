@@ -129,7 +129,7 @@ export function Console({ route, source }: { route: Route; source: DataSource })
         "grid h-full grid-cols-[var(--sidebar)_minmax(0,1fr)] max-[980px]:grid-cols-1 max-[980px]:grid-rows-[auto_minmax(0,1fr)]",
         moving && "transition-[grid-template-columns] duration-200 ease-out motion-reduce:transition-none",
       )}
-      style={{ "--sidebar": `${collapsed ? RAIL_WIDTH : sidebar.width}px` } as CSSProperties}
+      style={{ "--sidebar": collapsed ? RAIL_WIDTH : `${sidebar.width}px` } as CSSProperties}
     >
       {/* Where the sidebar has no room: a bar with the menu and search, the sidebar in a drawer. */}
       <header className="hidden items-center gap-3 border-b bg-sidebar px-4 py-2.5 max-[980px]:flex">
@@ -146,7 +146,7 @@ export function Console({ route, source }: { route: Route; source: DataSource })
       </header>
       <Dialog open={menu} onOpenChange={setMenu}>
         <DialogContent
-          className="top-0 left-0 h-full w-[280px] max-w-[85vw] translate-x-0 translate-y-0 rounded-none border-0 border-r p-0 sm:max-w-[280px]"
+          className="top-0 left-0 h-full w-[17.5rem] max-w-[85vw] translate-x-0 translate-y-0 rounded-none border-0 border-r p-0 sm:max-w-[17.5rem]"
           showCloseButton={false}
         >
           <DialogTitle className="sr-only">Menu</DialogTitle>

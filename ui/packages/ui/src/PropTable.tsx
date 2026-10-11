@@ -16,12 +16,12 @@ export interface PropRow {
 /** Label / value rows with a copy button per value; the label column fits the longest label. */
 export function PropTable({ rows }: { rows: readonly PropRow[] }) {
   return (
-    <dl className="m-0 grid grid-cols-[minmax(110px,max-content)_minmax(0,1fr)_auto] text-[14.5px]">
+    <dl className="m-0 grid grid-cols-[minmax(110px,max-content)_minmax(0,1fr)_auto] text-base">
       {rows.map((row) =>
         row.heading ? (
           <div
             key={row.id ?? row.label}
-            className="col-span-3 flex items-baseline gap-1.5 pt-4 pb-1 text-[12px] font-semibold tracking-wide text-muted-foreground uppercase"
+            className="col-span-3 flex items-baseline gap-1.5 pt-4 pb-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase"
           >
             {row.label}
             <span className="font-normal tabular-nums">{row.value}</span>
@@ -30,7 +30,7 @@ export function PropTable({ rows }: { rows: readonly PropRow[] }) {
           <div key={row.id ?? row.label} className="group/row contents">
             <dt className="flex min-h-10 items-center border-b py-1.5 pr-5 text-muted-foreground">{row.label}</dt>
             <dd
-              className={`m-0 flex min-h-10 min-w-0 items-center border-b py-1.5 break-all ${row.mono ? "font-mono text-[14px]" : ""}`}
+              className={`m-0 flex min-h-10 min-w-0 items-center border-b py-1.5 break-all ${row.mono ? "font-mono text-base" : ""}`}
             >
               {row.value}
             </dd>

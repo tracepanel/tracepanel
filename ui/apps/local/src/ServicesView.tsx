@@ -67,12 +67,12 @@ export function byProject(apps: ServiceApp[]): App[] {
 function Name({ icon, name, detail }: { icon: ReactNode; name: string; detail: string | null }) {
   return (
     <span className="flex items-center gap-3">
-      <span className="grid size-9 shrink-0 place-items-center rounded-lg border bg-muted/60 text-text-2 [&_svg]:size-[18px]">
+      <span className="grid size-9 shrink-0 place-items-center rounded-lg border bg-muted/60 text-text-2 [&_svg]:size-[1.125rem]">
         {icon}
       </span>
       <span className="min-w-0">
         <span className="block font-medium">{name}</span>
-        {detail ? <Mono className="block truncate text-[13px] text-muted-foreground">{detail}</Mono> : null}
+        {detail ? <Mono className="block truncate text-sm text-muted-foreground">{detail}</Mono> : null}
       </span>
     </span>
   );
@@ -82,14 +82,14 @@ function AppRow({ app, slowest }: { app: App; slowest: number }) {
   const kind = app.runtime ? runtimeKind(app.runtime) : null;
   return (
     <Tr tone={app.errors ? "error" : undefined} href={href(appTarget(app.busiest))}>
-      <Td className="max-w-[360px]">
+      <Td className="max-w-[22.5rem]">
         <Name icon={kind ? <RuntimeIcon kind={kind} /> : null} name={app.service} detail={app.runtime} />
       </Td>
       <Td className="text-muted-foreground">App</Td>
       <Td>
         <span className="flex flex-wrap gap-1">
           {app.roles.map((role) => (
-            <Badge key={role.role} variant="outline" className="text-[12px]">
+            <Badge key={role.role} variant="outline" className="text-xs">
               {role.role}
             </Badge>
           ))}
@@ -141,14 +141,14 @@ export function ServicesView({ map }: { map: ServiceMap }) {
       ))}
       {map.services.map((node) => (
         <Tr key={node.id} tone={node.errors ? "error" : undefined} href={href(target(node))}>
-          <Td className="max-w-[360px]">
+          <Td className="max-w-[22.5rem]">
             <Name icon={<ServiceIcon node={node} />} name={systemName(node)} detail={serviceWhere(node)} />
           </Td>
           <Td className="text-muted-foreground">{SERVICE_KINDS[node.kind]}</Td>
           <Td>
             <span className="flex flex-wrap gap-1">
               {callers(node).map((role) => (
-                <Badge key={role} variant="outline" className="text-[12px]">
+                <Badge key={role} variant="outline" className="text-xs">
                   {role}
                 </Badge>
               ))}

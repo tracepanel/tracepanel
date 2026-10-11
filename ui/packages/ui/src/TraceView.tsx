@@ -274,7 +274,7 @@ export function TraceView({
     explore.length > 0 ? (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm" className="h-7 shrink-0 gap-1.5 px-2.5 text-[13px] shadow-none">
+          <Button variant="outline" size="sm" className="h-7 shrink-0 gap-1.5 px-2.5 text-sm shadow-none">
             <CompassIcon />
             Explore
             <ChevronDownIcon className="text-muted-foreground" />

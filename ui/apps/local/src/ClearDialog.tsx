@@ -86,7 +86,7 @@ export function ClearDialog({
         {deletable ? (
           <label
             htmlFor={checkboxId}
-            className="flex cursor-pointer items-start gap-3 rounded-lg border p-3.5 text-[14px] has-[[data-state=checked]]:border-error/40 has-[[data-state=checked]]:bg-error/5"
+            className="flex cursor-pointer items-start gap-3 rounded-lg border p-3.5 text-base has-[[data-state=checked]]:border-error/40 has-[[data-state=checked]]:bg-error/5"
           >
             <Checkbox
               id={checkboxId}
@@ -108,7 +108,7 @@ export function ClearDialog({
             </span>
           </label>
         ) : null}
-        {error ? <p className="text-[14px] text-error">{error}</p> : null}
+        {error ? <p className="text-base text-error">{error}</p> : null}
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
             Cancel

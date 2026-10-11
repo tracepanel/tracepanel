@@ -23,7 +23,7 @@ export function DataTable({
         dense && "[&_td]:px-3 [&_td:first-child]:pl-4 [&_th]:px-3 [&_th:first-child]:pl-4",
       )}
     >
-      <Table className="text-[16px]">
+      <Table className="text-md">
         <TableHeader className="bg-muted">
           <TableRow className="hover:bg-transparent">{head}</TableRow>
         </TableHeader>
@@ -37,7 +37,7 @@ export function Th({ num, className, ...props }: ComponentProps<typeof TableHead
   return (
     <TableHead
       className={cn(
-        "h-12 px-5 text-[13px] font-semibold tracking-wide text-muted-foreground uppercase first:pl-6",
+        "h-12 px-5 text-sm font-semibold tracking-wide text-muted-foreground uppercase first:pl-6",
         num && "text-right",
         className,
       )}
@@ -145,8 +145,8 @@ export function PageHeader({
 }) {
   return (
     <header className="flex min-w-0 items-center gap-4 px-10 pt-8">
-      <h1 className="shrink-0 text-[28px] font-semibold tracking-tight">{title}</h1>
-      {description ? <p className="min-w-0 flex-1 truncate text-[15px] text-muted-foreground">{description}</p> : null}
+      <h1 className="shrink-0 text-3xl font-semibold tracking-tight">{title}</h1>
+      {description ? <p className="min-w-0 flex-1 truncate text-md text-muted-foreground">{description}</p> : null}
       {actions ? <div className="ml-auto">{actions}</div> : null}
     </header>
   );
@@ -182,7 +182,7 @@ export function LoadMore({ label, loading, onMore }: { label: string; loading: b
 /** Where this page sits: section › item; earlier crumbs are links. */
 export function Breadcrumbs({ items }: { items: readonly { label: ReactNode; href?: string }[] }) {
   return (
-    <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-[15px]">
+    <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-md">
       {items.map((item, index) => (
         // Only the current page (the last crumb, no link) shrinks and truncates; the links keep their width.
         <span
@@ -220,7 +220,7 @@ const LEVEL_TONE: Record<string, string> = {
 export function LevelBadge({ level }: { level: string }) {
   return (
     <span
-      className={`inline-flex rounded-md border px-1.5 py-px font-mono text-[11.5px] font-semibold tracking-wide uppercase ${LEVEL_TONE[level] ?? LEVEL_TONE["debug"]}`}
+      className={`inline-flex rounded-md border px-1.5 py-px font-mono text-2xs font-semibold tracking-wide uppercase ${LEVEL_TONE[level] ?? LEVEL_TONE["debug"]}`}
     >
       {level}
     </span>

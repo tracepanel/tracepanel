@@ -537,7 +537,7 @@ function Details({ node, trace, links }: { node: Node; trace: Trace; links?: Tra
       run?.name ?? (node.type === "waiting" ? String(node.span.attrs["task.name"] ?? node.span.name) : "task");
     return (
       <div className="mx-4 mt-3 mb-4 grid gap-3 rounded-lg border bg-card p-4">
-        <p className="text-[13px] font-semibold tracking-wide text-muted-foreground uppercase">
+        <p className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
           task ·{" "}
           {run
             ? `started ${duration(Math.max(run.start - trace.start, 0))} after this request · took ${duration(run.duration)}`
@@ -557,7 +557,7 @@ function Details({ node, trace, links }: { node: Node; trace: Trace; links?: Tra
           </a>
         ) : null}
         {run ? null : (
-          <p className="text-[13px] text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             It shows up here once a worker has run it (is a worker running?).
           </p>
         )}
@@ -567,10 +567,10 @@ function Details({ node, trace, links }: { node: Node; trace: Trace; links?: Tra
   if (node.type === "log") {
     return (
       <div className="mx-4 mt-3 mb-4 grid gap-3 rounded-lg border bg-card p-4">
-        <p className="text-[13px] font-semibold tracking-wide text-muted-foreground uppercase">
+        <p className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
           Log · {node.log.level} · {node.log.logger}
         </p>
-        <pre className="m-0 overflow-auto rounded-md border bg-muted/60 px-4 py-3 font-mono text-[13px] whitespace-pre-wrap">
+        <pre className="m-0 overflow-auto rounded-md border bg-muted/60 px-4 py-3 font-mono text-sm whitespace-pre-wrap">
           {node.log.exception ? `${node.log.message}\n\n${node.log.exception}` : node.log.message}
         </pre>
       </div>
@@ -579,7 +579,7 @@ function Details({ node, trace, links }: { node: Node; trace: Trace; links?: Tra
   if (node.type === "error") {
     return (
       <div className="mx-4 mt-3 mb-4 grid gap-3 rounded-lg border bg-card p-4">
-        <p className="text-[13px] font-semibold tracking-wide text-muted-foreground uppercase">Error</p>
+        <p className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">Error</p>
         <p className="dt-error-message">
           <b>{node.error.type.replace(/^builtins\./, "")}</b>: {node.error.message}
         </p>
@@ -591,14 +591,14 @@ function Details({ node, trace, links }: { node: Node; trace: Trace; links?: Tra
     const origins = new Set(node.spans.map((span) => String(span.attrs["code.origin"] ?? "")));
     return (
       <div className="mx-4 mt-3 mb-4 grid gap-3 rounded-lg border bg-card p-4">
-        <p className="text-[13px] font-semibold tracking-wide text-muted-foreground uppercase">
+        <p className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
           {node.spans.length} similar {first?.kind === "cache" ? "cache calls" : "queries"} ·{" "}
           {duration(node.spans.reduce((sum, span) => sum + span.duration, 0))} total
         </p>
         {first?.kind === "sql" ? (
           <SqlCode sql={String(first.attrs["db.statement"] ?? "")} vendor={String(first.attrs["db.vendor"] ?? "")} />
         ) : null}
-        <p className="flex flex-wrap items-center gap-2 text-[14px] text-muted-foreground [&_code]:rounded [&_code]:bg-muted [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[13px] [&_code]:text-foreground">
+        <p className="flex flex-wrap items-center gap-2 text-base text-muted-foreground [&_code]:rounded [&_code]:bg-muted [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-sm [&_code]:text-foreground">
           from{" "}
           {[...origins].map((origin) => (
             <code key={origin}>{origin}</code>
@@ -616,7 +616,7 @@ function Details({ node, trace, links }: { node: Node; trace: Trace; links?: Tra
   const offset = duration(Math.max(span.start - trace.start, 0));
   return (
     <div className="mx-4 mt-3 mb-4 grid gap-3 rounded-lg border bg-card p-4">
-      <p className="text-[13px] font-semibold tracking-wide text-muted-foreground uppercase">
+      <p className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
         {span.kind === "http" ? "request" : span.kind} · started at +{offset} · took {duration(span.duration)}
       </p>
       {span.kind === "sql" ? (

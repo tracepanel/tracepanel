@@ -19,7 +19,7 @@ function initials(user: User): string {
 
 function Avatar({ user }: { user: User | null }) {
   return (
-    <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-brand-soft text-[12px] font-semibold text-brand">
+    <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-brand-soft text-xs font-semibold text-brand">
       {user ? initials(user) : <UserRoundIcon className="size-4" />}
     </span>
   );
@@ -28,7 +28,7 @@ function Avatar({ user }: { user: User | null }) {
 function Role({ user }: { user: User }) {
   const role = user.is_superuser ? "superuser" : user.is_staff ? "staff" : null;
   return role ? (
-    <span className="rounded border border-brand/30 bg-brand-soft px-1.5 py-0.5 text-[11px] text-brand">{role}</span>
+    <span className="rounded border border-brand/30 bg-brand-soft px-1.5 py-0.5 text-2xs text-brand">{role}</span>
   ) : null;
 }
 
@@ -83,7 +83,7 @@ export function UserSwitcher({ source, onSwitched }: { source: DataSource; onSwi
         <Button
           variant="outline"
           size="sm"
-          className="h-7 max-w-44 gap-1.5 px-2 text-[13px] shadow-none"
+          className="h-7 max-w-44 gap-1.5 px-2 text-sm shadow-none"
           title={current ? "Change user (development only)" : "Set user (development only)"}
         >
           {current ? (
@@ -103,23 +103,23 @@ export function UserSwitcher({ source, onSwitched }: { source: DataSource; onSwi
       <PopoverContent
         align="end"
         collisionPadding={8}
-        className="flex max-h-[var(--radix-popover-content-available-height)] w-[360px] flex-col overflow-hidden p-0"
+        className="flex max-h-[var(--radix-popover-content-available-height)] w-[22.5rem] flex-col overflow-hidden p-0"
       >
         <div className="grid gap-1 border-b px-4 pt-4 pb-3">
-          <p className="text-[14px] font-semibold">View this site as</p>
-          <p className="text-[12.5px] text-muted-foreground">
+          <p className="text-base font-semibold">View this site as</p>
+          <p className="text-xs text-muted-foreground">
             Logs this browser in as the user, without a password. Development only.
           </p>
         </div>
         <div className="flex items-center gap-3 border-b px-4 py-3">
           <Avatar user={current} />
           <span className="grid min-w-0 flex-1">
-            <span className="text-[12px] text-muted-foreground">Now</span>
+            <span className="text-xs text-muted-foreground">Now</span>
             <span className="truncate font-medium">{current ? current.username : "Anonymous"}</span>
           </span>
           {current ? <Role user={current} /> : null}
           {current ? (
-            <Button variant="outline" size="sm" className="h-7 gap-1.5 text-[13px]" onClick={() => pick(null)}>
+            <Button variant="outline" size="sm" className="h-7 gap-1.5 text-sm" onClick={() => pick(null)}>
               <LogOutIcon />
               Log out
             </Button>
@@ -153,7 +153,7 @@ export function UserSwitcher({ source, onSwitched }: { source: DataSource; onSwi
             </CommandGroup>
           </CommandList>
         </Command>
-        {error ? <p className="border-t px-4 py-2 text-[13px] text-error">{error}</p> : null}
+        {error ? <p className="border-t px-4 py-2 text-sm text-error">{error}</p> : null}
       </PopoverContent>
     </Popover>
   );

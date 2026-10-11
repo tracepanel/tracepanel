@@ -78,6 +78,27 @@
   --color-faint: var(--dt-faint);
   --color-text-2: var(--dt-text-2);
   --color-text-3: var(--dt-text-3);
+  /* The type scale (styles.css): text-2xs … text-4xl, in place of Tailwind's own. */
+  --text-2xs: var(--dt-size-2xs);
+  --text-2xs--line-height: 1.5;
+  --text-xs: var(--dt-size-xs);
+  --text-xs--line-height: 1.5;
+  --text-sm: var(--dt-size-sm);
+  --text-sm--line-height: 1.5;
+  --text-base: var(--dt-size-base);
+  --text-base--line-height: 1.5;
+  --text-md: var(--dt-size-md);
+  --text-md--line-height: 1.5;
+  --text-lg: var(--dt-size-lg);
+  --text-lg--line-height: 1.45;
+  --text-xl: var(--dt-size-xl);
+  --text-xl--line-height: 1.35;
+  --text-2xl: var(--dt-size-2xl);
+  --text-2xl--line-height: 1.25;
+  --text-3xl: var(--dt-size-3xl);
+  --text-3xl--line-height: 1.2;
+  --text-4xl: var(--dt-size-4xl);
+  --text-4xl--line-height: 1.15;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);

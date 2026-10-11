@@ -16,7 +16,7 @@ export function SqlCode({ sql, vendor, raw }: SqlCodeProps) {
   const tokens = useMemo(() => tokenizeSql(text), [text]);
   return (
     <div className="group/sql relative min-w-0 overflow-hidden rounded-md border bg-muted/60">
-      <pre className="m-0 max-h-[480px] overflow-auto px-4 py-3 pr-12 font-mono text-[13px] leading-relaxed text-foreground [tab-size:2]">
+      <pre className="m-0 max-h-[30rem] overflow-auto px-4 py-3 pr-12 font-mono text-sm leading-relaxed text-foreground [tab-size:2]">
         <code>
           {tokens.map((token, index) =>
             token.type === "text" ? (

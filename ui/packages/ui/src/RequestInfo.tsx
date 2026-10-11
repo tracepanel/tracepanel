@@ -150,15 +150,13 @@ function LinkedTrace({ trace, links }: { trace: TraceSummary; links?: TraceLinks
       {trace.kind === "http" ? (
         <MethodBadge method={trace.method} />
       ) : (
-        <Badge variant="outline" className="font-mono text-[11px] uppercase">
+        <Badge variant="outline" className="font-mono text-2xs uppercase">
           {trace.kind}
         </Badge>
       )}
-      <span className="truncate font-mono text-[14px]">{trace.path ?? trace.name}</span>
-      {trace.status === "error" ? <span className="text-[13px] text-error">failed</span> : null}
-      <span className="ml-auto shrink-0 text-[13px] text-muted-foreground tabular-nums">
-        {duration(trace.duration)}
-      </span>
+      <span className="truncate font-mono text-base">{trace.path ?? trace.name}</span>
+      {trace.status === "error" ? <span className="text-sm text-error">failed</span> : null}
+      <span className="ml-auto shrink-0 text-sm text-muted-foreground tabular-nums">{duration(trace.duration)}</span>
     </span>
   );
   return links?.trace ? (
@@ -234,12 +232,12 @@ export function RequestInfo({ trace, related, links }: RequestInfoProps) {
       <PropTable rows={rows} />
       {document ? (
         <section className="grid gap-2" aria-label="GraphQL query">
-          <h3 className="text-[13px] font-medium text-muted-foreground">Query</h3>
+          <h3 className="text-sm font-medium text-muted-foreground">Query</h3>
           <GraphqlCode document={document} />
         </section>
       ) : null}
       <section className="grid gap-2" aria-label="All attributes">
-        <h3 className="text-[13px] font-medium text-muted-foreground">
+        <h3 className="text-sm font-medium text-muted-foreground">
           All attributes <span className="tabular-nums">{Object.keys(listed).length}</span>
         </h3>
         <AttrsTable attrs={listed} />
