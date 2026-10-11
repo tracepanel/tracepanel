@@ -116,5 +116,47 @@ async fn the_agent_finds_the_issues_and_the_api_returns_them() {
         assert!(errors.is_empty(), "{name}: {errors:?}");
         assert_eq!(kinds(&answer["issues"]), expected, "{name}");
     }
+
+    // Several apps in one store: with service=, the menus and an endpoint's page are that app's alone.
+    let (status, values) = get(&router, "/api/values?service=api").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        values["route"],
+        serde_json::json!(["/books", "/books/fixed", "/boom", "/reports/slow"])
+    );
+
+    let (status, every) = get(&router, "/api/values").await;
+    assert_eq!(status, StatusCode::OK, "{every}");
+    assert!(
+        every["route"]
+            .as_array()
+            .unwrap()
+            .contains(&Value::from("/api/report"))
+    );
+
+    let (status, detail) = get(
+        &router,
+        "/api/endpoints/detail?method=GET&route=/books&service=api",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(detail["summary"]["calls"], 1);
+
+    let (status, _) = get(
+        &router,
+        "/api/endpoints/detail?method=GET&route=/books&service=blog",
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+async fn get(router: &axum::Router, uri: &str) -> (StatusCode, Value) {
+    let request = Request::get(uri).body(Body::empty()).unwrap();
+    let response = router.clone().oneshot(request).await.unwrap();
+    let status = response.status();
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    (status, serde_json::from_slice(&body).unwrap_or(Value::Null))
 }

@@ -62,10 +62,10 @@ export const NAV_GROUPS: { title: string | null; items: NavItem[] }[] = [
   },
   {
     title: "Data",
-    // Most used first: the queries are what tracepanel is about; emails are looked at least.
+    // The map of what the app talks to first, then the queries, the most looked-at data; emails last.
     items: [
-      { section: "queries", label: "Database", icon: DatabaseIcon },
       { section: "services", label: "Services", icon: NetworkIcon },
+      { section: "queries", label: "Database", icon: DatabaseIcon },
       { section: "logs", label: "Logs", icon: ScrollTextIcon },
       { section: "mails", label: "Emails", icon: MailIcon },
     ],

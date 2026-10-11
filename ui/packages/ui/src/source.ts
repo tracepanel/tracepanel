@@ -55,7 +55,8 @@ export interface DataSource {
   listTasks(q: string): Promise<TaskRow[]>;
   listWebsockets(q: string): Promise<WebsocketRow[]>;
   listGraphql(q: string): Promise<GraphqlRow[]>;
-  getGraphqlOperation(operation: string): Promise<GraphqlDetail | null>;
+  /** With `service`, only that app's calls. */
+  getGraphqlOperation(operation: string, service?: string): Promise<GraphqlDetail | null>;
   listJobs(q: string): Promise<JobRow[]>;
   /** Any group of traces named by a search: what a group page shows. */
   summarizeTraces(q: string): Promise<TraceGroup | null>;
@@ -63,10 +64,12 @@ export interface DataSource {
   listServices(q: string): Promise<ServiceMap>;
   /** The trace that enqueued this one, and the traces it enqueued (Celery). */
   related(traceId: string): Promise<Related>;
-  getEndpoint(method: string, route: string): Promise<EndpointDetail | null>;
+  /** With `service`, only that app's calls: two apps can serve the same route. */
+  getEndpoint(method: string, route: string, service?: string): Promise<EndpointDetail | null>;
   /** `group`: "endpoint" groups requests by method + route (the HTTP page), "operation" by trace name. */
   tracesOverview(q: string, group?: "operation" | "endpoint"): Promise<TracesOverview>;
-  knownValues(): Promise<KnownValues>;
+  /** With `service`, only the values that app's pages can find. */
+  knownValues(service?: string): Promise<KnownValues>;
   /** The sidebar's numbers; with `service`, only that app's (service.name). */
   counts(service?: string): Promise<Counts>;
   /** The user of this browser session; null when anonymous. Development only. */
@@ -193,16 +196,23 @@ export function httpSource(base: string | URL): DataSource {
         }
       );
     },
-    async knownValues() {
+    async knownValues(service) {
       return (
-        (await getJson<KnownValues>(url("values"))) ?? { route: [], logger: [], db: [], task: [], queue: [], extra: [] }
+        (await getJson<KnownValues>(url("values", { service }))) ?? {
+          route: [],
+          logger: [],
+          db: [],
+          task: [],
+          queue: [],
+          extra: [],
+        }
       );
     },
     async listTasks(q = "") {
       return (await getJson<{ tasks: TaskRow[] }>(url("tasks", { q })))?.tasks ?? [];
     },
-    getGraphqlOperation(operation) {
-      return getJson<GraphqlDetail>(url("graphql/detail", { operation }));
+    getGraphqlOperation(operation, service) {
+      return getJson<GraphqlDetail>(url("graphql/detail", { operation, service }));
     },
     async listJobs(q = "") {
       return (await getJson<{ jobs: JobRow[] }>(url("jobs", { q })))?.jobs ?? [];
@@ -222,8 +232,8 @@ export function httpSource(base: string | URL): DataSource {
     async related(traceId) {
       return (await getJson<Related>(url(`traces/${traceId}/related`))) ?? NO_RELATED;
     },
-    getEndpoint(method, route) {
-      return getJson<EndpointDetail>(url("endpoints/detail", { method, route }));
+    getEndpoint(method, route, service) {
+      return getJson<EndpointDetail>(url("endpoints/detail", { method, route, service }));
     },
     getIssue(fingerprint, q = "") {
       return getJson<IssueDetail>(url("issues/detail", { fingerprint, q }));

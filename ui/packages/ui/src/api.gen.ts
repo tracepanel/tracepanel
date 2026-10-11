@@ -1179,6 +1179,8 @@ export interface components {
         };
     };
     parameters: {
+        /** @description Only what this app (service.name) recorded; every app when left out. */
+        service: string;
         /** @description Search query: free text plus key:value filters, e.g. route:/api/* status>=500 "timed out". */
         q: string;
         limit: number;
@@ -1527,6 +1529,8 @@ export interface operations {
             query: {
                 /** @description query PostList */
                 operation: string;
+                /** @description Only what this app (service.name) recorded; every app when left out. */
+                service?: components["parameters"]["service"];
             };
             header?: never;
             path?: never;
@@ -1635,6 +1639,8 @@ export interface operations {
             query: {
                 method: string;
                 route: string;
+                /** @description Only what this app (service.name) recorded; every app when left out. */
+                service?: components["parameters"]["service"];
             };
             header?: never;
             path?: never;
@@ -1711,7 +1717,7 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description Only what this app (service.name) recorded; every app when left out. */
-                service?: string;
+                service?: components["parameters"]["service"];
             };
             header?: never;
             path?: never;
@@ -1755,7 +1761,10 @@ export interface operations {
     };
     knownValues: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Only what this app (service.name) recorded; every app when left out. */
+                service?: components["parameters"]["service"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
