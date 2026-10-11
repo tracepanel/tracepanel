@@ -1,5 +1,6 @@
 // Corner badge, fetch and XHR capture, slide-out panel (iframe inside Shadow DOM).
 import { RUNTIME_PATHS, runtimeKind, runtimeName } from "@tracepanel/ui/lib/runtime";
+import { CARD_STYLE, mountCard } from "./card";
 
 export interface TraceInfo {
   /** The trace's own name when it says more than the request line (a GraphQL operation). */
@@ -119,16 +120,15 @@ const STYLE = `
   .seg .issues svg { color: currentColor; }
   .issues[data-tone="error"] { background: rgb(255 107 94 / 0.16); color: #ff8a7a; }
   .more { padding: 3px 8px; border-radius: 999px; background: rgb(255 255 255 / 0.09); color: #e7e9ef; font-size: 12px; }
-  .flash-name {
-    max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    font: 500 12px "Geist Mono Variable", "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace; color: #fff;
+  .more[data-tone="error"] { background: rgb(255 107 94 / 0.16); color: #ff8a7a; font-weight: 600; }
+  .name {
+    max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-radius: 6px;
+    font: 500 12.5px "Geist Mono Variable", "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace; color: #fff;
   }
-  .badge[data-flash] { animation: flash 900ms ease-out; border-color: rgb(165 135 255 / 0.7); }
-  .badge[data-flash="warn"] { border-color: rgb(245 181 68 / 0.7); }
-  .badge[data-flash="error"] { border-color: rgb(255 107 94 / 0.7); }
-  @keyframes flash {
-    from { box-shadow: 0 0 0 0 rgb(165 135 255 / 0.5), 0 12px 32px rgb(10 12 17 / 0.32); }
-    to { box-shadow: 0 0 0 12px rgb(165 135 255 / 0), 0 12px 32px rgb(10 12 17 / 0.32); }
+  .name[data-pulse] { animation: pulse 700ms ease-out; }
+  @keyframes pulse {
+    from { box-shadow: 0 0 0 0 rgb(165 135 255 / 0.6); }
+    to { box-shadow: 0 0 0 8px rgb(165 135 255 / 0); }
   }
   .panel {
     position: fixed; top: 0; right: 0; bottom: 0; z-index: 2147483646;
@@ -156,7 +156,7 @@ const STYLE = `
   :host([data-theme="light"]) .seg + .seg { border-left-color: #e2e2dc; }
   :host([data-theme="light"]) .seg svg, :host([data-theme="light"]) .unit { color: #5f6470; }
   :host([data-theme="light"]) .runtime { background: #f0f0ed; color: #3a3e47; }
-  :host([data-theme="light"]) .seg b, :host([data-theme="light"]) .flash-name { color: #16181d; }
+  :host([data-theme="light"]) .seg b, :host([data-theme="light"]) .name { color: #16181d; }
   :host([data-theme="light"]) .seg[data-speed="slow"] b { color: #b45309; }
   :host([data-theme="light"]) .seg[data-speed="very-slow"] b { color: #d0342c; }
   :host([data-theme="light"]) .status { background: rgb(98 160 20 / 0.12); color: #3d7a0c; }
@@ -166,6 +166,7 @@ const STYLE = `
   :host([data-theme="light"]) .issues { background: rgb(217 119 6 / 0.1); color: #b45309; }
   :host([data-theme="light"]) .issues[data-tone="error"] { background: rgb(208 52 44 / 0.09); color: #d0342c; }
   :host([data-theme="light"]) .more { background: #f0f0ed; color: #16181d; }
+  :host([data-theme="light"]) .more[data-tone="error"] { background: rgb(208 52 44 / 0.09); color: #d0342c; }
   :host([data-theme="light"]) .panel {
     border-left-color: #e2e2dc; background: #ffffff;
     box-shadow: -16px 0 40px rgb(22 24 29 / 0.12);
@@ -192,7 +193,7 @@ const STYLE = `
   :host .panel[data-resizing], :host .panel[data-resizing][data-open], :host .panel[data-resizing] ~ .badge,
   :host([data-dock="bottom"]) .panel[data-resizing][data-open] { transition: none; }
   :host([data-theme="light"][data-dock="bottom"]) .panel { border-top-color: #e2e2dc; box-shadow: 0 -16px 40px rgb(22 24 29 / 0.12); }
-  @media (prefers-reduced-motion: reduce) { .panel, .badge { transition: none; } .badge[data-flash] { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { .panel, .badge { transition: none; } .name[data-pulse] { animation: none; } }
 `;
 
 const PENDING = "pending";
@@ -424,11 +425,22 @@ function addIssues(parent: HTMLElement, issues: number, tone: "warn" | "error"):
   segment(parent).append(pill);
 }
 
-function addPill(parent: HTMLElement, text: string, className: string): void {
+/** Which request the pill is about: its method and path (a GraphQL operation by its name). */
+function addName(parent: HTMLElement, info: TraceInfo, pulse: boolean): void {
+  const name = document.createElement("span");
+  name.className = "name";
+  name.textContent = title(info);
+  name.title = title(info);
+  if (pulse) name.dataset["pulse"] = "";
+  segment(parent).append(name);
+}
+
+function addPill(parent: HTMLElement, text: string, className: string): HTMLSpanElement {
   const span = document.createElement("span");
   span.className = className;
   span.textContent = text;
   segment(parent).append(span);
+  return span;
 }
 
 /** What the widget already knows from response headers: lets the panel show a request before it is stored. */
@@ -512,7 +524,6 @@ function savePanel(state: PanelState): void {
 }
 
 /** How long a just-finished fetch/XHR stays on the badge. */
-const FLASH_MS = 5000;
 
 const TAB_KEY = "tracepanel:tab";
 const TAB_LIMIT = 200;
@@ -571,7 +582,7 @@ export function mount(options: WidgetOptions = {}): Widget {
   const root = host.attachShadow({ mode: "open" });
   const applyTheme = watchTheme(host);
   root.innerHTML = `
-    <style>${STYLE}</style>
+    <style>${STYLE}${CARD_STYLE}</style>
     <div class="panel" part="panel"><div class="resize" title="Drag to resize · double-click to reset"></div></div>
     <button class="badge" part="badge" type="button" aria-expanded="false">
       <span class="brand"><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="6" width="26" height="5.5" rx="2.75" fill="#7c4ff0"/><rect x="9" y="13.25" width="18" height="5.5" rx="2.75" fill="#a587ff"/><rect x="15" y="20.5" width="10" height="5.5" rx="2.75" fill="#b6e24a"/></svg><span class="runtime"></span></span>
@@ -627,9 +638,8 @@ export function mount(options: WidgetOptions = {}): Widget {
     tab = [...tab, { id: initial.trace, parent: null, summary: summaryOf(initial) }];
     saveTab(tab);
   }
-  // The latest fetch/XHR, shown on the badge for a few seconds so it is caught as it happens.
-  let flash: TraceInfo | null = null;
-  let flashTimer: number | undefined;
+  // Set while drawing the pill for a new AJAX call: its name pulses once.
+  let pulse = false;
 
   function sendTab(): void {
     if (frame?.contentWindow && panelUrl) {
@@ -645,48 +655,43 @@ export function mount(options: WidgetOptions = {}): Widget {
     }
   }
 
-  function render(): void {
-    if (flash) {
-      renderFlash(flash);
-      return;
-    }
-    badge.removeAttribute("data-flash");
-    const shown = pageCleared ? null : page;
-    const headline = shown ?? later[0] ?? {};
-    const others = shown ? later : later.slice(1);
-    const worst = [headline, ...others].map(state).reduce((a, b) => (SEVERITY[b] > SEVERITY[a] ? b : a), "ok");
-
-    stats.textContent = "";
-    addStatus(stats, headline.status);
-    addTime(stats, headline.totalMs ?? 0);
-    addQueries(stats, headline.queries ?? 0);
-    const issues = [headline, ...others].reduce((sum, info) => sum + (info.issues ?? 0), 0);
-    if (issues > 0) addIssues(stats, issues, worst === "error" ? "error" : "warn");
-    if (others.length > 0) addPill(stats, `+${others.length}`, "more");
-    badge.dataset["verdict"] = worst;
-
-    const recent = others.slice(-3).map(line);
-    const summary = [
-      line(headline),
-      ...(recent.length ? ["", `Later requests (${others.length}):`, ...recent] : []),
-      ...(options.runtime ? ["", `Served by ${options.runtime}`] : []),
-    ];
-    badge.title = summary.join("\n");
-    badge.setAttribute("aria-label", `tracepanel: ${summary.join(". ")}`);
+  /** This tab's requests on this page, oldest first: the page (unless cleared) and its AJAX calls. */
+  function requests(): TraceInfo[] {
+    return [...(page && !pageCleared ? [page] : []), ...later];
   }
 
-  function renderFlash(info: TraceInfo): void {
-    const summary = summaryOf(info);
+  /**
+   * The pill describes one request, named, and every number on it is that request's: the latest (the page when it
+   * loads, then each AJAX call), as the panel's Follow new shows it. On the right, the rest of this page: how many
+   * requests, how many failed; the ring is the worst of them all.
+   */
+  function render(): void {
+    const all = requests();
+    const shown = all.at(-1) ?? {};
+    const worst = all.map(state).reduce((a, b) => (SEVERITY[b] > SEVERITY[a] ? b : a), "ok");
+
     stats.textContent = "";
-    addPill(stats, summary.name, "flash-name");
-    addStatus(stats, info.status);
-    addTime(stats, info.totalMs ?? 0);
-    addQueries(stats, summary.queries);
-    if (summary.issues) addIssues(stats, summary.issues, state(info) === "error" ? "error" : "warn");
-    badge.dataset["flash"] = state(info);
-    badge.dataset["verdict"] = state(info);
-    badge.title = `${line(info)}\nClick to open this request.`;
-    badge.setAttribute("aria-label", `tracepanel: ${line(info)}. Click to open this request.`);
+    addName(stats, shown, pulse);
+    addStatus(stats, shown.status);
+    addTime(stats, shown.totalMs ?? 0);
+    addQueries(stats, shown.queries ?? 0);
+    // Findings are amber whatever else happened: a failure says so in its status, and in the page's count.
+    if (shown.issues) addIssues(stats, shown.issues, "warn");
+    const failed = all.filter((info) => (info.status ?? 200) >= 500).length;
+    if (all.length > 1) {
+      const count = addPill(stats, failed ? `${all.length} req · ${failed} failed` : `${all.length} req`, "more");
+      count.title = "Requests on this page: the page and its AJAX calls";
+      if (failed) count.dataset["tone"] = "error";
+    }
+    badge.dataset["verdict"] = worst;
+
+    const summary = [
+      line(shown),
+      ...(all.length > 1 ? [`${all.length} requests on this page${failed ? `, ${failed} failed` : ""}`] : []),
+      ...(options.runtime ? [`Served by ${options.runtime}`] : []),
+    ];
+    // No title: the hover card shows all of it (and more); screen readers get the summary.
+    badge.setAttribute("aria-label", `tracepanel: ${summary.join(". ")}`);
   }
 
   /** A page htmx loaded (a boosted link or form): it heads the list, and what follows is its requests. */
@@ -694,8 +699,6 @@ export function mount(options: WidgetOptions = {}): Widget {
     page = info;
     pageCleared = false;
     later.length = 0;
-    flash = null;
-    window.clearTimeout(flashTimer);
     if (info.trace) {
       tab = [...tab, { id: info.trace, parent: null, summary: summaryOf(info) }];
       saveTab(tab);
@@ -744,13 +747,10 @@ export function mount(options: WidgetOptions = {}): Widget {
       tab = [...tab, { id: info.trace, parent: page?.trace ?? null, summary: summaryOf(info) }];
       saveTab(tab);
     }
-    flash = info;
-    window.clearTimeout(flashTimer);
-    flashTimer = window.setTimeout(() => {
-      flash = null;
-      render();
-    }, FLASH_MS);
+    // The latest request takes the pill (and keeps it until the next one), with a short pulse.
+    pulse = true;
     render();
+    pulse = false;
     sendTab();
   }
 
@@ -763,8 +763,6 @@ export function mount(options: WidgetOptions = {}): Widget {
     tab = all ? [] : tab.filter((entry) => entry.id === page?.trace);
     saveTab(tab);
     later.length = 0;
-    flash = null;
-    window.clearTimeout(flashTimer);
     render();
     sendTab();
   }
@@ -791,10 +789,21 @@ export function mount(options: WidgetOptions = {}): Widget {
     savePanel(panelState());
   }
 
+  // Hover (or keyboard focus): the request at a glance, before opening the panel.
+  mountCard(root, badge, {
+    requests,
+    page: () => (pageCleared ? null : page),
+    api: panelUrl,
+    panelOpen: () => panel.hasAttribute("data-open"),
+    open,
+    fetch: nativeFetch,
+  });
+
+  // The panel opens on the request the pill shows.
   badge.addEventListener("click", () => {
-    if (flash?.trace) open(`#/t/${flash.trace}`);
-    else if (panel.hasAttribute("data-open")) close();
-    else open();
+    const shown = requests().at(-1);
+    if (panel.hasAttribute("data-open")) close();
+    else open(shown?.trace ? `#/t/${shown.trace}` : "#/");
   });
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") close();

@@ -8,6 +8,7 @@
     "./styles.css": "./src/styles.css",
     "./theme.css": "./src/theme.css",
     "./lib/*": "./src/lib/*.ts",
+    "./types": "./src/types.ts",
     "./components/ui/*": "./src/components/ui/*.tsx",
     "./hooks/*": "./src/hooks/*.ts",
     "./components/*": "./src/components/*.tsx"

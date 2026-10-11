@@ -32,6 +32,7 @@ import { SearchPalette } from "./SearchPalette";
 import { ThemeToggle } from "./Sidebar";
 import { ScopeProvider } from "./scope";
 import { graphqlOperation } from "./sections";
+import { tabOf } from "./TracePage";
 import { TraceScreen } from "./TraceScreen";
 import { UserSwitcher } from "./UserSwitcher";
 
@@ -567,10 +568,19 @@ function PanelApp({ route }: { route: Route }) {
   const followRows = split ? tabRows : pageRows;
   const latestChild = followRows.length > 1 ? followRows.at(-1)?.trace.id : undefined;
   const followed = useRef(latestChild);
+  // The history the panel opens with is what was already there, not a new request: the request a link asked for
+  // (the pill's card) stays on screen. Only requests that arrive after it are followed.
+  const seeded = useRef(history !== null);
   useEffect(() => {
+    if (!seeded.current) {
+      if (history === null) return;
+      seeded.current = true;
+      followed.current = latestChild;
+      return;
+    }
     if (follow && latestChild && latestChild !== followed.current) go({ name: "trace", id: latestChild });
     followed.current = latestChild;
-  }, [follow, latestChild]);
+  }, [follow, latestChild, history]);
 
   // Esc anywhere in the panel closes it, as on the page; a menu or list open in it takes the Esc first.
   useEffect(() => {
@@ -681,9 +691,13 @@ function PanelApp({ route }: { route: Route }) {
         <main className="panel-body">
           {selectedId ? (
             <TraceScreen
+              // A link to another tab of the trace on screen opens that tab: a new screen, not a kept state.
+              key={route.name === "trace" && route.tab ? `${selectedId} ${route.tab}` : selectedId}
               id={selectedId}
               source={source}
               variant={split ? "strip" : "compact"}
+              // A link to a tab (the pill's card opens a finding on Issues) wins over the last tab used.
+              initialTab={route.name === "trace" ? tabOf(route.tab) : undefined}
               preferredTab={tab}
               onTabChange={(next) => {
                 setTab(next);

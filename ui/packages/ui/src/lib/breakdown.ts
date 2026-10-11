@@ -1,0 +1,78 @@
+// Where a trace's time went, per category: plain data, no React; the console's call tree and the page widget both
+// draw from it.
+import type { Span, Trace } from "../types";
+
+export type Category = "django" | "view" | "code" | "template" | "sql" | "cache" | "mail";
+
+export const CATEGORY_LABELS: Record<Category, string> = {
+  django: "Framework & middleware",
+  view: "View code",
+  code: "Your code",
+  template: "Templates",
+  sql: "Database",
+  cache: "Cache",
+  mail: "Email",
+};
+
+function categoryOf(span: Span): Category | null {
+  if (span.kind === "sql") return "sql";
+  if (span.kind === "cache") return "cache";
+  if (span.kind === "mail") return "mail";
+  if (span.kind === "template") return "template";
+  if (span.kind === "view") return "view";
+  // A task or command root is the user's own code; so are spans they add with tracepanel.span().
+  if (span.kind === "function" || span.kind === "task.run" || span.kind === "command") return "code";
+  // An API framework's own steps (Django Ninja's auth, input validation, response serialization).
+  if (span.parent_id === null || span.kind === "middleware" || span.kind === "framework") return "django";
+  return null;
+}
+
+/**
+ * Where the wall-clock time went, per category. Each moment of the trace counts once, for the deepest span
+ * running then: concurrent spans (async resolvers, asyncio.gather) can't add up to more than the trace took.
+ */
+export function breakdown(trace: Trace): [Category, number][] {
+  const byId = new Map(trace.spans.map((span) => [span.id, span]));
+  const depths = new Map<string, number>();
+  const depth = (span: Span): number => {
+    const known = depths.get(span.id);
+    if (known !== undefined) return known;
+    const parent = span.parent_id ? byId.get(span.parent_id) : undefined;
+    const value = parent ? depth(parent) + 1 : 0;
+    depths.set(span.id, value);
+    return value;
+  };
+  // A span without a category of its own (a transaction: the code inside atomic(), a signal…) is its owner's time.
+  const owner = (span: Span): Category | null => {
+    let current: Span | undefined = span;
+    while (current) {
+      const category = current.kind === "transaction" ? null : categoryOf(current);
+      if (category) return category;
+      current = current.parent_id ? byId.get(current.parent_id) : undefined;
+    }
+    return null;
+  };
+  const spans = trace.spans.filter((span) => span.duration > 0);
+  const edges = [...new Set(spans.flatMap((span) => [span.start, span.start + span.duration]))].sort((a, b) => a - b);
+  const totals = new Map<Category, number>();
+  for (let index = 0; index + 1 < edges.length; index++) {
+    const from = edges[index] ?? 0;
+    const to = edges[index + 1] ?? from;
+    let innermost: Span | undefined;
+    for (const span of spans) {
+      if (span.start > from || span.start + span.duration < to) continue;
+      if (
+        !innermost ||
+        depth(span) > depth(innermost) ||
+        (depth(span) === depth(innermost) && span.start > innermost.start)
+      ) {
+        innermost = span;
+      }
+    }
+    const category = innermost ? owner(innermost) : null;
+    if (category) totals.set(category, (totals.get(category) ?? 0) + (to - from));
+  }
+  return (Object.keys(CATEGORY_LABELS) as Category[])
+    .map((category): [Category, number] => [category, totals.get(category) ?? 0])
+    .filter(([, value]) => value > 0);
+}
