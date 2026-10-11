@@ -12,6 +12,8 @@ The agent skills live in `.agents/skills/`; `.claude/skills` is a symlink to tha
 | docs, release | written in this repository | n/a | n/a |
 | ui-verify | written in this repository | n/a | n/a |
 
+One real delta from upstream in `design-system`: `scripts/check-staged-contracts.mjs` matches `design-system/` in any workspace subdirectory (the upstream script assumes the repository root is the project root; here the project root is `ui/`, which holds `DESIGN.md`). Marked inline in the file.
+
 How to upgrade a vendored skill:
 
 1. Download its new `SKILL.md` (and supporting files) at the new revision.

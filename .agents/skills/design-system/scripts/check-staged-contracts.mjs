@@ -17,8 +17,11 @@ function checkStagedContracts() {
   );
   if (!changedPaths.size) return;
 
+  // Local delta (documented in .agents/SOURCES.md): contracts may live in a
+  // workspace subdirectory (ui/design-system/), so the design-system prefix
+  // matches anywhere in the path instead of only at the repository root.
   const contractPaths = git("ls-files", "-z").split("\0")
-    .filter((path) => /^design-system\/(components|layouts|patterns)\/.+\.md$/.test(path));
+    .filter((path) => /(?:^|\/)design-system\/(components|layouts|patterns)\/.+\.md$/.test(path));
   if (!contractPaths.length) return;
 
   const snapshot = mkdtempSync(join(tmpdir(), "design-contracts-"));
@@ -31,7 +34,7 @@ function checkStagedContracts() {
       const affected = changedPaths.has(contractPath) || sources.some((source) => changedPaths.has(source));
       if (!affected) continue;
 
-      const kind = contractPath.split("/")[1].slice(0, -1);
+      const kind = contractPath.match(/(?:^|\/)design-system\/([a-z]+)\//)[1].slice(0, -1);
       let problems;
       try {
         problems = checkContractFile(stagedFile, { kind });
