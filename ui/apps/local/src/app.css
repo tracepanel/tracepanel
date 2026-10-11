@@ -1138,6 +1138,7 @@ html[data-resizing] {
   border: 1px solid var(--dt-border);
   border-radius: 12px;
   background: var(--dt-card);
+  box-shadow: var(--dt-shadow);
 }
 
 .stat-label {
@@ -1187,6 +1188,7 @@ html[data-resizing] {
   border: 1px solid var(--dt-border);
   border-radius: 12px;
   background: var(--dt-card);
+  box-shadow: var(--dt-shadow);
 }
 
 .chart figcaption {
@@ -1293,6 +1295,7 @@ html[data-resizing] {
   overflow: hidden;
   border: 1px solid var(--dt-border);
   border-radius: 12px;
+  box-shadow: var(--dt-shadow);
 }
 
 .endpoint-columns {
@@ -1368,6 +1371,7 @@ button.stat:hover {
   border: 1px solid var(--dt-border);
   border-radius: 12px;
   background: var(--dt-card);
+  box-shadow: var(--dt-shadow);
 }
 
 .overview-list h3 {
@@ -1584,6 +1588,7 @@ body {
 .list > .dt-issue-groups {
   border: 1px solid var(--dt-border);
   border-radius: 8px;
+  box-shadow: var(--dt-shadow);
 }
 
 .table {

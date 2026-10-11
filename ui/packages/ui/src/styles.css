@@ -624,6 +624,7 @@ a.dt-request-row {
   font: inherit;
   text-align: left;
   cursor: pointer;
+  box-shadow: var(--dt-shadow);
 }
 .dt-issue-banner span:not(.dt-issue-banner-cta) {
   overflow: hidden;
@@ -644,6 +645,7 @@ a.dt-request-row {
   border: 1px solid var(--dt-border);
   border-radius: var(--dt-radius);
   background: var(--dt-subtle);
+  box-shadow: var(--dt-shadow);
 }
 .dt-metric {
   display: grid;
@@ -884,6 +886,7 @@ a.dt-request-row {
   margin: 0 16px 16px;
   border: 1px solid var(--dt-border);
   border-radius: var(--dt-radius);
+  box-shadow: var(--dt-shadow);
 }
 .dt-disclosure summary {
   padding: 8px 12px;
@@ -1214,6 +1217,7 @@ details[data-focused] > .dt-sql-group {
   border: 1px solid var(--dt-error-border);
   border-radius: var(--dt-radius);
   background: var(--dt-error-bg);
+  box-shadow: var(--dt-shadow);
 }
 .dt-error-type {
   margin: 0;
@@ -1235,6 +1239,7 @@ details[data-focused] > .dt-sql-group {
   overflow: hidden;
   border: 1px solid var(--dt-border);
   border-radius: var(--dt-radius);
+  box-shadow: var(--dt-shadow);
 }
 .dt-frame + .dt-frame,
 .dt-frame-group + .dt-frame,
@@ -1621,6 +1626,7 @@ details[data-focused] > .dt-sql-group {
   overflow: hidden;
   border: 1px solid var(--dt-border);
   border-radius: var(--dt-radius);
+  box-shadow: var(--dt-shadow);
 }
 .dt-map-details .dt-section-label {
   margin: 0;
@@ -1861,6 +1867,7 @@ details[data-focused] > .dt-sql-group {
   border: 1px solid var(--dt-border);
   border-radius: var(--dt-radius);
   background: var(--dt-subtle);
+  box-shadow: var(--dt-shadow);
 }
 .dt-mail[data-failed] {
   border-color: var(--dt-error-border);
