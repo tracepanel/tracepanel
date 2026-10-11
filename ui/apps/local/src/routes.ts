@@ -29,7 +29,20 @@ export type Route =
   | { name: Section; q: string; view?: EntryView | undefined }
   | { name: "group"; section: EntrySection; key: string }
   | { name: "trace"; id: string; from?: string | undefined; tab?: string | undefined }
-  | { name: "issue"; fingerprint: string };
+  | { name: "issue"; fingerprint: string; error?: boolean | undefined };
+
+/** A trace id: a ULID, in Crockford's alphabet (no I, L, O or U). */
+export const TRACE_ID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
+
+/** One endpoint's group: its key is "METHOD route", the way the agent's issue endpoints write it too. */
+export function endpointGroup(method: string, route: string): Route {
+  return { name: "group", section: "endpoints", key: `${method} ${route}` };
+}
+
+/** An issue's page, remembering whether it is an error (listed under Errors) or another finding. */
+export function issueRoute(fingerprint: string, kind: string): Route {
+  return { name: "issue", fingerprint, error: kind === "error" };
+}
 
 export function isEntry(section: string): section is EntrySection {
   return (ENTRY_SECTIONS as string[]).includes(section);
@@ -41,9 +54,10 @@ export function parse(hash: string): Route {
   const params = new URLSearchParams(query);
   const q = params.get("q") ?? "";
   const issue = /^issue\/([0-9a-f]{16})$/.exec(path);
-  if (issue?.[1]) return { name: "issue", fingerprint: issue[1] };
-  const trace = /^(?:t|traces)\/([0-9A-Z]{26})$/.exec(path);
-  if (trace?.[1]) {
+  if (issue?.[1]) return { name: "issue", fingerprint: issue[1], error: params.get("in") === "errors" };
+  // `traces/` is how the widget wrote it before; old links still open.
+  const trace = /^(?:t|traces)\/(.+)$/.exec(path);
+  if (trace?.[1] && TRACE_ID.test(trace[1])) {
     return { name: "trace", id: trace[1], from: params.get("from") ?? undefined, tab: params.get("tab") ?? undefined };
   }
   const group = /^group\/([a-z]+)\/(.+)$/.exec(path);
@@ -52,8 +66,7 @@ export function parse(hash: string): Route {
   }
   // Older links: one endpoint.
   if (path === "endpoint") {
-    const key = `${params.get("method") ?? "GET"} ${params.get("route") ?? "/"}`;
-    return { name: "group", section: "endpoints", key };
+    return endpointGroup(params.get("method") ?? "GET", params.get("route") ?? "/");
   }
   if ((SECTIONS as string[]).includes(path)) {
     const view = params.get("view") === "calls" ? "calls" : undefined;
@@ -71,7 +84,8 @@ export function href(route: Route): string {
     const query = params.size ? `?${params}` : "";
     return `#/t/${route.id}${query}`;
   }
-  if (route.name === "issue") return `#/issue/${route.fingerprint}`;
+  // Errors and other issues share a page; `in` says which list it belongs to, for the crumbs and the menu.
+  if (route.name === "issue") return `#/issue/${route.fingerprint}${route.error ? "?in=errors" : ""}`;
   if (route.name === "group") return `#/group/${route.section}/${encodeURIComponent(route.key)}`;
   const params = new URLSearchParams();
   if (route.q) params.set("q", route.q);

@@ -40,7 +40,7 @@ export interface WidgetOptions {
 export interface Widget {
   /** Add a request made by the page after it loaded (fetch, XHR). */
   record(info: TraceInfo): void;
-  /** Open the panel; `hash` picks a screen, e.g. "#/traces/<id>". */
+  /** Open the panel; `hash` picks a screen, e.g. "#/t/<id>". */
   open(hash?: string): void;
   close(): void;
 }
@@ -778,7 +778,7 @@ export function mount(options: WidgetOptions = {}): Widget {
   }
 
   badge.addEventListener("click", () => {
-    if (flash?.trace) open(`#/traces/${flash.trace}`);
+    if (flash?.trace) open(`#/t/${flash.trace}`);
     else if (panel.hasAttribute("data-open")) close();
     else open();
   });

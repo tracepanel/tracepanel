@@ -141,7 +141,15 @@ export function TraceView({
     return map;
   }, [trace]);
   const [active, setActive] = useState<TabId>(
-    () => initialTab ?? (trace.errors.length > 0 ? "error" : hasTab(trace, preferredTab) ? preferredTab : "tree"),
+    // A tab the link asked for that this trace has not (an error tab without an error) falls back like no tab.
+    () =>
+      hasTab(trace, initialTab)
+        ? initialTab
+        : trace.errors.length > 0
+          ? "error"
+          : hasTab(trace, preferredTab)
+            ? preferredTab
+            : "tree",
   );
   const dbTime = sql.reduce((sum, span) => sum + span.duration, 0);
   const mails = useMemo(() => trace.spans.filter((span) => span.kind === "mail"), [trace]);

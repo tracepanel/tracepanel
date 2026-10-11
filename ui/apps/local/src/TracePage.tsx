@@ -1,6 +1,6 @@
 import type { DataSource, TabId } from "@tracepanel/ui";
 import { exploreFor } from "./explore";
-import { go, openTrace, parse } from "./routes";
+import { go, href, openTrace, parse } from "./routes";
 import { crumbsFor } from "./sections";
 import { TraceScreen } from "./TraceScreen";
 import { Breadcrumbs, Mono } from "./ui";
@@ -51,6 +51,11 @@ export function TracePage({
           onTabChange={(next) => go({ name: "trace", id, from, tab: next }, true)}
           explore={(trace) => exploreFor(trace, go)}
           onOpenTrace={(linked) => openTrace(linked)}
+          back={
+            <a href={from ?? href({ name: "endpoints", q: "" })}>
+              {from ? `Back to ${back.at(-1)?.label ?? "the list"}` : "All HTTP endpoints"}
+            </a>
+          }
         />
       </div>
     </main>

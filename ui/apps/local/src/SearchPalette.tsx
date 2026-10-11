@@ -10,11 +10,10 @@ import {
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@tracepanel/ui/components/ui/dialog";
 import { ArrowRightIcon, SearchIcon } from "lucide-react";
 import { useEffect, useState } from "react";
-import { go, openTrace, type Section } from "./routes";
+import { go, openTrace, type Section, TRACE_ID } from "./routes";
 import { NAV } from "./Sidebar";
 import { graphqlOperation } from "./sections";
 
-const TRACE_ID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 const SHOWN = 8;
 const DEBOUNCE_MS = 150;
 
@@ -49,7 +48,7 @@ export function SearchPalette({
   const query = text.trim();
 
   useEffect(() => {
-    if (!query || TRACE_ID.test(query)) {
+    if (!query || TRACE_ID.test(query.toUpperCase())) {
       setResults([]);
       return;
     }
@@ -89,9 +88,9 @@ export function SearchPalette({
           />
           <CommandList className="max-h-[420px]">
             <CommandEmpty>No traces match.</CommandEmpty>
-            {TRACE_ID.test(query) ? (
+            {TRACE_ID.test(query.toUpperCase()) ? (
               <CommandGroup heading="Trace">
-                <CommandItem value={`id-${query}`} onSelect={() => close(() => openTrace(query))}>
+                <CommandItem value={`id-${query}`} onSelect={() => close(() => openTrace(query.toUpperCase()))}>
                   <ArrowRightIcon />
                   Open trace <span className="font-mono">{query}</span>
                 </CommandItem>
