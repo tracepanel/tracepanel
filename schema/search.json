@@ -268,11 +268,11 @@
   "services": {
     "kind": {
       "type": "text",
-      "help": "database, cache, mail, queue, http"
+      "help": "app, database, cache, mail, queue, http"
     },
     "system": {
       "type": "text",
-      "help": "postgresql, redis, smtp, rabbitmq…"
+      "help": "python, go, postgresql, redis, smtp, rabbitmq…"
     },
     "role": {
       "type": "text",

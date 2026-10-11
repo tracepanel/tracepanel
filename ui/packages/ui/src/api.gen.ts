@@ -857,11 +857,20 @@ export interface components {
             paths: string[];
             last_seen: components["schemas"]["Time"];
         };
+        /** @description The project's own web, workers and commands, each a service of its own. */
         ServiceApp: {
             /** @description service.name: the project (the TRACEPANEL service setting). */
             service: string;
             /** @description web, worker or command. */
             role: string;
+            /** @description Requests */
+            traces: number;
+            /** @description How many of them failed. */
+            errors: number;
+            total: components["schemas"]["Duration"];
+            last_seen: components["schemas"]["Time"];
+            /** @description What runs it, as the SDKs label it: "Python 3.12 · Django 6.0", "Go 1.27". */
+            runtime: string | null;
         };
         ServiceNode: {
             /** @description kind:system/address:port/namespace, e.g. database:postgresql/db:5432/blog. */

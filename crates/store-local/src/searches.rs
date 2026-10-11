@@ -253,6 +253,35 @@ pub(crate) fn service_search() -> search::Schema {
     )
 }
 
+pub(crate) const SERVICE_NAME: &str = "json_extract(doc, '$.attrs.\"service.name\"')";
+pub(crate) const SERVICE_ROLE: &str = "json_extract(doc, '$.attrs.\"service.role\"')";
+pub(crate) const LANGUAGE: &str = "json_extract(doc, '$.attrs.\"telemetry.sdk.language\"')";
+
+/// The services search, read against the traces: the app itself is a service too, of kind `app`, whose system is
+/// its language. The same filters then keep or drop it as they do a database.
+pub(crate) fn app_search() -> search::Schema {
+    search::schema_for(
+        "services",
+        &[
+            ("kind", "'app'"),
+            ("system", LANGUAGE),
+            ("role", SERVICE_ROLE),
+            ("since", "start"),
+            ("until", "start"),
+        ],
+        Box::new(|words| {
+            (
+                format!("{SERVICE_NAME} LIKE ? ESCAPE '\\'"),
+                vec![Sql::Text(format!("%{}%", search::like(words)))],
+            )
+        }),
+        vec![],
+        vec![],
+    )
+}
+
+pub(crate) static APP_SEARCH: std::sync::LazyLock<search::Schema> =
+    std::sync::LazyLock::new(app_search);
 pub(crate) static MAIL_SEARCH: std::sync::LazyLock<search::Schema> =
     std::sync::LazyLock::new(mail_search);
 pub(crate) static ISSUE_SEARCH: std::sync::LazyLock<search::Schema> =

@@ -989,12 +989,20 @@ components:
         paths: { type: array, items: { type: string }, description: Up to five paths seen. }
         last_seen: { $ref: "#/components/schemas/Time" }
     ServiceApp:
+      description: The project's own web, workers and commands, each a service of its own.
       type: object
       additionalProperties: false
-      required: [service, role]
+      required: [service, role, traces, errors, total, last_seen, runtime]
       properties:
         service: { type: string, description: "service.name: the project (the TRACEPANEL service setting)." }
         role: { type: string, description: "web, worker or command." }
+        traces: { type: integer, description: Requests, tasks or commands it handled. }
+        errors: { type: integer, description: How many of them failed. }
+        total: { $ref: "#/components/schemas/Duration" }
+        last_seen: { $ref: "#/components/schemas/Time" }
+        runtime:
+          type: [string, "null"]
+          description: 'What runs it, as the SDKs label it: "Python 3.12 · Django 6.0", "Go 1.27".'
     ServiceNode:
       type: object
       additionalProperties: false
