@@ -89,12 +89,14 @@ const STYLE = `
     box-shadow: 0 12px 32px rgb(10 12 17 / 0.32), 0 2px 6px rgb(10 12 17 / 0.2), inset 0 1px rgb(255 255 255 / 0.05);
     font: 500 13px/1 "Geist Variable", "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
     font-variant-numeric: tabular-nums; cursor: pointer;
-    transition: right 180ms ease-out, box-shadow 180ms ease-out, background-color 120ms ease-out, border-color 180ms ease-out;
+    transition: right 180ms ease-out, box-shadow 180ms ease-out, border-color 120ms ease-out;
   }
   .badge[data-verdict="warn"] { border-color: rgb(245 181 68 / 0.45); box-shadow: 0 0 0 4px rgb(245 181 68 / 0.16), 0 12px 32px rgb(10 12 17 / 0.32); }
   .badge[data-verdict="error"] { border-color: rgb(255 107 94 / 0.5); box-shadow: 0 0 0 4px rgb(255 107 94 / 0.17), 0 12px 32px rgb(10 12 17 / 0.32); }
-  /* Hover answers in place: the pill stays where it is. */
-  .badge:hover { background: #151922; }
+  /* Hover answers in place: the border, in the verdict's colour, gets stronger; the pill stays where it is. */
+  .badge:hover { border-color: rgb(255 255 255 / 0.24); }
+  .badge[data-verdict="warn"]:hover { border-color: rgb(245 181 68 / 0.85); }
+  .badge[data-verdict="error"]:hover { border-color: rgb(255 107 94 / 0.9); }
   .badge:focus-visible { outline: 2px solid #b6e24a; outline-offset: 3px; }
   .brand { display: flex; align-items: center; padding-right: 8px; }
   .brand svg { width: 22px; height: 22px; }
@@ -146,9 +148,11 @@ const STYLE = `
     border-color: #e2e2dc; background: #ffffff; color: #16181d;
     box-shadow: 0 10px 28px rgb(22 24 29 / 0.12), 0 1px 3px rgb(22 24 29 / 0.08);
   }
-  :host([data-theme="light"]) .badge:hover { background: #f5f5f2; }
+  :host([data-theme="light"]) .badge:hover { border-color: #b9b9b1; }
   :host([data-theme="light"]) .badge[data-verdict="warn"] { border-color: rgb(217 119 6 / 0.45); box-shadow: 0 0 0 4px rgb(217 119 6 / 0.13), 0 10px 28px rgb(22 24 29 / 0.12); }
   :host([data-theme="light"]) .badge[data-verdict="error"] { border-color: rgb(208 52 44 / 0.45); box-shadow: 0 0 0 4px rgb(208 52 44 / 0.12), 0 10px 28px rgb(22 24 29 / 0.12); }
+  :host([data-theme="light"]) .badge[data-verdict="warn"]:hover { border-color: rgb(217 119 6 / 0.85); }
+  :host([data-theme="light"]) .badge[data-verdict="error"]:hover { border-color: rgb(208 52 44 / 0.85); }
   :host([data-theme="light"]) .seg + .seg { border-left-color: #e2e2dc; }
   :host([data-theme="light"]) .seg svg, :host([data-theme="light"]) .unit { color: #5f6470; }
   :host([data-theme="light"]) .runtime { background: #f0f0ed; color: #3a3e47; }

@@ -41,7 +41,7 @@
   html {
     /* The density: every size is in rem, so this one value scales the whole UI. A percentage keeps the reader's
        own browser font size in the sum. */
-    font-size: 78.75%;
+    font-size: 75%;
     font-family: var(--dt-font);
     /* Geist: figures of one width, so numbers line up in tables and do not jitter as they update. */
     font-variant-numeric: tabular-nums;
