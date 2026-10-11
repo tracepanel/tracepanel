@@ -28,7 +28,7 @@ export function TracePage({
   const back = from ? crumbsFor(parse(from), from) : [];
   const initialTab = TABS.find((item) => item === tab);
   return (
-    <main className="min-h-0 min-w-0 overflow-y-auto bg-background">
+    <main className="min-h-0 min-w-0 overflow-y-auto bg-background" data-scroll="">
       {/* The trace's own header is inset 16px: the page pads 16px less so the crumbs line up with it. */}
       <div className="w-full px-6 pt-5 pb-12">
         {/* A stored trace never changes: no refresh control here. */}

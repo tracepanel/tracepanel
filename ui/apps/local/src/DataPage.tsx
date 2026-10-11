@@ -16,6 +16,8 @@ type DataSection = Exclude<Section, EntrySection>;
 interface DataPageProps {
   section: DataSection;
   q: string;
+  /** The row the list has open, from the URL. */
+  open?: string | undefined;
   source: DataSource;
   spec: SearchSpec | null;
   known: KnownValues;
@@ -43,8 +45,11 @@ const PRISTINE: Partial<Record<DataSection, { title: string; text: string }>> = 
   },
 };
 
-export function DataPage({ section, q, source, spec, known }: DataPageProps) {
-  const setQuery = (next: string) => go({ name: section, q: next }, true);
+export function DataPage({ section, q, open, source, spec, known }: DataPageProps) {
+  // Opening a row replaces the entry: it is no step to go Back through, but it survives leaving and coming back.
+  const setOpen = (key: string | null) => go({ name: section, q, open: key ?? undefined }, true);
+  // Typing replaces the entry, so Back skips the letters; a chip or a menu adds one, so Back undoes it.
+  const setQuery = (next: string, typed = false) => go({ name: section, q: next }, typed);
   const refine = (terms: Record<string, string>) => go({ name: section, q: refineQuery(q, terms) });
 
   const traces = usePaged(
@@ -145,7 +150,7 @@ export function DataPage({ section, q, source, spec, known }: DataPageProps) {
     body = logs.items ? (
       logs.items.length ? (
         <>
-          <LogsTable items={logs.items} onFilter={refine} />
+          <LogsTable items={logs.items} onFilter={refine} open={open ?? null} onOpen={setOpen} />
           {logs.hasMore ? <LoadMore label="Load older logs" loading={logs.loading} onMore={logs.more} /> : null}
         </>
       ) : (
@@ -158,7 +163,7 @@ export function DataPage({ section, q, source, spec, known }: DataPageProps) {
     body = mails.items ? (
       mails.items.length ? (
         <>
-          <MailsTable items={mails.items} source={source} />
+          <MailsTable items={mails.items} source={source} open={open ?? null} onOpen={setOpen} />
           {mails.hasMore ? <LoadMore label="Load older emails" loading={mails.loading} onMore={mails.more} /> : null}
         </>
       ) : (
@@ -182,7 +187,7 @@ export function DataPage({ section, q, source, spec, known }: DataPageProps) {
   } else if (section === "queries") {
     body = queries.data ? (
       queries.data.length ? (
-        <QueriesTable items={queries.data} source={source} />
+        <QueriesTable items={queries.data} source={source} open={open ?? null} onOpen={setOpen} />
       ) : (
         <Empty title="No queries match">SQL from stored traces is aggregated here.</Empty>
       )
@@ -218,7 +223,7 @@ export function DataPage({ section, q, source, spec, known }: DataPageProps) {
         count={loaded.size}
         onChange={setQuery}
       />
-      <section className="min-h-0 flex-1 overflow-y-auto px-10 pb-10" aria-label={meta.label}>
+      <section className="min-h-0 flex-1 overflow-y-auto px-10 pb-10" aria-label={meta.label} data-scroll="">
         {body}
       </section>
     </main>
