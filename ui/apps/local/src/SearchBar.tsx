@@ -58,7 +58,9 @@ interface QuickOption {
 }
 
 /** Values the console knows from stored data (routes, loggers, database aliases). */
-export type KnownValues = Partial<Record<"route" | "logger" | "db" | "task" | "queue" | "extra", readonly string[]>>;
+export type KnownValues = Partial<
+  Record<"route" | "logger" | "db" | "task" | "queue" | "job" | "extra", readonly string[]>
+>;
 
 interface QuickFilter {
   label: string;
@@ -215,12 +217,14 @@ const QUICK: Record<Section, Control[]> = {
   mails: [{ ...TIME, verb: "Sent" }],
   jobs: [
     { ...TIME, verb: "Ran" },
+    // By name: the command ("manage.py import_posts") or what the code named its block (trace("nightly import")).
+    { label: "Job", title: "Filter by job", key: "job", values: (known) => known.job ?? [] },
     {
       label: "Source",
       title: "Filter by source",
       key: "source",
       values: ["manage.py", "custom"],
-      format: (value) => (value === "custom" ? "tracepanel.trace()" : value),
+      format: (value) => (value === "custom" ? "Traced in code" : "Django command"),
     },
   ],
   graphql: [

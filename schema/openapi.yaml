@@ -838,10 +838,11 @@ components:
     KnownValues:
       type: object
       additionalProperties: false
-      required: [route, logger, db, task, queue, extra]
+      required: [route, logger, db, task, queue, job, extra]
       properties:
         task: { type: array, description: Celery task names., items: { type: string } }
         queue: { type: array, description: Celery queues tasks ran from., items: { type: string } }
+        job: { type: array, description: "Job names: management commands and tracepanel.trace() blocks.", items: { type: string } }
         route: { type: array, items: { type: string } }
         logger: { type: array, items: { type: string } }
         db: { type: array, items: { type: string } }

@@ -204,6 +204,7 @@ export function httpSource(base: string | URL): DataSource {
           db: [],
           task: [],
           queue: [],
+          job: [],
           extra: [],
         }
       );
