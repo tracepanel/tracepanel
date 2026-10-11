@@ -67,8 +67,7 @@ function AppRow({ app, slowest }: { app: ServiceApp; slowest: number }) {
 }
 
 /**
- * The project's own web, workers and commands first, then what they talk to, and who calls it. A table, not the service map (ServiceGraph in @tracepanel/ui): a
- * project usually has one web and a worker, and a table says it better.
+ * The project's own web, workers and commands first, then what they talk to, and who calls it.
  */
 export function ServicesView({ map }: { map: ServiceMap }) {
   const slowest = Math.max(...map.services.map((node) => node.total), 1);

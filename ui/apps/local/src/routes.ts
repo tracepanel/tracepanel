@@ -98,10 +98,6 @@ export function parse(hash: string): Route {
   if (group?.[1] && group[2] && isEntry(group[1])) {
     return { name: "group", section: group[1], key: decodeURIComponent(group[2]), q: q || undefined };
   }
-  // Older links: one endpoint.
-  if (path === "endpoint") {
-    return endpointGroup(params.get("method") ?? "GET", params.get("route") ?? "/");
-  }
   if ((SECTIONS as string[]).includes(path)) {
     const view = params.get("view") === "calls" ? "calls" : undefined;
     return { name: path as Section, q, view, open: params.get("open") ?? undefined };

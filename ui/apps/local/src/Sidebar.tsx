@@ -80,6 +80,7 @@ export function Sidebar({
   counts,
   onSearch,
   onClear,
+  drawer = false,
 }: {
   section: Section | null;
   /** Issues (the badge turns red with errors) and traces per entry point (empty ones are hidden). */
@@ -87,10 +88,17 @@ export function Sidebar({
   onSearch: () => void;
   /** Deletes the stored data; left out where the source can't clear its store. */
   onClear?: (() => void) | undefined;
+  /** In the narrow screen's menu, which shows it where the column is hidden. */
+  drawer?: boolean;
 }) {
   const visible = visibleSections(counts);
   return (
-    <aside className="flex min-h-0 flex-col gap-7 border-r bg-sidebar px-5 pt-6 pb-5 max-[980px]:hidden">
+    <aside
+      className={cn(
+        "flex min-h-0 flex-col gap-7 bg-sidebar px-5 pt-6 pb-5",
+        drawer ? "h-full overflow-y-auto" : "border-r max-[980px]:hidden",
+      )}
+    >
       <a href="#/" className="px-2 no-underline" aria-label="Tracepanel home">
         <Logo />
       </a>
