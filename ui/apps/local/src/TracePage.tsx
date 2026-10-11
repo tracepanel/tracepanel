@@ -1,6 +1,7 @@
 import type { DataSource, TabId } from "@tracepanel/ui";
 import { exploreFor } from "./explore";
-import { consoleLinks, go, href, parse } from "./routes";
+import { useEscapeTo } from "./keyboard";
+import { consoleLinks, follow, go, href, parse } from "./routes";
 import { crumbsFor } from "./sections";
 import { TraceScreen } from "./TraceScreen";
 import { Breadcrumbs, Mono } from "./ui";
@@ -26,6 +27,7 @@ export function TracePage({
   source: DataSource;
 }) {
   const back = from ? crumbsFor(parse(from), from) : [];
+  useEscapeTo(from, follow);
   const initialTab = TABS.find((item) => item === tab);
   return (
     <main className="min-h-0 min-w-0 overflow-y-auto bg-background" data-scroll="">

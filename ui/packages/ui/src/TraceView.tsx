@@ -14,7 +14,7 @@ import {
   TerminalIcon,
   TriangleAlertIcon,
 } from "lucide-react";
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { CallMap } from "./CallMap";
 import { Button } from "./components/ui/button";
 import {
@@ -27,6 +27,7 @@ import { ErrorView } from "./ErrorView";
 import { duration } from "./format";
 import { IssueList } from "./IssueList";
 import { LogList } from "./LogList";
+import { isTyping } from "./lib/keys";
 import { linkProps, type TraceLinks } from "./links";
 import { MailList } from "./MailList";
 import { Metrics } from "./Metrics";
@@ -307,18 +308,27 @@ export function TraceView({
         </DropdownMenuContent>
       </DropdownMenu>
     ) : null;
-  const tabsBar = (
-    <Tabs
-      label="Trace details"
-      tabs={tabs}
-      active={active}
-      onChange={(id) => {
-        setActive(id);
-        setFocus(undefined);
-        onTabChange?.(id);
-      }}
-    />
-  );
+  const openTab = (id: TabId) => {
+    setActive(id);
+    setFocus(undefined);
+    onTabChange?.(id);
+  };
+  // 1–7 open the tabs in the order they are shown; the latest list, without rebinding on every render.
+  const shown = useRef({ tabs, openTab });
+  shown.current = { tabs, openTab };
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (isTyping(event)) return;
+      const tab = shown.current.tabs[Number(event.key) - 1];
+      if (!/^[1-9]$/.test(event.key) || tab === undefined) return;
+      event.preventDefault();
+      shown.current.openTab(tab.id);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const tabsBar = <Tabs label="Trace details" tabs={tabs} active={active} onChange={openTab} />;
 
   // In the panel (either dock) the tabs carry the status and timings: one toolbar row, then the content.
   if (compact) {
