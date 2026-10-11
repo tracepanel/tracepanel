@@ -9,8 +9,9 @@ import {
   CommandList,
 } from "@tracepanel/ui/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@tracepanel/ui/components/ui/popover";
+import { useCloseOnBlur } from "@tracepanel/ui/hooks/useCloseOnBlur";
 import { ArrowLeftRightIcon, CheckIcon, LogOutIcon, UserRoundIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 function initials(user: User): string {
   const words = (user.name ?? user.username).split(/[\s._@-]+/).filter(Boolean);
@@ -43,6 +44,8 @@ export function UserSwitcher({ source, onSwitched }: { source: DataSource; onSwi
   const [query, setQuery] = useState("");
   const [users, setUsers] = useState<User[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const closeMenu = useCallback(() => setOpen(false), []);
+  useCloseOnBlur(open, closeMenu);
 
   useEffect(() => {
     source.currentUser().then(setCurrent, () => setCurrent(undefined));
