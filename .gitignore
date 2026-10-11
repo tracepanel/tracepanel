@@ -4,3 +4,10 @@ node_modules/
 ui/apps/*/dist/
 ui/packages/*/dist/
 ui-dist/*.map
+
+# lefthook: the local-only hook override (any of its supported formats)
+.lefthook-local.yml
+.lefthook-local.yaml
+.lefthook-local.json
+.lefthook-local.jsonc
+.lefthook-local.toml
