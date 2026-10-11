@@ -1,0 +1,34 @@
+# Git hooks for the whole repo: the UI files go through biome in ui/, the repo
+# prose pages go through scripts/lint_docs.py. The home for the hook engine is
+# lefthook (dev dependency of ui/, where pnpm installs it); this file sits at the
+# repo root so it can name paths from either side.
+# yaml-language-server: $schema=https://lefthook.dev/schema.json
+
+pre-commit:
+  parallel: true
+  jobs:
+    - name: biome
+      # root changes the CWD to ui/ and rewrites {staged_files} paths relative to it.
+      root: ui/
+      glob: "ui/**/*.{ts,tsx,css,json,mjs}"
+      run: pnpm exec biome check --write {staged_files}
+      stage_fixed: true
+
+    - name: docs-lint
+      # scripts/lint_docs.py takes no paths: it reads the fixed page list.
+      # Run it whole whenever a page it reads is staged.
+      glob: "{README.md,CONTRIBUTING.md,SECURITY.md,PYPI.md,CHANGELOG.md,schema/README.md}"
+      run: uv run --no-project --with ruff scripts/lint_docs.py
+
+# pre-push jobs are full checks by design: a push is a review request.
+pre-push:
+  parallel: true
+  jobs:
+    - name: typecheck
+      root: ui/
+      run: pnpm -r typecheck
+
+    - name: fallow-audit
+      # The audit gate fails only on findings the change introduces.
+      root: ui/
+      run: pnpm exec fallow audit --base origin/main

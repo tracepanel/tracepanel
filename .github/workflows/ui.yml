@@ -1,5 +1,6 @@
-# The console, the panel and the widget (ui/): lint, types, the API contract, and ui-dist/ (what the binary embeds)
-# built from this very ui/.
+# The console, the panel and the widget (ui/): the checks are separate jobs so
+# a failure names its reason, and the checks here are what the pre-push hook
+# runs locally (ui/ releases the agents only behind the same gates).
 name: UI
 
 on:
@@ -20,8 +21,8 @@ defaults:
     working-directory: ui
 
 jobs:
-  check:
-    name: Lint, types, contract, ui-dist
+  lint:
+    name: Biome
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -34,20 +35,53 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: 26
           cache: pnpm
           cache-dependency-path: ui/pnpm-lock.yaml
 
-      # scripts/ui.sh writes the UI's licenses with uv.
-      - uses: astral-sh/setup-uv@v10.3.0
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm exec biome ci --reporter=github .
+
+  types:
+    name: TypeScript
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: ui/package.json
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: pnpm
+          cache-dependency-path: ui/pnpm-lock.yaml
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Biome (format and lint)
-        run: pnpm exec biome ci --reporter=github .
+      - run: pnpm -r typecheck
 
-      - name: TypeScript
-        run: pnpm -r typecheck
+  contract:
+    name: API contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: ui/package.json
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: pnpm
+          cache-dependency-path: ui/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
 
       - name: The API types match schema/openapi.yaml
         run: |
@@ -58,8 +92,29 @@ jobs:
             exit 1
           }
 
-      - name: ui-dist/ is this ui/, built
-        # The build is reproducible: the committed ui-dist/ must be what scripts/ui.sh makes now.
+  embed:
+    name: ui-dist is this ui/, built
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: ui/package.json
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: pnpm
+          cache-dependency-path: ui/pnpm-lock.yaml
+
+      # scripts/ui.sh writes the UI's licenses with uv.
+      - uses: astral-sh/setup-uv@v10.3.0
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: The build is reproducible
         working-directory: .
         run: |
           scripts/ui.sh
@@ -67,3 +122,40 @@ jobs:
             echo "::error::ui-dist/ is out of date with ui/: run scripts/ui.sh and commit."
             exit 1
           }
+
+  quality:
+    name: fallow quality gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # fallow audit diffs a change against its base; the walk needs both ends.
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: ui/package.json
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: pnpm
+          cache-dependency-path: ui/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      # pnpm install wires the hooks (postinstall: lefthook install); this
+      # asserts the wiring, not the local hooks a dev machine has. The binary
+      # is called directly: plain `pnpm exec` recurses the whole workspace on
+      # some pnpm versions and then fails on a package without the bin.
+      - name: lefthook is wired
+        working-directory: ui
+        run: ./node_modules/.bin/lefthook check-install
+
+      - name: fallow finds only what this change adds
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          BASE=${PR_BASE:-HEAD~1}
+          pnpm exec fallow audit --base "$BASE"
