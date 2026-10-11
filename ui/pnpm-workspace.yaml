@@ -5,6 +5,15 @@ packages:
 # minimumReleaseAge). Same window the fallow audit and Renovate respect, and
 # the same window the team already runs locally.
 minimumReleaseAge: 2880
-# esbuild (vite's bundler) checks its platform binary after install: the one dependency allowed to run a build script.
+# esbuild (vite's bundler) checks its platform binary after install, and
+# lefthook's pruned-launcher postinstall wires the platform binary: the two
+# dependencies allowed to run build scripts.
 allowBuilds:
   esbuild: true
+  lefthook: true
+# pnpm 12 asks when a package bundles agent skills. The repo's policy is one
+# skills home (.agents/skills/ at the repo root, hand-vendored and pinned in
+# .agents/SOURCES.md), so bundled skills stay denied rather than linked.
+permissions:
+  fallow:
+    skills: false

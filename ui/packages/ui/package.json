@@ -18,12 +18,13 @@
   },
   "devDependencies": {
     "@types/react": "^19.0.0",
+    "lefthook": "2.2.1",
     "openapi-typescript": "7.13.0",
     "react": "^19.0.0",
-    "lefthook": "2.2.1"
+    "typescript": "npm:@typescript/typescript6@^6.0.2"
   },
   "scripts": {
-    "typecheck": "tsc -p .",
+    "typecheck": "tsc6 -p .",
     "api": "node scripts/api.mjs"
   },
   "dependencies": {
@@ -31,7 +32,7 @@
     "clsx": "2.1.1",
     "cmdk": "1.1.1",
     "graphql": "17.0.2",
-    "lucide-react": "1.52.0",
+    "lucide-react": "1.54.0",
     "prism-react-renderer": "2.4.1",
     "radix-ui": "1.7.0",
     "sql-formatter": "^15.9.0",
