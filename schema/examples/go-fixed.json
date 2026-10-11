@@ -7,7 +7,7 @@
     "http.status_code": 200,
     "process.runtime.name": "go",
     "process.runtime.version": "1.27.1",
-    "service.name": "go-api-bin",
+    "service.name": "api",
     "service.role": "web",
     "telemetry.sdk.language": "go",
     "tracepanel.framework": "net/http"

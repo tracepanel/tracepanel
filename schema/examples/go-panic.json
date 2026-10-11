@@ -7,7 +7,7 @@
     "http.status_code": 500,
     "process.runtime.name": "go",
     "process.runtime.version": "1.27.1",
-    "service.name": "go-api-bin",
+    "service.name": "api",
     "service.role": "web",
     "telemetry.sdk.language": "go",
     "tracepanel.framework": "net/http"
@@ -20,7 +20,7 @@
         {
           "context": [],
           "context_start": null,
-          "filename": "/opt/homebrew/Cellar/go/1.27.1/libexec/src/runtime/asm_arm64.s",
+          "filename": "/usr/local/go/src/runtime/asm_arm64.s",
           "function": "goexit",
           "in_app": false,
           "lineno": 1039,
@@ -30,7 +30,7 @@
         {
           "context": [],
           "context_start": null,
-          "filename": "/opt/homebrew/Cellar/go/1.27.1/libexec/src/net/http/server.go",
+          "filename": "/usr/local/go/src/net/http/server.go",
           "function": "(*conn).serve",
           "in_app": false,
           "lineno": 2137,
@@ -40,7 +40,7 @@
         {
           "context": [],
           "context_start": null,
-          "filename": "/opt/homebrew/Cellar/go/1.27.1/libexec/src/net/http/server.go",
+          "filename": "/usr/local/go/src/net/http/server.go",
           "function": "serverHandler.ServeHTTP",
           "in_app": false,
           "lineno": 3413,
@@ -50,7 +50,7 @@
         {
           "context": [],
           "context_start": null,
-          "filename": "/opt/homebrew/Cellar/go/1.27.1/libexec/src/net/http/server.go",
+          "filename": "/usr/local/go/src/net/http/server.go",
           "function": "HandlerFunc.ServeHTTP",
           "in_app": false,
           "lineno": 2338,
@@ -65,7 +65,7 @@
           "in_app": false,
           "lineno": 47,
           "locals": null,
-          "module": "go-api/internal/tracepanel"
+          "module": "example.com/api/internal/tracepanel"
         },
         {
           "context": [],
@@ -75,7 +75,7 @@
           "in_app": false,
           "lineno": 46,
           "locals": null,
-          "module": "go-api/internal/tracepanel"
+          "module": "example.com/api/internal/tracepanel"
         },
         {
           "context": [],
@@ -85,12 +85,12 @@
           "in_app": false,
           "lineno": 137,
           "locals": null,
-          "module": "go-api/internal/tracepanel"
+          "module": "example.com/api/internal/tracepanel"
         },
         {
           "context": [],
           "context_start": null,
-          "filename": "/opt/homebrew/Cellar/go/1.27.1/libexec/src/net/http/server.go",
+          "filename": "/usr/local/go/src/net/http/server.go",
           "function": "(*ServeMux).ServeHTTP",
           "in_app": false,
           "lineno": 2903,
@@ -100,7 +100,7 @@
         {
           "context": [],
           "context_start": null,
-          "filename": "/opt/homebrew/Cellar/go/1.27.1/libexec/src/net/http/server.go",
+          "filename": "/usr/local/go/src/net/http/server.go",
           "function": "HandlerFunc.ServeHTTP",
           "in_app": false,
           "lineno": 2338,
@@ -132,7 +132,7 @@
         {
           "context": [],
           "context_start": null,
-          "filename": "/opt/homebrew/Cellar/go/1.27.1/libexec/src/internal/runtime/maps/runtime_faststr.go",
+          "filename": "/usr/local/go/src/internal/runtime/maps/runtime_faststr.go",
           "function": "mapassign_faststr",
           "in_app": false,
           "lineno": 263,

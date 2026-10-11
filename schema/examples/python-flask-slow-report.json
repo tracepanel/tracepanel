@@ -7,7 +7,7 @@
     "http.status_code": 200,
     "process.runtime.name": "cpython",
     "process.runtime.version": "3.14.0",
-    "service.name": "flask-classic",
+    "service.name": "reports",
     "service.role": "web",
     "telemetry.sdk.language": "python",
     "tracepanel.framework": "Flask 3.1.3"

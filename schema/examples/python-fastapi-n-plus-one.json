@@ -7,7 +7,7 @@
     "http.status_code": 200,
     "process.runtime.name": "cpython",
     "process.runtime.version": "3.14.0",
-    "service.name": "fastapi-classic",
+    "service.name": "shop-api",
     "service.role": "web",
     "telemetry.sdk.language": "python",
     "tracepanel.framework": "FastAPI 0.142.4"

@@ -9,7 +9,7 @@
     "http.status_code": 302,
     "process.runtime.name": "cpython",
     "process.runtime.version": "3.14.0",
-    "service.name": "django-htmx",
+    "service.name": "todo",
     "service.role": "web",
     "telemetry.sdk.language": "python",
     "tracepanel.framework": "Django 6.1.2",

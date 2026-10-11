@@ -7,7 +7,7 @@
     "http.status_code": 200,
     "process.runtime.name": "cpython",
     "process.runtime.version": "3.11.16",
-    "service.name": "django-classic",
+    "service.name": "blog",
     "service.role": "web",
     "telemetry.sdk.language": "python",
     "tracepanel.framework": "Django 5.2.18",
