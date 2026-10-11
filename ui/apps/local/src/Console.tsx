@@ -12,7 +12,15 @@ import { IssuePage } from "./IssuePage";
 import { useRowKeys } from "./keyboard";
 import { go, isEntry, parse, periodOf, type Route, type Section } from "./routes";
 import { SearchPalette } from "./SearchPalette";
-import { RAIL_WIDTH, Sidebar, SidebarHandle, useSidebarCollapsed, useSidebarWidth, visibleSections } from "./Sidebar";
+import {
+  RAIL_WIDTH,
+  Sidebar,
+  SidebarHandle,
+  SidebarToggle,
+  useSidebarCollapsed,
+  useSidebarWidth,
+  visibleSections,
+} from "./Sidebar";
 import { scopedSource, useApps, useScope } from "./scope";
 import { useScrollMemory } from "./scroll";
 import { sectionLabel } from "./sections";
@@ -183,9 +191,9 @@ export function Console({ route, source: everything }: { route: Route; source: D
           onClear={source.clearStore ? () => setClearing(true) : undefined}
           scope={scope}
           collapsed={collapsed}
-          onCollapse={collapse}
         />
         {collapsed ? null : <SidebarHandle {...sidebar} />}
+        <SidebarToggle collapsed={collapsed} collapse={collapse} />
       </div>
       {page}
       <SearchPalette open={searching} onOpenChange={setSearching} source={source} sections={visibleSections(counts)} />

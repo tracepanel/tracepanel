@@ -229,17 +229,18 @@ a {
 .split-handle::after {
   content: "";
   position: absolute;
-  top: 50%;
-  left: -2px;
-  width: 0.25rem;
-  height: 2.5rem;
-  margin-top: -1.25rem;
-  border-radius: 2px;
+  inset-block: 0;
+  left: -1px;
+  width: 2px;
   background: transparent;
   transition: background 120ms;
 }
 
-.split-handle:hover::after,
+/* As the console's sidebar: the whole border lights up, faint on hover, full while dragging or focused. */
+.split-handle:hover::after {
+  background: color-mix(in srgb, var(--dt-accent) 50%, transparent);
+}
+
 .split-handle:focus-visible::after,
 .split-handle[data-dragging]::after {
   background: var(--dt-accent);
