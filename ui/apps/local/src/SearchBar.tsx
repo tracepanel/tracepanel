@@ -355,7 +355,8 @@ export interface SearchBarProps {
   count?: number | undefined;
   /** The list of this entry point's calls: its own quick filters on the traces search. */
   callsOf?: EntrySection | undefined;
-  onChange: (q: string) => void;
+  /** `typed`: the box's own debounced text, which replaces the history entry; a chip or a menu adds one. */
+  onChange: (q: string, typed?: boolean) => void;
 }
 
 export function SearchBar({ section, q, spec, error, known, count, callsOf, onChange }: SearchBarProps) {
@@ -383,7 +384,7 @@ export function SearchBar({ section, q, spec, error, known, count, callsOf, onCh
       const next = compose(parsed.filters, parseQuery(text, keys).text);
       if (next !== compose(parsed.filters, parsed.text)) {
         sent.current = next;
-        onChange(next);
+        onChange(next, true);
       }
     }, 300);
     return () => window.clearTimeout(timer);

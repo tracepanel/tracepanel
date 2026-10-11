@@ -89,7 +89,8 @@ export function EntryPage({ section, q, view, source, spec, known }: EntryPagePr
   const entry = ENTRY[section];
   // Before the search spec loads, every term goes along.
   const keysOf = (resource: SearchResource) => (spec ? new Set(Object.keys(spec[resource] ?? {})) : null);
-  const setQuery = (next: string) => go({ name: section, q: next, view }, true);
+  // Typing replaces the entry, so Back skips the letters; a chip or a menu adds one, so Back undoes it.
+  const setQuery = (next: string, typed = false) => go({ name: section, q: next, view }, typed);
   const refine = (terms: Record<string, string>) => go({ name: section, q: refineQuery(q, terms), view });
 
   const groups = useSearch(
@@ -219,7 +220,7 @@ export function EntryPage({ section, q, view, source, spec, known }: EntryPagePr
         count={loaded.size}
         onChange={setQuery}
       />
-      <section className="min-h-0 flex-1 overflow-y-auto px-10 pb-10" aria-label={entry.title}>
+      <section className="min-h-0 flex-1 overflow-y-auto px-10 pb-10" aria-label={entry.title} data-scroll="">
         {body}
       </section>
     </main>

@@ -27,7 +27,7 @@ export type EntryView = "overview" | "calls";
  */
 export type Route =
   | { name: "home" }
-  | { name: Section; q: string; view?: EntryView | undefined }
+  | { name: Section; q: string; view?: EntryView | undefined; open?: string | undefined }
   | { name: "group"; section: EntrySection; key: string; q?: string | undefined }
   | { name: "trace"; id: string; from?: string | undefined; tab?: string | undefined; span?: string | undefined }
   | { name: "issue"; fingerprint: string; error?: boolean | undefined };
@@ -104,7 +104,7 @@ export function parse(hash: string): Route {
   }
   if ((SECTIONS as string[]).includes(path)) {
     const view = params.get("view") === "calls" ? "calls" : undefined;
-    return { name: path as Section, q, view };
+    return { name: path as Section, q, view, open: params.get("open") ?? undefined };
   }
   return { name: "home" };
 }
@@ -128,6 +128,8 @@ export function href(route: Route): string {
   const params = new URLSearchParams();
   if (route.q) params.set("q", route.q);
   if (route.view === "calls") params.set("view", "calls");
+  // The row a list has open (a statement, a log record, an email): it is still open after Back.
+  if (route.open) params.set("open", route.open);
   return `#/${route.name}${params.size ? `?${params}` : ""}`;
 }
 
@@ -137,7 +139,8 @@ const EMBEDDED = window.parent !== window;
 /** Go to a console address (`#/…`), as a link in the console would. */
 export function follow(target: string, replace = false): void {
   if (replace || EMBEDDED) {
-    history.replaceState(null, "", target);
+    // The entry's own state (its scroll, see scroll.ts) stays with it.
+    history.replaceState(history.state, "", target);
     window.dispatchEvent(new HashChangeEvent("hashchange"));
   } else {
     location.hash = target;

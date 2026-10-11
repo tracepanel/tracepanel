@@ -9,6 +9,7 @@ import { IssuePage } from "./IssuePage";
 import { go, isEntry, parse, periodOf, type Route, type Section } from "./routes";
 import { SearchPalette } from "./SearchPalette";
 import { Sidebar, SidebarHandle, useSidebarWidth, visibleSections } from "./Sidebar";
+import { useScrollMemory } from "./scroll";
 import { TracePage } from "./TracePage";
 
 /** The menu item a page belongs to; a trace belongs to wherever it was opened from. */
@@ -21,6 +22,8 @@ function sectionOf(route: Route): Section | null {
 }
 
 export function Console({ route, source }: { route: Route; source: DataSource }) {
+  // The address as the browser has it: positions are filed under the same string they are read back by.
+  useScrollMemory(location.hash);
   const [spec, setSpec] = useState<SearchSpec | null>(null);
   const [searching, setSearching] = useState(false);
   const [clearing, setClearing] = useState(false);
@@ -59,13 +62,13 @@ export function Console({ route, source }: { route: Route; source: DataSource })
     page = <TracePage id={route.id} from={route.from} tab={route.tab} span={route.span} source={source} />;
   else if (route.name === "issue") {
     page = (
-      <main className="min-h-0 min-w-0 overflow-y-auto bg-background">
+      <main className="min-h-0 min-w-0 overflow-y-auto bg-background" data-scroll="">
         <IssuePage fingerprint={route.fingerprint} source={source} />
       </main>
     );
   } else if (route.name === "group") {
     page = (
-      <main className="min-h-0 min-w-0 overflow-y-auto bg-background">
+      <main className="min-h-0 min-w-0 overflow-y-auto bg-background" data-scroll="">
         <GroupPage
           key={`${route.section} ${route.key} ${route.q ?? ""}`}
           section={route.section}
@@ -89,7 +92,17 @@ export function Console({ route, source }: { route: Route; source: DataSource })
       />
     );
   } else if (route.name !== "home") {
-    page = <DataPage key={route.name} section={route.name} q={route.q} source={source} spec={spec} known={known} />;
+    page = (
+      <DataPage
+        key={route.name}
+        section={route.name}
+        q={route.q}
+        open={route.open}
+        source={source}
+        spec={spec}
+        known={known}
+      />
+    );
   }
 
   const sidebar = useSidebarWidth();

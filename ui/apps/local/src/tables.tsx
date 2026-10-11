@@ -173,8 +173,18 @@ export function EndpointsTable({ items }: { items: readonly EndpointRow[] }) {
   );
 }
 
-export function QueriesTable({ items, source }: { items: readonly QueryRow[]; source: DataSource }) {
-  const [open, setOpen] = useState<string | null>(null);
+export function QueriesTable({
+  items,
+  source,
+  open,
+  onOpen,
+}: {
+  items: readonly QueryRow[];
+  source: DataSource;
+  /** The statement shown open, kept in the URL by the page. */
+  open: string | null;
+  onOpen: (key: string | null) => void;
+}) {
   const heaviest = Math.max(...items.map((item) => item.total), 1);
   return (
     <DataTable
@@ -191,7 +201,7 @@ export function QueriesTable({ items, source }: { items: readonly QueryRow[]; so
     >
       {items.map((item) => (
         <Fragment key={item.fp}>
-          <Tr selected={open === item.fp} onClick={() => setOpen(open === item.fp ? null : item.fp)}>
+          <Tr selected={open === item.fp} onClick={() => onOpen(open === item.fp ? null : item.fp)}>
             <Td>
               <span className="flex flex-col gap-0.5">
                 <Mono className="font-semibold">
@@ -251,12 +261,16 @@ export function QueriesTable({ items, source }: { items: readonly QueryRow[]; so
 export function LogsTable({
   items,
   onFilter,
+  open,
+  onOpen,
 }: {
   items: readonly LogRow[];
+  /** The record shown open, by id, kept in the URL by the page. */
+  open: string | null;
+  onOpen: (key: string | null) => void;
   /** Narrows the current list: each key replaces the same filter in the query. */
   onFilter: (terms: Record<string, string>) => void;
 }) {
-  const [open, setOpen] = useState<number | null>(null);
   return (
     <DataTable
       head={
@@ -272,11 +286,11 @@ export function LogsTable({
       {items.map((log) => (
         <Fragment key={log.id}>
           <Tr
-            selected={open === log.id}
+            selected={open === String(log.id)}
             tone={
               log.level === "error" || log.level === "critical" ? "error" : log.level === "warning" ? "warn" : undefined
             }
-            onClick={() => setOpen(open === log.id ? null : log.id)}
+            onClick={() => onOpen(open === String(log.id) ? null : String(log.id))}
           >
             <Td className="text-muted-foreground tabular-nums">{new Date(log.time / 1000).toLocaleTimeString()}</Td>
             <Td>
@@ -299,7 +313,7 @@ export function LogsTable({
               />
             </Td>
           </Tr>
-          {open === log.id ? (
+          {open === String(log.id) ? (
             <TableRow className="hover:bg-transparent">
               <TableCell colSpan={5} className="bg-muted/40 px-5 py-4 whitespace-normal">
                 <LogDetails log={log} onFilter={onFilter} />
@@ -452,8 +466,18 @@ export function IssuesTable({ items }: { items: readonly IssueRow[] }) {
   );
 }
 
-export function MailsTable({ items, source }: { items: readonly MailRow[]; source: DataSource }) {
-  const [open, setOpen] = useState<string | null>(null);
+export function MailsTable({
+  items,
+  source,
+  open,
+  onOpen,
+}: {
+  items: readonly MailRow[];
+  source: DataSource;
+  /** The email shown open, by its span, kept in the URL by the page. */
+  open: string | null;
+  onOpen: (key: string | null) => void;
+}) {
   return (
     <DataTable
       head={
@@ -471,7 +495,7 @@ export function MailsTable({ items, source }: { items: readonly MailRow[]; sourc
           <Tr
             selected={open === mail.span_id}
             tone={mail.sent === false ? "error" : undefined}
-            onClick={() => setOpen(open === mail.span_id ? null : mail.span_id)}
+            onClick={() => onOpen(open === mail.span_id ? null : mail.span_id)}
           >
             <Td className="max-w-[420px]">
               <span className="block truncate font-medium">{mail.subject || "(no subject)"}</span>
