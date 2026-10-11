@@ -596,8 +596,9 @@ function PanelApp({ route }: { route: Route }) {
           target="_blank"
           rel="noreferrer"
           title="Open this request in the full console, in a new tab"
+          aria-label="Open in the console"
         >
-          Console
+          <span className="bar-label">Console</span>
           <ExternalIcon />
         </a>
       </Button>

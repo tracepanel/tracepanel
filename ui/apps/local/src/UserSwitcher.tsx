@@ -89,13 +89,13 @@ export function UserSwitcher({ source, onSwitched }: { source: DataSource; onSwi
           {current ? (
             <>
               <UserRoundIcon className="text-muted-foreground" />
-              <span className="truncate">{current.username}</span>
-              <ArrowLeftRightIcon className="text-muted-foreground" />
+              <span className="bar-label truncate">{current.username}</span>
+              <ArrowLeftRightIcon className="bar-label text-muted-foreground" />
             </>
           ) : (
             <>
               <UserRoundIcon className="text-muted-foreground" />
-              Set user
+              <span className="bar-label">Set user</span>
             </>
           )}
         </Button>

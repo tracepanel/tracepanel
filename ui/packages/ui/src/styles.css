@@ -259,7 +259,7 @@ code,
   align-items: center;
   gap: 0.25rem;
   padding: 0 0.4375rem;
-  border-radius: 62.4375rem;
+  border-radius: 999px;
   font-size: var(--dt-size-xs);
   font-weight: 600;
   line-height: 1.125rem;
@@ -610,6 +610,15 @@ a.dt-request-row {
   background: none;
   backdrop-filter: none;
 }
+/* A narrow panel (docked right): Explore keeps its icon, and the tabs fade at the edge where more of them scroll. */
+@media (max-width: 560px) {
+  .dt-explore-label {
+    display: none;
+  }
+  .dt-trace-strip .dt-tabs {
+    mask-image: linear-gradient(to right, #000 calc(100% - 1.5rem), transparent);
+  }
+}
 .dt-trace-strip .dt-tab {
   flex: none;
   margin-bottom: 0;
@@ -848,7 +857,7 @@ a.dt-request-row {
 .dt-tab-count {
   min-width: 1.125rem;
   padding: 0 0.3125rem;
-  border-radius: 62.4375rem;
+  border-radius: 999px;
   background: var(--dt-muted-bg);
   color: var(--dt-text-2);
   font-size: var(--dt-size-xs);
@@ -1681,7 +1690,7 @@ details[data-focused] > .dt-sql-group {
   height: 1.625rem;
   padding: 0 0.625rem;
   border: 1px solid var(--dt-border);
-  border-radius: 62.4375rem;
+  border-radius: 999px;
   background: none;
   color: var(--dt-text-2);
   font: 500 var(--dt-size-xs) var(--dt-font);
