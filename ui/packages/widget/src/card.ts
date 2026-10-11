@@ -187,9 +187,56 @@ function ranked(issues: readonly Issue[]): Issue[] {
   return [...issues].sort((a, b) => Number(b.kind === "error") - Number(a.kind === "error"));
 }
 
+/** "1 issue", "3 issues". */
+export function plural(count: number, one: string, many: string): string {
+  return `${count} ${count === 1 ? one : many}`;
+}
+
+function failed(info: TraceInfo): boolean {
+  return (info.status ?? 200) >= 500;
+}
+
+/** As on the pill: a request's time is amber from 300 ms, red from a second. */
+function speedOf(total: number): "slow" | "very-slow" | undefined {
+  if (total >= VERY_SLOW_MS) return "very-slow";
+  return total >= SLOW_MS ? "slow" : undefined;
+}
+
+/** A request's row name: method and path, "page" on the page itself, and its findings as an amber chip. */
+function requestLabel(info: TraceInfo, isPage: boolean): HTMLElement {
+  const { method, path } = requestName(info);
+  const name = element("span", "card-path", `${method} ${path}`);
+  if (isPage) name.append(element("span", "card-tag", "page"));
+  // What makes a fast 200 worth opening.
+  if (info.issues) name.append(element("span", "card-kind card-issues", plural(info.issues, "issue", "issues")));
+  return name;
+}
+
+/** Its time, amber or red when slow. */
+function timeCell(info: TraceInfo): HTMLElement {
+  const total = info.totalMs ?? 0;
+  const time = element("span", "card-ms", pillMs(total));
+  const speed = speedOf(total);
+  if (speed) time.dataset["speed"] = speed;
+  return time;
+}
+
+/** "Most time: View code 4.6 ms · 78%": the bar's biggest part in words. */
+function mostLine(category: string, value: number, total: number): HTMLElement {
+  const line = element("p", "card-most");
+  line.dataset["category"] = category;
+  line.append(
+    element("i"),
+    `Most time: ${CATEGORY_LABELS[category as Category]} `,
+    element("b", undefined, ms(value)),
+    ` · ${Math.round((value / total) * 100)}%`,
+  );
+  return line;
+}
+
 /** Worst first: failed, then with issues, then slowest. */
 function worstFirst(requests: readonly TraceInfo[]): TraceInfo[] {
-  const rank = (info: TraceInfo) => ((info.status ?? 200) >= 500 ? 2 : info.issues ? 1 : 0);
+  const rank = (info: TraceInfo) => (failed(info) ? 2 : info.issues ? 1 : 0);
   return [...requests].sort((a, b) => rank(b) - rank(a) || (b.totalMs ?? 0) - (a.totalMs ?? 0));
 }
 
@@ -250,20 +297,11 @@ export function mountCard(root: ShadowRoot, badge: HTMLElement, source: CardSour
       bar.append(piece);
     }
     const [top] = [...parts].sort((a, b) => b[1] - a[1]);
-    // A failed request's story is its error (under Fix first), not where its time went.
-    if (!top || (info.status ?? 200) >= 500) return [bar];
+    if (!top) return [bar];
     const [category, value] = top;
-    const label = `Most time: ${CATEGORY_LABELS[category as Category]}`;
-    bar.setAttribute("aria-label", `${label}, ${ms(value)}`);
-    const line = element("p", "card-most");
-    line.dataset["category"] = category;
-    line.append(
-      element("i"),
-      `${label} `,
-      element("b", undefined, ms(value)),
-      ` · ${Math.round((value / total) * 100)}%`,
-    );
-    return [bar, line];
+    bar.setAttribute("aria-label", `Most time: ${CATEGORY_LABELS[category as Category]}, ${ms(value)}`);
+    // A failed request's story is its error (under Fix first), not where its time went.
+    return failed(info) ? [bar] : [bar, mostLine(category, value, total)];
   }
 
   function findings(info: TraceInfo, trace: Trace): HTMLElement | null {
@@ -304,36 +342,28 @@ export function mountCard(root: ShadowRoot, badge: HTMLElement, source: CardSour
     const sorted = worstFirst(later);
     const section = element("section", "card-section");
     section.append(element("p", "card-caption", `Other requests on this page · ${later.length}`));
-    for (const info of sorted.slice(0, OTHERS)) {
-      const row = element("button", "card-row");
-      row.type = "button";
-      const { method, path } = requestName(info);
-      const chip = statusChip(info.status) ?? element("span");
-      const name = element("span", "card-path", `${method} ${path}`);
-      if (info === page) name.append(element("span", "card-tag", "page"));
-      // Its findings, amber as on the pill: what makes a fast 200 worth opening.
-      if (info.issues)
-        name.append(
-          element("span", "card-kind card-issues", `${info.issues} ${info.issues === 1 ? "issue" : "issues"}`),
-        );
-      const time = element("span", "card-ms", pillMs(info.totalMs ?? 0));
-      const total = info.totalMs ?? 0;
-      if (total >= SLOW_MS) time.dataset["speed"] = total >= VERY_SLOW_MS ? "very-slow" : "slow";
-      row.append(chip, name, time);
-      row.title = `${method} ${path}\nClick to open it in the panel`;
-      const trace = info.trace;
-      if (trace) {
-        row.addEventListener("click", () => {
-          hide(true);
-          source.open(`#/t/${trace}`);
-        });
-      }
-      section.append(row);
-    }
+    for (const info of sorted.slice(0, OTHERS)) section.append(requestRow(info, info === page));
     // The panel lists them all; it opens on the first one not shown here.
     const next = sorted[OTHERS]?.trace;
     if (next) section.append(moreLink(sorted.length - OTHERS, `#/t/${next}`));
     return section;
+  }
+
+  /** One of the page's other requests: status, name, time; a click opens it in the panel. */
+  function requestRow(info: TraceInfo, isPage: boolean): HTMLElement {
+    const row = element("button", "card-row");
+    row.type = "button";
+    row.append(statusChip(info.status) ?? element("span"), requestLabel(info, isPage), timeCell(info));
+    const { method, path } = requestName(info);
+    row.title = `${method} ${path}\nClick to open it in the panel`;
+    const trace = info.trace;
+    if (trace) {
+      row.addEventListener("click", () => {
+        hide(true);
+        source.open(`#/t/${trace}`);
+      });
+    }
+    return row;
   }
 
   /** "+2 more →": opens the panel where the rest are. */

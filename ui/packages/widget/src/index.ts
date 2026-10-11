@@ -1,6 +1,6 @@
 // Corner badge, fetch and XHR capture, slide-out panel (iframe inside Shadow DOM).
 import { RUNTIME_PATHS, runtimeKind, runtimeName } from "@tracepanel/ui/lib/runtime";
-import { CARD_STYLE, mountCard } from "./card";
+import { CARD_STYLE, mountCard, plural } from "./card";
 
 export interface TraceInfo {
   /** The trace's own name when it says more than the request line (a GraphQL operation). */
@@ -438,7 +438,10 @@ function addIssues(parent: HTMLElement, issues: number, tone: "warn" | "error"):
  * the other numbers, and how many of the others failed in red, as their own chip, so "16" never reads as 16
  * failures. No tooltip: the hover card lists them.
  */
-function addPage(parent: HTMLElement, count: number, failed: number, more: boolean): void {
+function addPage(parent: HTMLElement, all: readonly TraceInfo[]): void {
+  const count = all.length;
+  const failed = othersFailed(all);
+  const more = isFailure(all.at(-1));
   const seg = segment(parent);
   seg.className = "seg page";
   seg.innerHTML = ICONS.layers;
@@ -456,6 +459,30 @@ function addPage(parent: HTMLElement, count: number, failed: number, more: boole
     chip.append(more ? `${failed} more failed` : `${failed} failed`);
     seg.append(chip);
   }
+}
+
+function isFailure(info: TraceInfo | undefined): boolean {
+  return (info?.status ?? 200) >= 500;
+}
+
+/** The shown (latest) request's failure is already its status: the page count names the others' failures. */
+function othersFailed(all: readonly TraceInfo[]): number {
+  return all.slice(0, -1).filter(isFailure).length;
+}
+
+/** "5 requests on this page, 1 other one failed", or nothing for a page alone. */
+function pageLine(all: readonly TraceInfo[]): string[] {
+  if (all.length < 2) return [];
+  const failed = othersFailed(all);
+  return [
+    `${all.length} requests on this page${failed ? `, ${plural(failed, "other one", "other ones")} failed` : ""}`,
+  ];
+}
+
+/** The pill read aloud: the shown request, the page's count, the runtime. */
+function pillLabel(all: readonly TraceInfo[], runtime: string | undefined): string {
+  const summary = [line(all.at(-1) ?? {}), ...pageLine(all), ...(runtime ? [`Served by ${runtime}`] : [])];
+  return `tracepanel: ${summary.join(". ")}`;
 }
 
 /** Which request the pill is about: its method and path (a GraphQL operation by its name). */
@@ -704,19 +731,10 @@ export function mount(options: WidgetOptions = {}): Widget {
     addQueries(stats, shown.queries ?? 0);
     // Findings are amber whatever else happened: a failure says so in its status, and in the page's count.
     if (shown.issues) addIssues(stats, shown.issues, "warn");
-    // The shown request's failure is already its status: the chip counts the page's other failures.
-    const failed = all.slice(0, -1).filter((info) => (info.status ?? 200) >= 500).length;
-    if (all.length > 1) addPage(stats, all.length, failed, (shown.status ?? 200) >= 500);
+    if (all.length > 1) addPage(stats, all);
     badge.dataset["verdict"] = worst;
-
-    const others = failed ? `, ${failed} other ${failed === 1 ? "one" : "ones"} failed` : "";
-    const summary = [
-      line(shown),
-      ...(all.length > 1 ? [`${all.length} requests on this page${others}`] : []),
-      ...(options.runtime ? [`Served by ${options.runtime}`] : []),
-    ];
     // No title: the hover card shows all of it (and more); screen readers get the summary.
-    badge.setAttribute("aria-label", `tracepanel: ${summary.join(". ")}`);
+    badge.setAttribute("aria-label", pillLabel(all, options.runtime));
   }
 
   /** A page htmx loaded (a boosted link or form): it heads the list, and what follows is its requests. */
