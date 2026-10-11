@@ -1,85 +1,86 @@
 /* @tracepanel/ui — shared by the console and the panel. Every class is prefixed with dt-. */
 
-/* tracepanel identity: violet accents and a small lime brand mark on calm, GitHub-like neutral surfaces, dark (default) or light.
-   The app sets html[data-theme] from the viewer's choice or the OS preference. */
+/* tracepanel identity: the brand's violet and lime on deep ink, dark (default) or light. Status reads in lightness
+   as well as hue: lime is fine, amber needs a look, coral failed. The app sets html[data-theme] from the viewer's
+   choice or the OS preference. */
 :root {
   color-scheme: dark;
-  --dt-font: "Inter Variable", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --dt-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --dt-font: "Geist Variable", "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --dt-mono: "Geist Mono Variable", "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
-  --dt-ink: rgb(1 4 9 / 0.88);
-  --dt-ink-2: #151b23;
-  --dt-ink-text: #f0f6fc;
-  --dt-ink-muted: #9198a1;
-  --dt-lime: #c8f560;
-  --dt-lime-text: #120e24;
+  --dt-ink: rgb(10 12 17 / 0.9);
+  --dt-ink-2: #12151d;
+  --dt-ink-text: #eceef3;
+  --dt-ink-muted: #8c93a6;
+  --dt-lime: #b6e24a;
+  --dt-lime-text: #10140a;
 
-  --dt-page: #0d1117;
-  --dt-bg: #0d1117;
-  --dt-paper: #151b23;
+  --dt-page: #0a0c11;
+  --dt-bg: #0a0c11;
+  --dt-paper: #12151d;
   --dt-subtle: rgb(255 255 255 / 0.02);
-  --dt-muted-bg: rgb(101 108 118 / 0.2);
-  --dt-hover: rgb(101 108 118 / 0.12);
-  --dt-selected: rgb(163 113 247 / 0.12);
-  --dt-border: #2a313c;
-  --dt-border-strong: #3d444d;
+  --dt-muted-bg: #1a1f2c;
+  --dt-hover: rgb(255 255 255 / 0.045);
+  --dt-selected: rgb(165 135 255 / 0.13);
+  --dt-border: #1d212c;
+  --dt-border-strong: #2a3040;
   --dt-blur: none;
 
-  --dt-text: #f0f6fc;
-  --dt-text-2: #c3ccd6;
-  --dt-text-3: #9198a1;
+  --dt-text: #eceef3;
+  --dt-text-2: #b9bfcd;
+  --dt-text-3: #8c93a6;
 
-  --dt-accent: #bc8cff;
-  --dt-accent-strong: #8957e5;
-  --dt-accent-bg: rgb(163 113 247 / 0.15);
-  --dt-glow: 0 0 0 3px rgb(163 113 247 / 0.3);
+  --dt-accent: #bc9cff;
+  --dt-accent-strong: #7c4ff0;
+  --dt-accent-bg: rgb(165 135 255 / 0.14);
+  --dt-glow: 0 0 0 3px rgb(165 135 255 / 0.3);
 
-  --dt-ok: #4ade80;
-  --dt-ok-bg: rgb(74 222 128 / 0.12);
-  --dt-warn: #fb923c;
-  --dt-warn-strong: #ff8a4c;
-  --dt-warn-bg: rgb(251 146 60 / 0.1);
-  --dt-warn-border: rgb(251 146 60 / 0.22);
-  --dt-error: #fb7185;
-  --dt-error-bg: rgb(251 113 133 / 0.1);
-  --dt-error-border: rgb(251 113 133 / 0.32);
-  --dt-info: #7db4ff;
-  --dt-info-bg: rgb(125 180 255 / 0.13);
+  --dt-ok: #b8f25c;
+  --dt-ok-bg: rgb(184 242 92 / 0.11);
+  --dt-warn: #f5b544;
+  --dt-warn-strong: #ffc561;
+  --dt-warn-bg: rgb(245 181 68 / 0.11);
+  --dt-warn-border: rgb(245 181 68 / 0.3);
+  --dt-error: #ff8a7a;
+  --dt-error-bg: rgb(255 107 94 / 0.11);
+  --dt-error-border: rgb(255 107 94 / 0.34);
+  --dt-info: #9db2ff;
+  --dt-info-bg: rgb(157 178 255 / 0.12);
 
-  --dt-get: #7db4ff;
-  --dt-post: #4ade80;
-  --dt-put: #fbbf24;
-  --dt-delete: #fb7185;
+  --dt-get: #9db2ff;
+  --dt-post: #b8f25c;
+  --dt-put: #f5b544;
+  --dt-delete: #ff8a7a;
 
-  --dt-k-request: rgb(145 152 161 / 0.35);
-  --dt-k-django: rgb(145 152 161 / 0.35);
-  --dt-k-view: #a78bfa;
+  --dt-k-request: rgb(140 147 166 / 0.32);
+  --dt-k-django: rgb(140 147 166 / 0.32);
+  --dt-k-view: #a587ff;
   --dt-k-template: #2dd4bf;
-  --dt-k-sql: #7db4ff;
-  --dt-k-cache: #fbbf24;
+  --dt-k-sql: #9db2ff;
+  --dt-k-cache: #f5b544;
   --dt-k-log: #9a93bd;
   --dt-k-mail: #f472b6;
 
-  --dt-mark: rgb(145 152 161 / 0.35);
+  --dt-mark: rgb(140 147 166 / 0.32);
   --dt-db: #8b7bff;
 
-  --dt-radius: 8px;
-  --dt-radius-sm: 6px;
-  --dt-shadow: 0 8px 24px rgb(1 4 9 / 0.5);
+  --dt-radius: 10px;
+  --dt-radius-sm: 7px;
+  --dt-shadow: 0 1px 0 rgb(255 255 255 / 0.03) inset, 0 8px 24px rgb(0 0 0 / 0.35);
 
   /* Surfaces the apps build on. */
-  --dt-surface: #0d1117;
-  --dt-chrome: #010409;
-  --dt-chrome-strong: #151b23;
-  --dt-panel: #0d1117;
-  --dt-popover: #151b23;
-  --dt-popover-shadow: 0 8px 24px rgb(1 4 9 / 0.6);
-  --dt-card: #0d1117;
-  --dt-faint: #151b23;
-  --dt-field: #0d1117;
-  --dt-grid: rgb(145 152 161 / 0.15);
-  --dt-scrollbar: rgb(145 152 161 / 0.35);
-  --dt-backdrop: #0d1117;
+  --dt-surface: #0a0c11;
+  --dt-chrome: #0d1016;
+  --dt-chrome-strong: #12151d;
+  --dt-panel: #0a0c11;
+  --dt-popover: #12151d;
+  --dt-popover-shadow: 0 16px 40px rgb(0 0 0 / 0.55), 0 0 0 1px rgb(255 255 255 / 0.04);
+  --dt-card: #10131a;
+  --dt-faint: #141821;
+  --dt-field: #0c0f15;
+  --dt-grid: rgb(140 147 166 / 0.13);
+  --dt-scrollbar: rgb(140 147 166 / 0.3);
+  --dt-backdrop: #0a0c11;
 
   /* Chart series: validated with the dataviz palette checker on --dt-surface. */
   --dt-chart-1: #8b7bff;
@@ -87,87 +88,87 @@
 
   /* SQL highlighting. */
   --dt-syn-keyword: #c8a8ff;
-  --dt-syn-identifier: #e6edf3;
-  --dt-syn-string: #c8f560;
+  --dt-syn-identifier: #e3e6ee;
+  --dt-syn-string: #b8f25c;
   --dt-syn-number: #ffb86b;
-  --dt-syn-comment: #8b949e;
-  --dt-syn-operator: #9198a1;
-  --dt-syn-function: #79c0ff;
-  --dt-syn-param-bg: rgb(200 245 96 / 0.16);
+  --dt-syn-comment: #7d8497;
+  --dt-syn-operator: #8c93a6;
+  --dt-syn-function: #9db2ff;
+  --dt-syn-param-bg: rgb(245 181 68 / 0.16);
   --dt-alias-text: #5eead4;
 }
 
-/* Light theme: same identity, paper surfaces, darker inks so text and marks keep their contrast. */
+/* Light theme: same identity on white and warm grey, darker inks so text and marks keep their contrast. */
 :root[data-theme="light"] {
   color-scheme: light;
 
   --dt-ink: rgb(255 255 255 / 0.95);
-  --dt-ink-2: #f6f8fa;
-  --dt-ink-text: #1f2328;
-  --dt-ink-muted: #59636e;
-  --dt-lime: #c8f560;
+  --dt-ink-2: #f5f5f3;
+  --dt-ink-text: #16181d;
+  --dt-ink-muted: #5f6470;
+  --dt-lime: #b6e24a;
   --dt-lime-text: #1b2a05;
 
   --dt-page: #ffffff;
   --dt-bg: #ffffff;
-  --dt-paper: #f6f8fa;
-  --dt-subtle: #f6f8fa;
-  --dt-muted-bg: rgb(129 139 152 / 0.15);
-  --dt-hover: rgb(129 139 152 / 0.1);
-  --dt-selected: rgb(130 80 223 / 0.08);
-  --dt-border: #d1d9e0;
-  --dt-border-strong: #c1c9d2;
+  --dt-paper: #f6f6f4;
+  --dt-subtle: #f8f8f6;
+  --dt-muted-bg: #efefec;
+  --dt-hover: rgb(22 24 29 / 0.045);
+  --dt-selected: rgb(124 79 240 / 0.08);
+  --dt-border: #e7e7e2;
+  --dt-border-strong: #d5d5ce;
 
-  --dt-text: #1f2328;
-  --dt-text-2: #3d444d;
-  --dt-text-3: #59636e;
+  --dt-text: #16181d;
+  --dt-text-2: #3a3e47;
+  --dt-text-3: #5f6470;
 
-  --dt-accent: #8250df;
-  --dt-accent-strong: #8250df;
-  --dt-accent-bg: rgb(130 80 223 / 0.1);
-  --dt-glow: 0 0 0 3px rgb(130 80 223 / 0.2);
+  --dt-accent: #6d3fe0;
+  --dt-accent-strong: #7c4ff0;
+  --dt-accent-bg: rgb(124 79 240 / 0.09);
+  --dt-glow: 0 0 0 3px rgb(124 79 240 / 0.2);
 
-  --dt-ok: #15803d;
-  --dt-ok-bg: rgb(22 163 74 / 0.1);
-  --dt-warn: #c2410c;
-  --dt-warn-strong: #c2410c;
-  --dt-warn-bg: rgb(234 88 12 / 0.08);
-  --dt-warn-border: rgb(234 88 12 / 0.25);
-  --dt-error: #e11d48;
-  --dt-error-bg: rgb(225 29 72 / 0.07);
-  --dt-error-border: rgb(225 29 72 / 0.3);
-  --dt-info: #2563eb;
-  --dt-info-bg: rgb(37 99 235 / 0.09);
+  --dt-ok: #3d7a0c;
+  --dt-ok-bg: rgb(98 160 20 / 0.11);
+  --dt-warn: #b45309;
+  --dt-warn-strong: #b45309;
+  --dt-warn-bg: rgb(217 119 6 / 0.09);
+  --dt-warn-border: rgb(217 119 6 / 0.28);
+  --dt-error: #d0342c;
+  --dt-error-bg: rgb(220 52 44 / 0.07);
+  --dt-error-border: rgb(220 52 44 / 0.3);
+  --dt-info: #3456d6;
+  --dt-info-bg: rgb(52 86 214 / 0.08);
 
-  --dt-get: #2563eb;
-  --dt-post: #15803d;
+  --dt-get: #3456d6;
+  --dt-post: #3d7a0c;
   --dt-put: #b45309;
-  --dt-delete: #e11d48;
+  --dt-delete: #d0342c;
 
-  --dt-k-request: rgb(89 99 110 / 0.3);
-  --dt-k-django: rgb(89 99 110 / 0.3);
-  --dt-k-view: #7c5ce6;
+  --dt-k-request: rgb(95 100 112 / 0.28);
+  --dt-k-django: rgb(95 100 112 / 0.28);
+  --dt-k-view: #7c4ff0;
   --dt-k-template: #0d9488;
-  --dt-k-sql: #2563eb;
+  --dt-k-sql: #3456d6;
   --dt-k-cache: #d97706;
   --dt-k-log: #8a84a6;
   --dt-k-mail: #db2777;
 
-  --dt-mark: rgb(89 99 110 / 0.3);
+  --dt-mark: rgb(95 100 112 / 0.28);
   --dt-db: #6d5ce7;
-  --dt-shadow: 0 1px 3px rgb(31 35 40 / 0.08);
+  --dt-shadow: 0 1px 2px rgb(22 24 29 / 0.05), 0 4px 14px rgb(22 24 29 / 0.04);
 
   --dt-surface: #ffffff;
-  --dt-chrome: #f6f8fa;
-  --dt-chrome-strong: #f6f8fa;
+  --dt-chrome: #f7f7f5;
+  --dt-chrome-strong: #f0f0ed;
   --dt-panel: #ffffff;
   --dt-popover: #ffffff;
-  --dt-popover-shadow: 0 8px 24px rgb(66 74 83 / 0.16);
+  --dt-popover-shadow: 0 16px 40px rgb(22 24 29 / 0.14), 0 0 0 1px rgb(22 24 29 / 0.05);
   --dt-card: #ffffff;
-  --dt-faint: #f6f8fa;
+  --dt-faint: #f6f6f4;
   --dt-field: #ffffff;
-  --dt-grid: rgb(31 35 40 / 0.08);
-  --dt-scrollbar: rgb(31 35 40 / 0.25);
+  --dt-grid: rgb(22 24 29 / 0.07);
+  --dt-scrollbar: rgb(22 24 29 / 0.22);
   --dt-backdrop: #ffffff;
 
   --dt-chart-1: #6d5ce7;
@@ -175,12 +176,12 @@
 
   --dt-syn-keyword: #6d28d9;
   --dt-syn-identifier: #1d1830;
-  --dt-syn-string: #3f7d0a;
+  --dt-syn-string: #3d7a0c;
   --dt-syn-number: #b45309;
   --dt-syn-comment: #8a84a6;
   --dt-syn-operator: #6e6889;
-  --dt-syn-function: #0550ae;
-  --dt-syn-param-bg: rgb(101 163 13 / 0.12);
+  --dt-syn-function: #3456d6;
+  --dt-syn-param-bg: rgb(217 119 6 / 0.12);
   --dt-alias-text: #0f766e;
 }
 

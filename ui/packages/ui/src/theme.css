@@ -25,7 +25,7 @@
   --border: var(--dt-border);
   --input: var(--dt-border-strong);
   --ring: var(--dt-accent);
-  --radius: 0.5rem;
+  --radius: 0.625rem;
   --sidebar: var(--dt-chrome);
   --sidebar-foreground: var(--dt-text-2);
   --sidebar-accent: var(--dt-hover);

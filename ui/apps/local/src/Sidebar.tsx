@@ -105,17 +105,17 @@ export function Sidebar({
       <button
         type="button"
         onClick={onSearch}
-        className="flex items-center gap-2.5 rounded-lg border bg-background px-3 py-2 text-left text-[15px] text-muted-foreground hover:bg-accent"
+        className="flex items-center gap-2.5 rounded-lg border bg-[var(--dt-field)] px-3 py-2 text-left text-[15px] text-muted-foreground transition-colors hover:border-[var(--dt-border-strong)] hover:text-foreground"
       >
         <SearchIcon className="size-4" />
         Search traces
-        <kbd className="ml-auto rounded border px-1.5 font-mono text-[12px]">⌘K</kbd>
+        <kbd className="ml-auto rounded-md bg-muted px-1.5 py-0.5 font-mono text-[12px] text-text-2">⌘K</kbd>
       </button>
       <nav className="grid gap-5">
         {NAV_GROUPS.map((group) => (
           <div key={group.items[0]?.section} className="grid gap-1">
             {group.title ? (
-              <span className="px-3.5 pb-1 text-[12px] font-semibold tracking-wider text-muted-foreground uppercase">
+              <span className="px-3.5 pb-1 text-[11.5px] font-semibold tracking-[0.08em] text-muted-foreground/80 uppercase">
                 {group.title}
               </span>
             ) : null}
@@ -142,8 +142,8 @@ export function Sidebar({
                     {count ? (
                       <span
                         className={cn(
-                          "ml-auto min-w-6 rounded-full px-2 text-center text-[13px] leading-6 font-semibold tabular-nums",
-                          item === "errors" ? "bg-error text-white" : "bg-warn-soft text-warn",
+                          "ml-auto min-w-6 rounded-full px-2 text-center font-mono text-[12.5px] leading-6 font-semibold tabular-nums",
+                          item === "errors" ? "bg-error-soft text-error" : "bg-warn-soft text-warn",
                         )}
                       >
                         {count}

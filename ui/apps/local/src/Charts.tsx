@@ -607,7 +607,7 @@ export function Stat({
       <span className="text-[14px] font-medium text-muted-foreground">{label}</span>
       <span
         className={cn(
-          "text-[28px] leading-tight font-semibold tabular-nums",
+          "text-[30px] leading-tight font-semibold tracking-[-0.02em] tabular-nums",
           tone === "warn" && "text-warn",
           tone === "error" && "text-error",
         )}
