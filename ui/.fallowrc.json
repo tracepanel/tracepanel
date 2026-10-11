@@ -1,0 +1,30 @@
+{
+  "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
+  "ignorePatterns": [
+    "**/dist/**",
+    "packages/ui/src/api.gen.ts",
+    "**/*.d.ts"
+  ],
+  "rules": {
+    "unused-files": "warn",
+    "unused-exports": "warn",
+    "unused-types": "warn",
+    "unused-dependencies": "warn",
+    "unused-enum-members": "warn",
+    "unused-class-members": "warn",
+    "unresolved-imports": "warn",
+    "circular-dependencies": "warn",
+    "type-only-dependencies": "warn",
+    "boundary-violation": "warn"
+  },
+  "boundaries": {
+    "zones": [
+      { "name": "design-system", "patterns": ["packages/ui/**"] },
+      { "name": "widget", "patterns": ["packages/widget/**"] },
+      { "name": "app", "patterns": ["apps/local/**"] }
+    ],
+    "rules": [
+      { "from": "design-system", "allow": [] }
+    ]
+  }
+}
