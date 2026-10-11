@@ -120,27 +120,32 @@ export function Sidebar({
     <aside
       className={cn(
         "flex min-h-0 flex-col overflow-hidden bg-sidebar pt-6 pb-5",
-        rail ? "items-center gap-6 px-3" : "gap-7 px-5",
+        // The same gaps open and as a rail: toggling moves things sideways only, never up or down.
+        rail ? "items-center gap-7 px-3" : "gap-7 px-5",
         drawer ? "h-full overflow-y-auto" : "border-r max-[980px]:hidden",
       )}
     >
-      <div className={cn("flex items-center", rail ? "flex-col gap-3" : "justify-between gap-2")}>
-        <a href="#/" className={cn("no-underline", !rail && "px-2")} aria-label="Tracepanel home">
-          {rail ? <LogoMark /> : <Logo />}
-        </a>
-        {/* Expand where collapse was: at the top, by the logo. */}
+      <div className={cn("flex h-8 items-center", !rail && "justify-between gap-2")}>
         {onCollapse && rail ? (
+          // One row as when open: the mark, which turns into the expand button under the pointer.
           <RailTip label="Expand the sidebar" detail="⌘B">
             <button
               type="button"
-              className="grid size-8 place-items-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
+              className="group grid size-8 place-items-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground focus-visible:bg-sidebar-accent"
               aria-label="Expand the sidebar"
               onClick={() => onCollapse(false)}
             >
-              <PanelLeftOpenIcon className="size-[1.125rem]" />
+              <span className="col-start-1 row-start-1 group-hover:invisible group-focus-visible:invisible">
+                <LogoMark />
+              </span>
+              <PanelLeftOpenIcon className="invisible col-start-1 row-start-1 size-[1.125rem] group-hover:visible group-focus-visible:visible" />
             </button>
           </RailTip>
-        ) : null}
+        ) : (
+          <a href="#/" className={cn("no-underline", !rail && "px-2")} aria-label="Tracepanel home">
+            {rail ? <LogoMark /> : <Logo />}
+          </a>
+        )}
         {onCollapse && !rail ? (
           <button
             type="button"
@@ -160,7 +165,7 @@ export function Sidebar({
             type="button"
             onClick={onSearch}
             aria-label="Search traces"
-            className="grid size-11 place-items-center rounded-lg border bg-[var(--dt-field)] text-muted-foreground transition-colors hover:border-[var(--dt-border-strong)] hover:text-foreground"
+            className="grid size-10 place-items-center rounded-lg border bg-[var(--dt-field)] text-muted-foreground transition-colors hover:border-[var(--dt-border-strong)] hover:text-foreground"
           >
             <SearchIcon className="size-[1.125rem]" />
           </button>
@@ -169,23 +174,32 @@ export function Sidebar({
         <button
           type="button"
           onClick={onSearch}
-          className="flex items-center gap-2.5 rounded-lg border bg-[var(--dt-field)] px-3 py-2 text-left whitespace-nowrap text-md text-muted-foreground transition-colors hover:border-[var(--dt-border-strong)] hover:text-foreground"
+          className="flex h-10 items-center gap-2.5 rounded-lg border bg-[var(--dt-field)] px-3 text-left whitespace-nowrap text-md text-muted-foreground transition-colors hover:border-[var(--dt-border-strong)] hover:text-foreground"
         >
           <SearchIcon className="size-4" />
           Search traces
           <kbd className="ml-auto rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs text-text-2">⌘K</kbd>
         </button>
       )}
-      <nav className={cn("grid", rail ? "justify-items-center gap-4" : "gap-5")}>
+      <nav className={cn("grid gap-5", rail && "justify-items-center")}>
         {NAV_GROUPS.map((group, index) => (
           <div key={group.items[0]?.section} className="grid gap-1">
-            {rail ? (
-              index > 0 ? (
-                <span className="mx-auto mb-3 h-px w-6 bg-border" />
-              ) : null
-            ) : group.title ? (
-              <span className="px-3.5 pb-1 text-2xs font-semibold tracking-[0.08em] text-muted-foreground/80 uppercase">
-                {group.title}
+            {group.title ? (
+              // As a rail the title's row stays, a short line in its place, so the items keep their height.
+              <span
+                className={cn(
+                  "h-5 px-3.5 pb-1 text-2xs leading-4 font-semibold tracking-[0.08em] text-muted-foreground/80 uppercase",
+                  rail && "relative w-full overflow-hidden text-transparent select-none",
+                )}
+                aria-hidden={rail ? true : undefined}
+              >
+                {rail ? (
+                  index > 0 ? (
+                    <span className="absolute inset-x-0 top-2 mx-auto h-px w-6 bg-border" />
+                  ) : null
+                ) : (
+                  group.title
+                )}
               </span>
             ) : null}
             {group.items
@@ -202,7 +216,7 @@ export function Sidebar({
                     aria-label={rail ? (count ? `${label}, ${count}` : label) : undefined}
                     className={cn(
                       "relative flex items-center rounded-lg text-lg font-medium whitespace-nowrap text-sidebar-foreground no-underline",
-                      rail ? "size-11 justify-center" : "gap-3.5 px-3.5 py-2.5",
+                      rail ? "size-11 justify-center" : "h-11 gap-3.5 px-3.5",
                       "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                       "focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none",
                       current &&
