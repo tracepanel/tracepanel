@@ -271,6 +271,7 @@ a {
   .bar-label {
     display: none;
   }
+
   /* Under both rows. */
   .switcher-popover {
     top: 5.75rem;
@@ -317,16 +318,24 @@ a {
 }
 
 .switcher-count {
+  display: inline-flex;
   flex: none;
+  align-items: center;
+  gap: 0.25rem;
   min-width: 1.125rem;
   padding: 0 0.3125rem;
   border-radius: 999px;
-  background: var(--dt-accent-bg);
-  color: var(--dt-accent);
+  background: var(--dt-subtle);
+  color: var(--dt-text-2);
   font-size: var(--dt-size-xs);
   font-weight: 600;
   line-height: 1.0625rem;
   text-align: center;
+}
+
+.switcher-count svg {
+  width: 0.75rem;
+  height: 0.75rem;
 }
 
 .switcher-popover {

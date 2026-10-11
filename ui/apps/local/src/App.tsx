@@ -10,6 +10,7 @@ import {
   httpSource,
   ISSUE_LABELS,
   type IssueKind,
+  LayersIcon,
   Logo,
   MethodBadge,
   type TabId,
@@ -19,7 +20,7 @@ import {
 } from "@tracepanel/ui";
 import { Button } from "@tracepanel/ui/components/ui/button";
 import { TooltipProvider } from "@tracepanel/ui/components/ui/tooltip";
-import { rem } from "@tracepanel/ui/lib/utils";
+import { cn, rem } from "@tracepanel/ui/lib/utils";
 import { type ReactNode, type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ClearDialog } from "./ClearDialog";
 import { Console } from "./Console";
@@ -33,7 +34,7 @@ import { ScopeProvider } from "./scope";
 import { graphqlOperation } from "./sections";
 import { tabOf } from "./TracePage";
 import { TraceScreen } from "./TraceScreen";
-import { UserSwitcher } from "./UserSwitcher";
+import { NARROW_ICON, UserSwitcher } from "./UserSwitcher";
 
 const base = location.href.split("#")[0] ?? location.href;
 const source: DataSource = httpSource(new URL("api/", base));
@@ -308,6 +309,16 @@ function ClearButton({ onClear, label = "Clear requests" }: { onClear: () => voi
   );
 }
 
+/** As on the pill: a stack and the number of this tab's requests. */
+function RequestCount({ count }: { count: number }) {
+  return (
+    <span className="switcher-count" title={`${count} ${count === 1 ? "request" : "requests"} in this tab`}>
+      <LayersIcon />
+      {count}
+    </span>
+  );
+}
+
 function RequestSwitcher({
   rows,
   selectedId,
@@ -359,7 +370,7 @@ function RequestSwitcher({
         ) : (
           <span className="switcher-path">Requests</span>
         )}
-        <span className="switcher-count">{rows.length}</span>
+        <RequestCount count={rows.length} />
         <ChevronDownIcon />
       </button>
       {open ? (
@@ -638,7 +649,12 @@ function PanelApp({ route }: { route: Route }) {
   const panelActions = (
     <>
       <UserSwitcher source={source} onSwitched={() => tellWidget("tracepanel:reload")} />
-      <Button variant="outline" size="sm" className="mr-1 h-7 gap-1.5 px-2.5 text-sm shadow-none" asChild>
+      <Button
+        variant="outline"
+        size="sm"
+        className={cn("mr-1 h-7 gap-1.5 px-2.5 text-sm shadow-none", NARROW_ICON)}
+        asChild
+      >
         <a
           href={`${base}${selectedId ? href({ name: "trace", id: selectedId, tab, from: sectionFor(selectedKind) }) : "#/"}`}
           target="_blank"
@@ -684,9 +700,7 @@ function PanelApp({ route }: { route: Route }) {
         <header className="bar">
           {/* The runtime is on the pill: the panel shows whose it is, not what served the page again. */}
           <Logo className="shrink-0 gap-1.5 text-md [&_svg]:size-6" />
-          {split ? (
-            <span className="bar-title">Tracepanel</span>
-          ) : (
+          {split ? null : (
             <RequestSwitcher
               rows={rows}
               selectedId={selectedId}

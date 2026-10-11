@@ -666,6 +666,10 @@ a.dt-request-row {
   .dt-trace-strip .dt-tabs {
     mask-image: linear-gradient(to right, #000 calc(100% - 1.5rem), transparent);
   }
+  /* Every tab fits: the open one keeps its name, the others their icon and count (the name is the tooltip). */
+  .dt-trace-strip .dt-tab:not([aria-selected="true"]) :is(.dt-tab-label, .dt-tab-detail) {
+    display: none;
+  }
 }
 .dt-trace-strip .dt-tab {
   flex: none;
