@@ -15,6 +15,8 @@ import {
   BracesIcon,
   BugIcon,
   CableIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
   ChevronsUpDownIcon,
   CircleAlertIcon,
   DatabaseIcon,
@@ -25,8 +27,6 @@ import {
   MonitorIcon,
   MoonIcon,
   NetworkIcon,
-  PanelLeftCloseIcon,
-  PanelLeftOpenIcon,
   RouteIcon,
   ScrollTextIcon,
   SearchIcon,
@@ -96,7 +96,6 @@ export function Sidebar({
   onClear,
   drawer = false,
   collapsed = false,
-  onCollapse,
   scope,
 }: {
   section: Section | null;
@@ -109,8 +108,6 @@ export function Sidebar({
   drawer?: boolean;
   /** A rail of icons, each named on hover; the drawer is never one. */
   collapsed?: boolean;
-  /** Collapse or expand; left out where it can't (the drawer). */
-  onCollapse?: ((collapsed: boolean) => void) | undefined;
   /** Several apps in the store: which one the console shows. Left out with one app. */
   scope?: AppScope | undefined;
 }) {
@@ -125,7 +122,7 @@ export function Sidebar({
         drawer ? "h-full overflow-y-auto" : "border-r max-[980px]:hidden",
       )}
     >
-      <SidebarHead rail={rail} onCollapse={onCollapse} />
+      <SidebarHead rail={rail} />
       {scope ? <AppSwitcher scope={scope} rail={rail} /> : null}
       <SearchButton rail={rail} onSearch={onSearch} />
       <nav className={cn("grid gap-5", rail && "justify-items-center")}>
@@ -151,59 +148,36 @@ export function Sidebar({
   );
 }
 
-/** The logo and collapse: one row open and as a rail, so collapsing moves nothing up or down. */
-function SidebarHead({ rail, onCollapse }: { rail: boolean; onCollapse?: ((collapsed: boolean) => void) | undefined }) {
+/** The logo: the mark as a rail. Collapsing is the toggle on the sidebar's edge (SidebarToggle). */
+function SidebarHead({ rail }: { rail: boolean }) {
   return (
-    <div className="flex h-8 items-center justify-between gap-2">
-      {rail ? <RailHead onCollapse={onCollapse} /> : <OpenHead onCollapse={onCollapse} />}
+    <div className="flex h-8 items-center">
+      <a href="#/" className={cn("no-underline", !rail && "px-2")} aria-label="Tracepanel home">
+        {rail ? <LogoMark /> : <Logo />}
+      </a>
     </div>
   );
 }
 
-/** As a rail: the mark, which turns into the expand button under the pointer. */
-function RailHead({ onCollapse }: { onCollapse?: ((collapsed: boolean) => void) | undefined }) {
-  if (!onCollapse) {
-    return (
-      <a href="#/" className="no-underline" aria-label="Tracepanel home">
-        <LogoMark />
-      </a>
-    );
-  }
+/**
+ * Collapse and expand: a round button on the sidebar's right edge, level with the logo. Always shown and in the same
+ * place in both states, outside the sidebar's rows, so toggling moves nothing up or down.
+ */
+export function SidebarToggle({ collapsed, collapse }: { collapsed: boolean; collapse: (collapsed: boolean) => void }) {
+  const label = collapsed ? "Expand the sidebar" : "Collapse the sidebar";
+  const Icon = collapsed ? ChevronRightIcon : ChevronLeftIcon;
   return (
-    <RailTip label="Expand the sidebar" detail="⌘B">
+    <RailTip label={label} detail="⌘B">
       <button
         type="button"
-        className="group grid size-8 place-items-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground focus-visible:bg-sidebar-accent"
-        aria-label="Expand the sidebar"
-        onClick={() => onCollapse(false)}
+        aria-label={label}
+        aria-expanded={!collapsed}
+        onClick={() => collapse(!collapsed)}
+        className="absolute top-7 -right-3 z-20 grid size-6 place-items-center rounded-full border bg-sidebar text-muted-foreground shadow-sm transition-colors hover:border-[var(--dt-border-strong)] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
       >
-        <span className="col-start-1 row-start-1 group-hover:invisible group-focus-visible:invisible">
-          <LogoMark />
-        </span>
-        <PanelLeftOpenIcon className="invisible col-start-1 row-start-1 size-[1.125rem] group-hover:visible group-focus-visible:visible" />
+        <Icon className="size-3.5" />
       </button>
     </RailTip>
-  );
-}
-
-function OpenHead({ onCollapse }: { onCollapse?: ((collapsed: boolean) => void) | undefined }) {
-  return (
-    <>
-      <a href="#/" className="px-2 no-underline" aria-label="Tracepanel home">
-        <Logo />
-      </a>
-      {onCollapse ? (
-        <button
-          type="button"
-          className="grid size-8 place-items-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
-          title="Collapse the sidebar · ⌘B"
-          aria-label="Collapse the sidebar"
-          onClick={() => onCollapse(true)}
-        >
-          <PanelLeftCloseIcon className="size-[1.125rem]" />
-        </button>
-      ) : null}
-    </>
   );
 }
 
