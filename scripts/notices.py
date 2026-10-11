@@ -66,7 +66,8 @@ def license_text(package: Path, license_id: str) -> str | None:
 
 def ui() -> str:
     listing = subprocess.run(  # noqa: S603 (pnpm, ui/)
-        ["pnpm", "licenses", "list", "--prod", "--json"],  # noqa: S607
+        # -r: every workspace package's dependencies (pnpm 12 lists only the root's without it, and it has none).
+        ["pnpm", "licenses", "list", "--prod", "--json", "-r"],  # noqa: S607
         cwd=UI,
         check=True,
         capture_output=True,
@@ -78,6 +79,9 @@ def ui() -> str:
         for package in items
         for version, path in zip(package["versions"], package["paths"], strict=False)
     )
+    if not packages:
+        # An empty listing is a pnpm change, not a console without dependencies: never ship no notices silently.
+        sys.exit("pnpm licenses listed no packages in ui/")
     parts = []
     missing = []
     for name, version, license_id, path in packages:
