@@ -14,13 +14,13 @@ export function LogoMark({ className }: { className?: string }) {
   );
 }
 
-/** Mark plus the lowercase wordmark. */
+/** Mark plus the wordmark: "Tracepanel", the product's name as prose writes it, "Trace" in the brand colour. */
 export function Logo({ className }: { className?: string }) {
   return (
     <span className={cn("inline-flex items-center gap-2.5 text-xl font-semibold tracking-[-0.03em]", className)}>
       <LogoMark />
       <span>
-        <span className="text-brand">trace</span>panel
+        <span className="text-brand">Trace</span>panel
       </span>
     </span>
   );
