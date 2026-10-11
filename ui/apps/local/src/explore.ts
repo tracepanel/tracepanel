@@ -11,7 +11,7 @@ const ISSUES_SHOWN = 3;
  * What a trace page links to that it doesn't show itself: every call of its group (an endpoint, an operation,
  * a task…), its issues across all calls, and the logs of every process around it.
  */
-export function exploreFor(trace: Trace, open: (route: Route) => void): ExploreItem[] {
+export function exploreFor(trace: Trace, address: (route: Route) => string): ExploreItem[] {
   const items: ExploreItem[] = [];
   const group = groupOf(trace);
   if (group) {
@@ -19,7 +19,7 @@ export function exploreFor(trace: Trace, open: (route: Route) => void): ExploreI
       label: `${ENTRY[group.section].calls === "Requests" ? "All requests to" : "All calls of"} ${group.label}`,
       hint: "Latency, errors and issues across every call",
       icon: "group",
-      onSelect: () => open({ name: "group", section: group.section, key: group.key }),
+      href: address({ name: "group", section: group.section, key: group.key }),
     });
   }
   for (const issue of trace.issues.slice(0, ISSUES_SHOWN)) {
@@ -27,7 +27,7 @@ export function exploreFor(trace: Trace, open: (route: Route) => void): ExploreI
       label: issue.title,
       hint: "How often it happens, and where",
       icon: "issue",
-      onSelect: () => open(issueRoute(issue.fingerprint, issue.kind)),
+      href: address(issueRoute(issue.fingerprint, issue.kind)),
     });
   }
   const since = isoWithOffset(trace.start - AROUND_US);
@@ -36,7 +36,7 @@ export function exploreFor(trace: Trace, open: (route: Route) => void): ExploreI
     label: "Logs around this moment",
     hint: "Every request, task and job, 30 s before and after",
     icon: "logs",
-    onSelect: () => open({ name: "logs", q: `since:${since} until:${until}` }),
+    href: address({ name: "logs", q: `since:${since} until:${until}` }),
   });
   return items;
 }

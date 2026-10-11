@@ -4,7 +4,7 @@ import { LightbulbIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { CallsChart } from "./Charts";
 import { exploreFor } from "./explore";
-import { go, href, openTrace, traceHref } from "./routes";
+import { consoleLinks, href, traceHref } from "./routes";
 import { TraceScreen } from "./TraceScreen";
 import { TracesTable } from "./tables";
 import { Breadcrumbs, Loading, Mono } from "./ui";
@@ -120,8 +120,8 @@ export function IssuePage({ fingerprint, source }: { fingerprint: string; source
           <TraceScreen
             id={issue.last_trace_id}
             source={source}
-            explore={(trace) => exploreFor(trace, go)}
-            onOpenTrace={(id) => openTrace(id)}
+            explore={(trace) => exploreFor(trace, href)}
+            links={consoleLinks()}
             initialTab={error ? "error" : "issues"}
           />
         </Card>

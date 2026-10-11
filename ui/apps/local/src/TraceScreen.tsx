@@ -24,8 +24,10 @@ export interface TraceScreenProps {
   initialTab?: TraceViewProps["initialTab"];
   preferredTab?: TraceViewProps["preferredTab"];
   actions?: TraceViewProps["actions"];
-  /** Opens a linked trace (enqueued by / enqueued tasks). */
-  onOpenTrace?: ((id: string) => void) | undefined;
+  /** Where linked traces, issues, statements and logs lead. */
+  links?: TraceViewProps["links"];
+  /** A span to open in the call tree. */
+  initialSpan?: string | undefined;
   /** The way back when the trace is gone (the console's page); the panel has none to offer. */
   back?: ReactNode;
 }
@@ -39,7 +41,8 @@ export function TraceScreen({
   initialTab,
   preferredTab,
   actions,
-  onOpenTrace,
+  links,
+  initialSpan,
   back,
 }: TraceScreenProps) {
   const [trace, setTrace] = useState<Trace | null | undefined>(undefined);
@@ -110,7 +113,8 @@ export function TraceScreen({
       preferredTab={preferredTab}
       actions={actions}
       related={related}
-      onOpenTrace={onOpenTrace}
+      links={links}
+      initialSpan={initialSpan}
       variant={variant}
     />
   );

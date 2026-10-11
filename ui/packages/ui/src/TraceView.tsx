@@ -27,6 +27,7 @@ import { ErrorView } from "./ErrorView";
 import { duration } from "./format";
 import { IssueList } from "./IssueList";
 import { LogList } from "./LogList";
+import { linkProps, type TraceLinks } from "./links";
 import { MailList } from "./MailList";
 import { Metrics } from "./Metrics";
 import { MethodBadge, RoutePath, StatusBadge } from "./primitives";
@@ -43,7 +44,9 @@ export interface ExploreItem {
   label: string;
   hint: string;
   icon: "group" | "issue" | "logs";
-  onSelect: () => void;
+  /** Where it leads, as a link (Cmd-click opens a new tab); without it, `onSelect` acts. */
+  href?: string | undefined;
+  onSelect?: (() => void) | undefined;
 }
 
 const EXPLORE_ICONS = { group: ListIcon, issue: CircleAlertIcon, logs: ScrollTextIcon };
@@ -109,9 +112,12 @@ export interface TraceViewProps {
   onTabChange?: ((tab: TabId) => void) | undefined;
   /** Extra header buttons from the host page (open full page, close), shown after Explore. */
   actions?: ReactNode;
-  /** Traces linked to this one (Celery enqueues) and how to open them. */
+  /** Traces linked to this one (Celery enqueues). */
   related?: Related | undefined;
-  onOpenTrace?: ((id: string) => void) | undefined;
+  /** Where linked traces, issues, statements and logs lead; each missing leaves its links out. */
+  links?: TraceLinks | undefined;
+  /** A span to open in the call tree, as a link to it asks. */
+  initialSpan?: string | undefined;
   /** Tab to open first; by default Error for a failed request, else the call tree. */
   initialTab?: TabId | undefined;
   /** The tab to open when this trace has it and no error to show first (the panel remembers the last one). */
@@ -129,7 +135,8 @@ export function TraceView({
   preferredTab,
   actions,
   related,
-  onOpenTrace,
+  links,
+  initialSpan,
   variant = "full",
 }: TraceViewProps) {
   const compact = variant === "compact" || variant === "strip";
@@ -154,6 +161,8 @@ export function TraceView({
   const dbTime = sql.reduce((sum, span) => sum + span.duration, 0);
   const mails = useMemo(() => trace.spans.filter((span) => span.kind === "mail"), [trace]);
   const [focus, setFocus] = useState<ReadonlySet<string> | undefined>(undefined);
+  // A span to open in the call tree: from the link's `span`, or a log record's "in the call tree".
+  const [treeSpan, setTreeSpan] = useState(initialSpan);
 
   const status = trace.attrs["http.status_code"];
   const state = trace.attrs["task.state"];
@@ -221,9 +230,9 @@ export function TraceView({
 
   const panel = (
     <div role="tabpanel" className="dt-tabpanel">
-      {active === "request" ? <RequestInfo trace={trace} related={related} onOpenTrace={onOpenTrace} /> : null}
+      {active === "request" ? <RequestInfo trace={trace} related={related} links={links} /> : null}
       {active === "tree" ? (
-        <CallMap trace={trace} issueBySpan={issueBySpan} related={related} onOpenTrace={onOpenTrace} />
+        <CallMap trace={trace} issueBySpan={issueBySpan} related={related} links={links} initialSpan={treeSpan} />
       ) : null}
       {active === "issues" ? (
         <IssueList
@@ -232,12 +241,32 @@ export function TraceView({
             setFocus(new Set(ids));
             setActive("sql");
           }}
+          links={links}
         />
       ) : null}
-      {active === "sql" ? <SqlList spans={sql} issueBySpan={issueBySpan} focus={focus} onExplain={onExplain} /> : null}
-      {active === "logs" ? <LogList logs={trace.logs} start={trace.start} /> : null}
+      {active === "sql" ? (
+        <SqlList spans={sql} issueBySpan={issueBySpan} focus={focus} onExplain={onExplain} links={links} />
+      ) : null}
+      {active === "logs" ? (
+        <LogList
+          logs={trace.logs}
+          start={trace.start}
+          traceId={trace.id}
+          links={links}
+          onShowSpan={(span) => {
+            setTreeSpan(span);
+            setActive("tree");
+          }}
+        />
+      ) : null}
       {active === "mail" ? <MailList spans={mails} /> : null}
-      {active === "error" ? <ErrorView errors={trace.errors} /> : null}
+      {active === "error" ? (
+        <ErrorView
+          errors={trace.errors}
+          issues={trace.issues.filter((issue) => issue.kind === "error")}
+          links={links}
+        />
+      ) : null}
     </div>
   );
   const exploreMenu =
@@ -253,8 +282,8 @@ export function TraceView({
         <DropdownMenuContent align="start" className="w-80">
           {explore.map((item) => {
             const Icon = EXPLORE_ICONS[item.icon];
-            return (
-              <DropdownMenuItem key={item.label} className="items-start gap-3 py-2" onSelect={item.onSelect}>
+            const body = (
+              <>
                 <Icon className="mt-0.5" />
                 {/* A long route breaks anywhere and stops at two lines; the tooltip has all of it. */}
                 <span className="grid min-w-0 gap-0.5">
@@ -263,6 +292,15 @@ export function TraceView({
                   </span>
                   <span className="text-xs text-muted-foreground">{item.hint}</span>
                 </span>
+              </>
+            );
+            return item.href ? (
+              <DropdownMenuItem key={item.label} className="items-start gap-3 py-2" asChild>
+                <a {...linkProps(links, item.href)}>{body}</a>
+              </DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem key={item.label} className="items-start gap-3 py-2" onSelect={() => item.onSelect?.()}>
+                {body}
               </DropdownMenuItem>
             );
           })}

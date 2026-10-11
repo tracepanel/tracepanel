@@ -1,3 +1,4 @@
+import type { TraceLinks } from "@tracepanel/ui";
 import { useEffect, useState } from "react";
 
 /** Where work comes in: each has an overview of its groups and a list of its calls. */
@@ -28,7 +29,7 @@ export type Route =
   | { name: "home" }
   | { name: Section; q: string; view?: EntryView | undefined }
   | { name: "group"; section: EntrySection; key: string; q?: string | undefined }
-  | { name: "trace"; id: string; from?: string | undefined; tab?: string | undefined }
+  | { name: "trace"; id: string; from?: string | undefined; tab?: string | undefined; span?: string | undefined }
   | { name: "issue"; fingerprint: string; error?: boolean | undefined };
 
 /** A trace id: a ULID, in Crockford's alphabet (no I, L, O or U). */
@@ -85,7 +86,13 @@ export function parse(hash: string): Route {
   // `traces/` is how the widget wrote it before; old links still open.
   const trace = /^(?:t|traces)\/(.+)$/.exec(path);
   if (trace?.[1] && TRACE_ID.test(trace[1])) {
-    return { name: "trace", id: trace[1], from: params.get("from") ?? undefined, tab: params.get("tab") ?? undefined };
+    return {
+      name: "trace",
+      id: trace[1],
+      from: params.get("from") ?? undefined,
+      tab: params.get("tab") ?? undefined,
+      span: params.get("span") ?? undefined,
+    };
   }
   const group = /^group\/([a-z]+)\/(.+)$/.exec(path);
   if (group?.[1] && group[2] && isEntry(group[1])) {
@@ -108,6 +115,7 @@ export function href(route: Route): string {
     const params = new URLSearchParams();
     if (route.from) params.set("from", route.from);
     if (route.tab) params.set("tab", route.tab);
+    if (route.span) params.set("span", route.span);
     const query = params.size ? `?${params}` : "";
     return `#/t/${route.id}${query}`;
   }
@@ -146,11 +154,22 @@ export function openInNewTab(target: string): void {
 }
 
 /** Where a trace opens from here: its page, remembering this one as the way back. */
-export function traceHref(id: string, tab?: string): string {
+export function traceHref(id: string, tab?: string, span?: string): string {
   const from = location.hash.startsWith("#/t/") ? parse(location.hash) : null;
   // From one trace to a linked one: keep the original way back.
   const back = from?.name === "trace" ? from.from : location.hash;
-  return href({ name: "trace", id, from: back || undefined, tab });
+  return href({ name: "trace", id, from: back || undefined, tab, span });
+}
+
+/** Where a trace's parts lead in the console: linked traces, issues, every request with a statement, its logs. */
+export function consoleLinks(prefix = "", newTab = false): TraceLinks {
+  return {
+    trace: (id) => `${prefix}${prefix ? href({ name: "trace", id }) : traceHref(id)}`,
+    issue: (fingerprint, kind) => `${prefix}${href(issueRoute(fingerprint, kind))}`,
+    query: (key) => `${prefix}${href({ name: "traces", q: `query:${key}` })}`,
+    logs: (traceId) => `${prefix}${href({ name: "logs", q: `trace:${traceId}` })}`,
+    newTab,
+  };
 }
 
 /** Open a trace on its page, remembering where from: every list in the console opens traces this way. */

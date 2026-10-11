@@ -1,7 +1,8 @@
 import { Highlight, type PrismTheme } from "prism-react-renderer";
 import { ChevronRightIcon } from "./icons";
 import { keyed } from "./keys";
-import type { ChainedError, Frame, TraceError } from "./types";
+import { linkProps, type TraceLinks } from "./links";
+import type { ChainedError, Frame, Issue, TraceError } from "./types";
 
 type Group = { app: true; frame: Frame } | { app: false; frames: Frame[] };
 
@@ -150,11 +151,20 @@ function Chained({ error }: { error: ChainedError }) {
   );
 }
 
-export function ErrorView({ errors }: { errors: readonly TraceError[] }) {
+export function ErrorView({
+  errors,
+  issues = [],
+  links,
+}: {
+  errors: readonly TraceError[];
+  /** The trace's error issues, in the same order as its errors: each error links to its own. */
+  issues?: readonly Issue[];
+  links?: TraceLinks | undefined;
+}) {
   if (errors.length === 0) return <p className="dt-note">No errors.</p>;
   return (
     <>
-      {keyed(errors, (error) => `${error.time}:${error.type}`).map(({ key, item: error }) => (
+      {keyed(errors, (error) => `${error.time}:${error.type}`).map(({ key, item: error }, index) => (
         <section key={key} className="dt-error">
           <header className="dt-error-head">
             <p className="dt-error-type">{shortType(error.type)}</p>
@@ -162,6 +172,11 @@ export function ErrorView({ errors }: { errors: readonly TraceError[] }) {
             <p className="dt-error-meta">
               {error.handled ? "Handled" : "Unhandled"} · {error.frames.length} frames · most recent call last
             </p>
+            {links?.issue && issues[index] ? (
+              <a className="dt-issue-link" {...linkProps(links, links.issue(issues[index].fingerprint, "error"))}>
+                Every time it happened →
+              </a>
+            ) : null}
           </header>
           <Frames frames={error.frames} />
           {error.chain.map((inner, index) => (

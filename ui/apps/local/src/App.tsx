@@ -26,7 +26,7 @@ import { Console } from "./Console";
 import { exploreFor } from "./explore";
 import { type TabEntry, type TabHistory, usePolling, useTabHistory } from "./hooks";
 import { RefreshProvider } from "./refresh";
-import { go, href, type Route, useRoute } from "./routes";
+import { consoleLinks, go, href, type Route, useRoute } from "./routes";
 import { ThemeToggle } from "./Sidebar";
 import { graphqlOperation } from "./sections";
 import { TraceScreen } from "./TraceScreen";
@@ -348,6 +348,12 @@ const TAB_KEY = "tracepanel:panel-tab";
 const PANEL_TABS = new Set<TabId>(["request", "tree", "issues", "sql", "logs", "mail", "error"]);
 
 /** The tab the panel opens: the last one picked, kept across requests and page loads. */
+/** The console list a request of this kind belongs to: the way back from its trace page there. */
+function sectionFor(kind: string | undefined): string | undefined {
+  const section = { http: "endpoints", task: "tasks", command: "jobs", websocket: "websockets" }[kind ?? ""];
+  return section ? `#/${section}` : undefined;
+}
+
 function readTab(): TabId | undefined {
   try {
     const value = localStorage.getItem(TAB_KEY);
@@ -566,12 +572,13 @@ function PanelApp({ route }: { route: Route }) {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  const selectedKind = rows.find((row) => row.trace.id === selectedId)?.trace.kind;
   const panelActions = (
     <>
       <UserSwitcher source={source} onSwitched={() => tellWidget("tracepanel:reload")} />
       <Button variant="outline" size="sm" className="mr-1 h-7 gap-1.5 px-2.5 text-[13px] shadow-none" asChild>
         <a
-          href={`${base}${selectedId ? href({ name: "trace", id: selectedId }) : "#/"}`}
+          href={`${base}${selectedId ? href({ name: "trace", id: selectedId, tab, from: sectionFor(selectedKind) }) : "#/"}`}
           target="_blank"
           rel="noreferrer"
           title="Open this request in the full console, in a new tab"
@@ -663,8 +670,8 @@ function PanelApp({ route }: { route: Route }) {
                 writeTab(next);
               }}
               actions={split ? panelActions : undefined}
-              onOpenTrace={(id) => window.open(`${base}${href({ name: "trace", id })}`, "_blank")}
-              explore={(trace) => exploreFor(trace, (route) => window.open(`${base}${href(route)}`, "_blank"))}
+              links={consoleLinks(base, true)}
+              explore={(trace) => exploreFor(trace, (route) => `${base}${href(route)}`)}
             />
           ) : history ? (
             <Empty title="No requests yet">Requests from this browser tab will appear here.</Empty>
