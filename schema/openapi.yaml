@@ -571,7 +571,7 @@ components:
       type: object
       additionalProperties: false
       required: [id, trace_id, time, level, logger, message, exception, attrs, trace_kind, trace_htmx, trace_name, method,
-        path, http_status, user_id]
+        path, http_status, user_id, service]
       properties:
         id: { type: integer }
         trace_id: { type: string }
@@ -588,6 +588,7 @@ components:
         path: { type: [string, "null"] }
         http_status: { type: [integer, "null"] }
         user_id: { type: [string, "null"] }
+        service: { type: string, description: The app that recorded it (its trace's service.name). }
     Attrs:
       description: Namespaced attributes; values are scalars or lists of scalars.
       type: object
