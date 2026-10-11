@@ -285,7 +285,10 @@ function RequestSwitcher({
       if (root.current && !root.current.contains(event.target as Node)) setOpen(false);
     };
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key !== "Escape") return;
+      // This Esc closes the list, not the panel.
+      event.preventDefault();
+      setOpen(false);
     };
     document.addEventListener("pointerdown", onPointer);
     document.addEventListener("keydown", onKey);
@@ -553,6 +556,15 @@ function PanelApp({ route }: { route: Route }) {
     if (follow && latestChild && latestChild !== followed.current) go({ name: "trace", id: latestChild });
     followed.current = latestChild;
   }, [follow, latestChild]);
+
+  // Esc anywhere in the panel closes it, as on the page; a menu or list open in it takes the Esc first.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !event.defaultPrevented) tellWidget("tracepanel:close");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const panelActions = (
     <>

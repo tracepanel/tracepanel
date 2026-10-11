@@ -14,7 +14,7 @@ import { ArrowRightIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { CallsChart, Histogram, LatencyChart, Stat } from "./Charts";
 import { RefreshControl, useRefresh } from "./refresh";
-import { type EntrySection, go, openTrace } from "./routes";
+import { type EntrySection, go, href, traceHref } from "./routes";
 import { ENTRY } from "./sections";
 import { TracesTable } from "./tables";
 import { Breadcrumbs, DataTable, Loading, Meter, Mono, Td, Th, Tr } from "./ui";
@@ -150,7 +150,7 @@ export function GroupPage({
           </h2>
           <IssueGroupList
             issues={errors.map((issue) => ({ ...issue, occurrences: issue.calls }))}
-            onSelect={(issue) => go({ name: "issue", fingerprint: issue.fingerprint })}
+            hrefFor={(issue) => href({ name: "issue", fingerprint: issue.fingerprint })}
           />
         </section>
       ) : null}
@@ -164,7 +164,7 @@ export function GroupPage({
           </h2>
           <IssueGroupList
             issues={findings.map((issue) => ({ ...issue, occurrences: issue.calls }))}
-            onSelect={(issue) => go({ name: "issue", fingerprint: issue.fingerprint })}
+            hrefFor={(issue) => href({ name: "issue", fingerprint: issue.fingerprint })}
           />
         </section>
       ) : null}
@@ -172,11 +172,11 @@ export function GroupPage({
       <div className="grid gap-7">
         <section>
           <h2 className="mb-2.5 text-[19px] font-semibold">Slowest calls</h2>
-          <TracesTable items={group.slowest} selectedId={null} onSelect={(id) => openTrace(id)} />
+          <TracesTable items={group.slowest} selectedId={null} hrefFor={traceHref} />
         </section>
         <section>
           <h2 className="mb-2.5 text-[19px] font-semibold">Recent calls</h2>
-          <TracesTable items={group.recent} selectedId={null} onSelect={(id) => openTrace(id)} />
+          <TracesTable items={group.recent} selectedId={null} hrefFor={traceHref} />
         </section>
       </div>
     </div>

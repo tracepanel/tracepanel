@@ -5,20 +5,19 @@ import type { IssueGroup } from "./types";
 
 export interface IssueGroupListProps {
   issues: readonly IssueGroup[];
-  /** Called with the issue: hosts open its page, or its latest trace. */
-  onSelect: (issue: IssueGroup) => void;
+  /** Where an issue opens (its page, or its latest trace), as a link the host's router follows. */
+  hrefFor: (issue: IssueGroup) => string;
 }
 
-export function IssueGroupList({ issues, onSelect }: IssueGroupListProps) {
+export function IssueGroupList({ issues, hrefFor }: IssueGroupListProps) {
   return (
     <ul className="dt-requests">
       {issues.map((issue) => (
         <li key={issue.fingerprint}>
-          <button
-            type="button"
+          <a
+            href={hrefFor(issue)}
             className="dt-request-row dt-issue-row"
             data-tone={issue.kind === "error" ? "error" : "warn"}
-            onClick={() => onSelect(issue)}
           >
             <span className="dt-request-main">
               <span className="dt-issue-row-icon" data-kind={issue.kind}>
@@ -38,7 +37,7 @@ export function IssueGroupList({ issues, onSelect }: IssueGroupListProps) {
               </span>
               <span className="dt-request-time">last {ago(issue.last_seen)}</span>
             </span>
-          </button>
+          </a>
         </li>
       ))}
     </ul>

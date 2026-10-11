@@ -13,7 +13,7 @@ import { ChevronRightIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { CallsChart, LatencyChart, Stat } from "./Charts";
 import { useRefresh } from "./refresh";
-import { go } from "./routes";
+import { href } from "./routes";
 import { isoWithOffset } from "./time";
 
 const STORAGE_KEY = "tracepanel:overview";
@@ -264,15 +264,16 @@ function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-/** Every operation opens its group page: an endpoint, a GraphQL operation, a task, a job. */
-function openOperation(item: OperationStats): void {
+/** Where an operation opens: its group page (an endpoint, a GraphQL operation, a task, a job), else a search. */
+function operationHref(item: OperationStats): string {
   const operation = item.kind === "http" && item.name.startsWith("GraphQL ") ? item.name.slice(8) : null;
-  if (operation) go({ name: "group", section: "graphql", key: operation });
-  else if (item.kind === "http" && item.method && item.route) {
-    go({ name: "group", section: "endpoints", key: `${item.method} ${item.route}` });
-  } else if (item.kind === "task") go({ name: "group", section: "tasks", key: item.name });
-  else if (item.kind === "command") go({ name: "group", section: "jobs", key: item.name });
-  else go({ name: "traces", q: `kind:${item.kind} name:"${item.name}"` });
+  if (operation) return href({ name: "group", section: "graphql", key: operation });
+  if (item.kind === "http" && item.method && item.route) {
+    return href({ name: "group", section: "endpoints", key: `${item.method} ${item.route}` });
+  }
+  if (item.kind === "task") return href({ name: "group", section: "tasks", key: item.name });
+  if (item.kind === "command") return href({ name: "group", section: "jobs", key: item.name });
+  return href({ name: "traces", q: `kind:${item.kind} name:"${item.name}"` });
 }
 
 function OperationList({
@@ -295,10 +296,9 @@ function OperationList({
       <ul className="grid">
         {items.map((item) => (
           <li key={`${item.kind} ${item.name}`}>
-            <button
-              type="button"
+            <a
+              href={operationHref(item)}
               className="flex w-full items-center gap-2.5 rounded-md px-1.5 py-2 text-left text-sm hover:bg-accent"
-              onClick={() => openOperation(item)}
             >
               {item.kind === "http" && item.name.startsWith("GraphQL ") ? (
                 <>
@@ -329,7 +329,7 @@ function OperationList({
               >
                 {metric(item)}
               </b>
-            </button>
+            </a>
           </li>
         ))}
       </ul>

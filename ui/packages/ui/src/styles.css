@@ -92,6 +92,7 @@
   --dt-syn-number: #ffb86b;
   --dt-syn-comment: #8b949e;
   --dt-syn-operator: #9198a1;
+  --dt-syn-function: #79c0ff;
   --dt-syn-param-bg: rgb(200 245 96 / 0.16);
   --dt-alias-text: #5eead4;
 }
@@ -178,6 +179,7 @@
   --dt-syn-number: #b45309;
   --dt-syn-comment: #8a84a6;
   --dt-syn-operator: #6e6889;
+  --dt-syn-function: #0550ae;
   --dt-syn-param-bg: rgb(101 163 13 / 0.12);
   --dt-alias-text: #0f766e;
 }
@@ -354,6 +356,9 @@ a:focus-visible {
   font: inherit;
   text-align: left;
   cursor: pointer;
+}
+a.dt-request-row {
+  text-decoration: none;
 }
 .dt-request-row::before {
   content: "";
@@ -1280,6 +1285,37 @@ details[data-focused] > .dt-sql-group {
 }
 .dt-source code {
   font: inherit;
+}
+.dt-source .token.keyword,
+.dt-source .token.boolean,
+.dt-source .token.important {
+  color: var(--dt-syn-keyword);
+}
+.dt-source .token.string,
+.dt-source .token.char,
+.dt-source .token.triple-quoted-string,
+.dt-source .token.string-interpolation {
+  color: var(--dt-syn-string);
+}
+.dt-source .token.interpolation {
+  color: var(--dt-ink-text);
+}
+.dt-source .token.number {
+  color: var(--dt-syn-number);
+}
+.dt-source .token.comment {
+  color: var(--dt-syn-comment);
+  font-style: italic;
+}
+.dt-source .token.function,
+.dt-source .token.class-name,
+.dt-source .token.builtin,
+.dt-source .token.decorator {
+  color: var(--dt-syn-function);
+}
+.dt-source .token.operator,
+.dt-source .token.punctuation {
+  color: var(--dt-syn-operator);
 }
 .dt-frame-nosource {
   margin: 0;

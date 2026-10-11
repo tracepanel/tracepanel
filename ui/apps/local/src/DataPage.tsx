@@ -4,7 +4,7 @@ import { usePaged, useSearch } from "./data";
 import { EmptyPage } from "./EmptyPage";
 import { refineQuery } from "./EntryPage";
 import { RefreshControl } from "./refresh";
-import { type EntrySection, go, openTrace, type Section } from "./routes";
+import { type EntrySection, go, openTrace, type Section, traceHref } from "./routes";
 import { SearchBar } from "./SearchBar";
 import { ServicesView } from "./ServicesView";
 import { DATA_LABELS } from "./sections";
@@ -127,7 +127,7 @@ export function DataPage({ section, q, source, spec, known }: DataPageProps) {
     body = traces.items ? (
       traces.items.length ? (
         <>
-          <TracesTable items={traces.items} selectedId={null} onSelect={(id) => openTrace(id)} />
+          <TracesTable items={traces.items} selectedId={null} hrefFor={traceHref} />
           {traces.hasMore ? <LoadMore label="Load older" loading={traces.loading} onMore={traces.more} /> : null}
         </>
       ) : (
