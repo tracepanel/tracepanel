@@ -120,16 +120,11 @@ const STYLE = `
   .seg .issues svg { color: currentColor; }
   .issues[data-tone="error"] { background: rgb(255 107 94 / 0.16); color: #ff8a7a; }
   .more { padding: 3px 8px; border-radius: 999px; background: rgb(255 255 255 / 0.09); color: #e7e9ef; font-size: 12px; }
-  .flash-name {
-    max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    font: 500 12px "Geist Mono Variable", "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace; color: #fff;
-  }
-  .badge[data-flash] { animation: flash 900ms ease-out; border-color: rgb(165 135 255 / 0.7); }
-  .badge[data-flash="warn"] { border-color: rgb(245 181 68 / 0.7); }
-  .badge[data-flash="error"] { border-color: rgb(255 107 94 / 0.7); }
-  @keyframes flash {
-    from { box-shadow: 0 0 0 0 rgb(165 135 255 / 0.5), 0 12px 32px rgb(10 12 17 / 0.32); }
-    to { box-shadow: 0 0 0 12px rgb(165 135 255 / 0), 0 12px 32px rgb(10 12 17 / 0.32); }
+  .more[data-tone="error"] { background: rgb(255 107 94 / 0.16); color: #ff8a7a; font-weight: 600; }
+  .more[data-pulse] { animation: pulse 700ms ease-out; }
+  @keyframes pulse {
+    from { box-shadow: 0 0 0 0 rgb(165 135 255 / 0.6); }
+    to { box-shadow: 0 0 0 8px rgb(165 135 255 / 0); }
   }
   .panel {
     position: fixed; top: 0; right: 0; bottom: 0; z-index: 2147483646;
@@ -157,7 +152,7 @@ const STYLE = `
   :host([data-theme="light"]) .seg + .seg { border-left-color: #e2e2dc; }
   :host([data-theme="light"]) .seg svg, :host([data-theme="light"]) .unit { color: #5f6470; }
   :host([data-theme="light"]) .runtime { background: #f0f0ed; color: #3a3e47; }
-  :host([data-theme="light"]) .seg b, :host([data-theme="light"]) .flash-name { color: #16181d; }
+  :host([data-theme="light"]) .seg b { color: #16181d; }
   :host([data-theme="light"]) .seg[data-speed="slow"] b { color: #b45309; }
   :host([data-theme="light"]) .seg[data-speed="very-slow"] b { color: #d0342c; }
   :host([data-theme="light"]) .status { background: rgb(98 160 20 / 0.12); color: #3d7a0c; }
@@ -167,6 +162,7 @@ const STYLE = `
   :host([data-theme="light"]) .issues { background: rgb(217 119 6 / 0.1); color: #b45309; }
   :host([data-theme="light"]) .issues[data-tone="error"] { background: rgb(208 52 44 / 0.09); color: #d0342c; }
   :host([data-theme="light"]) .more { background: #f0f0ed; color: #16181d; }
+  :host([data-theme="light"]) .more[data-tone="error"] { background: rgb(208 52 44 / 0.09); color: #d0342c; }
   :host([data-theme="light"]) .panel {
     border-left-color: #e2e2dc; background: #ffffff;
     box-shadow: -16px 0 40px rgb(22 24 29 / 0.12);
@@ -193,7 +189,7 @@ const STYLE = `
   :host .panel[data-resizing], :host .panel[data-resizing][data-open], :host .panel[data-resizing] ~ .badge,
   :host([data-dock="bottom"]) .panel[data-resizing][data-open] { transition: none; }
   :host([data-theme="light"][data-dock="bottom"]) .panel { border-top-color: #e2e2dc; box-shadow: 0 -16px 40px rgb(22 24 29 / 0.12); }
-  @media (prefers-reduced-motion: reduce) { .panel, .badge { transition: none; } .badge[data-flash] { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { .panel, .badge { transition: none; } .more[data-pulse] { animation: none; } }
 `;
 
 const PENDING = "pending";
@@ -425,11 +421,12 @@ function addIssues(parent: HTMLElement, issues: number, tone: "warn" | "error"):
   segment(parent).append(pill);
 }
 
-function addPill(parent: HTMLElement, text: string, className: string): void {
+function addPill(parent: HTMLElement, text: string, className: string): HTMLSpanElement {
   const span = document.createElement("span");
   span.className = className;
   span.textContent = text;
   segment(parent).append(span);
+  return span;
 }
 
 /** What the widget already knows from response headers: lets the panel show a request before it is stored. */
@@ -513,7 +510,6 @@ function savePanel(state: PanelState): void {
 }
 
 /** How long a just-finished fetch/XHR stays on the badge. */
-const FLASH_MS = 5000;
 
 const TAB_KEY = "tracepanel:tab";
 const TAB_LIMIT = 200;
@@ -628,9 +624,8 @@ export function mount(options: WidgetOptions = {}): Widget {
     tab = [...tab, { id: initial.trace, parent: null, summary: summaryOf(initial) }];
     saveTab(tab);
   }
-  // The latest fetch/XHR, shown on the badge for a few seconds so it is caught as it happens.
-  let flash: TraceInfo | null = null;
-  let flashTimer: number | undefined;
+  // Set while drawing the pill for a new AJAX call: its "+N" pulses once.
+  let pulse = false;
 
   function sendTab(): void {
     if (frame?.contentWindow && panelUrl) {
@@ -647,11 +642,6 @@ export function mount(options: WidgetOptions = {}): Widget {
   }
 
   function render(): void {
-    if (flash) {
-      renderFlash(flash);
-      return;
-    }
-    badge.removeAttribute("data-flash");
     const shown = pageCleared ? null : page;
     const headline = shown ?? later[0] ?? {};
     const others = shown ? later : later.slice(1);
@@ -662,8 +652,14 @@ export function mount(options: WidgetOptions = {}): Widget {
     addTime(stats, headline.totalMs ?? 0);
     addQueries(stats, headline.queries ?? 0);
     const issues = [headline, ...others].reduce((sum, info) => sum + (info.issues ?? 0), 0);
-    if (issues > 0) addIssues(stats, issues, worst === "error" ? "error" : "warn");
-    if (others.length > 0) addPill(stats, `+${others.length}`, "more");
+    // Findings are amber whatever else happened: a failed request says so on its own, in the "+N" of the page's AJAX.
+    if (issues > 0) addIssues(stats, issues, "warn");
+    const failed = others.filter((info) => (info.status ?? 200) >= 500).length;
+    if (others.length > 0) {
+      const more = addPill(stats, failed ? `+${others.length} · ${failed} failed` : `+${others.length}`, "more");
+      if (failed) more.dataset["tone"] = "error";
+      if (pulse) more.dataset["pulse"] = "";
+    }
     badge.dataset["verdict"] = worst;
 
     const recent = others.slice(-3).map(line);
@@ -676,26 +672,11 @@ export function mount(options: WidgetOptions = {}): Widget {
     badge.setAttribute("aria-label", `tracepanel: ${summary.join(". ")}`);
   }
 
-  function renderFlash(info: TraceInfo): void {
-    const summary = summaryOf(info);
-    stats.textContent = "";
-    addPill(stats, summary.name, "flash-name");
-    addStatus(stats, info.status);
-    addTime(stats, info.totalMs ?? 0);
-    addQueries(stats, summary.queries);
-    if (summary.issues) addIssues(stats, summary.issues, state(info) === "error" ? "error" : "warn");
-    badge.dataset["flash"] = state(info);
-    badge.dataset["verdict"] = state(info);
-    badge.setAttribute("aria-label", `tracepanel: ${line(info)}. Click to open this request.`);
-  }
-
   /** A page htmx loaded (a boosted link or form): it heads the list, and what follows is its requests. */
   function navigate(info: TraceInfo): void {
     page = info;
     pageCleared = false;
     later.length = 0;
-    flash = null;
-    window.clearTimeout(flashTimer);
     if (info.trace) {
       tab = [...tab, { id: info.trace, parent: null, summary: summaryOf(info) }];
       saveTab(tab);
@@ -744,13 +725,10 @@ export function mount(options: WidgetOptions = {}): Widget {
       tab = [...tab, { id: info.trace, parent: page?.trace ?? null, summary: summaryOf(info) }];
       saveTab(tab);
     }
-    flash = info;
-    window.clearTimeout(flashTimer);
-    flashTimer = window.setTimeout(() => {
-      flash = null;
-      render();
-    }, FLASH_MS);
+    // The pill stays the page's: a new AJAX call shows as its "+N" counting up, with a short pulse.
+    pulse = true;
     render();
+    pulse = false;
     sendTab();
   }
 
@@ -763,8 +741,6 @@ export function mount(options: WidgetOptions = {}): Widget {
     tab = all ? [] : tab.filter((entry) => entry.id === page?.trace);
     saveTab(tab);
     later.length = 0;
-    flash = null;
-    window.clearTimeout(flashTimer);
     render();
     sendTab();
   }
@@ -801,8 +777,7 @@ export function mount(options: WidgetOptions = {}): Widget {
   });
 
   badge.addEventListener("click", () => {
-    if (flash?.trace) open(`#/t/${flash.trace}`);
-    else if (panel.hasAttribute("data-open")) close();
+    if (panel.hasAttribute("data-open")) close();
     else open();
   });
   document.addEventListener("keydown", (event) => {

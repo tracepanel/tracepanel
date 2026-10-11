@@ -569,7 +569,7 @@ function PanelApp({ route }: { route: Route }) {
   const latestChild = followRows.length > 1 ? followRows.at(-1)?.trace.id : undefined;
   const followed = useRef(latestChild);
   // The history the panel opens with is what was already there, not a new request: the request a link asked for
-  // (the pill's card, a flash) stays on screen. Only requests that arrive after it are followed.
+  // (the pill's card) stays on screen. Only requests that arrive after it are followed.
   const seeded = useRef(history !== null);
   useEffect(() => {
     if (!seeded.current) {
