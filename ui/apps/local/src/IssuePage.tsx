@@ -4,7 +4,7 @@ import { LightbulbIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { CallsChart } from "./Charts";
 import { exploreFor } from "./explore";
-import { go, openTrace } from "./routes";
+import { go, href, openTrace, traceHref } from "./routes";
 import { TraceScreen } from "./TraceScreen";
 import { TracesTable } from "./tables";
 import { Breadcrumbs, Loading, Mono } from "./ui";
@@ -89,13 +89,12 @@ export function IssuePage({ fingerprint, source }: { fingerprint: string; source
                 const [method = "GET", route = "/"] = endpoint.split(" ");
                 return (
                   <li key={endpoint}>
-                    <button
-                      type="button"
-                      className="w-full rounded-md px-1.5 py-1.5 text-left font-mono text-[14px] hover:bg-accent"
-                      onClick={() => go({ name: "group", section: "endpoints", key: `${method} ${route}` })}
+                    <a
+                      href={href({ name: "group", section: "endpoints", key: `${method} ${route}` })}
+                      className="block w-full rounded-md px-1.5 py-1.5 text-left font-mono text-[14px] hover:bg-accent"
                     >
                       {endpoint}
-                    </button>
+                    </a>
                   </li>
                 );
               })}
@@ -121,7 +120,7 @@ export function IssuePage({ fingerprint, source }: { fingerprint: string; source
         <h2 className="text-[19px] font-semibold">
           Requests <span className="font-normal text-muted-foreground">· newest first</span>
         </h2>
-        <TracesTable items={issue.traces} selectedId={null} onSelect={(id) => openTrace(id)} />
+        <TracesTable items={issue.traces} selectedId={null} hrefFor={traceHref} />
       </section>
     </div>
   );

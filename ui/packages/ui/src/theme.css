@@ -91,4 +91,17 @@
   body {
     @apply bg-background text-foreground;
   }
+  /* Tailwind 4 gives buttons the arrow; whatever can be clicked here shows the hand. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="link"],
+  [role="tab"],
+  [role="option"],
+  [role="menuitem"],
+  [role="checkbox"],
+  [role="switch"],
+  summary,
+  label:has(input:not(:disabled)) {
+    cursor: pointer;
+  }
 }

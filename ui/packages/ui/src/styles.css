@@ -355,6 +355,9 @@ a:focus-visible {
   text-align: left;
   cursor: pointer;
 }
+a.dt-request-row {
+  text-decoration: none;
+}
 .dt-request-row::before {
   content: "";
   position: absolute;

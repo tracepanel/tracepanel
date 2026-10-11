@@ -28,19 +28,20 @@ import { Button } from "@tracepanel/ui/components/ui/button";
 import { TableCell, TableRow } from "@tracepanel/ui/components/ui/table";
 import { ArrowRightIcon, ListFilterIcon } from "lucide-react";
 import { Fragment, useEffect, useState } from "react";
-import { go, openTrace } from "./routes";
+import { go, href, openTrace } from "./routes";
 import { graphqlOperation } from "./sections";
 import { DataTable, LevelBadge, Meter, Mono, Td, Th, Tr } from "./ui";
 
 export function TracesTable({
   items,
   selectedId,
-  onSelect,
+  hrefFor,
   compact = false,
 }: {
   items: readonly TraceSummary[];
   selectedId: string | null;
-  onSelect: (id: string) => void;
+  /** Where a row opens: its trace page, as a link. */
+  hrefFor: (id: string) => string;
   /** Narrow list beside an open trace: drops the Queries column (the trace pane shows it). */
   compact?: boolean;
 }) {
@@ -63,7 +64,7 @@ export function TracesTable({
           key={trace.id}
           selected={trace.id === selectedId}
           tone={trace.status === "error" ? "error" : trace.issues > 0 ? "warn" : undefined}
-          onClick={() => onSelect(trace.id)}
+          href={hrefFor(trace.id)}
         >
           <Td>
             {graphqlOperation(trace) ? (
@@ -128,7 +129,7 @@ export function EndpointsTable({ items }: { items: readonly EndpointRow[] }) {
         <Tr
           key={`${item.method} ${item.route}`}
           tone={item.errors > 0 ? "error" : item.with_issues > 0 ? "warn" : undefined}
-          onClick={() => go({ name: "group", section: "endpoints", key: `${item.method} ${item.route}` })}
+          href={href({ name: "group", section: "endpoints", key: `${item.method} ${item.route}` })}
         >
           <Td>
             <span className="flex items-center gap-2.5">
@@ -419,7 +420,7 @@ export function IssuesTable({ items }: { items: readonly IssueRow[] }) {
           <Tr
             key={item.fingerprint}
             tone={error ? "error" : "warn"}
-            onClick={() => go({ name: "issue", fingerprint: item.fingerprint })}
+            href={href({ name: "issue", fingerprint: item.fingerprint })}
           >
             <Td className="whitespace-normal">
               <span className="flex flex-col gap-0.5">
@@ -628,7 +629,7 @@ export function TasksTable({ items }: { items: readonly TaskRow[] }) {
         <Tr
           key={item.task}
           tone={item.failures ? "error" : item.with_issues ? "warn" : undefined}
-          onClick={() => go({ name: "group", section: "tasks", key: item.task })}
+          href={href({ name: "group", section: "tasks", key: item.task })}
         >
           <Td className="max-w-[420px]">
             <Mono className="block truncate">{item.task}</Mono>
@@ -692,7 +693,7 @@ export function GraphqlTable({ items }: { items: readonly GraphqlRow[] }) {
         <Tr
           key={item.operation}
           tone={item.errors ? "error" : item.with_issues ? "warn" : undefined}
-          onClick={() => go({ name: "group", section: "graphql", key: item.operation })}
+          href={href({ name: "group", section: "graphql", key: item.operation })}
         >
           <Td>
             <Badge variant="outline" className="font-mono text-[12px]">
@@ -750,7 +751,7 @@ export function JobsTable({ items }: { items: readonly JobRow[] }) {
         <Tr
           key={item.job}
           tone={item.failures ? "error" : item.with_issues ? "warn" : undefined}
-          onClick={() => go({ name: "group", section: "jobs", key: item.job })}
+          href={href({ name: "group", section: "jobs", key: item.job })}
         >
           <Td className="max-w-[420px]">
             <Mono className="block truncate">{item.job}</Mono>
@@ -800,7 +801,7 @@ export function WebsocketsTable({ items }: { items: readonly WebsocketRow[] }) {
         <Tr
           key={item.consumer}
           tone={item.errors ? "error" : item.with_issues ? "warn" : undefined}
-          onClick={() => go({ name: "group", section: "websockets", key: item.consumer })}
+          href={href({ name: "group", section: "websockets", key: item.consumer })}
         >
           <Td className="max-w-[360px]">
             <Mono className="block truncate">{item.consumer}</Mono>

@@ -4,7 +4,7 @@ import { type ReactNode, useCallback } from "react";
 import { usePaged, useSearch } from "./data";
 import { EmptyPage } from "./EmptyPage";
 import { RefreshControl } from "./refresh";
-import { type EntrySection, type EntryView, go, href, openTrace } from "./routes";
+import { type EntrySection, type EntryView, go, href, traceHref } from "./routes";
 import { SearchBar } from "./SearchBar";
 import { ENTRY } from "./sections";
 import {
@@ -141,7 +141,7 @@ export function EntryPage({ section, q, view, source, spec, known }: EntryPagePr
     list = calls.items ? (
       calls.items.length ? (
         <>
-          <TracesTable items={calls.items} selectedId={null} onSelect={(id) => openTrace(id)} />
+          <TracesTable items={calls.items} selectedId={null} hrefFor={traceHref} />
           {calls.hasMore ? <LoadMore label="Load older" loading={calls.loading} onMore={calls.more} /> : null}
         </>
       ) : (

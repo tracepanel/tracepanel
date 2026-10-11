@@ -8,7 +8,7 @@ import {
   systemName,
 } from "@tracepanel/ui";
 import { Badge } from "@tracepanel/ui/components/ui/badge";
-import { go, type Route } from "./routes";
+import { href, type Route } from "./routes";
 import { DataTable, Meter, Mono, Td, Th, Tr } from "./ui";
 
 /** Where to look next: the SQL of that database, the traces using that cache, the emails, the tasks. */
@@ -44,7 +44,7 @@ export function ServicesView({ map }: { map: ServiceMap }) {
       }
     >
       {map.services.map((node) => (
-        <Tr key={node.id} tone={node.errors ? "error" : undefined} onClick={() => go(target(node))}>
+        <Tr key={node.id} tone={node.errors ? "error" : undefined} href={href(target(node))}>
           <Td className="max-w-[360px]">
             <span className="block font-medium">{systemName(node)}</span>
             <Mono className="block truncate text-[13px] text-muted-foreground">{serviceWhere(node)}</Mono>

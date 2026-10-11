@@ -79,19 +79,39 @@ export function href(route: Route): string {
   return `#/${route.name}${params.size ? `?${params}` : ""}`;
 }
 
+// In the widget's iframe a new entry would land in the page's own history: Back would step through the panel.
+const EMBEDDED = window.parent !== window;
+
+/** Go to a console address (`#/…`), as a link in the console would. */
+export function follow(target: string, replace = false): void {
+  if (replace || EMBEDDED) {
+    history.replaceState(null, "", target);
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+  } else {
+    location.hash = target;
+  }
+}
+
 export function go(route: Route, replace = false): void {
-  const target = href(route);
-  if (replace) history.replaceState(null, "", target);
-  else location.hash = target;
-  if (replace) window.dispatchEvent(new HashChangeEvent("hashchange"));
+  follow(href(route), replace);
+}
+
+/** Open a console address in a new tab, as Cmd-click or a middle click on a link would. */
+export function openInNewTab(target: string): void {
+  window.open(`${location.href.split("#")[0]}${target}`, "_blank", "noopener");
+}
+
+/** Where a trace opens from here: its page, remembering this one as the way back. */
+export function traceHref(id: string, tab?: string): string {
+  const from = location.hash.startsWith("#/t/") ? parse(location.hash) : null;
+  // From one trace to a linked one: keep the original way back.
+  const back = from?.name === "trace" ? from.from : location.hash;
+  return href({ name: "trace", id, from: back || undefined, tab });
 }
 
 /** Open a trace on its page, remembering where from: every list in the console opens traces this way. */
 export function openTrace(id: string, tab?: string): void {
-  const from = location.hash.startsWith("#/t/") ? parse(location.hash) : null;
-  // From one trace to a linked one: keep the original way back.
-  const back = from?.name === "trace" ? from.from : location.hash;
-  go({ name: "trace", id, from: back || undefined, tab });
+  follow(traceHref(id, tab));
 }
 
 export function useRoute(): Route {

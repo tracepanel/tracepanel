@@ -2,7 +2,8 @@ import { Button } from "@tracepanel/ui/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@tracepanel/ui/components/ui/table";
 import { cn } from "@tracepanel/ui/lib/utils";
 import { ChevronRightIcon } from "lucide-react";
-import { type ComponentProps, type ReactNode, useEffect, useRef } from "react";
+import { type ComponentProps, type ReactNode, type SyntheticEvent, useEffect, useRef } from "react";
+import { follow, openInNewTab } from "./routes";
 
 /* Console building blocks on top of shadcn/ui: a GitHub-like boxed table, meters, loading, page header. */
 
@@ -49,19 +50,56 @@ export function Td({ num, className, ...props }: ComponentProps<typeof TableCell
   return <TableCell className={cn("px-5 py-4 first:pl-6", num && "text-right tabular-nums", className)} {...props} />;
 }
 
-/** A clickable row; `tone` marks it with a colored edge, `selected` highlights the open one. */
+// What a click inside a row means for itself rather than for the row.
+const OWN_CLICK = "a, button, input, select, textarea, summary, [role=button]";
+
+function ownClick(event: SyntheticEvent): boolean {
+  const target = event.target as Element;
+  return target !== event.currentTarget && target.closest(OWN_CLICK) !== null;
+}
+
+/** What makes a row a link: a click goes there, Cmd/Ctrl/Shift-click or a middle click opens a new tab, Enter too. */
+function linkProps(target: string): ComponentProps<typeof TableRow> {
+  return {
+    role: "link",
+    tabIndex: 0,
+    onClick: (event) => {
+      if (ownClick(event)) return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey) openInNewTab(target);
+      else follow(target);
+    },
+    // Without this a middle click starts the browser's autoscroll instead.
+    onMouseDown: (event) => {
+      if (event.button === 1 && !ownClick(event)) event.preventDefault();
+    },
+    onAuxClick: (event) => {
+      if (event.button === 1 && !ownClick(event)) openInNewTab(target);
+    },
+    onKeyDown: (event) => {
+      if (event.key === "Enter" && event.target === event.currentTarget) follow(target);
+    },
+  };
+}
+
+/**
+ * A clickable row; `href` makes it a link (`#/…`), `tone` marks it with a colored edge, `selected` highlights the
+ * open one. A row that expands in place takes `onClick` instead.
+ */
 export function Tr({
   tone,
   selected,
+  href,
   className,
   ...props
-}: ComponentProps<typeof TableRow> & { tone?: "warn" | "error" | undefined; selected?: boolean }) {
+}: ComponentProps<typeof TableRow> & { tone?: "warn" | "error" | undefined; selected?: boolean; href?: string }) {
   return (
     <TableRow
       data-tone={tone}
       data-state={selected ? "selected" : undefined}
+      {...(href === undefined ? {} : linkProps(href))}
       className={cn(
         "cursor-pointer data-[state=selected]:bg-brand-soft",
+        "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
         "data-[tone=error]:[&>td:first-child]:shadow-[inset_3px_0_0_var(--color-error)]",
         "data-[tone=warn]:[&>td:first-child]:shadow-[inset_3px_0_0_var(--color-warn)]",
         className,
