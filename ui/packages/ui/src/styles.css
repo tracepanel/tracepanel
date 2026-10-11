@@ -569,13 +569,18 @@ a.dt-request-row {
   font-size: var(--dt-size-2xs);
 }
 /* This page, in the narrow list: a dot after the path. */
+/* Narrow list: the open page is a dot in the row's left gutter, beside the tone edge, so it sits in the same place on
+   every row whatever the path's length and moves no column. */
 .dt-this-page {
-  flex: none;
-  width: 0.4375rem;
-  height: 0.4375rem;
+  position: absolute;
+  top: 50%;
+  left: 0.4375rem;
+  width: 0.3125rem;
+  height: 0.3125rem;
   border-radius: 999px;
   background: var(--dt-accent);
-  box-shadow: 0 0 0 3px var(--dt-accent-bg);
+  box-shadow: 0 0 0 2px var(--dt-accent-bg);
+  transform: translateY(-50%);
 }
 .dt-request-queries {
   display: inline-flex;

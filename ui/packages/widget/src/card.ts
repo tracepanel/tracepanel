@@ -62,7 +62,11 @@ export const CARD_STYLE = `
   .card-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12.5px "Geist Mono Variable", "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace; }
   .card-ms { color: #b9bfcd; font-size: 12px; }
   .card-tag { margin-left: 8px; padding: 0 6px; border-radius: 999px; background: rgb(165 135 255 / 0.16); color: #bc9cff; font: 600 11px "Geist Variable", "Geist", ui-sans-serif, system-ui, sans-serif; }
-  .card-more { margin: 4px 0 0; color: #8c93a6; font-size: 12px; }
+  .card-more {
+    margin: 4px 0 0; padding: 2px 0; border: 0; background: none; color: #bc9cff;
+    font: 500 12px "Geist Variable", "Geist", ui-sans-serif, system-ui, sans-serif; cursor: pointer;
+  }
+  .card-more:hover, .card-more:focus-visible { color: #dcc6ff; text-decoration: underline; outline: none; }
   .card-skeleton { height: 10px; margin: 8px 0; border-radius: 5px; background: linear-gradient(90deg, rgb(255 255 255 / 0.05), rgb(255 255 255 / 0.11), rgb(255 255 255 / 0.05)); background-size: 200% 100%; animation: card-shimmer 1.2s linear infinite; }
   @keyframes card-shimmer { to { background-position: -200% 0; } }
   [data-category="django"] { --k: rgb(140 147 166 / 0.4); }
@@ -78,7 +82,9 @@ export const CARD_STYLE = `
   :host([data-theme="light"]) .card-method { color: #6d3fe0; }
   :host([data-theme="light"]) .card-time, :host([data-theme="light"]) .card-ms { color: #3a3e47; }
   :host([data-theme="light"]) .card-most, :host([data-theme="light"]) .card-hint, :host([data-theme="light"]) .card-count,
-  :host([data-theme="light"]) .card-caption, :host([data-theme="light"]) .card-more { color: #5f6470; }
+  :host([data-theme="light"]) .card-caption { color: #5f6470; }
+  :host([data-theme="light"]) .card-more { color: #6d3fe0; }
+  :host([data-theme="light"]) .card-more:hover { color: #4c22b8; }
   :host([data-theme="light"]) .card-most b { color: #16181d; }
   :host([data-theme="light"]) .card-section { border-top-color: #ecece7; }
   :host([data-theme="light"]) .card-row:hover, :host([data-theme="light"]) .card-row:focus-visible { background: #f5f5f2; }
@@ -278,8 +284,7 @@ export function mountCard(root: ShadowRoot, badge: HTMLElement, source: CardSour
       });
       section.append(row);
     }
-    if (issues.length > FINDINGS)
-      section.append(element("p", "card-more", `+${issues.length - FINDINGS} more in the panel`));
+    if (issues.length > FINDINGS) section.append(moreLink(issues.length - FINDINGS, `#/t/${traceId}?tab=issues`));
     return section;
   }
 
@@ -319,8 +324,21 @@ export function mountCard(root: ShadowRoot, badge: HTMLElement, source: CardSour
       }
       section.append(row);
     }
-    if (worth.length > LATER) section.append(element("p", "card-more", `+${worth.length - LATER} more in the panel`));
+    // The panel lists them all; it opens on the first one not shown here.
+    const next = worth[LATER]?.trace;
+    if (next) section.append(moreLink(worth.length - LATER, `#/t/${next}`));
     return section;
+  }
+
+  /** "+2 more →": opens the panel where the rest are. */
+  function moreLink(count: number, hash: string): HTMLElement {
+    const link = element("button", "card-more", `+${count} more in the panel →`);
+    link.type = "button";
+    link.addEventListener("click", () => {
+      hide(true);
+      source.open(hash);
+    });
+    return link;
   }
 
   function render(info: TraceInfo, later: readonly TraceInfo[], trace: Trace | null, loading: boolean): void {
