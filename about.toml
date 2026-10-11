@@ -15,6 +15,8 @@ accepted = [
     "BSL-1.0",
     "Unlicense",
     "MPL-2.0",
+    # webpki-roots: Mozilla's root certificates as data, for sending to the cloud over TLS anywhere.
+    "CDLA-Permissive-2.0",
 ]
 ignore-dev-dependencies = true
 ignore-build-dependencies = true

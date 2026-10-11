@@ -17,6 +17,7 @@ tracepanel-analysis = { path = "crates/analysis" }
 tracepanel-store-local = { path = "crates/store-local" }
 tracepanel-server = { path = "crates/server" }
 tracepanel-mcp = { path = "crates/mcp" }
+tracepanel-sender = { path = "crates/sender" }
 regex = "1.13"
 rusqlite = { version = "0.40", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
