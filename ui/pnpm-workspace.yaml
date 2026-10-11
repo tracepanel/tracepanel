@@ -1,3 +1,6 @@
 packages:
   - packages/*
   - apps/*
+# esbuild (vite's bundler) checks its platform binary after install: the one dependency allowed to run a build script.
+allowBuilds:
+  esbuild: true
