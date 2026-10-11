@@ -418,6 +418,44 @@ a {
   background: var(--dt-selected);
 }
 
+.follow-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
+  height: 1.625rem;
+  padding: 0 0.5rem;
+  border: 1px solid transparent;
+  border-radius: 0.4375rem;
+  background: none;
+  color: var(--dt-text-3);
+  font: 500 var(--dt-size-xs) var(--dt-font);
+  cursor: pointer;
+}
+.follow-button svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+.follow-button:hover {
+  color: var(--dt-text);
+  background: var(--dt-hover);
+}
+.follow-button[aria-pressed="true"] {
+  border-color: rgb(167 139 250 / 0.35);
+  background: var(--dt-accent-bg);
+  color: var(--dt-accent);
+}
+.list-count {
+  overflow: hidden;
+  color: var(--dt-text-2);
+  font-size: var(--dt-size-xs);
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.runtime-chip[data-compact] {
+  padding: 0 0.3125rem;
+}
+
 .toggle {
   display: inline-flex;
   align-items: center;

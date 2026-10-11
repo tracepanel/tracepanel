@@ -582,6 +582,11 @@ a.dt-request-row {
   align-items: center;
   gap: 0.25rem;
 }
+/* The number in a box of its own width: the icons stand in one column whatever the count. */
+.dt-request-queries-n {
+  min-width: 3ch;
+  text-align: right;
+}
 .dt-request-queries .dt-icon {
   color: var(--dt-text-3);
 }
