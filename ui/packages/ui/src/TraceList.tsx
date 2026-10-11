@@ -78,7 +78,7 @@ export function TraceList({ rows, selectedId, currentId, newIds, compact, onSele
                   title={`${trace.queries} SQL ${trace.queries === 1 ? "query" : "queries"}`}
                 >
                   <DatabaseIcon size={12} />
-                  {trace.queries}
+                  <span className="dt-request-queries-n">{trace.queries}</span>
                 </span>
               ) : (
                 <span>{`${trace.queries} ${trace.queries === 1 ? "query" : "queries"}`}</span>

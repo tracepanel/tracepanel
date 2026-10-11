@@ -8,11 +8,8 @@ import {
   Empty,
   ExternalIcon,
   httpSource,
-  LogoMark,
+  Logo,
   MethodBadge,
-  RuntimeIcon,
-  runtimeKind,
-  runtimeName,
   type TabId,
   TraceList,
   type TraceRow,
@@ -21,7 +18,7 @@ import {
 import { Button } from "@tracepanel/ui/components/ui/button";
 import { TooltipProvider } from "@tracepanel/ui/components/ui/tooltip";
 import { rem } from "@tracepanel/ui/lib/utils";
-import { type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type ReactNode, type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ClearDialog } from "./ClearDialog";
 import { Console } from "./Console";
 import { exploreFor } from "./explore";
@@ -250,20 +247,59 @@ function useTabRows(history: TabHistory | null): TraceRow[] {
 }
 
 /** What served the page, as its mark and name; the versions in the tooltip ("Python 3.12 · Django 6.0"). */
-function RuntimeChip({ label }: { label: string }) {
-  const kind = runtimeKind(label);
+
+/** Follow new: open each request as it arrives. */
+function FollowToggle({ follow, onFollow }: { follow: boolean; onFollow: (value: boolean) => void }) {
+  const byPointer = useRef(false);
   return (
-    <span className="runtime-chip" title={`Served by ${label}`}>
-      {kind ? <RuntimeIcon kind={kind} /> : null}
-      {kind ? runtimeName(kind) : label.split(" · ")[0]}
-    </span>
+    <label
+      className="toggle"
+      title="Open each new request as it arrives"
+      onPointerDown={() => (byPointer.current = true)}
+    >
+      <input
+        type="checkbox"
+        checked={follow}
+        onChange={(event) => {
+          onFollow(event.target.checked);
+          // A click on the label focuses the hidden box, and Chrome then rings it: a mouse doesn't need the ring.
+          if (byPointer.current) event.target.blur();
+          byPointer.current = false;
+        }}
+      />
+      <span className="toggle-track" aria-hidden="true" />
+      Follow new
+    </label>
+  );
+}
+
+/** The list's count and its two controls: in the list's head, or in the dock's toolbar row over the list. */
+function ListControls({
+  count,
+  follow,
+  onFollow,
+  onClear,
+}: {
+  count: ReactNode;
+  follow: boolean;
+  onFollow: (value: boolean) => void;
+  onClear: () => void;
+}) {
+  return (
+    <>
+      <span className="list-count">{count}</span>
+      <span className="ml-auto flex shrink-0 items-center gap-1">
+        <FollowToggle follow={follow} onFollow={onFollow} />
+        <ClearButton onClear={onClear} />
+      </span>
+    </>
   );
 }
 
 /** Clear, where the requests are listed, as in the browser's Network tab. */
-function ClearButton({ onClear }: { onClear: () => void }) {
+function ClearButton({ onClear, label = "Clear requests" }: { onClear: () => void; label?: string }) {
   return (
-    <button type="button" className="icon-button" title="Clear requests" aria-label="Clear requests" onClick={onClear}>
+    <button type="button" className="icon-button" title={label} aria-label={label} onClick={onClear}>
       <ClearIcon />
     </button>
   );
@@ -472,6 +508,7 @@ function useStickToBottom(
  */
 function PageRequests({
   scope = "page",
+  head = true,
   rows,
   selectedId,
   currentId = null,
@@ -480,6 +517,8 @@ function PageRequests({
   onClear,
 }: {
   scope?: "page" | "tab";
+  /** false where the dock's toolbar row carries the count and the controls. */
+  head?: boolean;
   rows: readonly TraceRow[];
   selectedId: string | null;
   currentId?: string | null;
@@ -503,19 +542,20 @@ function PageRequests({
       className={scope === "tab" ? "page-requests panel-list" : "page-requests"}
       aria-label={scope === "tab" ? "Pages and requests in this browser tab" : "Requests made by this page"}
     >
-      <div className="page-requests-head">
-        <span className="min-w-0 truncate">
-          {scope === "tab" ? "This tab" : "This page"} <span className="page-requests-count">{count}</span>
-        </span>
-        <span className="flex shrink-0 items-center gap-2">
-          <label className="toggle">
-            <input type="checkbox" checked={follow} onChange={(event) => onFollow(event.target.checked)} />
-            <span className="toggle-track" aria-hidden="true" />
-            Follow new
-          </label>
-          <ClearButton onClear={onClear} />
-        </span>
-      </div>
+      {head ? (
+        <div className="page-requests-head">
+          <ListControls
+            count={
+              <>
+                {scope === "tab" ? "This tab" : "This page"} <span className="page-requests-count">{count}</span>
+              </>
+            }
+            follow={follow}
+            onFollow={onFollow}
+            onClear={onClear}
+          />
+        </div>
+      ) : null}
       <TraceList
         compact={true}
         rows={rows}
@@ -621,14 +661,7 @@ function PanelApp({ route }: { route: Route }) {
       </button>
     </>
   );
-  const runtime = history?.runtime ? <RuntimeChip label={history.runtime} /> : null;
-  const logo = (
-    <span className="flex shrink-0 items-center gap-2" title="Tracepanel">
-      <LogoMark className="size-6" />
-      <span className="sr-only">Tracepanel</span>
-      {runtime}
-    </span>
-  );
+  const requestCount = `${tabRows.length} ${tabRows.length === 1 ? "request" : "requests"}`;
   // Docked at the bottom with a request open, the panel has no bar of its own: the logo over the list and the trace's
   // toolbar make one row across it (as in browser devtools).
   const toolbarInTrace = split && selectedId !== null;
@@ -646,11 +679,8 @@ function PanelApp({ route }: { route: Route }) {
       />
       {toolbarInTrace ? null : (
         <header className="bar">
-          <span className="flex shrink-0 items-center gap-2" title="Tracepanel">
-            <LogoMark className="size-7" />
-            <span className="sr-only">Tracepanel</span>
-            {runtime}
-          </span>
+          {/* The runtime is on the pill: the panel shows whose it is, not what served the page again. */}
+          <Logo className="shrink-0 gap-1.5 text-md [&_svg]:size-6" />
           {split ? (
             <span className="bar-title">Tracepanel</span>
           ) : (
@@ -675,10 +705,20 @@ function PanelApp({ route }: { route: Route }) {
       ) : null}
       <div className={split ? "panel-split" : "panel-main"} data-brand={toolbarInTrace ? "" : undefined} ref={splitRef}>
         {/* Over the list, level with the trace's tabs: one toolbar row across the dock, as in browser devtools. */}
-        {toolbarInTrace ? <div className="panel-brand">{logo}</div> : null}
+        {toolbarInTrace ? (
+          <div className="panel-brand">
+            <Logo className="shrink-0 gap-1.5 text-md [&_svg]:size-5" />
+            {/* No count here: the rows are right below; Clear's tooltip says how many. */}
+            <span className="ml-auto flex shrink-0 items-center gap-2">
+              <FollowToggle follow={follow} onFollow={onFollow} />
+              <ClearButton onClear={() => setClearing(true)} label={`Clear ${requestCount}`} />
+            </span>
+          </div>
+        ) : null}
         {split ? (
           <PageRequests
             scope="tab"
+            head={!toolbarInTrace}
             rows={tabRows}
             selectedId={selectedId}
             currentId={currentId}

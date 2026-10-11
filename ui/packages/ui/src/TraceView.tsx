@@ -14,7 +14,7 @@ import {
   TerminalIcon,
   TriangleAlertIcon,
 } from "lucide-react";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CallMap } from "./CallMap";
 import { Button } from "./components/ui/button";
 import {
@@ -25,6 +25,7 @@ import {
 } from "./components/ui/dropdown-menu";
 import { ErrorView } from "./ErrorView";
 import { duration } from "./format";
+import { useCloseOnBlur } from "./hooks/useCloseOnBlur";
 import { IssueList } from "./IssueList";
 import { LogList } from "./LogList";
 import { isTyping } from "./lib/keys";
@@ -270,9 +271,13 @@ export function TraceView({
       ) : null}
     </div>
   );
+  // In the panel a click on the page doesn't reach the menu: it closes when the frame loses focus.
+  const [exploreOpen, setExploreOpen] = useState(false);
+  const closeExplore = useCallback(() => setExploreOpen(false), []);
+  useCloseOnBlur(exploreOpen, closeExplore);
   const exploreMenu =
     explore.length > 0 ? (
-      <DropdownMenu>
+      <DropdownMenu open={exploreOpen} onOpenChange={setExploreOpen}>
         <DropdownMenuTrigger asChild>
           <Button
             variant="outline"
