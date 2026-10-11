@@ -14,7 +14,7 @@ import { TracePage } from "./TracePage";
 /** The menu item a page belongs to; a trace belongs to wherever it was opened from. */
 function sectionOf(route: Route): Section | null {
   if (route.name === "group") return route.section;
-  if (route.name === "issue") return "issues";
+  if (route.name === "issue") return route.error ? "errors" : "issues";
   if (route.name === "trace") return route.from ? sectionOf(parse(route.from)) : null;
   if (route.name === "home") return null;
   return route.name;

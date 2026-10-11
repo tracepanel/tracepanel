@@ -14,7 +14,7 @@ import { ArrowRightIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { CallsChart, Histogram, LatencyChart, Stat } from "./Charts";
 import { RefreshControl, useRefresh } from "./refresh";
-import { type EntrySection, go, href, traceHref } from "./routes";
+import { type EntrySection, go, href, issueRoute, traceHref } from "./routes";
 import { ENTRY } from "./sections";
 import { TracesTable } from "./tables";
 import { Breadcrumbs, DataTable, Loading, Meter, Mono, Td, Th, Tr } from "./ui";
@@ -81,7 +81,14 @@ export function GroupPage({
 
   if (group === undefined) return <Loading />;
   if (group === null || group.summary === null) {
-    return <Empty title={`No calls of ${groupKey}`}>It has no stored traces yet.</Empty>;
+    return (
+      <Empty
+        title={`No calls of ${groupKey}`}
+        action={<a href={href({ name: section, q: "" })}>All {ENTRY[section].label}</a>}
+      >
+        It has no stored traces yet.
+      </Empty>
+    );
   }
   const s = group.summary;
   const errors = group.issues.filter((issue) => issue.kind === "error");
@@ -150,7 +157,7 @@ export function GroupPage({
           </h2>
           <IssueGroupList
             issues={errors.map((issue) => ({ ...issue, occurrences: issue.calls }))}
-            hrefFor={(issue) => href({ name: "issue", fingerprint: issue.fingerprint })}
+            hrefFor={(issue) => href(issueRoute(issue.fingerprint, issue.kind))}
           />
         </section>
       ) : null}
@@ -164,7 +171,7 @@ export function GroupPage({
           </h2>
           <IssueGroupList
             issues={findings.map((issue) => ({ ...issue, occurrences: issue.calls }))}
-            hrefFor={(issue) => href({ name: "issue", fingerprint: issue.fingerprint })}
+            hrefFor={(issue) => href(issueRoute(issue.fingerprint, issue.kind))}
           />
         </section>
       ) : null}

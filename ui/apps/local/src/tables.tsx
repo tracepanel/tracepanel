@@ -28,7 +28,7 @@ import { Button } from "@tracepanel/ui/components/ui/button";
 import { TableCell, TableRow } from "@tracepanel/ui/components/ui/table";
 import { ArrowRightIcon, ListFilterIcon } from "lucide-react";
 import { Fragment, useEffect, useState } from "react";
-import { go, href, openTrace } from "./routes";
+import { endpointGroup, go, href, issueRoute, traceHref } from "./routes";
 import { graphqlOperation } from "./sections";
 import { DataTable, LevelBadge, Meter, Mono, Td, Th, Tr } from "./ui";
 
@@ -129,7 +129,7 @@ export function EndpointsTable({ items }: { items: readonly EndpointRow[] }) {
         <Tr
           key={`${item.method} ${item.route}`}
           tone={item.errors > 0 ? "error" : item.with_issues > 0 ? "warn" : undefined}
-          href={href({ name: "group", section: "endpoints", key: `${item.method} ${item.route}` })}
+          href={href(endpointGroup(item.method, item.route))}
         >
           <Td>
             <span className="flex items-center gap-2.5">
@@ -173,15 +173,7 @@ export function EndpointsTable({ items }: { items: readonly EndpointRow[] }) {
   );
 }
 
-export function QueriesTable({
-  items,
-  onOpen,
-  source,
-}: {
-  items: readonly QueryRow[];
-  onOpen: (q: string) => void;
-  source: DataSource;
-}) {
+export function QueriesTable({ items, source }: { items: readonly QueryRow[]; source: DataSource }) {
   const [open, setOpen] = useState<string | null>(null);
   const heaviest = Math.max(...items.map((item) => item.total), 1);
   return (
@@ -242,8 +234,10 @@ export function QueriesTable({
                     load={(analyze) => source.explain(item.sample_trace, item.sample_span, analyze)}
                   />
                 ) : null}
-                <Button variant="outline" size="sm" onClick={() => onOpen(`query:${item.fp}`)}>
-                  Show {item.traces} {item.traces === 1 ? "request" : "requests"} with this query
+                <Button variant="outline" size="sm" asChild>
+                  <a href={href({ name: "traces", q: `query:${item.fp}` })}>
+                    Show {item.traces} {item.traces === 1 ? "request" : "requests"} with this query
+                  </a>
                 </Button>
               </TableCell>
             </TableRow>
@@ -256,11 +250,9 @@ export function QueriesTable({
 
 export function LogsTable({
   items,
-  onOpen,
   onFilter,
 }: {
   items: readonly LogRow[];
-  onOpen: (traceId: string) => void;
   /** Narrows the current list: each key replaces the same filter in the query. */
   onFilter: (terms: Record<string, string>) => void;
 }) {
@@ -310,7 +302,7 @@ export function LogsTable({
           {open === log.id ? (
             <TableRow className="hover:bg-transparent">
               <TableCell colSpan={5} className="bg-muted/40 px-5 py-4 whitespace-normal">
-                <LogDetails log={log} onOpen={onOpen} onFilter={onFilter} />
+                <LogDetails log={log} onFilter={onFilter} />
               </TableCell>
             </TableRow>
           ) : null}
@@ -320,15 +312,7 @@ export function LogsTable({
   );
 }
 
-function LogDetails({
-  log,
-  onOpen,
-  onFilter,
-}: {
-  log: LogRow;
-  onOpen: (traceId: string) => void;
-  onFilter: (terms: Record<string, string>) => void;
-}) {
+function LogDetails({ log, onFilter }: { log: LogRow; onFilter: (terms: Record<string, string>) => void }) {
   const fields: [string, string][] = [
     ["trace_id", log.trace_id],
     ["logger", log.logger],
@@ -356,9 +340,11 @@ function LogDetails({
             this user
           </Button>
         ) : null}
-        <Button size="xs" className="ml-auto" onClick={() => onOpen(log.trace_id)}>
-          Open request
-          <ArrowRightIcon />
+        <Button size="xs" className="ml-auto" asChild>
+          <a href={traceHref(log.trace_id, "logs")}>
+            Open request
+            <ArrowRightIcon />
+          </a>
         </Button>
       </div>
       <div className="group/message relative rounded-md border bg-background">
@@ -420,7 +406,7 @@ export function IssuesTable({ items }: { items: readonly IssueRow[] }) {
           <Tr
             key={item.fingerprint}
             tone={error ? "error" : "warn"}
-            href={href({ name: "issue", fingerprint: item.fingerprint })}
+            href={href(issueRoute(item.fingerprint, item.kind))}
           >
             <Td className="whitespace-normal">
               <span className="flex flex-col gap-0.5">
@@ -551,9 +537,11 @@ function MailPreview({ mail, source }: { mail: MailRow; source: DataSource }) {
     <div className="grid gap-3">
       <MailList spans={[span]} />
       <div>
-        <Button variant="outline" size="sm" onClick={() => openTrace(mail.trace_id)}>
-          Open request
-          <ArrowRightIcon />
+        <Button variant="outline" size="sm" asChild>
+          <a href={traceHref(mail.trace_id, "mail")}>
+            Open request
+            <ArrowRightIcon />
+          </a>
         </Button>
       </div>
     </div>

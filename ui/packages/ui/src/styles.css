@@ -318,6 +318,13 @@ code,
   margin: 0;
   color: var(--dt-text-2);
 }
+.dt-empty-action {
+  margin: 12px 0 0;
+}
+.dt-empty-action a {
+  color: var(--dt-brand, currentColor);
+  font-weight: 500;
+}
 
 .dt-section-label {
   margin: 16px 0 8px;

@@ -89,11 +89,13 @@ export function RichText({ text }: { text: string }) {
   );
 }
 
-export function Empty({ title, children }: { title: string; children?: ReactNode }) {
+/** Nothing to show; `action` is the way on, so an empty page is never a dead end. */
+export function Empty({ title, children, action }: { title: string; children?: ReactNode; action?: ReactNode }) {
   return (
     <div className="dt-empty">
       <p className="dt-empty-title">{title}</p>
       {children ? <p className="dt-empty-text">{children}</p> : null}
+      {action ? <p className="dt-empty-action">{action}</p> : null}
     </div>
   );
 }

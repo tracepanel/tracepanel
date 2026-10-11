@@ -25,7 +25,13 @@ export function IssuePage({ fingerprint, source }: { fingerprint: string; source
   }, [fingerprint, source]);
 
   if (issue === undefined) return <Loading />;
-  if (issue === null) return <Empty title="Issue not found">It may have been dropped with old traces.</Empty>;
+  if (issue === null) {
+    return (
+      <Empty title="Issue not found" action={<a href={href({ name: "issues", q: "" })}>Back to issues</a>}>
+        It may have been dropped with old traces.
+      </Empty>
+    );
+  }
 
   const error = issue.kind === "error";
   const [type, ...message] = issue.title.split(": ");
@@ -85,26 +91,31 @@ export function IssuePage({ fingerprint, source }: { fingerprint: string; source
           <Card className="gap-2 px-4 py-3.5 shadow-none">
             <h2 className="text-[16px] font-semibold">Endpoints</h2>
             <ul className="grid gap-0.5">
-              {issue.endpoints.map((endpoint) => {
-                const [method = "GET", route = "/"] = endpoint.split(" ");
-                return (
-                  <li key={endpoint}>
-                    <a
-                      href={href({ name: "group", section: "endpoints", key: `${method} ${route}` })}
-                      className="block w-full rounded-md px-1.5 py-1.5 text-left font-mono text-[14px] hover:bg-accent"
-                    >
-                      {endpoint}
-                    </a>
-                  </li>
-                );
-              })}
+              {issue.endpoints.map((endpoint) => (
+                <li key={endpoint}>
+                  <a
+                    href={href({ name: "group", section: "endpoints", key: endpoint })}
+                    className="block w-full rounded-md px-1.5 py-1.5 text-left font-mono text-[14px] hover:bg-accent"
+                  >
+                    {endpoint}
+                  </a>
+                </li>
+              ))}
             </ul>
           </Card>
         ) : null}
       </div>
 
       <section className="grid grid-cols-[minmax(0,1fr)] gap-2.5">
-        <h2 className="text-[19px] font-semibold">Latest occurrence</h2>
+        <h2 className="flex items-baseline gap-3 text-[19px] font-semibold">
+          Latest occurrence
+          <a
+            href={traceHref(issue.last_trace_id, error ? "error" : "issues")}
+            className="text-[14px] font-medium text-brand hover:underline"
+          >
+            Open request →
+          </a>
+        </h2>
         <Card className="p-0 shadow-none">
           <TraceScreen
             id={issue.last_trace_id}

@@ -7,7 +7,7 @@ import {
   TraceView,
   type TraceViewProps,
 } from "@tracepanel/ui";
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { useRefresh } from "./refresh";
 
 /** A just-finished request may not be stored yet (the SDK writes in the background): retry briefly. */
@@ -26,6 +26,8 @@ export interface TraceScreenProps {
   actions?: TraceViewProps["actions"];
   /** Opens a linked trace (enqueued by / enqueued tasks). */
   onOpenTrace?: ((id: string) => void) | undefined;
+  /** The way back when the trace is gone (the console's page); the panel has none to offer. */
+  back?: ReactNode;
 }
 
 export function TraceScreen({
@@ -38,6 +40,7 @@ export function TraceScreen({
   preferredTab,
   actions,
   onOpenTrace,
+  back,
 }: TraceScreenProps) {
   const [trace, setTrace] = useState<Trace | null | undefined>(undefined);
   const [related, setRelated] = useState<Related | undefined>(undefined);
@@ -90,7 +93,7 @@ export function TraceScreen({
   }
   if (trace === null) {
     return (
-      <Empty title="Trace not found">
+      <Empty title="Trace not found" action={back}>
         It is no longer in the local store: older traces are removed as new ones arrive, and the store starts fresh
         after a Tracepanel upgrade.
       </Empty>

@@ -1,5 +1,5 @@
 import type { ExploreItem, Trace } from "@tracepanel/ui";
-import type { Route } from "./routes";
+import { issueRoute, type Route } from "./routes";
 import { ENTRY, groupOf } from "./sections";
 import { isoWithOffset } from "./time";
 
@@ -27,7 +27,7 @@ export function exploreFor(trace: Trace, open: (route: Route) => void): ExploreI
       label: issue.title,
       hint: "How often it happens, and where",
       icon: "issue",
-      onSelect: () => open({ name: "issue", fingerprint: issue.fingerprint }),
+      onSelect: () => open(issueRoute(issue.fingerprint, issue.kind)),
     });
   }
   const since = isoWithOffset(trace.start - AROUND_US);

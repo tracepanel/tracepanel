@@ -13,7 +13,7 @@ import { ChevronRightIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { CallsChart, LatencyChart, Stat } from "./Charts";
 import { useRefresh } from "./refresh";
-import { href } from "./routes";
+import { endpointGroup, href } from "./routes";
 import { isoWithOffset } from "./time";
 
 const STORAGE_KEY = "tracepanel:overview";
@@ -269,7 +269,7 @@ function operationHref(item: OperationStats): string {
   const operation = item.kind === "http" && item.name.startsWith("GraphQL ") ? item.name.slice(8) : null;
   if (operation) return href({ name: "group", section: "graphql", key: operation });
   if (item.kind === "http" && item.method && item.route) {
-    return href({ name: "group", section: "endpoints", key: `${item.method} ${item.route}` });
+    return href(endpointGroup(item.method, item.route));
   }
   if (item.kind === "task") return href({ name: "group", section: "tasks", key: item.name });
   if (item.kind === "command") return href({ name: "group", section: "jobs", key: item.name });

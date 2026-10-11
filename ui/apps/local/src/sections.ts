@@ -119,10 +119,15 @@ export function crumbsFor(route: Route, from: string): { label: string; href: st
       { label: route.key, href: from },
     ];
   if (route.name === "issue")
-    return [
-      { label: "Issues", href: "#/issues" },
-      { label: "Issue", href: from },
-    ];
+    return route.error
+      ? [
+          { label: "Errors", href: "#/errors" },
+          { label: "Error", href: from },
+        ]
+      : [
+          { label: "Issues", href: "#/issues" },
+          { label: "Issue", href: from },
+        ];
   if (route.name === "home" || route.name === "trace") return [];
   return [{ label: sectionLabel(route.name), href: from }];
 }

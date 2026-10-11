@@ -4,7 +4,7 @@ import { usePaged, useSearch } from "./data";
 import { EmptyPage } from "./EmptyPage";
 import { refineQuery } from "./EntryPage";
 import { RefreshControl } from "./refresh";
-import { type EntrySection, go, openTrace, type Section, traceHref } from "./routes";
+import { type EntrySection, go, type Section, traceHref } from "./routes";
 import { SearchBar } from "./SearchBar";
 import { ServicesView } from "./ServicesView";
 import { DATA_LABELS } from "./sections";
@@ -145,7 +145,7 @@ export function DataPage({ section, q, source, spec, known }: DataPageProps) {
     body = logs.items ? (
       logs.items.length ? (
         <>
-          <LogsTable items={logs.items} onOpen={(id) => openTrace(id, "logs")} onFilter={refine} />
+          <LogsTable items={logs.items} onFilter={refine} />
           {logs.hasMore ? <LoadMore label="Load older logs" loading={logs.loading} onMore={logs.more} /> : null}
         </>
       ) : (
@@ -182,7 +182,7 @@ export function DataPage({ section, q, source, spec, known }: DataPageProps) {
   } else if (section === "queries") {
     body = queries.data ? (
       queries.data.length ? (
-        <QueriesTable items={queries.data} onOpen={(query) => go({ name: "traces", q: query })} source={source} />
+        <QueriesTable items={queries.data} source={source} />
       ) : (
         <Empty title="No queries match">SQL from stored traces is aggregated here.</Empty>
       )
