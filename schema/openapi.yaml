@@ -250,6 +250,7 @@ paths:
       summary: One GraphQL operation, like an endpoint (percentiles, series, issues, calls), plus its resolvers.
       parameters:
         - { name: operation, in: query, required: true, schema: { type: string }, description: "query PostList" }
+        - $ref: "#/components/parameters/service"
       responses:
         "200":
           description: The operation.
@@ -330,6 +331,7 @@ paths:
       parameters:
         - { name: method, in: query, required: true, schema: { type: string } }
         - { name: route, in: query, required: true, schema: { type: string } }
+        - $ref: "#/components/parameters/service"
       responses:
         "200":
           description: The endpoint.
@@ -377,10 +379,7 @@ paths:
       operationId: counts
       summary: Navigation badges.
       parameters:
-        - name: service
-          in: query
-          description: Only what this app (service.name) recorded; every app when left out.
-          schema: { type: string }
+        - $ref: "#/components/parameters/service"
       responses:
         "200":
           description: Counts.
@@ -408,6 +407,8 @@ paths:
     get:
       operationId: knownValues
       summary: Distinct routes, loggers, database aliases and extra= keys, for filter menus and hints.
+      parameters:
+        - $ref: "#/components/parameters/service"
       responses:
         "200":
           description: Known values.
@@ -481,6 +482,11 @@ paths:
 
 components:
   parameters:
+    service:
+      name: service
+      in: query
+      description: Only what this app (service.name) recorded; every app when left out.
+      schema: { type: string }
     q:
       name: q
       in: query
