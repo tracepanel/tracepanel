@@ -326,13 +326,41 @@ export function LogsTable({
   );
 }
 
+/** A value as a search term: quoted when it has spaces. */
+function term(value: string): string {
+  return /\s/.test(value) ? `"${value}"` : value;
+}
+
+/** A row of the log's details, and the filter its icon applies, if any. */
+type LogField = [key: string, value: string, filter?: Record<string, string> | undefined];
+
+/**
+ * Where the record was written, from its trace: the app, the request (or task, job) and its status, the user. The
+ * record carries none of it itself; the trace does, once for all of its records.
+ */
+function logContext(log: LogRow): LogField[] {
+  const user: LogField[] = log.user_id ? [["user", log.user_id, { user: term(log.user_id) }]] : [];
+  return [["app", log.service, { service: term(log.service) }], requestField(log), ...user];
+}
+
+/** "GET /api/stats/ → 200", filtering by its path; a task's or job's name as it is. */
+function requestField(log: LogRow): LogField {
+  if (!(log.method && log.path)) return ["request", log.trace_name];
+  const status = log.http_status ? ` → ${log.http_status}` : "";
+  return ["request", `${log.method} ${log.path}${status}`, { path: term(log.path) }];
+}
+
 function LogDetails({ log, onFilter }: { log: LogRow; onFilter: (terms: Record<string, string>) => void }) {
-  const fields: [string, string][] = [
+  const fields: LogField[] = [
+    ...logContext(log),
     ["trace_id", log.trace_id],
     ["logger", log.logger],
     ["level", log.level],
     ["time", new Date(log.time / 1000).toISOString()],
-    ...Object.entries(log.attrs).map(([key, value]): [string, string] => [key, String(value)]),
+    ...Object.entries(log.attrs).map(([key, value]): LogField => {
+      const text = String(value);
+      return [key, text, key.startsWith("extra.") ? { [key]: term(text) } : undefined];
+    }),
   ];
   return (
     <div className="grid gap-3.5">
@@ -371,21 +399,21 @@ function LogDetails({ log, onFilter }: { log: LogRow; onFilter: (terms: Record<s
         </pre>
       ) : null}
       <dl className="grid grid-cols-[max-content_minmax(0,1fr)_auto] items-center overflow-hidden rounded-md border bg-background text-base">
-        {fields.map(([key, value]) => (
+        {fields.map(([key, value, filter]) => (
           <Fragment key={key}>
             <dt className="border-b px-3 py-1.5 font-mono text-muted-foreground">{key}</dt>
             <dd className="m-0 truncate border-b px-3 py-1.5 font-mono" title={value}>
               {value}
             </dd>
             <span className="flex items-center border-b px-1.5 py-1">
-              {key.startsWith("extra.") ? (
+              {filter ? (
                 <Button
                   variant="ghost"
                   size="icon-xs"
                   className="text-muted-foreground"
                   title={`Show logs with ${key} = ${value}`}
                   aria-label={`Show logs with ${key} = ${value}`}
-                  onClick={() => onFilter({ [key]: /\s/.test(value) ? `"${value}"` : value })}
+                  onClick={() => onFilter(filter)}
                 >
                   <ListFilterIcon />
                 </Button>
