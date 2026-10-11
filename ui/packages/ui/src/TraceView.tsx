@@ -365,6 +365,7 @@ export function TraceView({
               <MethodBadge method={head.badge} htmx={htmxOf(trace)} />
               <h2>{head.title}</h2>
               <StatusBadge status={typeof status === "number" ? status : null} />
+              <span className="dt-trace-time">{duration(trace.duration)}</span>
             </div>
             {compact ? null : typeof route === "string" && route !== path ? (
               <p className="dt-trace-route">
@@ -377,7 +378,15 @@ export function TraceView({
         </div>
       </header>
       {compact ? null : <Metrics trace={trace} />}
-      {compact ? null : <Timeline trace={trace} />}
+      {compact ? null : (
+        <Timeline
+          trace={trace}
+          onSelect={(target) => {
+            if (target.tab === "tree") setTreeSpan(target.span);
+            openTab(target.tab);
+          }}
+        />
+      )}
       {tabsBar}
       {panel}
     </article>

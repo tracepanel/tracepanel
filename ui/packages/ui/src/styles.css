@@ -668,6 +668,22 @@ a.dt-request-row {
   padding: 0 0.5rem;
   font-size: var(--dt-size-sm);
 }
+/* The full trace page: the request as its headline. */
+.dt-trace[data-variant="full"] .dt-trace-title {
+  gap: 0.625rem;
+}
+.dt-trace[data-variant="full"] .dt-trace-title h2 {
+  font-size: var(--dt-size-2xl);
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+.dt-trace-time {
+  color: var(--dt-text-2);
+  font-size: var(--dt-size-md);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .dt-trace-route {
   margin: 0.25rem 0 0 2.875rem;
   color: var(--dt-text-3);
@@ -829,8 +845,16 @@ a.dt-request-row {
   top: 1px;
   bottom: 1px;
   min-width: 2px;
+  padding: 0;
+  border: 0;
   border-radius: 2px;
   background: var(--dt-mark);
+  cursor: pointer;
+}
+.dt-mark:hover,
+.dt-mark:focus-visible {
+  outline: 1px solid var(--dt-text-2);
+  outline-offset: 1px;
 }
 .dt-mark[data-tone="warn"] {
   background: var(--dt-warn-strong);

@@ -4,7 +4,7 @@ import { useEscapeTo } from "./keyboard";
 import { consoleLinks, follow, go, href, parse } from "./routes";
 import { crumbsFor } from "./sections";
 import { TraceScreen } from "./TraceScreen";
-import { Breadcrumbs, Mono } from "./ui";
+import { Breadcrumbs } from "./ui";
 
 const TABS: TabId[] = ["request", "tree", "issues", "sql", "logs", "mail", "error"];
 
@@ -44,11 +44,8 @@ export function TracePage({
             items={[
               ...back,
               {
-                label: (
-                  <>
-                    Trace <Mono className="text-base font-normal">{id}</Mono>
-                  </>
-                ),
+                // The request is the page's headline; its id is on the Request tab.
+                label: "Trace",
               },
             ]}
           />
