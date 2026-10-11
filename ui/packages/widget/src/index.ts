@@ -1,5 +1,6 @@
 // Corner badge, fetch and XHR capture, slide-out panel (iframe inside Shadow DOM).
 import { RUNTIME_PATHS, runtimeKind, runtimeName } from "@tracepanel/ui/lib/runtime";
+import { CARD_STYLE, mountCard } from "./card";
 
 export interface TraceInfo {
   /** The trace's own name when it says more than the request line (a GraphQL operation). */
@@ -571,7 +572,7 @@ export function mount(options: WidgetOptions = {}): Widget {
   const root = host.attachShadow({ mode: "open" });
   const applyTheme = watchTheme(host);
   root.innerHTML = `
-    <style>${STYLE}</style>
+    <style>${STYLE}${CARD_STYLE}</style>
     <div class="panel" part="panel"><div class="resize" title="Drag to resize · double-click to reset"></div></div>
     <button class="badge" part="badge" type="button" aria-expanded="false">
       <span class="brand"><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="6" width="26" height="5.5" rx="2.75" fill="#7c4ff0"/><rect x="9" y="13.25" width="18" height="5.5" rx="2.75" fill="#a587ff"/><rect x="15" y="20.5" width="10" height="5.5" rx="2.75" fill="#b6e24a"/></svg><span class="runtime"></span></span>
@@ -671,7 +672,7 @@ export function mount(options: WidgetOptions = {}): Widget {
       ...(recent.length ? ["", `Later requests (${others.length}):`, ...recent] : []),
       ...(options.runtime ? ["", `Served by ${options.runtime}`] : []),
     ];
-    badge.title = summary.join("\n");
+    // No title: the hover card shows all of it (and more); screen readers get the summary.
     badge.setAttribute("aria-label", `tracepanel: ${summary.join(". ")}`);
   }
 
@@ -685,7 +686,6 @@ export function mount(options: WidgetOptions = {}): Widget {
     if (summary.issues) addIssues(stats, summary.issues, state(info) === "error" ? "error" : "warn");
     badge.dataset["flash"] = state(info);
     badge.dataset["verdict"] = state(info);
-    badge.title = `${line(info)}\nClick to open this request.`;
     badge.setAttribute("aria-label", `tracepanel: ${line(info)}. Click to open this request.`);
   }
 
@@ -790,6 +790,15 @@ export function mount(options: WidgetOptions = {}): Widget {
     badge.setAttribute("aria-expanded", "false");
     savePanel(panelState());
   }
+
+  // Hover (or keyboard focus): the request at a glance, before opening the panel.
+  mountCard(root, badge, {
+    requests: () => ({ page: pageCleared ? null : page, later }),
+    api: panelUrl,
+    panelOpen: () => panel.hasAttribute("data-open"),
+    open,
+    fetch: nativeFetch,
+  });
 
   badge.addEventListener("click", () => {
     if (flash?.trace) open(`#/t/${flash.trace}`);

@@ -8,6 +8,11 @@ import { Breadcrumbs, Mono } from "./ui";
 
 const TABS: TabId[] = ["request", "tree", "issues", "sql", "logs", "mail", "error"];
 
+/** The tab a link asks for (`?tab=issues`), if it is one. */
+export function tabOf(value: string | undefined): TabId | undefined {
+  return TABS.find((item) => item === value);
+}
+
 /**
  * A trace, the same page wherever it was opened from: the crumbs lead back there (`from`), the open tab is in the
  * URL (a link to its call tree stays a link to its call tree), Explore leads to its group, issues and nearby logs.
@@ -28,7 +33,7 @@ export function TracePage({
 }) {
   const back = from ? crumbsFor(parse(from), from) : [];
   useEscapeTo(from, follow);
-  const initialTab = TABS.find((item) => item === tab);
+  const initialTab = tabOf(tab);
   return (
     <main className="min-h-0 min-w-0 overflow-y-auto bg-background" data-scroll="">
       {/* The trace's own header is inset 16px: the page pads 16px less so the crumbs line up with it. */}
