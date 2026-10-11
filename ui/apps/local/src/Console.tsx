@@ -72,7 +72,12 @@ export function Console({ route, source }: { route: Route; source: DataSource })
   else if (route.name === "issue") {
     page = (
       <main className="min-h-0 min-w-0 overflow-y-auto bg-background" data-scroll="">
-        <IssuePage fingerprint={route.fingerprint} source={source} />
+        <IssuePage
+          key={`${route.fingerprint} ${route.q ?? ""}`}
+          fingerprint={route.fingerprint}
+          period={periodOf(route.q ?? "")}
+          source={source}
+        />
       </main>
     );
   } else if (route.name === "group") {

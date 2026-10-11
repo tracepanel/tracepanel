@@ -273,6 +273,7 @@ function operationHref(item: OperationStats): string {
   }
   if (item.kind === "task") return href(groupRoute("tasks", item.name));
   if (item.kind === "command") return href(groupRoute("jobs", item.name));
+  if (item.kind === "websocket" && item.view) return href(groupRoute("websockets", item.view));
   return href({ name: "traces", q: withPeriod(`kind:${item.kind} name:"${item.name}"`, currentPeriod()) });
 }
 

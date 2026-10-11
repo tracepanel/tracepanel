@@ -239,6 +239,18 @@ pub fn level(column: &str) -> Compiler {
     )
 }
 
+/// The `since:` and `until:` of a query, in epoch µs: the last of each wins, as in a dict built from them.
+pub fn period(query: &str, now_us: i64) -> (Option<i64>, Option<i64>) {
+    let bound = |name: &str| {
+        parse(query)
+            .into_iter()
+            .rev()
+            .filter(|term| term.key.as_deref() == Some(name) && term.op == ":")
+            .find_map(|term| parse_time_us(&term.value, now_us))
+    };
+    (bound("since"), bound("until"))
+}
+
 /// `15m` / `2h` / `1d` ago, or an ISO date-time (local time without an offset); epoch µs.
 pub fn parse_time_us(value: &str, now_us: i64) -> Option<i64> {
     if let Some(found) = AGO.captures(value) {
@@ -434,6 +446,20 @@ pub fn compile_where(query: &str, schema: &Schema) -> Result<(String, Vec<Sql>),
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_period_is_its_last_since_and_until() {
+        let now = 1_000_000_000_000;
+        assert_eq!(
+            period("since:15m route:/api/*", now),
+            (Some(now - 900_000_000), None)
+        );
+        assert_eq!(
+            period("since:1h since:15m until:5m", now),
+            (Some(now - 900_000_000), Some(now - 300_000_000))
+        );
+        assert_eq!(period("route:/api/* since>15m", now), (None, None));
+    }
 
     #[test]
     fn parses_filters_and_quoted_text() {

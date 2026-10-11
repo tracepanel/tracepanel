@@ -4,25 +4,35 @@ import { LightbulbIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { CallsChart } from "./Charts";
 import { exploreFor } from "./explore";
+import { PeriodChip } from "./PeriodChip";
 import { consoleLinks, href, traceHref } from "./routes";
 import { TraceScreen } from "./TraceScreen";
 import { TracesTable } from "./tables";
 import { Breadcrumbs, Loading, Mono } from "./ui";
 
 /** One issue, Sentry-style: what and where, how often, its latest occurrence, and every request it happened in. */
-export function IssuePage({ fingerprint, source }: { fingerprint: string; source: DataSource }) {
+export function IssuePage({
+  fingerprint,
+  period,
+  source,
+}: {
+  fingerprint: string;
+  /** The since:/until: of the list it was opened from: its chart and requests keep to it. */
+  period: string;
+  source: DataSource;
+}) {
   const [issue, setIssue] = useState<IssueDetail | null | undefined>(undefined);
   // Loaded once: an issue is read, not watched (the Issues list refreshes; opening the issue again shows what is new).
   useEffect(() => {
     let cancelled = false;
-    source.getIssue(fingerprint).then(
+    source.getIssue(fingerprint, period).then(
       (result) => !cancelled && setIssue(result),
       () => !cancelled && setIssue(null),
     );
     return () => {
       cancelled = true;
     };
-  }, [fingerprint, source]);
+  }, [fingerprint, period, source]);
 
   if (issue === undefined) return <Loading />;
   if (issue === null) {
@@ -41,7 +51,9 @@ export function IssuePage({ fingerprint, source }: { fingerprint: string; source
       <header className="grid grid-cols-[minmax(0,1fr)] gap-3 *:min-w-0">
         <Breadcrumbs
           items={[
-            error ? { label: "Errors", href: "#/errors" } : { label: "Issues", href: "#/issues" },
+            error
+              ? { label: "Errors", href: href({ name: "errors", q: period }) }
+              : { label: "Issues", href: href({ name: "issues", q: period }) },
             { label: issue.title },
           ]}
         />
@@ -76,6 +88,7 @@ export function IssuePage({ fingerprint, source }: { fingerprint: string; source
             </span>
           </Card>
         ) : null}
+        <PeriodChip period={period} allTime={href({ name: "issue", fingerprint, error: issue.kind === "error" })} />
       </header>
 
       {/* How often over time; next to it, the endpoints it happens on (left out when it isn't tied to a route). */}

@@ -28,7 +28,7 @@ import { Button } from "@tracepanel/ui/components/ui/button";
 import { TableCell, TableRow } from "@tracepanel/ui/components/ui/table";
 import { ArrowRightIcon, ListFilterIcon } from "lucide-react";
 import { Fragment, useEffect, useState } from "react";
-import { endpointGroup, go, groupRoute, href, issueRoute, traceHref } from "./routes";
+import { currentPeriod, endpointGroup, go, groupRoute, href, issueRoute, traceHref, withPeriod } from "./routes";
 import { graphqlOperation } from "./sections";
 import { DataTable, LevelBadge, Meter, Mono, Td, Th, Tr } from "./ui";
 
@@ -142,7 +142,7 @@ export function EndpointsTable({ items }: { items: readonly EndpointRow[] }) {
                   title="One URL, many GraphQL operations: see them one by one"
                   onClick={(event) => {
                     event.stopPropagation();
-                    go({ name: "graphql", q: "" });
+                    go({ name: "graphql", q: withPeriod(`route:${item.route}`, currentPeriod()) });
                   }}
                 >
                   GraphQL · {item.graphql_operations} {item.graphql_operations === 1 ? "operation" : "operations"}

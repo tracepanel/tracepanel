@@ -309,7 +309,7 @@ fn get_issue(server: &Server, args: &Value) -> Result<String, Refusal> {
     let fingerprint = required(args, "fingerprint")?;
     let detail = server
         .reader
-        .issue_detail(&fingerprint, 1, 10)?
+        .issue_detail(&fingerprint, "", 1, 10)?
         .ok_or_else(|| Refusal(format!("No issue {fingerprint}: list_issues lists them.")))?;
     let now = search::now_us();
     let traces: Vec<String> = detail

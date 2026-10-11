@@ -360,14 +360,17 @@ paths:
     get:
       operationId: getIssue
       summary: One issue with its events over time and the requests it happened in.
+      description: With `q`, its series and requests are those within the search (since:, until:); without it, all of them.
       parameters:
         - { name: fingerprint, in: query, required: true, schema: { type: string } }
+        - { $ref: "#/components/parameters/q" }
       responses:
         "200":
           description: The issue.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/IssueDetail" }
+        "400": { $ref: "#/components/responses/BadSearch" }
         "404": { $ref: "#/components/responses/NotFound" }
   /counts:
     get:
@@ -725,12 +728,13 @@ components:
       allOf:
         - $ref: "#/components/schemas/GroupStats"
         - type: object
-          required: [kind, name, method, route]
+          required: [kind, name, method, route, view]
           properties:
             kind: { type: string, enum: [http, task, command, websocket] }
             name: { type: string }
             method: { type: [string, "null"], description: For requests. }
             route: { type: [string, "null"], description: For requests. }
+            view: { type: [string, "null"], description: "For WebSocket events: the consumer, which names their group." }
       unevaluatedProperties: false
     TracesOverview:
       type: object

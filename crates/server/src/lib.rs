@@ -283,8 +283,9 @@ async fn issues(State(reader): State<Shared>, Query(query): Params) -> Response 
 
 async fn issue_detail(State(reader): State<Shared>, Query(query): Params) -> Response {
     let fingerprint = query.get("fingerprint").cloned().unwrap_or_default();
+    let q = q(&query);
     match read(&reader, move |reader| {
-        reader.issue_detail(&fingerprint, 40, 50)
+        reader.issue_detail(&fingerprint, &q, 40, 50)
     })
     .await
     {
