@@ -1,10 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
-  "ignorePatterns": [
-    "**/dist/**",
-    "packages/ui/src/api.gen.ts",
-    "**/*.d.ts"
-  ],
+  "ignorePatterns": ["**/dist/**", "packages/ui/src/api.gen.ts", "**/*.d.ts"],
   "rules": {
     "unused-files": "warn",
     "unused-exports": "warn",
@@ -23,8 +19,6 @@
       { "name": "widget", "patterns": ["packages/widget/**"] },
       { "name": "app", "patterns": ["apps/local/**"] }
     ],
-    "rules": [
-      { "from": "design-system", "allow": [] }
-    ]
+    "rules": [{ "from": "design-system", "allow": [] }]
   }
 }

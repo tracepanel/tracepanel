@@ -1,6 +1,10 @@
 packages:
   - packages/*
   - apps/*
+# New releases stay out for 48 hours before they resolve here (docs: pnpm
+# minimumReleaseAge). Same window the fallow audit and Renovate respect, and
+# the same window the team already runs locally.
+minimumReleaseAge: 2880
 # esbuild (vite's bundler) checks its platform binary after install: the one dependency allowed to run a build script.
 allowBuilds:
   esbuild: true
