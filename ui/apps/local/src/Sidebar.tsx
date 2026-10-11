@@ -124,10 +124,23 @@ export function Sidebar({
         drawer ? "h-full overflow-y-auto" : "border-r max-[980px]:hidden",
       )}
     >
-      <div className={cn("flex items-center", !rail && "justify-between gap-2")}>
+      <div className={cn("flex items-center", rail ? "flex-col gap-3" : "justify-between gap-2")}>
         <a href="#/" className={cn("no-underline", !rail && "px-2")} aria-label="Tracepanel home">
           {rail ? <LogoMark /> : <Logo />}
         </a>
+        {/* Expand where collapse was: at the top, by the logo. */}
+        {onCollapse && rail ? (
+          <RailTip label="Expand the sidebar" detail="⌘B">
+            <button
+              type="button"
+              className="grid size-8 place-items-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
+              aria-label="Expand the sidebar"
+              onClick={() => onCollapse(false)}
+            >
+              <PanelLeftOpenIcon className="size-[1.125rem]" />
+            </button>
+          </RailTip>
+        ) : null}
         {onCollapse && !rail ? (
           <button
             type="button"
@@ -251,18 +264,6 @@ export function Sidebar({
             </RailTip>
           ) : null}
           <ThemeToggle side="right" />
-          {onCollapse ? (
-            <RailTip label="Expand the sidebar" detail="⌘B">
-              <button
-                type="button"
-                className="grid size-9 place-items-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
-                aria-label="Expand the sidebar"
-                onClick={() => onCollapse(false)}
-              >
-                <PanelLeftOpenIcon className="size-[1.125rem]" />
-              </button>
-            </RailTip>
-          ) : null}
         </footer>
       ) : (
         <footer className="mt-auto flex items-center justify-between gap-2 border-t pt-4 pl-2.5 text-sm text-muted-foreground">

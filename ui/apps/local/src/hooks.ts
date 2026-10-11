@@ -7,6 +7,8 @@ export interface EntrySummary {
   duration: number;
   queries: number;
   issues: number;
+  /** Which findings, once the widget has asked the agent: the row names them before its trace loads. */
+  kinds?: string[] | undefined;
   /** Sent by htmx: the element that sent it, where the answer went, whether it loaded a page. */
   htmx?: { trigger?: string | undefined; target?: string | undefined; boosted?: boolean | undefined } | undefined;
 }

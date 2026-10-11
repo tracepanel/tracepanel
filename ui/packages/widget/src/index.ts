@@ -456,6 +456,8 @@ export interface EntrySummary {
   duration: number;
   queries: number;
   issues: number;
+  /** Which findings (n+1, duplicates…), once the agent has them: the panel's row names them before its trace loads. */
+  kinds?: string[] | undefined;
   htmx?: HtmxInfo | undefined;
 }
 
@@ -718,13 +720,16 @@ export function mount(options: WidgetOptions = {}): Widget {
       try {
         const response = await nativeFetch(url, { credentials: "same-origin" });
         if (response.ok) {
-          const body = (await response.json()) as { traces?: { id: string; issues?: number }[] };
+          const body = (await response.json()) as {
+            // biome-ignore lint/style/useNamingConvention: the API's field name.
+            traces?: { id: string; issues?: number; issue_kinds?: string[] }[];
+          };
           const row = body.traces?.find((trace) => trace.id === info.trace);
           if (row) {
             info.issues = row.issues ?? 0;
             info.issuesPending = false;
             const entry = tab.find((item) => item.id === info.trace);
-            if (entry?.summary) entry.summary = { ...entry.summary, issues: info.issues };
+            if (entry?.summary) entry.summary = { ...entry.summary, issues: info.issues, kinds: row.issue_kinds };
             saveTab(tab);
             render();
             sendTab();
