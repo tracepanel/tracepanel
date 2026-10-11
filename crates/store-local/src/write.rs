@@ -182,8 +182,8 @@ pub(crate) fn write_trace(
     db.execute(
         "INSERT OR REPLACE INTO traces (id, kind, name, start, duration, status, http_status, method, path, route, view,
          user_id, queries, db_time, issues, issue_kinds, errors, logs, mails, db_aliases, cache_aliases, task_state,
-         htmx, doc) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20,
-         ?21, ?22, ?23, ?24)",
+         htmx, service, doc) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18,
+         ?19, ?20, ?21, ?22, ?23, ?24, ?25)",
         params![
             trace.id,
             trace.kind,
@@ -209,6 +209,7 @@ pub(crate) fn write_trace(
             alias_list(&cache_aliases),
             task_state,
             htmx,
+            or_default(attrs, "service.name", ""),
             doc,
         ],
     )?;

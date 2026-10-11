@@ -59,24 +59,32 @@ function ownClick(event: SyntheticEvent): boolean {
 }
 
 /** What makes a row a link: a click goes there, Cmd/Ctrl/Shift-click or a middle click opens a new tab, Enter too. */
-function linkProps(target: string): ComponentProps<typeof TableRow> {
+function linkProps(target: string, opening?: () => void): ComponentProps<typeof TableRow> {
+  const go = () => {
+    opening?.();
+    follow(target);
+  };
+  const newTab = () => {
+    opening?.();
+    openInNewTab(target);
+  };
   return {
     role: "link",
     tabIndex: 0,
     onClick: (event) => {
       if (ownClick(event)) return;
-      if (event.metaKey || event.ctrlKey || event.shiftKey) openInNewTab(target);
-      else follow(target);
+      if (event.metaKey || event.ctrlKey || event.shiftKey) newTab();
+      else go();
     },
     // Without this a middle click starts the browser's autoscroll instead.
     onMouseDown: (event) => {
       if (event.button === 1 && !ownClick(event)) event.preventDefault();
     },
     onAuxClick: (event) => {
-      if (event.button === 1 && !ownClick(event)) openInNewTab(target);
+      if (event.button === 1 && !ownClick(event)) newTab();
     },
     onKeyDown: (event) => {
-      if (event.key === "Enter" && event.target === event.currentTarget) follow(target);
+      if (event.key === "Enter" && event.target === event.currentTarget) go();
     },
   };
 }
@@ -89,14 +97,21 @@ export function Tr({
   tone,
   selected,
   href,
+  opening,
   className,
   ...props
-}: ComponentProps<typeof TableRow> & { tone?: "warn" | "error" | undefined; selected?: boolean; href?: string }) {
+}: ComponentProps<typeof TableRow> & {
+  tone?: "warn" | "error" | undefined;
+  selected?: boolean;
+  href?: string;
+  /** Called before `href` is followed, however (click, Enter, a new tab). */
+  opening?: (() => void) | undefined;
+}) {
   return (
     <TableRow
       data-tone={tone}
       data-state={selected ? "selected" : undefined}
-      {...(href === undefined ? {} : linkProps(href))}
+      {...(href === undefined ? {} : linkProps(href, opening))}
       className={cn(
         "cursor-pointer data-[state=selected]:bg-brand-soft",
         "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",

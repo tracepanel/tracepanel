@@ -36,6 +36,32 @@ pub(crate) fn contains(column: &'static str) -> Compiler {
     })
 }
 
+/// Rows of a table that keeps its trace's id (`column`): those whose trace an app (service.name) recorded.
+fn of_service(column: &'static str) -> Compiler {
+    let service = search::text("service");
+    Box::new(move |term| {
+        let (clause, params) = service(term)?;
+        Ok((
+            format!("{column} IN (SELECT id FROM traces WHERE {clause})"),
+            params,
+        ))
+    })
+}
+
+/// Issues seen in a trace that matches `filter` (a filter on the traces table).
+fn in_issue_traces(filter: Compiler) -> Compiler {
+    Box::new(move |term| {
+        let (clause, params) = filter(term)?;
+        Ok((
+            format!(
+                "fingerprint IN (SELECT issue_traces.fingerprint FROM issue_traces \
+                 JOIN traces ON traces.id = issue_traces.trace_id WHERE {clause})"
+            ),
+            params,
+        ))
+    })
+}
+
 pub(crate) fn trace_search() -> search::Schema {
     let task_name = search::text("name");
     search::schema_for(
@@ -51,6 +77,7 @@ pub(crate) fn trace_search() -> search::Schema {
             ("user", "user_id"),
             ("trace", "id"),
             ("name", "name"),
+            ("service", "service"),
             ("since", "start"),
             ("until", "start"),
         ],
@@ -113,6 +140,7 @@ pub(crate) fn log_search(fts: bool) -> search::Schema {
             ("route", "traces.route"),
             ("path", "traces.path"),
             ("user", "traces.user_id"),
+            ("service", "traces.service"),
             ("since", "logs.time"),
             ("until", "logs.time"),
         ],
@@ -163,15 +191,18 @@ pub(crate) fn query_search() -> search::Schema {
                 vec![Sql::Text(format!("%{}%", search::like(words)))],
             )
         }),
-        vec![(
-            "table",
-            Box::new(|term| {
-                Ok((
-                    "name LIKE ?".into(),
-                    vec![Sql::Text(format!("% {}", term.value))],
-                ))
-            }),
-        )],
+        vec![
+            (
+                "table",
+                Box::new(|term| {
+                    Ok((
+                        "name LIKE ?".into(),
+                        vec![Sql::Text(format!("% {}", term.value))],
+                    ))
+                }),
+            ),
+            ("service", of_service("trace_id")),
+        ],
         vec![],
     )
 }
@@ -194,21 +225,25 @@ pub(crate) fn mail_search() -> search::Schema {
                 vec![pattern.clone(), pattern],
             )
         }),
-        vec![(
-            "to",
-            Box::new(|term| {
-                Ok((
-                    "mails.recipients LIKE ? ESCAPE '\\'".into(),
-                    vec![Sql::Text(format!("%,{},%", search::like(&term.value)))],
-                ))
-            }),
-        )],
+        vec![
+            (
+                "to",
+                Box::new(|term| {
+                    Ok((
+                        "mails.recipients LIKE ? ESCAPE '\\'".into(),
+                        vec![Sql::Text(format!("%,{},%", search::like(&term.value)))],
+                    ))
+                }),
+            ),
+            ("service", of_service("mails.trace_id")),
+        ],
         vec![],
     )
 }
 
 pub(crate) fn issue_search() -> search::Schema {
     let route = search::text("traces.route");
+    let service = search::text("traces.service");
     search::schema_for(
         "issues",
         &[
@@ -223,19 +258,10 @@ pub(crate) fn issue_search() -> search::Schema {
                 vec![pattern.clone(), pattern],
             )
         }),
-        vec![(
-            "route",
-            Box::new(move |term| {
-                let (clause, params) = route(term)?;
-                Ok((
-                    format!(
-                        "fingerprint IN (SELECT issue_traces.fingerprint FROM issue_traces \
-                         JOIN traces ON traces.id = issue_traces.trace_id WHERE {clause})"
-                    ),
-                    params,
-                ))
-            }),
-        )],
+        vec![
+            ("route", in_issue_traces(route)),
+            ("service", in_issue_traces(service)),
+        ],
         vec![],
     )
 }
@@ -247,6 +273,7 @@ pub(crate) fn service_search() -> search::Schema {
             ("kind", "kind"),
             ("system", "system"),
             ("role", "role"),
+            ("service", "service"),
             ("since", "start"),
             ("until", "start"),
         ],
@@ -262,7 +289,6 @@ pub(crate) fn service_search() -> search::Schema {
     )
 }
 
-pub(crate) const SERVICE_NAME: &str = "json_extract(doc, '$.attrs.\"service.name\"')";
 pub(crate) const SERVICE_ROLE: &str = "json_extract(doc, '$.attrs.\"service.role\"')";
 pub(crate) const LANGUAGE: &str = "json_extract(doc, '$.attrs.\"telemetry.sdk.language\"')";
 
@@ -275,12 +301,13 @@ pub(crate) fn app_search() -> search::Schema {
             ("kind", "'app'"),
             ("system", LANGUAGE),
             ("role", SERVICE_ROLE),
+            ("service", "service"),
             ("since", "start"),
             ("until", "start"),
         ],
         Box::new(|words| {
             (
-                format!("{SERVICE_NAME} LIKE ? ESCAPE '\\'"),
+                "service LIKE ? ESCAPE '\\'".into(),
                 vec![Sql::Text(format!("%{}%", search::like(words)))],
             )
         }),

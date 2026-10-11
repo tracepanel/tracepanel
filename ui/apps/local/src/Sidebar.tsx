@@ -1,13 +1,24 @@
-import { type Counts, Logo, LogoMark } from "@tracepanel/ui";
+import { type Counts, Logo, LogoMark, RuntimeIcon, runtimeKind } from "@tracepanel/ui";
 import { Button } from "@tracepanel/ui/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@tracepanel/ui/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@tracepanel/ui/components/ui/tooltip";
 import { cn, rem } from "@tracepanel/ui/lib/utils";
 import {
   BracesIcon,
   BugIcon,
   CableIcon,
+  ChevronsUpDownIcon,
   CircleAlertIcon,
   DatabaseIcon,
+  LayersIcon,
   ListChecksIcon,
   type LucideIcon,
   MailIcon,
@@ -25,6 +36,7 @@ import {
 } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import type { Section } from "./routes";
+import type { App } from "./scope";
 import { type ThemeChoice, useTheme } from "./theme";
 
 interface NavItem {
@@ -85,6 +97,7 @@ export function Sidebar({
   drawer = false,
   collapsed = false,
   onCollapse,
+  scope,
 }: {
   section: Section | null;
   /** Issues (the badge turns red with errors) and traces per entry point (empty ones are hidden). */
@@ -98,6 +111,8 @@ export function Sidebar({
   collapsed?: boolean;
   /** Collapse or expand; left out where it can't (the drawer). */
   onCollapse?: ((collapsed: boolean) => void) | undefined;
+  /** Several apps in the store: which one the console shows. Left out with one app. */
+  scope?: AppScope | undefined;
 }) {
   const visible = visibleSections(counts);
   const rail = collapsed && !drawer;
@@ -125,6 +140,7 @@ export function Sidebar({
           </button>
         ) : null}
       </div>
+      {scope ? <AppSwitcher scope={scope} rail={rail} /> : null}
       {rail ? (
         <RailTip label="Search traces" detail="⌘K">
           <button
@@ -270,6 +286,74 @@ export function Sidebar({
         </footer>
       )}
     </aside>
+  );
+}
+
+export interface AppScope {
+  apps: App[];
+  /** "" is every app. */
+  service: string;
+  onService: (service: string) => void;
+}
+
+/** Which app the console shows: every one, or one of them. A rail shows the chosen app's mark. */
+function AppSwitcher({ scope, rail }: { scope: AppScope; rail: boolean }) {
+  const chosen = scope.apps.find((app) => app.service === scope.service);
+  const mark = (app: App | undefined) => {
+    const kind = app?.runtime ? runtimeKind(app.runtime) : null;
+    return kind ? <RuntimeIcon kind={kind} /> : <LayersIcon />;
+  };
+  const label = chosen ? chosen.service : "All apps";
+  const trigger = rail ? (
+    <button
+      type="button"
+      aria-label={`App: ${label}`}
+      className={cn(
+        "grid size-11 place-items-center rounded-lg border text-text-2 hover:border-[var(--dt-border-strong)] hover:text-foreground [&_svg]:size-[1.125rem]",
+        chosen && "border-brand/40 bg-brand-soft text-brand",
+      )}
+    >
+      {mark(chosen)}
+    </button>
+  ) : (
+    <button
+      type="button"
+      className={cn(
+        "flex items-center gap-2.5 rounded-lg border px-3 py-2 text-left text-md font-medium transition-colors hover:border-[var(--dt-border-strong)] [&_svg]:size-4",
+        chosen && "border-brand/40 bg-brand-soft",
+      )}
+    >
+      <span className={cn("text-text-2", chosen && "text-brand")}>{mark(chosen)}</span>
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      <ChevronsUpDownIcon className="text-muted-foreground" />
+    </button>
+  );
+  return (
+    <DropdownMenu>
+      {rail ? (
+        <RailTip label={`App: ${label}`}>
+          <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+        </RailTip>
+      ) : (
+        <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+      )}
+      <DropdownMenuContent align="start" side={rail ? "right" : "bottom"} className="w-60">
+        <DropdownMenuLabel>Show</DropdownMenuLabel>
+        <DropdownMenuRadioGroup value={scope.service} onValueChange={scope.onService}>
+          <DropdownMenuRadioItem value="" className="gap-2">
+            <LayersIcon className="text-muted-foreground" />
+            All apps
+          </DropdownMenuRadioItem>
+          <DropdownMenuSeparator />
+          {scope.apps.map((app) => (
+            <DropdownMenuRadioItem key={app.service} value={app.service} className="gap-2">
+              <span className="text-muted-foreground">{mark(app)}</span>
+              <span className="truncate">{app.service}</span>
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

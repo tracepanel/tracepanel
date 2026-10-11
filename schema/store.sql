@@ -1,6 +1,6 @@
 -- tracepanel's local store: one SQLite file per format version, shared by every process of a project and, when it
 -- runs, written by tracepanel-agent instead (which reads this file too: keep both writers in step).
--- version: 13
+-- version: 14
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS traces (
     id TEXT PRIMARY KEY,
@@ -26,10 +26,13 @@ CREATE TABLE IF NOT EXISTS traces (
     cache_aliases TEXT NOT NULL,
     task_state TEXT,
     htmx TEXT,
+    -- service.name: one store can hold several apps (services sending to one agent).
+    service TEXT NOT NULL,
     doc TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS traces_start ON traces (start DESC);
 CREATE INDEX IF NOT EXISTS traces_route ON traces (route);
+CREATE INDEX IF NOT EXISTS traces_service ON traces (service);
 CREATE TABLE IF NOT EXISTS issues (
     fingerprint TEXT PRIMARY KEY,
     fingerprint_version INTEGER NOT NULL,

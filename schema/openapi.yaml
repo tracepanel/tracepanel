@@ -376,6 +376,11 @@ paths:
     get:
       operationId: counts
       summary: Navigation badges.
+      parameters:
+        - name: service
+          in: query
+          description: Only what this app (service.name) recorded; every app when left out.
+          schema: { type: string }
       responses:
         "200":
           description: Counts.

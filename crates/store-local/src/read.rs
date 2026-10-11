@@ -406,7 +406,7 @@ impl Reader {
         let rows = objects(
             db,
             &format!(
-                "SELECT {SERVICE_NAME} AS service, {SERVICE_ROLE} AS role, COUNT(*) AS traces, \
+                "SELECT service, {SERVICE_ROLE} AS role, COUNT(*) AS traces, \
                  SUM(status = 'error') AS errors, SUM(duration) AS total, MAX(start) AS last_seen, \
                  MAX({LANGUAGE}) AS language, \
                  MAX(json_extract(doc, '$.attrs.\"process.runtime.version\"')) AS version, \
@@ -709,21 +709,31 @@ impl Reader {
     }
 
     /// Issue groups (and how many are errors) and traces per entry point: what the console's menu shows.
-    pub fn counts(&self) -> rusqlite::Result<Value> {
+    /// The sidebar's numbers; with `service`, only what that app (service.name) recorded.
+    pub fn counts(&self, service: Option<&str>) -> rusqlite::Result<Value> {
         let db = self.connect()?;
+        // NULL: every app.
+        let service = service.filter(|name| !name.is_empty());
         let grouped = |sql: &str| -> rusqlite::Result<HashMap<String, i64>> {
             let mut statement = db.prepare(sql)?;
-            let rows = statement.query_map([], |row| {
+            let rows = statement.query_map([service], |row| {
                 Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
             })?;
             rows.collect()
         };
-        let kinds = grouped("SELECT kind, COUNT(*) FROM issues GROUP BY kind")?;
-        let traces = grouped("SELECT kind, COUNT(*) FROM traces GROUP BY kind")?;
+        let kinds = grouped(
+            "SELECT kind, COUNT(*) FROM issues WHERE ?1 IS NULL OR fingerprint IN \
+             (SELECT issue_traces.fingerprint FROM issue_traces JOIN traces ON traces.id = issue_traces.trace_id \
+             WHERE traces.service = ?1) GROUP BY kind",
+        )?;
+        let traces = grouped(
+            "SELECT kind, COUNT(*) FROM traces WHERE ?1 IS NULL OR service = ?1 GROUP BY kind",
+        )?;
         // A GraphQL request is named after its operation: the name says it, no JSON to parse.
         let graphql: i64 = db.query_row(
-            "SELECT COUNT(*) FROM traces WHERE kind = 'http' AND name LIKE 'GraphQL %'",
-            [],
+            "SELECT COUNT(*) FROM traces WHERE kind = 'http' AND name LIKE 'GraphQL %' \
+             AND (?1 IS NULL OR service = ?1)",
+            [service],
             |row| row.get(0),
         )?;
         let count = |map: &HashMap<String, i64>, key: &str| map.get(key).copied().unwrap_or(0);
