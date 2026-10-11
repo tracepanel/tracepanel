@@ -21,7 +21,7 @@ import {
 import { Button } from "@tracepanel/ui/components/ui/button";
 import { TooltipProvider } from "@tracepanel/ui/components/ui/tooltip";
 import { rem } from "@tracepanel/ui/lib/utils";
-import { type ReactNode, type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ClearDialog } from "./ClearDialog";
 import { Console } from "./Console";
 import { exploreFor } from "./explore";
@@ -471,7 +471,6 @@ function useStickToBottom(
  */
 function PageRequests({
   scope = "page",
-  lead,
   rows,
   selectedId,
   currentId = null,
@@ -480,8 +479,6 @@ function PageRequests({
   onClear,
 }: {
   scope?: "page" | "tab";
-  /** Shown first in the head row (the logo, when the head is part of the panel's toolbar). */
-  lead?: ReactNode;
   rows: readonly TraceRow[];
   selectedId: string | null;
   currentId?: string | null;
@@ -506,11 +503,8 @@ function PageRequests({
       aria-label={scope === "tab" ? "Pages and requests in this browser tab" : "Requests made by this page"}
     >
       <div className="page-requests-head">
-        <span className="flex min-w-0 items-center gap-2">
-          {lead}
-          <span className="truncate">
-            {scope === "tab" ? "This tab" : "This page"} <span className="page-requests-count">{count}</span>
-          </span>
+        <span className="min-w-0 truncate">
+          {scope === "tab" ? "This tab" : "This page"} <span className="page-requests-count">{count}</span>
         </span>
         <span className="flex shrink-0 items-center gap-2">
           <label className="toggle">
@@ -625,8 +619,8 @@ function PanelApp({ route }: { route: Route }) {
       {runtime}
     </span>
   );
-  // Docked at the bottom with a request open, the panel is two rows: the list's head and the trace's toolbar share
-  // the first one (as in browser devtools), so no bar of its own.
+  // Docked at the bottom with a request open, the panel has no bar of its own: the logo over the list and the trace's
+  // toolbar make one row across it (as in browser devtools).
   const toolbarInTrace = split && selectedId !== null;
 
   return (
@@ -669,11 +663,12 @@ function PanelApp({ route }: { route: Route }) {
           onClear={() => setClearing(true)}
         />
       ) : null}
-      <div className={split ? "panel-split" : "panel-main"} ref={splitRef}>
+      <div className={split ? "panel-split" : "panel-main"} data-brand={toolbarInTrace ? "" : undefined} ref={splitRef}>
+        {/* Over the list, level with the trace's tabs: one toolbar row across the dock, as in browser devtools. */}
+        {toolbarInTrace ? <div className="panel-brand">{logo}</div> : null}
         {split ? (
           <PageRequests
             scope="tab"
-            lead={toolbarInTrace ? logo : undefined}
             rows={tabRows}
             selectedId={selectedId}
             currentId={currentId}
