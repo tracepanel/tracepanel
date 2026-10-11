@@ -7,7 +7,7 @@
     "http.status_code": 500,
     "process.runtime.name": "cpython",
     "process.runtime.version": "3.11.16",
-    "service.name": "django-classic",
+    "service.name": "blog",
     "service.role": "web",
     "telemetry.sdk.language": "python",
     "tracepanel.framework": "Django 5.2.18",
@@ -77,7 +77,7 @@
             ""
           ],
           "context_start": 43,
-          "filename": "/home/dev/tracepanel-python/tracepanel/django/structure.py",
+          "filename": ".venv/lib/python3.11/site-packages/tracepanel/django/structure.py",
           "function": "wrapped",
           "in_app": false,
           "lineno": 48,
@@ -149,7 +149,7 @@
         "process.pid": 20678,
         "thread.name": "Thread-24 (process_request_thread)"
       },
-      "exception": "Traceback (most recent call last):\n  File \"/home/dev/django-classic/.venv/lib/python3.11/site-packages/django/core/handlers/exception.py\", line 55, in inner\n    response = get_response(request)\n               ^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/dev/django-classic/.venv/lib/python3.11/site-packages/django/core/handlers/base.py\", line 197, in _get_response\n    response = wrapped_callback(request, *callback_args, **callback_kwargs)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/dev/tracepanel-python/tracepanel/django/structure.py\", line 48, in wrapped\n    return view(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/dev/django-classic/blog/views.py\", line 79, in error\n    return JsonResponse({\"ratio\": posts / 0})\n                                  ~~~~~~^~~\nZeroDivisionError: division by zero\n",
+      "exception": "Traceback (most recent call last):\n  File \"/home/dev/blog/.venv/lib/python3.11/site-packages/django/core/handlers/exception.py\", line 55, in inner\n    response = get_response(request)\n               ^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/dev/blog/.venv/lib/python3.11/site-packages/django/core/handlers/base.py\", line 197, in _get_response\n    response = wrapped_callback(request, *callback_args, **callback_kwargs)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \".venv/lib/python3.11/site-packages/tracepanel/django/structure.py\", line 48, in wrapped\n    return view(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/dev/blog/blog/views.py\", line 79, in error\n    return JsonResponse({\"ratio\": posts / 0})\n                                  ~~~~~~^~~\nZeroDivisionError: division by zero\n",
       "level": "error",
       "logger": "django.request",
       "message": "Internal Server Error: /error/",

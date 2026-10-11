@@ -75,7 +75,8 @@ fn every_example_matches_the_schema_as_the_sdk_sent_it() {
 #[tokio::test]
 async fn the_agent_finds_the_issues_and_the_api_returns_them() {
     let validator = validator();
-    let dir = std::env::temp_dir().join(format!("tracepanel-examples-{}", std::process::id()));
+    let dir =
+        std::env::temp_dir().join(format!("tracepanel-schema-examples-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let path = tracepanel_store_local::path_in(&dir);
