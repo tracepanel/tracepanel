@@ -21,8 +21,8 @@ scripts/   project scripts (UI build, docs lint, wheel checks)
    - `ui-verify` to record screen evidence for a UI PR.
    - `deslop` in a cleanup PR per area, never mixed with a behavior change.
    - `unslop` when writing or editing prose.
-2. Check `ui/design-system/` inventories for a component before writing a new one; the component code alone is not its contract.
-3. Record every doubt about system coverage in `ui/design-system/gaps.md` once it exists, and work through the documented APIs and escapes meanwhile. Logging is not authorization.
+2. Check `ui/design-system/` inventories for a component before writing a new one; the component code alone is not its contract. `ui/DESIGN.md` is the entry point: sources, indexes, verification and the gap journal.
+3. Record every doubt about system coverage in `ui/design-system/gaps.md`, and work through the documented APIs and escapes meanwhile. Logging is not authorization.
 4. The generated API client (`ui/packages/ui/src/api.gen.ts`) is off limits: change `schema/openapi.yaml` and run `pnpm api` instead. Types in the app come from that contract.
 
 ## The gates
