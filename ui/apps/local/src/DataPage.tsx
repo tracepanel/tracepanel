@@ -6,7 +6,7 @@ import { refineQuery } from "./EntryPage";
 import { RefreshControl } from "./refresh";
 import { type EntrySection, go, type Section, traceHref } from "./routes";
 import { SearchBar } from "./SearchBar";
-import { ServicesView } from "./ServicesView";
+import { byProject, ServicesView } from "./ServicesView";
 import { DATA_LABELS } from "./sections";
 import { IssuesTable, LogsTable, MailsTable, QueriesTable, TracesTable } from "./tables";
 import { Loading, LoadMore, PageHeader } from "./ui";
@@ -111,7 +111,7 @@ export function DataPage({ section, q, open, source, spec, known }: DataPageProp
     logs: { size: logs.items?.length, error: logs.error },
     mails: { size: mails.items?.length, error: mails.error },
     services: {
-      size: services.data ? services.data.apps.length + services.data.services.length : undefined,
+      size: services.data ? byProject(services.data.apps).length + services.data.services.length : undefined,
       error: services.error,
     },
     queries: { size: queries.data?.length, error: queries.error },

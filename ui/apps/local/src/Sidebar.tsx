@@ -1,4 +1,4 @@
-import { type Counts, Logo } from "@tracepanel/ui";
+import { type Counts, Logo, LogoMark } from "@tracepanel/ui";
 import { Button } from "@tracepanel/ui/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@tracepanel/ui/components/ui/tooltip";
 import { cn } from "@tracepanel/ui/lib/utils";
@@ -14,6 +14,8 @@ import {
   MonitorIcon,
   MoonIcon,
   NetworkIcon,
+  PanelLeftCloseIcon,
+  PanelLeftOpenIcon,
   RouteIcon,
   ScrollTextIcon,
   SearchIcon,
@@ -21,7 +23,7 @@ import {
   TerminalIcon,
   Trash2Icon,
 } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import type { Section } from "./routes";
 import { type ThemeChoice, useTheme } from "./theme";
 
@@ -81,6 +83,8 @@ export function Sidebar({
   onSearch,
   onClear,
   drawer = false,
+  collapsed = false,
+  onCollapse,
 }: {
   section: Section | null;
   /** Issues (the badge turns red with errors) and traces per entry point (empty ones are hidden). */
@@ -90,31 +94,67 @@ export function Sidebar({
   onClear?: (() => void) | undefined;
   /** In the narrow screen's menu, which shows it where the column is hidden. */
   drawer?: boolean;
+  /** A rail of icons, each named on hover; the drawer is never one. */
+  collapsed?: boolean;
+  /** Collapse or expand; left out where it can't (the drawer). */
+  onCollapse?: ((collapsed: boolean) => void) | undefined;
 }) {
   const visible = visibleSections(counts);
+  const rail = collapsed && !drawer;
   return (
     <aside
       className={cn(
-        "flex min-h-0 flex-col gap-7 bg-sidebar px-5 pt-6 pb-5",
+        "flex min-h-0 flex-col overflow-hidden bg-sidebar pt-6 pb-5",
+        rail ? "items-center gap-6 px-3" : "gap-7 px-5",
         drawer ? "h-full overflow-y-auto" : "border-r max-[980px]:hidden",
       )}
     >
-      <a href="#/" className="px-2 no-underline" aria-label="Tracepanel home">
-        <Logo />
-      </a>
-      <button
-        type="button"
-        onClick={onSearch}
-        className="flex items-center gap-2.5 rounded-lg border bg-[var(--dt-field)] px-3 py-2 text-left text-[15px] text-muted-foreground transition-colors hover:border-[var(--dt-border-strong)] hover:text-foreground"
-      >
-        <SearchIcon className="size-4" />
-        Search traces
-        <kbd className="ml-auto rounded-md bg-muted px-1.5 py-0.5 font-mono text-[12px] text-text-2">⌘K</kbd>
-      </button>
-      <nav className="grid gap-5">
-        {NAV_GROUPS.map((group) => (
+      <div className={cn("flex items-center", !rail && "justify-between gap-2")}>
+        <a href="#/" className={cn("no-underline", !rail && "px-2")} aria-label="Tracepanel home">
+          {rail ? <LogoMark /> : <Logo />}
+        </a>
+        {onCollapse && !rail ? (
+          <button
+            type="button"
+            className="grid size-8 place-items-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
+            title="Collapse the sidebar · ⌘B"
+            aria-label="Collapse the sidebar"
+            onClick={() => onCollapse(true)}
+          >
+            <PanelLeftCloseIcon className="size-[18px]" />
+          </button>
+        ) : null}
+      </div>
+      {rail ? (
+        <RailTip label="Search traces" detail="⌘K">
+          <button
+            type="button"
+            onClick={onSearch}
+            aria-label="Search traces"
+            className="grid size-11 place-items-center rounded-lg border bg-[var(--dt-field)] text-muted-foreground transition-colors hover:border-[var(--dt-border-strong)] hover:text-foreground"
+          >
+            <SearchIcon className="size-[18px]" />
+          </button>
+        </RailTip>
+      ) : (
+        <button
+          type="button"
+          onClick={onSearch}
+          className="flex items-center gap-2.5 rounded-lg border bg-[var(--dt-field)] px-3 py-2 text-left whitespace-nowrap text-[15px] text-muted-foreground transition-colors hover:border-[var(--dt-border-strong)] hover:text-foreground"
+        >
+          <SearchIcon className="size-4" />
+          Search traces
+          <kbd className="ml-auto rounded-md bg-muted px-1.5 py-0.5 font-mono text-[12px] text-text-2">⌘K</kbd>
+        </button>
+      )}
+      <nav className={cn("grid", rail ? "justify-items-center gap-4" : "gap-5")}>
+        {NAV_GROUPS.map((group, index) => (
           <div key={group.items[0]?.section} className="grid gap-1">
-            {group.title ? (
+            {rail ? (
+              index > 0 ? (
+                <span className="mx-auto mb-3 h-px w-6 bg-border" />
+              ) : null
+            ) : group.title ? (
               <span className="px-3.5 pb-1 text-[11.5px] font-semibold tracking-[0.08em] text-muted-foreground/80 uppercase">
                 {group.title}
               </span>
@@ -124,13 +164,16 @@ export function Sidebar({
               .map(({ section: item, label, icon: Icon }) => {
                 const current = item === section;
                 const count = item === "errors" ? counts?.errors : item === "issues" ? counts?.issues : undefined;
-                return (
+                const tone = item === "errors" ? "error" : "warn";
+                const link = (
                   <a
                     key={item}
                     href={`#/${item}`}
                     aria-current={current ? "page" : undefined}
+                    aria-label={rail ? (count ? `${label}, ${count}` : label) : undefined}
                     className={cn(
-                      "relative flex items-center gap-3.5 rounded-lg px-3.5 py-2.5 text-[17px] font-medium text-sidebar-foreground no-underline",
+                      "relative flex items-center rounded-lg text-[17px] font-medium whitespace-nowrap text-sidebar-foreground no-underline",
+                      rail ? "size-11 justify-center" : "gap-3.5 px-3.5 py-2.5",
                       "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                       "focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none",
                       current &&
@@ -138,43 +181,136 @@ export function Sidebar({
                     )}
                   >
                     <Icon className={cn("size-5 shrink-0", current && "text-brand")} />
-                    {label}
-                    {count ? (
-                      <span
-                        className={cn(
-                          "ml-auto min-w-6 rounded-full px-2 text-center font-mono text-[12.5px] leading-6 font-semibold tabular-nums",
-                          item === "errors" ? "bg-error-soft text-error" : "bg-warn-soft text-warn",
-                        )}
-                      >
-                        {count}
-                      </span>
-                    ) : null}
+                    {rail ? (
+                      count ? (
+                        <span
+                          className={cn(
+                            "absolute -top-1 -right-1.5 min-w-[18px] rounded-full px-1 text-center font-mono text-[10.5px] leading-[18px] font-semibold tabular-nums ring-2 ring-sidebar",
+                            tone === "error" ? "bg-error-soft text-error" : "bg-warn-soft text-warn",
+                          )}
+                        >
+                          {count > 99 ? "99+" : count}
+                        </span>
+                      ) : null
+                    ) : (
+                      <>
+                        {label}
+                        {count ? (
+                          <span
+                            className={cn(
+                              "ml-auto min-w-6 rounded-full px-2 text-center font-mono text-[12.5px] leading-6 font-semibold tabular-nums",
+                              tone === "error" ? "bg-error-soft text-error" : "bg-warn-soft text-warn",
+                            )}
+                          >
+                            {count}
+                          </span>
+                        ) : null}
+                      </>
+                    )}
                   </a>
+                );
+                return rail ? (
+                  <RailTip key={item} label={label} detail={count ? String(count) : undefined} tone={tone}>
+                    {link}
+                  </RailTip>
+                ) : (
+                  link
                 );
               })}
           </div>
         ))}
       </nav>
-      <footer className="mt-auto flex items-center justify-between gap-2 border-t pt-4 pl-2.5 text-[13.5px] text-muted-foreground">
-        <span>
-          Local · stored in <code className="font-mono">.tracepanel/</code>
-        </span>
-        <span className="flex items-center gap-1">
+      {rail ? (
+        <footer className="mt-auto flex flex-col items-center gap-1 border-t pt-4">
           {onClear ? (
-            <button
-              type="button"
-              className="grid size-8 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-error"
-              title="Delete all data"
-              aria-label="Delete all data"
-              onClick={onClear}
-            >
-              <Trash2Icon className="size-4" />
-            </button>
+            <RailTip label="Delete all data">
+              <button
+                type="button"
+                className="grid size-9 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-error"
+                aria-label="Delete all data"
+                onClick={onClear}
+              >
+                <Trash2Icon className="size-4" />
+              </button>
+            </RailTip>
           ) : null}
-          <ThemeToggle />
-        </span>
-      </footer>
+          <ThemeToggle side="right" />
+          {onCollapse ? (
+            <RailTip label="Expand the sidebar" detail="⌘B">
+              <button
+                type="button"
+                className="grid size-9 place-items-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
+                aria-label="Expand the sidebar"
+                onClick={() => onCollapse(false)}
+              >
+                <PanelLeftOpenIcon className="size-[18px]" />
+              </button>
+            </RailTip>
+          ) : null}
+        </footer>
+      ) : (
+        <footer className="mt-auto flex items-center justify-between gap-2 border-t pt-4 pl-2.5 text-[13.5px] text-muted-foreground">
+          <span>
+            Local · stored in <code className="font-mono">.tracepanel/</code>
+          </span>
+          <span className="flex items-center gap-1">
+            {onClear ? (
+              <button
+                type="button"
+                className="grid size-8 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-error"
+                title="Delete all data"
+                aria-label="Delete all data"
+                onClick={onClear}
+              >
+                <Trash2Icon className="size-4" />
+              </button>
+            ) : null}
+            <ThemeToggle />
+          </span>
+        </footer>
+      )}
     </aside>
+  );
+}
+
+/** The rail's names: beside the icon at once, with a count or a shortcut. */
+function RailTip({
+  label,
+  detail,
+  tone,
+  children,
+}: {
+  label: string;
+  detail?: string | undefined;
+  tone?: "error" | "warn";
+  children: ReactNode;
+}) {
+  return (
+    <Tooltip delayDuration={0}>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent
+        side="right"
+        sideOffset={12}
+        arrow={false}
+        className="flex items-center gap-2 rounded-lg border bg-popover px-3 py-1.5 text-[13.5px] font-medium text-popover-foreground shadow-[var(--dt-popover-shadow)]"
+      >
+        {label}
+        {detail ? (
+          <span
+            className={cn(
+              "rounded-md px-1.5 font-mono text-[11.5px] leading-5 tabular-nums",
+              tone === "error"
+                ? "bg-error-soft text-error"
+                : tone === "warn"
+                  ? "bg-warn-soft text-warn"
+                  : "bg-muted text-text-2",
+            )}
+          >
+            {detail}
+          </span>
+        ) : null}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -185,7 +321,7 @@ const THEMES: { value: ThemeChoice; label: string; icon: LucideIcon }[] = [
 ];
 
 /** One small button that cycles Auto → Light → Dark; `compact` for the panel's toolbar. */
-export function ThemeToggle({ compact = false }: { compact?: boolean }) {
+export function ThemeToggle({ compact = false, side = "top" }: { compact?: boolean; side?: "top" | "right" }) {
   const [theme, setTheme] = useTheme();
   const index = Math.max(
     THEMES.findIndex((item) => item.value === theme),
@@ -222,7 +358,7 @@ export function ThemeToggle({ compact = false }: { compact?: boolean }) {
           <Icon />
         </Button>
       </TooltipTrigger>
-      <TooltipContent side="top">
+      <TooltipContent side={side}>
         Theme: {current.label} · click for {next.label}
       </TooltipContent>
     </Tooltip>
@@ -298,4 +434,53 @@ export function SidebarHandle({ width, resize }: { width: number; resize: (width
       }}
     />
   );
+}
+
+const COLLAPSED_KEY = "tracepanel:sidebar-collapsed";
+/** The rail: 44px items between 12px sides, and the border. */
+export const RAIL_WIDTH = 69;
+/** How long the column takes to open or close. */
+const COLLAPSE_MS = 200;
+
+/** Whether the sidebar is a rail of icons: remembered in this browser, ⌘B / Ctrl+B toggles it. */
+export function useSidebarCollapsed(): {
+  collapsed: boolean;
+  collapse: (collapsed: boolean) => void;
+  /** True while the column changes width: only then does it animate, not while dragged. */
+  moving: boolean;
+} {
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(COLLAPSED_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const [moving, setMoving] = useState(false);
+  const collapse = (next: boolean) => {
+    setMoving(true);
+    setCollapsed(next);
+    try {
+      localStorage.setItem(COLLAPSED_KEY, next ? "1" : "0");
+    } catch {
+      // Blocked storage: the choice lasts until reload.
+    }
+  };
+  useEffect(() => {
+    if (!moving) return;
+    const timer = setTimeout(() => setMoving(false), COLLAPSE_MS + 50);
+    return () => clearTimeout(timer);
+  }, [moving]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: collapse reads only the state it is given.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && !event.shiftKey && event.key.toLowerCase() === "b") {
+        event.preventDefault();
+        collapse(!collapsed);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [collapsed]);
+  return { collapsed, collapse, moving };
 }

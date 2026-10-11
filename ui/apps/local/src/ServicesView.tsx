@@ -5,12 +5,14 @@ import {
   runtimeKind,
   SERVICE_KINDS,
   type ServiceApp,
+  ServiceIcon,
   type ServiceMap,
   type ServiceNode,
   serviceWhere,
   systemName,
 } from "@tracepanel/ui";
 import { Badge } from "@tracepanel/ui/components/ui/badge";
+import type { ReactNode } from "react";
 import { currentPeriod, href, type Route, withPeriod } from "./routes";
 import { DataTable, Meter, Mono, Td, Th, Tr } from "./ui";
 
@@ -32,22 +34,66 @@ function appTarget(app: ServiceApp): Route {
   return { name: "traces", q: "" };
 }
 
-function AppRow({ app, slowest }: { app: ServiceApp; slowest: number }) {
+/** One project, however many roles it runs as (web, worker, command): its rows summed, the busiest role first. */
+interface App extends Omit<ServiceApp, "role"> {
+  roles: ServiceApp[];
+  /** Where the row goes: the role with the most traces. */
+  busiest: ServiceApp;
+}
+
+export function byProject(apps: ServiceApp[]): App[] {
+  const projects = new Map<string, App>();
+  for (const app of apps) {
+    const project = projects.get(app.service);
+    if (!project) {
+      projects.set(app.service, { ...app, roles: [app], busiest: app });
+      continue;
+    }
+    project.roles.push(app);
+    project.runtime ??= app.runtime;
+    project.traces += app.traces;
+    project.errors += app.errors;
+    project.total += app.total;
+    if (app.last_seen > project.last_seen) project.last_seen = app.last_seen;
+  }
+  for (const project of projects.values()) {
+    project.roles.sort((a, b) => b.traces - a.traces);
+    project.busiest = project.roles[0] ?? project.busiest;
+  }
+  return [...projects.values()];
+}
+
+/** The icon in a tile, then the name over where it runs. */
+function Name({ icon, name, detail }: { icon: ReactNode; name: string; detail: string | null }) {
+  return (
+    <span className="flex items-center gap-3">
+      <span className="grid size-9 shrink-0 place-items-center rounded-lg border bg-muted/60 text-text-2 [&_svg]:size-[18px]">
+        {icon}
+      </span>
+      <span className="min-w-0">
+        <span className="block font-medium">{name}</span>
+        {detail ? <Mono className="block truncate text-[13px] text-muted-foreground">{detail}</Mono> : null}
+      </span>
+    </span>
+  );
+}
+
+function AppRow({ app, slowest }: { app: App; slowest: number }) {
   const kind = app.runtime ? runtimeKind(app.runtime) : null;
   return (
-    <Tr tone={app.errors ? "error" : undefined} href={href(appTarget(app))}>
+    <Tr tone={app.errors ? "error" : undefined} href={href(appTarget(app.busiest))}>
       <Td className="max-w-[360px]">
-        <span className="flex items-center gap-2 font-medium">
-          {kind ? <RuntimeIcon kind={kind} /> : null}
-          {app.service}
-        </span>
-        {app.runtime ? <Mono className="block truncate text-[13px] text-muted-foreground">{app.runtime}</Mono> : null}
+        <Name icon={kind ? <RuntimeIcon kind={kind} /> : null} name={app.service} detail={app.runtime} />
       </Td>
       <Td className="text-muted-foreground">App</Td>
       <Td>
-        <Badge variant="outline" className="text-[12px]">
-          {app.role}
-        </Badge>
+        <span className="flex flex-wrap gap-1">
+          {app.roles.map((role) => (
+            <Badge key={role.role} variant="outline" className="text-[12px]">
+              {role.role}
+            </Badge>
+          ))}
+        </span>
       </Td>
       <Td num>{app.traces.toLocaleString()}</Td>
       <Td>
@@ -72,7 +118,8 @@ function AppRow({ app, slowest }: { app: ServiceApp; slowest: number }) {
 export function ServicesView({ map }: { map: ServiceMap }) {
   const slowest = Math.max(...map.services.map((node) => node.total), 1);
   // The apps' time is every request's whole duration: on the services' scale it would flatten them.
-  const busiest = Math.max(...map.apps.map((app) => app.total), 1);
+  const apps = byProject(map.apps);
+  const busiest = Math.max(...apps.map((app) => app.total), 1);
   const callers = (node: ServiceNode) => [...new Set(map.edges.filter((e) => e.peer === node.id).map((e) => e.role))];
   return (
     <DataTable
@@ -89,14 +136,13 @@ export function ServicesView({ map }: { map: ServiceMap }) {
         </>
       }
     >
-      {map.apps.map((app) => (
-        <AppRow key={`${app.service} ${app.role}`} app={app} slowest={busiest} />
+      {apps.map((app) => (
+        <AppRow key={app.service} app={app} slowest={busiest} />
       ))}
       {map.services.map((node) => (
         <Tr key={node.id} tone={node.errors ? "error" : undefined} href={href(target(node))}>
           <Td className="max-w-[360px]">
-            <span className="block font-medium">{systemName(node)}</span>
-            <Mono className="block truncate text-[13px] text-muted-foreground">{serviceWhere(node)}</Mono>
+            <Name icon={<ServiceIcon node={node} />} name={systemName(node)} detail={serviceWhere(node)} />
           </Td>
           <Td className="text-muted-foreground">{SERVICE_KINDS[node.kind]}</Td>
           <Td>
