@@ -16,8 +16,8 @@
   },
   "devDependencies": {
     "@tracepanel/ui": "workspace:^",
-    "typescript": "^5.6.0",
-    "vite": "^7.0.0",
-    "lefthook": "2.2.1"
+    "lefthook": "2.2.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4"
   }
 }
