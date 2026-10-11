@@ -144,9 +144,12 @@ jobs:
           cache-dependency-path: ui/pnpm-lock.yaml
 
       # pnpm install wires the hooks (postinstall: lefthook install); this
-      # asserts the wiring, not the local hooks a dev machine has.
+      # asserts the wiring, not the local hooks a dev machine has. The binary
+      # is called directly: plain `pnpm exec` recurses the whole workspace on
+      # some pnpm versions and then fails on a package without the bin.
       - name: lefthook is wired
-        run: pnpm exec lefthook check-install
+        working-directory: ui
+        run: ./node_modules/.bin/lefthook check-install
 
       - name: fallow finds only what this change adds
         env:
