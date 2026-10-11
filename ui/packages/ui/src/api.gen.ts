@@ -718,6 +718,8 @@ export interface components {
             task: string[];
             /** @description Celery queues tasks ran from. */
             queue: string[];
+            /** @description Job names: management commands and tracepanel.trace() blocks. */
+            job: string[];
             route: string[];
             logger: string[];
             db: string[];
