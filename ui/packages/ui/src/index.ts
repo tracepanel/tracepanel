@@ -11,6 +11,7 @@ export { LogList } from "./LogList";
 export * from "./Logo";
 export { ISSUE_LABELS } from "./labels";
 export { queryFingerprint } from "./lib/fingerprint";
+export { isTyping } from "./lib/keys";
 export { type RuntimeKind, runtimeKind, runtimeName } from "./lib/runtime";
 export { linkProps, type TraceLinks } from "./links";
 export { MailList } from "./MailList";

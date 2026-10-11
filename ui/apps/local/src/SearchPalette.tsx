@@ -1,4 +1,14 @@
-import { ago, type DataSource, duration, MethodBadge, type TraceSummary } from "@tracepanel/ui";
+import {
+  ago,
+  type DataSource,
+  duration,
+  type EndpointRow,
+  IssueIcon,
+  type IssueRow,
+  MethodBadge,
+  RoutePath,
+  type TraceSummary,
+} from "@tracepanel/ui";
 import {
   Command,
   CommandEmpty,
@@ -10,11 +20,13 @@ import {
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@tracepanel/ui/components/ui/dialog";
 import { ArrowRightIcon, SearchIcon } from "lucide-react";
 import { useEffect, useState } from "react";
-import { go, openTrace, type Section, TRACE_ID } from "./routes";
+import { endpointGroup, go, issueRoute, openTrace, type Route, type Section, TRACE_ID } from "./routes";
 import { NAV } from "./Sidebar";
 import { graphqlOperation } from "./sections";
 
 const SHOWN = 8;
+// Endpoints and issues are a shortcut past the traces: a few of each.
+const SHOWN_GROUPS = 4;
 const DEBOUNCE_MS = 150;
 
 const KIND_BADGES: Record<string, string> = { task: "TASK", command: "JOB", websocket: "WS" };
@@ -36,28 +48,44 @@ export function SearchPalette({
   onOpenChange,
   source,
   sections,
+  openRoute,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   source: DataSource;
   /** Menu sections shown in the console (empty entry points are hidden there and here). */
   sections: Set<Section>;
+  /** How a choice opens: the console goes there; the panel opens traces itself and the rest in the console. */
+  openRoute?: ((route: Route) => void) | undefined;
 }) {
   const [text, setText] = useState("");
   const [results, setResults] = useState<TraceSummary[]>([]);
+  const [endpoints, setEndpoints] = useState<EndpointRow[]>([]);
+  const [issues, setIssues] = useState<IssueRow[]>([]);
+  const openTo = openRoute ?? ((route: Route) => (route.name === "trace" ? openTrace(route.id) : go(route)));
   const query = text.trim();
 
   useEffect(() => {
     if (!query || TRACE_ID.test(query.toUpperCase())) {
       setResults([]);
+      setEndpoints([]);
+      setIssues([]);
       return;
     }
     let cancelled = false;
     const timer = window.setTimeout(() => {
+      // An unfinished filter (`status>`), or one a list does not take, is no error worth showing here.
       source.searchTraces(query, null).then(
         (page) => !cancelled && setResults(page.items.slice(0, SHOWN)),
-        // An unfinished filter (`status>`) is not an error worth showing here.
         () => !cancelled && setResults([]),
+      );
+      source.listEndpoints(query).then(
+        (rows) => !cancelled && setEndpoints(rows.slice(0, SHOWN_GROUPS)),
+        () => !cancelled && setEndpoints([]),
+      );
+      source.listIssues(query).then(
+        (rows) => !cancelled && setIssues(rows.slice(0, SHOWN_GROUPS)),
+        () => !cancelled && setIssues([]),
       );
     }, DEBOUNCE_MS);
     return () => {
@@ -90,7 +118,10 @@ export function SearchPalette({
             <CommandEmpty>No traces match.</CommandEmpty>
             {TRACE_ID.test(query.toUpperCase()) ? (
               <CommandGroup heading="Trace">
-                <CommandItem value={`id-${query}`} onSelect={() => close(() => openTrace(query.toUpperCase()))}>
+                <CommandItem
+                  value={`id-${query}`}
+                  onSelect={() => close(() => openTo({ name: "trace", id: query.toUpperCase() }))}
+                >
                   <ArrowRightIcon />
                   Open trace <span className="font-mono">{query}</span>
                 </CommandItem>
@@ -101,7 +132,11 @@ export function SearchPalette({
                 {results.map((trace) => {
                   const { badge, name } = label(trace);
                   return (
-                    <CommandItem key={trace.id} value={trace.id} onSelect={() => close(() => openTrace(trace.id))}>
+                    <CommandItem
+                      key={trace.id}
+                      value={trace.id}
+                      onSelect={() => close(() => openTo({ name: "trace", id: trace.id }))}
+                    >
                       <MethodBadge method={badge} htmx={trace.htmx} />
                       <span className="min-w-0 flex-1 truncate font-mono text-[14px]">{name}</span>
                       <span className="text-[13px] text-muted-foreground tabular-nums">
@@ -110,10 +145,42 @@ export function SearchPalette({
                     </CommandItem>
                   );
                 })}
-                <CommandItem value="all" onSelect={() => close(() => go({ name: "traces", q: query }))}>
+                <CommandItem value="all" onSelect={() => close(() => openTo({ name: "traces", q: query }))}>
                   <SearchIcon />
                   Search all traces for <span className="font-mono">{query}</span>
                 </CommandItem>
+              </CommandGroup>
+            ) : null}
+            {endpoints.length > 0 ? (
+              <CommandGroup heading="Endpoints">
+                {endpoints.map((row) => (
+                  <CommandItem
+                    key={`${row.method} ${row.route}`}
+                    value={`endpoint-${row.method} ${row.route}`}
+                    onSelect={() => close(() => openTo(endpointGroup(row.method, row.route)))}
+                  >
+                    <MethodBadge method={row.method} />
+                    <span className="min-w-0 flex-1 truncate font-mono text-[14px]">
+                      <RoutePath path={row.route} />
+                    </span>
+                    <span className="text-[13px] text-muted-foreground tabular-nums">{row.calls} calls</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            ) : null}
+            {issues.length > 0 ? (
+              <CommandGroup heading="Issues">
+                {issues.map((issue) => (
+                  <CommandItem
+                    key={issue.fingerprint}
+                    value={`issue-${issue.fingerprint}`}
+                    onSelect={() => close(() => openTo(issueRoute(issue.fingerprint, issue.kind)))}
+                  >
+                    <IssueIcon kind={issue.kind} />
+                    <span className="min-w-0 flex-1 truncate text-[14px]">{issue.title}</span>
+                    <span className="text-[13px] text-muted-foreground tabular-nums">last {ago(issue.last_seen)}</span>
+                  </CommandItem>
+                ))}
               </CommandGroup>
             ) : null}
             {matching.length > 0 ? (
@@ -122,7 +189,7 @@ export function SearchPalette({
                   <CommandItem
                     key={section}
                     value={`go-${section}`}
-                    onSelect={() => close(() => go({ name: section, q: "" }))}
+                    onSelect={() => close(() => openTo({ name: section, q: "" }))}
                   >
                     <Icon />
                     {name}

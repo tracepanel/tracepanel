@@ -6,6 +6,7 @@ import { useSearch } from "./data";
 import { EntryPage } from "./EntryPage";
 import { GroupPage } from "./GroupPage";
 import { IssuePage } from "./IssuePage";
+import { useRowKeys } from "./keyboard";
 import { go, isEntry, parse, periodOf, type Route, type Section } from "./routes";
 import { SearchPalette } from "./SearchPalette";
 import { Sidebar, SidebarHandle, useSidebarWidth, visibleSections } from "./Sidebar";
@@ -24,6 +25,7 @@ function sectionOf(route: Route): Section | null {
 export function Console({ route, source }: { route: Route; source: DataSource }) {
   // The address as the browser has it: positions are filed under the same string they are read back by.
   useScrollMemory(location.hash);
+  useRowKeys();
   const [spec, setSpec] = useState<SearchSpec | null>(null);
   const [searching, setSearching] = useState(false);
   const [clearing, setClearing] = useState(false);

@@ -26,7 +26,8 @@ import { Console } from "./Console";
 import { exploreFor } from "./explore";
 import { type TabEntry, type TabHistory, usePolling, useTabHistory } from "./hooks";
 import { RefreshProvider } from "./refresh";
-import { consoleLinks, go, href, type Route, useRoute } from "./routes";
+import { consoleLinks, go, href, type Route, SECTIONS, useRoute } from "./routes";
+import { SearchPalette } from "./SearchPalette";
 import { ThemeToggle } from "./Sidebar";
 import { graphqlOperation } from "./sections";
 import { TraceScreen } from "./TraceScreen";
@@ -550,6 +551,17 @@ function PanelApp({ route }: { route: Route }) {
   const [follow, setFollow] = useState(readFollow);
   const [tab, setTab] = useState(readTab);
   const [clearing, setClearing] = useState(false);
+  const [searching, setSearching] = useState(false);
+  // ⌘K, as in the console: a trace opens here, anything else in the console, in a new tab.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() !== "k" || !(event.metaKey || event.ctrlKey)) return;
+      event.preventDefault();
+      setSearching((open) => !open);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   const onFollow = (value: boolean) => {
     setFollow(value);
     writeFollow(value);
@@ -615,6 +627,15 @@ function PanelApp({ route }: { route: Route }) {
 
   return (
     <div className="panel">
+      <SearchPalette
+        open={searching}
+        onOpenChange={setSearching}
+        source={source}
+        sections={new Set(SECTIONS)}
+        openRoute={(target) =>
+          target.name === "trace" ? go(target) : window.open(`${base}${href(target)}`, "_blank", "noopener")
+        }
+      />
       {toolbarInTrace ? null : (
         <header className="bar">
           <span className="flex shrink-0 items-center gap-2" title="Tracepanel">
