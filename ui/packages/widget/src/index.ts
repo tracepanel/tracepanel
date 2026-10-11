@@ -121,8 +121,10 @@ const STYLE = `
   .issues { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; background: rgb(245 181 68 / 0.15); color: #f5b544; font-weight: 600; font-size: 12px; }
   .seg .issues svg { color: currentColor; }
   .issues[data-tone="error"] { background: rgb(255 107 94 / 0.16); color: #ff8a7a; }
-  .more { padding: 3px 8px; border-radius: 999px; background: rgb(255 255 255 / 0.09); color: #e7e9ef; font-size: 12px; }
-  .more[data-tone="error"] { background: rgb(255 107 94 / 0.16); color: #ff8a7a; font-weight: 600; }
+  /* The page's count: a step back from the latest request's numbers; its failures stand out on their own. */
+  .page .unit { margin-left: -1px; }
+  .failed { display: inline-flex; align-items: center; gap: 4px; margin-left: 3px; padding: 3px 8px; border-radius: 999px; background: rgb(255 107 94 / 0.16); color: #ff8a7a; font-weight: 600; font-size: 12px; }
+  .seg .failed svg { width: 12px; height: 12px; color: currentColor; }
   .name {
     max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-radius: 6px;
     font: 500 12.5px "Geist Mono Variable", "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace; color: #fff;
@@ -168,8 +170,7 @@ const STYLE = `
   :host([data-theme="light"]) .status[data-tone="server"] { background: rgb(208 52 44 / 0.09); color: #d0342c; }
   :host([data-theme="light"]) .issues { background: rgb(217 119 6 / 0.1); color: #b45309; }
   :host([data-theme="light"]) .issues[data-tone="error"] { background: rgb(208 52 44 / 0.09); color: #d0342c; }
-  :host([data-theme="light"]) .more { background: #f0f0ed; color: #16181d; }
-  :host([data-theme="light"]) .more[data-tone="error"] { background: rgb(208 52 44 / 0.09); color: #d0342c; }
+  :host([data-theme="light"]) .failed { background: rgb(208 52 44 / 0.09); color: #d0342c; }
   :host([data-theme="light"]) .panel {
     border-left-color: #e2e2dc; background: #ffffff;
     box-shadow: -16px 0 40px rgb(22 24 29 / 0.12);
@@ -374,6 +375,10 @@ const ICONS = {
   db: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>',
   clock:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+  layers:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg>',
+  failed:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>',
   alert:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 21h20L12 3Z"/><path d="M12 10v4M12 17.5h.01"/></svg>',
 } as const;
@@ -428,6 +433,30 @@ function addIssues(parent: HTMLElement, issues: number, tone: "warn" | "error"):
   segment(parent).append(pill);
 }
 
+/**
+ * The rest of the page, after the latest request's numbers: how many requests it made, in the same neutral style as
+ * the other numbers, and only the failed ones in red, as their own chip, so "16" never reads as 16 failures.
+ */
+function addPage(parent: HTMLElement, count: number, failed: number): void {
+  const seg = segment(parent);
+  seg.className = "seg page";
+  seg.innerHTML = ICONS.layers;
+  const value = document.createElement("b");
+  value.textContent = String(count);
+  const unit = document.createElement("span");
+  unit.className = "unit";
+  unit.textContent = "requests";
+  seg.append(value, unit);
+  seg.title = `${count} requests on this page: the page and its AJAX calls${failed ? `, ${failed} failed` : ""}`;
+  if (failed) {
+    const chip = document.createElement("span");
+    chip.className = "failed";
+    chip.innerHTML = ICONS.failed;
+    chip.append(`${failed} failed`);
+    seg.append(chip);
+  }
+}
+
 /** Which request the pill is about: its method and path (a GraphQL operation by its name). */
 function addName(parent: HTMLElement, info: TraceInfo, pulse: boolean): void {
   const name = document.createElement("span");
@@ -436,14 +465,6 @@ function addName(parent: HTMLElement, info: TraceInfo, pulse: boolean): void {
   name.title = title(info);
   if (pulse) name.dataset["pulse"] = "";
   segment(parent).append(name);
-}
-
-function addPill(parent: HTMLElement, text: string, className: string): HTMLSpanElement {
-  const span = document.createElement("span");
-  span.className = className;
-  span.textContent = text;
-  segment(parent).append(span);
-  return span;
 }
 
 /** What the widget already knows from response headers: lets the panel show a request before it is stored. */
@@ -683,11 +704,7 @@ export function mount(options: WidgetOptions = {}): Widget {
     // Findings are amber whatever else happened: a failure says so in its status, and in the page's count.
     if (shown.issues) addIssues(stats, shown.issues, "warn");
     const failed = all.filter((info) => (info.status ?? 200) >= 500).length;
-    if (all.length > 1) {
-      const count = addPill(stats, failed ? `${all.length} req · ${failed} failed` : `${all.length} req`, "more");
-      count.title = "Requests on this page: the page and its AJAX calls";
-      if (failed) count.dataset["tone"] = "error";
-    }
+    if (all.length > 1) addPage(stats, all.length, failed);
     badge.dataset["verdict"] = worst;
 
     const summary = [
