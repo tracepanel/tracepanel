@@ -274,8 +274,14 @@ async fn mails(State(reader): State<Shared>, Query(query): Params) -> Response {
     )
 }
 
-async fn values(State(reader): State<Shared>) -> Response {
-    answer(read(&reader, |reader| reader.known_values()).await)
+async fn values(State(reader): State<Shared>, Query(query): Params) -> Response {
+    let service = service(&query);
+    answer(read(&reader, move |reader| reader.known_values(&service)).await)
+}
+
+/// `service=`: one app's data, as the console's app switcher picks it; "" or absent is every app.
+fn service(query: &HashMap<String, String>) -> String {
+    query.get("service").cloned().unwrap_or_default()
 }
 
 async fn issues(State(reader): State<Shared>, Query(query): Params) -> Response {
@@ -360,9 +366,10 @@ async fn jobs(State(reader): State<Shared>, Query(query): Params) -> Response {
 async fn endpoint_detail(State(reader): State<Shared>, Query(query): Params) -> Response {
     let method = query.get("method").cloned().unwrap_or_else(|| "GET".into());
     let route = query.get("route").cloned().unwrap_or_default();
+    let service = service(&query);
     found(
         read(&reader, move |reader| {
-            reader.endpoint_detail(&method, &route, 40)
+            reader.endpoint_detail(&method, &route, &service, 40)
         })
         .await,
     )
@@ -370,7 +377,13 @@ async fn endpoint_detail(State(reader): State<Shared>, Query(query): Params) -> 
 
 async fn graphql_detail(State(reader): State<Shared>, Query(query): Params) -> Response {
     let operation = query.get("operation").cloned().unwrap_or_default();
-    found(read(&reader, move |reader| reader.graphql_detail(&operation, 40)).await)
+    let service = service(&query);
+    found(
+        read(&reader, move |reader| {
+            reader.graphql_detail(&operation, &service, 40)
+        })
+        .await,
+    )
 }
 
 async fn summary(State(reader): State<Shared>, Query(query): Params) -> Response {

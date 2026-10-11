@@ -73,6 +73,9 @@ export function scopedSource(source: DataSource, service: string): DataSource {
     tracesOverview: (query, group) => source.tracesOverview(q(query), group),
     listIssues: (query) => source.listIssues(q(query ?? "")),
     getIssue: (fingerprint, query) => source.getIssue(fingerprint, q(query ?? "")),
+    getEndpoint: (method, route) => source.getEndpoint(method, route, service),
+    getGraphqlOperation: (operation) => source.getGraphqlOperation(operation, service),
+    knownValues: () => source.knownValues(service),
     counts: () => source.counts(service),
   };
 }

@@ -445,40 +445,42 @@ impl Reader {
         }))
     }
 
-    /// One endpoint: percentile summary, time series, latency histogram, issues, slowest and recent calls.
+    /// One endpoint: percentile summary, time series, latency histogram, issues, slowest and recent calls. With
+    /// `service`, only that app's calls: two apps can serve the same route.
     pub fn endpoint_detail(
         &self,
         method: &str,
         route: &str,
+        service: &str,
         buckets: i64,
     ) -> Result<Option<Value>, ReadError> {
         let method = method.to_uppercase();
-        let params = vec![Sql::Text(method.clone()), Sql::Text(route.to_owned())];
-        Ok(self
-            .detail(
-                "kind = 'http' AND method = ? AND route = ?",
-                params,
-                buckets,
-            )?
-            .map(|detail| {
-                let mut object = Row::new();
-                object.insert("method".into(), Value::from(method));
-                object.insert("route".into(), Value::from(route));
-                object.extend(detail);
-                Value::Object(object)
-            }))
+        let mut params = vec![Sql::Text(method.clone()), Sql::Text(route.to_owned())];
+        let condition = with_service(
+            "kind = 'http' AND method = ? AND route = ?",
+            service,
+            &mut params,
+        );
+        Ok(self.detail(&condition, params, buckets)?.map(|detail| {
+            let mut object = Row::new();
+            object.insert("method".into(), Value::from(method));
+            object.insert("route".into(), Value::from(route));
+            object.extend(detail);
+            Value::Object(object)
+        }))
     }
 
-    /// One GraphQL operation: like an endpoint (percentiles, series, issues, calls) plus its resolvers.
+    /// One GraphQL operation: like an endpoint (percentiles, series, issues, calls) plus its resolvers. With
+    /// `service`, only that app's calls.
     pub fn graphql_detail(
         &self,
         operation: &str,
+        service: &str,
         buckets: i64,
     ) -> Result<Option<Value>, ReadError> {
-        let condition = format!("{OPERATION} = ?");
-        let Some(detail) =
-            self.detail(&condition, vec![Sql::Text(operation.to_owned())], buckets)?
-        else {
+        let mut params = vec![Sql::Text(operation.to_owned())];
+        let condition = with_service(&format!("{OPERATION} = ?"), service, &mut params);
+        let Some(detail) = self.detail(&condition, params.clone(), buckets)? else {
             return Ok(None);
         };
         let db = self.connect()?;
@@ -486,7 +488,9 @@ impl Reader {
             "SELECT doc FROM traces WHERE {condition} ORDER BY start"
         ))?;
         let docs: Vec<Value> = statement
-            .query_map([operation], |row| row.get::<_, String>(0))?
+            .query_map(rusqlite::params_from_iter(params), |row| {
+                row.get::<_, String>(0)
+            })?
             .collect::<Result<Vec<_>, _>>()?
             .iter()
             .filter_map(|doc| serde_json::from_str(doc).ok())
@@ -656,4 +660,13 @@ impl Reader {
         overview.insert("failing".into(), Value::Array(failing));
         Ok(Value::Object(overview))
     }
+}
+
+/// The condition narrowed to one app (`service`, as the console's app switcher picks it); "" is every app.
+pub(crate) fn with_service(condition: &str, service: &str, params: &mut Vec<Sql>) -> String {
+    if service.is_empty() {
+        return condition.to_owned();
+    }
+    params.push(Sql::Text(service.to_owned()));
+    format!("({condition}) AND service = ?")
 }

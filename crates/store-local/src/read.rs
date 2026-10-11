@@ -215,12 +215,27 @@ impl Reader {
     }
 
     /// Distinct routes, loggers, database aliases and extra= keys: what the console offers in menus and hints.
-    pub fn known_values(&self) -> Result<Value, ReadError> {
+    /// With `service`, only that app's: the menus offer what its pages can find.
+    pub fn known_values(&self, service: &str) -> Result<Value, ReadError> {
         let db = self.connect()?;
+        // Traces of the app; logs and SQL rows through their trace.
+        let (traces, of_trace) = if service.is_empty() {
+            ("1", "1")
+        } else {
+            (
+                "service = ?1",
+                "trace_id IN (SELECT id FROM traces WHERE service = ?1)",
+            )
+        };
         let distinct = |sql: &str| -> rusqlite::Result<Value> {
             let mut statement = db.prepare(sql)?;
+            let params: Vec<&dyn rusqlite::ToSql> = if statement.parameter_count() == 0 {
+                vec![]
+            } else {
+                vec![&service]
+            };
             let values: Vec<Value> = statement
-                .query_map([], |row| Ok(json_value(row.get_ref(0)?)))?
+                .query_map(params.as_slice(), |row| Ok(json_value(row.get_ref(0)?)))?
                 .collect::<Result<Vec<_>, _>>()?
                 .into_iter()
                 .map(|value| match value {
@@ -231,16 +246,17 @@ impl Reader {
             Ok(Value::Array(values))
         };
         Ok(serde_json::json!({
-            "route": distinct("SELECT DISTINCT route FROM traces WHERE route != '' ORDER BY 1")?,
-            "logger": distinct("SELECT DISTINCT logger FROM logs ORDER BY 1")?,
-            "db": distinct("SELECT DISTINCT alias FROM sql ORDER BY 1")?,
-            "task": distinct("SELECT DISTINCT name FROM traces WHERE kind = 'task' ORDER BY 1")?,
+            "route": distinct(&format!("SELECT DISTINCT route FROM traces WHERE route != '' AND {traces} ORDER BY 1"))?,
+            "logger": distinct(&format!("SELECT DISTINCT logger FROM logs WHERE {of_trace} ORDER BY 1"))?,
+            "db": distinct(&format!("SELECT DISTINCT alias FROM sql WHERE {of_trace} ORDER BY 1"))?,
+            "task": distinct(&format!("SELECT DISTINCT name FROM traces WHERE kind = 'task' AND {traces} ORDER BY 1"))?,
             "queue": distinct(&format!(
-                "SELECT DISTINCT {QUEUE} FROM traces WHERE kind = 'task' AND {QUEUE} IS NOT NULL ORDER BY 1"
+                "SELECT DISTINCT {QUEUE} FROM traces WHERE kind = 'task' AND {QUEUE} IS NOT NULL AND {traces} ORDER BY 1"
             ))?,
-            "extra": distinct(
-                "SELECT DISTINCT json_each.key FROM logs, json_each(logs.attrs) WHERE json_each.key LIKE 'extra.%' ORDER BY 1"
-            )?,
+            "extra": distinct(&format!(
+                "SELECT DISTINCT json_each.key FROM (SELECT attrs FROM logs WHERE {of_trace}) AS logs, \
+                 json_each(logs.attrs) WHERE json_each.key LIKE 'extra.%' ORDER BY 1"
+            ))?,
         }))
     }
 
