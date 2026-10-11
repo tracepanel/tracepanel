@@ -1,4 +1,5 @@
 // Corner badge, fetch and XHR capture, slide-out panel (iframe inside Shadow DOM).
+import { RUNTIME_PATHS, runtimeKind, runtimeName } from "@tracepanel/ui/lib/runtime";
 
 export interface TraceInfo {
   /** The trace's own name when it says more than the request line (a GraphQL operation). */
@@ -92,7 +93,8 @@ const STYLE = `
   .badge:focus-visible { outline: 2px solid #c8f560; outline-offset: 2px; }
   .brand { display: flex; padding-right: 8px; }
   .brand svg { width: 22px; height: 22px; }
-  .runtime { align-self: center; margin-left: 6px; color: #8f88b0; font-size: 11px; font-weight: 600; letter-spacing: 0.02em; }
+  .runtime { align-self: center; display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; color: #8f88b0; font-size: 11px; font-weight: 600; letter-spacing: 0.02em; }
+  .brand .runtime svg { width: 12px; height: 12px; }
   .runtime:empty { display: none; }
   .stats { display: inline-flex; align-items: center; min-width: 0; height: 100%; }
   .seg { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px; white-space: nowrap; }
@@ -532,6 +534,26 @@ function saveTab(entries: readonly TabEntry[]): void {
   }
 }
 
+const SVG = "http://www.w3.org/2000/svg";
+
+/** The mark and name of what served the page; an unknown runtime keeps its language's first word. */
+function showRuntime(element: HTMLElement, label: string | undefined): void {
+  if (!label) return;
+  const kind = runtimeKind(label);
+  if (kind === null) {
+    element.textContent = label.split(" · ")[0]?.split(" ")[0] ?? "";
+    return;
+  }
+  const svg = document.createElementNS(SVG, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS(SVG, "path");
+  path.setAttribute("d", RUNTIME_PATHS[kind]);
+  path.setAttribute("fill", "currentColor");
+  svg.append(path);
+  element.append(svg, runtimeName(kind));
+}
+
 export function mount(options: WidgetOptions = {}): Widget {
   const host = document.createElement("tracepanel-widget");
   const root = host.attachShadow({ mode: "open" });
@@ -551,8 +573,8 @@ export function mount(options: WidgetOptions = {}): Widget {
 
   const badge = query<HTMLButtonElement>(root, ".badge");
   const stats = query<HTMLElement>(root, ".stats");
-  // The language that served the page ("Python", "Go"): which backend a page is on, at a glance.
-  query<HTMLElement>(root, ".runtime").textContent = options.runtime?.split(" · ")[0]?.split(" ")[0] ?? "";
+  // What served the page, as the panel shows it (Django, FastAPI, Flask, Python, Go): which backend, at a glance.
+  showRuntime(query<HTMLElement>(root, ".runtime"), options.runtime);
   const panel = query<HTMLElement>(root, ".panel");
   const panelUrl = options.api ? new URL(options.api, location.href) : null;
   const handle = query<HTMLElement>(root, ".resize");

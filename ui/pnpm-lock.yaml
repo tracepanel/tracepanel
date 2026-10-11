@@ -106,6 +106,9 @@ importers:
 
   packages/widget:
     devDependencies:
+      '@tracepanel/ui':
+        specifier: workspace:^
+        version: link:../ui
       typescript:
         specifier: ^5.6.0
         version: 5.9.3
