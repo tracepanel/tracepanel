@@ -1,4 +1,6 @@
-import type { Counts, DataSource, KnownValues, SearchSpec } from "@tracepanel/ui";
+import { type Counts, type DataSource, type KnownValues, LogoMark, type SearchSpec } from "@tracepanel/ui";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@tracepanel/ui/components/ui/dialog";
+import { MenuIcon, SearchIcon } from "lucide-react";
 import { type CSSProperties, useCallback, useEffect, useState } from "react";
 import { ClearDialog } from "./ClearDialog";
 import { DataPage } from "./DataPage";
@@ -11,6 +13,7 @@ import { go, isEntry, parse, periodOf, type Route, type Section } from "./routes
 import { SearchPalette } from "./SearchPalette";
 import { Sidebar, SidebarHandle, useSidebarWidth, visibleSections } from "./Sidebar";
 import { useScrollMemory } from "./scroll";
+import { sectionLabel } from "./sections";
 import { TracePage } from "./TracePage";
 
 /** The menu item a page belongs to; a trace belongs to wherever it was opened from. */
@@ -29,6 +32,10 @@ export function Console({ route, source }: { route: Route; source: DataSource })
   const [spec, setSpec] = useState<SearchSpec | null>(null);
   const [searching, setSearching] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [menu, setMenu] = useState(false);
+  // A choice in the menu goes somewhere: the menu closes behind it.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: closing on every new address is the point.
+  useEffect(() => setMenu(false), [location.hash]);
   useEffect(() => {
     source.searchSpec().then(setSpec, () => undefined);
   }, [source]);
@@ -108,14 +115,47 @@ export function Console({ route, source }: { route: Route; source: DataSource })
   }
 
   const sidebar = useSidebarWidth();
+  const current = sectionOf(route);
   return (
     <div
-      className="grid h-full grid-cols-[var(--sidebar)_minmax(0,1fr)] max-[980px]:grid-cols-1"
+      className="grid h-full grid-cols-[var(--sidebar)_minmax(0,1fr)] max-[980px]:grid-cols-1 max-[980px]:grid-rows-[auto_minmax(0,1fr)]"
       style={{ "--sidebar": `${sidebar.width}px` } as CSSProperties}
     >
+      {/* Where the sidebar has no room: a bar with the menu and search, the sidebar in a drawer. */}
+      <header className="hidden items-center gap-3 border-b bg-sidebar px-4 py-2.5 max-[980px]:flex">
+        <button type="button" className="icon-button" aria-label="Menu" onClick={() => setMenu(true)}>
+          <MenuIcon className="size-5" />
+        </button>
+        <a href="#/" aria-label="Tracepanel home" className="flex items-center">
+          <LogoMark className="size-6" />
+        </a>
+        <span className="truncate font-semibold">{current ? sectionLabel(current) : "Tracepanel"}</span>
+        <button type="button" className="icon-button ml-auto" aria-label="Search" onClick={() => setSearching(true)}>
+          <SearchIcon className="size-5" />
+        </button>
+      </header>
+      <Dialog open={menu} onOpenChange={setMenu}>
+        <DialogContent
+          className="top-0 left-0 h-full w-[280px] max-w-[85vw] translate-x-0 translate-y-0 rounded-none border-0 border-r p-0 sm:max-w-[280px]"
+          showCloseButton={false}
+        >
+          <DialogTitle className="sr-only">Menu</DialogTitle>
+          <DialogDescription className="sr-only">The console's sections</DialogDescription>
+          <Sidebar
+            drawer={true}
+            section={current}
+            counts={counts}
+            onSearch={() => {
+              setMenu(false);
+              setSearching(true);
+            }}
+            onClear={source.clearStore ? () => setClearing(true) : undefined}
+          />
+        </DialogContent>
+      </Dialog>
       <div className="relative grid min-h-0 max-[980px]:hidden">
         <Sidebar
-          section={sectionOf(route)}
+          section={current}
           counts={counts}
           onSearch={() => setSearching(true)}
           onClear={source.clearStore ? () => setClearing(true) : undefined}

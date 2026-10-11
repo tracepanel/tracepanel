@@ -20,7 +20,7 @@ export * from "./PropTable";
 export { AliasChip, Empty, IssueChip, MethodBadge, RichText, RoutePath, StatusBadge } from "./primitives";
 export { RequestInfo } from "./RequestInfo";
 export { RuntimeIcon } from "./RuntimeIcon";
-export { SERVICE_KINDS, ServiceGraph, serviceWhere, systemName } from "./ServiceMap";
+export { SERVICE_KINDS, serviceWhere, systemName } from "./ServiceMap";
 export { SqlCode } from "./SqlCode";
 export { SqlList } from "./SqlList";
 export { type DataSource, httpSource, SearchError } from "./source";
