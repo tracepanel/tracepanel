@@ -4,8 +4,8 @@
 
 @import "tailwindcss";
 /* Bundled, not fetched: the console works offline and looks the same on every machine. */
-@import "@fontsource-variable/inter/wght.css";
-@import "@fontsource-variable/jetbrains-mono/wght.css";
+@import "@fontsource-variable/geist/wght.css";
+@import "@fontsource-variable/geist-mono/wght.css";
 @import "tw-animate-css";
 @import "@tracepanel/ui/theme.css";
 @import "@tracepanel/ui/styles.css" layer(legacy);
@@ -28,9 +28,12 @@
 
 @layer base {
   html {
+    /* The density: every size is in rem, so this one value scales the whole UI. A percentage keeps the reader's
+       own browser font size in the sum. */
+    font-size: 71.25%;
     font-family: var(--dt-font);
-    /* Inter: straight-sided digits that line up in tables, a clearer l/1/I, and contextual alternates. */
-    font-feature-settings: "cv05", "cv08", "calt";
+    /* Geist: figures of one width, so numbers line up in tables and do not jitter as they update. */
+    font-variant-numeric: tabular-nums;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;

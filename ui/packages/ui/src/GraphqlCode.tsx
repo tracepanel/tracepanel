@@ -26,7 +26,7 @@ export function GraphqlCode({ document }: { document: string }) {
   }, [document]);
   return (
     <div className="group/gql relative min-w-0 overflow-hidden rounded-md border bg-muted/60">
-      <pre className="m-0 max-h-[480px] overflow-auto px-4 py-3 pr-12 font-mono text-[13px] leading-relaxed whitespace-pre-wrap text-foreground">
+      <pre className="m-0 max-h-[30rem] overflow-auto px-4 py-3 pr-12 font-mono text-sm leading-relaxed whitespace-pre-wrap text-foreground">
         <code>
           {shown.tokens.map((token, index) =>
             token.type === "text" ? (

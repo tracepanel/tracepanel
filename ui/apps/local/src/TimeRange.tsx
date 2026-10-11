@@ -65,7 +65,7 @@ export function TimeRange({ since, until, onChange, verb = "Started", open, onOp
           variant="outline"
           size="sm"
           className={cn(
-            "h-9 gap-1.5 bg-muted px-3.5 text-[15px] font-medium shadow-none",
+            "h-9 gap-1.5 bg-muted px-3.5 text-md font-medium shadow-none",
             summary && "border-brand/40 bg-brand-soft hover:bg-brand-soft",
           )}
         >
@@ -75,14 +75,14 @@ export function TimeRange({ since, until, onChange, verb = "Started", open, onOp
         </Button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-[22rem] p-0">
-        <div className="border-b px-3 py-2.5 text-[13px] font-semibold">{verb} within</div>
+        <div className="border-b px-3 py-2.5 text-sm font-semibold">{verb} within</div>
         <div className="grid grid-cols-2 gap-1 p-2">
           {PRESETS.map(([value, label]) => (
             <button
               key={value}
               type="button"
               aria-pressed={since === value && !until}
-              className="rounded-md px-2.5 py-2 text-left text-[14px] hover:bg-accent aria-pressed:bg-brand-soft aria-pressed:font-medium aria-pressed:text-brand"
+              className="rounded-md px-2.5 py-2 text-left text-base hover:bg-accent aria-pressed:bg-brand-soft aria-pressed:font-medium aria-pressed:text-brand"
               onClick={() => {
                 onChange(value, undefined);
                 onOpenChange(false);
@@ -100,23 +100,23 @@ export function TimeRange({ since, until, onChange, verb = "Started", open, onOp
             onOpenChange(false);
           }}
         >
-          <span className="text-[13px] font-semibold">Custom range</span>
-          <label className="grid grid-cols-[48px_1fr] items-center gap-2 text-[13px] text-muted-foreground">
+          <span className="text-sm font-semibold">Custom range</span>
+          <label className="grid grid-cols-[48px_1fr] items-center gap-2 text-sm text-muted-foreground">
             From
             <input
               type="datetime-local"
               value={from}
               onChange={(event) => setFrom(event.target.value)}
-              className="h-8 rounded-md border bg-background px-2 font-mono text-[13px] text-foreground"
+              className="h-8 rounded-md border bg-background px-2 font-mono text-sm text-foreground"
             />
           </label>
-          <label className="grid grid-cols-[48px_1fr] items-center gap-2 text-[13px] text-muted-foreground">
+          <label className="grid grid-cols-[48px_1fr] items-center gap-2 text-sm text-muted-foreground">
             To
             <input
               type="datetime-local"
               value={to}
               onChange={(event) => setTo(event.target.value)}
-              className="h-8 rounded-md border bg-background px-2 font-mono text-[13px] text-foreground"
+              className="h-8 rounded-md border bg-background px-2 font-mono text-sm text-foreground"
             />
           </label>
           <div className="flex justify-between gap-2 pt-1">

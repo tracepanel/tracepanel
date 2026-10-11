@@ -7,8 +7,9 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@tracepanel/ui/components/ui/dropdown-menu";
+import { cn } from "@tracepanel/ui/lib/utils";
 import { ChevronDownIcon, RefreshCwIcon } from "lucide-react";
-import { createContext, type ReactNode, useContext, useMemo, useState } from "react";
+import { createContext, type ReactNode, useContext, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
 /** One auto-refresh setting for every screen of the console, plus a manual "refresh now". */
 interface Refresh {
@@ -18,6 +19,8 @@ interface Refresh {
   /** Bumped by "refresh now": screens reload when it changes. */
   tick: number;
   now: () => void;
+  /** Bumped every `interval` while the page is visible: one clock for every screen, so all reload together. */
+  cycle: number;
 }
 
 const KEY = "tracepanel:refresh";
@@ -43,11 +46,120 @@ const RefreshContext = createContext<Refresh>({
   setInterval: () => undefined,
   tick: 0,
   now: () => undefined,
+  cycle: 0,
 });
+
+/* ---------- What is loading: the button's spinner, its error, its "updated" time ---------- */
+
+interface Activity {
+  /** Loads in flight. */
+  pending: number;
+  /** Why the last load failed (the agent stopped, …); null once one succeeds. */
+  error: string | null;
+  /** When a load last succeeded. */
+  updated: number | null;
+}
+
+let activity: Activity = { pending: 0, error: null, updated: null };
+const listeners = new Set<() => void>();
+
+function change(next: Partial<Activity>): void {
+  activity = { ...activity, ...next };
+  for (const listener of listeners) listener();
+}
+
+/** Counts a load for the refresh button: it spins while any is in flight and turns red when one fails. */
+export function track<T>(load: Promise<T>, counts: (error: unknown) => boolean = () => true): Promise<T> {
+  change({ pending: activity.pending + 1 });
+  return load.then(
+    (value) => {
+      change({ pending: activity.pending - 1, error: null, updated: Date.now() });
+      return value;
+    },
+    (error: unknown) => {
+      // fetch() rejects with a TypeError when nothing answers: the agent stopped.
+      const message =
+        error instanceof TypeError
+          ? "the agent isn't answering"
+          : error instanceof Error
+            ? error.message
+            : String(error);
+      change({ pending: activity.pending - 1, ...(counts(error) ? { error: message } : {}) });
+      throw error;
+    },
+  );
+}
+
+function useActivity(): Activity {
+  return useSyncExternalStore(
+    (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    () => activity,
+  );
+}
+
+/** A spin of half a turn at least: a load that answers at once is still seen. */
+const MIN_SPIN_MS = 600;
+
+function useSpinning(busy: boolean): boolean {
+  const [spinning, setSpinning] = useState(busy);
+  useEffect(() => {
+    if (busy) {
+      setSpinning(true);
+      return;
+    }
+    const timer = setTimeout(() => setSpinning(false), MIN_SPIN_MS);
+    return () => clearTimeout(timer);
+  }, [busy]);
+  return spinning;
+}
+
+function ago(at: number | null, now: number): string {
+  if (at === null) return "Not loaded yet";
+  const seconds = Math.max(0, Math.round((now - at) / 1000));
+  if (seconds < 2) return "Updated just now";
+  if (seconds < 60) return `Updated ${seconds}s ago`;
+  return `Updated ${Math.round(seconds / 60)}m ago`;
+}
+
+/** The refresh icon: spinning while loading, red with the reason when the last load failed. */
+function RefreshIcon({ activity }: { activity: Activity }) {
+  const spinning = useSpinning(activity.pending > 0);
+  return (
+    <RefreshCwIcon
+      className={cn(
+        spinning && "animate-spin [animation-duration:0.6s] motion-reduce:animate-none",
+        activity.error && !spinning && "text-error",
+      )}
+    />
+  );
+}
+
+function useTitle(activity: Activity): string {
+  // Re-read on hover: the title says how long ago, and that changes with no load.
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  if (activity.error) return `Couldn't refresh: ${activity.error} · click to retry`;
+  return `Refresh now · ${ago(activity.updated, now)}`;
+}
 
 export function RefreshProvider({ children }: { children: ReactNode }) {
   const [interval, setIntervalState] = useState(read);
   const [tick, setTick] = useState(0);
+  const [cycle, setCycle] = useState(0);
+  useEffect(() => {
+    if (!interval) return;
+    const timer = window.setInterval(
+      () => document.visibilityState === "visible" && setCycle((current) => current + 1),
+      interval,
+    );
+    return () => window.clearInterval(timer);
+  }, [interval]);
   const value = useMemo<Refresh>(
     () => ({
       interval,
@@ -61,8 +173,9 @@ export function RefreshProvider({ children }: { children: ReactNode }) {
       },
       tick,
       now: () => setTick((current) => current + 1),
+      cycle,
     }),
-    [interval, tick],
+    [interval, tick, cycle],
   );
   return <RefreshContext.Provider value={value}>{children}</RefreshContext.Provider>;
 }
@@ -77,6 +190,8 @@ export function useRefresh(): Refresh {
  */
 export function RefreshControl({ live = true }: { live?: boolean }) {
   const { interval, setInterval, now } = useRefresh();
+  const loading = useActivity();
+  const title = useTitle(loading);
   if (!live) {
     return (
       <Button
@@ -84,10 +199,10 @@ export function RefreshControl({ live = true }: { live?: boolean }) {
         size="sm"
         className="h-9 gap-1.5 px-3 shadow-none"
         aria-label="Refresh now"
-        title="Refresh now"
+        title={title}
         onClick={now}
       >
-        <RefreshCwIcon />
+        <RefreshIcon activity={loading} />
         Refresh
       </Button>
     );
@@ -100,10 +215,10 @@ export function RefreshControl({ live = true }: { live?: boolean }) {
         size="sm"
         className="h-9 rounded-r-none border-r-0 shadow-none"
         aria-label="Refresh now"
-        title="Refresh now"
+        title={title}
         onClick={now}
       >
-        <RefreshCwIcon />
+        <RefreshIcon activity={loading} />
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

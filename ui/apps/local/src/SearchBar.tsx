@@ -488,7 +488,7 @@ export function SearchBar({ section, q, spec, error, known, count, callsOf, onCh
             // biome-ignore lint/suspicious/noArrayIndexKey: a chip is a position in the query; a filter may repeat.
             key={`${serialize(filter)}:${index}`}
             variant="outline"
-            className="h-7 gap-0.5 rounded-md border-brand/35 bg-brand-soft pr-0.5 pl-2 font-mono text-[14px] font-normal"
+            className="h-7 gap-0.5 rounded-md border-brand/35 bg-brand-soft pr-0.5 pl-2 font-mono text-base font-normal"
           >
             <span className="text-brand">{filter.key}</span>
             <span className="text-muted-foreground">{filter.op}</span>
@@ -514,7 +514,7 @@ export function SearchBar({ section, q, spec, error, known, count, callsOf, onCh
           }
           aria-label="Search"
           spellCheck={false}
-          className="h-9 min-w-40 flex-1 bg-transparent font-mono text-[15px] outline-none placeholder:font-sans placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden"
+          className="h-9 min-w-40 flex-1 bg-transparent font-mono text-md outline-none placeholder:font-sans placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden"
           onFocus={() => setFocused(true)}
           onBlur={() => window.setTimeout(() => setFocused(false), 120)}
           onChange={(event) => {
@@ -557,7 +557,7 @@ export function SearchBar({ section, q, spec, error, known, count, callsOf, onCh
               key={suggestion.insert}
               type="button"
               data-active={index === cursor ? "" : undefined}
-              className="flex w-full min-w-0 items-baseline gap-4 rounded-sm px-2.5 py-1.5 text-left text-[14px] text-muted-foreground hover:bg-accent data-[active]:bg-accent data-[active]:text-foreground"
+              className="flex w-full min-w-0 items-baseline gap-4 rounded-sm px-2.5 py-1.5 text-left text-base text-muted-foreground hover:bg-accent data-[active]:bg-accent data-[active]:text-foreground"
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => accept(suggestion)}
             >
@@ -571,7 +571,7 @@ export function SearchBar({ section, q, spec, error, known, count, callsOf, onCh
           ))}
         </div>
       ) : null}
-      {error ? <p className="mt-2 text-[14px] text-error">{error}</p> : null}
+      {error ? <p className="mt-2 text-base text-error">{error}</p> : null}
       <div className="mt-4 flex flex-wrap items-center gap-2.5">
         {quick.map((control) => (
           <QuickControl
@@ -588,7 +588,7 @@ export function SearchBar({ section, q, spec, error, known, count, callsOf, onCh
           />
         ))}
         {count !== undefined ? (
-          <span className="ml-auto text-[14px] text-muted-foreground tabular-nums">{count} shown</span>
+          <span className="ml-auto text-base text-muted-foreground tabular-nums">{count} shown</span>
         ) : null}
       </div>
     </div>

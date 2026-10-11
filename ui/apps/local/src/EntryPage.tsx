@@ -186,7 +186,7 @@ export function EntryPage({ section, q, view, source, spec, known }: EntryPagePr
             })}
             aria-current={view === item ? "page" : undefined}
             className={cn(
-              "rounded-md px-3.5 py-1.5 text-[15px] font-medium text-text-2 no-underline hover:bg-accent hover:text-foreground",
+              "rounded-md px-3.5 py-1.5 text-md font-medium text-text-2 no-underline hover:bg-accent hover:text-foreground",
               view === item && "bg-brand-soft text-brand hover:bg-brand-soft hover:text-brand",
             )}
           >
@@ -239,7 +239,7 @@ function TypeFilter({ q, calls, onChange }: { q: string; calls: boolean; onChang
           aria-pressed={current === type}
           onClick={() => onChange(type)}
           className={cn(
-            "rounded-md px-2.5 py-1 text-[14px] text-muted-foreground capitalize hover:bg-accent",
+            "rounded-md px-2.5 py-1 text-base text-muted-foreground capitalize hover:bg-accent",
             current === type && "bg-brand-soft font-medium text-brand",
           )}
         >

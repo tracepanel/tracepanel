@@ -32,7 +32,7 @@ function AllRequests({ span, links }: { span: Span; links: TraceLinks | undefine
     String(span.attrs["db.alias"] ?? "default"),
   );
   return (
-    <a className="text-[13px] font-medium text-brand hover:underline" {...linkProps(links, links.query(key))}>
+    <a className="text-sm font-medium text-brand hover:underline" {...linkProps(links, links.query(key))}>
       All requests with this query →
     </a>
   );
@@ -68,7 +68,7 @@ function groupSpans(spans: readonly Span[], issueBySpan: ReadonlyMap<string, Iss
 }
 
 function Heading({ children }: { children: string }) {
-  return <h4 className="text-[13px] font-semibold tracking-wide text-muted-foreground uppercase">{children}</h4>;
+  return <h4 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">{children}</h4>;
 }
 
 /** One row: summary line, and when open the statement, its plan and where it was called from. */
@@ -98,8 +98,8 @@ function Row({
       <details open={open} className="group/row">
         <summary className="grid cursor-pointer list-none grid-cols-[14px_36px_minmax(0,1fr)_auto_88px_64px] items-center gap-2.5 px-3 py-1.5 hover:bg-accent [&::-webkit-details-marker]:hidden">
           <ChevronRightIcon className="size-4 text-muted-foreground transition-transform group-open/row:rotate-90" />
-          <span className="text-right font-mono text-[13px] text-muted-foreground tabular-nums">{lead}</span>
-          <span className="flex min-w-0 items-center gap-2 font-mono text-[14px]">
+          <span className="text-right font-mono text-sm text-muted-foreground tabular-nums">{lead}</span>
+          <span className="flex min-w-0 items-center gap-2 font-mono text-base">
             <span className="truncate">{name}</span>
             <AliasChip value={alias} />
           </span>
@@ -107,7 +107,7 @@ function Row({
           <span className="h-1.5 overflow-hidden rounded-full bg-muted-foreground/15" aria-hidden="true">
             <span className="block h-full rounded-full bg-chart-1" style={{ width: `${Math.max(share * 100, 2)}%` }} />
           </span>
-          <span className="text-right text-[14px] tabular-nums">{duration(time)}</span>
+          <span className="text-right text-base tabular-nums">{duration(time)}</span>
         </summary>
         <div className="grid gap-4 border-t bg-muted/30 px-5 py-4">{children}</div>
       </details>
@@ -137,7 +137,7 @@ export function SqlList({ spans, issueBySpan, focus, onExplain, links }: SqlList
               type="button"
               aria-pressed={mode === value}
               onClick={() => setMode(value)}
-              className="rounded-[5px] px-3 py-1 text-[13px] font-medium text-muted-foreground aria-pressed:bg-background aria-pressed:text-foreground aria-pressed:shadow-sm"
+              className="rounded-[0.3125rem] px-3 py-1 text-sm font-medium text-muted-foreground aria-pressed:bg-background aria-pressed:text-foreground aria-pressed:shadow-sm"
             >
               {value === "grouped" ? "Grouped" : "In order"}
             </button>
@@ -181,7 +181,7 @@ export function SqlList({ spans, issueBySpan, focus, onExplain, links }: SqlList
                         <li
                           key={span.id}
                           className={cn(
-                            "grid grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-3 border-b px-3 py-1.5 text-[13px] last:border-b-0",
+                            "grid grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-3 border-b px-3 py-1.5 text-sm last:border-b-0",
                             focus?.has(span.id) && "bg-brand-soft",
                           )}
                         >
@@ -223,7 +223,7 @@ export function SqlList({ spans, issueBySpan, focus, onExplain, links }: SqlList
                 ) : null}
                 <section className="grid gap-1">
                   <Heading>Called from</Heading>
-                  <code className="font-mono text-[13px]">{String(span.attrs["code.origin"] ?? "—")}</code>
+                  <code className="font-mono text-sm">{String(span.attrs["code.origin"] ?? "—")}</code>
                 </section>
                 <AllRequests span={span} links={links} />
               </Row>

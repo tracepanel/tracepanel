@@ -59,7 +59,7 @@ export function IssuePage({
         />
         <div className="flex items-center gap-2.5">
           <IssueChip kind={issue.kind} />
-          <span className="text-[14px] text-muted-foreground">
+          <span className="text-base text-muted-foreground">
             {issue.occurrences} {issue.occurrences === 1 ? "event" : "events"} · in {issue.traces.length} stored{" "}
             {issue.traces.length === 1 ? "request" : "requests"} · first seen {ago(issue.first_seen)} · last seen{" "}
             {ago(issue.last_seen)}
@@ -102,13 +102,13 @@ export function IssuePage({
         <CallsChart series={issue.series} title="Events over time" noun="event" errors={error} />
         {issue.endpoints.length ? (
           <Card className="gap-2 px-4 py-3.5 shadow-none">
-            <h2 className="text-[16px] font-semibold">Endpoints</h2>
+            <h2 className="text-md font-semibold">Endpoints</h2>
             <ul className="grid gap-0.5">
               {issue.endpoints.map((endpoint) => (
                 <li key={endpoint}>
                   <a
                     href={href({ name: "group", section: "endpoints", key: endpoint })}
-                    className="block w-full rounded-md px-1.5 py-1.5 text-left font-mono text-[14px] hover:bg-accent"
+                    className="block w-full rounded-md px-1.5 py-1.5 text-left font-mono text-base hover:bg-accent"
                   >
                     {endpoint}
                   </a>
@@ -120,11 +120,11 @@ export function IssuePage({
       </div>
 
       <section className="grid grid-cols-[minmax(0,1fr)] gap-2.5">
-        <h2 className="flex items-baseline gap-3 text-[19px] font-semibold">
+        <h2 className="flex items-baseline gap-3 text-xl font-semibold">
           Latest occurrence
           <a
             href={traceHref(issue.last_trace_id, error ? "error" : "issues")}
-            className="text-[14px] font-medium text-brand hover:underline"
+            className="text-base font-medium text-brand hover:underline"
           >
             Open request →
           </a>
@@ -141,7 +141,7 @@ export function IssuePage({
       </section>
 
       <section className="grid grid-cols-[minmax(0,1fr)] gap-2.5">
-        <h2 className="text-[19px] font-semibold">
+        <h2 className="text-xl font-semibold">
           Requests <span className="font-normal text-muted-foreground">· newest first</span>
         </h2>
         <TracesTable items={issue.traces} selectedId={null} hrefFor={traceHref} />

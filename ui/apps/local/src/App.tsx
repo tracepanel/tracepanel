@@ -20,6 +20,7 @@ import {
 } from "@tracepanel/ui";
 import { Button } from "@tracepanel/ui/components/ui/button";
 import { TooltipProvider } from "@tracepanel/ui/components/ui/tooltip";
+import { rem } from "@tracepanel/ui/lib/utils";
 import { type ReactNode, type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ClearDialog } from "./ClearDialog";
 import { Console } from "./Console";
@@ -64,21 +65,22 @@ function useDock(): Dock {
 }
 
 const LIST_WIDTH_KEY = "tracepanel:list-width";
-const LIST_WIDTH = 360;
-const MIN_LIST_WIDTH = 220;
-const MIN_TRACE_WIDTH = 360;
+// In rem, so the defaults follow the density; a dragged width is the reader's, in pixels.
+const LIST_WIDTH = () => Math.round(rem(22.5));
+const MIN_LIST_WIDTH = () => Math.round(rem(13.75));
+const MIN_TRACE_WIDTH = () => Math.round(rem(22.5));
 
 function readListWidth(): number {
   try {
     const value = Number(localStorage.getItem(LIST_WIDTH_KEY));
-    return value >= MIN_LIST_WIDTH ? value : LIST_WIDTH;
+    return value >= MIN_LIST_WIDTH() ? value : LIST_WIDTH();
   } catch {
-    return LIST_WIDTH;
+    return LIST_WIDTH();
   }
 }
 
 function clampListWidth(value: number): number {
-  return Math.round(Math.min(Math.max(value, MIN_LIST_WIDTH), window.innerWidth - MIN_TRACE_WIDTH));
+  return Math.round(Math.min(Math.max(value, MIN_LIST_WIDTH()), window.innerWidth - MIN_TRACE_WIDTH()));
 }
 
 /**
@@ -131,7 +133,7 @@ function SplitHandle({ container }: { container: RefObject<HTMLDivElement | null
         handle.addEventListener("pointerup", onUp);
         handle.addEventListener("pointercancel", onUp);
       }}
-      onDoubleClick={() => apply(LIST_WIDTH, true)}
+      onDoubleClick={() => apply(LIST_WIDTH(), true)}
       onKeyDown={(event) => {
         const step = event.shiftKey ? 80 : 20;
         if (event.key === "ArrowLeft") apply(width - step, true);
@@ -588,14 +590,15 @@ function PanelApp({ route }: { route: Route }) {
   const panelActions = (
     <>
       <UserSwitcher source={source} onSwitched={() => tellWidget("tracepanel:reload")} />
-      <Button variant="outline" size="sm" className="mr-1 h-7 gap-1.5 px-2.5 text-[13px] shadow-none" asChild>
+      <Button variant="outline" size="sm" className="mr-1 h-7 gap-1.5 px-2.5 text-sm shadow-none" asChild>
         <a
           href={`${base}${selectedId ? href({ name: "trace", id: selectedId, tab, from: sectionFor(selectedKind) }) : "#/"}`}
           target="_blank"
           rel="noreferrer"
           title="Open this request in the full console, in a new tab"
+          aria-label="Open in the console"
         >
-          Console
+          <span className="bar-label">Console</span>
           <ExternalIcon />
         </a>
       </Button>

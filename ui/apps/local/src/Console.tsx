@@ -1,5 +1,6 @@
 import { type Counts, type DataSource, type KnownValues, LogoMark, type SearchSpec } from "@tracepanel/ui";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@tracepanel/ui/components/ui/dialog";
+import { cn } from "@tracepanel/ui/lib/utils";
 import { MenuIcon, SearchIcon } from "lucide-react";
 import { type CSSProperties, useCallback, useEffect, useState } from "react";
 import { ClearDialog } from "./ClearDialog";
@@ -11,7 +12,7 @@ import { IssuePage } from "./IssuePage";
 import { useRowKeys } from "./keyboard";
 import { go, isEntry, parse, periodOf, type Route, type Section } from "./routes";
 import { SearchPalette } from "./SearchPalette";
-import { Sidebar, SidebarHandle, useSidebarWidth, visibleSections } from "./Sidebar";
+import { RAIL_WIDTH, Sidebar, SidebarHandle, useSidebarCollapsed, useSidebarWidth, visibleSections } from "./Sidebar";
 import { useScrollMemory } from "./scroll";
 import { sectionLabel } from "./sections";
 import { TracePage } from "./TracePage";
@@ -120,11 +121,15 @@ export function Console({ route, source }: { route: Route; source: DataSource })
   }
 
   const sidebar = useSidebarWidth();
+  const { collapsed, collapse, moving } = useSidebarCollapsed();
   const current = sectionOf(route);
   return (
     <div
-      className="grid h-full grid-cols-[var(--sidebar)_minmax(0,1fr)] max-[980px]:grid-cols-1 max-[980px]:grid-rows-[auto_minmax(0,1fr)]"
-      style={{ "--sidebar": `${sidebar.width}px` } as CSSProperties}
+      className={cn(
+        "grid h-full grid-cols-[var(--sidebar)_minmax(0,1fr)] max-[980px]:grid-cols-1 max-[980px]:grid-rows-[auto_minmax(0,1fr)]",
+        moving && "transition-[grid-template-columns] duration-200 ease-out motion-reduce:transition-none",
+      )}
+      style={{ "--sidebar": collapsed ? RAIL_WIDTH : `${sidebar.width}px` } as CSSProperties}
     >
       {/* Where the sidebar has no room: a bar with the menu and search, the sidebar in a drawer. */}
       <header className="hidden items-center gap-3 border-b bg-sidebar px-4 py-2.5 max-[980px]:flex">
@@ -141,7 +146,7 @@ export function Console({ route, source }: { route: Route; source: DataSource })
       </header>
       <Dialog open={menu} onOpenChange={setMenu}>
         <DialogContent
-          className="top-0 left-0 h-full w-[280px] max-w-[85vw] translate-x-0 translate-y-0 rounded-none border-0 border-r p-0 sm:max-w-[280px]"
+          className="top-0 left-0 h-full w-[17.5rem] max-w-[85vw] translate-x-0 translate-y-0 rounded-none border-0 border-r p-0 sm:max-w-[17.5rem]"
           showCloseButton={false}
         >
           <DialogTitle className="sr-only">Menu</DialogTitle>
@@ -164,8 +169,10 @@ export function Console({ route, source }: { route: Route; source: DataSource })
           counts={counts}
           onSearch={() => setSearching(true)}
           onClear={source.clearStore ? () => setClearing(true) : undefined}
+          collapsed={collapsed}
+          onCollapse={collapse}
         />
-        <SidebarHandle {...sidebar} />
+        {collapsed ? null : <SidebarHandle {...sidebar} />}
       </div>
       {page}
       <SearchPalette open={searching} onOpenChange={setSearching} source={source} sections={visibleSections(counts)} />

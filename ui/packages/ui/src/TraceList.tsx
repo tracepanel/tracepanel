@@ -1,7 +1,8 @@
 import { ago, duration } from "./format";
 import { DatabaseIcon } from "./icons";
+import { ISSUE_LABELS } from "./labels";
 import { IssueChip, MethodBadge, RoutePath, StatusBadge } from "./primitives";
-import type { TraceSummary } from "./types";
+import type { IssueKind, TraceSummary } from "./types";
 
 export interface TraceRow {
   trace: TraceSummary;
@@ -57,7 +58,14 @@ export function TraceList({ rows, selectedId, currentId, newIds, compact, onSele
                   </span>
                 ) : null}
               </span>
-              {trace.id === currentId ? <span className="dt-tag">this page</span> : null}
+              {trace.id === currentId ? (
+                compact ? (
+                  // Narrow: a dot, so the path keeps its room; the row is also highlighted.
+                  <span className="dt-this-page" role="img" aria-label="This page" title="This page" />
+                ) : (
+                  <span className="dt-tag">this page</span>
+                )
+              ) : null}
             </span>
             <span className="dt-request-meta">
               <StatusBadge status={trace.http_status} />
@@ -75,22 +83,45 @@ export function TraceList({ rows, selectedId, currentId, newIds, compact, onSele
               ) : (
                 <span>{`${trace.queries} ${trace.queries === 1 ? "query" : "queries"}`}</span>
               )}
-              {/* Narrow, an error shows as its status and the red edge: the chips are what could be better. */}
-              {(trace.issue_kinds ?? [])
-                .filter((kind) => !compact || kind !== "error")
-                .map((kind) => (
-                  <IssueChip key={kind} kind={kind} />
-                ))}
-              {trace.issue_kinds === undefined && trace.issues > 0 ? (
-                <span className="dt-chip" data-kind="n+1">
-                  {trace.issues} {trace.issues === 1 ? "issue" : "issues"}
-                </span>
-              ) : null}
+              {compact ? (
+                <CompactChips kinds={trace.issue_kinds} issues={trace.issues} />
+              ) : (
+                <>
+                  {(trace.issue_kinds ?? []).map((kind) => (
+                    <IssueChip key={kind} kind={kind} />
+                  ))}
+                  {trace.issue_kinds === undefined && trace.issues > 0 ? (
+                    <span className="dt-chip" data-kind="n+1">
+                      {trace.issues} {trace.issues === 1 ? "issue" : "issues"}
+                    </span>
+                  ) : null}
+                </>
+              )}
               {compact ? null : <span className="dt-request-time">{ago(trace.start)}</span>}
             </span>
           </button>
         </li>
       ))}
     </ul>
+  );
+}
+
+/**
+ * The narrow list's last column (empty on a clean row, so the columns stay in place): the first finding, "+N" for
+ * the rest, all of them in the tooltip. An error shows as its status and the red edge, not here.
+ */
+function CompactChips({ kinds, issues }: { kinds: IssueKind[] | undefined; issues: number }) {
+  const shown = (kinds ?? []).filter((kind) => kind !== "error");
+  const [first, ...rest] = shown;
+  return (
+    <span className="dt-request-chips" title={shown.map((kind) => ISSUE_LABELS[kind]).join(", ") || undefined}>
+      {first ? <IssueChip kind={first} /> : null}
+      {rest.length > 0 ? <span className="dt-request-chips-more">+{rest.length}</span> : null}
+      {kinds === undefined && issues > 0 ? (
+        <span className="dt-chip" data-kind="n+1">
+          {issues}
+        </span>
+      ) : null}
+    </span>
   );
 }

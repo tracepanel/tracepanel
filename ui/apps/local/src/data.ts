@@ -1,6 +1,6 @@
 import { type Page, SearchError } from "@tracepanel/ui";
 import { useCallback, useEffect, useState } from "react";
-import { useRefresh } from "./refresh";
+import { track, useRefresh } from "./refresh";
 
 export interface Loaded<T> {
   data: T | undefined;
@@ -20,30 +20,26 @@ export function useSearch<T>(load: (q: string) => Promise<T>, q: string, slower 
     setLoader(() => load);
     setState({ data: undefined, error: null });
   }
-  const { interval, tick } = useRefresh();
-  const refreshMs = interval * slower;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `tick` reloads on "refresh now".
+  const { tick, cycle } = useRefresh();
+  // The shared clock's cycles, every `slower`th of them: all screens reload together.
+  const due = slower ? Math.floor(cycle / slower) : 0;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `tick` reloads on "refresh now", `due` on the clock.
   useEffect(() => {
     let cancelled = false;
-    const run = () =>
-      load(q).then(
-        (data) => !cancelled && setState({ data, error: null }),
-        (error: unknown) =>
-          !cancelled &&
-          setState((current) => ({
-            data: error instanceof SearchError ? undefined : current.data,
-            error: error instanceof Error ? error.message : String(error),
-          })),
-      );
-    run();
-    const timer = refreshMs
-      ? window.setInterval(() => document.visibilityState === "visible" && run(), refreshMs)
-      : undefined;
+    // A rejected search is the query's fault, not a failed refresh: the button stays as it is.
+    track(load(q), (error) => !(error instanceof SearchError)).then(
+      (data) => !cancelled && setState({ data, error: null }),
+      (error: unknown) =>
+        !cancelled &&
+        setState((current) => ({
+          data: error instanceof SearchError ? undefined : current.data,
+          error: error instanceof Error ? error.message : String(error),
+        })),
+    );
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
     };
-  }, [load, q, refreshMs, tick]);
+  }, [load, q, due, tick]);
   return state;
 }
 

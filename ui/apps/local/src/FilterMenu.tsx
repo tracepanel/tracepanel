@@ -70,7 +70,7 @@ export function FilterMenu({
           variant="outline"
           size="sm"
           className={cn(
-            "h-9 gap-1.5 bg-muted px-3.5 text-[15px] font-medium shadow-none",
+            "h-9 gap-1.5 bg-muted px-3.5 text-md font-medium shadow-none",
             summary && "border-brand/40 bg-brand-soft hover:bg-brand-soft",
           )}
         >
@@ -87,12 +87,12 @@ export function FilterMenu({
       {/* As wide as its longest value, within bounds. */}
       <PopoverContent align="start" className="w-auto max-w-80 min-w-52 p-1">
         <Command value={active} onValueChange={setActive}>
-          <div className="flex items-center justify-between gap-4 px-2.5 pt-1.5 pb-1 text-[13px] font-medium text-muted-foreground">
+          <div className="flex items-center justify-between gap-4 px-2.5 pt-1.5 pb-1 text-sm font-medium text-muted-foreground">
             {title}
             {summary ? (
               <button
                 type="button"
-                className="text-[13px] font-medium text-brand hover:underline"
+                className="text-sm font-medium text-brand hover:underline"
                 onClick={() => {
                   onClear();
                   onOpenChange(false);
@@ -114,12 +114,12 @@ export function FilterMenu({
                     onSelect(item.value);
                     if (!multiple) onOpenChange(false);
                   }}
-                  className="gap-2.5 px-2.5 py-1.5 text-[14px]"
+                  className="gap-2.5 px-2.5 py-1.5 text-base"
                 >
                   {multiple ? (
                     <span
                       className={cn(
-                        "flex size-4 shrink-0 items-center justify-center rounded-[4px] border border-muted-foreground/40",
+                        "flex size-4 shrink-0 items-center justify-center rounded-[0.25rem] border border-muted-foreground/40",
                         item.selected && "border-primary bg-primary text-primary-foreground",
                       )}
                     >
@@ -149,7 +149,7 @@ export function FilterMenu({
                       onClear();
                       onOpenChange(false);
                     }}
-                    className="justify-center text-[14px] text-muted-foreground"
+                    className="justify-center text-base text-muted-foreground"
                   >
                     Clear selection
                   </CommandItem>

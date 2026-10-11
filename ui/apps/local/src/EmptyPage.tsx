@@ -32,8 +32,8 @@ export function EmptyPage({
               <Icon className="size-7" />
             </span>
           ) : null}
-          <h2 className="text-[19px] font-semibold">{empty}</h2>
-          <p className="text-[15px] text-muted-foreground">{children}</p>
+          <h2 className="text-xl font-semibold">{empty}</h2>
+          <p className="text-md text-muted-foreground">{children}</p>
         </div>
       </section>
     </main>

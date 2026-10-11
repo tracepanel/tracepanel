@@ -1,85 +1,98 @@
 /* @tracepanel/ui — shared by the console and the panel. Every class is prefixed with dt-. */
 
-/* tracepanel identity: violet accents and a small lime brand mark on calm, GitHub-like neutral surfaces, dark (default) or light.
-   The app sets html[data-theme] from the viewer's choice or the OS preference. */
+/* tracepanel identity: the brand's violet and lime on deep ink, dark (default) or light. Status reads in lightness
+   as well as hue: lime is fine, amber needs a look, coral failed. The app sets html[data-theme] from the viewer's
+   choice or the OS preference. */
 :root {
   color-scheme: dark;
-  --dt-font: "Inter Variable", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --dt-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --dt-font: "Geist Variable", "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --dt-mono: "Geist Mono Variable", "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  /* The type scale, in rem: the whole UI follows the root font size (the density in index.css, and the reader's
+     own browser setting). Tailwind's text-2xs … text-4xl are these. */
+  --dt-size-2xs: 0.6875rem;
+  --dt-size-xs: 0.75rem;
+  --dt-size-sm: 0.8125rem;
+  --dt-size-base: 0.875rem;
+  --dt-size-md: 0.9375rem;
+  --dt-size-lg: 1.0625rem;
+  --dt-size-xl: 1.25rem;
+  --dt-size-2xl: 1.5rem;
+  --dt-size-3xl: 1.75rem;
+  --dt-size-4xl: 1.875rem;
 
-  --dt-ink: rgb(1 4 9 / 0.88);
-  --dt-ink-2: #151b23;
-  --dt-ink-text: #f0f6fc;
-  --dt-ink-muted: #9198a1;
-  --dt-lime: #c8f560;
-  --dt-lime-text: #120e24;
+  --dt-ink: rgb(10 12 17 / 0.9);
+  --dt-ink-2: #12151d;
+  --dt-ink-text: #eceef3;
+  --dt-ink-muted: #8c93a6;
+  --dt-lime: #b6e24a;
+  --dt-lime-text: #10140a;
 
-  --dt-page: #0d1117;
-  --dt-bg: #0d1117;
-  --dt-paper: #151b23;
+  --dt-page: #0a0c11;
+  --dt-bg: #0a0c11;
+  --dt-paper: #12151d;
   --dt-subtle: rgb(255 255 255 / 0.02);
-  --dt-muted-bg: rgb(101 108 118 / 0.2);
-  --dt-hover: rgb(101 108 118 / 0.12);
-  --dt-selected: rgb(163 113 247 / 0.12);
-  --dt-border: #2a313c;
-  --dt-border-strong: #3d444d;
+  --dt-muted-bg: #1a1f2c;
+  --dt-hover: rgb(255 255 255 / 0.045);
+  --dt-selected: rgb(165 135 255 / 0.13);
+  --dt-border: #1d212c;
+  --dt-border-strong: #2a3040;
   --dt-blur: none;
 
-  --dt-text: #f0f6fc;
-  --dt-text-2: #c3ccd6;
-  --dt-text-3: #9198a1;
+  --dt-text: #eceef3;
+  --dt-text-2: #b9bfcd;
+  --dt-text-3: #8c93a6;
 
-  --dt-accent: #bc8cff;
-  --dt-accent-strong: #8957e5;
-  --dt-accent-bg: rgb(163 113 247 / 0.15);
-  --dt-glow: 0 0 0 3px rgb(163 113 247 / 0.3);
+  --dt-accent: #bc9cff;
+  --dt-accent-strong: #7c4ff0;
+  --dt-accent-bg: rgb(165 135 255 / 0.14);
+  --dt-glow: 0 0 0 3px rgb(165 135 255 / 0.3);
 
-  --dt-ok: #4ade80;
-  --dt-ok-bg: rgb(74 222 128 / 0.12);
-  --dt-warn: #fb923c;
-  --dt-warn-strong: #ff8a4c;
-  --dt-warn-bg: rgb(251 146 60 / 0.1);
-  --dt-warn-border: rgb(251 146 60 / 0.22);
-  --dt-error: #fb7185;
-  --dt-error-bg: rgb(251 113 133 / 0.1);
-  --dt-error-border: rgb(251 113 133 / 0.32);
-  --dt-info: #7db4ff;
-  --dt-info-bg: rgb(125 180 255 / 0.13);
+  --dt-ok: #b8f25c;
+  --dt-ok-bg: rgb(184 242 92 / 0.11);
+  --dt-warn: #f5b544;
+  --dt-warn-strong: #ffc561;
+  --dt-warn-bg: rgb(245 181 68 / 0.11);
+  --dt-warn-border: rgb(245 181 68 / 0.3);
+  --dt-error: #ff8a7a;
+  --dt-error-bg: rgb(255 107 94 / 0.11);
+  --dt-error-border: rgb(255 107 94 / 0.34);
+  --dt-info: #9db2ff;
+  --dt-info-bg: rgb(157 178 255 / 0.12);
 
-  --dt-get: #7db4ff;
-  --dt-post: #4ade80;
-  --dt-put: #fbbf24;
-  --dt-delete: #fb7185;
+  --dt-get: #9db2ff;
+  --dt-post: #b8f25c;
+  --dt-put: #f5b544;
+  --dt-delete: #ff8a7a;
 
-  --dt-k-request: rgb(145 152 161 / 0.35);
-  --dt-k-django: rgb(145 152 161 / 0.35);
-  --dt-k-view: #a78bfa;
+  --dt-k-request: rgb(140 147 166 / 0.32);
+  --dt-k-django: rgb(140 147 166 / 0.32);
+  --dt-k-view: #a587ff;
   --dt-k-template: #2dd4bf;
-  --dt-k-sql: #7db4ff;
-  --dt-k-cache: #fbbf24;
+  --dt-k-sql: #9db2ff;
+  --dt-k-cache: #f5b544;
   --dt-k-log: #9a93bd;
   --dt-k-mail: #f472b6;
 
-  --dt-mark: rgb(145 152 161 / 0.35);
+  --dt-mark: rgb(140 147 166 / 0.32);
   --dt-db: #8b7bff;
 
-  --dt-radius: 8px;
-  --dt-radius-sm: 6px;
-  --dt-shadow: 0 8px 24px rgb(1 4 9 / 0.5);
+  --dt-radius: 0.625rem;
+  --dt-radius-sm: 0.4375rem;
+  --dt-shadow: 0 1px 0 rgb(255 255 255 / 0.03) inset, 0 8px 24px rgb(0 0 0 / 0.35);
 
   /* Surfaces the apps build on. */
-  --dt-surface: #0d1117;
-  --dt-chrome: #010409;
-  --dt-chrome-strong: #151b23;
-  --dt-panel: #0d1117;
-  --dt-popover: #151b23;
-  --dt-popover-shadow: 0 8px 24px rgb(1 4 9 / 0.6);
-  --dt-card: #0d1117;
-  --dt-faint: #151b23;
-  --dt-field: #0d1117;
-  --dt-grid: rgb(145 152 161 / 0.15);
-  --dt-scrollbar: rgb(145 152 161 / 0.35);
-  --dt-backdrop: #0d1117;
+  --dt-surface: #0a0c11;
+  --dt-chrome: #0d1016;
+  --dt-chrome-strong: #12151d;
+  --dt-panel: #0a0c11;
+  --dt-popover: #12151d;
+  --dt-popover-shadow: 0 16px 40px rgb(0 0 0 / 0.55), 0 0 0 1px rgb(255 255 255 / 0.04);
+  --dt-card: #10131a;
+  --dt-faint: #141821;
+  --dt-field: #0c0f15;
+  --dt-grid: rgb(140 147 166 / 0.13);
+  --dt-scrollbar: rgb(140 147 166 / 0.3);
+  --dt-backdrop: #0a0c11;
 
   /* Chart series: validated with the dataviz palette checker on --dt-surface. */
   --dt-chart-1: #8b7bff;
@@ -87,87 +100,87 @@
 
   /* SQL highlighting. */
   --dt-syn-keyword: #c8a8ff;
-  --dt-syn-identifier: #e6edf3;
-  --dt-syn-string: #c8f560;
+  --dt-syn-identifier: #e3e6ee;
+  --dt-syn-string: #b8f25c;
   --dt-syn-number: #ffb86b;
-  --dt-syn-comment: #8b949e;
-  --dt-syn-operator: #9198a1;
-  --dt-syn-function: #79c0ff;
-  --dt-syn-param-bg: rgb(200 245 96 / 0.16);
+  --dt-syn-comment: #7d8497;
+  --dt-syn-operator: #8c93a6;
+  --dt-syn-function: #9db2ff;
+  --dt-syn-param-bg: rgb(245 181 68 / 0.16);
   --dt-alias-text: #5eead4;
 }
 
-/* Light theme: same identity, paper surfaces, darker inks so text and marks keep their contrast. */
+/* Light theme: same identity on white and warm grey, darker inks so text and marks keep their contrast. */
 :root[data-theme="light"] {
   color-scheme: light;
 
   --dt-ink: rgb(255 255 255 / 0.95);
-  --dt-ink-2: #f6f8fa;
-  --dt-ink-text: #1f2328;
-  --dt-ink-muted: #59636e;
-  --dt-lime: #c8f560;
+  --dt-ink-2: #f5f5f3;
+  --dt-ink-text: #16181d;
+  --dt-ink-muted: #5f6470;
+  --dt-lime: #b6e24a;
   --dt-lime-text: #1b2a05;
 
   --dt-page: #ffffff;
   --dt-bg: #ffffff;
-  --dt-paper: #f6f8fa;
-  --dt-subtle: #f6f8fa;
-  --dt-muted-bg: rgb(129 139 152 / 0.15);
-  --dt-hover: rgb(129 139 152 / 0.1);
-  --dt-selected: rgb(130 80 223 / 0.08);
-  --dt-border: #d1d9e0;
-  --dt-border-strong: #c1c9d2;
+  --dt-paper: #f6f6f4;
+  --dt-subtle: #f8f8f6;
+  --dt-muted-bg: #efefec;
+  --dt-hover: rgb(22 24 29 / 0.045);
+  --dt-selected: rgb(124 79 240 / 0.08);
+  --dt-border: #e7e7e2;
+  --dt-border-strong: #d5d5ce;
 
-  --dt-text: #1f2328;
-  --dt-text-2: #3d444d;
-  --dt-text-3: #59636e;
+  --dt-text: #16181d;
+  --dt-text-2: #3a3e47;
+  --dt-text-3: #5f6470;
 
-  --dt-accent: #8250df;
-  --dt-accent-strong: #8250df;
-  --dt-accent-bg: rgb(130 80 223 / 0.1);
-  --dt-glow: 0 0 0 3px rgb(130 80 223 / 0.2);
+  --dt-accent: #6d3fe0;
+  --dt-accent-strong: #7c4ff0;
+  --dt-accent-bg: rgb(124 79 240 / 0.09);
+  --dt-glow: 0 0 0 3px rgb(124 79 240 / 0.2);
 
-  --dt-ok: #15803d;
-  --dt-ok-bg: rgb(22 163 74 / 0.1);
-  --dt-warn: #c2410c;
-  --dt-warn-strong: #c2410c;
-  --dt-warn-bg: rgb(234 88 12 / 0.08);
-  --dt-warn-border: rgb(234 88 12 / 0.25);
-  --dt-error: #e11d48;
-  --dt-error-bg: rgb(225 29 72 / 0.07);
-  --dt-error-border: rgb(225 29 72 / 0.3);
-  --dt-info: #2563eb;
-  --dt-info-bg: rgb(37 99 235 / 0.09);
+  --dt-ok: #3d7a0c;
+  --dt-ok-bg: rgb(98 160 20 / 0.11);
+  --dt-warn: #b45309;
+  --dt-warn-strong: #b45309;
+  --dt-warn-bg: rgb(217 119 6 / 0.09);
+  --dt-warn-border: rgb(217 119 6 / 0.28);
+  --dt-error: #d0342c;
+  --dt-error-bg: rgb(220 52 44 / 0.07);
+  --dt-error-border: rgb(220 52 44 / 0.3);
+  --dt-info: #3456d6;
+  --dt-info-bg: rgb(52 86 214 / 0.08);
 
-  --dt-get: #2563eb;
-  --dt-post: #15803d;
+  --dt-get: #3456d6;
+  --dt-post: #3d7a0c;
   --dt-put: #b45309;
-  --dt-delete: #e11d48;
+  --dt-delete: #d0342c;
 
-  --dt-k-request: rgb(89 99 110 / 0.3);
-  --dt-k-django: rgb(89 99 110 / 0.3);
-  --dt-k-view: #7c5ce6;
+  --dt-k-request: rgb(95 100 112 / 0.28);
+  --dt-k-django: rgb(95 100 112 / 0.28);
+  --dt-k-view: #7c4ff0;
   --dt-k-template: #0d9488;
-  --dt-k-sql: #2563eb;
+  --dt-k-sql: #3456d6;
   --dt-k-cache: #d97706;
   --dt-k-log: #8a84a6;
   --dt-k-mail: #db2777;
 
-  --dt-mark: rgb(89 99 110 / 0.3);
+  --dt-mark: rgb(95 100 112 / 0.28);
   --dt-db: #6d5ce7;
-  --dt-shadow: 0 1px 3px rgb(31 35 40 / 0.08);
+  --dt-shadow: 0 1px 2px rgb(22 24 29 / 0.05), 0 4px 14px rgb(22 24 29 / 0.04);
 
   --dt-surface: #ffffff;
-  --dt-chrome: #f6f8fa;
-  --dt-chrome-strong: #f6f8fa;
+  --dt-chrome: #f7f7f5;
+  --dt-chrome-strong: #f0f0ed;
   --dt-panel: #ffffff;
   --dt-popover: #ffffff;
-  --dt-popover-shadow: 0 8px 24px rgb(66 74 83 / 0.16);
+  --dt-popover-shadow: 0 16px 40px rgb(22 24 29 / 0.14), 0 0 0 1px rgb(22 24 29 / 0.05);
   --dt-card: #ffffff;
-  --dt-faint: #f6f8fa;
+  --dt-faint: #f6f6f4;
   --dt-field: #ffffff;
-  --dt-grid: rgb(31 35 40 / 0.08);
-  --dt-scrollbar: rgb(31 35 40 / 0.25);
+  --dt-grid: rgb(22 24 29 / 0.07);
+  --dt-scrollbar: rgb(22 24 29 / 0.22);
   --dt-backdrop: #ffffff;
 
   --dt-chart-1: #6d5ce7;
@@ -175,12 +188,12 @@
 
   --dt-syn-keyword: #6d28d9;
   --dt-syn-identifier: #1d1830;
-  --dt-syn-string: #3f7d0a;
+  --dt-syn-string: #3d7a0c;
   --dt-syn-number: #b45309;
   --dt-syn-comment: #8a84a6;
   --dt-syn-operator: #6e6889;
-  --dt-syn-function: #0550ae;
-  --dt-syn-param-bg: rgb(101 163 13 / 0.12);
+  --dt-syn-function: #3456d6;
+  --dt-syn-param-bg: rgb(217 119 6 / 0.12);
   --dt-alias-text: #0f766e;
 }
 
@@ -197,10 +210,10 @@ code,
 
 .dt-method {
   flex: none;
-  min-width: 38px;
-  padding: 1px 5px;
-  border-radius: 4px;
-  font: 600 12px / 16px var(--dt-mono);
+  min-width: 2.375rem;
+  padding: 1px 0.3125rem;
+  border-radius: 0.25rem;
+  font: 600 var(--dt-size-xs) / 1rem var(--dt-mono);
   letter-spacing: 0.02em;
   text-align: center;
   color: var(--dt-get);
@@ -222,9 +235,9 @@ code,
 
 .dt-status {
   flex: none;
-  padding: 1px 6px;
-  border-radius: 4px;
-  font: 600 12px / 16px var(--dt-mono);
+  padding: 1px 0.375rem;
+  border-radius: 0.25rem;
+  font: 600 var(--dt-size-xs) / 1rem var(--dt-mono);
   color: var(--dt-ok);
   background: var(--dt-ok-bg);
 }
@@ -244,12 +257,12 @@ code,
 .dt-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 0 7px;
+  gap: 0.25rem;
+  padding: 0 0.4375rem;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: var(--dt-size-xs);
   font-weight: 600;
-  line-height: 18px;
+  line-height: 1.125rem;
   white-space: nowrap;
   color: var(--dt-warn);
   background: var(--dt-warn-bg);
@@ -264,11 +277,11 @@ code,
 
 .dt-tag {
   flex: none;
-  padding: 0 6px;
-  border-radius: 4px;
-  font-size: 12px;
+  padding: 0 0.375rem;
+  border-radius: 0.25rem;
+  font-size: var(--dt-size-xs);
   font-weight: 600;
-  line-height: 16px;
+  line-height: 1rem;
   color: var(--dt-accent);
   background: var(--dt-accent-bg);
 }
@@ -283,35 +296,35 @@ code,
 .dt-button {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 10px;
+  gap: 0.375rem;
+  padding: 0.3125rem 0.625rem;
   border: 1px solid var(--dt-border-strong);
   border-radius: var(--dt-radius-sm);
   background: var(--dt-bg);
   color: var(--dt-text);
-  font: 500 13px / 16px var(--dt-font);
+  font: 500 var(--dt-size-sm) / 1rem var(--dt-font);
   cursor: pointer;
 }
 .dt-button:hover {
   background: var(--dt-hover);
 }
 .dt-button-small {
-  padding: 3px 8px;
+  padding: 0.1875rem 0.5rem;
 }
 
 .dt-note {
   margin: 0;
-  padding: 24px 16px;
+  padding: 1.5rem 1rem;
   color: var(--dt-text-3);
   text-align: center;
 }
 
 .dt-empty {
-  padding: 48px 24px;
+  padding: 3rem 1.5rem;
   text-align: center;
 }
 .dt-empty-title {
-  margin: 0 0 4px;
+  margin: 0 0 0.25rem;
   font-weight: 600;
 }
 .dt-empty-text {
@@ -319,7 +332,7 @@ code,
   color: var(--dt-text-2);
 }
 .dt-empty-action {
-  margin: 12px 0 0;
+  margin: 0.75rem 0 0;
 }
 .dt-empty-action a {
   color: var(--dt-brand, currentColor);
@@ -327,8 +340,8 @@ code,
 }
 
 .dt-section-label {
-  margin: 16px 0 8px;
-  font-size: 12px;
+  margin: 1rem 0 0.5rem;
+  font-size: var(--dt-size-xs);
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -353,9 +366,9 @@ a:focus-visible {
 .dt-request-row {
   position: relative;
   display: grid;
-  gap: 3px;
+  gap: 0.1875rem;
   width: 100%;
-  padding: 9px 16px 9px 18px;
+  padding: 0.5625rem 1rem 0.5625rem 1.125rem;
   border: 0;
   border-bottom: 1px solid var(--dt-border);
   background: none;
@@ -373,7 +386,7 @@ a.dt-request-row {
   top: 0;
   bottom: 0;
   left: 0;
-  width: 3px;
+  width: 0.1875rem;
   background: transparent;
 }
 .dt-request-row[data-tone="warn"]::before {
@@ -389,18 +402,18 @@ a.dt-request-row {
   background: var(--dt-selected);
 }
 .dt-request-row[data-depth="1"] {
-  padding-left: 42px;
+  padding-left: 2.625rem;
 }
 .dt-request-row[data-depth="1"]::after {
   content: "";
   position: absolute;
   top: 0;
-  left: 26px;
-  width: 9px;
-  height: 18px;
+  left: 1.625rem;
+  width: 0.5625rem;
+  height: 1.125rem;
   border-bottom: 1px solid var(--dt-border-strong);
   border-left: 1px solid var(--dt-border-strong);
-  border-bottom-left-radius: 4px;
+  border-bottom-left-radius: 0.25rem;
 }
 
 .dt-request-row[data-new] {
@@ -420,26 +433,26 @@ a.dt-request-row {
 .dt-request-main {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
   min-width: 0;
 }
 /* htmx sent it: a small tag after the method. */
 .dt-htmx {
   flex: none;
-  padding: 0 5px;
-  border-radius: 4px;
+  padding: 0 0.3125rem;
+  border-radius: 0.25rem;
   background: var(--dt-subtle);
   border: 1px solid var(--dt-border);
   color: var(--dt-text-2);
   font-family: var(--dt-mono);
-  font-size: 11px;
-  line-height: 18px;
+  font-size: var(--dt-size-2xs);
+  line-height: 1.125rem;
 }
 .dt-method-group {
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 4px;
+  gap: 0.25rem;
 }
 .dt-request-trigger {
   color: var(--dt-text-3);
@@ -448,7 +461,7 @@ a.dt-request-row {
 .dt-request-path {
   overflow: hidden;
   font-family: var(--dt-mono);
-  font-size: 13.5px;
+  font-size: var(--dt-size-sm);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -456,10 +469,10 @@ a.dt-request-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 10px;
-  padding-left: 46px;
+  gap: 0.25rem 0.625rem;
+  padding-left: 2.875rem;
   color: var(--dt-text-2);
-  font-size: 13px;
+  font-size: var(--dt-size-sm);
   font-variant-numeric: tabular-nums;
 }
 .dt-request-time {
@@ -470,7 +483,7 @@ a.dt-request-row {
 .dt-issue-row-icon {
   display: grid;
   place-items: center;
-  width: 38px;
+  width: 2.375rem;
   color: var(--dt-warn);
 }
 .dt-issue-row-icon[data-kind="error"] {
@@ -478,31 +491,44 @@ a.dt-request-row {
 }
 .dt-issue-row-title {
   font-family: var(--dt-font);
-  font-size: 14px;
+  font-size: var(--dt-size-base);
   font-weight: 500;
 }
 .dt-issue-row-where {
   overflow: hidden;
-  max-width: 260px;
-  font-size: 12.5px;
+  max-width: 16.25rem;
+  font-size: var(--dt-size-xs);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/* The narrow list is one grid: path, status, duration, queries, findings. Each row is a subgrid of it, so a column
+   is as wide as its widest cell in the whole list, the numbers line up, and the path keeps the rest. */
+.dt-requests[data-compact] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(4, auto);
+  column-gap: 0.625rem;
+}
+.dt-requests[data-compact] > li {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
 .dt-requests[data-compact] .dt-request-row {
-  display: flex;
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
   align-items: center;
-  gap: 12px;
-  padding: 6px 12px 6px 14px;
+  padding: 0.375rem 0.75rem 0.375rem 0.875rem;
 }
 .dt-requests[data-compact] .dt-request-row[data-depth="1"] {
-  padding-left: 14px;
+  padding-left: 0.875rem;
 }
 .dt-requests[data-compact] .dt-request-row[data-depth="1"]::after {
   display: none;
 }
 .dt-requests[data-compact] .dt-request-main {
-  flex: 1;
+  grid-column: 1;
   /* Narrow: the path keeps a few characters, the tags shrink first, nothing runs into the numbers. */
   overflow: hidden;
 }
@@ -518,16 +544,43 @@ a.dt-request-row {
 }
 .dt-requests[data-compact] .dt-request-meta {
   display: grid;
-  grid-auto-columns: auto;
-  grid-auto-flow: column;
-  grid-template-columns: 34px 56px 44px;
+  grid-column: 2 / -1;
+  grid-template-columns: subgrid;
   justify-items: end;
   padding-left: 0;
+}
+.dt-request-chips {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.25rem;
+  width: 100%;
+  min-width: 0;
+}
+.dt-request-chips .dt-chip {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dt-request-chips-more {
+  flex: none;
+  color: var(--dt-text-3);
+  font-size: var(--dt-size-2xs);
+}
+/* This page, in the narrow list: a dot after the path. */
+.dt-this-page {
+  flex: none;
+  width: 0.4375rem;
+  height: 0.4375rem;
+  border-radius: 999px;
+  background: var(--dt-accent);
+  box-shadow: 0 0 0 3px var(--dt-accent-bg);
 }
 .dt-request-queries {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 0.25rem;
 }
 .dt-request-queries .dt-icon {
   color: var(--dt-text-3);
@@ -536,24 +589,23 @@ a.dt-request-row {
   color: var(--dt-text-3);
 }
 .dt-requests[data-compact] .dt-chip {
-  min-width: 40px;
   justify-content: center;
 }
 /* ---------- Trace ---------- */
 
 .dt-trace-head {
-  padding: 14px 16px 10px;
+  padding: 0.875rem 1rem 0.625rem;
 }
 .dt-trace-title {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
   min-width: 0;
 }
 .dt-trace-title h2 {
   overflow: hidden;
   margin: 0;
-  font: 600 16px / 20px var(--dt-mono);
+  font: 600 var(--dt-size-md) / 1.25rem var(--dt-mono);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -564,7 +616,7 @@ a.dt-request-row {
   margin-left: 0;
 }
 .dt-trace[data-variant="compact"] .dt-trace-head {
-  padding: 12px 16px 10px;
+  padding: 0.75rem 1rem 0.625rem;
 }
 .dt-trace[data-variant="compact"] .dt-tabs {
   margin-top: 0;
@@ -576,9 +628,9 @@ a.dt-request-row {
   z-index: 2;
   display: flex;
   align-items: center;
-  gap: 12px;
-  height: 40px;
-  padding: 0 8px 0 4px;
+  gap: 0.75rem;
+  height: 2.5rem;
+  padding: 0 0.5rem 0 0.25rem;
   border-bottom: 1px solid var(--dt-border);
   background: var(--dt-chrome, var(--dt-bg));
   backdrop-filter: var(--dt-blur);
@@ -592,30 +644,39 @@ a.dt-request-row {
   overflow-x: auto;
   scrollbar-width: none;
   margin: 0;
-  padding: 0 4px;
+  padding: 0 0.25rem;
   border: 0;
   background: none;
   backdrop-filter: none;
 }
+/* A narrow panel (docked right): Explore keeps its icon, and the tabs fade at the edge where more of them scroll. */
+@media (max-width: 560px) {
+  .dt-explore-label {
+    display: none;
+  }
+  .dt-trace-strip .dt-tabs {
+    mask-image: linear-gradient(to right, #000 calc(100% - 1.5rem), transparent);
+  }
+}
 .dt-trace-strip .dt-tab {
   flex: none;
   margin-bottom: 0;
-  padding: 0 8px;
-  font-size: 13.5px;
+  padding: 0 0.5rem;
+  font-size: var(--dt-size-sm);
 }
 .dt-trace-route {
-  margin: 4px 0 0 46px;
+  margin: 0.25rem 0 0 2.875rem;
   color: var(--dt-text-3);
-  font-size: 13px;
+  font-size: var(--dt-size-sm);
 }
 
 .dt-issue-banner {
   display: flex;
   align-items: center;
-  gap: 8px;
-  width: calc(100% - 32px);
-  margin: 0 16px 12px;
-  padding: 8px 12px;
+  gap: 0.5rem;
+  width: calc(100% - 2rem);
+  margin: 0 1rem 0.75rem;
+  padding: 0.5rem 0.75rem;
   border: 1px solid var(--dt-warn-border);
   border-radius: var(--dt-radius);
   background: var(--dt-warn-bg);
@@ -623,6 +684,7 @@ a.dt-request-row {
   font: inherit;
   text-align: left;
   cursor: pointer;
+  box-shadow: var(--dt-shadow);
 }
 .dt-issue-banner span:not(.dt-issue-banner-cta) {
   overflow: hidden;
@@ -639,63 +701,64 @@ a.dt-request-row {
 .dt-metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  margin: 0 16px;
+  margin: 0 1rem;
   border: 1px solid var(--dt-border);
   border-radius: var(--dt-radius);
   background: var(--dt-subtle);
+  box-shadow: var(--dt-shadow);
 }
 .dt-metric {
   display: grid;
   gap: 2px;
-  padding: 10px 12px;
+  padding: 0.625rem 0.75rem;
 }
 .dt-metric + .dt-metric {
   border-left: 1px solid var(--dt-border);
 }
 .dt-metric-label {
   color: var(--dt-text-3);
-  font-size: 12px;
+  font-size: var(--dt-size-xs);
   font-weight: 500;
 }
 .dt-metric-value {
-  font-size: 19px;
+  font-size: var(--dt-size-xl);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 .dt-metric-sub {
   color: var(--dt-text-2);
-  font-size: 12.5px;
+  font-size: var(--dt-size-xs);
 }
 /* On a console page the metrics are the same tiles as the summaries of the other pages (Stat): separate cards,
    larger numbers. The panel keeps the compact strip. */
 .dt-trace[data-variant="full"] .dt-metrics {
-  gap: 10px;
+  gap: 0.625rem;
   border: 0;
   background: none;
 }
 .dt-trace[data-variant="full"] .dt-metric {
   align-content: start;
-  gap: 6px;
-  padding: 16px 20px;
+  gap: 0.375rem;
+  padding: 1rem 1.25rem;
   border: 1px solid var(--dt-border);
-  border-radius: 12px;
+  border-radius: 0.75rem;
   background: var(--dt-card);
 }
 .dt-trace[data-variant="full"] .dt-metric-label {
   color: var(--dt-text-2);
-  font-size: 14px;
+  font-size: var(--dt-size-base);
 }
 .dt-trace[data-variant="full"] .dt-metric-value {
-  font-size: 28px;
+  font-size: var(--dt-size-3xl);
   line-height: 1.25;
 }
 .dt-trace[data-variant="full"] .dt-metric-sub {
-  font-size: 14px;
+  font-size: var(--dt-size-base);
 }
 .dt-split {
   display: block;
-  height: 4px;
-  margin-top: 4px;
+  height: 0.25rem;
+  margin-top: 0.25rem;
   overflow: hidden;
   border-radius: 2px;
   background: var(--dt-border-strong);
@@ -708,14 +771,14 @@ a.dt-request-row {
 
 .dt-timeline {
   margin: 0;
-  padding: 14px 16px 6px;
+  padding: 0.875rem 1rem 0.375rem;
 }
 .dt-timeline-axis {
   position: relative;
-  height: 16px;
-  margin-left: 72px;
+  height: 1rem;
+  margin-left: 4.5rem;
   color: var(--dt-text-3);
-  font-size: 12px;
+  font-size: var(--dt-size-xs);
   font-variant-numeric: tabular-nums;
 }
 .dt-timeline-axis span {
@@ -731,23 +794,23 @@ a.dt-request-row {
 }
 .dt-lane {
   display: grid;
-  grid-template-columns: 72px minmax(0, 1fr);
+  grid-template-columns: 4.5rem minmax(0, 1fr);
   align-items: center;
-  height: 22px;
+  height: 1.375rem;
 }
 .dt-lane-label {
   display: flex;
-  gap: 4px;
+  gap: 0.25rem;
   color: var(--dt-text-2);
-  font-size: 12.5px;
+  font-size: var(--dt-size-xs);
 }
 .dt-lane-count {
   color: var(--dt-text-3);
 }
 .dt-lane-track {
   position: relative;
-  height: 12px;
-  border-radius: 3px;
+  height: 0.75rem;
+  border-radius: 0.1875rem;
   background: var(--dt-muted-bg);
 }
 .dt-lane-grid {
@@ -791,22 +854,22 @@ a.dt-request-row {
   z-index: 1;
   display: flex;
   gap: 2px;
-  margin-top: 8px;
-  padding: 0 12px;
+  margin-top: 0.5rem;
+  padding: 0 0.75rem;
   border-bottom: 1px solid var(--dt-border);
   background: var(--dt-bg);
 }
 .dt-tab {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.375rem;
   margin-bottom: -1px;
-  padding: 9px 8px;
+  padding: 0.5625rem 0.5rem;
   border: 0;
   border-bottom: 2px solid transparent;
   background: none;
   color: var(--dt-text-2);
-  font: 500 14px var(--dt-font);
+  font: 500 var(--dt-size-base) var(--dt-font);
   cursor: pointer;
 }
 .dt-tab:hover {
@@ -818,8 +881,8 @@ a.dt-request-row {
 }
 .dt-tab > svg {
   flex: none;
-  width: 14px;
-  height: 14px;
+  width: 0.875rem;
+  height: 0.875rem;
   color: var(--dt-text-3);
 }
 .dt-tab[aria-selected="true"] > svg {
@@ -827,18 +890,18 @@ a.dt-request-row {
 }
 .dt-tab-detail {
   color: var(--dt-text-3);
-  font-size: 12.5px;
+  font-size: var(--dt-size-xs);
   font-variant-numeric: tabular-nums;
 }
 .dt-tab-count {
-  min-width: 18px;
-  padding: 0 5px;
+  min-width: 1.125rem;
+  padding: 0 0.3125rem;
   border-radius: 999px;
   background: var(--dt-muted-bg);
   color: var(--dt-text-2);
-  font-size: 12px;
+  font-size: var(--dt-size-xs);
   font-weight: 600;
-  line-height: 17px;
+  line-height: 1.0625rem;
   text-align: center;
 }
 .dt-tab-count[data-tone="warn"] {
@@ -854,14 +917,14 @@ a.dt-request-row {
 
 .dt-props {
   margin: 0;
-  padding: 6px 16px;
+  padding: 0.375rem 1rem;
 }
 .dt-props div {
   display: grid;
-  grid-template-columns: 88px minmax(0, 1fr);
-  gap: 12px;
+  grid-template-columns: 5.5rem minmax(0, 1fr);
+  gap: 0.75rem;
   align-items: baseline;
-  padding: 7px 0;
+  padding: 0.4375rem 0;
   border-bottom: 1px solid var(--dt-border);
 }
 .dt-props div:last-child {
@@ -869,23 +932,24 @@ a.dt-request-row {
 }
 .dt-props dt {
   color: var(--dt-text-3);
-  font-size: 13px;
+  font-size: var(--dt-size-sm);
 }
 .dt-props dd {
   margin: 0;
   overflow-wrap: anywhere;
 }
 .dt-props code {
-  font-size: 13px;
+  font-size: var(--dt-size-sm);
 }
 
 .dt-disclosure {
-  margin: 0 16px 16px;
+  margin: 0 1rem 1rem;
   border: 1px solid var(--dt-border);
   border-radius: var(--dt-radius);
+  box-shadow: var(--dt-shadow);
 }
 .dt-disclosure summary {
-  padding: 8px 12px;
+  padding: 0.5rem 0.75rem;
   color: var(--dt-text-2);
   cursor: pointer;
 }
@@ -893,14 +957,14 @@ a.dt-request-row {
 
 .dt-issue-cards {
   display: grid;
-  gap: 10px;
-  padding: 12px 16px 16px;
+  gap: 0.625rem;
+  padding: 0.75rem 1rem 1rem;
 }
 .dt-issue-card {
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr);
-  gap: 12px;
-  padding: 12px;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  gap: 0.75rem;
+  padding: 0.75rem;
   border: 1px solid var(--dt-border);
   border-radius: var(--dt-radius);
   background: var(--dt-bg);
@@ -909,8 +973,8 @@ a.dt-request-row {
 .dt-issue-icon {
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 2rem;
+  height: 2rem;
   border-radius: var(--dt-radius-sm);
   color: var(--dt-warn);
   background: var(--dt-warn-bg);
@@ -921,13 +985,13 @@ a.dt-request-row {
 }
 .dt-issue-body {
   display: grid;
-  gap: 6px;
+  gap: 0.375rem;
   min-width: 0;
 }
 .dt-issue-kind {
   margin: 0;
   color: var(--dt-warn);
-  font-size: 12px;
+  font-size: var(--dt-size-xs);
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -937,19 +1001,19 @@ a.dt-request-row {
 }
 .dt-issue-title {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--dt-size-md);
   font-weight: 600;
   overflow-wrap: anywhere;
 }
 .dt-issue-where {
   justify-self: start;
   max-width: 100%;
-  padding: 2px 6px;
+  padding: 2px 0.375rem;
   overflow: hidden;
-  border-radius: 4px;
+  border-radius: 0.25rem;
   background: var(--dt-muted-bg);
   color: var(--dt-text-2);
-  font-size: 12.5px;
+  font-size: var(--dt-size-xs);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -961,7 +1025,7 @@ a.dt-request-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 0.75rem;
   margin: 0;
 }
 .dt-issue-actions:empty {
@@ -969,7 +1033,7 @@ a.dt-request-row {
 }
 .dt-issue-link {
   color: var(--dt-brand, currentColor);
-  font-size: 13px;
+  font-size: var(--dt-size-sm);
   font-weight: 500;
   text-decoration: none;
 }
@@ -982,7 +1046,7 @@ a.dt-request-row {
   background: none;
   color: var(--dt-brand, currentColor);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--dt-size-xs);
   white-space: nowrap;
 }
 .dt-log-span:hover {
@@ -990,14 +1054,14 @@ a.dt-request-row {
 }
 .dt-logs-more {
   margin: 0;
-  padding: 10px 16px 0;
+  padding: 0.625rem 1rem 0;
 }
 .dt-issue-hint code {
-  padding: 0 4px;
-  border-radius: 4px;
+  padding: 0 0.25rem;
+  border-radius: 0.25rem;
   background: var(--dt-muted-bg);
   color: var(--dt-text);
-  font-size: 13px;
+  font-size: var(--dt-size-sm);
 }
 .dt-issue-body .dt-button {
   justify-self: start;
@@ -1009,12 +1073,12 @@ a.dt-request-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 10px 16px;
+  gap: 0.75rem;
+  padding: 0.625rem 1rem;
 }
 .dt-toolbar-text {
   color: var(--dt-text-2);
-  font-size: 13px;
+  font-size: var(--dt-size-sm);
 }
 .dt-segmented {
   display: inline-flex;
@@ -1023,12 +1087,12 @@ a.dt-request-row {
   background: var(--dt-muted-bg);
 }
 .dt-segmented button {
-  padding: 3px 10px;
+  padding: 0.1875rem 0.625rem;
   border: 0;
-  border-radius: 4px;
+  border-radius: 0.25rem;
   background: none;
   color: var(--dt-text-2);
-  font: 500 13px var(--dt-font);
+  font: 500 var(--dt-size-sm) var(--dt-font);
   cursor: pointer;
 }
 .dt-segmented button[aria-pressed="true"] {
@@ -1048,10 +1112,10 @@ a.dt-request-row {
 }
 .dt-sql-group {
   display: grid;
-  grid-template-columns: 14px 36px minmax(0, 1fr) auto 64px 60px;
+  grid-template-columns: 0.875rem 2.25rem minmax(0, 1fr) auto 4rem 3.75rem;
   align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
   list-style: none;
   cursor: pointer;
 }
@@ -1073,57 +1137,57 @@ details[data-focused] > .dt-sql-group {
 }
 .dt-sql-count {
   color: var(--dt-text-2);
-  font-size: 13px;
+  font-size: var(--dt-size-sm);
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
 .dt-sql-name {
   overflow: hidden;
-  font: 13.5px var(--dt-mono);
+  font: var(--dt-size-sm) var(--dt-mono);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .dt-sql-bar {
-  height: 6px;
+  height: 0.375rem;
   overflow: hidden;
-  border-radius: 3px;
+  border-radius: 0.1875rem;
   background: var(--dt-muted-bg);
 }
 .dt-sql-bar span {
   display: block;
   height: 100%;
-  border-radius: 3px;
+  border-radius: 0.1875rem;
   background: var(--dt-db);
 }
 .dt-sql-time {
-  font-size: 13px;
+  font-size: var(--dt-size-sm);
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
 .dt-code {
   margin: 0;
-  padding: 10px 16px 10px 40px;
+  padding: 0.625rem 1rem 0.625rem 2.5rem;
   overflow-x: auto;
   background: var(--dt-subtle);
   color: var(--dt-text);
-  font-size: 13px;
+  font-size: var(--dt-size-sm);
   line-height: 1.55;
   white-space: pre-wrap;
   word-break: break-word;
 }
 .dt-sql-calls {
   margin: 0;
-  padding: 4px 16px 10px 40px;
+  padding: 0.25rem 1rem 0.625rem 2.5rem;
   background: var(--dt-subtle);
   list-style: none;
 }
 .dt-sql-calls li {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
-  padding: 3px 0;
+  gap: 0.75rem;
+  padding: 0.1875rem 0;
   color: var(--dt-text-2);
-  font-size: 12.5px;
+  font-size: var(--dt-size-xs);
   font-variant-numeric: tabular-nums;
 }
 .dt-sql-calls code {
@@ -1136,10 +1200,10 @@ details[data-focused] > .dt-sql-group {
 }
 .dt-sql-origin {
   margin: 0;
-  padding: 0 16px 10px 40px;
+  padding: 0 1rem 0.625rem 2.5rem;
   background: var(--dt-subtle);
   color: var(--dt-text-2);
-  font-size: 12.5px;
+  font-size: var(--dt-size-xs);
 }
 
 /* ---------- Logs tab ---------- */
@@ -1151,10 +1215,10 @@ details[data-focused] > .dt-sql-group {
 }
 .dt-log {
   display: grid;
-  grid-template-columns: 56px 64px minmax(0, 1fr) auto auto;
-  gap: 10px;
+  grid-template-columns: 3.5rem 4rem minmax(0, 1fr) auto auto;
+  gap: 0.625rem;
   align-items: baseline;
-  padding: 7px 16px 7px 13px;
+  padding: 0.4375rem 1rem 0.4375rem 0.8125rem;
   border-bottom: 1px solid var(--dt-border);
   border-left: 3px solid transparent;
 }
@@ -1169,12 +1233,12 @@ details[data-focused] > .dt-sql-group {
 }
 .dt-log-time {
   color: var(--dt-text-3);
-  font-size: 12.5px;
+  font-size: var(--dt-size-xs);
   font-variant-numeric: tabular-nums;
 }
 .dt-log-level {
   color: var(--dt-text-2);
-  font: 600 12px var(--dt-mono);
+  font: 600 var(--dt-size-xs) var(--dt-mono);
   text-transform: uppercase;
 }
 .dt-log[data-level="warning"] .dt-log-level {
@@ -1185,55 +1249,57 @@ details[data-focused] > .dt-sql-group {
   color: var(--dt-error);
 }
 .dt-log-message {
-  font: 13.5px var(--dt-mono);
+  font: var(--dt-size-sm) var(--dt-mono);
   overflow-wrap: anywhere;
 }
 .dt-log-logger {
-  max-width: 140px;
+  max-width: 8.75rem;
   overflow: hidden;
   color: var(--dt-text-3);
-  font-size: 12.5px;
+  font-size: var(--dt-size-xs);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .dt-log-exception {
   grid-column: 1 / -1;
-  margin: 4px -16px -7px -13px;
-  padding-left: 16px;
+  margin: 0.25rem -1rem -0.4375rem -0.8125rem;
+  padding-left: 1rem;
 }
 
 /* ---------- Error tab ---------- */
 
 .dt-error {
-  padding: 14px 16px 20px;
+  padding: 0.875rem 1rem 1.25rem;
 }
 .dt-error-head {
-  margin-bottom: 12px;
-  padding: 12px 14px;
+  margin-bottom: 0.75rem;
+  padding: 0.75rem 0.875rem;
   border: 1px solid var(--dt-error-border);
   border-radius: var(--dt-radius);
   background: var(--dt-error-bg);
+  box-shadow: var(--dt-shadow);
 }
 .dt-error-type {
   margin: 0;
   color: var(--dt-error);
-  font: 700 15px var(--dt-mono);
+  font: 700 var(--dt-size-md) var(--dt-mono);
 }
 .dt-error-message {
-  margin: 4px 0 0;
-  font-size: 15px;
+  margin: 0.25rem 0 0;
+  font-size: var(--dt-size-md);
   overflow-wrap: anywhere;
 }
 .dt-error-meta {
-  margin: 8px 0 0;
+  margin: 0.5rem 0 0;
   color: var(--dt-text-3);
-  font-size: 12.5px;
+  font-size: var(--dt-size-xs);
 }
 .dt-frames {
   display: grid;
   overflow: hidden;
   border: 1px solid var(--dt-border);
   border-radius: var(--dt-radius);
+  box-shadow: var(--dt-shadow);
 }
 .dt-frame + .dt-frame,
 .dt-frame-group + .dt-frame,
@@ -1245,8 +1311,8 @@ details[data-focused] > .dt-sql-group {
 .dt-frame-group > summary {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
   list-style: none;
   cursor: pointer;
 }
@@ -1270,11 +1336,11 @@ details[data-focused] > .dt-sql-group {
 .dt-frame-group > summary {
   background: var(--dt-subtle);
   color: var(--dt-text-3);
-  font-size: 13px;
+  font-size: var(--dt-size-sm);
 }
 .dt-frame-group-names {
   overflow: hidden;
-  font: 12px var(--dt-mono);
+  font: var(--dt-size-xs) var(--dt-mono);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1283,7 +1349,7 @@ details[data-focused] > .dt-sql-group {
   background: var(--dt-subtle);
 }
 .dt-frame-fn {
-  font: 600 13.5px var(--dt-mono);
+  font: 600 var(--dt-size-sm) var(--dt-mono);
 }
 .dt-frame[data-app] > summary .dt-frame-fn {
   color: var(--dt-text);
@@ -1296,13 +1362,13 @@ details[data-focused] > .dt-sql-group {
   margin-left: auto;
   overflow: hidden;
   color: var(--dt-text-3);
-  font-size: 12.5px;
+  font-size: var(--dt-size-xs);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .dt-source {
   margin: 0;
-  padding: 6px 0;
+  padding: 0.375rem 0;
   overflow-x: auto;
   background: var(--dt-ink);
   color: var(--dt-ink-text);
@@ -1310,9 +1376,9 @@ details[data-focused] > .dt-sql-group {
 }
 .dt-source li {
   display: flex;
-  gap: 14px;
-  padding: 0 12px;
-  font: 13px / 1.65 var(--dt-mono);
+  gap: 0.875rem;
+  padding: 0 0.75rem;
+  font: var(--dt-size-sm) / 1.65 var(--dt-mono);
   white-space: pre;
 }
 .dt-source li[data-current] {
@@ -1320,7 +1386,7 @@ details[data-focused] > .dt-sql-group {
   box-shadow: inset 3px 0 var(--dt-warn-strong);
 }
 .dt-source-no {
-  min-width: 28px;
+  min-width: 1.75rem;
   color: var(--dt-ink-muted);
   text-align: right;
   user-select: none;
@@ -1361,44 +1427,44 @@ details[data-focused] > .dt-sql-group {
 }
 .dt-frame-nosource {
   margin: 0;
-  padding: 8px 12px;
+  padding: 0.5rem 0.75rem;
   color: var(--dt-text-3);
-  font-size: 13px;
+  font-size: var(--dt-size-sm);
 }
 .dt-locals {
   margin: 0;
-  padding: 6px 12px 10px;
+  padding: 0.375rem 0.75rem 0.625rem;
   border-top: 1px solid var(--dt-border);
   background: var(--dt-bg);
 }
 .dt-locals div {
   display: grid;
-  grid-template-columns: minmax(80px, 0.35fr) 1fr;
-  gap: 10px;
-  padding: 3px 0;
+  grid-template-columns: minmax(5rem, 0.35fr) 1fr;
+  gap: 0.625rem;
+  padding: 0.1875rem 0;
 }
 .dt-locals dt {
   color: var(--dt-text-2);
-  font: 600 12.5px var(--dt-mono);
+  font: 600 var(--dt-size-xs) var(--dt-mono);
 }
 .dt-locals dd {
   margin: 0;
-  font: 12.5px var(--dt-mono);
+  font: var(--dt-size-xs) var(--dt-mono);
   overflow-wrap: anywhere;
 }
 .dt-chained {
-  margin-top: 18px;
+  margin-top: 1.125rem;
 }
 .dt-chain-relation {
-  margin: 0 0 6px;
+  margin: 0 0 0.375rem;
   color: var(--dt-text-3);
-  font-size: 12px;
+  font-size: var(--dt-size-xs);
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 .dt-chained .dt-error-message {
-  margin-bottom: 10px;
+  margin-bottom: 0.625rem;
 }
 
 /* ---------- Explore links ---------- */
@@ -1406,20 +1472,20 @@ details[data-focused] > .dt-sql-group {
 .dt-explore {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin: 10px 0 0;
+  gap: 0.375rem;
+  margin: 0.625rem 0 0;
 }
 .dt-button-sm {
-  height: 26px;
-  padding: 0 10px;
-  font-size: 12.5px;
+  height: 1.625rem;
+  padding: 0 0.625rem;
+  font-size: var(--dt-size-xs);
 }
 .dt-link-button {
   padding: 0;
   border: 0;
   background: none;
   color: var(--dt-accent);
-  font: 500 13px var(--dt-font);
+  font: 500 var(--dt-size-sm) var(--dt-font);
   cursor: pointer;
 }
 .dt-link-button:hover {
@@ -1429,13 +1495,13 @@ details[data-focused] > .dt-sql-group {
 /* ---------- Call tree ---------- */
 
 .dt-breakdown {
-  padding: 14px 16px 10px;
+  padding: 0.875rem 1rem 0.625rem;
 }
 .dt-breakdown-bar {
   display: flex;
-  height: 10px;
+  height: 0.625rem;
   overflow: hidden;
-  border-radius: 5px;
+  border-radius: 0.3125rem;
   background: var(--dt-muted-bg);
 }
 .dt-breakdown-bar span + span {
@@ -1463,17 +1529,17 @@ details[data-focused] > .dt-sql-group {
 .dt-breakdown-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 16px;
-  margin: 10px 0 0;
+  gap: 0.375rem 1rem;
+  margin: 0.625rem 0 0;
   padding: 0;
   list-style: none;
   color: var(--dt-text-2);
-  font-size: 13px;
+  font-size: var(--dt-size-sm);
 }
 .dt-breakdown-legend li {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.375rem;
 }
 .dt-breakdown-legend b {
   color: var(--dt-text);
@@ -1484,21 +1550,21 @@ details[data-focused] > .dt-sql-group {
   color: var(--dt-text-3);
 }
 .dt-swatch {
-  width: 9px;
-  height: 9px;
-  border-radius: 3px;
+  width: 0.5625rem;
+  height: 0.5625rem;
+  border-radius: 0.1875rem;
   background: var(--dt-k);
 }
 
 .dt-map-head {
   display: flex;
   justify-content: space-between;
-  padding: 6px 16px;
+  padding: 0.375rem 1rem;
   border-top: 1px solid var(--dt-border);
   border-bottom: 1px solid var(--dt-border);
   background: var(--dt-subtle);
   color: var(--dt-text-3);
-  font-size: 12px;
+  font-size: var(--dt-size-xs);
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -1507,12 +1573,12 @@ details[data-focused] > .dt-sql-group {
   --dt-k: var(--dt-k-request);
   display: grid;
   /* Names first: twice the bars' width, so module paths and SQL read in full more often than they truncate. */
-  grid-template-columns: minmax(0, 2fr) minmax(110px, 1fr) 64px;
+  grid-template-columns: minmax(0, 2fr) minmax(6.875rem, 1fr) 4rem;
   align-items: center;
-  gap: 10px;
+  gap: 0.625rem;
   width: 100%;
-  min-height: 28px;
-  padding: 0 16px 0 0;
+  min-height: 1.75rem;
+  padding: 0 1rem 0 0;
   border: 0;
   border-bottom: 1px solid color-mix(in srgb, var(--dt-border) 60%, transparent);
   background: none;
@@ -1554,14 +1620,14 @@ details[data-focused] > .dt-sql-group {
 .dt-map-name {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.375rem;
   min-width: 0;
 }
 .dt-map-caret {
   display: grid;
   place-items: center;
   flex: none;
-  width: 14px;
+  width: 0.875rem;
   color: var(--dt-text-3);
 }
 .dt-map-caret .dt-icon {
@@ -1572,28 +1638,28 @@ details[data-focused] > .dt-sql-group {
 }
 .dt-map-kind {
   flex: none;
-  padding: 0 5px;
-  border-radius: 4px;
+  padding: 0 0.3125rem;
+  border-radius: 0.25rem;
   background: color-mix(in srgb, var(--dt-k) 16%, transparent);
   color: color-mix(in srgb, var(--dt-k) 75%, var(--dt-text));
-  font: 600 11px / 16px var(--dt-mono);
+  font: 600 var(--dt-size-2xs) / 1rem var(--dt-mono);
   text-transform: uppercase;
 }
 .dt-map-text {
   overflow: hidden;
-  font: 13px var(--dt-mono);
+  font: var(--dt-size-sm) var(--dt-mono);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .dt-map-times {
   flex: none;
   color: var(--dt-text-2);
-  font-size: 12.5px;
+  font-size: var(--dt-size-xs);
   font-weight: 600;
 }
 .dt-map-track {
   position: relative;
-  height: 12px;
+  height: 0.75rem;
 }
 .dt-map-bar {
   position: absolute;
@@ -1611,36 +1677,37 @@ details[data-focused] > .dt-sql-group {
 }
 .dt-map-time {
   color: var(--dt-text-2);
-  font-size: 12.5px;
+  font-size: var(--dt-size-xs);
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
 .dt-map-details {
-  margin: 12px 16px 16px;
+  margin: 0.75rem 1rem 1rem;
   overflow: hidden;
   border: 1px solid var(--dt-border);
   border-radius: var(--dt-radius);
+  box-shadow: var(--dt-shadow);
 }
 .dt-map-details .dt-section-label {
   margin: 0;
-  padding: 8px 12px;
+  padding: 0.5rem 0.75rem;
   border-bottom: 1px solid var(--dt-border);
   background: var(--dt-subtle);
 }
 .dt-map-details .dt-code {
-  padding-left: 12px;
+  padding-left: 0.75rem;
 }
 .dt-map-details .dt-error-message {
-  padding: 10px 12px;
+  padding: 0.625rem 0.75rem;
 }
 .dt-map-origin {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 0.375rem;
   margin: 0;
-  padding: 8px 12px;
+  padding: 0.5rem 0.75rem;
   color: var(--dt-text-3);
-  font-size: 13px;
+  font-size: var(--dt-size-sm);
 }
 .dt-map-origin code {
   color: var(--dt-text-2);
@@ -1652,20 +1719,20 @@ details[data-focused] > .dt-sql-group {
   border: 0;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  padding: 8px 16px 10px;
+  gap: 0.375rem;
+  padding: 0.5rem 1rem 0.625rem;
 }
 .dt-map-filter {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 26px;
-  padding: 0 10px;
+  gap: 0.375rem;
+  height: 1.625rem;
+  padding: 0 0.625rem;
   border: 1px solid var(--dt-border);
   border-radius: 999px;
   background: none;
   color: var(--dt-text-2);
-  font: 500 12.5px var(--dt-font);
+  font: 500 var(--dt-size-xs) var(--dt-font);
   cursor: pointer;
 }
 .dt-map-filter span {
@@ -1685,11 +1752,11 @@ details[data-focused] > .dt-sql-group {
   color: var(--dt-text-2);
 }
 .dt-map-filter-clear {
-  padding: 0 6px;
+  padding: 0 0.375rem;
   border: 0;
   background: none;
   color: var(--dt-text-3);
-  font-size: 12.5px;
+  font-size: var(--dt-size-xs);
   cursor: pointer;
 }
 .dt-map-filter-clear:hover {
@@ -1705,11 +1772,11 @@ details[data-focused] > .dt-sql-group {
   font-style: italic;
 }
 .dt-map-state {
-  padding: 0 6px;
-  border-radius: 5px;
+  padding: 0 0.375rem;
+  border-radius: 0.3125rem;
   background: var(--dt-hover);
   color: var(--dt-text-2);
-  font-size: 11px;
+  font-size: var(--dt-size-2xs);
 }
 .dt-map-state[data-state="success"] {
   background: var(--dt-ok-bg);
@@ -1726,7 +1793,7 @@ details[data-focused] > .dt-sql-group {
   background: none;
   color: var(--dt-accent-strong);
   font: inherit;
-  font-size: 13.5px;
+  font-size: var(--dt-size-sm);
   font-weight: 500;
   cursor: pointer;
 }
@@ -1734,9 +1801,9 @@ details[data-focused] > .dt-sql-group {
   text-decoration: underline;
 }
 .dt-map-hint {
-  margin: 12px 16px 16px;
+  margin: 0.75rem 1rem 1rem;
   color: var(--dt-text-3);
-  font-size: 13px;
+  font-size: var(--dt-size-sm);
   text-align: center;
 }
 
@@ -1766,7 +1833,7 @@ details[data-focused] > .dt-sql-group {
 }
 .dt-sql-param {
   padding: 0 2px;
-  border-radius: 3px;
+  border-radius: 0.1875rem;
   background: var(--dt-syn-param-bg);
   color: var(--dt-syn-string);
 }
@@ -1786,7 +1853,7 @@ details[data-focused] > .dt-sql-group {
 }
 .dt-gql-variable {
   padding: 0 2px;
-  border-radius: 3px;
+  border-radius: 0.1875rem;
   background: var(--dt-syn-param-bg);
   color: var(--dt-syn-string);
 }
@@ -1832,12 +1899,12 @@ details[data-focused] > .dt-sql-group {
 
 .dt-alias {
   flex: none;
-  margin-left: 6px;
-  padding: 0 6px;
+  margin-left: 0.375rem;
+  padding: 0 0.375rem;
   border: 1px solid rgb(45 212 191 / 0.35);
-  border-radius: 4px;
+  border-radius: 0.25rem;
   color: var(--dt-alias-text);
-  font: 600 11px / 16px var(--dt-mono);
+  font: 600 var(--dt-size-2xs) / 1rem var(--dt-mono);
   vertical-align: 1px;
 }
 [data-category="mail"] {
@@ -1852,14 +1919,15 @@ details[data-focused] > .dt-sql-group {
 }
 .dt-mails {
   display: grid;
-  gap: 14px;
-  padding: 14px 16px 18px;
+  gap: 0.875rem;
+  padding: 0.875rem 1rem 1.125rem;
 }
 .dt-mail {
   overflow: hidden;
   border: 1px solid var(--dt-border);
   border-radius: var(--dt-radius);
   background: var(--dt-subtle);
+  box-shadow: var(--dt-shadow);
 }
 .dt-mail[data-failed] {
   border-color: var(--dt-error-border);
@@ -1867,8 +1935,8 @@ details[data-focused] > .dt-sql-group {
 .dt-mail-head {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 14px;
+  gap: 0.625rem;
+  padding: 0.75rem 0.875rem;
   border-bottom: 1px solid var(--dt-border);
 }
 .dt-mail-head h3 {
@@ -1876,38 +1944,38 @@ details[data-focused] > .dt-sql-group {
   min-width: 0;
   margin: 0;
   overflow: hidden;
-  font-size: 15px;
+  font-size: var(--dt-size-md);
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .dt-mail-time {
   color: var(--dt-text-3);
-  font-size: 13px;
+  font-size: var(--dt-size-sm);
   font-variant-numeric: tabular-nums;
 }
 .dt-mail-props {
-  padding: 4px 14px;
+  padding: 0.25rem 0.875rem;
 }
 .dt-mail-switch {
-  margin: 10px 14px 0;
+  margin: 0.625rem 0.875rem 0;
 }
 .dt-mail-html {
   display: block;
-  width: calc(100% - 28px);
-  height: 420px;
-  margin: 10px 14px 14px;
+  width: calc(100% - 1.75rem);
+  height: 26.25rem;
+  margin: 0.625rem 0.875rem 0.875rem;
   border: 1px solid var(--dt-border);
   border-radius: var(--dt-radius-sm);
   background: #fff;
 }
 .dt-mail-text {
-  margin: 10px 14px 14px;
-  padding: 12px;
+  margin: 0.625rem 0.875rem 0.875rem;
+  padding: 0.75rem;
   border-radius: var(--dt-radius-sm);
   background: var(--dt-ink);
   color: var(--dt-ink-text);
-  font: 13.5px / 1.55 var(--dt-mono);
+  font: var(--dt-size-sm) / 1.55 var(--dt-mono);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }

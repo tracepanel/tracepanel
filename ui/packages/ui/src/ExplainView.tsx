@@ -36,10 +36,10 @@ export function ExplainView({ load, vendor }: ExplainViewProps) {
   return (
     <section className="grid gap-2">
       <div className="flex flex-wrap items-center gap-2.5">
-        <h4 className="text-[13px] font-semibold tracking-wide text-muted-foreground uppercase">Query plan</h4>
+        <h4 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">Query plan</h4>
         {plan ? (
           <>
-            <span className="text-[13px] text-muted-foreground">
+            <span className="text-sm text-muted-foreground">
               {plan.vendor} · {plan.alias}
               {plan.analyzed ? " · analyzed" : ""}
             </span>
@@ -76,19 +76,19 @@ export function ExplainView({ load, vendor }: ExplainViewProps) {
       </div>
       {state.status === "failed" ? <p className="text-sm text-error">{state.message}</p> : null}
       {state.status === "idle" ? (
-        <p className="text-[13px] text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           Run EXPLAIN on the database to see how it reads the tables{canAnalyze ? ", or ANALYZE to time it" : ""}.
         </p>
       ) : null}
       {plan ? (
         <ol className="m-0 grid list-none rounded-md border bg-muted/60 py-1.5">
           {keyed(plan.lines, (line) => `${line.depth}:${line.text}`).map(({ key, item: line }) => (
-            <li key={key} className="grid gap-0.5 py-1 pr-3" style={{ paddingLeft: `${12 + line.depth * 20}px` }}>
-              <code className={`font-mono text-[13px] whitespace-pre-wrap ${line.warning ? "text-warn" : ""}`}>
+            <li key={key} className="grid gap-0.5 py-1 pr-3" style={{ paddingLeft: `${0.75 + line.depth * 1.25}rem` }}>
+              <code className={`font-mono text-sm whitespace-pre-wrap ${line.warning ? "text-warn" : ""}`}>
                 {line.text}
               </code>
               {line.warning ? (
-                <span className="flex items-center gap-1.5 text-[13px] text-text-2">
+                <span className="flex items-center gap-1.5 text-sm text-text-2">
                   <TriangleAlertIcon className="size-3.5 text-warn" />
                   {line.warning}
                 </span>

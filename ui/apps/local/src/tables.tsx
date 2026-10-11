@@ -138,7 +138,7 @@ export function EndpointsTable({ items }: { items: readonly EndpointRow[] }) {
               {item.graphql_operations > 0 ? (
                 <button
                   type="button"
-                  className="ml-1 rounded-md border border-brand/30 bg-brand-soft px-1.5 font-sans text-[12px] text-brand hover:bg-brand/15"
+                  className="ml-1 rounded-md border border-brand/30 bg-brand-soft px-1.5 font-sans text-xs text-brand hover:bg-brand/15"
                   title="One URL, many GraphQL operations: see them one by one"
                   onClick={(event) => {
                     event.stopPropagation();
@@ -208,7 +208,7 @@ export function QueriesTable({
                   {item.name}
                   <AliasChip value={item.alias} />
                 </Mono>
-                {item.origin ? <Mono className="text-[14px] text-muted-foreground">{item.origin}</Mono> : null}
+                {item.origin ? <Mono className="text-base text-muted-foreground">{item.origin}</Mono> : null}
               </span>
             </Td>
             <Td num>{item.calls}</Td>
@@ -301,7 +301,7 @@ export function LogsTable({
               <Mono className="block truncate">{log.message}</Mono>
             </Td>
             <Td>
-              <Mono className="text-[14px] text-muted-foreground">{log.logger}</Mono>
+              <Mono className="text-base text-muted-foreground">{log.logger}</Mono>
             </Td>
             <Td>
               <SourceCell
@@ -337,7 +337,7 @@ function LogDetails({ log, onFilter }: { log: LogRow; onFilter: (terms: Record<s
   return (
     <div className="grid gap-3.5">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="mr-1 text-[14px] text-muted-foreground">Show logs from</span>
+        <span className="mr-1 text-base text-muted-foreground">Show logs from</span>
         <Button variant="outline" size="xs" onClick={() => onFilter({ trace: log.trace_id })}>
           this request
         </Button>
@@ -362,15 +362,15 @@ function LogDetails({ log, onFilter }: { log: LogRow; onFilter: (terms: Record<s
         </Button>
       </div>
       <div className="group/message relative rounded-md border bg-background">
-        <pre className="m-0 px-4 py-3 pr-12 font-mono text-[14px] whitespace-pre-wrap">{log.message}</pre>
+        <pre className="m-0 px-4 py-3 pr-12 font-mono text-base whitespace-pre-wrap">{log.message}</pre>
         <CopyButton text={log.message} label="Copy message" className="absolute top-2 right-2" />
       </div>
       {log.exception ? (
-        <pre className="m-0 max-h-80 overflow-auto rounded-md border border-error/30 bg-error-soft px-4 py-3 font-mono text-[13.5px] text-foreground">
+        <pre className="m-0 max-h-80 overflow-auto rounded-md border border-error/30 bg-error-soft px-4 py-3 font-mono text-sm text-foreground">
           {log.exception}
         </pre>
       ) : null}
-      <dl className="grid grid-cols-[max-content_minmax(0,1fr)_auto] items-center overflow-hidden rounded-md border bg-background text-[14px]">
+      <dl className="grid grid-cols-[max-content_minmax(0,1fr)_auto] items-center overflow-hidden rounded-md border bg-background text-base">
         {fields.map(([key, value]) => (
           <Fragment key={key}>
             <dt className="border-b px-3 py-1.5 font-mono text-muted-foreground">{key}</dt>
@@ -432,7 +432,7 @@ export function IssuesTable({ items }: { items: readonly IssueRow[] }) {
                 ) : (
                   <span className="font-medium">{item.title}</span>
                 )}
-                {item.culprit ? <Mono className="text-[14px] text-muted-foreground">{item.culprit}</Mono> : null}
+                {item.culprit ? <Mono className="text-base text-muted-foreground">{item.culprit}</Mono> : null}
               </span>
             </Td>
             <Td>
@@ -441,12 +441,12 @@ export function IssuesTable({ items }: { items: readonly IssueRow[] }) {
             <Td>
               <span className="flex flex-col gap-0.5">
                 {item.endpoints.slice(0, 3).map((endpoint) => (
-                  <Mono key={endpoint} className="text-[14px]">
+                  <Mono key={endpoint} className="text-base">
                     {endpoint}
                   </Mono>
                 ))}
                 {item.endpoints.length > 3 ? (
-                  <span className="text-[14px] text-muted-foreground">+{item.endpoints.length - 3} more</span>
+                  <span className="text-base text-muted-foreground">+{item.endpoints.length - 3} more</span>
                 ) : null}
               </span>
             </Td>
@@ -497,23 +497,23 @@ export function MailsTable({
             tone={mail.sent === false ? "error" : undefined}
             onClick={() => onOpen(open === mail.span_id ? null : mail.span_id)}
           >
-            <Td className="max-w-[420px]">
+            <Td className="max-w-[26.25rem]">
               <span className="block truncate font-medium">{mail.subject || "(no subject)"}</span>
             </Td>
             <Td>
               <span className="flex flex-col gap-0.5">
                 {mail.recipients.slice(0, 2).map((address) => (
-                  <Mono key={address} className="text-[14px]">
+                  <Mono key={address} className="text-base">
                     {address}
                   </Mono>
                 ))}
                 {mail.recipients.length > 2 ? (
-                  <span className="text-[13px] text-muted-foreground">+{mail.recipients.length - 2} more</span>
+                  <span className="text-sm text-muted-foreground">+{mail.recipients.length - 2} more</span>
                 ) : null}
               </span>
             </Td>
             <Td>
-              <Mono className="text-[14px] text-muted-foreground">{mail.sender ?? "—"}</Mono>
+              <Mono className="text-base text-muted-foreground">{mail.sender ?? "—"}</Mono>
             </Td>
             <Td>
               <SourceCell
@@ -590,7 +590,7 @@ function SourceCell({
   const operation = graphqlOperation({ kind, name });
   return (
     // A table cell ignores max-width: the cell's content holds the limit, so a long task name truncates.
-    <span className="flex max-w-[340px] min-w-0 items-center gap-2">
+    <span className="flex max-w-[21.25rem] min-w-0 items-center gap-2">
       {operation ? (
         <KindBadge kind="graphql" />
       ) : kind === "http" ? (
@@ -598,7 +598,7 @@ function SourceCell({
       ) : (
         <KindBadge kind={kind} />
       )}
-      <Mono className="truncate text-[14px]">
+      <Mono className="truncate text-base">
         {operation ?? (kind === "http" ? (path ?? name) : kind === "websocket" ? name.replace(/^WS /, "") : name)}
       </Mono>
     </span>
@@ -609,7 +609,7 @@ export function KindBadge({ kind }: { kind: string }) {
   return (
     <Badge
       variant="outline"
-      className="h-[22px] rounded-md border-brand/30 bg-brand-soft px-1.5 font-mono text-[11px] text-brand uppercase"
+      className="h-[1.375rem] rounded-md border-brand/30 bg-brand-soft px-1.5 font-mono text-2xs text-brand uppercase"
     >
       {{ command: "job", websocket: "ws", graphql: "gql" }[kind] ?? kind}
     </Badge>
@@ -643,11 +643,11 @@ export function TasksTable({ items }: { items: readonly TaskRow[] }) {
           tone={item.failures ? "error" : item.with_issues ? "warn" : undefined}
           href={href(groupRoute("tasks", item.task))}
         >
-          <Td className="max-w-[420px]">
+          <Td className="max-w-[26.25rem]">
             <Mono className="block truncate">{item.task}</Mono>
           </Td>
           <Td>
-            <Badge variant="outline" className="text-[12px]">
+            <Badge variant="outline" className="text-xs">
               {TASK_SYSTEMS[item.system] ?? item.system}
             </Badge>
           </Td>
@@ -669,7 +669,7 @@ export function TasksTable({ items }: { items: readonly TaskRow[] }) {
           <Td>
             <span className="flex flex-wrap gap-1">
               {item.queues.map((queue) => (
-                <Badge key={queue} variant="outline" className="font-mono text-[12px]">
+                <Badge key={queue} variant="outline" className="font-mono text-xs">
                   {queue}
                 </Badge>
               ))}
@@ -708,11 +708,11 @@ export function GraphqlTable({ items }: { items: readonly GraphqlRow[] }) {
           href={href(groupRoute("graphql", item.operation))}
         >
           <Td>
-            <Badge variant="outline" className="font-mono text-[12px]">
+            <Badge variant="outline" className="font-mono text-xs">
               {item.type ?? "query"}
             </Badge>
           </Td>
-          <Td className="max-w-[420px]">
+          <Td className="max-w-[26.25rem]">
             {item.name ? (
               <Mono className="block truncate">{item.name}</Mono>
             ) : (
@@ -765,11 +765,11 @@ export function JobsTable({ items }: { items: readonly JobRow[] }) {
           tone={item.failures ? "error" : item.with_issues ? "warn" : undefined}
           href={href(groupRoute("jobs", item.job))}
         >
-          <Td className="max-w-[420px]">
+          <Td className="max-w-[26.25rem]">
             <Mono className="block truncate">{item.job}</Mono>
           </Td>
           <Td>
-            <Badge variant="outline" className="font-mono text-[12px]">
+            <Badge variant="outline" className="font-mono text-xs">
               {JOB_SOURCES[item.source] ?? item.source}
             </Badge>
           </Td>
@@ -815,7 +815,7 @@ export function WebsocketsTable({ items }: { items: readonly WebsocketRow[] }) {
           tone={item.errors ? "error" : item.with_issues ? "warn" : undefined}
           href={href(groupRoute("websockets", item.consumer))}
         >
-          <Td className="max-w-[360px]">
+          <Td className="max-w-[22.5rem]">
             <Mono className="block truncate">{item.consumer}</Mono>
           </Td>
           <Td num>{item.connections}</Td>
@@ -831,7 +831,7 @@ export function WebsocketsTable({ items }: { items: readonly WebsocketRow[] }) {
               {duration(item.p95)}
             </Meter>
           </Td>
-          <Td className="max-w-[260px]">
+          <Td className="max-w-[16.25rem]">
             <Mono className="block truncate text-muted-foreground">{item.paths.join(", ")}</Mono>
           </Td>
           <Td num className="text-muted-foreground">
@@ -853,7 +853,7 @@ const TASK_STATE: Record<string, [string, string]> = {
 export function TaskState({ state }: { state: string }) {
   const [label, tone] = TASK_STATE[state] ?? [state, ""];
   return (
-    <Badge variant="outline" className={`h-[22px] rounded-md px-1.5 font-mono text-[11.5px] ${tone}`}>
+    <Badge variant="outline" className={`h-[1.375rem] rounded-md px-1.5 font-mono text-2xs ${tone}`}>
       {label}
     </Badge>
   );

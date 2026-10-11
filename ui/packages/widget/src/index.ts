@@ -79,56 +79,63 @@ function watchTheme(host: HTMLElement): () => void {
 
 const STYLE = `
   :host { all: initial; }
+  /* A dark pill in the corner: the request's verdict at a glance. Its ring is the verdict: none when all is well,
+     amber when something wants a look, coral when it failed. */
   .badge {
     position: fixed; right: 16px; bottom: 16px; z-index: 2147483647;
     display: flex; align-items: center; gap: 0; max-width: calc(100vw - 32px);
-    height: 40px; padding: 0 6px 0 8px; border: 1px solid rgb(255 255 255 / 0.1); border-radius: 12px;
-    background: linear-gradient(180deg, #1d1838, #14112a); color: #ece9f7;
-    box-shadow: 0 12px 32px rgb(15 12 30 / 0.35), 0 2px 4px rgb(15 12 30 / 0.2), inset 0 1px rgb(255 255 255 / 0.06);
-    font: 500 13px/1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    height: 42px; padding: 0 6px 0 10px; border: 1px solid rgb(255 255 255 / 0.09); border-radius: 999px;
+    background: #0e1117; color: #e7e9ef;
+    box-shadow: 0 12px 32px rgb(10 12 17 / 0.32), 0 2px 6px rgb(10 12 17 / 0.2), inset 0 1px rgb(255 255 255 / 0.05);
+    font: 500 13px/1 "Geist Variable", "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
     font-variant-numeric: tabular-nums; cursor: pointer;
-    transition: right 180ms ease-out, box-shadow 180ms ease-out, transform 120ms ease-out;
+    transition: right 180ms ease-out, box-shadow 180ms ease-out, border-color 120ms ease-out;
   }
-  .badge:hover { transform: translateY(-1px); box-shadow: 0 16px 36px rgb(15 12 30 / 0.42), 0 2px 4px rgb(15 12 30 / 0.2), inset 0 1px rgb(255 255 255 / 0.08); }
-  .badge:focus-visible { outline: 2px solid #c8f560; outline-offset: 2px; }
-  .brand { display: flex; padding-right: 8px; }
+  .badge[data-verdict="warn"] { border-color: rgb(245 181 68 / 0.45); box-shadow: 0 0 0 4px rgb(245 181 68 / 0.16), 0 12px 32px rgb(10 12 17 / 0.32); }
+  .badge[data-verdict="error"] { border-color: rgb(255 107 94 / 0.5); box-shadow: 0 0 0 4px rgb(255 107 94 / 0.17), 0 12px 32px rgb(10 12 17 / 0.32); }
+  /* Hover answers in place: the border, in the verdict's colour, gets stronger; the pill stays where it is. */
+  .badge:hover { border-color: rgb(255 255 255 / 0.24); }
+  .badge[data-verdict="warn"]:hover { border-color: rgb(245 181 68 / 0.85); }
+  .badge[data-verdict="error"]:hover { border-color: rgb(255 107 94 / 0.9); }
+  .badge:focus-visible { outline: 2px solid #b6e24a; outline-offset: 3px; }
+  .brand { display: flex; align-items: center; padding-right: 8px; }
   .brand svg { width: 22px; height: 22px; }
-  .runtime { align-self: center; display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; color: #8f88b0; font-size: 11px; font-weight: 600; letter-spacing: 0.02em; }
+  .runtime { align-self: center; display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 4px 7px; border-radius: 999px; background: rgb(255 255 255 / 0.07); color: #b9bfcd; font-size: 11px; font-weight: 600; letter-spacing: 0.01em; }
   .brand .runtime svg { width: 12px; height: 12px; }
   .runtime:empty { display: none; }
   .stats { display: inline-flex; align-items: center; min-width: 0; height: 100%; }
   .seg { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px; white-space: nowrap; }
-  .seg + .seg { border-left: 1px solid rgb(255 255 255 / 0.12); }
-  .seg svg { width: 13px; height: 13px; color: #8f88b0; flex: none; }
-  .seg b { color: #fff; font-weight: 650; }
-  .unit { color: #8f88b0; }
-  .status { padding: 3px 6px; border-radius: 6px; font: 650 11.5px ui-monospace, "SF Mono", Menlo, monospace; background: rgb(74 222 128 / 0.16); color: #6ee7a0; }
-  .status[data-tone="redirect"] { background: rgb(125 180 255 / 0.16); color: #93c1ff; }
-  .status[data-tone="client"] { background: rgb(251 146 60 / 0.18); color: #ffb26b; }
-  .status[data-tone="server"] { background: rgb(248 113 113 / 0.2); color: #ff8b8b; }
-  .seg[data-speed="slow"] b { color: #fbbf24; }
-  .seg[data-speed="very-slow"] b { color: #ff8b8b; }
-  .issues { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 6px; background: rgb(251 146 60 / 0.18); color: #ffb26b; font-weight: 650; font-size: 12px; }
+  .seg + .seg { border-left: 1px solid rgb(255 255 255 / 0.1); }
+  .seg svg { width: 13px; height: 13px; color: #8c93a6; flex: none; }
+  .seg b { color: #fff; font-weight: 600; }
+  .unit { color: #8c93a6; }
+  .status { padding: 3px 7px; border-radius: 999px; font: 600 11.5px "Geist Mono Variable", "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace; background: rgb(184 242 92 / 0.13); color: #b8f25c; }
+  .status[data-tone="redirect"] { background: rgb(157 178 255 / 0.15); color: #9db2ff; }
+  .status[data-tone="client"] { background: rgb(245 181 68 / 0.15); color: #f5b544; }
+  .status[data-tone="server"] { background: rgb(255 107 94 / 0.16); color: #ff8a7a; }
+  .seg[data-speed="slow"] b { color: #f5b544; }
+  .seg[data-speed="very-slow"] b { color: #ff8a7a; }
+  .issues { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; background: rgb(245 181 68 / 0.15); color: #f5b544; font-weight: 600; font-size: 12px; }
   .seg .issues svg { color: currentColor; }
-  .issues[data-tone="error"] { background: rgb(248 113 113 / 0.2); color: #ff8b8b; }
-  .more { padding: 3px 7px; border-radius: 6px; background: rgb(255 255 255 / 0.1); color: #ece9f7; font-size: 12px; }
+  .issues[data-tone="error"] { background: rgb(255 107 94 / 0.16); color: #ff8a7a; }
+  .more { padding: 3px 8px; border-radius: 999px; background: rgb(255 255 255 / 0.09); color: #e7e9ef; font-size: 12px; }
   .flash-name {
     max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    font: 500 12px ui-monospace, "SF Mono", Menlo, monospace; color: #fff;
+    font: 500 12px "Geist Mono Variable", "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace; color: #fff;
   }
-  .badge[data-flash] { animation: flash 900ms ease-out; border-color: rgb(154 140 255 / 0.7); }
-  .badge[data-flash="warn"] { border-color: rgb(242 100 61 / 0.75); }
-  .badge[data-flash="error"] { border-color: rgb(239 68 68 / 0.7); }
+  .badge[data-flash] { animation: flash 900ms ease-out; border-color: rgb(165 135 255 / 0.7); }
+  .badge[data-flash="warn"] { border-color: rgb(245 181 68 / 0.7); }
+  .badge[data-flash="error"] { border-color: rgb(255 107 94 / 0.7); }
   @keyframes flash {
-    from { box-shadow: 0 0 0 0 rgb(154 140 255 / 0.55), 0 10px 28px rgb(23 19 43 / 0.32); }
-    to { box-shadow: 0 0 0 10px rgb(154 140 255 / 0), 0 10px 28px rgb(23 19 43 / 0.32); }
+    from { box-shadow: 0 0 0 0 rgb(165 135 255 / 0.5), 0 12px 32px rgb(10 12 17 / 0.32); }
+    to { box-shadow: 0 0 0 12px rgb(165 135 255 / 0), 0 12px 32px rgb(10 12 17 / 0.32); }
   }
   .panel {
     position: fixed; top: 0; right: 0; bottom: 0; z-index: 2147483646;
-    width: min(var(--tracepanel-width, 600px), 100vw); border-left: 1px solid rgb(167 139 250 / 0.22);
-    background: rgb(15 12 30 / 0.97);
+    width: min(var(--tracepanel-width, 600px), 100vw); border-left: 1px solid rgb(255 255 255 / 0.08);
+    background: #0a0c11;
     backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-    box-shadow: -24px 0 60px rgb(10 6 30 / 0.45), inset 1px 0 rgb(255 255 255 / 0.04);
+    box-shadow: -24px 0 60px rgb(10 12 17 / 0.4);
     transform: translateX(100%); visibility: hidden;
     transition: transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1), width 200ms ease-out, visibility 0s 200ms;
   }
@@ -138,37 +145,42 @@ const STYLE = `
   .panel iframe { width: 100%; height: 100%; border: 0; display: block; background: transparent; color-scheme: dark; }
   /* Light theme (the console's Auto / Light / Dark choice, shared through localStorage). */
   :host([data-theme="light"]) .badge {
-    border-color: #d1d9e0; background: #ffffff; color: #1f2328;
-    box-shadow: 0 8px 24px rgb(66 74 83 / 0.16), 0 1px 2px rgb(31 35 40 / 0.08);
+    border-color: #e2e2dc; background: #ffffff; color: #16181d;
+    box-shadow: 0 10px 28px rgb(22 24 29 / 0.12), 0 1px 3px rgb(22 24 29 / 0.08);
   }
-  :host([data-theme="light"]) .badge { background: #ffffff; box-shadow: 0 10px 28px rgb(66 74 83 / 0.16), 0 1px 3px rgb(31 35 40 / 0.1); }
-  :host([data-theme="light"]) .seg + .seg { border-left-color: #d8dee4; }
-  :host([data-theme="light"]) .seg svg, :host([data-theme="light"]) .unit, :host([data-theme="light"]) .runtime { color: #6e7781; }
-  :host([data-theme="light"]) .seg b, :host([data-theme="light"]) .flash-name { color: #1f2328; }
+  :host([data-theme="light"]) .badge:hover { border-color: #b9b9b1; }
+  :host([data-theme="light"]) .badge[data-verdict="warn"] { border-color: rgb(217 119 6 / 0.45); box-shadow: 0 0 0 4px rgb(217 119 6 / 0.13), 0 10px 28px rgb(22 24 29 / 0.12); }
+  :host([data-theme="light"]) .badge[data-verdict="error"] { border-color: rgb(208 52 44 / 0.45); box-shadow: 0 0 0 4px rgb(208 52 44 / 0.12), 0 10px 28px rgb(22 24 29 / 0.12); }
+  :host([data-theme="light"]) .badge[data-verdict="warn"]:hover { border-color: rgb(217 119 6 / 0.85); }
+  :host([data-theme="light"]) .badge[data-verdict="error"]:hover { border-color: rgb(208 52 44 / 0.85); }
+  :host([data-theme="light"]) .seg + .seg { border-left-color: #e2e2dc; }
+  :host([data-theme="light"]) .seg svg, :host([data-theme="light"]) .unit { color: #5f6470; }
+  :host([data-theme="light"]) .runtime { background: #f0f0ed; color: #3a3e47; }
+  :host([data-theme="light"]) .seg b, :host([data-theme="light"]) .flash-name { color: #16181d; }
   :host([data-theme="light"]) .seg[data-speed="slow"] b { color: #b45309; }
-  :host([data-theme="light"]) .seg[data-speed="very-slow"] b { color: #cf222e; }
-  :host([data-theme="light"]) .status { background: #dafbe1; color: #1a7f37; }
-  :host([data-theme="light"]) .status[data-tone="redirect"] { background: #ddf4ff; color: #0969da; }
-  :host([data-theme="light"]) .status[data-tone="client"] { background: #fff1e5; color: #bc4c00; }
-  :host([data-theme="light"]) .status[data-tone="server"] { background: #ffebe9; color: #cf222e; }
-  :host([data-theme="light"]) .issues { background: #fff1e5; color: #bc4c00; }
-  :host([data-theme="light"]) .issues[data-tone="error"] { background: #ffebe9; color: #cf222e; }
-  :host([data-theme="light"]) .more { background: rgb(129 139 152 / 0.15); color: #1f2328; }
+  :host([data-theme="light"]) .seg[data-speed="very-slow"] b { color: #d0342c; }
+  :host([data-theme="light"]) .status { background: rgb(98 160 20 / 0.12); color: #3d7a0c; }
+  :host([data-theme="light"]) .status[data-tone="redirect"] { background: rgb(52 86 214 / 0.09); color: #3456d6; }
+  :host([data-theme="light"]) .status[data-tone="client"] { background: rgb(217 119 6 / 0.1); color: #b45309; }
+  :host([data-theme="light"]) .status[data-tone="server"] { background: rgb(208 52 44 / 0.09); color: #d0342c; }
+  :host([data-theme="light"]) .issues { background: rgb(217 119 6 / 0.1); color: #b45309; }
+  :host([data-theme="light"]) .issues[data-tone="error"] { background: rgb(208 52 44 / 0.09); color: #d0342c; }
+  :host([data-theme="light"]) .more { background: #f0f0ed; color: #16181d; }
   :host([data-theme="light"]) .panel {
-    border-left-color: #d1d9e0; background: #ffffff;
-    box-shadow: -16px 0 40px rgb(66 74 83 / 0.14);
+    border-left-color: #e2e2dc; background: #ffffff;
+    box-shadow: -16px 0 40px rgb(22 24 29 / 0.12);
   }
   :host([data-theme="light"]) .panel iframe { color-scheme: light; }
   .panel[data-instant], .panel[data-instant] ~ .badge, .panel[data-resizing], .panel[data-resizing] ~ .badge { transition: none; }
   .panel[data-resizing] iframe { pointer-events: none; }
   .resize { position: absolute; top: 0; bottom: 0; left: -4px; width: 8px; cursor: ew-resize; z-index: 1; }
   .resize::after { content: ""; position: absolute; top: 50%; left: 2px; width: 4px; height: 40px; margin-top: -20px; border-radius: 2px; background: rgb(167 139 250 / 0.0); transition: background 120ms; }
-  .resize:hover::after, .panel[data-resizing] .resize::after { background: rgb(167 139 250 / 0.7); }
+  .resize:hover::after, .panel[data-resizing] .resize::after { background: rgb(165 135 255 / 0.7); }
   /* Docked at the bottom, like browser devtools: full width, the height is dragged from the top edge. */
   :host([data-dock="bottom"]) .panel {
     top: auto; left: 0; width: 100vw; height: min(var(--tracepanel-height, 360px), 100vh);
-    border-left: 0; border-top: 1px solid rgb(167 139 250 / 0.22);
-    box-shadow: 0 -24px 60px rgb(10 6 30 / 0.35), inset 0 1px rgb(255 255 255 / 0.04);
+    border-left: 0; border-top: 1px solid rgb(255 255 255 / 0.08);
+    box-shadow: 0 -24px 60px rgb(10 12 17 / 0.3);
     transform: translateY(100%);
     transition: transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1), height 200ms ease-out, visibility 0s 200ms;
   }
@@ -179,7 +191,7 @@ const STYLE = `
   /* While dragging, the size follows the pointer: no transition (these selectors outrank the dock rules). */
   :host .panel[data-resizing], :host .panel[data-resizing][data-open], :host .panel[data-resizing] ~ .badge,
   :host([data-dock="bottom"]) .panel[data-resizing][data-open] { transition: none; }
-  :host([data-theme="light"][data-dock="bottom"]) .panel { border-top-color: #d1d9e0; box-shadow: 0 -16px 40px rgb(66 74 83 / 0.14); }
+  :host([data-theme="light"][data-dock="bottom"]) .panel { border-top-color: #e2e2dc; box-shadow: 0 -16px 40px rgb(22 24 29 / 0.12); }
   @media (prefers-reduced-motion: reduce) { .panel, .badge { transition: none; } .badge[data-flash] { animation: none; } }
 `;
 
@@ -651,6 +663,7 @@ export function mount(options: WidgetOptions = {}): Widget {
     const issues = [headline, ...others].reduce((sum, info) => sum + (info.issues ?? 0), 0);
     if (issues > 0) addIssues(stats, issues, worst === "error" ? "error" : "warn");
     if (others.length > 0) addPill(stats, `+${others.length}`, "more");
+    badge.dataset["verdict"] = worst;
 
     const recent = others.slice(-3).map(line);
     const summary = [
@@ -671,6 +684,7 @@ export function mount(options: WidgetOptions = {}): Widget {
     addQueries(stats, summary.queries);
     if (summary.issues) addIssues(stats, summary.issues, state(info) === "error" ? "error" : "warn");
     badge.dataset["flash"] = state(info);
+    badge.dataset["verdict"] = state(info);
     badge.title = `${line(info)}\nClick to open this request.`;
     badge.setAttribute("aria-label", `tracepanel: ${line(info)}. Click to open this request.`);
   }
