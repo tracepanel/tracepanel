@@ -67,7 +67,8 @@ export interface DataSource {
   /** `group`: "endpoint" groups requests by method + route (the HTTP page), "operation" by trace name. */
   tracesOverview(q: string, group?: "operation" | "endpoint"): Promise<TracesOverview>;
   knownValues(): Promise<KnownValues>;
-  counts(): Promise<Counts>;
+  /** The sidebar's numbers; with `service`, only that app's (service.name). */
+  counts(service?: string): Promise<Counts>;
   /** The user of this browser session; null when anonymous. Development only. */
   /** null when anonymous; rejects where switching users isn't offered (FastAPI, Django without auth). */
   currentUser(): Promise<User | null>;
@@ -183,9 +184,9 @@ export function httpSource(base: string | URL): DataSource {
       if (!response.ok) throw new Error(`tracepanel API /store: HTTP ${response.status}`);
       return ((await response.json()) as { deleted: number }).deleted;
     },
-    async counts() {
+    async counts(service) {
       return (
-        (await getJson<Counts>(url("counts"))) ?? {
+        (await getJson<Counts>(url("counts", { service }))) ?? {
           issues: 0,
           errors: 0,
           sections: { http: 0, graphql: 0, tasks: 0, websockets: 0, jobs: 0 },

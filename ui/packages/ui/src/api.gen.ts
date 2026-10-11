@@ -1709,7 +1709,10 @@ export interface operations {
     };
     counts: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Only what this app (service.name) recorded; every app when left out. */
+                service?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;

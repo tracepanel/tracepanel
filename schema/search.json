@@ -84,6 +84,10 @@
       "type": "text",
       "help": "Task queue system: celery, dramatiq, rq, django"
     },
+    "service": {
+      "type": "text",
+      "help": "The app that recorded it (service.name): service:shop"
+    },
     "since": {
       "type": "time",
       "help": "Started at or after: since:15m, since:2026-10-07T13:30"
@@ -122,6 +126,10 @@
       "type": "text",
       "help": "A field passed in extra=: extra.order_id:42"
     },
+    "service": {
+      "type": "text",
+      "help": "The app that recorded it (service.name): service:shop"
+    },
     "since": {
       "type": "time",
       "help": "Logged at or after: since:15m, since:2026-10-07T13:30"
@@ -144,6 +152,10 @@
       "type": "text",
       "help": "Statement id"
     },
+    "service": {
+      "type": "text",
+      "help": "The app that recorded it (service.name): service:shop"
+    },
     "since": {
       "type": "time",
       "help": "Ran at or after: since:15m"
@@ -161,6 +173,10 @@
     "from": {
       "type": "text",
       "help": "Sender address"
+    },
+    "service": {
+      "type": "text",
+      "help": "The app that recorded it (service.name): service:shop"
     },
     "since": {
       "type": "time",
@@ -188,6 +204,10 @@
       "type": "text",
       "help": "Which queue ran it: celery, django"
     },
+    "service": {
+      "type": "text",
+      "help": "The app that recorded it (service.name): service:shop"
+    },
     "since": {
       "type": "time",
       "help": "Runs at or after: since:15m"
@@ -205,6 +225,10 @@
     "source": {
       "type": "text",
       "help": "manage.py or custom (tracepanel.trace)"
+    },
+    "service": {
+      "type": "text",
+      "help": "The app that recorded it (service.name): service:shop"
     },
     "since": {
       "type": "time",
@@ -228,6 +252,10 @@
       "type": "text",
       "help": "The URL it was sent to: route:/graphql/"
     },
+    "service": {
+      "type": "text",
+      "help": "The app that recorded it (service.name): service:shop"
+    },
     "since": {
       "type": "time",
       "help": "Calls at or after: since:15m"
@@ -246,6 +274,10 @@
       "type": "text",
       "help": "connect, receive, disconnect, or a channel layer message type: chat.message"
     },
+    "service": {
+      "type": "text",
+      "help": "The app that recorded it (service.name): service:shop"
+    },
     "since": {
       "type": "time",
       "help": "Events at or after: since:15m"
@@ -263,6 +295,10 @@
     "method": {
       "type": "text",
       "help": "HTTP method"
+    },
+    "service": {
+      "type": "text",
+      "help": "The app that recorded it (service.name): service:shop"
     },
     "since": {
       "type": "time",
@@ -286,6 +322,10 @@
       "type": "text",
       "help": "Who calls it: web, worker, command"
     },
+    "service": {
+      "type": "text",
+      "help": "The app that calls it, or the app itself (service.name)"
+    },
     "since": {
       "type": "time",
       "help": "Calls at or after: since:15m"
@@ -303,6 +343,10 @@
     "route": {
       "type": "text",
       "help": "Route of a request it happened in, * wildcards"
+    },
+    "service": {
+      "type": "text",
+      "help": "The app that recorded it (service.name): service:shop"
     },
     "since": {
       "type": "time",

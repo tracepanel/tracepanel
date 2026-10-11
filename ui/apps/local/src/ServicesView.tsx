@@ -78,10 +78,10 @@ function Name({ icon, name, detail }: { icon: ReactNode; name: string; detail: s
   );
 }
 
-function AppRow({ app, slowest }: { app: App; slowest: number }) {
+function AppRow({ app, slowest, onOpen }: { app: App; slowest: number; onOpen?: (() => void) | undefined }) {
   const kind = app.runtime ? runtimeKind(app.runtime) : null;
   return (
-    <Tr tone={app.errors ? "error" : undefined} href={href(appTarget(app.busiest))}>
+    <Tr tone={app.errors ? "error" : undefined} href={href(appTarget(app.busiest))} opening={onOpen}>
       <Td className="max-w-[22.5rem]">
         <Name icon={kind ? <RuntimeIcon kind={kind} /> : null} name={app.service} detail={app.runtime} />
       </Td>
@@ -115,7 +115,7 @@ function AppRow({ app, slowest }: { app: App; slowest: number }) {
 /**
  * The project's own web, workers and commands first, then what they talk to, and who calls it.
  */
-export function ServicesView({ map }: { map: ServiceMap }) {
+export function ServicesView({ map, onApp }: { map: ServiceMap; onApp?: ((service: string) => void) | undefined }) {
   const slowest = Math.max(...map.services.map((node) => node.total), 1);
   // The apps' time is every request's whole duration: on the services' scale it would flatten them.
   const apps = byProject(map.apps);
@@ -137,7 +137,13 @@ export function ServicesView({ map }: { map: ServiceMap }) {
       }
     >
       {apps.map((app) => (
-        <AppRow key={app.service} app={app} slowest={busiest} />
+        <AppRow
+          key={app.service}
+          app={app}
+          slowest={busiest}
+          // Several apps: opening one shows the console as that app (the sidebar's switcher).
+          onOpen={onApp && apps.length > 1 ? () => onApp(app.service) : undefined}
+        />
       ))}
       {map.services.map((node) => (
         <Tr key={node.id} tone={node.errors ? "error" : undefined} href={href(target(node))}>

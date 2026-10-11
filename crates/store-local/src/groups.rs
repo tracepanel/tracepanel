@@ -93,6 +93,7 @@ pub(crate) fn name_search(
         resource,
         &[
             (column_name, "name"),
+            ("service", "service"),
             ("since", "start"),
             ("until", "start"),
         ],
@@ -166,7 +167,12 @@ impl Reader {
     pub fn list_endpoints(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
         let schema = search::schema_for(
             "endpoints",
-            &[("route", "route"), ("since", "start"), ("until", "start")],
+            &[
+                ("route", "route"),
+                ("service", "service"),
+                ("since", "start"),
+                ("until", "start"),
+            ],
             Box::new(|words| {
                 (
                     "route LIKE ? ESCAPE '\\'".into(),
@@ -273,7 +279,12 @@ impl Reader {
     pub fn list_websockets(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
         let schema = search::schema_for(
             "websockets",
-            &[("consumer", "view"), ("since", "start"), ("until", "start")],
+            &[
+                ("consumer", "view"),
+                ("service", "service"),
+                ("since", "start"),
+                ("until", "start"),
+            ],
             Box::new(|words| {
                 let pattern = Sql::Text(format!("%{}%", search::like(words)));
                 (
@@ -327,7 +338,12 @@ impl Reader {
     pub fn list_graphql(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
         let schema = search::schema_for(
             "graphql",
-            &[("route", "route"), ("since", "start"), ("until", "start")],
+            &[
+                ("route", "route"),
+                ("service", "service"),
+                ("since", "start"),
+                ("until", "start"),
+            ],
             Box::new(|words| {
                 (
                     format!("{OPERATION} LIKE ? ESCAPE '\\'"),

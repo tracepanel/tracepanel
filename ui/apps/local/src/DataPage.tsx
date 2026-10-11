@@ -7,6 +7,7 @@ import { RefreshControl } from "./refresh";
 import { type EntrySection, go, type Section, traceHref } from "./routes";
 import { SearchBar } from "./SearchBar";
 import { byProject, ServicesView } from "./ServicesView";
+import { useScope } from "./scope";
 import { DATA_LABELS } from "./sections";
 import { IssuesTable, LogsTable, MailsTable, QueriesTable, TracesTable } from "./tables";
 import { Loading, LoadMore, PageHeader } from "./ui";
@@ -46,6 +47,7 @@ const PRISTINE: Partial<Record<DataSection, { title: string; text: string }>> = 
 };
 
 export function DataPage({ section, q, open, source, spec, known }: DataPageProps) {
+  const { setService } = useScope();
   // Opening a row replaces the entry: it is no step to go Back through, but it survives leaving and coming back.
   const setOpen = (key: string | null) => go({ name: section, q, open: key ?? undefined }, true);
   // Typing replaces the entry, so Back skips the letters; a chip or a menu adds one, so Back undoes it.
@@ -175,7 +177,7 @@ export function DataPage({ section, q, open, source, spec, known }: DataPageProp
   } else if (section === "services") {
     body = services.data ? (
       services.data.apps.length + services.data.services.length ? (
-        <ServicesView map={services.data} />
+        <ServicesView map={services.data} onApp={setService} />
       ) : (
         <Empty title={q ? "No services match" : "No services yet"}>
           Databases, caches, mail servers and brokers appear here after the first call that uses them.

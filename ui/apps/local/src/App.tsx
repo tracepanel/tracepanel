@@ -30,6 +30,7 @@ import { RefreshProvider } from "./refresh";
 import { consoleLinks, go, href, type Route, SECTIONS, useRoute } from "./routes";
 import { SearchPalette } from "./SearchPalette";
 import { ThemeToggle } from "./Sidebar";
+import { ScopeProvider } from "./scope";
 import { graphqlOperation } from "./sections";
 import { TraceScreen } from "./TraceScreen";
 import { UserSwitcher } from "./UserSwitcher";
@@ -726,7 +727,13 @@ export function App() {
   return (
     <TooltipProvider delayDuration={300}>
       <RefreshProvider>
-        {embedded ? <PanelApp route={route} /> : <Console route={route} source={source} />}
+        {embedded ? (
+          <PanelApp route={route} />
+        ) : (
+          <ScopeProvider>
+            <Console route={route} source={source} />
+          </ScopeProvider>
+        )}
       </RefreshProvider>
     </TooltipProvider>
   );

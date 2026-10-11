@@ -231,8 +231,9 @@ async fn related(State(reader): State<Shared>, Path(id): Path<String>) -> Respon
     answer(read(&reader, move |reader| Ok(reader.related(&id)?)).await)
 }
 
-async fn counts(State(reader): State<Shared>) -> Response {
-    answer(read(&reader, |reader| Ok(reader.counts()?)).await)
+async fn counts(State(reader): State<Shared>, Query(query): Params) -> Response {
+    let service = query.get("service").cloned();
+    answer(read(&reader, move |reader| Ok(reader.counts(service.as_deref())?)).await)
 }
 
 async fn logs(State(reader): State<Shared>, Query(query): Params) -> Response {

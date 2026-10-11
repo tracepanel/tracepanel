@@ -2,7 +2,7 @@ import { type Counts, type DataSource, type KnownValues, LogoMark, type SearchSp
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@tracepanel/ui/components/ui/dialog";
 import { cn } from "@tracepanel/ui/lib/utils";
 import { MenuIcon, SearchIcon } from "lucide-react";
-import { type CSSProperties, useCallback, useEffect, useState } from "react";
+import { type CSSProperties, useCallback, useEffect, useMemo, useState } from "react";
 import { ClearDialog } from "./ClearDialog";
 import { DataPage } from "./DataPage";
 import { useSearch } from "./data";
@@ -13,6 +13,7 @@ import { useRowKeys } from "./keyboard";
 import { go, isEntry, parse, periodOf, type Route, type Section } from "./routes";
 import { SearchPalette } from "./SearchPalette";
 import { RAIL_WIDTH, Sidebar, SidebarHandle, useSidebarCollapsed, useSidebarWidth, visibleSections } from "./Sidebar";
+import { scopedSource, useApps, useScope } from "./scope";
 import { useScrollMemory } from "./scroll";
 import { sectionLabel } from "./sections";
 import { TracePage } from "./TracePage";
@@ -26,7 +27,17 @@ function sectionOf(route: Route): Section | null {
   return route.name;
 }
 
-export function Console({ route, source }: { route: Route; source: DataSource }) {
+export function Console({ route, source: everything }: { route: Route; source: DataSource }) {
+  // Several apps sending to one agent: the one chosen narrows every page (scope.tsx).
+  const { service, setService } = useScope();
+  const source = useMemo(() => scopedSource(everything, service), [everything, service]);
+  const apps = useApps(everything);
+  // The switcher: only where there is a choice.
+  const scope = apps && apps.length > 1 ? { apps, service, onService: setService } : undefined;
+  // The chosen app gone (the store cleared, another project): back to all of them.
+  useEffect(() => {
+    if (service && apps && !apps.some((app) => app.service === service)) setService("");
+  }, [service, apps, setService]);
   // The address as the browser has it: positions are filed under the same string they are read back by.
   useScrollMemory(location.hash);
   useRowKeys();
@@ -160,6 +171,7 @@ export function Console({ route, source }: { route: Route; source: DataSource })
               setSearching(true);
             }}
             onClear={source.clearStore ? () => setClearing(true) : undefined}
+            scope={scope}
           />
         </DialogContent>
       </Dialog>
@@ -169,6 +181,7 @@ export function Console({ route, source }: { route: Route; source: DataSource })
           counts={counts}
           onSearch={() => setSearching(true)}
           onClear={source.clearStore ? () => setClearing(true) : undefined}
+          scope={scope}
           collapsed={collapsed}
           onCollapse={collapse}
         />
@@ -180,7 +193,8 @@ export function Console({ route, source }: { route: Route; source: DataSource })
         mode="console"
         open={clearing}
         onOpenChange={setClearing}
-        source={source}
+        // Deleting is for every app: the dialog counts them all.
+        source={everything}
         onCleared={() => {
           // Every page shows data that is gone: start over from the home page.
           location.hash = "#/";
