@@ -115,13 +115,15 @@ function CompactChips({ kinds, issues }: { kinds: IssueKind[] | undefined; issue
   const [first, ...rest] = shown;
   return (
     <span className="dt-request-chips" title={shown.map((kind) => ISSUE_LABELS[kind]).join(", ") || undefined}>
-      {first ? <IssueChip kind={first} /> : null}
-      {rest.length > 0 ? <span className="dt-request-chips-more">+{rest.length}</span> : null}
-      {kinds === undefined && issues > 0 ? (
+      {first ? (
+        <IssueChip kind={first} />
+      ) : issues > 0 ? (
+        // Findings of kinds not known yet (a row from the widget's summary, before its trace loads): their count.
         <span className="dt-chip" data-kind="n+1">
-          {issues}
+          {issues} {issues === 1 ? "issue" : "issues"}
         </span>
       ) : null}
+      {rest.length > 0 ? <span className="dt-request-chips-more">+{rest.length}</span> : null}
     </span>
   );
 }
