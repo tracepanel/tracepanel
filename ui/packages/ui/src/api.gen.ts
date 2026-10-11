@@ -524,6 +524,8 @@ export interface components {
             path: string | null;
             http_status: number | null;
             user_id: string | null;
+            /** @description The app that recorded it (its trace's service.name). */
+            service: string;
         };
         /** @description Namespaced attributes; values are scalars or lists of scalars. */
         Attrs: {

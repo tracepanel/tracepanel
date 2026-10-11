@@ -490,7 +490,7 @@ impl Reader {
             &format!(
                 "SELECT logs.id, logs.trace_id, logs.time, logs.level, logs.logger, logs.message, logs.exception, \
                  logs.attrs, traces.kind AS trace_kind, traces.htmx AS trace_htmx, traces.name AS trace_name, \
-                 traces.method, traces.path, traces.http_status, traces.user_id \
+                 traces.method, traces.path, traces.http_status, traces.user_id, traces.service \
                  FROM logs JOIN traces ON traces.id = logs.trace_id WHERE {condition} \
                  ORDER BY logs.time DESC, logs.id DESC LIMIT ?"
             ),
