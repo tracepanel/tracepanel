@@ -8,6 +8,8 @@ import {
   Empty,
   ExternalIcon,
   httpSource,
+  ISSUE_LABELS,
+  type IssueKind,
   Logo,
   MethodBadge,
   type TabId,
@@ -185,7 +187,8 @@ function fromWidget(entry: TabEntry): TraceSummary | undefined {
     errors: 0,
     logs: 0,
     mails: 0,
-    issue_kinds: [],
+    // Named as soon as the widget knows them, so the row's chip doesn't change when the trace loads.
+    issue_kinds: (summary.kinds ?? []).filter((kind): kind is IssueKind => kind in ISSUE_LABELS),
     db_aliases: [],
     cache_aliases: [],
     task_state: null,
