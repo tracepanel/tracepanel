@@ -8,9 +8,11 @@ import type { TraceInfo } from "./index";
 const SHOW_MS = 250;
 const HIDE_MS = 180;
 const FINDINGS = 2;
-const LATER = 3;
-/** A later request this slow is worth a row of its own; faster ones that went fine are only counted. */
+/** The page's other requests listed in the card; the panel has the rest. */
+const OTHERS = 4;
+/** As on the pill: from here a request's time is amber, from a second red. */
 const SLOW_MS = 300;
+const VERY_SLOW_MS = 1000;
 
 const KIND_LABELS: Record<Issue["kind"], string> = {
   "n+1": "N+1",
@@ -61,6 +63,9 @@ export const CARD_STYLE = `
   .card-code { color: #b8f25c; font: 12px "Geist Mono Variable", "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace; }
   .card-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12.5px "Geist Mono Variable", "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace; }
   .card-ms { color: #b9bfcd; font-size: 12px; }
+  .card-issues { margin-left: 8px; font-family: "Geist Variable", "Geist", ui-sans-serif, system-ui, sans-serif; font-size: 11px; }
+  .card-ms[data-speed="slow"] { color: #f5b544; font-weight: 600; }
+  .card-ms[data-speed="very-slow"] { color: #ff8a7a; font-weight: 600; }
   .card-tag { margin-left: 8px; padding: 0 6px; border-radius: 999px; background: rgb(165 135 255 / 0.16); color: #bc9cff; font: 600 11px "Geist Variable", "Geist", ui-sans-serif, system-ui, sans-serif; }
   .card-more {
     margin: 4px 0 0; padding: 2px 0; border: 0; background: none; color: #bc9cff;
@@ -81,6 +86,8 @@ export const CARD_STYLE = `
   }
   :host([data-theme="light"]) .card-method { color: #6d3fe0; }
   :host([data-theme="light"]) .card-time, :host([data-theme="light"]) .card-ms { color: #3a3e47; }
+  :host([data-theme="light"]) .card-ms[data-speed="slow"] { color: #b45309; }
+  :host([data-theme="light"]) .card-ms[data-speed="very-slow"] { color: #d0342c; }
   :host([data-theme="light"]) .card-most, :host([data-theme="light"]) .card-hint, :host([data-theme="light"]) .card-count,
   :host([data-theme="light"]) .card-caption { color: #5f6470; }
   :host([data-theme="light"]) .card-more { color: #6d3fe0; }
@@ -227,7 +234,7 @@ export function mountCard(root: ShadowRoot, badge: HTMLElement, source: CardSour
   }
 
   /** The bar of where the time went, and in words only the biggest part. */
-  function timing(trace: Trace): HTMLElement[] {
+  function timing(info: TraceInfo, trace: Trace): HTMLElement[] {
     const parts = breakdown(trace);
     const total = Math.max(
       parts.reduce((sum, [, value]) => sum + value, 0),
@@ -243,7 +250,8 @@ export function mountCard(root: ShadowRoot, badge: HTMLElement, source: CardSour
       bar.append(piece);
     }
     const [top] = [...parts].sort((a, b) => b[1] - a[1]);
-    if (!top) return [bar];
+    // A failed request's story is its error (under Fix first), not where its time went.
+    if (!top || (info.status ?? 200) >= 500) return [bar];
     const [category, value] = top;
     const label = `Most time: ${CATEGORY_LABELS[category as Category]}`;
     bar.setAttribute("aria-label", `${label}, ${ms(value)}`);
@@ -291,29 +299,27 @@ export function mountCard(root: ShadowRoot, badge: HTMLElement, source: CardSour
   function otherRequests(later: readonly TraceInfo[]): HTMLElement | null {
     const page = source.page();
     if (later.length === 0) return null;
-    const failed = later.filter((info) => (info.status ?? 200) >= 500).length;
-    // Only the ones worth a look get a row: failed, with issues, or slow. The rest are a count.
-    const worth = worstFirst(later).filter(
-      (info) => (info.status ?? 200) >= 500 || Boolean(info.issues) || (info.totalMs ?? 0) >= SLOW_MS,
-    );
+    // Every one of them, worst first, so the count in the caption is the rows below it (and "+N more" the rest);
+    // each row says why it matters: its status, its time in amber or red when slow.
+    const sorted = worstFirst(later);
     const section = element("section", "card-section");
-    // The page's other requests (the page itself, its other AJAX calls): the pill's "N req".
-    const count = `Other requests on this page · ${later.length}`;
-    section.append(
-      element(
-        "p",
-        "card-caption",
-        failed ? `${count} · ${failed} failed` : worth.length ? count : `${count} · all fine`,
-      ),
-    );
-    for (const info of worth.slice(0, LATER)) {
+    section.append(element("p", "card-caption", `Other requests on this page · ${later.length}`));
+    for (const info of sorted.slice(0, OTHERS)) {
       const row = element("button", "card-row");
       row.type = "button";
       const { method, path } = requestName(info);
       const chip = statusChip(info.status) ?? element("span");
       const name = element("span", "card-path", `${method} ${path}`);
       if (info === page) name.append(element("span", "card-tag", "page"));
-      row.append(chip, name, element("span", "card-ms", pillMs(info.totalMs ?? 0)));
+      // Its findings, amber as on the pill: what makes a fast 200 worth opening.
+      if (info.issues)
+        name.append(
+          element("span", "card-kind card-issues", `${info.issues} ${info.issues === 1 ? "issue" : "issues"}`),
+        );
+      const time = element("span", "card-ms", pillMs(info.totalMs ?? 0));
+      const total = info.totalMs ?? 0;
+      if (total >= SLOW_MS) time.dataset["speed"] = total >= VERY_SLOW_MS ? "very-slow" : "slow";
+      row.append(chip, name, time);
       row.title = `${method} ${path}\nClick to open it in the panel`;
       const trace = info.trace;
       if (trace) {
@@ -325,8 +331,8 @@ export function mountCard(root: ShadowRoot, badge: HTMLElement, source: CardSour
       section.append(row);
     }
     // The panel lists them all; it opens on the first one not shown here.
-    const next = worth[LATER]?.trace;
-    if (next) section.append(moreLink(worth.length - LATER, `#/t/${next}`));
+    const next = sorted[OTHERS]?.trace;
+    if (next) section.append(moreLink(sorted.length - OTHERS, `#/t/${next}`));
     return section;
   }
 
@@ -344,7 +350,7 @@ export function mountCard(root: ShadowRoot, badge: HTMLElement, source: CardSour
   function render(info: TraceInfo, later: readonly TraceInfo[], trace: Trace | null, loading: boolean): void {
     card.textContent = "";
     card.append(head(info, trace));
-    if (trace) card.append(...timing(trace));
+    if (trace) card.append(...timing(info, trace));
     else if (loading) card.append(element("div", "card-skeleton"), element("div", "card-skeleton"));
     const fixes = trace ? findings(info, trace) : null;
     if (fixes) card.append(fixes);

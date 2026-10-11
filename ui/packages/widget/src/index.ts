@@ -435,9 +435,10 @@ function addIssues(parent: HTMLElement, issues: number, tone: "warn" | "error"):
 
 /**
  * The rest of the page, after the latest request's numbers: how many requests it made, in the same neutral style as
- * the other numbers, and only the failed ones in red, as their own chip, so "16" never reads as 16 failures.
+ * the other numbers, and how many of the others failed in red, as their own chip, so "16" never reads as 16
+ * failures. No tooltip: the hover card lists them.
  */
-function addPage(parent: HTMLElement, count: number, failed: number): void {
+function addPage(parent: HTMLElement, count: number, failed: number, more: boolean): void {
   const seg = segment(parent);
   seg.className = "seg page";
   seg.innerHTML = ICONS.layers;
@@ -447,12 +448,12 @@ function addPage(parent: HTMLElement, count: number, failed: number): void {
   unit.className = "unit";
   unit.textContent = "requests";
   seg.append(value, unit);
-  seg.title = `${count} requests on this page: the page and its AJAX calls${failed ? `, ${failed} failed` : ""}`;
   if (failed) {
     const chip = document.createElement("span");
     chip.className = "failed";
     chip.innerHTML = ICONS.failed;
-    chip.append(`${failed} failed`);
+    // Next to a red status: "1 more failed", so it isn't read as that one again.
+    chip.append(more ? `${failed} more failed` : `${failed} failed`);
     seg.append(chip);
   }
 }
@@ -703,13 +704,15 @@ export function mount(options: WidgetOptions = {}): Widget {
     addQueries(stats, shown.queries ?? 0);
     // Findings are amber whatever else happened: a failure says so in its status, and in the page's count.
     if (shown.issues) addIssues(stats, shown.issues, "warn");
-    const failed = all.filter((info) => (info.status ?? 200) >= 500).length;
-    if (all.length > 1) addPage(stats, all.length, failed);
+    // The shown request's failure is already its status: the chip counts the page's other failures.
+    const failed = all.slice(0, -1).filter((info) => (info.status ?? 200) >= 500).length;
+    if (all.length > 1) addPage(stats, all.length, failed, (shown.status ?? 200) >= 500);
     badge.dataset["verdict"] = worst;
 
+    const others = failed ? `, ${failed} other ${failed === 1 ? "one" : "ones"} failed` : "";
     const summary = [
       line(shown),
-      ...(all.length > 1 ? [`${all.length} requests on this page${failed ? `, ${failed} failed` : ""}`] : []),
+      ...(all.length > 1 ? [`${all.length} requests on this page${others}`] : []),
       ...(options.runtime ? [`Served by ${options.runtime}`] : []),
     ];
     // No title: the hover card shows all of it (and more); screen readers get the summary.
