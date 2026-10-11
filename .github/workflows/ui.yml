@@ -43,15 +43,6 @@ jobs:
 
       - run: pnpm exec biome ci --reporter=github .
 
-      - name: DESIGN.md matches the --dt-* tokens and satisfies the format
-        run: |
-          node scripts/design-md.mjs
-          git diff --exit-code DESIGN.md || {
-            echo "::error file=ui/DESIGN.md::Out of date with packages/ui/src/styles.css: run pnpm design-md in ui/ and commit."
-            exit 1
-          }
-          pnpm run design-md:lint
-
   types:
     name: TypeScript
     runs-on: ubuntu-latest

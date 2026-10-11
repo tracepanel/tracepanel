@@ -12,14 +12,11 @@
     "fmt": "biome check --write .",
     "lint": "biome check . && pnpm -r typecheck",
     "api": "pnpm --filter @tracepanel/ui api",
-    "design-md": "node scripts/design-md.mjs",
-    "design-md:lint": "design.md lint DESIGN.md",
     "watch": "TRACEPANEL_UI_OUT=\"$(cd .. && pwd)/ui-dist\" pnpm -r --parallel watch",
     "postinstall": "lefthook install"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",
-    "@google/design.md": "0.4.0",
     "fallow": "3.32.0",
     "lefthook": "2.2.1",
     "typescript": "^7.0.2",

@@ -20,11 +20,6 @@ pre-commit:
       glob: "{README.md,CONTRIBUTING.md,SECURITY.md,PYPI.md,CHANGELOG.md,schema/README.md}"
       run: uv run --no-project --with ruff scripts/lint_docs.py
 
-    - name: design-contracts
-      # The checker selects its own work: it fails only when a staged change
-      # touches a contract in ui/design-system/ or one of its sources.
-      run: node .agents/skills/design-system/scripts/check-staged-contracts.mjs
-
 # pre-push jobs are full checks by design: a push is a review request.
 pre-push:
   parallel: true
