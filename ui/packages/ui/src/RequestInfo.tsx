@@ -2,6 +2,7 @@ import { AttrsTable } from "./AttrsTable";
 import { Badge } from "./components/ui/badge";
 import { duration } from "./format";
 import { GraphqlCode } from "./GraphqlCode";
+import { linkProps, type TraceLinks } from "./links";
 import { type PropRow, PropTable } from "./PropTable";
 import { MethodBadge, RoutePath, StatusBadge } from "./primitives";
 import type { Attrs, Related, Trace, TraceSummary } from "./types";
@@ -140,10 +141,10 @@ export interface RequestInfoProps {
   trace: Trace;
   /** Traces linked to this one (Celery): shown with links when given. */
   related?: Related | undefined;
-  onOpenTrace?: ((id: string) => void) | undefined;
+  links?: TraceLinks | undefined;
 }
 
-function LinkedTrace({ trace, onOpen }: { trace: TraceSummary; onOpen?: ((id: string) => void) | undefined }) {
+function LinkedTrace({ trace, links }: { trace: TraceSummary; links?: TraceLinks | undefined }) {
   const body = (
     <span className="flex min-w-0 items-center gap-2">
       {trace.kind === "http" ? (
@@ -160,23 +161,22 @@ function LinkedTrace({ trace, onOpen }: { trace: TraceSummary; onOpen?: ((id: st
       </span>
     </span>
   );
-  return onOpen ? (
-    <button
-      type="button"
-      className="w-full rounded-md py-0.5 text-left hover:bg-accent"
-      onClick={() => onOpen(trace.id)}
+  return links?.trace ? (
+    <a
+      className="block w-full rounded-md py-0.5 text-left hover:bg-accent"
+      {...linkProps(links, links.trace(trace.id))}
     >
       {body}
-    </button>
+    </a>
   ) : (
     body
   );
 }
 
-function relatedRows(related: Related | undefined, onOpen: RequestInfoProps["onOpenTrace"]): PropRow[] {
+function relatedRows(related: Related | undefined, links: TraceLinks | undefined): PropRow[] {
   if (!related) return [];
   const one = (label: string, trace: Related["enqueued_by"]): PropRow[] =>
-    trace ? [{ label, value: <LinkedTrace trace={trace} onOpen={onOpen} /> }] : [];
+    trace ? [{ label, value: <LinkedTrace trace={trace} links={links} /> }] : [];
   const many = (single: string, plural: string, traces: Related["enqueued"]): PropRow[] =>
     traces.length
       ? [
@@ -185,7 +185,7 @@ function relatedRows(related: Related | undefined, onOpen: RequestInfoProps["onO
             value: (
               <span className="grid w-full gap-0.5">
                 {traces.map((child) => (
-                  <LinkedTrace key={child.id} trace={child} onOpen={onOpen} />
+                  <LinkedTrace key={child.id} trace={child} links={links} />
                 ))}
               </span>
             ),
@@ -203,7 +203,7 @@ function relatedRows(related: Related | undefined, onOpen: RequestInfoProps["onO
 }
 
 /** Overview of the traced request or task run: what ran, how it went, who caused it; every id copies. */
-export function RequestInfo({ trace, related, onOpenTrace }: RequestInfoProps) {
+export function RequestInfo({ trace, related, links }: RequestInfoProps) {
   const attrs = trace.attrs;
   const path = text(attrs["http.path"]);
   const route = text(attrs["http.route"]);
@@ -216,7 +216,7 @@ export function RequestInfo({ trace, related, onOpenTrace }: RequestInfoProps) {
     : attrs;
   const rows: PropRow[] = [
     ...(trace.kind === "task" ? taskRows(trace) : []),
-    ...relatedRows(related, onOpenTrace),
+    ...relatedRows(related, links),
     ...(path ? [{ label: "URL", value: path, copy: path, mono: true }] : []),
     ...(route ? [{ label: "Route", value: <RoutePath path={route} />, copy: route, mono: true }] : []),
     ...(view ? [{ label: "View", value: view, copy: view, mono: true }] : []),

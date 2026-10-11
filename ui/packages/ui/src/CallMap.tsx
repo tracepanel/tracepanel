@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { duration, percent } from "./format";
 import { GraphqlCode } from "./GraphqlCode";
 import { ChevronRightIcon } from "./icons";
 import { keyed } from "./keys";
+import { linkProps, type TraceLinks } from "./links";
 import { PropTable } from "./PropTable";
 import { AliasChip, IssueChip } from "./primitives";
 import { SqlCode } from "./SqlCode";
@@ -529,15 +530,7 @@ function findNode(nodes: Node[], key: string): Node | undefined {
   return undefined;
 }
 
-function Details({
-  node,
-  trace,
-  onOpenTrace,
-}: {
-  node: Node;
-  trace: Trace;
-  onOpenTrace?: ((id: string) => void) | undefined;
-}) {
+function Details({ node, trace, links }: { node: Node; trace: Trace; links?: TraceLinks | undefined }) {
   if (node.type === "task" || node.type === "waiting") {
     const run = node.type === "task" ? node.run : null;
     const name =
@@ -558,10 +551,10 @@ function Details({
             ...(run?.issues ? [{ label: "Issues", value: String(run.issues) }] : []),
           ]}
         />
-        {run && onOpenTrace ? (
-          <button type="button" className="dt-map-open" onClick={() => onOpenTrace(run.id)}>
+        {run && links?.trace ? (
+          <a className="dt-map-open" {...linkProps(links, links.trace(run.id))}>
             Open the task's trace →
-          </button>
+          </a>
         ) : null}
         {run ? null : (
           <p className="text-[13px] text-muted-foreground">
@@ -646,16 +639,24 @@ export function CallMap({
   trace,
   issueBySpan,
   related,
-  onOpenTrace,
+  links,
+  initialSpan,
 }: {
   trace: Trace;
   issueBySpan: ReadonlyMap<string, IssueKind>;
   /** Linked traces: tasks this trace enqueued appear under their enqueue span. */
   related?: Related | undefined;
-  onOpenTrace?: ((id: string) => void) | undefined;
+  links?: TraceLinks | undefined;
+  /** A span to open with its details, as a link to it asks (a log line's span). */
+  initialSpan?: string | undefined;
 }) {
   const tree = useMemo(() => buildTree(trace, related), [trace, related]);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(initialSpan ?? null);
+  const rows = useRef<HTMLDivElement>(null);
+  // Brought into view once, when a link opened the tree on it.
+  useEffect(() => {
+    if (initialSpan) rows.current?.querySelector('[aria-current="true"]')?.scrollIntoView({ block: "center" });
+  }, [initialSpan]);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   const toggle = (key: string) =>
     setCollapsed((current) => {
@@ -684,7 +685,7 @@ export function CallMap({
         <span>Call tree</span>
         <span>Time</span>
       </div>
-      <div className="dt-map-rows">
+      <div className="dt-map-rows" ref={rows}>
         <Rows
           nodes={tree}
           depth={0}
@@ -692,7 +693,7 @@ export function CallMap({
         />
       </div>
       {node ? (
-        <Details node={node} trace={trace} onOpenTrace={onOpenTrace} />
+        <Details node={node} trace={trace} links={links} />
       ) : (
         <p className="dt-map-hint">Select a row to see its details.</p>
       )}

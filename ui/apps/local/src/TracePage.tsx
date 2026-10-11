@@ -1,6 +1,6 @@
 import type { DataSource, TabId } from "@tracepanel/ui";
 import { exploreFor } from "./explore";
-import { go, href, openTrace, parse } from "./routes";
+import { consoleLinks, go, href, parse } from "./routes";
 import { crumbsFor } from "./sections";
 import { TraceScreen } from "./TraceScreen";
 import { Breadcrumbs, Mono } from "./ui";
@@ -15,11 +15,14 @@ export function TracePage({
   id,
   from,
   tab,
+  span,
   source,
 }: {
   id: string;
   from?: string | undefined;
   tab?: string | undefined;
+  /** A span to open in the call tree (from a log record). */
+  span?: string | undefined;
   source: DataSource;
 }) {
   const back = from ? crumbsFor(parse(from), from) : [];
@@ -49,8 +52,9 @@ export function TracePage({
           source={source}
           initialTab={initialTab}
           onTabChange={(next) => go({ name: "trace", id, from, tab: next }, true)}
-          explore={(trace) => exploreFor(trace, go)}
-          onOpenTrace={(linked) => openTrace(linked)}
+          explore={(trace) => exploreFor(trace, href)}
+          links={consoleLinks()}
+          initialSpan={span}
           back={
             <a href={from ?? href({ name: "endpoints", q: "" })}>
               {from ? `Back to ${back.at(-1)?.label ?? "the list"}` : "All HTTP endpoints"}

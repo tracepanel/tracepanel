@@ -3,6 +3,8 @@ import { ChevronRightIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 import { ExplainView } from "./ExplainView";
 import { duration } from "./format";
+import { queryFingerprint } from "./lib/fingerprint";
+import { linkProps, type TraceLinks } from "./links";
 import { AliasChip, IssueChip } from "./primitives";
 import { SqlCode } from "./SqlCode";
 import type { ExplainPlan, IssueKind, Span } from "./types";
@@ -19,6 +21,21 @@ export interface SqlListProps {
   /** Spans to highlight and expand, e.g. after "Show queries" on an issue. */
   focus?: ReadonlySet<string> | undefined;
   onExplain?: Explain | undefined;
+  links?: TraceLinks | undefined;
+}
+
+/** "All requests with this query", where the host can list them. */
+function AllRequests({ span, links }: { span: Span; links: TraceLinks | undefined }) {
+  if (!links?.query) return null;
+  const key = queryFingerprint(
+    String(span.attrs["db.fingerprint"] ?? span.name),
+    String(span.attrs["db.alias"] ?? "default"),
+  );
+  return (
+    <a className="text-[13px] font-medium text-brand hover:underline" {...linkProps(links, links.query(key))}>
+      All requests with this query →
+    </a>
+  );
 }
 
 interface Group {
@@ -98,7 +115,7 @@ function Row({
   );
 }
 
-export function SqlList({ spans, issueBySpan, focus, onExplain }: SqlListProps) {
+export function SqlList({ spans, issueBySpan, focus, onExplain, links }: SqlListProps) {
   const [mode, setMode] = useState<"grouped" | "timeline">("grouped");
   const groups = useMemo(() => groupSpans(spans, issueBySpan), [spans, issueBySpan]);
   const heaviestGroup = Math.max(...groups.map((group) => group.total), 1);
@@ -175,6 +192,7 @@ export function SqlList({ spans, issueBySpan, focus, onExplain }: SqlListProps) 
                       ))}
                     </ol>
                   </section>
+                  {first ? <AllRequests span={first} links={links} /> : null}
                 </Row>
               );
             })
@@ -207,6 +225,7 @@ export function SqlList({ spans, issueBySpan, focus, onExplain }: SqlListProps) 
                   <Heading>Called from</Heading>
                   <code className="font-mono text-[13px]">{String(span.attrs["code.origin"] ?? "—")}</code>
                 </section>
+                <AllRequests span={span} links={links} />
               </Row>
             ))}
       </ul>

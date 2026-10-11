@@ -55,7 +55,8 @@ export function Console({ route, source }: { route: Route; source: DataSource })
   }, []);
 
   let page = null;
-  if (route.name === "trace") page = <TracePage id={route.id} from={route.from} tab={route.tab} source={source} />;
+  if (route.name === "trace")
+    page = <TracePage id={route.id} from={route.from} tab={route.tab} span={route.span} source={source} />;
   else if (route.name === "issue") {
     page = (
       <main className="min-h-0 min-w-0 overflow-y-auto bg-background">

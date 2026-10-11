@@ -957,6 +957,41 @@ a.dt-request-row {
   margin: 0;
   color: var(--dt-text-2);
 }
+.dt-issue-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+}
+.dt-issue-actions:empty {
+  display: none;
+}
+.dt-issue-link {
+  color: var(--dt-brand, currentColor);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+}
+.dt-issue-link:hover {
+  text-decoration: underline;
+}
+.dt-log-span {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dt-brand, currentColor);
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.dt-log-span:hover {
+  text-decoration: underline;
+}
+.dt-logs-more {
+  margin: 0;
+  padding: 10px 16px 0;
+}
 .dt-issue-hint code {
   padding: 0 4px;
   border-radius: 4px;
@@ -1116,7 +1151,7 @@ details[data-focused] > .dt-sql-group {
 }
 .dt-log {
   display: grid;
-  grid-template-columns: 56px 64px minmax(0, 1fr) auto;
+  grid-template-columns: 56px 64px minmax(0, 1fr) auto auto;
   gap: 10px;
   align-items: baseline;
   padding: 7px 16px 7px 13px;
