@@ -249,10 +249,10 @@ const QUICK: Record<Section, Control[]> = {
       label: "Kind",
       title: "Filter by kind",
       key: "kind",
-      values: ["database", "cache", "mail", "queue", "http"],
+      values: ["app", "database", "cache", "mail", "queue", "http"],
       format: capital,
     },
-    { label: "Caller", title: "Filter by caller", key: "role", values: ["web", "worker", "command"], format: capital },
+    { label: "Role", title: "Filter by role", key: "role", values: ["web", "worker", "command"], format: capital },
   ],
   queries: [
     { ...TIME, verb: "Ran" },

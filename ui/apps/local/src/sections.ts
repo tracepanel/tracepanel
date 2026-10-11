@@ -55,7 +55,7 @@ export const ENTRY: Record<
 export const DATA_LABELS: Record<Exclude<Section, EntrySection>, { label: string; description: string }> = {
   services: {
     label: "Services",
-    description: "Databases, caches, mail servers and brokers your app talks to, and who calls them.",
+    description: "Your app's web, workers and commands, and the databases, caches, mail servers and brokers they call.",
   },
   queries: {
     label: "Database",

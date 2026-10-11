@@ -324,7 +324,6 @@ impl Reader {
         let mut nodes: HashMap<String, serde_json::Map<String, Value>> = HashMap::new();
         let mut aliases: HashMap<String, BTreeSet<String>> = HashMap::new();
         let mut totals: HashMap<String, [i64; 4]> = HashMap::new();
-        let mut apps: BTreeSet<(String, String)> = BTreeSet::new();
         let mut edges: Vec<Value> = Vec::new();
         for row in rows {
             let peer = row["peer"].as_str().unwrap_or("").to_owned();
@@ -348,12 +347,6 @@ impl Reader {
                 total[2] += int(&row, "errors");
             }
             total[3] = total[3].max(int(&row, "last_seen"));
-            let text = |key: &str| {
-                row[key]
-                    .as_str()
-                    .map_or_else(|| row[key].to_string(), str::to_owned)
-            };
-            apps.insert((text("role"), text("service")));
             edges.push(serde_json::json!({
                 "service": row["service"],
                 "role": row["role"],
@@ -394,10 +387,42 @@ impl Reader {
         services.sort_by(|a, b| a.0.cmp(&b.0).then(b.1.cmp(&a.1)));
         edges.sort_by_key(|edge| -edge["total"].as_i64().unwrap_or(0));
         Ok(serde_json::json!({
-            "apps": apps.into_iter().map(|(role, service)| serde_json::json!({"service": service, "role": role})).collect::<Vec<_>>(),
+            "apps": self.list_apps(&db, query)?,
             "services": services.into_iter().map(|(_, _, node)| node).collect::<Vec<_>>(),
             "edges": edges,
         }))
+    }
+
+    /// The project's own web, workers and commands, as services of their own: what they handled and what runs them.
+    fn list_apps(&self, db: &Connection, query: &str) -> Result<Vec<Value>, ReadError> {
+        let (condition, params) = search::compile_where(query, &APP_SEARCH)?;
+        let rows = objects(
+            db,
+            &format!(
+                "SELECT {SERVICE_NAME} AS service, {SERVICE_ROLE} AS role, COUNT(*) AS traces, \
+                 SUM(status = 'error') AS errors, SUM(duration) AS total, MAX(start) AS last_seen, \
+                 MAX({LANGUAGE}) AS language, \
+                 MAX(json_extract(doc, '$.attrs.\"process.runtime.version\"')) AS version, \
+                 MAX(json_extract(doc, '$.attrs.\"tracepanel.framework\"')) AS framework \
+                 FROM traces WHERE {condition} GROUP BY service, role ORDER BY service, role"
+            ),
+            params,
+        )?;
+        Ok(rows
+            .into_iter()
+            .map(|row| {
+                let text = |key: &str| row[key].as_str().map(str::to_owned);
+                serde_json::json!({
+                    "service": text("service").unwrap_or_default(),
+                    "role": text("role").unwrap_or_default(),
+                    "traces": int(&row, "traces"),
+                    "errors": int(&row, "errors"),
+                    "total": int(&row, "total"),
+                    "last_seen": int(&row, "last_seen"),
+                    "runtime": runtime_label(text("language"), text("version"), text("framework")),
+                })
+            })
+            .collect())
     }
 
     pub fn clear(&self) -> Result<i64, ReadError> {
@@ -708,5 +733,73 @@ impl Reader {
                 "jobs": count(&traces, "command"),
             },
         }))
+    }
+}
+
+/// What runs an app, as the SDKs label it for the panel: "Python 3.12 · Django 6.0", "Go 1.27".
+fn runtime_label(
+    language: Option<String>,
+    version: Option<String>,
+    framework: Option<String>,
+) -> Option<String> {
+    let language = language?;
+    let mut name = language.chars();
+    let language = name
+        .next()
+        .map(|first| first.to_uppercase().chain(name).collect::<String>())?;
+    let short = |text: &str| text.split('.').take(2).collect::<Vec<_>>().join(".");
+    let runtime = match version {
+        Some(version) => format!("{language} {}", short(&version)),
+        None => language,
+    };
+    Some(match framework {
+        Some(framework) => {
+            let (name, version) = framework.split_once(' ').unwrap_or((&framework, ""));
+            let framework = if version.is_empty() {
+                name.to_owned()
+            } else {
+                format!("{name} {}", short(version))
+            };
+            format!("{runtime} · {framework}")
+        }
+        None => runtime,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::runtime_label;
+
+    fn label(
+        language: Option<&str>,
+        version: Option<&str>,
+        framework: Option<&str>,
+    ) -> Option<String> {
+        runtime_label(
+            language.map(str::to_owned),
+            version.map(str::to_owned),
+            framework.map(str::to_owned),
+        )
+    }
+
+    #[test]
+    fn an_app_is_labelled_as_its_sdk_labels_it() {
+        assert_eq!(
+            label(Some("python"), Some("3.12.4"), Some("Django 6.0.1")).as_deref(),
+            Some("Python 3.12 · Django 6.0")
+        );
+        assert_eq!(
+            label(Some("python"), Some("3.14.0"), None).as_deref(),
+            Some("Python 3.14")
+        );
+        assert_eq!(
+            label(Some("go"), Some("1.27.1"), None).as_deref(),
+            Some("Go 1.27")
+        );
+        assert_eq!(
+            label(Some("python"), None, Some("Flask")).as_deref(),
+            Some("Python · Flask")
+        );
+        assert_eq!(label(None, Some("3.12.4"), Some("Django 6.0.1")), None);
     }
 }

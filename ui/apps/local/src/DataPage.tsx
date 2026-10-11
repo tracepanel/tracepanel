@@ -105,7 +105,10 @@ export function DataPage({ section, q, source, spec, known }: DataPageProps) {
     traces: { size: traces.items?.length, error: traces.error },
     logs: { size: logs.items?.length, error: logs.error },
     mails: { size: mails.items?.length, error: mails.error },
-    services: { size: services.data?.services.length, error: services.error },
+    services: {
+      size: services.data ? services.data.apps.length + services.data.services.length : undefined,
+      error: services.error,
+    },
     queries: { size: queries.data?.length, error: queries.error },
     errors: { size: issues.data?.length, error: issues.error },
     issues: { size: issues.data?.length, error: issues.error },
@@ -166,7 +169,7 @@ export function DataPage({ section, q, source, spec, known }: DataPageProps) {
     );
   } else if (section === "services") {
     body = services.data ? (
-      services.data.services.length ? (
+      services.data.apps.length + services.data.services.length ? (
         <ServicesView map={services.data} />
       ) : (
         <Empty title={q ? "No services match" : "No services yet"}>
