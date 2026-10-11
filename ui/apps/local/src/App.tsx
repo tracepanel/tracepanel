@@ -22,7 +22,6 @@ import {
 import { Button } from "@tracepanel/ui/components/ui/button";
 import { TooltipProvider } from "@tracepanel/ui/components/ui/tooltip";
 import { rem } from "@tracepanel/ui/lib/utils";
-import { ArrowDownToLineIcon } from "lucide-react";
 import { type ReactNode, type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ClearDialog } from "./ClearDialog";
 import { Console } from "./Console";
@@ -252,30 +251,24 @@ function useTabRows(history: TabHistory | null): TraceRow[] {
 }
 
 /** What served the page, as its mark and name; the versions in the tooltip ("Python 3.12 · Django 6.0"). */
-/** What served the page; `compact`, its mark alone (the name in the tooltip), where the row is tight. */
-function RuntimeChip({ label, compact = false }: { label: string; compact?: boolean }) {
+function RuntimeChip({ label }: { label: string }) {
   const kind = runtimeKind(label);
   return (
-    <span className="runtime-chip" data-compact={compact && kind ? "" : undefined} title={`Served by ${label}`}>
+    <span className="runtime-chip" title={`Served by ${label}`}>
       {kind ? <RuntimeIcon kind={kind} /> : null}
-      {compact && kind ? <span className="sr-only">{runtimeName(kind)}</span> : kind ? runtimeName(kind) : label}
+      {kind ? runtimeName(kind) : label.split(" · ")[0]}
     </span>
   );
 }
 
-/** Follow new: open each request as it arrives. A pressed button, quieter than a switch: it is a setting. */
-function FollowButton({ follow, onFollow }: { follow: boolean; onFollow: (value: boolean) => void }) {
+/** Follow new: open each request as it arrives. */
+function FollowToggle({ follow, onFollow }: { follow: boolean; onFollow: (value: boolean) => void }) {
   return (
-    <button
-      type="button"
-      className="follow-button"
-      aria-pressed={follow}
-      title={follow ? "Following new requests: each opens as it arrives" : "Follow new requests"}
-      onClick={() => onFollow(!follow)}
-    >
-      <ArrowDownToLineIcon aria-hidden="true" />
-      Follow
-    </button>
+    <label className="toggle" title="Open each new request as it arrives">
+      <input type="checkbox" checked={follow} onChange={(event) => onFollow(event.target.checked)} />
+      <span className="toggle-track" aria-hidden="true" />
+      Follow new
+    </label>
   );
 }
 
@@ -295,7 +288,7 @@ function ListControls({
     <>
       <span className="list-count">{count}</span>
       <span className="ml-auto flex shrink-0 items-center gap-1">
-        <FollowButton follow={follow} onFollow={onFollow} />
+        <FollowToggle follow={follow} onFollow={onFollow} />
         <ClearButton onClear={onClear} />
       </span>
     </>
@@ -718,10 +711,9 @@ function PanelApp({ route }: { route: Route }) {
         {toolbarInTrace ? (
           <div className="panel-brand">
             <Logo className="shrink-0 gap-1.5 text-md [&_svg]:size-5" />
-            {history?.runtime ? <RuntimeChip label={history.runtime} compact={true} /> : null}
             {/* No count here: the rows are right below; Clear's tooltip says how many. */}
-            <span className="ml-auto flex shrink-0 items-center gap-1">
-              <FollowButton follow={follow} onFollow={onFollow} />
+            <span className="ml-auto flex shrink-0 items-center gap-2">
+              <FollowToggle follow={follow} onFollow={onFollow} />
               <ClearButton onClear={() => setClearing(true)} label={`Clear ${requestCount}`} />
             </span>
           </div>
