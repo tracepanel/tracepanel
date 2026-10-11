@@ -35,6 +35,6 @@ scripts/   project scripts (UI build, docs lint, wheel checks)
 
 ## House rules
 
-- Node 24, the pnpm version in `ui/package.json` packageManager, no global install
+- Node 26 (the floor is `engines.node` in `ui/package.json`; CI pins it), the pnpm version in `ui/package.json` packageManager, no global install
 - The repo voice rules (`.agents/skills/docs/SKILL.md`) apply to the README, the changelog, the security and contributing pages and PR descriptions: plain verbs, no marketing words, no em dashes, no semicolons
 - Keep changes consistent with the surrounding structure. When a rule exists in a hook, change the hook or the config, never skip it silently
