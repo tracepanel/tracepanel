@@ -189,7 +189,7 @@ export function useRefresh(): Refresh {
  * don't reload on a timer.
  */
 export function RefreshControl({ live = true }: { live?: boolean }) {
-  const { interval, setInterval, now, cycle } = useRefresh();
+  const { interval, setInterval, now } = useRefresh();
   const loading = useActivity();
   const title = useTitle(loading);
   if (!live) {
@@ -222,22 +222,9 @@ export function RefreshControl({ live = true }: { live?: boolean }) {
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button
-            variant="outline"
-            size="sm"
-            className="relative h-9 gap-1.5 overflow-hidden rounded-l-none px-3 shadow-none"
-          >
+          <Button variant="outline" size="sm" className="h-9 gap-1.5 rounded-l-none px-3 shadow-none">
             {interval ? `Every ${label}` : "Auto-refresh off"}
             <ChevronDownIcon className="text-muted-foreground" />
-            {interval ? (
-              // Fills until the next refresh: restarted (key) on every cycle and on a change of interval.
-              <span
-                key={`${cycle} ${interval}`}
-                aria-hidden="true"
-                className="absolute inset-x-0 bottom-0 h-0.5 origin-left animate-countdown bg-brand/70 motion-reduce:hidden"
-                style={{ animationDuration: `${interval}ms` }}
-              />
-            ) : null}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-44">
