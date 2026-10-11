@@ -143,6 +143,8 @@ jobs:
           cache: pnpm
           cache-dependency-path: ui/pnpm-lock.yaml
 
+      - run: pnpm install --frozen-lockfile
+
       # pnpm install wires the hooks (postinstall: lefthook install); this
       # asserts the wiring, not the local hooks a dev machine has. The binary
       # is called directly: plain `pnpm exec` recurses the whole workspace on
