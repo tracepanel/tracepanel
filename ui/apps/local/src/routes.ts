@@ -27,16 +27,43 @@ export type EntryView = "overview" | "calls";
 export type Route =
   | { name: "home" }
   | { name: Section; q: string; view?: EntryView | undefined }
-  | { name: "group"; section: EntrySection; key: string }
+  | { name: "group"; section: EntrySection; key: string; q?: string | undefined }
   | { name: "trace"; id: string; from?: string | undefined; tab?: string | undefined }
   | { name: "issue"; fingerprint: string; error?: boolean | undefined };
 
 /** A trace id: a ULID, in Crockford's alphabet (no I, L, O or U). */
 export const TRACE_ID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 
+// A search's period: its since:/until: terms, which every list of the same traces can take.
+const PERIOD_TERM = /^(?:since|until):\S+$/;
+
+export function periodOf(q: string): string {
+  return q
+    .split(/\s+/)
+    .filter((term) => PERIOD_TERM.test(term))
+    .join(" ");
+}
+
+/** `q` looking at `period` instead of its own. */
+export function withPeriod(q: string, period: string): string {
+  const rest = q.split(/\s+/).filter((term) => term && !PERIOD_TERM.test(term));
+  return [...rest, ...period.split(/\s+/).filter(Boolean)].join(" ");
+}
+
+/** The period of the page on screen: a link into a group or a list keeps looking at it. */
+export function currentPeriod(): string {
+  const route = parse(location.hash);
+  return "q" in route && route.q ? periodOf(route.q) : "";
+}
+
+/** One group's page, over the period the page it is opened from looks at. */
+export function groupRoute(section: EntrySection, key: string): Route {
+  return { name: "group", section, key, q: currentPeriod() || undefined };
+}
+
 /** One endpoint's group: its key is "METHOD route", the way the agent's issue endpoints write it too. */
 export function endpointGroup(method: string, route: string): Route {
-  return { name: "group", section: "endpoints", key: `${method} ${route}` };
+  return groupRoute("endpoints", `${method} ${route}`);
 }
 
 /** An issue's page, remembering whether it is an error (listed under Errors) or another finding. */
@@ -62,7 +89,7 @@ export function parse(hash: string): Route {
   }
   const group = /^group\/([a-z]+)\/(.+)$/.exec(path);
   if (group?.[1] && group[2] && isEntry(group[1])) {
-    return { name: "group", section: group[1], key: decodeURIComponent(group[2]) };
+    return { name: "group", section: group[1], key: decodeURIComponent(group[2]), q: q || undefined };
   }
   // Older links: one endpoint.
   if (path === "endpoint") {
@@ -86,7 +113,10 @@ export function href(route: Route): string {
   }
   // Errors and other issues share a page; `in` says which list it belongs to, for the crumbs and the menu.
   if (route.name === "issue") return `#/issue/${route.fingerprint}${route.error ? "?in=errors" : ""}`;
-  if (route.name === "group") return `#/group/${route.section}/${encodeURIComponent(route.key)}`;
+  if (route.name === "group") {
+    const query = route.q ? `?${new URLSearchParams({ q: route.q })}` : "";
+    return `#/group/${route.section}/${encodeURIComponent(route.key)}${query}`;
+  }
   const params = new URLSearchParams();
   if (route.q) params.set("q", route.q);
   if (route.view === "calls") params.set("view", "calls");

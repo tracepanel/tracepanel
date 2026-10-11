@@ -14,16 +14,54 @@ import { ArrowRightIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { CallsChart, Histogram, LatencyChart, Stat } from "./Charts";
 import { RefreshControl, useRefresh } from "./refresh";
-import { type EntrySection, go, href, issueRoute, traceHref } from "./routes";
+import { type EntrySection, go, href, issueRoute, traceHref, withPeriod } from "./routes";
 import { ENTRY } from "./sections";
 import { TracesTable } from "./tables";
+import { parseAbsolute, shortTime } from "./time";
 import { Breadcrumbs, DataTable, Loading, Meter, Mono, Td, Th, Tr } from "./ui";
 
 type Group = TraceGroup | GraphqlDetail;
 
-/** The data of one group: a GraphQL operation has its own endpoint (with resolvers), the rest is a search. */
-function load(source: DataSource, section: EntrySection, key: string): Promise<Group | null> {
-  return section === "graphql" ? source.getGraphqlOperation(key) : source.summarizeTraces(ENTRY[section].group(key));
+/**
+ * The data of one group over a period: a GraphQL operation has its own endpoint (with resolvers, and no period),
+ * the rest is a search.
+ */
+function load(source: DataSource, section: EntrySection, key: string, period: string): Promise<Group | null> {
+  if (section === "graphql") return source.getGraphqlOperation(key);
+  return source.summarizeTraces(`${ENTRY[section].group(key)} ${period}`.trim());
+}
+
+/** "since 15:27:14 until 15:42:00", or "the last 1h", for the period chip. */
+function describePeriod(period: string): string {
+  return period
+    .split(" ")
+    .map((term) => {
+      const [key = "", value = ""] = term.split(/:(.*)/s);
+      const at = parseAbsolute(value);
+      if (at) return `${key} ${shortTime(at)}`;
+      return key === "since" ? `the last ${value}` : `until ${value} ago`;
+    })
+    .join(" ");
+}
+
+/** The period a group is summarised over, and the way to see all of it; GraphQL detail has no period. */
+function PeriodChip({ section, groupKey, period }: { section: EntrySection; groupKey: string; period: string }) {
+  if (!period) return null;
+  const all = href({ name: "group", section, key: groupKey });
+  return (
+    <p className="flex items-center gap-2 text-sm text-muted-foreground">
+      {section === "graphql" ? (
+        <span>Showing all time: an operation's detail has no period ({describePeriod(period)} on the list).</span>
+      ) : (
+        <>
+          <span className="rounded-md border px-2 py-0.5 font-medium text-foreground">{describePeriod(period)}</span>
+          <a href={all} className="font-medium text-brand hover:underline">
+            All time
+          </a>
+        </>
+      )}
+    </p>
+  );
 }
 
 function Title({ section, groupKey }: { section: EntrySection; groupKey: string }) {
@@ -52,10 +90,13 @@ function Title({ section, groupKey }: { section: EntrySection; groupKey: string 
 export function GroupPage({
   section,
   groupKey,
+  period,
   source,
 }: {
   section: EntrySection;
   groupKey: string;
+  /** The since:/until: of the list it was opened from, if any. */
+  period: string;
   source: DataSource;
 }) {
   const [group, setGroup] = useState<Group | null | undefined>(undefined);
@@ -65,7 +106,7 @@ export function GroupPage({
   useEffect(() => {
     let cancelled = false;
     const run = () =>
-      load(source, section, groupKey).then(
+      load(source, section, groupKey, period).then(
         (result) => !cancelled && setGroup(result),
         () => !cancelled && setGroup(null),
       );
@@ -77,14 +118,14 @@ export function GroupPage({
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [section, groupKey, source, interval, tick]);
+  }, [section, groupKey, period, source, interval, tick]);
 
   if (group === undefined) return <Loading />;
   if (group === null || group.summary === null) {
     return (
       <Empty
         title={`No calls of ${groupKey}`}
-        action={<a href={href({ name: section, q: "" })}>All {ENTRY[section].label}</a>}
+        action={<a href={href({ name: section, q: period })}>All {ENTRY[section].label}</a>}
       >
         It has no stored traces yet.
       </Empty>
@@ -99,7 +140,9 @@ export function GroupPage({
       {/* One column no wider than the page: a long error message or SQL wraps instead of widening it. */}
       <header className="grid gap-2">
         <div className="flex items-center justify-between gap-3">
-          <Breadcrumbs items={[{ label: entry.label, href: `#/${section}` }, { label: groupKey }]} />
+          <Breadcrumbs
+            items={[{ label: entry.label, href: href({ name: section, q: period }) }, { label: groupKey }]}
+          />
           <RefreshControl />
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -109,13 +152,18 @@ export function GroupPage({
           <Button
             variant="outline"
             onClick={() =>
-              go({ name: section, q: entry.group(groupKey).replace(entry.scope, "").trim(), view: "calls" })
+              go({
+                name: section,
+                q: withPeriod(entry.group(groupKey).replace(entry.scope, "").trim(), period),
+                view: "calls",
+              })
             }
           >
             {s.calls === 1 ? "View the call" : `View all ${s.calls} calls`}
             <ArrowRightIcon />
           </Button>
         </div>
+        <PeriodChip section={section} groupKey={groupKey} period={period} />
       </header>
 
       <section className="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-2.5" aria-label="Summary">

@@ -6,7 +6,7 @@ import { useSearch } from "./data";
 import { EntryPage } from "./EntryPage";
 import { GroupPage } from "./GroupPage";
 import { IssuePage } from "./IssuePage";
-import { go, isEntry, parse, type Route, type Section } from "./routes";
+import { go, isEntry, parse, periodOf, type Route, type Section } from "./routes";
 import { SearchPalette } from "./SearchPalette";
 import { Sidebar, SidebarHandle, useSidebarWidth, visibleSections } from "./Sidebar";
 import { TracePage } from "./TracePage";
@@ -65,7 +65,13 @@ export function Console({ route, source }: { route: Route; source: DataSource })
   } else if (route.name === "group") {
     page = (
       <main className="min-h-0 min-w-0 overflow-y-auto bg-background">
-        <GroupPage key={`${route.section} ${route.key}`} section={route.section} groupKey={route.key} source={source} />
+        <GroupPage
+          key={`${route.section} ${route.key} ${route.q ?? ""}`}
+          section={route.section}
+          groupKey={route.key}
+          period={periodOf(route.q ?? "")}
+          source={source}
+        />
       </main>
     );
   } else if (route.name !== "home" && isEntry(route.name)) {
