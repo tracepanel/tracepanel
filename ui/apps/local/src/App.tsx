@@ -9,11 +9,7 @@ import {
   ExternalIcon,
   httpSource,
   Logo,
-  LogoMark,
   MethodBadge,
-  RuntimeIcon,
-  runtimeKind,
-  runtimeName,
   type TabId,
   TraceList,
   type TraceRow,
@@ -251,21 +247,26 @@ function useTabRows(history: TabHistory | null): TraceRow[] {
 }
 
 /** What served the page, as its mark and name; the versions in the tooltip ("Python 3.12 · Django 6.0"). */
-function RuntimeChip({ label }: { label: string }) {
-  const kind = runtimeKind(label);
-  return (
-    <span className="runtime-chip" title={`Served by ${label}`}>
-      {kind ? <RuntimeIcon kind={kind} /> : null}
-      {kind ? runtimeName(kind) : label.split(" · ")[0]}
-    </span>
-  );
-}
 
 /** Follow new: open each request as it arrives. */
 function FollowToggle({ follow, onFollow }: { follow: boolean; onFollow: (value: boolean) => void }) {
+  const byPointer = useRef(false);
   return (
-    <label className="toggle" title="Open each new request as it arrives">
-      <input type="checkbox" checked={follow} onChange={(event) => onFollow(event.target.checked)} />
+    <label
+      className="toggle"
+      title="Open each new request as it arrives"
+      onPointerDown={() => (byPointer.current = true)}
+    >
+      <input
+        type="checkbox"
+        checked={follow}
+        onChange={(event) => {
+          onFollow(event.target.checked);
+          // A click on the label focuses the hidden box, and Chrome then rings it: a mouse doesn't need the ring.
+          if (byPointer.current) event.target.blur();
+          byPointer.current = false;
+        }}
+      />
       <span className="toggle-track" aria-hidden="true" />
       Follow new
     </label>
@@ -660,7 +661,6 @@ function PanelApp({ route }: { route: Route }) {
       </button>
     </>
   );
-  const runtime = history?.runtime ? <RuntimeChip label={history.runtime} /> : null;
   const requestCount = `${tabRows.length} ${tabRows.length === 1 ? "request" : "requests"}`;
   // Docked at the bottom with a request open, the panel has no bar of its own: the logo over the list and the trace's
   // toolbar make one row across it (as in browser devtools).
@@ -679,11 +679,8 @@ function PanelApp({ route }: { route: Route }) {
       />
       {toolbarInTrace ? null : (
         <header className="bar">
-          <span className="flex shrink-0 items-center gap-2" title="Tracepanel">
-            <LogoMark className="size-7" />
-            <span className="sr-only">Tracepanel</span>
-            {runtime}
-          </span>
+          {/* The runtime is on the pill: the panel shows whose it is, not what served the page again. */}
+          <Logo className="shrink-0 gap-1.5 text-md [&_svg]:size-6" />
           {split ? (
             <span className="bar-title">Tracepanel</span>
           ) : (

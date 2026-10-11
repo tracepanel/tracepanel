@@ -507,7 +507,7 @@ a.dt-request-row {
 .dt-requests[data-compact] {
   display: grid;
   grid-template-columns: minmax(0, 1fr) repeat(4, auto);
-  column-gap: 0.625rem;
+  column-gap: 0.875rem;
 }
 .dt-requests[data-compact] > li {
   display: grid;
@@ -582,10 +582,9 @@ a.dt-request-row {
   align-items: center;
   gap: 0.25rem;
 }
-/* The number in a box of its own width: the icons stand in one column whatever the count. */
-.dt-request-queries-n {
-  min-width: 3ch;
-  text-align: right;
+/* The icon and its number together, the column aligned at its start: icons in a line, each number by its icon. */
+.dt-requests[data-compact] .dt-request-queries {
+  justify-self: start;
 }
 .dt-request-queries .dt-icon {
   color: var(--dt-text-3);
