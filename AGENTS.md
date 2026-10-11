@@ -31,7 +31,7 @@ scripts/   project scripts (UI build, docs lint, wheel checks)
 - CI runs the same five jobs (`Biome`, `TypeScript`, `API contract`, `ui-dist`, `fallow quality gate`); a PR lands only with all five green
 - `fallow audit` fails only on findings the change introduces
 - `ui/DESIGN.md` is generated from the `--dt-*` tokens by `pnpm design-md`; regenerate and commit it after token changes, CI checks the sync too
-- Renovate (self-hosted through `.github/workflows/renovate.yml`, config `renovate.json5`) proposes `ui/` dependency updates: minors and patches in one Monday PR, majors one by one. Its 48-hour release-age window matches `ui/pnpm-workspace.yaml`
+- Dependabot proposes `ui/` dependency updates (`.github/dependabot.yml`): minors and patches in one weekly PR, majors one by one. Its 48-hour cooldown matches `ui/pnpm-workspace.yaml`; no token or GitHub app is involved
 
 ## House rules
 
