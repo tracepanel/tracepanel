@@ -61,6 +61,7 @@ export const CARD_STYLE = `
   .card-code { color: #b8f25c; font: 12px "Geist Mono Variable", "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace; }
   .card-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12.5px "Geist Mono Variable", "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace; }
   .card-ms { color: #b9bfcd; font-size: 12px; }
+  .card-tag { margin-left: 8px; padding: 0 6px; border-radius: 999px; background: rgb(165 135 255 / 0.16); color: #bc9cff; font: 600 11px "Geist Variable", "Geist", ui-sans-serif, system-ui, sans-serif; }
   .card-more { margin: 4px 0 0; color: #8c93a6; font-size: 12px; }
   .card-skeleton { height: 10px; margin: 8px 0; border-radius: 5px; background: linear-gradient(90deg, rgb(255 255 255 / 0.05), rgb(255 255 255 / 0.11), rgb(255 255 255 / 0.05)); background-size: 200% 100%; animation: card-shimmer 1.2s linear infinite; }
   @keyframes card-shimmer { to { background-position: -200% 0; } }
@@ -84,6 +85,7 @@ export const CARD_STYLE = `
   :host([data-theme="light"]) .card-kind { background: rgb(217 119 6 / 0.1); color: #b45309; }
   :host([data-theme="light"]) .card-kind[data-tone="error"] { background: rgb(208 52 44 / 0.09); color: #d0342c; }
   :host([data-theme="light"]) .card-code { color: #3d7a0c; }
+  :host([data-theme="light"]) .card-tag { background: rgb(109 63 224 / 0.1); color: #6d3fe0; }
   :host([data-theme="light"]) [data-category="django"] { --k: rgb(95 100 112 / 0.3); }
   :host([data-theme="light"]) [data-category="view"], :host([data-theme="light"]) [data-category="code"] { --k: #7c4ff0; }
   :host([data-theme="light"]) [data-category="template"] { --k: #0d9488; }
@@ -95,8 +97,10 @@ export const CARD_STYLE = `
 `;
 
 export interface CardSource {
-  /** The page's own request (null once cleared), and the fetch/XHR requests it made after it loaded. */
-  requests(): { page: TraceInfo | null; later: readonly TraceInfo[] };
+  /** This page's requests, oldest first: the page (unless cleared) and its AJAX calls. The last is the pill's. */
+  requests(): readonly TraceInfo[];
+  /** The page's own request among them (null once cleared): tagged "page" in the list. */
+  page(): TraceInfo | null;
   /** The panel's API base, for the stored trace; null without one (only the headers are known). */
   api: URL | null;
   /** Whether the panel is open: the card stays away then. */
@@ -121,6 +125,11 @@ function ms(microseconds: number): string {
   const value = microseconds / 1000;
   if (value >= 1000) return `${(value / 1000).toFixed(1)} s`;
   return value >= 10 ? `${Math.round(value)} ms` : `${value.toFixed(1).replace(/\.0$/, "")} ms`;
+}
+
+/** As the pill shows time: whole milliseconds, seconds from one. */
+function pillMs(value: number): string {
+  return value >= 1000 ? `${(value / 1000).toFixed(1)} s` : `${Math.round(value)} ms`;
 }
 
 function statusChip(status: number | null | undefined): HTMLElement | null {
@@ -206,7 +215,8 @@ export function mountCard(root: ShadowRoot, badge: HTMLElement, source: CardSour
     row.append(name);
     const chip = statusChip(info.status);
     if (chip) row.append(chip);
-    row.append(element("span", "card-time", ms(trace?.duration ?? (info.totalMs ?? 0) * 1000)));
+    // The pill's number, rounded the pill's way: the two never disagree.
+    row.append(element("span", "card-time", pillMs(info.totalMs ?? (trace?.duration ?? 0) / 1000)));
     return row;
   }
 
@@ -255,7 +265,8 @@ export function mountCard(root: ShadowRoot, badge: HTMLElement, source: CardSour
       const kind = element("span", "card-kind", label);
       if (issue.kind === "error") kind.dataset["tone"] = "error";
       // The chip already says the kind ("N+1: 50 similar queries…"), and a count already in the title isn't repeated.
-      const title = issue.title.startsWith(`${label}: `) ? issue.title.slice(label.length + 2) : issue.title;
+      // "N+1: 50 similar queries …", "Duplicate queries: 10 identical …": the chip says what comes before the colon.
+      const title = issue.title.replace(/^[^:]{1,40}: /, "");
       const count = issue.count > 1 && !title.includes(String(issue.count)) ? `×${issue.count}` : "";
       row.append(kind, element("span", "card-title", title), element("span", "card-count", count));
       const hint = fixLine(issue);
@@ -272,7 +283,8 @@ export function mountCard(root: ShadowRoot, badge: HTMLElement, source: CardSour
     return section;
   }
 
-  function laterRequests(later: readonly TraceInfo[]): HTMLElement | null {
+  function otherRequests(later: readonly TraceInfo[]): HTMLElement | null {
+    const page = source.page();
     if (later.length === 0) return null;
     const failed = later.filter((info) => (info.status ?? 200) >= 500).length;
     // Only the ones worth a look get a row: failed, with issues, or slow. The rest are a count.
@@ -280,8 +292,8 @@ export function mountCard(root: ShadowRoot, badge: HTMLElement, source: CardSour
       (info) => (info.status ?? 200) >= 500 || Boolean(info.issues) || (info.totalMs ?? 0) >= SLOW_MS,
     );
     const section = element("section", "card-section");
-    // The fetch/XHR calls the page made once loaded: the pill's "+N", named as the panel names them.
-    const count = `AJAX from this page · ${later.length}`;
+    // The page's other requests (the page itself, its other AJAX calls): the pill's "N req".
+    const count = `Other requests on this page · ${later.length}`;
     section.append(
       element(
         "p",
@@ -294,11 +306,9 @@ export function mountCard(root: ShadowRoot, badge: HTMLElement, source: CardSour
       row.type = "button";
       const { method, path } = requestName(info);
       const chip = statusChip(info.status) ?? element("span");
-      row.append(
-        chip,
-        element("span", "card-path", `${method} ${path}`),
-        element("span", "card-ms", ms((info.totalMs ?? 0) * 1000)),
-      );
+      const name = element("span", "card-path", `${method} ${path}`);
+      if (info === page) name.append(element("span", "card-tag", "page"));
+      row.append(chip, name, element("span", "card-ms", pillMs(info.totalMs ?? 0)));
       row.title = `${method} ${path}\nClick to open it in the panel`;
       const trace = info.trace;
       if (trace) {
@@ -320,14 +330,14 @@ export function mountCard(root: ShadowRoot, badge: HTMLElement, source: CardSour
     else if (loading) card.append(element("div", "card-skeleton"), element("div", "card-skeleton"));
     const fixes = trace ? findings(info, trace) : null;
     if (fixes) card.append(fixes);
-    const after = laterRequests(later);
+    const after = otherRequests(later);
     if (after) card.append(after);
   }
 
-  /** The headline (the page, or its first request once the page is cleared) and the requests after it. */
+  /** The request the pill shows (the latest), and the page's others. */
   function current(): { info: TraceInfo | undefined; rest: readonly TraceInfo[] } {
-    const { page, later } = source.requests();
-    return page ? { info: page, rest: later } : { info: later[0], rest: later.slice(1) };
+    const all = source.requests();
+    return { info: all.at(-1), rest: all.slice(0, -1) };
   }
 
   function show(): void {
