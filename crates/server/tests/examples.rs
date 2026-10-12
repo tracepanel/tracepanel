@@ -355,6 +355,150 @@ async fn otel_spans_are_mapped_before_they_are_stored() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// Systems with no kind of their own (a graph database, a broker, an RPC system): the family's generic kind, their
+/// own name kept, and with no code per system, a list of their own (`/api/ops?system=neo4j`), a place in the counts,
+/// and N+1 issues from their family's rules.
+#[tokio::test]
+async fn any_system_is_listed_and_analyzed_by_its_family() {
+    let dir = std::env::temp_dir().join(format!("tracepanel-any-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = tracepanel_store_local::path_in(&dir);
+    let mut store = Store::open(&path).unwrap();
+    let router = tracepanel_server::router(Reader::new(&path), Activity::default());
+
+    let otel = |n: usize, name: &str, attrs: Value| {
+        let mut attrs = attrs;
+        attrs["otel.span_kind"] = attrs
+            .get("otel.span_kind")
+            .cloned()
+            .unwrap_or(Value::from("client"));
+        attrs["code.origin"] = Value::from("app/views.py:30 in feed");
+        serde_json::json!({
+            "id": format!("01M4ANYSPAN{n:015}"), "parent_id": "01M4ANYR00T000000000000000", "kind": "otel",
+            "name": name, "start": 1_791_000_000_000_100_i64 + n as i64 * 10, "duration": 900, "status": "ok",
+            "attrs": attrs,
+        })
+    };
+    let mut spans = vec![serde_json::json!({
+        "id": "01M4ANYR00T000000000000000", "parent_id": null, "kind": "http", "name": "GET /feed",
+        "start": 1_791_000_000_000_000_i64, "duration": 9000, "status": "ok", "attrs": {},
+    })];
+    for n in 1..=3 {
+        spans.push(otel(n, "MATCH", serde_json::json!({
+            "db.system.name": "neo4j", "db.operation.name": "MATCH", "db.namespace": "graph",
+            "db.query.text": format!("MATCH (u:User {{id: {n}}}) RETURN u"), "server.address": "graph.local",
+        })));
+        spans.push(otel(10 + n, "orders publish", serde_json::json!({
+            "otel.span_kind": "producer", "messaging.system": "nats", "messaging.destination.name": "orders",
+        })));
+        spans.push(otel(20 + n, "Users.get", serde_json::json!({
+            "rpc.system": "thrift", "rpc.service": "Users", "rpc.method": "get", "server.address": "users.local",
+        })));
+    }
+    let doc = serde_json::json!({
+        "id": "01M4ANYTRACE00000000000000", "kind": "http", "name": "GET /feed", "start": 1_791_000_000_000_000_i64,
+        "duration": 9000, "status": "ok",
+        "attrs": {"http.method": "GET", "http.route": "/feed", "http.status_code": 200, "service.name": "shop"},
+        "spans": spans, "logs": [], "errors": [], "links": [], "issues": [],
+    });
+    let batch = Batch {
+        frame: serde_json::to_vec(&vec![&doc]).unwrap(),
+        max_traces: Some(1000),
+        thresholds: Thresholds::default(),
+    };
+    let mut received = batch.decode().unwrap();
+    for trace in &mut received {
+        tracepanel_analysis::apply(trace, &batch.thresholds);
+    }
+    store.write(&received).unwrap();
+
+    let (_, trace) = get(&router, "/api/traces/01M4ANYTRACE00000000000000").await;
+    let errors: Vec<String> = validator()
+        .iter_errors(&trace)
+        .map(|error| error.to_string())
+        .collect();
+    assert!(errors.is_empty(), "as served: {errors:?}");
+    let mut kinds_of: Vec<&str> = trace["spans"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|span| span["kind"].as_str().unwrap())
+        .collect();
+    kinds_of.dedup();
+    assert_eq!(
+        kinds_of,
+        [
+            "http",
+            "db",
+            "messaging",
+            "rpc",
+            "db",
+            "messaging",
+            "rpc",
+            "db",
+            "messaging",
+            "rpc"
+        ]
+    );
+    let mut titles: Vec<&str> = trace["issues"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|issue| issue["title"].as_str().unwrap())
+        .collect();
+    titles.sort_unstable();
+    assert_eq!(
+        titles,
+        [
+            "N+1: 3 similar NATS messages · publish orders",
+            "N+1: 3 similar Neo4j commands · MATCH",
+            "N+1: 3 similar Thrift calls · Users/get",
+        ]
+    );
+
+    let (status, neo4j) = get(&router, "/api/ops?system=neo4j").await;
+    assert_eq!(status, StatusCode::OK);
+    let row = &neo4j["ops"][0];
+    assert_eq!(
+        (
+            row["system"].clone(),
+            row["family"].clone(),
+            row["target"].clone(),
+            row["op"].clone(),
+            row["calls"].clone()
+        ),
+        (
+            Value::from("neo4j"),
+            Value::from("datastore"),
+            Value::from("graph"),
+            Value::from("MATCH"),
+            Value::from(3)
+        )
+    );
+    assert_eq!(neo4j["ops"].as_array().unwrap().len(), 1);
+    let (_, counts) = get(&router, "/api/counts").await;
+    assert_eq!(
+        counts["sections"]["systems"],
+        serde_json::json!([
+            {"system": "neo4j", "family": "datastore", "label": "Neo4j"},
+            {"system": "nats", "family": "messaging", "label": "NATS"},
+            {"system": "thrift", "family": "rpc", "label": "Thrift"},
+        ])
+    );
+    let (_, values) = get(&router, "/api/values").await;
+    assert_eq!(
+        values["targets"],
+        serde_json::json!({"nats": ["orders"], "neo4j": ["graph"], "thrift": ["Users"]})
+    );
+    let key = row["key"].as_str().unwrap();
+    let (_, found) = get(&router, &format!("/api/traces?q=op:{key}")).await;
+    assert_eq!(found["traces"][0]["id"], "01M4ANYTRACE00000000000000");
+    let (_, ops) = get(&router, "/api/ops?q=family:rpc%20op:GET").await;
+    assert_eq!(ops["ops"][0]["system"], "thrift");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 async fn get(router: &axum::Router, uri: &str) -> (StatusCode, Value) {
     let request = Request::get(uri).body(Body::empty()).unwrap();
     let response = router.clone().oneshot(request).await.unwrap();

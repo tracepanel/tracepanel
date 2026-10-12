@@ -94,11 +94,10 @@ pub(crate) fn marks(count: usize) -> String {
     vec!["?"; count].join(", ")
 }
 
-/// One of the console's aggregated lists (Database, HTTP calls, Redis, Cache): a table of calls, one row per span,
-/// grouped by `key`, with `columns` for what names a group.
+/// One of the console's lists of operations: the `ops` table's rows of one `system` (all, for None), grouped by `key`,
+/// with `columns` for what names a group.
 pub(crate) struct Aggregate {
-    pub(crate) table: &'static str,
-    pub(crate) key: &'static str,
+    pub(crate) system: Option<&'static str>,
     pub(crate) columns: &'static str,
 }
 
@@ -112,12 +111,13 @@ pub(crate) fn aggregate(
     search: &search::Schema,
     limit: i64,
 ) -> Result<Vec<serde_json::Map<String, Value>>, ReadError> {
-    let Aggregate {
-        table,
-        key,
-        columns,
-    } = of;
-    let (condition, mut params) = search::compile_where(query, search)?;
+    let Aggregate { system, columns } = of;
+    let (table, key) = ("ops", "key");
+    let (mut condition, mut params) = search::compile_where(query, search)?;
+    if let Some(system) = system {
+        condition = format!("system = ? AND ({condition})");
+        params.insert(0, Sql::Text((*system).to_owned()));
+    }
     params.push(Sql::Integer(limit));
     let rows = objects(
         db,
@@ -345,10 +345,12 @@ impl Reader {
         Ok(serde_json::json!({
             "route": distinct(&format!("SELECT DISTINCT route FROM traces WHERE route != '' AND {traces} ORDER BY 1"))?,
             "logger": distinct(&format!("SELECT DISTINCT logger FROM logs WHERE {of_trace} ORDER BY 1"))?,
-            "db": distinct(&format!("SELECT DISTINCT alias FROM sql WHERE {of_trace} ORDER BY 1"))?,
-            "host": distinct(&format!("SELECT DISTINCT host FROM calls WHERE {of_trace} ORDER BY 1"))?,
-            "redis": distinct(&format!("SELECT DISTINCT alias FROM redis WHERE {of_trace} ORDER BY 1"))?,
-            "cache": distinct(&format!("SELECT DISTINCT alias FROM cache_calls WHERE {of_trace} ORDER BY 1"))?,
+            "db": distinct(&format!("SELECT DISTINCT target FROM ops WHERE system = 'sql' AND {of_trace} ORDER BY 1"))?,
+            "host": distinct(&format!("SELECT DISTINCT target FROM ops WHERE system = 'http' AND {of_trace} ORDER BY 1"))?,
+            "redis": distinct(&format!("SELECT DISTINCT target FROM ops WHERE system = 'redis' AND {of_trace} ORDER BY 1"))?,
+            "cache": distinct(&format!("SELECT DISTINCT target FROM ops WHERE system = 'cache' AND {of_trace} ORDER BY 1"))?,
+            "targets": by_system(&db, "target", of_trace, service)?,
+            "ops": by_system(&db, "op", of_trace, service)?,
             "task": distinct(&format!("SELECT DISTINCT name FROM traces WHERE kind = 'task' AND {traces} ORDER BY 1"))?,
             "job": distinct(&format!("SELECT DISTINCT name FROM traces WHERE kind = 'command' AND {traces} ORDER BY 1"))?,
             "queue": distinct(&format!(
@@ -621,15 +623,36 @@ impl Reader {
         Ok(Page { items, next })
     }
 
-    /// SQL statements aggregated across stored traces, heaviest first.
+    /// Operations of every system (or one, `system:` in the query) aggregated per key, heaviest first: the fields
+    /// every list has, what names the group (system, family, target, op, template, name), and the extras some
+    /// systems have (statement and vendor for SQL, hits and misses for a cache, via for Redis), null elsewhere.
+    pub fn list_ops(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
+        let db = self.connect()?;
+        let rows = aggregate(
+            &db,
+            &Aggregate {
+                system: None,
+                columns: "MAX(system) AS system, MAX(family) AS family, MAX(target) AS target, MAX(op) AS op, \
+                          MAX(template) AS template, MAX(name) AS name, MAX(statement) AS statement, \
+                          MAX(vendor) AS vendor, MAX(via) AS via, \
+                          CASE WHEN MAX(family) = 'cache' THEN COALESCE(SUM(hit = 1), 0) END AS hits, \
+                          CASE WHEN MAX(family) = 'cache' THEN COALESCE(SUM(hit = 0), 0) END AS misses",
+            },
+            query,
+            &OPS_SEARCH,
+            limit,
+        )?;
+        Ok(objects_of(rows))
+    }
+
+    /// SQL statements aggregated across stored traces, heaviest first (the Database page's rows, as before `ops`).
     pub fn list_queries(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
         let db = self.connect()?;
         let rows = aggregate(
             &db,
             &Aggregate {
-                table: "sql",
-                key: "fp",
-                columns: "fp, alias, MAX(vendor) AS vendor, statement, name",
+                system: Some("sql"),
+                columns: "key AS fp, target AS alias, MAX(vendor) AS vendor, template AS statement, name",
             },
             query,
             &QUERY_SEARCH,
@@ -650,9 +673,8 @@ impl Reader {
     pub fn list_calls(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
         let db = self.connect()?;
         let aggregate_of = Aggregate {
-            table: "calls",
-            key: "key",
-            columns: "method, host, template",
+            system: Some("http"),
+            columns: "op AS method, target AS host, template",
         };
         Ok(objects_of(aggregate(
             &db,
@@ -667,9 +689,8 @@ impl Reader {
     pub fn list_redis(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
         let db = self.connect()?;
         let aggregate_of = Aggregate {
-            table: "redis",
-            key: "key",
-            columns: "alias, command, template, via",
+            system: Some("redis"),
+            columns: "target AS alias, op AS command, template, via",
         };
         Ok(objects_of(aggregate(
             &db,
@@ -684,9 +705,8 @@ impl Reader {
     pub fn list_cache(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
         let db = self.connect()?;
         let aggregate_of = Aggregate {
-            table: "cache_calls",
-            key: "key",
-            columns: "alias, MAX(system) AS system, op, template, \
+            system: Some("cache"),
+            columns: "target AS alias, MAX(vendor) AS system, op, template, \
                       COALESCE(SUM(hit = 1), 0) AS hits, COALESCE(SUM(hit = 0), 0) AS misses",
         };
         Ok(objects_of(aggregate(
@@ -844,17 +864,24 @@ impl Reader {
             [service],
             |row| row.get(0),
         )?;
-        // Whether a table of calls has rows (of the app's traces): the console shows that page only then.
-        let any = |table: &str| -> rusqlite::Result<bool> {
-            db.query_row(
-                &format!(
-                    "SELECT EXISTS (SELECT 1 FROM {table} WHERE ?1 IS NULL OR trace_id IN \
-                     (SELECT id FROM traces WHERE service = ?1))"
-                ),
-                [service],
-                |row| row.get(0),
-            )
+        // The systems with operations (of the app's traces), each with its family: the console lists a page for
+        // each, in the families' order, then by name.
+        let mut systems: Vec<(String, String)> = {
+            let mut statement = db.prepare(
+                "SELECT DISTINCT system, family FROM ops WHERE ?1 IS NULL OR trace_id IN \
+                 (SELECT id FROM traces WHERE service = ?1)",
+            )?;
+            let rows = statement.query_map([service], |row| Ok((row.get(0)?, row.get(1)?)))?;
+            rows.collect::<rusqlite::Result<_>>()?
         };
+        let rank = |family: &str| {
+            tracepanel_analysis::ops::FAMILIES
+                .iter()
+                .position(|known| *known == family)
+                .unwrap_or(usize::MAX)
+        };
+        systems.sort_by(|(a, af), (b, bf)| rank(af).cmp(&rank(bf)).then_with(|| a.cmp(b)));
+        let any = |system: &str| systems.iter().any(|(name, _)| name == system);
         let count = |map: &HashMap<String, i64>, key: &str| map.get(key).copied().unwrap_or(0);
         let errors = count(&kinds, "error");
         Ok(serde_json::json!({
@@ -868,12 +895,54 @@ impl Reader {
                 "websockets": count(&traces, "websocket"),
                 "jobs": count(&traces, "command"),
                 // Outgoing HTTP calls, Redis commands and cache calls were recorded: the console shows their pages.
-                "calls": any("calls")?,
-                "redis": any("redis")?,
-                "cache": any("cache_calls")?,
+                "calls": any("http"),
+                "redis": any("redis"),
+                "cache": any("cache"),
+                "systems": systems
+                    .iter()
+                    .map(|(system, family)| {
+                        serde_json::json!({
+                            "system": system,
+                            "family": family,
+                            "label": tracepanel_analysis::ops::display_name(system),
+                        })
+                    })
+                    .collect::<Vec<_>>(),
             },
         }))
     }
+}
+
+/// One column of each system's operations, its distinct values for the console's filters: the targets (databases,
+/// instances, hosts, topics) or the operations (SELECT, GET, find, publish).
+fn by_system(
+    db: &Connection,
+    column: &str,
+    of_trace: &str,
+    service: &str,
+) -> rusqlite::Result<Value> {
+    let mut statement = db.prepare(&format!(
+        "SELECT DISTINCT system, {column} FROM ops WHERE {column} != '' AND {of_trace} ORDER BY 1, 2"
+    ))?;
+    let params: Vec<&dyn rusqlite::ToSql> = if statement.parameter_count() == 0 {
+        vec![]
+    } else {
+        vec![&service]
+    };
+    let mut by_system = serde_json::Map::new();
+    let rows = statement.query_map(params.as_slice(), |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+    })?;
+    for row in rows {
+        let (system, target) = row?;
+        by_system
+            .entry(system)
+            .or_insert_with(|| Value::Array(Vec::new()))
+            .as_array_mut()
+            .expect("an array")
+            .push(Value::from(target));
+    }
+    Ok(Value::Object(by_system))
 }
 
 /// What runs an app, as the SDKs label it for the panel: "Python 3.12 · Django 6.0", "Go 1.27".

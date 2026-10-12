@@ -1,33 +1,16 @@
-import {
-  type CacheRow,
-  type CallRow,
-  type DataSource,
-  Empty,
-  type KnownValues,
-  type QueryRow,
-  type RedisRow,
-  type SearchSpec,
-} from "@tracepanel/ui";
+import { type DataSource, Empty, type KnownValues, type OpRow, type SearchSpec } from "@tracepanel/ui";
+import type { Family } from "@tracepanel/ui/lib/systems";
 import { type ReactNode, useCallback } from "react";
 import { usePaged, useSearch } from "./data";
 import { EmptyPage } from "./EmptyPage";
 import { refineQuery } from "./EntryPage";
 import { RefreshControl } from "./refresh";
-import { type EntrySection, go, type Section, traceHref } from "./routes";
+import { type EntrySection, go, type OpsSection, type Section, systemOfSection, traceHref } from "./routes";
 import { SearchBar } from "./SearchBar";
 import { byProject, ServicesView } from "./ServicesView";
 import { useScope } from "./scope";
-import { DATA_LABELS } from "./sections";
-import {
-  CacheTable,
-  CallsTable,
-  IssuesTable,
-  LogsTable,
-  MailsTable,
-  QueriesTable,
-  RedisTable,
-  TracesTable,
-} from "./tables";
+import { pageMeta } from "./sections";
+import { IssuesTable, LogsTable, MailsTable, OpsTable, TracesTable } from "./tables";
 import { Loading, LoadMore, PageHeader } from "./ui";
 
 type DataSection = Exclude<Section, EntrySection>;
@@ -40,21 +23,19 @@ interface DataPageProps {
   source: DataSource;
   spec: SearchSpec | null;
   known: KnownValues;
+  /** The systems in the store and their families (the agent's counts): a system's page takes its family's words. */
+  systems?: readonly { system: string; family: Family; label: string }[] | undefined;
 }
 
 /** What the work touched (services, SQL, emails, logs), what went wrong (issues), and ⌘K's search results. */
-const SUMMARIES: ReadonlySet<string> = new Set(["services", "queries", "redis", "cache", "calls"]);
+const SUMMARIES: ReadonlySet<string> = new Set(["services"]);
 
 /** What each section says before anything is stored. Search results (traces) always keep their search bar. */
-const PRISTINE: Partial<Record<DataSection, { title: string; text: string }>> = {
+const PRISTINE: Partial<Record<Exclude<DataSection, OpsSection>, { title: string; text: string }>> = {
   services: {
     title: "No services yet",
     text: "Databases, caches, mail servers and brokers appear here after the first call that uses them.",
   },
-  queries: { title: "No queries yet", text: "SQL from requests, tasks and jobs is aggregated here." },
-  redis: { title: "No Redis commands yet", text: "Redis commands your app runs are aggregated here." },
-  cache: { title: "No cache calls yet", text: "Reads and writes through your framework's cache are aggregated here." },
-  calls: { title: "No HTTP calls yet", text: "HTTP calls your app makes to other services are aggregated here." },
   mails: { title: "No emails yet", text: "Emails your app sends show up here." },
   logs: { title: "No log records yet", text: "Records from requests, tasks and jobs show up here." },
   errors: {
@@ -67,47 +48,51 @@ const PRISTINE: Partial<Record<DataSection, { title: string; text: string }>> = 
   },
 };
 
-type CallSection = "queries" | "redis" | "cache" | "calls";
-
-interface CallTableProps {
-  source: DataSource;
-  open: string | null;
-  onOpen: (key: string | null) => void;
+/** A data page: its system (a system's page), the system's family, its name and words, what it says when empty. */
+function pageOfSection(section: DataSection, systems: DataPageProps["systems"]) {
+  const system = systemOfSection(section);
+  const entry = systems?.find((each) => each.system === system);
+  const family = entry?.family;
+  const meta = pageMeta(section, family, entry?.label);
+  const pristine = system ? systemPristine(meta.noun) : PRISTINE[section as keyof typeof PRISTINE];
+  return { system, family, meta, pristine };
 }
 
-/** The pages of calls the app makes: where their rows come from, how they are shown, what they are called. */
-const CALL_PAGES: Record<
-  CallSection,
-  {
-    noun: string;
-    load: (source: DataSource, q: string) => Promise<readonly unknown[]>;
-    table: (items: unknown[], props: CallTableProps) => ReactNode;
-  }
-> = {
-  queries: {
-    noun: "queries",
-    load: (source, q) => source.listQueries(q),
-    table: (items, props) => <QueriesTable items={items as QueryRow[]} {...props} />,
-  },
-  redis: {
-    noun: "Redis commands",
-    load: (source, q) => source.listRedis(q),
-    table: (items, { open, onOpen }) => <RedisTable items={items as RedisRow[]} open={open} onOpen={onOpen} />,
-  },
-  cache: {
-    noun: "cache calls",
-    load: (source, q) => source.listCache(q),
-    table: (items, { open, onOpen }) => <CacheTable items={items as CacheRow[]} open={open} onOpen={onOpen} />,
-  },
-  calls: {
-    noun: "HTTP calls",
-    load: (source, q) => source.listCalls(q),
-    table: (items, { open, onOpen }) => <CallsTable items={items as CallRow[]} open={open} onOpen={onOpen} />,
-  },
-};
+/** How many rows a list has, and its error. */
+function listed<E>(list: { data?: readonly unknown[] | undefined; error: E }) {
+  return { size: list.data?.length, error: list.error };
+}
 
-function isCallSection(section: string): section is CallSection {
-  return section in CALL_PAGES;
+/** Services and the systems' pages are summaries: they change slowly, and refresh on demand. */
+function isSummary(section: DataSection): boolean {
+  return SUMMARIES.has(section) || systemOfSection(section) !== null;
+}
+
+/** What a system's page says before anything is stored. */
+function systemPristine(noun = "operations"): { title: string; text: string } {
+  return {
+    title: `No ${noun} yet`,
+    text: `${noun.charAt(0).toUpperCase()}${noun.slice(1)} your app makes show up here.`,
+  };
+}
+
+/** A paged list's body: loading, its rows with "Load older" while there are more, or what to say when it is empty. */
+function pagedBody<T>(
+  list: { items: T[] | undefined; hasMore: boolean; loading: boolean; more: () => void },
+  moreLabel: string,
+  rows: (items: T[]) => ReactNode,
+  empty: ReactNode,
+): ReactNode {
+  return listBody(
+    list.items,
+    (items) => (
+      <>
+        {rows(items)}
+        {list.hasMore ? <LoadMore label={moreLabel} loading={list.loading} onMore={list.more} /> : null}
+      </>
+    ),
+    empty,
+  );
 }
 
 /** A list's body: loading, its rows, or what to say when nothing matches. */
@@ -116,8 +101,9 @@ function listBody<T>(data: T[] | undefined, rows: (items: T[]) => ReactNode, emp
   return data.length > 0 ? rows(data) : empty;
 }
 
-export function DataPage({ section, q, open, source, spec, known }: DataPageProps) {
+export function DataPage({ section, q, open, source, spec, known, systems }: DataPageProps) {
   const { setService } = useScope();
+  const { system, family, meta, pristine } = pageOfSection(section, systems);
   // Opening a row replaces the entry: it is no step to go Back through, but it survives leaving and coming back.
   const setOpen = (key: string | null) => go({ name: section, q, open: key ?? undefined }, true);
   // Typing replaces the entry, so Back skips the letters; a chip or a menu adds one, so Back undoes it.
@@ -158,9 +144,8 @@ export function DataPage({ section, q, open, source, spec, known }: DataPageProp
   );
   const stats = useSearch(
     useCallback(
-      (query: string): Promise<readonly unknown[]> =>
-        isCallSection(section) ? CALL_PAGES[section].load(source, query) : Promise.resolve([]),
-      [source, section],
+      (query: string): Promise<OpRow[]> => (system ? source.listOps(system, query) : Promise.resolve([])),
+      [source, system],
     ),
     q,
     0,
@@ -179,25 +164,20 @@ export function DataPage({ section, q, open, source, spec, known }: DataPageProp
     q,
   );
 
-  const loaded = {
-    traces: { size: traces.items?.length, error: traces.error },
-    logs: { size: logs.items?.length, error: logs.error },
-    mails: { size: mails.items?.length, error: mails.error },
-    services: {
-      size: services.data ? byProject(services.data.apps).length + services.data.services.length : undefined,
-      error: services.error,
-    },
-    queries: { size: stats.data?.length, error: stats.error },
-    redis: { size: stats.data?.length, error: stats.error },
-    cache: { size: stats.data?.length, error: stats.error },
-    calls: { size: stats.data?.length, error: stats.error },
-    errors: { size: issues.data?.length, error: issues.error },
-    issues: { size: issues.data?.length, error: issues.error },
-  }[section];
+  const loaded =
+    {
+      traces: { size: traces.items?.length, error: traces.error },
+      logs: { size: logs.items?.length, error: logs.error },
+      mails: { size: mails.items?.length, error: mails.error },
+      services: {
+        size: services.data ? byProject(services.data.apps).length + services.data.services.length : undefined,
+        error: services.error,
+      },
+      errors: { size: issues.data?.length, error: issues.error },
+      issues: { size: issues.data?.length, error: issues.error },
+    }[section as string] ?? listed(stats);
 
-  const meta = DATA_LABELS[section];
   // Nothing stored yet (not a search that matched nothing): no search, filters or refresh to show.
-  const pristine = PRISTINE[section];
   if (!q && loaded.size === 0 && pristine) {
     return (
       <EmptyPage section={section} title={meta.label} description={meta.description} empty={pristine.title}>
@@ -208,45 +188,27 @@ export function DataPage({ section, q, open, source, spec, known }: DataPageProp
 
   let body: ReactNode;
   if (section === "traces") {
-    body = traces.items ? (
-      traces.items.length ? (
-        <>
-          <TracesTable items={traces.items} selectedId={null} hrefFor={traceHref} />
-          {traces.hasMore ? <LoadMore label="Load older" loading={traces.loading} onMore={traces.more} /> : null}
-        </>
-      ) : (
-        <Empty title="No traces match">
-          Search names and paths, or filter: status&gt;=500, task:send_*, kind:command.
-        </Empty>
-      )
-    ) : (
-      <Loading />
+    body = pagedBody(
+      traces,
+      "Load older",
+      (items) => <TracesTable items={items} selectedId={null} hrefFor={traceHref} />,
+      <Empty title="No traces match">
+        Search names and paths, or filter: status&gt;=500, task:send_*, kind:command.
+      </Empty>,
     );
   } else if (section === "logs") {
-    body = logs.items ? (
-      logs.items.length ? (
-        <>
-          <LogsTable items={logs.items} onFilter={refine} open={open ?? null} onOpen={setOpen} />
-          {logs.hasMore ? <LoadMore label="Load older logs" loading={logs.loading} onMore={logs.more} /> : null}
-        </>
-      ) : (
-        <Empty title="No log records match">Records from requests, tasks and jobs are searchable here.</Empty>
-      )
-    ) : (
-      <Loading />
+    body = pagedBody(
+      logs,
+      "Load older logs",
+      (items) => <LogsTable items={items} onFilter={refine} open={open ?? null} onOpen={setOpen} />,
+      <Empty title="No log records match">Records from requests, tasks and jobs are searchable here.</Empty>,
     );
   } else if (section === "mails") {
-    body = mails.items ? (
-      mails.items.length ? (
-        <>
-          <MailsTable items={mails.items} source={source} open={open ?? null} onOpen={setOpen} />
-          {mails.hasMore ? <LoadMore label="Load older emails" loading={mails.loading} onMore={mails.more} /> : null}
-        </>
-      ) : (
-        <Empty title={q ? "No emails match" : "No emails yet"}>Emails your app sends show up here.</Empty>
-      )
-    ) : (
-      <Loading />
+    body = pagedBody(
+      mails,
+      "Load older emails",
+      (items) => <MailsTable items={items} source={source} open={open ?? null} onOpen={setOpen} />,
+      <Empty title={q ? "No emails match" : "No emails yet"}>Emails your app sends show up here.</Empty>,
     );
   } else if (section === "services") {
     body = services.data ? (
@@ -260,12 +222,11 @@ export function DataPage({ section, q, open, source, spec, known }: DataPageProp
     ) : (
       <Loading />
     );
-  } else if (isCallSection(section)) {
-    const page = CALL_PAGES[section];
+  } else if (system) {
     body = listBody(
-      stats.data ? [...stats.data] : undefined,
-      (items) => page.table(items, { source, open: open ?? null, onOpen: setOpen }),
-      <Empty title={`No ${page.noun} match`}>Try a broader search, or another filter.</Empty>,
+      stats.data,
+      (items) => <OpsTable items={items} source={source} open={open ?? null} onOpen={setOpen} />,
+      <Empty title={`No ${meta.noun ?? "operations"} match`}>Try a broader search, or another filter.</Empty>,
     );
   } else {
     body = listBody(
@@ -281,10 +242,11 @@ export function DataPage({ section, q, open, source, spec, known }: DataPageProp
       <PageHeader
         title={section === "traces" ? "Search" : meta.label}
         description={meta.description}
-        actions={<RefreshControl live={!SUMMARIES.has(section)} />}
+        actions={<RefreshControl live={!isSummary(section)} />}
       />
       <SearchBar
         section={section}
+        family={family}
         q={q}
         spec={spec}
         error={loaded.error}

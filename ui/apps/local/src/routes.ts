@@ -5,32 +5,12 @@ import { useEffect, useState } from "react";
 export type EntrySection = "endpoints" | "graphql" | "tasks" | "websockets" | "jobs";
 export const ENTRY_SECTIONS: EntrySection[] = ["endpoints", "graphql", "tasks", "websockets", "jobs"];
 
+/** A system's page of operations: `ops/sql`, `ops/redis`, `ops/mongodb`, `ops/neo4j`… one per system in the data. */
+export type OpsSection = `ops/${string}`;
+
 /** `traces` is search results (⌘K "search all"), not a menu item. */
-export type Section =
-  | EntrySection
-  | "services"
-  | "queries"
-  | "redis"
-  | "cache"
-  | "calls"
-  | "mails"
-  | "logs"
-  | "errors"
-  | "issues"
-  | "traces";
-export const SECTIONS: Section[] = [
-  ...ENTRY_SECTIONS,
-  "services",
-  "queries",
-  "redis",
-  "cache",
-  "calls",
-  "mails",
-  "logs",
-  "errors",
-  "issues",
-  "traces",
-];
+export type Section = EntrySection | "services" | OpsSection | "mails" | "logs" | "errors" | "issues" | "traces";
+export const SECTIONS: Section[] = [...ENTRY_SECTIONS, "services", "mails", "logs", "errors", "issues", "traces"];
 
 export type EntryView = "overview" | "calls";
 
@@ -86,6 +66,30 @@ export function issueRoute(fingerprint: string, kind: string): Route {
   return { name: "issue", fingerprint, error: kind === "error", q: currentPeriod() || undefined };
 }
 
+/** Pages that were sections of their own before every system got one: old links still open them. */
+const LEGACY: Record<string, OpsSection> = {
+  queries: "ops/sql",
+  redis: "ops/redis",
+  cache: "ops/cache",
+  calls: "ops/http",
+};
+const OPS_SECTION = /^ops\/[\w.:-]+$/;
+
+/** A system's page. */
+export function opsSection(system: string): OpsSection {
+  return `ops/${system}`;
+}
+
+/** The system a page lists the operations of, or null for any other page. */
+export function systemOfSection(section: string): string | null {
+  return OPS_SECTION.test(section) ? section.slice("ops/".length) : null;
+}
+
+function sectionOf(path: string): Section | null {
+  const section = LEGACY[path] ?? path;
+  return (SECTIONS as string[]).includes(section) || OPS_SECTION.test(section) ? (section as Section) : null;
+}
+
 export function isEntry(section: string): section is EntrySection {
   return (ENTRY_SECTIONS as string[]).includes(section);
 }
@@ -114,9 +118,10 @@ export function parse(hash: string): Route {
   if (group?.[1] && group[2] && isEntry(group[1])) {
     return { name: "group", section: group[1], key: decodeURIComponent(group[2]), q: q || undefined };
   }
-  if ((SECTIONS as string[]).includes(path)) {
+  const section = sectionOf(path);
+  if (section) {
     const view = params.get("view") === "calls" ? "calls" : undefined;
-    return { name: path as Section, q, view, open: params.get("open") ?? undefined };
+    return { name: section, q, view, open: params.get("open") ?? undefined };
   }
   return { name: "home" };
 }

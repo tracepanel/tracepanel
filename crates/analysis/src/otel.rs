@@ -3,9 +3,11 @@
 //! An SDK sends a span an OpenTelemetry instrumentation made as it is: kind `otel`, the span's name, and its
 //! attributes, with `otel.span_kind`, `otel.scope` and the `code.origin` the SDK adds. Here it becomes what the
 //! SDKs' own spans are (`sql`, `redis`, `http.client`) or a kind per system (`mongodb`, `kafka`, `grpc`…), before
-//! the issues are found and the trace is stored, so nothing downstream tells them apart. Both the older and the
-//! current names of the conventions' attributes are read (`db.statement` and `db.query.text`, `http.method` and
-//! `http.request.method`…). Whatever isn't recognized stays a `function`.
+//! the issues are found and the trace is stored, so nothing downstream tells them apart. A database, broker or RPC
+//! system without a kind of its own gets its family's (`db`, `messaging`, `rpc`), its name kept in `db.system`,
+//! `messaging.system` or `rpc.system`: listed and analyzed like the known ones (`ops`). Both the older and the current
+//! names of the conventions' attributes are read (`db.statement` and `db.query.text`, `http.method` and
+//! `http.request.method`…). Whatever else isn't recognized (a consumer's work, a server span) stays a `function`.
 
 use regex::Regex;
 use serde_json::{Map, Value};
@@ -82,6 +84,12 @@ const DATASTORES: &[(&str, &str)] = &[
     ("memcached", "memcached"),
 ];
 
+/// The kinds of the systems without one of their own: any other database, broker or RPC system, its own name kept in
+/// `db.system`, `messaging.system` or `rpc.system`. A new system needs no code to be recorded, listed and analyzed.
+pub const GENERIC_DB: &str = "db";
+pub const GENERIC_MESSAGING: &str = "messaging";
+pub const GENERIC_RPC: &str = "rpc";
+
 /// Message brokers with a span kind of their own.
 const BROKERS: &[(&str, &str)] = &[
     ("kafka", "kafka"),
@@ -152,6 +160,10 @@ pub fn map(name: &str, attrs: &Attrs) -> Mapped {
         if let Some((_, kind)) = DATASTORES.iter().find(|(name, _)| *name == system) {
             return datastore(name, attrs, kind, &system);
         }
+        // Any other database (neo4j, couchbase, influxdb…): the family's kind, `db`, with its own name kept.
+        if !SQL_SYSTEMS.contains(&system.as_str()) {
+            return datastore(name, attrs, GENERIC_DB, &system);
+        }
     }
     if text(attrs, &["rpc.system"]).as_deref() == Some("aws-api")
         && text(attrs, &["rpc.service"]).as_deref() == Some("DynamoDB")
@@ -161,8 +173,16 @@ pub fn map(name: &str, attrs: &Attrs) -> Mapped {
     if let Some(mapped) = messaging(name, attrs, &span_kind) {
         return mapped;
     }
-    if text(attrs, &["rpc.system"]).as_deref() == Some("grpc") && span_kind == "client" {
-        return grpc(name, attrs);
+    if span_kind == "client"
+        && let Some(system) = text(attrs, &["rpc.system"]).map(|system| system.to_lowercase())
+    {
+        // gRPC has a kind of its own; any other RPC system (thrift, jsonrpc, aws-api…) the family's, `rpc`.
+        let kind = if system == "grpc" {
+            "grpc"
+        } else {
+            GENERIC_RPC
+        };
+        return rpc(name, attrs, kind, &system);
     }
     if span_kind == "client"
         && let Some(method) = text(attrs, &["http.request.method", "http.method"])
@@ -577,7 +597,13 @@ fn datastore(name: &str, attrs: &Attrs, kind: &str, system: &str) -> Mapped {
 /// A message sent to a broker. What a consumer does with one is its own work, and stays a function.
 fn messaging(name: &str, attrs: &Attrs, span_kind: &str) -> Option<Mapped> {
     let system = text(attrs, &["messaging.system"])?.to_lowercase();
-    let (_, kind) = BROKERS.iter().find(|(name, _)| *name == system)?;
+    // A known broker its kind, and its name as tracepanel spells it; any other (nats, pulsar…) `messaging`, as sent.
+    let (kind, system) = BROKERS
+        .iter()
+        .find(|(name, _)| *name == system)
+        .map_or((GENERIC_MESSAGING, system.clone()), |(_, kind)| {
+            (*kind, (*kind).to_owned())
+        });
     let operation = text(
         attrs,
         &[
@@ -597,7 +623,7 @@ fn messaging(name: &str, attrs: &Attrs, span_kind: &str) -> Option<Mapped> {
         &["messaging.destination.name", "messaging.destination"],
     );
     let mut out = common(attrs);
-    out.insert("messaging.system".into(), Value::from(*kind));
+    out.insert("messaging.system".into(), Value::from(system));
     out.insert("messaging.operation".into(), Value::from(operation.clone()));
     if let Some(destination) = &destination {
         out.insert(
@@ -607,7 +633,7 @@ fn messaging(name: &str, attrs: &Attrs, span_kind: &str) -> Option<Mapped> {
     }
     server(attrs, &mut out);
     Some(Mapped {
-        kind: (*kind).into(),
+        kind: kind.into(),
         name: destination.map_or_else(
             || name.to_owned(),
             |destination| format!("{operation} {destination}"),
@@ -617,12 +643,13 @@ fn messaging(name: &str, attrs: &Attrs, span_kind: &str) -> Option<Mapped> {
     })
 }
 
-fn grpc(name: &str, attrs: &Attrs) -> Mapped {
+/// An RPC call: gRPC (whose status code says whether it failed), or any other RPC system as the `rpc` kind.
+fn rpc(name: &str, attrs: &Attrs, kind: &str, system: &str) -> Mapped {
     let service = text(attrs, &["rpc.service"]);
     let method = text(attrs, &["rpc.method"]);
     let code = number(attrs, &["rpc.grpc.status_code"]);
     let mut out = common(attrs);
-    out.insert("rpc.system".into(), Value::from("grpc"));
+    out.insert("rpc.system".into(), Value::from(system));
     if let Some(service) = &service {
         out.insert("rpc.service".into(), Value::from(service.clone()));
     }
@@ -638,10 +665,10 @@ fn grpc(name: &str, attrs: &Attrs) -> Mapped {
         _ => name.to_owned(),
     };
     Mapped {
-        kind: "grpc".into(),
+        kind: kind.into(),
         name,
         attrs: out,
-        error: code.is_some_and(|code| code != 0),
+        error: code.is_some_and(|code| code != 0) || attrs.contains_key("error.type"),
     }
 }
 

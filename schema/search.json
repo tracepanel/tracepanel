@@ -64,6 +64,10 @@
       "type": "text",
       "help": "Made this cache call (id from Cache)"
     },
+    "op": {
+      "type": "text",
+      "help": "Made this operation, any system's (id from Database, Redis, Cache, HTTP calls or another system's page)"
+    },
     "peer": {
       "type": "text",
       "help": "Called this service (id from Services)"
@@ -149,6 +153,56 @@
     "until": {
       "type": "time",
       "help": "Logged before: until:5m, until:2026-10-07T14:00"
+    }
+  },
+  "ops": {
+    "system": {
+      "type": "text",
+      "help": "System: system:sql, system:redis, system:mongodb, system:kafka, system:neo4j"
+    },
+    "target": {
+      "type": "text",
+      "help": "Where it went: a database, an instance, a host, a topic: target:api.example.com"
+    },
+    "db": {
+      "type": "text",
+      "help": "Where it went, as target: db:default"
+    },
+    "host": {
+      "type": "text",
+      "help": "Where it went, as target: host:api.example.com"
+    },
+    "op": {
+      "type": "text",
+      "help": "Operation, any case: op:select, op:get, op:find, op:publish"
+    },
+    "failed": {
+      "type": "text",
+      "help": "Only operations that failed: failed:true"
+    },
+    "via": {
+      "type": "text",
+      "help": "Why a Redis command ran: via:direct, via:cache, via:task"
+    },
+    "family": {
+      "type": "text",
+      "help": "Family: sql, redis, cache, datastore, messaging, rpc, http"
+    },
+    "key": {
+      "type": "text",
+      "help": "Operation id"
+    },
+    "service": {
+      "type": "text",
+      "help": "The app that recorded it (service.name): service:shop"
+    },
+    "since": {
+      "type": "time",
+      "help": "Called at or after: since:15m"
+    },
+    "until": {
+      "type": "time",
+      "help": "Called before: until:5m"
     }
   },
   "queries": {

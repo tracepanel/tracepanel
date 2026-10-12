@@ -5,7 +5,7 @@ import { ChevronRightIcon, CloseIcon } from "./icons";
 import { keyed } from "./keys";
 import { breakdown, CATEGORY_LABELS } from "./lib/breakdown";
 import { callTemplate, groupNoun } from "./lib/calls";
-import { CALL_KINDS, DATASTORES, MESSAGING } from "./lib/kinds";
+import { CALL_KINDS, DATASTORES, MESSAGING, RPC } from "./lib/systems";
 import { linkProps, type TraceLinks } from "./links";
 import { PropTable } from "./PropTable";
 import { AliasChip, IssueChip } from "./primitives";
@@ -126,7 +126,7 @@ const FILTERS = [
   { id: "datastore", label: "Datastores", kinds: [...DATASTORES] },
   { id: "messaging", label: "Messaging", kinds: [...MESSAGING] },
   { id: "http", label: "HTTP calls", kinds: ["http.client"] },
-  { id: "grpc", label: "gRPC", kinds: ["grpc"] },
+  { id: "rpc", label: "RPC", kinds: [...RPC] },
   { id: "signal", label: "Signals", kinds: ["signal"] },
   { id: "template", label: "Templates", kinds: ["template"] },
   { id: "task", label: "Tasks", kinds: ["task.enqueue", "task"] },

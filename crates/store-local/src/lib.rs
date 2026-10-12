@@ -8,6 +8,7 @@ use serde_json::Value;
 use sha1::{Digest, Sha1};
 use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
+use tracepanel_analysis::ops::Operation;
 use tracepanel_protocol::{Attrs, Received, Span, Trace};
 
 pub mod search;
@@ -32,7 +33,7 @@ pub use read::{Page, ReadError, Reader};
 /// The store's errors (SQLite's).
 pub use rusqlite::Error;
 pub use stats::{SLOW_REQUEST_US, stats};
-pub use values::{cache_key, call_key, query_fingerprint, redis_key};
+pub use values::{op_key, query_fingerprint};
 pub use write::{DEFAULT_MAX_TRACES, SCHEMA, Store, path_in, version};
 
 #[cfg(test)]
@@ -55,12 +56,29 @@ mod tests {
     }
 
     #[test]
-    fn an_endpoint_s_key_is_its_method_host_and_template() {
-        let key = call_key("GET", "api.example.com", "/users/{id}");
+    fn an_operation_s_key_is_its_system_target_op_template_and_via() {
+        let operation = |system: &str, target: &str, via: Option<&'static str>| Operation {
+            system: system.into(),
+            family: "http",
+            target: target.into(),
+            op: "GET".into(),
+            template: "/users/{id}".into(),
+            name: String::new(),
+            statement: None,
+            vendor: None,
+            params_hash: None,
+            via,
+            hit: None,
+        };
+        let key = op_key(&operation("http", "api.example.com", None));
         assert_eq!(key.len(), 16);
-        assert_eq!(key, call_key("GET", "api.example.com", "/users/{id}"));
-        assert_ne!(key, call_key("POST", "api.example.com", "/users/{id}"));
-        assert_ne!(key, call_key("GET", "other.example.com", "/users/{id}"));
+        assert_eq!(key, op_key(&operation("http", "api.example.com", None)));
+        assert_ne!(key, op_key(&operation("http", "other.example.com", None)));
+        assert_ne!(key, op_key(&operation("grpc", "api.example.com", None)));
+        assert_ne!(
+            key,
+            op_key(&operation("http", "api.example.com", Some("cache")))
+        );
     }
 
     /// A request that reads three users through Django's cache (on Redis), a Redis GET under each, and one direct
@@ -226,7 +244,17 @@ mod tests {
         assert_eq!(
             counts["sections"],
             serde_json::json!({"http": 1, "graphql": 0, "tasks": 0, "websockets": 0, "jobs": 0, "calls": false,
-                               "redis": true, "cache": true})
+                               "redis": true, "cache": true,
+                               "systems": [{"system": "redis", "family": "redis", "label": "Redis"},
+                                           {"system": "cache", "family": "cache", "label": "cache"}]})
+        );
+        assert_eq!(
+            known["targets"],
+            serde_json::json!({"cache": ["default"], "redis": ["redis"]})
+        );
+        assert_eq!(
+            known["ops"],
+            serde_json::json!({"cache": ["get"], "redis": ["GET", "INCR"]})
         );
         let _ = std::fs::remove_dir_all(&dir);
     }

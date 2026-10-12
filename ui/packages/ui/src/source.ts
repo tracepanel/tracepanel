@@ -13,6 +13,7 @@ import type {
   KnownValues,
   LogRow,
   MailRow,
+  OpRow,
   Page,
   QueryRow,
   RedisRow,
@@ -60,6 +61,8 @@ export interface DataSource {
   listRedis(q: string): Promise<RedisRow[]>;
   /** Cache operations (the framework's cache) by operation and key pattern. */
   listCache(q: string): Promise<CacheRow[]>;
+  /** One system's operations (`sql`, `redis`, `http`, `mongodb`, `neo4j`…) by what they repeat, heaviest first. */
+  listOps(system: string, q: string): Promise<OpRow[]>;
   listEndpoints(q: string): Promise<EndpointRow[]>;
   listTasks(q: string): Promise<TaskRow[]>;
   listWebsockets(q: string): Promise<WebsocketRow[]>;
@@ -157,6 +160,9 @@ export function httpSource(base: string | URL): DataSource {
     async listCalls(q) {
       return (await getJson<{ calls: CallRow[] }>(url("calls", { q })))?.calls ?? [];
     },
+    async listOps(system, q) {
+      return (await getJson<{ ops: OpRow[] }>(url("ops", { system, q })))?.ops ?? [];
+    },
     async listRedis(q) {
       return (await getJson<{ redis: RedisRow[] }>(url("redis", { q })))?.redis ?? [];
     },
@@ -210,7 +216,17 @@ export function httpSource(base: string | URL): DataSource {
         (await getJson<Counts>(url("counts", { service }))) ?? {
           issues: 0,
           errors: 0,
-          sections: { http: 0, graphql: 0, tasks: 0, websockets: 0, jobs: 0, calls: false, redis: false, cache: false },
+          sections: {
+            http: 0,
+            graphql: 0,
+            tasks: 0,
+            websockets: 0,
+            jobs: 0,
+            calls: false,
+            redis: false,
+            cache: false,
+            systems: [],
+          },
         }
       );
     },
@@ -223,6 +239,8 @@ export function httpSource(base: string | URL): DataSource {
           host: [],
           redis: [],
           cache: [],
+          targets: {},
+          ops: {},
           task: [],
           queue: [],
           job: [],

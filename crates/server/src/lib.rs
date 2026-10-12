@@ -35,6 +35,7 @@ pub fn router(reader: Reader, activity: Activity) -> Router {
         .route("/api/counts", get(counts))
         .route("/api/search", get(search_spec))
         .route("/api/logs", get(logs))
+        .route("/api/ops", get(ops))
         .route("/api/queries", get(queries))
         .route("/api/calls", get(calls))
         .route("/api/redis", get(redis))
@@ -251,6 +252,20 @@ async fn logs(State(reader): State<Shared>, Query(query): Params) -> Response {
         read(&reader, move |reader| {
             let page = reader.search_logs(&q, limit, before)?;
             Ok(json!({"logs": page.items, "next": page.next}))
+        })
+        .await,
+    )
+}
+
+/// Operations of every system, or of one (`system=`, the same as `system:` in `q`): one list for any system.
+async fn ops(State(reader): State<Shared>, Query(query): Params) -> Response {
+    let (mut q, limit) = (q(&query), limit(&query));
+    if let Some(system) = query.get("system").filter(|system| !system.is_empty()) {
+        q = format!("system:\"{}\" {q}", system.replace('"', ""));
+    }
+    answer(
+        read(&reader, move |reader| {
+            Ok(json!({"ops": reader.list_ops(&q, limit)?}))
         })
         .await,
     )

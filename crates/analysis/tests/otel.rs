@@ -307,13 +307,42 @@ fn the_other_systems() {
         ),
         ("function".into(), "orders process".into())
     );
-    // Unknown systems, and a gRPC server span: functions, their attributes kept.
-    let unknown = map(
-        "neo4j query",
-        &attrs(json!({"db.system": "neo4j", "server.address": "graph.local"})),
+    // Systems without a kind of their own: their family's generic kind, their own name kept.
+    let neo4j = map(
+        "MATCH",
+        &attrs(
+            json!({"otel.span_kind": "client", "db.system": "neo4j", "db.operation.name": "MATCH",
+                      "db.namespace": "graph", "server.address": "graph.local"}),
+        ),
     );
-    assert_eq!(unknown.kind, "function");
-    assert_eq!(unknown.attrs["server.address"], "graph.local");
+    assert_eq!((neo4j.kind.as_str(), neo4j.name.as_str()), ("db", "MATCH"));
+    assert_eq!(neo4j.attrs["db.system"], "neo4j");
+    assert_eq!(neo4j.attrs["server.address"], "graph.local");
+    let nats = map(
+        "orders publish",
+        &attrs(
+            json!({"otel.span_kind": "producer", "messaging.system": "nats",
+                      "messaging.destination.name": "orders"}),
+        ),
+    );
+    assert_eq!(
+        (nats.kind.as_str(), nats.name.as_str()),
+        ("messaging", "publish orders")
+    );
+    assert_eq!(nats.attrs["messaging.system"], "nats");
+    let thrift = map(
+        "Users.get",
+        &attrs(
+            json!({"otel.span_kind": "client", "rpc.system": "thrift", "rpc.service": "Users",
+                      "rpc.method": "get"}),
+        ),
+    );
+    assert_eq!(
+        (thrift.kind.as_str(), thrift.name.as_str()),
+        ("rpc", "Users/get")
+    );
+    assert_eq!(thrift.attrs["rpc.system"], "thrift");
+    // A gRPC server span: a function, its attributes kept.
     assert_eq!(
         one(
             "/svc/Method",

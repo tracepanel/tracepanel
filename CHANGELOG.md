@@ -6,12 +6,35 @@
 
 - Spans an OpenTelemetry instrumentation recorded are mapped by the agent,
   from the semantic conventions (older and current attribute names alike),
-  so every SDK sends them as they are (kind `otel`). SQL becomes a query with
-  its fingerprint and parameters, whichever form the instrumentation records
-  them in, and gets the same issues as an SDK's own. So do Redis, HTTP calls
-  and gRPC. MongoDB, Elasticsearch and OpenSearch, Cassandra, DynamoDB,
-  Memcached, Kafka, RabbitMQ and SQS get a span kind each, and show on the
-  Services map. What isn't recognized stays a function.
+  so every SDK can send them as they are (kind `otel`). SQL becomes a query
+  with its fingerprint and parameters, whichever form the instrumentation
+  records them in, and gets the same issues as an SDK's own. So do Redis, HTTP
+  calls and gRPC. MongoDB, Elasticsearch and OpenSearch, Cassandra, DynamoDB,
+  Memcached, Kafka, RabbitMQ and SQS get a span kind each. A database, broker
+  or RPC system the agent doesn't know gets its family's kind (`db`,
+  `messaging`, `rpc`) under its own name, so it is never lost.
+- Every call to another system is an operation: one model for SQL, Redis, a
+  cache, datastores, brokers, RPC and HTTP. Each system the app called gets a
+  page, with the same columns and filters (time, target, operation, failed),
+  and issues by its family's rules: N+1 and duplicates for any datastore or RPC
+  system, a publish per item for a broker. A new system needs no code.
+- In a trace, one Calls tab lists the calls system by system (SQL keeps its
+  plans), and a tile per system shows its calls and time.
+
+### Changed
+
+- The store's format is now version 17: one table of operations in place of
+  the tables for queries, HTTP calls, Redis and cache calls. A store from an
+  earlier version is left as it is, and the agent starts a new, empty one.
+- System pages live at `#/ops/<system>` (`#/queries`, `#/redis`, `#/cache` and
+  `#/calls` still open them), and `/api/ops?system=` lists any system's
+  operations. `/api/queries`, `/api/calls`, `/api/redis` and `/api/cache` keep
+  their answers. The trace search takes `op:<key>` for any operation.
+
+### Fixed
+
+- A trace received twice (sent again with late spans) counted its queries,
+  calls and services twice.
 
 ## 0.0.1a2 (2026-10-12)
 

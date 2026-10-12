@@ -96,14 +96,21 @@ pub(crate) fn peer(span: &Span) -> Option<Peer> {
         "task.enqueue" | "channel.send" if truthy(attrs.get("messaging.system")) => {
             Some(new("queue", py_str(&attrs["messaging.system"]), None, None))
         }
-        // A message sent to a broker an OpenTelemetry instrumentation saw (Kafka, RabbitMQ, SQS).
-        "kafka" | "rabbitmq" | "sqs" => Some(new(
+        // A message sent to a broker an OpenTelemetry instrumentation saw: Kafka, RabbitMQ, SQS, or any other
+        // (`messaging`, its system named in messaging.system).
+        "kafka" | "rabbitmq" | "sqs" | "messaging" => Some(new(
             "queue",
             text(attrs.get("messaging.system")).unwrap_or_else(|| span.kind.clone()),
             None,
             None,
         )),
-        "grpc" if address.is_some() => Some(new("http", "grpc".into(), None, None)),
+        // An RPC call: gRPC, or any other system (`rpc`, named in rpc.system).
+        "grpc" | "rpc" if address.is_some() => Some(new(
+            "http",
+            text(attrs.get("rpc.system")).unwrap_or_else(|| span.kind.clone()),
+            None,
+            None,
+        )),
         "http.client" if address.is_some() => Some(new(
             "http",
             text(attrs.get("url.scheme")).unwrap_or_else(|| "http".into()),

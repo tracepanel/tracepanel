@@ -30,6 +30,7 @@ export type QueryRow = Schemas["QueryRow"];
 export type CallRow = Schemas["CallRow"];
 export type RedisRow = Schemas["RedisRow"];
 export type CacheRow = Schemas["CacheRow"];
+export type OpRow = Schemas["OpRow"];
 export type ExplainPlan = Schemas["ExplainPlan"];
 export type EndpointRow = Schemas["EndpointRow"];
 export type TaskRow = Schemas["TaskRow"];

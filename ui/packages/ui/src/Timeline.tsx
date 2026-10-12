@@ -1,6 +1,6 @@
 import { duration } from "./format";
 import { keyed } from "./keys";
-import { DATASTORES, MESSAGING } from "./lib/kinds";
+import { DATASTORES, MESSAGING, RPC } from "./lib/systems";
 import type { Trace } from "./types";
 
 /** Where a mark leads: the span in the call tree, the logs, the error. */
@@ -41,7 +41,7 @@ function lanes(trace: Trace): Lane[] {
     { label: "datastores", marks: spans(...DATASTORES) },
     { label: "messaging", marks: spans(...MESSAGING) },
     { label: "http", marks: spans("http.client") },
-    { label: "grpc", marks: spans("grpc") },
+    { label: "rpc", marks: spans(...RPC) },
     {
       label: "logs",
       marks: keyed(trace.logs, (log) => `log:${log.time}:${log.message}`).map(({ key, item: log }) => ({

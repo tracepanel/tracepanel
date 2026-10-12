@@ -7,7 +7,7 @@ import { IssueChip } from "./primitives";
 import type { IssueKind, Span } from "./types";
 
 export interface CallsListProps {
-  /** The request's outgoing HTTP calls. */
+  /** The request's calls to one system: HTTP calls, Redis commands, MongoDB commands… */
   spans: readonly Span[];
   /** Issue kind per span id, to mark the calls an issue points at. */
   issueBySpan: ReadonlyMap<string, IssueKind>;
@@ -36,18 +36,21 @@ function groupCalls(spans: readonly Span[], issueBySpan: ReadonlyMap<string, Iss
   return [...groups.values()].sort((a, b) => b.total - a.total);
 }
 
-/** One call: its status, its URL (credentials and secrets already left out by the SDK), where it was made. */
+/** One call's outcome: an HTTP status, or whether it failed. */
 function statusOf(span: Span): string {
   const status = span.attrs["http.response.status_code"];
   if (typeof status === "number") return String(status);
   return span.status === "error" ? "failed" : "—";
 }
 
-/** What a call's row shows, as text: its URL, where it was made, why it failed. */
+/** Where a call's text is: an HTTP call's URL, a command or statement. */
+const TEXT_ATTRS = ["url.full", "db.statement"];
+
+/** What a call's row shows, as text: its URL or command, where it was made, why it failed. */
 function textsOf(span: Span): { url: string; origin: string; failure: string } {
   const attrs = span.attrs;
   return {
-    url: String(attrs["url.full"] ?? span.name),
+    url: String(TEXT_ATTRS.map((key) => attrs[key]).find((value) => value !== undefined) ?? span.name),
     origin: String(attrs["code.origin"] ?? "—"),
     failure: String(attrs["error.type"] ?? ""),
   };
@@ -77,17 +80,16 @@ function Call({ span, index, focused }: { span: Span; index: number; focused: bo
   );
 }
 
-/** Outgoing HTTP calls, grouped by endpoint like queries by statement: what was called, how often, from where. */
+/** One system's calls, grouped by what they repeat (an endpoint, a key pattern) like queries by statement. */
 export function CallsList({ spans, issueBySpan, focus }: CallsListProps) {
   const groups = useMemo(() => groupCalls(spans, issueBySpan), [spans, issueBySpan]);
   const heaviest = Math.max(...groups.map((group) => group.total), 1);
   if (spans.length === 0)
-    return <p className="px-4 py-6 text-sm text-muted-foreground">No outgoing HTTP calls in this request.</p>;
+    return <p className="px-4 py-6 text-sm text-muted-foreground">No calls of this kind in this request.</p>;
   return (
     <div className="grid gap-3 p-4">
       <span className="text-sm text-muted-foreground">
-        {spans.length} {spans.length === 1 ? "call" : "calls"} · {groups.length}{" "}
-        {groups.length === 1 ? "endpoint" : "endpoints"}
+        {spans.length} {spans.length === 1 ? "call" : "calls"} · {groups.length} unique
       </span>
       <ul className="m-0 list-none overflow-hidden rounded-lg border bg-card p-0">
         {groups.map((group) => {

@@ -1,29 +1,14 @@
 // Outgoing calls (HTTP, cache) shown like queries: one row per call, and a template that groups the calls a loop
 // makes (`GET api.example.com/users/{id}`), as a statement's fingerprint groups its queries.
 import type { Span } from "../types";
+import { SYSTEMS, type System, systemOfSpan } from "./systems";
 
-/** What one span of a kind is called, and several. */
-const NOUNS: Record<string, [string, string]> = {
-  sql: ["query", "queries"],
-  redis: ["Redis command", "Redis commands"],
-  cache: ["cache call", "cache calls"],
-  "http.client": ["HTTP call", "HTTP calls"],
-  grpc: ["gRPC call", "gRPC calls"],
-  kafka: ["Kafka message", "Kafka messages"],
-  rabbitmq: ["RabbitMQ message", "RabbitMQ messages"],
-  sqs: ["SQS message", "SQS messages"],
-  mongodb: ["MongoDB command", "MongoDB commands"],
-  elasticsearch: ["Elasticsearch request", "Elasticsearch requests"],
-  cassandra: ["Cassandra query", "Cassandra queries"],
-  dynamodb: ["DynamoDB request", "DynamoDB requests"],
-  memcached: ["Memcached command", "Memcached commands"],
-};
-const QUERIES: [string, string] = ["query", "queries"];
+const SQL = SYSTEMS[0] as System;
 
-/** What a group of similar calls is called: "queries", "cache calls", "HTTP calls" (one of them, for a count of 1). */
+/** What a group of similar calls is called: "queries", "Redis commands", "HTTP calls" (one of them, for a count of 1). */
 export function groupNoun(span: Span | undefined, count = 2): string {
-  const [one, many] = NOUNS[String(span?.kind)] ?? QUERIES;
-  return count === 1 ? one : many;
+  const system = (span && systemOfSpan(span)) ?? SQL;
+  return count === 1 ? system.one : system.many;
 }
 
 const ID_SEGMENT = /^(\d+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{16,})$/i;

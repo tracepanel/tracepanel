@@ -737,9 +737,8 @@ a.dt-request-row {
 
 .dt-metrics {
   display: grid;
-  /* Four tiles, five when the request made HTTP calls: as many equal columns as there are tiles. */
-  grid-auto-columns: minmax(0, 1fr);
-  grid-auto-flow: column;
+  /* Duration and a tile per system the request called: as many as fit in a row, the rest wrap. */
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
   margin: 0 1rem;
   border: 1px solid var(--dt-border);
   border-radius: var(--dt-radius);
@@ -1679,10 +1678,10 @@ details[data-focused] > .dt-sql-group {
 ) {
   --dt-k: var(--dt-k-datastore);
 }
-.dt-map-row:is([data-kind="kafka"], [data-kind="rabbitmq"], [data-kind="sqs"]) {
+.dt-map-row:is([data-kind="kafka"], [data-kind="rabbitmq"], [data-kind="sqs"], [data-kind="messaging"]) {
   --dt-k: var(--dt-k-messaging);
 }
-.dt-map-row[data-kind="grpc"] {
+.dt-map-row:is([data-kind="grpc"], [data-kind="rpc"]) {
   --dt-k: var(--dt-k-http);
 }
 .dt-map-row[data-kind="log"] {

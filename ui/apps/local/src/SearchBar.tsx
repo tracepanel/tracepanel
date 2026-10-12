@@ -1,11 +1,12 @@
 import { IssueChip, type IssueKind, type SearchResource, type SearchSpec } from "@tracepanel/ui";
 import { Badge } from "@tracepanel/ui/components/ui/badge";
 import { Button } from "@tracepanel/ui/components/ui/button";
+import { type Family, systemOfPage } from "@tracepanel/ui/lib/systems";
 import { cn } from "@tracepanel/ui/lib/utils";
 import { SearchIcon, XIcon } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { FilterMenu } from "./FilterMenu";
-import type { EntrySection, Section } from "./routes";
+import { type EntrySection, type OpsSection, type Section, systemOfSection } from "./routes";
 import { TimeRange } from "./TimeRange";
 import { parseAbsolute, shortTime } from "./time";
 import { LevelBadge } from "./ui";
@@ -60,7 +61,11 @@ interface QuickOption {
 /** Values the console knows from stored data (routes, loggers, database aliases, hosts called, Redis and caches). */
 export type KnownValues = Partial<
   Record<"route" | "logger" | "db" | "host" | "redis" | "cache" | "task" | "queue" | "job" | "extra", readonly string[]>
->;
+> & {
+  /** Each system's targets and operations, by the name its page has (`sql`, `redis`, `mongodb`…). */
+  targets?: Readonly<Record<string, readonly string[]>>;
+  ops?: Readonly<Record<string, readonly string[]>>;
+};
 
 interface QuickFilter {
   label: string;
@@ -180,17 +185,38 @@ const FAILED: QuickFilter = {
   options: [{ label: "Failed", terms: [f("failed", ":", "true")] }],
 };
 
-/** Time, where the calls went (a database, an instance, a cache, a host), the operation, and failed calls. */
-function callFilters(target: MultiFilter, operations: readonly string[]): Control[] {
-  return [
-    { ...TIME, verb: "Called" },
-    target,
-    { label: "Operation", title: "Filter by operation", key: "op", values: operations },
-    FAILED,
-  ];
+/** Redis's own filter: who sent the command. */
+const VIA: MultiFilter = {
+  label: "Via",
+  title: "Sent by",
+  key: "via",
+  values: ["direct", "cache", "task"],
+  format: (value) => ({ direct: "The app", cache: "A cache", task: "A task queue" })[value] ?? value,
+};
+
+/**
+ * A system's page: the same filters for every system — when, where to (its targets as the agent knows them), which
+ * operation, failed or not — with the target and the operations named as the system has them.
+ */
+function systemFilters(system: string, family: Family | undefined): Control[] {
+  const meta = systemOfPage(system, family);
+  const target: MultiFilter = {
+    label: meta.target,
+    title: `Filter by ${meta.target.toLowerCase()}`,
+    key: "target",
+    values: (known) => known.targets?.[system] ?? [],
+  };
+  const operations: MultiFilter = {
+    label: "Operation",
+    title: "Filter by operation",
+    key: "op",
+    // What the store has seen, else what the system is known to do.
+    values: (known) => known.ops?.[system] ?? meta.ops,
+  };
+  return [{ ...TIME, verb: "Called" }, target, operations, FAILED, ...(meta.family === "redis" ? [VIA] : [])];
 }
 
-const QUICK: Record<Section, Control[]> = {
+const QUICK: Record<Exclude<Section, OpsSection>, Control[]> = {
   traces: [TIME, STATUS, METHOD, ROUTE, DURATION, ISSUE, CONTAINS],
   logs: [
     { ...TIME, verb: "Logged" },
@@ -276,38 +302,6 @@ const QUICK: Record<Section, Control[]> = {
     },
     { label: "Role", title: "Filter by role", key: "role", values: ["web", "worker", "command"], format: capital },
   ],
-  // The pages of calls the app makes, all with the same filters: when, where to, which operation, failed or not.
-  queries: callFilters(
-    { label: "Database", title: "Filter by database", key: "db", values: (known) => known.db ?? [] },
-    ["SELECT", "INSERT", "UPDATE", "DELETE"],
-  ),
-  redis: [
-    ...callFilters(
-      { label: "Instance", title: "Filter by Redis instance", key: "db", values: (known) => known.redis ?? [] },
-      ["GET", "SET", "MGET", "HGET", "HSET", "INCR", "DEL", "EXPIRE", "LPUSH", "PIPELINE"],
-    ),
-    // Redis's own: who sent the command.
-    {
-      label: "Via",
-      title: "Sent by",
-      key: "via",
-      values: ["direct", "cache", "task"],
-      format: (value) => ({ direct: "The app", cache: "A cache", task: "A task queue" })[value] ?? value,
-    },
-  ],
-  cache: callFilters({ label: "Cache", title: "Filter by cache", key: "db", values: (known) => known.cache ?? [] }, [
-    "get",
-    "set",
-    "add",
-    "delete",
-    "get_many",
-    "set_many",
-    "incr",
-  ]),
-  calls: callFilters(
-    { label: "Host", title: "Filter by host", key: "host", values: (known) => known.host ?? [] },
-    METHODS,
-  ),
 };
 
 /**
@@ -366,6 +360,28 @@ const VALUES: Record<string, string[]> = {
   until: ["5m", "15m", "1h", "1d"],
 };
 
+/** Where the agent's search spec describes a section's fields: every system's page searches operations. */
+function searchResourceOf(section: Section): SearchResource {
+  if (systemOfSection(section)) return "ops" as SearchResource;
+  return (section === "errors" ? "issues" : section) as SearchResource;
+}
+
+/** The placeholder's example: an entry point's calls', a system's first operation, else the section's own. */
+function exampleFor(section: Section, family: Family | undefined, callsOf: EntrySection | undefined): string {
+  if (callsOf) return CALLS_EXAMPLE[callsOf];
+  const system = systemOfSection(section);
+  if (!system) return EXAMPLE[section as keyof typeof EXAMPLE];
+  const op = systemOfPage(system, family).ops[0];
+  return op ? `op:${op}` : "failed:true";
+}
+
+/** The filter chips: an entry point's calls', a system's, else the section's own. */
+function controlsFor(section: Section, family: Family | undefined, callsOf: EntrySection | undefined): Control[] {
+  if (callsOf) return CALLS[callsOf];
+  const system = systemOfSection(section);
+  return system ? systemFilters(system, family) : QUICK[section as keyof typeof QUICK];
+}
+
 /* ---------- component ---------- */
 
 /** since:/until: chips show the local time, not the full ISO string (it stays in the query and the tooltip). */
@@ -375,7 +391,7 @@ function chipValue(filter: Filter): string {
   return date ? shortTime(date) : filter.value;
 }
 
-const EXAMPLE: Record<Section, string> = {
+const EXAMPLE: Record<Exclude<Section, OpsSection>, string> = {
   traces: "status>=500 since:1h",
   endpoints: "route:/api/* since:1h",
   tasks: "state:failure",
@@ -383,10 +399,6 @@ const EXAMPLE: Record<Section, string> = {
   jobs: "source:custom",
   websockets: "event:receive",
   graphql: "type:mutation",
-  queries: "table:auth_user",
-  calls: "host:api.example.com",
-  redis: "op:GET",
-  cache: "op:get",
   mails: "to:ann@example.com",
   logs: "level:error",
   errors: "ZeroDivisionError route:/api/*",
@@ -401,6 +413,8 @@ interface Suggestion {
 
 export interface SearchBarProps {
   section: Section;
+  /** A system's page: its family, for the filters' words (from the agent's counts). */
+  family?: Family | undefined;
   q: string;
   spec: SearchSpec | null;
   error: string | null;
@@ -414,9 +428,9 @@ export interface SearchBarProps {
   onChange: (q: string, typed?: boolean) => void;
 }
 
-export function SearchBar({ section, q, spec, error, known, count, callsOf, onChange }: SearchBarProps) {
+export function SearchBar({ section, family, q, spec, error, known, count, callsOf, onChange }: SearchBarProps) {
   // Errors are the issues of kind error: the same search.
-  const fields = spec?.[(section === "errors" ? "issues" : section) as SearchResource] ?? {};
+  const fields = spec?.[searchResourceOf(section)] ?? {};
   const keys = useMemo(() => new Set(Object.keys(fields)), [fields]);
   const parsed = useMemo(() => parseQuery(q, keys), [q, keys]);
   const [text, setText] = useState(parsed.text);
@@ -524,7 +538,7 @@ export function SearchBar({ section, q, spec, error, known, count, callsOf, onCh
     setOpen(null);
   }
 
-  const quick = callsOf ? CALLS[callsOf] : QUICK[section];
+  const quick = controlsFor(section, family, callsOf);
   const showSuggestions = focused && suggestions.length > 0;
 
   return (
@@ -565,7 +579,7 @@ export function SearchBar({ section, q, spec, error, known, count, callsOf, onCh
           placeholder={
             parsed.filters.length
               ? "Add text or filters…"
-              : `Search or type a filter, e.g. ${callsOf ? CALLS_EXAMPLE[callsOf] : EXAMPLE[section]}`
+              : `Search or type a filter, e.g. ${exampleFor(section, family, callsOf)}`
           }
           aria-label="Search"
           spellCheck={false}

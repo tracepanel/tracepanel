@@ -1,8 +1,6 @@
 import {
   AliasChip,
   ago,
-  type CacheRow,
-  type CallRow,
   CopyButton,
   type DataSource,
   duration,
@@ -16,8 +14,7 @@ import {
   MailList,
   type MailRow,
   MethodBadge,
-  type QueryRow,
-  type RedisRow,
+  type OpRow,
   RoutePath,
   type Span,
   SqlCode,
@@ -29,6 +26,7 @@ import {
 import { Badge } from "@tracepanel/ui/components/ui/badge";
 import { Button } from "@tracepanel/ui/components/ui/button";
 import { TableCell, TableRow } from "@tracepanel/ui/components/ui/table";
+import { systemOfPage } from "@tracepanel/ui/lib/systems";
 import { ArrowRightIcon, ListFilterIcon } from "lucide-react";
 import { Fragment, type ReactNode, useEffect, useState } from "react";
 import { currentPeriod, endpointGroup, go, groupRoute, href, issueRoute, traceHref, withPeriod } from "./routes";
@@ -177,7 +175,7 @@ export function EndpointsTable({ items }: { items: readonly EndpointRow[] }) {
 }
 
 /** What every page of calls lists per row: how often, in how many requests, how many failed, how long. */
-type CallStats = Pick<CallRow, "calls" | "traces" | "errors" | "total" | "slowest" | "most_per_trace" | "origin">;
+type CallStats = Pick<OpRow, "calls" | "traces" | "errors" | "total" | "slowest" | "most_per_trace" | "origin">;
 
 /** A column only one page has (the cache's hit rate). */
 interface ExtraColumn<T> {
@@ -330,111 +328,89 @@ interface TableProps<T> {
   onOpen: (key: string | null) => void;
 }
 
-export function QueriesTable({ items, source, open, onOpen }: TableProps<QueryRow> & { source: DataSource }) {
+/** What an open SQL row adds: the statement and its plan. */
+function SqlDetails({ item, source }: { item: OpRow; source: DataSource }) {
+  const statement = item.statement ?? item.template;
+  const vendor = item.vendor ?? "";
   return (
-    <CallStatsTable
-      items={items}
-      keyOf={(item) => item.fp}
-      name={(item) => (
-        <>
-          {item.name}
-          <AliasChip value={item.alias} />
-        </>
-      )}
-      details={(item) => (
-        <>
-          <SqlCode sql={item.statement} vendor={item.vendor} />
-          {/^\s*SELECT\b/i.test(item.statement) ? (
-            <ExplainView
-              vendor={item.vendor}
-              load={(analyze) => source.explain(item.sample_trace, item.sample_span, analyze)}
-            />
-          ) : null}
-          <RequestLinks q={`query:${item.fp}`} traces={item.traces} what="query" sample={item.sample_trace} />
-        </>
-      )}
-      open={open}
-      onOpen={onOpen}
-    />
+    <>
+      <SqlCode sql={statement} vendor={vendor} />
+      {/^\s*SELECT\b/i.test(statement) ? (
+        <ExplainView vendor={vendor} load={(analyze) => source.explain(item.sample_trace, item.sample_span, analyze)} />
+      ) : null}
+    </>
   );
 }
 
-/** Redis commands by command and key pattern (`GET post:{id}:views`). */
-export function RedisTable({ items, open, onOpen }: TableProps<RedisRow>) {
+/** What a row is: its operation and template, where it went, and what kind of call it was (an HTTP method). */
+function OpName({ item }: { item: OpRow }) {
+  if (item.family === "sql") {
+    return (
+      <>
+        {item.name}
+        <AliasChip value={item.target} />
+      </>
+    );
+  }
+  if (item.family === "http") {
+    return (
+      <>
+        <MethodBadge method={item.op} />
+        {item.target}
+        {item.template}
+      </>
+    );
+  }
   return (
-    <CallStatsTable
-      items={items}
-      keyOf={(item) => item.key}
-      name={(item) => (
-        <>
-          {item.command} {item.template}
-          <AliasChip value={item.alias} />
-        </>
-      )}
-      extra={VIA}
-      details={(item) => (
-        <RequestLinks q={`redis_call:${item.key}`} traces={item.traces} what="command" sample={item.sample_trace} />
-      )}
-      open={open}
-      onOpen={onOpen}
-    />
+    <>
+      {item.op} {item.template}
+      <AliasChip value={item.target} />
+    </>
   );
 }
+
+/** The column only some families have: Redis says who sent a command, a cache how often a read found its key. */
+const EXTRA: Partial<Record<OpRow["family"], ExtraColumn<OpRow>>> = {
+  redis: { head: "Via", cell: (item) => VIA_LABELS[item.via ?? ""] ?? item.via ?? "—" },
+  cache: { head: "Hit rate", cell: hitRate },
+};
 
 /** What sent a Redis command: the app itself, a cache, or a task queue publishing a task. */
 const VIA_LABELS: Record<string, string> = { direct: "Direct", cache: "Cache", task: "Task queue" };
 
-const VIA: ExtraColumn<RedisRow> = {
-  head: "Via",
-  cell: (item) => VIA_LABELS[item.via] ?? item.via,
-};
-
-const HIT_RATE: ExtraColumn<CacheRow> = {
-  head: "Hit rate",
-  cell: (item) => (item.hits + item.misses > 0 ? percentOf(item.hits, item.hits + item.misses) : "—"),
-};
+/** How often a cache's reads found their key. */
+function hitRate({ hits, misses }: OpRow): string {
+  const found = hits ?? 0;
+  const reads = found + (misses ?? 0);
+  return reads > 0 ? percentOf(found, reads) : "—";
+}
 
 function percentOf(part: number, whole: number): string {
   return `${Math.round((part / whole) * 100)}%`;
 }
 
-/** Cache operations by operation and key pattern (`get user:{id}`), with how often a read found its key. */
-export function CacheTable({ items, open, onOpen }: TableProps<CacheRow>) {
+/**
+ * One system's operations, the same table for every system: SQL, Redis, a cache, MongoDB, a broker, HTTP calls, or a
+ * system the console has never heard of. An open row shows SQL's statement and plan, and the requests that made it.
+ */
+export function OpsTable({ items, source, open, onOpen }: TableProps<OpRow> & { source: DataSource }) {
+  const family = items[0]?.family ?? "datastore";
   return (
     <CallStatsTable
       items={items}
       keyOf={(item) => item.key}
-      name={(item) => (
-        <>
-          {item.op} {item.template}
-          <AliasChip value={item.alias} />
-        </>
-      )}
-      extra={HIT_RATE}
+      name={(item) => <OpName item={item} />}
+      extra={EXTRA[family]}
       details={(item) => (
-        <RequestLinks q={`cache_call:${item.key}`} traces={item.traces} what="cache call" sample={item.sample_trace} />
-      )}
-      open={open}
-      onOpen={onOpen}
-    />
-  );
-}
-
-/** Outgoing HTTP calls by endpoint (method, host, path with ids as {id}). */
-export function CallsTable({ items, open, onOpen }: TableProps<CallRow>) {
-  return (
-    <CallStatsTable
-      items={items}
-      keyOf={(item) => item.key}
-      name={(item) => (
         <>
-          <MethodBadge method={item.method} />
-          {item.host}
-          {item.template}
+          {item.family === "sql" ? <SqlDetails item={item} source={source} /> : null}
+          <RequestLinks
+            q={item.family === "sql" ? `query:${item.key}` : `op:${item.key}`}
+            traces={item.traces}
+            what={systemOfPage(item.system, item.family).one}
+            sample={item.sample_trace}
+          />
         </>
-      )}
-      details={(item) => (
-        <RequestLinks q={`call:${item.key}`} traces={item.traces} what="call" sample={item.sample_trace} />
       )}
       open={open}
       onOpen={onOpen}

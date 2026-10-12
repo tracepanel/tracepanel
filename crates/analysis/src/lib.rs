@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use std::sync::LazyLock;
 use tracepanel_protocol::{Attrs, Issue, Span, Thresholds, Trace};
 
+pub mod ops;
 pub mod otel;
 
 pub const FINGERPRINT_VERSION: i64 = 1;
@@ -517,8 +518,6 @@ fn redis_call(span: &Span) -> Call<'_> {
     }
 }
 
-/// Repeated and duplicate HTTP calls, Redis commands and cache calls, and slow HTTP calls: SQL's issues for the
-/// other services.
 /// Whether repeated calls cost at least `min_ms` together, by their median: the first call of a request often pays
 /// for opening the connection, and that is not what repeating them costs.
 fn costly(spans: &[&Span], min_ms: i64) -> bool {
@@ -528,119 +527,6 @@ fn costly(spans: &[&Span], min_ms: i64) -> bool {
     median.saturating_mul(spans.len() as i64) >= min_ms.saturating_mul(1000)
 }
 
-fn call_issues(trace: &Trace, thresholds: &Thresholds) -> Vec<Issue> {
-    let mut issues = Vec::new();
-    let threshold = thresholds.n_plus_one.max(0) as usize;
-    for (kind, label, describe) in [
-        ("http.client", "calls", http_call as fn(&Span) -> Call<'_>),
-        ("redis", "Redis commands", redis_call),
-        ("cache", "cache calls", cache_call),
-    ] {
-        let mut order: Vec<String> = Vec::new();
-        let mut groups: HashMap<String, Vec<Call<'_>>> = HashMap::new();
-        // Redis commands under a cache operation or an enqueue: the issue is the cache's (or the queue's), on the
-        // layer the app fixes it on.
-        let own = |span: &&Span| kind != "redis" || redis_via(trace, span) == "direct";
-        for span in trace
-            .spans
-            .iter()
-            .filter(|span| span.kind == kind)
-            .filter(own)
-        {
-            let call = describe(span);
-            if !groups.contains_key(&call.group) {
-                order.push(call.group.clone());
-            }
-            groups.entry(call.group.clone()).or_default().push(call);
-        }
-        let (repeated_hint, duplicates_hint) = match kind {
-            "cache" => (CACHE_REPEATED, CACHE_DUPLICATES),
-            "redis" => (REDIS_REPEATED, CACHE_DUPLICATES),
-            _ => (HTTP_REPEATED, HTTP_DUPLICATES),
-        };
-        for group in order {
-            let calls = &groups[&group];
-            let title = calls[0].title.as_str();
-            let spans: Vec<&Span> = calls.iter().map(|call| call.span).collect();
-            // An in-memory store's repeats are an issue only when they cost something together.
-            if kind != "http.client" && !costly(&spans, thresholds.n_plus_one_min_ms) {
-                continue;
-            }
-            let key = format!("{kind}|{group}");
-            // Only what project code makes is actionable, as with SQL.
-            let Some(culprit_text) = culprit(&spans) else {
-                continue;
-            };
-            let key_culprit = culprit_key(Some(&culprit_text));
-            let distinct = calls
-                .iter()
-                .map(|call| call.exact.as_str())
-                .collect::<std::collections::HashSet<_>>()
-                .len();
-            if distinct >= threshold {
-                issues.push(issue(
-                    issue_key("n+1", &[Some(&key), key_culprit.as_deref()]),
-                    "n+1",
-                    format!("N+1: {} similar {label} · {title}", spans.len()),
-                    Some(culprit_text.clone()),
-                    Some(repeated_hint),
-                    spans.len(),
-                    spans.iter().map(|span| span.id.clone()).collect(),
-                ));
-            } else {
-                let reads: Vec<&Call<'_>> = calls.iter().filter(|call| call.read).collect();
-                let counts =
-                    reads
-                        .iter()
-                        .fold(HashMap::<&str, usize>::new(), |mut counts, call| {
-                            *counts.entry(call.exact.as_str()).or_default() += 1;
-                            counts
-                        });
-                let repeated: Vec<&Span> = reads
-                    .iter()
-                    .filter(|call| counts[call.exact.as_str()] >= DUPLICATES_MIN)
-                    .map(|call| call.span)
-                    .collect();
-                if !repeated.is_empty() {
-                    issues.push(issue(
-                        issue_key("duplicates", &[Some(&key), key_culprit.as_deref()]),
-                        "duplicates",
-                        format!("Duplicate {label}: {} identical · {title}", repeated.len()),
-                        Some(culprit_text.clone()),
-                        Some(duplicates_hint),
-                        repeated.len(),
-                        repeated.iter().map(|span| span.id.clone()).collect(),
-                    ));
-                }
-            }
-            if kind != "http.client" {
-                continue;
-            }
-            let slow: Vec<&Span> = spans
-                .iter()
-                .copied()
-                .filter(|span| span.duration >= thresholds.slow_http_ms * 1000)
-                .collect();
-            if !slow.is_empty() {
-                let slowest = slow.iter().map(|span| span.duration).max().unwrap_or(0);
-                issues.push(issue(
-                    issue_key("slow-http", &[Some(&key), key_culprit.as_deref()]),
-                    "slow-http",
-                    format!("Slow HTTP call: {} ms · {title}", milliseconds(slowest)),
-                    culprit(&slow),
-                    Some(SLOW_HTTP),
-                    slow.len(),
-                    slow.iter().map(|span| span.id.clone()).collect(),
-                ));
-            }
-        }
-    }
-    issues
-}
-
-// ---------- errors ----------
-
-/// An error's message as an issue title: its first line, on one line, cut at a word.
 pub fn headline(message: &str) -> String {
     let first = message
         .lines()
@@ -892,8 +778,7 @@ pub fn apply(received: &mut tracepanel_protocol::Received, thresholds: &Threshol
 
 /// Issues in a finished trace: errors first, then the rest by occurrence count.
 pub fn analyze(trace: &Trace, thresholds: &Thresholds) -> Vec<Issue> {
-    let mut found = sql_issues(trace, thresholds);
-    found.extend(call_issues(trace, thresholds));
+    let mut found = ops::operation_issues(trace, thresholds);
     found.extend(transaction_issues(trace, thresholds));
     found.extend(htmx_issues(trace));
     // A stable sort, as Python's sorted().
@@ -1197,6 +1082,108 @@ mod tests {
                     2
                 ),
             ]
+        );
+    }
+
+    /// An operation span of project code: (kind, name, attrs, duration in µs).
+    fn op(
+        kind: &'static str,
+        name: &'static str,
+        mut attrs: Value,
+        duration: i64,
+    ) -> (&'static str, &'static str, Value, i64) {
+        attrs["code.origin"] = Value::from("app/views.py:40 in feed");
+        (kind, name, attrs, duration)
+    }
+
+    #[test]
+    fn a_datastore_gets_n_plus_one_and_duplicate_reads_from_its_family() {
+        let find = |id: i64| {
+            op(
+                "mongodb",
+                "find users",
+                serde_json::json!({"db.system": "mongodb", "db.operation": "find", "db.collection.name": "users",
+                                   "db.namespace": "shop", "db.statement": format!("{{\"filter\": {{\"_id\": {id}}}}}")}),
+                2000,
+            )
+        };
+        assert_eq!(
+            found(&request(&[find(1), find(2), find(3)])),
+            [(
+                "n+1".to_owned(),
+                "N+1: 3 similar MongoDB commands · find users".to_owned(),
+                3
+            )]
+        );
+        // The same read twice: a duplicate; an insert twice is two actions.
+        let insert = op(
+            "mongodb",
+            "insert users",
+            serde_json::json!({"db.system": "mongodb", "db.operation": "insert", "db.collection.name": "users",
+                               "db.statement": "{\"documents\": [{\"n\": 1}]}"}),
+            2000,
+        );
+        assert_eq!(
+            found(&request(&[find(7), find(7), insert.clone(), insert])),
+            [(
+                "duplicates".to_owned(),
+                "Duplicate MongoDB commands: 2 identical · find users".to_owned(),
+                2
+            )]
+        );
+    }
+
+    #[test]
+    fn a_publish_per_item_is_an_n_plus_one_and_never_a_duplicate() {
+        let publish = || {
+            op(
+                "kafka",
+                "publish orders",
+                serde_json::json!({"messaging.system": "kafka", "messaging.operation": "publish",
+                                   "messaging.destination.name": "orders"}),
+                1000,
+            )
+        };
+        assert_eq!(
+            found(&request(&[publish(), publish(), publish()])),
+            [(
+                "n+1".to_owned(),
+                "N+1: 3 similar Kafka messages · publish orders".to_owned(),
+                3
+            )]
+        );
+        assert_eq!(found(&request(&[publish(), publish()])), []);
+    }
+
+    #[test]
+    fn a_slow_grpc_call_and_cheap_memcached_repeats() {
+        let call = op(
+            "grpc",
+            "Users/Get",
+            serde_json::json!({"rpc.system": "grpc", "rpc.service": "Users", "rpc.method": "Get"}),
+            700_000,
+        );
+        assert_eq!(
+            found(&request(&[call])),
+            [(
+                "slow-http".to_owned(),
+                "Slow gRPC call: 700 ms · Users/Get".to_owned(),
+                1
+            )]
+        );
+        // Three Memcached gets of 0.2 ms: under n_plus_one_min_ms, no issue.
+        let get = |key: &str| {
+            op(
+                "memcached",
+                "get",
+                serde_json::json!({"db.system": "memcached", "db.operation": "get",
+                                   "db.statement": format!("get {key}")}),
+                200,
+            )
+        };
+        assert_eq!(
+            found(&request(&[get("user:1"), get("user:2"), get("user:3")])),
+            []
         );
     }
 
