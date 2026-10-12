@@ -9,61 +9,10 @@ line of code to fix.
 
 It runs while you develop. Nothing leaves your machine.
 
-## Install
+## Status
 
-Tracepanel turns on only in development. That means `DEBUG` is on, the app
-runs in a debug server, or you start it with `tracepanel run`.
-
-### Django
-
-```bash
-pip install django-tracepanel
-```
-
-```python
-# settings.py
-INSTALLED_APPS += ["tracepanel.django"]
-```
-
-Run the server as usual and open any page. Tracepanel also traces Celery,
-Django REST framework, Django Ninja, Channels, Strawberry and htmx without
-extra setup.
-
-### FastAPI
-
-```bash
-pip install tracepanel
-```
-
-```python
-from fastapi import FastAPI
-
-import tracepanel.fastapi
-
-app = FastAPI(debug=True)
-tracepanel.fastapi.install(app)
-```
-
-Tracepanel also traces SQLAlchemy, Celery, Dramatiq, RQ and Strawberry without
-extra setup.
-
-### Flask
-
-```bash
-pip install tracepanel
-```
-
-```python
-from flask import Flask
-
-import tracepanel.flask
-
-app = Flask(__name__)
-tracepanel.flask.install(app)
-```
-
-Start it with `flask run --debug`. Tracepanel also traces SQLAlchemy, Celery,
-Dramatiq and RQ without extra setup.
+Tracepanel is in development and not on PyPI yet. Install instructions come
+with the first release.
 
 ## Run without changing your code
 
