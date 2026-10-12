@@ -13,7 +13,10 @@
   analysis as SQL. Calls a loop makes to one endpoint
   (`GET api.example.com/users/{id}`) or one key pattern (`user:{id}`) are an
   N+1. The same read made twice is a duplicate. An HTTP call slower than
-  `slow_http_ms` (500 ms by default) is a new issue, `slow-http`.
+  `slow_http_ms` (500 ms by default) is a new issue, `slow-http`. Repeated Redis
+  commands and cache operations are an issue only when they cost
+  `n_plus_one_min_ms` (5 ms by default) together, by their median call: an
+  in-memory store answers in a fraction of a millisecond.
 - Three data pages next to Database: Redis, Cache and HTTP calls. Each lists
   what the app called, grouped by key pattern or endpoint, with the same
   columns (calls, requests, most in one request, failures, total and slowest

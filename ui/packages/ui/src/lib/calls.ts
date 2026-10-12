@@ -30,7 +30,7 @@ export function pathTemplate(path: string): string {
 // An id inside a key (`post:42:views`, `session:9f3a…`): a number, a UUID, a long hex hash.
 const ID_IN_KEY = /\b(\d+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{16,})\b/gi;
 
-/** A Redis command with its key's ids as `{id}`: `GET post:{id}:views`. */
+/** A Redis command or a cache operation with its key's ids as `{id}`: `GET post:{id}:views`, `get user:{id}`. */
 function keyTemplate(name: string): string {
   return name.replace(ID_IN_KEY, "{id}");
 }
@@ -42,9 +42,13 @@ function endpointTemplate(name: string): string {
   return slash < 0 ? name : `${method} ${target.slice(0, slash)}${pathTemplate(target.slice(slash))}`;
 }
 
-const TEMPLATES: Record<string, (name: string) => string> = { redis: keyTemplate, "http.client": endpointTemplate };
+const TEMPLATES: Record<string, (name: string) => string> = {
+  redis: keyTemplate,
+  cache: keyTemplate,
+  "http.client": endpointTemplate,
+};
 
-/** What a call is a repeat of: an HTTP call's endpoint, a Redis command's key pattern, any other span's name. */
+/** What a call is a repeat of: an HTTP call's endpoint, a key pattern, any other span's name. */
 export function callTemplate(span: Span | undefined): string {
   if (span === undefined) return "";
   return (TEMPLATES[span.kind] ?? String)(span.name);

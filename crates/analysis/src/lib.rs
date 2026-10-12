@@ -516,6 +516,15 @@ fn redis_call(span: &Span) -> Call<'_> {
 
 /// Repeated and duplicate HTTP calls, Redis commands and cache calls, and slow HTTP calls: SQL's issues for the
 /// other services.
+/// Whether repeated calls cost at least `min_ms` together, by their median: the first call of a request often pays
+/// for opening the connection, and that is not what repeating them costs.
+fn costly(spans: &[&Span], min_ms: i64) -> bool {
+    let mut durations: Vec<i64> = spans.iter().map(|span| span.duration).collect();
+    durations.sort_unstable();
+    let median = durations.get(durations.len() / 2).copied().unwrap_or(0);
+    median.saturating_mul(spans.len() as i64) >= min_ms.saturating_mul(1000)
+}
+
 fn call_issues(trace: &Trace, thresholds: &Thresholds) -> Vec<Issue> {
     let mut issues = Vec::new();
     let threshold = thresholds.n_plus_one.max(0) as usize;
@@ -550,6 +559,10 @@ fn call_issues(trace: &Trace, thresholds: &Thresholds) -> Vec<Issue> {
             let calls = &groups[&group];
             let title = calls[0].title.as_str();
             let spans: Vec<&Span> = calls.iter().map(|call| call.span).collect();
+            // An in-memory store's repeats are an issue only when they cost something together.
+            if kind != "http.client" && !costly(&spans, thresholds.n_plus_one_min_ms) {
+                continue;
+            }
             let key = format!("{kind}|{group}");
             // Only what project code makes is actionable, as with SQL.
             let Some(culprit_text) = culprit(&spans) else {
@@ -956,7 +969,8 @@ mod tests {
         let attrs = serde_json::json!({
             "cache.alias": "redis", "cache.op": op, "cache.key": key, "code.origin": "app/views.py:20 in feed",
         });
-        ("cache", "redis", attrs, 100)
+        // 3 ms: a cache on a Redis over the network, where even two of the same cost more than 5 ms.
+        ("cache", "redis", attrs, 3000)
     }
 
     #[test]
@@ -998,7 +1012,34 @@ mod tests {
             "db.system": "redis", "db.operation": command, "redis.alias": "redis", "redis.key": key,
             "code.origin": "app/views.py:30 in feed",
         });
-        ("redis", "GET", attrs, 100)
+        ("redis", "GET", attrs, 3000)
+    }
+
+    #[test]
+    fn cheap_repeats_of_an_in_memory_store_are_no_issue() {
+        // Three GETs of 0.2 ms each, and a first one that opened the connection: 0.6 ms by the median, under 5 ms.
+        let mut spans = vec![
+            redis("GET", "user:1".into()),
+            redis("GET", "user:2".into()),
+            redis("GET", "user:3".into()),
+        ];
+        spans[0].3 = 10_000;
+        for span in &mut spans[1..] {
+            span.3 = 200;
+        }
+        let cheap = request(&spans);
+
+        assert_eq!(found(&cheap), []);
+        // The same at 3 ms each (a Redis over the network): an N+1.
+        assert_eq!(
+            found(&request(&[
+                redis("GET", "user:1".into()),
+                redis("GET", "user:2".into()),
+                redis("GET", "user:3".into())
+            ]))
+            .len(),
+            1
+        );
     }
 
     fn found(trace: &Trace) -> Vec<(String, String, i64)> {

@@ -158,6 +158,17 @@ function countFilters(nodes: Node[], counts = new Map<FilterId, number>()): Map<
 }
 
 /**
+ * How many of each a chip filters: spans counted in the trace itself (a folded group hides its members' children:
+ * a cache call's Redis commands), the rest (logs, tasks) as rows of the tree.
+ */
+function chipCounts(nodes: Node[], trace: Trace): Map<FilterId, number> {
+  const counts = countFilters(nodes);
+  const filters = trace.spans.map((span) => FILTER_OF.get(span.kind)).filter((filter) => filter !== undefined);
+  for (const filter of new Set(filters)) counts.set(filter, filters.filter((each) => each === filter).length);
+  return counts;
+}
+
+/**
  * With filters on: the rows that match, and the rows on the way to them ("path": shown dimmed, always open).
  * Everything else is hidden.
  */
@@ -727,7 +738,7 @@ export function CallMap({
   const [collapsed, toggle] = useToggleSet();
   const details = detailsOf(tree, selected, trace, links);
   const [active, setActive] = useState<ReadonlySet<FilterId>>(new Set());
-  const counts = useMemo(() => countFilters(tree), [tree]);
+  const counts = useMemo(() => chipCounts(tree, trace), [tree, trace]);
   const marks = useMemo(() => marksOf(tree, active), [tree, active]);
 
   return (
