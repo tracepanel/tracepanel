@@ -161,4 +161,4 @@ Python 3.11 and newer, Django 5.2 and newer.
 
 ## License
 
-[Apache License 2.0](LICENSE). © DevRealm OÜ.
+Licensed under the [Apache License 2.0](LICENSE).
