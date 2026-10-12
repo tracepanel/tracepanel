@@ -1,4 +1,5 @@
-//! The service map: what each trace's spans called (databases, caches, mail, queues, HTTP), and the broker a task came from.
+//! The service map: what each trace's spans called (databases and Redis, caches, mail, queues, HTTP), and the broker
+//! a task came from.
 
 use super::*;
 
@@ -65,6 +66,13 @@ pub(crate) fn peer(span: &Span) -> Option<Peer> {
             });
             Some(new("database", system, namespace, Some(alias)))
         }
+        // Redis used directly is a datastore, whatever the app keeps in it; through a cache API it is a cache.
+        "redis" => Some(new(
+            "database",
+            text(attrs.get("db.system")).unwrap_or_else(|| "redis".into()),
+            text(attrs.get("db.namespace")),
+            Some(or_default(attrs, "redis.alias", "redis")),
+        )),
         "cache" => {
             let alias = text(attrs.get("cache.alias")).unwrap_or_else(|| "default".into());
             let namespace = if address.is_some() {

@@ -1,12 +1,39 @@
 import { duration, percent } from "./format";
-import type { Trace } from "./types";
+import type { Span, Trace } from "./types";
 
-/** The request at a glance: time split between Python and the database, queries, cache, logs. */
+/** The request's cache operations, when it made any: how many, and how many of its reads found their key. */
+function CacheMetric({ cache }: { cache: Span[] }) {
+  if (cache.length === 0) return null;
+  const hits = cache.filter((span) => span.attrs["cache.hit"] === true).length;
+  const gets = cache.filter((span) => span.attrs["cache.op"] === "get").length;
+  return (
+    <div className="dt-metric">
+      <span className="dt-metric-label">Cache</span>
+      <span className="dt-metric-value">{cache.length}</span>
+      <span className="dt-metric-sub">{gets > 0 ? `${hits}/${gets} hits` : "calls"}</span>
+    </div>
+  );
+}
+
+/** Calls the request made of one kind, when it made any: how many, and their time. */
+function CallsMetric({ label, calls }: { label: string; calls: Span[] }) {
+  if (calls.length === 0) return null;
+  return (
+    <div className="dt-metric">
+      <span className="dt-metric-label">{label}</span>
+      <span className="dt-metric-value">{calls.length}</span>
+      <span className="dt-metric-sub">{duration(calls.reduce((sum, span) => sum + span.duration, 0))}</span>
+    </div>
+  );
+}
+
+/** The request at a glance: time split between the app and the database, queries; cache, Redis and HTTP calls when
+ * it made any. */
 export function Metrics({ trace }: { trace: Trace }) {
   const sql = trace.spans.filter((span) => span.kind === "sql");
   const cache = trace.spans.filter((span) => span.kind === "cache");
-  const hits = cache.filter((span) => span.attrs["cache.hit"] === true).length;
-  const gets = cache.filter((span) => span.attrs["cache.op"] === "get").length;
+  const calls = trace.spans.filter((span) => span.kind === "http.client");
+  const redis = trace.spans.filter((span) => span.kind === "redis");
   const db = sql.reduce((sum, span) => sum + span.duration, 0);
   const byAlias = new Map<string, number>();
   for (const span of sql) {
@@ -38,11 +65,9 @@ export function Metrics({ trace }: { trace: Trace }) {
         <span className="dt-metric-value">{sql.length}</span>
         <span className="dt-metric-sub">{new Set(sql.map((span) => span.attrs["db.fingerprint"])).size} unique</span>
       </div>
-      <div className="dt-metric">
-        <span className="dt-metric-label">Cache</span>
-        <span className="dt-metric-value">{cache.length}</span>
-        <span className="dt-metric-sub">{gets > 0 ? `${hits}/${gets} hits` : "calls"}</span>
-      </div>
+      <CacheMetric cache={cache} />
+      <CallsMetric label="Redis" calls={redis} />
+      <CallsMetric label="HTTP calls" calls={calls} />
     </div>
   );
 }

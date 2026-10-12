@@ -32,7 +32,7 @@ pub use read::{Page, ReadError, Reader};
 /// The store's errors (SQLite's).
 pub use rusqlite::Error;
 pub use stats::{SLOW_REQUEST_US, stats};
-pub use values::query_fingerprint;
+pub use values::{cache_key, call_key, query_fingerprint, redis_key};
 pub use write::{DEFAULT_MAX_TRACES, SCHEMA, Store, path_in, version};
 
 #[cfg(test)]
@@ -52,5 +52,143 @@ mod tests {
         assert_eq!(py_str(&Value::from(true)), "True");
         assert_eq!(py_str(&serde_json::json!(1.0)), "1.0");
         assert_eq!(query_fingerprint("SELECT 1", "default").len(), 16);
+    }
+
+    #[test]
+    fn an_endpoint_s_key_is_its_method_host_and_template() {
+        let key = call_key("GET", "api.example.com", "/users/{id}");
+        assert_eq!(key.len(), 16);
+        assert_eq!(key, call_key("GET", "api.example.com", "/users/{id}"));
+        assert_ne!(key, call_key("POST", "api.example.com", "/users/{id}"));
+        assert_ne!(key, call_key("GET", "other.example.com", "/users/{id}"));
+    }
+
+    /// A request that reads three users through Django's cache (on Redis), a Redis GET under each, and one direct
+    /// INCR that fails.
+    fn cached_request() -> Received {
+        let mut spans = vec![serde_json::json!({
+            "id": "root", "parent_id": null, "kind": "http", "name": "GET /", "start": 0, "duration": 100,
+            "status": "ok", "attrs": {},
+        })];
+        for n in 1..=3 {
+            spans.push(serde_json::json!({
+                "id": format!("c{n}"), "parent_id": "root", "kind": "cache", "name": "cache.get", "start": n,
+                "duration": 3, "status": "ok", "attrs": {
+                    "cache.alias": "default", "cache.system": "redis", "cache.op": "get", "cache.key": format!("user:{n}"),
+                    "cache.hit": n == 1, "code.origin": "app/views.py:10 in feed",
+                },
+            }));
+            spans.push(serde_json::json!({
+                "id": format!("r{n}"), "parent_id": format!("c{n}"), "kind": "redis", "name": format!("GET :1:user:{n}"),
+                "start": n, "duration": 2, "status": "ok", "attrs": {
+                    "db.system": "redis", "db.operation": "GET", "redis.alias": "redis", "redis.key": format!(":1:user:{n}"),
+                    "code.origin": "app/views.py:10 in feed",
+                },
+            }));
+        }
+        spans.push(serde_json::json!({
+            "id": "incr", "parent_id": "root", "kind": "redis", "name": "INCR hits", "start": 9, "duration": 1,
+            "status": "error", "attrs": {
+                "db.system": "redis", "db.operation": "INCR", "redis.alias": "redis", "redis.key": "hits",
+                "code.origin": "app/views.py:12 in feed",
+            },
+        }));
+        let doc = serde_json::json!({
+            "id": "t1", "kind": "http", "name": "GET /", "start": 0, "duration": 100, "status": "ok",
+            "attrs": {"service.name": "shop"}, "spans": spans, "logs": [], "errors": [], "links": [], "issues": [],
+        });
+        Received {
+            trace: serde_json::from_value(doc.clone()).unwrap(),
+            doc: doc.to_string(),
+        }
+    }
+
+    #[test]
+    fn cache_and_redis_lists_take_the_same_filters() {
+        let dir =
+            std::env::temp_dir().join(format!("tracepanel-store-cache-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = path_in(&dir);
+        Store::open(&path)
+            .unwrap()
+            .write(&[cached_request()])
+            .unwrap();
+        let reader = Reader::new(&path);
+        let fields = |rows: Vec<Value>, names: &[&str]| -> Vec<Vec<Value>> {
+            rows.into_iter()
+                .map(|row| names.iter().map(|name| row[*name].clone()).collect())
+                .collect()
+        };
+
+        assert_eq!(
+            fields(
+                reader.list_cache("db:default op:GET", 50).unwrap(),
+                &[
+                    "op",
+                    "template",
+                    "system",
+                    "calls",
+                    "hits",
+                    "misses",
+                    "most_per_trace",
+                    "errors"
+                ]
+            ),
+            [
+                serde_json::json!(["get", "user:{id}", "redis", 3, 1, 2, 3, 0])
+                    .as_array()
+                    .unwrap()
+                    .clone()
+            ]
+        );
+
+        assert_eq!(
+            fields(
+                reader.list_redis("", 50).unwrap(),
+                &["command", "template", "via", "calls", "errors"]
+            ),
+            [
+                serde_json::json!(["GET", ":{id}:user:{id}", "cache", 3, 0])
+                    .as_array()
+                    .unwrap()
+                    .clone(),
+                serde_json::json!(["INCR", "hits", "direct", 1, 1])
+                    .as_array()
+                    .unwrap()
+                    .clone(),
+            ]
+        );
+        assert_eq!(
+            fields(
+                reader
+                    .list_redis("failed:true via:direct op:incr", 50)
+                    .unwrap(),
+                &["command"]
+            ),
+            [vec![Value::from("INCR")]]
+        );
+        assert!(reader.list_redis("via:task", 50).unwrap().is_empty());
+        assert!(reader.list_cache("failed:true", 50).unwrap().is_empty());
+
+        let known = reader.known_values("").unwrap();
+        assert_eq!(
+            (
+                known["redis"].clone(),
+                known["cache"].clone(),
+                known["host"].clone()
+            ),
+            (
+                serde_json::json!(["redis"]),
+                serde_json::json!(["default"]),
+                serde_json::json!([])
+            )
+        );
+        let counts = reader.counts(None).unwrap();
+        assert_eq!(
+            counts["sections"],
+            serde_json::json!({"http": 1, "graphql": 0, "tasks": 0, "websockets": 0, "jobs": 0, "calls": false,
+                               "redis": true, "cache": true})
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

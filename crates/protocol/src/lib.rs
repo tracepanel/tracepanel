@@ -182,6 +182,11 @@ pub struct Thresholds {
     pub n_plus_one: i64,
     pub slow_sql_ms: i64,
     pub long_transaction_ms: i64,
+    /// An outgoing HTTP call this slow is an issue (SDKs from before it send none: the default then).
+    pub slow_http_ms: i64,
+    /// Repeated Redis commands or cache operations are an issue only when they cost this much together: an
+    /// in-memory store answers in a fraction of a millisecond, and a few of those are nothing to fix.
+    pub n_plus_one_min_ms: i64,
 }
 
 impl Default for Thresholds {
@@ -190,6 +195,8 @@ impl Default for Thresholds {
             n_plus_one: 3,
             slow_sql_ms: 100,
             long_transaction_ms: 500,
+            slow_http_ms: 500,
+            n_plus_one_min_ms: 5,
         }
     }
 }

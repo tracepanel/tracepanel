@@ -1,4 +1,5 @@
-//! Writing the store: a trace's rows (the trace, its SQL, logs, emails, issues, links, peers), and pruning to `max_traces`.
+//! Writing the store: a trace's rows (the trace, its SQL, outgoing calls, logs, emails, issues, links, peers), and
+//! pruning to `max_traces`.
 
 use super::*;
 
@@ -6,7 +7,7 @@ use super::*;
 pub const SCHEMA: &str = include_str!("../../../schema/store.sql");
 pub(crate) const FTS_SCHEMA: &str =
     "CREATE VIRTUAL TABLE IF NOT EXISTS logs_fts USING fts5(message, logger)";
-pub(crate) const TABLES: [&str; 12] = [
+pub(crate) const TABLES: [&str; 15] = [
     "meta",
     "traces",
     "issues",
@@ -14,6 +15,9 @@ pub(crate) const TABLES: [&str; 12] = [
     "logs",
     "logs_fts",
     "sql",
+    "calls",
+    "redis",
+    "cache_calls",
     "mails",
     "links",
     "peers",
@@ -123,6 +127,9 @@ pub(crate) fn prune(db: &Connection, fts: bool, max_traces: i64) -> rusqlite::Re
     for table in [
         "logs",
         "sql",
+        "calls",
+        "redis",
+        "cache_calls",
         "issue_traces",
         "mails",
         "links",
@@ -252,8 +259,8 @@ pub(crate) fn write_trace(
             span.attrs.get("db.vendor")
         };
         db.execute(
-            "INSERT INTO sql (trace_id, span_id, fp, alias, vendor, statement, name, start, duration, origin)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            "INSERT INTO sql (trace_id, span_id, fp, alias, vendor, statement, name, op, error, start, duration, origin)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
             params![
                 trace.id,
                 span.id,
@@ -262,6 +269,71 @@ pub(crate) fn write_trace(
                 sql(vendor),
                 statement,
                 span.name,
+                sql_op(&statement),
+                span.status == "error",
+                span.start,
+                span.duration,
+                sql(span.attrs.get("code.origin")),
+            ],
+        )?;
+    }
+    for span in trace.spans.iter().filter(|span| span.kind == "http.client") {
+        let (method, host, template) = tracepanel_analysis::http_endpoint(span);
+        db.execute(
+            "INSERT INTO calls (trace_id, span_id, key, method, host, template, status, error, start, duration, origin)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            params![
+                trace.id,
+                span.id,
+                call_key(&method, &host, &template),
+                method,
+                host,
+                template,
+                span.attrs.get("http.response.status_code").and_then(Value::as_i64),
+                span.status == "error",
+                span.start,
+                span.duration,
+                sql(span.attrs.get("code.origin")),
+            ],
+        )?;
+    }
+    for span in trace.spans.iter().filter(|span| span.kind == "redis") {
+        let (alias, command, template) = tracepanel_analysis::redis_command(span);
+        let via = tracepanel_analysis::redis_via(trace, span);
+        db.execute(
+            "INSERT INTO redis (trace_id, span_id, key, alias, command, template, via, error, start, duration, origin)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            params![
+                trace.id,
+                span.id,
+                redis_key(&alias, &command, &template, via),
+                alias,
+                command,
+                template,
+                via,
+                span.status == "error",
+                span.start,
+                span.duration,
+                sql(span.attrs.get("code.origin")),
+            ],
+        )?;
+    }
+    for span in trace.spans.iter().filter(|span| span.kind == "cache") {
+        let (alias, op, template) = tracepanel_analysis::cache_op(span);
+        let hit = span.attrs.get("cache.hit").and_then(Value::as_bool);
+        db.execute(
+            "INSERT INTO cache_calls (trace_id, span_id, key, alias, system, op, template, hit, error, start, duration,
+             origin) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+            params![
+                trace.id,
+                span.id,
+                cache_key(&alias, &op, &template),
+                alias,
+                sql(span.attrs.get("cache.system")),
+                op,
+                template,
+                hit,
+                span.status == "error",
                 span.start,
                 span.duration,
                 sql(span.attrs.get("code.origin")),

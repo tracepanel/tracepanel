@@ -70,6 +70,8 @@
   --dt-k-template: #2dd4bf;
   --dt-k-sql: #9db2ff;
   --dt-k-cache: #f5b544;
+  --dt-k-http: #4ade80;
+  --dt-k-redis: #fb923c;
   --dt-k-log: #9a93bd;
   --dt-k-mail: #f472b6;
 
@@ -163,6 +165,8 @@
   --dt-k-template: #0d9488;
   --dt-k-sql: #3456d6;
   --dt-k-cache: #d97706;
+  --dt-k-http: #15803d;
+  --dt-k-redis: #c2410c;
   --dt-k-log: #8a84a6;
   --dt-k-mail: #db2777;
 
@@ -729,7 +733,9 @@ a.dt-request-row {
 
 .dt-metrics {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  /* Four tiles, five when the request made HTTP calls: as many equal columns as there are tiles. */
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
   margin: 0 1rem;
   border: 1px solid var(--dt-border);
   border-radius: var(--dt-radius);
@@ -1560,6 +1566,12 @@ details[data-focused] > .dt-sql-group {
 [data-category="cache"] {
   --dt-k: var(--dt-k-cache);
 }
+[data-category="http"] {
+  --dt-k: var(--dt-k-http);
+}
+[data-category="redis"] {
+  --dt-k: var(--dt-k-redis);
+}
 .dt-breakdown-bar span {
   background: var(--dt-k);
 }
@@ -1641,6 +1653,12 @@ details[data-focused] > .dt-sql-group {
 }
 .dt-map-row[data-kind="cache"] {
   --dt-k: var(--dt-k-cache);
+}
+.dt-map-row[data-kind="http.client"] {
+  --dt-k: var(--dt-k-http);
+}
+.dt-map-row[data-kind="redis"] {
+  --dt-k: var(--dt-k-redis);
 }
 .dt-map-row[data-kind="log"] {
   --dt-k: var(--dt-k-log);

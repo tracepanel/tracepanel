@@ -1,4 +1,13 @@
-import { type DataSource, Empty, type KnownValues, type SearchSpec } from "@tracepanel/ui";
+import {
+  type CacheRow,
+  type CallRow,
+  type DataSource,
+  Empty,
+  type KnownValues,
+  type QueryRow,
+  type RedisRow,
+  type SearchSpec,
+} from "@tracepanel/ui";
 import { type ReactNode, useCallback } from "react";
 import { usePaged, useSearch } from "./data";
 import { EmptyPage } from "./EmptyPage";
@@ -9,7 +18,16 @@ import { SearchBar } from "./SearchBar";
 import { byProject, ServicesView } from "./ServicesView";
 import { useScope } from "./scope";
 import { DATA_LABELS } from "./sections";
-import { IssuesTable, LogsTable, MailsTable, QueriesTable, TracesTable } from "./tables";
+import {
+  CacheTable,
+  CallsTable,
+  IssuesTable,
+  LogsTable,
+  MailsTable,
+  QueriesTable,
+  RedisTable,
+  TracesTable,
+} from "./tables";
 import { Loading, LoadMore, PageHeader } from "./ui";
 
 type DataSection = Exclude<Section, EntrySection>;
@@ -25,7 +43,7 @@ interface DataPageProps {
 }
 
 /** What the work touched (services, SQL, emails, logs), what went wrong (issues), and ⌘K's search results. */
-const SUMMARIES: ReadonlySet<string> = new Set(["services", "queries"]);
+const SUMMARIES: ReadonlySet<string> = new Set(["services", "queries", "redis", "cache", "calls"]);
 
 /** What each section says before anything is stored. Search results (traces) always keep their search bar. */
 const PRISTINE: Partial<Record<DataSection, { title: string; text: string }>> = {
@@ -34,6 +52,9 @@ const PRISTINE: Partial<Record<DataSection, { title: string; text: string }>> = 
     text: "Databases, caches, mail servers and brokers appear here after the first call that uses them.",
   },
   queries: { title: "No queries yet", text: "SQL from requests, tasks and jobs is aggregated here." },
+  redis: { title: "No Redis commands yet", text: "Redis commands your app runs are aggregated here." },
+  cache: { title: "No cache calls yet", text: "Reads and writes through your framework's cache are aggregated here." },
+  calls: { title: "No HTTP calls yet", text: "HTTP calls your app makes to other services are aggregated here." },
   mails: { title: "No emails yet", text: "Emails your app sends show up here." },
   logs: { title: "No log records yet", text: "Records from requests, tasks and jobs show up here." },
   errors: {
@@ -45,6 +66,55 @@ const PRISTINE: Partial<Record<DataSection, { title: string; text: string }>> = 
     text: "N+1 queries, duplicate and slow SQL, transaction and htmx mistakes show up here.",
   },
 };
+
+type CallSection = "queries" | "redis" | "cache" | "calls";
+
+interface CallTableProps {
+  source: DataSource;
+  open: string | null;
+  onOpen: (key: string | null) => void;
+}
+
+/** The pages of calls the app makes: where their rows come from, how they are shown, what they are called. */
+const CALL_PAGES: Record<
+  CallSection,
+  {
+    noun: string;
+    load: (source: DataSource, q: string) => Promise<readonly unknown[]>;
+    table: (items: unknown[], props: CallTableProps) => ReactNode;
+  }
+> = {
+  queries: {
+    noun: "queries",
+    load: (source, q) => source.listQueries(q),
+    table: (items, props) => <QueriesTable items={items as QueryRow[]} {...props} />,
+  },
+  redis: {
+    noun: "Redis commands",
+    load: (source, q) => source.listRedis(q),
+    table: (items, { open, onOpen }) => <RedisTable items={items as RedisRow[]} open={open} onOpen={onOpen} />,
+  },
+  cache: {
+    noun: "cache calls",
+    load: (source, q) => source.listCache(q),
+    table: (items, { open, onOpen }) => <CacheTable items={items as CacheRow[]} open={open} onOpen={onOpen} />,
+  },
+  calls: {
+    noun: "HTTP calls",
+    load: (source, q) => source.listCalls(q),
+    table: (items, { open, onOpen }) => <CallsTable items={items as CallRow[]} open={open} onOpen={onOpen} />,
+  },
+};
+
+function isCallSection(section: string): section is CallSection {
+  return section in CALL_PAGES;
+}
+
+/** A list's body: loading, its rows, or what to say when nothing matches. */
+function listBody<T>(data: T[] | undefined, rows: (items: T[]) => ReactNode, empty: ReactNode): ReactNode {
+  if (data === undefined) return <Loading />;
+  return data.length > 0 ? rows(data) : empty;
+}
 
 export function DataPage({ section, q, open, source, spec, known }: DataPageProps) {
   const { setService } = useScope();
@@ -86,9 +156,10 @@ export function DataPage({ section, q, open, source, spec, known }: DataPageProp
     q,
     0,
   );
-  const queries = useSearch(
+  const stats = useSearch(
     useCallback(
-      (query: string) => (section === "queries" ? source.listQueries(query) : Promise.resolve([])),
+      (query: string): Promise<readonly unknown[]> =>
+        isCallSection(section) ? CALL_PAGES[section].load(source, query) : Promise.resolve([]),
       [source, section],
     ),
     q,
@@ -116,7 +187,10 @@ export function DataPage({ section, q, open, source, spec, known }: DataPageProp
       size: services.data ? byProject(services.data.apps).length + services.data.services.length : undefined,
       error: services.error,
     },
-    queries: { size: queries.data?.length, error: queries.error },
+    queries: { size: stats.data?.length, error: stats.error },
+    redis: { size: stats.data?.length, error: stats.error },
+    cache: { size: stats.data?.length, error: stats.error },
+    calls: { size: stats.data?.length, error: stats.error },
     errors: { size: issues.data?.length, error: issues.error },
     issues: { size: issues.data?.length, error: issues.error },
   }[section];
@@ -186,25 +260,18 @@ export function DataPage({ section, q, open, source, spec, known }: DataPageProp
     ) : (
       <Loading />
     );
-  } else if (section === "queries") {
-    body = queries.data ? (
-      queries.data.length ? (
-        <QueriesTable items={queries.data} source={source} open={open ?? null} onOpen={setOpen} />
-      ) : (
-        <Empty title="No queries match">SQL from stored traces is aggregated here.</Empty>
-      )
-    ) : (
-      <Loading />
+  } else if (isCallSection(section)) {
+    const page = CALL_PAGES[section];
+    body = listBody(
+      stats.data ? [...stats.data] : undefined,
+      (items) => page.table(items, { source, open: open ?? null, onOpen: setOpen }),
+      <Empty title={`No ${page.noun} match`}>Try a broader search, or another filter.</Empty>,
     );
   } else {
-    body = issues.data ? (
-      issues.data.length ? (
-        <IssuesTable items={issues.data} />
-      ) : (
-        <Empty title={section === "errors" ? "No errors match" : "No issues match"}>Try a broader search.</Empty>
-      )
-    ) : (
-      <Loading />
+    body = listBody(
+      issues.data,
+      (items) => <IssuesTable items={items} />,
+      <Empty title={`No ${section} match`}>Try a broader search.</Empty>,
     );
   }
 

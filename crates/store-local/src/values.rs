@@ -80,11 +80,41 @@ pub(crate) fn port(value: Option<&Value>) -> Option<i64> {
     value.and_then(Value::as_i64)
 }
 
-pub fn query_fingerprint(statement: &str, alias: &str) -> String {
-    let digest = Sha1::digest(format!("{alias}|{statement}").as_bytes());
-    digest
+/// The first 16 hex of SHA-1: the ids the console's lists group by and link with.
+fn short_sha1(text: &str) -> String {
+    Sha1::digest(text.as_bytes())
         .iter()
         .map(|byte| format!("{byte:02x}"))
         .collect::<String>()[..16]
         .to_owned()
+}
+
+pub fn query_fingerprint(statement: &str, alias: &str) -> String {
+    short_sha1(&format!("{alias}|{statement}"))
+}
+
+/// An outgoing HTTP endpoint's id, over "METHOD host template" (`call:<key>` in search).
+pub fn call_key(method: &str, host: &str, template: &str) -> String {
+    short_sha1(&format!("{method} {host}{template}"))
+}
+
+/// A Redis command's id, over "redis alias COMMAND template via" (`redis_call:<key>` in search): the same command
+/// made directly and under a cache operation are two rows.
+pub fn redis_key(alias: &str, command: &str, template: &str, via: &str) -> String {
+    short_sha1(&format!("redis {alias} {command} {template} {via}"))
+}
+
+/// A cache operation's id, over "cache alias op template" (`cache_call:<key>` in search).
+pub fn cache_key(alias: &str, op: &str, template: &str) -> String {
+    short_sha1(&format!("cache {alias} {op} {template}"))
+}
+
+/// A statement's verb, as the console filters it (`op:select`): its first word, upper case.
+pub(crate) fn sql_op(statement: &str) -> String {
+    statement
+        .split_whitespace()
+        .next()
+        .unwrap_or("SQL")
+        .trim_start_matches('(')
+        .to_uppercase()
 }

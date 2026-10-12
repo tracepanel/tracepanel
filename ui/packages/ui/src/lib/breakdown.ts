@@ -2,7 +2,7 @@
 // draw from it.
 import type { Span, Trace } from "../types";
 
-export type Category = "django" | "view" | "code" | "template" | "sql" | "cache" | "mail";
+export type Category = "django" | "view" | "code" | "template" | "sql" | "redis" | "cache" | "http" | "mail";
 
 export const CATEGORY_LABELS: Record<Category, string> = {
   django: "Framework & middleware",
@@ -10,18 +10,36 @@ export const CATEGORY_LABELS: Record<Category, string> = {
   code: "Your code",
   template: "Templates",
   sql: "Database",
+  redis: "Redis",
   cache: "Cache",
+  http: "External calls",
   mail: "Email",
 };
 
-function categoryOf(span: Span): Category | null {
-  if (span.kind === "sql") return "sql";
-  if (span.kind === "cache") return "cache";
-  if (span.kind === "mail") return "mail";
-  if (span.kind === "template") return "template";
-  if (span.kind === "view") return "view";
+const BY_KIND: Record<string, Category> = {
+  sql: "sql",
+  redis: "redis",
+  cache: "cache",
+  "http.client": "http",
+  mail: "mail",
+  template: "template",
+  view: "view",
   // A task or command root is the user's own code; so are spans they add with tracepanel.span().
-  if (span.kind === "function" || span.kind === "task.run" || span.kind === "command") return "code";
+  function: "code",
+  "task.run": "code",
+  command: "code",
+};
+
+/** A cache's Redis commands are the cache's time: what the app asked for, on whatever backend serves it. */
+function servedFor(span: Span, byId: ReadonlyMap<string, Span>): Span {
+  if (span.kind !== "redis") return span;
+  const parent = byId.get(String(span.parent_id));
+  return parent?.kind === "cache" ? parent : span;
+}
+
+function categoryOf(span: Span): Category | null {
+  const category = BY_KIND[span.kind];
+  if (category) return category;
   // An API framework's own steps (Django Ninja's auth, input validation, response serialization).
   if (span.parent_id === null || span.kind === "middleware" || span.kind === "framework") return "django";
   return null;
@@ -44,7 +62,7 @@ export function breakdown(trace: Trace): [Category, number][] {
   };
   // A span without a category of its own (a transaction: the code inside atomic(), a signal…) is its owner's time.
   const owner = (span: Span): Category | null => {
-    let current: Span | undefined = span;
+    let current: Span | undefined = servedFor(span, byId);
     while (current) {
       const category = current.kind === "transaction" ? null : categoryOf(current);
       if (category) return category;

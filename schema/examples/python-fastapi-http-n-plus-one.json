@@ -1,0 +1,193 @@
+{
+  "attrs": {
+    "code.view": "__main__.feed",
+    "http.method": "GET",
+    "http.path": "/api/feed",
+    "http.route": "/api/feed",
+    "http.status_code": 200,
+    "process.runtime.name": "cpython",
+    "process.runtime.version": "3.11.16",
+    "service.name": "app",
+    "service.role": "web",
+    "telemetry.sdk.language": "python",
+    "tracepanel.framework": "FastAPI 0.142.4"
+  },
+  "duration": 13290,
+  "errors": [],
+  "id": "01M4R1ER9RWER0QHV07BJDSZ7B",
+  "issues": [],
+  "kind": "http",
+  "links": [],
+  "logs": [],
+  "name": "GET /api/feed",
+  "spans": [
+    {
+      "attrs": {},
+      "duration": 13290,
+      "id": "01M4R1ER9SZFFTZ4D473QHS2V6",
+      "kind": "http",
+      "name": "GET /api/feed",
+      "parent_id": null,
+      "start": 1791808201016980,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.function": "__main__.feed"
+      },
+      "duration": 13188,
+      "id": "01M4R1ER9SND7BXTQ8R2NTD20F",
+      "kind": "view",
+      "name": "__main__.feed",
+      "parent_id": "01M4R1ER9SZFFTZ4D473QHS2V6",
+      "start": 1791808201017074,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "main.py:45 in feed",
+        "http.request.method": "GET",
+        "http.response.status_code": 200,
+        "server.address": "127.0.0.1",
+        "server.port": 56927,
+        "url.full": "http://127.0.0.1:56927/users/1",
+        "url.scheme": "http"
+      },
+      "duration": 1052,
+      "id": "01M4R1ER9ZCR3PXB0CXT5BM0FV",
+      "kind": "http.client",
+      "name": "GET 127.0.0.1/users/1",
+      "parent_id": "01M4R1ER9SND7BXTQ8R2NTD20F",
+      "start": 1791808201022083,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "main.py:46 in feed",
+        "db.operation": "GET",
+        "db.system": "redis",
+        "redis.alias": "redis",
+        "redis.key": "likes:1",
+        "server.address": "localhost",
+        "server.port": 56928
+      },
+      "duration": 2616,
+      "id": "01M4R1ERA114XFH90B9D0FBNWF",
+      "kind": "redis",
+      "name": "GET likes:1",
+      "parent_id": "01M4R1ER9SND7BXTQ8R2NTD20F",
+      "start": 1791808201023286,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "main.py:45 in feed",
+        "http.request.method": "GET",
+        "http.response.status_code": 200,
+        "server.address": "127.0.0.1",
+        "server.port": 56927,
+        "url.full": "http://127.0.0.1:56927/users/2",
+        "url.scheme": "http"
+      },
+      "duration": 522,
+      "id": "01M4R1ERA27PVZHJZH1KRG2GFR",
+      "kind": "http.client",
+      "name": "GET 127.0.0.1/users/2",
+      "parent_id": "01M4R1ER9SND7BXTQ8R2NTD20F",
+      "start": 1791808201026431,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "main.py:46 in feed",
+        "db.operation": "GET",
+        "db.system": "redis",
+        "redis.alias": "redis",
+        "redis.key": "likes:2",
+        "server.address": "localhost",
+        "server.port": 56928
+      },
+      "duration": 200,
+      "id": "01M4R1ERA3QMWVV487ZQ1DGFMY",
+      "kind": "redis",
+      "name": "GET likes:2",
+      "parent_id": "01M4R1ER9SND7BXTQ8R2NTD20F",
+      "start": 1791808201027056,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "main.py:45 in feed",
+        "http.request.method": "GET",
+        "http.response.status_code": 200,
+        "server.address": "127.0.0.1",
+        "server.port": 56927,
+        "url.full": "http://127.0.0.1:56927/users/3",
+        "url.scheme": "http"
+      },
+      "duration": 519,
+      "id": "01M4R1ERA4MAA3AK8FSXR6TEMV",
+      "kind": "http.client",
+      "name": "GET 127.0.0.1/users/3",
+      "parent_id": "01M4R1ER9SND7BXTQ8R2NTD20F",
+      "start": 1791808201027763,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "main.py:46 in feed",
+        "db.operation": "GET",
+        "db.system": "redis",
+        "redis.alias": "redis",
+        "redis.key": "likes:3",
+        "server.address": "localhost",
+        "server.port": 56928
+      },
+      "duration": 225,
+      "id": "01M4R1ERA4MFAWQXNRW9BQQ8BA",
+      "kind": "redis",
+      "name": "GET likes:3",
+      "parent_id": "01M4R1ER9SND7BXTQ8R2NTD20F",
+      "start": 1791808201028403,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "main.py:45 in feed",
+        "http.request.method": "GET",
+        "http.response.status_code": 200,
+        "server.address": "127.0.0.1",
+        "server.port": 56927,
+        "url.full": "http://127.0.0.1:56927/users/4",
+        "url.scheme": "http"
+      },
+      "duration": 541,
+      "id": "01M4R1ERA54V6J7G6DS2EX8ZGB",
+      "kind": "http.client",
+      "name": "GET 127.0.0.1/users/4",
+      "parent_id": "01M4R1ER9SND7BXTQ8R2NTD20F",
+      "start": 1791808201029149,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "main.py:46 in feed",
+        "db.operation": "GET",
+        "db.system": "redis",
+        "redis.alias": "redis",
+        "redis.key": "likes:4",
+        "server.address": "localhost",
+        "server.port": 56928
+      },
+      "duration": 211,
+      "id": "01M4R1ERA6R2ABC1WNTYW9QK9H",
+      "kind": "redis",
+      "name": "GET likes:4",
+      "parent_id": "01M4R1ER9SND7BXTQ8R2NTD20F",
+      "start": 1791808201029816,
+      "status": "ok"
+    }
+  ],
+  "start": 1791808201016980,
+  "status": "ok"
+}

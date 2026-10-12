@@ -6,11 +6,25 @@ export type EntrySection = "endpoints" | "graphql" | "tasks" | "websockets" | "j
 export const ENTRY_SECTIONS: EntrySection[] = ["endpoints", "graphql", "tasks", "websockets", "jobs"];
 
 /** `traces` is search results (⌘K "search all"), not a menu item. */
-export type Section = EntrySection | "services" | "queries" | "mails" | "logs" | "errors" | "issues" | "traces";
+export type Section =
+  | EntrySection
+  | "services"
+  | "queries"
+  | "redis"
+  | "cache"
+  | "calls"
+  | "mails"
+  | "logs"
+  | "errors"
+  | "issues"
+  | "traces";
 export const SECTIONS: Section[] = [
   ...ENTRY_SECTIONS,
   "services",
   "queries",
+  "redis",
+  "cache",
+  "calls",
   "mails",
   "logs",
   "errors",

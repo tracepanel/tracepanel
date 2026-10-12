@@ -57,9 +57,9 @@ interface QuickOption {
   terms: Filter[];
 }
 
-/** Values the console knows from stored data (routes, loggers, database aliases). */
+/** Values the console knows from stored data (routes, loggers, database aliases, hosts called, Redis and caches). */
 export type KnownValues = Partial<
-  Record<"route" | "logger" | "db" | "task" | "queue" | "job" | "extra", readonly string[]>
+  Record<"route" | "logger" | "db" | "host" | "redis" | "cache" | "task" | "queue" | "job" | "extra", readonly string[]>
 >;
 
 interface QuickFilter {
@@ -93,6 +93,7 @@ const ISSUE_LABELS: Record<string, string> = {
   "n+1": "N+1",
   duplicates: "Duplicate queries",
   "slow-sql": "Slow query",
+  "slow-http": "Slow HTTP call",
   "long-transaction": "Long transaction",
   "in-transaction": "Before commit",
   htmx: "htmx",
@@ -143,6 +144,7 @@ const ISSUE: QuickFilter = {
     { label: "N+1", terms: [f("has", ":", "n+1")] },
     { label: "Duplicate queries", terms: [f("has", ":", "duplicates")] },
     { label: "Slow query", terms: [f("has", ":", "slow-sql")] },
+    { label: "Slow HTTP call", terms: [f("has", ":", "slow-http")] },
     { label: "Long transaction", terms: [f("has", ":", "long-transaction")] },
     { label: "Before commit", terms: [f("has", ":", "in-transaction")] },
     { label: "htmx", terms: [f("has", ":", "htmx")] },
@@ -172,6 +174,22 @@ const QUEUE: MultiFilter = {
   values: (known) => known.queue ?? [],
 };
 
+const FAILED: QuickFilter = {
+  label: "Outcome",
+  title: "Filter by outcome",
+  options: [{ label: "Failed", terms: [f("failed", ":", "true")] }],
+};
+
+/** Time, where the calls went (a database, an instance, a cache, a host), the operation, and failed calls. */
+function callFilters(target: MultiFilter, operations: readonly string[]): Control[] {
+  return [
+    { ...TIME, verb: "Called" },
+    target,
+    { label: "Operation", title: "Filter by operation", key: "op", values: operations },
+    FAILED,
+  ];
+}
+
 const QUICK: Record<Section, Control[]> = {
   traces: [TIME, STATUS, METHOD, ROUTE, DURATION, ISSUE, CONTAINS],
   logs: [
@@ -193,7 +211,7 @@ const QUICK: Record<Section, Control[]> = {
       label: "Type",
       title: "Filter by type",
       key: "kind",
-      values: ["n+1", "duplicates", "slow-sql", "long-transaction", "in-transaction", "htmx"],
+      values: ["n+1", "duplicates", "slow-sql", "slow-http", "long-transaction", "in-transaction", "htmx"],
       format: (value) => ISSUE_LABELS[value] ?? value,
       display: (kind) => <IssueChip kind={kind as IssueKind} />,
     },
@@ -258,10 +276,38 @@ const QUICK: Record<Section, Control[]> = {
     },
     { label: "Role", title: "Filter by role", key: "role", values: ["web", "worker", "command"], format: capital },
   ],
-  queries: [
-    { ...TIME, verb: "Ran" },
+  // The pages of calls the app makes, all with the same filters: when, where to, which operation, failed or not.
+  queries: callFilters(
     { label: "Database", title: "Filter by database", key: "db", values: (known) => known.db ?? [] },
+    ["SELECT", "INSERT", "UPDATE", "DELETE"],
+  ),
+  redis: [
+    ...callFilters(
+      { label: "Instance", title: "Filter by Redis instance", key: "db", values: (known) => known.redis ?? [] },
+      ["GET", "SET", "MGET", "HGET", "HSET", "INCR", "DEL", "EXPIRE", "LPUSH", "PIPELINE"],
+    ),
+    // Redis's own: who sent the command.
+    {
+      label: "Via",
+      title: "Sent by",
+      key: "via",
+      values: ["direct", "cache", "task"],
+      format: (value) => ({ direct: "The app", cache: "A cache", task: "A task queue" })[value] ?? value,
+    },
   ],
+  cache: callFilters({ label: "Cache", title: "Filter by cache", key: "db", values: (known) => known.cache ?? [] }, [
+    "get",
+    "set",
+    "add",
+    "delete",
+    "get_many",
+    "set_many",
+    "incr",
+  ]),
+  calls: callFilters(
+    { label: "Host", title: "Filter by host", key: "host", values: (known) => known.host ?? [] },
+    METHODS,
+  ),
 };
 
 /**
@@ -289,6 +335,7 @@ const VALUES: Record<string, string[]> = {
     "n+1",
     "duplicates",
     "slow-sql",
+    "slow-http",
     "long-transaction",
     "in-transaction",
     "htmx",
@@ -306,6 +353,7 @@ const VALUES: Record<string, string[]> = {
     "n+1",
     "duplicates",
     "slow-sql",
+    "slow-http",
     "long-transaction",
     "in-transaction",
     "htmx",
@@ -336,6 +384,9 @@ const EXAMPLE: Record<Section, string> = {
   websockets: "event:receive",
   graphql: "type:mutation",
   queries: "table:auth_user",
+  calls: "host:api.example.com",
+  redis: "op:GET",
+  cache: "op:get",
   mails: "to:ann@example.com",
   logs: "level:error",
   errors: "ZeroDivisionError route:/api/*",

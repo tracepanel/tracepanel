@@ -1,5 +1,6 @@
 export { AttrsTable } from "./AttrsTable";
 export { CallMap } from "./CallMap";
+export { CallsList } from "./CallsList";
 export * from "./CopyButton";
 export { ErrorView } from "./ErrorView";
 export * from "./ExplainView";

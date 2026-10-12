@@ -119,6 +119,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/calls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Outgoing HTTP calls aggregated per endpoint (method, host, path template) across stored traces, heaviest first. */
+        get: operations["listCalls"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/redis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Redis commands aggregated per client alias, command and key template across stored traces, heaviest first. */
+        get: operations["listRedis"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/cache": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cache operations (a cache API's, such as Django's) aggregated per alias, op and key template, heaviest first. */
+        get: operations["listCache"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/explain": {
         parameters: {
             query?: never;
@@ -465,7 +516,7 @@ export interface components {
         /** @description Microseconds. */
         Duration: number;
         /** @enum {string} */
-        IssueKind: "n+1" | "duplicates" | "slow-sql" | "error" | "long-transaction" | "in-transaction" | "htmx";
+        IssueKind: "n+1" | "duplicates" | "slow-sql" | "slow-http" | "error" | "long-transaction" | "in-transaction" | "htmx";
         /** @description A trace without its document, as in lists. */
         TraceSummary: {
             id: string;
@@ -555,6 +606,8 @@ export interface components {
             trace_name: string;
         };
         QueryRow: {
+            /** @description Statement id, as fp (search traces with query:<key>). */
+            key: string;
             /** @description Statement id (search with query:<fp>). */
             fp: string;
             /** @description Database alias. */
@@ -566,10 +619,99 @@ export interface components {
             name: string;
             calls: number;
             traces: number;
+            /** @description Calls that failed. */
+            errors: number;
             total: components["schemas"]["Duration"];
             slowest: components["schemas"]["Duration"];
             last_seen: components["schemas"]["Time"];
+            /** @description The most calls in one trace. */
             most_per_trace: number;
+            /** @description The most common line of code making the call. */
+            origin: string | null;
+            /** @description The latest call's trace. */
+            sample_trace: string;
+            /** @description The latest call's span. */
+            sample_span: string;
+        };
+        CallRow: {
+            /** @description Endpoint id (search traces with call:<key>). */
+            key: string;
+            /** @description GET, POST… */
+            method: string;
+            host: string;
+            /** @description Path with ids as {id}: /users/{id}. */
+            template: string;
+            calls: number;
+            traces: number;
+            /** @description Calls that failed or answered 400 or more. */
+            errors: number;
+            total: components["schemas"]["Duration"];
+            slowest: components["schemas"]["Duration"];
+            last_seen: components["schemas"]["Time"];
+            /** @description The most calls in one trace. */
+            most_per_trace: number;
+            /** @description The most common line of code making the call. */
+            origin: string | null;
+            /** @description The latest call's trace. */
+            sample_trace: string;
+            /** @description The latest call's span. */
+            sample_span: string;
+        };
+        RedisRow: {
+            /** @description Command id (search traces with redis_call:<key>). */
+            key: string;
+            /** @description The client's alias: redis, redis/1. */
+            alias: string;
+            /** @description GET, HGETALL, PIPELINE… */
+            command: string;
+            /** @description Key with ids as {id}: user:{id}; empty without a key. */
+            template: string;
+            /**
+             * @description Why the command ran: the app's own call, or under a cache operation or a task enqueue.
+             * @enum {string}
+             */
+            via: "direct" | "cache" | "task";
+            calls: number;
+            traces: number;
+            /** @description Calls that failed. */
+            errors: number;
+            total: components["schemas"]["Duration"];
+            slowest: components["schemas"]["Duration"];
+            last_seen: components["schemas"]["Time"];
+            /** @description The most calls in one trace. */
+            most_per_trace: number;
+            /** @description The most common line of code making the call. */
+            origin: string | null;
+            /** @description The latest call's trace. */
+            sample_trace: string;
+            /** @description The latest call's span. */
+            sample_span: string;
+        };
+        CacheRow: {
+            /** @description Operation id (search traces with cache_call:<key>). */
+            key: string;
+            /** @description Cache alias. */
+            alias: string;
+            /** @description The cache's backend: redis, memcached, locmem… */
+            system: string | null;
+            /** @description get, set, get_many… */
+            op: string;
+            /** @description Key with ids as {id}; empty for an operation on several keys. */
+            template: string;
+            /** @description Gets that found the key. */
+            hits: number;
+            /** @description Gets that didn't. */
+            misses: number;
+            calls: number;
+            traces: number;
+            /** @description Calls that failed. */
+            errors: number;
+            total: components["schemas"]["Duration"];
+            slowest: components["schemas"]["Duration"];
+            last_seen: components["schemas"]["Time"];
+            /** @description The most calls in one trace. */
+            most_per_trace: number;
+            /** @description The most common line of code making the call. */
             origin: string | null;
             /** @description The latest call's trace. */
             sample_trace: string;
@@ -713,6 +855,12 @@ export interface components {
                 websockets: number;
                 /** @description Management commands and tracepanel.trace() blocks. */
                 jobs: number;
+                /** @description Outgoing HTTP calls were recorded; the console shows its HTTP calls page. */
+                calls: boolean;
+                /** @description Redis commands were recorded; the console shows its Redis page. */
+                redis: boolean;
+                /** @description Cache operations were recorded; the console shows its Cache page. */
+                cache: boolean;
             };
         };
         KnownValues: {
@@ -724,7 +872,14 @@ export interface components {
             job: string[];
             route: string[];
             logger: string[];
+            /** @description Database aliases. */
             db: string[];
+            /** @description Hosts the app called over HTTP. */
+            host: string[];
+            /** @description Redis client aliases. */
+            redis: string[];
+            /** @description Cache aliases. */
+            cache: string[];
             /** @description extra.* keys seen in logs. */
             extra: string[];
         };
@@ -743,6 +898,9 @@ export interface components {
             logs: components["schemas"]["SearchFields"];
             mails: components["schemas"]["SearchFields"];
             queries: components["schemas"]["SearchFields"];
+            calls: components["schemas"]["SearchFields"];
+            redis: components["schemas"]["SearchFields"];
+            cache: components["schemas"]["SearchFields"];
             endpoints: components["schemas"]["SearchFields"];
             issues: components["schemas"]["SearchFields"];
         };
@@ -978,7 +1136,7 @@ export interface components {
             id: components["schemas"]["trace.schema"]["$defs"]["id"];
             parent_id: components["schemas"]["trace.schema"]["$defs"]["id"] | null;
             /** @enum {unknown} */
-            kind: "http" | "middleware" | "framework" | "view" | "template" | "sql" | "transaction" | "cache" | "mail" | "signal" | "http.client" | "task.enqueue" | "task.run" | "command" | "function" | "event" | "websocket" | "websocket.send" | "channel.send" | "graphql";
+            kind: "http" | "middleware" | "framework" | "view" | "template" | "sql" | "transaction" | "cache" | "redis" | "mail" | "signal" | "http.client" | "task.enqueue" | "task.run" | "command" | "function" | "event" | "websocket" | "websocket.send" | "channel.send" | "graphql";
             name: string;
             start: components["schemas"]["trace.schema"]["$defs"]["time"];
             duration: components["schemas"]["trace.schema"]["$defs"]["duration"];
@@ -1023,7 +1181,7 @@ export interface components {
             fingerprint: string;
             fingerprint_version: number;
             /** @enum {unknown} */
-            kind: "n+1" | "duplicates" | "slow-sql" | "error" | "long-transaction" | "in-transaction" | "htmx";
+            kind: "n+1" | "duplicates" | "slow-sql" | "slow-http" | "error" | "long-transaction" | "in-transaction" | "htmx";
             title: string;
             /** @description Where in the project code it happens, e.g. "blog/views.py:21 in post_list". */
             culprit: string | null;
@@ -1069,7 +1227,7 @@ export interface components {
                     id: components["schemas"]["trace.schema"]["$defs"]["id"];
                     parent_id: components["schemas"]["trace.schema"]["$defs"]["id"] | null;
                     /** @enum {unknown} */
-                    kind: "http" | "middleware" | "framework" | "view" | "template" | "sql" | "transaction" | "cache" | "mail" | "signal" | "http.client" | "task.enqueue" | "task.run" | "command" | "function" | "event" | "websocket" | "websocket.send" | "channel.send" | "graphql";
+                    kind: "http" | "middleware" | "framework" | "view" | "template" | "sql" | "transaction" | "cache" | "redis" | "mail" | "signal" | "http.client" | "task.enqueue" | "task.run" | "command" | "function" | "event" | "websocket" | "websocket.send" | "channel.send" | "graphql";
                     name: string;
                     start: components["schemas"]["trace.schema"]["$defs"]["time"];
                     duration: components["schemas"]["trace.schema"]["$defs"]["duration"];
@@ -1131,7 +1289,7 @@ export interface components {
                     fingerprint: string;
                     fingerprint_version: number;
                     /** @enum {unknown} */
-                    kind: "n+1" | "duplicates" | "slow-sql" | "error" | "long-transaction" | "in-transaction" | "htmx";
+                    kind: "n+1" | "duplicates" | "slow-sql" | "slow-http" | "error" | "long-transaction" | "in-transaction" | "htmx";
                     title: string;
                     /** @description Where in the project code it happens, e.g. "blog/views.py:21 in post_list". */
                     culprit: string | null;
@@ -1381,6 +1539,87 @@ export interface operations {
                 content: {
                     "application/json": {
                         queries: components["schemas"]["QueryRow"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadSearch"];
+        };
+    };
+    listCalls: {
+        parameters: {
+            query?: {
+                /** @description Search query: free text plus key:value filters, e.g. route:/api/* status>=500 "timed out". */
+                q?: components["parameters"]["q"];
+                limit?: components["parameters"]["limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Endpoints. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        calls: components["schemas"]["CallRow"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadSearch"];
+        };
+    };
+    listRedis: {
+        parameters: {
+            query?: {
+                /** @description Search query: free text plus key:value filters, e.g. route:/api/* status>=500 "timed out". */
+                q?: components["parameters"]["q"];
+                limit?: components["parameters"]["limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Commands. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        redis: components["schemas"]["RedisRow"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadSearch"];
+        };
+    };
+    listCache: {
+        parameters: {
+            query?: {
+                /** @description Search query: free text plus key:value filters, e.g. route:/api/* status>=500 "timed out". */
+                q?: components["parameters"]["q"];
+                limit?: components["parameters"]["limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cache operations. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        cache: components["schemas"]["CacheRow"][];
                     };
                 };
             };

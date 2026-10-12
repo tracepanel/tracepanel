@@ -43,5 +43,12 @@
   ],
   "go-panic.json": [
     "error"
+  ],
+  "python-fastapi-http-n-plus-one.json": [
+    "n+1"
+  ],
+  "python-fastapi-http-slow.json": [
+    "duplicates",
+    "slow-http"
   ]
 }

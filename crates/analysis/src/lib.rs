@@ -20,6 +20,12 @@ static BY_PK: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"(?i)WHERE (?:[`"]?\w+[`"]?\.)?[`"]?id[`"]? = (?:%s|\?|\$\d+)"#).unwrap()
 });
 static LINE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r":\d+ in ").unwrap());
+// The parts of a URL path or a cache key that name one item: a number, a UUID, a long hex digest.
+static UUID: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b").unwrap()
+});
+static HEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)\b[0-9a-f]{16,}\b").unwrap());
+static NUMBER: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b\d+\b").unwrap());
 
 const SELECT_RELATED: &str = "Load the related object in the same query: add `select_related()` for this ForeignKey \
     to the queryset that produced these rows.";
@@ -34,6 +40,16 @@ const DUPLICATES: &str = "Run the query once and reuse the result, or cache it f
 const DATALOADER: &str = " In GraphQL, a resolver runs once per object: batch these lookups with a DataLoader \
     (strawberry.dataloader), or prefetch in the parent resolver.";
 const SLOW_SQL: &str = "Check the query plan (`EXPLAIN`) and add an index or narrow the query.";
+const HTTP_REPEATED: &str =
+    "Fetch them in one batch request, or call once and reuse the result for the request.";
+const CACHE_REPEATED: &str = "Read or write the keys in one round trip (a multi-key command such as MGET, or a pipeline) instead of one per item.";
+const HTTP_DUPLICATES: &str =
+    "Make the call once and reuse the answer, or cache it for the request.";
+const CACHE_DUPLICATES: &str = "Read the key once and keep the value for the request.";
+const REDIS_REPEATED: &str = "Send the commands in one round trip (a multi-key command such as MGET, or a pipeline) \
+    instead of one per item.";
+const SLOW_HTTP: &str = "The request waits for the other service: set a timeout, cache the answer, or make the call \
+    outside the request (in a background task).";
 const LONG_TRANSACTION: &str = "Rows locked inside stay locked until COMMIT: keep slow work (HTTP calls, emails, \
     heavy Python) out of the `atomic()` block.";
 const LONG_TRANSACTION_SQLALCHEMY: &str = "Rows locked inside stay locked until COMMIT: keep slow work (HTTP calls, \
@@ -345,6 +361,280 @@ fn sql_issues(trace: &Trace, thresholds: &Thresholds) -> Vec<Issue> {
     issues
 }
 
+// ---------- HTTP calls, Redis and cache ----------
+
+/// `user:42:profile` -> `user:{id}:profile`; `/users/42` -> `/users/{id}`: the item a call is about, as `{id}`.
+/// The analysis groups calls by it, and the store aggregates them by it.
+pub fn template(text: &str) -> String {
+    let text = UUID.replace_all(text, "{id}");
+    let text = HEX.replace_all(&text, "{id}");
+    NUMBER.replace_all(&text, "{id}").into_owned()
+}
+
+/// One kind of outgoing call, as the issues see it: what makes two calls the same request or the same item.
+struct Call<'a> {
+    span: &'a Span,
+    /// Calls to the same endpoint, or the same key pattern: `GET api.example.com/users/{id}`.
+    group: String,
+    /// How an issue's title names the group (the group itself, unless it has parts only for telling groups apart).
+    title: String,
+    /// The exact call: its full URL, or its key.
+    exact: String,
+    /// Whether making it twice is wasted: a read, not a write (two POSTs, or two INCRs, are two actions).
+    read: bool,
+}
+
+// Operations that only read: Django's cache API, and Redis commands (lowercase).
+const CACHE_READS: &[&str] = &[
+    "get",
+    "get_many",
+    "has_key",
+    "mget",
+    "exists",
+    "hget",
+    "hmget",
+    "hgetall",
+    "hexists",
+    "smembers",
+    "sismember",
+    "lrange",
+    "lindex",
+    "llen",
+    "zrange",
+    "zscore",
+    "zcard",
+    "scard",
+    "strlen",
+    "ttl",
+    "type",
+];
+
+/// The endpoint an `http.client` span called: its method, host and path template (`/users/{id}`), whatever the query
+/// string asks it. The analysis groups calls by it, and the store aggregates them by it.
+pub fn http_endpoint(span: &Span) -> (String, String, String) {
+    let method = or_default(&span.attrs, "http.request.method", "GET").to_uppercase();
+    let url = text(&span.attrs, "url.full").unwrap_or_else(|| span.name.clone());
+    // scheme://host:port/path?query -> host, path.
+    let rest = url.split_once("://").map_or(url.as_str(), |(_, rest)| rest);
+    let without_query = rest.split(['?', '#']).next().unwrap_or("");
+    let (host, path) = without_query.split_once('/').unwrap_or((without_query, ""));
+    let host = host.rsplit('@').next().unwrap_or(host);
+    let host = text(&span.attrs, "server.address")
+        .unwrap_or_else(|| host.split(':').next().unwrap_or(host).to_owned());
+    (method, host, format!("/{}", template(path)))
+}
+
+fn http_call(span: &Span) -> Call<'_> {
+    let (method, host, path) = http_endpoint(span);
+    let url = text(&span.attrs, "url.full").unwrap_or_else(|| span.name.clone());
+    let group = format!("{method} {host}{path}");
+    Call {
+        span,
+        title: group.clone(),
+        group,
+        exact: format!("{method} {url}"),
+        read: matches!(method.as_str(), "GET" | "HEAD" | "OPTIONS"),
+    }
+}
+
+/// A string key names the item; the *_many ops and pipelines carry how many, which says nothing of which.
+fn item_key<'a>(span: &'a Span, attr: &str) -> Option<&'a str> {
+    match span.attrs.get(attr) {
+        Some(Value::String(key)) => Some(key.as_str()),
+        _ => None,
+    }
+}
+
+/// A Django cache operation: its alias, its op (`get`) and its key template (`user:{id}`, "" for a count).
+pub fn cache_op(span: &Span) -> (String, String, String) {
+    let op = or_default(&span.attrs, "cache.op", &span.name).to_lowercase();
+    let alias = or_default(&span.attrs, "cache.alias", "default");
+    let key = item_key(span, "cache.key")
+        .map(template)
+        .unwrap_or_default();
+    (alias, op, key)
+}
+
+/// A Redis command: its client's alias (`redis`, `redis/1`), the command (`GET`) and its key template.
+pub fn redis_command(span: &Span) -> (String, String, String) {
+    let command = text(&span.attrs, "db.operation")
+        .unwrap_or_else(|| span.name.split_whitespace().next().unwrap_or("").to_owned())
+        .to_uppercase();
+    let alias = or_default(&span.attrs, "redis.alias", "redis");
+    let key = item_key(span, "redis.key")
+        .map(template)
+        .unwrap_or_default();
+    (alias, command, key)
+}
+
+/// Why a Redis command ran, by the nearest ancestor that asked a library for it: "cache" (a cache operation, such as
+/// Django's cache over Redis), "task" (a task enqueued on a Redis broker), "direct" (the app's own call). The app
+/// fixes an issue on the cache operation or the enqueue it made, not on the commands those sent.
+pub fn redis_via(trace: &Trace, span: &Span) -> &'static str {
+    let mut parent = span.parent_id.as_deref();
+    // A bound in case of a cycle: no tree is that deep.
+    for _ in 0..trace.spans.len() {
+        let Some(id) = parent else { break };
+        let Some(ancestor) = trace.spans.iter().find(|candidate| candidate.id == id) else {
+            break;
+        };
+        match ancestor.kind.as_str() {
+            "cache" => return "cache",
+            "task.enqueue" => return "task",
+            _ => parent = ancestor.parent_id.as_deref(),
+        }
+    }
+    "direct"
+}
+
+fn cache_call(span: &Span) -> Call<'_> {
+    let (alias, op, key) = cache_op(span);
+    let exact = item_key(span, "cache.key");
+    let group = format!("{alias} {op} {key}").trim_end().to_owned();
+    Call {
+        span,
+        title: group.clone(),
+        group,
+        exact: format!("{alias} {op} {}", exact.unwrap_or_default()),
+        read: exact.is_some() && CACHE_READS.contains(&op.as_str()),
+    }
+}
+
+fn redis_call(span: &Span) -> Call<'_> {
+    let (alias, command, key) = redis_command(span);
+    let exact = item_key(span, "redis.key");
+    let title = format!("{command} {key}").trim_end().to_owned();
+    Call {
+        span,
+        // Two clients (databases) apart: the same command on each is not one group.
+        group: format!("{alias} {title}"),
+        title,
+        exact: format!("{alias} {command} {}", exact.unwrap_or_default()),
+        read: exact.is_some() && CACHE_READS.contains(&command.to_lowercase().as_str()),
+    }
+}
+
+/// Repeated and duplicate HTTP calls, Redis commands and cache calls, and slow HTTP calls: SQL's issues for the
+/// other services.
+/// Whether repeated calls cost at least `min_ms` together, by their median: the first call of a request often pays
+/// for opening the connection, and that is not what repeating them costs.
+fn costly(spans: &[&Span], min_ms: i64) -> bool {
+    let mut durations: Vec<i64> = spans.iter().map(|span| span.duration).collect();
+    durations.sort_unstable();
+    let median = durations.get(durations.len() / 2).copied().unwrap_or(0);
+    median.saturating_mul(spans.len() as i64) >= min_ms.saturating_mul(1000)
+}
+
+fn call_issues(trace: &Trace, thresholds: &Thresholds) -> Vec<Issue> {
+    let mut issues = Vec::new();
+    let threshold = thresholds.n_plus_one.max(0) as usize;
+    for (kind, label, describe) in [
+        ("http.client", "calls", http_call as fn(&Span) -> Call<'_>),
+        ("redis", "Redis commands", redis_call),
+        ("cache", "cache calls", cache_call),
+    ] {
+        let mut order: Vec<String> = Vec::new();
+        let mut groups: HashMap<String, Vec<Call<'_>>> = HashMap::new();
+        // Redis commands under a cache operation or an enqueue: the issue is the cache's (or the queue's), on the
+        // layer the app fixes it on.
+        let own = |span: &&Span| kind != "redis" || redis_via(trace, span) == "direct";
+        for span in trace
+            .spans
+            .iter()
+            .filter(|span| span.kind == kind)
+            .filter(own)
+        {
+            let call = describe(span);
+            if !groups.contains_key(&call.group) {
+                order.push(call.group.clone());
+            }
+            groups.entry(call.group.clone()).or_default().push(call);
+        }
+        let (repeated_hint, duplicates_hint) = match kind {
+            "cache" => (CACHE_REPEATED, CACHE_DUPLICATES),
+            "redis" => (REDIS_REPEATED, CACHE_DUPLICATES),
+            _ => (HTTP_REPEATED, HTTP_DUPLICATES),
+        };
+        for group in order {
+            let calls = &groups[&group];
+            let title = calls[0].title.as_str();
+            let spans: Vec<&Span> = calls.iter().map(|call| call.span).collect();
+            // An in-memory store's repeats are an issue only when they cost something together.
+            if kind != "http.client" && !costly(&spans, thresholds.n_plus_one_min_ms) {
+                continue;
+            }
+            let key = format!("{kind}|{group}");
+            // Only what project code makes is actionable, as with SQL.
+            let Some(culprit_text) = culprit(&spans) else {
+                continue;
+            };
+            let key_culprit = culprit_key(Some(&culprit_text));
+            let distinct = calls
+                .iter()
+                .map(|call| call.exact.as_str())
+                .collect::<std::collections::HashSet<_>>()
+                .len();
+            if distinct >= threshold {
+                issues.push(issue(
+                    issue_key("n+1", &[Some(&key), key_culprit.as_deref()]),
+                    "n+1",
+                    format!("N+1: {} similar {label} · {title}", spans.len()),
+                    Some(culprit_text.clone()),
+                    Some(repeated_hint),
+                    spans.len(),
+                    spans.iter().map(|span| span.id.clone()).collect(),
+                ));
+            } else {
+                let reads: Vec<&Call<'_>> = calls.iter().filter(|call| call.read).collect();
+                let counts =
+                    reads
+                        .iter()
+                        .fold(HashMap::<&str, usize>::new(), |mut counts, call| {
+                            *counts.entry(call.exact.as_str()).or_default() += 1;
+                            counts
+                        });
+                let repeated: Vec<&Span> = reads
+                    .iter()
+                    .filter(|call| counts[call.exact.as_str()] >= DUPLICATES_MIN)
+                    .map(|call| call.span)
+                    .collect();
+                if !repeated.is_empty() {
+                    issues.push(issue(
+                        issue_key("duplicates", &[Some(&key), key_culprit.as_deref()]),
+                        "duplicates",
+                        format!("Duplicate {label}: {} identical · {title}", repeated.len()),
+                        Some(culprit_text.clone()),
+                        Some(duplicates_hint),
+                        repeated.len(),
+                        repeated.iter().map(|span| span.id.clone()).collect(),
+                    ));
+                }
+            }
+            if kind != "http.client" {
+                continue;
+            }
+            let slow: Vec<&Span> = spans
+                .iter()
+                .copied()
+                .filter(|span| span.duration >= thresholds.slow_http_ms * 1000)
+                .collect();
+            if !slow.is_empty() {
+                let slowest = slow.iter().map(|span| span.duration).max().unwrap_or(0);
+                issues.push(issue(
+                    issue_key("slow-http", &[Some(&key), key_culprit.as_deref()]),
+                    "slow-http",
+                    format!("Slow HTTP call: {} ms · {title}", milliseconds(slowest)),
+                    culprit(&slow),
+                    Some(SLOW_HTTP),
+                    slow.len(),
+                    slow.iter().map(|span| span.id.clone()).collect(),
+                ));
+            }
+        }
+    }
+    issues
+}
+
 // ---------- errors ----------
 
 /// An error's message as an issue title: its first line, on one line, cut at a word.
@@ -598,6 +888,7 @@ pub fn apply(received: &mut tracepanel_protocol::Received, thresholds: &Threshol
 /// Issues in a finished trace: errors first, then the rest by occurrence count.
 pub fn analyze(trace: &Trace, thresholds: &Thresholds) -> Vec<Issue> {
     let mut found = sql_issues(trace, thresholds);
+    found.extend(call_issues(trace, thresholds));
     found.extend(transaction_issues(trace, thresholds));
     found.extend(htmx_issues(trace));
     // A stable sort, as Python's sorted().
@@ -647,6 +938,261 @@ mod tests {
         let long = format!("Error: {}", "word ".repeat(60));
         let title = headline(&long);
         assert!(title.ends_with("word…") && title.chars().count() <= TITLE_LIMIT);
+    }
+
+    /// A request whose spans are these (kind, name, attrs, duration in µs).
+    fn request(spans: &[(&str, &str, Value, i64)]) -> Trace {
+        let spans: Vec<Value> = spans
+            .iter()
+            .enumerate()
+            .map(|(n, (kind, name, attrs, duration))| {
+                serde_json::json!({
+                    "id": format!("s{n}"), "kind": kind, "name": name, "start": n, "duration": duration,
+                    "attrs": attrs,
+                })
+            })
+            .collect();
+        serde_json::from_value(serde_json::json!({
+            "id": "t", "kind": "http", "name": "GET /", "start": 0, "spans": spans,
+        }))
+        .unwrap()
+    }
+
+    fn get(url: &str) -> (&'static str, &'static str, Value, i64) {
+        let attrs = serde_json::json!({
+            "http.request.method": "GET", "url.full": url, "code.origin": "app/views.py:12 in feed",
+        });
+        ("http.client", "GET", attrs, 1000)
+    }
+
+    fn cache(op: &str, key: Value) -> (&'static str, &'static str, Value, i64) {
+        let attrs = serde_json::json!({
+            "cache.alias": "redis", "cache.op": op, "cache.key": key, "code.origin": "app/views.py:20 in feed",
+        });
+        // 3 ms: a cache on a Redis over the network, where even two of the same cost more than 5 ms.
+        ("cache", "redis", attrs, 3000)
+    }
+
+    #[test]
+    fn redis_commands_under_a_cache_call_are_the_cache_s_issue() {
+        let mut trace = request(&[
+            cache("get", "user:1".into()),
+            redis("GET", "user:1".into()),
+            cache("get", "user:2".into()),
+            redis("GET", "user:2".into()),
+            cache("get", "user:3".into()),
+            redis("GET", "user:3".into()),
+        ]);
+        // Each GET under the cache get before it, as the SDK nests them.
+        for index in [1, 3, 5] {
+            let parent = trace.spans[index - 1].id.clone();
+            trace.spans[index].parent_id = Some(parent);
+        }
+
+        assert_eq!(
+            found(&trace),
+            [(
+                "n+1".to_owned(),
+                "N+1: 3 similar cache calls · redis get user:{id}".to_owned(),
+                3
+            )]
+        );
+        assert_eq!(
+            trace
+                .spans
+                .iter()
+                .map(|span| redis_via(&trace, span))
+                .collect::<Vec<_>>(),
+            ["direct", "cache", "direct", "cache", "direct", "cache"]
+        );
+    }
+
+    fn redis(command: &str, key: Value) -> (&'static str, &'static str, Value, i64) {
+        let attrs = serde_json::json!({
+            "db.system": "redis", "db.operation": command, "redis.alias": "redis", "redis.key": key,
+            "code.origin": "app/views.py:30 in feed",
+        });
+        ("redis", "GET", attrs, 3000)
+    }
+
+    #[test]
+    fn cheap_repeats_of_an_in_memory_store_are_no_issue() {
+        // Three GETs of 0.2 ms each, and a first one that opened the connection: 0.6 ms by the median, under 5 ms.
+        let mut spans = vec![
+            redis("GET", "user:1".into()),
+            redis("GET", "user:2".into()),
+            redis("GET", "user:3".into()),
+        ];
+        spans[0].3 = 10_000;
+        for span in &mut spans[1..] {
+            span.3 = 200;
+        }
+        let cheap = request(&spans);
+
+        assert_eq!(found(&cheap), []);
+        // The same at 3 ms each (a Redis over the network): an N+1.
+        assert_eq!(
+            found(&request(&[
+                redis("GET", "user:1".into()),
+                redis("GET", "user:2".into()),
+                redis("GET", "user:3".into())
+            ]))
+            .len(),
+            1
+        );
+    }
+
+    fn found(trace: &Trace) -> Vec<(String, String, i64)> {
+        analyze(trace, &Thresholds::default())
+            .into_iter()
+            .map(|issue| (issue.kind, issue.title, issue.count))
+            .collect()
+    }
+
+    #[test]
+    fn templates_name_the_item_as_id() {
+        assert_eq!(
+            [
+                template("users/42/orders"),
+                template("user:42:profile"),
+                template("files/0b9f6c1e-3c1a-4c1e-9f1e-2a8f8a1d3b4c"),
+                template("blobs/9f86d081884c7d659a2feaa0c55ad015"),
+                template("v2/items"),
+            ],
+            [
+                "users/{id}/orders",
+                "user:{id}:profile",
+                "files/{id}",
+                "blobs/{id}",
+                "v2/items",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_call_per_item_is_an_n_plus_one() {
+        let trace = request(&[
+            get("https://api.example.com/users/1?fields=name"),
+            get("https://api.example.com/users/2?fields=name"),
+            get("https://api.example.com/users/3?fields=name"),
+            cache("get", "user:1".into()),
+            cache("get", "user:2".into()),
+            cache("get", "user:3".into()),
+        ]);
+
+        assert_eq!(
+            found(&trace),
+            [
+                (
+                    "n+1".to_owned(),
+                    "N+1: 3 similar calls · GET api.example.com/users/{id}".to_owned(),
+                    3
+                ),
+                (
+                    "n+1".to_owned(),
+                    "N+1: 3 similar cache calls · redis get user:{id}".to_owned(),
+                    3
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn the_same_read_twice_is_a_duplicate_and_a_write_is_not() {
+        let trace = request(&[
+            get("https://api.example.com/rates"),
+            get("https://api.example.com/rates"),
+            cache("get", "settings".into()),
+            cache("get", "settings".into()),
+            cache("incr", "hits".into()),
+            cache("incr", "hits".into()),
+        ]);
+
+        assert_eq!(
+            found(&trace),
+            [
+                (
+                    "duplicates".to_owned(),
+                    "Duplicate calls: 2 identical · GET api.example.com/rates".to_owned(),
+                    2
+                ),
+                (
+                    "duplicates".to_owned(),
+                    "Duplicate cache calls: 2 identical · redis get settings".to_owned(),
+                    2
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn single_calls_and_calls_from_library_code_are_no_issue() {
+        // Made by a library, with no project frame to point at.
+        let mut library = get("https://auth.example.com/keys");
+        library.2 = serde_json::json!({"http.request.method": "GET", "url.full": "https://auth.example.com/keys"});
+        let trace = request(&[
+            get("https://api.example.com/users/1"),
+            get("https://api.example.com/teams/1"),
+            cache("get_many", 3.into()),
+            library.clone(),
+            library.clone(),
+            library,
+        ]);
+
+        assert_eq!(found(&trace), []);
+    }
+
+    #[test]
+    fn a_slow_http_call_by_its_threshold() {
+        let mut slow = get("https://pay.example.com/charges");
+        slow.3 = 750_000;
+        let trace = request(&[slow, get("https://pay.example.com/refunds")]);
+
+        assert_eq!(
+            found(&trace),
+            [(
+                "slow-http".to_owned(),
+                "Slow HTTP call: 750 ms · GET pay.example.com/charges".to_owned(),
+                1
+            )]
+        );
+
+        let relaxed = Thresholds {
+            slow_http_ms: 1000,
+            ..Thresholds::default()
+        };
+        assert!(analyze(&trace, &relaxed).is_empty());
+    }
+
+    #[test]
+    fn redis_commands_have_the_issues_of_cache_calls() {
+        let trace = request(&[
+            redis("GET", "post:1:views".into()),
+            redis("GET", "post:2:views".into()),
+            redis("GET", "post:3:views".into()),
+            redis("HGETALL", "settings".into()),
+            redis("HGETALL", "settings".into()),
+            redis("INCR", "hits".into()),
+            redis("INCR", "hits".into()),
+            // A pipeline's key is how many commands it sent: no item, no group of items.
+            redis("PIPELINE", 3.into()),
+        ]);
+
+        assert_eq!(
+            found(&trace),
+            [
+                (
+                    "n+1".to_owned(),
+                    "N+1: 3 similar Redis commands · GET post:{id}:views".to_owned(),
+                    3
+                ),
+                (
+                    "duplicates".to_owned(),
+                    "Duplicate Redis commands: 2 identical · HGETALL settings".to_owned(),
+                    2
+                ),
+            ]
+        );
     }
 
     #[test]
