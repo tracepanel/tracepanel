@@ -145,7 +145,8 @@ const STYLE = `
   }
   .panel[data-open] { transform: none; visibility: visible; transition: transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1), width 200ms ease-out; }
   .panel[data-open] ~ .badge { right: calc(min(var(--tracepanel-width, 600px), 100vw) + 16px); }
-  @media (max-width: 720px) { .panel[data-open] ~ .badge { display: none; } }
+  /* No room beside the panel (a narrow window): the panel shows the same request, the badge steps aside. */
+  :host([data-crowded]:not([data-dock="bottom"])) .panel[data-open] ~ .badge { visibility: hidden; }
   .panel iframe { width: 100%; height: 100%; border: 0; display: block; background: transparent; color-scheme: dark; }
   /* Light theme (the console's Auto / Light / Dark choice, shared through localStorage). */
   :host([data-theme="light"]) .badge {
@@ -664,7 +665,14 @@ export function mount(options: WidgetOptions = {}): Widget {
   function setWidth(value: number): void {
     width = Math.round(Math.min(Math.max(value, MIN_WIDTH), window.innerWidth - 40));
     host.style.setProperty("--tracepanel-width", `${width}px`);
+    fitBadge();
   }
+
+  /** Whether the badge fits left of the right-docked panel; hidden, it still has its width to measure. */
+  function fitBadge(): void {
+    host.toggleAttribute("data-crowded", window.innerWidth - width < badge.offsetWidth + 32);
+  }
+  window.addEventListener("resize", fitBadge);
 
   function setHeight(value: number): void {
     height = Math.round(Math.min(Math.max(value, MIN_HEIGHT), window.innerHeight - 40));
@@ -734,6 +742,7 @@ export function mount(options: WidgetOptions = {}): Widget {
     // Findings are amber whatever else happened: a failure says so in its status, and in the page's count.
     if (shown.issues) addIssues(stats, shown.issues, "warn");
     if (all.length > 1) addPage(stats, all);
+    fitBadge();
     badge.dataset["verdict"] = worst;
     // No title: the hover card shows all of it (and more); screen readers get the summary.
     badge.setAttribute("aria-label", pillLabel(all, options.runtime));

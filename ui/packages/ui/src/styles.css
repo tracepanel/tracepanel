@@ -1833,9 +1833,63 @@ details[data-focused] > .dt-sql-group {
 .dt-map-open:hover {
   text-decoration: underline;
 }
+.dt-map-details-title {
+  margin: 0;
+  padding-right: 2rem;
+  color: var(--dt-text-3);
+  font-size: var(--dt-size-sm);
+  font-weight: 600;
+}
+.dt-map-row:focus-visible {
+  outline-offset: -2px;
+}
+
+/* A narrow tree: the selected row's details open under it, in the row's tint. */
 .dt-map-inline {
   border-bottom: 1px solid var(--dt-border);
   background: var(--dt-subtle);
+}
+
+/* A wide tree: the details sit beside it and stay in view while the tree scrolls. */
+.dt-map-body[data-side] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(20rem, 40%);
+  align-items: start;
+}
+.dt-map-tree {
+  min-width: 0;
+}
+.dt-map-side {
+  position: sticky;
+  top: var(--dt-side-top, 0px);
+  max-height: var(--dt-side-height, 100vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-top: 1px solid var(--dt-border);
+  border-left: 1px solid var(--dt-border);
+  background: var(--dt-bg);
+}
+.dt-map-side-close {
+  position: absolute;
+  top: 0.625rem;
+  right: 0.625rem;
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 1px solid transparent;
+  border-radius: 0.375rem;
+  background: none;
+  color: var(--dt-text-3);
+  cursor: pointer;
+}
+.dt-map-side-close:hover {
+  border-color: var(--dt-border-strong);
+  color: var(--dt-text);
+}
+.dt-map-side-close svg {
+  width: 1rem;
+  height: 1rem;
 }
 
 /* ---------- SQL ---------- */
