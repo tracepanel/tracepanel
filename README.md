@@ -4,15 +4,15 @@
 
 **See what your app does on every request.** Tracepanel is a debug toolbar for
 Python web apps. It traces every request, query, task and error on your
-machine, finds the N+1 queries and the duplicate and slow SQL, and names the
+machine. It finds N+1 queries, duplicate queries and slow SQL, and names the
 line of code to fix.
 
 It runs while you develop. Nothing leaves your machine.
 
 ## Install
 
-Tracepanel turns on in development only: with `DEBUG`, in a debug server, or
-under `tracepanel run`.
+Tracepanel turns on only in development. That means `DEBUG` is on, the app
+runs in a debug server, or you start it with `tracepanel run`.
 
 ### Django
 
@@ -25,8 +25,9 @@ pip install django-tracepanel
 INSTALLED_APPS += ["tracepanel.django"]
 ```
 
-Run the server as usual and open any page. Celery, Django REST framework,
-Django Ninja, Channels, Strawberry and htmx are traced with no more setup.
+Run the server as usual and open any page. Tracepanel also traces Celery,
+Django REST framework, Django Ninja, Channels, Strawberry and htmx without
+extra setup.
 
 ### FastAPI
 
@@ -43,7 +44,8 @@ app = FastAPI(debug=True)
 tracepanel.fastapi.install(app)
 ```
 
-SQLAlchemy, Celery, Dramatiq, RQ and Strawberry are traced with no more setup.
+Tracepanel also traces SQLAlchemy, Celery, Dramatiq, RQ and Strawberry without
+extra setup.
 
 ### Flask
 
@@ -60,13 +62,13 @@ app = Flask(__name__)
 tracepanel.flask.install(app)
 ```
 
-Start it with `flask run --debug`. SQLAlchemy, Celery, Dramatiq and RQ are
-traced with no more setup.
+Start it with `flask run --debug`. Tracepanel also traces SQLAlchemy, Celery,
+Dramatiq and RQ without extra setup.
 
 ## Run without changing your code
 
 `tracepanel run` turns Tracepanel on for one command and adds nothing to the
-project:
+project. For example:
 
 ```bash
 tracepanel run python manage.py runserver   # Django
@@ -79,20 +81,21 @@ tracepanel run celery -A app worker         # a worker
 ## What you see
 
 Open any page of your app. A badge in the corner shows the request's status,
-time, queries and issues. Click it for the panel: every request the page made,
-`fetch()` calls included, each with its call tree, SQL and logs.
+time, queries and issues. Click it to open the panel. The panel lists every
+request the page made, including `fetch()` calls, each with its call tree, SQL
+and logs.
 
-The console at `/__tracepanel__/` shows everything the app did beyond one page:
-HTTP endpoints, GraphQL operations, background tasks, commands and WebSockets,
-with charts over time and one search across all of it.
+The console at `/__tracepanel__/` covers the whole app. It lists HTTP
+endpoints, GraphQL operations, background tasks, commands and WebSockets, with
+charts over time and one search across all of them.
 
-A task or a command has no page, so each one ends with a line in the terminal:
-a summary and a link to its trace.
+A task or a command has no page, so each one prints a summary line in the
+terminal with a link to its trace.
 
 ## Issues it finds
 
-Each issue names the line of your code it comes from and how to fix it, in the
-words of your ORM.
+Each issue names the line of your code that caused it and shows the fix with
+your ORM's API.
 
 | Issue | What it is |
 | --- | --- |
@@ -128,15 +131,15 @@ Claude Code, Cursor or Codex then gets tools to find a trace, read it in a few
 lines, wait for the request it made and compare the traces before and after a
 fix. A trace's 151 SQL queries fold into lines such as
 `sql SELECT auth_user ×50 · 0.7 ms  [n+1] — blog/views.py:28`. The answers
-leave out SQL parameters and variables' values unless you start it with
-`--values`.
+leave out SQL parameters and local variables unless you start
+`tracepanel mcp` with `--values`.
 
 ## Privacy
 
 Traces stay in `.tracepanel/` in your project. Add it to `.gitignore`. By
 default the console listens on `127.0.0.1`, and the agent takes traces from
-this machine only. Values under names that look secret, such as passwords,
-tokens and keys, are masked.
+this machine only. Tracepanel masks values under names that look secret, such
+as passwords, tokens and keys.
 
 ## Platforms
 
@@ -158,4 +161,4 @@ Python 3.11 and newer, Django 5.2 and newer.
 
 ## License
 
-[Apache License 2.0](LICENSE). © DevRealm OÜ.
+Licensed under the [Apache License 2.0](LICENSE).
