@@ -63,6 +63,7 @@ export function scopedSource(source: DataSource, service: string): DataSource {
     searchLogs: (query, before) => source.searchLogs(q(query), before),
     searchMails: (query, before) => source.searchMails(q(query), before),
     listCalls: (system, query) => source.listCalls(system, q(query)),
+    callsSummary: (system, query) => source.callsSummary(system, q(query)),
     listEndpoints: (query) => source.listEndpoints(q(query)),
     listTasks: (query) => source.listTasks(q(query)),
     listWebsockets: (query) => source.listWebsockets(q(query)),

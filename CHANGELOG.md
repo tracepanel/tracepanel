@@ -4,6 +4,10 @@
 
 ### Added
 
+- Tiles above a system's page sum up its calls, all of them and with the
+  page's filters: how many and in how many requests, their time and p95, how
+  many per request (up to the most in one), how many failed (a click shows
+  them), and a cache's hit rate. `/api/calls/summary` answers them.
 - Spans an OpenTelemetry instrumentation recorded are mapped by the agent,
   from the semantic conventions (older and current attribute names alike),
   so every SDK can send them as they are (kind `otel`). SQL becomes a query

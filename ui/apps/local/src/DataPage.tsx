@@ -1,6 +1,7 @@
 import { type CallRow, type DataSource, Empty, type KnownValues, type SearchSpec } from "@tracepanel/ui";
 import type { Family } from "@tracepanel/ui/lib/systems";
 import { type ReactNode, useCallback } from "react";
+import { SystemTiles } from "./CallsTiles";
 import { usePaged, useSearch } from "./data";
 import { EmptyPage } from "./EmptyPage";
 import { refineQuery } from "./EntryPage";
@@ -223,10 +224,17 @@ export function DataPage({ section, q, open, source, spec, known, systems }: Dat
       <Loading />
     );
   } else if (system) {
-    body = listBody(
-      stats.data,
-      (items) => <CallsTable items={items} source={source} open={open ?? null} onOpen={setOpen} />,
-      <Empty title={`No ${meta.noun ?? "operations"} match`}>Try a broader search, or another filter.</Empty>,
+    body = (
+      <>
+        <SystemTiles system={system} q={q} source={source} onFailed={() => refine({ failed: "true" })} />
+        {listBody(
+          stats.data,
+          (items) => (
+            <CallsTable items={items} source={source} open={open ?? null} onOpen={setOpen} />
+          ),
+          <Empty title={`No ${meta.noun ?? "operations"} match`}>Try a broader search, or another filter.</Empty>,
+        )}
+      </>
     );
   } else {
     body = listBody(
