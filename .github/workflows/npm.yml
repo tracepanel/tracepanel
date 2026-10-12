@@ -1,8 +1,11 @@
 name: npm
 
-# The agent's npm packages: on a version tag, like release.yml, or by hand on an existing tag (a version already on
-# PyPI). It builds and checks every platform (wheels.yml), then publishes the 15 platform packages and
-# @tracepanel/agent, which depends on them.
+# The agent's npm packages: the 15 platform packages and @tracepanel/agent, which depends on them.
+#
+# - On a version tag, like release.yml: it builds and checks every platform (wheels.yml) and publishes the packages
+#   made from those wheels.
+# - By hand, with a version already on PyPI (0.0.1a1): it downloads that release's wheels, makes the packages from
+#   them, checks them, and publishes them. The binaries are the ones on PyPI, byte for byte.
 #
 # npm's trusted publishing signs the upload: each package names this repository, npm.yml and the environment npm.
 # A package must exist before it can trust a workflow, so the first release publishes with an NPM_TOKEN secret; npm
@@ -12,6 +15,10 @@ on:
   push:
     tags: ["[0-9]+.[0-9]+.[0-9]+*"]
   workflow_dispatch:
+    inputs:
+      version:
+        description: "A version on PyPI, such as 0.0.1a1: its wheels go to npm unchanged"
+        required: true
 
 permissions:
   contents: read
@@ -20,6 +27,7 @@ jobs:
   version:
     # The tag names the version in Cargo.toml (and pyproject.toml): 0.0.1a1 is 0.0.1-alpha.1 on npm.
     name: The tag is the version
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -27,9 +35,7 @@ jobs:
 
       - uses: astral-sh/setup-uv@v10.3.0
 
-      - name: A tag, and the same version as Cargo.toml
-        run: |
-          test "$GITHUB_REF_TYPE" = tag || { echo "::error::run it on a tag"; exit 1; }
+      - run: |
           uv run --no-project --with packaging python - <<'EOF'
           import os, sys, tomllib
           from packaging.version import Version
@@ -42,9 +48,51 @@ jobs:
     needs: version
     uses: ./.github/workflows/wheels.yml
 
+  released:
+    # A released version's wheels from PyPI, made into packages, installed and run here.
+    name: Packages of ${{ inputs.version }} from PyPI
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.3.0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: The release's wheels, made into packages
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          uv run --no-project scripts/npm.py --download "$VERSION" wheels
+          uv run --no-project scripts/npm.py wheels npm
+
+      - name: Pack them
+        run: |
+          mkdir npm-dist
+          for package in npm/*/; do (cd "$package" && npm pack --pack-destination ../../npm-dist); done
+
+      - name: Install, run the command, receive a trace and serve it
+        run: |
+          mkdir try && cd try && npm init -y > /dev/null
+          npm install --omit=optional ../npm-dist/tracepanel-agent-[0-9]*.tgz ../npm-dist/tracepanel-agent-linux-x64-gnu-*.tgz
+          npx tracepanel-agent --version
+          export TRACEPANEL_AGENT_BIN="$(node -p "require('@tracepanel/agent').binaryPath()")"
+          cd .. && uv run --no-project --python 3.13 python scripts/smoke.py
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: npm-packages
+          path: npm-dist/*.tgz
+
   publish:
     name: Publish to npm
-    needs: wheels
+    needs: [wheels, released]
+    # One of the two made the packages; the other was skipped.
+    if: ${{ !cancelled() && !failure() }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment:
@@ -54,10 +102,6 @@ jobs:
       # What npm's trusted publishing and provenance sign the upload with, in place of a token.
       id-token: write
     steps:
-      - uses: actions/checkout@v7
-        with:
-          sparse-checkout: Cargo.toml
-
       - uses: actions/setup-node@v7
         with:
           node-version: 24
@@ -75,13 +119,15 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          main=$(ls npm-dist/tracepanel-agent-[0-9]*.tgz)
+          version=$(basename "$main" .tgz)
+          version=${version#tracepanel-agent-}
           # A pre-release goes under its own dist-tag (alpha, beta, rc), so `npm install` keeps the latest release.
           case "$version" in
             *-*) tag=$(echo "${version#*-}" | cut -d. -f1) ;;
             *) tag=latest ;;
           esac
-          main="npm-dist/tracepanel-agent-$version.tgz"
+          echo "version $version, dist-tag $tag"
           for package in npm-dist/*.tgz; do
             [ "$package" = "$main" ] && continue
             npm publish "$package" --access public --tag "$tag" --provenance

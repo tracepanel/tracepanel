@@ -8,20 +8,22 @@ installs only the one that fits. `@tracepanel/agent` lists them all as optional 
 as `tracepanel-agent`, and tells SDKs where it is (`binaryPath()`).
 
     uv run --no-project scripts/npm.py WHEELS OUT
+    uv run --no-project scripts/npm.py --download 0.0.1a1 WHEELS   # a released version's wheels, from PyPI
 
-WHEELS holds one directory per wheel artifact, `wheel-<rust target>/` (actions/download-artifact without merging).
-OUT gets one directory per package, ready for `npm pack` or `npm publish`. Python's standard library only.
+WHEELS holds one directory per wheel, `wheel-<rust target>/`: the build's artifacts (actions/download-artifact without
+merging), or a release's wheels from PyPI. OUT gets one directory per package, ready for `npm pack` or
+`npm publish`. The version is the wheels': 0.0.1a1 on PyPI is 0.0.1-alpha.1 on npm. Python's standard library only.
 """
 
 import json
+import re
 import shutil
 import stat
 import sys
-import tomllib
+import urllib.request
 import zipfile
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
 SCOPE = "@tracepanel"
 LICENSE = "FSL-1.1-ALv2"
 REPOSITORY = "https://github.com/tracepanel/tracepanel"
@@ -143,15 +145,67 @@ release.
 """
 
 
-def version() -> str:
-    """The agent's version as npm writes it: semver, the same as Cargo.toml's."""
-    return tomllib.loads((ROOT / "Cargo.toml").read_text())["workspace"]["package"]["version"]
+# A wheel's platform tag: the Rust target it was built for. Linux glibc wheels are tagged with the oldest glibc they
+# run on, which changes over releases (aarch64 went from manylinux_2_17 to manylinux_2_28): matched by CPU only.
+WHEEL_TAGS = [
+    (r"manylinux_\d+_\d+_x86_64", "x86_64-unknown-linux-gnu"),
+    (r"manylinux_\d+_\d+_aarch64", "aarch64-unknown-linux-gnu"),
+    (r"manylinux_\d+_\d+_i686", "i686-unknown-linux-gnu"),
+    (r"manylinux_\d+_\d+_ppc64le", "powerpc64le-unknown-linux-gnu"),
+    (r"manylinux_\d+_\d+_s390x", "s390x-unknown-linux-gnu"),
+    (r"manylinux_\d+_\d+_riscv64", "riscv64gc-unknown-linux-gnu"),
+    (r"manylinux_\d+_\d+_armv7l", "armv7-unknown-linux-gnueabihf"),
+    (r"musllinux_\d+_\d+_x86_64", "x86_64-unknown-linux-musl"),
+    (r"musllinux_\d+_\d+_aarch64", "aarch64-unknown-linux-musl"),
+    (r"musllinux_\d+_\d+_i686", "i686-unknown-linux-musl"),
+    (r"musllinux_\d+_\d+_armv7l", "armv7-unknown-linux-musleabihf"),
+    (r"linux_armv6l", "arm-unknown-linux-musleabihf"),
+    (r"macosx_\d+_\d+_arm64", "aarch64-apple-darwin"),
+    (r"macosx_\d+_\d+_x86_64", "x86_64-apple-darwin"),
+    (r"win_amd64", "x86_64-pc-windows-msvc"),
+    (r"win32", "i686-pc-windows-msvc"),
+    (r"win_arm64", "aarch64-pc-windows-msvc"),
+]
 
 
-def common(name: str, description: str) -> dict[str, object]:
+def semver(version: str) -> str:
+    """A PEP 440 version as npm writes it: 0.0.1a1 is 0.0.1-alpha.1, as in Cargo.toml."""
+    match = re.fullmatch(r"(\d+\.\d+\.\d+)(?:(a|b|rc)(\d+))?", version)
+    if match is None:
+        sys.exit(f"{version}: not a version this script knows how to write for npm")
+    release, kind, number = match.groups()
+    names = {"a": "alpha", "b": "beta", "rc": "rc"}
+    return f"{release}-{names[kind]}.{number}" if kind else release
+
+
+def wheel_target(name: str) -> str | None:
+    """The Rust target of a wheel, from its platform tags (`manylinux_2_17_x86_64.manylinux2014_x86_64`: two)."""
+    if not name.endswith(".whl"):
+        return None
+    tags = name.removesuffix(".whl").rsplit("-", 1)[-1].split(".")
+    return next((target for pattern, target in WHEEL_TAGS for tag in tags if re.fullmatch(pattern, tag)), None)
+
+
+def download(version: str, wheels: Path) -> None:
+    """A released version's wheels from PyPI, one directory per Rust target, as the build's artifacts are laid out."""
+    with urllib.request.urlopen(f"https://pypi.org/pypi/tracepanel-agent/{version}/json", timeout=30) as response:
+        files = json.loads(response.read())["urls"]
+    for file in files:
+        name = file["filename"]
+        target = wheel_target(name)
+        if target is None:
+            continue
+        directory = wheels / f"wheel-{target}"
+        directory.mkdir(parents=True, exist_ok=True)
+        with urllib.request.urlopen(file["url"], timeout=120) as response:
+            (directory / name).write_bytes(response.read())
+    print(f"{version}: {len(list(wheels.glob('wheel-*')))} wheels from PyPI in {wheels}")
+
+
+def common(name: str, description: str, version: str) -> dict[str, object]:
     return {
         "name": name,
-        "version": version(),
+        "version": version,
         "description": description,
         "license": LICENSE,
         "homepage": REPOSITORY,
@@ -179,13 +233,13 @@ def extract(wheel: Path, out: Path) -> None:
         sys.exit(f"{wheel.name}: no tracepanel-agent binary in it")
 
 
-def platform_package(target: str, wheel: Path, out: Path) -> str:
+def platform_package(target: str, wheel: Path, out: Path, version: str) -> str:
     suffix, os_name, cpu, libc = PLATFORMS[target]
     name = f"{SCOPE}/agent-{suffix}"
     directory = out / f"agent-{suffix}"
     directory.mkdir(parents=True)
     extract(wheel, directory)
-    data = common(name, f"The tracepanel-agent binary for {suffix}. Installed by @tracepanel/agent.")
+    data = common(name, f"The tracepanel-agent binary for {suffix}. Installed by @tracepanel/agent.", version)
     data |= {"os": [os_name], "cpu": [cpu], "files": ["bin", *LICENSE_FILES], "preferUnplugged": True}
     if libc:
         data["libc"] = [libc]
@@ -193,7 +247,7 @@ def platform_package(target: str, wheel: Path, out: Path) -> str:
     return name
 
 
-def main_package(names: list[str], licenses_from: Path, out: Path) -> None:
+def main_package(names: list[str], licenses_from: Path, out: Path, version: str) -> None:
     directory = out / "agent"
     (directory / "bin").mkdir(parents=True)
     (directory / "index.js").write_text(INDEX_JS)
@@ -208,6 +262,7 @@ def main_package(names: list[str], licenses_from: Path, out: Path) -> None:
         f"{SCOPE}/agent",
         "The Tracepanel agent: keeps your app's traces and logs, finds N+1 queries and other issues, serves the "
         "local console",
+        version,
     )
     data |= {
         "main": "index.js",
@@ -215,23 +270,36 @@ def main_package(names: list[str], licenses_from: Path, out: Path) -> None:
         "bin": {"tracepanel-agent": "bin/tracepanel-agent.js"},
         "files": ["index.js", "index.d.ts", "bin", "README.md", *LICENSE_FILES],
         "engines": {"node": ">=18"},
-        "optionalDependencies": dict.fromkeys(sorted(names), version()),
+        "optionalDependencies": dict.fromkeys(sorted(names), version),
     }
     write_json(directory / "package.json", data)
 
 
+def wheel_version(wheel: Path) -> str:
+    """The version in a wheel's name: tracepanel_agent-0.0.1a1-py3-none-....whl."""
+    return wheel.name.split("-")[1]
+
+
 def main() -> None:
+    if sys.argv[1] == "--download":
+        download(sys.argv[2], Path(sys.argv[3]))
+        return
     wheels, out = Path(sys.argv[1]), Path(sys.argv[2])
     if out.exists():
         shutil.rmtree(out)
-    names = []
+    found = {}
     for target in PLATFORMS:
-        found = sorted((wheels / f"wheel-{target}").glob("*.whl"))
-        if len(found) != 1:
-            sys.exit(f"wheel-{target}: expected one wheel, found {len(found)}")
-        names.append(platform_package(target, found[0], out))
-    main_package(names, out / f"agent-{PLATFORMS['x86_64-unknown-linux-gnu'][0]}", out)
-    print(f"{len(names) + 1} npm packages, version {version()}, in {out}")
+        matches = sorted((wheels / f"wheel-{target}").glob("*.whl"))
+        if len(matches) != 1:
+            sys.exit(f"wheel-{target}: expected one wheel, found {len(matches)}")
+        found[target] = matches[0]
+    versions = {wheel_version(wheel) for wheel in found.values()}
+    if len(versions) != 1:
+        sys.exit(f"the wheels are of different versions: {sorted(versions)}")
+    version = semver(versions.pop())
+    names = [platform_package(target, wheel, out, version) for target, wheel in found.items()]
+    main_package(names, out / f"agent-{PLATFORMS['x86_64-unknown-linux-gnu'][0]}", out, version)
+    print(f"{len(names) + 1} npm packages, version {version}, in {out}")
 
 
 if __name__ == "__main__":
