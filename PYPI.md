@@ -1,7 +1,8 @@
 # tracepanel-agent
 
-The agent of [Tracepanel](https://github.com/tracepanel/tracepanel), a debug
-toolbar for Python web apps. It receives your app's traces, finds N+1 queries,
+The agent of [Tracepanel](https://github.com/tracepanel/tracepanel), which
+collects the traces and logs of your app on your machine. It receives every
+request, job and command with its SQL queries and log lines, finds N+1 queries,
 duplicate and slow SQL, long transactions and errors, keeps everything in your
 project's `.tracepanel/` directory, and serves the panel and the console.
 
