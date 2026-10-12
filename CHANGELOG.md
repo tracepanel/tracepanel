@@ -13,6 +13,11 @@
   mail), and a curve for each pair, thicker for more calls and red with
   failures. Hovering a card brings out its own curves, and a card opens
   where its calls are listed. The table below keeps the numbers.
+- The services map and table show one card per server (its address and
+  port), however many ways the app uses it: Redis as a datastore and as a
+  cache backend is one card, "Cache redis · Database 1". Its calls are the
+  server's: a cache's commands to Redis count once. The map is compact by
+  default and has a zoom, kept across visits.
 - Spans an OpenTelemetry instrumentation recorded are mapped by the agent,
   from the semantic conventions (older and current attribute names alike),
   so every SDK can send them as they are (kind `otel`). SQL becomes a query

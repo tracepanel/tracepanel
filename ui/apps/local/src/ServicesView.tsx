@@ -6,15 +6,23 @@ import {
   SERVICE_KINDS,
   ServiceIcon,
   type ServiceMap,
-  type ServiceNode,
-  serviceWhere,
   systemName,
 } from "@tracepanel/ui";
 import { Badge } from "@tracepanel/ui/components/ui/badge";
 import type { ReactNode } from "react";
 import { href } from "./routes";
 import { ServicesMap } from "./ServicesMap";
-import { appTarget, byProject, type Project, serviceTarget } from "./services";
+import {
+  appTarget,
+  byHost,
+  byProject,
+  type Host,
+  hostEdges,
+  hostUses,
+  hostWhere,
+  type Project,
+  serviceTarget,
+} from "./services";
 import { DataTable, Meter, Mono, Td, Th, Tr } from "./ui";
 
 /** The icon in a tile, then the name over where it runs. */
@@ -66,16 +74,57 @@ function AppRow({ app, slowest, onOpen }: { app: Project; slowest: number; onOpe
   );
 }
 
+/** A server the app talks to, one row however many ways it uses it (Redis as a datastore and as a cache). */
+function HostRow({ host, callers, slowest }: { host: Host; callers: string[]; slowest: number }) {
+  const kinds = [...new Set(host.uses.map((use) => SERVICE_KINDS[use.kind]))].join(" · ");
+  return (
+    <Tr tone={host.errors ? "error" : undefined} href={href(serviceTarget(host.primary))}>
+      <Td className="max-w-[22.5rem]">
+        <Name
+          icon={<ServiceIcon node={host.primary} />}
+          name={systemName(host.primary)}
+          detail={[hostWhere(host), hostUses(host)].filter(Boolean).join(" · ")}
+        />
+      </Td>
+      <Td className="text-muted-foreground">{kinds}</Td>
+      <Td>
+        <span className="flex flex-wrap gap-1">
+          {callers.map((role) => (
+            <Badge key={role} variant="outline" className="text-xs">
+              {role}
+            </Badge>
+          ))}
+        </span>
+      </Td>
+      <Td num>{host.calls.toLocaleString()}</Td>
+      <Td>
+        <Meter value={host.total} max={slowest}>
+          {duration(host.total)}
+        </Meter>
+      </Td>
+      <Td num>{duration(Math.round(host.total / Math.max(host.calls, 1)))}</Td>
+      <Td num className={host.errors ? "font-semibold text-error" : "text-muted-foreground"}>
+        {host.errors || "—"}
+      </Td>
+      <Td num className="text-muted-foreground">
+        {ago(host.last_seen)}
+      </Td>
+    </Tr>
+  );
+}
+
 /**
  * The map of who talks to what, then the table: the project's own web, workers and commands first, then what they
  * talk to, and who calls it.
  */
 export function ServicesView({ map, onApp }: { map: ServiceMap; onApp?: ((service: string) => void) | undefined }) {
-  const slowest = Math.max(...map.services.map((node) => node.total), 1);
+  const hosts = byHost(map.services);
+  const slowest = Math.max(...hosts.map((one) => one.total), 1);
   // The apps' time is every request's whole duration: on the services' scale it would flatten them.
   const apps = byProject(map.apps);
   const busiest = Math.max(...apps.map((app) => app.total), 1);
-  const callers = (node: ServiceNode) => [...new Set(map.edges.filter((e) => e.peer === node.id).map((e) => e.role))];
+  const edges = hostEdges(map.edges, hosts);
+  const callers = (one: Host) => [...new Set(edges.filter((edge) => edge.host === one.key).map((edge) => edge.role))];
   return (
     <>
       <ServicesMap map={map} />
@@ -102,35 +151,8 @@ export function ServicesView({ map, onApp }: { map: ServiceMap; onApp?: ((servic
             onOpen={onApp && apps.length > 1 ? () => onApp(app.service) : undefined}
           />
         ))}
-        {map.services.map((node) => (
-          <Tr key={node.id} tone={node.errors ? "error" : undefined} href={href(serviceTarget(node))}>
-            <Td className="max-w-[22.5rem]">
-              <Name icon={<ServiceIcon node={node} />} name={systemName(node)} detail={serviceWhere(node)} />
-            </Td>
-            <Td className="text-muted-foreground">{SERVICE_KINDS[node.kind]}</Td>
-            <Td>
-              <span className="flex flex-wrap gap-1">
-                {callers(node).map((role) => (
-                  <Badge key={role} variant="outline" className="text-xs">
-                    {role}
-                  </Badge>
-                ))}
-              </span>
-            </Td>
-            <Td num>{node.calls.toLocaleString()}</Td>
-            <Td>
-              <Meter value={node.total} max={slowest}>
-                {duration(node.total)}
-              </Meter>
-            </Td>
-            <Td num>{duration(Math.round(node.total / Math.max(node.calls, 1)))}</Td>
-            <Td num className={node.errors ? "font-semibold text-error" : "text-muted-foreground"}>
-              {node.errors || "—"}
-            </Td>
-            <Td num className="text-muted-foreground">
-              {ago(node.last_seen)}
-            </Td>
-          </Tr>
+        {hosts.map((one) => (
+          <HostRow key={one.key} host={one} callers={callers(one)} slowest={slowest} />
         ))}
       </DataTable>
     </>
