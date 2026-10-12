@@ -114,11 +114,11 @@ Python 3.11 and newer, Django 5.2 and newer.
 
 ## License
 
-The agent and its console are under the
-[Functional Source License](LICENSE) (FSL-1.1-ALv2). You can use, change and
-share them for any purpose except a commercial product or service that competes
-with Tracepanel. Each version becomes Apache License 2.0 two years after its
-release.
+Tracepanel is free to use on your projects, at work or on your own. The SDKs
+that record traces, such as the Python package, are under the MIT License.
 
-The SDKs that record traces, such as the Python package, are under the MIT
-License.
+The agent and its console are fair source, under the [Functional Source
+License](LICENSE) (FSL-1.1-ALv2). Use them, change them and share your changes.
+The one thing it reserves is offering Tracepanel itself as a commercial product
+or hosted service. Each version becomes Apache License 2.0 two years after its
+release.
