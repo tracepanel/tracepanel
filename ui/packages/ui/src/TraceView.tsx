@@ -10,7 +10,6 @@ import {
   ListChecksIcon,
   ListIcon,
   ListTreeIcon,
-  MailIcon,
   ScrollTextIcon,
   TerminalIcon,
   TriangleAlertIcon,
@@ -34,7 +33,6 @@ import { LogList } from "./LogList";
 import { groupNoun } from "./lib/calls";
 import { isTyping } from "./lib/keys";
 import { linkProps, type TraceLinks } from "./links";
-import { MailList } from "./MailList";
 import { Metrics } from "./Metrics";
 import { MethodBadge, RoutePath, StatusBadge } from "./primitives";
 import { RequestInfo } from "./RequestInfo";
@@ -42,9 +40,9 @@ import { type Explain, SqlList } from "./SqlList";
 import { type SystemCalls, systemCalls, systemOfIssue } from "./systemCalls";
 import { Tabs } from "./Tabs";
 import { Timeline } from "./Timeline";
-import type { Issue, IssueKind, Related, Span, Trace } from "./types";
+import type { Issue, IssueKind, Related, Trace } from "./types";
 
-export type TabId = "request" | "tree" | "issues" | "sql" | "cache" | "http" | "logs" | "mail" | "error";
+export type TabId = "request" | "tree" | "issues" | "sql" | "cache" | "http" | "logs" | "error";
 
 /** A way out of this trace that the page itself doesn't show: its group, its issues, what ran around it. */
 export interface ExploreItem {
@@ -118,11 +116,10 @@ function callsByTab(trace: Trace): Partial<Record<CallsTabId, SystemCalls>> {
   );
 }
 
-/** The tabs a trace shows only when it has something for them (issues, an error, SQL, other calls, mail). */
+/** The tabs a trace shows only when it has something for them (issues, an error, SQL, the cache, HTTP calls). */
 const OPTIONAL_TABS: Partial<Record<TabId, (trace: Trace) => boolean>> = {
   issues: (trace) => findingsOf(trace).length > 0,
   error: (trace) => trace.errors.length > 0,
-  mail: (trace) => trace.spans.some((span) => span.kind === "mail"),
   sql: (trace) => callsByTab(trace).sql !== undefined,
   cache: (trace) => callsByTab(trace).cache !== undefined,
   http: (trace) => callsByTab(trace).http !== undefined,
@@ -133,19 +130,16 @@ function hasTab(trace: Trace, tab: TabId | undefined): tab is TabId {
   return OPTIONAL_TABS[tab]?.(trace) ?? true;
 }
 
-/** The tabs that list spans: SQL with its plans, the cache's and HTTP calls grouped by what they repeat, emails. */
+/** The tabs that list spans: SQL with its plans, the cache's and HTTP calls grouped by what they repeat. */
 function SpanLists({
   active,
-  mails,
   calls,
   sql,
 }: {
   active: TabId;
-  mails: Span[];
   calls: Partial<Record<CallsTabId, SystemCalls>>;
   sql: Omit<ComponentProps<typeof SqlList>, "spans">;
 }) {
-  if (active === "mail") return <MailList spans={mails} />;
   if (!isCallsTab(active)) return null;
   return <SystemList system={active} calls={calls[active]} {...sql} />;
 }
@@ -205,13 +199,11 @@ function traceTabs({
   outcome,
   findings,
   calls,
-  mails,
 }: {
   trace: Trace;
   outcome: ReactNode;
   findings: readonly Issue[];
   calls: Partial<Record<CallsTabId, SystemCalls>>;
-  mails: readonly Span[];
 }) {
   const KindIcon = KIND_ICONS[trace.kind] ?? GlobeIcon;
   return [
@@ -243,7 +235,6 @@ function traceTabs({
     // What a request is most often opened for: its SQL, cache and HTTP calls, and its logs.
     ...callsTabs(calls),
     { id: "logs" as const, label: "Logs", icon: <ScrollTextIcon />, count: trace.logs.length },
-    ...tabIfAny(mails, { id: "mail" as const, label: "Mail", icon: <MailIcon />, count: mails.length }),
   ];
 }
 
@@ -309,7 +300,6 @@ export function TraceView({
             : "tree",
   );
   const calls = useMemo(() => callsByTab(trace), [trace]);
-  const mails = useMemo(() => trace.spans.filter((span) => span.kind === "mail"), [trace]);
   const spansNoun = useMemo(() => nounsOf(trace), [trace]);
   const [focus, setFocus] = useState<ReadonlySet<string> | undefined>(undefined);
   // A span to open in the call tree: from the link's `span`, or a log record's "in the call tree".
@@ -329,7 +319,7 @@ export function TraceView({
         failed
       </span>
     ) : null;
-  const tabs = traceTabs({ trace, outcome, findings, calls, mails });
+  const tabs = traceTabs({ trace, outcome, findings, calls });
   const head = heading(trace);
   const path = trace.attrs["http.path"];
   const route = trace.attrs["http.route"];
@@ -364,7 +354,7 @@ export function TraceView({
           }}
         />
       ) : null}
-      <SpanLists active={active} mails={mails} calls={calls} sql={{ issueBySpan, focus, onExplain, links }} />
+      <SpanLists active={active} calls={calls} sql={{ issueBySpan, focus, onExplain, links }} />
       {active === "error" ? (
         <ErrorView
           errors={trace.errors}

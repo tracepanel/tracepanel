@@ -403,7 +403,7 @@ function RequestSwitcher({
 }
 
 const TAB_KEY = "tracepanel:panel-tab";
-const PANEL_TABS = new Set<TabId>(["request", "tree", "issues", "sql", "cache", "http", "logs", "mail", "error"]);
+const PANEL_TABS = new Set<TabId>(["request", "tree", "issues", "sql", "cache", "http", "logs", "error"]);
 
 /** The tab the panel opens: the last one picked, kept across requests and page loads. */
 /** The console list a request of this kind belongs to: the way back from its trace page there. */

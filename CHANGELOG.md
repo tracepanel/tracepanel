@@ -24,7 +24,8 @@
   Database (SQL with its plans), Cache, HTTP calls and Logs, each when the
   request has any. The calls to other systems (Redis used directly,
   MongoDB, a broker) are in the call tree, and the console has a page for
-  each. A tile per system shows its calls and time.
+  each. A tile per system shows its calls and time. The Mail tab is gone:
+  an email is in the call tree, and the Emails page lists them all.
 
 ### Changed
 

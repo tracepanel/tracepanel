@@ -6,7 +6,7 @@ import { crumbsFor } from "./sections";
 import { TraceScreen } from "./TraceScreen";
 import { Breadcrumbs } from "./ui";
 
-const TABS: TabId[] = ["request", "tree", "issues", "sql", "cache", "http", "logs", "mail", "error"];
+const TABS: TabId[] = ["request", "tree", "issues", "sql", "cache", "http", "logs", "error"];
 
 /** The tab a link asks for (`?tab=issues`), if it is one. */
 export function tabOf(value: string | undefined): TabId | undefined {
