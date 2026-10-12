@@ -119,7 +119,8 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          main=$(ls npm-dist/tracepanel-agent-[0-9]*.tgz)
+          # "./": npm reads a bare "dir/file" as a GitHub repository, not a file.
+          main=$(ls ./npm-dist/tracepanel-agent-[0-9]*.tgz)
           version=$(basename "$main" .tgz)
           version=${version#tracepanel-agent-}
           # A pre-release goes under its own dist-tag (alpha, beta, rc), so `npm install` keeps the latest release.
@@ -128,7 +129,7 @@ jobs:
             *) tag=latest ;;
           esac
           echo "version $version, dist-tag $tag"
-          for package in npm-dist/*.tgz; do
+          for package in ./npm-dist/*.tgz; do
             [ "$package" = "$main" ] && continue
             npm publish "$package" --access public --tag "$tag" --provenance
           done
