@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { duration, percent } from "./format";
 import { GraphqlCode } from "./GraphqlCode";
 import { ChevronRightIcon } from "./icons";
@@ -245,6 +245,25 @@ interface RowContext {
   onToggle: (key: string) => void;
   /** Set while filters are on: only marked rows show. */
   marks?: ReadonlyMap<string, Mark> | undefined;
+  /** The selected row's details, opened right under that row. */
+  details: ReactNode;
+}
+
+/** The selected row's details, under it: where the click was, not past the end of a long tree. */
+function RowDetails({ id, ctx }: { id: string; ctx: RowContext }) {
+  const box = useRef<HTMLDivElement>(null);
+  const shown = ctx.selected === id;
+  // A row near the bottom edge: scrolled just enough for the details to start in view.
+  useEffect(() => {
+    const top = box.current?.getBoundingClientRect().top;
+    if (shown && top !== undefined && top > window.innerHeight - 64) box.current?.scrollIntoView({ block: "nearest" });
+  }, [shown]);
+  if (!shown) return null;
+  return (
+    <div className="dt-map-inline" ref={box}>
+      {ctx.details}
+    </div>
+  );
 }
 
 function Bar({ trace, start, length, point }: { trace: Trace; start: number; length: number; point?: boolean }) {
@@ -279,60 +298,64 @@ function Rows({ nodes, depth, ctx }: { nodes: Node[]; depth: number; ctx: RowCon
             ? `${node.error.type.replace(/^builtins\./, "")}: ${node.error.message}`
             : node.log.message;
           return (
-            <button
-              key={node.key}
-              type="button"
-              className="dt-map-row"
-              data-dim={mark === "path" ? "" : undefined}
-              data-kind={isError ? "error" : "log"}
-              data-level={isError ? "error" : node.log.level}
-              aria-current={ctx.selected === node.key ? "true" : undefined}
-              onClick={() => ctx.onSelect(node.key)}
-            >
-              <span className="dt-map-name" style={indent}>
-                <span className="dt-map-caret" />
-                <span className="dt-map-kind">{isError ? "error" : node.log.level}</span>
-                <span className="dt-map-text">{text}</span>
-              </span>
-              <Bar trace={ctx.trace} start={time} length={0} point={true} />
-              <span className="dt-map-time">+{duration(Math.max(time - ctx.trace.start, 0))}</span>
-            </button>
+            <Fragment key={node.key}>
+              <button
+                type="button"
+                className="dt-map-row"
+                data-dim={mark === "path" ? "" : undefined}
+                data-kind={isError ? "error" : "log"}
+                data-level={isError ? "error" : node.log.level}
+                aria-current={ctx.selected === node.key ? "true" : undefined}
+                onClick={() => ctx.onSelect(node.key)}
+              >
+                <span className="dt-map-name" style={indent}>
+                  <span className="dt-map-caret" />
+                  <span className="dt-map-kind">{isError ? "error" : node.log.level}</span>
+                  <span className="dt-map-text">{text}</span>
+                </span>
+                <Bar trace={ctx.trace} start={time} length={0} point={true} />
+                <span className="dt-map-time">+{duration(Math.max(time - ctx.trace.start, 0))}</span>
+              </button>
+              <RowDetails id={node.key} ctx={ctx} />
+            </Fragment>
           );
         }
         if (node.type === "task" || node.type === "waiting") {
           const after = (node.type === "task" ? node.run.start : node.span.start) - ctx.trace.start;
           return (
-            <button
-              key={node.key}
-              type="button"
-              className="dt-map-row"
-              data-dim={mark === "path" ? "" : undefined}
-              data-kind="task"
-              data-status={node.type === "task" ? node.run.status : undefined}
-              aria-current={ctx.selected === node.key ? "true" : undefined}
-              onClick={() => ctx.onSelect(node.key)}
-            >
-              <span className="dt-map-name" style={indent}>
-                <span className="dt-map-caret" />
-                <span className="dt-map-kind">task</span>
+            <Fragment key={node.key}>
+              <button
+                type="button"
+                className="dt-map-row"
+                data-dim={mark === "path" ? "" : undefined}
+                data-kind="task"
+                data-status={node.type === "task" ? node.run.status : undefined}
+                aria-current={ctx.selected === node.key ? "true" : undefined}
+                onClick={() => ctx.onSelect(node.key)}
+              >
+                <span className="dt-map-name" style={indent}>
+                  <span className="dt-map-caret" />
+                  <span className="dt-map-kind">task</span>
+                  {node.type === "task" ? (
+                    <>
+                      <span className="dt-map-text">{node.run.name}</span>
+                      <TaskState state={node.run.task_state} />
+                    </>
+                  ) : (
+                    <span className="dt-map-text dt-map-waiting">waiting for a worker…</span>
+                  )}
+                </span>
                 {node.type === "task" ? (
-                  <>
-                    <span className="dt-map-text">{node.run.name}</span>
-                    <TaskState state={node.run.task_state} />
-                  </>
+                  <Bar trace={ctx.trace} start={node.run.start} length={node.run.duration} />
                 ) : (
-                  <span className="dt-map-text dt-map-waiting">waiting for a worker…</span>
+                  <span className="dt-map-track" aria-hidden="true" />
                 )}
-              </span>
-              {node.type === "task" ? (
-                <Bar trace={ctx.trace} start={node.run.start} length={node.run.duration} />
-              ) : (
-                <span className="dt-map-track" aria-hidden="true" />
-              )}
-              <span className="dt-map-time">
-                {node.type === "task" ? duration(node.run.duration) : `+${duration(Math.max(after, 0))}`}
-              </span>
-            </button>
+                <span className="dt-map-time">
+                  {node.type === "task" ? duration(node.run.duration) : `+${duration(Math.max(after, 0))}`}
+                </span>
+              </button>
+              <RowDetails id={node.key} ctx={ctx} />
+            </Fragment>
           );
         }
         if (node.type === "group") {
@@ -378,6 +401,7 @@ function Rows({ nodes, depth, ctx }: { nodes: Node[]; depth: number; ctx: RowCon
                 </span>
                 <span className="dt-map-time">{duration(total)}</span>
               </button>
+              <RowDetails id={node.key} ctx={ctx} />
               {open ? (
                 <Rows
                   nodes={node.spans.map((span) => ({ type: "span", key: span.id, span, children: [] }))}
@@ -422,6 +446,7 @@ function Rows({ nodes, depth, ctx }: { nodes: Node[]; depth: number; ctx: RowCon
               <Bar trace={ctx.trace} start={span.start} length={span.duration} />
               <span className="dt-map-time">{duration(span.duration)}</span>
             </button>
+            <RowDetails id={node.key} ctx={ctx} />
             {open ? <Rows nodes={node.children} depth={depth + 1} ctx={ctx} /> : null}
           </div>
         );
@@ -615,14 +640,18 @@ export function CallMap({
         <Rows
           nodes={tree}
           depth={0}
-          ctx={{ trace, issueBySpan, selected, onSelect: select, collapsed, onToggle: toggle, marks }}
+          ctx={{
+            trace,
+            issueBySpan,
+            selected,
+            onSelect: select,
+            collapsed,
+            onToggle: toggle,
+            marks,
+            details: node ? <Details node={node} trace={trace} links={links} /> : null,
+          }}
         />
       </div>
-      {node ? (
-        <Details node={node} trace={trace} links={links} />
-      ) : (
-        <p className="dt-map-hint">Select a row to see its details.</p>
-      )}
     </div>
   );
 }

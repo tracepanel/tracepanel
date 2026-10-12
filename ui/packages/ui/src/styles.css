@@ -1833,11 +1833,9 @@ details[data-focused] > .dt-sql-group {
 .dt-map-open:hover {
   text-decoration: underline;
 }
-.dt-map-hint {
-  margin: 0.75rem 1rem 1rem;
-  color: var(--dt-text-3);
-  font-size: var(--dt-size-sm);
-  text-align: center;
+.dt-map-inline {
+  border-bottom: 1px solid var(--dt-border);
+  background: var(--dt-subtle);
 }
 
 /* ---------- SQL ---------- */
