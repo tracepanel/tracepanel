@@ -20,8 +20,15 @@
   system, a publish per item for a broker. A new system needs no code.
 - The MCP tool `list_calls` lists the calls to any system (`system:redis`,
   `system:sql`) with the key `call:` finds their traces by.
-- In a trace, one Calls tab lists the calls system by system (SQL keeps its
-  plans), and a tile per system shows its calls and time.
+- A trace has a tab for each list a request is most often opened for:
+  Database (SQL with its plans), Cache, HTTP calls and Logs, each when the
+  request has any. The calls to other systems (Redis used directly,
+  MongoDB, a broker) are in the call tree, and the console has a page for
+  each. A tile per system shows its calls and time. The Mail tab is gone:
+  an email is in the call tree, and the Emails page lists them all.
+- The call tree's details pane can be resized: drag its edge, or focus it
+  and use the arrow keys. The width is kept, and a double click restores the
+  default.
 
 ### Changed
 
@@ -32,8 +39,7 @@
   system's calls. `/api/queries`, `/api/redis` and `/api/cache` are gone, and
   `/api/calls` answers for every system, not only HTTP.
 - The trace search takes `call:<key>` for a call to any system, SQL included.
-  `query:`, `redis_call:` and `cache_call:` are gone. The trace's SQL tab is
-  its Calls tab.
+  `query:`, `redis_call:` and `cache_call:` are gone.
 - The MCP tool `list_queries` is now `list_calls`.
 - `/api/counts` lists the systems with calls (`sections.systems`) in place of
   the `calls`, `redis` and `cache` flags, and `/api/values` gives each
@@ -41,6 +47,11 @@
 
 ### Fixed
 
+- The panel no longer blinks through an empty pane when a new request
+  arrives: the request on screen stays until the next one is loaded.
+- The search palette's Go to lists every system's page, as the sidebar does,
+  and the sidebar's list scrolls when it is taller than the window.
+- The divider between the call tree and its details runs the full height.
 - A trace received twice (sent again with late spans) counted its queries,
   calls and services twice.
 

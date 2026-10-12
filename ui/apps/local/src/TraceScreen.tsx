@@ -32,6 +32,27 @@ export interface TraceScreenProps {
   back?: ReactNode;
 }
 
+/**
+ * Traces linked to this one, reloaded while it is open (tasks a request enqueued finish later). Kept with the id
+ * they are for: while the next trace loads, the one on screen doesn't get the next one's links.
+ */
+function useRelated(id: string, source: DataSource): (traceId: string) => Related | undefined {
+  const [related, setRelated] = useState<{ id: string; related: Related } | undefined>(undefined);
+  const { cycle, tick } = useRefresh();
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `tick` reloads on "refresh now", `cycle` on the clock.
+  useEffect(() => {
+    let cancelled = false;
+    track(source.related(id)).then(
+      (result) => !cancelled && setRelated({ id, related: result }),
+      () => undefined,
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [id, source, cycle, tick]);
+  return (traceId) => (related?.id === traceId ? related.related : undefined);
+}
+
 export function TraceScreen({
   id,
   source,
@@ -46,20 +67,7 @@ export function TraceScreen({
   back,
 }: TraceScreenProps) {
   const [trace, setTrace] = useState<Trace | null | undefined>(undefined);
-  const [related, setRelated] = useState<Related | undefined>(undefined);
-  const { cycle, tick } = useRefresh();
-  // Tasks a request enqueued finish later: keep looking while the trace is open.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `tick` reloads on "refresh now", `cycle` on the clock.
-  useEffect(() => {
-    let cancelled = false;
-    track(source.related(id)).then(
-      (result) => !cancelled && setRelated(result),
-      () => undefined,
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [id, source, cycle, tick]);
+  const related = useRelated(id, source);
   useEffect(() => {
     let cancelled = false;
     let timer: number | undefined;
@@ -108,7 +116,7 @@ export function TraceScreen({
       initialTab={initialTab}
       preferredTab={preferredTab}
       actions={actions}
-      related={related}
+      related={related(trace.id)}
       links={links}
       initialSpan={initialSpan}
       variant={variant}

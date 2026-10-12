@@ -768,7 +768,7 @@ function MailPreview({ mail, source }: { mail: MailRow; source: DataSource }) {
       <MailList spans={[span]} />
       <div>
         <Button variant="outline" size="sm" asChild>
-          <a href={traceHref(mail.trace_id, "mail")}>
+          <a href={traceHref(mail.trace_id, "tree", mail.span_id)}>
             Open request
             <ArrowRightIcon />
           </a>

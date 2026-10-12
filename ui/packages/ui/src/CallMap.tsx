@@ -9,6 +9,7 @@ import { CALL_KINDS, DATASTORES, MESSAGING, RPC } from "./lib/systems";
 import { linkProps, type TraceLinks } from "./links";
 import { PropTable } from "./PropTable";
 import { AliasChip, IssueChip } from "./primitives";
+import { SideResize, useSideWidth } from "./SideResize";
 import { SqlCode } from "./SqlCode";
 import type { IssueKind, Log, Related, Span, Trace, TraceError, TraceSummary } from "./types";
 
@@ -652,9 +653,10 @@ function useSidePane(map: RefObject<HTMLDivElement | null>): boolean {
 }
 
 /** Beside the tree, like the devtools' Network panel: the tree keeps its shape, the details stay in view. */
-function SidePane({ children, onClose }: { children: ReactNode; onClose: () => void }) {
+function SidePane({ children, onClose, resize }: { children: ReactNode; onClose: () => void; resize: ReactNode }) {
   return (
     <aside className="dt-map-side" aria-label="Details">
+      {resize}
       <button type="button" className="dt-map-side-close" aria-label="Close the details" onClick={onClose}>
         <CloseIcon />
       </button>
@@ -665,10 +667,15 @@ function SidePane({ children, onClose }: { children: ReactNode; onClose: () => v
 
 /** The tree, and its details beside it while it is wide enough. */
 function MapBody({ details, onClose, children }: { details: ReactNode; onClose: () => void; children: ReactNode }) {
+  const { width, setWidth, style } = useSideWidth();
   return (
-    <div className="dt-map-body" data-side={details ? "" : undefined}>
+    <div className="dt-map-body" data-side={details ? "" : undefined} style={details ? style : undefined}>
       <div className="dt-map-tree">{children}</div>
-      {details ? <SidePane onClose={onClose}>{details}</SidePane> : null}
+      {details ? (
+        <SidePane onClose={onClose} resize={<SideResize width={width} onWidth={setWidth} />}>
+          {details}
+        </SidePane>
+      ) : null}
     </div>
   );
 }

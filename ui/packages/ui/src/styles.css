@@ -1899,11 +1899,21 @@ details[data-focused] > .dt-sql-group {
 /* A wide tree: the details sit beside it and stay in view while the tree scrolls. */
 .dt-map-body[data-side] {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(20rem, 40%);
+  /* The reader's width once they dragged the pane's edge (see .dt-map-resize). */
+  grid-template-columns: minmax(0, 1fr) var(--dt-side-width, minmax(20rem, 40%));
   align-items: start;
 }
 .dt-map-tree {
   min-width: 0;
+}
+/* The line between the tree and the details runs the taller one's height: the tree's edge and the pane's
+   overlap, so a short pane beside a long tree (or the other way round) still has its divider. */
+.dt-map-body[data-side] .dt-map-tree {
+  align-self: stretch;
+  border-right: 1px solid var(--dt-border);
+}
+.dt-map-body[data-side] .dt-map-side {
+  margin-left: -1px;
 }
 .dt-map-side {
   position: sticky;
@@ -1914,6 +1924,23 @@ details[data-focused] > .dt-sql-group {
   border-top: 1px solid var(--dt-border);
   border-left: 1px solid var(--dt-border);
   background: var(--dt-bg);
+}
+/* The pane's left edge: drag it, or focus it and use the arrow keys. */
+.dt-map-resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -3px;
+  z-index: 1;
+  width: 6px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.dt-map-resize:hover,
+.dt-map-resize:focus-visible,
+.dt-map-resize:active {
+  outline: none;
+  background: linear-gradient(to right, transparent 2px, var(--dt-brand) 2px, var(--dt-brand) 4px, transparent 4px);
 }
 .dt-map-side-close {
   position: absolute;

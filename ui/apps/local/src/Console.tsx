@@ -13,13 +13,13 @@ import { useRowKeys } from "./keyboard";
 import { go, isEntry, parse, periodOf, type Route, type Section } from "./routes";
 import { SearchPalette } from "./SearchPalette";
 import {
+  navItems,
   RAIL_WIDTH,
   Sidebar,
   SidebarHandle,
   SidebarToggle,
   useSidebarCollapsed,
   useSidebarWidth,
-  visibleSections,
 } from "./Sidebar";
 import { scopedSource, useApps, useScope } from "./scope";
 import { useScrollMemory } from "./scroll";
@@ -207,7 +207,7 @@ export function Console({ route, source: everything }: { route: Route; source: D
         <SidebarToggle collapsed={collapsed} collapse={collapse} />
       </div>
       {page}
-      <SearchPalette open={searching} onOpenChange={setSearching} source={source} sections={visibleSections(counts)} />
+      <SearchPalette open={searching} onOpenChange={setSearching} source={source} items={navItems(counts)} />
       <ClearDialog
         mode="console"
         open={clearing}
