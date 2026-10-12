@@ -1,5 +1,6 @@
 import { duration } from "./format";
 import { keyed } from "./keys";
+import { DATASTORES, MESSAGING } from "./lib/kinds";
 import type { Trace } from "./types";
 
 /** Where a mark leads: the span in the call tree, the logs, the error. */
@@ -21,9 +22,9 @@ interface Lane {
 
 function lanes(trace: Trace): Lane[] {
   const flagged = new Set(trace.issues.flatMap((issue) => issue.span_ids));
-  const spans = (kind: string): Mark[] =>
+  const spans = (...kinds: readonly string[]): Mark[] =>
     trace.spans
-      .filter((span) => span.kind === kind)
+      .filter((span) => kinds.includes(span.kind))
       .map((span) => ({
         key: span.id,
         start: span.start,
@@ -37,7 +38,10 @@ function lanes(trace: Trace): Lane[] {
     { label: "sql", marks: spans("sql") },
     { label: "redis", marks: spans("redis") },
     { label: "cache", marks: spans("cache") },
+    { label: "datastores", marks: spans(...DATASTORES) },
+    { label: "messaging", marks: spans(...MESSAGING) },
     { label: "http", marks: spans("http.client") },
+    { label: "grpc", marks: spans("grpc") },
     {
       label: "logs",
       marks: keyed(trace.logs, (log) => `log:${log.time}:${log.message}`).map(({ key, item: log }) => ({

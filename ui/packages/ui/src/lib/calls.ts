@@ -8,6 +8,15 @@ const NOUNS: Record<string, [string, string]> = {
   redis: ["Redis command", "Redis commands"],
   cache: ["cache call", "cache calls"],
   "http.client": ["HTTP call", "HTTP calls"],
+  grpc: ["gRPC call", "gRPC calls"],
+  kafka: ["Kafka message", "Kafka messages"],
+  rabbitmq: ["RabbitMQ message", "RabbitMQ messages"],
+  sqs: ["SQS message", "SQS messages"],
+  mongodb: ["MongoDB command", "MongoDB commands"],
+  elasticsearch: ["Elasticsearch request", "Elasticsearch requests"],
+  cassandra: ["Cassandra query", "Cassandra queries"],
+  dynamodb: ["DynamoDB request", "DynamoDB requests"],
+  memcached: ["Memcached command", "Memcached commands"],
 };
 const QUERIES: [string, string] = ["query", "queries"];
 

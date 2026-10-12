@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Spans an OpenTelemetry instrumentation recorded are mapped by the agent,
+  from the semantic conventions (older and current attribute names alike),
+  so every SDK sends them as they are (kind `otel`). SQL becomes a query with
+  its fingerprint and parameters, whichever form the instrumentation records
+  them in, and gets the same issues as an SDK's own. So do Redis, HTTP calls
+  and gRPC. MongoDB, Elasticsearch and OpenSearch, Cassandra, DynamoDB,
+  Memcached, Kafka, RabbitMQ and SQS get a span kind each, and show on the
+  Services map. What isn't recognized stays a function.
+
 ## 0.0.1a2 (2026-10-12)
 
 ### Added

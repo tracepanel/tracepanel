@@ -1,6 +1,7 @@
 //! N+1 detection, duplicate and slow SQL, long transactions, htmx mistakes and error grouping: the issues of every
 //! trace, whichever SDK recorded it, with stable fingerprints so a problem groups as one. The SDKs normalize SQL
-//! (`db.fingerprint`) when they record it; tracepanel-python's tests check the issues through the console's API.
+//! (`db.fingerprint`) when they record it; spans an OpenTelemetry instrumentation recorded are mapped first (`otel`),
+//! the same way. tracepanel-python's tests check the issues through the console's API.
 
 use regex::Regex;
 use serde_json::Value;
@@ -8,6 +9,8 @@ use sha1::{Digest, Sha1};
 use std::collections::HashMap;
 use std::sync::LazyLock;
 use tracepanel_protocol::{Attrs, Issue, Span, Thresholds, Trace};
+
+pub mod otel;
 
 pub const FINGERPRINT_VERSION: i64 = 1;
 const DUPLICATES_MIN: usize = 2;
@@ -872,8 +875,10 @@ fn htmx_issues(trace: &Trace) -> Vec<Issue> {
         .collect()
 }
 
-/// A received trace's issues: in its rows, and in its document, which the console shows.
+/// A received trace, made ready for the store: its OpenTelemetry spans mapped to tracepanel's kinds, then its
+/// issues found, in its rows and in its document, which the console shows.
 pub fn apply(received: &mut tracepanel_protocol::Received, thresholds: &Thresholds) {
+    otel::normalize(received);
     let issues = analyze(&received.trace, thresholds);
     if issues.is_empty() {
         return;

@@ -82,6 +82,8 @@ export const CARD_STYLE = `
   [data-category="cache"] { --k: #f5b544; }
   [data-category="http"] { --k: #4ade80; }
   [data-category="redis"] { --k: #fb923c; }
+  [data-category="datastore"] { --k: #22d3ee; }
+  [data-category="messaging"] { --k: #e879f9; }
   [data-category="mail"] { --k: #f472b6; }
   :host([data-theme="light"]) .card {
     border-color: #e2e2dc; background: #ffffff; color: #16181d;
@@ -109,6 +111,8 @@ export const CARD_STYLE = `
   :host([data-theme="light"]) [data-category="cache"] { --k: #d97706; }
   :host([data-theme="light"]) [data-category="http"] { --k: #15803d; }
   :host([data-theme="light"]) [data-category="redis"] { --k: #c2410c; }
+  :host([data-theme="light"]) [data-category="datastore"] { --k: #0e7490; }
+  :host([data-theme="light"]) [data-category="messaging"] { --k: #a21caf; }
   :host([data-theme="light"]) [data-category="mail"] { --k: #db2777; }
   .panel[data-open] ~ .card { display: none; }
   @media (prefers-reduced-motion: reduce) { .card { transition: none; } .card-skeleton { animation: none; } }

@@ -263,6 +263,98 @@ async fn the_agent_finds_the_issues_and_the_api_returns_them() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A trace with spans an OpenTelemetry instrumentation recorded, sent as they are (`otel`): the agent maps them, finds
+/// their issues like its SDKs' own, and stores and serves them as ordinary kinds.
+#[tokio::test]
+async fn otel_spans_are_mapped_before_they_are_stored() {
+    let dir = std::env::temp_dir().join(format!("tracepanel-otel-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = tracepanel_store_local::path_in(&dir);
+    let mut store = Store::open(&path).unwrap();
+    let router = tracepanel_server::router(Reader::new(&path), Activity::default());
+
+    // pg through @opentelemetry/instrumentation-pg: three lookups by key, from one line of a Node app.
+    let lookup = |n: i64| {
+        serde_json::json!({
+            "id": format!("01M4PGSPAN{n:016}"), "parent_id": "01M4PGR00T0000000000000000", "kind": "otel",
+            "name": "pg.query:SELECT shop", "start": 1_791_000_000_000_100_i64 + n * 10, "duration": 900,
+            "status": "ok",
+            "attrs": {
+                "otel.span_kind": "client", "otel.scope": "@opentelemetry/instrumentation-pg",
+                "db.system.name": "postgresql", "db.namespace": "shop", "server.address": "localhost",
+                "server.port": 5432, "db.query.text": "SELECT * FROM users WHERE id = $1",
+                "db.postgresql.values": [n.to_string()], "code.origin": "server.js:21 in <anonymous>",
+            },
+        })
+    };
+    let doc = serde_json::json!({
+        "id": "01M4PGTRACE000000000000000", "kind": "http", "name": "GET /orders", "start": 1_791_000_000_000_000_i64,
+        "duration": 5000, "status": "ok",
+        "attrs": {"http.method": "GET", "http.route": "/orders", "http.status_code": 200, "service.name": "shop",
+                  "telemetry.sdk.language": "nodejs"},
+        "spans": [
+            {"id": "01M4PGR00T0000000000000000", "parent_id": null, "kind": "http", "name": "GET /orders",
+             "start": 1_791_000_000_000_000_i64, "duration": 5000, "status": "ok", "attrs": {}},
+            lookup(1), lookup(2), lookup(3),
+        ],
+        "logs": [], "errors": [], "links": [], "issues": [],
+    });
+    let errors: Vec<String> = validator()
+        .iter_errors(&doc)
+        .map(|error| error.to_string())
+        .collect();
+    assert!(errors.is_empty(), "as sent: {errors:?}");
+    let batch = Batch {
+        frame: serde_json::to_vec(&vec![&doc]).unwrap(),
+        max_traces: Some(1000),
+        thresholds: Thresholds::default(),
+    };
+    let mut received = batch.decode().unwrap();
+    for trace in &mut received {
+        tracepanel_analysis::apply(trace, &batch.thresholds);
+    }
+    store.write(&received).unwrap();
+
+    let (status, trace) = get(&router, "/api/traces/01M4PGTRACE000000000000000").await;
+    assert_eq!(status, StatusCode::OK);
+    let errors: Vec<String> = validator()
+        .iter_errors(&trace)
+        .map(|error| error.to_string())
+        .collect();
+    assert!(errors.is_empty(), "as served: {errors:?}");
+    let spans: Vec<(&str, &str)> = trace["spans"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|span| {
+            (
+                span["kind"].as_str().unwrap(),
+                span["name"].as_str().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        spans,
+        [
+            ("http", "GET /orders"),
+            ("sql", "SELECT users"),
+            ("sql", "SELECT users"),
+            ("sql", "SELECT users")
+        ]
+    );
+    assert_eq!(kinds(&trace["issues"]), ["n+1"]);
+
+    let (_, queries) = get(&router, "/api/queries").await;
+    let query = &queries["queries"][0];
+    assert_eq!(query["statement"], "SELECT * FROM users WHERE id = $1");
+    assert_eq!(query["alias"], "shop");
+    assert_eq!(query["vendor"], "postgresql");
+    assert_eq!(query["calls"], 3);
+    assert_eq!(query["most_per_trace"], 3);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 async fn get(router: &axum::Router, uri: &str) -> (StatusCode, Value) {
     let request = Request::get(uri).body(Body::empty()).unwrap();
     let response = router.clone().oneshot(request).await.unwrap();

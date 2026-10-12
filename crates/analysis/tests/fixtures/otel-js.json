@@ -1,0 +1,127 @@
+[
+ {
+  "case": "js pg",
+  "name": "pg.connect",
+  "otel.span_kind": "client",
+  "otel.scope": "@opentelemetry/instrumentation-pg",
+  "status": 0,
+  "attrs": {
+   "db.system.name": "postgresql",
+   "db.namespace": "fx",
+   "server.address": "localhost",
+   "server.port": 55433
+  }
+ },
+ {
+  "case": "js pg",
+  "name": "pg.query:SELECT fx",
+  "otel.span_kind": "client",
+  "otel.scope": "@opentelemetry/instrumentation-pg",
+  "status": 0,
+  "attrs": {
+   "db.system.name": "postgresql",
+   "db.namespace": "fx",
+   "server.address": "localhost",
+   "server.port": 55433,
+   "db.query.text": "SELECT $1::int AS n, $2 AS s",
+   "db.postgresql.values": [
+    "1",
+    "a"
+   ]
+  }
+ },
+ {
+  "case": "js pg",
+  "name": "pg.query:SELECT fx",
+  "otel.span_kind": "client",
+  "otel.scope": "@opentelemetry/instrumentation-pg",
+  "status": 0,
+  "attrs": {
+   "db.system.name": "postgresql",
+   "db.namespace": "fx",
+   "server.address": "localhost",
+   "server.port": 55433,
+   "db.query.text": "SELECT * FROM pg_type WHERE typname = 'int4'"
+  }
+ },
+ {
+  "case": "js http+fetch",
+  "name": "GET",
+  "otel.span_kind": "server",
+  "otel.scope": "@opentelemetry/instrumentation-http",
+  "status": 0,
+  "attrs": {
+   "http.request.method": "GET",
+   "url.scheme": "http",
+   "server.address": "127.0.0.1",
+   "network.peer.address": "127.0.0.1",
+   "network.peer.port": 61793,
+   "network.protocol.version": "1.1",
+   "url.path": "/users/1",
+   "url.query": "token=x",
+   "client.address": "127.0.0.1",
+   "server.port": 61791,
+   "http.response.status_code": 200
+  }
+ },
+ {
+  "case": "js http+fetch",
+  "name": "GET",
+  "otel.span_kind": "client",
+  "otel.scope": "@opentelemetry/instrumentation-http",
+  "status": 0,
+  "attrs": {
+   "http.request.method": "GET",
+   "server.address": "127.0.0.1",
+   "server.port": 61791,
+   "url.full": "http://127.0.0.1:61791/users/1?token=x",
+   "http.response.status_code": 200,
+   "network.peer.address": "127.0.0.1",
+   "network.peer.port": 61791,
+   "network.protocol.version": "1.1"
+  }
+ },
+ {
+  "case": "js http+fetch",
+  "name": "GET",
+  "otel.span_kind": "server",
+  "otel.scope": "@opentelemetry/instrumentation-http",
+  "status": 0,
+  "attrs": {
+   "http.request.method": "GET",
+   "url.scheme": "http",
+   "server.address": "127.0.0.1",
+   "network.peer.address": "127.0.0.1",
+   "network.peer.port": 61794,
+   "network.protocol.version": "1.1",
+   "user_agent.original": "node",
+   "url.path": "/missing",
+   "client.address": "127.0.0.1",
+   "server.port": 61791,
+   "http.response.status_code": 404
+  }
+ },
+ {
+  "case": "js http+fetch",
+  "name": "GET",
+  "otel.span_kind": "client",
+  "otel.scope": "@opentelemetry/instrumentation-undici",
+  "status": 2,
+  "attrs": {
+   "http.request.method": "GET",
+   "http.request.method_original": "GET",
+   "url.full": "http://127.0.0.1:61791/missing",
+   "url.path": "/missing",
+   "url.query": "",
+   "url.scheme": "http",
+   "server.address": "127.0.0.1",
+   "server.port": 61791,
+   "user_agent.original": "node",
+   "network.peer.address": "127.0.0.1",
+   "network.peer.port": 61791,
+   "network.protocol.version": "1.1",
+   "http.response.status_code": 404,
+   "error.type": "404"
+  }
+ }
+]

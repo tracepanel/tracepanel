@@ -104,6 +104,45 @@ mod tests {
     }
 
     #[test]
+    fn a_trace_received_twice_counts_once() {
+        let dir =
+            std::env::temp_dir().join(format!("tracepanel-store-twice-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = path_in(&dir);
+        let mut store = Store::open(&path).unwrap();
+        store.write(&[cached_request()]).unwrap();
+        // The same trace again, as an SDK sends it when spans came late.
+        store.write(&[cached_request()]).unwrap();
+        let reader = Reader::new(&path);
+        let calls = |rows: Vec<Value>| {
+            rows.iter()
+                .map(|row| row["calls"].clone())
+                .collect::<Vec<_>>()
+        };
+
+        assert_eq!(
+            calls(reader.list_redis("", 50).unwrap()),
+            [Value::from(3), Value::from(1)]
+        );
+        assert_eq!(calls(reader.list_cache("", 50).unwrap()), [Value::from(3)]);
+        let services = reader.list_services("").unwrap();
+        assert_eq!(
+            services["services"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|node| (node["kind"].clone(), node["calls"].clone()))
+                .collect::<Vec<_>>(),
+            // The cache on Redis (3 gets) and Redis itself (3 GETs and an INCR), each once.
+            [
+                (Value::from("cache"), Value::from(3)),
+                (Value::from("database"), Value::from(4))
+            ]
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn cache_and_redis_lists_take_the_same_filters() {
         let dir =
             std::env::temp_dir().join(format!("tracepanel-store-cache-{}", std::process::id()));

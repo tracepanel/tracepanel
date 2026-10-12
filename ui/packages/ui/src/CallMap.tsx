@@ -5,6 +5,7 @@ import { ChevronRightIcon, CloseIcon } from "./icons";
 import { keyed } from "./keys";
 import { breakdown, CATEGORY_LABELS } from "./lib/breakdown";
 import { callTemplate, groupNoun } from "./lib/calls";
+import { CALL_KINDS, DATASTORES, MESSAGING } from "./lib/kinds";
 import { linkProps, type TraceLinks } from "./links";
 import { PropTable } from "./PropTable";
 import { AliasChip, IssueChip } from "./primitives";
@@ -36,10 +37,9 @@ function startOf(node: Node): number {
  * statements).
  */
 const GROUP_MIN = 3;
-const LEAF_CALLS = new Set(["sql", "redis", "cache", "http.client"]);
 
 function isLeafCall(node: Node): node is Extract<Node, { type: "span" }> {
-  return node.type === "span" && LEAF_CALLS.has(node.span.kind) && node.children.every(isBackendCall);
+  return node.type === "span" && CALL_KINDS.has(node.span.kind) && node.children.every(isBackendCall);
 }
 
 /** A cache call's own Redis commands don't stop it from grouping with its likes: they are how it was served. */
@@ -123,7 +123,10 @@ const FILTERS = [
   { id: "sql", label: "SQL", kinds: ["sql"] },
   { id: "redis", label: "Redis", kinds: ["redis"] },
   { id: "cache", label: "Cache", kinds: ["cache"] },
+  { id: "datastore", label: "Datastores", kinds: [...DATASTORES] },
+  { id: "messaging", label: "Messaging", kinds: [...MESSAGING] },
   { id: "http", label: "HTTP calls", kinds: ["http.client"] },
+  { id: "grpc", label: "gRPC", kinds: ["grpc"] },
   { id: "signal", label: "Signals", kinds: ["signal"] },
   { id: "template", label: "Templates", kinds: ["template"] },
   { id: "task", label: "Tasks", kinds: ["task.enqueue", "task"] },

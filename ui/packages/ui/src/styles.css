@@ -72,6 +72,8 @@
   --dt-k-cache: #f5b544;
   --dt-k-http: #4ade80;
   --dt-k-redis: #fb923c;
+  --dt-k-datastore: #22d3ee;
+  --dt-k-messaging: #e879f9;
   --dt-k-log: #9a93bd;
   --dt-k-mail: #f472b6;
 
@@ -167,6 +169,8 @@
   --dt-k-cache: #d97706;
   --dt-k-http: #15803d;
   --dt-k-redis: #c2410c;
+  --dt-k-datastore: #0e7490;
+  --dt-k-messaging: #a21caf;
   --dt-k-log: #8a84a6;
   --dt-k-mail: #db2777;
 
@@ -1572,6 +1576,12 @@ details[data-focused] > .dt-sql-group {
 [data-category="redis"] {
   --dt-k: var(--dt-k-redis);
 }
+[data-category="datastore"] {
+  --dt-k: var(--dt-k-datastore);
+}
+[data-category="messaging"] {
+  --dt-k: var(--dt-k-messaging);
+}
 .dt-breakdown-bar span {
   background: var(--dt-k);
 }
@@ -1659,6 +1669,21 @@ details[data-focused] > .dt-sql-group {
 }
 .dt-map-row[data-kind="redis"] {
   --dt-k: var(--dt-k-redis);
+}
+.dt-map-row:is(
+  [data-kind="mongodb"],
+  [data-kind="elasticsearch"],
+  [data-kind="cassandra"],
+  [data-kind="dynamodb"],
+  [data-kind="memcached"]
+) {
+  --dt-k: var(--dt-k-datastore);
+}
+.dt-map-row:is([data-kind="kafka"], [data-kind="rabbitmq"], [data-kind="sqs"]) {
+  --dt-k: var(--dt-k-messaging);
+}
+.dt-map-row[data-kind="grpc"] {
+  --dt-k: var(--dt-k-http);
 }
 .dt-map-row[data-kind="log"] {
   --dt-k: var(--dt-k-log);
