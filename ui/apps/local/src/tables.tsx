@@ -1,6 +1,7 @@
 import {
   AliasChip,
   ago,
+  type CallRow,
   CopyButton,
   type DataSource,
   duration,
@@ -214,18 +215,10 @@ export function QueriesTable({
             <Td num>{item.calls}</Td>
             <Td num>{item.traces}</Td>
             <Td num>
-              <span className="inline-flex items-center gap-2">
-                {item.most_per_trace >= 3 ? (
-                  <Badge
-                    variant="outline"
-                    className="border-warn/30 bg-warn-soft text-warn"
-                    title="Runs several times in one request: N+1 or duplicate queries"
-                  >
-                    Repeated
-                  </Badge>
-                ) : null}
-                {item.most_per_trace}×
-              </span>
+              <RepeatedCount
+                most={item.most_per_trace}
+                title="Runs several times in one request: N+1 or duplicate queries"
+              />
             </Td>
             <Td>
               <Meter value={item.total} max={heaviest}>
@@ -255,6 +248,114 @@ export function QueriesTable({
         </Fragment>
       ))}
     </DataTable>
+  );
+}
+
+/** Outgoing HTTP calls by endpoint (method, host, path with ids as {id}), heaviest first. */
+export function CallsTable({
+  items,
+  open,
+  onOpen,
+}: {
+  items: readonly CallRow[];
+  /** The endpoint shown open, kept in the URL by the page. */
+  open: string | null;
+  onOpen: (key: string | null) => void;
+}) {
+  const heaviest = Math.max(...items.map((item) => item.total), 1);
+  return (
+    <DataTable
+      head={
+        <>
+          <Th>Endpoint</Th>
+          <Th num>Calls</Th>
+          <Th num>Requests</Th>
+          <Th num>Max / request</Th>
+          <Th num>Failed</Th>
+          <Th>Total time</Th>
+          <Th num>Slowest</Th>
+        </>
+      }
+    >
+      {items.map((item) => (
+        <CallRowView key={item.key} item={item} heaviest={heaviest} open={open === item.key} onOpen={onOpen} />
+      ))}
+    </DataTable>
+  );
+}
+
+/** One endpoint's row, and when open, the ways to its traces. */
+function CallRowView({
+  item,
+  heaviest,
+  open,
+  onOpen,
+}: {
+  item: CallRow;
+  heaviest: number;
+  open: boolean;
+  onOpen: (key: string | null) => void;
+}) {
+  return (
+    <>
+      <Tr selected={open} tone={item.errors > 0 ? "error" : undefined} onClick={() => onOpen(open ? null : item.key)}>
+        <Td>
+          <span className="flex flex-col gap-0.5">
+            <Mono className="flex items-center gap-2 font-semibold">
+              <MethodBadge method={item.method} />
+              {item.host}
+              {item.template}
+            </Mono>
+            <Mono className="text-base text-muted-foreground">{item.origin ?? ""}</Mono>
+          </span>
+        </Td>
+        <Td num>{item.calls}</Td>
+        <Td num>{item.traces}</Td>
+        <Td num>
+          <RepeatedCount most={item.most_per_trace} title="Called several times in one request: an N+1" />
+        </Td>
+        <Td num>{item.errors}</Td>
+        <Td>
+          <Meter value={item.total} max={heaviest}>
+            {duration(item.total)}
+          </Meter>
+        </Td>
+        <Td num>{duration(item.slowest)}</Td>
+      </Tr>
+      {open ? <CallLinks item={item} /> : null}
+    </>
+  );
+}
+
+function CallLinks({ item }: { item: CallRow }) {
+  const requests = item.traces === 1 ? "request" : "requests";
+  return (
+    <TableRow className="hover:bg-transparent">
+      <TableCell colSpan={7} className="space-x-2 bg-muted/40 px-5 py-4 whitespace-normal">
+        <Button variant="outline" size="sm" asChild>
+          <a href={href({ name: "traces", q: `call:${item.key}` })}>
+            Show {item.traces} {requests} with this call
+          </a>
+        </Button>
+        <Button variant="ghost" size="sm" asChild>
+          <a href={traceHref(item.sample_trace)}>Latest call →</a>
+        </Button>
+      </TableCell>
+    </TableRow>
+  );
+}
+
+/** How many times at most in one request; flagged from 3 on, where a loop is the likely cause. */
+function RepeatedCount({ most, title }: { most: number; title: string }) {
+  return (
+    <span className="inline-flex items-center gap-2">
+      {most >= 3 ? (
+        <Badge variant="outline" className="border-warn/30 bg-warn-soft text-warn" title={title}>
+          Repeated
+        </Badge>
+      ) : null}
+      {most}×
+    </span>
   );
 }
 

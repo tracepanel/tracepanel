@@ -88,3 +88,13 @@ pub fn query_fingerprint(statement: &str, alias: &str) -> String {
         .collect::<String>()[..16]
         .to_owned()
 }
+
+/// An outgoing HTTP endpoint's id: the first 16 hex of SHA-1 over "METHOD host template" (`call:<key>` in search).
+pub fn call_key(method: &str, host: &str, template: &str) -> String {
+    let digest = Sha1::digest(format!("{method} {host}{template}").as_bytes());
+    digest
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>()[..16]
+        .to_owned()
+}

@@ -119,6 +119,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/calls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Outgoing HTTP calls aggregated per endpoint (method, host, path template) across stored traces, heaviest first. */
+        get: operations["listCalls"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/explain": {
         parameters: {
             query?: never;
@@ -576,6 +593,28 @@ export interface components {
             /** @description The latest call's span. */
             sample_span: string;
         };
+        CallRow: {
+            /** @description Endpoint id (search traces with call:<key>). */
+            key: string;
+            /** @description GET, POST… */
+            method: string;
+            host: string;
+            /** @description Path with ids as {id}: /users/{id}. */
+            template: string;
+            calls: number;
+            traces: number;
+            /** @description Calls that failed or answered 400 or more. */
+            errors: number;
+            total: components["schemas"]["Duration"];
+            slowest: components["schemas"]["Duration"];
+            last_seen: components["schemas"]["Time"];
+            most_per_trace: number;
+            origin: string | null;
+            /** @description The latest call's trace. */
+            sample_trace: string;
+            /** @description The latest call's span. */
+            sample_span: string;
+        };
         ExplainPlan: {
             vendor: string;
             alias: string;
@@ -713,6 +752,8 @@ export interface components {
                 websockets: number;
                 /** @description Management commands and tracepanel.trace() blocks. */
                 jobs: number;
+                /** @description Outgoing HTTP calls were recorded; the console shows its HTTP calls page. */
+                calls: boolean;
             };
         };
         KnownValues: {
@@ -1381,6 +1422,33 @@ export interface operations {
                 content: {
                     "application/json": {
                         queries: components["schemas"]["QueryRow"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadSearch"];
+        };
+    };
+    listCalls: {
+        parameters: {
+            query?: {
+                /** @description Search query: free text plus key:value filters, e.g. route:/api/* status>=500 "timed out". */
+                q?: components["parameters"]["q"];
+                limit?: components["parameters"]["limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Endpoints. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        calls: components["schemas"]["CallRow"][];
                     };
                 };
             };

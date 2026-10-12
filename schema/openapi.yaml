@@ -148,6 +148,25 @@ paths:
                 properties:
                   queries: { type: array, items: { $ref: "#/components/schemas/QueryRow" } }
         "400": { $ref: "#/components/responses/BadSearch" }
+  /calls:
+    get:
+      operationId: listCalls
+      summary: Outgoing HTTP calls aggregated per endpoint (method, host, path template) across stored traces, heaviest first.
+      parameters:
+        - $ref: "#/components/parameters/q"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: Endpoints.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [calls]
+                additionalProperties: false
+                properties:
+                  calls: { type: array, items: { $ref: "#/components/schemas/CallRow" } }
+        "400": { $ref: "#/components/responses/BadSearch" }
   /explain:
     get:
       operationId: explain
@@ -643,6 +662,26 @@ components:
         origin: { type: [string, "null"] }
         sample_trace: { type: string, description: The latest call's trace. }
         sample_span: { type: string, description: The latest call's span. }
+    CallRow:
+      type: object
+      additionalProperties: false
+      required: [key, method, host, template, calls, traces, errors, total, slowest, last_seen, most_per_trace, origin,
+        sample_trace, sample_span]
+      properties:
+        key: { type: string, description: "Endpoint id (search traces with call:<key>)." }
+        method: { type: string, description: "GET, POST…" }
+        host: { type: string }
+        template: { type: string, description: "Path with ids as {id}: /users/{id}." }
+        calls: { type: integer }
+        traces: { type: integer }
+        errors: { type: integer, description: Calls that failed or answered 400 or more. }
+        total: { $ref: "#/components/schemas/Duration" }
+        slowest: { $ref: "#/components/schemas/Duration" }
+        last_seen: { $ref: "#/components/schemas/Time" }
+        most_per_trace: { type: integer }
+        origin: { type: [string, "null"] }
+        sample_trace: { type: string, description: The latest call's trace. }
+        sample_span: { type: string, description: The latest call's span. }
     ExplainPlan:
       type: object
       additionalProperties: false
@@ -828,13 +867,14 @@ components:
           type: object
           description: Stored traces per entry point; the console hides entry points with none.
           additionalProperties: false
-          required: [http, graphql, tasks, websockets, jobs]
+          required: [http, graphql, tasks, websockets, jobs, calls]
           properties:
             http: { type: integer, description: HTTP requests that are not GraphQL operations. }
             graphql: { type: integer }
             tasks: { type: integer }
             websockets: { type: integer }
             jobs: { type: integer, description: Management commands and tracepanel.trace() blocks. }
+            calls: { type: boolean, description: Outgoing HTTP calls were recorded; the console shows its HTTP calls page. }
     KnownValues:
       type: object
       additionalProperties: false

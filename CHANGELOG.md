@@ -13,6 +13,16 @@
   grouped by endpoint, a tile with their count and time, a lane on the
   timeline, and "External calls" in the call tree's time breakdown. Similar
   HTTP calls fold into one row of the call tree, like queries.
+- An HTTP calls page, next to Database: the endpoints the app calls (method,
+  host and path with ids as `{id}`), with their calls, requests, failures,
+  most calls in one request, total and slowest time, and the line of code
+  that calls them. It links to the requests that made the call (`call:<key>`
+  in the search) and shows in the sidebar once the app has made a call.
+
+### Changed
+
+- The store's format is now version 15. A store from an earlier version is
+  left as it is, and the agent starts a new, empty one.
 
 ## 0.0.1a1 (2026-10-12)
 

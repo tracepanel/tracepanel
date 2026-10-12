@@ -1600,6 +1600,7 @@ dependencies = [
  "rusqlite",
  "serde_json",
  "sha1",
+ "tracepanel-analysis",
  "tracepanel-protocol",
 ]
 

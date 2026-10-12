@@ -27,6 +27,7 @@ export type TraceSummary = Schemas["TraceSummary"];
 export type LogRow = Schemas["LogRow"];
 export type MailRow = Schemas["MailRow"];
 export type QueryRow = Schemas["QueryRow"];
+export type CallRow = Schemas["CallRow"];
 export type ExplainPlan = Schemas["ExplainPlan"];
 export type EndpointRow = Schemas["EndpointRow"];
 export type TaskRow = Schemas["TaskRow"];

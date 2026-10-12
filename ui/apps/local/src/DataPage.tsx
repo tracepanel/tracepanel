@@ -9,7 +9,7 @@ import { SearchBar } from "./SearchBar";
 import { byProject, ServicesView } from "./ServicesView";
 import { useScope } from "./scope";
 import { DATA_LABELS } from "./sections";
-import { IssuesTable, LogsTable, MailsTable, QueriesTable, TracesTable } from "./tables";
+import { CallsTable, IssuesTable, LogsTable, MailsTable, QueriesTable, TracesTable } from "./tables";
 import { Loading, LoadMore, PageHeader } from "./ui";
 
 type DataSection = Exclude<Section, EntrySection>;
@@ -25,7 +25,7 @@ interface DataPageProps {
 }
 
 /** What the work touched (services, SQL, emails, logs), what went wrong (issues), and ⌘K's search results. */
-const SUMMARIES: ReadonlySet<string> = new Set(["services", "queries"]);
+const SUMMARIES: ReadonlySet<string> = new Set(["services", "queries", "calls"]);
 
 /** What each section says before anything is stored. Search results (traces) always keep their search bar. */
 const PRISTINE: Partial<Record<DataSection, { title: string; text: string }>> = {
@@ -34,6 +34,7 @@ const PRISTINE: Partial<Record<DataSection, { title: string; text: string }>> = 
     text: "Databases, caches, mail servers and brokers appear here after the first call that uses them.",
   },
   queries: { title: "No queries yet", text: "SQL from requests, tasks and jobs is aggregated here." },
+  calls: { title: "No HTTP calls yet", text: "HTTP calls your app makes to other services are aggregated here." },
   mails: { title: "No emails yet", text: "Emails your app sends show up here." },
   logs: { title: "No log records yet", text: "Records from requests, tasks and jobs show up here." },
   errors: {
@@ -45,6 +46,12 @@ const PRISTINE: Partial<Record<DataSection, { title: string; text: string }>> = 
     text: "N+1 queries, duplicate and slow SQL, transaction and htmx mistakes show up here.",
   },
 };
+
+/** A list's body: loading, its rows, or what to say when nothing matches. */
+function listBody<T>(data: T[] | undefined, rows: (items: T[]) => ReactNode, empty: ReactNode): ReactNode {
+  if (data === undefined) return <Loading />;
+  return data.length > 0 ? rows(data) : empty;
+}
 
 export function DataPage({ section, q, open, source, spec, known }: DataPageProps) {
   const { setService } = useScope();
@@ -94,6 +101,14 @@ export function DataPage({ section, q, open, source, spec, known }: DataPageProp
     q,
     0,
   );
+  const calls = useSearch(
+    useCallback(
+      (query: string) => (section === "calls" ? source.listCalls(query) : Promise.resolve([])),
+      [source, section],
+    ),
+    q,
+    0,
+  );
   const issues = useSearch(
     useCallback(
       (query: string) =>
@@ -117,6 +132,7 @@ export function DataPage({ section, q, open, source, spec, known }: DataPageProp
       error: services.error,
     },
     queries: { size: queries.data?.length, error: queries.error },
+    calls: { size: calls.data?.length, error: calls.error },
     errors: { size: issues.data?.length, error: issues.error },
     issues: { size: issues.data?.length, error: issues.error },
   }[section];
@@ -187,24 +203,22 @@ export function DataPage({ section, q, open, source, spec, known }: DataPageProp
       <Loading />
     );
   } else if (section === "queries") {
-    body = queries.data ? (
-      queries.data.length ? (
-        <QueriesTable items={queries.data} source={source} open={open ?? null} onOpen={setOpen} />
-      ) : (
-        <Empty title="No queries match">SQL from stored traces is aggregated here.</Empty>
-      )
-    ) : (
-      <Loading />
+    body = listBody(
+      queries.data,
+      (items) => <QueriesTable items={items} source={source} open={open ?? null} onOpen={setOpen} />,
+      <Empty title="No queries match">SQL from stored traces is aggregated here.</Empty>,
+    );
+  } else if (section === "calls") {
+    body = listBody(
+      calls.data,
+      (items) => <CallsTable items={items} open={open ?? null} onOpen={setOpen} />,
+      <Empty title="No HTTP calls match">HTTP calls from stored traces are aggregated here.</Empty>,
     );
   } else {
-    body = issues.data ? (
-      issues.data.length ? (
-        <IssuesTable items={issues.data} />
-      ) : (
-        <Empty title={section === "errors" ? "No errors match" : "No issues match"}>Try a broader search.</Empty>
-      )
-    ) : (
-      <Loading />
+    body = listBody(
+      issues.data,
+      (items) => <IssuesTable items={items} />,
+      <Empty title={`No ${section} match`}>Try a broader search.</Empty>,
     );
   }
 

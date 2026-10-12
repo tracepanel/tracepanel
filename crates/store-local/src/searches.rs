@@ -102,6 +102,15 @@ pub(crate) fn trace_search() -> search::Schema {
                 }),
             ),
             (
+                "call",
+                Box::new(|term| {
+                    Ok((
+                        "id IN (SELECT trace_id FROM calls WHERE key = ?)".into(),
+                        vec![Sql::Text(term.value.clone())],
+                    ))
+                }),
+            ),
+            (
                 "peer",
                 Box::new(|term| {
                     Ok((
@@ -210,6 +219,29 @@ pub(crate) fn query_search() -> search::Schema {
 
 pub(crate) static QUERY_SEARCH: std::sync::LazyLock<search::Schema> =
     std::sync::LazyLock::new(query_search);
+
+pub(crate) fn call_search() -> search::Schema {
+    search::schema_for(
+        "calls",
+        &[("call", "key"), ("since", "start"), ("until", "start")],
+        Box::new(|words| {
+            let pattern = Sql::Text(format!("%{}%", search::like(words)));
+            (
+                "template LIKE ? ESCAPE '\\' OR host LIKE ? ESCAPE '\\'".into(),
+                vec![pattern.clone(), pattern],
+            )
+        }),
+        vec![
+            ("host", search::text("host")),
+            ("method", search::upper_text("method")),
+            ("service", of_service("trace_id")),
+        ],
+        vec![],
+    )
+}
+
+pub(crate) static CALL_SEARCH: std::sync::LazyLock<search::Schema> =
+    std::sync::LazyLock::new(call_search);
 
 pub(crate) fn mail_search() -> search::Schema {
     search::schema_for(

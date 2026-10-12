@@ -1,4 +1,5 @@
 import type {
+  CallRow,
   Counts,
   EndpointDetail,
   EndpointRow,
@@ -51,6 +52,8 @@ export interface DataSource {
   searchLogs(q: string, before?: number | null): Promise<Page<LogRow>>;
   searchMails(q: string, before?: number | null): Promise<Page<MailRow>>;
   listQueries(q: string): Promise<QueryRow[]>;
+  /** Outgoing HTTP calls by endpoint, across stored traces. */
+  listCalls(q: string): Promise<CallRow[]>;
   listEndpoints(q: string): Promise<EndpointRow[]>;
   listTasks(q: string): Promise<TaskRow[]>;
   listWebsockets(q: string): Promise<WebsocketRow[]>;
@@ -145,6 +148,9 @@ export function httpSource(base: string | URL): DataSource {
     async listQueries(q) {
       return (await getJson<{ queries: QueryRow[] }>(url("queries", { q })))?.queries ?? [];
     },
+    async listCalls(q) {
+      return (await getJson<{ calls: CallRow[] }>(url("calls", { q })))?.calls ?? [];
+    },
     async listEndpoints(q) {
       return (await getJson<{ endpoints: EndpointRow[] }>(url("endpoints", { q })))?.endpoints ?? [];
     },
@@ -192,7 +198,7 @@ export function httpSource(base: string | URL): DataSource {
         (await getJson<Counts>(url("counts", { service }))) ?? {
           issues: 0,
           errors: 0,
-          sections: { http: 0, graphql: 0, tasks: 0, websockets: 0, jobs: 0 },
+          sections: { http: 0, graphql: 0, tasks: 0, websockets: 0, jobs: 0, calls: false },
         }
       );
     },

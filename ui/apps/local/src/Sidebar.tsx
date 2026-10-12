@@ -12,6 +12,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@tracepanel/ui/components/ui/tooltip";
 import { cn, rem } from "@tracepanel/ui/lib/utils";
 import {
+  ArrowUpRightIcon,
   BracesIcon,
   BugIcon,
   CableIcon,
@@ -66,6 +67,7 @@ export const NAV_GROUPS: { title: string | null; items: NavItem[] }[] = [
     items: [
       { section: "services", label: "Services", icon: NetworkIcon },
       { section: "queries", label: "Database", icon: DatabaseIcon },
+      { section: "calls", label: "HTTP calls", icon: ArrowUpRightIcon },
       { section: "logs", label: "Logs", icon: ScrollTextIcon },
       { section: "mails", label: "Emails", icon: MailIcon },
     ],
@@ -82,16 +84,13 @@ export const NAV_GROUPS: { title: string | null; items: NavItem[] }[] = [
 
 export const NAV: NavItem[] = NAV_GROUPS.flatMap((group) => group.items);
 
-/** Entry points with traces; HTTP always (it is where a project starts). */
+/** The sections shown only once there is something in them; HTTP always (it is where a project starts). */
+const OPTIONAL = ["graphql", "tasks", "websockets", "jobs", "calls"] as const;
+
+/** Entry points with traces, and HTTP calls once the app made any. */
 export function visibleSections(counts: Counts | undefined): Set<Section> {
   const sections = counts?.sections;
-  const hidden = new Set<Section>();
-  if (sections) {
-    if (!sections.graphql) hidden.add("graphql");
-    if (!sections.tasks) hidden.add("tasks");
-    if (!sections.websockets) hidden.add("websockets");
-    if (!sections.jobs) hidden.add("jobs");
-  }
+  const hidden = new Set<Section>(OPTIONAL.filter((section) => sections && !sections[section]));
   return new Set(NAV.map((item) => item.section).filter((section) => !hidden.has(section)));
 }
 

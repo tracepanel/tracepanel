@@ -32,7 +32,7 @@ pub use read::{Page, ReadError, Reader};
 /// The store's errors (SQLite's).
 pub use rusqlite::Error;
 pub use stats::{SLOW_REQUEST_US, stats};
-pub use values::query_fingerprint;
+pub use values::{call_key, query_fingerprint};
 pub use write::{DEFAULT_MAX_TRACES, SCHEMA, Store, path_in, version};
 
 #[cfg(test)]
@@ -52,5 +52,14 @@ mod tests {
         assert_eq!(py_str(&Value::from(true)), "True");
         assert_eq!(py_str(&serde_json::json!(1.0)), "1.0");
         assert_eq!(query_fingerprint("SELECT 1", "default").len(), 16);
+    }
+
+    #[test]
+    fn an_endpoint_s_key_is_its_method_host_and_template() {
+        let key = call_key("GET", "api.example.com", "/users/{id}");
+        assert_eq!(key.len(), 16);
+        assert_eq!(key, call_key("GET", "api.example.com", "/users/{id}"));
+        assert_ne!(key, call_key("POST", "api.example.com", "/users/{id}"));
+        assert_ne!(key, call_key("GET", "other.example.com", "/users/{id}"));
     }
 }

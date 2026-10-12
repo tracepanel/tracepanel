@@ -264,6 +264,7 @@ const QUICK: Record<Section, Control[]> = {
     { ...TIME, verb: "Ran" },
     { label: "Database", title: "Filter by database", key: "db", values: (known) => known.db ?? [] },
   ],
+  calls: [{ ...TIME, verb: "Called" }],
 };
 
 /**
@@ -340,6 +341,7 @@ const EXAMPLE: Record<Section, string> = {
   websockets: "event:receive",
   graphql: "type:mutation",
   queries: "table:auth_user",
+  calls: "host:api.example.com",
   mails: "to:ann@example.com",
   logs: "level:error",
   errors: "ZeroDivisionError route:/api/*",

@@ -1,6 +1,6 @@
 -- tracepanel's local store: one SQLite file per format version, shared by every process of a project and, when it
 -- runs, written by tracepanel-agent instead (which reads this file too: keep both writers in step).
--- version: 14
+-- version: 15
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS traces (
     id TEXT PRIMARY KEY,
@@ -76,6 +76,22 @@ CREATE TABLE IF NOT EXISTS sql (
     origin TEXT
 );
 CREATE INDEX IF NOT EXISTS sql_fp ON sql (fp);
+-- Outgoing HTTP calls (http.client spans), aggregated per endpoint: `key` is its id, like `fp` for a statement.
+CREATE TABLE IF NOT EXISTS calls (
+    trace_id TEXT NOT NULL,
+    span_id TEXT NOT NULL,
+    key TEXT NOT NULL,
+    method TEXT NOT NULL,
+    host TEXT NOT NULL,
+    template TEXT NOT NULL,
+    status INTEGER,
+    error INTEGER NOT NULL,
+    start INTEGER NOT NULL,
+    duration INTEGER NOT NULL,
+    origin TEXT
+);
+CREATE INDEX IF NOT EXISTS calls_key ON calls (key);
+CREATE INDEX IF NOT EXISTS calls_trace ON calls (trace_id);
 CREATE TABLE IF NOT EXISTS mails (
     trace_id TEXT NOT NULL,
     span_id TEXT NOT NULL,

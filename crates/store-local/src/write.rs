@@ -6,7 +6,7 @@ use super::*;
 pub const SCHEMA: &str = include_str!("../../../schema/store.sql");
 pub(crate) const FTS_SCHEMA: &str =
     "CREATE VIRTUAL TABLE IF NOT EXISTS logs_fts USING fts5(message, logger)";
-pub(crate) const TABLES: [&str; 12] = [
+pub(crate) const TABLES: [&str; 13] = [
     "meta",
     "traces",
     "issues",
@@ -14,6 +14,7 @@ pub(crate) const TABLES: [&str; 12] = [
     "logs",
     "logs_fts",
     "sql",
+    "calls",
     "mails",
     "links",
     "peers",
@@ -123,6 +124,7 @@ pub(crate) fn prune(db: &Connection, fts: bool, max_traces: i64) -> rusqlite::Re
     for table in [
         "logs",
         "sql",
+        "calls",
         "issue_traces",
         "mails",
         "links",
@@ -262,6 +264,26 @@ pub(crate) fn write_trace(
                 sql(vendor),
                 statement,
                 span.name,
+                span.start,
+                span.duration,
+                sql(span.attrs.get("code.origin")),
+            ],
+        )?;
+    }
+    for span in trace.spans.iter().filter(|span| span.kind == "http.client") {
+        let (method, host, template) = tracepanel_analysis::http_endpoint(span);
+        db.execute(
+            "INSERT INTO calls (trace_id, span_id, key, method, host, template, status, error, start, duration, origin)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            params![
+                trace.id,
+                span.id,
+                call_key(&method, &host, &template),
+                method,
+                host,
+                template,
+                span.attrs.get("http.response.status_code").and_then(Value::as_i64),
+                span.status == "error",
                 span.start,
                 span.duration,
                 sql(span.attrs.get("code.origin")),

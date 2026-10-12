@@ -148,6 +148,61 @@ async fn the_agent_finds_the_issues_and_the_api_returns_them() {
     )
     .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
+
+    // Outgoing HTTP calls per endpoint, heaviest first: an id makes the endpoint's traces a search.
+    let (status, calls) = get(&router, "/api/calls?q=host:127.0.0.1").await;
+    assert_eq!(status, StatusCode::OK, "{calls}");
+    let rows = calls["calls"].as_array().unwrap();
+    let endpoints: Vec<(&str, &str, i64, i64)> = rows
+        .iter()
+        .map(|row| {
+            (
+                row["method"].as_str().unwrap(),
+                row["template"].as_str().unwrap(),
+                row["calls"].as_i64().unwrap(),
+                row["most_per_trace"].as_i64().unwrap(),
+            )
+        })
+        .collect();
+    assert!(
+        endpoints.contains(&("GET", "/users/{id}", 4, 4)),
+        "{endpoints:?}"
+    );
+    assert!(
+        endpoints.contains(&("GET", "/rates", 2, 2)),
+        "{endpoints:?}"
+    );
+    let users = rows
+        .iter()
+        .find(|row| row["template"] == "/users/{id}")
+        .unwrap();
+    assert_eq!(users["key"].as_str().unwrap().len(), 16);
+    assert_eq!(users["errors"], 0);
+    assert_eq!(users["traces"], 1);
+    assert_eq!(users["sample_trace"], "01M4R1ER9RWER0QHV07BJDSZ7B");
+
+    let (status, found) = get(
+        &router,
+        &format!("/api/traces?q=call:{}", users["key"].as_str().unwrap()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{found}");
+    let ids: Vec<&str> = found["traces"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|trace| trace["id"].as_str().unwrap())
+        .collect();
+    assert_eq!(ids, ["01M4R1ER9RWER0QHV07BJDSZ7B"]);
+
+    let (_, none) = get(&router, "/api/calls?q=host:elsewhere.example").await;
+    assert_eq!(none["calls"], serde_json::json!([]));
+
+    let (status, counts) = get(&router, "/api/counts").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(counts["sections"]["calls"], true);
+    let (_, other) = get(&router, "/api/counts?service=api").await;
+    assert_eq!(other["sections"]["calls"], false);
     let _ = std::fs::remove_dir_all(&dir);
 }
 

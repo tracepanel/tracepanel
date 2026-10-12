@@ -607,6 +607,81 @@ impl Reader {
             .collect())
     }
 
+    /// Outgoing HTTP calls aggregated per endpoint (method, host, path template) across stored traces, heaviest first.
+    pub fn list_calls(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
+        let (condition, mut params) = search::compile_where(query, &CALL_SEARCH)?;
+        params.push(Sql::Integer(limit));
+        let db = self.connect()?;
+        let rows = objects(
+            &db,
+            &format!(
+                "SELECT key, method, host, template, COUNT(*) AS calls, COUNT(DISTINCT trace_id) AS traces, \
+                 SUM(error) AS errors, SUM(duration) AS total, MAX(duration) AS slowest, MAX(start) AS last_seen \
+                 FROM calls WHERE {condition} GROUP BY key ORDER BY total DESC LIMIT ?"
+            ),
+            params,
+        )?;
+        if rows.is_empty() {
+            return Ok(Vec::new());
+        }
+        let keys: Vec<Sql> = rows
+            .iter()
+            .map(|row| Sql::Text(row["key"].as_str().unwrap_or("").to_owned()))
+            .collect();
+        let marks = marks(keys.len());
+        let by_key = |sql: &str| objects(&db, sql, keys.clone());
+        let per_trace: HashMap<String, i64> = by_key(&format!(
+            "SELECT key, MAX(n) AS most FROM (SELECT key, trace_id, COUNT(*) AS n FROM calls \
+             WHERE key IN ({marks}) GROUP BY key, trace_id) GROUP BY key"
+        ))?
+        .into_iter()
+        .map(|row| {
+            (
+                row["key"].as_str().unwrap_or("").to_owned(),
+                row["most"].as_i64().unwrap_or(1),
+            )
+        })
+        .collect();
+        let mut origins: HashMap<String, Vec<String>> = HashMap::new();
+        for row in by_key(&format!(
+            "SELECT key, origin FROM calls WHERE key IN ({marks}) AND origin IS NOT NULL"
+        ))? {
+            origins
+                .entry(row["key"].as_str().unwrap_or("").to_owned())
+                .or_default()
+                .push(row["origin"].as_str().unwrap_or("").to_owned());
+        }
+        // The latest call to each endpoint: the console opens it.
+        let samples: HashMap<String, (Value, Value)> = by_key(&format!(
+            "SELECT key, trace_id, span_id, MAX(start) FROM calls WHERE key IN ({marks}) GROUP BY key"
+        ))?
+        .into_iter()
+        .map(|row| (row["key"].as_str().unwrap_or("").to_owned(), (row["trace_id"].clone(), row["span_id"].clone())))
+        .collect();
+        Ok(rows
+            .into_iter()
+            .map(|mut row| {
+                let key = row["key"].as_str().unwrap_or("").to_owned();
+                let (trace, span) = samples
+                    .get(&key)
+                    .cloned()
+                    .unwrap_or((Value::Null, Value::Null));
+                row.insert("sample_trace".into(), trace);
+                row.insert("sample_span".into(), span);
+                row.insert(
+                    "most_per_trace".into(),
+                    Value::from(per_trace.get(&key).copied().unwrap_or(1)),
+                );
+                row.insert(
+                    "origin".into(),
+                    most_common(origins.remove(&key).unwrap_or_default())
+                        .map_or(Value::Null, Value::from),
+                );
+                Value::Object(row)
+            })
+            .collect())
+    }
+
     /// Newest first; `before` is the `start` of the last row of the previous page.
     pub fn search_traces(
         &self,
@@ -753,6 +828,12 @@ impl Reader {
             [service],
             |row| row.get(0),
         )?;
+        let calls: bool = db.query_row(
+            "SELECT EXISTS (SELECT 1 FROM calls WHERE ?1 IS NULL OR trace_id IN \
+             (SELECT id FROM traces WHERE service = ?1))",
+            [service],
+            |row| row.get(0),
+        )?;
         let count = |map: &HashMap<String, i64>, key: &str| map.get(key).copied().unwrap_or(0);
         let errors = count(&kinds, "error");
         Ok(serde_json::json!({
@@ -765,6 +846,8 @@ impl Reader {
                 "tasks": count(&traces, "task"),
                 "websockets": count(&traces, "websocket"),
                 "jobs": count(&traces, "command"),
+                // Outgoing HTTP calls were recorded: the console shows its HTTP calls page.
+                "calls": calls,
             },
         }))
     }

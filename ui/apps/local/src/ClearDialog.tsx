@@ -46,7 +46,15 @@ export function ClearDialog({
     setTraces(null);
     let cancelled = false;
     source.counts().then(
-      (counts) => !cancelled && setTraces(Object.values(counts.sections).reduce((sum, count) => sum + count, 0)),
+      // The traces per entry point; `calls` says whether any made HTTP calls, it counts no traces.
+      (counts) =>
+        !cancelled &&
+        setTraces(
+          Object.values(counts.sections).reduce<number>(
+            (sum, count) => sum + (typeof count === "number" ? count : 0),
+            0,
+          ),
+        ),
       () => undefined,
     );
     return () => {

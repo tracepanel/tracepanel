@@ -61,6 +61,10 @@ export const DATA_LABELS: Record<Exclude<Section, EntrySection>, { label: string
     label: "Database",
     description: "SQL statements across requests: how often they run, how long they take, and their query plans.",
   },
+  calls: {
+    label: "HTTP calls",
+    description: "The HTTP calls your app makes to other services: how often, how long they take, how often they fail.",
+  },
   mails: { label: "Emails", description: "Every email your app sent, with the request that sent it." },
   logs: { label: "Logs", description: "Log records from every request, task and job." },
   errors: {

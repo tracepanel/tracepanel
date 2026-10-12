@@ -52,6 +52,10 @@
       "type": "text",
       "help": "Contains this SQL statement (id from Queries)"
     },
+    "call": {
+      "type": "text",
+      "help": "Made this outgoing HTTP call (id from HTTP calls)"
+    },
     "peer": {
       "type": "text",
       "help": "Called this service (id from Services)"
@@ -163,6 +167,32 @@
     "until": {
       "type": "time",
       "help": "Ran before: until:5m"
+    }
+  },
+  "calls": {
+    "host": {
+      "type": "text",
+      "help": "Host called: host:api.example.com, * wildcards"
+    },
+    "method": {
+      "type": "text",
+      "help": "HTTP method: GET, POST…"
+    },
+    "call": {
+      "type": "text",
+      "help": "Endpoint id"
+    },
+    "service": {
+      "type": "text",
+      "help": "The app that recorded it (service.name): service:shop"
+    },
+    "since": {
+      "type": "time",
+      "help": "Called at or after: since:15m"
+    },
+    "until": {
+      "type": "time",
+      "help": "Called before: until:5m"
     }
   },
   "mails": {

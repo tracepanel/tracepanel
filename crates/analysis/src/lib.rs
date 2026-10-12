@@ -404,19 +404,27 @@ const CACHE_READS: &[&str] = &[
     "type",
 ];
 
-fn http_call(span: &Span) -> Call<'_> {
+/// The endpoint an `http.client` span called: its method, host and path template (`/users/{id}`), whatever the query
+/// string asks it. The analysis groups calls by it, and the store aggregates them by it.
+pub fn http_endpoint(span: &Span) -> (String, String, String) {
     let method = or_default(&span.attrs, "http.request.method", "GET").to_uppercase();
     let url = text(&span.attrs, "url.full").unwrap_or_else(|| span.name.clone());
-    // scheme://host:port/path?query -> host/path: the endpoint, whatever the query asks it.
+    // scheme://host:port/path?query -> host, path.
     let rest = url.split_once("://").map_or(url.as_str(), |(_, rest)| rest);
     let without_query = rest.split(['?', '#']).next().unwrap_or("");
     let (host, path) = without_query.split_once('/').unwrap_or((without_query, ""));
     let host = host.rsplit('@').next().unwrap_or(host);
     let host = text(&span.attrs, "server.address")
         .unwrap_or_else(|| host.split(':').next().unwrap_or(host).to_owned());
+    (method, host, format!("/{}", template(path)))
+}
+
+fn http_call(span: &Span) -> Call<'_> {
+    let (method, host, path) = http_endpoint(span);
+    let url = text(&span.attrs, "url.full").unwrap_or_else(|| span.name.clone());
     Call {
         span,
-        group: format!("{method} {host}/{}", template(path)),
+        group: format!("{method} {host}{path}"),
         exact: format!("{method} {url}"),
         read: matches!(method.as_str(), "GET" | "HEAD" | "OPTIONS"),
     }

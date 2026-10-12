@@ -36,6 +36,7 @@ pub fn router(reader: Reader, activity: Activity) -> Router {
         .route("/api/search", get(search_spec))
         .route("/api/logs", get(logs))
         .route("/api/queries", get(queries))
+        .route("/api/calls", get(calls))
         .route("/api/mails", get(mails))
         .route("/api/values", get(values))
         .route("/api/issues", get(issues))
@@ -258,6 +259,16 @@ async fn queries(State(reader): State<Shared>, Query(query): Params) -> Response
     answer(
         read(&reader, move |reader| {
             Ok(json!({"queries": reader.list_queries(&q, limit)?}))
+        })
+        .await,
+    )
+}
+
+async fn calls(State(reader): State<Shared>, Query(query): Params) -> Response {
+    let (q, limit) = (q(&query), limit(&query));
+    answer(
+        read(&reader, move |reader| {
+            Ok(json!({"calls": reader.list_calls(&q, limit)?}))
         })
         .await,
     )
