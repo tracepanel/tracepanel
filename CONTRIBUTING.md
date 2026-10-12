@@ -96,6 +96,12 @@ and checks every platform's wheel, and `Release` publishes them with
 `uv publish` on a tag. Releasing is described in
 `.claude/skills/release/SKILL.md`.
 
+The same binaries go to npm. `scripts/npm.py` makes one package per platform
+from the wheels, `@tracepanel/agent-<platform>`, and `@tracepanel/agent`, which
+lists them as optional dependencies and runs the one npm installed. `Wheels`
+packs them and installs them on Linux, macOS and Windows. `npm` publishes them
+on a tag, or by hand on an existing tag.
+
 ## Update dependencies
 
 After changing Rust or UI dependencies, regenerate the licenses the agent ships
