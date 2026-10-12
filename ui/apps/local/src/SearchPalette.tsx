@@ -20,8 +20,8 @@ import {
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@tracepanel/ui/components/ui/dialog";
 import { ArrowRightIcon, SearchIcon } from "lucide-react";
 import { useEffect, useState } from "react";
-import { endpointGroup, go, issueRoute, openTrace, type Route, type Section, TRACE_ID } from "./routes";
-import { NAV } from "./Sidebar";
+import { endpointGroup, go, issueRoute, openTrace, type Route, TRACE_ID } from "./routes";
+import type { NavItem } from "./Sidebar";
 import { graphqlOperation } from "./sections";
 
 const SHOWN = 8;
@@ -47,14 +47,14 @@ export function SearchPalette({
   open,
   onOpenChange,
   source,
-  sections,
+  items,
   openRoute,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   source: DataSource;
-  /** Menu sections shown in the console (empty entry points are hidden there and here). */
-  sections: Set<Section>;
+  /** The pages to go to, as the sidebar lists them (empty entry points hidden, a page per system called). */
+  items: readonly NavItem[];
   /** How a choice opens: the console goes there; the panel opens traces itself and the rest in the console. */
   openRoute?: ((route: Route) => void) | undefined;
 }) {
@@ -99,9 +99,7 @@ export function SearchPalette({
     setText("");
     then();
   };
-  const matching = NAV.filter(
-    (item) => sections.has(item.section) && (!query || item.label.toLowerCase().includes(query.toLowerCase())),
-  );
+  const matching = items.filter((item) => !query || item.label.toLowerCase().includes(query.toLowerCase()));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

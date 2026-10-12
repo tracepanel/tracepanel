@@ -10,7 +10,7 @@ export type CallsSection = `calls/${string}`;
 
 /** `traces` is search results (⌘K "search all"), not a menu item. */
 export type Section = EntrySection | "services" | CallsSection | "mails" | "logs" | "errors" | "issues" | "traces";
-export const SECTIONS: Section[] = [...ENTRY_SECTIONS, "services", "mails", "logs", "errors", "issues", "traces"];
+const SECTIONS: Section[] = [...ENTRY_SECTIONS, "services", "mails", "logs", "errors", "issues", "traces"];
 
 export type EntryView = "overview" | "calls";
 

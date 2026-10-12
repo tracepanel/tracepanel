@@ -51,7 +51,6 @@ export function TracePage({
           />
         </div>
         <TraceScreen
-          key={id}
           id={id}
           source={source}
           initialTab={initialTab}

@@ -28,9 +28,9 @@ import { Console } from "./Console";
 import { exploreFor } from "./explore";
 import { type TabEntry, type TabHistory, usePolling, useTabHistory } from "./hooks";
 import { RefreshProvider } from "./refresh";
-import { consoleLinks, go, href, type Route, SECTIONS, useRoute } from "./routes";
+import { consoleLinks, go, href, type Route, useRoute } from "./routes";
 import { SearchPalette } from "./SearchPalette";
-import { ThemeToggle } from "./Sidebar";
+import { NAV, ThemeToggle } from "./Sidebar";
 import { ScopeProvider } from "./scope";
 import { graphqlOperation } from "./sections";
 import { tabOf } from "./TracePage";
@@ -694,7 +694,7 @@ function PanelApp({ route }: { route: Route }) {
         open={searching}
         onOpenChange={setSearching}
         source={source}
-        sections={new Set(SECTIONS)}
+        items={NAV}
         openRoute={(target) =>
           target.name === "trace" ? go(target) : window.open(`${base}${href(target)}`, "_blank", "noopener")
         }
@@ -751,8 +751,9 @@ function PanelApp({ route }: { route: Route }) {
         <main className="panel-body">
           {selectedId ? (
             <TraceScreen
-              // A link to another tab of the trace on screen opens that tab: a new screen, not a kept state.
-              key={route.name === "trace" && route.tab ? `${selectedId} ${route.tab}` : selectedId}
+              // A link to another tab of the trace on screen opens that tab: a new screen, not a kept state. A new
+              // request keeps the screen: the trace on it stays until the next one is loaded, with no blank between.
+              key={route.name === "trace" ? (route.tab ?? "") : ""}
               id={selectedId}
               source={source}
               variant={split ? "strip" : "compact"}

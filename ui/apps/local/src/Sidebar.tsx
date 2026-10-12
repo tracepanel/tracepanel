@@ -46,7 +46,7 @@ import { callsSection, type Section } from "./routes";
 import type { App } from "./scope";
 import { type ThemeChoice, useTheme } from "./theme";
 
-interface NavItem {
+export interface NavItem {
   section: Section;
   label: string;
   icon: LucideIcon;
@@ -93,7 +93,7 @@ export const NAV: NavItem[] = NAV_GROUPS.flatMap((group) => group.items);
 const OPTIONAL = ["graphql", "tasks", "websockets", "jobs"] as const;
 
 /** Entry points with traces, and a page for each system the app called. */
-export function visibleSections(counts: Counts | undefined): Set<Section> {
+function visibleSections(counts: Counts | undefined): Set<Section> {
   const sections = counts?.sections;
   const hidden = new Set<Section>(OPTIONAL.filter((section) => sections && !sections[section]));
   const shown = NAV.map((item) => item.section).filter((section) => !hidden.has(section));
@@ -118,6 +118,12 @@ function systemItems(counts: Counts | undefined): NavItem[] {
     label: systemOfPage(system, family, label).label,
     icon: FAMILY_ICONS[family],
   }));
+}
+
+/** Every page the console lists, in the sidebar's order: the search palette's "Go to". */
+export function navItems(counts: Counts | undefined): NavItem[] {
+  const visible = visibleSections(counts);
+  return NAV_GROUPS.flatMap((group) => itemsOf(group, counts)).filter((item) => visible.has(item.section));
 }
 
 /** A group's items, the Data group with the systems after Services. */
@@ -163,7 +169,14 @@ export function Sidebar({
       <SidebarHead rail={rail} />
       {scope ? <AppSwitcher scope={scope} rail={rail} /> : null}
       <SearchButton rail={rail} onSearch={onSearch} />
-      <nav className={cn("grid gap-5", rail && "justify-items-center")}>
+      {/* Only the list scrolls (an app that calls many systems): the logo, search and footer stay in place. It
+          spans the sidebar's padding so the current page's mark at the edge isn't cut off. */}
+      <nav
+        className={cn(
+          "grid min-h-0 flex-1 content-start gap-5 overflow-y-auto overscroll-contain [scrollbar-width:thin]",
+          rail ? "-mx-3 justify-items-center px-3" : "-mx-5 px-5",
+        )}
+      >
         {NAV_GROUPS.map((group, index) => (
           <div key={group.items[0]?.section} className="grid gap-1">
             <GroupTitle title={group.title} rail={rail} divider={index > 0} />

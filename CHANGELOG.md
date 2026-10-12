@@ -26,6 +26,9 @@
   MongoDB, a broker) are in the call tree, and the console has a page for
   each. A tile per system shows its calls and time. The Mail tab is gone:
   an email is in the call tree, and the Emails page lists them all.
+- The call tree's details pane can be resized: drag its edge, or focus it
+  and use the arrow keys. The width is kept, and a double click restores the
+  default.
 
 ### Changed
 
@@ -44,6 +47,11 @@
 
 ### Fixed
 
+- The panel no longer blinks through an empty pane when a new request
+  arrives: the request on screen stays until the next one is loaded.
+- The search palette's Go to lists every system's page, as the sidebar does,
+  and the sidebar's list scrolls when it is taller than the window.
+- The divider between the call tree and its details runs the full height.
 - A trace received twice (sent again with late spans) counted its queries,
   calls and services twice.
 
