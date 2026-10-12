@@ -345,11 +345,15 @@ function RequestSwitcher({
       event.preventDefault();
       setOpen(false);
     };
+    // A click on the page around the panel never reaches this frame: it only takes the focus away.
+    const onBlur = () => setOpen(false);
     document.addEventListener("pointerdown", onPointer);
     document.addEventListener("keydown", onKey);
+    window.addEventListener("blur", onBlur);
     return () => {
       document.removeEventListener("pointerdown", onPointer);
       document.removeEventListener("keydown", onKey);
+      window.removeEventListener("blur", onBlur);
     };
   }, [open]);
 

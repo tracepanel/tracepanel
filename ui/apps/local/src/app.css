@@ -83,7 +83,8 @@ a {
 .bar {
   position: relative;
   top: 0;
-  z-index: 2;
+  /* Above the trace's sticky tab strip, so the request list opens over it. */
+  z-index: 3;
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -279,11 +280,6 @@ a {
   .bar-label {
     display: none;
   }
-
-  /* Under both rows. */
-  .switcher-popover {
-    top: 5.75rem;
-  }
 }
 
 .bar-title {
@@ -293,7 +289,6 @@ a {
 }
 
 .switcher {
-  position: relative;
   flex: 1;
   min-width: 0;
 }
@@ -347,8 +342,9 @@ a {
 }
 
 .switcher-popover {
-  position: fixed;
-  top: 3.375rem;
+  /* Just under the bar (one row or two), as wide as the panel. */
+  position: absolute;
+  top: calc(100% + 0.25rem);
   right: 0.5rem;
   left: 0.5rem;
   z-index: 10;
