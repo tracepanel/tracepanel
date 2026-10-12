@@ -82,6 +82,13 @@ pages:
 uv run --no-project --with ruff scripts/lint_docs.py
 ```
 
+## License of contributions
+
+This repository is under FSL-1.1-ALv2, and DevRealm OÜ also uses its code in
+the Tracepanel cloud. By opening a pull request you license your contribution
+to DevRealm OÜ under the Apache License 2.0, and to everyone else under this
+repository's license. You keep the copyright.
+
 ## Build the package
 
 `uv build` makes the sdist and, from it, a wheel for this machine. Maturin is

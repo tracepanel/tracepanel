@@ -4,7 +4,7 @@ version = "0.0.1a1"
 description = "The Tracepanel agent: receives your app's traces, finds N+1 queries and other issues, serves the local console"
 # The page on the package index (README.md is the repository's).
 readme = "PYPI.md"
-license = "Apache-2.0"
+license = "FSL-1.1-ALv2"
 license-files = ["LICENSE", "NOTICE", "THIRD-PARTY-NOTICES"]
 requires-python = ">=3.11"
 keywords = ["debug toolbar", "tracing", "n+1", "sql", "django", "fastapi", "flask", "observability"]

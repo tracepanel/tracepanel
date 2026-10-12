@@ -1,5 +1,11 @@
 Tracepanel
 Copyright 2026 DevRealm OÜ
 
-This product includes software developed by DevRealm OÜ (https://tracepanel.dev).
+Licensed under the Functional Source License, Version 1.1, ALv2 Future License
+(FSL-1.1-ALv2). See LICENSE.
+
 Third-party components and their licenses are listed in THIRD-PARTY-NOTICES.
+
+Django, FastAPI, Flask and the other names and logos the console shows to
+identify frameworks are trademarks of their owners. Tracepanel is not
+affiliated with them.
