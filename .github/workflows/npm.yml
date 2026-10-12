@@ -1,0 +1,89 @@
+name: npm
+
+# The agent's npm packages: on a version tag, like release.yml, or by hand on an existing tag (a version already on
+# PyPI). It builds and checks every platform (wheels.yml), then publishes the 15 platform packages and
+# @tracepanel/agent, which depends on them.
+#
+# npm's trusted publishing signs the upload: each package names this repository, npm.yml and the environment npm.
+# A package must exist before it can trust a workflow, so the first release publishes with an NPM_TOKEN secret; npm
+# uses the token when it is set and trusted publishing when it isn't. Remove the secret once every package trusts
+# this workflow.
+on:
+  push:
+    tags: ["[0-9]+.[0-9]+.[0-9]+*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    # The tag names the version in Cargo.toml (and pyproject.toml): 0.0.1a1 is 0.0.1-alpha.1 on npm.
+    name: The tag is the version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.3.0
+
+      - name: A tag, and the same version as Cargo.toml
+        run: |
+          test "$GITHUB_REF_TYPE" = tag || { echo "::error::run it on a tag"; exit 1; }
+          uv run --no-project --with packaging python - <<'EOF'
+          import os, sys, tomllib
+          from packaging.version import Version
+          cargo = tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"]
+          if Version(os.environ["GITHUB_REF_NAME"]) != Version(cargo):
+              sys.exit(f"::error::tag {os.environ['GITHUB_REF_NAME']}, Cargo.toml {cargo}: they must agree")
+          EOF
+
+  wheels:
+    needs: version
+    uses: ./.github/workflows/wheels.yml
+
+  publish:
+    name: Publish to npm
+    needs: wheels
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/@tracepanel/agent
+    permissions:
+      # What npm's trusted publishing and provenance sign the upload with, in place of a token.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: Cargo.toml
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: npm with trusted publishing (11.5.1 or later)
+        run: npm install --global npm@^11.5.1
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: npm-packages
+          path: npm-dist
+
+      - name: Publish the platform packages, then @tracepanel/agent
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          # A pre-release goes under its own dist-tag (alpha, beta, rc), so `npm install` keeps the latest release.
+          case "$version" in
+            *-*) tag=$(echo "${version#*-}" | cut -d. -f1) ;;
+            *) tag=latest ;;
+          esac
+          main="npm-dist/tracepanel-agent-$version.tgz"
+          for package in npm-dist/*.tgz; do
+            [ "$package" = "$main" ] && continue
+            npm publish "$package" --access public --tag "$tag" --provenance
+          done
+          npm publish "$main" --access public --tag "$tag" --provenance

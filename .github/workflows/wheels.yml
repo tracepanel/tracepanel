@@ -198,3 +198,78 @@ jobs:
         with:
           name: sdist
           path: dist/*.tar.gz
+
+  npm:
+    # The agent's npm packages, made from these wheels (scripts/npm.py): one per platform with its binary, and
+    # @tracepanel/agent, which depends on them all and runs the one npm installed. npm.yml publishes them.
+    name: npm packages
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.3.0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: wheel-*
+          path: wheels
+
+      - name: Make the packages from the wheels
+        run: uv run --no-project scripts/npm.py wheels npm
+
+      - name: Pack them
+        run: |
+          mkdir npm-dist
+          for package in npm/*/; do (cd "$package" && npm pack --pack-destination ../../npm-dist); done
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: npm-packages
+          path: npm-dist/*.tgz
+
+  smoke-npm:
+    # The npm packages as a user installs them: @tracepanel/agent with this platform's package, the
+    # tracepanel-agent command, and the binary it finds receiving a trace and serving it.
+    name: npm on ${{ matrix.name }}
+    needs: npm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux x86_64, runner: ubuntu-latest, platform: linux-x64-gnu }
+          - { name: macOS arm64, runner: macos-latest, platform: darwin-arm64 }
+          - { name: windows x86_64, runner: windows-latest, platform: win32-x64 }
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: scripts
+
+      - uses: astral-sh/setup-uv@v10.3.0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: npm-packages
+          path: npm-dist
+
+      - name: Install, run the command, receive a trace and serve it
+        shell: bash
+        run: |
+          mkdir try && cd try && npm init -y > /dev/null
+          # The platform packages aren't on the registry before a release: install this one from its tarball.
+          npm install --omit=optional ../npm-dist/tracepanel-agent-[0-9]*.tgz ../npm-dist/tracepanel-agent-${{ matrix.platform }}-*.tgz
+          test "$(node -p "require('@tracepanel/agent').platformPackage()")" = "@tracepanel/agent-${{ matrix.platform }}"
+          npx tracepanel-agent --version
+          export TRACEPANEL_AGENT_BIN="$(node -p "require('@tracepanel/agent').binaryPath()")"
+          cd .. && uv run --no-project --python 3.13 python scripts/smoke.py

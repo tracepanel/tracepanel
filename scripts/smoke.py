@@ -5,6 +5,7 @@ that leaves the analysis to it (tracepanel-go): a hello line, then a length-pref
 """
 
 import json
+import os
 import shutil
 import socket
 import struct
@@ -21,6 +22,9 @@ BINARY = "tracepanel-agent" + (".exe" if sys.platform == "win32" else "")
 
 
 def binary() -> str:
+    # The npm packages' check points it at the binary npm installed.
+    if override := os.environ.get("TRACEPANEL_AGENT_BIN"):
+        return override
     installed = Path(sysconfig.get_path("scripts")) / BINARY
     found = str(installed) if installed.is_file() else shutil.which(BINARY)
     if found is None:
