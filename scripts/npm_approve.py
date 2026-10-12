@@ -25,17 +25,40 @@ from npm import PLATFORMS, SCOPE, semver  # noqa: E402 (the sibling script, foun
 PACKAGES = [f"{SCOPE}/agent-{suffix}" for suffix, *_ in PLATFORMS.values()] + [f"{SCOPE}/agent"]
 # The fields a staged version's id and version may come under in `npm stage list --json`.
 ID_FIELDS = ("id", "stageId", "stage_id")
+# The first npm with `npm stage`.
+NPM_MIN = (11, 15)
 
 
 def npm(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(["npm", *args], capture_output=True, text=True, check=False)  # noqa: S607 (npm on PATH)
 
 
+def failure(result: subprocess.CompletedProcess[str]) -> str:
+    """What npm said went wrong: with --json, the error is a JSON object on stdout, not on stderr."""
+    try:
+        error = json.loads(result.stdout or "{}").get("error") or {}
+    except (json.JSONDecodeError, AttributeError):
+        error = {}
+    parts = [str(error.get(field) or "") for field in ("code", "summary", "detail")]
+    return " ".join(part for part in parts if part) or result.stderr.strip() or result.stdout.strip()
+
+
+def check_npm() -> None:
+    """npm stage needs npm 11.15 or later: an older one answers "Unknown command"."""
+    result = npm("--version")
+    if result.returncode != 0:
+        sys.exit("npm isn't on PATH")
+    version = result.stdout.strip()
+    numbers = tuple(int(part) for part in version.split(".")[:2] if part.isdigit())
+    if numbers < NPM_MIN:
+        sys.exit(f"npm {version} has no `npm stage`; npm 11.15 or later does (Node 26 has it, or npm i -g npm@latest)")
+
+
 def staged(package: str, version: str) -> list[str]:
     """The ids of the package's staged versions that are this release."""
     result = npm("stage", "list", package, "--json")
     if result.returncode != 0:
-        sys.exit(f"npm stage list {package}: {result.stderr.strip()}")
+        sys.exit(f"npm stage list {package}: {failure(result)}")
     entries = json.loads(result.stdout or "[]")
     if isinstance(entries, dict):
         entries = entries.get("objects") or entries.get("stages") or list(entries.values())
@@ -51,12 +74,13 @@ def staged(package: str, version: str) -> list[str]:
 
 def approve(stage_id: str, code: str) -> tuple[bool, str]:
     result = npm("stage", "approve", stage_id, "--otp", code)
-    return result.returncode == 0, (result.stderr or result.stdout).strip()
+    return result.returncode == 0, failure(result) if result.returncode else result.stdout.strip()
 
 
 def main() -> None:
     if len(sys.argv) != 2:
         sys.exit(__doc__)
+    check_npm()
     version = sys.argv[1] if "-" in sys.argv[1] else semver(sys.argv[1])
     pending = [(package, stage_id) for package in PACKAGES for stage_id in staged(package, version)]
     if not pending:
