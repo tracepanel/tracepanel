@@ -46,6 +46,9 @@
 - The call tree's details pane can be resized: drag its edge, or focus it
   and use the arrow keys. The width is kept, and a double click restores the
   default.
+- The call tree's time breakdown and its filters are one row: a share of
+  the time with rows in the tree (Database, Templates, Cache…) is a filter
+  chip with their count, and Logs, Errors and the other filters follow it.
 
 ### Changed
 
