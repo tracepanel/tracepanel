@@ -2,10 +2,12 @@
 
 [![CI](https://github.com/tracepanel/tracepanel/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/tracepanel/tracepanel/actions/workflows/ci.yml)
 
-**See what your app does on every request.** Tracepanel is a debug toolbar for
-Python web apps. It traces every request, query, task and error on your
-machine. It finds N+1 queries, duplicate queries and slow SQL, and names the
-line of code to fix.
+**See what your app does on every request.** Tracepanel collects the traces
+and logs of your app on your machine. Every request, background job and command
+comes with its SQL queries, log lines and errors. Tracepanel finds N+1 queries,
+duplicate queries and slow SQL, and names the line of code to fix.
+
+The first SDK is for Python: Django, FastAPI and Flask.
 
 It runs while you develop. Nothing leaves your machine.
 
@@ -37,6 +39,11 @@ and logs.
 The console at `/__tracepanel__/` covers the whole app. It lists HTTP
 endpoints, GraphQL operations, background tasks, commands and WebSockets, with
 charts over time and one search across all of them.
+
+Logs are in the console too, each line linked to the request, job or command
+that wrote it. Search them by level (`level>=warning`), logger (`blog.*`), the
+route, path or user of the request, or any field passed in `extra=`, such as
+`extra.order_id:42`.
 
 A task or a command has no page, so each one prints a summary line in the
 terminal with a link to its trace.
