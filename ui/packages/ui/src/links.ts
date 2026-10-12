@@ -9,8 +9,8 @@ export interface TraceLinks {
   trace?: ((id: string) => string) | undefined;
   /** An issue's page. */
   issue?: ((fingerprint: string, kind: IssueKind) => string) | undefined;
-  /** Every request that ran this statement: the agent's query key (`query:<key>`). */
-  query?: ((key: string) => string) | undefined;
+  /** Every request that made this call: the agent's key for it (`call:<key>`). */
+  call?: ((key: string) => string) | undefined;
   /** This trace's records in the logs list. */
   logs?: ((traceId: string) => string) | undefined;
   /** Open them in a new tab: the panel lives inside someone's page, the console does not. */

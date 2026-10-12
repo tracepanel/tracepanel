@@ -94,37 +94,24 @@ pub(crate) fn marks(count: usize) -> String {
     vec!["?"; count].join(", ")
 }
 
-/// One of the console's aggregated lists (Database, HTTP calls, Redis, Cache): a table of calls, one row per span,
-/// grouped by `key`, with `columns` for what names a group.
-pub(crate) struct Aggregate {
-    pub(crate) table: &'static str,
-    pub(crate) key: &'static str,
-    pub(crate) columns: &'static str,
-}
-
-/// The groups matching `query`, heaviest first, each with the fields every list has: `key`, `calls`, `traces`,
-/// `errors`, `total`, `slowest`, `last_seen`, `most_per_trace` (the most in one trace), `origin` (the most common
-/// line of code) and the latest call (`sample_trace`, `sample_span`), which the console opens.
+/// The calls matching `query` grouped by `key`, heaviest first: `columns` for what names a group, then the fields
+/// every group has: `calls`, `traces`, `errors`, `total`, `slowest`, `last_seen`, `most_per_trace` (the most in one
+/// trace), `origin` (the most common line of code) and the latest call (`sample_trace`, `sample_span`), which the
+/// console opens.
 pub(crate) fn aggregate(
     db: &Connection,
-    of: &Aggregate,
+    columns: &str,
     query: &str,
-    search: &search::Schema,
     limit: i64,
 ) -> Result<Vec<serde_json::Map<String, Value>>, ReadError> {
-    let Aggregate {
-        table,
-        key,
-        columns,
-    } = of;
-    let (condition, mut params) = search::compile_where(query, search)?;
+    let (condition, mut params) = search::compile_where(query, &CALLS_SEARCH)?;
     params.push(Sql::Integer(limit));
     let rows = objects(
         db,
         &format!(
-            "SELECT {key} AS key, {columns}, COUNT(*) AS calls, COUNT(DISTINCT trace_id) AS traces, \
+            "SELECT key, {columns}, COUNT(*) AS calls, COUNT(DISTINCT trace_id) AS traces, \
              SUM(error) AS errors, SUM(duration) AS total, MAX(duration) AS slowest, MAX(start) AS last_seen \
-             FROM {table} WHERE {condition} GROUP BY {key} ORDER BY total DESC LIMIT ?"
+             FROM calls WHERE {condition} GROUP BY key ORDER BY total DESC LIMIT ?"
         ),
         params,
     )?;
@@ -140,15 +127,15 @@ pub(crate) fn aggregate(
     let text_of =
         |row: &serde_json::Map<String, Value>| row["key"].as_str().unwrap_or("").to_owned();
     let per_trace: HashMap<String, i64> = by_key(&format!(
-        "SELECT key, MAX(n) AS most FROM (SELECT {key} AS key, trace_id, COUNT(*) AS n FROM {table} \
-         WHERE {key} IN ({marks}) GROUP BY {key}, trace_id) GROUP BY key"
+        "SELECT key, MAX(n) AS most FROM (SELECT key, trace_id, COUNT(*) AS n FROM calls \
+         WHERE key IN ({marks}) GROUP BY key, trace_id) GROUP BY key"
     ))?
     .into_iter()
     .map(|row| (text_of(&row), row["most"].as_i64().unwrap_or(1)))
     .collect();
     let mut origins: HashMap<String, Vec<String>> = HashMap::new();
     for row in by_key(&format!(
-        "SELECT {key} AS key, origin FROM {table} WHERE {key} IN ({marks}) AND origin IS NOT NULL"
+        "SELECT key, origin FROM calls WHERE key IN ({marks}) AND origin IS NOT NULL"
     ))? {
         origins
             .entry(text_of(&row))
@@ -157,10 +144,15 @@ pub(crate) fn aggregate(
     }
     // The latest call of each group: the console opens it (and explains it, for SQL).
     let samples: HashMap<String, (Value, Value)> = by_key(&format!(
-        "SELECT {key} AS key, trace_id, span_id, MAX(start) FROM {table} WHERE {key} IN ({marks}) GROUP BY {key}"
+        "SELECT key, trace_id, span_id, MAX(start) FROM calls WHERE key IN ({marks}) GROUP BY key"
     ))?
     .into_iter()
-    .map(|row| (text_of(&row), (row["trace_id"].clone(), row["span_id"].clone())))
+    .map(|row| {
+        (
+            text_of(&row),
+            (row["trace_id"].clone(), row["span_id"].clone()),
+        )
+    })
     .collect();
     Ok(rows
         .into_iter()
@@ -345,10 +337,9 @@ impl Reader {
         Ok(serde_json::json!({
             "route": distinct(&format!("SELECT DISTINCT route FROM traces WHERE route != '' AND {traces} ORDER BY 1"))?,
             "logger": distinct(&format!("SELECT DISTINCT logger FROM logs WHERE {of_trace} ORDER BY 1"))?,
-            "db": distinct(&format!("SELECT DISTINCT alias FROM sql WHERE {of_trace} ORDER BY 1"))?,
-            "host": distinct(&format!("SELECT DISTINCT host FROM calls WHERE {of_trace} ORDER BY 1"))?,
-            "redis": distinct(&format!("SELECT DISTINCT alias FROM redis WHERE {of_trace} ORDER BY 1"))?,
-            "cache": distinct(&format!("SELECT DISTINCT alias FROM cache_calls WHERE {of_trace} ORDER BY 1"))?,
+            "db": distinct(&format!("SELECT DISTINCT target FROM calls WHERE system = 'sql' AND {of_trace} ORDER BY 1"))?,
+            "targets": by_system(&db, "target", of_trace, service)?,
+            "ops": by_system(&db, "op", of_trace, service)?,
             "task": distinct(&format!("SELECT DISTINCT name FROM traces WHERE kind = 'task' AND {traces} ORDER BY 1"))?,
             "job": distinct(&format!("SELECT DISTINCT name FROM traces WHERE kind = 'command' AND {traces} ORDER BY 1"))?,
             "queue": distinct(&format!(
@@ -621,81 +612,22 @@ impl Reader {
         Ok(Page { items, next })
     }
 
-    /// SQL statements aggregated across stored traces, heaviest first.
-    pub fn list_queries(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
+    /// Calls to every system (or one, `system:` in the query) aggregated per key, heaviest first: the fields
+    /// every list has, what names the group (system, family, target, op, template, name), and the extras some
+    /// systems have (statement and vendor for SQL, hits and misses for a cache, via for Redis), null elsewhere.
+    pub fn list_calls(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
         let db = self.connect()?;
         let rows = aggregate(
             &db,
-            &Aggregate {
-                table: "sql",
-                key: "fp",
-                columns: "fp, alias, MAX(vendor) AS vendor, statement, name",
-            },
+            "MAX(system) AS system, MAX(family) AS family, MAX(target) AS target, MAX(op) AS op, \
+             MAX(template) AS template, MAX(name) AS name, MAX(statement) AS statement, \
+                          MAX(vendor) AS vendor, MAX(via) AS via, \
+                          CASE WHEN MAX(family) = 'cache' THEN COALESCE(SUM(hit = 1), 0) END AS hits, \
+                          CASE WHEN MAX(family) = 'cache' THEN COALESCE(SUM(hit = 0), 0) END AS misses",
             query,
-            &QUERY_SEARCH,
             limit,
         )?;
-        Ok(rows
-            .into_iter()
-            .map(|mut row| {
-                if row["vendor"].is_null() {
-                    row.insert("vendor".into(), Value::from(""));
-                }
-                Value::Object(row)
-            })
-            .collect())
-    }
-
-    /// Outgoing HTTP calls aggregated per endpoint (method, host, path template), heaviest first.
-    pub fn list_calls(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
-        let db = self.connect()?;
-        let aggregate_of = Aggregate {
-            table: "calls",
-            key: "key",
-            columns: "method, host, template",
-        };
-        Ok(objects_of(aggregate(
-            &db,
-            &aggregate_of,
-            query,
-            &CALL_SEARCH,
-            limit,
-        )?))
-    }
-
-    /// Redis commands aggregated per client alias, command, key template and `via`, heaviest first.
-    pub fn list_redis(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
-        let db = self.connect()?;
-        let aggregate_of = Aggregate {
-            table: "redis",
-            key: "key",
-            columns: "alias, command, template, via",
-        };
-        Ok(objects_of(aggregate(
-            &db,
-            &aggregate_of,
-            query,
-            &REDIS_SEARCH,
-            limit,
-        )?))
-    }
-
-    /// Cache operations aggregated per cache alias, op and key template, heaviest first; hits and misses of the gets.
-    pub fn list_cache(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
-        let db = self.connect()?;
-        let aggregate_of = Aggregate {
-            table: "cache_calls",
-            key: "key",
-            columns: "alias, MAX(system) AS system, op, template, \
-                      COALESCE(SUM(hit = 1), 0) AS hits, COALESCE(SUM(hit = 0), 0) AS misses",
-        };
-        Ok(objects_of(aggregate(
-            &db,
-            &aggregate_of,
-            query,
-            &CACHE_SEARCH,
-            limit,
-        )?))
+        Ok(objects_of(rows))
     }
 
     /// Newest first; `before` is the `start` of the last row of the previous page.
@@ -844,17 +776,23 @@ impl Reader {
             [service],
             |row| row.get(0),
         )?;
-        // Whether a table of calls has rows (of the app's traces): the console shows that page only then.
-        let any = |table: &str| -> rusqlite::Result<bool> {
-            db.query_row(
-                &format!(
-                    "SELECT EXISTS (SELECT 1 FROM {table} WHERE ?1 IS NULL OR trace_id IN \
-                     (SELECT id FROM traces WHERE service = ?1))"
-                ),
-                [service],
-                |row| row.get(0),
-            )
+        // The systems with operations (of the app's traces), each with its family: the console lists a page for
+        // each, in the families' order, then by name.
+        let mut systems: Vec<(String, String)> = {
+            let mut statement = db.prepare(
+                "SELECT DISTINCT system, family FROM calls WHERE ?1 IS NULL OR trace_id IN \
+                 (SELECT id FROM traces WHERE service = ?1)",
+            )?;
+            let rows = statement.query_map([service], |row| Ok((row.get(0)?, row.get(1)?)))?;
+            rows.collect::<rusqlite::Result<_>>()?
         };
+        let rank = |family: &str| {
+            tracepanel_analysis::calls::FAMILIES
+                .iter()
+                .position(|known| *known == family)
+                .unwrap_or(usize::MAX)
+        };
+        systems.sort_by(|(a, af), (b, bf)| rank(af).cmp(&rank(bf)).then_with(|| a.cmp(b)));
         let count = |map: &HashMap<String, i64>, key: &str| map.get(key).copied().unwrap_or(0);
         let errors = count(&kinds, "error");
         Ok(serde_json::json!({
@@ -867,13 +805,51 @@ impl Reader {
                 "tasks": count(&traces, "task"),
                 "websockets": count(&traces, "websocket"),
                 "jobs": count(&traces, "command"),
-                // Outgoing HTTP calls, Redis commands and cache calls were recorded: the console shows their pages.
-                "calls": any("calls")?,
-                "redis": any("redis")?,
-                "cache": any("cache_calls")?,
+                "systems": systems
+                    .iter()
+                    .map(|(system, family)| {
+                        serde_json::json!({
+                            "system": system,
+                            "family": family,
+                            "label": tracepanel_analysis::calls::display_name(system),
+                        })
+                    })
+                    .collect::<Vec<_>>(),
             },
         }))
     }
+}
+
+/// One column of each system's operations, its distinct values for the console's filters: the targets (databases,
+/// instances, hosts, topics) or the operations (SELECT, GET, find, publish).
+fn by_system(
+    db: &Connection,
+    column: &str,
+    of_trace: &str,
+    service: &str,
+) -> rusqlite::Result<Value> {
+    let mut statement = db.prepare(&format!(
+        "SELECT DISTINCT system, {column} FROM calls WHERE {column} != '' AND {of_trace} ORDER BY 1, 2"
+    ))?;
+    let params: Vec<&dyn rusqlite::ToSql> = if statement.parameter_count() == 0 {
+        vec![]
+    } else {
+        vec![&service]
+    };
+    let mut by_system = serde_json::Map::new();
+    let rows = statement.query_map(params.as_slice(), |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+    })?;
+    for row in rows {
+        let (system, target) = row?;
+        by_system
+            .entry(system)
+            .or_insert_with(|| Value::Array(Vec::new()))
+            .as_array_mut()
+            .expect("an array")
+            .push(Value::from(target));
+    }
+    Ok(Value::Object(by_system))
 }
 
 /// What runs an app, as the SDKs label it for the panel: "Python 3.12 · Django 6.0", "Go 1.27".

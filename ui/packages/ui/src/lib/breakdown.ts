@@ -1,8 +1,20 @@
 // Where a trace's time went, per category: plain data, no React; the console's call tree and the page widget both
 // draw from it.
 import type { Span, Trace } from "../types";
+import { DATASTORES, MESSAGING, RPC } from "./systems";
 
-export type Category = "django" | "view" | "code" | "template" | "sql" | "redis" | "cache" | "http" | "mail";
+export type Category =
+  | "django"
+  | "view"
+  | "code"
+  | "template"
+  | "sql"
+  | "redis"
+  | "cache"
+  | "datastore"
+  | "messaging"
+  | "http"
+  | "mail";
 
 export const CATEGORY_LABELS: Record<Category, string> = {
   django: "Framework & middleware",
@@ -12,6 +24,8 @@ export const CATEGORY_LABELS: Record<Category, string> = {
   sql: "Database",
   redis: "Redis",
   cache: "Cache",
+  datastore: "Datastores",
+  messaging: "Messaging",
   http: "External calls",
   mail: "Email",
 };
@@ -21,6 +35,9 @@ const BY_KIND: Record<string, Category> = {
   redis: "redis",
   cache: "cache",
   "http.client": "http",
+  ...Object.fromEntries(RPC.map((kind) => [kind, "http" as const])),
+  ...Object.fromEntries(DATASTORES.map((kind) => [kind, "datastore" as const])),
+  ...Object.fromEntries(MESSAGING.map((kind) => [kind, "messaging" as const])),
   mail: "mail",
   template: "template",
   view: "view",

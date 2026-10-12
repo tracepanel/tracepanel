@@ -10,8 +10,10 @@ import {
   DropdownMenuTrigger,
 } from "@tracepanel/ui/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@tracepanel/ui/components/ui/tooltip";
+import { type Family, systemOfPage } from "@tracepanel/ui/lib/systems";
 import { cn, rem } from "@tracepanel/ui/lib/utils";
 import {
+  ArrowLeftRightIcon,
   ArrowUpRightIcon,
   BracesIcon,
   BugIcon,
@@ -21,6 +23,7 @@ import {
   ChevronsUpDownIcon,
   CircleAlertIcon,
   DatabaseIcon,
+  DatabaseZapIcon,
   KeyRoundIcon,
   LayersIcon,
   ListChecksIcon,
@@ -32,13 +35,14 @@ import {
   RouteIcon,
   ScrollTextIcon,
   SearchIcon,
+  SendIcon,
   SunIcon,
   TerminalIcon,
   Trash2Icon,
   ZapIcon,
 } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
-import type { Section } from "./routes";
+import { callsSection, type Section } from "./routes";
 import type { App } from "./scope";
 import { type ThemeChoice, useTheme } from "./theme";
 
@@ -68,10 +72,7 @@ export const NAV_GROUPS: { title: string | null; items: NavItem[] }[] = [
     // The map of what the app talks to first, then the queries, the most looked-at data; emails last.
     items: [
       { section: "services", label: "Services", icon: NetworkIcon },
-      { section: "queries", label: "Database", icon: DatabaseIcon },
-      { section: "redis", label: "Redis", icon: KeyRoundIcon },
-      { section: "cache", label: "Cache", icon: ZapIcon },
-      { section: "calls", label: "HTTP calls", icon: ArrowUpRightIcon },
+      // Then a page per system the app calls (systemItems): the database, Redis, MongoDB, HTTP calls…
       { section: "logs", label: "Logs", icon: ScrollTextIcon },
       { section: "mails", label: "Emails", icon: MailIcon },
     ],
@@ -89,13 +90,41 @@ export const NAV_GROUPS: { title: string | null; items: NavItem[] }[] = [
 export const NAV: NavItem[] = NAV_GROUPS.flatMap((group) => group.items);
 
 /** The sections shown only once there is something in them; HTTP always (it is where a project starts). */
-const OPTIONAL = ["graphql", "tasks", "websockets", "jobs", "redis", "cache", "calls"] as const;
+const OPTIONAL = ["graphql", "tasks", "websockets", "jobs"] as const;
 
-/** Entry points with traces; Redis, Cache and HTTP calls once the app used them. */
+/** Entry points with traces, and a page for each system the app called. */
 export function visibleSections(counts: Counts | undefined): Set<Section> {
   const sections = counts?.sections;
   const hidden = new Set<Section>(OPTIONAL.filter((section) => sections && !sections[section]));
-  return new Set(NAV.map((item) => item.section).filter((section) => !hidden.has(section)));
+  const shown = NAV.map((item) => item.section).filter((section) => !hidden.has(section));
+  return new Set([...shown, ...systemItems(counts).map((item) => item.section)]);
+}
+
+/** A system's icon, by its family: the database, a key–value store, a cache, a datastore, a broker, RPC, HTTP. */
+const FAMILY_ICONS: Record<Family, LucideIcon> = {
+  sql: DatabaseIcon,
+  redis: KeyRoundIcon,
+  cache: ZapIcon,
+  datastore: DatabaseZapIcon,
+  messaging: SendIcon,
+  rpc: ArrowLeftRightIcon,
+  http: ArrowUpRightIcon,
+};
+
+/** A Data item for each system the store has operations of, in the agent's order (families, then names). */
+function systemItems(counts: Counts | undefined): NavItem[] {
+  return (counts?.sections.systems ?? []).map(({ system, family, label }) => ({
+    section: callsSection(system),
+    label: systemOfPage(system, family, label).label,
+    icon: FAMILY_ICONS[family],
+  }));
+}
+
+/** A group's items, the Data group with the systems after Services. */
+function itemsOf(group: (typeof NAV_GROUPS)[number], counts: Counts | undefined): NavItem[] {
+  if (group.title !== "Data") return group.items;
+  const [first, ...rest] = group.items;
+  return [...(first ? [first] : []), ...systemItems(counts), ...rest];
 }
 
 export function Sidebar({
@@ -138,7 +167,7 @@ export function Sidebar({
         {NAV_GROUPS.map((group, index) => (
           <div key={group.items[0]?.section} className="grid gap-1">
             <GroupTitle title={group.title} rail={rail} divider={index > 0} />
-            {group.items
+            {itemsOf(group, counts)
               .filter((entry) => visible.has(entry.section))
               .map((entry) => (
                 <NavLink

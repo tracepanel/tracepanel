@@ -93,28 +93,19 @@ pub fn query_fingerprint(statement: &str, alias: &str) -> String {
     short_sha1(&format!("{alias}|{statement}"))
 }
 
-/// An outgoing HTTP endpoint's id, over "METHOD host template" (`call:<key>` in search).
-pub fn call_key(method: &str, host: &str, template: &str) -> String {
-    short_sha1(&format!("{method} {host}{template}"))
-}
-
-/// A Redis command's id, over "redis alias COMMAND template via" (`redis_call:<key>` in search): the same command
-/// made directly and under a cache operation are two rows.
-pub fn redis_key(alias: &str, command: &str, template: &str, via: &str) -> String {
-    short_sha1(&format!("redis {alias} {command} {template} {via}"))
-}
-
-/// A cache operation's id, over "cache alias op template" (`cache_call:<key>` in search).
-pub fn cache_key(alias: &str, op: &str, template: &str) -> String {
-    short_sha1(&format!("cache {alias} {op} {template}"))
-}
-
-/// A statement's verb, as the console filters it (`op:select`): its first word, upper case.
-pub(crate) fn sql_op(statement: &str) -> String {
-    statement
-        .split_whitespace()
-        .next()
-        .unwrap_or("SQL")
-        .trim_start_matches('(')
-        .to_uppercase()
+/// An operation's id (`op:<key>` in search), the group a list of operations shows as one row. SQL's is its
+/// statement's fingerprint key (`query:<key>`); every other system's is over "system|target|op|template|via": the same
+/// Redis command made directly and under a cache operation are two rows.
+pub fn call_key(operation: &Operation) -> String {
+    if operation.family == "sql" {
+        return query_fingerprint(&operation.template, &operation.target);
+    }
+    short_sha1(&format!(
+        "{}|{}|{}|{}|{}",
+        operation.system,
+        operation.target,
+        operation.op,
+        operation.template,
+        operation.via.unwrap_or_default()
+    ))
 }

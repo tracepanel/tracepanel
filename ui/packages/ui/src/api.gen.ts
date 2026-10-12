@@ -102,23 +102,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/queries": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** SQL statements aggregated across stored traces, heaviest first. */
-        get: operations["listQueries"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/calls": {
         parameters: {
             query?: never;
@@ -126,42 +109,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Outgoing HTTP calls aggregated per endpoint (method, host, path template) across stored traces, heaviest first. */
+        /** Calls the app made to other systems (SQL, Redis, cache, HTTP, a datastore, a broker, an RPC system) aggregated per key across stored traces, heaviest first. One list for every system; `system` narrows it to one, as `system:` in q does. */
         get: operations["listCalls"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/redis": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Redis commands aggregated per client alias, command and key template across stored traces, heaviest first. */
-        get: operations["listRedis"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/cache": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Cache operations (a cache API's, such as Django's) aggregated per alias, op and key template, heaviest first. */
-        get: operations["listCache"];
         put?: never;
         post?: never;
         delete?: never;
@@ -605,118 +554,46 @@ export interface components {
             path: string | null;
             trace_name: string;
         };
-        QueryRow: {
-            /** @description Statement id, as fp (search traces with query:<key>). */
+        CallRow: {
+            /** @description Call id (search traces with call:<key>; for SQL also query:<key>). */
             key: string;
-            /** @description Statement id (search with query:<fp>). */
-            fp: string;
-            /** @description Database alias. */
-            alias: string;
-            /** @description sqlite, postgresql, mysql… */
-            vendor: string;
-            /** @description Normalized SQL with %s placeholders. */
-            statement: string;
+            /** @description What the console lists it under: sql, redis, cache, http, a known datastore, broker or RPC kind (mongodb, kafka, grpc…), or the system's own name for any other (neo4j, nats, thrift). */
+            system: string;
+            /** @enum {string} */
+            family: "sql" | "redis" | "cache" | "datastore" | "messaging" | "rpc" | "http";
+            /** @description Where it went: a database alias, an instance, a host, a topic, an RPC service. */
+            target: string;
+            /** @description The operation: SELECT, GET, get, POST, find, publish, an RPC method. */
+            op: string;
+            /** @description What its repeats share: the SQL fingerprint, a key or path with ids as {id}, a collection. */
+            template: string;
+            /** @description The span's name. */
             name: string;
             calls: number;
             traces: number;
-            /** @description Calls that failed. */
+            /** @description Operations that failed. */
             errors: number;
             total: components["schemas"]["Duration"];
             slowest: components["schemas"]["Duration"];
             last_seen: components["schemas"]["Time"];
-            /** @description The most calls in one trace. */
+            /** @description The most in one trace. */
             most_per_trace: number;
-            /** @description The most common line of code making the call. */
+            /** @description The most common line of code making it. */
             origin: string | null;
-            /** @description The latest call's trace. */
+            /** @description The latest one's trace. */
             sample_trace: string;
-            /** @description The latest call's span. */
+            /** @description The latest one's span. */
             sample_span: string;
-        };
-        CallRow: {
-            /** @description Endpoint id (search traces with call:<key>). */
-            key: string;
-            /** @description GET, POST… */
-            method: string;
-            host: string;
-            /** @description Path with ids as {id}: /users/{id}. */
-            template: string;
-            calls: number;
-            traces: number;
-            /** @description Calls that failed or answered 400 or more. */
-            errors: number;
-            total: components["schemas"]["Duration"];
-            slowest: components["schemas"]["Duration"];
-            last_seen: components["schemas"]["Time"];
-            /** @description The most calls in one trace. */
-            most_per_trace: number;
-            /** @description The most common line of code making the call. */
-            origin: string | null;
-            /** @description The latest call's trace. */
-            sample_trace: string;
-            /** @description The latest call's span. */
-            sample_span: string;
-        };
-        RedisRow: {
-            /** @description Command id (search traces with redis_call:<key>). */
-            key: string;
-            /** @description The client's alias: redis, redis/1. */
-            alias: string;
-            /** @description GET, HGETALL, PIPELINE… */
-            command: string;
-            /** @description Key with ids as {id}: user:{id}; empty without a key. */
-            template: string;
-            /**
-             * @description Why the command ran: the app's own call, or under a cache operation or a task enqueue.
-             * @enum {string}
-             */
-            via: "direct" | "cache" | "task";
-            calls: number;
-            traces: number;
-            /** @description Calls that failed. */
-            errors: number;
-            total: components["schemas"]["Duration"];
-            slowest: components["schemas"]["Duration"];
-            last_seen: components["schemas"]["Time"];
-            /** @description The most calls in one trace. */
-            most_per_trace: number;
-            /** @description The most common line of code making the call. */
-            origin: string | null;
-            /** @description The latest call's trace. */
-            sample_trace: string;
-            /** @description The latest call's span. */
-            sample_span: string;
-        };
-        CacheRow: {
-            /** @description Operation id (search traces with cache_call:<key>). */
-            key: string;
-            /** @description Cache alias. */
-            alias: string;
-            /** @description The cache's backend: redis, memcached, locmem… */
-            system: string | null;
-            /** @description get, set, get_many… */
-            op: string;
-            /** @description Key with ids as {id}; empty for an operation on several keys. */
-            template: string;
-            /** @description Gets that found the key. */
-            hits: number;
-            /** @description Gets that didn't. */
-            misses: number;
-            calls: number;
-            traces: number;
-            /** @description Calls that failed. */
-            errors: number;
-            total: components["schemas"]["Duration"];
-            slowest: components["schemas"]["Duration"];
-            last_seen: components["schemas"]["Time"];
-            /** @description The most calls in one trace. */
-            most_per_trace: number;
-            /** @description The most common line of code making the call. */
-            origin: string | null;
-            /** @description The latest call's trace. */
-            sample_trace: string;
-            /** @description The latest call's span. */
-            sample_span: string;
+            /** @description The operation in full: the SQL statement, the command with its key, the URL. */
+            statement: string | null;
+            /** @description SQL: the database; a cache: its backend. */
+            vendor: string | null;
+            /** @description A cache: gets that found their key. */
+            hits: number | null;
+            /** @description A cache: gets that didn't. */
+            misses: number | null;
+            /** @description Redis: direct (the app's call), cache or task (sent for one). */
+            via: string | null;
         };
         ExplainPlan: {
             vendor: string;
@@ -855,12 +732,14 @@ export interface components {
                 websockets: number;
                 /** @description Management commands and tracepanel.trace() blocks. */
                 jobs: number;
-                /** @description Outgoing HTTP calls were recorded; the console shows its HTTP calls page. */
-                calls: boolean;
-                /** @description Redis commands were recorded; the console shows its Redis page. */
-                redis: boolean;
-                /** @description Cache operations were recorded; the console shows its Cache page. */
-                cache: boolean;
+                /** @description The systems with operations, by family then name: the console lists a page for each. */
+                systems: {
+                    system: string;
+                    /** @description Its name in the console: MongoDB, NATS, Google Pub/Sub, or the system's own. */
+                    label: string;
+                    /** @enum {string} */
+                    family: "sql" | "redis" | "cache" | "datastore" | "messaging" | "rpc" | "http";
+                }[];
             };
         };
         KnownValues: {
@@ -874,12 +753,14 @@ export interface components {
             logger: string[];
             /** @description Database aliases. */
             db: string[];
-            /** @description Hosts the app called over HTTP. */
-            host: string[];
-            /** @description Redis client aliases. */
-            redis: string[];
-            /** @description Cache aliases. */
-            cache: string[];
+            /** @description Each system's targets (as /counts names the systems): {"mongodb": ["shop"]}. */
+            targets: {
+                [key: string]: string[];
+            };
+            /** @description Each system's operations (as /counts names the systems): {"mongodb": ["find", "insert"]}. */
+            ops: {
+                [key: string]: string[];
+            };
             /** @description extra.* keys seen in logs. */
             extra: string[];
         };
@@ -897,10 +778,7 @@ export interface components {
             traces: components["schemas"]["SearchFields"];
             logs: components["schemas"]["SearchFields"];
             mails: components["schemas"]["SearchFields"];
-            queries: components["schemas"]["SearchFields"];
             calls: components["schemas"]["SearchFields"];
-            redis: components["schemas"]["SearchFields"];
-            cache: components["schemas"]["SearchFields"];
             endpoints: components["schemas"]["SearchFields"];
             issues: components["schemas"]["SearchFields"];
         };
@@ -1135,8 +1013,11 @@ export interface components {
         span: {
             id: components["schemas"]["trace.schema"]["$defs"]["id"];
             parent_id: components["schemas"]["trace.schema"]["$defs"]["id"] | null;
-            /** @enum {unknown} */
-            kind: "http" | "middleware" | "framework" | "view" | "template" | "sql" | "transaction" | "cache" | "redis" | "mail" | "signal" | "http.client" | "task.enqueue" | "task.run" | "command" | "function" | "event" | "websocket" | "websocket.send" | "channel.send" | "graphql";
+            /**
+             * @description otel is an OpenTelemetry span as its instrumentation recorded it, with otel.span_kind and otel.scope among its attributes: the agent maps it to one of the other kinds before it stores the trace, so the console never returns one.
+             * @enum {unknown}
+             */
+            kind: "http" | "middleware" | "framework" | "view" | "template" | "sql" | "transaction" | "cache" | "redis" | "mail" | "signal" | "http.client" | "task.enqueue" | "task.run" | "command" | "function" | "event" | "websocket" | "websocket.send" | "channel.send" | "graphql" | "mongodb" | "elasticsearch" | "cassandra" | "dynamodb" | "memcached" | "kafka" | "rabbitmq" | "sqs" | "grpc" | "db" | "messaging" | "rpc" | "otel";
             name: string;
             start: components["schemas"]["trace.schema"]["$defs"]["time"];
             duration: components["schemas"]["trace.schema"]["$defs"]["duration"];
@@ -1226,8 +1107,11 @@ export interface components {
                 span: {
                     id: components["schemas"]["trace.schema"]["$defs"]["id"];
                     parent_id: components["schemas"]["trace.schema"]["$defs"]["id"] | null;
-                    /** @enum {unknown} */
-                    kind: "http" | "middleware" | "framework" | "view" | "template" | "sql" | "transaction" | "cache" | "redis" | "mail" | "signal" | "http.client" | "task.enqueue" | "task.run" | "command" | "function" | "event" | "websocket" | "websocket.send" | "channel.send" | "graphql";
+                    /**
+                     * @description otel is an OpenTelemetry span as its instrumentation recorded it, with otel.span_kind and otel.scope among its attributes: the agent maps it to one of the other kinds before it stores the trace, so the console never returns one.
+                     * @enum {unknown}
+                     */
+                    kind: "http" | "middleware" | "framework" | "view" | "template" | "sql" | "transaction" | "cache" | "redis" | "mail" | "signal" | "http.client" | "task.enqueue" | "task.run" | "command" | "function" | "event" | "websocket" | "websocket.send" | "channel.send" | "graphql" | "mongodb" | "elasticsearch" | "cassandra" | "dynamodb" | "memcached" | "kafka" | "rabbitmq" | "sqs" | "grpc" | "db" | "messaging" | "rpc" | "otel";
                     name: string;
                     start: components["schemas"]["trace.schema"]["$defs"]["time"];
                     duration: components["schemas"]["trace.schema"]["$defs"]["duration"];
@@ -1518,39 +1402,14 @@ export interface operations {
             400: components["responses"]["BadSearch"];
         };
     };
-    listQueries: {
-        parameters: {
-            query?: {
-                /** @description Search query: free text plus key:value filters, e.g. route:/api/* status>=500 "timed out". */
-                q?: components["parameters"]["q"];
-                limit?: components["parameters"]["limit"];
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Statements. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        queries: components["schemas"]["QueryRow"][];
-                    };
-                };
-            };
-            400: components["responses"]["BadSearch"];
-        };
-    };
     listCalls: {
         parameters: {
             query?: {
                 /** @description Search query: free text plus key:value filters, e.g. route:/api/* status>=500 "timed out". */
                 q?: components["parameters"]["q"];
                 limit?: components["parameters"]["limit"];
+                /** @description One system, as /counts lists them: sql, redis, cache, http, mongodb, kafka, grpc, neo4j… */
+                system?: string;
             };
             header?: never;
             path?: never;
@@ -1558,7 +1417,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Endpoints. */
+            /** @description Calls. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1566,60 +1425,6 @@ export interface operations {
                 content: {
                     "application/json": {
                         calls: components["schemas"]["CallRow"][];
-                    };
-                };
-            };
-            400: components["responses"]["BadSearch"];
-        };
-    };
-    listRedis: {
-        parameters: {
-            query?: {
-                /** @description Search query: free text plus key:value filters, e.g. route:/api/* status>=500 "timed out". */
-                q?: components["parameters"]["q"];
-                limit?: components["parameters"]["limit"];
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Commands. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        redis: components["schemas"]["RedisRow"][];
-                    };
-                };
-            };
-            400: components["responses"]["BadSearch"];
-        };
-    };
-    listCache: {
-        parameters: {
-            query?: {
-                /** @description Search query: free text plus key:value filters, e.g. route:/api/* status>=500 "timed out". */
-                q?: components["parameters"]["q"];
-                limit?: components["parameters"]["limit"];
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Cache operations. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        cache: components["schemas"]["CacheRow"][];
                     };
                 };
             };

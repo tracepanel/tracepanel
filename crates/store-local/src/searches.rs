@@ -93,37 +93,10 @@ pub(crate) fn trace_search() -> search::Schema {
             ("method", search::upper_text("method")),
             ("has", Box::new(has)),
             (
-                "query",
-                Box::new(|term| {
-                    Ok((
-                        "id IN (SELECT trace_id FROM sql WHERE fp = ?)".into(),
-                        vec![Sql::Text(term.value.clone())],
-                    ))
-                }),
-            ),
-            (
                 "call",
                 Box::new(|term| {
                     Ok((
                         "id IN (SELECT trace_id FROM calls WHERE key = ?)".into(),
-                        vec![Sql::Text(term.value.clone())],
-                    ))
-                }),
-            ),
-            (
-                "redis_call",
-                Box::new(|term| {
-                    Ok((
-                        "id IN (SELECT trace_id FROM redis WHERE key = ?)".into(),
-                        vec![Sql::Text(term.value.clone())],
-                    ))
-                }),
-            ),
-            (
-                "cache_call",
-                Box::new(|term| {
-                    Ok((
-                        "id IN (SELECT trace_id FROM cache_calls WHERE key = ?)".into(),
                         vec![Sql::Text(term.value.clone())],
                     ))
                 }),
@@ -240,73 +213,28 @@ fn free_text(columns: &'static [&'static str]) -> search::FreeText {
     })
 }
 
-// The four lists of calls (Database, HTTP calls, Redis, Cache) take the same filters: the time, the app, what was
-// called (`db:`, or `host:` for HTTP), the operation (`op:`), and `failed:`. Each also has its own id (`query:`,
-// `call:`, `redis_call:`, `cache_call:`), the one a trace search takes to find the requests that made the call.
-// Redis alone has `via:`: whether the app ran a command itself, or a cache or a task queue did for it.
+// Every list of calls takes the same filters over the `calls` table: the time, the app, the target (`target:`, as
+// `db:` or `host:` too), the operation (`op:`, any case), `failed:`, and the key a trace search links with. The
+// `calls` list takes `system:` and `family:`; Redis's `via:` (whether the app ran a command itself, or a cache or a task
+// queue did for it) works on any. The Database, Redis and Cache lists keep their own spelling of the same fields
+// (`query:`, `redis_call:`, `cache_call:` for the key).
 
-pub(crate) fn query_search() -> search::Schema {
-    search::schema_for(
-        "queries",
-        &[
-            ("query", "fp"),
-            ("db", "alias"),
-            ("since", "start"),
-            ("until", "start"),
-        ],
-        free_text(&["statement"]),
-        vec![
-            (
-                "table",
-                Box::new(|term| {
-                    Ok((
-                        "name LIKE ?".into(),
-                        vec![Sql::Text(format!("% {}", term.value))],
-                    ))
-                }),
-            ),
-            ("op", search::upper_text("op")),
-            ("failed", Box::new(failed)),
-            ("service", of_service("trace_id")),
-        ],
-        vec![],
-    )
-}
-
-pub(crate) static QUERY_SEARCH: std::sync::LazyLock<search::Schema> =
-    std::sync::LazyLock::new(query_search);
-
-pub(crate) fn call_search() -> search::Schema {
+pub(crate) fn calls_search() -> search::Schema {
     search::schema_for(
         "calls",
-        &[("call", "key"), ("since", "start"), ("until", "start")],
-        free_text(&["template", "host"]),
-        vec![
-            ("host", search::text("host")),
-            ("op", search::upper_text("method")),
-            ("method", search::upper_text("method")),
-            ("failed", Box::new(failed)),
-            ("service", of_service("trace_id")),
-        ],
-        vec![],
-    )
-}
-
-pub(crate) static CALL_SEARCH: std::sync::LazyLock<search::Schema> =
-    std::sync::LazyLock::new(call_search);
-
-pub(crate) fn redis_search() -> search::Schema {
-    search::schema_for(
-        "redis",
         &[
-            ("redis_call", "key"),
-            ("db", "alias"),
+            ("system", "system"),
+            ("family", "family"),
+            ("target", "target"),
+            ("db", "target"),
+            ("host", "target"),
+            ("key", "key"),
             ("since", "start"),
             ("until", "start"),
         ],
-        free_text(&["template", "command"]),
+        free_text(&["template", "name", "statement", "target"]),
         vec![
-            ("op", search::upper_text("command")),
+            ("op", lower_text("lower(op)")),
             ("via", lower_text("via")),
             ("failed", Box::new(failed)),
             ("service", of_service("trace_id")),
@@ -315,30 +243,8 @@ pub(crate) fn redis_search() -> search::Schema {
     )
 }
 
-pub(crate) static REDIS_SEARCH: std::sync::LazyLock<search::Schema> =
-    std::sync::LazyLock::new(redis_search);
-
-pub(crate) fn cache_search() -> search::Schema {
-    search::schema_for(
-        "cache",
-        &[
-            ("cache_call", "key"),
-            ("db", "alias"),
-            ("since", "start"),
-            ("until", "start"),
-        ],
-        free_text(&["template", "op"]),
-        vec![
-            ("op", lower_text("op")),
-            ("failed", Box::new(failed)),
-            ("service", of_service("trace_id")),
-        ],
-        vec![],
-    )
-}
-
-pub(crate) static CACHE_SEARCH: std::sync::LazyLock<search::Schema> =
-    std::sync::LazyLock::new(cache_search);
+pub(crate) static CALLS_SEARCH: std::sync::LazyLock<search::Schema> =
+    std::sync::LazyLock::new(calls_search);
 
 pub(crate) fn mail_search() -> search::Schema {
     search::schema_for(

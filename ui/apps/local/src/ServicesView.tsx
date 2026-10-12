@@ -12,15 +12,28 @@ import {
   systemName,
 } from "@tracepanel/ui";
 import { Badge } from "@tracepanel/ui/components/ui/badge";
+import { SQL_VENDORS } from "@tracepanel/ui/lib/systems";
 import type { ReactNode } from "react";
-import { currentPeriod, href, type Route, withPeriod } from "./routes";
+import { callsSection, currentPeriod, href, type Route, withPeriod } from "./routes";
 import { DataTable, Meter, Mono, Td, Th, Tr } from "./ui";
 
-/** Where to look next: the SQL of that database, the traces that used that cache, called that API or broker. */
+/** The page of a service's operations: SQL for every SQL database, the cache's, HTTP calls, a datastore's own. */
+function pageOfService(node: ServiceNode): string | null {
+  return PAGE_OF_KIND[node.kind]?.(node.system) ?? null;
+}
+
+const PAGE_OF_KIND: Partial<Record<ServiceNode["kind"], (system: string) => string>> = {
+  database: (system) => (SQL_VENDORS.has(system) ? "sql" : system),
+  cache: () => "cache",
+  http: (system) => (WEB.has(system) ? "http" : system),
+};
+const WEB = new Set(["http", "https"]);
+
+/** Where to look next: the system's page (its operations to that database, cache or API), else the traces. */
 function target(node: ServiceNode): Route {
   const aliases = node.aliases.join(",");
-  if (node.kind === "database") return { name: "queries", q: aliases ? `db:${aliases}` : "" };
-  if (node.kind === "cache") return { name: "traces", q: aliases ? `cache:${aliases}` : "" };
+  const page = pageOfService(node);
+  if (page) return { name: callsSection(page), q: aliases ? `target:${aliases}` : "" };
   if (node.kind === "mail") return { name: "mails", q: "" };
   // A broker and an HTTP API: the traces that called it (a worker's tasks taking from the broker included).
   return { name: "traces", q: withPeriod(`peer:${node.id}`, currentPeriod()) };

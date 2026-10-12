@@ -48,21 +48,9 @@
       "type": "text",
       "help": "Used this cache alias: cache:sessions"
     },
-    "query": {
-      "type": "text",
-      "help": "Contains this SQL statement (id from Queries)"
-    },
     "call": {
       "type": "text",
-      "help": "Made this outgoing HTTP call (id from HTTP calls)"
-    },
-    "redis_call": {
-      "type": "text",
-      "help": "Ran this Redis command (id from Redis)"
-    },
-    "cache_call": {
-      "type": "text",
-      "help": "Made this cache call (id from Cache)"
+      "help": "Made this call (id from Database, Redis, Cache, HTTP calls or another system's page)"
     },
     "peer": {
       "type": "text",
@@ -151,122 +139,40 @@
       "help": "Logged before: until:5m, until:2026-10-07T14:00"
     }
   },
-  "queries": {
+  "calls": {
+    "system": {
+      "type": "text",
+      "help": "System: system:sql, system:redis, system:mongodb, system:kafka, system:neo4j"
+    },
+    "target": {
+      "type": "text",
+      "help": "Where it went: a database, an instance, a host, a topic: target:api.example.com"
+    },
     "db": {
       "type": "text",
-      "help": "Database alias"
+      "help": "Where it went, as target: db:default"
     },
-    "op": {
-      "type": "text",
-      "help": "Statement verb: op:select, op:insert,update"
-    },
-    "failed": {
-      "type": "text",
-      "help": "Only calls that failed: failed:true"
-    },
-    "table": {
-      "type": "text",
-      "help": "Table the statement reads or writes"
-    },
-    "query": {
-      "type": "text",
-      "help": "Statement id"
-    },
-    "service": {
-      "type": "text",
-      "help": "The app that recorded it (service.name): service:shop"
-    },
-    "since": {
-      "type": "time",
-      "help": "Ran at or after: since:15m"
-    },
-    "until": {
-      "type": "time",
-      "help": "Ran before: until:5m"
-    }
-  },
-  "calls": {
     "host": {
       "type": "text",
-      "help": "Host called: host:api.example.com, * wildcards"
+      "help": "Where it went, as target: host:api.example.com"
     },
     "op": {
       "type": "text",
-      "help": "HTTP method: op:get, op:post"
+      "help": "Operation, any case: op:select, op:get, op:find, op:publish"
     },
     "failed": {
       "type": "text",
-      "help": "Only calls that failed (no answer, or a status of 400 or more): failed:true"
-    },
-    "method": {
-      "type": "text",
-      "help": "HTTP method, as op: method:post"
-    },
-    "call": {
-      "type": "text",
-      "help": "Endpoint id"
-    },
-    "service": {
-      "type": "text",
-      "help": "The app that recorded it (service.name): service:shop"
-    },
-    "since": {
-      "type": "time",
-      "help": "Called at or after: since:15m"
-    },
-    "until": {
-      "type": "time",
-      "help": "Called before: until:5m"
-    }
-  },
-  "redis": {
-    "db": {
-      "type": "text",
-      "help": "Redis client (alias): db:redis, db:redis/1"
-    },
-    "op": {
-      "type": "text",
-      "help": "Command: op:get, op:hgetall,mget"
-    },
-    "failed": {
-      "type": "text",
-      "help": "Only calls that failed: failed:true"
+      "help": "Only operations that failed: failed:true"
     },
     "via": {
       "type": "text",
-      "help": "Why it ran: via:direct (the app's call), via:cache (a cache operation), via:task (a task enqueue)"
+      "help": "Why a Redis command ran: via:direct, via:cache, via:task"
     },
-    "redis_call": {
+    "family": {
       "type": "text",
-      "help": "Command id"
+      "help": "Family: sql, redis, cache, datastore, messaging, rpc, http"
     },
-    "service": {
-      "type": "text",
-      "help": "The app that recorded it (service.name): service:shop"
-    },
-    "since": {
-      "type": "time",
-      "help": "Run at or after: since:15m"
-    },
-    "until": {
-      "type": "time",
-      "help": "Run before: until:5m"
-    }
-  },
-  "cache": {
-    "db": {
-      "type": "text",
-      "help": "Cache alias: db:default, db:sessions"
-    },
-    "op": {
-      "type": "text",
-      "help": "Cache operation: op:get, op:set_many"
-    },
-    "failed": {
-      "type": "text",
-      "help": "Only calls that failed: failed:true"
-    },
-    "cache_call": {
+    "key": {
       "type": "text",
       "help": "Operation id"
     },

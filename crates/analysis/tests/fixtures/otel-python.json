@@ -1,0 +1,224 @@
+[
+ {
+  "case": "python psycopg",
+  "name": "SELECT",
+  "otel.span_kind": "client",
+  "otel.scope": "opentelemetry.instrumentation.psycopg",
+  "status": "UNSET",
+  "attrs": {
+   "db.system": "postgresql",
+   "db.name": "fx",
+   "db.statement": "SELECT %s::int AS n, %s AS s",
+   "db.user": "postgres",
+   "net.peer.name": "localhost",
+   "net.peer.port": 55433,
+   "db.statement.parameters": "(1, 'a')"
+  }
+ },
+ {
+  "case": "python psycopg",
+  "name": "SELECT",
+  "otel.span_kind": "client",
+  "otel.scope": "opentelemetry.instrumentation.psycopg",
+  "status": "UNSET",
+  "attrs": {
+   "db.system": "postgresql",
+   "db.name": "fx",
+   "db.statement": "SELECT * FROM pg_type WHERE typname = %(n)s",
+   "db.user": "postgres",
+   "net.peer.name": "localhost",
+   "net.peer.port": 55433,
+   "db.statement.parameters": "{'n': 'int4'}"
+  }
+ },
+ {
+  "case": "python psycopg2",
+  "name": "SELECT",
+  "otel.span_kind": "client",
+  "otel.scope": "opentelemetry.instrumentation.psycopg2",
+  "status": "UNSET",
+  "attrs": {
+   "db.system": "postgresql",
+   "db.name": "fx",
+   "db.statement": "SELECT %s::int",
+   "db.user": "postgres",
+   "net.peer.name": "localhost",
+   "net.peer.port": 55433,
+   "db.statement.parameters": "(7,)"
+  }
+ },
+ {
+  "case": "python asyncpg",
+  "name": "SELECT",
+  "otel.span_kind": "client",
+  "otel.scope": "opentelemetry.instrumentation.asyncpg",
+  "status": "UNSET",
+  "attrs": {
+   "db.system": "postgresql",
+   "db.name": "fx",
+   "db.user": "postgres",
+   "net.peer.name": "localhost",
+   "net.peer.port": 55433,
+   "net.transport": "ip_tcp",
+   "db.statement": "SELECT $1::int",
+   "db.statement.parameters": "(3,)"
+  }
+ },
+ {
+  "case": "python redis",
+  "name": "SET",
+  "otel.span_kind": "client",
+  "otel.scope": "opentelemetry.instrumentation.redis",
+  "status": "UNSET",
+  "attrs": {
+   "db.statement": "SET ? ?",
+   "db.redis.args_length": 3,
+   "db.system": "redis",
+   "db.redis.database_index": 1,
+   "net.peer.name": "localhost",
+   "net.peer.port": 61739,
+   "net.transport": "ip_tcp"
+  }
+ },
+ {
+  "case": "python redis",
+  "name": "GET",
+  "otel.span_kind": "client",
+  "otel.scope": "opentelemetry.instrumentation.redis",
+  "status": "UNSET",
+  "attrs": {
+   "db.statement": "GET ?",
+   "db.redis.args_length": 2,
+   "db.system": "redis",
+   "db.redis.database_index": 1,
+   "net.peer.name": "localhost",
+   "net.peer.port": 61739,
+   "net.transport": "ip_tcp"
+  }
+ },
+ {
+  "case": "python redis",
+  "name": "GET INCRBY",
+  "otel.span_kind": "client",
+  "otel.scope": "opentelemetry.instrumentation.redis",
+  "status": "UNSET",
+  "attrs": {
+   "db.statement": "GET ?\nINCRBY ? ?",
+   "db.redis.pipeline_length": 2,
+   "db.system": "redis",
+   "db.redis.database_index": 1,
+   "net.peer.name": "localhost",
+   "net.peer.port": 61739,
+   "net.transport": "ip_tcp"
+  }
+ },
+ {
+  "case": "python requests+httpx",
+  "name": "GET",
+  "otel.span_kind": "client",
+  "otel.scope": "opentelemetry.instrumentation.requests",
+  "status": "UNSET",
+  "attrs": {
+   "http.method": "GET",
+   "http.url": "http://REDACTED:REDACTED@127.0.0.1:61738/users/1?token=secret&page=2",
+   "user_agent.original": "python-requests/2.34.2",
+   "http.status_code": 200
+  }
+ },
+ {
+  "case": "python requests+httpx",
+  "name": "GET",
+  "otel.span_kind": "client",
+  "otel.scope": "opentelemetry.instrumentation.requests",
+  "status": "ERROR",
+  "attrs": {
+   "http.method": "GET",
+   "http.url": "http://REDACTED:REDACTED@127.0.0.1:61738/missing",
+   "user_agent.original": "python-requests/2.34.2",
+   "http.status_code": 404
+  }
+ },
+ {
+  "case": "python requests+httpx",
+  "name": "GET",
+  "otel.span_kind": "client",
+  "otel.scope": "opentelemetry.instrumentation.httpx",
+  "status": "UNSET",
+  "attrs": {
+   "http.method": "GET",
+   "http.url": "http://127.0.0.1:61738/users/2",
+   "http.status_code": 200
+  }
+ },
+ {
+  "case": "python grpc",
+  "name": "/grpc.health.v1.Health/Check",
+  "otel.span_kind": "client",
+  "otel.scope": "opentelemetry.instrumentation.grpc",
+  "status": "UNSET",
+  "attrs": {
+   "rpc.system": "grpc",
+   "rpc.grpc.status_code": 0,
+   "rpc.method": "Check",
+   "rpc.service": "grpc.health.v1.Health"
+  }
+ },
+ {
+  "case": "python grpc",
+  "name": "/grpc.health.v1.Health/Check",
+  "otel.span_kind": "client",
+  "otel.scope": "opentelemetry.instrumentation.grpc",
+  "status": "ERROR",
+  "attrs": {
+   "rpc.system": "grpc",
+   "rpc.method": "Check",
+   "rpc.service": "grpc.health.v1.Health",
+   "rpc.grpc.status_code": 5
+  }
+ },
+ {
+  "case": "python pymongo",
+  "name": "shop.insert",
+  "otel.span_kind": "client",
+  "otel.scope": "opentelemetry.instrumentation.pymongo",
+  "status": "UNSET",
+  "attrs": {
+   "db.system": "mongodb",
+   "db.name": "shop",
+   "db.statement": "insert",
+   "db.mongodb.collection": "users",
+   "net.peer.name": "localhost",
+   "net.peer.port": 57017
+  }
+ },
+ {
+  "case": "python pymongo",
+  "name": "shop.find",
+  "otel.span_kind": "client",
+  "otel.scope": "opentelemetry.instrumentation.pymongo",
+  "status": "UNSET",
+  "attrs": {
+   "db.system": "mongodb",
+   "db.name": "shop",
+   "db.statement": "find",
+   "db.mongodb.collection": "users",
+   "net.peer.name": "localhost",
+   "net.peer.port": 57017
+  }
+ },
+ {
+  "case": "python pymongo",
+  "name": "shop.find",
+  "otel.span_kind": "client",
+  "otel.scope": "opentelemetry.instrumentation.pymongo",
+  "status": "UNSET",
+  "attrs": {
+   "db.system": "mongodb",
+   "db.name": "shop",
+   "db.statement": "find",
+   "db.mongodb.collection": "users",
+   "net.peer.name": "localhost",
+   "net.peer.port": 57017
+  }
+ }
+]

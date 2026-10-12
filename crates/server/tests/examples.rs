@@ -150,14 +150,14 @@ async fn the_agent_finds_the_issues_and_the_api_returns_them() {
     assert_eq!(status, StatusCode::NOT_FOUND);
 
     // Outgoing HTTP calls per endpoint, heaviest first: an id makes the endpoint's traces a search.
-    let (status, calls) = get(&router, "/api/calls?q=host:127.0.0.1").await;
+    let (status, calls) = get(&router, "/api/calls?system=http&q=host:127.0.0.1").await;
     assert_eq!(status, StatusCode::OK, "{calls}");
     let rows = calls["calls"].as_array().unwrap();
     let endpoints: Vec<(&str, &str, i64, i64)> = rows
         .iter()
         .map(|row| {
             (
-                row["method"].as_str().unwrap(),
+                row["op"].as_str().unwrap(),
                 row["template"].as_str().unwrap(),
                 row["calls"].as_i64().unwrap(),
                 row["most_per_trace"].as_i64().unwrap(),
@@ -195,18 +195,18 @@ async fn the_agent_finds_the_issues_and_the_api_returns_them() {
         .collect();
     assert_eq!(ids, ["01M4R1ER9RWER0QHV07BJDSZ7B"]);
 
-    let (_, none) = get(&router, "/api/calls?q=host:elsewhere.example").await;
+    let (_, none) = get(&router, "/api/calls?system=http&q=host:elsewhere.example").await;
     assert_eq!(none["calls"], serde_json::json!([]));
 
     // The same filters on every list of calls: the target (host:, db:), op:, failed:.
-    let (status, posts) = get(&router, "/api/calls?q=op:get%20failed:false").await;
+    let (status, posts) = get(&router, "/api/calls?system=http&q=op:get%20failed:false").await;
     assert_eq!(status, StatusCode::OK, "{posts}");
     assert_eq!(posts["calls"].as_array().unwrap().len(), rows.len());
     let (_, failed) = get(&router, "/api/calls?q=failed:true").await;
     assert_eq!(failed["calls"], serde_json::json!([]));
-    let (_, writes) = get(&router, "/api/queries?q=op:insert").await;
+    let (_, writes) = get(&router, "/api/calls?system=sql&q=op:insert").await;
     assert!(
-        writes["queries"]
+        writes["calls"]
             .as_array()
             .unwrap()
             .iter()
@@ -215,15 +215,19 @@ async fn the_agent_finds_the_issues_and_the_api_returns_them() {
     );
 
     // Redis used directly: its commands per key pattern, with why they ran.
-    let (status, redis) = get(&router, "/api/redis?q=db:redis%20op:get%20via:direct").await;
+    let (status, redis) = get(
+        &router,
+        "/api/calls?system=redis&q=db:redis%20op:get%20via:direct",
+    )
+    .await;
     assert_eq!(status, StatusCode::OK, "{redis}");
-    let commands: Vec<(&str, &str, &str, i64, i64)> = redis["redis"]
+    let commands: Vec<(&str, &str, &str, i64, i64)> = redis["calls"]
         .as_array()
         .unwrap()
         .iter()
         .map(|row| {
             (
-                row["command"].as_str().unwrap(),
+                row["op"].as_str().unwrap(),
                 row["template"].as_str().unwrap(),
                 row["via"].as_str().unwrap(),
                 row["calls"].as_i64().unwrap(),
@@ -232,16 +236,16 @@ async fn the_agent_finds_the_issues_and_the_api_returns_them() {
         })
         .collect();
     assert_eq!(commands, [("GET", "likes:{id}", "direct", 4, 4)]);
-    let (_, through_cache) = get(&router, "/api/redis?q=via:cache").await;
-    assert_eq!(through_cache["redis"], serde_json::json!([]));
-    let (status, cache) = get(&router, "/api/cache").await;
+    let (_, through_cache) = get(&router, "/api/calls?system=redis&q=via:cache").await;
+    assert_eq!(through_cache["calls"], serde_json::json!([]));
+    let (status, cache) = get(&router, "/api/calls?system=cache").await;
     assert_eq!(status, StatusCode::OK, "{cache}");
 
     let (status, found) = get(
         &router,
         &format!(
-            "/api/traces?q=redis_call:{}",
-            redis["redis"][0]["key"].as_str().unwrap()
+            "/api/traces?q=call:{}",
+            redis["calls"][0]["key"].as_str().unwrap()
         ),
     )
     .await;
@@ -250,16 +254,258 @@ async fn the_agent_finds_the_issues_and_the_api_returns_them() {
 
     // What the filter menus offer.
     let (_, values) = get(&router, "/api/values").await;
-    assert_eq!(values["host"], serde_json::json!(["127.0.0.1"]));
-    assert_eq!(values["redis"], serde_json::json!(["redis"]));
+    assert_eq!(values["targets"]["http"], serde_json::json!(["127.0.0.1"]));
+    assert_eq!(values["targets"]["redis"], serde_json::json!(["redis"]));
 
     let (status, counts) = get(&router, "/api/counts").await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(counts["sections"]["calls"], true);
-    assert_eq!(counts["sections"]["redis"], true);
+    let systems = |counts: &Value| {
+        counts["sections"]["systems"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|system| system["system"].as_str().unwrap().to_owned())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(systems(&counts), ["sql", "redis", "http"]);
     let (_, other) = get(&router, "/api/counts?service=api").await;
-    assert_eq!(other["sections"]["calls"], false);
-    assert_eq!(other["sections"]["redis"], false);
+    assert_eq!(systems(&other), ["sql"]);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A trace with spans an OpenTelemetry instrumentation recorded, sent as they are (`otel`): the agent maps them, finds
+/// their issues like its SDKs' own, and stores and serves them as ordinary kinds.
+#[tokio::test]
+async fn otel_spans_are_mapped_before_they_are_stored() {
+    let dir = std::env::temp_dir().join(format!("tracepanel-otel-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = tracepanel_store_local::path_in(&dir);
+    let mut store = Store::open(&path).unwrap();
+    let router = tracepanel_server::router(Reader::new(&path), Activity::default());
+
+    // pg through @opentelemetry/instrumentation-pg: three lookups by key, from one line of a Node app.
+    let lookup = |n: i64| {
+        serde_json::json!({
+            "id": format!("01M4PGSPAN{n:016}"), "parent_id": "01M4PGR00T0000000000000000", "kind": "otel",
+            "name": "pg.query:SELECT shop", "start": 1_791_000_000_000_100_i64 + n * 10, "duration": 900,
+            "status": "ok",
+            "attrs": {
+                "otel.span_kind": "client", "otel.scope": "@opentelemetry/instrumentation-pg",
+                "db.system.name": "postgresql", "db.namespace": "shop", "server.address": "localhost",
+                "server.port": 5432, "db.query.text": "SELECT * FROM users WHERE id = $1",
+                "db.postgresql.values": [n.to_string()], "code.origin": "server.js:21 in <anonymous>",
+            },
+        })
+    };
+    let doc = serde_json::json!({
+        "id": "01M4PGTRACE000000000000000", "kind": "http", "name": "GET /orders", "start": 1_791_000_000_000_000_i64,
+        "duration": 5000, "status": "ok",
+        "attrs": {"http.method": "GET", "http.route": "/orders", "http.status_code": 200, "service.name": "shop",
+                  "telemetry.sdk.language": "nodejs"},
+        "spans": [
+            {"id": "01M4PGR00T0000000000000000", "parent_id": null, "kind": "http", "name": "GET /orders",
+             "start": 1_791_000_000_000_000_i64, "duration": 5000, "status": "ok", "attrs": {}},
+            lookup(1), lookup(2), lookup(3),
+        ],
+        "logs": [], "errors": [], "links": [], "issues": [],
+    });
+    let errors: Vec<String> = validator()
+        .iter_errors(&doc)
+        .map(|error| error.to_string())
+        .collect();
+    assert!(errors.is_empty(), "as sent: {errors:?}");
+    let batch = Batch {
+        frame: serde_json::to_vec(&vec![&doc]).unwrap(),
+        max_traces: Some(1000),
+        thresholds: Thresholds::default(),
+    };
+    let mut received = batch.decode().unwrap();
+    for trace in &mut received {
+        tracepanel_analysis::apply(trace, &batch.thresholds);
+    }
+    store.write(&received).unwrap();
+
+    let (status, trace) = get(&router, "/api/traces/01M4PGTRACE000000000000000").await;
+    assert_eq!(status, StatusCode::OK);
+    let errors: Vec<String> = validator()
+        .iter_errors(&trace)
+        .map(|error| error.to_string())
+        .collect();
+    assert!(errors.is_empty(), "as served: {errors:?}");
+    let spans: Vec<(&str, &str)> = trace["spans"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|span| {
+            (
+                span["kind"].as_str().unwrap(),
+                span["name"].as_str().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        spans,
+        [
+            ("http", "GET /orders"),
+            ("sql", "SELECT users"),
+            ("sql", "SELECT users"),
+            ("sql", "SELECT users")
+        ]
+    );
+    assert_eq!(kinds(&trace["issues"]), ["n+1"]);
+
+    let (_, queries) = get(&router, "/api/calls?system=sql").await;
+    let query = &queries["calls"][0];
+    assert_eq!(query["template"], "SELECT * FROM users WHERE id = $1");
+    assert_eq!(query["target"], "shop");
+    assert_eq!(query["vendor"], "postgresql");
+    assert_eq!(query["calls"], 3);
+    assert_eq!(query["most_per_trace"], 3);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Systems with no kind of their own (a graph database, a broker, an RPC system): the family's generic kind, their
+/// own name kept, and with no code per system, a list of their own (`/api/calls?system=neo4j`), a place in the counts,
+/// and N+1 issues from their family's rules.
+#[tokio::test]
+async fn any_system_is_listed_and_analyzed_by_its_family() {
+    let dir = std::env::temp_dir().join(format!("tracepanel-any-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = tracepanel_store_local::path_in(&dir);
+    let mut store = Store::open(&path).unwrap();
+    let router = tracepanel_server::router(Reader::new(&path), Activity::default());
+
+    let otel = |n: usize, name: &str, attrs: Value| {
+        let mut attrs = attrs;
+        attrs["otel.span_kind"] = attrs
+            .get("otel.span_kind")
+            .cloned()
+            .unwrap_or(Value::from("client"));
+        attrs["code.origin"] = Value::from("app/views.py:30 in feed");
+        serde_json::json!({
+            "id": format!("01M4ANYSPAN{n:015}"), "parent_id": "01M4ANYR00T000000000000000", "kind": "otel",
+            "name": name, "start": 1_791_000_000_000_100_i64 + n as i64 * 10, "duration": 900, "status": "ok",
+            "attrs": attrs,
+        })
+    };
+    let mut spans = vec![serde_json::json!({
+        "id": "01M4ANYR00T000000000000000", "parent_id": null, "kind": "http", "name": "GET /feed",
+        "start": 1_791_000_000_000_000_i64, "duration": 9000, "status": "ok", "attrs": {},
+    })];
+    for n in 1..=3 {
+        spans.push(otel(n, "MATCH", serde_json::json!({
+            "db.system.name": "neo4j", "db.operation.name": "MATCH", "db.namespace": "graph",
+            "db.query.text": format!("MATCH (u:User {{id: {n}}}) RETURN u"), "server.address": "graph.local",
+        })));
+        spans.push(otel(10 + n, "orders publish", serde_json::json!({
+            "otel.span_kind": "producer", "messaging.system": "nats", "messaging.destination.name": "orders",
+        })));
+        spans.push(otel(20 + n, "Users.get", serde_json::json!({
+            "rpc.system": "thrift", "rpc.service": "Users", "rpc.method": "get", "server.address": "users.local",
+        })));
+    }
+    let doc = serde_json::json!({
+        "id": "01M4ANYTRACE00000000000000", "kind": "http", "name": "GET /feed", "start": 1_791_000_000_000_000_i64,
+        "duration": 9000, "status": "ok",
+        "attrs": {"http.method": "GET", "http.route": "/feed", "http.status_code": 200, "service.name": "shop"},
+        "spans": spans, "logs": [], "errors": [], "links": [], "issues": [],
+    });
+    let batch = Batch {
+        frame: serde_json::to_vec(&vec![&doc]).unwrap(),
+        max_traces: Some(1000),
+        thresholds: Thresholds::default(),
+    };
+    let mut received = batch.decode().unwrap();
+    for trace in &mut received {
+        tracepanel_analysis::apply(trace, &batch.thresholds);
+    }
+    store.write(&received).unwrap();
+
+    let (_, trace) = get(&router, "/api/traces/01M4ANYTRACE00000000000000").await;
+    let errors: Vec<String> = validator()
+        .iter_errors(&trace)
+        .map(|error| error.to_string())
+        .collect();
+    assert!(errors.is_empty(), "as served: {errors:?}");
+    let mut kinds_of: Vec<&str> = trace["spans"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|span| span["kind"].as_str().unwrap())
+        .collect();
+    kinds_of.dedup();
+    assert_eq!(
+        kinds_of,
+        [
+            "http",
+            "db",
+            "messaging",
+            "rpc",
+            "db",
+            "messaging",
+            "rpc",
+            "db",
+            "messaging",
+            "rpc"
+        ]
+    );
+    let mut titles: Vec<&str> = trace["issues"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|issue| issue["title"].as_str().unwrap())
+        .collect();
+    titles.sort_unstable();
+    assert_eq!(
+        titles,
+        [
+            "N+1: 3 similar NATS messages · publish orders",
+            "N+1: 3 similar Neo4j commands · MATCH",
+            "N+1: 3 similar Thrift calls · Users/get",
+        ]
+    );
+
+    let (status, neo4j) = get(&router, "/api/calls?system=neo4j").await;
+    assert_eq!(status, StatusCode::OK);
+    let row = &neo4j["calls"][0];
+    assert_eq!(
+        (
+            row["system"].clone(),
+            row["family"].clone(),
+            row["target"].clone(),
+            row["op"].clone(),
+            row["calls"].clone()
+        ),
+        (
+            Value::from("neo4j"),
+            Value::from("datastore"),
+            Value::from("graph"),
+            Value::from("MATCH"),
+            Value::from(3)
+        )
+    );
+    assert_eq!(neo4j["calls"].as_array().unwrap().len(), 1);
+    let (_, counts) = get(&router, "/api/counts").await;
+    assert_eq!(
+        counts["sections"]["systems"],
+        serde_json::json!([
+            {"system": "neo4j", "family": "datastore", "label": "Neo4j"},
+            {"system": "nats", "family": "messaging", "label": "NATS"},
+            {"system": "thrift", "family": "rpc", "label": "Thrift"},
+        ])
+    );
+    let (_, values) = get(&router, "/api/values").await;
+    assert_eq!(
+        values["targets"],
+        serde_json::json!({"nats": ["orders"], "neo4j": ["graph"], "thrift": ["Users"]})
+    );
+    let key = row["key"].as_str().unwrap();
+    let (_, found) = get(&router, &format!("/api/traces?q=call:{key}")).await;
+    assert_eq!(found["traces"][0]["id"], "01M4ANYTRACE00000000000000");
+    let (_, rpc) = get(&router, "/api/calls?q=family:rpc%20op:GET").await;
+    assert_eq!(rpc["calls"][0]["system"], "thrift");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

@@ -25,7 +25,7 @@ const TOOLS: [&str; 9] = [
     "list_issues",
     "get_issue",
     "list_endpoints",
-    "list_queries",
+    "list_calls",
     "search_logs",
 ];
 
@@ -538,11 +538,11 @@ GET /api/checkout · 1 call · p50 609 ms · p95 609 ms · 1 with issues · last
     );
 
     assert_eq!(
-        tool(&server, "list_queries", json!({"limit": 1})).await.0,
-        "statements (1):
-×1 in 1 trace · up to 1 per trace · total 599 ms · slowest 599 ms · app/api.py:56 in report
+        tool(&server, "list_calls", json!({"query": "system:sql", "limit": 1})).await.0,
+        "calls (1, heaviest first):
+sql app.sqlite3 · ×1 in 1 trace · up to 1 per trace · total 599 ms · slowest 599 ms · app/api.py:56 in report
     WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c WHERE x < 2000000) SELECT count(*) FROM c
-    e.g. trace 01M4GPB3578QTR3FS1P9G47DTX"
+    e.g. trace 01M4GPB3578QTR3FS1P9G47DTX · call:070b2f637f88284a"
     );
 
     assert_eq!(
@@ -604,9 +604,8 @@ async fn mistakes_come_back_for_the_model_to_correct() {
     assert_eq!(
         tool(&server, "find_traces", json!({"query": "colour:red"})).await,
         (
-            "Unknown filter 'colour'. Use one of: cache, cache_call, call, db, duration, has, kind, method, name, \
-             operation, path, peer, queries, query, queue, redis_call, route, service, since, state, status, system, \
-             task, trace, until, user, view"
+            "Unknown filter 'colour'. Use one of: cache, call, db, duration, has, kind, method, name, operation, path, \
+             peer, queries, queue, route, service, since, state, status, system, task, trace, until, user, view"
                 .to_owned(),
             true
         )

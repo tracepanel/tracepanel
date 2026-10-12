@@ -1,5 +1,6 @@
 import type { Trace, TraceSummary } from "@tracepanel/ui";
-import type { EntrySection, Route, Section } from "./routes";
+import { type Family, systemOfPage } from "@tracepanel/ui/lib/systems";
+import { type CallsSection, type EntrySection, type Route, type Section, systemOfSection } from "./routes";
 
 /** What each entry point is: its label, the traces it covers, and how one of its groups is searched for. */
 export const ENTRY: Record<
@@ -52,26 +53,10 @@ export const ENTRY: Record<
   },
 };
 
-export const DATA_LABELS: Record<Exclude<Section, EntrySection>, { label: string; description: string }> = {
+const DATA_LABELS: Record<Exclude<Section, EntrySection | CallsSection>, { label: string; description: string }> = {
   services: {
     label: "Services",
     description: "Your app's web, workers and commands, and the databases, caches, mail servers and brokers they call.",
-  },
-  queries: {
-    label: "Database",
-    description: "SQL statements across requests: how often they run, how long they take, and their query plans.",
-  },
-  redis: {
-    label: "Redis",
-    description: "Redis commands your app runs: which keys, how often, how long they take, how often they fail.",
-  },
-  cache: {
-    label: "Cache",
-    description: "Cache reads and writes through your framework's cache: hit rate, keys, and time.",
-  },
-  calls: {
-    label: "HTTP calls",
-    description: "The HTTP calls your app makes to other services: how often, how long they take, how often they fail.",
   },
   mails: { label: "Emails", description: "Every email your app sent, with the request that sent it." },
   logs: { label: "Logs", description: "Log records from every request, task and job." },
@@ -90,10 +75,22 @@ function quote(value: string): string {
   return /[\s"]/.test(value) ? `"${value.replaceAll('"', '\\"')}"` : value;
 }
 
+/** A data page's name, what it shows, and (a system's page) what its rows are called. */
+export function pageMeta(
+  section: Exclude<Section, EntrySection>,
+  family?: Family,
+  label?: string,
+): { label: string; description: string; noun?: string } {
+  const system = systemOfSection(section);
+  if (!system) return DATA_LABELS[section as keyof typeof DATA_LABELS];
+  const meta = systemOfPage(system, family, label);
+  return { label: meta.label, description: meta.description, noun: meta.many };
+}
+
 export function sectionLabel(section: Section): string {
   return section in ENTRY
     ? ENTRY[section as EntrySection].label
-    : DATA_LABELS[section as keyof typeof DATA_LABELS].label;
+    : pageMeta(section as Exclude<Section, EntrySection>).label;
 }
 
 /** The GraphQL operation a request ran, from the name tracepanel gives it ("GraphQL query PostList"). */

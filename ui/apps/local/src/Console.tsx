@@ -71,9 +71,8 @@ export function Console({ route, source: everything }: { route: Route; source: D
     route: [],
     logger: [],
     db: [],
-    host: [],
-    redis: [],
-    cache: [],
+    targets: {},
+    ops: {},
     task: [],
     queue: [],
     job: [],
@@ -146,6 +145,7 @@ export function Console({ route, source: everything }: { route: Route; source: D
         source={source}
         spec={spec}
         known={known}
+        systems={counts?.sections.systems}
       />
     );
   }

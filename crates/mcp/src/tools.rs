@@ -85,11 +85,12 @@ pub(crate) fn list() -> Value {
             vec![],
         ),
         (
-            "list_queries",
-            "List SQL queries",
-            "SQL statements across all traces: how often, how many per trace, total and slowest time, and where in \
-             the code.",
-            json!({"query": query("Which statements; empty for all."), "limit": limit(20, 100)}),
+            "list_calls",
+            "List calls",
+            "Calls to databases, Redis, caches, HTTP services and other systems across all traces, grouped by \
+             statement or operation, heaviest first: how often, how many per trace, total and slowest time, and \
+             where in the code.",
+            json!({"query": query("Which calls, e.g. `system:sql op:select` or `system:redis failed:true`; empty for all."), "limit": limit(20, 100)}),
             vec![],
         ),
         (
@@ -166,7 +167,7 @@ pub(crate) fn call(server: &Server, name: &str, args: &Value) -> Option<Result<S
         "list_issues" => list_issues(server, args),
         "get_issue" => get_issue(server, args),
         "list_endpoints" => list_endpoints(server, args),
-        "list_queries" => list_queries(server, args),
+        "list_calls" => list_calls(server, args),
         "search_logs" => search_logs(server, args),
         _ => return None,
     };
@@ -342,15 +343,15 @@ fn list_endpoints(server: &Server, args: &Value) -> Result<String, Refusal> {
     ))
 }
 
-fn list_queries(server: &Server, args: &Value) -> Result<String, Refusal> {
+fn list_calls(server: &Server, args: &Value) -> Result<String, Refusal> {
     store_ready(server)?;
     let rows = server
         .reader
-        .list_queries(&string(args, "query"), number(args, "limit", 20, 100))?;
+        .list_calls(&string(args, "query"), number(args, "limit", 20, 100))?;
     Ok(lines(
-        format!("statements ({}):", rows.len()),
-        rows.iter().map(compact::query_lines).collect(),
-        "No SQL.",
+        format!("calls ({}, heaviest first):", rows.len()),
+        rows.iter().map(compact::call_lines).collect(),
+        "No calls.",
     ))
 }
 

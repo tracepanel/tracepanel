@@ -5,32 +5,12 @@ import { useEffect, useState } from "react";
 export type EntrySection = "endpoints" | "graphql" | "tasks" | "websockets" | "jobs";
 export const ENTRY_SECTIONS: EntrySection[] = ["endpoints", "graphql", "tasks", "websockets", "jobs"];
 
+/** A system's page of operations: `calls/sql`, `calls/redis`, `calls/mongodb`, `calls/neo4j`… one per system in the data. */
+export type CallsSection = `calls/${string}`;
+
 /** `traces` is search results (⌘K "search all"), not a menu item. */
-export type Section =
-  | EntrySection
-  | "services"
-  | "queries"
-  | "redis"
-  | "cache"
-  | "calls"
-  | "mails"
-  | "logs"
-  | "errors"
-  | "issues"
-  | "traces";
-export const SECTIONS: Section[] = [
-  ...ENTRY_SECTIONS,
-  "services",
-  "queries",
-  "redis",
-  "cache",
-  "calls",
-  "mails",
-  "logs",
-  "errors",
-  "issues",
-  "traces",
-];
+export type Section = EntrySection | "services" | CallsSection | "mails" | "logs" | "errors" | "issues" | "traces";
+export const SECTIONS: Section[] = [...ENTRY_SECTIONS, "services", "mails", "logs", "errors", "issues", "traces"];
 
 export type EntryView = "overview" | "calls";
 
@@ -86,6 +66,22 @@ export function issueRoute(fingerprint: string, kind: string): Route {
   return { name: "issue", fingerprint, error: kind === "error", q: currentPeriod() || undefined };
 }
 
+const CALLS_SECTION = /^calls\/[\w.:-]+$/;
+
+/** A system's page. */
+export function callsSection(system: string): CallsSection {
+  return `calls/${system}`;
+}
+
+/** The system a page lists the operations of, or null for any other page. */
+export function systemOfSection(section: string): string | null {
+  return CALLS_SECTION.test(section) ? section.slice("calls/".length) : null;
+}
+
+function sectionOf(path: string): Section | null {
+  return (SECTIONS as string[]).includes(path) || CALLS_SECTION.test(path) ? (path as Section) : null;
+}
+
 export function isEntry(section: string): section is EntrySection {
   return (ENTRY_SECTIONS as string[]).includes(section);
 }
@@ -114,9 +110,10 @@ export function parse(hash: string): Route {
   if (group?.[1] && group[2] && isEntry(group[1])) {
     return { name: "group", section: group[1], key: decodeURIComponent(group[2]), q: q || undefined };
   }
-  if ((SECTIONS as string[]).includes(path)) {
+  const section = sectionOf(path);
+  if (section) {
     const view = params.get("view") === "calls" ? "calls" : undefined;
-    return { name: path as Section, q, view, open: params.get("open") ?? undefined };
+    return { name: section, q, view, open: params.get("open") ?? undefined };
   }
   return { name: "home" };
 }
@@ -181,12 +178,12 @@ export function traceHref(id: string, tab?: string, span?: string): string {
   return href({ name: "trace", id, from: back || undefined, tab, span });
 }
 
-/** Where a trace's parts lead in the console: linked traces, issues, every request with a statement, its logs. */
+/** Where a trace's parts lead in the console: linked traces, issues, every request with a call, its logs. */
 export function consoleLinks(prefix = "", newTab = false): TraceLinks {
   return {
     trace: (id) => `${prefix}${prefix ? href({ name: "trace", id }) : traceHref(id)}`,
     issue: (fingerprint, kind) => `${prefix}${href(issueRoute(fingerprint, kind))}`,
-    query: (key) => `${prefix}${href({ name: "traces", q: `query:${key}` })}`,
+    call: (key) => `${prefix}${href({ name: "traces", q: `call:${key}` })}`,
     logs: (traceId) => `${prefix}${href({ name: "logs", q: `trace:${traceId}` })}`,
     newTab,
   };

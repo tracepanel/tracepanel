@@ -1,4 +1,4 @@
-//! Writing the store: a trace's rows (the trace, its SQL, outgoing calls, logs, emails, issues, links, peers), and
+//! Writing the store: a trace's rows (the trace, its operations, logs, emails, issues, links, peers), and
 //! pruning to `max_traces`.
 
 use super::*;
@@ -7,17 +7,14 @@ use super::*;
 pub const SCHEMA: &str = include_str!("../../../schema/store.sql");
 pub(crate) const FTS_SCHEMA: &str =
     "CREATE VIRTUAL TABLE IF NOT EXISTS logs_fts USING fts5(message, logger)";
-pub(crate) const TABLES: [&str; 15] = [
+pub(crate) const TABLES: [&str; 12] = [
     "meta",
     "traces",
     "issues",
     "issue_traces",
     "logs",
     "logs_fts",
-    "sql",
     "calls",
-    "redis",
-    "cache_calls",
     "mails",
     "links",
     "peers",
@@ -117,29 +114,51 @@ pub(crate) fn prune(db: &Connection, fts: bool, max_traces: i64) -> rusqlite::Re
         "DELETE FROM traces WHERE id NOT IN (SELECT id FROM traces ORDER BY start DESC LIMIT ?1)",
         [max_traces],
     )?;
-    let orphan = "trace_id NOT IN (SELECT id FROM traces)";
+    delete_rows(db, fts, "trace_id NOT IN (SELECT id FROM traces)", [])
+}
+
+/// The tables with rows per trace: a trace's statements, calls, logs, issues, peers and links.
+const PER_TRACE: [&str; 8] = [
+    "logs",
+    "calls",
+    "issue_traces",
+    "mails",
+    "links",
+    "peers",
+    "task_enqueues",
+    "task_runs",
+];
+
+fn delete_rows<P: rusqlite::Params + Clone>(
+    db: &Connection,
+    fts: bool,
+    which: &str,
+    params: P,
+) -> rusqlite::Result<()> {
     if fts {
         db.execute(
-            &format!("DELETE FROM logs_fts WHERE rowid IN (SELECT id FROM logs WHERE {orphan})"),
-            [],
+            &format!("DELETE FROM logs_fts WHERE rowid IN (SELECT id FROM logs WHERE {which})"),
+            params.clone(),
         )?;
     }
-    for table in [
-        "logs",
-        "sql",
-        "calls",
-        "redis",
-        "cache_calls",
-        "issue_traces",
-        "mails",
-        "links",
-        "peers",
-        "task_enqueues",
-        "task_runs",
-    ] {
-        db.execute(&format!("DELETE FROM {table} WHERE {orphan}"), [])?;
+    for table in PER_TRACE {
+        db.execute(
+            &format!("DELETE FROM {table} WHERE {which}"),
+            params.clone(),
+        )?;
     }
     Ok(())
+}
+
+/// A trace received again (an SDK that sends it once more, with spans that came late): what the first copy wrote
+/// goes, so its statements, calls and issues count once.
+fn forget(db: &Connection, fts: bool, trace_id: &str) -> rusqlite::Result<()> {
+    db.execute(
+        "UPDATE issues SET occurrences = occurrences - 1
+         WHERE fingerprint IN (SELECT fingerprint FROM issue_traces WHERE trace_id = ?1)",
+        [trace_id],
+    )?;
+    delete_rows(db, fts, "trace_id = ?1", [trace_id])
 }
 
 pub(crate) fn write_trace(
@@ -148,6 +167,7 @@ pub(crate) fn write_trace(
     trace: &Trace,
     doc: &str,
 ) -> rusqlite::Result<()> {
+    forget(db, fts, &trace.id)?;
     let attrs = &trace.attrs;
     let sql_spans: Vec<&Span> = trace
         .spans
@@ -246,93 +266,29 @@ pub(crate) fn write_trace(
             )?;
         }
     }
-    for span in &sql_spans {
-        let alias = or_default(&span.attrs, "db.alias", "default");
-        // str(attrs.get("db.fingerprint", span.name)): the name only when the key is missing.
-        let statement = span
-            .attrs
-            .get("db.fingerprint")
-            .map_or_else(|| span.name.clone(), py_str);
-        let vendor = if truthy(span.attrs.get("db.system")) {
-            span.attrs.get("db.system")
-        } else {
-            span.attrs.get("db.vendor")
+    for span in &trace.spans {
+        let Some(operation) = tracepanel_analysis::calls::operation(trace, span) else {
+            continue;
         };
         db.execute(
-            "INSERT INTO sql (trace_id, span_id, fp, alias, vendor, statement, name, op, error, start, duration, origin)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+            "INSERT INTO calls (trace_id, span_id, key, system, family, target, op, template, name, statement, vendor,
+             params_hash, via, hit, error, start, duration, origin)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
             params![
                 trace.id,
                 span.id,
-                query_fingerprint(&statement, &alias),
-                alias,
-                sql(vendor),
-                statement,
-                span.name,
-                sql_op(&statement),
-                span.status == "error",
-                span.start,
-                span.duration,
-                sql(span.attrs.get("code.origin")),
-            ],
-        )?;
-    }
-    for span in trace.spans.iter().filter(|span| span.kind == "http.client") {
-        let (method, host, template) = tracepanel_analysis::http_endpoint(span);
-        db.execute(
-            "INSERT INTO calls (trace_id, span_id, key, method, host, template, status, error, start, duration, origin)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
-            params![
-                trace.id,
-                span.id,
-                call_key(&method, &host, &template),
-                method,
-                host,
-                template,
-                span.attrs.get("http.response.status_code").and_then(Value::as_i64),
-                span.status == "error",
-                span.start,
-                span.duration,
-                sql(span.attrs.get("code.origin")),
-            ],
-        )?;
-    }
-    for span in trace.spans.iter().filter(|span| span.kind == "redis") {
-        let (alias, command, template) = tracepanel_analysis::redis_command(span);
-        let via = tracepanel_analysis::redis_via(trace, span);
-        db.execute(
-            "INSERT INTO redis (trace_id, span_id, key, alias, command, template, via, error, start, duration, origin)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
-            params![
-                trace.id,
-                span.id,
-                redis_key(&alias, &command, &template, via),
-                alias,
-                command,
-                template,
-                via,
-                span.status == "error",
-                span.start,
-                span.duration,
-                sql(span.attrs.get("code.origin")),
-            ],
-        )?;
-    }
-    for span in trace.spans.iter().filter(|span| span.kind == "cache") {
-        let (alias, op, template) = tracepanel_analysis::cache_op(span);
-        let hit = span.attrs.get("cache.hit").and_then(Value::as_bool);
-        db.execute(
-            "INSERT INTO cache_calls (trace_id, span_id, key, alias, system, op, template, hit, error, start, duration,
-             origin) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
-            params![
-                trace.id,
-                span.id,
-                cache_key(&alias, &op, &template),
-                alias,
-                sql(span.attrs.get("cache.system")),
-                op,
-                template,
-                hit,
+                call_key(&operation),
+                operation.system,
+                operation.family,
+                operation.target,
+                operation.op,
+                operation.template,
+                operation.name,
+                operation.statement,
+                operation.vendor,
+                operation.params_hash,
+                operation.via,
+                operation.hit,
                 span.status == "error",
                 span.start,
                 span.duration,

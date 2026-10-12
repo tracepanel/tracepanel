@@ -159,6 +159,7 @@
           ]
         },
         "kind": {
+          "description": "otel is an OpenTelemetry span as its instrumentation recorded it, with otel.span_kind and otel.scope among its attributes: the agent maps it to one of the other kinds before it stores the trace, so the console never returns one.",
           "enum": [
             "http",
             "middleware",
@@ -180,7 +181,20 @@
             "websocket",
             "websocket.send",
             "channel.send",
-            "graphql"
+            "graphql",
+            "mongodb",
+            "elasticsearch",
+            "cassandra",
+            "dynamodb",
+            "memcached",
+            "kafka",
+            "rabbitmq",
+            "sqs",
+            "grpc",
+            "db",
+            "messaging",
+            "rpc",
+            "otel"
           ]
         },
         "name": {

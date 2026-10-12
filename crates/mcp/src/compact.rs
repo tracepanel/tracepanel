@@ -214,8 +214,20 @@ pub(crate) fn endpoint_line(row: &Value, now: i64) -> String {
     parts.join(" · ")
 }
 
-pub(crate) fn query_lines(row: &Value) -> String {
+/// A group of calls: its system and target, how often and how long, then the statement (or operation) and where
+/// to look, a sample trace and the key `call:` finds its traces by.
+pub(crate) fn call_lines(row: &Value) -> String {
+    let what = ["statement", "template", "name"]
+        .into_iter()
+        .map(|key| text(row, key))
+        .find(|value| !value.is_empty())
+        .unwrap_or("");
     let mut parts = vec![
+        [text(row, "system"), text(row, "target")]
+            .into_iter()
+            .filter(|value| !value.is_empty())
+            .collect::<Vec<_>>()
+            .join(" "),
         format!(
             "×{} in {}",
             int(row, "calls"),
@@ -229,10 +241,11 @@ pub(crate) fn query_lines(row: &Value) -> String {
         parts.push(text(row, "origin").to_owned());
     }
     format!(
-        "{}\n    {}\n    e.g. trace {}",
+        "{}\n    {}\n    e.g. trace {} · call:{}",
         parts.join(" · "),
-        short(text(row, "statement"), STATEMENT),
-        text(row, "sample_trace")
+        short(what, STATEMENT),
+        text(row, "sample_trace"),
+        text(row, "key")
     )
 }
 
