@@ -5,6 +5,7 @@ import type { Span } from "../types";
 /** What one span of a kind is called, and several. */
 const NOUNS: Record<string, [string, string]> = {
   sql: ["query", "queries"],
+  redis: ["Redis command", "Redis commands"],
   cache: ["cache call", "cache calls"],
   "http.client": ["HTTP call", "HTTP calls"],
 };
@@ -26,11 +27,25 @@ export function pathTemplate(path: string): string {
     .join("/");
 }
 
-/** What a call is a repeat of: an HTTP call's method, host and path template; any other span's name. */
+// An id inside a key (`post:42:views`, `session:9f3a…`): a number, a UUID, a long hex hash.
+const ID_IN_KEY = /\b(\d+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{16,})\b/gi;
+
+/** A Redis command with its key's ids as `{id}`: `GET post:{id}:views`. */
+function keyTemplate(name: string): string {
+  return name.replace(ID_IN_KEY, "{id}");
+}
+
+/** An HTTP call's method, host and path template: `GET api.example.com/users/{id}`. */
+function endpointTemplate(name: string): string {
+  const [method = "", target = ""] = name.split(" ", 2);
+  const slash = target.indexOf("/");
+  return slash < 0 ? name : `${method} ${target.slice(0, slash)}${pathTemplate(target.slice(slash))}`;
+}
+
+const TEMPLATES: Record<string, (name: string) => string> = { redis: keyTemplate, "http.client": endpointTemplate };
+
+/** What a call is a repeat of: an HTTP call's endpoint, a Redis command's key pattern, any other span's name. */
 export function callTemplate(span: Span | undefined): string {
   if (span === undefined) return "";
-  if (span.kind !== "http.client") return span.name;
-  const [method = "", target = ""] = span.name.split(" ", 2);
-  const slash = target.indexOf("/");
-  return slash < 0 ? span.name : `${method} ${target.slice(0, slash)}${pathTemplate(target.slice(slash))}`;
+  return (TEMPLATES[span.kind] ?? String)(span.name);
 }

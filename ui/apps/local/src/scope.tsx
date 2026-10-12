@@ -64,6 +64,8 @@ export function scopedSource(source: DataSource, service: string): DataSource {
     searchMails: (query, before) => source.searchMails(q(query), before),
     listQueries: (query) => source.listQueries(q(query)),
     listCalls: (query) => source.listCalls(q(query)),
+    listRedis: (query) => source.listRedis(q(query)),
+    listCache: (query) => source.listCache(q(query)),
     listEndpoints: (query) => source.listEndpoints(q(query)),
     listTasks: (query) => source.listTasks(q(query)),
     listWebsockets: (query) => source.listWebsockets(q(query)),

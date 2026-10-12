@@ -57,9 +57,9 @@ interface QuickOption {
   terms: Filter[];
 }
 
-/** Values the console knows from stored data (routes, loggers, database aliases). */
+/** Values the console knows from stored data (routes, loggers, database aliases, hosts called, Redis and caches). */
 export type KnownValues = Partial<
-  Record<"route" | "logger" | "db" | "task" | "queue" | "job" | "extra", readonly string[]>
+  Record<"route" | "logger" | "db" | "host" | "redis" | "cache" | "task" | "queue" | "job" | "extra", readonly string[]>
 >;
 
 interface QuickFilter {
@@ -174,6 +174,22 @@ const QUEUE: MultiFilter = {
   values: (known) => known.queue ?? [],
 };
 
+const FAILED: QuickFilter = {
+  label: "Outcome",
+  title: "Filter by outcome",
+  options: [{ label: "Failed", terms: [f("failed", ":", "true")] }],
+};
+
+/** Time, where the calls went (a database, an instance, a cache, a host), the operation, and failed calls. */
+function callFilters(target: MultiFilter, operations: readonly string[]): Control[] {
+  return [
+    { ...TIME, verb: "Called" },
+    target,
+    { label: "Operation", title: "Filter by operation", key: "op", values: operations },
+    FAILED,
+  ];
+}
+
 const QUICK: Record<Section, Control[]> = {
   traces: [TIME, STATUS, METHOD, ROUTE, DURATION, ISSUE, CONTAINS],
   logs: [
@@ -260,11 +276,38 @@ const QUICK: Record<Section, Control[]> = {
     },
     { label: "Role", title: "Filter by role", key: "role", values: ["web", "worker", "command"], format: capital },
   ],
-  queries: [
-    { ...TIME, verb: "Ran" },
+  // The pages of calls the app makes, all with the same filters: when, where to, which operation, failed or not.
+  queries: callFilters(
     { label: "Database", title: "Filter by database", key: "db", values: (known) => known.db ?? [] },
+    ["SELECT", "INSERT", "UPDATE", "DELETE"],
+  ),
+  redis: [
+    ...callFilters(
+      { label: "Instance", title: "Filter by Redis instance", key: "db", values: (known) => known.redis ?? [] },
+      ["GET", "SET", "MGET", "HGET", "HSET", "INCR", "DEL", "EXPIRE", "LPUSH", "PIPELINE"],
+    ),
+    // Redis's own: who sent the command.
+    {
+      label: "Via",
+      title: "Sent by",
+      key: "via",
+      values: ["direct", "cache", "task"],
+      format: (value) => ({ direct: "The app", cache: "A cache", task: "A task queue" })[value] ?? value,
+    },
   ],
-  calls: [{ ...TIME, verb: "Called" }],
+  cache: callFilters({ label: "Cache", title: "Filter by cache", key: "db", values: (known) => known.cache ?? [] }, [
+    "get",
+    "set",
+    "add",
+    "delete",
+    "get_many",
+    "set_many",
+    "incr",
+  ]),
+  calls: callFilters(
+    { label: "Host", title: "Filter by host", key: "host", values: (known) => known.host ?? [] },
+    METHODS,
+  ),
 };
 
 /**
@@ -342,6 +385,8 @@ const EXAMPLE: Record<Section, string> = {
   graphql: "type:mutation",
   queries: "table:auth_user",
   calls: "host:api.example.com",
+  redis: "op:GET",
+  cache: "op:get",
   mails: "to:ann@example.com",
   logs: "level:error",
   errors: "ZeroDivisionError route:/api/*",

@@ -71,6 +71,7 @@
   --dt-k-sql: #9db2ff;
   --dt-k-cache: #f5b544;
   --dt-k-http: #4ade80;
+  --dt-k-redis: #fb923c;
   --dt-k-log: #9a93bd;
   --dt-k-mail: #f472b6;
 
@@ -165,6 +166,7 @@
   --dt-k-sql: #3456d6;
   --dt-k-cache: #d97706;
   --dt-k-http: #15803d;
+  --dt-k-redis: #c2410c;
   --dt-k-log: #8a84a6;
   --dt-k-mail: #db2777;
 
@@ -1567,6 +1569,9 @@ details[data-focused] > .dt-sql-group {
 [data-category="http"] {
   --dt-k: var(--dt-k-http);
 }
+[data-category="redis"] {
+  --dt-k: var(--dt-k-redis);
+}
 .dt-breakdown-bar span {
   background: var(--dt-k);
 }
@@ -1651,6 +1656,9 @@ details[data-focused] > .dt-sql-group {
 }
 .dt-map-row[data-kind="http.client"] {
   --dt-k: var(--dt-k-http);
+}
+.dt-map-row[data-kind="redis"] {
+  --dt-k: var(--dt-k-redis);
 }
 .dt-map-row[data-kind="log"] {
   --dt-k: var(--dt-k-log);

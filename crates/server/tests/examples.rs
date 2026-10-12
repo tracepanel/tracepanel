@@ -198,11 +198,68 @@ async fn the_agent_finds_the_issues_and_the_api_returns_them() {
     let (_, none) = get(&router, "/api/calls?q=host:elsewhere.example").await;
     assert_eq!(none["calls"], serde_json::json!([]));
 
+    // The same filters on every list of calls: the target (host:, db:), op:, failed:.
+    let (status, posts) = get(&router, "/api/calls?q=op:get%20failed:false").await;
+    assert_eq!(status, StatusCode::OK, "{posts}");
+    assert_eq!(posts["calls"].as_array().unwrap().len(), rows.len());
+    let (_, failed) = get(&router, "/api/calls?q=failed:true").await;
+    assert_eq!(failed["calls"], serde_json::json!([]));
+    let (_, writes) = get(&router, "/api/queries?q=op:insert").await;
+    assert!(
+        writes["queries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|row| row["statement"].as_str().unwrap().starts_with("INSERT")),
+        "{writes}"
+    );
+
+    // Redis used directly: its commands per key pattern, with why they ran.
+    let (status, redis) = get(&router, "/api/redis?q=db:redis%20op:get%20via:direct").await;
+    assert_eq!(status, StatusCode::OK, "{redis}");
+    let commands: Vec<(&str, &str, &str, i64, i64)> = redis["redis"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|row| {
+            (
+                row["command"].as_str().unwrap(),
+                row["template"].as_str().unwrap(),
+                row["via"].as_str().unwrap(),
+                row["calls"].as_i64().unwrap(),
+                row["most_per_trace"].as_i64().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(commands, [("GET", "likes:{id}", "direct", 4, 4)]);
+    let (_, through_cache) = get(&router, "/api/redis?q=via:cache").await;
+    assert_eq!(through_cache["redis"], serde_json::json!([]));
+    let (status, cache) = get(&router, "/api/cache").await;
+    assert_eq!(status, StatusCode::OK, "{cache}");
+
+    let (status, found) = get(
+        &router,
+        &format!(
+            "/api/traces?q=redis_call:{}",
+            redis["redis"][0]["key"].as_str().unwrap()
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{found}");
+    assert_eq!(found["traces"][0]["id"], "01M4R1ER9RWER0QHV07BJDSZ7B");
+
+    // What the filter menus offer.
+    let (_, values) = get(&router, "/api/values").await;
+    assert_eq!(values["host"], serde_json::json!(["127.0.0.1"]));
+    assert_eq!(values["redis"], serde_json::json!(["redis"]));
+
     let (status, counts) = get(&router, "/api/counts").await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(counts["sections"]["calls"], true);
+    assert_eq!(counts["sections"]["redis"], true);
     let (_, other) = get(&router, "/api/counts?service=api").await;
     assert_eq!(other["sections"]["calls"], false);
+    assert_eq!(other["sections"]["redis"], false);
     let _ = std::fs::remove_dir_all(&dir);
 }
 

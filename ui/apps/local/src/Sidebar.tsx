@@ -21,6 +21,7 @@ import {
   ChevronsUpDownIcon,
   CircleAlertIcon,
   DatabaseIcon,
+  KeyRoundIcon,
   LayersIcon,
   ListChecksIcon,
   type LucideIcon,
@@ -34,6 +35,7 @@ import {
   SunIcon,
   TerminalIcon,
   Trash2Icon,
+  ZapIcon,
 } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import type { Section } from "./routes";
@@ -67,6 +69,8 @@ export const NAV_GROUPS: { title: string | null; items: NavItem[] }[] = [
     items: [
       { section: "services", label: "Services", icon: NetworkIcon },
       { section: "queries", label: "Database", icon: DatabaseIcon },
+      { section: "redis", label: "Redis", icon: KeyRoundIcon },
+      { section: "cache", label: "Cache", icon: ZapIcon },
       { section: "calls", label: "HTTP calls", icon: ArrowUpRightIcon },
       { section: "logs", label: "Logs", icon: ScrollTextIcon },
       { section: "mails", label: "Emails", icon: MailIcon },
@@ -85,9 +89,9 @@ export const NAV_GROUPS: { title: string | null; items: NavItem[] }[] = [
 export const NAV: NavItem[] = NAV_GROUPS.flatMap((group) => group.items);
 
 /** The sections shown only once there is something in them; HTTP always (it is where a project starts). */
-const OPTIONAL = ["graphql", "tasks", "websockets", "jobs", "calls"] as const;
+const OPTIONAL = ["graphql", "tasks", "websockets", "jobs", "redis", "cache", "calls"] as const;
 
-/** Entry points with traces, and HTTP calls once the app made any. */
+/** Entry points with traces; Redis, Cache and HTTP calls once the app used them. */
 export function visibleSections(counts: Counts | undefined): Set<Section> {
   const sections = counts?.sections;
   const hidden = new Set<Section>(OPTIONAL.filter((section) => sections && !sections[section]));

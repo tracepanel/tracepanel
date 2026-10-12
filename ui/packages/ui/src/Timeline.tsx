@@ -35,6 +35,7 @@ function lanes(trace: Trace): Lane[] {
   const result: Lane[] = [
     { label: "request", marks: spans(trace.kind) },
     { label: "sql", marks: spans("sql") },
+    { label: "redis", marks: spans("redis") },
     { label: "cache", marks: spans("cache") },
     { label: "http", marks: spans("http.client") },
     {

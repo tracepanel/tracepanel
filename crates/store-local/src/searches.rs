@@ -111,6 +111,24 @@ pub(crate) fn trace_search() -> search::Schema {
                 }),
             ),
             (
+                "redis_call",
+                Box::new(|term| {
+                    Ok((
+                        "id IN (SELECT trace_id FROM redis WHERE key = ?)".into(),
+                        vec![Sql::Text(term.value.clone())],
+                    ))
+                }),
+            ),
+            (
+                "cache_call",
+                Box::new(|term| {
+                    Ok((
+                        "id IN (SELECT trace_id FROM cache_calls WHERE key = ?)".into(),
+                        vec![Sql::Text(term.value.clone())],
+                    ))
+                }),
+            ),
+            (
                 "peer",
                 Box::new(|term| {
                     Ok((
@@ -186,6 +204,47 @@ pub(crate) fn log_search(fts: bool) -> search::Schema {
     )
 }
 
+/// `failed:true` (or `failed:false`): calls whose span failed, on every list of calls.
+fn failed(term: &Term) -> search::Clause {
+    if term.op != ":" {
+        return Err(SearchError("failed supports only ':'".into()));
+    }
+    match term.value.to_lowercase().as_str() {
+        "true" | "yes" | "1" => Ok(("error = 1".into(), vec![])),
+        "false" | "no" | "0" => Ok(("error = 0".into(), vec![])),
+        _ => Err(SearchError("failed expects true or false".into())),
+    }
+}
+
+/// `term` with its value in lower case: cache ops are spelled as the cache API names them (`get`, `set_many`).
+fn lower_text(column: &str) -> Compiler {
+    let inner = search::text(column);
+    Box::new(move |term| {
+        inner(&Term {
+            value: term.value.to_lowercase(),
+            ..term.clone()
+        })
+    })
+}
+
+/// Free text over some of a list's columns: any of them containing the words.
+fn free_text(columns: &'static [&'static str]) -> search::FreeText {
+    Box::new(move |words| {
+        let pattern = Sql::Text(format!("%{}%", search::like(words)));
+        let clause = columns
+            .iter()
+            .map(|column| format!("{column} LIKE ? ESCAPE '\\'"))
+            .collect::<Vec<_>>()
+            .join(" OR ");
+        (clause, vec![pattern; columns.len()])
+    })
+}
+
+// The four lists of calls (Database, HTTP calls, Redis, Cache) take the same filters: the time, the app, what was
+// called (`db:`, or `host:` for HTTP), the operation (`op:`), and `failed:`. Each also has its own id (`query:`,
+// `call:`, `redis_call:`, `cache_call:`), the one a trace search takes to find the requests that made the call.
+// Redis alone has `via:`: whether the app ran a command itself, or a cache or a task queue did for it.
+
 pub(crate) fn query_search() -> search::Schema {
     search::schema_for(
         "queries",
@@ -195,12 +254,7 @@ pub(crate) fn query_search() -> search::Schema {
             ("since", "start"),
             ("until", "start"),
         ],
-        Box::new(|words| {
-            (
-                "statement LIKE ? ESCAPE '\\'".into(),
-                vec![Sql::Text(format!("%{}%", search::like(words)))],
-            )
-        }),
+        free_text(&["statement"]),
         vec![
             (
                 "table",
@@ -211,6 +265,8 @@ pub(crate) fn query_search() -> search::Schema {
                     ))
                 }),
             ),
+            ("op", search::upper_text("op")),
+            ("failed", Box::new(failed)),
             ("service", of_service("trace_id")),
         ],
         vec![],
@@ -224,16 +280,12 @@ pub(crate) fn call_search() -> search::Schema {
     search::schema_for(
         "calls",
         &[("call", "key"), ("since", "start"), ("until", "start")],
-        Box::new(|words| {
-            let pattern = Sql::Text(format!("%{}%", search::like(words)));
-            (
-                "template LIKE ? ESCAPE '\\' OR host LIKE ? ESCAPE '\\'".into(),
-                vec![pattern.clone(), pattern],
-            )
-        }),
+        free_text(&["template", "host"]),
         vec![
             ("host", search::text("host")),
+            ("op", search::upper_text("method")),
             ("method", search::upper_text("method")),
+            ("failed", Box::new(failed)),
             ("service", of_service("trace_id")),
         ],
         vec![],
@@ -242,6 +294,51 @@ pub(crate) fn call_search() -> search::Schema {
 
 pub(crate) static CALL_SEARCH: std::sync::LazyLock<search::Schema> =
     std::sync::LazyLock::new(call_search);
+
+pub(crate) fn redis_search() -> search::Schema {
+    search::schema_for(
+        "redis",
+        &[
+            ("redis_call", "key"),
+            ("db", "alias"),
+            ("since", "start"),
+            ("until", "start"),
+        ],
+        free_text(&["template", "command"]),
+        vec![
+            ("op", search::upper_text("command")),
+            ("via", lower_text("via")),
+            ("failed", Box::new(failed)),
+            ("service", of_service("trace_id")),
+        ],
+        vec![],
+    )
+}
+
+pub(crate) static REDIS_SEARCH: std::sync::LazyLock<search::Schema> =
+    std::sync::LazyLock::new(redis_search);
+
+pub(crate) fn cache_search() -> search::Schema {
+    search::schema_for(
+        "cache",
+        &[
+            ("cache_call", "key"),
+            ("db", "alias"),
+            ("since", "start"),
+            ("until", "start"),
+        ],
+        free_text(&["template", "op"]),
+        vec![
+            ("op", lower_text("op")),
+            ("failed", Box::new(failed)),
+            ("service", of_service("trace_id")),
+        ],
+        vec![],
+    )
+}
+
+pub(crate) static CACHE_SEARCH: std::sync::LazyLock<search::Schema> =
+    std::sync::LazyLock::new(cache_search);
 
 pub(crate) fn mail_search() -> search::Schema {
     search::schema_for(

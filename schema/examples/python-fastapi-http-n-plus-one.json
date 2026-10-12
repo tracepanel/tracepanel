@@ -63,19 +63,18 @@
     },
     {
       "attrs": {
-        "cache.alias": "redis",
-        "cache.hit": false,
-        "cache.key": "likes:1",
-        "cache.op": "get",
-        "cache.system": "redis",
         "code.origin": "main.py:46 in feed",
+        "db.operation": "GET",
+        "db.system": "redis",
+        "redis.alias": "redis",
+        "redis.key": "likes:1",
         "server.address": "localhost",
         "server.port": 56928
       },
       "duration": 2616,
       "id": "01M4R1ERA114XFH90B9D0FBNWF",
-      "kind": "cache",
-      "name": "redis.get",
+      "kind": "redis",
+      "name": "GET likes:1",
       "parent_id": "01M4R1ER9SND7BXTQ8R2NTD20F",
       "start": 1791808201023286,
       "status": "ok"
@@ -100,19 +99,18 @@
     },
     {
       "attrs": {
-        "cache.alias": "redis",
-        "cache.hit": false,
-        "cache.key": "likes:2",
-        "cache.op": "get",
-        "cache.system": "redis",
         "code.origin": "main.py:46 in feed",
+        "db.operation": "GET",
+        "db.system": "redis",
+        "redis.alias": "redis",
+        "redis.key": "likes:2",
         "server.address": "localhost",
         "server.port": 56928
       },
       "duration": 200,
       "id": "01M4R1ERA3QMWVV487ZQ1DGFMY",
-      "kind": "cache",
-      "name": "redis.get",
+      "kind": "redis",
+      "name": "GET likes:2",
       "parent_id": "01M4R1ER9SND7BXTQ8R2NTD20F",
       "start": 1791808201027056,
       "status": "ok"
@@ -137,19 +135,18 @@
     },
     {
       "attrs": {
-        "cache.alias": "redis",
-        "cache.hit": false,
-        "cache.key": "likes:3",
-        "cache.op": "get",
-        "cache.system": "redis",
         "code.origin": "main.py:46 in feed",
+        "db.operation": "GET",
+        "db.system": "redis",
+        "redis.alias": "redis",
+        "redis.key": "likes:3",
         "server.address": "localhost",
         "server.port": 56928
       },
       "duration": 225,
       "id": "01M4R1ERA4MFAWQXNRW9BQQ8BA",
-      "kind": "cache",
-      "name": "redis.get",
+      "kind": "redis",
+      "name": "GET likes:3",
       "parent_id": "01M4R1ER9SND7BXTQ8R2NTD20F",
       "start": 1791808201028403,
       "status": "ok"
@@ -174,19 +171,18 @@
     },
     {
       "attrs": {
-        "cache.alias": "redis",
-        "cache.hit": false,
-        "cache.key": "likes:4",
-        "cache.op": "get",
-        "cache.system": "redis",
         "code.origin": "main.py:46 in feed",
+        "db.operation": "GET",
+        "db.system": "redis",
+        "redis.alias": "redis",
+        "redis.key": "likes:4",
         "server.address": "localhost",
         "server.port": 56928
       },
       "duration": 211,
       "id": "01M4R1ERA6R2ABC1WNTYW9QK9H",
-      "kind": "cache",
-      "name": "redis.get",
+      "kind": "redis",
+      "name": "GET likes:4",
       "parent_id": "01M4R1ER9SND7BXTQ8R2NTD20F",
       "start": 1791808201029816,
       "status": "ok"

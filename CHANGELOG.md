@@ -4,24 +4,32 @@
 
 ### Added
 
-- Outgoing HTTP calls and cache calls (Redis) get the same analysis as SQL.
-  Calls a loop makes to one endpoint (`GET api.example.com/users/{id}`) or one
-  key pattern (`user:{id}`) are an N+1. The same read made twice is a
-  duplicate. An HTTP call slower than `slow_http_ms` (500 ms by default) is a
-  new issue, `slow-http`.
-- The console shows outgoing HTTP calls: an HTTP calls tab with the calls
-  grouped by endpoint, a tile with their count and time, a lane on the
-  timeline, and "External calls" in the call tree's time breakdown. Similar
-  HTTP calls fold into one row of the call tree, like queries.
-- An HTTP calls page, next to Database: the endpoints the app calls (method,
-  host and path with ids as `{id}`), with their calls, requests, failures,
-  most calls in one request, total and slowest time, and the line of code
-  that calls them. It links to the requests that made the call (`call:<key>`
-  in the search) and shows in the sidebar once the app has made a call.
+- Redis is a span kind of its own, `redis`: a datastore, not a cache. A
+  cache operation (`cache`, from any cache library) is a span of its own too,
+  with its Redis commands as children when its backend is Redis. Issues are
+  found on the layer they are fixed on: a cache N+1 on the cache operations,
+  not again on their Redis commands.
+- Outgoing HTTP calls, Redis commands and cache operations get the same
+  analysis as SQL. Calls a loop makes to one endpoint
+  (`GET api.example.com/users/{id}`) or one key pattern (`user:{id}`) are an
+  N+1. The same read made twice is a duplicate. An HTTP call slower than
+  `slow_http_ms` (500 ms by default) is a new issue, `slow-http`.
+- Three data pages next to Database: Redis, Cache and HTTP calls. Each lists
+  what the app called, grouped by key pattern or endpoint, with the same
+  columns (calls, requests, most in one request, failures, total and slowest
+  time) and the same filters (time, where to, operation, failed). Redis also
+  says what sent a command (the app, a cache, a task queue), and Cache its hit
+  rate. Each shows in the sidebar once the app has used it, and links to the
+  requests that made the call.
+- Database gets the same filters: `op:` (SELECT, INSERT…) and `failed:`.
+- In a trace: an HTTP calls tab, tiles with the Redis commands and HTTP calls,
+  lanes on the timeline, "Redis" and "External calls" in the time breakdown (a
+  cache's Redis commands count as Cache), and similar calls folded into one
+  row of the call tree, like queries.
 
 ### Changed
 
-- The store's format is now version 15. A store from an earlier version is
+- The store's format is now version 16. A store from an earlier version is
   left as it is, and the agent starts a new, empty one.
 
 ## 0.0.1a1 (2026-10-12)

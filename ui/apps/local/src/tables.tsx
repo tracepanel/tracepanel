@@ -1,6 +1,7 @@
 import {
   AliasChip,
   ago,
+  type CacheRow,
   type CallRow,
   CopyButton,
   type DataSource,
@@ -16,6 +17,7 @@ import {
   type MailRow,
   MethodBadge,
   type QueryRow,
+  type RedisRow,
   RoutePath,
   type Span,
   SqlCode,
@@ -28,7 +30,7 @@ import { Badge } from "@tracepanel/ui/components/ui/badge";
 import { Button } from "@tracepanel/ui/components/ui/button";
 import { TableCell, TableRow } from "@tracepanel/ui/components/ui/table";
 import { ArrowRightIcon, ListFilterIcon } from "lucide-react";
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, type ReactNode, useEffect, useState } from "react";
 import { currentPeriod, endpointGroup, go, groupRoute, href, issueRoute, traceHref, withPeriod } from "./routes";
 import { graphqlOperation } from "./sections";
 import { DataTable, LevelBadge, Meter, Mono, Td, Th, Tr } from "./ui";
@@ -174,91 +176,33 @@ export function EndpointsTable({ items }: { items: readonly EndpointRow[] }) {
   );
 }
 
-export function QueriesTable({
-  items,
-  source,
-  open,
-  onOpen,
-}: {
-  items: readonly QueryRow[];
-  source: DataSource;
-  /** The statement shown open, kept in the URL by the page. */
-  open: string | null;
-  onOpen: (key: string | null) => void;
-}) {
-  const heaviest = Math.max(...items.map((item) => item.total), 1);
-  return (
-    <DataTable
-      head={
-        <>
-          <Th>Statement</Th>
-          <Th num>Calls</Th>
-          <Th num>Requests</Th>
-          <Th num>Max / request</Th>
-          <Th>Total time</Th>
-          <Th num>Slowest</Th>
-        </>
-      }
-    >
-      {items.map((item) => (
-        <Fragment key={item.fp}>
-          <Tr selected={open === item.fp} onClick={() => onOpen(open === item.fp ? null : item.fp)}>
-            <Td>
-              <span className="flex flex-col gap-0.5">
-                <Mono className="font-semibold">
-                  {item.name}
-                  <AliasChip value={item.alias} />
-                </Mono>
-                {item.origin ? <Mono className="text-base text-muted-foreground">{item.origin}</Mono> : null}
-              </span>
-            </Td>
-            <Td num>{item.calls}</Td>
-            <Td num>{item.traces}</Td>
-            <Td num>
-              <RepeatedCount
-                most={item.most_per_trace}
-                title="Runs several times in one request: N+1 or duplicate queries"
-              />
-            </Td>
-            <Td>
-              <Meter value={item.total} max={heaviest}>
-                {duration(item.total)}
-              </Meter>
-            </Td>
-            <Td num>{duration(item.slowest)}</Td>
-          </Tr>
-          {open === item.fp ? (
-            <TableRow className="hover:bg-transparent">
-              <TableCell colSpan={6} className="space-y-3 bg-muted/40 px-5 py-4 whitespace-normal">
-                <SqlCode sql={item.statement} vendor={item.vendor} />
-                {/^\s*SELECT\b/i.test(item.statement) ? (
-                  <ExplainView
-                    vendor={item.vendor}
-                    load={(analyze) => source.explain(item.sample_trace, item.sample_span, analyze)}
-                  />
-                ) : null}
-                <Button variant="outline" size="sm" asChild>
-                  <a href={href({ name: "traces", q: `query:${item.fp}` })}>
-                    Show {item.traces} {item.traces === 1 ? "request" : "requests"} with this query
-                  </a>
-                </Button>
-              </TableCell>
-            </TableRow>
-          ) : null}
-        </Fragment>
-      ))}
-    </DataTable>
-  );
+/** What every page of calls lists per row: how often, in how many requests, how many failed, how long. */
+type CallStats = Pick<CallRow, "calls" | "traces" | "errors" | "total" | "slowest" | "most_per_trace" | "origin">;
+
+/** A column only one page has (the cache's hit rate). */
+interface ExtraColumn<T> {
+  head: string;
+  cell: (item: T) => ReactNode;
 }
 
-/** Outgoing HTTP calls by endpoint (method, host, path with ids as {id}), heaviest first. */
-export function CallsTable({
+/**
+ * The table of the pages of calls (Database, Redis, Cache, HTTP calls): the same columns on each, heaviest first.
+ * A row opens in place to what the page shows for it: the statement, the ways to its requests.
+ */
+function CallStatsTable<T extends CallStats>({
   items,
+  keyOf,
+  name,
+  extra,
+  details,
   open,
   onOpen,
 }: {
-  items: readonly CallRow[];
-  /** The endpoint shown open, kept in the URL by the page. */
+  items: readonly T[];
+  keyOf: (item: T) => string;
+  name: (item: T) => ReactNode;
+  extra?: ExtraColumn<T> | undefined;
+  details: (item: T) => ReactNode;
   open: string | null;
   onOpen: (key: string | null) => void;
 }) {
@@ -267,54 +211,69 @@ export function CallsTable({
     <DataTable
       head={
         <>
-          <Th>Endpoint</Th>
+          <Th>Name</Th>
           <Th num>Calls</Th>
           <Th num>Requests</Th>
           <Th num>Max / request</Th>
           <Th num>Failed</Th>
+          {extra ? <Th num>{extra.head}</Th> : null}
           <Th>Total time</Th>
           <Th num>Slowest</Th>
         </>
       }
     >
       {items.map((item) => (
-        <CallRowView key={item.key} item={item} heaviest={heaviest} open={open === item.key} onOpen={onOpen} />
+        <CallStatsRow
+          key={keyOf(item)}
+          item={item}
+          rowKey={keyOf(item)}
+          name={name}
+          extra={extra}
+          details={details}
+          heaviest={heaviest}
+          open={open === keyOf(item)}
+          onOpen={onOpen}
+        />
       ))}
     </DataTable>
   );
 }
 
-/** One endpoint's row, and when open, the ways to its traces. */
-function CallRowView({
+function CallStatsRow<T extends CallStats>({
   item,
+  rowKey,
+  name,
+  extra,
+  details,
   heaviest,
   open,
   onOpen,
 }: {
-  item: CallRow;
+  item: T;
+  rowKey: string;
+  name: (item: T) => ReactNode;
+  extra: ExtraColumn<T> | undefined;
+  details: (item: T) => ReactNode;
   heaviest: number;
   open: boolean;
   onOpen: (key: string | null) => void;
 }) {
   return (
     <>
-      <Tr selected={open} tone={item.errors > 0 ? "error" : undefined} onClick={() => onOpen(open ? null : item.key)}>
+      <Tr selected={open} tone={toneOf(item)} onClick={() => onOpen(open ? null : rowKey)}>
         <Td>
           <span className="flex flex-col gap-0.5">
-            <Mono className="flex items-center gap-2 font-semibold">
-              <MethodBadge method={item.method} />
-              {item.host}
-              {item.template}
-            </Mono>
-            <Mono className="text-base text-muted-foreground">{item.origin ?? ""}</Mono>
+            <Mono className="flex items-center gap-2 font-semibold">{name(item)}</Mono>
+            <Mono className="text-base text-muted-foreground">{item.origin}</Mono>
           </span>
         </Td>
         <Td num>{item.calls}</Td>
         <Td num>{item.traces}</Td>
         <Td num>
-          <RepeatedCount most={item.most_per_trace} title="Called several times in one request: an N+1" />
+          <RepeatedCount most={item.most_per_trace} />
         </Td>
         <Td num>{item.errors}</Td>
+        <ExtraCell item={item} extra={extra} />
         <Td>
           <Meter value={item.total} max={heaviest}>
             {duration(item.total)}
@@ -322,35 +281,177 @@ function CallRowView({
         </Td>
         <Td num>{duration(item.slowest)}</Td>
       </Tr>
-      {open ? <CallLinks item={item} /> : null}
+      <CallStatsDetails open={open} span={extra ? 8 : 7}>
+        {open ? details(item) : null}
+      </CallStatsDetails>
     </>
   );
 }
 
-function CallLinks({ item }: { item: CallRow }) {
-  const requests = item.traces === 1 ? "request" : "requests";
+const toneOf = (item: CallStats) => (item.errors > 0 ? "error" : undefined);
+
+function ExtraCell<T>({ item, extra }: { item: T; extra: ExtraColumn<T> | undefined }) {
+  return extra ? <Td num>{extra.cell(item)}</Td> : null;
+}
+
+/** An open row's details, across the table. */
+function CallStatsDetails({ open, span, children }: { open: boolean; span: number; children: ReactNode }) {
+  if (!open) return null;
   return (
     <TableRow className="hover:bg-transparent">
-      <TableCell colSpan={7} className="space-x-2 bg-muted/40 px-5 py-4 whitespace-normal">
-        <Button variant="outline" size="sm" asChild>
-          <a href={href({ name: "traces", q: `call:${item.key}` })}>
-            Show {item.traces} {requests} with this call
-          </a>
-        </Button>
-        <Button variant="ghost" size="sm" asChild>
-          <a href={traceHref(item.sample_trace)}>Latest call →</a>
-        </Button>
+      <TableCell colSpan={span} className="space-y-3 bg-muted/40 px-5 py-4 whitespace-normal">
+        {children}
       </TableCell>
     </TableRow>
   );
 }
 
-/** How many times at most in one request; flagged from 3 on, where a loop is the likely cause. */
-function RepeatedCount({ most, title }: { most: number; title: string }) {
+/** "Show N requests with this …" and the latest call, under an open row. */
+function RequestLinks({ q, traces, what, sample }: { q: string; traces: number; what: string; sample: string }) {
+  const requests = traces === 1 ? "request" : "requests";
+  return (
+    <p className="flex flex-wrap gap-2">
+      <Button variant="outline" size="sm" asChild>
+        <a href={href({ name: "traces", q })}>
+          Show {traces} {requests} with this {what}
+        </a>
+      </Button>
+      <Button variant="ghost" size="sm" asChild>
+        <a href={traceHref(sample)}>Latest {what} →</a>
+      </Button>
+    </p>
+  );
+}
+
+interface TableProps<T> {
+  items: readonly T[];
+  /** The row shown open, kept in the URL by the page. */
+  open: string | null;
+  onOpen: (key: string | null) => void;
+}
+
+export function QueriesTable({ items, source, open, onOpen }: TableProps<QueryRow> & { source: DataSource }) {
+  return (
+    <CallStatsTable
+      items={items}
+      keyOf={(item) => item.fp}
+      name={(item) => (
+        <>
+          {item.name}
+          <AliasChip value={item.alias} />
+        </>
+      )}
+      details={(item) => (
+        <>
+          <SqlCode sql={item.statement} vendor={item.vendor} />
+          {/^\s*SELECT\b/i.test(item.statement) ? (
+            <ExplainView
+              vendor={item.vendor}
+              load={(analyze) => source.explain(item.sample_trace, item.sample_span, analyze)}
+            />
+          ) : null}
+          <RequestLinks q={`query:${item.fp}`} traces={item.traces} what="query" sample={item.sample_trace} />
+        </>
+      )}
+      open={open}
+      onOpen={onOpen}
+    />
+  );
+}
+
+/** Redis commands by command and key pattern (`GET post:{id}:views`). */
+export function RedisTable({ items, open, onOpen }: TableProps<RedisRow>) {
+  return (
+    <CallStatsTable
+      items={items}
+      keyOf={(item) => item.key}
+      name={(item) => (
+        <>
+          {item.command} {item.template}
+          <AliasChip value={item.alias} />
+        </>
+      )}
+      extra={VIA}
+      details={(item) => (
+        <RequestLinks q={`redis_call:${item.key}`} traces={item.traces} what="command" sample={item.sample_trace} />
+      )}
+      open={open}
+      onOpen={onOpen}
+    />
+  );
+}
+
+/** What sent a Redis command: the app itself, a cache, or a task queue publishing a task. */
+const VIA_LABELS: Record<string, string> = { direct: "Direct", cache: "Cache", task: "Task queue" };
+
+const VIA: ExtraColumn<RedisRow> = {
+  head: "Via",
+  cell: (item) => VIA_LABELS[item.via] ?? item.via,
+};
+
+const HIT_RATE: ExtraColumn<CacheRow> = {
+  head: "Hit rate",
+  cell: (item) => (item.hits + item.misses > 0 ? percentOf(item.hits, item.hits + item.misses) : "—"),
+};
+
+function percentOf(part: number, whole: number): string {
+  return `${Math.round((part / whole) * 100)}%`;
+}
+
+/** Cache operations by operation and key pattern (`get user:{id}`), with how often a read found its key. */
+export function CacheTable({ items, open, onOpen }: TableProps<CacheRow>) {
+  return (
+    <CallStatsTable
+      items={items}
+      keyOf={(item) => item.key}
+      name={(item) => (
+        <>
+          {item.op} {item.template}
+          <AliasChip value={item.alias} />
+        </>
+      )}
+      extra={HIT_RATE}
+      details={(item) => (
+        <RequestLinks q={`cache_call:${item.key}`} traces={item.traces} what="cache call" sample={item.sample_trace} />
+      )}
+      open={open}
+      onOpen={onOpen}
+    />
+  );
+}
+
+/** Outgoing HTTP calls by endpoint (method, host, path with ids as {id}). */
+export function CallsTable({ items, open, onOpen }: TableProps<CallRow>) {
+  return (
+    <CallStatsTable
+      items={items}
+      keyOf={(item) => item.key}
+      name={(item) => (
+        <>
+          <MethodBadge method={item.method} />
+          {item.host}
+          {item.template}
+        </>
+      )}
+      details={(item) => (
+        <RequestLinks q={`call:${item.key}`} traces={item.traces} what="call" sample={item.sample_trace} />
+      )}
+      open={open}
+      onOpen={onOpen}
+    />
+  );
+}
+
+/** How many times at most in one request; flagged from 3 on, where a loop (an N+1) is the likely cause. */
+function RepeatedCount({ most }: { most: number }) {
   return (
     <span className="inline-flex items-center gap-2">
       {most >= 3 ? (
-        <Badge variant="outline" className="border-warn/30 bg-warn-soft text-warn" title={title}>
+        <Badge
+          variant="outline"
+          className="border-warn/30 bg-warn-soft text-warn"
+          title="Several times in one request: an N+1, or a duplicate"
+        >
           Repeated
         </Badge>
       ) : null}

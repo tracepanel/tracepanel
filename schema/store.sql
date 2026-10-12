@@ -1,6 +1,6 @@
 -- tracepanel's local store: one SQLite file per format version, shared by every process of a project and, when it
 -- runs, written by tracepanel-agent instead (which reads this file too: keep both writers in step).
--- version: 15
+-- version: 16
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS traces (
     id TEXT PRIMARY KEY,
@@ -71,6 +71,9 @@ CREATE TABLE IF NOT EXISTS sql (
     vendor TEXT,
     statement TEXT NOT NULL,
     name TEXT NOT NULL,
+    -- The statement's verb (SELECT, INSERT…): `op:` on the Database page, as a command or a method on the others.
+    op TEXT NOT NULL,
+    error INTEGER NOT NULL,
     start INTEGER NOT NULL,
     duration INTEGER NOT NULL,
     origin TEXT
@@ -92,6 +95,41 @@ CREATE TABLE IF NOT EXISTS calls (
 );
 CREATE INDEX IF NOT EXISTS calls_key ON calls (key);
 CREATE INDEX IF NOT EXISTS calls_trace ON calls (trace_id);
+-- Redis commands (redis spans), aggregated per alias, command, key template (`user:{id}`) and `via`: why the
+-- command ran, "direct" (the app's call), "cache" (under a cache operation) or "task" (under a task enqueue).
+CREATE TABLE IF NOT EXISTS redis (
+    trace_id TEXT NOT NULL,
+    span_id TEXT NOT NULL,
+    key TEXT NOT NULL,
+    alias TEXT NOT NULL,
+    command TEXT NOT NULL,
+    template TEXT NOT NULL,
+    via TEXT NOT NULL,
+    error INTEGER NOT NULL,
+    start INTEGER NOT NULL,
+    duration INTEGER NOT NULL,
+    origin TEXT
+);
+CREATE INDEX IF NOT EXISTS redis_key ON redis (key);
+CREATE INDEX IF NOT EXISTS redis_trace ON redis (trace_id);
+-- Cache operations through a cache API (cache spans: Django's cache, whatever its backend), aggregated likewise;
+-- `hit` is 1 or 0 for a get, NULL for the rest.
+CREATE TABLE IF NOT EXISTS cache_calls (
+    trace_id TEXT NOT NULL,
+    span_id TEXT NOT NULL,
+    key TEXT NOT NULL,
+    alias TEXT NOT NULL,
+    system TEXT,
+    op TEXT NOT NULL,
+    template TEXT NOT NULL,
+    hit INTEGER,
+    error INTEGER NOT NULL,
+    start INTEGER NOT NULL,
+    duration INTEGER NOT NULL,
+    origin TEXT
+);
+CREATE INDEX IF NOT EXISTS cache_calls_key ON cache_calls (key);
+CREATE INDEX IF NOT EXISTS cache_calls_trace ON cache_calls (trace_id);
 CREATE TABLE IF NOT EXISTS mails (
     trace_id TEXT NOT NULL,
     span_id TEXT NOT NULL,

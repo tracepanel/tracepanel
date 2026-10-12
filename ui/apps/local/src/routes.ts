@@ -10,6 +10,8 @@ export type Section =
   | EntrySection
   | "services"
   | "queries"
+  | "redis"
+  | "cache"
   | "calls"
   | "mails"
   | "logs"
@@ -20,6 +22,8 @@ export const SECTIONS: Section[] = [
   ...ENTRY_SECTIONS,
   "services",
   "queries",
+  "redis",
+  "cache",
   "calls",
   "mails",
   "logs",

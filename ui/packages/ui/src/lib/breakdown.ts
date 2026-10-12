@@ -2,7 +2,7 @@
 // draw from it.
 import type { Span, Trace } from "../types";
 
-export type Category = "django" | "view" | "code" | "template" | "sql" | "cache" | "http" | "mail";
+export type Category = "django" | "view" | "code" | "template" | "sql" | "redis" | "cache" | "http" | "mail";
 
 export const CATEGORY_LABELS: Record<Category, string> = {
   django: "Framework & middleware",
@@ -10,6 +10,7 @@ export const CATEGORY_LABELS: Record<Category, string> = {
   code: "Your code",
   template: "Templates",
   sql: "Database",
+  redis: "Redis",
   cache: "Cache",
   http: "External calls",
   mail: "Email",
@@ -17,6 +18,7 @@ export const CATEGORY_LABELS: Record<Category, string> = {
 
 const BY_KIND: Record<string, Category> = {
   sql: "sql",
+  redis: "redis",
   cache: "cache",
   "http.client": "http",
   mail: "mail",
@@ -27,6 +29,13 @@ const BY_KIND: Record<string, Category> = {
   "task.run": "code",
   command: "code",
 };
+
+/** A cache's Redis commands are the cache's time: what the app asked for, on whatever backend serves it. */
+function servedFor(span: Span, byId: ReadonlyMap<string, Span>): Span {
+  if (span.kind !== "redis") return span;
+  const parent = byId.get(String(span.parent_id));
+  return parent?.kind === "cache" ? parent : span;
+}
 
 function categoryOf(span: Span): Category | null {
   const category = BY_KIND[span.kind];
@@ -53,7 +62,7 @@ export function breakdown(trace: Trace): [Category, number][] {
   };
   // A span without a category of its own (a transaction: the code inside atomic(), a signal…) is its owner's time.
   const owner = (span: Span): Category | null => {
-    let current: Span | undefined = span;
+    let current: Span | undefined = servedFor(span, byId);
     while (current) {
       const category = current.kind === "transaction" ? null : categoryOf(current);
       if (category) return category;

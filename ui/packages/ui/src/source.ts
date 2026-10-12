@@ -1,4 +1,5 @@
 import type {
+  CacheRow,
   CallRow,
   Counts,
   EndpointDetail,
@@ -14,6 +15,7 @@ import type {
   MailRow,
   Page,
   QueryRow,
+  RedisRow,
   Related,
   SearchSpec,
   ServiceMap,
@@ -54,6 +56,10 @@ export interface DataSource {
   listQueries(q: string): Promise<QueryRow[]>;
   /** Outgoing HTTP calls by endpoint, across stored traces. */
   listCalls(q: string): Promise<CallRow[]>;
+  /** Redis commands by command and key pattern. */
+  listRedis(q: string): Promise<RedisRow[]>;
+  /** Cache operations (the framework's cache) by operation and key pattern. */
+  listCache(q: string): Promise<CacheRow[]>;
   listEndpoints(q: string): Promise<EndpointRow[]>;
   listTasks(q: string): Promise<TaskRow[]>;
   listWebsockets(q: string): Promise<WebsocketRow[]>;
@@ -151,6 +157,12 @@ export function httpSource(base: string | URL): DataSource {
     async listCalls(q) {
       return (await getJson<{ calls: CallRow[] }>(url("calls", { q })))?.calls ?? [];
     },
+    async listRedis(q) {
+      return (await getJson<{ redis: RedisRow[] }>(url("redis", { q })))?.redis ?? [];
+    },
+    async listCache(q) {
+      return (await getJson<{ cache: CacheRow[] }>(url("cache", { q })))?.cache ?? [];
+    },
     async listEndpoints(q) {
       return (await getJson<{ endpoints: EndpointRow[] }>(url("endpoints", { q })))?.endpoints ?? [];
     },
@@ -198,7 +210,7 @@ export function httpSource(base: string | URL): DataSource {
         (await getJson<Counts>(url("counts", { service }))) ?? {
           issues: 0,
           errors: 0,
-          sections: { http: 0, graphql: 0, tasks: 0, websockets: 0, jobs: 0, calls: false },
+          sections: { http: 0, graphql: 0, tasks: 0, websockets: 0, jobs: 0, calls: false, redis: false, cache: false },
         }
       );
     },
@@ -208,6 +220,9 @@ export function httpSource(base: string | URL): DataSource {
           route: [],
           logger: [],
           db: [],
+          host: [],
+          redis: [],
+          cache: [],
           task: [],
           queue: [],
           job: [],

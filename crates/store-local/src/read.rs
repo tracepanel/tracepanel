@@ -94,6 +94,102 @@ pub(crate) fn marks(count: usize) -> String {
     vec!["?"; count].join(", ")
 }
 
+/// One of the console's aggregated lists (Database, HTTP calls, Redis, Cache): a table of calls, one row per span,
+/// grouped by `key`, with `columns` for what names a group.
+pub(crate) struct Aggregate {
+    pub(crate) table: &'static str,
+    pub(crate) key: &'static str,
+    pub(crate) columns: &'static str,
+}
+
+/// The groups matching `query`, heaviest first, each with the fields every list has: `key`, `calls`, `traces`,
+/// `errors`, `total`, `slowest`, `last_seen`, `most_per_trace` (the most in one trace), `origin` (the most common
+/// line of code) and the latest call (`sample_trace`, `sample_span`), which the console opens.
+pub(crate) fn aggregate(
+    db: &Connection,
+    of: &Aggregate,
+    query: &str,
+    search: &search::Schema,
+    limit: i64,
+) -> Result<Vec<serde_json::Map<String, Value>>, ReadError> {
+    let Aggregate {
+        table,
+        key,
+        columns,
+    } = of;
+    let (condition, mut params) = search::compile_where(query, search)?;
+    params.push(Sql::Integer(limit));
+    let rows = objects(
+        db,
+        &format!(
+            "SELECT {key} AS key, {columns}, COUNT(*) AS calls, COUNT(DISTINCT trace_id) AS traces, \
+             SUM(error) AS errors, SUM(duration) AS total, MAX(duration) AS slowest, MAX(start) AS last_seen \
+             FROM {table} WHERE {condition} GROUP BY {key} ORDER BY total DESC LIMIT ?"
+        ),
+        params,
+    )?;
+    if rows.is_empty() {
+        return Ok(Vec::new());
+    }
+    let keys: Vec<Sql> = rows
+        .iter()
+        .map(|row| Sql::Text(row["key"].as_str().unwrap_or("").to_owned()))
+        .collect();
+    let marks = marks(keys.len());
+    let by_key = |sql: &str| objects(db, sql, keys.clone());
+    let text_of =
+        |row: &serde_json::Map<String, Value>| row["key"].as_str().unwrap_or("").to_owned();
+    let per_trace: HashMap<String, i64> = by_key(&format!(
+        "SELECT key, MAX(n) AS most FROM (SELECT {key} AS key, trace_id, COUNT(*) AS n FROM {table} \
+         WHERE {key} IN ({marks}) GROUP BY {key}, trace_id) GROUP BY key"
+    ))?
+    .into_iter()
+    .map(|row| (text_of(&row), row["most"].as_i64().unwrap_or(1)))
+    .collect();
+    let mut origins: HashMap<String, Vec<String>> = HashMap::new();
+    for row in by_key(&format!(
+        "SELECT {key} AS key, origin FROM {table} WHERE {key} IN ({marks}) AND origin IS NOT NULL"
+    ))? {
+        origins
+            .entry(text_of(&row))
+            .or_default()
+            .push(row["origin"].as_str().unwrap_or("").to_owned());
+    }
+    // The latest call of each group: the console opens it (and explains it, for SQL).
+    let samples: HashMap<String, (Value, Value)> = by_key(&format!(
+        "SELECT {key} AS key, trace_id, span_id, MAX(start) FROM {table} WHERE {key} IN ({marks}) GROUP BY {key}"
+    ))?
+    .into_iter()
+    .map(|row| (text_of(&row), (row["trace_id"].clone(), row["span_id"].clone())))
+    .collect();
+    Ok(rows
+        .into_iter()
+        .map(|mut row| {
+            let group = text_of(&row);
+            let (trace, span) = samples
+                .get(&group)
+                .cloned()
+                .unwrap_or((Value::Null, Value::Null));
+            row.insert("sample_trace".into(), trace);
+            row.insert("sample_span".into(), span);
+            row.insert(
+                "most_per_trace".into(),
+                Value::from(per_trace.get(&group).copied().unwrap_or(1)),
+            );
+            row.insert(
+                "origin".into(),
+                most_common(origins.remove(&group).unwrap_or_default())
+                    .map_or(Value::Null, Value::from),
+            );
+            row
+        })
+        .collect())
+}
+
+pub(crate) fn objects_of(rows: Vec<serde_json::Map<String, Value>>) -> Vec<Value> {
+    rows.into_iter().map(Value::Object).collect()
+}
+
 /// Counter(...).most_common(1)[0][0]: the most frequent, the first seen on a tie.
 pub(crate) fn most_common(items: impl IntoIterator<Item = String>) -> Option<String> {
     let mut order: Vec<String> = Vec::new();
@@ -214,7 +310,8 @@ impl Reader {
         Ok(Page { items, next })
     }
 
-    /// Distinct routes, loggers, database aliases and extra= keys: what the console offers in menus and hints.
+    /// Distinct routes, loggers, database, Redis and cache aliases, hosts called and extra= keys: what the console
+    /// offers in menus and hints.
     /// With `service`, only that app's: the menus offer what its pages can find.
     pub fn known_values(&self, service: &str) -> Result<Value, ReadError> {
         let db = self.connect()?;
@@ -249,6 +346,9 @@ impl Reader {
             "route": distinct(&format!("SELECT DISTINCT route FROM traces WHERE route != '' AND {traces} ORDER BY 1"))?,
             "logger": distinct(&format!("SELECT DISTINCT logger FROM logs WHERE {of_trace} ORDER BY 1"))?,
             "db": distinct(&format!("SELECT DISTINCT alias FROM sql WHERE {of_trace} ORDER BY 1"))?,
+            "host": distinct(&format!("SELECT DISTINCT host FROM calls WHERE {of_trace} ORDER BY 1"))?,
+            "redis": distinct(&format!("SELECT DISTINCT alias FROM redis WHERE {of_trace} ORDER BY 1"))?,
+            "cache": distinct(&format!("SELECT DISTINCT alias FROM cache_calls WHERE {of_trace} ORDER BY 1"))?,
             "task": distinct(&format!("SELECT DISTINCT name FROM traces WHERE kind = 'task' AND {traces} ORDER BY 1"))?,
             "job": distinct(&format!("SELECT DISTINCT name FROM traces WHERE kind = 'command' AND {traces} ORDER BY 1"))?,
             "queue": distinct(&format!(
@@ -523,163 +623,79 @@ impl Reader {
 
     /// SQL statements aggregated across stored traces, heaviest first.
     pub fn list_queries(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
-        let (condition, mut params) = search::compile_where(query, &QUERY_SEARCH)?;
-        params.push(Sql::Integer(limit));
         let db = self.connect()?;
-        let rows = objects(
+        let rows = aggregate(
             &db,
-            &format!(
-                "SELECT fp, alias, MAX(vendor) AS vendor, statement, name, \
-                 COUNT(*) AS calls, COUNT(DISTINCT trace_id) AS traces, \
-                 SUM(duration) AS total, MAX(duration) AS slowest, MAX(start) AS last_seen \
-                 FROM sql WHERE {condition} GROUP BY fp ORDER BY total DESC LIMIT ?"
-            ),
-            params,
+            &Aggregate {
+                table: "sql",
+                key: "fp",
+                columns: "fp, alias, MAX(vendor) AS vendor, statement, name",
+            },
+            query,
+            &QUERY_SEARCH,
+            limit,
         )?;
-        if rows.is_empty() {
-            return Ok(Vec::new());
-        }
-        let fps: Vec<Sql> = rows
-            .iter()
-            .map(|row| Sql::Text(row["fp"].as_str().unwrap_or("").to_owned()))
-            .collect();
-        let marks = marks(fps.len());
-        let per_trace: HashMap<String, i64> = objects(
-            &db,
-            &format!(
-                "SELECT fp, MAX(n) AS most FROM (SELECT fp, trace_id, COUNT(*) AS n FROM sql \
-                 WHERE fp IN ({marks}) GROUP BY fp, trace_id) GROUP BY fp"
-            ),
-            fps.clone(),
-        )?
-        .into_iter()
-        .map(|row| {
-            (
-                row["fp"].as_str().unwrap_or("").to_owned(),
-                row["most"].as_i64().unwrap_or(1),
-            )
-        })
-        .collect();
-        let mut origins: HashMap<String, Vec<String>> = HashMap::new();
-        for row in objects(
-            &db,
-            &format!("SELECT fp, origin FROM sql WHERE fp IN ({marks}) AND origin IS NOT NULL"),
-            fps.clone(),
-        )? {
-            origins
-                .entry(row["fp"].as_str().unwrap_or("").to_owned())
-                .or_default()
-                .push(row["origin"].as_str().unwrap_or("").to_owned());
-        }
-        // The latest call of each statement: the console explains and opens it.
-        let samples: HashMap<String, (Value, Value)> = objects(
-            &db,
-            &format!("SELECT fp, trace_id, span_id, MAX(start) FROM sql WHERE fp IN ({marks}) GROUP BY fp"),
-            fps,
-        )?
-        .into_iter()
-        .map(|row| (row["fp"].as_str().unwrap_or("").to_owned(), (row["trace_id"].clone(), row["span_id"].clone())))
-        .collect();
         Ok(rows
             .into_iter()
             .map(|mut row| {
-                let fp = row["fp"].as_str().unwrap_or("").to_owned();
-                let (trace, span) = samples
-                    .get(&fp)
-                    .cloned()
-                    .unwrap_or((Value::Null, Value::Null));
-                row.insert("sample_trace".into(), trace);
-                row.insert("sample_span".into(), span);
-                if row["vendor"].is_null() || row["vendor"] == "" {
+                if row["vendor"].is_null() {
                     row.insert("vendor".into(), Value::from(""));
                 }
-                row.insert(
-                    "most_per_trace".into(),
-                    Value::from(per_trace.get(&fp).copied().unwrap_or(1)),
-                );
-                row.insert(
-                    "origin".into(),
-                    most_common(origins.remove(&fp).unwrap_or_default())
-                        .map_or(Value::Null, Value::from),
-                );
                 Value::Object(row)
             })
             .collect())
     }
 
-    /// Outgoing HTTP calls aggregated per endpoint (method, host, path template) across stored traces, heaviest first.
+    /// Outgoing HTTP calls aggregated per endpoint (method, host, path template), heaviest first.
     pub fn list_calls(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
-        let (condition, mut params) = search::compile_where(query, &CALL_SEARCH)?;
-        params.push(Sql::Integer(limit));
         let db = self.connect()?;
-        let rows = objects(
+        let aggregate_of = Aggregate {
+            table: "calls",
+            key: "key",
+            columns: "method, host, template",
+        };
+        Ok(objects_of(aggregate(
             &db,
-            &format!(
-                "SELECT key, method, host, template, COUNT(*) AS calls, COUNT(DISTINCT trace_id) AS traces, \
-                 SUM(error) AS errors, SUM(duration) AS total, MAX(duration) AS slowest, MAX(start) AS last_seen \
-                 FROM calls WHERE {condition} GROUP BY key ORDER BY total DESC LIMIT ?"
-            ),
-            params,
-        )?;
-        if rows.is_empty() {
-            return Ok(Vec::new());
-        }
-        let keys: Vec<Sql> = rows
-            .iter()
-            .map(|row| Sql::Text(row["key"].as_str().unwrap_or("").to_owned()))
-            .collect();
-        let marks = marks(keys.len());
-        let by_key = |sql: &str| objects(&db, sql, keys.clone());
-        let per_trace: HashMap<String, i64> = by_key(&format!(
-            "SELECT key, MAX(n) AS most FROM (SELECT key, trace_id, COUNT(*) AS n FROM calls \
-             WHERE key IN ({marks}) GROUP BY key, trace_id) GROUP BY key"
-        ))?
-        .into_iter()
-        .map(|row| {
-            (
-                row["key"].as_str().unwrap_or("").to_owned(),
-                row["most"].as_i64().unwrap_or(1),
-            )
-        })
-        .collect();
-        let mut origins: HashMap<String, Vec<String>> = HashMap::new();
-        for row in by_key(&format!(
-            "SELECT key, origin FROM calls WHERE key IN ({marks}) AND origin IS NOT NULL"
-        ))? {
-            origins
-                .entry(row["key"].as_str().unwrap_or("").to_owned())
-                .or_default()
-                .push(row["origin"].as_str().unwrap_or("").to_owned());
-        }
-        // The latest call to each endpoint: the console opens it.
-        let samples: HashMap<String, (Value, Value)> = by_key(&format!(
-            "SELECT key, trace_id, span_id, MAX(start) FROM calls WHERE key IN ({marks}) GROUP BY key"
-        ))?
-        .into_iter()
-        .map(|row| (row["key"].as_str().unwrap_or("").to_owned(), (row["trace_id"].clone(), row["span_id"].clone())))
-        .collect();
-        Ok(rows
-            .into_iter()
-            .map(|mut row| {
-                let key = row["key"].as_str().unwrap_or("").to_owned();
-                let (trace, span) = samples
-                    .get(&key)
-                    .cloned()
-                    .unwrap_or((Value::Null, Value::Null));
-                row.insert("sample_trace".into(), trace);
-                row.insert("sample_span".into(), span);
-                row.insert(
-                    "most_per_trace".into(),
-                    Value::from(per_trace.get(&key).copied().unwrap_or(1)),
-                );
-                row.insert(
-                    "origin".into(),
-                    most_common(origins.remove(&key).unwrap_or_default())
-                        .map_or(Value::Null, Value::from),
-                );
-                Value::Object(row)
-            })
-            .collect())
+            &aggregate_of,
+            query,
+            &CALL_SEARCH,
+            limit,
+        )?))
+    }
+
+    /// Redis commands aggregated per client alias, command, key template and `via`, heaviest first.
+    pub fn list_redis(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
+        let db = self.connect()?;
+        let aggregate_of = Aggregate {
+            table: "redis",
+            key: "key",
+            columns: "alias, command, template, via",
+        };
+        Ok(objects_of(aggregate(
+            &db,
+            &aggregate_of,
+            query,
+            &REDIS_SEARCH,
+            limit,
+        )?))
+    }
+
+    /// Cache operations aggregated per cache alias, op and key template, heaviest first; hits and misses of the gets.
+    pub fn list_cache(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
+        let db = self.connect()?;
+        let aggregate_of = Aggregate {
+            table: "cache_calls",
+            key: "key",
+            columns: "alias, MAX(system) AS system, op, template, \
+                      COALESCE(SUM(hit = 1), 0) AS hits, COALESCE(SUM(hit = 0), 0) AS misses",
+        };
+        Ok(objects_of(aggregate(
+            &db,
+            &aggregate_of,
+            query,
+            &CACHE_SEARCH,
+            limit,
+        )?))
     }
 
     /// Newest first; `before` is the `start` of the last row of the previous page.
@@ -828,12 +844,17 @@ impl Reader {
             [service],
             |row| row.get(0),
         )?;
-        let calls: bool = db.query_row(
-            "SELECT EXISTS (SELECT 1 FROM calls WHERE ?1 IS NULL OR trace_id IN \
-             (SELECT id FROM traces WHERE service = ?1))",
-            [service],
-            |row| row.get(0),
-        )?;
+        // Whether a table of calls has rows (of the app's traces): the console shows that page only then.
+        let any = |table: &str| -> rusqlite::Result<bool> {
+            db.query_row(
+                &format!(
+                    "SELECT EXISTS (SELECT 1 FROM {table} WHERE ?1 IS NULL OR trace_id IN \
+                     (SELECT id FROM traces WHERE service = ?1))"
+                ),
+                [service],
+                |row| row.get(0),
+            )
+        };
         let count = |map: &HashMap<String, i64>, key: &str| map.get(key).copied().unwrap_or(0);
         let errors = count(&kinds, "error");
         Ok(serde_json::json!({
@@ -846,8 +867,10 @@ impl Reader {
                 "tasks": count(&traces, "task"),
                 "websockets": count(&traces, "websocket"),
                 "jobs": count(&traces, "command"),
-                // Outgoing HTTP calls were recorded: the console shows its HTTP calls page.
-                "calls": calls,
+                // Outgoing HTTP calls, Redis commands and cache calls were recorded: the console shows their pages.
+                "calls": any("calls")?,
+                "redis": any("redis")?,
+                "cache": any("cache_calls")?,
             },
         }))
     }

@@ -67,7 +67,18 @@ export function Console({ route, source: everything }: { route: Route; source: D
     useCallback(() => source.knownValues(), [source]),
     "",
     3,
-  ).data ?? { route: [], logger: [], db: [], task: [], queue: [], job: [], extra: [] };
+  ).data ?? {
+    route: [],
+    logger: [],
+    db: [],
+    host: [],
+    redis: [],
+    cache: [],
+    task: [],
+    queue: [],
+    job: [],
+    extra: [],
+  };
 
   // The console opens on HTTP: where every Django project's work comes in.
   useEffect(() => {

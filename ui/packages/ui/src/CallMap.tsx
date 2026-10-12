@@ -36,10 +36,15 @@ function startOf(node: Node): number {
  * statements).
  */
 const GROUP_MIN = 3;
-const LEAF_CALLS = new Set(["sql", "cache", "http.client"]);
+const LEAF_CALLS = new Set(["sql", "redis", "cache", "http.client"]);
 
 function isLeafCall(node: Node): node is Extract<Node, { type: "span" }> {
-  return node.type === "span" && node.children.length === 0 && LEAF_CALLS.has(node.span.kind);
+  return node.type === "span" && LEAF_CALLS.has(node.span.kind) && node.children.every(isBackendCall);
+}
+
+/** A cache call's own Redis commands don't stop it from grouping with its likes: they are how it was served. */
+function isBackendCall(node: Node): boolean {
+  return node.type === "span" && node.span.kind === "redis" && node.children.length === 0;
 }
 
 function collapse(nodes: Node[]): Node[] {
@@ -116,6 +121,7 @@ function buildTree(trace: Trace, related: Related | undefined): Node[] {
 /** What the filter chips above the tree pick, in their order; a chip shows only when the trace has such rows. */
 const FILTERS = [
   { id: "sql", label: "SQL", kinds: ["sql"] },
+  { id: "redis", label: "Redis", kinds: ["redis"] },
   { id: "cache", label: "Cache", kinds: ["cache"] },
   { id: "http", label: "HTTP calls", kinds: ["http.client"] },
   { id: "signal", label: "Signals", kinds: ["signal"] },

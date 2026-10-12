@@ -61,6 +61,14 @@ export const DATA_LABELS: Record<Exclude<Section, EntrySection>, { label: string
     label: "Database",
     description: "SQL statements across requests: how often they run, how long they take, and their query plans.",
   },
+  redis: {
+    label: "Redis",
+    description: "Redis commands your app runs: which keys, how often, how long they take, how often they fail.",
+  },
+  cache: {
+    label: "Cache",
+    description: "Cache reads and writes through your framework's cache: hit rate, keys, and time.",
+  },
   calls: {
     label: "HTTP calls",
     description: "The HTTP calls your app makes to other services: how often, how long they take, how often they fail.",
