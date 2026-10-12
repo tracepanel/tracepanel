@@ -1,9 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.0.1a2 (2026-10-12)
 
 ### Added
 
+- The agent is on npm too, as `@tracepanel/agent`: `npx tracepanel-agent`
+  runs the same binaries as the PyPI wheels, one package per platform.
 - Redis is a span kind of its own, `redis`: a datastore, not a cache. A
   cache operation (`cache`, from any cache library) is a span of its own too,
   with its Redis commands as children when its backend is Redis. Issues are
