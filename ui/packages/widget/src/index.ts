@@ -145,8 +145,11 @@ const STYLE = `
   }
   .panel[data-open] { transform: none; visibility: visible; transition: transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1), width 200ms ease-out; }
   .panel[data-open] ~ .badge { right: calc(min(var(--tracepanel-width, 600px), 100vw) + 16px); }
-  /* No room beside the panel (a narrow window): the panel shows the same request, the badge steps aside. */
-  :host([data-crowded]:not([data-dock="bottom"])) .panel[data-open] ~ .badge { visibility: hidden; }
+  /* No room beside the panel (a narrow window): the panel shows the request, the badge folds to its logo,
+     its ring still the verdict. */
+  :host([data-crowded]:not([data-dock="bottom"])) .panel[data-open] ~ .badge { width: 42px; padding: 0; justify-content: center; }
+  :host([data-crowded]:not([data-dock="bottom"])) .panel[data-open] ~ .badge :is(.stats, .runtime) { display: none; }
+  :host([data-crowded]:not([data-dock="bottom"])) .panel[data-open] ~ .badge .brand { padding: 0; }
   .panel iframe { width: 100%; height: 100%; border: 0; display: block; background: transparent; color-scheme: dark; }
   /* Light theme (the console's Auto / Light / Dark choice, shared through localStorage). */
   :host([data-theme="light"]) .badge {
@@ -668,8 +671,9 @@ export function mount(options: WidgetOptions = {}): Widget {
     fitBadge();
   }
 
-  /** Whether the badge fits left of the right-docked panel; hidden, it still has its width to measure. */
+  /** Whether the badge fits left of the right-docked panel, measured unfolded (no paint in between). */
   function fitBadge(): void {
+    host.removeAttribute("data-crowded");
     host.toggleAttribute("data-crowded", window.innerWidth - width < badge.offsetWidth + 32);
   }
   window.addEventListener("resize", fitBadge);
