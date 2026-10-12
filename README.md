@@ -7,9 +7,10 @@ and logs of your app on your machine. Every request, background job and command
 comes with its SQL queries, log lines and errors. Tracepanel finds N+1 queries,
 duplicate queries and slow SQL, and names the line of code to fix.
 
-Logs need no setup. The SDK picks up what your code already writes with the
-standard logging, keeps your logging configuration as it is, and attaches each
-line to the request, job or command that wrote it.
+There is nothing to instrument. The SDK hooks into your framework, ORM, task
+queue and standard logging, so requests, SQL queries, jobs and log lines are
+recorded without changes to your code. Your logging configuration stays as it
+is, and each log line is attached to the request, job or command that wrote it.
 
 The first SDK is for Python: Django, FastAPI and Flask.
 
