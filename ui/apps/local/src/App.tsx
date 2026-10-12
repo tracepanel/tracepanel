@@ -20,6 +20,7 @@ import {
 } from "@tracepanel/ui";
 import { Button } from "@tracepanel/ui/components/ui/button";
 import { TooltipProvider } from "@tracepanel/ui/components/ui/tooltip";
+import { useCloseOnBlur } from "@tracepanel/ui/hooks/useCloseOnBlur";
 import { cn, rem } from "@tracepanel/ui/lib/utils";
 import { type ReactNode, type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ClearDialog } from "./ClearDialog";
@@ -345,17 +346,15 @@ function RequestSwitcher({
       event.preventDefault();
       setOpen(false);
     };
-    // A click on the page around the panel never reaches this frame: it only takes the focus away.
-    const onBlur = () => setOpen(false);
     document.addEventListener("pointerdown", onPointer);
     document.addEventListener("keydown", onKey);
-    window.addEventListener("blur", onBlur);
     return () => {
       document.removeEventListener("pointerdown", onPointer);
       document.removeEventListener("keydown", onKey);
-      window.removeEventListener("blur", onBlur);
     };
   }, [open]);
+  const closeList = useCallback(() => setOpen(false), []);
+  useCloseOnBlur(open, closeList);
 
   return (
     <div className="switcher" ref={root}>
