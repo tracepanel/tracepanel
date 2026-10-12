@@ -241,6 +241,13 @@ async fn the_agent_finds_the_issues_and_the_api_returns_them() {
     let (status, cache) = get(&router, "/api/calls?system=cache").await;
     assert_eq!(status, StatusCode::OK, "{cache}");
 
+    // The tiles above a system's page: over every call, with the page's filters.
+    let (status, summary) = get(&router, "/api/calls/summary?system=redis&q=via:direct").await;
+    assert_eq!(status, StatusCode::OK, "{summary}");
+    assert_eq!(summary["calls"], redis["calls"][0]["calls"]);
+    let (status, _) = get(&router, "/api/calls/summary?q=colour:red").await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
     let (status, found) = get(
         &router,
         &format!(

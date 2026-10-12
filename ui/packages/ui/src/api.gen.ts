@@ -119,6 +119,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/calls/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The calls /calls lists at a glance, over every one of them (not the top groups a list shows): the tiles above a system's page. The same `q` and `system`. */
+        get: operations["callsSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/explain": {
         parameters: {
             query?: never;
@@ -553,6 +570,22 @@ export interface components {
             method: string | null;
             path: string | null;
             trace_name: string;
+        };
+        CallsSummary: {
+            calls: number;
+            /** @description Traces with any of the calls. */
+            traces: number;
+            /** @description The most calls in one trace; null with no calls. */
+            most_per_trace: number | null;
+            /** @description Calls that failed. */
+            errors: number;
+            total: components["schemas"]["Duration"];
+            /** @description Null with no calls. */
+            p95: components["schemas"]["Duration"] | null;
+            /** @description A cache's gets that hit; null for other systems. */
+            hits: number | null;
+            /** @description A cache's gets that missed; null for other systems. */
+            misses: number | null;
         };
         CallRow: {
             /** @description Call id (search traces with call:<key>; for SQL also query:<key>). */
@@ -1426,6 +1459,32 @@ export interface operations {
                     "application/json": {
                         calls: components["schemas"]["CallRow"][];
                     };
+                };
+            };
+            400: components["responses"]["BadSearch"];
+        };
+    };
+    callsSummary: {
+        parameters: {
+            query?: {
+                /** @description Search query: free text plus key:value filters, e.g. route:/api/* status>=500 "timed out". */
+                q?: components["parameters"]["q"];
+                /** @description One system, as /counts lists them. */
+                system?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The totals. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CallsSummary"];
                 };
             };
             400: components["responses"]["BadSearch"];

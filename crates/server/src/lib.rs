@@ -36,6 +36,7 @@ pub fn router(reader: Reader, activity: Activity) -> Router {
         .route("/api/search", get(search_spec))
         .route("/api/logs", get(logs))
         .route("/api/calls", get(calls))
+        .route("/api/calls/summary", get(calls_summary))
         .route("/api/mails", get(mails))
         .route("/api/values", get(values))
         .route("/api/issues", get(issues))
@@ -253,18 +254,30 @@ async fn logs(State(reader): State<Shared>, Query(query): Params) -> Response {
     )
 }
 
-/// Calls to every system, or to one (`system=`, the same as `system:` in `q`): one list for any system.
-async fn calls(State(reader): State<Shared>, Query(query): Params) -> Response {
-    let (mut q, limit) = (q(&query), limit(&query));
-    if let Some(system) = query.get("system").filter(|system| !system.is_empty()) {
-        q = format!("system:\"{}\" {q}", system.replace('"', ""));
+/// The search `q` with `system=` in it (the same as `system:` in `q`).
+fn calls_query(query: &HashMap<String, String>) -> String {
+    let q = q(query);
+    match query.get("system").filter(|system| !system.is_empty()) {
+        Some(system) => format!("system:\"{}\" {q}", system.replace('"', "")),
+        None => q,
     }
+}
+
+/// Calls to every system, or to one (`system=`): one list for any system.
+async fn calls(State(reader): State<Shared>, Query(query): Params) -> Response {
+    let (q, limit) = (calls_query(&query), limit(&query));
     answer(
         read(&reader, move |reader| {
             Ok(json!({"calls": reader.list_calls(&q, limit)?}))
         })
         .await,
     )
+}
+
+/// The calls `calls` lists at a glance, over all of them: the tiles above a system's page.
+async fn calls_summary(State(reader): State<Shared>, Query(query): Params) -> Response {
+    let q = calls_query(&query);
+    answer(read(&reader, move |reader| reader.calls_summary(&q)).await)
 }
 
 async fn mails(State(reader): State<Shared>, Query(query): Params) -> Response {

@@ -155,6 +155,25 @@ paths:
                 properties:
                   calls: { type: array, items: { $ref: "#/components/schemas/CallRow" } }
         "400": { $ref: "#/components/responses/BadSearch" }
+  /calls/summary:
+    get:
+      operationId: callsSummary
+      summary: >-
+        The calls /calls lists at a glance, over every one of them (not the top groups a list shows): the tiles above
+        a system's page. The same `q` and `system`.
+      parameters:
+        - $ref: "#/components/parameters/q"
+        - name: system
+          in: query
+          description: "One system, as /counts lists them."
+          schema: { type: string }
+      responses:
+        "200":
+          description: The totals.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CallsSummary" }
+        "400": { $ref: "#/components/responses/BadSearch" }
   /explain:
     get:
       operationId: explain
@@ -632,6 +651,19 @@ components:
         trace_name: { type: string }
     # CallRow, every system's aggregated calls, has the core fields: key, calls, traces, errors, total, slowest,
     # last_seen, most_per_trace, origin, sample_trace, sample_span.
+    CallsSummary:
+      type: object
+      additionalProperties: false
+      required: [calls, traces, most_per_trace, errors, total, p95, hits, misses]
+      properties:
+        calls: { type: integer }
+        traces: { type: integer, description: Traces with any of the calls. }
+        most_per_trace: { type: [integer, "null"], description: The most calls in one trace; null with no calls. }
+        errors: { type: integer, description: Calls that failed. }
+        total: { $ref: "#/components/schemas/Duration" }
+        p95: { oneOf: [{ $ref: "#/components/schemas/Duration" }, { type: "null" }], description: Null with no calls. }
+        hits: { type: [integer, "null"], description: "A cache's gets that hit; null for other systems." }
+        misses: { type: [integer, "null"], description: "A cache's gets that missed; null for other systems." }
     CallRow:
       type: object
       additionalProperties: false

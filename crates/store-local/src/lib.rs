@@ -164,6 +164,44 @@ mod tests {
     }
 
     #[test]
+    fn a_systems_calls_at_a_glance() {
+        let dir =
+            std::env::temp_dir().join(format!("tracepanel-store-summary-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = path_in(&dir);
+        Store::open(&path)
+            .unwrap()
+            .write(&[cached_request()])
+            .unwrap();
+        let reader = Reader::new(&path);
+
+        assert_eq!(
+            reader.calls_summary("system:redis").unwrap(),
+            serde_json::json!({"calls": 4, "traces": 1, "most_per_trace": 4, "errors": 1, "total": 7, "p95": 2,
+                               "hits": null, "misses": null})
+        );
+
+        // A cache's hits and misses; the same filters as its list.
+        assert_eq!(
+            reader.calls_summary("system:cache").unwrap(),
+            serde_json::json!({"calls": 3, "traces": 1, "most_per_trace": 3, "errors": 0, "total": 9, "p95": 3,
+                               "hits": 1, "misses": 2})
+        );
+        assert_eq!(
+            reader.calls_summary("system:redis failed:true").unwrap()["calls"],
+            1
+        );
+
+        // No calls: zeros, and nothing to rank.
+        assert_eq!(
+            reader.calls_summary("system:mongodb").unwrap(),
+            serde_json::json!({"calls": 0, "traces": 0, "most_per_trace": null, "errors": 0, "total": 0,
+                               "p95": null, "hits": null, "misses": null})
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn cache_and_redis_calls_take_the_same_filters() {
         let dir =
             std::env::temp_dir().join(format!("tracepanel-store-cache-{}", std::process::id()));

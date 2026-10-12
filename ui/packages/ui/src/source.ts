@@ -1,5 +1,6 @@
 import type {
   CallRow,
+  CallsSummary,
   Counts,
   EndpointDetail,
   EndpointRow,
@@ -52,6 +53,8 @@ export interface DataSource {
   searchMails(q: string, before?: number | null): Promise<Page<MailRow>>;
   /** One system's calls (`sql`, `redis`, `http`, `mongodb`, `neo4j`…) by what they repeat, heaviest first. */
   listCalls(system: string, q: string): Promise<CallRow[]>;
+  /** The same calls at a glance, over all of them: how many, their time, how many failed. */
+  callsSummary(system: string, q: string): Promise<CallsSummary | null>;
   listEndpoints(q: string): Promise<EndpointRow[]>;
   listTasks(q: string): Promise<TaskRow[]>;
   listWebsockets(q: string): Promise<WebsocketRow[]>;
@@ -145,6 +148,9 @@ export function httpSource(base: string | URL): DataSource {
     },
     async listCalls(system, q) {
       return (await getJson<{ calls: CallRow[] }>(url("calls", { system, q })))?.calls ?? [];
+    },
+    async callsSummary(system, q) {
+      return (await getJson<CallsSummary>(url("calls/summary", { system, q }))) ?? null;
     },
     async listEndpoints(q) {
       return (await getJson<{ endpoints: EndpointRow[] }>(url("endpoints", { q })))?.endpoints ?? [];
