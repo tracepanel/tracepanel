@@ -7,10 +7,11 @@ name: npm
 # - By hand, with a version already on PyPI (0.0.1a1): it downloads that release's wheels, makes the packages from
 #   them, checks them, and publishes them. The binaries are the ones on PyPI, byte for byte.
 #
-# npm's trusted publishing signs the upload: each package names this repository, npm.yml and the environment npm.
-# A package must exist before it can trust a workflow, so the first release publishes with an NPM_TOKEN secret; npm
-# uses the token when it is set and trusted publishing when it isn't. Remove the secret once every package trusts
-# this workflow.
+# It stages the versions (npm stage publish): nothing is public until a maintainer approves each one with 2FA, so a
+# compromised workflow or token can't publish. scripts/npm_approve.py approves a release's 16 versions in one go.
+#
+# npm's trusted publishing signs the upload: each package trusts this repository, npm.yml and the environment npm,
+# allowed to stage only. An NPM_TOKEN secret, if set, is used instead (the first release needed one).
 on:
   push:
     tags: ["[0-9]+.[0-9]+.[0-9]+*"]
@@ -89,7 +90,7 @@ jobs:
           path: npm-dist/*.tgz
 
   publish:
-    name: Publish to npm
+    name: Stage on npm
     needs: [wheels, released]
     # One of the two made the packages; the other was skipped.
     if: ${{ !cancelled() && !failure() }}
@@ -107,15 +108,15 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
 
-      - name: npm with trusted publishing (11.5.1 or later)
-        run: npm install --global npm@^11.5.1
+      - name: npm with staged publishing (11.15.0 or later)
+        run: npm install --global npm@^11.15.0
 
       - uses: actions/download-artifact@v8
         with:
           name: npm-packages
           path: npm-dist
 
-      - name: Publish the platform packages, then @tracepanel/agent
+      - name: Stage the platform packages, then @tracepanel/agent
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
@@ -131,6 +132,7 @@ jobs:
           echo "version $version, dist-tag $tag"
           for package in ./npm-dist/*.tgz; do
             [ "$package" = "$main" ] && continue
-            npm publish "$package" --access public --tag "$tag" --provenance
+            npm stage publish "$package" --access public --tag "$tag" --provenance
           done
-          npm publish "$main" --access public --tag "$tag" --provenance
+          npm stage publish "$main" --access public --tag "$tag" --provenance
+          echo "::notice::$version is staged: approve it with scripts/npm_approve.py $version"
