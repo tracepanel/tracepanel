@@ -6,15 +6,16 @@ request, job and command with its SQL queries and log lines, finds N+1 queries,
 duplicate and slow SQL, long transactions and errors, keeps everything in your
 project's `.tracepanel/` directory, and serves the panel and the console.
 
-You don't install it yourself. `pip install tracepanel` (or `django-tracepanel`)
-brings it, and the first traced request starts it. To run it in the
-foreground, with the console on http://127.0.0.1:8765/:
+You don't install it yourself. The Tracepanel SDKs bring it, and the first
+traced request starts it. The Python SDK, `tracepanel`, comes in its own
+release. To run the agent by hand, with the console on
+http://127.0.0.1:8765/:
 
 ```bash
-tracepanel dev
+tracepanel-agent --serve 127.0.0.1:8765
 ```
 
-It gives AI coding agents your traces over MCP too: `tracepanel mcp`.
+It gives AI coding agents your traces over MCP too: `tracepanel-agent mcp`.
 
 Your traces stay on your machine.
 
