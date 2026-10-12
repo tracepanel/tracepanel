@@ -15,4 +15,9 @@ tracepanel dev
 
 It gives AI coding agents your traces over MCP too: `tracepanel mcp`.
 
-Your traces stay on your machine. Licensed under the Apache License 2.0.
+Your traces stay on your machine.
+
+The agent is under the Functional Source License (FSL-1.1-ALv2). You can use it
+for any purpose except a commercial product or service that competes with
+Tracepanel. Each version becomes Apache License 2.0 two years after its
+release.

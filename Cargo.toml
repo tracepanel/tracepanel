@@ -7,7 +7,7 @@ version = "0.0.1-alpha.1"
 edition = "2024"
 rust-version = "1.99"
 repository = "https://github.com/tracepanel/tracepanel"
-license = "Apache-2.0"
+license = "FSL-1.1-ALv2"
 # Not on crates.io: the agent ships as a binary (and its crates are not in the third-party notices).
 publish = false
 
