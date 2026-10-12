@@ -630,6 +630,58 @@ impl Reader {
         Ok(objects_of(rows))
     }
 
+    /// The calls matching `query` (one system's, with `system:` in it) at a glance: how many, in how many traces,
+    /// the most in one trace, how many failed, their total and p95 time, and a cache's hits and misses (null for
+    /// other systems). Over every call, not the top groups a list shows.
+    pub fn calls_summary(&self, query: &str) -> Result<Value, ReadError> {
+        let (condition, params) = search::compile_where(query, &CALLS_SEARCH)?;
+        let db = self.connect()?;
+        let mut totals = objects(
+            &db,
+            &format!(
+                "SELECT COUNT(*) AS calls, COUNT(DISTINCT trace_id) AS traces, COALESCE(SUM(error), 0) AS errors, \
+                 COALESCE(SUM(duration), 0) AS total, \
+                 CASE WHEN MAX(family) = 'cache' THEN COALESCE(SUM(hit = 1), 0) END AS hits, \
+                 CASE WHEN MAX(family) = 'cache' THEN COALESCE(SUM(hit = 0), 0) END AS misses \
+                 FROM calls WHERE {condition}"
+            ),
+            params.clone(),
+        )?
+        .pop()
+        .unwrap_or_default();
+        let calls = totals.get("calls").and_then(Value::as_i64).unwrap_or(0);
+        // One number, or null (no calls).
+        let one = |sql: &str, params: Vec<Sql>| -> Result<Value, ReadError> {
+            Ok(db
+                .query_row(sql, rusqlite::params_from_iter(params), |row| {
+                    row.get::<_, Option<i64>>(0)
+                })?
+                .map_or(Value::Null, Value::from))
+        };
+        let most_per_trace = one(
+            &format!(
+                "SELECT MAX(n) FROM (SELECT COUNT(*) AS n FROM calls WHERE {condition} GROUP BY trace_id)"
+            ),
+            params.clone(),
+        )?;
+        // The call 95% of the others are no slower than: nearest rank.
+        let p95 = if calls == 0 {
+            Value::Null
+        } else {
+            let mut ranked = params;
+            ranked.push(Sql::Integer((calls * 95 + 99) / 100 - 1));
+            one(
+                &format!(
+                    "SELECT duration FROM calls WHERE {condition} ORDER BY duration LIMIT 1 OFFSET ?"
+                ),
+                ranked,
+            )?
+        };
+        totals.insert("most_per_trace".into(), most_per_trace);
+        totals.insert("p95".into(), p95);
+        Ok(Value::Object(totals))
+    }
+
     /// Newest first; `before` is the `start` of the last row of the previous page.
     pub fn search_traces(
         &self,

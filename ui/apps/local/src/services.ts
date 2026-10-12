@@ -34,7 +34,7 @@ export function appTarget(app: ServiceApp): Route {
 }
 
 /** One project, however many roles it runs as (web, worker, command): its rows summed, the busiest role first. */
-export interface App extends Omit<ServiceApp, "role"> {
+export interface Project extends Omit<ServiceApp, "role"> {
   roles: ServiceApp[];
   /** Where the row goes: the role with the most traces. */
   busiest: ServiceApp;
@@ -45,7 +45,7 @@ function sum(roles: readonly ServiceApp[], field: "traces" | "errors" | "total")
 }
 
 /** A project's roles summed, the busiest first. */
-function project(roles: readonly ServiceApp[]): App {
+function project(roles: readonly ServiceApp[]): Project {
   const sorted = [...roles].sort((a, b) => b.traces - a.traces);
   const busiest = sorted[0] as ServiceApp;
   return {
@@ -61,7 +61,7 @@ function project(roles: readonly ServiceApp[]): App {
   };
 }
 
-export function byProject(apps: readonly ServiceApp[]): App[] {
+export function byProject(apps: readonly ServiceApp[]): Project[] {
   const projects = new Map<string, ServiceApp[]>();
   for (const app of apps) projects.set(app.service, [...(projects.get(app.service) ?? []), app]);
   return [...projects.values()].map(project);

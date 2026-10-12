@@ -12,7 +12,7 @@ import {
 import { cn } from "@tracepanel/ui/lib/utils";
 import { type ReactNode, type RefObject, useLayoutEffect, useRef, useState } from "react";
 import { href } from "./routes";
-import { type App, appTarget, byProject, serviceTarget } from "./services";
+import { appTarget, byProject, type Project, serviceTarget } from "./services";
 
 /** The services' groups, in the order a request reaches them: its data first, then what it hands work to. */
 const KIND_GROUPS: readonly { kind: ServiceNode["kind"]; label: string }[] = [
@@ -138,7 +138,7 @@ function failures(errors: number): string {
 }
 
 /** A project, with a card per role it runs as (web, worker, command): the edges start at the roles. */
-function AppCards({ app, onHover }: { app: App; onHover: (anchor: string | null) => void }) {
+function AppCards({ app, onHover }: { app: Project; onHover: (anchor: string | null) => void }) {
   const kind = app.runtime ? runtimeKind(app.runtime) : null;
   return (
     <div className="grid gap-1.5">

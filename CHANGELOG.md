@@ -4,6 +4,10 @@
 
 ### Added
 
+- Tiles above a system's page sum up its calls, all of them and with the
+  page's filters: how many and in how many requests, their time and p95, how
+  many per request (up to the most in one), how many failed (a click shows
+  them), and a cache's hit rate. `/api/calls/summary` answers them.
 - The Services page opens with a map: the project's apps on the left, what
   they call on the right by kind (databases, caches, brokers, HTTP APIs,
   mail), and a curve for each pair, thicker for more calls and red with

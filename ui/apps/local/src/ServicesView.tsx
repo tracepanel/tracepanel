@@ -14,7 +14,7 @@ import { Badge } from "@tracepanel/ui/components/ui/badge";
 import type { ReactNode } from "react";
 import { href } from "./routes";
 import { ServicesMap } from "./ServicesMap";
-import { type App, appTarget, byProject, serviceTarget } from "./services";
+import { appTarget, byProject, type Project, serviceTarget } from "./services";
 import { DataTable, Meter, Mono, Td, Th, Tr } from "./ui";
 
 /** The icon in a tile, then the name over where it runs. */
@@ -32,7 +32,7 @@ function Name({ icon, name, detail }: { icon: ReactNode; name: string; detail: s
   );
 }
 
-function AppRow({ app, slowest, onOpen }: { app: App; slowest: number; onOpen?: (() => void) | undefined }) {
+function AppRow({ app, slowest, onOpen }: { app: Project; slowest: number; onOpen?: (() => void) | undefined }) {
   const kind = app.runtime ? runtimeKind(app.runtime) : null;
   return (
     <Tr tone={app.errors ? "error" : undefined} href={href(appTarget(app.busiest))} opening={onOpen}>
