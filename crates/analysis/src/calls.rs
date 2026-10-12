@@ -56,6 +56,9 @@ pub fn family(kind: &str) -> Option<&'static str> {
 /// How titles name a system: its known spelling, else its name as sent.
 pub fn display_name(system: &str) -> String {
     match system {
+        "sql" => "Database",
+        "cache" => "Cache",
+        "http" => "HTTP calls",
         "redis" => "Redis",
         "mongodb" => "MongoDB",
         "elasticsearch" => "Elasticsearch",

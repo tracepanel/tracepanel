@@ -14,7 +14,7 @@ pub(crate) const TABLES: [&str; 12] = [
     "issue_traces",
     "logs",
     "logs_fts",
-    "ops",
+    "calls",
     "mails",
     "links",
     "peers",
@@ -120,7 +120,7 @@ pub(crate) fn prune(db: &Connection, fts: bool, max_traces: i64) -> rusqlite::Re
 /// The tables with rows per trace: a trace's statements, calls, logs, issues, peers and links.
 const PER_TRACE: [&str; 8] = [
     "logs",
-    "ops",
+    "calls",
     "issue_traces",
     "mails",
     "links",
@@ -267,17 +267,17 @@ pub(crate) fn write_trace(
         }
     }
     for span in &trace.spans {
-        let Some(operation) = tracepanel_analysis::ops::operation(trace, span) else {
+        let Some(operation) = tracepanel_analysis::calls::operation(trace, span) else {
             continue;
         };
         db.execute(
-            "INSERT INTO ops (trace_id, span_id, key, system, family, target, op, template, name, statement, vendor,
+            "INSERT INTO calls (trace_id, span_id, key, system, family, target, op, template, name, statement, vendor,
              params_hash, via, hit, error, start, duration, origin)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
             params![
                 trace.id,
                 span.id,
-                op_key(&operation),
+                call_key(&operation),
                 operation.system,
                 operation.family,
                 operation.target,

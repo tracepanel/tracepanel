@@ -1,6 +1,6 @@
 -- tracepanel's local store: one SQLite file per format version, shared by every process of a project and, when it
 -- runs, written by tracepanel-agent instead (which reads this file too: keep both writers in step).
--- version: 17
+-- version: 18
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS traces (
     id TEXT PRIMARY KEY,
@@ -63,14 +63,14 @@ CREATE TABLE IF NOT EXISTS logs (
 );
 CREATE INDEX IF NOT EXISTS logs_time ON logs (time DESC);
 CREATE INDEX IF NOT EXISTS logs_trace ON logs (trace_id);
--- Operations: every call the app makes to another system (crates/analysis/src/ops.rs), one row per span. `system` is
+-- Operations: every call the app makes to another system (crates/analysis/src/calls.rs), one row per span. `system` is
 -- what the console lists them under (sql, redis, cache, http, mongodb, kafka, grpc, or a system's own name for the
 -- generic db / messaging / rpc kinds), `family` the rules its issues follow, `key` the id a list groups by and a trace
 -- search links with (`op:<key>`; for SQL the statement's fingerprint key, `query:<key>`). `target` is where it went (a
 -- database alias, an instance, a host, a topic), `op` the verb, `template` what its repeats share (a fingerprint, a key
 -- or path with its ids as {id}, a collection). `vendor` is SQL's database or a cache's backend, `params_hash` SQL's
 -- parameters, `via` why a Redis command ran (direct, cache, task), `hit` a cache get's outcome.
-CREATE TABLE IF NOT EXISTS ops (
+CREATE TABLE IF NOT EXISTS calls (
     trace_id TEXT NOT NULL,
     span_id TEXT NOT NULL,
     key TEXT NOT NULL,
@@ -90,9 +90,9 @@ CREATE TABLE IF NOT EXISTS ops (
     duration INTEGER NOT NULL,
     origin TEXT
 );
-CREATE INDEX IF NOT EXISTS ops_key ON ops (key);
-CREATE INDEX IF NOT EXISTS ops_trace ON ops (trace_id);
-CREATE INDEX IF NOT EXISTS ops_system ON ops (system);
+CREATE INDEX IF NOT EXISTS calls_key ON calls (key);
+CREATE INDEX IF NOT EXISTS calls_trace ON calls (trace_id);
+CREATE INDEX IF NOT EXISTS calls_system ON calls (system);
 CREATE TABLE IF NOT EXISTS mails (
     trace_id TEXT NOT NULL,
     span_id TEXT NOT NULL,

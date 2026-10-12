@@ -35,11 +35,7 @@ pub fn router(reader: Reader, activity: Activity) -> Router {
         .route("/api/counts", get(counts))
         .route("/api/search", get(search_spec))
         .route("/api/logs", get(logs))
-        .route("/api/ops", get(ops))
-        .route("/api/queries", get(queries))
         .route("/api/calls", get(calls))
-        .route("/api/redis", get(redis))
-        .route("/api/cache", get(cache))
         .route("/api/mails", get(mails))
         .route("/api/values", get(values))
         .route("/api/issues", get(issues))
@@ -257,55 +253,15 @@ async fn logs(State(reader): State<Shared>, Query(query): Params) -> Response {
     )
 }
 
-/// Operations of every system, or of one (`system=`, the same as `system:` in `q`): one list for any system.
-async fn ops(State(reader): State<Shared>, Query(query): Params) -> Response {
+/// Calls to every system, or to one (`system=`, the same as `system:` in `q`): one list for any system.
+async fn calls(State(reader): State<Shared>, Query(query): Params) -> Response {
     let (mut q, limit) = (q(&query), limit(&query));
     if let Some(system) = query.get("system").filter(|system| !system.is_empty()) {
         q = format!("system:\"{}\" {q}", system.replace('"', ""));
     }
     answer(
         read(&reader, move |reader| {
-            Ok(json!({"ops": reader.list_ops(&q, limit)?}))
-        })
-        .await,
-    )
-}
-
-async fn queries(State(reader): State<Shared>, Query(query): Params) -> Response {
-    let (q, limit) = (q(&query), limit(&query));
-    answer(
-        read(&reader, move |reader| {
-            Ok(json!({"queries": reader.list_queries(&q, limit)?}))
-        })
-        .await,
-    )
-}
-
-async fn calls(State(reader): State<Shared>, Query(query): Params) -> Response {
-    let (q, limit) = (q(&query), limit(&query));
-    answer(
-        read(&reader, move |reader| {
             Ok(json!({"calls": reader.list_calls(&q, limit)?}))
-        })
-        .await,
-    )
-}
-
-async fn redis(State(reader): State<Shared>, Query(query): Params) -> Response {
-    let (q, limit) = (q(&query), limit(&query));
-    answer(
-        read(&reader, move |reader| {
-            Ok(json!({"redis": reader.list_redis(&q, limit)?}))
-        })
-        .await,
-    )
-}
-
-async fn cache(State(reader): State<Shared>, Query(query): Params) -> Response {
-    let (q, limit) = (q(&query), limit(&query));
-    answer(
-        read(&reader, move |reader| {
-            Ok(json!({"cache": reader.list_cache(&q, limit)?}))
         })
         .await,
     )

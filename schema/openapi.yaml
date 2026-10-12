@@ -129,32 +129,13 @@ paths:
                   mails: { type: array, items: { $ref: "#/components/schemas/MailRow" } }
                   next: { $ref: "#/components/schemas/Cursor" }
         "400": { $ref: "#/components/responses/BadSearch" }
-  /queries:
+  /calls:
     get:
-      operationId: listQueries
-      summary: SQL statements aggregated across stored traces, heaviest first.
-      parameters:
-        - $ref: "#/components/parameters/q"
-        - $ref: "#/components/parameters/limit"
-      responses:
-        "200":
-          description: Statements.
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [queries]
-                additionalProperties: false
-                properties:
-                  queries: { type: array, items: { $ref: "#/components/schemas/QueryRow" } }
-        "400": { $ref: "#/components/responses/BadSearch" }
-  /ops:
-    get:
-      operationId: listOps
+      operationId: listCalls
       summary: >-
-        Operations (every call the app made to another system: SQL, Redis, cache, HTTP, a datastore, a broker, an RPC
-        system) aggregated per key across stored traces, heaviest first. One list for every system; `system` narrows it
-        to one, as `system:` in q does.
+        Calls the app made to other systems (SQL, Redis, cache, HTTP, a datastore, a broker, an RPC system) aggregated
+        per key across stored traces, heaviest first. One list for every system; `system` narrows it to one, as
+        `system:` in q does.
       parameters:
         - $ref: "#/components/parameters/q"
         - $ref: "#/components/parameters/limit"
@@ -164,26 +145,7 @@ paths:
           schema: { type: string }
       responses:
         "200":
-          description: Operations.
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [ops]
-                additionalProperties: false
-                properties:
-                  ops: { type: array, items: { $ref: "#/components/schemas/OpRow" } }
-        "400": { $ref: "#/components/responses/BadSearch" }
-  /calls:
-    get:
-      operationId: listCalls
-      summary: Outgoing HTTP calls aggregated per endpoint (method, host, path template) across stored traces, heaviest first.
-      parameters:
-        - $ref: "#/components/parameters/q"
-        - $ref: "#/components/parameters/limit"
-      responses:
-        "200":
-          description: Endpoints.
+          description: Calls.
           content:
             application/json:
               schema:
@@ -192,44 +154,6 @@ paths:
                 additionalProperties: false
                 properties:
                   calls: { type: array, items: { $ref: "#/components/schemas/CallRow" } }
-        "400": { $ref: "#/components/responses/BadSearch" }
-  /redis:
-    get:
-      operationId: listRedis
-      summary: Redis commands aggregated per client alias, command and key template across stored traces, heaviest first.
-      parameters:
-        - $ref: "#/components/parameters/q"
-        - $ref: "#/components/parameters/limit"
-      responses:
-        "200":
-          description: Commands.
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [redis]
-                additionalProperties: false
-                properties:
-                  redis: { type: array, items: { $ref: "#/components/schemas/RedisRow" } }
-        "400": { $ref: "#/components/responses/BadSearch" }
-  /cache:
-    get:
-      operationId: listCache
-      summary: Cache operations (a cache API's, such as Django's) aggregated per alias, op and key template, heaviest first.
-      parameters:
-        - $ref: "#/components/parameters/q"
-        - $ref: "#/components/parameters/limit"
-      responses:
-        "200":
-          description: Cache operations.
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [cache]
-                additionalProperties: false
-                properties:
-                  cache: { type: array, items: { $ref: "#/components/schemas/CacheRow" } }
         "400": { $ref: "#/components/responses/BadSearch" }
   /explain:
     get:
@@ -706,37 +630,15 @@ components:
         method: { type: [string, "null"] }
         path: { type: [string, "null"] }
         trace_name: { type: string }
-    # The four aggregated lists (QueryRow, CallRow, RedisRow, CacheRow) share their core fields: key, calls, traces,
-    # errors, total, slowest, last_seen, most_per_trace, origin, sample_trace, sample_span.
-    QueryRow:
-      type: object
-      additionalProperties: false
-      required: [key, fp, alias, vendor, statement, name, calls, traces, errors, total, slowest, last_seen,
-        most_per_trace, origin, sample_trace, sample_span]
-      properties:
-        key: { type: string, description: "Statement id, as fp (search traces with query:<key>)." }
-        fp: { type: string, description: "Statement id (search with query:<fp>)." }
-        alias: { type: string, description: Database alias. }
-        vendor: { type: string, description: "sqlite, postgresql, mysql…" }
-        statement: { type: string, description: Normalized SQL with %s placeholders. }
-        name: { type: string }
-        calls: { type: integer }
-        traces: { type: integer }
-        errors: { type: integer, description: Calls that failed. }
-        total: { $ref: "#/components/schemas/Duration" }
-        slowest: { $ref: "#/components/schemas/Duration" }
-        last_seen: { $ref: "#/components/schemas/Time" }
-        most_per_trace: { type: integer, description: The most calls in one trace. }
-        origin: { type: [string, "null"], description: The most common line of code making the call. }
-        sample_trace: { type: string, description: The latest call's trace. }
-        sample_span: { type: string, description: The latest call's span. }
-    OpRow:
+    # CallRow, every system's aggregated calls, has the core fields: key, calls, traces, errors, total, slowest,
+    # last_seen, most_per_trace, origin, sample_trace, sample_span.
+    CallRow:
       type: object
       additionalProperties: false
       required: [key, system, family, target, op, template, name, calls, traces, errors, total, slowest, last_seen,
         most_per_trace, origin, sample_trace, sample_span, statement, vendor, hits, misses, via]
       properties:
-        key: { type: string, description: "Operation id (search traces with op:<key>; for SQL also query:<key>)." }
+        key: { type: string, description: "Call id (search traces with call:<key>; for SQL also query:<key>)." }
         system:
           type: string
           description: >-
@@ -762,73 +664,6 @@ components:
         hits: { type: [integer, "null"], description: "A cache: gets that found their key." }
         misses: { type: [integer, "null"], description: "A cache: gets that didn't." }
         via: { type: [string, "null"], description: "Redis: direct (the app's call), cache or task (sent for one)." }
-    CallRow:
-      type: object
-      additionalProperties: false
-      required: [key, method, host, template, calls, traces, errors, total, slowest, last_seen, most_per_trace, origin,
-        sample_trace, sample_span]
-      properties:
-        key: { type: string, description: "Endpoint id (search traces with call:<key>)." }
-        method: { type: string, description: "GET, POST…" }
-        host: { type: string }
-        template: { type: string, description: "Path with ids as {id}: /users/{id}." }
-        calls: { type: integer }
-        traces: { type: integer }
-        errors: { type: integer, description: Calls that failed or answered 400 or more. }
-        total: { $ref: "#/components/schemas/Duration" }
-        slowest: { $ref: "#/components/schemas/Duration" }
-        last_seen: { $ref: "#/components/schemas/Time" }
-        most_per_trace: { type: integer, description: The most calls in one trace. }
-        origin: { type: [string, "null"], description: The most common line of code making the call. }
-        sample_trace: { type: string, description: The latest call's trace. }
-        sample_span: { type: string, description: The latest call's span. }
-    RedisRow:
-      type: object
-      additionalProperties: false
-      required: [key, alias, command, template, via, calls, traces, errors, total, slowest, last_seen, most_per_trace,
-        origin, sample_trace, sample_span]
-      properties:
-        key: { type: string, description: "Command id (search traces with redis_call:<key>)." }
-        alias: { type: string, description: "The client's alias: redis, redis/1." }
-        command: { type: string, description: "GET, HGETALL, PIPELINE…" }
-        template: { type: string, description: "Key with ids as {id}: user:{id}; empty without a key." }
-        via:
-          type: string
-          enum: [direct, cache, task]
-          description: "Why the command ran: the app's own call, or under a cache operation or a task enqueue."
-        calls: { type: integer }
-        traces: { type: integer }
-        errors: { type: integer, description: Calls that failed. }
-        total: { $ref: "#/components/schemas/Duration" }
-        slowest: { $ref: "#/components/schemas/Duration" }
-        last_seen: { $ref: "#/components/schemas/Time" }
-        most_per_trace: { type: integer, description: The most calls in one trace. }
-        origin: { type: [string, "null"], description: The most common line of code making the call. }
-        sample_trace: { type: string, description: The latest call's trace. }
-        sample_span: { type: string, description: The latest call's span. }
-    CacheRow:
-      type: object
-      additionalProperties: false
-      required: [key, alias, system, op, template, hits, misses, calls, traces, errors, total, slowest, last_seen,
-        most_per_trace, origin, sample_trace, sample_span]
-      properties:
-        key: { type: string, description: "Operation id (search traces with cache_call:<key>)." }
-        alias: { type: string, description: Cache alias. }
-        system: { type: [string, "null"], description: "The cache's backend: redis, memcached, locmem…" }
-        op: { type: string, description: "get, set, get_many…" }
-        template: { type: string, description: "Key with ids as {id}; empty for an operation on several keys." }
-        hits: { type: integer, description: Gets that found the key. }
-        misses: { type: integer, description: Gets that didn't. }
-        calls: { type: integer }
-        traces: { type: integer }
-        errors: { type: integer, description: Calls that failed. }
-        total: { $ref: "#/components/schemas/Duration" }
-        slowest: { $ref: "#/components/schemas/Duration" }
-        last_seen: { $ref: "#/components/schemas/Time" }
-        most_per_trace: { type: integer, description: The most calls in one trace. }
-        origin: { type: [string, "null"], description: The most common line of code making the call. }
-        sample_trace: { type: string, description: The latest call's trace. }
-        sample_span: { type: string, description: The latest call's span. }
     ExplainPlan:
       type: object
       additionalProperties: false
@@ -1014,16 +849,13 @@ components:
           type: object
           description: Stored traces per entry point; the console hides entry points with none.
           additionalProperties: false
-          required: [http, graphql, tasks, websockets, jobs, calls, redis, cache, systems]
+          required: [http, graphql, tasks, websockets, jobs, systems]
           properties:
             http: { type: integer, description: HTTP requests that are not GraphQL operations. }
             graphql: { type: integer }
             tasks: { type: integer }
             websockets: { type: integer }
             jobs: { type: integer, description: Management commands and tracepanel.trace() blocks. }
-            calls: { type: boolean, description: Outgoing HTTP calls were recorded; the console shows its HTTP calls page. }
-            redis: { type: boolean, description: Redis commands were recorded; the console shows its Redis page. }
-            cache: { type: boolean, description: Cache operations were recorded; the console shows its Cache page. }
             systems:
               type: array
               description: >-
@@ -1039,7 +871,7 @@ components:
     KnownValues:
       type: object
       additionalProperties: false
-      required: [route, logger, db, host, redis, cache, targets, ops, task, queue, job, extra]
+      required: [route, logger, db, targets, ops, task, queue, job, extra]
       properties:
         task: { type: array, description: Celery task names., items: { type: string } }
         queue: { type: array, description: Celery queues tasks ran from., items: { type: string } }
@@ -1047,9 +879,6 @@ components:
         route: { type: array, items: { type: string } }
         logger: { type: array, items: { type: string } }
         db: { type: array, description: Database aliases., items: { type: string } }
-        host: { type: array, description: Hosts the app called over HTTP., items: { type: string } }
-        redis: { type: array, description: Redis client aliases., items: { type: string } }
-        cache: { type: array, description: Cache aliases., items: { type: string } }
         targets:
           type: object
           description: "Each system's targets (as /counts names the systems): {\"mongodb\": [\"shop\"]}."
@@ -1069,8 +898,7 @@ components:
     SearchSpec:
       type: object
       additionalProperties: false
-      required: [traces, logs, mails, ops, queries, calls, redis, cache, endpoints, tasks, services, websockets, graphql,
-        jobs, issues]
+      required: [traces, logs, mails, calls, endpoints, tasks, services, websockets, graphql, jobs, issues]
       properties:
         tasks: { $ref: "#/components/schemas/SearchFields" }
         services: { $ref: "#/components/schemas/SearchFields" }
@@ -1080,11 +908,7 @@ components:
         traces: { $ref: "#/components/schemas/SearchFields" }
         logs: { $ref: "#/components/schemas/SearchFields" }
         mails: { $ref: "#/components/schemas/SearchFields" }
-        ops: { $ref: "#/components/schemas/SearchFields" }
-        queries: { $ref: "#/components/schemas/SearchFields" }
         calls: { $ref: "#/components/schemas/SearchFields" }
-        redis: { $ref: "#/components/schemas/SearchFields" }
-        cache: { $ref: "#/components/schemas/SearchFields" }
         endpoints: { $ref: "#/components/schemas/SearchFields" }
         issues: { $ref: "#/components/schemas/SearchFields" }
     SearchFields:

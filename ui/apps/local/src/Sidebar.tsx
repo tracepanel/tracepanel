@@ -42,7 +42,7 @@ import {
   ZapIcon,
 } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
-import { opsSection, type Section } from "./routes";
+import { callsSection, type Section } from "./routes";
 import type { App } from "./scope";
 import { type ThemeChoice, useTheme } from "./theme";
 
@@ -114,7 +114,7 @@ const FAMILY_ICONS: Record<Family, LucideIcon> = {
 /** A Data item for each system the store has operations of, in the agent's order (families, then names). */
 function systemItems(counts: Counts | undefined): NavItem[] {
   return (counts?.sections.systems ?? []).map(({ system, family, label }) => ({
-    section: opsSection(system),
+    section: callsSection(system),
     label: systemOfPage(system, family, label).label,
     icon: FAMILY_ICONS[family],
   }));

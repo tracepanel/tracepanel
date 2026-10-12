@@ -8,7 +8,7 @@ use serde_json::Value;
 use sha1::{Digest, Sha1};
 use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
-use tracepanel_analysis::ops::Operation;
+use tracepanel_analysis::calls::Operation;
 use tracepanel_protocol::{Attrs, Received, Span, Trace};
 
 pub mod search;
@@ -33,7 +33,7 @@ pub use read::{Page, ReadError, Reader};
 /// The store's errors (SQLite's).
 pub use rusqlite::Error;
 pub use stats::{SLOW_REQUEST_US, stats};
-pub use values::{op_key, query_fingerprint};
+pub use values::{call_key, query_fingerprint};
 pub use write::{DEFAULT_MAX_TRACES, SCHEMA, Store, path_in, version};
 
 #[cfg(test)]
@@ -70,14 +70,14 @@ mod tests {
             via,
             hit: None,
         };
-        let key = op_key(&operation("http", "api.example.com", None));
+        let key = call_key(&operation("http", "api.example.com", None));
         assert_eq!(key.len(), 16);
-        assert_eq!(key, op_key(&operation("http", "api.example.com", None)));
-        assert_ne!(key, op_key(&operation("http", "other.example.com", None)));
-        assert_ne!(key, op_key(&operation("grpc", "api.example.com", None)));
+        assert_eq!(key, call_key(&operation("http", "api.example.com", None)));
+        assert_ne!(key, call_key(&operation("http", "other.example.com", None)));
+        assert_ne!(key, call_key(&operation("grpc", "api.example.com", None)));
         assert_ne!(
             key,
-            op_key(&operation("http", "api.example.com", Some("cache")))
+            call_key(&operation("http", "api.example.com", Some("cache")))
         );
     }
 
@@ -139,10 +139,13 @@ mod tests {
         };
 
         assert_eq!(
-            calls(reader.list_redis("", 50).unwrap()),
+            calls(reader.list_calls("system:redis", 50).unwrap()),
             [Value::from(3), Value::from(1)]
         );
-        assert_eq!(calls(reader.list_cache("", 50).unwrap()), [Value::from(3)]);
+        assert_eq!(
+            calls(reader.list_calls("system:cache", 50).unwrap()),
+            [Value::from(3)]
+        );
         let services = reader.list_services("").unwrap();
         assert_eq!(
             services["services"]
@@ -161,7 +164,7 @@ mod tests {
     }
 
     #[test]
-    fn cache_and_redis_lists_take_the_same_filters() {
+    fn cache_and_redis_calls_take_the_same_filters() {
         let dir =
             std::env::temp_dir().join(format!("tracepanel-store-cache-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
@@ -179,11 +182,13 @@ mod tests {
 
         assert_eq!(
             fields(
-                reader.list_cache("db:default op:GET", 50).unwrap(),
+                reader
+                    .list_calls("system:cache db:default op:GET", 50)
+                    .unwrap(),
                 &[
                     "op",
                     "template",
-                    "system",
+                    "vendor",
                     "calls",
                     "hits",
                     "misses",
@@ -201,8 +206,8 @@ mod tests {
 
         assert_eq!(
             fields(
-                reader.list_redis("", 50).unwrap(),
-                &["command", "template", "via", "calls", "errors"]
+                reader.list_calls("system:redis", 50).unwrap(),
+                &["op", "template", "via", "calls", "errors"]
             ),
             [
                 serde_json::json!(["GET", ":{id}:user:{id}", "cache", 3, 0])
@@ -218,35 +223,32 @@ mod tests {
         assert_eq!(
             fields(
                 reader
-                    .list_redis("failed:true via:direct op:incr", 50)
+                    .list_calls("system:redis failed:true via:direct op:incr", 50)
                     .unwrap(),
-                &["command"]
+                &["op"]
             ),
             [vec![Value::from("INCR")]]
         );
-        assert!(reader.list_redis("via:task", 50).unwrap().is_empty());
-        assert!(reader.list_cache("failed:true", 50).unwrap().is_empty());
+        assert!(
+            reader
+                .list_calls("system:redis via:task", 50)
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            reader
+                .list_calls("system:cache failed:true", 50)
+                .unwrap()
+                .is_empty()
+        );
 
         let known = reader.known_values("").unwrap();
-        assert_eq!(
-            (
-                known["redis"].clone(),
-                known["cache"].clone(),
-                known["host"].clone()
-            ),
-            (
-                serde_json::json!(["redis"]),
-                serde_json::json!(["default"]),
-                serde_json::json!([])
-            )
-        );
         let counts = reader.counts(None).unwrap();
         assert_eq!(
             counts["sections"],
-            serde_json::json!({"http": 1, "graphql": 0, "tasks": 0, "websockets": 0, "jobs": 0, "calls": false,
-                               "redis": true, "cache": true,
+            serde_json::json!({"http": 1, "graphql": 0, "tasks": 0, "websockets": 0, "jobs": 0,
                                "systems": [{"system": "redis", "family": "redis", "label": "Redis"},
-                                           {"system": "cache", "family": "cache", "label": "cache"}]})
+                                           {"system": "cache", "family": "cache", "label": "Cache"}]})
         );
         assert_eq!(
             known["targets"],

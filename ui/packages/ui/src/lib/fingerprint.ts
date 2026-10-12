@@ -38,7 +38,7 @@ function sha1(bytes: Uint8Array): string {
   return [h0, h1, h2, h3, h4].map((h) => h.toString(16).padStart(8, "0")).join("");
 }
 
-/** The key the agent files a statement under, as `query:<key>` searches for it. */
+/** The key the agent files a statement under, as `call:<key>` searches for it. */
 export function queryFingerprint(statement: string, alias: string): string {
   return sha1(encoder.encode(`${alias}|${statement}`)).slice(0, 16);
 }

@@ -14,7 +14,7 @@ import {
 import { Badge } from "@tracepanel/ui/components/ui/badge";
 import { SQL_VENDORS } from "@tracepanel/ui/lib/systems";
 import type { ReactNode } from "react";
-import { currentPeriod, href, opsSection, type Route, withPeriod } from "./routes";
+import { callsSection, currentPeriod, href, type Route, withPeriod } from "./routes";
 import { DataTable, Meter, Mono, Td, Th, Tr } from "./ui";
 
 /** The page of a service's operations: SQL for every SQL database, the cache's, HTTP calls, a datastore's own. */
@@ -33,7 +33,7 @@ const WEB = new Set(["http", "https"]);
 function target(node: ServiceNode): Route {
   const aliases = node.aliases.join(",");
   const page = pageOfService(node);
-  if (page) return { name: opsSection(page), q: aliases ? `target:${aliases}` : "" };
+  if (page) return { name: callsSection(page), q: aliases ? `target:${aliases}` : "" };
   if (node.kind === "mail") return { name: "mails", q: "" };
   // A broker and an HTTP API: the traces that called it (a worker's tasks taking from the broker included).
   return { name: "traces", q: withPeriod(`peer:${node.id}`, currentPeriod()) };

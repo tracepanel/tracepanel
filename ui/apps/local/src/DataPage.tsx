@@ -1,16 +1,16 @@
-import { type DataSource, Empty, type KnownValues, type OpRow, type SearchSpec } from "@tracepanel/ui";
+import { type CallRow, type DataSource, Empty, type KnownValues, type SearchSpec } from "@tracepanel/ui";
 import type { Family } from "@tracepanel/ui/lib/systems";
 import { type ReactNode, useCallback } from "react";
 import { usePaged, useSearch } from "./data";
 import { EmptyPage } from "./EmptyPage";
 import { refineQuery } from "./EntryPage";
 import { RefreshControl } from "./refresh";
-import { type EntrySection, go, type OpsSection, type Section, systemOfSection, traceHref } from "./routes";
+import { type CallsSection, type EntrySection, go, type Section, systemOfSection, traceHref } from "./routes";
 import { SearchBar } from "./SearchBar";
 import { byProject, ServicesView } from "./ServicesView";
 import { useScope } from "./scope";
 import { pageMeta } from "./sections";
-import { IssuesTable, LogsTable, MailsTable, OpsTable, TracesTable } from "./tables";
+import { CallsTable, IssuesTable, LogsTable, MailsTable, TracesTable } from "./tables";
 import { Loading, LoadMore, PageHeader } from "./ui";
 
 type DataSection = Exclude<Section, EntrySection>;
@@ -31,7 +31,7 @@ interface DataPageProps {
 const SUMMARIES: ReadonlySet<string> = new Set(["services"]);
 
 /** What each section says before anything is stored. Search results (traces) always keep their search bar. */
-const PRISTINE: Partial<Record<Exclude<DataSection, OpsSection>, { title: string; text: string }>> = {
+const PRISTINE: Partial<Record<Exclude<DataSection, CallsSection>, { title: string; text: string }>> = {
   services: {
     title: "No services yet",
     text: "Databases, caches, mail servers and brokers appear here after the first call that uses them.",
@@ -144,7 +144,7 @@ export function DataPage({ section, q, open, source, spec, known, systems }: Dat
   );
   const stats = useSearch(
     useCallback(
-      (query: string): Promise<OpRow[]> => (system ? source.listOps(system, query) : Promise.resolve([])),
+      (query: string): Promise<CallRow[]> => (system ? source.listCalls(system, query) : Promise.resolve([])),
       [source, system],
     ),
     q,
@@ -225,7 +225,7 @@ export function DataPage({ section, q, open, source, spec, known, systems }: Dat
   } else if (system) {
     body = listBody(
       stats.data,
-      (items) => <OpsTable items={items} source={source} open={open ?? null} onOpen={setOpen} />,
+      (items) => <CallsTable items={items} source={source} open={open ?? null} onOpen={setOpen} />,
       <Empty title={`No ${meta.noun ?? "operations"} match`}>Try a broader search, or another filter.</Empty>,
     );
   } else {

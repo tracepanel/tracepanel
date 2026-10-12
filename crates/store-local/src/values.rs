@@ -96,7 +96,7 @@ pub fn query_fingerprint(statement: &str, alias: &str) -> String {
 /// An operation's id (`op:<key>` in search), the group a list of operations shows as one row. SQL's is its
 /// statement's fingerprint key (`query:<key>`); every other system's is over "system|target|op|template|via": the same
 /// Redis command made directly and under a cache operation are two rows.
-pub fn op_key(operation: &Operation) -> String {
+pub fn call_key(operation: &Operation) -> String {
     if operation.family == "sql" {
         return query_fingerprint(&operation.template, &operation.target);
     }

@@ -150,14 +150,14 @@ async fn the_agent_finds_the_issues_and_the_api_returns_them() {
     assert_eq!(status, StatusCode::NOT_FOUND);
 
     // Outgoing HTTP calls per endpoint, heaviest first: an id makes the endpoint's traces a search.
-    let (status, calls) = get(&router, "/api/calls?q=host:127.0.0.1").await;
+    let (status, calls) = get(&router, "/api/calls?system=http&q=host:127.0.0.1").await;
     assert_eq!(status, StatusCode::OK, "{calls}");
     let rows = calls["calls"].as_array().unwrap();
     let endpoints: Vec<(&str, &str, i64, i64)> = rows
         .iter()
         .map(|row| {
             (
-                row["method"].as_str().unwrap(),
+                row["op"].as_str().unwrap(),
                 row["template"].as_str().unwrap(),
                 row["calls"].as_i64().unwrap(),
                 row["most_per_trace"].as_i64().unwrap(),
@@ -195,18 +195,18 @@ async fn the_agent_finds_the_issues_and_the_api_returns_them() {
         .collect();
     assert_eq!(ids, ["01M4R1ER9RWER0QHV07BJDSZ7B"]);
 
-    let (_, none) = get(&router, "/api/calls?q=host:elsewhere.example").await;
+    let (_, none) = get(&router, "/api/calls?system=http&q=host:elsewhere.example").await;
     assert_eq!(none["calls"], serde_json::json!([]));
 
     // The same filters on every list of calls: the target (host:, db:), op:, failed:.
-    let (status, posts) = get(&router, "/api/calls?q=op:get%20failed:false").await;
+    let (status, posts) = get(&router, "/api/calls?system=http&q=op:get%20failed:false").await;
     assert_eq!(status, StatusCode::OK, "{posts}");
     assert_eq!(posts["calls"].as_array().unwrap().len(), rows.len());
     let (_, failed) = get(&router, "/api/calls?q=failed:true").await;
     assert_eq!(failed["calls"], serde_json::json!([]));
-    let (_, writes) = get(&router, "/api/queries?q=op:insert").await;
+    let (_, writes) = get(&router, "/api/calls?system=sql&q=op:insert").await;
     assert!(
-        writes["queries"]
+        writes["calls"]
             .as_array()
             .unwrap()
             .iter()
@@ -215,15 +215,19 @@ async fn the_agent_finds_the_issues_and_the_api_returns_them() {
     );
 
     // Redis used directly: its commands per key pattern, with why they ran.
-    let (status, redis) = get(&router, "/api/redis?q=db:redis%20op:get%20via:direct").await;
+    let (status, redis) = get(
+        &router,
+        "/api/calls?system=redis&q=db:redis%20op:get%20via:direct",
+    )
+    .await;
     assert_eq!(status, StatusCode::OK, "{redis}");
-    let commands: Vec<(&str, &str, &str, i64, i64)> = redis["redis"]
+    let commands: Vec<(&str, &str, &str, i64, i64)> = redis["calls"]
         .as_array()
         .unwrap()
         .iter()
         .map(|row| {
             (
-                row["command"].as_str().unwrap(),
+                row["op"].as_str().unwrap(),
                 row["template"].as_str().unwrap(),
                 row["via"].as_str().unwrap(),
                 row["calls"].as_i64().unwrap(),
@@ -232,16 +236,16 @@ async fn the_agent_finds_the_issues_and_the_api_returns_them() {
         })
         .collect();
     assert_eq!(commands, [("GET", "likes:{id}", "direct", 4, 4)]);
-    let (_, through_cache) = get(&router, "/api/redis?q=via:cache").await;
-    assert_eq!(through_cache["redis"], serde_json::json!([]));
-    let (status, cache) = get(&router, "/api/cache").await;
+    let (_, through_cache) = get(&router, "/api/calls?system=redis&q=via:cache").await;
+    assert_eq!(through_cache["calls"], serde_json::json!([]));
+    let (status, cache) = get(&router, "/api/calls?system=cache").await;
     assert_eq!(status, StatusCode::OK, "{cache}");
 
     let (status, found) = get(
         &router,
         &format!(
-            "/api/traces?q=redis_call:{}",
-            redis["redis"][0]["key"].as_str().unwrap()
+            "/api/traces?q=call:{}",
+            redis["calls"][0]["key"].as_str().unwrap()
         ),
     )
     .await;
@@ -250,16 +254,22 @@ async fn the_agent_finds_the_issues_and_the_api_returns_them() {
 
     // What the filter menus offer.
     let (_, values) = get(&router, "/api/values").await;
-    assert_eq!(values["host"], serde_json::json!(["127.0.0.1"]));
-    assert_eq!(values["redis"], serde_json::json!(["redis"]));
+    assert_eq!(values["targets"]["http"], serde_json::json!(["127.0.0.1"]));
+    assert_eq!(values["targets"]["redis"], serde_json::json!(["redis"]));
 
     let (status, counts) = get(&router, "/api/counts").await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(counts["sections"]["calls"], true);
-    assert_eq!(counts["sections"]["redis"], true);
+    let systems = |counts: &Value| {
+        counts["sections"]["systems"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|system| system["system"].as_str().unwrap().to_owned())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(systems(&counts), ["sql", "redis", "http"]);
     let (_, other) = get(&router, "/api/counts?service=api").await;
-    assert_eq!(other["sections"]["calls"], false);
-    assert_eq!(other["sections"]["redis"], false);
+    assert_eq!(systems(&other), ["sql"]);
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -345,10 +355,10 @@ async fn otel_spans_are_mapped_before_they_are_stored() {
     );
     assert_eq!(kinds(&trace["issues"]), ["n+1"]);
 
-    let (_, queries) = get(&router, "/api/queries").await;
-    let query = &queries["queries"][0];
-    assert_eq!(query["statement"], "SELECT * FROM users WHERE id = $1");
-    assert_eq!(query["alias"], "shop");
+    let (_, queries) = get(&router, "/api/calls?system=sql").await;
+    let query = &queries["calls"][0];
+    assert_eq!(query["template"], "SELECT * FROM users WHERE id = $1");
+    assert_eq!(query["target"], "shop");
     assert_eq!(query["vendor"], "postgresql");
     assert_eq!(query["calls"], 3);
     assert_eq!(query["most_per_trace"], 3);
@@ -356,7 +366,7 @@ async fn otel_spans_are_mapped_before_they_are_stored() {
 }
 
 /// Systems with no kind of their own (a graph database, a broker, an RPC system): the family's generic kind, their
-/// own name kept, and with no code per system, a list of their own (`/api/ops?system=neo4j`), a place in the counts,
+/// own name kept, and with no code per system, a list of their own (`/api/calls?system=neo4j`), a place in the counts,
 /// and N+1 issues from their family's rules.
 #[tokio::test]
 async fn any_system_is_listed_and_analyzed_by_its_family() {
@@ -457,9 +467,9 @@ async fn any_system_is_listed_and_analyzed_by_its_family() {
         ]
     );
 
-    let (status, neo4j) = get(&router, "/api/ops?system=neo4j").await;
+    let (status, neo4j) = get(&router, "/api/calls?system=neo4j").await;
     assert_eq!(status, StatusCode::OK);
-    let row = &neo4j["ops"][0];
+    let row = &neo4j["calls"][0];
     assert_eq!(
         (
             row["system"].clone(),
@@ -476,7 +486,7 @@ async fn any_system_is_listed_and_analyzed_by_its_family() {
             Value::from(3)
         )
     );
-    assert_eq!(neo4j["ops"].as_array().unwrap().len(), 1);
+    assert_eq!(neo4j["calls"].as_array().unwrap().len(), 1);
     let (_, counts) = get(&router, "/api/counts").await;
     assert_eq!(
         counts["sections"]["systems"],
@@ -492,10 +502,10 @@ async fn any_system_is_listed_and_analyzed_by_its_family() {
         serde_json::json!({"nats": ["orders"], "neo4j": ["graph"], "thrift": ["Users"]})
     );
     let key = row["key"].as_str().unwrap();
-    let (_, found) = get(&router, &format!("/api/traces?q=op:{key}")).await;
+    let (_, found) = get(&router, &format!("/api/traces?q=call:{key}")).await;
     assert_eq!(found["traces"][0]["id"], "01M4ANYTRACE00000000000000");
-    let (_, ops) = get(&router, "/api/ops?q=family:rpc%20op:GET").await;
-    assert_eq!(ops["ops"][0]["system"], "thrift");
+    let (_, rpc) = get(&router, "/api/calls?q=family:rpc%20op:GET").await;
+    assert_eq!(rpc["calls"][0]["system"], "thrift");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

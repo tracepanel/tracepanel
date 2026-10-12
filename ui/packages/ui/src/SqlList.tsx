@@ -26,13 +26,13 @@ export interface SqlListProps {
 
 /** "All requests with this query", where the host can list them. */
 function AllRequests({ span, links }: { span: Span; links: TraceLinks | undefined }) {
-  if (!links?.query) return null;
+  if (!links?.call) return null;
   const key = queryFingerprint(
     String(span.attrs["db.fingerprint"] ?? span.name),
     String(span.attrs["db.alias"] ?? "default"),
   );
   return (
-    <a className="text-sm font-medium text-brand hover:underline" {...linkProps(links, links.query(key))}>
+    <a className="text-sm font-medium text-brand hover:underline" {...linkProps(links, links.call(key))}>
       All requests with this query →
     </a>
   );

@@ -1,6 +1,6 @@
 import type { Trace, TraceSummary } from "@tracepanel/ui";
 import { type Family, systemOfPage } from "@tracepanel/ui/lib/systems";
-import { type EntrySection, type OpsSection, type Route, type Section, systemOfSection } from "./routes";
+import { type CallsSection, type EntrySection, type Route, type Section, systemOfSection } from "./routes";
 
 /** What each entry point is: its label, the traces it covers, and how one of its groups is searched for. */
 export const ENTRY: Record<
@@ -53,7 +53,7 @@ export const ENTRY: Record<
   },
 };
 
-const DATA_LABELS: Record<Exclude<Section, EntrySection | OpsSection>, { label: string; description: string }> = {
+const DATA_LABELS: Record<Exclude<Section, EntrySection | CallsSection>, { label: string; description: string }> = {
   services: {
     label: "Services",
     description: "Your app's web, workers and commands, and the databases, caches, mail servers and brokers they call.",

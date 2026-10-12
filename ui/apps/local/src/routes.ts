@@ -5,11 +5,11 @@ import { useEffect, useState } from "react";
 export type EntrySection = "endpoints" | "graphql" | "tasks" | "websockets" | "jobs";
 export const ENTRY_SECTIONS: EntrySection[] = ["endpoints", "graphql", "tasks", "websockets", "jobs"];
 
-/** A system's page of operations: `ops/sql`, `ops/redis`, `ops/mongodb`, `ops/neo4j`… one per system in the data. */
-export type OpsSection = `ops/${string}`;
+/** A system's page of operations: `calls/sql`, `calls/redis`, `calls/mongodb`, `calls/neo4j`… one per system in the data. */
+export type CallsSection = `calls/${string}`;
 
 /** `traces` is search results (⌘K "search all"), not a menu item. */
-export type Section = EntrySection | "services" | OpsSection | "mails" | "logs" | "errors" | "issues" | "traces";
+export type Section = EntrySection | "services" | CallsSection | "mails" | "logs" | "errors" | "issues" | "traces";
 export const SECTIONS: Section[] = [...ENTRY_SECTIONS, "services", "mails", "logs", "errors", "issues", "traces"];
 
 export type EntryView = "overview" | "calls";
@@ -66,28 +66,20 @@ export function issueRoute(fingerprint: string, kind: string): Route {
   return { name: "issue", fingerprint, error: kind === "error", q: currentPeriod() || undefined };
 }
 
-/** Pages that were sections of their own before every system got one: old links still open them. */
-const LEGACY: Record<string, OpsSection> = {
-  queries: "ops/sql",
-  redis: "ops/redis",
-  cache: "ops/cache",
-  calls: "ops/http",
-};
-const OPS_SECTION = /^ops\/[\w.:-]+$/;
+const CALLS_SECTION = /^calls\/[\w.:-]+$/;
 
 /** A system's page. */
-export function opsSection(system: string): OpsSection {
-  return `ops/${system}`;
+export function callsSection(system: string): CallsSection {
+  return `calls/${system}`;
 }
 
 /** The system a page lists the operations of, or null for any other page. */
 export function systemOfSection(section: string): string | null {
-  return OPS_SECTION.test(section) ? section.slice("ops/".length) : null;
+  return CALLS_SECTION.test(section) ? section.slice("calls/".length) : null;
 }
 
 function sectionOf(path: string): Section | null {
-  const section = LEGACY[path] ?? path;
-  return (SECTIONS as string[]).includes(section) || OPS_SECTION.test(section) ? (section as Section) : null;
+  return (SECTIONS as string[]).includes(path) || CALLS_SECTION.test(path) ? (path as Section) : null;
 }
 
 export function isEntry(section: string): section is EntrySection {
@@ -186,12 +178,12 @@ export function traceHref(id: string, tab?: string, span?: string): string {
   return href({ name: "trace", id, from: back || undefined, tab, span });
 }
 
-/** Where a trace's parts lead in the console: linked traces, issues, every request with a statement, its logs. */
+/** Where a trace's parts lead in the console: linked traces, issues, every request with a call, its logs. */
 export function consoleLinks(prefix = "", newTab = false): TraceLinks {
   return {
     trace: (id) => `${prefix}${prefix ? href({ name: "trace", id }) : traceHref(id)}`,
     issue: (fingerprint, kind) => `${prefix}${href(issueRoute(fingerprint, kind))}`,
-    query: (key) => `${prefix}${href({ name: "traces", q: `query:${key}` })}`,
+    call: (key) => `${prefix}${href({ name: "traces", q: `call:${key}` })}`,
     logs: (traceId) => `${prefix}${href({ name: "logs", q: `trace:${traceId}` })}`,
     newTab,
   };

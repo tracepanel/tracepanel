@@ -6,7 +6,7 @@ import { cn } from "@tracepanel/ui/lib/utils";
 import { SearchIcon, XIcon } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { FilterMenu } from "./FilterMenu";
-import { type EntrySection, type OpsSection, type Section, systemOfSection } from "./routes";
+import { type CallsSection, type EntrySection, type Section, systemOfSection } from "./routes";
 import { TimeRange } from "./TimeRange";
 import { parseAbsolute, shortTime } from "./time";
 import { LevelBadge } from "./ui";
@@ -58,9 +58,9 @@ interface QuickOption {
   terms: Filter[];
 }
 
-/** Values the console knows from stored data (routes, loggers, database aliases, hosts called, Redis and caches). */
+/** Values the console knows from stored data (routes, loggers, database aliases, tasks, jobs, log extras). */
 export type KnownValues = Partial<
-  Record<"route" | "logger" | "db" | "host" | "redis" | "cache" | "task" | "queue" | "job" | "extra", readonly string[]>
+  Record<"route" | "logger" | "db" | "task" | "queue" | "job" | "extra", readonly string[]>
 > & {
   /** Each system's targets and operations, by the name its page has (`sql`, `redis`, `mongodb`…). */
   targets?: Readonly<Record<string, readonly string[]>>;
@@ -216,7 +216,7 @@ function systemFilters(system: string, family: Family | undefined): Control[] {
   return [{ ...TIME, verb: "Called" }, target, operations, FAILED, ...(meta.family === "redis" ? [VIA] : [])];
 }
 
-const QUICK: Record<Exclude<Section, OpsSection>, Control[]> = {
+const QUICK: Record<Exclude<Section, CallsSection>, Control[]> = {
   traces: [TIME, STATUS, METHOD, ROUTE, DURATION, ISSUE, CONTAINS],
   logs: [
     { ...TIME, verb: "Logged" },
@@ -362,7 +362,7 @@ const VALUES: Record<string, string[]> = {
 
 /** Where the agent's search spec describes a section's fields: every system's page searches operations. */
 function searchResourceOf(section: Section): SearchResource {
-  if (systemOfSection(section)) return "ops" as SearchResource;
+  if (systemOfSection(section)) return "calls";
   return (section === "errors" ? "issues" : section) as SearchResource;
 }
 
@@ -391,7 +391,7 @@ function chipValue(filter: Filter): string {
   return date ? shortTime(date) : filter.value;
 }
 
-const EXAMPLE: Record<Exclude<Section, OpsSection>, string> = {
+const EXAMPLE: Record<Exclude<Section, CallsSection>, string> = {
   traces: "status>=500 since:1h",
   endpoints: "route:/api/* since:1h",
   tasks: "state:failure",

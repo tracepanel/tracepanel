@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::sync::LazyLock;
 use tracepanel_protocol::{Attrs, Issue, Span, Thresholds, Trace};
 
-pub mod ops;
+pub mod calls;
 pub mod otel;
 
 pub const FINGERPRINT_VERSION: i64 = 1;
@@ -778,7 +778,7 @@ pub fn apply(received: &mut tracepanel_protocol::Received, thresholds: &Threshol
 
 /// Issues in a finished trace: errors first, then the rest by occurrence count.
 pub fn analyze(trace: &Trace, thresholds: &Thresholds) -> Vec<Issue> {
-    let mut found = ops::operation_issues(trace, thresholds);
+    let mut found = calls::operation_issues(trace, thresholds);
     found.extend(transaction_issues(trace, thresholds));
     found.extend(htmx_issues(trace));
     // A stable sort, as Python's sorted().

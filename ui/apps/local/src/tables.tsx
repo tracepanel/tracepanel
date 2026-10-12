@@ -1,6 +1,7 @@
 import {
   AliasChip,
   ago,
+  type CallRow,
   CopyButton,
   type DataSource,
   duration,
@@ -14,7 +15,6 @@ import {
   MailList,
   type MailRow,
   MethodBadge,
-  type OpRow,
   RoutePath,
   type Span,
   SqlCode,
@@ -175,7 +175,7 @@ export function EndpointsTable({ items }: { items: readonly EndpointRow[] }) {
 }
 
 /** What every page of calls lists per row: how often, in how many requests, how many failed, how long. */
-type CallStats = Pick<OpRow, "calls" | "traces" | "errors" | "total" | "slowest" | "most_per_trace" | "origin">;
+type CallStats = Pick<CallRow, "calls" | "traces" | "errors" | "total" | "slowest" | "most_per_trace" | "origin">;
 
 /** A column only one page has (the cache's hit rate). */
 interface ExtraColumn<T> {
@@ -329,7 +329,7 @@ interface TableProps<T> {
 }
 
 /** What an open SQL row adds: the statement and its plan. */
-function SqlDetails({ item, source }: { item: OpRow; source: DataSource }) {
+function SqlDetails({ item, source }: { item: CallRow; source: DataSource }) {
   const statement = item.statement ?? item.template;
   const vendor = item.vendor ?? "";
   return (
@@ -343,7 +343,7 @@ function SqlDetails({ item, source }: { item: OpRow; source: DataSource }) {
 }
 
 /** What a row is: its operation and template, where it went, and what kind of call it was (an HTTP method). */
-function OpName({ item }: { item: OpRow }) {
+function OpName({ item }: { item: CallRow }) {
   if (item.family === "sql") {
     return (
       <>
@@ -370,7 +370,7 @@ function OpName({ item }: { item: OpRow }) {
 }
 
 /** The column only some families have: Redis says who sent a command, a cache how often a read found its key. */
-const EXTRA: Partial<Record<OpRow["family"], ExtraColumn<OpRow>>> = {
+const EXTRA: Partial<Record<CallRow["family"], ExtraColumn<CallRow>>> = {
   redis: { head: "Via", cell: (item) => VIA_LABELS[item.via ?? ""] ?? item.via ?? "—" },
   cache: { head: "Hit rate", cell: hitRate },
 };
@@ -379,7 +379,7 @@ const EXTRA: Partial<Record<OpRow["family"], ExtraColumn<OpRow>>> = {
 const VIA_LABELS: Record<string, string> = { direct: "Direct", cache: "Cache", task: "Task queue" };
 
 /** How often a cache's reads found their key. */
-function hitRate({ hits, misses }: OpRow): string {
+function hitRate({ hits, misses }: CallRow): string {
   const found = hits ?? 0;
   const reads = found + (misses ?? 0);
   return reads > 0 ? percentOf(found, reads) : "—";
@@ -393,7 +393,7 @@ function percentOf(part: number, whole: number): string {
  * One system's operations, the same table for every system: SQL, Redis, a cache, MongoDB, a broker, HTTP calls, or a
  * system the console has never heard of. An open row shows SQL's statement and plan, and the requests that made it.
  */
-export function OpsTable({ items, source, open, onOpen }: TableProps<OpRow> & { source: DataSource }) {
+export function CallsTable({ items, source, open, onOpen }: TableProps<CallRow> & { source: DataSource }) {
   const family = items[0]?.family ?? "datastore";
   return (
     <CallStatsTable
@@ -405,7 +405,7 @@ export function OpsTable({ items, source, open, onOpen }: TableProps<OpRow> & { 
         <>
           {item.family === "sql" ? <SqlDetails item={item} source={source} /> : null}
           <RequestLinks
-            q={item.family === "sql" ? `query:${item.key}` : `op:${item.key}`}
+            q={`call:${item.key}`}
             traces={item.traces}
             what={systemOfPage(item.system, item.family).one}
             sample={item.sample_trace}

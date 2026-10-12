@@ -41,7 +41,7 @@ import { Tabs } from "./Tabs";
 import { Timeline } from "./Timeline";
 import type { Issue, IssueKind, Related, Span, Trace } from "./types";
 
-export type TabId = "request" | "tree" | "issues" | "sql" | "calls" | "logs" | "mail" | "error";
+export type TabId = "request" | "tree" | "issues" | "calls" | "logs" | "mail" | "error";
 
 /** A way out of this trace that the page itself doesn't show: its group, its issues, what ran around it. */
 export interface ExploreItem {
@@ -90,8 +90,6 @@ const OPTIONAL_TABS: Partial<Record<TabId, (trace: Trace) => boolean>> = {
   error: (trace) => trace.errors.length > 0,
   mail: (trace) => trace.spans.some((span) => span.kind === "mail"),
   calls: (trace) => systemCalls(trace).length > 0,
-  // The SQL tab is now the Calls tab, on SQL: old links (`tab=sql`) still open it.
-  sql: (trace) => systemCalls(trace).length > 0,
 };
 
 function hasTab(trace: Trace, tab: TabId | undefined): tab is TabId {
@@ -113,11 +111,6 @@ function nounsOf(trace: Trace): (issue: Issue) => string {
 }
 
 /** A tab for a list, when the list has anything. */
-/** The SQL tab became the Calls tab. */
-function callsFor(tab: TabId): TabId {
-  return tab === "sql" ? "calls" : tab;
-}
-
 function tabIfAny<T>(items: readonly unknown[], tab: T): T[] {
   return items.length > 0 ? [tab] : [];
 }
@@ -187,18 +180,16 @@ export function TraceView({
   const [active, setActive] = useState<TabId>(
     // A tab the link asked for that this trace has not (an error tab without an error) falls back like no tab.
     () =>
-      callsFor(
-        hasTab(trace, initialTab)
-          ? initialTab
-          : trace.errors.length > 0
-            ? "error"
-            : hasTab(trace, preferredTab)
-              ? preferredTab
-              : "tree",
-      ),
+      hasTab(trace, initialTab)
+        ? initialTab
+        : trace.errors.length > 0
+          ? "error"
+          : hasTab(trace, preferredTab)
+            ? preferredTab
+            : "tree",
   );
-  // The system the Calls tab shows: SQL for an old `tab=sql` link, else the first the request called.
-  const [system, setSystem] = useState<string | undefined>(initialTab === "sql" ? "sql" : undefined);
+  // The system the Calls tab shows: the one an issue points at, else the first the request called.
+  const [system, setSystem] = useState<string | undefined>(undefined);
   const systems = useMemo(() => systemCalls(trace), [trace]);
   const callCount = systems.reduce((sum, each) => sum + each.spans.length, 0);
   const callTime = systems.reduce((sum, each) => sum + each.total, 0);
