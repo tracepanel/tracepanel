@@ -7,9 +7,10 @@ import { refineQuery } from "./EntryPage";
 import { RefreshControl } from "./refresh";
 import { type CallsSection, type EntrySection, go, type Section, systemOfSection, traceHref } from "./routes";
 import { SearchBar } from "./SearchBar";
-import { byProject, ServicesView } from "./ServicesView";
+import { ServicesView } from "./ServicesView";
 import { useScope } from "./scope";
 import { pageMeta } from "./sections";
+import { byProject } from "./services";
 import { CallsTable, IssuesTable, LogsTable, MailsTable, TracesTable } from "./tables";
 import { Loading, LoadMore, PageHeader } from "./ui";
 

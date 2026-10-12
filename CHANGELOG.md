@@ -4,6 +4,11 @@
 
 ### Added
 
+- The Services page opens with a map: the project's apps on the left, what
+  they call on the right by kind (databases, caches, brokers, HTTP APIs,
+  mail), and a curve for each pair, thicker for more calls and red with
+  failures. Hovering a card brings out its own curves, and a card opens
+  where its calls are listed. The table below keeps the numbers.
 - Spans an OpenTelemetry instrumentation recorded are mapped by the agent,
   from the semantic conventions (older and current attribute names alike),
   so every SDK can send them as they are (kind `otel`). SQL becomes a query
