@@ -268,6 +268,14 @@ a {
     flex-basis: 100%;
     order: 3;
   }
+  /* The whole row is the select: the path takes the room, the count and the chevron sit at the end. */
+  .bar > .switcher .switcher-button {
+    width: 100%;
+  }
+  .bar > .switcher .switcher-path {
+    flex: 1;
+    text-align: left;
+  }
   .bar-label {
     display: none;
   }
