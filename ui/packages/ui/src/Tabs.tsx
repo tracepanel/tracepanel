@@ -30,10 +30,12 @@ export function Tabs<T extends string>({ tabs, active, onChange, label }: TabsPr
           role="tab"
           aria-selected={tab.id === active}
           className="dt-tab"
+          // Narrow, the other tabs show their icon and count only: the name is in the tooltip.
+          title={tab.label}
           onClick={() => onChange(tab.id)}
         >
           {tab.icon ?? null}
-          {tab.label}
+          <span className="dt-tab-label">{tab.label}</span>
           {tab.count === undefined ? null : (
             <span className="dt-tab-count" data-tone={tab.tone}>
               {tab.count}
