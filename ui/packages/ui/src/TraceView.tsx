@@ -14,10 +14,11 @@ import {
   ScrollTextIcon,
   TerminalIcon,
   TriangleAlertIcon,
+  ZapIcon,
 } from "lucide-react";
 import { type ComponentProps, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CallMap } from "./CallMap";
-import { CallsTab, type SystemCalls, systemCalls, systemOfIssue } from "./CallsTab";
+import { CallsList } from "./CallsList";
 import { Button } from "./components/ui/button";
 import {
   DropdownMenu,
@@ -38,11 +39,12 @@ import { Metrics } from "./Metrics";
 import { MethodBadge, RoutePath, StatusBadge } from "./primitives";
 import { RequestInfo } from "./RequestInfo";
 import { type Explain, SqlList } from "./SqlList";
+import { type SystemCalls, systemCalls, systemOfIssue } from "./systemCalls";
 import { Tabs } from "./Tabs";
 import { Timeline } from "./Timeline";
 import type { Issue, IssueKind, Related, Span, Trace } from "./types";
 
-export type TabId = "request" | "tree" | "issues" | "sql" | "logs" | "calls" | "mail" | "error";
+export type TabId = "request" | "tree" | "issues" | "sql" | "cache" | "http" | "logs" | "mail" | "error";
 
 /** A way out of this trace that the page itself doesn't show: its group, its issues, what ran around it. */
 export interface ExploreItem {
@@ -86,12 +88,34 @@ function findingsOf(trace: Trace): Trace["issues"] {
 }
 
 /**
- * The request's SQL, which gets a tab of its own (the list a request is most often opened for), and its calls to
- * every other system, which share the Calls tab.
+ * The systems a request is most often opened for get a tab each: its SQL, its cache and its HTTP calls. The others
+ * (Redis used directly, MongoDB, a broker…) are in the call tree, and the console has a page for each.
  */
-function splitCalls(trace: Trace): { sql: SystemCalls | undefined; others: SystemCalls[] } {
-  const systems = systemCalls(trace);
-  return { sql: systems.find((each) => each.key === "sql"), others: systems.filter((each) => each.key !== "sql") };
+type CallsTabId = "sql" | "cache" | "http";
+const CALLS_TABS: readonly { id: CallsTabId; system: string; label: string; icon: typeof GlobeIcon }[] = [
+  { id: "sql", system: "sql", label: "Database", icon: DatabaseIcon },
+  { id: "cache", system: "cache", label: "Cache", icon: ZapIcon },
+  // HTTP calls are spans of kind `http.client`.
+  { id: "http", system: "http.client", label: "HTTP calls", icon: ArrowUpRightIcon },
+];
+
+function isCallsTab(tab: string | undefined): tab is CallsTabId {
+  return CALLS_TABS.some((each) => each.id === tab);
+}
+
+/** The tab a system's calls are listed in, if it has one. */
+function tabOfSystem(system: string | undefined): CallsTabId | undefined {
+  return CALLS_TABS.find((each) => each.system === system)?.id;
+}
+
+/** The calls each of those tabs lists, by its id: only the systems the request called. */
+function callsByTab(trace: Trace): Partial<Record<CallsTabId, SystemCalls>> {
+  return Object.fromEntries(
+    systemCalls(trace).flatMap((each) => {
+      const tab = tabOfSystem(each.key);
+      return tab ? [[tab, each]] : [];
+    }),
+  );
 }
 
 /** The tabs a trace shows only when it has something for them (issues, an error, SQL, other calls, mail). */
@@ -99,8 +123,9 @@ const OPTIONAL_TABS: Partial<Record<TabId, (trace: Trace) => boolean>> = {
   issues: (trace) => findingsOf(trace).length > 0,
   error: (trace) => trace.errors.length > 0,
   mail: (trace) => trace.spans.some((span) => span.kind === "mail"),
-  sql: (trace) => splitCalls(trace).sql !== undefined,
-  calls: (trace) => splitCalls(trace).others.length > 0,
+  sql: (trace) => callsByTab(trace).sql !== undefined,
+  cache: (trace) => callsByTab(trace).cache !== undefined,
+  http: (trace) => callsByTab(trace).http !== undefined,
 };
 
 function hasTab(trace: Trace, tab: TabId | undefined): tab is TabId {
@@ -108,22 +133,35 @@ function hasTab(trace: Trace, tab: TabId | undefined): tab is TabId {
   return OPTIONAL_TABS[tab]?.(trace) ?? true;
 }
 
-/** The tabs that list spans: SQL, the calls to each other system, emails. */
+/** The tabs that list spans: SQL with its plans, the cache's and HTTP calls grouped by what they repeat, emails. */
 function SpanLists({
   active,
   mails,
-  sql,
   calls,
+  sql,
 }: {
   active: TabId;
   mails: Span[];
-  sql: ComponentProps<typeof SqlList>;
-  calls: ComponentProps<typeof CallsTab>;
+  calls: Partial<Record<CallsTabId, SystemCalls>>;
+  sql: Omit<ComponentProps<typeof SqlList>, "spans">;
 }) {
-  if (active === "sql") return <SqlList {...sql} />;
-  if (active === "calls") return <CallsTab {...calls} />;
   if (active === "mail") return <MailList spans={mails} />;
-  return null;
+  if (!isCallsTab(active)) return null;
+  return <SystemList system={active} calls={calls[active]} {...sql} />;
+}
+
+/** One system's calls: SQL with its plans, the others grouped by what they repeat. */
+function SystemList({
+  system,
+  calls,
+  ...props
+}: Omit<ComponentProps<typeof SqlList>, "spans"> & { system: CallsTabId; calls: SystemCalls | undefined }) {
+  const spans = calls?.spans ?? [];
+  return system === "sql" ? (
+    <SqlList spans={spans} {...props} />
+  ) : (
+    <CallsList spans={spans} issueBySpan={props.issueBySpan} focus={props.focus} />
+  );
 }
 
 /** What an issue's spans are called on its Show button: "queries", "HTTP calls", by the kind of its first span. */
@@ -137,10 +175,9 @@ function tabIfAny<T>(items: readonly unknown[], tab: T): T[] {
   return items.length > 0 ? [tab] : [];
 }
 
-/** Where an issue's spans are listed: SQL in its tab, other calls in the Calls tab (on their system), the rest in the call tree. */
+/** Where an issue's spans are listed: the tab of their system, if it has one, else the call tree. */
 function tabOfSpans(trace: Trace, ids: readonly string[]): TabId {
-  const system = systemOfIssue(trace, ids[0]);
-  return system === "sql" ? "sql" : system ? "calls" : "tree";
+  return tabOfSystem(systemOfIssue(trace, ids[0])) ?? "tree";
 }
 
 const KIND_ICONS: Record<string, typeof GlobeIcon> = {
@@ -152,13 +189,14 @@ const KIND_ICONS: Record<string, typeof GlobeIcon> = {
 
 const KIND_LABELS: Record<string, string> = { task: "Task", command: "Command" };
 
-/** A tab's count and time for the calls it lists: how many, and how long they took together. */
-function callsOn(systems: readonly SystemCalls[]): { count: number; detail: string | undefined } {
-  const total = systems.reduce((sum, each) => sum + each.total, 0);
-  return {
-    count: systems.reduce((sum, each) => sum + each.spans.length, 0),
-    detail: total > 0 ? duration(total) : undefined,
-  };
+/** A system's tab, when the request called it: how many calls, and how long they took together. */
+function callsTabs(calls: Partial<Record<CallsTabId, SystemCalls>>) {
+  return CALLS_TABS.flatMap(({ id, label, icon: Icon }) => {
+    const of = calls[id];
+    return of
+      ? [{ id, label, icon: <Icon />, count: of.spans.length, detail: of.total > 0 ? duration(of.total) : undefined }]
+      : [];
+  });
 }
 
 /** The trace's tabs, in the order they show: each list's only when it has anything. */
@@ -166,19 +204,16 @@ function traceTabs({
   trace,
   outcome,
   findings,
-  sql,
-  others,
+  calls,
   mails,
 }: {
   trace: Trace;
   outcome: ReactNode;
   findings: readonly Issue[];
-  sql: SystemCalls | undefined;
-  others: readonly SystemCalls[];
+  calls: Partial<Record<CallsTabId, SystemCalls>>;
   mails: readonly Span[];
 }) {
   const KindIcon = KIND_ICONS[trace.kind] ?? GlobeIcon;
-  const sqls = sql ? [sql] : [];
   return [
     {
       id: "request" as const,
@@ -205,16 +240,9 @@ function traceTabs({
       count: findings.length,
       tone: "warn" as const,
     }),
-    // The two lists a request is most often opened for: its SQL and its logs.
-    ...tabIfAny(sqls, { id: "sql" as const, label: "Database", icon: <DatabaseIcon />, ...callsOn(sqls) }),
+    // What a request is most often opened for: its SQL, cache and HTTP calls, and its logs.
+    ...callsTabs(calls),
     { id: "logs" as const, label: "Logs", icon: <ScrollTextIcon />, count: trace.logs.length },
-    // Every call to another system (Redis, a cache, HTTP, MongoDB…), one system at a time; its time goes with it.
-    ...tabIfAny(others, {
-      id: "calls" as const,
-      label: "Calls",
-      icon: <ArrowUpRightIcon />,
-      ...callsOn(others),
-    }),
     ...tabIfAny(mails, { id: "mail" as const, label: "Mail", icon: <MailIcon />, count: mails.length }),
   ];
 }
@@ -280,9 +308,7 @@ export function TraceView({
             ? preferredTab
             : "tree",
   );
-  // The system the Calls tab shows: the one an issue points at, else the first the request called.
-  const [system, setSystem] = useState<string | undefined>(undefined);
-  const { sql, others } = useMemo(() => splitCalls(trace), [trace]);
+  const calls = useMemo(() => callsByTab(trace), [trace]);
   const mails = useMemo(() => trace.spans.filter((span) => span.kind === "mail"), [trace]);
   const spansNoun = useMemo(() => nounsOf(trace), [trace]);
   const [focus, setFocus] = useState<ReadonlySet<string> | undefined>(undefined);
@@ -303,7 +329,7 @@ export function TraceView({
         failed
       </span>
     ) : null;
-  const tabs = traceTabs({ trace, outcome, findings, sql, others, mails });
+  const tabs = traceTabs({ trace, outcome, findings, calls, mails });
   const head = heading(trace);
   const path = trace.attrs["http.path"];
   const route = trace.attrs["http.route"];
@@ -319,7 +345,7 @@ export function TraceView({
           issues={findings}
           onShowSpans={(ids) => {
             setFocus(new Set(ids));
-            setSystem(systemOfIssue(trace, ids[0]));
+            setTreeSpan(ids[0]);
             setActive(tabOfSpans(trace, ids));
           }}
           spansNoun={spansNoun}
@@ -338,12 +364,7 @@ export function TraceView({
           }}
         />
       ) : null}
-      <SpanLists
-        active={active}
-        mails={mails}
-        sql={{ spans: sql?.spans ?? [], issueBySpan, focus, onExplain, links }}
-        calls={{ systems: others, system, onSystem: setSystem, issueBySpan, focus }}
-      />
+      <SpanLists active={active} mails={mails} calls={calls} sql={{ issueBySpan, focus, onExplain, links }} />
       {active === "error" ? (
         <ErrorView
           errors={trace.errors}

@@ -20,10 +20,11 @@
   system, a publish per item for a broker. A new system needs no code.
 - The MCP tool `list_calls` lists the calls to any system (`system:redis`,
   `system:sql`) with the key `call:` finds their traces by.
-- In a trace, SQL keeps its Database tab (with its plans), and Logs follows
-  it, the two lists a request is most often opened for. One Calls tab lists
-  the calls to every other system, system by system, and a tile per system
-  shows its calls and time.
+- A trace has a tab for each list a request is most often opened for:
+  Database (SQL with its plans), Cache, HTTP calls and Logs, each when the
+  request has any. The calls to other systems (Redis used directly,
+  MongoDB, a broker) are in the call tree, and the console has a page for
+  each. A tile per system shows its calls and time.
 
 ### Changed
 

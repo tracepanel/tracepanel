@@ -1,5 +1,5 @@
-import { type SystemCalls, systemCalls } from "./CallsTab";
 import { duration, percent } from "./format";
+import { type SystemCalls, systemCalls } from "./systemCalls";
 import type { Span, Trace } from "./types";
 
 /** What a system's tile adds under its time: SQL's unique statements, a cache's hits. */
