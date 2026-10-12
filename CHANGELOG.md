@@ -20,8 +20,10 @@
   system, a publish per item for a broker. A new system needs no code.
 - The MCP tool `list_calls` lists the calls to any system (`system:redis`,
   `system:sql`) with the key `call:` finds their traces by.
-- In a trace, one Calls tab lists the calls system by system (SQL keeps its
-  plans), and a tile per system shows its calls and time.
+- In a trace, SQL keeps its Database tab (with its plans), and Logs follows
+  it, the two lists a request is most often opened for. One Calls tab lists
+  the calls to every other system, system by system, and a tile per system
+  shows its calls and time.
 
 ### Changed
 
@@ -32,8 +34,7 @@
   system's calls. `/api/queries`, `/api/redis` and `/api/cache` are gone, and
   `/api/calls` answers for every system, not only HTTP.
 - The trace search takes `call:<key>` for a call to any system, SQL included.
-  `query:`, `redis_call:` and `cache_call:` are gone. The trace's SQL tab is
-  its Calls tab.
+  `query:`, `redis_call:` and `cache_call:` are gone.
 - The MCP tool `list_queries` is now `list_calls`.
 - `/api/counts` lists the systems with calls (`sections.systems`) in place of
   the `calls`, `redis` and `cache` flags, and `/api/values` gives each

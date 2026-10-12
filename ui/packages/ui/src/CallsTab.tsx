@@ -1,8 +1,6 @@
 import { CallsList } from "./CallsList";
 import { duration } from "./format";
 import { FAMILY_ORDER, type Family, systemOfSpan } from "./lib/systems";
-import type { TraceLinks } from "./links";
-import { type Explain, SqlList } from "./SqlList";
 import type { IssueKind, Span, Trace } from "./types";
 
 /** The request's calls to one system: its key ("sql", "redis", "neo4j"), what it is called, its spans. */
@@ -42,8 +40,8 @@ export function systemOfIssue(trace: Trace, spanId: string | undefined): string 
 }
 
 /**
- * Every call the request made, one system at a time: SQL with its plans, the others grouped by what they repeat.
- * A switch picks the system; it opens on the one an issue points at, else the first.
+ * The request's calls to systems other than SQL (which has its own tab), one system at a time, grouped by what
+ * they repeat. A switch picks the system; it opens on the one an issue points at, else the first.
  */
 export function CallsTab({
   systems,
@@ -51,16 +49,12 @@ export function CallsTab({
   onSystem,
   issueBySpan,
   focus,
-  onExplain,
-  links,
 }: {
   systems: readonly SystemCalls[];
   system: string | undefined;
   onSystem: (system: string) => void;
   issueBySpan: ReadonlyMap<string, IssueKind>;
   focus: ReadonlySet<string> | undefined;
-  onExplain?: Explain | undefined;
-  links?: TraceLinks | undefined;
 }) {
   const current = systems.find((each) => each.key === system) ?? systems[0];
   if (!current) return <p className="px-4 py-6 text-sm text-muted-foreground">No calls in this request.</p>;
@@ -82,11 +76,7 @@ export function CallsTab({
           </button>
         ))}
       </div>
-      {current.key === "sql" ? (
-        <SqlList spans={current.spans} issueBySpan={issueBySpan} focus={focus} onExplain={onExplain} links={links} />
-      ) : (
-        <CallsList spans={current.spans} issueBySpan={issueBySpan} focus={focus} />
-      )}
+      <CallsList spans={current.spans} issueBySpan={issueBySpan} focus={focus} />
     </div>
   );
 }
