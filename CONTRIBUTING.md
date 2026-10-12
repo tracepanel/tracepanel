@@ -100,7 +100,8 @@ The same binaries go to npm. `scripts/npm.py` makes one package per platform
 from the wheels, `@tracepanel/agent-<platform>`, and `@tracepanel/agent`, which
 lists them as optional dependencies and runs the one npm installed. `Wheels`
 packs them and installs them on Linux, macOS and Windows. `npm` publishes them
-on a tag, or by hand on an existing tag.
+on a tag. Run by hand with a version on PyPI, it makes the packages from that
+release's wheels.
 
 ## Update dependencies
 
