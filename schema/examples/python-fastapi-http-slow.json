@@ -1,0 +1,103 @@
+{
+  "attrs": {
+    "code.view": "__main__.checkout",
+    "http.method": "GET",
+    "http.path": "/api/checkout",
+    "http.route": "/api/checkout",
+    "http.status_code": 200,
+    "process.runtime.name": "cpython",
+    "process.runtime.version": "3.11.16",
+    "service.name": "app",
+    "service.role": "web",
+    "telemetry.sdk.language": "python",
+    "tracepanel.framework": "FastAPI 0.142.4"
+  },
+  "duration": 608634,
+  "errors": [],
+  "id": "01M4R1ERA7DHP6ZT4EJT0BK1HM",
+  "issues": [],
+  "kind": "http",
+  "links": [],
+  "logs": [],
+  "name": "GET /api/checkout",
+  "spans": [
+    {
+      "attrs": {},
+      "duration": 608634,
+      "id": "01M4R1ERA7XRBR7NWMXP3M1YWE",
+      "kind": "http",
+      "name": "GET /api/checkout",
+      "parent_id": null,
+      "start": 1791808201031260,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.function": "__main__.checkout"
+      },
+      "duration": 608509,
+      "id": "01M4R1ERA7CQEJGCXWJKC00VVV",
+      "kind": "view",
+      "name": "__main__.checkout",
+      "parent_id": "01M4R1ERA7XRBR7NWMXP3M1YWE",
+      "start": 1791808201031314,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "main.py:52 in checkout",
+        "http.request.method": "GET",
+        "http.response.status_code": 200,
+        "server.address": "127.0.0.1",
+        "server.port": 56927,
+        "url.full": "http://127.0.0.1:56927/rates",
+        "url.scheme": "http"
+      },
+      "duration": 738,
+      "id": "01M4R1ERA9YF2D5B3WMKCYQYAB",
+      "kind": "http.client",
+      "name": "GET 127.0.0.1/rates",
+      "parent_id": "01M4R1ERA7CQEJGCXWJKC00VVV",
+      "start": 1791808201032313,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "main.py:53 in checkout",
+        "http.request.method": "GET",
+        "http.response.status_code": 200,
+        "server.address": "127.0.0.1",
+        "server.port": 56927,
+        "url.full": "http://127.0.0.1:56927/rates",
+        "url.scheme": "http"
+      },
+      "duration": 498,
+      "id": "01M4R1ERAAAPT48ACCRRZ90FBF",
+      "kind": "http.client",
+      "name": "GET 127.0.0.1/rates",
+      "parent_id": "01M4R1ERA7CQEJGCXWJKC00VVV",
+      "start": 1791808201033669,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "main.py:54 in checkout",
+        "http.request.method": "GET",
+        "http.response.status_code": 200,
+        "server.address": "127.0.0.1",
+        "server.port": 56927,
+        "url.full": "http://127.0.0.1:56927/charges/latest",
+        "url.scheme": "http"
+      },
+      "duration": 603250,
+      "id": "01M4R1ERX5VTQ9NWVR9JET8GWS",
+      "kind": "http.client",
+      "name": "GET 127.0.0.1/charges/latest",
+      "parent_id": "01M4R1ERA7CQEJGCXWJKC00VVV",
+      "start": 1791808201034722,
+      "status": "ok"
+    }
+  ],
+  "start": 1791808201031260,
+  "status": "ok"
+}

@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Outgoing HTTP calls and cache calls (Redis) get the same analysis as SQL.
+  Calls a loop makes to one endpoint (`GET api.example.com/users/{id}`) or one
+  key pattern (`user:{id}`) are an N+1. The same read made twice is a
+  duplicate. An HTTP call slower than `slow_http_ms` (500 ms by default) is a
+  new issue, `slow-http`.
+- The console shows outgoing HTTP calls: an HTTP calls tab with the calls
+  grouped by endpoint, a tile with their count and time, a lane on the
+  timeline, and "External calls" in the call tree's time breakdown. Similar
+  HTTP calls fold into one row of the call tree, like queries.
+
 ## 0.0.1a1 (2026-10-12)
 
 The first release of the Tracepanel agent. It is an alpha: the store format

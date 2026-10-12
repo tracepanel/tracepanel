@@ -490,7 +490,8 @@ async fn lists_one_line_each() {
         tool(&server, "find_traces", json!({"query": "has:n+1"}))
             .await
             .0,
-        "traces (4, newest first):
+        "traces (5, newest first):
+01M4R1ER9RWER0QHV07BJDSZ7B  GET /api/feed → 200 · 13.3 ms · issues: n+1 · <ago>
 01M4GPCSNDHYSFJGJK7FY7NGH5  GET /books → 200 · 2.0 ms · 21 SQL (0.9 ms) · issues: n+1 · <ago>
 01M4GPC5X4GTP7C29QTSE6VRAM  GET /async/ → 200 · 38.2 ms · 61 SQL (2.3 ms) · issues: n+1 · <ago>
 01M4GPC1BHG83SW8X460V23TM0  GET / → 200 · 27.6 ms · 151 SQL (3.2 ms) · issues: n+1 · <ago>
@@ -533,7 +534,7 @@ latest traces:
         tool(&server, "list_endpoints", json!({"limit": 2})).await.0,
         "endpoints (2, busiest first):
 GET /slow-transaction/ · 1 call · p50 611 ms · p95 611 ms · 2.0 SQL avg · 1 with issues · last <ago>
-GET /api/report · 1 call · p50 603 ms · p95 603 ms · 1.0 SQL avg · 1 with issues · last <ago>"
+GET /api/checkout · 1 call · p50 609 ms · p95 609 ms · 1 with issues · last <ago>"
     );
 
     assert_eq!(

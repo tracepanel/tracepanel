@@ -16,12 +16,13 @@ pub(crate) fn has(term: &Term) -> search::Clause {
         "logs" => Ok(("logs > 0".into(), vec![])),
         "issues" => Ok(("issues > 0".into(), vec![])),
         "mail" => Ok(("mails > 0".into(), vec![])),
-        "n+1" | "duplicates" | "slow-sql" | "long-transaction" | "in-transaction" | "htmx" => {
+        "n+1" | "duplicates" | "slow-sql" | "slow-http" | "long-transaction" | "in-transaction"
+        | "htmx" => {
             Ok(("issue_kinds LIKE ?".into(), vec![Sql::Text(format!("%,{},%", term.value))]))
         }
         _ => Err(SearchError(
-            "has expects one of: n+1, duplicates, slow-sql, long-transaction, in-transaction, htmx, error, issues, \
-             logs, mail"
+            "has expects one of: n+1, duplicates, slow-sql, slow-http, long-transaction, in-transaction, htmx, error, \
+             issues, logs, mail"
                 .into(),
         )),
     }

@@ -4,6 +4,7 @@ import { GraphqlCode } from "./GraphqlCode";
 import { ChevronRightIcon, CloseIcon } from "./icons";
 import { keyed } from "./keys";
 import { breakdown, CATEGORY_LABELS } from "./lib/breakdown";
+import { callTemplate, groupNoun } from "./lib/calls";
 import { linkProps, type TraceLinks } from "./links";
 import { PropTable } from "./PropTable";
 import { AliasChip, IssueChip } from "./primitives";
@@ -30,21 +31,23 @@ function startOf(node: Node): number {
 }
 
 /**
- * 3+ identical leaf queries or cache calls under one parent collapse into a group shown where the first one ran,
- * even when they interleave (an N+1 in a template loop alternates between several statements).
+ * 3+ identical leaf queries, cache calls or HTTP calls (to one path template) under one parent collapse into a group
+ * shown where the first one ran, even when they interleave (an N+1 in a template loop alternates between several
+ * statements).
  */
 const GROUP_MIN = 3;
+const LEAF_CALLS = new Set(["sql", "cache", "http.client"]);
 
 function isLeafCall(node: Node): node is Extract<Node, { type: "span" }> {
-  return node.type === "span" && node.children.length === 0 && (node.span.kind === "sql" || node.span.kind === "cache");
+  return node.type === "span" && node.children.length === 0 && LEAF_CALLS.has(node.span.kind);
 }
 
 function collapse(nodes: Node[]): Node[] {
   const byName = new Map<string, Span[]>();
   for (const node of nodes) {
     if (isLeafCall(node))
-      byName.set(`${node.span.kind}:${node.span.name}`, [
-        ...(byName.get(`${node.span.kind}:${node.span.name}`) ?? []),
+      byName.set(`${node.span.kind}:${callTemplate(node.span)}`, [
+        ...(byName.get(`${node.span.kind}:${callTemplate(node.span)}`) ?? []),
         node.span,
       ]);
   }
@@ -52,7 +55,7 @@ function collapse(nodes: Node[]): Node[] {
   const emitted = new Set<string>();
   for (const node of nodes) {
     if (isLeafCall(node)) {
-      const name = `${node.span.kind}:${node.span.name}`;
+      const name = `${node.span.kind}:${callTemplate(node.span)}`;
       const spans = byName.get(name) ?? [];
       if (spans.length >= GROUP_MIN) {
         if (!emitted.has(name)) {
@@ -114,6 +117,7 @@ function buildTree(trace: Trace, related: Related | undefined): Node[] {
 const FILTERS = [
   { id: "sql", label: "SQL", kinds: ["sql"] },
   { id: "cache", label: "Cache", kinds: ["cache"] },
+  { id: "http", label: "HTTP calls", kinds: ["http.client"] },
   { id: "signal", label: "Signals", kinds: ["signal"] },
   { id: "template", label: "Templates", kinds: ["template"] },
   { id: "task", label: "Tasks", kinds: ["task.enqueue", "task"] },
@@ -382,7 +386,7 @@ function Rows({ nodes, depth, ctx }: { nodes: Node[]; depth: number; ctx: RowCon
                     <ChevronRightIcon />
                   </span>
                   <span className="dt-map-kind">{first?.kind}</span>
-                  <span className="dt-map-text">{first?.name}</span>
+                  <span className="dt-map-text">{callTemplate(first)}</span>
                   <AliasChip value={first?.attrs["db.alias"] ?? first?.attrs["cache.alias"]} />
                   <span className="dt-map-times">×{node.spans.length}</span>
                   {issue ? <IssueChip kind={issue} /> : null}
@@ -543,7 +547,7 @@ function Details({ node, trace, links }: { node: Node; trace: Trace; links?: Tra
     return (
       <div className="grid gap-3 p-4">
         <p className="dt-map-details-title">
-          {node.spans.length} similar {first?.kind === "cache" ? "cache calls" : "queries"} ·{" "}
+          {node.spans.length} similar {groupNoun(first)} ·{" "}
           {duration(node.spans.reduce((sum, span) => sum + span.duration, 0))} total
         </p>
         {first?.kind === "sql" ? (

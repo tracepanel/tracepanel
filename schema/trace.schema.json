@@ -421,6 +421,7 @@
             "n+1",
             "duplicates",
             "slow-sql",
+            "slow-http",
             "error",
             "long-transaction",
             "in-transaction",

@@ -91,9 +91,11 @@ async fn frames_reach_the_sink_with_the_sdks_settings() {
         (
             thresholds.n_plus_one,
             thresholds.slow_sql_ms,
-            thresholds.long_transaction_ms
+            thresholds.long_transaction_ms,
+            thresholds.slow_http_ms
         ),
-        (5, 20, 900)
+        // An SDK that doesn't know a threshold yet gets its default.
+        (5, 20, 900, 500)
     );
 }
 
@@ -112,9 +114,10 @@ async fn without_settings_the_defaults() {
         (
             thresholds.n_plus_one,
             thresholds.slow_sql_ms,
-            thresholds.long_transaction_ms
+            thresholds.long_transaction_ms,
+            thresholds.slow_http_ms
         ),
-        (3, 100, 500)
+        (3, 100, 500, 500)
     );
 }
 

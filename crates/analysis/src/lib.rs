@@ -20,6 +20,12 @@ static BY_PK: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"(?i)WHERE (?:[`"]?\w+[`"]?\.)?[`"]?id[`"]? = (?:%s|\?|\$\d+)"#).unwrap()
 });
 static LINE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r":\d+ in ").unwrap());
+// The parts of a URL path or a cache key that name one item: a number, a UUID, a long hex digest.
+static UUID: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b").unwrap()
+});
+static HEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)\b[0-9a-f]{16,}\b").unwrap());
+static NUMBER: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b\d+\b").unwrap());
 
 const SELECT_RELATED: &str = "Load the related object in the same query: add `select_related()` for this ForeignKey \
     to the queryset that produced these rows.";
@@ -34,6 +40,14 @@ const DUPLICATES: &str = "Run the query once and reuse the result, or cache it f
 const DATALOADER: &str = " In GraphQL, a resolver runs once per object: batch these lookups with a DataLoader \
     (strawberry.dataloader), or prefetch in the parent resolver.";
 const SLOW_SQL: &str = "Check the query plan (`EXPLAIN`) and add an index or narrow the query.";
+const HTTP_REPEATED: &str =
+    "Fetch them in one batch request, or call once and reuse the result for the request.";
+const CACHE_REPEATED: &str = "Read or write the keys in one round trip (a multi-key command such as MGET, or a pipeline) instead of one per item.";
+const HTTP_DUPLICATES: &str =
+    "Make the call once and reuse the answer, or cache it for the request.";
+const CACHE_DUPLICATES: &str = "Read the key once and keep the value for the request.";
+const SLOW_HTTP: &str = "The request waits for the other service: set a timeout, cache the answer, or make the call \
+    outside the request (in a background task).";
 const LONG_TRANSACTION: &str = "Rows locked inside stay locked until COMMIT: keep slow work (HTTP calls, emails, \
     heavy Python) out of the `atomic()` block.";
 const LONG_TRANSACTION_SQLALCHEMY: &str = "Rows locked inside stay locked until COMMIT: keep slow work (HTTP calls, \
@@ -345,6 +359,184 @@ fn sql_issues(trace: &Trace, thresholds: &Thresholds) -> Vec<Issue> {
     issues
 }
 
+// ---------- HTTP calls and cache ----------
+
+/// `user:42:profile` -> `user:{id}:profile`; `/users/42` -> `/users/{id}`: the item a call is about, as `{id}`.
+fn template(text: &str) -> String {
+    let text = UUID.replace_all(text, "{id}");
+    let text = HEX.replace_all(&text, "{id}");
+    NUMBER.replace_all(&text, "{id}").into_owned()
+}
+
+/// One kind of outgoing call, as the issues see it: what makes two calls the same request or the same item.
+struct Call<'a> {
+    span: &'a Span,
+    /// Calls to the same endpoint, or the same key pattern: `GET api.example.com/users/{id}`.
+    group: String,
+    /// The exact call: its full URL, or its key.
+    exact: String,
+    /// Whether making it twice is wasted: a read, not a write (two POSTs, or two INCRs, are two actions).
+    read: bool,
+}
+
+// Cache operations that only read (Django's cache API and Redis commands, lowercase).
+const CACHE_READS: &[&str] = &[
+    "get",
+    "get_many",
+    "has_key",
+    "mget",
+    "exists",
+    "hget",
+    "hmget",
+    "hgetall",
+    "hexists",
+    "smembers",
+    "sismember",
+    "lrange",
+    "lindex",
+    "llen",
+    "zrange",
+    "zscore",
+    "zcard",
+    "scard",
+    "strlen",
+    "ttl",
+    "type",
+];
+
+fn http_call(span: &Span) -> Call<'_> {
+    let method = or_default(&span.attrs, "http.request.method", "GET").to_uppercase();
+    let url = text(&span.attrs, "url.full").unwrap_or_else(|| span.name.clone());
+    // scheme://host:port/path?query -> host/path: the endpoint, whatever the query asks it.
+    let rest = url.split_once("://").map_or(url.as_str(), |(_, rest)| rest);
+    let without_query = rest.split(['?', '#']).next().unwrap_or("");
+    let (host, path) = without_query.split_once('/').unwrap_or((without_query, ""));
+    let host = host.rsplit('@').next().unwrap_or(host);
+    let host = text(&span.attrs, "server.address")
+        .unwrap_or_else(|| host.split(':').next().unwrap_or(host).to_owned());
+    Call {
+        span,
+        group: format!("{method} {host}/{}", template(path)),
+        exact: format!("{method} {url}"),
+        read: matches!(method.as_str(), "GET" | "HEAD" | "OPTIONS"),
+    }
+}
+
+fn cache_call(span: &Span) -> Call<'_> {
+    let op = or_default(&span.attrs, "cache.op", &span.name).to_lowercase();
+    let alias = or_default(&span.attrs, "cache.alias", "default");
+    // A string key names the item; the *_many ops and pipelines carry how many, which says nothing of which.
+    let key = match span.attrs.get("cache.key") {
+        Some(Value::String(key)) => Some(key.as_str()),
+        _ => None,
+    };
+    Call {
+        span,
+        group: format!("{alias} {op} {}", key.map(template).unwrap_or_default())
+            .trim_end()
+            .to_owned(),
+        exact: format!("{alias} {op} {}", key.unwrap_or_default()),
+        read: key.is_some() && CACHE_READS.contains(&op.as_str()),
+    }
+}
+
+/// Repeated and duplicate HTTP calls and cache calls, and slow HTTP calls: SQL's issues for the other services.
+fn call_issues(trace: &Trace, thresholds: &Thresholds) -> Vec<Issue> {
+    let mut issues = Vec::new();
+    let threshold = thresholds.n_plus_one.max(0) as usize;
+    for (kind, label, describe) in [
+        ("http.client", "calls", http_call as fn(&Span) -> Call<'_>),
+        ("cache", "cache calls", cache_call),
+    ] {
+        let mut order: Vec<String> = Vec::new();
+        let mut groups: HashMap<String, Vec<Call<'_>>> = HashMap::new();
+        for span in trace.spans.iter().filter(|span| span.kind == kind) {
+            let call = describe(span);
+            if !groups.contains_key(&call.group) {
+                order.push(call.group.clone());
+            }
+            groups.entry(call.group.clone()).or_default().push(call);
+        }
+        let (repeated_hint, duplicates_hint) = if kind == "cache" {
+            (CACHE_REPEATED, CACHE_DUPLICATES)
+        } else {
+            (HTTP_REPEATED, HTTP_DUPLICATES)
+        };
+        for group in order {
+            let calls = &groups[&group];
+            let spans: Vec<&Span> = calls.iter().map(|call| call.span).collect();
+            let key = format!("{kind}|{group}");
+            // Only what project code makes is actionable, as with SQL.
+            let Some(culprit_text) = culprit(&spans) else {
+                continue;
+            };
+            let key_culprit = culprit_key(Some(&culprit_text));
+            let distinct = calls
+                .iter()
+                .map(|call| call.exact.as_str())
+                .collect::<std::collections::HashSet<_>>()
+                .len();
+            if distinct >= threshold {
+                issues.push(issue(
+                    issue_key("n+1", &[Some(&key), key_culprit.as_deref()]),
+                    "n+1",
+                    format!("N+1: {} similar {label} · {group}", spans.len()),
+                    Some(culprit_text.clone()),
+                    Some(repeated_hint),
+                    spans.len(),
+                    spans.iter().map(|span| span.id.clone()).collect(),
+                ));
+            } else {
+                let reads: Vec<&Call<'_>> = calls.iter().filter(|call| call.read).collect();
+                let counts =
+                    reads
+                        .iter()
+                        .fold(HashMap::<&str, usize>::new(), |mut counts, call| {
+                            *counts.entry(call.exact.as_str()).or_default() += 1;
+                            counts
+                        });
+                let repeated: Vec<&Span> = reads
+                    .iter()
+                    .filter(|call| counts[call.exact.as_str()] >= DUPLICATES_MIN)
+                    .map(|call| call.span)
+                    .collect();
+                if !repeated.is_empty() {
+                    issues.push(issue(
+                        issue_key("duplicates", &[Some(&key), key_culprit.as_deref()]),
+                        "duplicates",
+                        format!("Duplicate {label}: {} identical · {group}", repeated.len()),
+                        Some(culprit_text.clone()),
+                        Some(duplicates_hint),
+                        repeated.len(),
+                        repeated.iter().map(|span| span.id.clone()).collect(),
+                    ));
+                }
+            }
+            if kind != "http.client" {
+                continue;
+            }
+            let slow: Vec<&Span> = spans
+                .iter()
+                .copied()
+                .filter(|span| span.duration >= thresholds.slow_http_ms * 1000)
+                .collect();
+            if !slow.is_empty() {
+                let slowest = slow.iter().map(|span| span.duration).max().unwrap_or(0);
+                issues.push(issue(
+                    issue_key("slow-http", &[Some(&key), key_culprit.as_deref()]),
+                    "slow-http",
+                    format!("Slow HTTP call: {} ms · {group}", milliseconds(slowest)),
+                    culprit(&slow),
+                    Some(SLOW_HTTP),
+                    slow.len(),
+                    slow.iter().map(|span| span.id.clone()).collect(),
+                ));
+            }
+        }
+    }
+    issues
+}
+
 // ---------- errors ----------
 
 /// An error's message as an issue title: its first line, on one line, cut at a word.
@@ -598,6 +790,7 @@ pub fn apply(received: &mut tracepanel_protocol::Received, thresholds: &Threshol
 /// Issues in a finished trace: errors first, then the rest by occurrence count.
 pub fn analyze(trace: &Trace, thresholds: &Thresholds) -> Vec<Issue> {
     let mut found = sql_issues(trace, thresholds);
+    found.extend(call_issues(trace, thresholds));
     found.extend(transaction_issues(trace, thresholds));
     found.extend(htmx_issues(trace));
     // A stable sort, as Python's sorted().
@@ -647,6 +840,160 @@ mod tests {
         let long = format!("Error: {}", "word ".repeat(60));
         let title = headline(&long);
         assert!(title.ends_with("word…") && title.chars().count() <= TITLE_LIMIT);
+    }
+
+    /// A request whose spans are these (kind, name, attrs, duration in µs).
+    fn request(spans: &[(&str, &str, Value, i64)]) -> Trace {
+        let spans: Vec<Value> = spans
+            .iter()
+            .enumerate()
+            .map(|(n, (kind, name, attrs, duration))| {
+                serde_json::json!({
+                    "id": format!("s{n}"), "kind": kind, "name": name, "start": n, "duration": duration,
+                    "attrs": attrs,
+                })
+            })
+            .collect();
+        serde_json::from_value(serde_json::json!({
+            "id": "t", "kind": "http", "name": "GET /", "start": 0, "spans": spans,
+        }))
+        .unwrap()
+    }
+
+    fn get(url: &str) -> (&'static str, &'static str, Value, i64) {
+        let attrs = serde_json::json!({
+            "http.request.method": "GET", "url.full": url, "code.origin": "app/views.py:12 in feed",
+        });
+        ("http.client", "GET", attrs, 1000)
+    }
+
+    fn cache(op: &str, key: Value) -> (&'static str, &'static str, Value, i64) {
+        let attrs = serde_json::json!({
+            "cache.alias": "redis", "cache.op": op, "cache.key": key, "code.origin": "app/views.py:20 in feed",
+        });
+        ("cache", "redis", attrs, 100)
+    }
+
+    fn found(trace: &Trace) -> Vec<(String, String, i64)> {
+        analyze(trace, &Thresholds::default())
+            .into_iter()
+            .map(|issue| (issue.kind, issue.title, issue.count))
+            .collect()
+    }
+
+    #[test]
+    fn templates_name_the_item_as_id() {
+        assert_eq!(
+            [
+                template("users/42/orders"),
+                template("user:42:profile"),
+                template("files/0b9f6c1e-3c1a-4c1e-9f1e-2a8f8a1d3b4c"),
+                template("blobs/9f86d081884c7d659a2feaa0c55ad015"),
+                template("v2/items"),
+            ],
+            [
+                "users/{id}/orders",
+                "user:{id}:profile",
+                "files/{id}",
+                "blobs/{id}",
+                "v2/items",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_call_per_item_is_an_n_plus_one() {
+        let trace = request(&[
+            get("https://api.example.com/users/1?fields=name"),
+            get("https://api.example.com/users/2?fields=name"),
+            get("https://api.example.com/users/3?fields=name"),
+            cache("get", "user:1".into()),
+            cache("get", "user:2".into()),
+            cache("get", "user:3".into()),
+        ]);
+
+        assert_eq!(
+            found(&trace),
+            [
+                (
+                    "n+1".to_owned(),
+                    "N+1: 3 similar calls · GET api.example.com/users/{id}".to_owned(),
+                    3
+                ),
+                (
+                    "n+1".to_owned(),
+                    "N+1: 3 similar cache calls · redis get user:{id}".to_owned(),
+                    3
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn the_same_read_twice_is_a_duplicate_and_a_write_is_not() {
+        let trace = request(&[
+            get("https://api.example.com/rates"),
+            get("https://api.example.com/rates"),
+            cache("get", "settings".into()),
+            cache("get", "settings".into()),
+            cache("incr", "hits".into()),
+            cache("incr", "hits".into()),
+        ]);
+
+        assert_eq!(
+            found(&trace),
+            [
+                (
+                    "duplicates".to_owned(),
+                    "Duplicate calls: 2 identical · GET api.example.com/rates".to_owned(),
+                    2
+                ),
+                (
+                    "duplicates".to_owned(),
+                    "Duplicate cache calls: 2 identical · redis get settings".to_owned(),
+                    2
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn single_calls_and_calls_from_library_code_are_no_issue() {
+        // Made by a library, with no project frame to point at.
+        let mut library = get("https://auth.example.com/keys");
+        library.2 = serde_json::json!({"http.request.method": "GET", "url.full": "https://auth.example.com/keys"});
+        let trace = request(&[
+            get("https://api.example.com/users/1"),
+            get("https://api.example.com/teams/1"),
+            cache("get_many", 3.into()),
+            library.clone(),
+            library.clone(),
+            library,
+        ]);
+
+        assert_eq!(found(&trace), []);
+    }
+
+    #[test]
+    fn a_slow_http_call_by_its_threshold() {
+        let mut slow = get("https://pay.example.com/charges");
+        slow.3 = 750_000;
+        let trace = request(&[slow, get("https://pay.example.com/refunds")]);
+
+        assert_eq!(
+            found(&trace),
+            [(
+                "slow-http".to_owned(),
+                "Slow HTTP call: 750 ms · GET pay.example.com/charges".to_owned(),
+                1
+            )]
+        );
+
+        let relaxed = Thresholds {
+            slow_http_ms: 1000,
+            ..Thresholds::default()
+        };
+        assert!(analyze(&trace, &relaxed).is_empty());
     }
 
     #[test]

@@ -36,6 +36,7 @@ function lanes(trace: Trace): Lane[] {
     { label: "request", marks: spans(trace.kind) },
     { label: "sql", marks: spans("sql") },
     { label: "cache", marks: spans("cache") },
+    { label: "http", marks: spans("http.client") },
     {
       label: "logs",
       marks: keyed(trace.logs, (log) => `log:${log.time}:${log.message}`).map(({ key, item: log }) => ({

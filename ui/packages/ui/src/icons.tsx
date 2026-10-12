@@ -110,10 +110,16 @@ export const CheckIcon = () => (
   </Icon>
 );
 
+const ISSUE_ICONS: Partial<Record<IssueKind, () => React.JSX.Element>> = {
+  "n+1": LayersIcon,
+  duplicates: CopyIcon,
+  "slow-sql": ClockIcon,
+  "slow-http": ClockIcon,
+  "long-transaction": ClockIcon,
+  htmx: SwapIcon,
+};
+
 export function IssueIcon({ kind }: { kind: IssueKind }) {
-  if (kind === "n+1") return <LayersIcon />;
-  if (kind === "duplicates") return <CopyIcon />;
-  if (kind === "slow-sql" || kind === "long-transaction") return <ClockIcon />;
-  if (kind === "htmx") return <SwapIcon />;
-  return <AlertIcon />;
+  const KindIcon = ISSUE_ICONS[kind] ?? AlertIcon;
+  return <KindIcon />;
 }

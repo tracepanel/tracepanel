@@ -536,7 +536,7 @@ components:
       minimum: 0
     IssueKind:
       type: string
-      enum: [n+1, duplicates, slow-sql, error, long-transaction, in-transaction, htmx]
+      enum: [n+1, duplicates, slow-sql, slow-http, error, long-transaction, in-transaction, htmx]
     TraceSummary:
       type: object
       description: A trace without its document, as in lists.
