@@ -83,7 +83,8 @@ a {
 .bar {
   position: relative;
   top: 0;
-  z-index: 2;
+  /* Above the trace's sticky tab strip, so the request list opens over it. */
+  z-index: 3;
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -268,12 +269,16 @@ a {
     flex-basis: 100%;
     order: 3;
   }
+  /* The whole row is the select: the path takes the room, the count and the chevron sit at the end. */
+  .bar > .switcher .switcher-button {
+    width: 100%;
+  }
+  .bar > .switcher .switcher-path {
+    flex: 1;
+    text-align: left;
+  }
   .bar-label {
     display: none;
-  }
-  /* Under both rows. */
-  .switcher-popover {
-    top: 5.75rem;
   }
 }
 
@@ -284,7 +289,6 @@ a {
 }
 
 .switcher {
-  position: relative;
   flex: 1;
   min-width: 0;
 }
@@ -317,21 +321,30 @@ a {
 }
 
 .switcher-count {
+  display: inline-flex;
   flex: none;
+  align-items: center;
+  gap: 0.25rem;
   min-width: 1.125rem;
   padding: 0 0.3125rem;
   border-radius: 999px;
-  background: var(--dt-accent-bg);
-  color: var(--dt-accent);
+  background: var(--dt-subtle);
+  color: var(--dt-text-2);
   font-size: var(--dt-size-xs);
   font-weight: 600;
   line-height: 1.0625rem;
   text-align: center;
 }
 
+.switcher-count svg {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
 .switcher-popover {
-  position: fixed;
-  top: 3.375rem;
+  /* Just under the bar (one row or two), as wide as the panel. */
+  position: absolute;
+  top: calc(100% + 0.25rem);
   right: 0.5rem;
   left: 0.5rem;
   z-index: 10;

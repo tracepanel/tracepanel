@@ -10,8 +10,16 @@ import {
 } from "@tracepanel/ui/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@tracepanel/ui/components/ui/popover";
 import { useCloseOnBlur } from "@tracepanel/ui/hooks/useCloseOnBlur";
+import { cn } from "@tracepanel/ui/lib/utils";
 import { ArrowLeftRightIcon, CheckIcon, LogOutIcon, UserRoundIcon } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+
+/**
+ * A narrow panel (docked right) shows its bar's actions as icons only: the outlined ones (the user, Console) then
+ * look like the plain icon buttons beside them.
+ */
+export const NARROW_ICON =
+  "max-[560px]:w-[1.875rem] max-[560px]:border-transparent max-[560px]:bg-transparent max-[560px]:px-0 max-[560px]:hover:bg-[var(--dt-hover)]";
 
 function initials(user: User): string {
   const words = (user.name ?? user.username).split(/[\s._@-]+/).filter(Boolean);
@@ -86,7 +94,7 @@ export function UserSwitcher({ source, onSwitched }: { source: DataSource; onSwi
         <Button
           variant="outline"
           size="sm"
-          className="h-7 max-w-44 gap-1.5 px-2 text-sm shadow-none"
+          className={cn("h-7 max-w-44 gap-1.5 px-2 text-sm shadow-none", NARROW_ICON)}
           title={current ? "Change user (development only)" : "Set user (development only)"}
         >
           {current ? (
