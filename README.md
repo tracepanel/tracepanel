@@ -101,10 +101,6 @@ Python 3.11 and newer, Django 5.2 and newer.
 
 ## Links
 
-- [tracepanel-python](https://github.com/tracepanel/tracepanel-python): the
-  Python package
-- [django-tracepanel](https://github.com/tracepanel/django-tracepanel): the
-  documentation for Django
 - [CHANGELOG.md](CHANGELOG.md): what changed in each version
 - [CONTRIBUTING.md](CONTRIBUTING.md): building and testing this repository
 
@@ -116,6 +112,5 @@ share them for any purpose except a commercial product or service that competes
 with Tracepanel. Each version becomes Apache License 2.0 two years after its
 release.
 
-The SDKs that record traces, such as
-[tracepanel-python](https://github.com/tracepanel/tracepanel-python), are under
-the MIT License.
+The SDKs that record traces, such as the Python package, are under the MIT
+License.

@@ -2,8 +2,7 @@
 
 This repository holds the Tracepanel agent, written in Rust (`crates/`), and the
 panel, console and widget it serves, written in React (`ui/`). The Python
-package that records traces lives in
-[tracepanel-python](https://github.com/tracepanel/tracepanel-python).
+package that records traces lives in the tracepanel-python repository.
 
 ## Build and test the agent
 
