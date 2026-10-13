@@ -22,6 +22,9 @@ function leadsTo(inSnapshot: boolean): { links: TraceLinks; explore?: (trace: Tr
   return { links: consoleLinks(), explore: (trace) => exploreFor(trace, href) };
 }
 
+/** The page's padding: the full page's, or a narrow screen's (a snapshot opened on a phone). */
+const PADDING = { full: "px-6 pt-5 pb-12", compact: "px-1 pt-3 pb-8" };
+
 /**
  * A trace, the same page wherever it was opened from: the crumbs lead back there (`from`), the open tab is in the
  * URL (a link to its call tree stays a link to its call tree), Explore leads to its group, issues and nearby logs.
@@ -33,6 +36,7 @@ export function TracePage({
   span,
   source,
   inSnapshot,
+  variant = "full",
 }: {
   id: string;
   from?: string | undefined;
@@ -42,6 +46,8 @@ export function TracePage({
   source: DataSource;
   /** Opened from a snapshot file: it leads only to the file's other traces. */
   inSnapshot?: boolean | undefined;
+  /** `compact` on a narrow screen: the trace as the panel shows it. */
+  variant?: "full" | "compact" | undefined;
 }) {
   const leads = leadsTo(inSnapshot === true);
   const back = from ? crumbsFor(parse(from), from) : [];
@@ -50,7 +56,7 @@ export function TracePage({
   return (
     <main className="min-h-0 min-w-0 overflow-y-auto bg-background" data-scroll="">
       {/* The trace's own header is inset 16px: the page pads 16px less so the crumbs line up with it. */}
-      <div className="w-full px-6 pt-5 pb-12">
+      <div className={`w-full ${PADDING[variant]}`}>
         {/* A stored trace never changes: no refresh control here. */}
         <div className="px-4">
           <Breadcrumbs
@@ -71,6 +77,7 @@ export function TracePage({
           explore={leads.explore}
           links={leads.links}
           initialSpan={span}
+          variant={variant}
           shareable
           back={
             <a href={from ?? href({ name: "endpoints", q: "" })}>
