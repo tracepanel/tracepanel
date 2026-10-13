@@ -187,6 +187,8 @@ pub struct Thresholds {
     /// Repeated Redis commands or cache operations are an issue only when they cost this much together: an
     /// in-memory store answers in a fraction of a millisecond, and a few of those are nothing to fix.
     pub n_plus_one_min_ms: i64,
+    /// A task that waited this long in its queue for a worker is an issue (SDKs from before it send none).
+    pub queue_wait_ms: i64,
 }
 
 impl Default for Thresholds {
@@ -197,6 +199,7 @@ impl Default for Thresholds {
             long_transaction_ms: 500,
             slow_http_ms: 500,
             n_plus_one_min_ms: 5,
+            queue_wait_ms: 1000,
         }
     }
 }

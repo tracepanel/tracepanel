@@ -117,6 +117,8 @@ const ISSUE_ICONS: Partial<Record<IssueKind, () => React.JSX.Element>> = {
   "slow-http": ClockIcon,
   "long-transaction": ClockIcon,
   htmx: SwapIcon,
+  "queue-wait": ClockIcon,
+  "blocking-call": ClockIcon,
 };
 
 export function IssueIcon({ kind }: { kind: IssueKind }) {
