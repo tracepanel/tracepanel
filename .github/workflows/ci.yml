@@ -159,7 +159,10 @@ jobs:
       - name: fallow finds only what this change adds
         env:
           BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
-        run: pnpm exec fallow audit --base "${BASE:-HEAD~1}"
+        # A new tag (the release runs this) has no base: its "before" is all zeros. Then the commit before this one.
+        run: |
+          if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2> /dev/null; then BASE=HEAD~1; fi
+          pnpm exec fallow audit --base "$BASE"
 
   ci:
     # What main's protection requires: every check passed, or had nothing to check.
