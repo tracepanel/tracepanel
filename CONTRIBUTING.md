@@ -107,15 +107,12 @@ and checks every platform's wheel, and `Release` publishes them with
 The same binaries go to npm. `scripts/npm.py` makes one package per platform
 from the wheels, `@tracepanel/agent-<platform>`, and `@tracepanel/agent`, which
 lists them as optional dependencies and runs the one npm installed. `Wheels`
-packs them and installs them on Linux, macOS and Windows. `npm` stages them
+packs them and installs them on Linux, macOS and Windows. `npm` publishes them
 once `Release` has published a tag to PyPI, from that run's packages: one build
-for both registries. Run by hand with a version on PyPI, it makes the packages
-from that release's wheels. A staged version goes public only when a
-maintainer approves it with 2FA. To approve all 16 of a release at once:
-
-```bash
-uv run scripts/npm_approve.py 0.0.2a1
-```
+for both registries, approved once, in `Release`'s `pypi` environment. Run by
+hand with a version on PyPI, it makes the packages from that release's wheels.
+It publishes through npm's trusted publishing, with no token: each package
+trusts this repository's `npm.yml` in the `npm` environment.
 
 ## Update dependencies
 
