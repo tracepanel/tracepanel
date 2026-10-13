@@ -58,5 +58,6 @@ jobs:
           merge-multiple: true
 
       - name: Publish
-        # Wheels and the sdist only: the run also holds the npm packages (.tgz), which npm.yml publishes.
+        # Wheels and the sdist only: the run also holds the npm packages (.tgz), which npm.yml stages once this run
+        # succeeds, the same build on both registries.
         run: uv publish --trusted-publishing always dist/*.whl dist/*.tar.gz

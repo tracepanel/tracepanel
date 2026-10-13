@@ -2,8 +2,8 @@ name: npm
 
 # The agent's npm packages: the 15 platform packages and @tracepanel/agent, which depends on them.
 #
-# - On a version tag, like release.yml: it builds and checks every platform (wheels.yml) and publishes the packages
-#   made from those wheels.
+# - After a release (release.yml, on a version tag) publishes to PyPI: it stages the npm packages that release made
+#   from the same wheels (wheels.yml builds them once). The binaries on npm are the ones on PyPI, byte for byte.
 # - By hand, with a version already on PyPI (0.0.1a1): it downloads that release's wheels, makes the packages from
 #   them, checks them, and publishes them. The binaries are the ones on PyPI, byte for byte.
 #
@@ -13,8 +13,9 @@ name: npm
 # npm's trusted publishing signs the upload: each package trusts this repository, npm.yml and the environment npm,
 # allowed to stage only. An NPM_TOKEN secret, if set, is used instead (the first release needed one).
 on:
-  push:
-    tags: ["[0-9]+.[0-9]+.[0-9]+*"]
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
   workflow_dispatch:
     inputs:
       version:
@@ -25,30 +26,6 @@ permissions:
   contents: read
 
 jobs:
-  version:
-    # The tag names the version in Cargo.toml (and pyproject.toml): 0.0.1a1 is 0.0.1-alpha.1 on npm.
-    name: The tag is the version
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: astral-sh/setup-uv@v10.3.0
-
-      - run: |
-          uv run --no-project --with packaging python - <<'EOF'
-          import os, sys, tomllib
-          from packaging.version import Version
-          cargo = tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"]
-          if Version(os.environ["GITHUB_REF_NAME"]) != Version(cargo):
-              sys.exit(f"::error::tag {os.environ['GITHUB_REF_NAME']}, Cargo.toml {cargo}: they must agree")
-          EOF
-
-  wheels:
-    needs: version
-    uses: ./.github/workflows/wheels.yml
-
   released:
     # A released version's wheels from PyPI, made into packages, installed and run here.
     name: Packages of ${{ inputs.version }} from PyPI
@@ -91,9 +68,11 @@ jobs:
 
   publish:
     name: Stage on npm
-    needs: [wheels, released]
-    # One of the two made the packages; the other was skipped.
-    if: ${{ !cancelled() && !failure() }}
+    needs: released
+    # A release published to PyPI from a tag, or the packages made here by hand from a version on PyPI.
+    if: >-
+      ${{ !cancelled() && !failure() && (github.event_name == 'workflow_dispatch'
+      || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment:
@@ -102,6 +81,8 @@ jobs:
     permissions:
       # What npm's trusted publishing and provenance sign the upload with, in place of a token.
       id-token: write
+      # The release's run, to download its npm packages.
+      actions: read
     steps:
       - uses: actions/setup-node@v7
         with:
@@ -111,7 +92,18 @@ jobs:
       - name: npm with staged publishing (11.15.0 or later)
         run: npm install --global npm@^11.15.0
 
-      - uses: actions/download-artifact@v8
+      - name: The release's packages
+        if: github.event_name == 'workflow_run'
+        uses: actions/download-artifact@v8
+        with:
+          name: npm-packages
+          path: npm-dist
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: The packages made here
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/download-artifact@v8
         with:
           name: npm-packages
           path: npm-dist
