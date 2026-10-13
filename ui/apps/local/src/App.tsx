@@ -31,6 +31,7 @@ import { type TabEntry, type TabHistory, usePolling, useTabHistory } from "./hoo
 import { RefreshProvider } from "./refresh";
 import { consoleLinks, go, href, type Route, useRoute } from "./routes";
 import { SearchPalette } from "./SearchPalette";
+import { ShareAction } from "./ShareDialog";
 import { NAV, ThemeToggle } from "./Sidebar";
 import { ScopeProvider } from "./scope";
 import { graphqlOperation } from "./sections";
@@ -671,6 +672,7 @@ function PanelApp({ route }: { route: Route }) {
           <ExternalIcon />
         </a>
       </Button>
+      <ShareAction traceId={selectedId} source={source} compact={true} />
       <ThemeToggle compact={true} />
       <button
         type="button"

@@ -1,4 +1,4 @@
-import { type DataSource, type ExplainPlan, snapshotFile, type Trace } from "@tracepanel/ui";
+import { type DataSource, type ExplainPlan, type Snapshot, snapshotFile, type Trace } from "@tracepanel/ui";
 import { Button } from "@tracepanel/ui/components/ui/button";
 import { Checkbox } from "@tracepanel/ui/components/ui/checkbox";
 import {
@@ -39,18 +39,30 @@ function fileName(trace: Trace): string {
   return `tracepanel-${name || "trace"}-${trace.id.slice(-6).toLowerCase()}.html`;
 }
 
-/** Make the snapshot file and hand it to the browser as a download. */
-async function downloadSnapshot(trace: Trace, source: DataSource, values: boolean): Promise<void> {
-  const snapshot = await source.snapshot?.(trace.id, values);
-  if (!snapshot) throw new Error("This trace is no longer stored.");
-  if (values) snapshot.plans = await plansOf(trace, source);
-  const url = URL.createObjectURL(await snapshotFile(snapshot, `${trace.name} · Tracepanel snapshot`));
+/** The snapshot of a trace from the source, with the plans of its slow queries when it has values. */
+async function loadSnapshot(traceId: string, source: DataSource, values: boolean): Promise<[Snapshot, Trace]> {
+  const snapshot = await source.snapshot?.(traceId, values);
+  const trace = snapshot?.traces[traceId] as Trace | undefined;
+  if (!(snapshot && trace)) throw new Error("This trace is no longer stored.");
+  return [snapshot, trace];
+}
+
+/** Hand a file to the browser as a download. */
+function save(file: Blob, name: string): void {
+  const url = URL.createObjectURL(file);
   const link = document.createElement("a");
   link.href = url;
-  link.download = fileName(trace);
+  link.download = name;
   link.click();
   // After the click has started the download.
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** Make the snapshot file and download it. */
+async function downloadSnapshot(traceId: string, source: DataSource, values: boolean): Promise<void> {
+  const [snapshot, trace] = await loadSnapshot(traceId, source, values);
+  if (values) snapshot.plans = await plansOf(trace, source);
+  save(await snapshotFile(snapshot, `${trace.name} · Tracepanel snapshot`), fileName(trace));
 }
 
 function ValuesOption({
@@ -82,12 +94,12 @@ function ValuesOption({
  * no agent and no network. Without values, what stays local on the way to the cloud stays local here too.
  */
 function ShareDialog({
-  trace,
+  traceId,
   source,
   open,
   onOpenChange,
 }: {
-  trace: Trace;
+  traceId: string;
   source: DataSource;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -106,7 +118,7 @@ function ShareDialog({
   const share = () => {
     setBusy(true);
     setError(null);
-    downloadSnapshot(trace, source, values)
+    downloadSnapshot(traceId, source, values)
       .then(() => onOpenChange(false))
       .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : String(reason)))
       .finally(() => setBusy(false));
@@ -137,21 +149,46 @@ function ShareDialog({
   );
 }
 
-/** The Share button with its dialog. */
-function ShareAction({ trace, source }: { trace: Trace; source: DataSource }) {
+/** What opens the dialog: a labelled button in the console's trace header, an icon in the panel's bar of icons. */
+function ShareButton({ compact, onClick }: { compact: boolean; onClick: () => void }) {
+  const title = "Share this trace as one HTML file";
+  if (compact) {
+    return (
+      <button type="button" className="icon-button" title={title} aria-label="Share" onClick={onClick}>
+        <Share2Icon aria-hidden="true" className="size-4" />
+      </button>
+    );
+  }
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      className="mr-1 h-7 gap-1.5 px-2.5 text-sm shadow-none"
+      onClick={onClick}
+      title={title}
+    >
+      <Share2Icon aria-hidden="true" className="size-3.5" />
+      Share
+    </Button>
+  );
+}
+
+/** The Share button with its dialog. None without a trace to share. */
+export function ShareAction({
+  traceId,
+  source,
+  compact = false,
+}: {
+  traceId: string | null;
+  source: DataSource;
+  compact?: boolean;
+}) {
   const [open, setOpen] = useState(false);
+  if (!(traceId && source.snapshot)) return null;
   return (
     <>
-      <Button
-        variant="outline"
-        size="sm"
-        className="mr-1 h-7 gap-1.5 px-2.5 text-sm shadow-none"
-        onClick={() => setOpen(true)}
-      >
-        <Share2Icon aria-hidden="true" className="size-3.5" />
-        Share
-      </Button>
-      <ShareDialog trace={trace} source={source} open={open} onOpenChange={setOpen} />
+      <ShareButton compact={compact} onClick={() => setOpen(true)} />
+      <ShareDialog traceId={traceId} source={source} open={open} onOpenChange={setOpen} />
     </>
   );
 }
@@ -161,7 +198,7 @@ export function withShare(trace: Trace, source: DataSource, actions: ReactNode, 
   if (!shareable || !source.snapshot) return actions;
   return (
     <>
-      <ShareAction trace={trace} source={source} />
+      <ShareAction traceId={trace.id} source={source} />
       {actions}
     </>
   );
