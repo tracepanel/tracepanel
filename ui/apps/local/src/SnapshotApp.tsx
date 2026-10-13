@@ -43,7 +43,7 @@ export function SnapshotApp({ snapshot }: { snapshot: Snapshot }) {
       <div className="flex h-dvh min-h-0 flex-col">
         <SnapshotBar snapshot={snapshot} away={shown?.id !== snapshot.root} />
         {shown ? (
-          <TracePage key={shown.id} {...shown} source={source} />
+          <TracePage key={shown.id} {...shown} source={source} inSnapshot={true} />
         ) : (
           <main className="min-h-0 overflow-y-auto">
             <Empty

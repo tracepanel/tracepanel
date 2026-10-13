@@ -1,4 +1,4 @@
-import type { DataSource, TabId } from "@tracepanel/ui";
+import type { DataSource, ExploreItem, TabId, Trace, TraceLinks } from "@tracepanel/ui";
 import { exploreFor } from "./explore";
 import { useEscapeTo } from "./keyboard";
 import { consoleLinks, follow, go, href, parse } from "./routes";
@@ -14,6 +14,15 @@ export function tabOf(value: string | undefined): TabId | undefined {
 }
 
 /**
+ * Where a trace's page leads: anywhere in the console, or in a snapshot only to its other traces (the rest isn't in
+ * the file: no Explore, no issue pages, no lists of calls or logs).
+ */
+function leadsTo(inSnapshot: boolean): { links: TraceLinks; explore?: (trace: Trace) => ExploreItem[] } {
+  if (inSnapshot) return { links: { trace: consoleLinks().trace } };
+  return { links: consoleLinks(), explore: (trace) => exploreFor(trace, href) };
+}
+
+/**
  * A trace, the same page wherever it was opened from: the crumbs lead back there (`from`), the open tab is in the
  * URL (a link to its call tree stays a link to its call tree), Explore leads to its group, issues and nearby logs.
  */
@@ -23,6 +32,7 @@ export function TracePage({
   tab,
   span,
   source,
+  inSnapshot,
 }: {
   id: string;
   from?: string | undefined;
@@ -30,7 +40,10 @@ export function TracePage({
   /** A span to open in the call tree (from a log record). */
   span?: string | undefined;
   source: DataSource;
+  /** Opened from a snapshot file: it leads only to the file's other traces. */
+  inSnapshot?: boolean | undefined;
 }) {
+  const leads = leadsTo(inSnapshot === true);
   const back = from ? crumbsFor(parse(from), from) : [];
   useEscapeTo(from, follow);
   const initialTab = tabOf(tab);
@@ -55,8 +68,8 @@ export function TracePage({
           source={source}
           initialTab={initialTab}
           onTabChange={(next) => go({ name: "trace", id, from, tab: next }, true)}
-          explore={(trace) => exploreFor(trace, href)}
-          links={consoleLinks()}
+          explore={leads.explore}
+          links={leads.links}
           initialSpan={span}
           shareable
           back={
