@@ -1,36 +1,6 @@
 # Changelog
 
-## Unreleased
-
-### Changed
-
-- Repeats of a system's calls get that system's way to batch them: `$in` or
-  `$lookup` for MongoDB, `_mget` and `_msearch` for Elasticsearch,
-  `BatchGetItem` for DynamoDB, `SendMessageBatch` for SQS, a single flush for
-  Kafka, confirms waited for once for RabbitMQ. Other systems keep their
-  family's hint.
-- A datastore call (MongoDB, Elasticsearch and the like) can keep its
-  values apart from its statement, as SQL does: with `db.params_hash` on
-  the span, two calls are the same only with the same values too. An SDK
-  then puts the query's shape in `db.statement` and its values in
-  `db.params`, which stay on this machine.
-- Finding a trace's issues costs half what it did: the issues go into its
-  document without parsing the whole document into a tree and writing it out
-  again, which cost three times the analysis itself (Django's N+1 example:
-  928 µs, now 413 µs).
-- The console's lists read less. The calls lists (Database, Redis, Cache,
-  HTTP and the other systems) count calls from one index, without reading the
-  table: on 500 traces, 52 ms became 10 ms. The Services page, and the pages
-  that group traces by an attribute (tasks, GraphQL, commands, WebSockets),
-  read a trace's attributes from a column of their own rather than from its
-  whole document: Services went from 65 ms to 2 ms.
-- The store's format is version 19 (a trace's `attrs` column). The agent
-  starts a new store file. The traces in the old one aren't carried over.
-- Writing traces costs less. Each insert is prepared once rather than for
-  every row, and a new trace no longer looks for rows of an earlier copy of
-  itself. Rotating a full store deletes the oldest traces' rows by their ids,
-  instead of reading every row of every table to find them. 200 traces into a
-  store at its 2,000: 552 ms, now 210 ms.
+## 0.1.0 (2026-10-13)
 
 ### Added
 
@@ -128,6 +98,33 @@
 
 ### Changed
 
+- Repeats of a system's calls get that system's way to batch them: `$in` or
+  `$lookup` for MongoDB, `_mget` and `_msearch` for Elasticsearch,
+  `BatchGetItem` for DynamoDB, `SendMessageBatch` for SQS, a single flush for
+  Kafka, confirms waited for once for RabbitMQ. Other systems keep their
+  family's hint.
+- A datastore call (MongoDB, Elasticsearch and the like) can keep its
+  values apart from its statement, as SQL does: with `db.params_hash` on
+  the span, two calls are the same only with the same values too. An SDK
+  then puts the query's shape in `db.statement` and its values in
+  `db.params`, which stay on this machine.
+- Finding a trace's issues costs half what it did: the issues go into its
+  document without parsing the whole document into a tree and writing it out
+  again, which cost three times the analysis itself (Django's N+1 example:
+  928 µs, now 413 µs).
+- The console's lists read less. The calls lists (Database, Redis, Cache,
+  HTTP and the other systems) count calls from one index, without reading the
+  table: on 500 traces, 52 ms became 10 ms. The Services page, and the pages
+  that group traces by an attribute (tasks, GraphQL, commands, WebSockets),
+  read a trace's attributes from a column of their own rather than from its
+  whole document: Services went from 65 ms to 2 ms.
+- The store's format is version 19 (a trace's `attrs` column). The agent
+  starts a new store file. The traces in the old one aren't carried over.
+- Writing traces costs less. Each insert is prepared once rather than for
+  every row, and a new trace no longer looks for rows of an earlier copy of
+  itself. Rotating a full store deletes the oldest traces' rows by their ids,
+  instead of reading every row of every table to find them. 200 traces into a
+  store at its 2,000: 552 ms, now 210 ms.
 - The store's format is now version 18: one table of calls in place of the
   tables for queries, HTTP calls, Redis and cache calls. A store from an
   earlier version is left as it is, and the agent starts a new, empty one.
