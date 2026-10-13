@@ -1910,6 +1910,7 @@ name = "tracepanel-sender"
 version = "0.0.1-alpha.2"
 dependencies = [
  "serde_json",
+ "tracepanel-protocol",
  "ureq",
  "zstd",
 ]

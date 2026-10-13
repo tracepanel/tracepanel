@@ -29,6 +29,15 @@
 
 ### Added
 
+- Share a trace as one HTML file. **Share** on a trace's page in the console,
+  or its icon in the panel's bar, downloads the console itself with the trace
+  and the traces linked to it inside: it opens in any browser, read-only, with
+  no agent and no network (about 0.7 MB: the console inside is gzipped), for a
+  teammate, a pull request or a bug report. By default it leaves out what
+  stays local on the way to Tracepanel Cloud: query parameters, email bodies,
+  a user's name and email, log fields and the local variables of errors.
+  **Include values** keeps them, with the plans of slow queries. The agent
+  serves the data at `GET /api/snapshot/{id}`.
 - A new issue, `large-result`: a SELECT with no LIMIT that returned
   `large_result_rows` rows or more (1000 by default), as the SDK counts what
   was fetched (`db.response.returned_rows`, OpenTelemetry's name for it, which

@@ -24,6 +24,7 @@ export { RuntimeIcon } from "./RuntimeIcon";
 export { SERVICE_KINDS, ServiceIcon, serviceWhere, systemName } from "./ServiceMap";
 export { SqlCode } from "./SqlCode";
 export { SqlList } from "./SqlList";
+export { readSnapshot, type Snapshot, snapshotFile, snapshotSource, withSnapshots } from "./snapshot";
 export { type DataSource, httpSource, SearchError } from "./source";
 export { formatSql, tokenizeSql } from "./sql";
 export { type Tab, Tabs } from "./Tabs";

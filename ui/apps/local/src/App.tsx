@@ -17,6 +17,7 @@ import {
   TraceList,
   type TraceRow,
   type TraceSummary,
+  withSnapshots,
 } from "@tracepanel/ui";
 import { Button } from "@tracepanel/ui/components/ui/button";
 import { TooltipProvider } from "@tracepanel/ui/components/ui/tooltip";
@@ -30,6 +31,7 @@ import { type TabEntry, type TabHistory, usePolling, useTabHistory } from "./hoo
 import { RefreshProvider } from "./refresh";
 import { consoleLinks, go, href, type Route, useRoute } from "./routes";
 import { SearchPalette } from "./SearchPalette";
+import { ShareAction } from "./ShareDialog";
 import { NAV, ThemeToggle } from "./Sidebar";
 import { ScopeProvider } from "./scope";
 import { graphqlOperation } from "./sections";
@@ -38,7 +40,8 @@ import { TraceScreen } from "./TraceScreen";
 import { NARROW_ICON, UserSwitcher } from "./UserSwitcher";
 
 const base = location.href.split("#")[0] ?? location.href;
-const source: DataSource = httpSource(new URL("api/", base));
+const api = new URL("api/", base);
+const source: DataSource = withSnapshots(httpSource(api), api);
 const embedded = window.parent !== window;
 
 function tellWidget(
@@ -669,6 +672,7 @@ function PanelApp({ route }: { route: Route }) {
           <ExternalIcon />
         </a>
       </Button>
+      <ShareAction traceId={selectedId} source={source} compact={true} />
       <ThemeToggle compact={true} />
       <button
         type="button"

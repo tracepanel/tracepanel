@@ -209,6 +209,60 @@ mod tests {
     }
 
     #[test]
+    fn a_snapshot_holds_the_trace_and_what_it_called_without_what_stays_local() {
+        let dir =
+            std::env::temp_dir().join(format!("tracepanel-store-snapshot-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = path_in(&dir);
+        let mut store = Store::open(&path).unwrap();
+        let mut shop: Value =
+            serde_json::from_str(&w3c_trace("SHOP", "shop", 0, None, Some("00f067aa0ba902b7")).doc)
+                .unwrap();
+        shop["attrs"]["user.email"] = "ann@example.com".into();
+        shop["spans"][0]["attrs"]["db.params"] = serde_json::json!([42]);
+        let shop = Received {
+            trace: serde_json::from_value(shop.clone()).unwrap(),
+            doc: shop.to_string(),
+        };
+        store
+            .write(&[
+                shop,
+                w3c_trace("BILLING", "billing", 2, Some("00f067aa0ba902b7"), None),
+            ])
+            .unwrap();
+        let reader = Reader::new(&path);
+
+        let shared = reader.snapshot("SHOP", false).unwrap().unwrap();
+        let with_values = reader.snapshot("SHOP", true).unwrap().unwrap();
+
+        assert_eq!(
+            (&shared["root"], &shared["values"], &shared["format"]),
+            (&Value::from("SHOP"), &Value::from(false), &Value::from(1))
+        );
+        let ids = |map: &Value| map.as_object().unwrap().keys().cloned().collect::<Vec<_>>();
+        assert_eq!(ids(&shared["traces"]), ["BILLING", "SHOP"]);
+        assert_eq!(ids(&shared["related"]), ["BILLING", "SHOP"]);
+        assert_eq!(shared["related"]["BILLING"]["called_by"]["id"], "SHOP");
+
+        assert_eq!(shared["traces"]["SHOP"]["attrs"].get("user.email"), None);
+        assert_eq!(
+            shared["traces"]["SHOP"]["spans"][0]["attrs"].get("db.params"),
+            None
+        );
+        assert_eq!(
+            with_values["traces"]["SHOP"]["attrs"]["user.email"],
+            "ann@example.com"
+        );
+        assert_eq!(
+            with_values["traces"]["SHOP"]["spans"][0]["attrs"]["db.params"],
+            serde_json::json!([42])
+        );
+
+        assert_eq!(reader.snapshot("NONE", false).unwrap(), None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn a_call_links_the_trace_it_reached_whichever_comes_first() {
         let dir = std::env::temp_dir().join(format!("tracepanel-store-w3c-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);

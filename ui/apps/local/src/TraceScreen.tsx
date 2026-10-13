@@ -9,6 +9,7 @@ import {
 } from "@tracepanel/ui";
 import { type ReactNode, useEffect, useState } from "react";
 import { track, useRefresh } from "./refresh";
+import { withShare } from "./ShareDialog";
 
 /** A just-finished request may not be stored yet (the SDK writes in the background): retry briefly. */
 const TRACE_RETRIES = 6;
@@ -30,6 +31,8 @@ export interface TraceScreenProps {
   initialSpan?: string | undefined;
   /** The way back when the trace is gone (the console's page); the panel has none to offer. */
   back?: ReactNode;
+  /** A Share button, when the source can make a snapshot: the console's trace page. */
+  shareable?: boolean | undefined;
 }
 
 /**
@@ -65,6 +68,7 @@ export function TraceScreen({
   links,
   initialSpan,
   back,
+  shareable,
 }: TraceScreenProps) {
   const [trace, setTrace] = useState<Trace | null | undefined>(undefined);
   const related = useRelated(id, source);
@@ -115,7 +119,7 @@ export function TraceScreen({
       onExplain={(span, analyze) => source.explain(trace.id, span, analyze)}
       initialTab={initialTab}
       preferredTab={preferredTab}
-      actions={actions}
+      actions={withShare(trace, source, actions, shareable === true)}
       related={related(trace.id)}
       links={links}
       initialSpan={initialSpan}

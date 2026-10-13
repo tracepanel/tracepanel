@@ -32,6 +32,7 @@ pub fn router(reader: Reader, activity: Activity) -> Router {
         .route("/api/traces", get(traces))
         .route("/api/traces/{id}", get(trace))
         .route("/api/traces/{id}/related", get(related))
+        .route("/api/snapshot/{id}", get(snapshot))
         .route("/api/counts", get(counts))
         .route("/api/search", get(search_spec))
         .route("/api/logs", get(logs))
@@ -230,6 +231,23 @@ async fn related(State(reader): State<Shared>, Path(id): Path<String>) -> Respon
         return not_found();
     }
     answer(read(&reader, move |reader| Ok(reader.related(&id)?)).await)
+}
+
+/// A trace to share and what is linked to it (`Reader::snapshot`); `values=1` keeps what otherwise stays local.
+async fn snapshot(
+    State(reader): State<Shared>,
+    Path(id): Path<String>,
+    Query(query): Params,
+) -> Response {
+    if !is_id(&id) {
+        return not_found();
+    }
+    let values = query.get("values").is_some_and(|value| value == "1");
+    match read(&reader, move |reader| Ok(reader.snapshot(&id, values)?)).await {
+        Ok(Some(snapshot)) => json_response(StatusCode::OK, snapshot.to_string()),
+        Ok(None) => not_found(),
+        Err(failure) => failure.into_response(),
+    }
 }
 
 async fn counts(State(reader): State<Shared>, Query(query): Params) -> Response {
