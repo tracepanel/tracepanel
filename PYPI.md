@@ -2,11 +2,13 @@
 
 The agent of [Tracepanel](https://github.com/tracepanel/tracepanel), which
 collects the traces and logs of your app on your machine. It receives every
-request, job and command with its SQL queries, Redis commands, cache calls,
-outgoing HTTP calls and log lines. It finds N+1 queries and calls, duplicates,
-slow SQL and slow HTTP calls, large results, blocking calls in async code, task
-queue waits, long transactions and errors, keeps everything in your project's
-`.tracepanel/` directory, and serves the panel and the console.
+request, job, command and gRPC call with its SQL queries, Redis commands,
+cache calls, MongoDB and other datastore queries, messages, outgoing HTTP and
+gRPC calls and log lines. It finds N+1 queries and calls, duplicates, slow SQL
+and slow calls, large results, blocking calls in async code, task queue waits,
+long transactions and errors, with a hint for each system. It keeps everything
+in your project's `.tracepanel/` directory and serves the panel and the
+console, where a trace can be shared as a single HTML file.
 
 You don't install it yourself. The Tracepanel SDKs bring it (for Python,
 `pip install --pre tracepanel` while Tracepanel is in alpha), and the first

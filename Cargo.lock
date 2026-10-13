@@ -1842,7 +1842,7 @@ checksum = "8df9b6e13f2d32c91b9bd719c00d1958837bc7dec474d94952798cc8e69eeec3"
 
 [[package]]
 name = "tracepanel-agent"
-version = "0.0.1-alpha.2"
+version = "0.1.0"
 dependencies = [
  "serde_json",
  "sha1",
@@ -1858,7 +1858,7 @@ dependencies = [
 
 [[package]]
 name = "tracepanel-analysis"
-version = "0.0.1-alpha.2"
+version = "0.1.0"
 dependencies = [
  "codspeed-divan-compat",
  "regex",
@@ -1869,7 +1869,7 @@ dependencies = [
 
 [[package]]
 name = "tracepanel-mcp"
-version = "0.0.1-alpha.2"
+version = "0.1.0"
 dependencies = [
  "regex",
  "rmcp",
@@ -1882,7 +1882,7 @@ dependencies = [
 
 [[package]]
 name = "tracepanel-otlp"
-version = "0.0.1-alpha.2"
+version = "0.1.0"
 dependencies = [
  "axum",
  "codspeed-divan-compat",
@@ -1897,7 +1897,7 @@ dependencies = [
 
 [[package]]
 name = "tracepanel-protocol"
-version = "0.0.1-alpha.2"
+version = "0.1.0"
 dependencies = [
  "codspeed-divan-compat",
  "serde",
@@ -1907,7 +1907,7 @@ dependencies = [
 
 [[package]]
 name = "tracepanel-sender"
-version = "0.0.1-alpha.2"
+version = "0.1.0"
 dependencies = [
  "serde_json",
  "tracepanel-protocol",
@@ -1917,7 +1917,7 @@ dependencies = [
 
 [[package]]
 name = "tracepanel-server"
-version = "0.0.1-alpha.2"
+version = "0.1.0"
 dependencies = [
  "axum",
  "jsonschema",
@@ -1933,7 +1933,7 @@ dependencies = [
 
 [[package]]
 name = "tracepanel-store-local"
-version = "0.0.1-alpha.2"
+version = "0.1.0"
 dependencies = [
  "chrono",
  "codspeed-divan-compat",
