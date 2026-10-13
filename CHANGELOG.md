@@ -4,6 +4,10 @@
 
 ### Added
 
+- A new issue, `large-result`: a SELECT with no LIMIT that returned
+  `large_result_rows` rows or more (1000 by default), as the SDK counts what
+  was fetched (`db.response.returned_rows`, OpenTelemetry's name for it, which
+  the OpenTelemetry mapping keeps). The hint says how to page or stream it.
 - A slow query whose LIKE pattern starts with `%` (Django's `contains` and
   `icontains`) says why no index helps, and what to do instead: match the
   start, or a trigram index or full-text search.

@@ -189,6 +189,8 @@ pub struct Thresholds {
     pub n_plus_one_min_ms: i64,
     /// A task that waited this long in its queue for a worker is an issue (SDKs from before it send none).
     pub queue_wait_ms: i64,
+    /// A SELECT without a LIMIT that returned this many rows is an issue (SDKs from before it send none).
+    pub large_result_rows: i64,
 }
 
 impl Default for Thresholds {
@@ -200,6 +202,7 @@ impl Default for Thresholds {
             slow_http_ms: 500,
             n_plus_one_min_ms: 5,
             queue_wait_ms: 1000,
+            large_result_rows: 1000,
         }
     }
 }

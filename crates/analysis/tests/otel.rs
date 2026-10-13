@@ -373,3 +373,20 @@ fn http_from_its_parts() {
     assert_eq!(mapped.attrs["server.port"], 443);
     assert!(mapped.error);
 }
+
+#[test]
+fn a_query_keeps_how_many_rows_it_returned() {
+    let attrs = json!({
+        "otel.span_kind": "client", "db.system.name": "postgresql", "db.query.text": "SELECT * FROM product",
+        "db.response.returned_rows": 25000,
+    });
+    let mapped = tracepanel_analysis::otel::map("SELECT product", attrs.as_object().unwrap());
+
+    assert_eq!(
+        (
+            mapped.kind.as_str(),
+            &mapped.attrs["db.response.returned_rows"]
+        ),
+        ("sql", &json!(25000))
+    );
+}
