@@ -15,6 +15,7 @@ path = "src/main.rs"
 [dependencies]
 tracepanel-analysis.workspace = true
 tracepanel-mcp.workspace = true
+tracepanel-otlp.workspace = true
 tracepanel-protocol.workspace = true
 tracepanel-sender.workspace = true
 tracepanel-server.workspace = true
