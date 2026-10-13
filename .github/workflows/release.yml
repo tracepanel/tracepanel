@@ -34,10 +34,30 @@ jobs:
           print(f"version {Version(python)}")
           EOF
 
-  # Format, lints, the crates' tests and the UI's checks on the tagged commit: nothing is built or published before
-  # they pass.
+  # Nothing is built or published before CI has passed on the tagged commit: the run that main's push made, not a new
+  # one.
   ci:
-    uses: ./.github/workflows/ci.yml
+    name: CI passed on this commit
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      actions: read
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for attempt in $(seq 1 120); do
+            result=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&event=push" \
+              --jq '.workflow_runs[0] | "\(.status) \(.conclusion)"')
+            case "$result" in
+              "completed success") echo "CI passed on $GITHUB_SHA" && exit 0 ;;
+              completed*) echo "::error::CI on $GITHUB_SHA: $result" && exit 1 ;;
+              # No run of main on this commit: tag a commit of main, after its CI.
+              "null null") [ "$attempt" -ge 10 ] && echo "::error::no CI run of main on $GITHUB_SHA" && exit 1 ;;
+            esac
+            sleep 30
+          done
+          echo "::error::CI on $GITHUB_SHA still runs" && exit 1
 
   wheels:
     needs: [version, ci]
