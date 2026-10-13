@@ -5,6 +5,8 @@
 //! array of traces (`schema/trace.schema.json`). The SDKs only record: the
 //! agent finds the issues, with the SDK's thresholds.
 
+pub mod local;
+
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use serde_json::{Map, Value};

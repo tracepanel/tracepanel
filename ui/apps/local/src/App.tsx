@@ -17,6 +17,7 @@ import {
   TraceList,
   type TraceRow,
   type TraceSummary,
+  withSnapshots,
 } from "@tracepanel/ui";
 import { Button } from "@tracepanel/ui/components/ui/button";
 import { TooltipProvider } from "@tracepanel/ui/components/ui/tooltip";
@@ -38,7 +39,8 @@ import { TraceScreen } from "./TraceScreen";
 import { NARROW_ICON, UserSwitcher } from "./UserSwitcher";
 
 const base = location.href.split("#")[0] ?? location.href;
-const source: DataSource = httpSource(new URL("api/", base));
+const api = new URL("api/", base);
+const source: DataSource = withSnapshots(httpSource(api), api);
 const embedded = window.parent !== window;
 
 function tellWidget(

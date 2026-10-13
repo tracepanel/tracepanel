@@ -34,17 +34,6 @@ pub const ENVIRONMENT_ATTR: &str = "deployment.environment.name";
 /// The most traces the cloud takes in one request.
 pub const MAX_BATCH: usize = 2000;
 
-/// Attributes that stay on this machine: parameters, mail bodies, who a user is beyond their id.
-const LOCAL_ONLY: [&str; 5] = [
-    "db.params",
-    "mail.body",
-    "mail.html",
-    "user.username",
-    "user.email",
-];
-/// A log record's own fields, as `extra=` passed them.
-const LOCAL_ONLY_PREFIX: &str = "extra.";
-
 /// Where to send, as whom, and from which environment.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Config {
@@ -96,7 +85,6 @@ pub fn prepare(doc: &str, environment: &str) -> Option<Value> {
         .entry("attrs")
         .or_insert_with(|| Value::Object(Map::new()));
     if let Some(attrs) = attrs.as_object_mut() {
-        strip(attrs);
         let named = attrs
             .get(ENVIRONMENT_ATTR)
             .is_some_and(|name| !name.is_null());
@@ -104,46 +92,8 @@ pub fn prepare(doc: &str, environment: &str) -> Option<Value> {
             attrs.insert(ENVIRONMENT_ATTR.into(), environment.into());
         }
     }
-    for key in ["spans", "logs"] {
-        for item in items(object, key) {
-            if let Some(attrs) = item.get_mut("attrs").and_then(Value::as_object_mut) {
-                strip(attrs);
-            }
-        }
-    }
-    for error in items(object, "errors") {
-        forget_locals(error);
-        if let Some(chain) = error.get_mut("chain").and_then(Value::as_array_mut) {
-            chain.iter_mut().for_each(forget_locals);
-        }
-    }
+    tracepanel_protocol::local::strip(&mut trace);
     Some(trace)
-}
-
-fn items<'a>(object: &'a mut Map<String, Value>, key: &str) -> impl Iterator<Item = &'a mut Value> {
-    object
-        .get_mut(key)
-        .and_then(Value::as_array_mut)
-        .into_iter()
-        .flatten()
-}
-
-fn strip(attrs: &mut Map<String, Value>) {
-    attrs.retain(|key, _| {
-        !LOCAL_ONLY.contains(&key.as_str()) && !key.starts_with(LOCAL_ONLY_PREFIX)
-    });
-}
-
-/// Local variables stay local; the schema keeps the field, as null.
-fn forget_locals(error: &mut Value) {
-    let Some(frames) = error.get_mut("frames").and_then(Value::as_array_mut) else {
-        return;
-    };
-    for frame in frames {
-        if let Some(locals) = frame.get_mut("locals") {
-            *locals = Value::Null;
-        }
-    }
 }
 
 /// How the sending thread paces itself; the defaults suit an agent, tests shorten them.

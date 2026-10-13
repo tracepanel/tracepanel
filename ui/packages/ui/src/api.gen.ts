@@ -51,6 +51,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/snapshot/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A trace to share, with the traces linked to it and the links of each: what the console writes into a snapshot file, which opens without the agent. */
+        get: operations["traceSnapshot"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/traces/overview": {
         parameters: {
             query?: never;
@@ -1003,6 +1020,26 @@ export interface components {
             /** @description How many of them failed. */
             errors: number;
         };
+        Snapshot: {
+            /** @description The snapshot's layout version. */
+            format: number;
+            /** @description The agent's version that made it. */
+            agent: string;
+            /** @description When it was made */
+            created: number;
+            /** @description Whether what stays local was kept. */
+            values: boolean;
+            /** @description The id of the trace it was made from. */
+            root: string;
+            /** @description The trace and those linked to it (at most 100), by id. */
+            traces: {
+                [key: string]: components["schemas"]["trace.schema"];
+            };
+            /** @description The links of each trace in `traces`, by id. */
+            related: {
+                [key: string]: components["schemas"]["Related"];
+            };
+        };
         Related: {
             /** @description The trace that enqueued this task. */
             enqueued_by: components["schemas"]["TraceSummary"] | null;
@@ -1368,6 +1405,32 @@ export interface operations {
                     "application/json": components["schemas"]["Related"];
                 };
             };
+        };
+    };
+    traceSnapshot: {
+        parameters: {
+            query?: {
+                /** @description `1` keeps what otherwise stays on this machine: query parameters, mail bodies, a user's name and email, a log record's own fields and the local variables of errors. */
+                values?: "0" | "1";
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The snapshot's data. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Snapshot"];
+                };
+            };
+            404: components["responses"]["NotFound"];
         };
     };
     tracesOverview: {

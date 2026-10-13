@@ -782,6 +782,43 @@ impl Reader {
     }
 
     /// The trace's document, as stored.
+    /// A trace to share, with what is linked to it (the request that queued it, the tasks it queued, the traces it
+    /// called and was called by, its WebSocket connection), each with its own links: everything the trace page shows,
+    /// and nothing else of the store. Without `values`, what stays local goes (`tracepanel_protocol::local`).
+    /// None when the trace isn't stored.
+    pub fn snapshot(&self, id: &str, values: bool) -> rusqlite::Result<Option<Value>> {
+        let Some(root) = self.get_trace(id)? else {
+            return Ok(None);
+        };
+        let mut order = vec![id.to_owned()];
+        let mut docs = serde_json::Map::new();
+        let mut related = serde_json::Map::new();
+        docs.insert(id.to_owned(), document(&root, values));
+        let links = self.related(id)?;
+        for linked in linked_ids(&links) {
+            if order.len() >= SNAPSHOT_TRACES || order.contains(&linked) {
+                continue;
+            }
+            if let Some(doc) = self.get_trace(&linked)? {
+                docs.insert(linked.clone(), document(&doc, values));
+                order.push(linked);
+            }
+        }
+        related.insert(id.to_owned(), links);
+        for linked in &order[1..] {
+            related.insert(linked.clone(), self.related(linked)?);
+        }
+        Ok(Some(serde_json::json!({
+            "format": SNAPSHOT_FORMAT,
+            "agent": env!("CARGO_PKG_VERSION"),
+            "created": search::now_us(),
+            "values": values,
+            "root": id,
+            "traces": docs,
+            "related": related,
+        })))
+    }
+
     pub fn get_trace(&self, id: &str) -> rusqlite::Result<Option<String>> {
         let db = self.connect()?;
         let mut statement = db.prepare("SELECT doc FROM traces WHERE id = ?1")?;
@@ -974,6 +1011,47 @@ fn runtime_label(
         }
         None => runtime,
     })
+}
+
+/// The version of a snapshot's layout: a file made now opens in a later console.
+const SNAPSHOT_FORMAT: i64 = 1;
+/// A trace and at most this many linked to it, the trace itself included.
+const SNAPSHOT_TRACES: usize = 100;
+
+/// A stored document as a snapshot carries it: as it is, or without what stays local.
+fn document(doc: &str, values: bool) -> Value {
+    let mut value: Value = serde_json::from_str(doc).unwrap_or(Value::Null);
+    if !values {
+        tracepanel_protocol::local::strip(&mut value);
+    }
+    value
+}
+
+/// The ids of the traces a trace's links name, in the order the trace page lists them.
+fn linked_ids(related: &Value) -> Vec<String> {
+    let mut ids = Vec::new();
+    for key in [
+        "enqueued_by",
+        "called_by",
+        "sent_by",
+        "connection",
+        "enqueued",
+        "calls",
+        "delivered",
+        "connection_events",
+    ] {
+        let found: Vec<&Value> = match &related[key] {
+            Value::Array(items) => items.iter().collect(),
+            Value::Object(_) => vec![&related[key]],
+            _ => Vec::new(),
+        };
+        ids.extend(
+            found
+                .into_iter()
+                .filter_map(|item| item["id"].as_str().map(str::to_owned)),
+        );
+    }
+    ids
 }
 
 #[cfg(test)]

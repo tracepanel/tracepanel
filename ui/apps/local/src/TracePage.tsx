@@ -58,6 +58,7 @@ export function TracePage({
           explore={(trace) => exploreFor(trace, href)}
           links={consoleLinks()}
           initialSpan={span}
+          shareable
           back={
             <a href={from ?? href({ name: "endpoints", q: "" })}>
               {from ? `Back to ${back.at(-1)?.label ?? "the list"}` : "All HTTP endpoints"}

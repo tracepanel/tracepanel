@@ -68,6 +68,30 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Related" }
+  /snapshot/{id}:
+    get:
+      operationId: traceSnapshot
+      summary: >-
+        A trace to share, with the traces linked to it and the links of each: what the console writes into a snapshot
+        file, which opens without the agent.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, pattern: "^[0-9A-Z]{26}$" }
+        - name: values
+          in: query
+          description: >-
+            `1` keeps what otherwise stays on this machine: query parameters, mail bodies, a user's name and email, a
+            log record's own fields and the local variables of errors.
+          schema: { type: string, enum: ["0", "1"], default: "0" }
+      responses:
+        "200":
+          description: The snapshot's data.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Snapshot" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /traces/overview:
     get:
       operationId: tracesOverview
@@ -1149,6 +1173,24 @@ components:
         traces: { type: integer, description: The called app's traces. }
         total: { $ref: "#/components/schemas/Duration", description: Their time. }
         errors: { type: integer, description: How many of them failed. }
+    Snapshot:
+      type: object
+      additionalProperties: false
+      required: [format, agent, created, values, root, traces, related]
+      properties:
+        format: { type: integer, description: "The snapshot's layout version." }
+        agent: { type: string, description: The agent's version that made it. }
+        created: { type: integer, description: When it was made, in microseconds since the epoch. }
+        values: { type: boolean, description: Whether what stays local was kept. }
+        root: { type: string, description: The id of the trace it was made from. }
+        traces:
+          type: object
+          description: The trace and those linked to it (at most 100), by id.
+          additionalProperties: { $ref: "trace.schema.json" }
+        related:
+          type: object
+          description: The links of each trace in `traces`, by id.
+          additionalProperties: { $ref: "#/components/schemas/Related" }
     Related:
       type: object
       additionalProperties: false

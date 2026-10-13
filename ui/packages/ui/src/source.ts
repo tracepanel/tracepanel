@@ -1,3 +1,4 @@
+import type { Snapshot } from "./snapshot";
 import type {
   CallRow,
   CallsSummary,
@@ -89,6 +90,8 @@ export interface DataSource {
   searchSpec(): Promise<SearchSpec>;
   /** Delete everything stored; resolves to how many traces. Optional: a source may not offer it. */
   clearStore?: () => Promise<number>;
+  /** A trace to share and what is linked to it; with `values`, what otherwise stays local. Optional too. */
+  snapshot?: (traceId: string, values: boolean) => Promise<Snapshot | null>;
 }
 
 async function getJson<T>(url: URL): Promise<T | null> {
