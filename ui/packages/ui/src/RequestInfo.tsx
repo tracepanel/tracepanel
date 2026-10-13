@@ -197,6 +197,8 @@ function relatedRows(related: Related | undefined, links: TraceLinks | undefined
     ...many("Connection event", "Connection events", related.connection_events),
     ...one("Sent by", related.sent_by),
     ...many("Delivered to", "Delivered to", related.delivered),
+    ...one("Called by", related.called_by),
+    ...many("Served by another app", "Served by other apps", related.calls),
   ];
 }
 

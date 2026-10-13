@@ -113,6 +113,9 @@ const NO_RELATED: Related = {
   // biome-ignore lint/style/useNamingConvention: wire format.
   sent_by: null,
   delivered: [],
+  // biome-ignore lint/style/useNamingConvention: wire format.
+  called_by: null,
+  calls: [],
   via: {},
 };
 
@@ -244,7 +247,7 @@ export function httpSource(base: string | URL): DataSource {
       return (await getJson<{ websockets: WebsocketRow[] }>(url("websockets", { q })))?.websockets ?? [];
     },
     async listServices(q = "") {
-      return (await getJson<ServiceMap>(url("services", { q }))) ?? { apps: [], services: [], edges: [] };
+      return (await getJson<ServiceMap>(url("services", { q }))) ?? { apps: [], links: [], services: [], edges: [] };
     },
     async related(traceId) {
       return (await getJson<Related>(url(`traces/${traceId}/related`))) ?? NO_RELATED;

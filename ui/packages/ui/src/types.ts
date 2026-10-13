@@ -42,8 +42,11 @@ export type ServiceApp = Schemas["ServiceApp"];
 export type ServiceNode = Schemas["ServiceNode"];
 export type ServiceEdge = Schemas["ServiceEdge"];
 /** What the project's web, workers and commands call (GET /services). */
+export type AppLink = Schemas["AppLink"];
 export interface ServiceMap {
   apps: ServiceApp[];
+  /** One app calling another (the W3C trace context its call carried). */
+  links: AppLink[];
   services: ServiceNode[];
   edges: ServiceEdge[];
 }

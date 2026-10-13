@@ -4,7 +4,7 @@ import { CheckIcon, CopyIcon, MinusIcon, PlusIcon } from "lucide-react";
 import { type CSSProperties, type ReactNode, useMemo, useState } from "react";
 import { type Box, type Diagram, type Link, laidOut, mermaidOf, type Placed } from "./architecture";
 import { href, type Route } from "./routes";
-import { appTarget, type Host, type HostEdge, hostUses, hostWhere, serviceTarget } from "./services";
+import { appTarget, type Host, hostUses, hostWhere, serviceTarget } from "./services";
 
 function plural(count: number, one: string, many: string): string {
   return `${count.toLocaleString()} ${count === 1 ? one : many}`;
@@ -213,6 +213,12 @@ function RoleBox({ placed, hovering }: { placed: Placed<Box>; hovering: Hovering
   );
 }
 
+/** A server's calls and their time; nothing for a broker the apps only take tasks from. */
+function hostStats(host: Host): string {
+  if (host.calls === 0) return "";
+  return `${plural(host.calls, "call", "calls")} · ${duration(host.total)}${failures(host.errors)}`;
+}
+
 function HostBox({ placed, host, hovering }: { placed: Placed<Box>; host: Host; hovering: Hovering }) {
   return (
     <Card
@@ -221,7 +227,7 @@ function HostBox({ placed, host, hovering }: { placed: Placed<Box>; host: Host; 
       icon={<ServiceIcon node={host.primary} />}
       name={systemName(host.primary)}
       detail={[hostWhere(host), hostUses(host)].filter(Boolean).join(" · ")}
-      stats={`${plural(host.calls, "call", "calls")} · ${duration(host.total)}${failures(host.errors)}`}
+      stats={hostStats(host)}
       failed={host.errors > 0}
       hovering={hovering}
     />
@@ -263,14 +269,38 @@ function pathOf(points: readonly Point[]): string {
   return [`M ${first.x} ${first.y}`, ...bends, `L ${last.x} ${last.y}`].join(" ");
 }
 
-function linkTitle(link: Link): string {
-  const edge = link.edge;
-  if (!edge) return "";
-  return `${edge.service} ${edge.role}: ${plural(edge.calls, "call", "calls")} in ${plural(edge.traces, "trace", "traces")}, ${duration(edge.total)}${failures(edge.errors)}. Click for the traces.`;
+/** What a link stands for: a role's calls to a server, or the traces another app served for its calls. */
+interface Carried {
+  count: number;
+  errors: number;
+  title: string;
+  /** Its traces: the role's that called the server, or the ones the other app served. */
+  target: Route;
+}
+
+function carried(link: Link): Carried | null {
+  const { edge, app } = link;
+  if (edge) {
+    return {
+      count: edge.calls,
+      errors: edge.errors,
+      title: `${edge.service} ${edge.role}: ${plural(edge.calls, "call", "calls")} in ${plural(edge.traces, "trace", "traces")}, ${duration(edge.total)}${failures(edge.errors)}. Click for the traces.`,
+      target: { name: "traces", q: `service:${edge.service} peer:${edge.peer}` },
+    };
+  }
+  if (app) {
+    return {
+      count: app.traces,
+      errors: app.errors,
+      title: `${app.service} → ${app.to_service}: ${plural(app.traces, "trace", "traces")} served, ${duration(app.total)}${failures(app.errors)}. Click for them.`,
+      target: { name: "traces", q: `service:${app.to_service}` },
+    };
+  }
+  return null;
 }
 
 function strokeOf(link: Link, mine: boolean): string {
-  if (link.edge?.errors) return "stroke-error/70";
+  if (carried(link)?.errors) return "stroke-error/70";
   return mine ? "stroke-brand" : "stroke-muted-foreground/50";
 }
 
@@ -279,11 +309,6 @@ function linkClass(link: Link, hover: string | null): string {
   if (hover === null) return cn("transition-opacity", strokeOf(link, false));
   const mine = link.from === hover || link.to === hover;
   return cn("transition-opacity", strokeOf(link, mine), !mine && "opacity-15");
-}
-
-/** The traces behind a call: the role's traces that called that server. */
-function linkTarget(edge: HostEdge): Route {
-  return { name: "traces", q: `service:${edge.service} peer:${edge.peer}` };
 }
 
 function LinkPath({
@@ -298,16 +323,17 @@ function LinkPath({
   hover: string | null;
 }) {
   const d = pathOf(points);
+  const what = carried(link);
   // 1px for one call, up to 4px for the busiest: a log scale, so a few calls still show.
-  const width = 1 + (3 * Math.log1p(link.edge?.calls ?? 0)) / Math.log1p(busiest);
+  const width = 1 + (3 * Math.log1p(what?.count ?? 0)) / Math.log1p(busiest);
   return (
     <g>
       <path d={d} fill="none" strokeWidth={width} markerEnd="url(#arch-arrow)" className={linkClass(link, hover)} />
-      {link.edge ? (
+      {what ? (
         // A wider, invisible twin to point at: a link to the call's traces.
-        <a href={href(linkTarget(link.edge))} tabIndex={-1} className="pointer-events-auto">
+        <a href={href(what.target)} tabIndex={-1} className="pointer-events-auto">
           <path d={d} fill="none" stroke="transparent" strokeWidth={12}>
-            <title>{linkTitle(link)}</title>
+            <title>{what.title}</title>
           </path>
         </a>
       ) : null}
@@ -316,7 +342,7 @@ function LinkPath({
 }
 
 function Links({ diagram, hover }: { diagram: Diagram; hover: string | null }) {
-  const busiest = Math.max(...diagram.links.map(({ link }) => link.edge?.calls ?? 0), 1);
+  const busiest = Math.max(...diagram.links.map(({ link }) => carried(link)?.count ?? 0), 1);
   return (
     <svg className="absolute inset-0 overflow-visible" width={diagram.width} height={diagram.height} aria-hidden="true">
       <defs>

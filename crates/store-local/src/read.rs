@@ -503,12 +503,53 @@ impl Reader {
         edges.sort_by_key(|edge| -edge["total"].as_i64().unwrap_or(0));
         Ok(serde_json::json!({
             "apps": self.list_apps(&db, query)?,
+            "links": self.list_app_links(&db, query)?,
             "services": services.into_iter().map(|(_, _, node)| node).collect::<Vec<_>>(),
             "edges": edges,
         }))
     }
 
     /// The project's own web, workers and commands, as services of their own: what they handled and what runs them.
+    /// One app's calls to another (`called_by` links): from which role to which, through which server the caller saw
+    /// (its HTTP host, its RPC service), how many traces, their time and failures on the called side. The page's
+    /// search picks the calling traces.
+    fn list_app_links(&self, db: &Connection, query: &str) -> Result<Vec<Value>, ReadError> {
+        let (condition, params) = search::compile_where(query, &APP_SEARCH)?;
+        let role = |table: &str| SERVICE_ROLE.replace("doc", &format!("{table}.doc"));
+        let rows = objects(
+            db,
+            &format!(
+                "SELECT caller.service AS service, {caller_role} AS role, callee.service AS to_service, \
+                 {callee_role} AS to_role, w3c.peer AS peer, COUNT(*) AS traces, SUM(callee.duration) AS total, \
+                 SUM(callee.status = 'error') AS errors \
+                 FROM links JOIN traces callee ON callee.id = links.trace_id \
+                 JOIN traces caller ON caller.id = links.linked_trace \
+                 LEFT JOIN w3c ON w3c.trace_id = links.linked_trace AND w3c.span_id = links.linked_span \
+                 AND w3c.side = 'out' \
+                 WHERE links.kind = 'called_by' AND links.linked_trace IN (SELECT id FROM traces WHERE {condition}) \
+                 GROUP BY 1, 2, 3, 4, 5 ORDER BY traces DESC",
+                caller_role = role("caller"),
+                callee_role = role("callee"),
+            ),
+            params,
+        )?;
+        Ok(rows
+            .into_iter()
+            .map(|row| {
+                serde_json::json!({
+                    "service": row["service"],
+                    "role": row["role"],
+                    "to_service": row["to_service"],
+                    "to_role": row["to_role"],
+                    "peer": row["peer"],
+                    "traces": int(&row, "traces"),
+                    "total": int(&row, "total"),
+                    "errors": int(&row, "errors"),
+                })
+            })
+            .collect())
+    }
+
     fn list_apps(&self, db: &Connection, query: &str) -> Result<Vec<Value>, ReadError> {
         let (condition, params) = search::compile_where(query, &APP_SEARCH)?;
         let rows = objects(
@@ -796,6 +837,8 @@ impl Reader {
             "connection_events": many("connection")?,
             "sent_by": one("sent_by")?,
             "delivered": many("sent_by")?,
+            "called_by": one("called_by")?,
+            "calls": many("called_by")?,
             "via": via,
         }))
     }
