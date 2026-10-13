@@ -411,7 +411,9 @@ const PANEL_TABS = new Set<TabId>(["request", "tree", "issues", "sql", "cache", 
 /** The tab the panel opens: the last one picked, kept across requests and page loads. */
 /** The console list a request of this kind belongs to: the way back from its trace page there. */
 function sectionFor(kind: string | undefined): string | undefined {
-  const section = { http: "endpoints", task: "tasks", command: "jobs", websocket: "websockets" }[kind ?? ""];
+  const section = { http: "endpoints", task: "tasks", command: "jobs", websocket: "websockets", rpc: "rpc" }[
+    kind ?? ""
+  ];
   return section ? `#/${section}` : undefined;
 }
 

@@ -15,6 +15,7 @@ import { useEffect, useState } from "react";
 import { CallsChart, LatencyChart, Stat } from "./Charts";
 import { track, useRefresh } from "./refresh";
 import { currentPeriod, endpointGroup, groupRoute, href, withPeriod } from "./routes";
+import { BY_NAME } from "./sections";
 import { isoWithOffset } from "./time";
 
 const STORAGE_KEY = "tracepanel:overview";
@@ -50,6 +51,7 @@ export const TASK_RUNS: OverviewScope = { filter: "kind:task", noun: "run", grou
 export const GRAPHQL_OPERATIONS: OverviewScope = { filter: "operation:*", noun: "operation", group: "operations" };
 export const WEBSOCKET_EVENTS: OverviewScope = { filter: "kind:websocket", noun: "event", group: "events" };
 export const JOB_RUNS: OverviewScope = { filter: "kind:command", noun: "run", group: "jobs" };
+export const RPC_CALLS: OverviewScope = { filter: "kind:rpc", noun: "call", group: "methods" };
 
 const KIND_BADGES: Record<string, string> = { command: "job", websocket: "ws" };
 
@@ -267,8 +269,8 @@ function operationHref(item: OperationStats): string {
   if (item.kind === "http" && item.method && item.route) {
     return href(endpointGroup(item.method, item.route));
   }
-  if (item.kind === "task") return href(groupRoute("tasks", item.name));
-  if (item.kind === "command") return href(groupRoute("jobs", item.name));
+  const named = BY_NAME[item.kind];
+  if (named) return href(groupRoute(named, item.name));
   if (item.kind === "websocket" && item.view) return href(groupRoute("websockets", item.view));
   return href({ name: "traces", q: withPeriod(`kind:${item.kind} name:"${item.name}"`, currentPeriod()) });
 }

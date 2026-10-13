@@ -51,6 +51,14 @@ export const ENTRY: Record<
     scope: "kind:command",
     group: (key) => `kind:command name:${quote(key)}`,
   },
+  rpc: {
+    label: "RPC",
+    title: "RPC",
+    description: "Calls the app served over gRPC and other RPC systems, by method.",
+    calls: "Calls",
+    scope: "kind:rpc",
+    group: (key) => `kind:rpc name:${quote(key)}`,
+  },
 };
 
 const DATA_LABELS: Record<Exclude<Section, EntrySection | CallsSection>, { label: string; description: string }> = {
@@ -98,6 +106,9 @@ export function graphqlOperation(trace: Pick<TraceSummary, "kind" | "name">): st
   return trace.kind === "http" && trace.name.startsWith("GraphQL ") ? trace.name.slice("GraphQL ".length) : null;
 }
 
+/** The kinds of trace grouped by their name, and the section that lists them. */
+export const BY_NAME: Partial<Record<string, EntrySection>> = { task: "tasks", command: "jobs", rpc: "rpc" };
+
 /** The entry-point group a trace belongs to: where "all calls like this one" lives. */
 export function groupOf(trace: Trace): { section: EntrySection; key: string; label: string } | null {
   const attrs = trace.attrs;
@@ -111,8 +122,8 @@ export function groupOf(trace: Trace): { section: EntrySection; key: string; lab
     }
     return null;
   }
-  if (trace.kind === "task") return { section: "tasks", key: trace.name, label: trace.name };
-  if (trace.kind === "command") return { section: "jobs", key: trace.name, label: trace.name };
+  const named = BY_NAME[trace.kind];
+  if (named) return { section: named, key: trace.name, label: trace.name };
   const consumer = attrs["code.view"];
   if (trace.kind === "websocket" && typeof consumer === "string") {
     return { section: "websockets", key: consumer, label: consumer };

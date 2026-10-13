@@ -60,7 +60,7 @@ interface QuickOption {
 
 /** Values the console knows from stored data (routes, loggers, database aliases, tasks, jobs, log extras). */
 export type KnownValues = Partial<
-  Record<"route" | "logger" | "db" | "task" | "queue" | "job" | "extra", readonly string[]>
+  Record<"route" | "logger" | "db" | "task" | "queue" | "job" | "rpc" | "extra", readonly string[]>
 > & {
   /** Each system's targets and operations, by the name its page has (`sql`, `redis`, `mongodb`…). */
   targets?: Readonly<Record<string, readonly string[]>>;
@@ -279,6 +279,11 @@ const QUICK: Record<Exclude<Section, CallsSection>, Control[]> = {
     },
   ],
   mails: [{ ...TIME, verb: "Sent" }],
+  rpc: [
+    { ...TIME, verb: "Called" },
+    { label: "Method", title: "Filter by method", key: "rpc", values: (known) => known.rpc ?? [] },
+    { label: "System", title: "Filter by RPC system", key: "system", values: ["grpc"] },
+  ],
   jobs: [
     { ...TIME, verb: "Ran" },
     // By name: the command ("manage.py import_posts") or what the code named its block (trace("nightly import")).
@@ -334,6 +339,7 @@ const CALLS: Record<EntrySection, Control[]> = {
   tasks: [{ ...TIME, verb: "Ran" }, TASK, STATE, QUEUE, DURATION, ISSUE],
   websockets: [{ ...TIME, verb: "Handled" }, DURATION, ISSUE, CONTAINS],
   jobs: [{ ...TIME, verb: "Ran" }, DURATION, ISSUE, CONTAINS],
+  rpc: [{ ...TIME, verb: "Called" }, DURATION, ISSUE, CONTAINS],
 };
 
 const CALLS_EXAMPLE: Record<EntrySection, string> = {
@@ -342,6 +348,7 @@ const CALLS_EXAMPLE: Record<EntrySection, string> = {
   tasks: "state:failure since:1h",
   websockets: "has:error since:1h",
   jobs: "has:error since:1d",
+  rpc: "has:error since:1h",
 };
 
 const VALUES: Record<string, string[]> = {
@@ -368,6 +375,7 @@ const VALUES: Record<string, string[]> = {
     "task",
     "command",
     "websocket",
+    "rpc",
     "n+1",
     "duplicates",
     "slow-sql",
@@ -425,6 +433,7 @@ const EXAMPLE: Record<Exclude<Section, CallsSection>, string> = {
   tasks: "state:failure",
   services: "kind:database",
   jobs: "source:custom",
+  rpc: "rpc:helloworld.Greeter/*",
   websockets: "event:receive",
   graphql: "type:mutation",
   mails: "to:ann@example.com",

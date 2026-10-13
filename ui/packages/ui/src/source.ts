@@ -16,6 +16,7 @@ import type {
   MailRow,
   Page,
   Related,
+  RpcRow,
   SearchSpec,
   ServiceMap,
   TaskRow,
@@ -63,6 +64,8 @@ export interface DataSource {
   /** With `service`, only that app's calls. */
   getGraphqlOperation(operation: string, service?: string): Promise<GraphqlDetail | null>;
   listJobs(q: string): Promise<JobRow[]>;
+  /** RPC calls served (gRPC and others), by method. */
+  listRpcs(q: string): Promise<RpcRow[]>;
   /** Any group of traces named by a search: what a group page shows. */
   summarizeTraces(q: string): Promise<TraceGroup | null>;
   /** Databases, caches, mail, brokers and APIs the project talks to, and who calls them. */
@@ -211,6 +214,7 @@ export function httpSource(base: string | URL): DataSource {
             tasks: 0,
             websockets: 0,
             jobs: 0,
+            rpc: 0,
             systems: [],
           },
         }
@@ -227,6 +231,7 @@ export function httpSource(base: string | URL): DataSource {
           task: [],
           queue: [],
           job: [],
+          rpc: [],
           extra: [],
         }
       );
@@ -239,6 +244,9 @@ export function httpSource(base: string | URL): DataSource {
     },
     async listJobs(q = "") {
       return (await getJson<{ jobs: JobRow[] }>(url("jobs", { q })))?.jobs ?? [];
+    },
+    async listRpcs(q = "") {
+      return (await getJson<{ rpc: RpcRow[] }>(url("rpc", { q })))?.rpc ?? [];
     },
     summarizeTraces(q) {
       return getJson<TraceGroup>(url("traces/summary", { q }));

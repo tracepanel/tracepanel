@@ -28,7 +28,8 @@
         "http",
         "task",
         "command",
-        "websocket"
+        "websocket",
+        "rpc"
       ]
     },
     "name": {

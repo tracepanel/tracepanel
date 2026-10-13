@@ -263,6 +263,28 @@
       "help": "Runs before: until:5m"
     }
   },
+  "rpc": {
+    "rpc": {
+      "type": "text",
+      "help": "Service/Method, * wildcards: Users/*"
+    },
+    "system": {
+      "type": "text",
+      "help": "The RPC system: system:grpc"
+    },
+    "service": {
+      "type": "text",
+      "help": "The app that recorded it (service.name): service:shop"
+    },
+    "since": {
+      "type": "time",
+      "help": "Calls at or after: since:15m"
+    },
+    "until": {
+      "type": "time",
+      "help": "Calls before: until:5m"
+    }
+  },
   "graphql": {
     "operation": {
       "type": "text",

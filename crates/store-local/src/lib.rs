@@ -133,6 +133,66 @@ mod tests {
     }
 
     #[test]
+    fn rpc_calls_served_are_listed_by_method() {
+        let dir = std::env::temp_dir().join(format!("tracepanel-store-rpc-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = path_in(&dir);
+        let mut store = Store::open(&path).unwrap();
+        let call = |id: &str, method: &str, status: &str| {
+            let doc = serde_json::json!({
+                "id": id, "kind": "rpc", "name": format!("helloworld.Greeter/{method}"), "start": 0, "duration": 2000,
+                "status": status, "attrs": {"service.name": "greeter", "rpc.system": "grpc"},
+                "spans": [], "logs": [], "errors": [], "links": [], "issues": [],
+            });
+            Received {
+                trace: serde_json::from_value(doc.clone()).unwrap(),
+                doc: doc.to_string(),
+            }
+        };
+        store
+            .write(&[
+                call("R1", "SayHello", "ok"),
+                call("R2", "SayHello", "error"),
+                call("R3", "SayBye", "ok"),
+            ])
+            .unwrap();
+        let reader = Reader::new(&path);
+
+        let rows = reader.list_rpcs("", 50).unwrap();
+        let listed: Vec<(Value, Value, Value, Value)> = rows
+            .iter()
+            .map(|row| {
+                (
+                    row["rpc"].clone(),
+                    row["system"].clone(),
+                    row["calls"].clone(),
+                    row["failures"].clone(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            listed,
+            [
+                (
+                    "helloworld.Greeter/SayHello".into(),
+                    "grpc".into(),
+                    2.into(),
+                    1.into()
+                ),
+                (
+                    "helloworld.Greeter/SayBye".into(),
+                    "grpc".into(),
+                    1.into(),
+                    0.into()
+                ),
+            ]
+        );
+        assert_eq!(reader.list_rpcs("rpc:*Bye", 50).unwrap().len(), 1);
+        assert_eq!(reader.counts(None).unwrap()["sections"]["rpc"], 3);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn rotation_keeps_the_newest_traces_and_only_their_rows() {
         let dir =
             std::env::temp_dir().join(format!("tracepanel-store-prune-{}", std::process::id()));
@@ -460,7 +520,7 @@ mod tests {
         let counts = reader.counts(None).unwrap();
         assert_eq!(
             counts["sections"],
-            serde_json::json!({"http": 1, "graphql": 0, "tasks": 0, "websockets": 0, "jobs": 0,
+            serde_json::json!({"http": 1, "graphql": 0, "tasks": 0, "websockets": 0, "jobs": 0, "rpc": 0,
                                "systems": [{"system": "redis", "family": "redis", "label": "Redis"},
                                            {"system": "cache", "family": "cache", "label": "Cache"}]})
         );

@@ -294,6 +294,25 @@ paths:
                 properties:
                   jobs: { type: array, items: { $ref: "#/components/schemas/JobRow" } }
         "400": { $ref: "#/components/responses/BadSearch" }
+  /rpc:
+    get:
+      operationId: listRpcs
+      summary: "RPC calls served (gRPC and other RPC systems' servers) by method, Service/Method, busiest first."
+      parameters:
+        - $ref: "#/components/parameters/q"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: Methods.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [rpc]
+                additionalProperties: false
+                properties:
+                  rpc: { type: array, items: { $ref: "#/components/schemas/RpcRow" } }
+        "400": { $ref: "#/components/responses/BadSearch" }
   /graphql/detail:
     get:
       operationId: getGraphqlOperation
@@ -599,7 +618,7 @@ components:
         db_time, issues, errors, logs, mails, issue_kinds, db_aliases, cache_aliases, task_state, htmx]
       properties:
         id: { type: string }
-        kind: { type: string, enum: [http, task, command, websocket] }
+        kind: { type: string, enum: [http, task, command, websocket, rpc] }
         name: { type: string }
         start: { $ref: "#/components/schemas/Time" }
         duration: { $ref: "#/components/schemas/Duration" }
@@ -641,7 +660,7 @@ components:
         message: { type: string }
         exception: { type: [string, "null"] }
         attrs: { $ref: "#/components/schemas/Attrs" }
-        trace_kind: { type: string, enum: [http, task, command, websocket] }
+        trace_kind: { type: string, enum: [http, task, command, websocket, rpc] }
         trace_htmx: { type: [string, "null"], enum: [request, boosted, null], description: As the trace's htmx. }
         trace_name: { type: string }
         method: { type: [string, "null"] }
@@ -672,7 +691,7 @@ components:
         recipients: { type: array, description: To and cc., items: { type: string } }
         sent: { type: [boolean, "null"], description: "False when the backend refused it; null when unknown." }
         html: { type: boolean }
-        trace_kind: { type: string, enum: [http, task, command, websocket] }
+        trace_kind: { type: string, enum: [http, task, command, websocket, rpc] }
         trace_htmx: { type: [string, "null"], enum: [request, boosted, null], description: As the trace's htmx. }
         method: { type: [string, "null"] }
         path: { type: [string, "null"] }
@@ -814,7 +833,7 @@ components:
         - type: object
           required: [kind]
           properties:
-            kind: { type: string, enum: [http, task, command, websocket] }
+            kind: { type: string, enum: [http, task, command, websocket, rpc] }
       unevaluatedProperties: false
     OperationStats:
       description: 'One operation: a trace kind plus name, e.g. http "GET /posts/<int:pk>/".'
@@ -823,7 +842,7 @@ components:
         - type: object
           required: [kind, name, method, route, view]
           properties:
-            kind: { type: string, enum: [http, task, command, websocket] }
+            kind: { type: string, enum: [http, task, command, websocket, rpc] }
             name: { type: string }
             method: { type: [string, "null"], description: For requests. }
             route: { type: [string, "null"], description: For requests. }
@@ -909,13 +928,14 @@ components:
           type: object
           description: Stored traces per entry point; the console hides entry points with none.
           additionalProperties: false
-          required: [http, graphql, tasks, websockets, jobs, systems]
+          required: [http, graphql, tasks, websockets, jobs, rpc, systems]
           properties:
             http: { type: integer, description: HTTP requests that are not GraphQL operations. }
             graphql: { type: integer }
             tasks: { type: integer }
             websockets: { type: integer }
             jobs: { type: integer, description: Management commands and tracepanel.trace() blocks. }
+            rpc: { type: integer, description: "RPC calls served: gRPC and other RPC systems' servers." }
             systems:
               type: array
               description: >-
@@ -931,11 +951,12 @@ components:
     KnownValues:
       type: object
       additionalProperties: false
-      required: [route, logger, db, targets, ops, task, queue, job, extra]
+      required: [route, logger, db, targets, ops, task, queue, job, rpc, extra]
       properties:
         task: { type: array, description: Celery task names., items: { type: string } }
         queue: { type: array, description: Celery queues tasks ran from., items: { type: string } }
         job: { type: array, description: "Job names: management commands and tracepanel.trace() blocks.", items: { type: string } }
+        rpc: { type: array, description: "RPC methods served, Service/Method.", items: { type: string } }
         route: { type: array, items: { type: string } }
         logger: { type: array, items: { type: string } }
         db: { type: array, description: Database aliases., items: { type: string } }
@@ -958,13 +979,14 @@ components:
     SearchSpec:
       type: object
       additionalProperties: false
-      required: [traces, logs, mails, calls, endpoints, tasks, services, websockets, graphql, jobs, issues]
+      required: [traces, logs, mails, calls, endpoints, tasks, services, websockets, graphql, jobs, rpc, issues]
       properties:
         tasks: { $ref: "#/components/schemas/SearchFields" }
         services: { $ref: "#/components/schemas/SearchFields" }
         websockets: { $ref: "#/components/schemas/SearchFields" }
         graphql: { $ref: "#/components/schemas/SearchFields" }
         jobs: { $ref: "#/components/schemas/SearchFields" }
+        rpc: { $ref: "#/components/schemas/SearchFields" }
         traces: { $ref: "#/components/schemas/SearchFields" }
         logs: { $ref: "#/components/schemas/SearchFields" }
         mails: { $ref: "#/components/schemas/SearchFields" }
@@ -1051,6 +1073,21 @@ components:
         job: { type: string, description: "manage.py migrate, or the name given to tracepanel.trace()." }
         source: { type: string, enum: [manage.py, custom] }
         runs: { type: integer }
+        failures: { type: integer }
+        p50: { $ref: "#/components/schemas/Duration" }
+        p95: { $ref: "#/components/schemas/Duration" }
+        total: { $ref: "#/components/schemas/Duration" }
+        avg_queries: { type: number }
+        with_issues: { type: integer }
+        last_seen: { $ref: "#/components/schemas/Time" }
+    RpcRow:
+      type: object
+      additionalProperties: false
+      required: [rpc, system, calls, failures, p50, p95, total, avg_queries, with_issues, last_seen]
+      properties:
+        rpc: { type: string, description: "The method, Service/Method: helloworld.Greeter/SayHello." }
+        system: { type: [string, "null"], description: "grpc, or another RPC system's name." }
+        calls: { type: integer }
         failures: { type: integer }
         p50: { $ref: "#/components/schemas/Duration" }
         p95: { $ref: "#/components/schemas/Duration" }

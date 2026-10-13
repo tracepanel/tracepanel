@@ -51,6 +51,7 @@ pub fn router(reader: Reader, activity: Activity) -> Router {
         .route("/api/graphql", get(graphql))
         .route("/api/graphql/detail", get(graphql_detail))
         .route("/api/jobs", get(jobs))
+        .route("/api/rpc", get(rpcs))
         .route("/api/traces/summary", get(summary))
         .route("/api/traces/overview", get(overview))
         .route("/api/{*rest}", any(unknown))
@@ -396,6 +397,10 @@ async fn graphql(State(reader): State<Shared>, Query(query): Params) -> Response
 
 async fn jobs(State(reader): State<Shared>, Query(query): Params) -> Response {
     listing(reader, query, "jobs", Reader::list_jobs).await
+}
+
+async fn rpcs(State(reader): State<Shared>, Query(query): Params) -> Response {
+    listing(reader, query, "rpc", Reader::list_rpcs).await
 }
 
 async fn endpoint_detail(State(reader): State<Shared>, Query(query): Params) -> Response {

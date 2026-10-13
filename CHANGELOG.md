@@ -34,6 +34,12 @@
 
 ### Added
 
+- An RPC section in the console: the calls the app served over gRPC and
+  other RPC systems, by method (`helloworld.Greeter/SayHello`), with calls,
+  failures, p95 and a page per method, as the other entry points have. An
+  OTLP root server span with `rpc.system` is a trace of the new kind `rpc`,
+  named `Service/Method`, with `rpc.*` attributes. `GET /api/rpc` lists the
+  methods, `/api/counts` counts them, and `rpc:` and `system:` search them.
 - A new issue, `slow-call`: a datastore query (MongoDB, Elasticsearch,
   DynamoDB, Cassandra and the like) over `slow_sql_ms`, or an RPC call such
   as gRPC over `slow_http_ms`, which was a `slow-http` until now. A slow
