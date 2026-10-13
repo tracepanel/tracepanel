@@ -1443,6 +1443,36 @@ mod tests {
     }
 
     #[test]
+    fn a_datastore_query_with_its_values_apart_is_the_same_query_only_with_the_same_values() {
+        // As an SDK records a query: its shape in the statement, its values local (db.params) and hashed.
+        let find = |hash: &str| {
+            op(
+                "mongodb",
+                "find users",
+                serde_json::json!({"db.system": "mongodb", "db.operation": "find", "db.collection.name": "users",
+                                   "db.statement": "{\"filter\": {\"_id\": \"?\"}}", "db.params_hash": hash}),
+                2000,
+            )
+        };
+        assert_eq!(
+            found(&request(&[find("a1"), find("b2"), find("c3")])),
+            [(
+                "n+1".to_owned(),
+                "N+1: 3 similar MongoDB commands · find users".to_owned(),
+                3
+            )]
+        );
+        assert_eq!(
+            found(&request(&[find("a1"), find("a1")])),
+            [(
+                "duplicates".to_owned(),
+                "Duplicate MongoDB commands: 2 identical · find users".to_owned(),
+                2
+            )]
+        );
+    }
+
+    #[test]
     fn a_publish_per_item_is_an_n_plus_one_and_never_a_duplicate() {
         let publish = || {
             op(

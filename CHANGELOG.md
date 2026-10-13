@@ -4,6 +4,11 @@
 
 ### Changed
 
+- A datastore call (MongoDB, Elasticsearch and the like) can keep its
+  values apart from its statement, as SQL does: with `db.params_hash` on
+  the span, two calls are the same only with the same values too. An SDK
+  then puts the query's shape in `db.statement` and its values in
+  `db.params`, which stay on this machine.
 - Finding a trace's issues costs half what it did: the issues go into its
   document without parsing the whole document into a tree and writing it out
   again, which cost three times the analysis itself (Django's N+1 example:
