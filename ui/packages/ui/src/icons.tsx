@@ -115,6 +115,7 @@ const ISSUE_ICONS: Partial<Record<IssueKind, () => React.JSX.Element>> = {
   duplicates: CopyIcon,
   "slow-sql": ClockIcon,
   "slow-http": ClockIcon,
+  "slow-call": ClockIcon,
   "long-transaction": ClockIcon,
   htmx: SwapIcon,
   "queue-wait": ClockIcon,

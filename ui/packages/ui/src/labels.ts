@@ -5,6 +5,7 @@ export const ISSUE_LABELS: Record<IssueKind, string> = {
   duplicates: "Duplicates",
   "slow-sql": "Slow query",
   "slow-http": "Slow HTTP call",
+  "slow-call": "Slow call",
   "long-transaction": "Long transaction",
   "in-transaction": "Before commit",
   htmx: "htmx",

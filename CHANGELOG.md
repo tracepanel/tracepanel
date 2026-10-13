@@ -4,6 +4,11 @@
 
 ### Changed
 
+- Repeats of a system's calls get that system's way to batch them: `$in` or
+  `$lookup` for MongoDB, `_mget` and `_msearch` for Elasticsearch,
+  `BatchGetItem` for DynamoDB, `SendMessageBatch` for SQS, a single flush for
+  Kafka, confirms waited for once for RabbitMQ. Other systems keep their
+  family's hint.
 - A datastore call (MongoDB, Elasticsearch and the like) can keep its
   values apart from its statement, as SQL does: with `db.params_hash` on
   the span, two calls are the same only with the same values too. An SDK
@@ -29,6 +34,12 @@
 
 ### Added
 
+- A new issue, `slow-call`: a datastore query (MongoDB, Elasticsearch,
+  DynamoDB, Cassandra and the like) over `slow_sql_ms`, or an RPC call such
+  as gRPC over `slow_http_ms`, which was a `slow-http` until now. A slow
+  MongoDB query's hint names the index its filter and sort need, as the
+  shell creates it (`db.users.createIndex({"email": 1})`): without one,
+  MongoDB reads the whole collection (COLLSCAN in `explain()`).
 - Share a trace as one HTML file. **Share** on a trace's page in the console,
   or its icon in the panel's bar, downloads the console itself with the trace
   and the traces linked to it inside: it opens in any browser, read-only, with

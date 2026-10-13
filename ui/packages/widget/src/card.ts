@@ -19,6 +19,7 @@ const KIND_LABELS: Record<Issue["kind"], string> = {
   duplicates: "Duplicates",
   "slow-sql": "Slow query",
   "slow-http": "Slow HTTP call",
+  "slow-call": "Slow call",
   "long-transaction": "Long transaction",
   "in-transaction": "Before commit",
   htmx: "htmx",

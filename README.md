@@ -76,6 +76,7 @@ your ORM's API.
 | Duplicates | the same query or call, with the same parameters, more than once in a request |
 | Slow SQL | a query over the threshold, with its plan (`EXPLAIN`) one click away, and why no index helps a `LIKE '%…'` |
 | Slow HTTP calls | an outgoing call over the threshold |
+| Slow calls | a MongoDB, Elasticsearch or other datastore query, or a gRPC call, over the threshold; for MongoDB, the index its filter needs |
 | Large results | a SELECT without a LIMIT that read many rows |
 | Blocking calls | a synchronous query or call in async code, which holds up every other request |
 | Queue waits | a task that waited for a free worker |

@@ -38,7 +38,7 @@
     },
     "has": {
       "type": "has",
-      "help": "n+1, duplicates, slow-sql, slow-http, long-transaction, in-transaction, htmx, queue-wait, blocking-call, large-result, error, issues, logs, mail"
+      "help": "n+1, duplicates, slow-sql, slow-http, slow-call, long-transaction, in-transaction, htmx, queue-wait, blocking-call, large-result, error, issues, logs, mail"
     },
     "db": {
       "type": "text",
@@ -362,7 +362,7 @@
   "issues": {
     "kind": {
       "type": "text",
-      "help": "error, n+1, duplicates, slow-sql, slow-http, long-transaction, in-transaction, htmx, queue-wait, blocking-call, large-result"
+      "help": "error, n+1, duplicates, slow-sql, slow-http, slow-call, long-transaction, in-transaction, htmx, queue-wait, blocking-call, large-result"
     },
     "route": {
       "type": "text",
