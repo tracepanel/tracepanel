@@ -11,8 +11,7 @@ in your project's `.tracepanel/` directory and serves the panel and the
 console, where a trace can be shared as a single HTML file.
 
 You don't install it yourself. The Tracepanel SDKs bring it (for Python,
-`pip install --pre tracepanel` while Tracepanel is in alpha), and the first
-traced request starts it. To run the
+`pip install tracepanel`), and the first traced request starts it. To run the
 agent by hand, with the console on http://127.0.0.1:8765/:
 
 ```bash
