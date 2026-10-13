@@ -144,16 +144,16 @@ export function hostUses(host: Host): string | null {
     .join(" · ");
 }
 
-/** An app role's calls to a host: its edges to the host's uses, counted as the host is. */
-export interface HostEdge extends Omit<ServiceEdge, "peer"> {
+/** An app role's calls to a host: its edges to the host's uses, counted as the host is; `peer` is the busiest use's. */
+export interface HostEdge extends ServiceEdge {
   host: string;
 }
 
 function hostEdge(edges: readonly (ServiceEdge & { kind: ServiceNode["kind"] })[], key: string): HostEdge {
   const reached = counted(edges);
-  const first = edges[0] as ServiceEdge;
+  const busiest = [...reached].sort((a, b) => b.calls - a.calls)[0] as ServiceEdge;
   return {
-    ...first,
+    ...busiest,
     host: key,
     traces: Math.max(...edges.map((edge) => edge.traces)),
     calls: total(reached, (edge) => edge.calls),

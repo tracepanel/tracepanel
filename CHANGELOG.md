@@ -8,16 +8,19 @@
   page's filters: how many and in how many requests, their time and p95, how
   many per request (up to the most in one), how many failed (a click shows
   them), and a cache's hit rate. `/api/calls/summary` answers them.
-- The Services page opens with a map: the project's apps on the left, what
-  they call on the right by kind (databases, caches, brokers, HTTP APIs,
-  mail), and a curve for each pair, thicker for more calls and red with
-  failures. Hovering a card brings out its own curves, and a card opens
-  where its calls are listed. The table below keeps the numbers.
-- The services map and table show one card per server (its address and
+- The Services page draws the project's architecture from its calls: where
+  work comes in, the apps' roles framed by project, the servers they call,
+  and an arrow per call, laid out left to right in layers (dagre), so a
+  broker sits between the app that enqueues and the worker that takes.
+  Arrows are thicker for more calls and red with failures, and one opens
+  its traces. A box opens where its calls are listed, and hovering it brings
+  out its arrows. "Copy as Mermaid" puts the same diagram on the clipboard
+  for a README or an issue. A zoom is kept across visits, and the table
+  below keeps the numbers.
+- The services diagram and table show one card per server (its address and
   port), however many ways the app uses it: Redis as a datastore and as a
   cache backend is one card, "Cache redis · Database 1". Its calls are the
-  server's: a cache's commands to Redis count once. The map is compact by
-  default and has a zoom, kept across visits.
+  server's: a cache's commands to Redis count once.
 - Spans an OpenTelemetry instrumentation recorded are mapped by the agent,
   from the semantic conventions (older and current attribute names alike),
   so every SDK can send them as they are (kind `otel`). SQL becomes a query
