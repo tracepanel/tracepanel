@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.1 (2026-10-13)
+
+### Changed
+
+- The Services map fits the width it has until you pick a zoom yourself: a
+  project with several apps no longer opens with its diagram cut off on the
+  right.
+- The Share dialog says what a file without values keeps: the trace's
+  shape, timings and issues.
+- The Issues page and the API describe the issues as they are now: N+1 and
+  duplicate calls, slow queries and calls, blocking calls, transactions.
+- The README and the PyPI page install with `pip install tracepanel`, with
+  no `--pre`.
+
 ## 0.1.0 (2026-10-13)
 
 ### Added

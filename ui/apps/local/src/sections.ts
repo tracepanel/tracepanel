@@ -74,7 +74,7 @@ const DATA_LABELS: Record<Exclude<Section, EntrySection | CallsSection>, { label
   },
   issues: {
     label: "Issues",
-    description: "What could be better: N+1 queries, duplicate and slow SQL, transactions, htmx.",
+    description: "What could be better: N+1 and duplicate calls, slow queries and calls, blocking calls, transactions.",
   },
   traces: { label: "Search", description: "Every trace matching the search, newest first." },
 };

@@ -786,7 +786,7 @@ export interface components {
             recent: components["schemas"]["TraceSummary"][];
         };
         Counts: {
-            /** @description Issue groups besides errors: N+1, duplicate and slow SQL, transactions, htmx. */
+            /** @description Issue groups besides errors: N+1, duplicates, slow queries and calls, blocking calls, transactions, htmx. */
             issues: number;
             /** @description Error groups. */
             errors: number;

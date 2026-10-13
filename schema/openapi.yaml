@@ -922,7 +922,7 @@ components:
       additionalProperties: false
       required: [issues, errors, sections]
       properties:
-        issues: { type: integer, description: "Issue groups besides errors: N+1, duplicate and slow SQL, transactions, htmx." }
+        issues: { type: integer, description: "Issue groups besides errors: N+1, duplicates, slow queries and calls, blocking calls, transactions, htmx." }
         errors: { type: integer, description: Error groups. }
         sections:
           type: object
