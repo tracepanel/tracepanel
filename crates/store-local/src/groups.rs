@@ -2,11 +2,11 @@
 
 use super::*;
 
-pub(crate) const COMMAND: &str = "json_extract(doc, '$.attrs.\"command.name\"')";
-pub(crate) const OPERATION_TYPE: &str = "json_extract(doc, '$.attrs.\"graphql.operation.type\"')";
-pub(crate) const OPERATION_NAME: &str = "json_extract(doc, '$.attrs.\"graphql.operation.name\"')";
-pub(crate) const WAIT: &str = "json_extract(doc, '$.attrs.\"task.queue_wait\"')";
-pub(crate) const WS_EVENT: &str = "json_extract(doc, '$.attrs.\"ws.event\"')";
+pub(crate) const COMMAND: &str = "json_extract(attrs, '$.\"command.name\"')";
+pub(crate) const OPERATION_TYPE: &str = "json_extract(attrs, '$.\"graphql.operation.type\"')";
+pub(crate) const OPERATION_NAME: &str = "json_extract(attrs, '$.\"graphql.operation.name\"')";
+pub(crate) const WAIT: &str = "json_extract(attrs, '$.\"task.queue_wait\"')";
+pub(crate) const WS_EVENT: &str = "json_extract(attrs, '$.\"ws.event\"')";
 pub(crate) const WS_LIFECYCLE: [&str; 3] = ["connect", "receive", "disconnect"];
 
 pub(crate) type Row = serde_json::Map<String, Value>;
@@ -301,7 +301,7 @@ impl Reader {
             &db,
             &format!(
                 "SELECT view, duration, status, start, issues, queries, {WS_EVENT} AS event, \
-                 json_extract(doc, '$.attrs.\"ws.path\"') AS ws_path \
+                 json_extract(attrs, '$.\"ws.path\"') AS ws_path \
                  FROM traces WHERE kind = 'websocket' AND view IS NOT NULL AND {condition}"
             ),
             params,

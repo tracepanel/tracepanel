@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Changed
+
+- The console's lists read less. The calls lists (Database, Redis, Cache,
+  HTTP and the other systems) count calls from one index, without reading the
+  table: on 500 traces, 52 ms became 10 ms. The Services page, and the pages
+  that group traces by an attribute (tasks, GraphQL, commands, WebSockets),
+  read a trace's attributes from a column of their own rather than from its
+  whole document: Services went from 65 ms to 2 ms.
+- The store's format is version 19 (a trace's `attrs` column). The agent
+  starts a new store file. The traces in the old one aren't carried over.
+
 ### Added
 
 - A new issue, `large-result`: a SELECT with no LIMIT that returned

@@ -1,6 +1,6 @@
 -- tracepanel's local store: one SQLite file per format version, shared by every process of a project and, when it
 -- runs, written by tracepanel-agent instead (which reads this file too: keep both writers in step).
--- version: 18
+-- version: 19
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS traces (
     id TEXT PRIMARY KEY,
@@ -28,6 +28,9 @@ CREATE TABLE IF NOT EXISTS traces (
     htmx TEXT,
     -- service.name: one store can hold several apps (services sending to one agent).
     service TEXT NOT NULL,
+    -- The trace's attrs (its doc's "attrs"), what a page groups or filters by (json_extract(attrs, ...)): reading them
+    -- from the doc parsed the whole trace, spans and logs included, for every row.
+    attrs TEXT NOT NULL,
     doc TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS traces_start ON traces (start DESC);
@@ -90,7 +93,11 @@ CREATE TABLE IF NOT EXISTS calls (
     duration INTEGER NOT NULL,
     origin TEXT
 );
-CREATE INDEX IF NOT EXISTS calls_key ON calls (key);
+-- A list of calls groups them by key and counts them per trace, filtered by system, family, target or time: from this
+-- index alone, without reading the table. The latest call and the most common line of code come from it too.
+CREATE INDEX IF NOT EXISTS calls_group ON calls (
+    key, trace_id, error, duration, start, hit, system, family, target, origin
+);
 CREATE INDEX IF NOT EXISTS calls_trace ON calls (trace_id);
 CREATE INDEX IF NOT EXISTS calls_system ON calls (system);
 CREATE TABLE IF NOT EXISTS mails (
