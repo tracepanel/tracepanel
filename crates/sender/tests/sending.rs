@@ -118,15 +118,16 @@ fn options() -> Options {
     }
 }
 
+/// A spool directory of the test's own. Numbered: tests run in parallel, and two started in the same microsecond
+/// (the clock's resolution on macOS) would share a directory named by the time, and see each other's batches.
 fn spool() -> PathBuf {
+    static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     let dir = std::env::temp_dir().join(format!(
         "tracepanel-sender-{}-{}",
         std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
+        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     ));
+    let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     dir
 }
@@ -295,10 +296,14 @@ fn what_the_cloud_did_not_take_is_sent_by_the_next_agent() {
         format!("http://{}", listener.local_addr().unwrap())
     };
     let dir = spool();
-    let first = Sender::start(config(&closed), dir.clone(), options()).unwrap();
+    // One batch, packed as it stops: a flush between the two offers would make two.
+    let patient = Options {
+        flush_every: Duration::from_secs(60),
+        ..options()
+    };
+    let first = Sender::start(config(&closed), dir.clone(), patient).unwrap();
     first.offer(trace("A"));
     first.offer(trace("B"));
-    std::thread::sleep(Duration::from_millis(100));
     let report = first.stop();
 
     assert_eq!(

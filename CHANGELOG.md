@@ -8,6 +8,9 @@
   `large_result_rows` rows or more (1000 by default), as the SDK counts what
   was fetched (`db.response.returned_rows`, OpenTelemetry's name for it, which
   the OpenTelemetry mapping keeps). The hint says how to page or stream it.
+- A slow query whose LIKE pattern starts with `%` (Django's `contains` and
+  `icontains`) says why no index helps, and what to do instead: match the
+  start, or a trigram index or full-text search.
 - Two new issues. `queue-wait`: a task that waited in its queue longer
   than `queue_wait_ms` (1 s by default) before a worker took it, a sign the
   workers are all busy. `blocking-call`: SQL, an HTTP call, Redis or a cache
