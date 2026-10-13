@@ -10,6 +10,12 @@
   shows in the console with no Tracepanel SDK: each service's work for one
   request, task or command is a trace, its spans mapped by the semantic
   conventions and analyzed as an SDK's. A port in use is said and skipped.
+- A trace links to the trace in another app that its call reached, by the
+  W3C trace context the call carried: `called_by` on one, `calls` on the
+  other, and the call tree shows the reached app's trace under the call. The
+  architecture diagram draws an arrow from app to app in place of the
+  server the caller saw (its HTTP host), and an app only other apps call
+  has no clients arrow. `/api/services` lists these app links.
 - Tiles above a system's page sum up its calls, all of them and with the
   page's filters: how many and in how many requests, their time and p95, how
   many per request (up to the most in one), how many failed (a click shows

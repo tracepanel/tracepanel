@@ -156,6 +156,11 @@ fn the_agent_maps_the_spans_and_finds_the_issues() {
         shop.trace.spans[0].attrs["code.origin"],
         "shop/views.py:31 in order"
     );
+    // The call to billing keeps the W3C id billing's trace names as its parent.
+    assert_eq!(
+        shop.trace.spans[5].attrs["w3c.span_id"],
+        docs[1]["attrs"]["w3c.parent_span_id"]
+    );
 }
 
 #[test]

@@ -1,7 +1,7 @@
 // The services as an architecture diagram, as data: what calls what (from the agent's service map), laid out in
 // layers left to right by dagre, and the same graph as Mermaid text to paste where diagrams are drawn from text.
 import { Graph, layout } from "@dagrejs/dagre";
-import type { ServiceApp, ServiceMap, ServiceNode } from "@tracepanel/ui";
+import type { AppLink, ServiceApp, ServiceMap, ServiceNode } from "@tracepanel/ui";
 import { byHost, byProject, type Host, type HostEdge, hostEdges } from "./services";
 
 /** A box on the diagram: where work comes in, a role of the project's apps, or a server they call. */
@@ -10,13 +10,15 @@ export type Box =
   | { type: "role"; id: string; service: string; runtime: string | null; app: ServiceApp }
   | { type: "host"; id: string; host: Host };
 
-/** A call between two boxes: an app role's calls to a server, or a worker taking tasks from a broker. */
+/** A call between two boxes: an app role's calls to a server or to another app, a worker taking from a broker. */
 export interface Link {
   key: string;
   from: string;
   to: string;
-  /** The calls it stands for; none for an entry's. */
+  /** The calls to a server it stands for. */
   edge: HostEdge | null;
+  /** The calls to another app it stands for. */
+  app: AppLink | null;
 }
 
 export interface Placed<T> {
@@ -47,9 +49,39 @@ const projectId = (service: string) => `project:${service}`;
 /** Where each role's work comes from, when the store says nothing more: requests from clients, commands from a shell. */
 const ENTRIES: Record<string, string> = { web: "Clients", command: "CLI · cron" };
 
+const roleOf = (service: string, role: string | null) => roleId(service, role ?? "web");
+
+/**
+ * The calls one app made to another, role to role. The server the caller saw it as (an HTTP host) is that app: its
+ * arrow to that server goes, and the server too when nothing else calls it.
+ */
+function appLinks(map: ServiceMap, hosts: readonly Host[]): { links: Link[]; seen: Set<string> } {
+  const seen = new Set(
+    map.links.flatMap((link) => (link.peer ? [`${roleOf(link.service, link.role)} ${link.peer}`] : [])),
+  );
+  const links = map.links.map((app) => {
+    const [from, to] = [roleOf(app.service, app.role), roleOf(app.to_service, app.to_role)];
+    return { key: `${from} ${to}`, from, to, edge: null, app };
+  });
+  // A host is the app when any of its uses is what the caller saw.
+  const hostSeen = new Set(
+    hosts.flatMap((host) =>
+      map.links.flatMap((link) =>
+        host.uses.some((use) => seen.has(`${roleOf(link.service, link.role)} ${use.id}`))
+          ? [`${roleOf(link.service, link.role)} ${hostId(host.key)}`]
+          : [],
+      ),
+    ),
+  );
+  return { links, seen: hostSeen };
+}
+
 /** The boxes and the calls between them: entries, the projects' roles, the servers, by host and port. */
 function graphOf(map: ServiceMap): { boxes: Box[]; links: Link[]; projects: string[] } {
   const hosts = byHost(map.services);
+  const apps = appLinks(map, hosts);
+  // An app only other apps call has no clients of its own on the diagram.
+  const called = new Set(apps.links.map((link) => link.to));
   const projects = byProject(map.apps);
   const roles: Box[] = projects.flatMap((project) =>
     project.roles.map((role) => ({
@@ -65,22 +97,28 @@ function graphOf(map: ServiceMap): { boxes: Box[]; links: Link[]; projects: stri
     .map((role): Box => ({ type: "entry", id: `entry:${role}`, label: ENTRIES[role] ?? role }));
   const links: Link[] = [
     ...map.apps
-      .filter((app) => ENTRIES[app.role])
+      .filter((app) => ENTRIES[app.role] && !called.has(roleId(app.service, app.role)))
       .map((app) => ({
         key: `entry ${app.service}/${app.role}`,
         from: `entry:${app.role}`,
         to: roleId(app.service, app.role),
         edge: null,
+        app: null,
       })),
-    ...hostEdges(map.edges, hosts).map((edge) => {
+    ...apps.links,
+    ...hostEdges(map.edges, hosts).flatMap((edge) => {
       const [role, server] = [roleId(edge.service, edge.role), hostId(edge.host)];
+      if (apps.seen.has(`${role} ${server}`)) return [];
       // A worker takes its tasks from the broker: the arrow runs from the broker to it.
       const [from, to] = edge.direction === "in" ? [server, role] : [role, server];
-      return { key: `${from} ${to}`, from, to, edge };
+      return [{ key: `${from} ${to}`, from, to, edge, app: null }];
     }),
   ];
+  // A server or an entry with no arrow left (a host that was another app) isn't drawn.
+  const linked = new Set(links.flatMap((link) => [link.from, link.to]));
+  const servers = hosts.map((host): Box => ({ type: "host", id: hostId(host.key), host }));
   return {
-    boxes: [...entries, ...roles, ...hosts.map((host): Box => ({ type: "host", id: hostId(host.key), host }))],
+    boxes: [...entries, ...roles, ...servers].filter((box) => box.type === "role" || linked.has(box.id)),
     links,
     projects: projects.map((project) => project.service),
   };
@@ -193,8 +231,13 @@ function boxLine(box: Box, label: (host: Host) => string): string[] {
   return box.type === "host" ? [hostLine(box.host, label)] : [];
 }
 
-function linkLine({ from, to, edge }: Link): string {
-  const calls = edge ? `|${quoted(`${edge.calls.toLocaleString("en-US")} calls`)}|` : "";
+function linkLine({ from, to, edge, app }: Link): string {
+  const count = edge
+    ? `${edge.calls.toLocaleString("en-US")} calls`
+    : app
+      ? `${app.traces.toLocaleString("en-US")} traces`
+      : "";
+  const calls = count ? `|${quoted(count)}|` : "";
   return `  ${mermaidId(from)} -->${calls} ${mermaidId(to)}`;
 }
 

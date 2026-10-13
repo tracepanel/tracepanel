@@ -318,10 +318,14 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [apps, services, edges]
+                required: [apps, links, services, edges]
                 additionalProperties: false
                 properties:
                   apps: { type: array, items: { $ref: "#/components/schemas/ServiceApp" } }
+                  links:
+                    type: array
+                    description: One app calling another, most traces first.
+                    items: { $ref: "#/components/schemas/AppLink" }
                   services:
                     type: array
                     description: By kind, then by total time.
@@ -1127,10 +1131,28 @@ components:
         calls: { type: integer }
         total: { $ref: "#/components/schemas/Duration", description: Time spent in the calls (queue wait for in). }
         errors: { type: integer }
+    AppLink:
+      description: >-
+        One app's calls to another, linked by the W3C trace context the call carried (a trace's `called_by`): from a
+        role of one to a role of the other.
+      type: object
+      additionalProperties: false
+      required: [service, role, to_service, to_role, peer, traces, total, errors]
+      properties:
+        service: { type: string, description: The calling app. }
+        role: { type: [string, "null"] }
+        to_service: { type: string, description: The app it called. }
+        to_role: { type: [string, "null"] }
+        peer:
+          type: [string, "null"]
+          description: The ServiceNode the caller saw it as (its HTTP host, its RPC service), if any.
+        traces: { type: integer, description: The called app's traces. }
+        total: { $ref: "#/components/schemas/Duration", description: Their time. }
+        errors: { type: integer, description: How many of them failed. }
     Related:
       type: object
       additionalProperties: false
-      required: [enqueued_by, enqueued, connection, connection_events, sent_by, delivered, via]
+      required: [enqueued_by, enqueued, connection, connection_events, sent_by, delivered, called_by, calls, via]
       properties:
         enqueued_by:
           description: The trace that enqueued this task.
@@ -1159,9 +1181,19 @@ components:
           type: array
           description: Events that handled the channel layer messages this trace sent, oldest first.
           items: { $ref: "#/components/schemas/TraceSummary" }
+        called_by:
+          description: The trace, in another app, whose call this trace served (by the W3C trace context it carried).
+          oneOf:
+            - $ref: "#/components/schemas/TraceSummary"
+            - { type: "null" }
+        calls:
+          type: array
+          description: The traces other apps served for this trace's calls, oldest first.
+          items: { $ref: "#/components/schemas/TraceSummary" }
         via:
           type: object
           description: >-
-            For the traces in enqueued, connection_events and delivered: the span of this trace each came from (the
-            task.enqueue or channel.send span), by trace id. The call tree shows a task under the span that enqueued it.
+            For the traces in enqueued, connection_events, delivered and calls: the span of this trace each came from
+            (the task.enqueue, channel.send or outgoing call span), by trace id. The call tree shows a task under the
+            span that enqueued it, and a call's trace under the call.
           additionalProperties: { type: string }

@@ -251,10 +251,11 @@ fn server(attrs: &Attrs, into: &mut Attrs) {
     }
 }
 
-/// What every mapped span keeps: where in the project it was called, and which instrumentation made it.
+/// What every mapped span keeps: where in the project it was called, which instrumentation made it, and the W3C span
+/// id of a call that carried the trace on (what links it to the trace the service it reached made).
 fn common(attrs: &Attrs) -> Attrs {
     let mut kept = Map::new();
-    for key in ["code.origin", "otel.scope", "error.type"] {
+    for key in ["code.origin", "otel.scope", "error.type", "w3c.span_id"] {
         if let Some(value) = attrs.get(key) {
             kept.insert(key.into(), value.clone());
         }
