@@ -1587,6 +1587,7 @@ details[data-focused] > .dt-sql-group {
 .dt-breakdown-legend {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 0.375rem 1rem;
   margin: 0.625rem 0 0;
   padding: 0;
@@ -1791,16 +1792,6 @@ details[data-focused] > .dt-sql-group {
 .dt-map-origin code {
   color: var(--dt-text-2);
 }
-.dt-map-filters {
-  display: flex;
-  min-width: 0;
-  margin: 0;
-  border: 0;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.5rem 1rem 0.625rem;
-}
 .dt-map-filter {
   display: inline-flex;
   align-items: center;
@@ -1814,9 +1805,13 @@ details[data-focused] > .dt-sql-group {
   font: 500 var(--dt-size-xs) var(--dt-font);
   cursor: pointer;
 }
-.dt-map-filter span {
+.dt-map-filter-count {
   color: var(--dt-text-3);
   font-variant-numeric: tabular-nums;
+}
+/* A legend entry that filters: the legend's text in a chip. */
+.dt-breakdown-legend .dt-map-filter {
+  font-size: var(--dt-size-sm);
 }
 .dt-map-filter:hover {
   background: var(--dt-hover);
@@ -1827,7 +1822,7 @@ details[data-focused] > .dt-sql-group {
   background: var(--dt-selected);
   color: var(--dt-text);
 }
-.dt-map-filter[aria-pressed="true"] span {
+.dt-map-filter[aria-pressed="true"] .dt-map-filter-count {
   color: var(--dt-text-2);
 }
 .dt-map-filter-clear {

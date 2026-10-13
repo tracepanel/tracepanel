@@ -12,7 +12,7 @@ import { duration, percent } from "./format";
 import { GraphqlCode } from "./GraphqlCode";
 import { ChevronRightIcon, CloseIcon } from "./icons";
 import { keyed } from "./keys";
-import { breakdown, CATEGORY_LABELS } from "./lib/breakdown";
+import { breakdown, CATEGORY_LABELS, type Category } from "./lib/breakdown";
 import { callTemplate, groupNoun } from "./lib/calls";
 import { CALL_KINDS, DATASTORES, MESSAGING, RPC } from "./lib/systems";
 import { linkProps, type TraceLinks } from "./links";
@@ -209,53 +209,94 @@ function markTree(nodes: Node[], active: ReadonlySet<FilterId>, marks = new Map<
 
 type Mark = "match" | "path";
 
-function Filters({
-  counts,
-  active,
-  onChange,
-}: {
+function toggled(active: ReadonlySet<FilterId>, id: FilterId): ReadonlySet<FilterId> {
+  const next = new Set(active);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  return next;
+}
+
+/** The legend's entries that pick rows too: a category's spans are a filter's rows. */
+const CATEGORY_FILTERS: Partial<Record<Category, FilterId>> = {
+  template: "template",
+  sql: "sql",
+  redis: "redis",
+  cache: "cache",
+  datastore: "datastore",
+  messaging: "messaging",
+  http: "http",
+  mail: "mail",
+};
+
+interface FilterState {
   counts: ReadonlyMap<FilterId, number>;
   active: ReadonlySet<FilterId>;
   onChange: (next: ReadonlySet<FilterId>) => void;
-}) {
-  const shown = FILTERS.filter((filter) => (counts.get(filter.id) ?? 0) > 0);
-  if (shown.length < 2 && active.size === 0) return null;
+}
+
+/** A chip that shows only its rows (and the rows on the way to them); pressed again, everything. */
+function FilterChip({ id, filters, children }: { id: FilterId; filters: FilterState; children: ReactNode }) {
   return (
-    <fieldset className="dt-map-filters" aria-label="Show only">
-      {shown.map((filter) => (
-        <button
-          key={filter.id}
-          type="button"
-          className="dt-map-filter"
-          aria-pressed={active.has(filter.id)}
-          onClick={() => {
-            const next = new Set(active);
-            if (next.has(filter.id)) next.delete(filter.id);
-            else next.add(filter.id);
-            onChange(next);
-          }}
-        >
-          {filter.label}
-          <span>{counts.get(filter.id)}</span>
-        </button>
-      ))}
-      {active.size > 0 ? (
-        <button type="button" className="dt-map-filter-clear" onClick={() => onChange(new Set())}>
-          Show all
-        </button>
-      ) : null}
-    </fieldset>
+    <button
+      type="button"
+      className="dt-map-filter"
+      aria-pressed={filters.active.has(id)}
+      onClick={() => filters.onChange(toggled(filters.active, id))}
+    >
+      {children}
+      <span className="dt-map-filter-count">{filters.counts.get(id)}</span>
+    </button>
+  );
+}
+
+/** A category of the time: its share, and a filter chip when the tree has its rows. */
+function Share({
+  category,
+  value,
+  total,
+  filters,
+}: {
+  category: Category;
+  value: number;
+  total: number;
+  filters: FilterState;
+}) {
+  const content = (
+    <>
+      <span className="dt-swatch" />
+      {CATEGORY_LABELS[category]}
+      <b>{duration(value)}</b>
+      <span className="dt-breakdown-share">{percent(value, total)}</span>
+    </>
+  );
+  const filter = CATEGORY_FILTERS[category];
+  return (
+    <li data-category={category}>
+      {filter && filters.counts.get(filter) ? (
+        <FilterChip id={filter} filters={filters}>
+          {content}
+        </FilterChip>
+      ) : (
+        content
+      )}
+    </li>
   );
 }
 
 /* ---------- time breakdown ---------- */
 
-function Breakdown({ trace }: { trace: Trace }) {
+/**
+ * Where the time went, and what to show: one row. A category with rows in the tree (Database, Templates, Cache…)
+ * is a filter chip too; the filters with no time of their own (Logs, Errors, Signals…) follow it as plain chips.
+ */
+function Breakdown({ trace, filters }: { trace: Trace; filters: FilterState }) {
   const parts = breakdown(trace);
   const total = Math.max(
     parts.reduce((sum, [, value]) => sum + value, 0),
     1,
   );
+  const claimed = new Set(parts.map(([category]) => CATEGORY_FILTERS[category]));
+  const others = FILTERS.filter((filter) => !claimed.has(filter.id) && (filters.counts.get(filter.id) ?? 0) > 0);
   return (
     <div className="dt-breakdown">
       <div className="dt-breakdown-bar" role="img" aria-label="Where the time went">
@@ -263,15 +304,24 @@ function Breakdown({ trace }: { trace: Trace }) {
           <span key={category} data-category={category} style={{ width: percent(value, total) }} />
         ))}
       </div>
-      <ul className="dt-breakdown-legend">
+      <ul className="dt-breakdown-legend" aria-label="Where the time went, and what to show">
         {parts.map(([category, value]) => (
-          <li key={category} data-category={category}>
-            <span className="dt-swatch" />
-            {CATEGORY_LABELS[category]}
-            <b>{duration(value)}</b>
-            <span className="dt-breakdown-share">{percent(value, total)}</span>
+          <Share key={category} category={category} value={value} total={total} filters={filters} />
+        ))}
+        {others.map((filter) => (
+          <li key={filter.id}>
+            <FilterChip id={filter.id} filters={filters}>
+              {filter.label}
+            </FilterChip>
           </li>
         ))}
+        {filters.active.size > 0 ? (
+          <li>
+            <button type="button" className="dt-map-filter-clear" onClick={() => filters.onChange(new Set())}>
+              Show all
+            </button>
+          </li>
+        ) : null}
       </ul>
     </div>
   );
@@ -833,8 +883,7 @@ export function CallMap({
 
   return (
     <div className="dt-map" ref={map}>
-      <Breakdown trace={trace} />
-      <Filters counts={counts} active={active} onChange={setActive} />
+      <Breakdown trace={trace} filters={{ counts, active, onChange: setActive }} />
       <MapBody details={side ? details : null} onClose={close}>
         <div className="dt-map-head">
           <span>Call tree</span>
