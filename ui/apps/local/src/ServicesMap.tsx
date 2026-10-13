@@ -1,7 +1,7 @@
 import { duration, RuntimeIcon, runtimeKind, ServiceIcon, type ServiceMap, systemName } from "@tracepanel/ui";
 import { cn } from "@tracepanel/ui/lib/utils";
 import { CheckIcon, CopyIcon, MinusIcon, PlusIcon } from "lucide-react";
-import { type CSSProperties, type ReactNode, useMemo, useState } from "react";
+import { type CSSProperties, type ReactNode, useCallback, useMemo, useState } from "react";
 import { type Box, type Diagram, type Link, laidOut, mermaidOf, type Placed } from "./architecture";
 import { href, type Route } from "./routes";
 import { appTarget, type Host, hostUses, hostWhere, serviceTarget } from "./services";
@@ -24,18 +24,41 @@ function hostLabel(host: Host): string {
 const ZOOM_KEY = "tracepanel:map-zoom";
 const ZOOMS = [0.5, 0.67, 0.8, 0.9, 1, 1.1, 1.25, 1.5];
 
-function storedZoom(): number {
+/** The zoom chosen on an earlier visit, or null: none chosen yet. */
+function storedZoom(): number | null {
   try {
     const zoom = Number(localStorage.getItem(ZOOM_KEY));
-    return ZOOMS.includes(zoom) ? zoom : 1;
+    return ZOOMS.includes(zoom) ? zoom : null;
   } catch {
-    return 1;
+    return null;
   }
 }
 
-/** The diagram's zoom, a step at a time, kept across visits (a big project's diagram is easier to take in smaller). */
-function useZoom() {
-  const [zoom, setZoom] = useState(storedZoom);
+/** The largest step, at most actual size, at which a diagram this wide fits the space it has. */
+function fitting(width: number, available: number): number {
+  const most = available > 0 ? Math.min(available / width, 1) : 1;
+  return ZOOMS.filter((zoom) => zoom <= most).at(-1) ?? ZOOMS[0] ?? 1;
+}
+
+/** The width of the element the callback ref is set on, as it changes. */
+function useWidth(): [number, (element: HTMLElement | null) => (() => void) | undefined] {
+  const [width, setWidth] = useState(0);
+  const ref = useCallback((element: HTMLElement | null) => {
+    if (!element) return;
+    const observer = new ResizeObserver(([entry]) => setWidth(entry?.contentRect.width ?? 0));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  return [width, ref];
+}
+
+/**
+ * The diagram's zoom, a step at a time, kept across visits (a big project's diagram is easier to take in smaller).
+ * Until one is chosen, the diagram fits the width it has.
+ */
+function useZoom(fit: number) {
+  const [chosen, setZoom] = useState(storedZoom);
+  const zoom = chosen ?? fit;
   const set = (next: number) => {
     setZoom(next);
     try {
@@ -375,14 +398,15 @@ function Links({ diagram, hover }: { diagram: Diagram; hover: string | null }) {
  * Mermaid; the table below has the numbers.
  */
 export function ServicesMap({ map }: { map: ServiceMap }) {
-  const zoom = useZoom();
   const diagram = useMemo(() => laidOut(map), [map]);
+  const [available, measured] = useWidth();
+  const zoom = useZoom(fitting(diagram.width, available));
   const [hover, setHover] = useState<string | null>(null);
   if (map.apps.length === 0 || map.services.length === 0) return null;
   return (
     <section className="mb-6 rounded-xl border bg-muted/20 max-[900px]:hidden" aria-label="Architecture">
       <Toolbar map={map} zoom={zoom} />
-      <div className="max-h-[75vh] overflow-auto px-4 pt-1 pb-4">
+      <div ref={measured} className="max-h-[75vh] overflow-auto px-4 pt-1 pb-4">
         <div className="relative mx-auto" style={{ width: diagram.width, height: diagram.height, zoom: zoom.zoom }}>
           {diagram.projects.map((placed) => (
             <ProjectFrame key={placed.item} placed={placed} />

@@ -34,8 +34,13 @@ jobs:
           print(f"version {Version(python)}")
           EOF
 
+  # Format, lints, the crates' tests and the UI's checks on the tagged commit: nothing is built or published before
+  # they pass.
+  ci:
+    uses: ./.github/workflows/ci.yml
+
   wheels:
-    needs: version
+    needs: [version, ci]
     uses: ./.github/workflows/wheels.yml
 
   publish:

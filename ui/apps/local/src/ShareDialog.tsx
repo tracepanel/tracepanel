@@ -82,7 +82,7 @@ function ValuesOption({
         <span>Include values</span>
         <span className="text-muted-foreground">
           Query parameters, the plans of slow queries, email bodies, users' names and emails, log fields and the local
-          variables of errors. Without them the file holds what Tracepanel Cloud would get.
+          variables of errors. Without them the file holds the trace's shape, timings and issues.
         </span>
       </label>
     </div>
