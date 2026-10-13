@@ -1,264 +1,371 @@
-import {
-  duration,
-  RuntimeIcon,
-  runtimeKind,
-  type ServiceEdge,
-  ServiceIcon,
-  type ServiceMap,
-  type ServiceNode,
-  serviceWhere,
-  systemName,
-} from "@tracepanel/ui";
+import { duration, RuntimeIcon, runtimeKind, ServiceIcon, type ServiceMap, systemName } from "@tracepanel/ui";
 import { cn } from "@tracepanel/ui/lib/utils";
-import { type ReactNode, type RefObject, useLayoutEffect, useRef, useState } from "react";
-import { href } from "./routes";
-import { appTarget, byProject, type Project, serviceTarget } from "./services";
-
-/** The services' groups, in the order a request reaches them: its data first, then what it hands work to. */
-const KIND_GROUPS: readonly { kind: ServiceNode["kind"]; label: string }[] = [
-  { kind: "database", label: "Databases" },
-  { kind: "cache", label: "Caches" },
-  { kind: "queue", label: "Brokers" },
-  { kind: "http", label: "HTTP APIs" },
-  { kind: "mail", label: "Mail" },
-];
-
-const appAnchor = (service: string, role: string) => `app:${service}/${role}`;
-const nodeAnchor = (id: string) => `node:${id}`;
-
-/** An edge as drawn: its curve, how thick (by calls), whether any call failed, and the two ends it joins. */
-interface Drawn {
-  key: string;
-  d: string;
-  width: number;
-  failed: boolean;
-  inbound: boolean;
-  ends: [string, string];
-  title: string;
-}
-
-function curve(from: DOMRect, to: DOMRect, box: DOMRect): string {
-  const [x1, y1] = [from.right - box.left, from.top + from.height / 2 - box.top];
-  const [x2, y2] = [to.left - box.left, to.top + to.height / 2 - box.top];
-  const bend = Math.max((x2 - x1) / 2, 24);
-  return `M ${x1} ${y1} C ${x1 + bend} ${y1}, ${x2 - bend} ${y2}, ${x2} ${y2}`;
-}
-
-function drawn(edge: ServiceEdge, ends: [Element, Element], box: DOMRect, busiest: number): Drawn {
-  const app = appAnchor(edge.service, edge.role);
-  return {
-    key: `${app} ${edge.peer}`,
-    d: curve(ends[0].getBoundingClientRect(), ends[1].getBoundingClientRect(), box),
-    // 1px for one call, up to 4px for the busiest edge: a log scale, so a few calls still show.
-    width: 1 + (3 * Math.log1p(edge.calls)) / Math.log1p(busiest),
-    failed: edge.errors > 0,
-    inbound: edge.direction === "in",
-    ends: [app, nodeAnchor(edge.peer)],
-    title: `${edge.service} ${edge.role} → ${edge.calls} calls in ${edge.traces} traces, ${duration(edge.total)}`,
-  };
-}
-
-/** The edges' curves, measured from where the cards are and measured again when the map changes size. */
-function useEdges(box: RefObject<HTMLElement | null>, edges: readonly ServiceEdge[]): Drawn[] {
-  const [paths, setPaths] = useState<Drawn[]>([]);
-  useLayoutEffect(() => {
-    const element = box.current;
-    if (!element) return;
-    const find = (anchor: string) => element.querySelector(`[data-anchor="${CSS.escape(anchor)}"]`);
-    const busiest = Math.max(...edges.map((edge) => edge.calls), 1);
-    const measure = () => {
-      const rect = element.getBoundingClientRect();
-      setPaths(
-        edges.flatMap((edge) => {
-          const from = find(appAnchor(edge.service, edge.role));
-          const to = find(nodeAnchor(edge.peer));
-          return from && to ? [drawn(edge, [from, to], rect, busiest)] : [];
-        }),
-      );
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [box, edges]);
-  return paths;
-}
-
-/** A card on the map: an icon, the name over where it runs, its numbers; a link to where it is listed. */
-function Card({
-  anchor,
-  to,
-  icon,
-  name,
-  detail,
-  stats,
-  failed,
-  onHover,
-}: {
-  anchor: string;
-  to: string;
-  icon: ReactNode;
-  name: string;
-  detail: string | null;
-  stats: string;
-  failed: boolean;
-  onHover: (anchor: string | null) => void;
-}) {
-  return (
-    <a
-      href={to}
-      data-anchor={anchor}
-      className={cn(
-        "relative flex items-center gap-2.5 rounded-lg border bg-card px-3 py-2 text-foreground no-underline shadow-xs hover:border-input hover:bg-accent",
-        failed && "border-error/40",
-      )}
-      onMouseEnter={() => onHover(anchor)}
-      onMouseLeave={() => onHover(null)}
-      onFocus={() => onHover(anchor)}
-      onBlur={() => onHover(null)}
-    >
-      <span className="grid size-8 shrink-0 place-items-center rounded-md border bg-muted/60 text-text-2 [&_svg]:size-4">
-        {icon}
-      </span>
-      <span className="min-w-0">
-        <span className="block truncate font-medium">{name}</span>
-        <span className="block truncate font-mono text-xs text-muted-foreground">{detail}</span>
-        <span className={cn("block text-xs text-text-2", failed && "text-error")}>{stats}</span>
-      </span>
-    </a>
-  );
-}
+import { CheckIcon, CopyIcon, MinusIcon, PlusIcon } from "lucide-react";
+import { type CSSProperties, type ReactNode, useMemo, useState } from "react";
+import { type Box, type Diagram, type Link, laidOut, mermaidOf, type Placed } from "./architecture";
+import { href, type Route } from "./routes";
+import { appTarget, type Host, type HostEdge, hostUses, hostWhere, serviceTarget } from "./services";
 
 function plural(count: number, one: string, many: string): string {
   return `${count.toLocaleString()} ${count === 1 ? one : many}`;
 }
 
 function failures(errors: number): string {
-  return errors ? ` · ${plural(errors, "error", "errors")}` : "";
+  return errors ? ` · ${errors} failed` : "";
 }
 
-/** A project, with a card per role it runs as (web, worker, command): the edges start at the roles. */
-function AppCards({ app, onHover }: { app: Project; onHover: (anchor: string | null) => void }) {
-  const kind = app.runtime ? runtimeKind(app.runtime) : null;
+/** A host's name on the diagram and in the Mermaid text: what runs there, where, and how the app uses it. */
+function hostLabel(host: Host): string {
+  return [systemName(host.primary), hostWhere(host), hostUses(host)].filter(Boolean).join(" · ");
+}
+
+/* ---------- zoom ---------- */
+
+const ZOOM_KEY = "tracepanel:map-zoom";
+const ZOOMS = [0.5, 0.67, 0.8, 0.9, 1, 1.1, 1.25, 1.5];
+
+function storedZoom(): number {
+  try {
+    const zoom = Number(localStorage.getItem(ZOOM_KEY));
+    return ZOOMS.includes(zoom) ? zoom : 1;
+  } catch {
+    return 1;
+  }
+}
+
+/** The diagram's zoom, a step at a time, kept across visits (a big project's diagram is easier to take in smaller). */
+function useZoom() {
+  const [zoom, setZoom] = useState(storedZoom);
+  const set = (next: number) => {
+    setZoom(next);
+    try {
+      localStorage.setItem(ZOOM_KEY, String(next));
+    } catch {
+      // Blocked storage: the zoom lasts until the page reloads.
+    }
+  };
+  const step = ZOOMS.indexOf(zoom);
+  return {
+    zoom,
+    out: step > 0 ? () => set(ZOOMS[step - 1] ?? zoom) : undefined,
+    in: step < ZOOMS.length - 1 ? () => set(ZOOMS[step + 1] ?? zoom) : undefined,
+    reset: () => set(1),
+  };
+}
+
+function ToolButton({
+  label,
+  onClick,
+  children,
+}: {
+  label: string;
+  onClick?: (() => void) | undefined;
+  children: ReactNode;
+}) {
   return (
-    <div className="grid gap-1.5">
-      {app.roles.map((role) => (
-        <Card
-          key={role.role}
-          anchor={appAnchor(role.service, role.role)}
-          to={href(appTarget(role))}
-          icon={kind ? <RuntimeIcon kind={kind} /> : null}
-          name={`${role.service} · ${role.role}`}
-          detail={app.runtime}
-          stats={`${plural(role.traces, "trace", "traces")} · ${duration(role.total)}${failures(role.errors)}`}
-          failed={role.errors > 0}
-          onHover={onHover}
-        />
-      ))}
+    <button
+      type="button"
+      className="flex h-6 min-w-6 items-center justify-center gap-1 rounded px-1.5 text-xs text-text-2 tabular-nums hover:bg-accent hover:text-foreground disabled:opacity-40 [&_svg]:size-3.5"
+      aria-label={label}
+      title={label}
+      disabled={!onClick}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** The diagram as Mermaid text on the clipboard, to paste into a README, an issue or a doc. */
+function CopyMermaid({ map }: { map: ServiceMap }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard.writeText(mermaidOf(map, hostLabel)).then(
+      () => {
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 1500);
+      },
+      () => undefined,
+    );
+  };
+  return (
+    <ToolButton label="Copy as Mermaid, for a README or an issue" onClick={copy}>
+      {copied ? <CheckIcon /> : <CopyIcon />}
+      {copied ? "Copied" : "Mermaid"}
+    </ToolButton>
+  );
+}
+
+function Toolbar({ map, zoom }: { map: ServiceMap; zoom: ReturnType<typeof useZoom> }) {
+  return (
+    <div className="flex items-center justify-end gap-2 px-3 pt-3">
+      <div className="flex items-center rounded-md border bg-card shadow-xs">
+        <CopyMermaid map={map} />
+      </div>
+      <div className="flex items-center rounded-md border bg-card shadow-xs">
+        <ToolButton label="Zoom out" onClick={zoom.out}>
+          <MinusIcon />
+        </ToolButton>
+        <ToolButton label="Actual size" onClick={zoom.reset}>
+          {Math.round(zoom.zoom * 100)}%
+        </ToolButton>
+        <ToolButton label="Zoom in" onClick={zoom.in}>
+          <PlusIcon />
+        </ToolButton>
+      </div>
     </div>
   );
 }
 
-function NodeCard({ node, onHover }: { node: ServiceNode; onHover: (anchor: string | null) => void }) {
+/* ---------- boxes ---------- */
+
+/** Where a box sits: dagre places centres, the box is drawn from its corner. */
+function at(placed: Placed<unknown>): CSSProperties {
+  return {
+    left: placed.x - placed.width / 2,
+    top: placed.y - placed.height / 2,
+    width: placed.width,
+    height: placed.height,
+  };
+}
+
+interface Hovering {
+  hover: string | null;
+  onHover: (id: string | null) => void;
+}
+
+/** A box: an icon, the name and its numbers, a second line; a link to where its calls are listed. */
+function Card({
+  placed,
+  to,
+  icon,
+  name,
+  detail,
+  stats,
+  failed,
+  hovering,
+}: {
+  placed: Placed<Box>;
+  to: string;
+  icon: ReactNode;
+  name: string;
+  detail: string | null;
+  stats: string;
+  failed: boolean;
+  hovering: Hovering;
+}) {
+  const id = placed.item.id;
+  return (
+    <a
+      href={to}
+      style={at(placed)}
+      className={cn(
+        "absolute flex items-center gap-2 rounded-md border bg-card px-2 text-sm text-foreground no-underline shadow-xs hover:border-input hover:bg-accent",
+        failed && "border-error/40",
+      )}
+      onMouseEnter={() => hovering.onHover(id)}
+      onMouseLeave={() => hovering.onHover(null)}
+      onFocus={() => hovering.onHover(id)}
+      onBlur={() => hovering.onHover(null)}
+    >
+      <span className="grid size-6 shrink-0 place-items-center rounded border bg-muted/60 text-text-2 [&_svg]:size-3.5">
+        {icon}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-baseline gap-2">
+          <span className="truncate font-medium">{name}</span>
+          <span className={cn("ml-auto shrink-0 text-xs text-text-2 tabular-nums", failed && "text-error")}>
+            {stats}
+          </span>
+        </span>
+        <span className="block truncate font-mono text-xs text-muted-foreground">{detail}</span>
+      </span>
+    </a>
+  );
+}
+
+function EntryBox({ placed, label }: { placed: Placed<Box>; label: string }) {
+  return (
+    <span
+      style={at(placed)}
+      className="absolute grid place-items-center rounded-full border border-dashed bg-card text-xs text-text-2"
+    >
+      {label}
+    </span>
+  );
+}
+
+function RoleBox({ placed, hovering }: { placed: Placed<Box>; hovering: Hovering }) {
+  const box = placed.item;
+  if (box.type !== "role") return null;
+  const kind = box.runtime ? runtimeKind(box.runtime) : null;
   return (
     <Card
-      anchor={nodeAnchor(node.id)}
-      to={href(serviceTarget(node))}
-      icon={<ServiceIcon node={node} />}
-      name={systemName(node)}
-      detail={serviceWhere(node)}
-      stats={`${plural(node.calls, "call", "calls")} · ${duration(node.total)}${failures(node.errors)}`}
-      failed={node.errors > 0}
-      onHover={onHover}
+      placed={placed}
+      to={href(appTarget(box.app))}
+      icon={kind ? <RuntimeIcon kind={kind} /> : null}
+      name={box.app.role}
+      detail={box.runtime}
+      stats={`${plural(box.app.traces, "trace", "traces")} · ${duration(box.app.total)}${failures(box.app.errors)}`}
+      failed={box.app.errors > 0}
+      hovering={hovering}
     />
   );
 }
 
-function Column({ title, children, className }: { title: string; children: ReactNode; className?: string }) {
+function HostBox({ placed, host, hovering }: { placed: Placed<Box>; host: Host; hovering: Hovering }) {
   return (
-    <section className={cn("grid content-start gap-1.5", className)} aria-label={title}>
-      <h3 className="px-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">{title}</h3>
-      {children}
-    </section>
+    <Card
+      placed={placed}
+      to={href(serviceTarget(host.primary))}
+      icon={<ServiceIcon node={host.primary} />}
+      name={systemName(host.primary)}
+      detail={[hostWhere(host), hostUses(host)].filter(Boolean).join(" · ")}
+      stats={`${plural(host.calls, "call", "calls")} · ${duration(host.total)}${failures(host.errors)}`}
+      failed={host.errors > 0}
+      hovering={hovering}
+    />
   );
 }
 
-/** A curve's look: red with failures; with a card hovered, its own in the brand's colour and the rest faded. */
-function edgeClass(path: Drawn, hover: string | null): string {
-  if (hover === null) return cn("transition-opacity", strokeOf(path, false));
-  const mine = path.ends.includes(hover);
-  return cn("transition-opacity", strokeOf(path, mine), !mine && "opacity-15");
+function BoxView({ placed, hovering }: { placed: Placed<Box>; hovering: Hovering }) {
+  const box = placed.item;
+  if (box.type === "entry") return <EntryBox placed={placed} label={box.label} />;
+  if (box.type === "role") return <RoleBox placed={placed} hovering={hovering} />;
+  return <HostBox placed={placed} host={box.host} hovering={hovering} />;
 }
 
-function strokeOf(path: Drawn, mine: boolean): string {
-  if (path.failed) return "stroke-error/70";
-  return mine ? "stroke-brand" : "stroke-muted-foreground/45";
-}
-
-/** The curves between the cards, under them; with a card hovered, its own stand out and the rest fade. */
-function Edges({ paths, hover }: { paths: readonly Drawn[]; hover: string | null }) {
+/** A project's frame around its roles, its name on the top edge. */
+function ProjectFrame({ placed }: { placed: Placed<string> }) {
   return (
-    <svg className="pointer-events-none absolute inset-0 size-full overflow-visible" aria-hidden="true">
+    <div style={at(placed)} className="absolute rounded-lg border border-dashed border-input bg-muted/30">
+      <span className="absolute top-1 left-2.5 text-xs font-medium text-text-2">{placed.item}</span>
+    </div>
+  );
+}
+
+/* ---------- links ---------- */
+
+type Point = { x: number; y: number };
+
+function midpoint(a: Point, b: Point): string {
+  return `${(a.x + b.x) / 2} ${(a.y + b.y) / 2}`;
+}
+
+/** Through dagre's points, softened: a straight start and end, rounded bends between. */
+function pathOf(points: readonly Point[]): string {
+  const [first, ...rest] = points;
+  const last = rest.at(-1);
+  if (!first || !last) return "";
+  const bends = rest
+    .slice(0, -1)
+    .map((point, index) => `Q ${point.x} ${point.y} ${midpoint(point, rest[index + 1] ?? point)}`);
+  return [`M ${first.x} ${first.y}`, ...bends, `L ${last.x} ${last.y}`].join(" ");
+}
+
+function linkTitle(link: Link): string {
+  const edge = link.edge;
+  if (!edge) return "";
+  return `${edge.service} ${edge.role}: ${plural(edge.calls, "call", "calls")} in ${plural(edge.traces, "trace", "traces")}, ${duration(edge.total)}${failures(edge.errors)}. Click for the traces.`;
+}
+
+function strokeOf(link: Link, mine: boolean): string {
+  if (link.edge?.errors) return "stroke-error/70";
+  return mine ? "stroke-brand" : "stroke-muted-foreground/50";
+}
+
+/** A link's look: red with failures; with a box hovered, its own in the brand's colour and the rest faded. */
+function linkClass(link: Link, hover: string | null): string {
+  if (hover === null) return cn("transition-opacity", strokeOf(link, false));
+  const mine = link.from === hover || link.to === hover;
+  return cn("transition-opacity", strokeOf(link, mine), !mine && "opacity-15");
+}
+
+/** The traces behind a call: the role's traces that called that server. */
+function linkTarget(edge: HostEdge): Route {
+  return { name: "traces", q: `service:${edge.service} peer:${edge.peer}` };
+}
+
+function LinkPath({
+  link,
+  points,
+  busiest,
+  hover,
+}: {
+  link: Link;
+  points: Point[];
+  busiest: number;
+  hover: string | null;
+}) {
+  const d = pathOf(points);
+  // 1px for one call, up to 4px for the busiest: a log scale, so a few calls still show.
+  const width = 1 + (3 * Math.log1p(link.edge?.calls ?? 0)) / Math.log1p(busiest);
+  return (
+    <g>
+      <path d={d} fill="none" strokeWidth={width} markerEnd="url(#arch-arrow)" className={linkClass(link, hover)} />
+      {link.edge ? (
+        // A wider, invisible twin to point at: a link to the call's traces.
+        <a href={href(linkTarget(link.edge))} tabIndex={-1} className="pointer-events-auto">
+          <path d={d} fill="none" stroke="transparent" strokeWidth={12}>
+            <title>{linkTitle(link)}</title>
+          </path>
+        </a>
+      ) : null}
+    </g>
+  );
+}
+
+function Links({ diagram, hover }: { diagram: Diagram; hover: string | null }) {
+  const busiest = Math.max(...diagram.links.map(({ link }) => link.edge?.calls ?? 0), 1);
+  return (
+    <svg className="absolute inset-0 overflow-visible" width={diagram.width} height={diagram.height} aria-hidden="true">
       <defs>
-        <marker id="services-in" viewBox="0 0 8 8" refX="1" refY="4" markerWidth="6" markerHeight="6" orient="auto">
-          <path d="M 8 0 L 0 4 L 8 8 z" className="fill-muted-foreground" />
+        {/* The same arrowhead on every line, however thick: in the diagram's pixels, not the stroke's. */}
+        <marker
+          id="arch-arrow"
+          viewBox="0 0 8 8"
+          refX="7"
+          refY="4"
+          markerWidth="8"
+          markerHeight="8"
+          markerUnits="userSpaceOnUse"
+          orient="auto"
+        >
+          <path d="M 0 0 L 8 4 L 0 8 z" className="fill-muted-foreground" />
         </marker>
       </defs>
-      {paths.map((path) => (
-        <path
-          key={path.key}
-          d={path.d}
-          fill="none"
-          strokeWidth={path.width}
-          strokeLinecap="round"
-          markerStart={path.inbound ? "url(#services-in)" : undefined}
-          className={edgeClass(path, hover)}
-        >
-          <title>{path.title}</title>
-        </path>
+      {diagram.links.map(({ link, points }) => (
+        <LinkPath key={link.key} link={link} points={points} busiest={busiest} hover={hover} />
       ))}
     </svg>
   );
 }
 
 /**
- * The project's apps on the left, what they talk to on the right by kind, a curve for each pair: thicker for more
- * calls, red with failures, an arrow into a worker for a broker it takes tasks from. A card opens where its calls are
- * listed; the table below has the numbers.
+ * The project's architecture, drawn from its calls: where work comes in, the apps' roles (framed by project), the
+ * servers they call by host and port, and an arrow per call between them, laid out left to right in layers so a
+ * broker sits between the app that enqueues and the worker that takes. Thicker for more calls, red with failures;
+ * hovering a box brings out its arrows, an arrow opens its traces, a box where its calls are listed. Copies as
+ * Mermaid; the table below has the numbers.
  */
 export function ServicesMap({ map }: { map: ServiceMap }) {
-  const box = useRef<HTMLElement>(null);
-  const paths = useEdges(box, map.edges);
+  const zoom = useZoom();
+  const diagram = useMemo(() => laidOut(map), [map]);
   const [hover, setHover] = useState<string | null>(null);
-  const columns = KIND_GROUPS.map((group) => ({
-    ...group,
-    nodes: map.services.filter((node) => node.kind === group.kind),
-  })).filter((group) => group.nodes.length > 0);
-  if (map.apps.length === 0 || columns.length === 0) return null;
+  if (map.apps.length === 0 || map.services.length === 0) return null;
   return (
-    <section
-      ref={box}
-      className="relative mb-6 grid grid-cols-[minmax(13rem,18rem)_minmax(6rem,1fr)_minmax(14rem,20rem)] items-start gap-x-4 rounded-xl border bg-muted/20 p-5 max-[900px]:hidden"
-      aria-label="Service map"
-    >
-      <Edges paths={paths} hover={hover} />
-      {/* Level with the middle of what they call: the curves fan out evenly, up and down. */}
-      <Column title="Apps" className="self-center">
-        {byProject(map.apps).map((app) => (
-          <AppCards key={app.service} app={app} onHover={setHover} />
-        ))}
-      </Column>
-      {/* The gap the curves cross: the cards on either side stay readable. */}
-      <span />
-      {/* One column, by kind: every curve runs left to right, none crosses a card. */}
-      <div className="grid content-start gap-4">
-        {columns.map((group) => (
-          <Column key={group.kind} title={group.label}>
-            {group.nodes.map((node) => (
-              <NodeCard key={node.id} node={node} onHover={setHover} />
-            ))}
-          </Column>
-        ))}
+    <section className="mb-6 rounded-xl border bg-muted/20 max-[900px]:hidden" aria-label="Architecture">
+      <Toolbar map={map} zoom={zoom} />
+      <div className="max-h-[75vh] overflow-auto px-4 pt-1 pb-4">
+        <div className="relative mx-auto" style={{ width: diagram.width, height: diagram.height, zoom: zoom.zoom }}>
+          {diagram.projects.map((placed) => (
+            <ProjectFrame key={placed.item} placed={placed} />
+          ))}
+          <Links diagram={diagram} hover={hover} />
+          {diagram.boxes.map((placed) => (
+            <BoxView key={placed.item.id} placed={placed} hovering={{ hover, onHover: setHover }} />
+          ))}
+        </div>
       </div>
     </section>
   );

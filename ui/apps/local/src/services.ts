@@ -1,5 +1,5 @@
-// What the Services page shows, as data: the project's apps by project, and where each node leads in the console.
-import type { ServiceApp, ServiceNode } from "@tracepanel/ui";
+// What the Services page shows, as data: the project's apps by project, its services by host, and where each leads.
+import { SERVICE_KINDS, type ServiceApp, type ServiceEdge, type ServiceNode, serviceWhere } from "@tracepanel/ui";
 import { SQL_VENDORS } from "@tracepanel/ui/lib/systems";
 import { callsSection, currentPeriod, type Route, withPeriod } from "./routes";
 
@@ -65,4 +65,113 @@ export function byProject(apps: readonly ServiceApp[]): Project[] {
   const projects = new Map<string, ServiceApp[]>();
   for (const app of apps) projects.set(app.service, [...(projects.get(app.service) ?? []), app]);
   return [...projects.values()].map(project);
+}
+
+/**
+ * One server, however the app uses it: Redis as a datastore (databases 0 and 1) and as a cache backend is one host.
+ * Keyed by address and port; an in-process backend (no address) is its own.
+ */
+export interface Host {
+  key: string;
+  /** The use with the most calls: what the host is named after, its icon, and where it leads. */
+  primary: ServiceNode;
+  /** Every way the app uses it, the busiest first. */
+  uses: ServiceNode[];
+  calls: number;
+  total: number;
+  errors: number;
+  // biome-ignore lint/style/useNamingConvention: the API's field, as ServiceNode has it.
+  last_seen: number;
+}
+
+function hostKey(node: ServiceNode): string {
+  return node.address ? `${node.address}:${node.port ?? ""}` : node.id;
+}
+
+/**
+ * The uses whose calls reached the server. A cache backed by Redis is counted twice by the agent: as cache calls, and
+ * as the Redis commands they ran. The commands are what the server did; a cache's own calls count only on a host with
+ * nothing else (an in-process cache).
+ */
+function counted<T extends { kind: ServiceNode["kind"] }>(uses: readonly T[]): readonly T[] {
+  const direct = uses.filter((use) => use.kind !== "cache");
+  return direct.length ? direct : uses;
+}
+
+function total<T>(items: readonly T[], value: (item: T) => number): number {
+  return items.reduce((sum, item) => sum + value(item), 0);
+}
+
+function host(uses: readonly ServiceNode[]): Host {
+  const sorted = [...uses].sort((a, b) => b.calls - a.calls);
+  const reached = counted(sorted);
+  const primary = reached[0] as ServiceNode;
+  return {
+    key: hostKey(primary),
+    primary,
+    uses: sorted,
+    calls: total(reached, (use) => use.calls),
+    total: total(reached, (use) => use.total),
+    errors: total(reached, (use) => use.errors),
+    // biome-ignore lint/style/useNamingConvention: the API's field, as ServiceNode has it.
+    last_seen: Math.max(...sorted.map((use) => use.last_seen)),
+  };
+}
+
+export function byHost(nodes: readonly ServiceNode[]): Host[] {
+  const hosts = new Map<string, ServiceNode[]>();
+  for (const node of nodes) hosts.set(hostKey(node), [...(hosts.get(hostKey(node)) ?? []), node]);
+  return [...hosts.values()].map(host);
+}
+
+/** Where the host runs (no database number: its uses say which), or "in process". */
+export function hostWhere(host: Host): string {
+  return host.primary.address ? serviceWhere({ ...host.primary, namespace: null }) : serviceWhere(host.primary);
+}
+
+/** What a use is called on its host: a cache by its aliases, a database by its name or number. */
+function nameOnHost(use: ServiceNode): string {
+  return use.kind === "cache" ? use.aliases.join(", ") : (use.namespace ?? "");
+}
+
+/** How the app uses a host, when more than one way: "Database 0, 1 · Cache default". */
+export function hostUses(host: Host): string | null {
+  if (host.uses.length < 2) return null;
+  const byKind = new Map<ServiceNode["kind"], string[]>();
+  for (const use of host.uses) byKind.set(use.kind, [...(byKind.get(use.kind) ?? []), nameOnHost(use)]);
+  return [...byKind]
+    .map(([kind, names]) => `${SERVICE_KINDS[kind]} ${names.filter(Boolean).join(", ")}`.trim())
+    .join(" · ");
+}
+
+/** An app role's calls to a host: its edges to the host's uses, counted as the host is; `peer` is the busiest use's. */
+export interface HostEdge extends ServiceEdge {
+  host: string;
+}
+
+function hostEdge(edges: readonly (ServiceEdge & { kind: ServiceNode["kind"] })[], key: string): HostEdge {
+  const reached = counted(edges);
+  const busiest = [...reached].sort((a, b) => b.calls - a.calls)[0] as ServiceEdge;
+  return {
+    ...busiest,
+    host: key,
+    traces: Math.max(...edges.map((edge) => edge.traces)),
+    calls: total(reached, (edge) => edge.calls),
+    total: total(reached, (edge) => edge.total),
+    errors: total(reached, (edge) => edge.errors),
+  };
+}
+
+export function hostEdges(edges: readonly ServiceEdge[], hosts: readonly Host[]): HostEdge[] {
+  const useOf = new Map(hosts.flatMap((one) => one.uses.map((use) => [use.id, { use, key: one.key }] as const)));
+  const groups = new Map<string, { key: string; edges: (ServiceEdge & { kind: ServiceNode["kind"] })[] }>();
+  for (const edge of edges) {
+    const peer = useOf.get(edge.peer);
+    if (!peer) continue;
+    const group = `${edge.service}|${edge.role}|${peer.key}|${edge.direction}`;
+    const entry = groups.get(group) ?? { key: peer.key, edges: [] };
+    entry.edges.push({ ...edge, kind: peer.use.kind });
+    groups.set(group, entry);
+  }
+  return [...groups.values()].map((group) => hostEdge(group.edges, group.key));
 }
