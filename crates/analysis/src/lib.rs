@@ -357,13 +357,48 @@ fn sql_issues(trace: &Trace, thresholds: &Thresholds) -> Vec<Issue> {
                 "slow-sql",
                 format!("Slow query: {} ms · {}", milliseconds(slowest), first.name),
                 culprit(&slow),
-                Some(SLOW_SQL),
+                Some(&slow_sql_hint(&slow)),
                 slow.len(),
                 slow.iter().map(|span| span.id.clone()).collect(),
             ));
         }
     }
     issues
+}
+
+/// A LIKE whose pattern starts with `%` (as Django's `contains` and `icontains` make): no index on the column helps.
+static LIKE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)\bI?LIKE\b").unwrap());
+static LIKE_LEADING_WILDCARD: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)\bI?LIKE\s+(?:UPPER\(|LOWER\()?'%").unwrap());
+
+const LIKE_HINT: &str = "Its LIKE pattern starts with %: no index on the column helps, so the database reads every \
+                         row. Match the start instead (startswith), or index the column for searching: a trigram index \
+                         (PostgreSQL's pg_trgm) or full-text search.";
+
+fn leading_wildcard(span: &Span) -> bool {
+    let statement = py_str(span.attrs.get("db.statement"));
+    if !LIKE.is_match(&statement) {
+        return false;
+    }
+    let pattern_param = span
+        .attrs
+        .get("db.params")
+        .and_then(Value::as_array)
+        .is_some_and(|params| {
+            params
+                .iter()
+                .any(|param| param.as_str().is_some_and(|text| text.starts_with('%')))
+        });
+    pattern_param || LIKE_LEADING_WILDCARD.is_match(&statement)
+}
+
+/// What to do about a slow query, and why its index doesn't help when its LIKE pattern starts with `%`.
+fn slow_sql_hint(slow: &[&Span]) -> String {
+    if slow.iter().any(|span| leading_wildcard(span)) {
+        format!("{SLOW_SQL} {LIKE_HINT}")
+    } else {
+        SLOW_SQL.to_owned()
+    }
 }
 
 // ---------- HTTP calls, Redis and cache ----------
@@ -1033,6 +1068,55 @@ mod tests {
         ]);
 
         assert_eq!(found(&trace), []);
+    }
+
+    #[test]
+    fn a_slow_like_with_a_leading_wildcard_says_why_no_index_helps() {
+        let slow = |statement: &str, params: Value| {
+            let attrs = serde_json::json!({
+                "db.statement": statement, "db.fingerprint": statement, "db.params": params,
+                "code.origin": "app/views.py:9 in search",
+            });
+            request(&[("sql", "SELECT product", attrs, 300_000)])
+        };
+        let hint = |trace: &Trace| {
+            analyze(trace, &Thresholds::default())[0]
+                .hint
+                .clone()
+                .unwrap_or_default()
+        };
+
+        // Django's icontains: the pattern in the parameter.
+        let icontains = slow(
+            r#"SELECT * FROM "product" WHERE UPPER("product"."name"::text) LIKE UPPER(%s)"#,
+            serde_json::json!(["%lamp%"]),
+        );
+        assert!(hint(&icontains).starts_with(SLOW_SQL));
+        assert!(hint(&icontains).ends_with(LIKE_HINT));
+        // The pattern written into the statement.
+        assert!(
+            hint(&slow(
+                "SELECT * FROM product WHERE name LIKE '%lamp'",
+                Value::Null
+            ))
+            .ends_with(LIKE_HINT)
+        );
+
+        // A prefix match can use an index; and a slow query without LIKE is only slow.
+        assert_eq!(
+            hint(&slow(
+                "SELECT * FROM product WHERE name LIKE %s",
+                serde_json::json!(["lamp%"])
+            )),
+            SLOW_SQL
+        );
+        assert_eq!(
+            hint(&slow(
+                "SELECT * FROM product WHERE price > %s",
+                serde_json::json!(["%"])
+            )),
+            SLOW_SQL
+        );
     }
 
     #[test]
