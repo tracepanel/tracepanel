@@ -2,16 +2,16 @@ name: npm
 
 # The agent's npm packages: the 15 platform packages and @tracepanel/agent, which depends on them.
 #
-# - After a release (release.yml, on a version tag) publishes to PyPI: it stages the npm packages that release made
+# - After a release (release.yml, on a version tag) publishes to PyPI: it publishes the npm packages that release made
 #   from the same wheels (wheels.yml builds them once). The binaries on npm are the ones on PyPI, byte for byte.
 # - By hand, with a version already on PyPI (0.0.1a1): it downloads that release's wheels, makes the packages from
 #   them, checks them, and publishes them. The binaries are the ones on PyPI, byte for byte.
 #
-# It stages the versions (npm stage publish): nothing is public until a maintainer approves each one with 2FA, so a
-# compromised workflow or token can't publish. scripts/npm_approve.py approves a release's 16 versions in one go.
+# A maintainer approves a release once, when Release publishes it to PyPI (its pypi environment): this runs only
+# after that run succeeded, and publishes what it built.
 #
-# npm's trusted publishing signs the upload: each package trusts this repository, npm.yml and the environment npm,
-# allowed to stage only. An NPM_TOKEN secret, if set, is used instead (the first release needed one).
+# npm's trusted publishing signs the upload, with no token: each package trusts this repository, npm.yml and the
+# environment npm, and nothing else can publish it. An NPM_TOKEN secret, if set, is used instead.
 on:
   workflow_run:
     workflows: [Release]
@@ -67,7 +67,7 @@ jobs:
           path: npm-dist/*.tgz
 
   publish:
-    name: Stage on npm
+    name: Publish to npm
     needs: released
     # A release published to PyPI from a tag, or the packages made here by hand from a version on PyPI.
     if: >-
@@ -89,7 +89,7 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
 
-      - name: npm with staged publishing (11.15.0 or later)
+      - name: npm with trusted publishing (11.5.1 or later)
         run: npm install --global npm@^11.15.0
 
       - name: The release's packages
@@ -108,7 +108,7 @@ jobs:
           name: npm-packages
           path: npm-dist
 
-      - name: Stage the platform packages, then @tracepanel/agent
+      - name: Publish the platform packages, then @tracepanel/agent
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
@@ -124,7 +124,8 @@ jobs:
           echo "version $version, dist-tag $tag"
           for package in ./npm-dist/*.tgz; do
             [ "$package" = "$main" ] && continue
-            npm stage publish "$package" --access public --tag "$tag" --provenance
+            npm publish "$package" --access public --tag "$tag" --provenance
           done
-          npm stage publish "$main" --access public --tag "$tag" --provenance
-          echo "::notice::$version is staged: approve it with scripts/npm_approve.py $version"
+          # Last: once it is public, installing it needs the platform packages.
+          npm publish "$main" --access public --tag "$tag" --provenance
+          echo "::notice::$version is on npm"
