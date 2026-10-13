@@ -14,4 +14,9 @@ serde_json.workspace = true
 tokio.workspace = true
 
 [dev-dependencies]
+divan.workspace = true
 tokio = { workspace = true, features = ["time"] }
+
+[[bench]]
+name = "decode"
+harness = false

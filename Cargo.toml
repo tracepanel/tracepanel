@@ -24,6 +24,8 @@ rusqlite = { version = "0.40", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
 sha1 = "0.11"
+# Benchmarks (benches/): divan's API, measured by CodSpeed under `cargo codspeed`, plain divan under `cargo bench`.
+divan = { package = "codspeed-divan-compat", version = "5.0.2" }
 tokio = { version = "1.53", features = ["io-std", "io-util", "macros", "net", "rt-multi-thread", "signal", "sync"] }
 
 # The agent ships as a binary, without symbols. Release wheels are built in CI only (the Wheels workflow),
