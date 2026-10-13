@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Changed
+
+- Finding a trace's issues costs half what it did: the issues go into its
+  document without parsing the whole document into a tree and writing it out
+  again, which cost three times the analysis itself (Django's N+1 example:
+  928 µs, now 413 µs).
+
 ### Added
 
 - A new issue, `large-result`: a SELECT with no LIMIT that returned
