@@ -22,6 +22,8 @@ const KIND_LABELS: Record<Issue["kind"], string> = {
   "long-transaction": "Long transaction",
   "in-transaction": "Before commit",
   htmx: "htmx",
+  "queue-wait": "Queue wait",
+  "blocking-call": "Blocking call",
   error: "Error",
 };
 

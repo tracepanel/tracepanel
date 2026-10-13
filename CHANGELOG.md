@@ -4,6 +4,12 @@
 
 ### Added
 
+- Two new issues. `queue-wait`: a task that waited in its queue longer
+  than `queue_wait_ms` (1 s by default) before a worker took it, a sign the
+  workers are all busy. `blocking-call`: SQL, an HTTP call, Redis or a cache
+  call made synchronously on an event loop's thread (the SDK marks it), which
+  makes every other request on the loop wait. One issue per place in the
+  code, once its calls cost 5 ms together, with what to use instead.
 - The agent takes OpenTelemetry spans over OTLP/HTTP (`--otlp`, by default
   127.0.0.1:4318, where exporters send them unless told otherwise), protobuf
   or JSON, gzipped or not. A service exporting with any OpenTelemetry SDK

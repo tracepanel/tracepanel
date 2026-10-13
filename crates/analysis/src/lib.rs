@@ -12,6 +12,7 @@ use tracepanel_protocol::{Attrs, Issue, Span, Thresholds, Trace};
 
 pub mod calls;
 pub mod otel;
+mod waits;
 
 pub const FINGERPRINT_VERSION: i64 = 1;
 const DUPLICATES_MIN: usize = 2;
@@ -781,6 +782,8 @@ pub fn analyze(trace: &Trace, thresholds: &Thresholds) -> Vec<Issue> {
     let mut found = calls::operation_issues(trace, thresholds);
     found.extend(transaction_issues(trace, thresholds));
     found.extend(htmx_issues(trace));
+    found.extend(waits::queue_issues(trace, thresholds));
+    found.extend(waits::blocking_issues(trace));
     // A stable sort, as Python's sorted().
     found.sort_by_key(|issue| -issue.count);
     let mut issues = error_issues(trace);
@@ -1030,6 +1033,97 @@ mod tests {
         ]);
 
         assert_eq!(found(&trace), []);
+    }
+
+    #[test]
+    fn a_task_that_waited_for_a_worker() {
+        let task = |waited: i64| -> Trace {
+            serde_json::from_value(serde_json::json!({
+                "id": "t", "kind": "task", "name": "shop.tasks.send_receipt", "start": 0,
+                "attrs": {"task.queue_wait": waited, "task.queue": "emails"},
+            }))
+            .unwrap()
+        };
+
+        let issues = analyze(&task(4_200_000), &Thresholds::default());
+        assert_eq!(
+            issues
+                .iter()
+                .map(|issue| (
+                    issue.kind.as_str(),
+                    issue.title.as_str(),
+                    issue.culprit.as_deref()
+                ))
+                .collect::<Vec<_>>(),
+            [(
+                "queue-wait",
+                "Queue wait: 4200 ms in emails · shop.tasks.send_receipt",
+                Some("shop.tasks.send_receipt")
+            )]
+        );
+
+        // Under the threshold, or not a task: nothing.
+        assert!(analyze(&task(900_000), &Thresholds::default()).is_empty());
+        let relaxed = Thresholds {
+            queue_wait_ms: 5000,
+            ..Thresholds::default()
+        };
+        assert!(analyze(&task(4_200_000), &relaxed).is_empty());
+    }
+
+    #[test]
+    fn a_blocking_call_on_the_event_loop() {
+        let blocking = |url: &'static str, origin: &str, duration: i64| {
+            let mut call = get(url);
+            call.2["code.blocks_event_loop"] = Value::Bool(true);
+            call.2["code.origin"] = Value::from(origin);
+            call.3 = duration;
+            call
+        };
+        let trace = request(&[
+            blocking(
+                "https://pay.example.com/charges",
+                "app/views.py:30 in checkout",
+                4_000,
+            ),
+            blocking(
+                "https://pay.example.com/tax",
+                "app/views.py:30 in checkout",
+                3_000,
+            ),
+            // Too quick to matter, alone at its line.
+            blocking(
+                "https://pay.example.com/ping",
+                "app/views.py:40 in checkout",
+                200,
+            ),
+            // Awaited: not on the loop.
+            get("https://pay.example.com/refunds"),
+        ]);
+
+        assert_eq!(
+            found(&trace),
+            [(
+                "blocking-call".to_owned(),
+                "Blocking call in async code: 2 HTTP calls, 7 ms · GET".to_owned(),
+                2
+            )]
+        );
+        let issue = &analyze(&trace, &Thresholds::default())[0];
+        assert_eq!(
+            (issue.culprit.as_deref(), issue.span_ids.as_slice()),
+            (
+                Some("app/views.py:30 in checkout"),
+                ["s0".to_owned(), "s1".to_owned()].as_slice()
+            )
+        );
+        assert!(
+            issue
+                .hint
+                .as_deref()
+                .unwrap_or_default()
+                .contains("httpx.AsyncClient")
+        );
     }
 
     #[test]

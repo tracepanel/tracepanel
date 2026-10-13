@@ -440,7 +440,9 @@
             "error",
             "long-transaction",
             "in-transaction",
-            "htmx"
+            "htmx",
+            "queue-wait",
+            "blocking-call"
           ]
         },
         "title": {
