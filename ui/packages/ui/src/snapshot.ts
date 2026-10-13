@@ -119,16 +119,25 @@ export function snapshotSource(snapshot: Snapshot): DataSource {
   };
 }
 
-/** A file's bytes as a `data:` URL. */
-async function dataUrl(response: Response): Promise<string> {
-  const type = response.headers.get("content-type")?.split(";")[0] ?? "application/octet-stream";
-  const bytes = new Uint8Array(await response.arrayBuffer());
+function base64(bytes: Uint8Array): string {
   let binary = "";
   // In slices: String.fromCharCode takes its arguments on the stack.
   for (let at = 0; at < bytes.length; at += 0x8000) {
     binary += String.fromCharCode(...bytes.subarray(at, at + 0x8000));
   }
-  return `data:${type};base64,${btoa(binary)}`;
+  return btoa(binary);
+}
+
+/** A file's bytes as a `data:` URL. */
+async function dataUrl(response: Response): Promise<string> {
+  const type = response.headers.get("content-type")?.split(";")[0] ?? "application/octet-stream";
+  return `data:${type};base64,${base64(new Uint8Array(await response.arrayBuffer()))}`;
+}
+
+/** Text gzipped, as base64: the file carries the console a third of its size. */
+async function packed(text: string): Promise<string> {
+  const zipped = new Blob([text]).stream().pipeThrough(new CompressionStream("gzip"));
+  return base64(new Uint8Array(await new Response(zipped).arrayBuffer()));
 }
 
 /** The files a stylesheet loads (`url(…)`), other than data URLs. */
@@ -166,7 +175,23 @@ function pageAssets(): { script: string; stylesheet: string; icon: string } {
 
 const escapeHtml = (text: string) => text.replace(/[&<>"]/g, (char) => `&#${char.charCodeAt(0)};`);
 
-function page(title: string, icon: string, css: string, data: string, code: string): string {
+/**
+ * Unpacks the data, the stylesheet and the script (each gzipped, base64), puts the data where readSnapshot() finds
+ * it, then runs the console. DecompressionStream is in every current browser.
+ */
+const LOADER = `const unpack = (text) =>
+  new Response(
+    new Blob([Uint8Array.from(atob(text), (char) => char.charCodeAt(0))]).stream().pipeThrough(new DecompressionStream("gzip")),
+  ).text();
+const packed = JSON.parse(document.getElementById("tracepanel-snapshot").textContent);
+const [data, css, js] = await Promise.all([unpack(packed.data), unpack(packed.css), unpack(packed.js)]);
+window.${GLOBAL} = JSON.parse(data);
+const style = document.createElement("style");
+style.textContent = css;
+document.head.append(style);
+await import(URL.createObjectURL(new Blob([js], { type: "text/javascript" })));`;
+
+function page(title: string, icon: string, packedParts: string): string {
   const link = icon ? `<link rel="icon" href="${escapeHtml(icon)}" />` : "";
   return `<!doctype html>
 <html lang="en">
@@ -175,9 +200,8 @@ function page(title: string, icon: string, css: string, data: string, code: stri
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>${escapeHtml(title)}</title>
     ${link}
-    <style>${css}</style>
-    <script>window.${GLOBAL} = ${data};</script>
-    <script type="module">${code}</script>
+    <script type="application/json" id="tracepanel-snapshot">${packedParts}</script>
+    <script type="module">${LOADER}</script>
   </head>
   <body>
     <div id="root"></div>
@@ -188,7 +212,7 @@ function page(title: string, icon: string, css: string, data: string, code: stri
 
 /**
  * The console as one HTML file with the snapshot inside: its script and stylesheet (fonts included) taken from this
- * page, the data in a script tag. Nothing in it loads from anywhere.
+ * page, and the data, each gzipped in a script tag the loader unpacks. Nothing in it loads from anywhere.
  */
 export async function snapshotFile(snapshot: Snapshot, title: string): Promise<Blob> {
   const assets = pageAssets();
@@ -196,8 +220,8 @@ export async function snapshotFile(snapshot: Snapshot, title: string): Promise<B
     fetch(assets.script).then((response) => response.text()),
     inlineStyles(assets.stylesheet),
   ]);
-  // Nothing in the data or the script may end the script tag it sits in.
-  const data = JSON.stringify(snapshot).replaceAll("<", "\\u003c");
-  const code = js.replaceAll("</script", "<\\/script");
-  return new Blob([page(title, assets.icon, css, data, code)], { type: "text/html" });
+  const [data, style, code] = await Promise.all([packed(JSON.stringify(snapshot)), packed(css), packed(js)]);
+  // Base64 only: nothing in it can end the script tag it sits in.
+  const parts = JSON.stringify({ data, css: style, js: code });
+  return new Blob([page(title, assets.icon, parts)], { type: "text/html" });
 }
