@@ -236,11 +236,15 @@ fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
-/// What came in, from the root's kind and attributes: a request served, a task taken, or a command run.
+/// What came in, from the root's kind and attributes: a request served (HTTP, or an RPC call such as gRPC), a task
+/// taken, or a command run.
 fn kind_of(root: &Span, attrs: &Map<String, Value>) -> (&'static str, &'static str) {
     let http = text(attrs, &["http.request.method", "http.method"]).is_some();
     if root.kind == 2 && http {
         return ("http", "web");
+    }
+    if root.kind == 2 && text(attrs, &["rpc.system"]).is_some() {
+        return ("rpc", "web");
     }
     let processing = matches!(
         text(attrs, &["messaging.operation.type", "messaging.operation"]),
@@ -308,6 +312,17 @@ fn trace_attrs(
             out.insert("http.path".into(), Value::from(path));
         }
     }
+    if kind == "rpc" {
+        for key in [
+            "rpc.system",
+            "rpc.service",
+            "rpc.method",
+            "rpc.grpc.status_code",
+        ] {
+            copy(&mut out, attrs, key, &[key]);
+        }
+        copy(&mut out, attrs, "user.id", &["enduser.id", "user.id"]);
+    }
     if kind == "task" {
         copy(&mut out, attrs, "task.system", &["messaging.system"]);
         copy(
@@ -332,6 +347,12 @@ fn trace_attrs(
 }
 
 fn trace_name(root: &Span, attrs: &Map<String, Value>, kind: &str) -> String {
+    if kind == "rpc"
+        && let (Some(service), Some(method)) =
+            (text(attrs, &["rpc.service"]), text(attrs, &["rpc.method"]))
+    {
+        return format!("{service}/{method}");
+    }
     if kind != "http" {
         return root.name.clone();
     }

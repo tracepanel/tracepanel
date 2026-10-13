@@ -3,6 +3,7 @@
 use super::*;
 
 pub(crate) const COMMAND: &str = "json_extract(attrs, '$.\"command.name\"')";
+pub(crate) const RPC_SYSTEM: &str = "json_extract(attrs, '$.\"rpc.system\"')";
 pub(crate) const OPERATION_TYPE: &str = "json_extract(attrs, '$.\"graphql.operation.type\"')";
 pub(crate) const OPERATION_NAME: &str = "json_extract(attrs, '$.\"graphql.operation.name\"')";
 pub(crate) const WAIT: &str = "json_extract(attrs, '$.\"task.queue_wait\"')";
@@ -549,6 +550,40 @@ impl Reader {
                     "job": job,
                     "source": rows[0]["source"],
                     "runs": rows.len(),
+                    "failures": failed(&rows),
+                    "p50": pct(&durations, 0.5),
+                    "p95": pct(&durations, 0.95),
+                    "total": durations.iter().sum::<i64>(),
+                    "avg_queries": avg_queries(&rows),
+                    "with_issues": with_issues(&rows),
+                    "last_seen": last_seen(&rows),
+                })
+            })
+            .collect();
+        Ok(busiest(items, limit))
+    }
+
+    /// RPC calls served (kind rpc: gRPC and other RPC systems' servers) by method, `Service/Method`; busiest first.
+    pub fn list_rpcs(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
+        let schema = name_search("rpc", "rpc", vec![("system", search::text(RPC_SYSTEM))]);
+        let (condition, params) = search::compile_where(query, &schema)?;
+        let db = self.connect()?;
+        let rows = objects(
+            &db,
+            &format!(
+                "SELECT name, duration, status, start, issues, queries, {RPC_SYSTEM} AS system \
+                 FROM traces WHERE kind = 'rpc' AND {condition}"
+            ),
+            params,
+        )?;
+        let items = grouped(rows, |row| text_of(&row["name"]))
+            .into_iter()
+            .map(|(method, rows)| {
+                let durations = durations(&rows);
+                serde_json::json!({
+                    "rpc": method,
+                    "system": rows[0]["system"],
+                    "calls": rows.len(),
                     "failures": failed(&rows),
                     "p50": pct(&durations, 0.5),
                     "p95": pct(&durations, 0.95),

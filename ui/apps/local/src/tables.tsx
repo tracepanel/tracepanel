@@ -16,6 +16,7 @@ import {
   type MailRow,
   MethodBadge,
   RoutePath,
+  type RpcRow,
   type Span,
   SqlCode,
   StatusBadge,
@@ -949,37 +950,49 @@ export function GraphqlTable({ items }: { items: readonly GraphqlRow[] }) {
 
 const JOB_SOURCES: Record<string, string> = { "manage.py": "manage.py", custom: "tracepanel.trace" };
 
-export function JobsTable({ items }: { items: readonly JobRow[] }) {
+/** A row of a list grouped by name (jobs, RPC methods): its name, a badge, how often it ran, failures and time. */
+type NamedRow = Pick<JobRow, "failures" | "with_issues" | "p95" | "avg_queries" | "last_seen"> & {
+  name: string;
+  badge: string;
+  count: number;
+};
+
+function NamedTable({
+  section,
+  head,
+  items,
+}: {
+  section: "jobs" | "rpc";
+  /** Column titles: the name, the badge, the count, the queries. */
+  head: [string, string, string, string];
+  items: readonly NamedRow[];
+}) {
   const slowest = Math.max(...items.map((item) => item.p95), 1);
   return (
     <DataTable
       head={
         <>
-          <Th>Job</Th>
-          <Th>Source</Th>
-          <Th num>Runs</Th>
+          <Th>{head[0]}</Th>
+          <Th>{head[1]}</Th>
+          <Th num>{head[2]}</Th>
           <Th num>Failed</Th>
           <Th>p95</Th>
-          <Th num>Queries / run</Th>
+          <Th num>{head[3]}</Th>
           <Th num>Last</Th>
         </>
       }
     >
       {items.map((item) => (
-        <Tr
-          key={item.job}
-          tone={item.failures ? "error" : item.with_issues ? "warn" : undefined}
-          href={href(groupRoute("jobs", item.job))}
-        >
+        <Tr key={item.name} tone={rowTone(item)} href={href(groupRoute(section, item.name))}>
           <Td className="max-w-[26.25rem]">
-            <Mono className="block truncate">{item.job}</Mono>
+            <Mono className="block truncate">{item.name}</Mono>
           </Td>
           <Td>
             <Badge variant="outline" className="font-mono text-xs">
-              {JOB_SOURCES[item.source] ?? item.source}
+              {item.badge}
             </Badge>
           </Td>
-          <Td num>{item.runs}</Td>
+          <Td num>{item.count}</Td>
           <Td num className={item.failures ? "font-semibold text-error" : "text-muted-foreground"}>
             {item.failures || "—"}
           </Td>
@@ -996,6 +1009,26 @@ export function JobsTable({ items }: { items: readonly JobRow[] }) {
       ))}
     </DataTable>
   );
+}
+
+function rowTone(item: Pick<JobRow, "failures" | "with_issues">): "error" | "warn" | undefined {
+  if (item.failures) return "error";
+  return item.with_issues ? "warn" : undefined;
+}
+
+export function JobsTable({ items }: { items: readonly JobRow[] }) {
+  const rows = items.map((item) => ({
+    ...item,
+    name: item.job,
+    badge: JOB_SOURCES[item.source] ?? item.source,
+    count: item.runs,
+  }));
+  return <NamedTable section="jobs" head={["Job", "Source", "Runs", "Queries / run"]} items={rows} />;
+}
+
+export function RpcTable({ items }: { items: readonly RpcRow[] }) {
+  const rows = items.map((item) => ({ ...item, name: item.rpc, badge: item.system ?? "rpc", count: item.calls }));
+  return <NamedTable section="rpc" head={["Method", "System", "Calls", "Queries / call"]} items={rows} />;
 }
 
 export function WebsocketsTable({ items }: { items: readonly WebsocketRow[] }) {

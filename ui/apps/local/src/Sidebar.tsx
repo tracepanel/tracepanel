@@ -39,6 +39,7 @@ import {
   SunIcon,
   TerminalIcon,
   Trash2Icon,
+  WaypointsIcon,
   ZapIcon,
 } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
@@ -65,6 +66,7 @@ export const NAV_GROUPS: { title: string | null; items: NavItem[] }[] = [
       { section: "tasks", label: "Tasks", icon: ListChecksIcon },
       { section: "websockets", label: "WebSockets", icon: CableIcon },
       { section: "jobs", label: "Jobs", icon: TerminalIcon },
+      { section: "rpc", label: "RPC", icon: WaypointsIcon },
     ],
   },
   {
@@ -90,7 +92,7 @@ export const NAV_GROUPS: { title: string | null; items: NavItem[] }[] = [
 export const NAV: NavItem[] = NAV_GROUPS.flatMap((group) => group.items);
 
 /** The sections shown only once there is something in them; HTTP always (it is where a project starts). */
-const OPTIONAL = ["graphql", "tasks", "websockets", "jobs"] as const;
+const OPTIONAL = ["graphql", "tasks", "websockets", "jobs", "rpc"] as const;
 
 /** Entry points with traces, and a page for each system the app called. */
 function visibleSections(counts: Counts | undefined): Set<Section> {

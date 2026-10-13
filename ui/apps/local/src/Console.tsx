@@ -76,6 +76,7 @@ export function Console({ route, source: everything }: { route: Route; source: D
     task: [],
     queue: [],
     job: [],
+    rpc: [],
     extra: [],
   };
 

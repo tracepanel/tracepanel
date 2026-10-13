@@ -46,8 +46,9 @@ request the page made, including `fetch()` calls, each with its call tree, SQL
 and logs.
 
 The console at `/__tracepanel__/` covers the whole app. It lists HTTP
-endpoints, GraphQL operations, background tasks, commands and WebSockets, with
-charts over time and one search across all of them.
+endpoints, GraphQL operations, background tasks, commands, WebSockets and the
+gRPC methods it serves, with charts over time and one search across all of
+them.
 
 Every system your app calls has a page of its own: the database, Redis, the
 cache, HTTP calls, and MongoDB, Kafka, gRPC or whatever else it talks to. Each

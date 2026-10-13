@@ -238,6 +238,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/rpc": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** RPC calls served (gRPC and other RPC systems' servers) by method, Service/Method, busiest first. */
+        get: operations["listRpcs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/graphql/detail": {
         parameters: {
             query?: never;
@@ -504,7 +521,7 @@ export interface components {
         TraceSummary: {
             id: string;
             /** @enum {string} */
-            kind: "http" | "task" | "command" | "websocket";
+            kind: "http" | "task" | "command" | "websocket" | "rpc";
             name: string;
             start: components["schemas"]["Time"];
             duration: components["schemas"]["Duration"];
@@ -547,7 +564,7 @@ export interface components {
             exception: string | null;
             attrs: components["schemas"]["Attrs"];
             /** @enum {string} */
-            trace_kind: "http" | "task" | "command" | "websocket";
+            trace_kind: "http" | "task" | "command" | "websocket" | "rpc";
             /**
              * @description As the trace's htmx.
              * @enum {string|null}
@@ -578,7 +595,7 @@ export interface components {
             sent: boolean | null;
             html: boolean;
             /** @enum {string} */
-            trace_kind: "http" | "task" | "command" | "websocket";
+            trace_kind: "http" | "task" | "command" | "websocket" | "rpc";
             /**
              * @description As the trace's htmx.
              * @enum {string|null}
@@ -707,12 +724,12 @@ export interface components {
         };
         KindStats: components["schemas"]["GroupStats"] & {
             /** @enum {string} */
-            kind: "http" | "task" | "command" | "websocket";
+            kind: "http" | "task" | "command" | "websocket" | "rpc";
         };
         /** @description One operation: a trace kind plus name, e.g. http "GET /posts/<int:pk>/". */
         OperationStats: components["schemas"]["GroupStats"] & {
             /** @enum {string} */
-            kind: "http" | "task" | "command" | "websocket";
+            kind: "http" | "task" | "command" | "websocket" | "rpc";
             name: string;
             /** @description For requests. */
             method: string | null;
@@ -782,6 +799,8 @@ export interface components {
                 websockets: number;
                 /** @description Management commands and tracepanel.trace() blocks. */
                 jobs: number;
+                /** @description RPC calls served: gRPC and other RPC systems' servers. */
+                rpc: number;
                 /** @description The systems with operations, by family then name: the console lists a page for each. */
                 systems: {
                     system: string;
@@ -799,6 +818,8 @@ export interface components {
             queue: string[];
             /** @description Job names: management commands and tracepanel.trace() blocks. */
             job: string[];
+            /** @description RPC methods served, Service/Method. */
+            rpc: string[];
             route: string[];
             logger: string[];
             /** @description Database aliases. */
@@ -825,6 +846,7 @@ export interface components {
             websockets: components["schemas"]["SearchFields"];
             graphql: components["schemas"]["SearchFields"];
             jobs: components["schemas"]["SearchFields"];
+            rpc: components["schemas"]["SearchFields"];
             traces: components["schemas"]["SearchFields"];
             logs: components["schemas"]["SearchFields"];
             mails: components["schemas"]["SearchFields"];
@@ -900,6 +922,20 @@ export interface components {
             /** @enum {string} */
             source: "manage.py" | "custom";
             runs: number;
+            failures: number;
+            p50: components["schemas"]["Duration"];
+            p95: components["schemas"]["Duration"];
+            total: components["schemas"]["Duration"];
+            avg_queries: number;
+            with_issues: number;
+            last_seen: components["schemas"]["Time"];
+        };
+        RpcRow: {
+            /** @description The method, Service/Method: helloworld.Greeter/SayHello. */
+            rpc: string;
+            /** @description grpc, or another RPC system's name. */
+            system: string | null;
+            calls: number;
             failures: number;
             p50: components["schemas"]["Duration"];
             p95: components["schemas"]["Duration"];
@@ -1169,7 +1205,7 @@ export interface components {
         "trace.schema": {
             id: components["schemas"]["trace.schema"]["$defs"]["id"];
             /** @enum {unknown} */
-            kind: "http" | "task" | "command" | "websocket";
+            kind: "http" | "task" | "command" | "websocket" | "rpc";
             /** @description Human-readable name, e.g. "GET /posts/<int:pk>/". */
             name: string;
             start: components["schemas"]["trace.schema"]["$defs"]["time"];
@@ -1709,6 +1745,33 @@ export interface operations {
                 content: {
                     "application/json": {
                         jobs: components["schemas"]["JobRow"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadSearch"];
+        };
+    };
+    listRpcs: {
+        parameters: {
+            query?: {
+                /** @description Search query: free text plus key:value filters, e.g. route:/api/* status>=500 "timed out". */
+                q?: components["parameters"]["q"];
+                limit?: components["parameters"]["limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Methods. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        rpc: components["schemas"]["RpcRow"][];
                     };
                 };
             };

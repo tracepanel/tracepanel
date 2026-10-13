@@ -29,6 +29,12 @@
 
 ### Added
 
+- An RPC section in the console: the calls the app served over gRPC and
+  other RPC systems, by method (`helloworld.Greeter/SayHello`), with calls,
+  failures, p95 and a page per method, as the other entry points have. An
+  OTLP root server span with `rpc.system` is a trace of the new kind `rpc`,
+  named `Service/Method`, with `rpc.*` attributes. `GET /api/rpc` lists the
+  methods, `/api/counts` counts them, and `rpc:` and `system:` search them.
 - Share a trace as one HTML file. **Share** on a trace's page in the console,
   or its icon in the panel's bar, downloads the console itself with the trace
   and the traces linked to it inside: it opens in any browser, read-only, with

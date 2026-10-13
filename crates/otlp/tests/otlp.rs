@@ -311,6 +311,61 @@ fn otlp_json_as_the_specification_writes_it() {
 }
 
 #[test]
+fn a_grpc_call_served_is_an_rpc_trace() {
+    let export = json!({"resourceSpans": [{
+        "resource": {"attributes": [{"key": "service.name", "value": {"stringValue": "greeter"}}]},
+        "scopeSpans": [{"scope": {"name": "grpc"}, "spans": [
+            {"traceId": "5b8efff798038103d269b633813fc60c", "spanId": "eee19b7ec3c1b174",
+             "name": "helloworld.Greeter/SayHello", "kind": 2,
+             "startTimeUnixNano": "1544712660000000000", "endTimeUnixNano": "1544712660020000000",
+             "attributes": [{"key": "rpc.system", "value": {"stringValue": "grpc"}},
+                            {"key": "rpc.service", "value": {"stringValue": "helloworld.Greeter"}},
+                            {"key": "rpc.method", "value": {"stringValue": "SayHello"}},
+                            {"key": "rpc.grpc.status_code", "value": {"intValue": "0"}}]}]}]}]});
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/json"),
+    );
+    let mut assembler = Assembler::default();
+    let start = Instant::now();
+    assembler.add(
+        tracepanel_otlp::decode(&headers, export.to_string().as_bytes()).unwrap(),
+        start,
+    );
+    let docs = assembler.ready(start + QUIET);
+
+    assert_eq!(
+        (
+            &docs[0]["kind"],
+            &docs[0]["name"],
+            &docs[0]["attrs"]["service.role"]
+        ),
+        (
+            &json!("rpc"),
+            &json!("helloworld.Greeter/SayHello"),
+            &json!("web")
+        )
+    );
+    assert_eq!(
+        (
+            &docs[0]["attrs"]["rpc.system"],
+            &docs[0]["attrs"]["rpc.service"],
+            &docs[0]["attrs"]["rpc.method"],
+            &docs[0]["attrs"]["rpc.grpc.status_code"],
+            docs[0]["attrs"].get("http.method")
+        ),
+        (
+            &json!("grpc"),
+            &json!("helloworld.Greeter"),
+            &json!("SayHello"),
+            &json!(0),
+            None
+        )
+    );
+}
+
+#[test]
 fn gzipped_exports_are_read() {
     let mut gzip = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
     gzip.write_all(&exports()[0]).unwrap();
