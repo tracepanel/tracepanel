@@ -1,0 +1,42 @@
+name: CodSpeed
+
+# What the agent costs per trace (crates/*/benches): decoding a frame, finding the issues, writing to the store, the
+# console's reads, OTLP. CodSpeed counts the instructions each benchmark runs and comments on a pull request when one
+# costs more.
+# Only when the Rust changed, as CI's own checks: a pull request that touches the UI or the docs gets no report.
+on:
+  push:
+    branches: [main]
+    paths: &rust
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - "schema/**"
+      - ".github/workflows/codspeed.yml"
+  pull_request:
+    paths: *rust
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  id-token: write # CodSpeed authenticates the upload by OpenID Connect
+
+jobs:
+  benchmarks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # The Rust in rust-toolchain.toml.
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2.9.2
+      - run: cargo install cargo-codspeed --version 5.0.2 --locked
+      - run: cargo codspeed build --workspace
+      - uses: CodSpeedHQ/action@v5.4.2
+        with:
+          mode: simulation
+          run: cargo codspeed run

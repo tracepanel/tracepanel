@@ -1,6 +1,7 @@
 # Tracepanel
 
 [![CI](https://github.com/tracepanel/tracepanel/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/tracepanel/tracepanel/actions/workflows/ci.yml)
+[![CodSpeed](https://img.shields.io/endpoint?url=https://codspeed.io/badge.json)](https://app.codspeed.io/tracepanel/tracepanel)
 
 **See what your app does on every request.** Tracepanel collects the traces
 and logs of your app on your machine. Every request, background job and command

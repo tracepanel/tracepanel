@@ -28,6 +28,14 @@ A tracepanel-python checkout next to this repository builds the agent from here
 when you run `uv sync` there. Its tests check the agent through the console's
 API.
 
+## Measure what it costs
+
+Each crate's `benches/` measures what the agent does per trace: decoding a
+frame, finding the issues, writing to the store, the console's reads, OTLP.
+The traces are `schema/examples`. CodSpeed runs them on every pull request,
+counts the instructions each one takes and comments when one costs more.
+`cargo bench` runs them on your machine with divan's timer.
+
 ## Change the UI
 
 ```bash
