@@ -1,9 +1,19 @@
 name: CI
 
+# One workflow for every change: `changes` reads what the change touched, and each check runs only when its part did
+# (the Rust when the crates or what they embed changed, the UI when ui/ did, the docs when a page or a comment did).
+# A check with nothing to check is skipped, and `CI` at the end passes when every check passed or was skipped: it is
+# the one check main's protection requires.
+#
+# The console's behaviour is checked through its API by tracepanel-python's tests, which build this agent from its
+# checkout (tracepanel-python's CI). Here: format, lints and the crates' own tests, and the UI's checks, the ones
+# the pre-push hook runs locally.
+
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -15,11 +25,44 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
 
-# The console's behaviour is checked through its API by tracepanel-python's tests, which build this agent from its
-# checkout (tracepanel-python's CI). Here: format, lints and the crates' own tests.
 jobs:
+  changes:
+    name: What changed
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      rust: ${{ steps.paths.outputs.rust }}
+      ui: ${{ steps.paths.outputs.ui }}
+      docs: ${{ steps.paths.outputs.docs }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - id: paths
+        env:
+          # A pull request: what it changes from its base. A push to main: what the push added.
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          everything() { for part in rust ui docs; do echo "$part=true" >> "$GITHUB_OUTPUT"; done; }
+          # Run by hand, a new branch, or a base this checkout doesn't have: check everything.
+          if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2> /dev/null; then everything; exit 0; fi
+          files=$(git diff --name-only "$BASE" HEAD)
+          echo "$files"
+          # A change to this workflow checks everything it runs.
+          if echo "$files" | grep -qx '.github/workflows/ci.yml'; then everything; exit 0; fi
+          touched() { if echo "$files" | grep -qE "$2"; then echo "$1=true"; else echo "$1=false"; fi >> "$GITHUB_OUTPUT"; }
+          # The crates, and what they embed at build time: the store's schema, the search fields, the examples.
+          touched rust '^(crates/|Cargo\.(toml|lock)$|rust-toolchain\.toml$|schema/)'
+          # ui/, the build it makes (ui-dist/), and what checks it: the API it is typed from, its build script, hooks.
+          touched ui '^(ui/|ui-dist/|schema/openapi\.yaml$|scripts/(ui|notices)\.(sh|py)$|lefthook\.yml$)'
+          # The pages, and the comments scripts/lint_docs.py reads (the crates' and the scripts').
+          touched docs '(\.md$|^crates/.*\.rs$|^scripts/.*\.py$)'
+
   rust:
     name: fmt, clippy, tests
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -37,6 +80,8 @@ jobs:
   docs:
     # The pages and the comments follow the project's docs style; scripts/lint_docs.py checks what it can.
     name: docs
+    needs: changes
+    if: needs.changes.outputs.docs == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -45,3 +90,87 @@ jobs:
       - uses: astral-sh/setup-uv@v10.3.0
 
       - run: uv run --no-project --with ruff scripts/lint_docs.py
+
+  ui:
+    # The console, the panel and the widget (ui/): one install, then each check a step of its own, so a failure names
+    # its reason. ui/ releases the agents only behind the same checks.
+    name: UI
+    needs: changes
+    if: needs.changes.outputs.ui == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # fallow audit diffs a change against its base; the walk needs both ends.
+          fetch-depth: 0
+
+      # The pnpm version comes from ui/package.json's packageManager.
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: ui/package.json
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: pnpm
+          cache-dependency-path: ui/pnpm-lock.yaml
+
+      # scripts/ui.sh writes the UI's licenses with uv.
+      - uses: astral-sh/setup-uv@v10.3.0
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Biome
+        run: pnpm exec biome ci --reporter=github .
+
+      - name: TypeScript
+        run: pnpm -r typecheck
+
+      - name: The API types match schema/openapi.yaml
+        run: |
+          # The script writes the file formatted (biome ignores api.gen.ts itself).
+          pnpm api
+          git diff --exit-code packages/ui/src/api.gen.ts || {
+            echo "::error file=ui/packages/ui/src/api.gen.ts::Out of date with schema/openapi.yaml: run pnpm api in ui/ and commit."
+            exit 1
+          }
+
+      - name: ui-dist is this ui/, built
+        working-directory: .
+        run: |
+          scripts/ui.sh
+          git diff --exit-code --stat ui-dist || {
+            echo "::error::ui-dist/ is out of date with ui/: run scripts/ui.sh and commit."
+            exit 1
+          }
+
+      # pnpm install wires the hooks (postinstall: lefthook install); this asserts the wiring, not the local hooks a
+      # dev machine has. The binary is called directly: plain `pnpm exec` recurses the whole workspace on some pnpm
+      # versions and then fails on a package without the bin.
+      - name: lefthook is wired
+        run: ./node_modules/.bin/lefthook check-install
+
+      - name: fallow finds only what this change adds
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: pnpm exec fallow audit --base "${BASE:-HEAD~1}"
+
+  ci:
+    # What main's protection requires: every check passed, or had nothing to check.
+    name: CI
+    needs: [changes, rust, docs, ui]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "changes, rust, docs, ui: $RESULTS"
+          for result in $RESULTS; do
+            case "$result" in success | skipped) ;; *) echo "::error::a check $result" && exit 1 ;; esac
+          done
