@@ -200,6 +200,7 @@ pub fn operation(trace: &Trace, span: &Span) -> Option<Operation> {
             operation.template =
                 text(attrs, "db.collection.name").map_or_else(String::new, |name| template(&name));
             operation.statement = text(attrs, "db.statement");
+            operation.params_hash = text(attrs, "db.params_hash");
         }
         // messaging
         _ => {
@@ -333,13 +334,19 @@ fn call_of<'a>(operation: &Operation, span: &'a Span) -> Call<'a> {
             } else {
                 what.clone()
             };
-            // The exact query, when the span has it (a datastore's statement); else each call is its own: repeats
-            // count as an N+1, and no two are known to be the same.
+            // The exact query, when the span has it (a datastore's statement, with its parameters' hash when an SDK
+            // keeps the values apart, as it does SQL's); else each call is its own: repeats count as an N+1, and no
+            // two are known to be the same.
             let exact = operation
                 .statement
                 .clone()
                 .filter(|statement| statement.contains(char::is_whitespace))
-                .map(|statement| format!("{} {statement}", operation.target));
+                .map(|statement| {
+                    let params = operation.params_hash.as_deref().unwrap_or_default();
+                    format!("{} {statement} {params}", operation.target)
+                        .trim_end()
+                        .to_owned()
+                });
             let read = operation.family == "rpc"
                 || DATASTORE_READS.contains(&operation.op.to_lowercase().replace(' ', "").as_str());
             Call {
