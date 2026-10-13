@@ -94,13 +94,19 @@ pub(crate) fn marks(count: usize) -> String {
     vec!["?"; count].join(", ")
 }
 
-/// The calls matching `query` grouped by `key`, heaviest first: `columns` for what names a group, then the fields
-/// every group has: `calls`, `traces`, `errors`, `total`, `slowest`, `last_seen`, `most_per_trace` (the most in one
-/// trace), `origin` (the most common line of code) and the latest call (`sample_trace`, `sample_span`), which the
-/// console opens.
+/// What names a group of calls: the same for each call in it (its key is made of them), read from its latest call.
+const NAMING: &str = "system, family, target, op, template, name, statement, vendor, via";
+
+/// The calls matching `query` grouped by `key`, heaviest first: what names a group (`NAMING`), then the fields every
+/// group has: `calls`, `traces`, `errors`, `total`, `slowest`, `last_seen`, `most_per_trace` (the most in one trace),
+/// a cache's `hits` and `misses` (null for the others), `origin` (the most common line of code) and the latest call
+/// (`sample_trace`, `sample_span`), which the console opens.
+///
+/// The numbers come from the `calls_group` index alone, per trace first and then per group (named: without
+/// statistics, SQLite would take `calls_system` for `system:` and read the table row by row); what names a group and
+/// the latest call come from one row each. Taking them by MAX() over every call read the whole table twice.
 pub(crate) fn aggregate(
     db: &Connection,
-    columns: &str,
     query: &str,
     limit: i64,
 ) -> Result<Vec<serde_json::Map<String, Value>>, ReadError> {
@@ -109,9 +115,14 @@ pub(crate) fn aggregate(
     let rows = objects(
         db,
         &format!(
-            "SELECT key, {columns}, COUNT(*) AS calls, COUNT(DISTINCT trace_id) AS traces, \
-             SUM(error) AS errors, SUM(duration) AS total, MAX(duration) AS slowest, MAX(start) AS last_seen \
-             FROM calls WHERE {condition} GROUP BY key ORDER BY total DESC LIMIT ?"
+            "SELECT key, SUM(n) AS calls, COUNT(*) AS traces, SUM(errors) AS errors, SUM(total) AS total, \
+             MAX(slowest) AS slowest, MAX(last) AS last_seen, MAX(n) AS most_per_trace, \
+             SUM(hits) AS hits, SUM(misses) AS misses \
+             FROM (SELECT key, COUNT(*) AS n, SUM(error) AS errors, SUM(duration) AS total, \
+             MAX(duration) AS slowest, MAX(start) AS last, \
+             COALESCE(SUM(hit = 1), 0) AS hits, COALESCE(SUM(hit = 0), 0) AS misses \
+             FROM calls INDEXED BY calls_group WHERE {condition} GROUP BY key, trace_id) \
+             GROUP BY key ORDER BY total DESC LIMIT ?"
         ),
         params,
     )?;
@@ -123,55 +134,73 @@ pub(crate) fn aggregate(
         .map(|row| Sql::Text(row["key"].as_str().unwrap_or("").to_owned()))
         .collect();
     let marks = marks(keys.len());
-    let by_key = |sql: &str| objects(db, sql, keys.clone());
     let text_of =
         |row: &serde_json::Map<String, Value>| row["key"].as_str().unwrap_or("").to_owned();
-    let per_trace: HashMap<String, i64> = by_key(&format!(
-        "SELECT key, MAX(n) AS most FROM (SELECT key, trace_id, COUNT(*) AS n FROM calls \
-         WHERE key IN ({marks}) GROUP BY key, trace_id) GROUP BY key"
-    ))?
-    .into_iter()
-    .map(|row| (text_of(&row), row["most"].as_i64().unwrap_or(1)))
+    // The latest call of each group: the console opens it (and explains it, for SQL), and it names the group.
+    let latest: Vec<Sql> = objects(
+        db,
+        &format!("SELECT rowid AS id, MAX(start) FROM calls WHERE key IN ({marks}) GROUP BY key"),
+        keys.clone(),
+    )?
+    .iter()
+    .filter_map(|row| row["id"].as_i64().map(Sql::Integer))
     .collect();
-    let mut origins: HashMap<String, Vec<String>> = HashMap::new();
-    for row in by_key(&format!(
-        "SELECT key, origin FROM calls WHERE key IN ({marks}) AND origin IS NOT NULL"
-    ))? {
-        origins
+    let mut naming: HashMap<String, serde_json::Map<String, Value>> = objects(
+        db,
+        &format!(
+            "SELECT key, trace_id AS sample_trace, span_id AS sample_span, {NAMING} FROM calls \
+             WHERE rowid IN ({})",
+            self::marks(latest.len())
+        ),
+        latest,
+    )?
+    .into_iter()
+    .map(|row| (text_of(&row), row))
+    .collect();
+    // The most common line of code in each group, the first seen on a tie (from the index too).
+    let mut origins: HashMap<String, (i64, i64, String)> = HashMap::new();
+    for row in objects(
+        db,
+        &format!(
+            "SELECT key, origin, COUNT(*) AS n, MIN(rowid) AS first FROM calls \
+             WHERE key IN ({marks}) AND origin IS NOT NULL GROUP BY key, origin"
+        ),
+        keys,
+    )? {
+        let (n, first) = (
+            row["n"].as_i64().unwrap_or(0),
+            row["first"].as_i64().unwrap_or(0),
+        );
+        let origin = row["origin"].as_str().unwrap_or("").to_owned();
+        let best = origins
             .entry(text_of(&row))
-            .or_default()
-            .push(row["origin"].as_str().unwrap_or("").to_owned());
+            .or_insert((0, i64::MAX, String::new()));
+        if n > best.0 || (n == best.0 && first < best.1) {
+            *best = (n, first, origin);
+        }
     }
-    // The latest call of each group: the console opens it (and explains it, for SQL).
-    let samples: HashMap<String, (Value, Value)> = by_key(&format!(
-        "SELECT key, trace_id, span_id, MAX(start) FROM calls WHERE key IN ({marks}) GROUP BY key"
-    ))?
-    .into_iter()
-    .map(|row| {
-        (
-            text_of(&row),
-            (row["trace_id"].clone(), row["span_id"].clone()),
-        )
-    })
-    .collect();
     Ok(rows
         .into_iter()
         .map(|mut row| {
             let group = text_of(&row);
-            let (trace, span) = samples
-                .get(&group)
-                .cloned()
-                .unwrap_or((Value::Null, Value::Null));
-            row.insert("sample_trace".into(), trace);
-            row.insert("sample_span".into(), span);
-            row.insert(
-                "most_per_trace".into(),
-                Value::from(per_trace.get(&group).copied().unwrap_or(1)),
-            );
+            let named = naming.remove(&group).unwrap_or_default();
+            let cache = named.get("family").and_then(Value::as_str) == Some("cache");
+            for field in ["hits", "misses"] {
+                if !cache {
+                    row.insert(field.into(), Value::Null);
+                }
+            }
+            for field in NAMING.split(", ").chain(["sample_trace", "sample_span"]) {
+                row.insert(
+                    field.into(),
+                    named.get(field).cloned().unwrap_or(Value::Null),
+                );
+            }
             row.insert(
                 "origin".into(),
-                most_common(origins.remove(&group).unwrap_or_default())
-                    .map_or(Value::Null, Value::from),
+                origins
+                    .remove(&group)
+                    .map_or(Value::Null, |(_, _, origin)| Value::from(origin)),
             );
             row
         })
@@ -180,27 +209,6 @@ pub(crate) fn aggregate(
 
 pub(crate) fn objects_of(rows: Vec<serde_json::Map<String, Value>>) -> Vec<Value> {
     rows.into_iter().map(Value::Object).collect()
-}
-
-/// Counter(...).most_common(1)[0][0]: the most frequent, the first seen on a tie.
-pub(crate) fn most_common(items: impl IntoIterator<Item = String>) -> Option<String> {
-    let mut order: Vec<String> = Vec::new();
-    let mut counts: HashMap<String, usize> = HashMap::new();
-    for item in items {
-        let count = counts.entry(item.clone()).or_insert(0);
-        if *count == 0 {
-            order.push(item);
-        }
-        *count += 1;
-    }
-    let mut best: Option<(String, usize)> = None;
-    for item in order {
-        let count = counts[&item];
-        if best.as_ref().is_none_or(|(_, top)| count > *top) {
-            best = Some((item, count));
-        }
-    }
-    best.map(|(item, _)| item)
 }
 
 /// A trace row from `SELECT LISTING`, as `_trace_row` makes it for the API.
@@ -515,7 +523,7 @@ impl Reader {
     /// search picks the calling traces.
     fn list_app_links(&self, db: &Connection, query: &str) -> Result<Vec<Value>, ReadError> {
         let (condition, params) = search::compile_where(query, &APP_SEARCH)?;
-        let role = |table: &str| SERVICE_ROLE.replace("doc", &format!("{table}.doc"));
+        let role = |table: &str| SERVICE_ROLE.replace("attrs", &format!("{table}.attrs"));
         let rows = objects(
             db,
             &format!(
@@ -558,8 +566,8 @@ impl Reader {
                 "SELECT service, {SERVICE_ROLE} AS role, COUNT(*) AS traces, \
                  SUM(status = 'error') AS errors, SUM(duration) AS total, MAX(start) AS last_seen, \
                  MAX({LANGUAGE}) AS language, \
-                 MAX(json_extract(doc, '$.attrs.\"process.runtime.version\"')) AS version, \
-                 MAX(json_extract(doc, '$.attrs.\"tracepanel.framework\"')) AS framework \
+                 MAX(json_extract(attrs, '$.\"process.runtime.version\"')) AS version, \
+                 MAX(json_extract(attrs, '$.\"tracepanel.framework\"')) AS framework \
                  FROM traces WHERE {condition} GROUP BY service, role ORDER BY service, role"
             ),
             params,
@@ -658,16 +666,7 @@ impl Reader {
     /// systems have (statement and vendor for SQL, hits and misses for a cache, via for Redis), null elsewhere.
     pub fn list_calls(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
         let db = self.connect()?;
-        let rows = aggregate(
-            &db,
-            "MAX(system) AS system, MAX(family) AS family, MAX(target) AS target, MAX(op) AS op, \
-             MAX(template) AS template, MAX(name) AS name, MAX(statement) AS statement, \
-                          MAX(vendor) AS vendor, MAX(via) AS via, \
-                          CASE WHEN MAX(family) = 'cache' THEN COALESCE(SUM(hit = 1), 0) END AS hits, \
-                          CASE WHEN MAX(family) = 'cache' THEN COALESCE(SUM(hit = 0), 0) END AS misses",
-            query,
-            limit,
-        )?;
+        let rows = aggregate(&db, query, limit)?;
         Ok(objects_of(rows))
     }
 

@@ -2,10 +2,10 @@
 
 use super::*;
 
-pub(crate) const OPERATION: &str = "json_extract(doc, '$.attrs.\"graphql.operation\"')";
-pub(crate) const QUEUE: &str = "json_extract(doc, '$.attrs.\"task.queue\"')";
-pub(crate) const STATE: &str = "json_extract(doc, '$.attrs.\"task.state\"')";
-pub(crate) const SYSTEM: &str = "json_extract(doc, '$.attrs.\"task.system\"')";
+pub(crate) const OPERATION: &str = "json_extract(attrs, '$.\"graphql.operation\"')";
+pub(crate) const QUEUE: &str = "json_extract(attrs, '$.\"task.queue\"')";
+pub(crate) const STATE: &str = "json_extract(attrs, '$.\"task.state\"')";
+pub(crate) const SYSTEM: &str = "json_extract(attrs, '$.\"task.system\"')";
 
 pub(crate) fn has(term: &Term) -> search::Clause {
     if term.op != ":" {
@@ -325,8 +325,8 @@ pub(crate) fn service_search() -> search::Schema {
     )
 }
 
-pub(crate) const SERVICE_ROLE: &str = "json_extract(doc, '$.attrs.\"service.role\"')";
-pub(crate) const LANGUAGE: &str = "json_extract(doc, '$.attrs.\"telemetry.sdk.language\"')";
+pub(crate) const SERVICE_ROLE: &str = "json_extract(attrs, '$.\"service.role\"')";
+pub(crate) const LANGUAGE: &str = "json_extract(attrs, '$.\"telemetry.sdk.language\"')";
 
 /// The services search, read against the traces: the app itself is a service too, of kind `app`, whose system is
 /// its language. The same filters then keep or drop it as they do a database.

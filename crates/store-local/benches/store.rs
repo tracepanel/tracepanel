@@ -94,6 +94,18 @@ fn list_services(bencher: Bencher) {
     bencher.bench_local(|| reader.list_services("").unwrap());
 }
 
+/// The Endpoints page: its list and its charts.
+#[divan::bench]
+fn list_endpoints(bencher: Bencher) {
+    let reader = filled();
+    bencher.bench_local(|| {
+        (
+            reader.list_endpoints("", 50).unwrap(),
+            reader.summary("", 60).unwrap(),
+        )
+    });
+}
+
 #[divan::bench]
 fn parse_a_search(bencher: Bencher) {
     bencher.bench_local(|| {
