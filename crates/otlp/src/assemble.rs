@@ -316,6 +316,10 @@ fn trace_attrs(
             "task.queue",
             &["messaging.destination.name", "messaging.source.name"],
         );
+        // The broker it took the task from: the services map's arrow from the broker to the worker.
+        for key in ["messaging.system", "server.address", "server.port"] {
+            copy(&mut out, attrs, key, &[key]);
+        }
     }
     out.insert("w3c.trace_id".into(), Value::from(hex(&root.span.trace_id)));
     if !root.span.parent_span_id.iter().all(|byte| *byte == 0) {

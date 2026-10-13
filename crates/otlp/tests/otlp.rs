@@ -111,6 +111,8 @@ fn a_service_a_trace_each_with_what_came_in() {
         )
     );
     assert_eq!(docs[2]["attrs"]["task.system"], "rabbitmq");
+    // What the services map draws the broker from.
+    assert_eq!(docs[2]["attrs"]["messaging.system"], "rabbitmq");
     assert_eq!(docs[2]["attrs"]["task.queue"], "orders");
 
     // billing's exception, as the trace's error.
