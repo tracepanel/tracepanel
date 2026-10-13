@@ -121,6 +121,56 @@ mod tests {
         }
     }
 
+    /// `cached_request` as the trace `id`, started at `start`.
+    fn request_as(id: &str, start: i64) -> Received {
+        let mut doc: Value = serde_json::from_str(&cached_request().doc).unwrap();
+        doc["id"] = id.into();
+        doc["start"] = start.into();
+        Received {
+            trace: serde_json::from_value(doc.clone()).unwrap(),
+            doc: doc.to_string(),
+        }
+    }
+
+    #[test]
+    fn rotation_keeps_the_newest_traces_and_only_their_rows() {
+        let dir =
+            std::env::temp_dir().join(format!("tracepanel-store-prune-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = path_in(&dir);
+        let mut store = Store::open(&path).unwrap();
+        store.max_traces = 10;
+        for n in 0..30 {
+            store.write(&[request_as(&format!("t{n:02}"), n)]).unwrap();
+        }
+        // Sent again: its first copy's rows go.
+        store.write(&[request_as("t29", 29)]).unwrap();
+        let db = rusqlite::Connection::open(&path).unwrap();
+        let ids = |sql: &str| -> Vec<String> {
+            let mut statement = db.prepare(sql).unwrap();
+            statement
+                .query_map([], |row| row.get(0))
+                .unwrap()
+                .collect::<Result<_, _>>()
+                .unwrap()
+        };
+
+        let kept: Vec<String> = (20..30).map(|n| format!("t{n}")).collect();
+        assert_eq!(ids("SELECT id FROM traces ORDER BY id"), kept);
+        for table in ["calls", "peers"] {
+            assert_eq!(
+                ids(&format!(
+                    "SELECT DISTINCT trace_id FROM {table} ORDER BY trace_id"
+                )),
+                kept,
+                "{table}"
+            );
+        }
+        // Seven calls a trace (three cache gets, three Redis GETs, an INCR), the one sent twice included.
+        assert_eq!(ids("SELECT COUNT(*) || '' FROM calls"), ["70"]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     /// A trace of `service` with W3C ids: called through `parent` (another trace's span), calling out through `out`.
     fn w3c_trace(
         id: &str,

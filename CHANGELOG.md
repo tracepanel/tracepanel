@@ -16,6 +16,11 @@
   whole document: Services went from 65 ms to 2 ms.
 - The store's format is version 19 (a trace's `attrs` column). The agent
   starts a new store file. The traces in the old one aren't carried over.
+- Writing traces costs less. Each insert is prepared once rather than for
+  every row, and a new trace no longer looks for rows of an earlier copy of
+  itself. Rotating a full store deletes the oldest traces' rows by their ids,
+  instead of reading every row of every table to find them. 200 traces into a
+  store at its 2,000: 552 ms, now 210 ms.
 
 ### Added
 

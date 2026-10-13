@@ -53,6 +53,8 @@ CREATE TABLE IF NOT EXISTS issue_traces (
     trace_id TEXT NOT NULL,
     PRIMARY KEY (fingerprint, trace_id)
 );
+-- Every table with rows per trace has an index on trace_id: rotation and a trace sent again delete by it.
+CREATE INDEX IF NOT EXISTS issue_traces_trace ON issue_traces (trace_id);
 CREATE TABLE IF NOT EXISTS logs (
     id INTEGER PRIMARY KEY,
     trace_id TEXT NOT NULL,
@@ -111,6 +113,7 @@ CREATE TABLE IF NOT EXISTS mails (
     html INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS mails_time ON mails (time DESC);
+CREATE INDEX IF NOT EXISTS mails_trace ON mails (trace_id);
 CREATE TABLE IF NOT EXISTS links (
     trace_id TEXT NOT NULL,
     kind TEXT NOT NULL,
@@ -154,5 +157,7 @@ CREATE INDEX IF NOT EXISTS peers_start ON peers (start DESC);
 -- Task runs whose queue carries no headers (Django Tasks) are linked to their enqueue by task id.
 CREATE TABLE IF NOT EXISTS task_enqueues (task_id TEXT NOT NULL, trace_id TEXT NOT NULL, span_id TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS task_enqueues_task ON task_enqueues (task_id);
+CREATE INDEX IF NOT EXISTS task_enqueues_trace ON task_enqueues (trace_id);
 CREATE TABLE IF NOT EXISTS task_runs (task_id TEXT NOT NULL, trace_id TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS task_runs_task ON task_runs (task_id);
+CREATE INDEX IF NOT EXISTS task_runs_trace ON task_runs (trace_id);

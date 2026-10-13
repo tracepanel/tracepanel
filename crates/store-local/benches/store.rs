@@ -18,16 +18,31 @@ const EXAMPLES: [&str; 5] = [
     include_str!("../../../schema/examples/python-django-in-transaction.json"),
 ];
 
-/// A fresh store's path: one per process and call, removed first.
-fn fresh() -> PathBuf {
-    static NEXT: AtomicUsize = AtomicUsize::new(0);
-    let dir = std::env::temp_dir().join(format!(
-        "tracepanel-bench-{}-{}",
-        std::process::id(),
-        NEXT.fetch_add(1, Ordering::Relaxed)
-    ));
-    let _ = std::fs::remove_dir_all(&dir);
-    tracepanel_store_local::path_in(&dir)
+/// A fresh store's directory, one per process and call: removed when dropped, after the measurement (a store per
+/// iteration would otherwise pile up in the temporary directory).
+struct Scratch(PathBuf);
+
+impl Scratch {
+    fn new() -> Self {
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
+        let dir = std::env::temp_dir().join(format!(
+            "tracepanel-bench-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        Self(dir)
+    }
+
+    fn store(&self) -> PathBuf {
+        tracepanel_store_local::path_in(&self.0)
+    }
+}
+
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
 }
 
 /// `count` traces as the agent stores them, each with an id of its own, their issues found.
@@ -52,21 +67,52 @@ fn received(count: usize) -> Vec<Received> {
 fn write_a_batch_of_50_traces(bencher: Bencher) {
     let batch = received(50);
     bencher
-        .with_inputs(|| Store::open(&fresh()).unwrap())
-        .bench_local_values(|mut store| {
+        .with_inputs(|| {
+            let scratch = Scratch::new();
+            (Store::open(&scratch.store()).unwrap(), scratch)
+        })
+        .bench_local_values(|(mut store, scratch)| {
             store.write(&batch).unwrap();
-            store
+            (store, scratch)
         });
 }
 
-/// A store of 500 traces, read the ways the console does.
-fn filled() -> Reader {
-    let path = fresh();
-    let mut store = Store::open(&path).unwrap();
+/// 200 traces into a store at its size (2,000 traces, the default limit), as an agent that has been running writes:
+/// in batches of 50, the last of which rotates the store (every 200 traces past the limit, the oldest go).
+#[divan::bench(sample_count = 10)]
+fn write_200_traces_into_a_full_store(bencher: Bencher) {
+    let traces = received(2200);
+    let (full, more) = traces.split_at(2000);
+    let filled = Scratch::new();
+    let mut store = Store::open(&filled.store()).unwrap();
+    for chunk in full.chunks(100) {
+        store.write(chunk).unwrap();
+    }
+    drop(store);
+    let path = filled.store();
+    bencher
+        .with_inputs(|| {
+            let scratch = Scratch::new();
+            std::fs::create_dir_all(&scratch.0).unwrap();
+            std::fs::copy(&path, scratch.store()).unwrap();
+            (Store::open(&scratch.store()).unwrap(), scratch)
+        })
+        .bench_local_values(|(mut store, scratch)| {
+            for batch in more.chunks(50) {
+                store.write(batch).unwrap();
+            }
+            (store, scratch)
+        });
+}
+
+/// A store of 500 traces, read the ways the console does; it goes with its directory.
+fn filled() -> (Reader, Scratch) {
+    let scratch = Scratch::new();
+    let mut store = Store::open(&scratch.store()).unwrap();
     for batch in received(500).chunks(50) {
         store.write(batch).unwrap();
     }
-    Reader::new(&path)
+    (Reader::new(&scratch.store()), scratch)
 }
 
 /// A search as the console sends it; "all" is no search.
@@ -76,13 +122,13 @@ fn query(name: &str) -> &str {
 
 #[divan::bench(args = ["all", "has:n+1", "status:200 duration>10ms"])]
 fn search_traces(bencher: Bencher, query_name: &str) {
-    let (reader, query) = (filled(), query(query_name));
+    let ((reader, _scratch), query) = (filled(), query(query_name));
     bencher.bench_local(|| reader.search_traces(query, 50, None).unwrap());
 }
 
 #[divan::bench(args = ["all", "system:sql"])]
 fn list_calls(bencher: Bencher, query_name: &str) {
-    let (reader, query) = (filled(), query(query_name));
+    let ((reader, _scratch), query) = (filled(), query(query_name));
     let found = reader.list_calls(query, 50).unwrap();
     assert!(!found.is_empty(), "{query_name}: no calls");
     bencher.bench_local(|| reader.list_calls(query, 50).unwrap());
@@ -90,14 +136,14 @@ fn list_calls(bencher: Bencher, query_name: &str) {
 
 #[divan::bench]
 fn list_services(bencher: Bencher) {
-    let reader = filled();
+    let (reader, _scratch) = filled();
     bencher.bench_local(|| reader.list_services("").unwrap());
 }
 
 /// The Endpoints page: its list and its charts.
 #[divan::bench]
 fn list_endpoints(bencher: Bencher) {
-    let reader = filled();
+    let (reader, _scratch) = filled();
     bencher.bench_local(|| {
         (
             reader.list_endpoints("", 50).unwrap(),
