@@ -255,7 +255,13 @@ fn server(attrs: &Attrs, into: &mut Attrs) {
 /// id of a call that carried the trace on (what links it to the trace the service it reached made).
 fn common(attrs: &Attrs) -> Attrs {
     let mut kept = Map::new();
-    for key in ["code.origin", "otel.scope", "error.type", "w3c.span_id"] {
+    for key in [
+        "code.origin",
+        "otel.scope",
+        "error.type",
+        "w3c.span_id",
+        "db.response.returned_rows",
+    ] {
         if let Some(value) = attrs.get(key) {
             kept.insert(key.into(), value.clone());
         }

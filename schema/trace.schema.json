@@ -442,7 +442,8 @@
             "in-transaction",
             "htmx",
             "queue-wait",
-            "blocking-call"
+            "blocking-call",
+            "large-result"
           ]
         },
         "title": {

@@ -104,6 +104,7 @@ const ISSUE_LABELS: Record<string, string> = {
   htmx: "htmx",
   "queue-wait": "Queue wait",
   "blocking-call": "Blocking call",
+  "large-result": "Large result",
   error: "Error",
 };
 
@@ -157,6 +158,7 @@ const ISSUE: QuickFilter = {
     { label: "htmx", terms: [f("has", ":", "htmx")] },
     { label: "Queue wait", terms: [f("has", ":", "queue-wait")] },
     { label: "Blocking call", terms: [f("has", ":", "blocking-call")] },
+    { label: "Large result", terms: [f("has", ":", "large-result")] },
     { label: "Error", terms: [f("has", ":", "error")] },
   ],
 };
@@ -251,6 +253,7 @@ const QUICK: Record<Exclude<Section, CallsSection>, Control[]> = {
         "htmx",
         "queue-wait",
         "blocking-call",
+        "large-result",
       ],
       format: (value) => ISSUE_LABELS[value] ?? value,
       display: (kind) => <IssueChip kind={kind as IssueKind} />,
@@ -349,6 +352,7 @@ const VALUES: Record<string, string[]> = {
     "htmx",
     "queue-wait",
     "blocking-call",
+    "large-result",
     "error",
     "issues",
     "logs",
@@ -369,6 +373,7 @@ const VALUES: Record<string, string[]> = {
     "htmx",
     "queue-wait",
     "blocking-call",
+    "large-result",
     "error",
   ],
   level: ["debug", "info", "warning", "error", "critical"],

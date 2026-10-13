@@ -4,6 +4,10 @@
 
 ### Added
 
+- A new issue, `large-result`: a SELECT with no LIMIT that returned
+  `large_result_rows` rows or more (1000 by default), as the SDK counts what
+  was fetched (`db.response.returned_rows`, OpenTelemetry's name for it, which
+  the OpenTelemetry mapping keeps). The hint says how to page or stream it.
 - Two new issues. `queue-wait`: a task that waited in its queue longer
   than `queue_wait_ms` (1 s by default) before a worker took it, a sign the
   workers are all busy. `blocking-call`: SQL, an HTTP call, Redis or a cache

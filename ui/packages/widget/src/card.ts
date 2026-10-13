@@ -24,6 +24,7 @@ const KIND_LABELS: Record<Issue["kind"], string> = {
   htmx: "htmx",
   "queue-wait": "Queue wait",
   "blocking-call": "Blocking call",
+  "large-result": "Large result",
   error: "Error",
 };
 

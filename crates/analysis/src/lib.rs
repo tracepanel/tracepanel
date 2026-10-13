@@ -366,6 +366,60 @@ fn sql_issues(trace: &Trace, thresholds: &Thresholds) -> Vec<Issue> {
     issues
 }
 
+/// A statement that says how many rows it wants: LIMIT, FETCH FIRST (standard SQL, Oracle), TOP (SQL Server), ROWNUM.
+static BOUNDED: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)\b(?:LIMIT|FETCH\s+(?:FIRST|NEXT)|TOP|ROWNUM)\b").unwrap());
+
+const LARGE_RESULT_HINT: &str = "The query has no LIMIT, and every row it returned was fetched (and, through an ORM, \
+                                 made into an object). Paginate (LIMIT, Django's Paginator), fetch only what the page \
+                                 shows, or for batch work stream it (.iterator()) and take only the columns used \
+                                 (.values_list()).";
+
+/// A SELECT with no LIMIT that returned `large_result_rows` rows or more (`db.response.returned_rows`, as the SDKs
+/// count what was fetched): one issue per statement, by its largest result.
+fn large_result_issues(trace: &Trace, thresholds: &Thresholds) -> Vec<Issue> {
+    let rows = |span: &Span| {
+        span.attrs
+            .get("db.response.returned_rows")
+            .and_then(Value::as_i64)
+            .unwrap_or(0)
+    };
+    let mut order: Vec<String> = Vec::new();
+    let mut groups: HashMap<String, Vec<&Span>> = HashMap::new();
+    for span in trace.spans.iter().filter(|span| span.kind == "sql") {
+        let statement = py_str(span.attrs.get("db.statement"));
+        let select = statement.trim_start().to_uppercase().starts_with("SELECT");
+        if !select || BOUNDED.is_match(&statement) || rows(span) < thresholds.large_result_rows {
+            continue;
+        }
+        let key = py_str(span.attrs.get("db.fingerprint"));
+        if !groups.contains_key(&key) {
+            order.push(key.clone());
+        }
+        groups.entry(key).or_default().push(span);
+    }
+    order
+        .into_iter()
+        .map(|key| {
+            let spans = &groups[&key];
+            let largest = spans.iter().map(|span| rows(span)).max().unwrap_or(0);
+            let culprit_text = culprit(spans);
+            issue(
+                issue_key(
+                    "large-result",
+                    &[Some(&key), culprit_key(culprit_text.as_deref()).as_deref()],
+                ),
+                "large-result",
+                format!("Large result: {largest} rows · {}", spans[0].name),
+                culprit_text,
+                Some(LARGE_RESULT_HINT),
+                spans.len(),
+                spans.iter().map(|span| span.id.clone()).collect(),
+            )
+        })
+        .collect()
+}
+
 // ---------- HTTP calls, Redis and cache ----------
 
 /// `user:42:profile` -> `user:{id}:profile`; `/users/42` -> `/users/{id}`: the item a call is about, as `{id}`.
@@ -782,6 +836,7 @@ pub fn analyze(trace: &Trace, thresholds: &Thresholds) -> Vec<Issue> {
     let mut found = calls::operation_issues(trace, thresholds);
     found.extend(transaction_issues(trace, thresholds));
     found.extend(htmx_issues(trace));
+    found.extend(large_result_issues(trace, thresholds));
     found.extend(waits::queue_issues(trace, thresholds));
     found.extend(waits::blocking_issues(trace));
     // A stable sort, as Python's sorted().
@@ -1033,6 +1088,50 @@ mod tests {
         ]);
 
         assert_eq!(found(&trace), []);
+    }
+
+    #[test]
+    fn a_select_without_a_limit_that_returned_many_rows() {
+        let query = |statement: &str, rows: i64| {
+            let attrs = serde_json::json!({
+                "db.statement": statement, "db.fingerprint": statement, "db.response.returned_rows": rows,
+                "code.origin": "app/views.py:14 in export",
+            });
+            ("sql", "SELECT product", attrs, 2_000)
+        };
+        let trace = request(&[
+            query(
+                r#"SELECT "product"."id", "product"."name" FROM "product""#,
+                25_000,
+            ),
+            // Bounded, few, or not a read: nothing.
+            query("SELECT * FROM product LIMIT 50", 50),
+            query("SELECT * FROM product LIMIT 5000", 5000),
+            query("SELECT * FROM category", 12),
+            query("UPDATE product SET price = price * 2", 25_000),
+        ]);
+
+        let issues = analyze(&trace, &Thresholds::default());
+        assert_eq!(
+            issues
+                .iter()
+                .map(|issue| (
+                    issue.kind.as_str(),
+                    issue.title.as_str(),
+                    issue.culprit.as_deref()
+                ))
+                .collect::<Vec<_>>(),
+            [(
+                "large-result",
+                "Large result: 25000 rows · SELECT product",
+                Some("app/views.py:14 in export")
+            )]
+        );
+        let relaxed = Thresholds {
+            large_result_rows: 50_000,
+            ..Thresholds::default()
+        };
+        assert!(analyze(&trace, &relaxed).is_empty());
     }
 
     #[test]
