@@ -986,6 +986,23 @@ export interface components {
             total: components["schemas"]["Duration"];
             errors: number;
         };
+        /** @description One app's calls to another, linked by the W3C trace context the call carried (a trace's `called_by`): from a role of one to a role of the other. */
+        AppLink: {
+            /** @description The calling app. */
+            service: string;
+            role: string | null;
+            /** @description The app it called. */
+            to_service: string;
+            to_role: string | null;
+            /** @description The ServiceNode the caller saw it as (its HTTP host, its RPC service), if any. */
+            peer: string | null;
+            /** @description The called app's traces. */
+            traces: number;
+            /** @description Their time. */
+            total: components["schemas"]["Duration"];
+            /** @description How many of them failed. */
+            errors: number;
+        };
         Related: {
             /** @description The trace that enqueued this task. */
             enqueued_by: components["schemas"]["TraceSummary"] | null;
@@ -999,7 +1016,11 @@ export interface components {
             sent_by: components["schemas"]["TraceSummary"] | null;
             /** @description Events that handled the channel layer messages this trace sent, oldest first. */
             delivered: components["schemas"]["TraceSummary"][];
-            /** @description For the traces in enqueued, connection_events and delivered: the span of this trace each came from (the task.enqueue or channel.send span), by trace id. The call tree shows a task under the span that enqueued it. */
+            /** @description The trace, in another app, whose call this trace served (by the W3C trace context it carried). */
+            called_by: components["schemas"]["TraceSummary"] | null;
+            /** @description The traces other apps served for this trace's calls, oldest first. */
+            calls: components["schemas"]["TraceSummary"][];
+            /** @description For the traces in enqueued, connection_events, delivered and calls: the span of this trace each came from (the task.enqueue, channel.send or outgoing call span), by trace id. The call tree shows a task under the span that enqueued it, and a call's trace under the call. */
             via: {
                 [key: string]: string;
             };
@@ -1704,6 +1725,8 @@ export interface operations {
                 content: {
                     "application/json": {
                         apps: components["schemas"]["ServiceApp"][];
+                        /** @description One app calling another, most traces first. */
+                        links: components["schemas"]["AppLink"][];
                         /** @description By kind, then by total time. */
                         services: components["schemas"]["ServiceNode"][];
                         /** @description Most time first. */

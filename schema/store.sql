@@ -112,6 +112,19 @@ CREATE TABLE IF NOT EXISTS links (
 );
 CREATE INDEX IF NOT EXISTS links_linked ON links (linked_trace);
 CREATE INDEX IF NOT EXISTS links_trace ON links (trace_id);
+-- The W3C ids a trace carries (`w3c.*` attributes): the call into it ('in': the caller's span id) and its calls that
+-- carry the trace on to another service ('out': its span, `span_id`, and the server it reached, `peer`). A trace
+-- whose 'out' span is another's 'in', in the same W3C trace, is the one that called it: `links` gets `called_by`.
+CREATE TABLE IF NOT EXISTS w3c (
+    trace_id TEXT NOT NULL,
+    w3c_trace TEXT NOT NULL,
+    w3c_span TEXT NOT NULL,
+    side TEXT NOT NULL,
+    span_id TEXT,
+    peer TEXT
+);
+CREATE INDEX IF NOT EXISTS w3c_span ON w3c (w3c_trace, w3c_span);
+CREATE INDEX IF NOT EXISTS w3c_trace ON w3c (trace_id);
 CREATE TABLE IF NOT EXISTS peers (
     trace_id TEXT NOT NULL,
     start INTEGER NOT NULL,

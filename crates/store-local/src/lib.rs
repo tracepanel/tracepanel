@@ -121,6 +121,78 @@ mod tests {
         }
     }
 
+    /// A trace of `service` with W3C ids: called through `parent` (another trace's span), calling out through `out`.
+    fn w3c_trace(
+        id: &str,
+        service: &str,
+        start: i64,
+        parent: Option<&str>,
+        out: Option<&str>,
+    ) -> Received {
+        let mut attrs = serde_json::json!({
+            "service.name": service, "service.role": "web", "w3c.trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+        });
+        if let Some(parent) = parent {
+            attrs["w3c.parent_span_id"] = parent.into();
+        }
+        let spans: Vec<Value> = out
+            .map(|out| {
+                serde_json::json!({
+                    "id": format!("{id}-call"), "parent_id": null, "kind": "http.client", "name": "POST billing/charge",
+                    "start": start + 1, "duration": 5, "status": "ok", "attrs": {
+                        "http.method": "POST", "server.address": "billing", "server.port": 8000,
+                        "url.full": "http://billing:8000/charge", "w3c.span_id": out,
+                    },
+                })
+            })
+            .into_iter()
+            .collect();
+        let doc = serde_json::json!({
+            "id": id, "kind": "http", "name": "POST /charge", "start": start, "duration": 10,
+            "status": if out.is_some() { "ok" } else { "error" }, "attrs": attrs, "spans": spans,
+            "logs": [], "errors": [], "links": [], "issues": [],
+        });
+        Received {
+            trace: serde_json::from_value(doc.clone()).unwrap(),
+            doc: doc.to_string(),
+        }
+    }
+
+    #[test]
+    fn a_call_links_the_trace_it_reached_whichever_comes_first() {
+        let dir = std::env::temp_dir().join(format!("tracepanel-store-w3c-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = path_in(&dir);
+        let mut store = Store::open(&path).unwrap();
+        let shop = || w3c_trace("SHOP", "shop", 0, None, Some("00f067aa0ba902b7"));
+        let billing = || w3c_trace("BILLING", "billing", 2, Some("00f067aa0ba902b7"), None);
+        // The called app's trace first (it ends first), then the caller's, then the callee's again (late spans).
+        store.write(&[billing()]).unwrap();
+        store.write(&[shop()]).unwrap();
+        store.write(&[billing()]).unwrap();
+        let reader = Reader::new(&path);
+
+        let to_billing = reader.related("BILLING").unwrap();
+        assert_eq!(to_billing["called_by"]["id"], "SHOP");
+        let from_shop = reader.related("SHOP").unwrap();
+        assert_eq!(
+            (
+                from_shop["calls"].as_array().unwrap().len(),
+                &from_shop["calls"][0]["id"],
+                &from_shop["via"]["BILLING"]
+            ),
+            (1, &Value::from("BILLING"), &Value::from("SHOP-call"))
+        );
+
+        let services = reader.list_services("").unwrap();
+        assert_eq!(
+            services["links"],
+            serde_json::json!([{"service": "shop", "role": "web", "to_service": "billing", "to_role": "web",
+                                "peer": "http:http/billing:8000", "traces": 1, "total": 10, "errors": 1}])
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn a_trace_received_twice_counts_once() {
         let dir =

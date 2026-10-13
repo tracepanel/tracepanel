@@ -7,7 +7,7 @@ use super::*;
 pub const SCHEMA: &str = include_str!("../../../schema/store.sql");
 pub(crate) const FTS_SCHEMA: &str =
     "CREATE VIRTUAL TABLE IF NOT EXISTS logs_fts USING fts5(message, logger)";
-pub(crate) const TABLES: [&str; 12] = [
+pub(crate) const TABLES: [&str; 13] = [
     "meta",
     "traces",
     "issues",
@@ -20,6 +20,7 @@ pub(crate) const TABLES: [&str; 12] = [
     "peers",
     "task_enqueues",
     "task_runs",
+    "w3c",
 ];
 pub(crate) const LEVELS: [(&str, i64); 5] = [
     ("debug", 10),
@@ -118,7 +119,7 @@ pub(crate) fn prune(db: &Connection, fts: bool, max_traces: i64) -> rusqlite::Re
 }
 
 /// The tables with rows per trace: a trace's statements, calls, logs, issues, peers and links.
-const PER_TRACE: [&str; 8] = [
+const PER_TRACE: [&str; 9] = [
     "logs",
     "calls",
     "issue_traces",
@@ -127,6 +128,7 @@ const PER_TRACE: [&str; 8] = [
     "peers",
     "task_enqueues",
     "task_runs",
+    "w3c",
 ];
 
 fn delete_rows<P: rusqlite::Params + Clone>(
@@ -328,6 +330,7 @@ pub(crate) fn write_trace(
         )?;
     }
     link_tasks(db, trace)?;
+    link_calls(db, trace)?;
     for span in trace.spans.iter().filter(|span| span.kind == "mail") {
         let recipients: BTreeSet<String> = ["mail.to", "mail.cc"]
             .iter()
@@ -377,6 +380,38 @@ pub(crate) fn write_trace(
             params![issue.fingerprint, trace.id],
         )?;
     }
+    Ok(())
+}
+
+/// Link a service's trace to the trace that called it, by the W3C ids both carry, whichever is written first: the
+/// caller's span that carried the trace on is the callee's parent.
+pub(crate) fn link_calls(db: &Connection, trace: &Trace) -> rusqlite::Result<()> {
+    let Some(w3c_trace) = text(trace.attrs.get("w3c.trace_id")) else {
+        return Ok(());
+    };
+    if let Some(parent) = text(trace.attrs.get("w3c.parent_span_id")) {
+        db.execute(
+            "INSERT INTO w3c (trace_id, w3c_trace, w3c_span, side) VALUES (?1, ?2, ?3, 'in')",
+            params![trace.id, w3c_trace, parent],
+        )?;
+    }
+    for span in &trace.spans {
+        let Some(w3c_span) = text(span.attrs.get("w3c.span_id")) else {
+            continue;
+        };
+        db.execute(
+            "INSERT INTO w3c (trace_id, w3c_trace, w3c_span, side, span_id, peer) VALUES (?1, ?2, ?3, 'out', ?4, ?5)",
+            params![trace.id, w3c_trace, w3c_span, span.id, services::peer(span).map(|peer| peer.id())],
+        )?;
+    }
+    db.execute(
+        "INSERT INTO links (trace_id, kind, linked_trace, linked_span)
+         SELECT callee.trace_id, 'called_by', caller.trace_id, caller.span_id
+         FROM w3c callee JOIN w3c caller ON caller.w3c_trace = callee.w3c_trace AND caller.w3c_span = callee.w3c_span
+         WHERE callee.side = 'in' AND caller.side = 'out' AND (callee.trace_id = ?1 OR caller.trace_id = ?1)
+           AND NOT EXISTS (SELECT 1 FROM links WHERE trace_id = callee.trace_id AND kind = 'called_by')",
+        params![trace.id],
+    )?;
     Ok(())
 }
 

@@ -78,6 +78,14 @@ To run the agent in the foreground, with the console on http://127.0.0.1:8765/:
 tracepanel dev
 ```
 
+## OpenTelemetry
+
+The agent also takes OpenTelemetry spans over OTLP/HTTP, on
+`127.0.0.1:4318`, where OpenTelemetry's exporters send them by default. A
+service that exports its traces with OpenTelemetry shows in the console while
+the agent runs, with no Tracepanel SDK in it. The agent reads the spans by
+OpenTelemetry's semantic conventions and finds the same issues in them.
+
 ## Use with an AI coding agent
 
 ```bash

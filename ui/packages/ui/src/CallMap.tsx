@@ -1,4 +1,13 @@
-import { Fragment, type ReactNode, type RefObject, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  Fragment,
+  type ReactNode,
+  type RefObject,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { duration, percent } from "./format";
 import { GraphqlCode } from "./GraphqlCode";
 import { ChevronRightIcon, CloseIcon } from "./icons";
@@ -20,9 +29,10 @@ type Node =
   | { type: "group"; key: string; spans: Span[]; start: number; end: number }
   | { type: "log"; key: string; log: Log }
   | { type: "error"; key: string; error: TraceError }
-  // A task this trace enqueued, under its task.enqueue span: run in a worker (a trace of its own) or still waiting.
-  | { type: "task"; key: string; run: TraceSummary }
-  | { type: "waiting"; key: string; span: Span };
+  // A trace of its own under a span of this one: a task it enqueued, run in a worker (or still waiting for one), or
+  // the trace another app served for one of its calls (`kind: "call"`).
+  | { type: "task"; key: string; run: TraceSummary; kind: "task" | "call" }
+  | { type: "waiting"; key: string; span: Span; kind: "task" };
 
 function startOf(node: Node): number {
   if (node.type === "span" || node.type === "waiting") return node.span.start;
@@ -83,25 +93,33 @@ function collapse(nodes: Node[]): Node[] {
   return result;
 }
 
+/** Each trace of its own under a span of this one, by that span's id. */
+function linked(runs: readonly TraceSummary[], related: Related, kind: "task" | "call"): [string, Node][] {
+  return runs.flatMap((run): [string, Node][] => {
+    const span = related.via[run.id];
+    return span ? [[span, { type: "task", key: `${kind}:${run.id}`, run, kind }]] : [];
+  });
+}
+
+/**
+ * Tasks under the span that enqueued them (an enqueue with no run yet is waiting for a worker), and the traces other
+ * apps served under the call that reached them.
+ */
+function linkedNodes(trace: Trace, related: Related | undefined): [string, Node][] {
+  if (!related) return [];
+  const tasks = linked(related.enqueued, related, "task");
+  const run = new Set(tasks.map(([span]) => span));
+  const waiting = trace.spans
+    .filter((span) => span.kind === "task.enqueue" && !run.has(span.id))
+    .map((span): [string, Node] => [span.id, { type: "waiting", key: `waiting:${span.id}`, span, kind: "task" }]);
+  return [...tasks, ...linked(related.calls, related, "call"), ...waiting];
+}
+
 function buildTree(trace: Trace, related: Related | undefined): Node[] {
   const children = new Map<string | null, Node[]>();
   const push = (parent: string | null, node: Node) => children.set(parent, [...(children.get(parent) ?? []), node]);
   for (const span of trace.spans) push(span.parent_id, { type: "span", key: span.id, span, children: [] });
-  // Tasks go under the span that enqueued them; an enqueue with no run yet is waiting for a worker.
-  const enqueuedBy = new Set<string>();
-  for (const run of related?.enqueued ?? []) {
-    const span = related?.via[run.id];
-    if (!span) continue;
-    enqueuedBy.add(span);
-    push(span, { type: "task", key: `task:${run.id}`, run });
-  }
-  if (related) {
-    for (const span of trace.spans) {
-      if (span.kind === "task.enqueue" && !enqueuedBy.has(span.id)) {
-        push(span.id, { type: "waiting", key: `waiting:${span.id}`, span });
-      }
-    }
-  }
+  for (const [parent, node] of linkedNodes(trace, related)) push(parent, node);
   for (const { key, item } of keyed(trace.logs, (log) => `log:${log.time}:${log.message}`)) {
     push(item.span_id, { type: "log", key, log: item });
   }
@@ -147,7 +165,7 @@ const FILTER_OF = new Map<string, FilterId>(FILTERS.flatMap((filter) => filter.k
 function kindOf(node: Node): string {
   if (node.type === "span") return node.span.kind;
   if (node.type === "group") return node.spans[0]?.kind ?? "";
-  if (node.type === "task" || node.type === "waiting") return "task";
+  if (node.type === "task" || node.type === "waiting") return node.kind;
   return node.type;
 }
 
@@ -359,6 +377,72 @@ function Bar({ trace, start, length, point }: { trace: Trace; start: number; len
   );
 }
 
+/** A trace of its own under a span of this one: a task (or one waiting for a worker), or another app's trace. */
+type Linked = Extract<Node, { type: "task" | "waiting" }>;
+
+/** How a linked row looks: its kind, its text, its bar on the request's timeline and its time. */
+interface LinkedView {
+  status: string | undefined;
+  kind: string;
+  text: ReactNode;
+  track: ReactNode;
+  time: string;
+}
+
+/** A task's run in a worker, or the trace another app served for a call. */
+function runView(node: Extract<Node, { type: "task" }>, trace: Trace): LinkedView {
+  return {
+    status: node.run.status,
+    kind: node.kind === "call" ? "app" : "task",
+    text: (
+      <>
+        <span className="dt-map-text">{node.run.name}</span>
+        <TaskState state={node.run.task_state} />
+      </>
+    ),
+    track: <Bar trace={trace} start={node.run.start} length={node.run.duration} />,
+    time: duration(node.run.duration),
+  };
+}
+
+/** A task enqueued that no worker has run yet. */
+function waitingView(node: Extract<Node, { type: "waiting" }>, trace: Trace): LinkedView {
+  return {
+    status: undefined,
+    kind: "task",
+    text: <span className="dt-map-text dt-map-waiting">waiting for a worker…</span>,
+    track: <span className="dt-map-track" aria-hidden="true" />,
+    time: `+${duration(Math.max(node.span.start - trace.start, 0))}`,
+  };
+}
+
+/** A trace of its own under a span of this one: a task (or one waiting for a worker), or another app's trace. */
+function LinkedRow({ node, ctx, indent, dim }: { node: Linked; ctx: RowContext; indent: CSSProperties; dim: boolean }) {
+  const view = node.type === "task" ? runView(node, ctx.trace) : waitingView(node, ctx.trace);
+  return (
+    <Fragment>
+      <button
+        type="button"
+        className="dt-map-row"
+        data-dim={dim ? "" : undefined}
+        data-kind="task"
+        data-status={view.status}
+        aria-current={ctx.selected === node.key ? "true" : undefined}
+        onClick={() => ctx.onSelect(node.key)}
+      >
+        <span className="dt-map-name" style={indent}>
+          <span className="dt-map-caret" />
+          <span className="dt-map-kind">{view.kind}</span>
+          {view.text}
+        </span>
+        {view.track}
+        <span className="dt-map-time">{view.time}</span>
+      </button>
+      <RowDetails id={node.key} ctx={ctx} />
+    </Fragment>
+  );
+}
+
 function Rows({ nodes, depth, ctx }: { nodes: Node[]; depth: number; ctx: RowContext }) {
   return (
     <>
@@ -396,42 +480,7 @@ function Rows({ nodes, depth, ctx }: { nodes: Node[]; depth: number; ctx: RowCon
           );
         }
         if (node.type === "task" || node.type === "waiting") {
-          const after = (node.type === "task" ? node.run.start : node.span.start) - ctx.trace.start;
-          return (
-            <Fragment key={node.key}>
-              <button
-                type="button"
-                className="dt-map-row"
-                data-dim={mark === "path" ? "" : undefined}
-                data-kind="task"
-                data-status={node.type === "task" ? node.run.status : undefined}
-                aria-current={ctx.selected === node.key ? "true" : undefined}
-                onClick={() => ctx.onSelect(node.key)}
-              >
-                <span className="dt-map-name" style={indent}>
-                  <span className="dt-map-caret" />
-                  <span className="dt-map-kind">task</span>
-                  {node.type === "task" ? (
-                    <>
-                      <span className="dt-map-text">{node.run.name}</span>
-                      <TaskState state={node.run.task_state} />
-                    </>
-                  ) : (
-                    <span className="dt-map-text dt-map-waiting">waiting for a worker…</span>
-                  )}
-                </span>
-                {node.type === "task" ? (
-                  <Bar trace={ctx.trace} start={node.run.start} length={node.run.duration} />
-                ) : (
-                  <span className="dt-map-track" aria-hidden="true" />
-                )}
-                <span className="dt-map-time">
-                  {node.type === "task" ? duration(node.run.duration) : `+${duration(Math.max(after, 0))}`}
-                </span>
-              </button>
-              <RowDetails id={node.key} ctx={ctx} />
-            </Fragment>
-          );
+          return <LinkedRow key={node.key} node={node} ctx={ctx} indent={indent} dim={mark === "path"} />;
         }
         if (node.type === "group") {
           const open = ctx.collapsed.has(`open:${node.key}`);
@@ -556,40 +605,71 @@ function findNode(nodes: Node[], key: string): Node | undefined {
   return undefined;
 }
 
+/** How a run's details name it: a task a worker ran, or the trace another app served for a call. */
+const RUN_WORDS = {
+  task: { what: "task", label: "Task", open: "Open the task's trace →" },
+  call: { what: "served by another app", label: "Trace", open: "Open the trace it served →" },
+} as const;
+
+/** A run's numbers: its name, a task's state, its queries and issues. */
+function runRows(run: TraceSummary, label: string) {
+  return [
+    { label, value: run.name, copy: run.name, mono: true },
+    ...(run.task_state ? [{ label: "State", value: <TaskState state={run.task_state} /> }] : []),
+    { label: "Queries", value: String(run.queries) },
+    ...(run.issues ? [{ label: "Issues", value: String(run.issues) }] : []),
+  ];
+}
+
+/** A trace of its own this trace led to: what it was, when it started, how long it took, a link to it. */
+function RunDetails({
+  run,
+  kind,
+  trace,
+  links,
+}: {
+  run: TraceSummary;
+  kind: "task" | "call";
+  trace: Trace;
+  links?: TraceLinks | undefined;
+}) {
+  const words = RUN_WORDS[kind];
+  const open = links?.trace;
+  return (
+    <div className="grid gap-3 p-4">
+      <p className="dt-map-details-title">
+        {words.what} · started {duration(Math.max(run.start - trace.start, 0))} after this request · took{" "}
+        {duration(run.duration)}
+      </p>
+      <PropTable rows={runRows(run, words.label)} />
+      {open ? (
+        <a className="dt-map-open" {...linkProps(links, open(run.id))}>
+          {words.open}
+        </a>
+      ) : null}
+    </div>
+  );
+}
+
+/** A task this trace enqueued that no worker has run yet. */
+function WaitingDetails({ span }: { span: Span }) {
+  const name = String(span.attrs["task.name"] ?? span.name);
+  return (
+    <div className="grid gap-3 p-4">
+      <p className="dt-map-details-title">task · enqueued, not run yet</p>
+      <PropTable rows={[{ label: "Task", value: name, copy: name, mono: true }]} />
+      <p className="text-sm text-muted-foreground">It shows up here once a worker has run it (is a worker running?).</p>
+    </div>
+  );
+}
+
+function LinkedDetails({ node, trace, links }: { node: Linked; trace: Trace; links?: TraceLinks | undefined }) {
+  if (node.type === "waiting") return <WaitingDetails span={node.span} />;
+  return <RunDetails run={node.run} kind={node.kind} trace={trace} links={links} />;
+}
+
 function Details({ node, trace, links }: { node: Node; trace: Trace; links?: TraceLinks | undefined }) {
-  if (node.type === "task" || node.type === "waiting") {
-    const run = node.type === "task" ? node.run : null;
-    const name =
-      run?.name ?? (node.type === "waiting" ? String(node.span.attrs["task.name"] ?? node.span.name) : "task");
-    return (
-      <div className="grid gap-3 p-4">
-        <p className="dt-map-details-title">
-          task ·{" "}
-          {run
-            ? `started ${duration(Math.max(run.start - trace.start, 0))} after this request · took ${duration(run.duration)}`
-            : "enqueued, not run yet"}
-        </p>
-        <PropTable
-          rows={[
-            { label: "Task", value: name, copy: name, mono: true },
-            ...(run?.task_state ? [{ label: "State", value: <TaskState state={run.task_state} /> }] : []),
-            ...(run ? [{ label: "Queries", value: String(run.queries) }] : []),
-            ...(run?.issues ? [{ label: "Issues", value: String(run.issues) }] : []),
-          ]}
-        />
-        {run && links?.trace ? (
-          <a className="dt-map-open" {...linkProps(links, links.trace(run.id))}>
-            Open the task's trace →
-          </a>
-        ) : null}
-        {run ? null : (
-          <p className="text-sm text-muted-foreground">
-            It shows up here once a worker has run it (is a worker running?).
-          </p>
-        )}
-      </div>
-    );
-  }
+  if (node.type === "task" || node.type === "waiting") return <LinkedDetails node={node} trace={trace} links={links} />;
   if (node.type === "log") {
     return (
       <div className="grid gap-3 p-4">
