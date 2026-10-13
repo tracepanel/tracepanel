@@ -1505,7 +1505,7 @@ mod tests {
         assert_eq!(
             found(&request(&[call])),
             [(
-                "slow-http".to_owned(),
+                "slow-call".to_owned(),
                 "Slow gRPC call: 700 ms · Users/Get".to_owned(),
                 1
             )]
@@ -1523,6 +1523,88 @@ mod tests {
         assert_eq!(
             found(&request(&[get("user:1"), get("user:2"), get("user:3")])),
             []
+        );
+    }
+
+    #[test]
+    fn a_slow_mongodb_query_names_the_index_its_filter_needs() {
+        let find = op(
+            "mongodb",
+            "find users",
+            serde_json::json!({"db.system": "mongodb", "db.operation": "find", "db.collection.name": "users",
+                               "db.statement": "{\"find\": \"users\", \"filter\": {\"$or\": [{\"email\": \"?\"}, {\"phone\": \"?\"}], \"active\": \"?\"}, \"sort\": {\"created\": -1}}"}),
+            150_000,
+        );
+        let issues = analyze(&request(&[find]), &Thresholds::default());
+
+        assert_eq!(
+            issues
+                .iter()
+                .map(|issue| (issue.kind.as_str(), issue.title.as_str()))
+                .collect::<Vec<_>>(),
+            [("slow-call", "Slow MongoDB query: 150 ms · find users")]
+        );
+        assert!(
+            issues[0]
+                .hint
+                .as_deref()
+                .unwrap_or_default()
+                .ends_with(
+                    "(COLLSCAN in `explain()`) when no index covers the filter: \
+                     `db.users.createIndex({\"email\": 1, \"phone\": 1, \"active\": 1, \"created\": 1})`."
+                ),
+            "{:?}",
+            issues[0].hint
+        );
+        // By _id alone: always indexed, the general hint.
+        let by_id = op(
+            "mongodb",
+            "find users",
+            serde_json::json!({"db.system": "mongodb", "db.operation": "find", "db.collection.name": "users",
+                               "db.statement": "{\"find\": \"users\", \"filter\": {\"_id\": \"?\"}}"}),
+            150_000,
+        );
+        let hint = analyze(&request(&[by_id]), &Thresholds::default())[0]
+            .hint
+            .clone()
+            .unwrap_or_default();
+        assert!(!hint.contains("createIndex"), "{hint}");
+    }
+
+    #[test]
+    fn repeats_get_their_system_s_own_way_to_batch() {
+        let hint_of = |kind: &'static str, attrs: Value| {
+            let call = || op(kind, "call", attrs.clone(), 1000);
+            analyze(&request(&[call(), call(), call()]), &Thresholds::default())[0]
+                .hint
+                .clone()
+                .unwrap_or_default()
+        };
+
+        assert!(
+            hint_of(
+                "sqs",
+                serde_json::json!({"messaging.system": "sqs", "messaging.destination.name": "jobs"})
+            )
+            .contains("SendMessageBatch")
+        );
+        assert!(hint_of("kafka", serde_json::json!({"messaging.system": "kafka", "messaging.destination.name": "orders"}))
+            .contains("flush once"));
+        assert!(
+            hint_of(
+                "dynamodb",
+                serde_json::json!({"db.system": "dynamodb", "db.operation": "GetItem",
+                                                       "db.collection.name": "users"})
+            )
+            .contains("BatchGetItem")
+        );
+        // A system with no way of its own: the family's.
+        assert!(
+            hint_of(
+                "db",
+                serde_json::json!({"db.system": "neo4j", "db.operation": "MATCH"})
+            )
+            .starts_with("Fetch the items in one query")
         );
     }
 

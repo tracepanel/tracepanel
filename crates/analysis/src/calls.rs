@@ -224,8 +224,104 @@ struct Rules {
     duplicates_hint: Option<&'static str>,
     /// Repeats are an issue only when they cost `n_plus_one_min_ms` together (an in-memory store).
     cheap: bool,
-    /// The slow-call issue: (issue kind, title prefix). Its threshold is `slow_http_ms`.
-    slow: Option<(&'static str, String)>,
+    /// The slow-call issue, if the family has one.
+    slow: Option<Slow>,
+}
+
+/// A family's slow-call issue: its kind, its title's prefix, its threshold and its hint.
+struct Slow {
+    kind: &'static str,
+    prefix: String,
+    threshold_ms: fn(&Thresholds) -> i64,
+    hint: &'static str,
+}
+
+const SLOW_DATASTORE: &str = "Look at the query's plan in the datastore: an index on the fields it filters and sorts \
+                              by, or a narrower query (fewer fields, a limit), usually makes it fast.";
+const SLOW_RPC: &str = "The request waits for the other service: set a deadline, cache the answer, or make the call \
+                        outside the request.";
+
+/// What to do about repeats of one system's calls, where it has a way of its own (else the family's hint).
+fn repeated_hint(system: &str) -> Option<&'static str> {
+    Some(match system {
+        "mongodb" => {
+            "Fetch the documents in one query: an `$in` filter on the field (`{\"_id\": {\"$in\": ids}}`), or a \
+             `$lookup` in an aggregation, instead of one `find` per item."
+        }
+        "elasticsearch" => {
+            "Fetch the documents in one request: `_mget` for ids, `_msearch` for searches, instead of one per item."
+        }
+        "dynamodb" => {
+            "Read the items in one `BatchGetItem` (up to 100 keys), and write them with `BatchWriteItem`, instead of \
+             one call per item."
+        }
+        "cassandra" => {
+            "Read the rows in one query (`IN` on the partition key), or run the statements concurrently, instead of \
+             one after the other."
+        }
+        "kafka" => {
+            "Produce the messages without waiting for each: send them in the loop and flush once after it, and the \
+             producer batches them (`linger.ms`, `batch.size`)."
+        }
+        "rabbitmq" => {
+            "Publish the messages on one channel without waiting for each confirm: publish in the loop, then wait for \
+             the confirms once."
+        }
+        "sqs" => {
+            "Send up to 10 messages at a time with `SendMessageBatch` instead of one `SendMessage` per item."
+        }
+        _ => return None,
+    })
+}
+
+/// The fields a MongoDB query filters by: a filter's own keys, and those inside `$and`, `$or` and `$nor`.
+fn filtered_fields(filter: &Value, fields: &mut Vec<String>) {
+    let Some(object) = filter.as_object() else {
+        return;
+    };
+    for (key, value) in object {
+        if matches!(key.as_str(), "$and" | "$or" | "$nor") {
+            for item in value.as_array().into_iter().flatten() {
+                filtered_fields(item, fields);
+            }
+        } else if !key.starts_with('$') && !fields.contains(key) {
+            fields.push(key.clone());
+        }
+    }
+}
+
+/// For a slow MongoDB query: the index its filter and sort need, as the shell creates it. MongoDB reads every
+/// document of the collection (COLLSCAN in its plan) when no index covers the filter.
+fn mongodb_index(span: &Span) -> Option<String> {
+    let statement: Value = serde_json::from_str(&text(&span.attrs, "db.statement")?).ok()?;
+    let collection = text(&span.attrs, "db.collection.name")?;
+    let filter = statement
+        .get("filter")
+        .or_else(|| statement.get("query"))
+        .or_else(|| statement["pipeline"].as_array()?.first()?.get("$match"))?;
+    let mut fields = Vec::new();
+    filtered_fields(filter, &mut fields);
+    for key in statement["sort"]
+        .as_object()
+        .into_iter()
+        .flat_map(|sort| sort.keys())
+    {
+        if !fields.contains(key) {
+            fields.push(key.clone());
+        }
+    }
+    if fields.is_empty() || fields == ["_id"] {
+        return None;
+    }
+    let keys = fields
+        .iter()
+        .map(|field| format!("\"{field}\": 1"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    Some(format!(
+        "{SLOW_DATASTORE} MongoDB reads every document of `{collection}` (COLLSCAN in `explain()`) when no index covers \
+         the filter: `db.{collection}.createIndex({{{keys}}})`."
+    ))
 }
 
 const DATASTORE_REPEATED: &str =
@@ -247,7 +343,12 @@ fn rules(family: &str, system: &str) -> Option<Rules> {
             repeated_hint: HTTP_REPEATED,
             duplicates_hint: Some(HTTP_DUPLICATES),
             cheap: false,
-            slow: Some(("slow-http", "Slow HTTP call".into())),
+            slow: Some(Slow {
+                kind: "slow-http",
+                prefix: "Slow HTTP call".into(),
+                threshold_ms: |thresholds| thresholds.slow_http_ms,
+                hint: SLOW_HTTP,
+            }),
         },
         "redis" => Rules {
             label: "Redis commands".into(),
@@ -268,7 +369,7 @@ fn rules(family: &str, system: &str) -> Option<Rules> {
             repeated_hint: if IN_MEMORY.contains(&system) {
                 CACHE_REPEATED
             } else {
-                DATASTORE_REPEATED
+                repeated_hint(system).unwrap_or(DATASTORE_REPEATED)
             },
             duplicates_hint: Some(if IN_MEMORY.contains(&system) {
                 CACHE_DUPLICATES
@@ -276,11 +377,17 @@ fn rules(family: &str, system: &str) -> Option<Rules> {
                 DATASTORE_DUPLICATES
             }),
             cheap: IN_MEMORY.contains(&system),
-            slow: None,
+            // A query in memory is never slow enough to matter; any other is, past `slow_sql_ms`, as SQL.
+            slow: (!IN_MEMORY.contains(&system)).then(|| Slow {
+                kind: "slow-call",
+                prefix: format!("Slow {name} query"),
+                threshold_ms: |thresholds| thresholds.slow_sql_ms,
+                hint: SLOW_DATASTORE,
+            }),
         },
         "messaging" => Rules {
             label: format!("{name} messages"),
-            repeated_hint: MESSAGING_REPEATED,
+            repeated_hint: repeated_hint(system).unwrap_or(MESSAGING_REPEATED),
             duplicates_hint: None,
             cheap: false,
             slow: None,
@@ -290,7 +397,12 @@ fn rules(family: &str, system: &str) -> Option<Rules> {
             repeated_hint: RPC_REPEATED,
             duplicates_hint: Some(RPC_DUPLICATES),
             cheap: false,
-            slow: Some(("slow-http", format!("Slow {name} call"))),
+            slow: Some(Slow {
+                kind: "slow-call",
+                prefix: format!("Slow {name} call"),
+                threshold_ms: |thresholds| thresholds.slow_http_ms,
+                hint: SLOW_RPC,
+            }),
         },
         _ => return None,
     })
@@ -470,20 +582,27 @@ fn group_issues(
             ));
         }
     }
-    if let Some((kind, prefix)) = &rules.slow {
+    if let Some(rule) = &rules.slow {
+        let threshold_us = (rule.threshold_ms)(thresholds) * 1000;
         let slow: Vec<&Span> = spans
             .iter()
             .copied()
-            .filter(|span| span.duration >= thresholds.slow_http_ms * 1000)
+            .filter(|span| span.duration >= threshold_us)
             .collect();
-        if !slow.is_empty() {
-            let slowest = slow.iter().map(|span| span.duration).max().unwrap_or(0);
+        if let Some(slowest) = slow.iter().max_by_key(|span| span.duration) {
+            let hint = (slowest.kind == "mongodb")
+                .then(|| mongodb_index(slowest))
+                .flatten();
             issues.push(issue(
-                issue_key(kind, &[Some(&key), key_culprit.as_deref()]),
-                kind,
-                format!("{prefix}: {} ms · {title}", milliseconds(slowest)),
+                issue_key(rule.kind, &[Some(&key), key_culprit.as_deref()]),
+                rule.kind,
+                format!(
+                    "{}: {} ms · {title}",
+                    rule.prefix,
+                    milliseconds(slowest.duration)
+                ),
                 culprit(&slow),
-                Some(SLOW_HTTP),
+                Some(hint.as_deref().unwrap_or(rule.hint)),
                 slow.len(),
                 slow.iter().map(|span| span.id.clone()).collect(),
             ));

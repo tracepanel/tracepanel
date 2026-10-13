@@ -516,7 +516,7 @@ export interface components {
         /** @description Microseconds. */
         Duration: number;
         /** @enum {string} */
-        IssueKind: "n+1" | "duplicates" | "slow-sql" | "slow-http" | "error" | "long-transaction" | "in-transaction" | "htmx" | "queue-wait" | "blocking-call" | "large-result";
+        IssueKind: "n+1" | "duplicates" | "slow-sql" | "slow-http" | "slow-call" | "error" | "long-transaction" | "in-transaction" | "htmx" | "queue-wait" | "blocking-call" | "large-result";
         /** @description A trace without its document, as in lists. */
         TraceSummary: {
             id: string;
@@ -1189,7 +1189,7 @@ export interface components {
             fingerprint: string;
             fingerprint_version: number;
             /** @enum {unknown} */
-            kind: "n+1" | "duplicates" | "slow-sql" | "slow-http" | "error" | "long-transaction" | "in-transaction" | "htmx" | "queue-wait" | "blocking-call" | "large-result";
+            kind: "n+1" | "duplicates" | "slow-sql" | "slow-http" | "slow-call" | "error" | "long-transaction" | "in-transaction" | "htmx" | "queue-wait" | "blocking-call" | "large-result";
             title: string;
             /** @description Where in the project code it happens, e.g. "blog/views.py:21 in post_list". */
             culprit: string | null;
@@ -1300,7 +1300,7 @@ export interface components {
                     fingerprint: string;
                     fingerprint_version: number;
                     /** @enum {unknown} */
-                    kind: "n+1" | "duplicates" | "slow-sql" | "slow-http" | "error" | "long-transaction" | "in-transaction" | "htmx" | "queue-wait" | "blocking-call" | "large-result";
+                    kind: "n+1" | "duplicates" | "slow-sql" | "slow-http" | "slow-call" | "error" | "long-transaction" | "in-transaction" | "htmx" | "queue-wait" | "blocking-call" | "large-result";
                     title: string;
                     /** @description Where in the project code it happens, e.g. "blog/views.py:21 in post_list". */
                     culprit: string | null;

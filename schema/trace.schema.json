@@ -438,6 +438,7 @@
             "duplicates",
             "slow-sql",
             "slow-http",
+            "slow-call",
             "error",
             "long-transaction",
             "in-transaction",
