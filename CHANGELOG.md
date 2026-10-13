@@ -4,6 +4,10 @@
 
 ### Changed
 
+- Finding a trace's issues costs half what it did: the issues go into its
+  document without parsing the whole document into a tree and writing it out
+  again, which cost three times the analysis itself (Django's N+1 example:
+  928 µs, now 413 µs).
 - The console's lists read less. The calls lists (Database, Redis, Cache,
   HTTP and the other systems) count calls from one index, without reading the
   table: on 500 traces, 52 ms became 10 ms. The Services page, and the pages

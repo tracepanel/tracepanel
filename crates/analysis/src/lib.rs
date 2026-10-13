@@ -5,8 +5,9 @@
 
 use regex::Regex;
 use serde_json::Value;
+use serde_json::value::RawValue;
 use sha1::{Digest, Sha1};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::LazyLock;
 use tracepanel_protocol::{Attrs, Issue, Span, Thresholds, Trace};
 
@@ -859,11 +860,19 @@ pub fn apply(received: &mut tracepanel_protocol::Received, thresholds: &Threshol
     if issues.is_empty() {
         return;
     }
-    if let Ok(mut doc) = serde_json::from_str::<Value>(&received.doc) {
-        doc["issues"] = serde_json::to_value(&issues).unwrap_or_default();
-        received.doc = doc.to_string();
+    if let Some(doc) = with_issues(&received.doc, &issues) {
+        received.doc = doc;
     }
     received.trace.issues = issues;
+}
+
+/// The document with its issues in: its other fields as they came, unparsed (a trace's document is most of its size,
+/// and a whole tree of it cost three times what finding the issues did). Its keys sorted, as before.
+fn with_issues(doc: &str, issues: &[Issue]) -> Option<String> {
+    let mut fields: BTreeMap<String, &RawValue> = serde_json::from_str(doc).ok()?;
+    let issues = serde_json::value::to_raw_value(issues).ok()?;
+    fields.insert("issues".to_owned(), &issues);
+    serde_json::to_string(&fields).ok()
 }
 
 /// Issues in a finished trace: errors first, then the rest by occurrence count.
@@ -913,6 +922,29 @@ mod tests {
         assert!(BY_PK.is_match(r#"SELECT * FROM "auth_user" WHERE "auth_user"."id" = %s"#));
         assert!(BY_PK.is_match("SELECT * FROM users WHERE id = $1"));
         assert!(!BY_PK.is_match("SELECT * FROM users WHERE author_id = ?"));
+    }
+
+    #[test]
+    fn a_document_gets_its_issues_and_keeps_the_rest_as_it_came() {
+        let issue = Issue {
+            fingerprint: "f".into(),
+            fingerprint_version: 1,
+            kind: "n+1".into(),
+            title: "N+1".into(),
+            culprit: None,
+            hint: None,
+            count: 3,
+            span_ids: vec!["s".into()],
+        };
+        let doc = r#"{"name":"GET /","issues":[],"attrs":{"z":1,"a":"\u00e9 1.50"}}"#;
+
+        assert_eq!(
+            with_issues(doc, std::slice::from_ref(&issue)).as_deref(),
+            Some(
+                r#"{"attrs":{"z":1,"a":"\u00e9 1.50"},"issues":[{"fingerprint":"f","fingerprint_version":1,"kind":"n+1","title":"N+1","culprit":null,"hint":null,"count":3,"span_ids":["s"]}],"name":"GET /"}"#
+            )
+        );
+        assert_eq!(with_issues("not json", &[issue]), None);
     }
 
     #[test]
