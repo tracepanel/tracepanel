@@ -14,16 +14,14 @@ language shows through OpenTelemetry.
 
 It runs while you develop. Nothing leaves your machine.
 
-## Status
-
-Tracepanel is in alpha. Its pre-releases are on PyPI:
+## Install
 
 ```bash
-pip install --pre tracepanel
+pip install tracepanel
 ```
 
-installs the Python SDK and the agent it starts. Things still change between
-pre-releases.
+installs the Python SDK and the agent it starts, at the same version. The
+documentation is at [tracepanel.dev/docs](https://tracepanel.dev/docs).
 
 ## Run without changing your code
 
