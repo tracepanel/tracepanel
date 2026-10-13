@@ -4,6 +4,12 @@
 
 ### Added
 
+- The agent takes OpenTelemetry spans over OTLP/HTTP (`--otlp`, by default
+  127.0.0.1:4318, where exporters send them unless told otherwise), protobuf
+  or JSON, gzipped or not. A service exporting with any OpenTelemetry SDK
+  shows in the console with no Tracepanel SDK: each service's work for one
+  request, task or command is a trace, its spans mapped by the semantic
+  conventions and analyzed as an SDK's. A port in use is said and skipped.
 - Tiles above a system's page sum up its calls, all of them and with the
   page's filters: how many and in how many requests, their time and p95, how
   many per request (up to the most in one), how many failed (a click shows

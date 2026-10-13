@@ -1,6 +1,7 @@
 //! `tracepanel-agent`: the project's agent. It receives the traces its processes record (an SDK in each: Python, Go)
 //! over a unix socket (TCP on Windows, or with `--listen tcp:HOST:PORT`), finds their issues, keeps them in the
-//! project's store and, with `--serve`, serves the console. Its addresses go to `<dir>/agent.addr` and
+//! project's store and, with `--serve`, serves the console. OpenTelemetry exporters send it their spans over OTLP/HTTP
+//! (`--otlp`, 127.0.0.1:4318 by default, where they send them unless told otherwise). Its addresses go to `<dir>/agent.addr` and
 //! `<dir>/console.addr`, where the SDKs look for them. With `TRACEPANEL_KEY` set, it also sends the traces it keeps
 //! to Tracepanel Cloud (`tracepanel-sender`).
 
@@ -25,11 +26,12 @@ const QUEUE: usize = 1024;
 static DROPPED: AtomicU64 = AtomicU64::new(0);
 
 const USAGE: &str = "usage: tracepanel-agent [--dir DIR] [--listen unix|tcp:HOST:PORT] [--serve HOST:PORT] \
-                     [--idle-exit SECONDS] [--record DIR]
+                     [--otlp HOST:PORT|off] [--idle-exit SECONDS] [--record DIR]
        tracepanel-agent mcp [--dir DIR] [--values]
   --dir        the project's store directory (default .tracepanel)
   --listen     where SDKs connect: a unix socket (default; not on Windows) or TCP, e.g. tcp:127.0.0.1:0
   --serve      also serve the console (UI and API), e.g. 127.0.0.1:8765 (port 0: any free one)
+  --otlp       take OpenTelemetry exporters' spans over OTLP/HTTP here (default 127.0.0.1:4318; off: don't)
   --idle-exit  exit after this many seconds unused (an agent an SDK started)
   --record     also save each trace as received, before analysis, to DIR/<id>.json (schema/examples)
   --version    print the version
@@ -48,9 +50,14 @@ struct Options {
     dir: PathBuf,
     listen: Option<String>,
     serve: Option<String>,
+    /// Where OTLP/HTTP is served; none with `--otlp off`.
+    otlp: Option<String>,
     idle_exit: Option<i64>,
     record: Option<PathBuf>,
 }
+
+/// Where OpenTelemetry exporters send OTLP/HTTP unless told otherwise.
+const OTLP_DEFAULT: &str = "127.0.0.1:4318";
 
 /// What to do: run, or print something and exit.
 #[derive(Debug, PartialEq)]
@@ -70,6 +77,7 @@ fn parse(args: impl IntoIterator<Item = String>) -> Result<Command, String> {
         dir: PathBuf::from(".tracepanel"),
         listen: None,
         serve: None,
+        otlp: Some(OTLP_DEFAULT.into()),
         idle_exit: None,
         record: None,
     };
@@ -85,6 +93,10 @@ fn parse(args: impl IntoIterator<Item = String>) -> Result<Command, String> {
             "--dir" => options.dir = PathBuf::from(value("a directory")?),
             "--serve" => options.serve = Some(value("HOST:PORT")?),
             "--record" => options.record = Some(PathBuf::from(value("a directory")?)),
+            "--otlp" => {
+                let otlp = value("HOST:PORT or off")?;
+                options.otlp = (otlp != "off").then_some(otlp);
+            }
             "--listen" => {
                 let listen = value("unix or tcp:HOST:PORT")?;
                 if listen != "unix" && !listen.starts_with("tcp:") {
@@ -168,6 +180,7 @@ async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
         dir,
         listen,
         serve,
+        otlp,
         idle_exit,
         record,
     } = options;
@@ -208,6 +221,10 @@ async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
     let sender = queue.clone();
     let sink = Arc::new(move |batch: Batch| enqueue(&sender, batch));
 
+    let otlp = match otlp {
+        Some(addr) => serve_otlp(&addr, sink.clone(), activity.clone()).await,
+        None => None,
+    };
     let server = tokio::spawn({
         let activity = activity.clone();
         async move { tracepanel_protocol::serve(listener, sink, activity).await }
@@ -233,6 +250,9 @@ async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
     if let Some((url, _)) = &console {
         println!("  console  {url}");
     }
+    if let Some((url, _)) = &otlp {
+        println!("  otlp     {url}");
+    }
     if let Some(cloud) = &cloud_line {
         println!("  cloud    {cloud}");
     }
@@ -248,6 +268,9 @@ async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
     }
     if let Some((_, console)) = console {
         console.abort();
+    }
+    if let Some((_, otlp)) = otlp {
+        otlp.abort();
     }
     // What was received gets written before exiting.
     let _ = queue.send(Message::Stop);
@@ -302,6 +325,28 @@ async fn idle(activity: &Activity, seconds: Option<i64>) {
         tokio::time::sleep(check).await;
         if activity.idle_seconds() >= seconds {
             return;
+        }
+    }
+}
+
+/// OTLP/HTTP on `addr`, into the same queue as the SDKs' traces. A port in use (a collector of the developer's own)
+/// is said and skipped: the SDKs' traces matter more.
+async fn serve_otlp(
+    addr: &str,
+    sink: tracepanel_protocol::Sink,
+    activity: Activity,
+) -> Option<(String, tokio::task::JoinHandle<std::io::Result<()>>)> {
+    match tokio::net::TcpListener::bind(addr).await {
+        Ok(listener) => {
+            let url = format!("http://{}", listener.local_addr().ok()?);
+            Some((
+                url,
+                tokio::spawn(tracepanel_otlp::serve(listener, sink, activity)),
+            ))
+        }
+        Err(error) => {
+            eprintln!("tracepanel-agent: no OTLP on {addr}: {error}");
+            None
         }
     }
 }
@@ -442,12 +487,13 @@ mod tests {
     fn the_command_line() {
         assert_eq!(
             parse(args(
-                "--dir .tp --serve 127.0.0.1:0 --idle-exit 1800 --listen tcp:127.0.0.1:0"
+                "--dir .tp --serve 127.0.0.1:0 --idle-exit 1800 --listen tcp:127.0.0.1:0 --otlp 0.0.0.0:4318"
             )),
             Ok(Command::Run(Options {
                 dir: PathBuf::from(".tp"),
                 listen: Some("tcp:127.0.0.1:0".into()),
                 serve: Some("127.0.0.1:0".into()),
+                otlp: Some("0.0.0.0:4318".into()),
                 idle_exit: Some(1800),
                 record: None,
             }))
@@ -458,6 +504,18 @@ mod tests {
                 dir: PathBuf::from(".tracepanel"),
                 listen: None,
                 serve: None,
+                otlp: Some("127.0.0.1:4318".into()),
+                idle_exit: None,
+                record: None,
+            }))
+        );
+        assert_eq!(
+            parse(args("--otlp off")),
+            Ok(Command::Run(Options {
+                dir: PathBuf::from(".tracepanel"),
+                listen: None,
+                serve: None,
+                otlp: None,
                 idle_exit: None,
                 record: None,
             }))

@@ -37,7 +37,7 @@ export interface Diagram {
 }
 
 const SIZES: Record<Box["type"], [number, number]> = { entry: [116, 30], role: [248, 44], host: [264, 44] };
-/** Room around a project's roles for its frame, and above them for its name. */
+/** Room around a project's roles for its frame, and above them for its name: boxes keep it between them too. */
 const FRAME = { side: 12, top: 22 };
 
 const roleId = (service: string, role: string) => `role:${service}/${role}`;
@@ -89,7 +89,13 @@ function graphOf(map: ServiceMap): { boxes: Box[]; links: Link[]; projects: stri
 /** The graph dagre lays out: a node per box, sized as drawn, the roles inside their project, an edge per call. */
 function dagreGraph(boxes: readonly Box[], links: readonly Link[]): Graph {
   const graph = new Graph({ multigraph: false });
-  graph.setGraph({ rankdir: "LR", ranksep: 96, nodesep: 18, marginx: FRAME.side + 4, marginy: FRAME.top + 4 });
+  graph.setGraph({
+    rankdir: "LR",
+    ranksep: 96,
+    nodesep: FRAME.top + FRAME.side + 12,
+    marginx: FRAME.side + 4,
+    marginy: FRAME.top + 4,
+  });
   graph.setDefaultEdgeLabel(() => ({}));
   for (const box of boxes) addBox(graph, box);
   for (const link of links) graph.setEdge(link.from, link.to, { weight: weightOf(link) });
