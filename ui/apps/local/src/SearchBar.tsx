@@ -60,7 +60,7 @@ interface QuickOption {
 
 /** Values the console knows from stored data (routes, loggers, database aliases, tasks, jobs, log extras). */
 export type KnownValues = Partial<
-  Record<"route" | "logger" | "db" | "task" | "queue" | "job" | "rpc" | "extra", readonly string[]>
+  Record<"route" | "logger" | "db" | "task" | "queue" | "job" | "rpc" | "page" | "extra", readonly string[]>
 > & {
   /** Each system's targets and operations, by the name its page has (`sql`, `redis`, `mongodb`…). */
   targets?: Readonly<Record<string, readonly string[]>>;
@@ -279,6 +279,10 @@ const QUICK: Record<Exclude<Section, CallsSection>, Control[]> = {
     },
   ],
   mails: [{ ...TIME, verb: "Sent" }],
+  pages: [
+    { ...TIME, verb: "Viewed" },
+    { label: "Page", title: "Filter by page", key: "page", values: (known) => known.page ?? [] },
+  ],
   rpc: [
     { ...TIME, verb: "Called" },
     { label: "Method", title: "Filter by method", key: "rpc", values: (known) => known.rpc ?? [] },
@@ -340,6 +344,7 @@ const CALLS: Record<EntrySection, Control[]> = {
   websockets: [{ ...TIME, verb: "Handled" }, DURATION, ISSUE, CONTAINS],
   jobs: [{ ...TIME, verb: "Ran" }, DURATION, ISSUE, CONTAINS],
   rpc: [{ ...TIME, verb: "Called" }, DURATION, ISSUE, CONTAINS],
+  pages: [{ ...TIME, verb: "Viewed" }, DURATION, ISSUE, CONTAINS],
 };
 
 const CALLS_EXAMPLE: Record<EntrySection, string> = {
@@ -349,6 +354,7 @@ const CALLS_EXAMPLE: Record<EntrySection, string> = {
   websockets: "has:error since:1h",
   jobs: "has:error since:1d",
   rpc: "has:error since:1h",
+  pages: "has:error since:1h",
 };
 
 const VALUES: Record<string, string[]> = {
@@ -376,6 +382,7 @@ const VALUES: Record<string, string[]> = {
     "command",
     "websocket",
     "rpc",
+    "page",
     "n+1",
     "duplicates",
     "slow-sql",
@@ -434,6 +441,7 @@ const EXAMPLE: Record<Exclude<Section, CallsSection>, string> = {
   services: "kind:database",
   jobs: "source:custom",
   rpc: "rpc:helloworld.Greeter/*",
+  pages: "page:/books/*",
   websockets: "event:receive",
   graphql: "type:mutation",
   mails: "to:ann@example.com",

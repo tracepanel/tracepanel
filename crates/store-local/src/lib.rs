@@ -520,7 +520,7 @@ mod tests {
         let counts = reader.counts(None).unwrap();
         assert_eq!(
             counts["sections"],
-            serde_json::json!({"http": 1, "graphql": 0, "tasks": 0, "websockets": 0, "jobs": 0, "rpc": 0,
+            serde_json::json!({"http": 1, "graphql": 0, "tasks": 0, "websockets": 0, "jobs": 0, "rpc": 0, "pages": 0,
                                "systems": [{"system": "redis", "family": "redis", "label": "Redis"},
                                            {"system": "cache", "family": "cache", "label": "Cache"}]})
         );

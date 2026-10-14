@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Added
+
+- A Pages section in the console: the pages a browser viewed, by path, with
+  their load time, errors and the calls each made to its API, a page per
+  path, and `page:` in search. A trace of kind `page` comes from the
+  browser: tracepanel-js records a page's load, its `fetch()` calls, its
+  errors and its console, and sends them to the console's address,
+  `POST /api/ingest`, as an SDK sends its traces. A dev server (Vite's plugin)
+  serves that address on the page's origin. The console takes JSON only, so a
+  page on another site can't send to it.
+
 ### Changed
 
 - The panel, the console and the services map show the mark of a Node.js

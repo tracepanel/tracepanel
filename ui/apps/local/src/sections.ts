@@ -59,6 +59,14 @@ export const ENTRY: Record<
     scope: "kind:rpc",
     group: (key) => `kind:rpc name:${quote(key)}`,
   },
+  pages: {
+    label: "Pages",
+    title: "Pages",
+    description: "Pages viewed in the browser: their load, the calls they make to the API, their errors.",
+    calls: "Views",
+    scope: "kind:page",
+    group: (key) => `kind:page name:${quote(key)}`,
+  },
 };
 
 const DATA_LABELS: Record<Exclude<Section, EntrySection | CallsSection>, { label: string; description: string }> = {
@@ -107,7 +115,12 @@ export function graphqlOperation(trace: Pick<TraceSummary, "kind" | "name">): st
 }
 
 /** The kinds of trace grouped by their name, and the section that lists them. */
-export const BY_NAME: Partial<Record<string, EntrySection>> = { task: "tasks", command: "jobs", rpc: "rpc" };
+export const BY_NAME: Partial<Record<string, EntrySection>> = {
+  task: "tasks",
+  command: "jobs",
+  rpc: "rpc",
+  page: "pages",
+};
 
 /** The entry-point group a trace belongs to: where "all calls like this one" lives. */
 export function groupOf(trace: Trace): { section: EntrySection; key: string; label: string } | null {

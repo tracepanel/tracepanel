@@ -351,6 +351,7 @@ impl Reader {
             "task": distinct(&format!("SELECT DISTINCT name FROM traces WHERE kind = 'task' AND {traces} ORDER BY 1"))?,
             "job": distinct(&format!("SELECT DISTINCT name FROM traces WHERE kind = 'command' AND {traces} ORDER BY 1"))?,
             "rpc": distinct(&format!("SELECT DISTINCT name FROM traces WHERE kind = 'rpc' AND {traces} ORDER BY 1"))?,
+            "page": distinct(&format!("SELECT DISTINCT name FROM traces WHERE kind = 'page' AND {traces} ORDER BY 1"))?,
             "queue": distinct(&format!(
                 "SELECT DISTINCT {QUEUE} FROM traces WHERE kind = 'task' AND {QUEUE} IS NOT NULL AND {traces} ORDER BY 1"
             ))?,
@@ -943,6 +944,7 @@ impl Reader {
                 "websockets": count(&traces, "websocket"),
                 "jobs": count(&traces, "command"),
                 "rpc": count(&traces, "rpc"),
+                "pages": count(&traces, "page"),
                 "systems": systems
                     .iter()
                     .map(|(system, family)| {

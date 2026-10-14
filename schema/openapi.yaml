@@ -313,6 +313,55 @@ paths:
                 properties:
                   rpc: { type: array, items: { $ref: "#/components/schemas/RpcRow" } }
         "400": { $ref: "#/components/responses/BadSearch" }
+  /pages:
+    get:
+      operationId: listPages
+      summary: "Pages viewed in a browser (tracepanel-js's browser recording) by path, busiest first."
+      parameters:
+        - $ref: "#/components/parameters/q"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: Pages.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [pages]
+                additionalProperties: false
+                properties:
+                  pages: { type: array, items: { $ref: "#/components/schemas/PageRow" } }
+        "400": { $ref: "#/components/responses/BadSearch" }
+  /ingest:
+    post:
+      operationId: ingestTraces
+      summary: "Traces a page recorded in the browser, sent as an SDK sends them: a JSON array of traces."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: array, items: { type: object } }
+      responses:
+        "202":
+          description: Taken; the agent stores them as an SDK's.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [taken]
+                additionalProperties: false
+                properties:
+                  taken: { type: integer }
+        "400":
+          description: Not a JSON array of traces.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "415":
+          description: Not application/json.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /graphql/detail:
     get:
       operationId: getGraphqlOperation
@@ -618,7 +667,7 @@ components:
         db_time, issues, errors, logs, mails, issue_kinds, db_aliases, cache_aliases, task_state, htmx]
       properties:
         id: { type: string }
-        kind: { type: string, enum: [http, task, command, websocket, rpc] }
+        kind: { type: string, enum: [http, task, command, websocket, rpc, page] }
         name: { type: string }
         start: { $ref: "#/components/schemas/Time" }
         duration: { $ref: "#/components/schemas/Duration" }
@@ -660,7 +709,7 @@ components:
         message: { type: string }
         exception: { type: [string, "null"] }
         attrs: { $ref: "#/components/schemas/Attrs" }
-        trace_kind: { type: string, enum: [http, task, command, websocket, rpc] }
+        trace_kind: { type: string, enum: [http, task, command, websocket, rpc, page] }
         trace_htmx: { type: [string, "null"], enum: [request, boosted, null], description: As the trace's htmx. }
         trace_name: { type: string }
         method: { type: [string, "null"] }
@@ -691,7 +740,7 @@ components:
         recipients: { type: array, description: To and cc., items: { type: string } }
         sent: { type: [boolean, "null"], description: "False when the backend refused it; null when unknown." }
         html: { type: boolean }
-        trace_kind: { type: string, enum: [http, task, command, websocket, rpc] }
+        trace_kind: { type: string, enum: [http, task, command, websocket, rpc, page] }
         trace_htmx: { type: [string, "null"], enum: [request, boosted, null], description: As the trace's htmx. }
         method: { type: [string, "null"] }
         path: { type: [string, "null"] }
@@ -833,7 +882,7 @@ components:
         - type: object
           required: [kind]
           properties:
-            kind: { type: string, enum: [http, task, command, websocket, rpc] }
+            kind: { type: string, enum: [http, task, command, websocket, rpc, page] }
       unevaluatedProperties: false
     OperationStats:
       description: 'One operation: a trace kind plus name, e.g. http "GET /posts/<int:pk>/".'
@@ -842,7 +891,7 @@ components:
         - type: object
           required: [kind, name, method, route, view]
           properties:
-            kind: { type: string, enum: [http, task, command, websocket, rpc] }
+            kind: { type: string, enum: [http, task, command, websocket, rpc, page] }
             name: { type: string }
             method: { type: [string, "null"], description: For requests. }
             route: { type: [string, "null"], description: For requests. }
@@ -928,7 +977,7 @@ components:
           type: object
           description: Stored traces per entry point; the console hides entry points with none.
           additionalProperties: false
-          required: [http, graphql, tasks, websockets, jobs, rpc, systems]
+          required: [http, graphql, tasks, websockets, jobs, rpc, pages, systems]
           properties:
             http: { type: integer, description: HTTP requests that are not GraphQL operations. }
             graphql: { type: integer }
@@ -936,6 +985,7 @@ components:
             websockets: { type: integer }
             jobs: { type: integer, description: Management commands and tracepanel.trace() blocks. }
             rpc: { type: integer, description: "RPC calls served: gRPC and other RPC systems' servers." }
+            pages: { type: integer, description: "Pages viewed in a browser." }
             systems:
               type: array
               description: >-
@@ -951,12 +1001,13 @@ components:
     KnownValues:
       type: object
       additionalProperties: false
-      required: [route, logger, db, targets, ops, task, queue, job, rpc, extra]
+      required: [route, logger, db, targets, ops, task, queue, job, rpc, page, extra]
       properties:
         task: { type: array, description: Celery task names., items: { type: string } }
         queue: { type: array, description: Celery queues tasks ran from., items: { type: string } }
         job: { type: array, description: "Job names: management commands and tracepanel.trace() blocks.", items: { type: string } }
         rpc: { type: array, description: "RPC methods served, Service/Method.", items: { type: string } }
+        page: { type: array, description: "Paths of pages viewed in a browser.", items: { type: string } }
         route: { type: array, items: { type: string } }
         logger: { type: array, items: { type: string } }
         db: { type: array, description: Database aliases., items: { type: string } }
@@ -979,7 +1030,7 @@ components:
     SearchSpec:
       type: object
       additionalProperties: false
-      required: [traces, logs, mails, calls, endpoints, tasks, services, websockets, graphql, jobs, rpc, issues]
+      required: [traces, logs, mails, calls, endpoints, tasks, services, websockets, graphql, jobs, rpc, pages, issues]
       properties:
         tasks: { $ref: "#/components/schemas/SearchFields" }
         services: { $ref: "#/components/schemas/SearchFields" }
@@ -987,6 +1038,7 @@ components:
         graphql: { $ref: "#/components/schemas/SearchFields" }
         jobs: { $ref: "#/components/schemas/SearchFields" }
         rpc: { $ref: "#/components/schemas/SearchFields" }
+        pages: { $ref: "#/components/schemas/SearchFields" }
         traces: { $ref: "#/components/schemas/SearchFields" }
         logs: { $ref: "#/components/schemas/SearchFields" }
         mails: { $ref: "#/components/schemas/SearchFields" }
@@ -1093,6 +1145,20 @@ components:
         p95: { $ref: "#/components/schemas/Duration" }
         total: { $ref: "#/components/schemas/Duration" }
         avg_queries: { type: number }
+        with_issues: { type: integer }
+        last_seen: { $ref: "#/components/schemas/Time" }
+    PageRow:
+      type: object
+      additionalProperties: false
+      required: [page, views, failures, p50, p95, total, avg_calls, with_issues, last_seen]
+      properties:
+        page: { type: string, description: "The page's path: /books/42." }
+        views: { type: integer }
+        failures: { type: integer, description: Views with an error in the page. }
+        p50: { $ref: "#/components/schemas/Duration" }
+        p95: { $ref: "#/components/schemas/Duration" }
+        total: { $ref: "#/components/schemas/Duration" }
+        avg_calls: { type: number, description: Requests to its API per view. }
         with_issues: { type: integer }
         last_seen: { $ref: "#/components/schemas/Time" }
     GraphqlDetail:

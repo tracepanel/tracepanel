@@ -41,7 +41,7 @@ function Title({ section, groupKey }: { section: EntrySection; groupKey: string 
       </>
     );
   }
-  const badge = { graphql: "GQL", tasks: "TASK", websockets: "WS", jobs: "JOB", rpc: "RPC" }[section];
+  const badge = { graphql: "GQL", tasks: "TASK", websockets: "WS", jobs: "JOB", rpc: "RPC", pages: "PAGE" }[section];
   return (
     <>
       <MethodBadge method={badge} />

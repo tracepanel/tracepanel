@@ -4,15 +4,16 @@
 //! framework: the app serves them itself and forwards the rest here (Django's `/__tracepanel__/`).
 
 use axum::Router;
-use axum::extract::{Path, Query, State};
-use axum::http::{HeaderValue, Method, StatusCode, Uri, header};
+use axum::body::Bytes;
+use axum::extract::{DefaultBodyLimit, Path, Query, State};
+use axum::http::{HeaderMap, HeaderValue, Method, StatusCode, Uri, header};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{any, get};
+use axum::routing::{any, get, post};
 use rust_embed::Embed;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tracepanel_protocol::Activity;
+use tracepanel_protocol::{Activity, Batch, Sink, Thresholds};
 use tracepanel_store_local::{ReadError, Reader};
 
 /// The console's UI, built from `ui/` into `ui-dist/` (`scripts/ui.sh`): what the browser loads, not the notices.
@@ -52,6 +53,7 @@ pub fn router(reader: Reader, activity: Activity) -> Router {
         .route("/api/graphql/detail", get(graphql_detail))
         .route("/api/jobs", get(jobs))
         .route("/api/rpc", get(rpcs))
+        .route("/api/pages", get(pages))
         .route("/api/traces/summary", get(summary))
         .route("/api/traces/overview", get(overview))
         .route("/api/{*rest}", any(unknown))
@@ -109,8 +111,13 @@ pub async fn serve_on(
     listener: tokio::net::TcpListener,
     reader: Reader,
     activity: Activity,
+    sink: Option<Sink>,
 ) -> std::io::Result<()> {
-    axum::serve(listener, router(reader, activity)).await
+    let app = match sink {
+        Some(sink) => router(reader, activity).merge(ingest(sink)),
+        None => router(reader, activity),
+    };
+    axum::serve(listener, app).await
 }
 
 fn json_response(status: StatusCode, body: String) -> Response {
@@ -401,6 +408,51 @@ async fn jobs(State(reader): State<Shared>, Query(query): Params) -> Response {
 
 async fn rpcs(State(reader): State<Shared>, Query(query): Params) -> Response {
     listing(reader, query, "rpc", Reader::list_rpcs).await
+}
+
+async fn pages(State(reader): State<Shared>, Query(query): Params) -> Response {
+    listing(reader, query, "pages", Reader::list_pages).await
+}
+
+/// A page's traces, recorded in the browser.
+const MAX_INGEST: usize = 8 << 20;
+
+/// What the console takes besides its API: the traces a page records in the browser (tracepanel-js), on the
+/// console's own address, which an app's dev server serves on the page's origin. JSON only: a page on another site
+/// can't send it without a CORS preflight, which the console doesn't answer.
+pub fn ingest(sink: Sink) -> Router {
+    Router::new()
+        .route("/api/ingest", post(take))
+        .layer(DefaultBodyLimit::max(MAX_INGEST))
+        .with_state(sink)
+}
+
+async fn take(State(sink): State<Sink>, headers: HeaderMap, body: Bytes) -> Response {
+    let json = headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value.starts_with("application/json"));
+    if !json {
+        return json_response(
+            StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            json!({"error": "send the traces as application/json"}).to_string(),
+        );
+    }
+    let taken = match serde_json::from_slice::<Vec<Value>>(&body) {
+        Ok(traces) => traces.len(),
+        Err(error) => {
+            return json_response(
+                StatusCode::BAD_REQUEST,
+                json!({"error": format!("not a JSON array of traces: {error}")}).to_string(),
+            );
+        }
+    };
+    sink(Batch {
+        frame: body.to_vec(),
+        max_traces: None,
+        thresholds: Thresholds::default(),
+    });
+    json_response(StatusCode::ACCEPTED, json!({"taken": taken}).to_string())
 }
 
 async fn endpoint_detail(State(reader): State<Shared>, Query(query): Params) -> Response {

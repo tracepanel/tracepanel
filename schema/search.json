@@ -285,6 +285,24 @@
       "help": "Calls before: until:5m"
     }
   },
+  "pages": {
+    "page": {
+      "type": "text",
+      "help": "The page's path, * wildcards: /books/*"
+    },
+    "service": {
+      "type": "text",
+      "help": "The app that recorded it (service.name): service:shop-web"
+    },
+    "since": {
+      "type": "time",
+      "help": "Views at or after: since:15m"
+    },
+    "until": {
+      "type": "time",
+      "help": "Views before: until:5m"
+    }
+  },
   "graphql": {
     "operation": {
       "type": "text",

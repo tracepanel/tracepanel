@@ -29,7 +29,8 @@
         "task",
         "command",
         "websocket",
-        "rpc"
+        "rpc",
+        "page"
       ]
     },
     "name": {
@@ -195,7 +196,8 @@
             "db",
             "messaging",
             "rpc",
-            "otel"
+            "otel",
+            "page"
           ]
         },
         "name": {

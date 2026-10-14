@@ -12,12 +12,22 @@ import {
   HTTP_REQUESTS,
   JOB_RUNS,
   type OverviewScope,
+  PAGE_VIEWS,
   RPC_CALLS,
   TASK_RUNS,
   TracesOverview,
   WEBSOCKET_EVENTS,
 } from "./TracesOverview";
-import { EndpointsTable, GraphqlTable, JobsTable, RpcTable, TasksTable, TracesTable, WebsocketsTable } from "./tables";
+import {
+  EndpointsTable,
+  GraphqlTable,
+  JobsTable,
+  PagesTable,
+  RpcTable,
+  TasksTable,
+  TracesTable,
+  WebsocketsTable,
+} from "./tables";
 import { Loading, LoadMore, PageHeader } from "./ui";
 
 const SCOPES: Record<EntrySection, OverviewScope> = {
@@ -27,6 +37,7 @@ const SCOPES: Record<EntrySection, OverviewScope> = {
   websockets: WEBSOCKET_EVENTS,
   jobs: JOB_RUNS,
   rpc: RPC_CALLS,
+  pages: PAGE_VIEWS,
 };
 
 const GRAPHQL_TYPES = ["query", "mutation", "subscription"] as const;
@@ -73,6 +84,7 @@ const GROUP_NOUN: Record<EntrySection, string> = {
   websockets: "consumer",
   jobs: "job",
   rpc: "method",
+  pages: "page",
 };
 
 /** The section's list, grouped: endpoints, operations, tasks, consumers, jobs or RPC methods. */
@@ -84,6 +96,7 @@ function listGroups(source: DataSource, section: EntrySection, query: string): P
     websockets: (q) => source.listWebsockets(q),
     jobs: (q) => source.listJobs(q),
     rpc: (q) => source.listRpcs(q),
+    pages: (q) => source.listPages(q),
   };
   return lists[section](query);
 }
@@ -177,6 +190,7 @@ export function EntryPage({ section, q, view, source, spec, known }: EntryPagePr
       websockets: () => <WebsocketsTable items={groups.data as Parameters<typeof WebsocketsTable>[0]["items"]} />,
       jobs: () => <JobsTable items={groups.data as Parameters<typeof JobsTable>[0]["items"]} />,
       rpc: () => <RpcTable items={groups.data as Parameters<typeof RpcTable>[0]["items"]} />,
+      pages: () => <PagesTable items={groups.data as Parameters<typeof PagesTable>[0]["items"]} />,
     }[section]();
   }
   // One page: the overview (folded with its chevron), then the list, grouped or every call; both share the search.

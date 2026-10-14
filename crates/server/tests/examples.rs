@@ -525,3 +525,93 @@ async fn get(router: &axum::Router, uri: &str) -> (StatusCode, Value) {
         .unwrap();
     (status, serde_json::from_slice(&body).unwrap_or(Value::Null))
 }
+
+/// A page's view, as tracepanel-js's browser recording sends it: its load, and a call to its API.
+fn page_view(id: &str, path: &str, status: &str) -> Value {
+    serde_json::json!({
+        "id": id, "kind": "page", "name": path, "start": 1_000_000, "duration": 420_000, "status": status,
+        "attrs": {"service.name": "shop-web", "service.role": "browser", "page.path": path},
+        "spans": [
+            {"id": format!("{id}-ROOT"), "parent_id": null, "kind": "page", "name": path, "start": 1_000_000,
+             "duration": 420_000, "status": "ok", "attrs": {}},
+            {"id": format!("{id}-CALL"), "parent_id": format!("{id}-ROOT"), "kind": "http.client",
+             "name": "GET 127.0.0.1/api/books", "start": 1_100_000, "duration": 30_000, "status": "ok",
+             "attrs": {"http.request.method": "GET", "url.full": "http://127.0.0.1:8028/api/books",
+                       "server.address": "127.0.0.1", "server.port": 8028, "http.response.status_code": 200}},
+        ],
+        "logs": [], "errors": [], "links": [], "issues": [],
+    })
+}
+
+#[tokio::test]
+async fn a_page_s_views_come_in_through_the_console_and_are_listed_by_path() {
+    let taken = std::sync::Arc::new(std::sync::Mutex::new(Vec::<Batch>::new()));
+    let sink: tracepanel_protocol::Sink = {
+        let taken = taken.clone();
+        std::sync::Arc::new(move |batch: Batch| taken.lock().unwrap().push(batch))
+    };
+    let ingest = tracepanel_server::ingest(sink);
+    let views = serde_json::json!([
+        page_view("PAGE1", "/books", "ok"),
+        page_view("PAGE2", "/books", "error")
+    ]);
+    let post = |content_type: &'static str, body: String| {
+        Request::post("/api/ingest")
+            .header("content-type", content_type)
+            .body(Body::from(body))
+            .unwrap()
+    };
+
+    let response = ingest
+        .clone()
+        .oneshot(post("application/json", views.to_string()))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::ACCEPTED);
+
+    let plain = ingest
+        .clone()
+        .oneshot(post("text/plain", views.to_string()))
+        .await
+        .unwrap();
+    let broken = ingest
+        .clone()
+        .oneshot(post("application/json", "{".into()))
+        .await
+        .unwrap();
+    assert_eq!(
+        (plain.status(), broken.status()),
+        (StatusCode::UNSUPPORTED_MEDIA_TYPE, StatusCode::BAD_REQUEST)
+    );
+
+    let dir = std::env::temp_dir().join(format!("tracepanel-server-pages-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("traces.sqlite3");
+    let mut store = Store::open(&path).unwrap();
+    let batches = std::mem::take(&mut *taken.lock().unwrap());
+    assert_eq!(batches.len(), 1);
+    store.write(&batches[0].decode().unwrap()).unwrap();
+    let router = tracepanel_server::router(Reader::new(&path), Activity::default());
+
+    let (status, pages) = get(&router, "/api/pages").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        (
+            &pages["pages"][0]["page"],
+            &pages["pages"][0]["views"],
+            &pages["pages"][0]["failures"],
+            &pages["pages"][0]["avg_calls"]
+        ),
+        (
+            &serde_json::json!("/books"),
+            &serde_json::json!(2),
+            &serde_json::json!(1),
+            &serde_json::json!(1.0)
+        )
+    );
+
+    let (_, counts) = get(&router, "/api/counts").await;
+    assert_eq!(counts["sections"]["pages"], 2);
+    let _ = std::fs::remove_dir_all(&dir);
+}

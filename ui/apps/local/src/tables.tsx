@@ -15,6 +15,7 @@ import {
   MailList,
   type MailRow,
   MethodBadge,
+  type PageRow,
   RoutePath,
   type RpcRow,
   type Span,
@@ -951,10 +952,12 @@ export function GraphqlTable({ items }: { items: readonly GraphqlRow[] }) {
 const JOB_SOURCES: Record<string, string> = { "manage.py": "manage.py", custom: "tracepanel.trace" };
 
 /** A row of a list grouped by name (jobs, RPC methods): its name, a badge, how often it ran, failures and time. */
-type NamedRow = Pick<JobRow, "failures" | "with_issues" | "p95" | "avg_queries" | "last_seen"> & {
+type NamedRow = Pick<JobRow, "failures" | "with_issues" | "p95" | "last_seen"> & {
   name: string;
   badge: string;
   count: number;
+  /** Queries per run or call, calls per page view. */
+  average: number;
 };
 
 function NamedTable({
@@ -962,7 +965,7 @@ function NamedTable({
   head,
   items,
 }: {
-  section: "jobs" | "rpc";
+  section: "jobs" | "rpc" | "pages";
   /** Column titles: the name, the badge, the count, the queries. */
   head: [string, string, string, string];
   items: readonly NamedRow[];
@@ -1001,7 +1004,7 @@ function NamedTable({
               {duration(item.p95)}
             </Meter>
           </Td>
-          <Td num>{item.avg_queries}</Td>
+          <Td num>{item.average}</Td>
           <Td num className="text-muted-foreground">
             {ago(item.last_seen)}
           </Td>
@@ -1022,13 +1025,31 @@ export function JobsTable({ items }: { items: readonly JobRow[] }) {
     name: item.job,
     badge: JOB_SOURCES[item.source] ?? item.source,
     count: item.runs,
+    average: item.avg_queries,
   }));
   return <NamedTable section="jobs" head={["Job", "Source", "Runs", "Queries / run"]} items={rows} />;
 }
 
 export function RpcTable({ items }: { items: readonly RpcRow[] }) {
-  const rows = items.map((item) => ({ ...item, name: item.rpc, badge: item.system ?? "rpc", count: item.calls }));
+  const rows = items.map((item) => ({
+    ...item,
+    name: item.rpc,
+    badge: item.system ?? "rpc",
+    count: item.calls,
+    average: item.avg_queries,
+  }));
   return <NamedTable section="rpc" head={["Method", "System", "Calls", "Queries / call"]} items={rows} />;
+}
+
+export function PagesTable({ items }: { items: readonly PageRow[] }) {
+  const rows = items.map((item) => ({
+    ...item,
+    name: item.page,
+    badge: "page",
+    count: item.views,
+    average: item.avg_calls,
+  }));
+  return <NamedTable section="pages" head={["Page", "Kind", "Views", "Calls / view"]} items={rows} />;
 }
 
 export function WebsocketsTable({ items }: { items: readonly WebsocketRow[] }) {

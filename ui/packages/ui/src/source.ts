@@ -15,6 +15,7 @@ import type {
   LogRow,
   MailRow,
   Page,
+  PageRow,
   Related,
   RpcRow,
   SearchSpec,
@@ -66,6 +67,8 @@ export interface DataSource {
   listJobs(q: string): Promise<JobRow[]>;
   /** RPC calls served (gRPC and others), by method. */
   listRpcs(q: string): Promise<RpcRow[]>;
+  /** Pages viewed in a browser, by path. */
+  listPages(q: string): Promise<PageRow[]>;
   /** Any group of traces named by a search: what a group page shows. */
   summarizeTraces(q: string): Promise<TraceGroup | null>;
   /** Databases, caches, mail, brokers and APIs the project talks to, and who calls them. */
@@ -215,6 +218,7 @@ export function httpSource(base: string | URL): DataSource {
             websockets: 0,
             jobs: 0,
             rpc: 0,
+            pages: 0,
             systems: [],
           },
         }
@@ -232,6 +236,7 @@ export function httpSource(base: string | URL): DataSource {
           queue: [],
           job: [],
           rpc: [],
+          page: [],
           extra: [],
         }
       );
@@ -247,6 +252,9 @@ export function httpSource(base: string | URL): DataSource {
     },
     async listRpcs(q = "") {
       return (await getJson<{ rpc: RpcRow[] }>(url("rpc", { q })))?.rpc ?? [];
+    },
+    async listPages(q = "") {
+      return (await getJson<{ pages: PageRow[] }>(url("pages", { q })))?.pages ?? [];
     },
     summarizeTraces(q) {
       return getJson<TraceGroup>(url("traces/summary", { q }));
