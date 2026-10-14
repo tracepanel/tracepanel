@@ -26,6 +26,8 @@
 - The page widget shows the framework of the app that answered a page's
   calls when the page's server didn't name one (an SPA from a dev server),
   and the panel names a Node.js trace's runtime Node, not Nodejs.
+- The console refreshes every 15 seconds by default, not every 5. A choice
+  you made in its refresh menu stays.
 
 ## 0.1.1 (2026-10-13)
 
