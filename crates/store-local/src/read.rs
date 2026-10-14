@@ -565,13 +565,16 @@ impl Reader {
         let rows = objects(
             db,
             &format!(
+                // What runs the app, from its latest trace: MAX(start) is the one min/max aggregate, so SQLite takes
+                // the bare columns from that row. A largest string would mix versions across an upgrade ("4.9" over
+                // "4.10", Java "8.0" over "21.0") and take each part from another trace.
                 "SELECT service, {SERVICE_ROLE} AS role, COUNT(*) AS traces, \
                  SUM(status = 'error') AS errors, SUM(duration) AS total, MAX(start) AS last_seen, \
-                 MAX({LANGUAGE}) AS language, \
-                 MAX(json_extract(attrs, '$.\"process.runtime.name\"')) AS runtime_name, \
-                 MAX(COALESCE(json_extract(attrs, '$.\"tracepanel.language.version\"'), \
-                     json_extract(attrs, '$.\"process.runtime.version\"'))) AS version, \
-                 MAX(json_extract(attrs, '$.\"tracepanel.framework\"')) AS framework \
+                 {LANGUAGE} AS language, \
+                 json_extract(attrs, '$.\"process.runtime.name\"') AS runtime_name, \
+                 COALESCE(json_extract(attrs, '$.\"tracepanel.language.version\"'), \
+                     json_extract(attrs, '$.\"process.runtime.version\"')) AS version, \
+                 json_extract(attrs, '$.\"tracepanel.framework\"') AS framework \
                  FROM traces WHERE {condition} GROUP BY service, role ORDER BY service, role"
             ),
             params,

@@ -55,6 +55,11 @@
 
 ### Fixed
 
+- An app's runtime in Services and on the map is its latest trace's. After an
+  upgrade it read the largest version string instead (Spring Boot 4.9 over
+  4.10, Java 8 over 21), and could take the language and the framework from
+  different traces. An upgraded app stays one app, as before.
+
 - The page widget's text on a page that isn't in UTF-8: its arrows and dots
   came out garbled, as the agent served `widget.min.js` without a charset and
   the page read it in its own encoding. The agent names UTF-8 for every text
