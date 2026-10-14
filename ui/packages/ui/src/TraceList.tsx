@@ -57,7 +57,8 @@ export function TraceList({ rows, selectedId, currentId, newIds, compact, onSele
               ) : null}
             </span>
             <span className="dt-request-meta">
-              <StatusBadge status={trace.kind === "page" ? null : trace.http_status} />
+              {/* A view or an action has no status of its own: an empty cell keeps the columns in place. */}
+              {trace.kind === "page" ? <span /> : <StatusBadge status={trace.http_status} />}
               <span>{duration(trace.duration)}</span>
               {compact ? <CompactMeta trace={trace} /> : <FullMeta trace={trace} />}
             </span>
