@@ -1,6 +1,8 @@
 packages:
   - packages/*
   - apps/*
+  # The console in a browser against a real agent (Playwright).
+  - e2e
 # New releases stay out for 48 hours before they resolve here (docs: pnpm
 # minimumReleaseAge). Same window the fallow audit and Renovate respect, and
 # the same window the team already runs locally.

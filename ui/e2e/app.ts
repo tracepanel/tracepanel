@@ -1,0 +1,118 @@
+// A page of an app with the widget, served on the console's origin (as an app's dev server serves the console): its
+// own load, and the calls it makes to its API, answered with the headers an SDK puts on them and the ids of real
+// traces in the agent, so the panel opens them.
+import type { Page } from "@playwright/test";
+import { CONSOLE } from "./agent.ts";
+
+/** An answer of the page's API, as an SDK sends it: its status, its trace, what Server-Timing says. */
+export interface Call {
+  status: number;
+  trace: string;
+  queries: number;
+  totalMs: number;
+  issues?: number;
+}
+
+/** The page's own request, as a server that traced it writes it on the widget's script tag. */
+export interface ServerPage extends Call {
+  runtime: string;
+}
+
+/** The id of a stored trace, by its name. */
+export async function traceId(name: string): Promise<string> {
+  const body = (await (await fetch(`${CONSOLE}api/traces?limit=100`)).json()) as {
+    traces: { id: string; name: string }[];
+  };
+  const found = body.traces.find((trace) => trace.name === name);
+  if (!found) throw new Error(`no stored trace named ${name}`);
+  return found.id;
+}
+
+function timing(call: Call): string {
+  return `db;dur=1;desc="${call.queries} queries", total;dur=${call.totalMs}, tracepanel-issues;desc="${call.issues ?? 0}"`;
+}
+
+// tracepanel-js's browser recording, by its contract with the widget: each view and action announced on window
+// (tracepanel:page) as it starts and ends, the latest kept on globalThis, and each Response marked with its action.
+const RECORDING = `
+(() => {
+  const PAGE = Symbol.for("tracepanel.page");
+  const seen = new Map();
+  globalThis[Symbol.for("tracepanel.pages")] = seen;
+  let count = 0;
+  const id = () => "01M4E2E" + String(++count).padStart(19, "0");
+  const now = () => Math.round((performance.timeOrigin + performance.now()) * 1000);
+  const announce = (detail) => {
+    seen.set(detail.id, detail);
+    dispatchEvent(new CustomEvent("tracepanel:page", { detail }));
+  };
+  const view = { id: id(), name: location.pathname, start: Math.round(performance.timeOrigin * 1000), duration: 0, status: "ok", open: true };
+  announce(view);
+  addEventListener("load", () => announce({ ...view, duration: now() - view.start, open: false }));
+  let current = null;
+  const send = window.fetch;
+  window.fetch = async (...args) => {
+    const action = current;
+    const response = await send(...args);
+    if (action) Object.defineProperty(response, PAGE, { value: action.id });
+    return response;
+  };
+  window.act = async (label, key) => {
+    current = { id: id(), name: location.pathname + ' › click "' + label + '"', start: now(), duration: 0, status: "ok", open: true };
+    announce(current);
+    const response = await fetch("/app/api/" + key);
+    announce({ ...current, duration: now() - current.start, status: response.status >= 500 ? "error" : "ok", open: false });
+    current = null;
+  };
+})();
+`;
+
+/**
+ * Opens /app/ with a button per call: "Load <key>" fetches /app/api/<key>; with `recording`, "Do <key>" does it as
+ * a click the browser recording sees. `server`: the page's own load was traced (a server-rendered page).
+ * `charset`: the page's encoding, UTF-8 unless given.
+ */
+export async function openApp(
+  page: Page,
+  calls: Record<string, Call>,
+  options: { server?: ServerPage; recording?: boolean; charset?: string } = {},
+): Promise<void> {
+  await page.route("**/app/api/*", (route) => {
+    const call = calls[new URL(route.request().url()).pathname.split("/").pop() ?? ""];
+    if (!call) return route.fulfill({ status: 404 });
+    return route.fulfill({
+      status: call.status,
+      contentType: "application/json",
+      body: "{}",
+      headers: { "Tracepanel-Id": call.trace, "Server-Timing": timing(call) },
+    });
+  });
+  const server = options.server;
+  const tag = server
+    ? `data-tracepanel-id="${server.trace}" data-tracepanel-method="GET" data-tracepanel-status="${server.status}"
+       data-tracepanel-total="${server.totalMs}" data-tracepanel-queries="${server.queries}"
+       data-tracepanel-issues="${server.issues ?? 0}" data-tracepanel-runtime="${server.runtime}"`
+    : "";
+  const buttons = Object.keys(calls)
+    .map((key) => `<button onclick="fetch('/app/api/${key}')">Load ${key}</button>`)
+    .concat(
+      options.recording
+        ? Object.keys(calls).map((key) => `<button onclick="act('${key}', '${key}')">Do ${key}</button>`)
+        : [],
+    )
+    .join("");
+  const html = `<!doctype html><html><head>
+    ${options.recording ? `<script>${RECORDING}</script>` : ""}
+    <script src="/widget.min.js" data-tracepanel-api="/" ${tag}></script>
+    <title>app</title></head><body>${buttons}</body></html>`;
+  // An app's page names its encoding; one that isn't UTF-8 reads a script with no charset of its own in its own.
+  const contentType = `text/html; charset=${options.charset ?? "utf-8"}`;
+  await page.route("**/app/", (route) => route.fulfill({ contentType, body: html }));
+  await page.goto("/app/");
+}
+
+/** The widget's pill: its accessible name says what it shows. */
+export const pill = (page: Page) => page.getByRole("button", { name: /^tracepanel:/ });
+
+/** The panel the pill opens, in its frame. */
+export const panel = (page: Page) => page.frameLocator("iframe");

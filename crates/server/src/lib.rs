@@ -538,7 +538,6 @@ async fn static_handler(uri: Uri) -> Response {
             }
         },
     };
-    let mime = mime_guess::from_path(path).first_or_octet_stream();
     // The page asks for its files with their version (`tracepanel.min.js?v=…`), and fonts carry a hash in their name:
     // those never change, cached for good. The page itself and widget.min.js (an SDK's <script>) never cached.
     let versioned = uri.query().is_some_and(|query| query.starts_with("v="));
@@ -547,16 +546,47 @@ async fn static_handler(uri: Uri) -> Response {
     } else {
         "no-cache"
     };
-    let mut response = ([(header::CONTENT_TYPE, mime.as_ref())], file.data).into_response();
+    let mut response = ([(header::CONTENT_TYPE, content_type(path))], file.data).into_response();
     response
         .headers_mut()
         .insert(header::CACHE_CONTROL, HeaderValue::from_static(cache));
     response
 }
 
+/// A file's type, and for text its charset: widget.min.js runs in an app's page, which reads a script in the page's
+/// own encoding when the answer doesn't name one, and its arrows and dots came out as mojibake on a page not in UTF-8.
+fn content_type(path: &str) -> String {
+    let mime = mime_guess::from_path(path).first_or_octet_stream();
+    let text = mime.type_() == mime_guess::mime::TEXT
+        || matches!(mime.subtype().as_str(), "javascript" | "json" | "svg");
+    if text && mime.get_param("charset").is_none() {
+        format!("{mime}; charset=utf-8")
+    } else {
+        mime.to_string()
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::is_local;
+    use super::{content_type, is_local};
+
+    #[test]
+    fn text_files_name_their_charset() {
+        assert_eq!(
+            [
+                content_type("widget.min.js"),
+                content_type("index.html"),
+                content_type("tracepanel.min.css"),
+                content_type("assets/geist.woff2"),
+            ],
+            [
+                "text/javascript; charset=utf-8".to_owned(),
+                "text/html; charset=utf-8".to_owned(),
+                "text/css; charset=utf-8".to_owned(),
+                "font/woff2".to_owned(),
+            ]
+        );
+    }
 
     #[test]
     fn only_pages_on_this_machine_are_local() {

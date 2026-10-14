@@ -42,6 +42,13 @@
 - An error's local variables line up: the names take the width of the
   longest one, not a third of the frame.
 
+### Fixed
+
+- The page widget's text on a page that isn't in UTF-8: its arrows and dots
+  came out garbled, as the agent served `widget.min.js` without a charset and
+  the page read it in its own encoding. The agent names UTF-8 for every text
+  file it serves now.
+
 ## 0.1.1 (2026-10-13)
 
 ### Changed

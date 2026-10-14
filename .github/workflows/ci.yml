@@ -3,11 +3,12 @@ name: CI
 # One workflow for every change: `changes` reads what the change touched, and each check runs only when its part did
 # (the Rust when the crates or what they embed changed, the UI when ui/ did, the docs when a page or a comment did).
 # A check with nothing to check is skipped, and `CI` at the end passes when every check passed or was skipped: it is
-# the one check main's protection requires.
+# the one check main's protection requires. A merge to main that brings exactly the code its pull request's last run
+# passed on (main didn't move in between) checks nothing again: that run already checked this tree.
 #
 # The console's behaviour is checked through its API by tracepanel-python's tests, which build this agent from its
-# checkout (tracepanel-python's CI). Here: format, lints and the crates' own tests, and the UI's checks, the ones
-# the pre-push hook runs locally.
+# checkout (tracepanel-python's CI). Here: format, lints and the crates' own tests, the UI's checks (the ones the
+# pre-push hook runs locally), and the console in a browser against this agent (ui/e2e, Playwright).
 
 on:
   push:
@@ -30,6 +31,11 @@ jobs:
     name: What changed
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      # To find the merged pull request's last run.
+      actions: read
+      pull-requests: read
     outputs:
       rust: ${{ steps.paths.outputs.rust }}
       ui: ${{ steps.paths.outputs.ui }}
@@ -39,12 +45,36 @@ jobs:
         with:
           fetch-depth: 0
 
+      # A pull request's run checks its merge with main as main was then. When it passed on the pull request's last
+      # commit, and main hadn't moved since the run began, the merge on main is that tree: nothing to check again.
+      - id: tested
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          api() { gh api "repos/$GITHUB_REPOSITORY/$1" --jq "$2"; }
+          pr=$(api "commits/$GITHUB_SHA/pulls" '.[0].number // empty')
+          [ -n "$pr" ] || exit 0
+          head=$(api "pulls/$pr" '.head.sha')
+          run=$(api "actions/workflows/ci.yml/runs?event=pull_request&head_sha=$head&status=success" \
+            '.workflow_runs[0] | "\(.id) \(.run_started_at)"')
+          [ -n "$run" ] && [ "$run" != "null null" ] || exit 0
+          read -r id started <<< "$run"
+          main_then=$(api "commits/$BEFORE" '.commit.committer.date')
+          if [[ "$main_then" < "$started" ]]; then
+            echo "same=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::#$pr's run $id passed on this code (main was at ${BEFORE:0:7}): not checked again."
+          fi
+
       - id: paths
         env:
           # A pull request: what it changes from its base. A push to main: what the push added.
           BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          TESTED: ${{ steps.tested.outputs.same }}
         run: |
           everything() { for part in rust ui docs; do echo "$part=true" >> "$GITHUB_OUTPUT"; done; }
+          if [ "$TESTED" = "true" ]; then for part in rust ui docs; do echo "$part=false" >> "$GITHUB_OUTPUT"; done; exit 0; fi
           # Run by hand, a new branch, or a base this checkout doesn't have: check everything.
           if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2> /dev/null; then everything; exit 0; fi
           files=$(git diff --name-only "$BASE" HEAD)
@@ -162,10 +192,59 @@ jobs:
           if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2> /dev/null; then BASE=HEAD~1; fi
           pnpm exec fallow audit --base "$BASE"
 
+  e2e:
+    # The console in Chromium against the agent this change builds, with the UI it embeds and traces as the SDKs send
+    # them: a change to either side can break what a person sees. A failure keeps Playwright's report and traces.
+    name: UI e2e
+    needs: changes
+    if: needs.changes.outputs.rust == 'true' || needs.changes.outputs.ui == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+      - uses: actions/checkout@v7
+
+      - run: rustup toolchain install
+        working-directory: .
+
+      - uses: Swatinem/rust-cache@v2
+
+      - run: cargo build --locked --bin tracepanel-agent
+        working-directory: .
+
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: ui/package.json
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: pnpm
+          cache-dependency-path: ui/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Chromium for Playwright
+        run: pnpm --filter @tracepanel/e2e exec playwright install --with-deps chromium
+
+      - name: The console in a browser
+        run: pnpm --filter @tracepanel/e2e e2e
+
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: |
+            ui/e2e/playwright-report
+            ui/e2e/test-results
+          retention-days: 7
+
   ci:
     # What main's protection requires: every check passed, or had nothing to check.
     name: CI
-    needs: [changes, rust, docs, ui]
+    needs: [changes, rust, docs, ui, e2e]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -173,7 +252,7 @@ jobs:
       - env:
           RESULTS: ${{ join(needs.*.result, ' ') }}
         run: |
-          echo "changes, rust, docs, ui: $RESULTS"
+          echo "changes, rust, docs, ui, e2e: $RESULTS"
           for result in $RESULTS; do
             case "$result" in success | skipped) ;; *) echo "::error::a check $result" && exit 1 ;; esac
           done
