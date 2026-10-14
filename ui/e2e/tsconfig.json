@@ -1,0 +1,6 @@
+{
+  "extends": "../tsconfig.base.json",
+  // Playwright loads the tests' TypeScript itself: imports name the .ts files as they are.
+  "compilerOptions": { "types": ["node"], "allowImportingTsExtensions": true },
+  "include": ["*.ts", "tests"]
+}

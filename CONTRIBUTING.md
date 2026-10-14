@@ -69,6 +69,25 @@ The agent embeds `ui-dist/`, the built UI. After changing `ui/`, run
 `scripts/ui.sh` and commit `ui-dist/` with the change. CI checks that
 `ui-dist/` matches `ui/`.
 
+### Test the console in a browser
+
+`ui/e2e` opens the console in Chromium against a real agent: a debug build of
+this checkout, with a store of its own. Before the tests, it sends the agent
+the traces in `schema/examples` and a few more it makes: a page's views and
+actions, a task, a job. A test fails on an error in the page's console, an
+exception the page didn't catch, or an answer of 5xx.
+
+```bash
+cargo build                                   # target/debug/tracepanel-agent
+cd ui/e2e
+pnpm exec playwright install chromium         # once
+pnpm e2e                                      # pnpm e2e --ui: step through
+```
+
+The debug agent reads `ui-dist/` from disk, so run `scripts/ui.sh` after
+changing `ui/`. CI runs the same tests when the crates or the UI change, and
+keeps Playwright's report and traces when one fails.
+
 ## Change what an SDK sends
 
 `schema/` holds what the SDKs, the agent and the UI agree on: the trace
