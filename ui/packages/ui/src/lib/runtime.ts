@@ -79,6 +79,41 @@ export function runtimeKind(label: string): RuntimeKind | null {
   return FRAMEWORKS.get(frameworkName) ?? LANGUAGES.get(languageName) ?? null;
 }
 
+type Attrs = Record<string, unknown>;
+
+const LANGUAGE_NAMES: Record<string, string> = { nodejs: "Node", webjs: "Browser", python: "Python", go: "Go" };
+
+function textOf(value: unknown): string | undefined {
+  return typeof value === "string" && value ? value : undefined;
+}
+
+/** A trace's language as people say it: OpenTelemetry's nodejs is Node, or Bun when Bun runs it; webjs the browser. */
+function languageName(attrs: Attrs): string | undefined {
+  const language = textOf(attrs["telemetry.sdk.language"]);
+  if (!language) return undefined;
+  if (textOf(attrs["process.runtime.name"]) === "bun") return "Bun";
+  return LANGUAGE_NAMES[language] ?? `${language[0]?.toUpperCase()}${language.slice(1)}`;
+}
+
+/** The implementation when it isn't the language's own: (cpython), not (node) under Node or (bun) under Bun. */
+function implementation(attrs: Attrs, language: string): string | undefined {
+  const name = textOf(attrs["process.runtime.name"]);
+  return name && !["node", "bun", language.toLowerCase()].includes(name.toLowerCase()) ? `(${name})` : undefined;
+}
+
+/**
+ * What ran a trace, as the SDKs label a page's runtime: "Node 26.11.1 · Express 5.3.0"; `detailed` names the
+ * implementation too, as the panel does: "Python 3.14.0 (cpython) · Django 6.1".
+ */
+export function traceRuntime(attrs: Attrs, detailed = false): string | undefined {
+  const language = languageName(attrs);
+  if (!language) return undefined;
+  const version = textOf(attrs["process.runtime.version"]);
+  const runtime = [language, version, detailed ? implementation(attrs, language) : undefined].filter(Boolean).join(" ");
+  const framework = textOf(attrs["tracepanel.framework"]);
+  return framework ? `${runtime} · ${framework}` : runtime;
+}
+
 export function runtimeName(kind: RuntimeKind): string {
   return NAMES[kind];
 }

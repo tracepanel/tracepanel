@@ -527,12 +527,23 @@ async fn get(router: &axum::Router, uri: &str) -> (StatusCode, Value) {
 }
 
 /// A page's view, as tracepanel-js's browser recording sends it: its load, and a call to its API.
-fn page_view(id: &str, path: &str, status: &str) -> Value {
+/// A page's view, or with `action` what the user did on it, as tracepanel-js records them in the browser.
+fn page_view(id: &str, path: &str, action: Option<&str>, status: &str) -> Value {
+    let (name, trigger) = match action {
+        Some(action) => (format!("{path} › {action}"), "click"),
+        None => (path.to_owned(), "load"),
+    };
+    let mut attrs = serde_json::json!({
+        "service.name": "shop-web", "service.role": "browser", "page.path": path, "page.trigger": trigger,
+    });
+    if let Some(action) = action {
+        attrs["page.action"] = action.into();
+    }
     serde_json::json!({
-        "id": id, "kind": "page", "name": path, "start": 1_000_000, "duration": 420_000, "status": status,
-        "attrs": {"service.name": "shop-web", "service.role": "browser", "page.path": path},
+        "id": id, "kind": "page", "name": name, "start": 1_000_000, "duration": 420_000, "status": status,
+        "attrs": attrs,
         "spans": [
-            {"id": format!("{id}-ROOT"), "parent_id": null, "kind": "page", "name": path, "start": 1_000_000,
+            {"id": format!("{id}-ROOT"), "parent_id": null, "kind": "page", "name": name, "start": 1_000_000,
              "duration": 420_000, "status": "ok", "attrs": {}},
             {"id": format!("{id}-CALL"), "parent_id": format!("{id}-ROOT"), "kind": "http.client",
              "name": "GET 127.0.0.1/api/books", "start": 1_100_000, "duration": 30_000, "status": "ok",
@@ -544,7 +555,7 @@ fn page_view(id: &str, path: &str, status: &str) -> Value {
 }
 
 #[tokio::test]
-async fn a_page_s_views_come_in_through_the_console_and_are_listed_by_path() {
+async fn a_page_s_views_and_actions_come_in_through_the_console_and_are_listed_by_page() {
     let taken = std::sync::Arc::new(std::sync::Mutex::new(Vec::<Batch>::new()));
     let sink: tracepanel_protocol::Sink = {
         let taken = taken.clone();
@@ -552,8 +563,9 @@ async fn a_page_s_views_come_in_through_the_console_and_are_listed_by_path() {
     };
     let ingest = tracepanel_server::ingest(sink);
     let views = serde_json::json!([
-        page_view("PAGE1", "/books", "ok"),
-        page_view("PAGE2", "/books", "error")
+        page_view("PAGE1", "/books", None, "ok"),
+        page_view("PAGE2", "/books", Some("click \"Save\""), "error"),
+        page_view("PAGE3", "/books", Some("click \"Save\""), "ok")
     ]);
     let post = |content_type: &'static str, body: String| {
         Request::post("/api/ingest")
@@ -596,22 +608,40 @@ async fn a_page_s_views_come_in_through_the_console_and_are_listed_by_path() {
 
     let (status, pages) = get(&router, "/api/pages").await;
     assert_eq!(status, StatusCode::OK);
+    // The page's view first, then what was done on it.
+    let rows: Vec<Value> = pages["pages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|row| {
+            serde_json::json!([
+                row["name"],
+                row["page"],
+                row["action"],
+                row["trigger"],
+                row["count"],
+                row["failures"],
+                row["avg_calls"]
+            ])
+        })
+        .collect();
     assert_eq!(
-        (
-            &pages["pages"][0]["page"],
-            &pages["pages"][0]["views"],
-            &pages["pages"][0]["failures"],
-            &pages["pages"][0]["avg_calls"]
-        ),
-        (
-            &serde_json::json!("/books"),
-            &serde_json::json!(2),
-            &serde_json::json!(1),
-            &serde_json::json!(1.0)
-        )
+        rows,
+        vec![
+            serde_json::json!(["/books", "/books", null, "load", 1, 0, 1.0]),
+            serde_json::json!([
+                "/books › click \"Save\"",
+                "/books",
+                "click \"Save\"",
+                "click",
+                2,
+                1,
+                1.0
+            ]),
+        ]
     );
 
     let (_, counts) = get(&router, "/api/counts").await;
-    assert_eq!(counts["sections"]["pages"], 2);
+    assert_eq!(counts["sections"]["pages"], 3);
     let _ = std::fs::remove_dir_all(&dir);
 }

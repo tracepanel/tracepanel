@@ -62,8 +62,10 @@ export const ENTRY: Record<
   pages: {
     label: "Pages",
     title: "Pages",
-    description: "Pages viewed in the browser: their load, the calls they make to the API, their errors.",
-    calls: "Views",
+    description:
+      "Pages in the browser: each view (a load, a route change) and what users do on it (clicks, submits), with the " +
+      "calls each makes to the API and its errors.",
+    calls: "Events",
     scope: "kind:page",
     group: (key) => `kind:page name:${quote(key)}`,
   },

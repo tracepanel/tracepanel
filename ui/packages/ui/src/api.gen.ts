@@ -983,16 +983,24 @@ export interface components {
             with_issues: number;
             last_seen: components["schemas"]["Time"];
         };
+        /** @description A page's view (its load, an SPA's route change) or an action on it (what the user did that called the API: a click, a submit; background when nobody did). A page's view comes first, then its actions. */
         PageRow: {
+            /** @description The traces' name, the group's key: /books, or /books › click "Save". */
+            name: string;
             /** @description The page's path: /books/42. */
             page: string;
-            views: number;
-            /** @description Views with an error in the page. */
+            /** @description What the user did: click "Save". None for a view. */
+            action: string | null;
+            /** @description load, navigation, click, submit or background. */
+            trigger: string | null;
+            /** @description Views, or times the action was done. */
+            count: number;
+            /** @description Views or actions with an error in the page or a failed call. */
             failures: number;
             p50: components["schemas"]["Duration"];
             p95: components["schemas"]["Duration"];
             total: components["schemas"]["Duration"];
-            /** @description Requests to its API per view. */
+            /** @description Requests to the API per view or action. */
             avg_calls: number;
             with_issues: number;
             last_seen: components["schemas"]["Time"];

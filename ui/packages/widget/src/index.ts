@@ -1,5 +1,5 @@
 // Corner badge, fetch and XHR capture, slide-out panel (iframe inside Shadow DOM).
-import { RUNTIME_PATHS, runtimeKind, runtimeName } from "@tracepanel/ui/lib/runtime";
+import { RUNTIME_PATHS, runtimeKind, runtimeName, traceRuntime } from "@tracepanel/ui/lib/runtime";
 import { CARD_STYLE, mountCard, plural } from "./card";
 
 export interface TraceInfo {
@@ -619,6 +619,33 @@ function saveTab(entries: readonly TabEntry[]): void {
 
 const SVG = "http://www.w3.org/2000/svg";
 
+/** The console could not be reached from this page: asking again won't help. */
+const UNREACHABLE = Symbol("unreachable");
+
+/** A console answer's JSON: undefined while it isn't there yet (not stored), UNREACHABLE when the fetch failed. */
+async function fetchJson(url: URL): Promise<unknown> {
+  try {
+    const response = await nativeFetch(url, { credentials: "same-origin" });
+    return response.ok ? await response.json() : undefined;
+  } catch {
+    return UNREACHABLE;
+  }
+}
+
+/** Whether to stop asking: the console is unreachable, or it answered and the answer was used. */
+function settled(body: unknown, use: (body: unknown) => boolean): boolean {
+  if (body === UNREACHABLE) return true;
+  return body !== undefined && use(body);
+}
+
+// biome-ignore lint/style/useNamingConvention: the API's field name.
+type ListedTrace = { id: string; issues?: number; issue_kinds?: string[] };
+
+/** One trace from a listing of traces by id, if the agent has stored it. */
+function listedTrace(body: unknown, id: string | undefined): ListedTrace | undefined {
+  return (body as { traces?: ListedTrace[] }).traces?.find((trace) => trace.id === id);
+}
+
 /** The mark and name of what served the page; an unknown runtime keeps its language's first word. */
 function showRuntime(element: HTMLElement, label: string | undefined): void {
   if (!label) return;
@@ -657,7 +684,11 @@ export function mount(options: WidgetOptions = {}): Widget {
   const badge = query<HTMLButtonElement>(root, ".badge");
   const stats = query<HTMLElement>(root, ".stats");
   // What served the page, as the panel shows it (Django, FastAPI, Flask, Python, Go): which backend, at a glance.
-  showRuntime(query<HTMLElement>(root, ".runtime"), options.runtime);
+  const runtimeMark = query<HTMLElement>(root, ".runtime");
+  showRuntime(runtimeMark, options.runtime);
+  // A page its server didn't label (an SPA from a dev server): what answered its first traced call.
+  let runtime = options.runtime;
+  let runtimeAsked = Boolean(runtime);
   const panel = query<HTMLElement>(root, ".panel");
   const panelUrl = options.api ? new URL(options.api, location.href) : null;
   const handle = query<HTMLElement>(root, ".resize");
@@ -716,7 +747,7 @@ export function mount(options: WidgetOptions = {}): Widget {
           type: "tracepanel:tab",
           entries: tab,
           current: pageCleared ? null : (page?.trace ?? null),
-          runtime: options.runtime ?? null,
+          runtime: runtime ?? null,
         },
         panelUrl.origin,
       );
@@ -749,7 +780,7 @@ export function mount(options: WidgetOptions = {}): Widget {
     fitBadge();
     badge.dataset["verdict"] = worst;
     // No title: the hover card shows all of it (and more); screen readers get the summary.
-    badge.setAttribute("aria-label", pillLabel(all, options.runtime));
+    badge.setAttribute("aria-label", pillLabel(all, runtime));
   }
 
   /** A page htmx loaded (a boosted link or form): it heads the list, and what follows is its requests. */
@@ -765,40 +796,55 @@ export function mount(options: WidgetOptions = {}): Widget {
     sendTab();
   }
 
-  /** Issues found after the response (by the agent): asked from the console once the request is stored. */
-  async function resolveIssues(info: TraceInfo): Promise<void> {
-    if (!info.issuesPending || !info.trace || !panelUrl) return;
-    const url = new URL(`api/traces?ids=${encodeURIComponent(info.trace)}`, panelUrl);
+  /**
+   * Asks the console about a request once the agent stored it: `use` takes the answer, and says whether it was
+   * there. Gives up quietly when the console is unreachable from this page.
+   */
+  async function askConsole(path: string, use: (body: unknown) => boolean): Promise<void> {
+    if (!panelUrl) return;
+    const url = new URL(path, panelUrl);
     for (let attempt = 1; attempt <= ISSUE_TRIES; attempt++) {
-      try {
-        const response = await nativeFetch(url, { credentials: "same-origin" });
-        if (response.ok) {
-          const body = (await response.json()) as {
-            // biome-ignore lint/style/useNamingConvention: the API's field name.
-            traces?: { id: string; issues?: number; issue_kinds?: string[] }[];
-          };
-          const row = body.traces?.find((trace) => trace.id === info.trace);
-          if (row) {
-            info.issues = row.issues ?? 0;
-            info.issuesPending = false;
-            const entry = tab.find((item) => item.id === info.trace);
-            if (entry?.summary) entry.summary = { ...entry.summary, issues: info.issues, kinds: row.issue_kinds };
-            saveTab(tab);
-            render();
-            sendTab();
-            return;
-          }
-        }
-      } catch {
-        // The console is not reachable from this page: the badge goes without the count.
-        return;
-      }
+      if (settled(await fetchJson(url), use)) return;
       await new Promise((resolve) => window.setTimeout(resolve, ISSUE_RETRY_MS * attempt));
     }
   }
 
+  /** Issues found after the response (by the agent): asked from the console once the request is stored. */
+  async function resolveIssues(info: TraceInfo): Promise<void> {
+    if (!info.issuesPending || !info.trace) return;
+    await askConsole(`api/traces?ids=${encodeURIComponent(info.trace)}`, (body) => {
+      const row = listedTrace(body, info.trace);
+      if (row) applyIssues(info, row);
+      return row !== undefined;
+    });
+  }
+
+  function applyIssues(info: TraceInfo, row: ListedTrace): void {
+    info.issues = row.issues ?? 0;
+    info.issuesPending = false;
+    const entry = tab.find((item) => item.id === info.trace);
+    if (entry?.summary) entry.summary = { ...entry.summary, issues: info.issues, kinds: row.issue_kinds };
+    saveTab(tab);
+    render();
+    sendTab();
+  }
+
+  /** The runtime of the app that answered a call, from its trace: for a page its server didn't label. */
+  async function resolveRuntime(info: TraceInfo): Promise<void> {
+    if (runtimeAsked || !info.trace) return;
+    runtimeAsked = true;
+    await askConsole(`api/traces/${encodeURIComponent(info.trace)}`, (body) => {
+      runtime = traceRuntime((body as { attrs?: Record<string, unknown> }).attrs ?? {});
+      showRuntime(runtimeMark, runtime);
+      render();
+      sendTab();
+      return true;
+    });
+  }
+
   function record(info: TraceInfo): void {
     void resolveIssues(info);
+    void resolveRuntime(info);
     if (info.htmx?.boosted) {
       navigate(info);
       return;

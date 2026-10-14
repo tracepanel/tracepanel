@@ -52,7 +52,8 @@ export const GRAPHQL_OPERATIONS: OverviewScope = { filter: "operation:*", noun: 
 export const WEBSOCKET_EVENTS: OverviewScope = { filter: "kind:websocket", noun: "event", group: "events" };
 export const JOB_RUNS: OverviewScope = { filter: "kind:command", noun: "run", group: "jobs" };
 export const RPC_CALLS: OverviewScope = { filter: "kind:rpc", noun: "call", group: "methods" };
-export const PAGE_VIEWS: OverviewScope = { filter: "kind:page", noun: "view", group: "pages" };
+// A page's views and the actions on it together: events.
+export const PAGE_VIEWS: OverviewScope = { filter: "kind:page", noun: "event", group: "pages" };
 
 const KIND_BADGES: Record<string, string> = { command: "job", websocket: "ws" };
 
@@ -243,12 +244,14 @@ export function TracesOverview({
               title={`Slowest ${scope.group}`}
               empty={`No ${nouns} yet.`}
               items={overview.slowest}
+              noun={scope.noun}
               metric={(item) => `p95 ${duration(item.p95)}`}
             />
             <OperationList
               title={`Failing ${scope.group}`}
               empty="No errors in this range."
               items={overview.failing}
+              noun={scope.noun}
               metric={(item) => `${item.errors} ${item.errors === 1 ? "error" : "errors"}`}
               tone="error"
             />
@@ -280,12 +283,15 @@ function OperationList({
   title,
   empty,
   items,
+  noun,
   metric,
   tone,
 }: {
   title: string;
   empty: string;
   items: readonly OperationStats[];
+  /** What one of its traces is: "request", "run", "event". */
+  noun: string;
   metric: (item: OperationStats) => string;
   tone?: "error";
 }) {
@@ -322,7 +328,7 @@ function OperationList({
                 </>
               )}
               <span className="text-base whitespace-nowrap text-muted-foreground">
-                {item.calls} {item.calls === 1 ? "call" : "calls"}
+                {item.calls} {item.calls === 1 ? noun : `${noun}s`}
               </span>
               <b
                 className={`min-w-24 text-right font-semibold whitespace-nowrap tabular-nums ${tone === "error" ? "text-error" : ""}`}

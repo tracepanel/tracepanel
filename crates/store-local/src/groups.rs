@@ -72,6 +72,25 @@ pub(crate) fn busiest(mut items: Vec<Value>, limit: i64) -> Vec<Value> {
     items
 }
 
+/// A page's view, then its actions, busiest first; the pages too, by the time spent on each in all.
+fn by_page(mut items: Vec<Value>, limit: i64) -> Vec<Value> {
+    let mut totals: HashMap<String, i64> = HashMap::new();
+    for item in &items {
+        *totals.entry(text_of(&item["page"])).or_default() += item["total"].as_i64().unwrap_or(0);
+    }
+    items.sort_by_key(|item| {
+        let page = text_of(&item["page"]);
+        (
+            -totals.get(&page).copied().unwrap_or(0),
+            page,
+            !item["action"].is_null(),
+            -item["total"].as_i64().unwrap_or(0),
+        )
+    });
+    items.truncate(limit.max(0) as usize);
+    items
+}
+
 pub(crate) fn group_stats(rows: &[Row]) -> serde_json::Map<String, Value> {
     let durations = durations(rows);
     let Value::Object(map) = serde_json::json!({
@@ -607,6 +626,9 @@ impl Reader {
             &db,
             &format!(
                 "SELECT name, duration, status, start, issues, \
+                 json_extract(attrs, '$.\"page.path\"') AS path, \
+                 json_extract(attrs, '$.\"page.action\"') AS action, \
+                 json_extract(attrs, '$.\"page.trigger\"') AS trigger, \
                  (SELECT COUNT(*) FROM calls WHERE calls.trace_id = traces.id AND calls.system = 'http') AS queries \
                  FROM traces WHERE kind = 'page' AND {condition}"
             ),
@@ -614,11 +636,20 @@ impl Reader {
         )?;
         let items = grouped(rows, |row| text_of(&row["name"]))
             .into_iter()
-            .map(|(page, rows)| {
+            .map(|(name, rows)| {
                 let durations = durations(&rows);
+                let first = &rows[0];
+                let path = match &first["path"] {
+                    Value::String(path) => path.clone(),
+                    _ => name.clone(),
+                };
                 serde_json::json!({
-                    "page": page,
-                    "views": rows.len(),
+                    "name": name,
+                    "page": path,
+                    // What the user did (click "Save"). Null for a view: the page's load, a route change.
+                    "action": first["action"],
+                    "trigger": first["trigger"],
+                    "count": rows.len(),
                     "failures": failed(&rows),
                     "p50": pct(&durations, 0.5),
                     "p95": pct(&durations, 0.95),
@@ -629,7 +660,7 @@ impl Reader {
                 })
             })
             .collect();
-        Ok(busiest(items, limit))
+        Ok(by_page(items, limit))
     }
 
     /// Monitoring over every trace matching a search, whatever its kind; `group` "endpoint" puts requests by route.
