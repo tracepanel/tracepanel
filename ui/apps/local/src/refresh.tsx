@@ -32,17 +32,20 @@ const CHOICES: [number, string][] = [
   [60000, "1m"],
 ];
 
+// Fresh enough for a local console, without its lists jumping under the reader every few seconds.
+const DEFAULT_MS = 15000;
+
 function read(): number {
   try {
     const value = Number(localStorage.getItem(KEY));
-    return CHOICES.some(([ms]) => ms === value) && localStorage.getItem(KEY) !== null ? value : 5000;
+    return CHOICES.some(([ms]) => ms === value) && localStorage.getItem(KEY) !== null ? value : DEFAULT_MS;
   } catch {
-    return 5000;
+    return DEFAULT_MS;
   }
 }
 
 const RefreshContext = createContext<Refresh>({
-  interval: 5000,
+  interval: DEFAULT_MS,
   setInterval: () => undefined,
   tick: 0,
   now: () => undefined,

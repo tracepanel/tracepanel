@@ -20,6 +20,8 @@
   plain server. An app the JavaScript SDK traces is labelled Node 26 or Bun
   1.3, not by OpenTelemetry's language name, nodejs.
 - A trace's SQL tab is named **DB**: the tabs fit on a narrower panel.
+- The console refreshes every 15 seconds by default, not every 5. A choice
+  you made in its refresh menu stays.
 
 ## 0.1.1 (2026-10-13)
 
