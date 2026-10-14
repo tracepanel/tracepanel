@@ -1,6 +1,7 @@
 import { ago, duration } from "./format";
 import { DatabaseIcon } from "./icons";
 import { ISSUE_LABELS } from "./labels";
+import { pageParts } from "./lib/page";
 import { IssueChip, MethodBadge, RoutePath, StatusBadge } from "./primitives";
 import type { IssueKind, TraceSummary } from "./types";
 
@@ -34,30 +35,18 @@ export function TraceList({ rows, selectedId, currentId, newIds, compact, onSele
             type="button"
             className="dt-request-row"
             data-depth={depth}
+            data-kind={trace.kind === "page" ? "page" : undefined}
             data-tone={trace.status === "error" ? "error" : trace.issues > 0 ? "warn" : "ok"}
             aria-current={trace.id === selectedId ? "true" : undefined}
             data-new={newIds?.has(trace.id) ? "" : undefined}
             onClick={() => onSelect(trace.id)}
           >
             <span className="dt-request-main">
-              {/* A GraphQL request is its operation ("GraphQL query PostList"), not POST /graphql/. */}
-              <MethodBadge
-                method={trace.name.startsWith("GraphQL ") ? "GQL" : (trace.method ?? trace.name.split(" ")[0])}
-                htmx={trace.htmx}
-              />
-              <span className="dt-request-path">
-                {trace.name.startsWith("GraphQL ")
-                  ? trace.name.slice("GraphQL ".length)
-                  : (trace.path ?? <RoutePath path={trace.name.split(" ").slice(1).join(" ")} />)}
-                {/* An htmx request: the element that sent it and where the answer went, after the path. */}
-                {trigger ? (
-                  <span className="dt-request-trigger">
-                    {" "}
-                    · {trigger}
-                    {target ? ` → ${target}` : ""}
-                  </span>
-                ) : null}
-              </span>
+              {trace.kind === "page" ? (
+                <PageName name={trace.name} />
+              ) : (
+                <RequestName trace={trace} trigger={trigger} target={target} />
+              )}
               {trace.id === currentId ? (
                 compact ? (
                   // Narrow: a dot, so the path keeps its room; the row is also highlighted.
@@ -68,41 +57,123 @@ export function TraceList({ rows, selectedId, currentId, newIds, compact, onSele
               ) : null}
             </span>
             <span className="dt-request-meta">
-              <StatusBadge status={trace.http_status} />
+              {/* A view or an action has no status of its own: an empty cell keeps the columns in place. */}
+              {trace.kind === "page" ? <span /> : <StatusBadge status={trace.http_status} />}
               <span>{duration(trace.duration)}</span>
-              {compact ? (
-                // A column of numbers: the database icon says what they count, the tooltip spells it out.
-                <span
-                  className="dt-request-queries"
-                  data-zero={trace.queries === 0 ? "" : undefined}
-                  title={`${trace.queries} SQL ${trace.queries === 1 ? "query" : "queries"}`}
-                >
-                  <DatabaseIcon size={12} />
-                  <span className="dt-request-queries-n">{trace.queries}</span>
-                </span>
-              ) : (
-                <span>{`${trace.queries} ${trace.queries === 1 ? "query" : "queries"}`}</span>
-              )}
-              {compact ? (
-                <CompactChips kinds={trace.issue_kinds} issues={trace.issues} />
-              ) : (
-                <>
-                  {(trace.issue_kinds ?? []).map((kind) => (
-                    <IssueChip key={kind} kind={kind} />
-                  ))}
-                  {trace.issue_kinds === undefined && trace.issues > 0 ? (
-                    <span className="dt-chip" data-kind="n+1">
-                      {trace.issues} {trace.issues === 1 ? "issue" : "issues"}
-                    </span>
-                  ) : null}
-                </>
-              )}
-              {compact ? null : <span className="dt-request-time">{ago(trace.start)}</span>}
+              {compact ? <CompactMeta trace={trace} /> : <FullMeta trace={trace} />}
             </span>
           </button>
         </li>
       ))}
     </ul>
+  );
+}
+
+/**
+ * The narrow list's numbers after the time: the queries (the database icon says what they count, the tooltip spells
+ * it out), then the first finding. A browser view or action runs no SQL itself: its requests, under it, do.
+ */
+function CompactMeta({ trace }: { trace: TraceSummary }) {
+  const queries =
+    trace.kind === "page" ? (
+      <span />
+    ) : (
+      <span
+        className="dt-request-queries"
+        data-zero={trace.queries === 0 ? "" : undefined}
+        title={`${trace.queries} SQL ${trace.queries === 1 ? "query" : "queries"}`}
+      >
+        <DatabaseIcon size={12} />
+        <span className="dt-request-queries-n">{trace.queries}</span>
+      </span>
+    );
+  return (
+    <>
+      {queries}
+      <CompactChips kinds={trace.issue_kinds} issues={trace.issues} />
+    </>
+  );
+}
+
+/** The wide list's numbers after the time: the queries, every finding, when it happened. */
+function FullMeta({ trace }: { trace: TraceSummary }) {
+  return (
+    <>
+      <span>{trace.kind === "page" ? "" : `${trace.queries} ${trace.queries === 1 ? "query" : "queries"}`}</span>
+      <FullChips kinds={trace.issue_kinds} issues={trace.issues} />
+      <span className="dt-request-time">{ago(trace.start)}</span>
+    </>
+  );
+}
+
+/** Every finding by name; just their count while the kinds aren't known yet. */
+function FullChips({ kinds, issues }: { kinds: IssueKind[] | undefined; issues: number }) {
+  if (kinds === undefined) {
+    return issues > 0 ? (
+      <span className="dt-chip" data-kind="n+1">
+        {issues} {issues === 1 ? "issue" : "issues"}
+      </span>
+    ) : null;
+  }
+  return (
+    <>
+      {kinds.map((kind) => (
+        <IssueChip key={kind} kind={kind} />
+      ))}
+    </>
+  );
+}
+
+/** What a request is named by: its GraphQL operation (not POST /graphql/), its path, else its name's path. */
+function requestPath(trace: TraceSummary) {
+  if (trace.name.startsWith("GraphQL ")) return trace.name.slice("GraphQL ".length);
+  return trace.path ?? <RoutePath path={trace.name.split(" ").slice(1).join(" ")} />;
+}
+
+/** An htmx request: the element that sent it and where the answer went, after the path. */
+function HtmxTrigger({ trigger, target }: { trigger: string; target?: string | undefined }) {
+  return (
+    <span className="dt-request-trigger">
+      {" "}
+      · {trigger}
+      {target ? ` → ${target}` : ""}
+    </span>
+  );
+}
+
+/** A request: its method (GQL for a GraphQL operation) and its path, and what sent it for htmx. */
+function RequestName({
+  trace,
+  trigger,
+  target,
+}: {
+  trace: TraceSummary;
+  trigger?: string | undefined;
+  target?: string | undefined;
+}) {
+  const method = trace.name.startsWith("GraphQL ") ? "GQL" : (trace.method ?? trace.name.split(" ")[0]);
+  return (
+    <>
+      <MethodBadge method={method} htmx={trace.htmx} />
+      <span className="dt-request-path">
+        {requestPath(trace)}
+        {trigger ? <HtmxTrigger trigger={trigger} target={target} /> : null}
+      </span>
+    </>
+  );
+}
+
+/** A view or an action recorded in the browser: its badge, the control, then its page. */
+function PageName({ name }: { name: string }) {
+  const { badge, label, page } = pageParts(name);
+  return (
+    <>
+      <MethodBadge method={badge} />
+      <span className="dt-request-path">
+        {label}
+        {page ? <span className="dt-request-trigger"> · {page}</span> : null}
+      </span>
+    </>
   );
 }
 

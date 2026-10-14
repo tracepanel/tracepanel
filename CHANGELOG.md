@@ -16,6 +16,13 @@
   serves that address on the page's origin. The console takes JSON only, so a
   page on another site can't send to it.
 
+- The panel lists what the user did in the browser when tracepanel-js
+  records the page: each view and action (`click "Save"`) is a row, its
+  requests under it, and opens with its calls, errors and console. Before
+  the page's first request, the pill shows its view and load time, as it
+  shows a server page's own load, and the runtime's mark it learned in the
+  tab.
+
 ### Changed
 
 - The panel, the console and the services map show the mark of a Node.js
@@ -23,6 +30,8 @@
   plain server. An app the JavaScript SDK traces is labelled Node 26 or Bun
   1.3, not by OpenTelemetry's language name, nodejs.
 - A trace's SQL tab is named **DB**: the tabs fit on a narrower panel.
+- Search reads a quote escaped inside a quoted value (`name:"/ › click
+  \"Save\""`): an action's page, named after a button, lists its calls.
 - The page widget shows the framework of the app that answered a page's
   calls when the page's server didn't name one (an SPA from a dev server),
   and the panel names a Node.js trace's runtime Node, not Nodejs.

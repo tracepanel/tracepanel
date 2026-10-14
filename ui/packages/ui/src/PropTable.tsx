@@ -30,7 +30,9 @@ export function PropTable({ rows }: { rows: readonly PropRow[] }) {
           <div key={row.id ?? row.label} className="group/row contents">
             <dt className="flex min-h-10 items-center border-b py-1.5 pr-5 text-muted-foreground">{row.label}</dt>
             <dd
-              className={`m-0 flex min-h-10 min-w-0 items-center border-b py-1.5 break-all ${row.mono ? "font-mono text-base" : ""}`}
+              // Wraps at spaces and slashes first, inside a word only when it must (a long id); a mono value at the
+              // size of the text beside it (mono glyphs run wider).
+              className={`m-0 flex min-h-10 min-w-0 items-center border-b py-1.5 [overflow-wrap:anywhere] ${row.mono ? "font-mono text-sm" : ""}`}
             >
               {row.value}
             </dd>

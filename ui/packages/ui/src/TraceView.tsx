@@ -32,6 +32,7 @@ import { IssueList } from "./IssueList";
 import { LogList } from "./LogList";
 import { groupNoun } from "./lib/calls";
 import { isTyping } from "./lib/keys";
+import { pageParts } from "./lib/page";
 import { linkProps, type TraceLinks } from "./links";
 import { Metrics } from "./Metrics";
 import { MethodBadge, RoutePath, StatusBadge } from "./primitives";
@@ -62,13 +63,26 @@ function htmxOf(trace: Trace): "request" | "boosted" | null {
   return trace.attrs["htmx.boosted"] ? "boosted" : "request";
 }
 
+/** A view or an action in the browser: VIEW /books, or CLICK "Save" · /books. */
+function pageHeading(name: string): { badge: string; title: string } {
+  const { badge, label, page } = pageParts(name);
+  return { badge, title: page ? `${label} · ${page}` : label };
+}
+
+/** The heading of a trace that isn't a request, by its kind. */
+const KIND_HEADINGS: Record<string, (name: string) => { badge: string; title: string }> = {
+  task: (name) => ({ badge: "TASK", title: name }),
+  command: (name) => ({ badge: "JOB", title: name }),
+  websocket: (name) => ({ badge: "WS", title: name.replace(/^WS /, "") }),
+  page: pageHeading,
+};
+
 function heading(trace: Trace): { badge: string; title: string } {
   const attrs = trace.attrs;
   const operation = attrs["graphql.operation"];
   if (typeof operation === "string") return { badge: "GQL", title: operation };
-  if (trace.kind === "task") return { badge: "TASK", title: trace.name };
-  if (trace.kind === "command") return { badge: "JOB", title: trace.name };
-  if (trace.kind === "websocket") return { badge: "WS", title: trace.name.replace(/^WS /, "") };
+  const byKind = KIND_HEADINGS[trace.kind];
+  if (byKind) return byKind(trace.name);
   const method = attrs["http.method"];
   const path = attrs["http.path"];
   return {

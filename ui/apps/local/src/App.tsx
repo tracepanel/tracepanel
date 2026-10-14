@@ -27,7 +27,7 @@ import { type ReactNode, type RefObject, useCallback, useEffect, useLayoutEffect
 import { ClearDialog } from "./ClearDialog";
 import { Console } from "./Console";
 import { exploreFor } from "./explore";
-import { type TabEntry, type TabHistory, usePolling, useTabHistory } from "./hooks";
+import { type EntrySummary, type TabEntry, type TabHistory, usePolling, useTabHistory } from "./hooks";
 import { RefreshProvider } from "./refresh";
 import { consoleLinks, go, href, type Route, useRoute } from "./routes";
 import { SearchPalette } from "./SearchPalette";
@@ -200,13 +200,46 @@ function fromWidget(entry: TabEntry): TraceSummary | undefined {
     htmx: summary.htmx ? (summary.htmx.boosted ? "boosted" : "request") : null,
   };
 }
+/** A row from what the widget knows: a request, or a view or an action recorded in the browser. */
+function rowFromWidget(entry: TabEntry): TraceSummary | undefined {
+  return entry.summary?.kind === "page" ? pageFromWidget(entry.id, entry.summary) : fromWidget(entry);
+}
+
+/** A view or an action recorded in the browser: named by its page and what was done, not a method and a path. */
+function pageFromWidget(id: string, summary: EntrySummary): TraceSummary {
+  return {
+    id,
+    kind: "page",
+    name: summary.name,
+    start: summary.start,
+    duration: summary.duration,
+    status: summary.failed ? "error" : "ok",
+    http_status: null,
+    queries: 0,
+    issues: 0,
+    method: null,
+    path: null,
+    route: null,
+    view: null,
+    user_id: null,
+    db_time: 0,
+    errors: 0,
+    logs: 0,
+    mails: 0,
+    issue_kinds: [],
+    db_aliases: [],
+    cache_aliases: [],
+    task_state: null,
+    htmx: null,
+  };
+}
 // biome-ignore-end lint/style/useNamingConvention: builds an API object; its field names are the wire format.
 
 /** Pages newest first, each followed by its own fetch/XHR requests in the order they happened. */
 function arrange(history: TabHistory, traces: readonly TraceSummary[]): TraceRow[] {
   const byId = new Map(traces.map((trace) => [trace.id, trace]));
   for (const entry of history.entries) {
-    const fallback = byId.has(entry.id) ? undefined : fromWidget(entry);
+    const fallback = byId.has(entry.id) ? undefined : rowFromWidget(entry);
     if (fallback) byId.set(entry.id, fallback);
   }
   const children = new Map<string | null, TraceSummary[]>();
@@ -557,9 +590,11 @@ function PageRequests({
   const list = useRef<HTMLElement>(null);
   const { unseen, jump } = useStickToBottom(list, rows.length, follow);
   const ajax = rows.length - 1;
+  // Requests only: the browser's views and actions are rows too, with their requests under them.
+  const requests = rows.filter((row) => row.trace.kind !== "page").length;
   const count =
     scope === "tab"
-      ? `· ${rows.length} ${rows.length === 1 ? "request" : "requests"}`
+      ? `· ${requests} ${requests === 1 ? "request" : "requests"}`
       : ajax > 0
         ? `+ ${ajax} ${ajax === 1 ? "request" : "requests"}`
         : "· no AJAX requests yet";

@@ -18,6 +18,81 @@ export interface TraceInfo {
   issuesPending?: boolean | undefined;
   /** Sent by htmx: what triggered it and where the answer goes. */
   htmx?: HtmxInfo | undefined;
+  /** The page's view or the action on it that made the call, as tracepanel-js records them in the browser. */
+  page?: string | undefined;
+}
+
+/** A view or an action tracepanel-js records in the browser, as it announces them (tracepanel:page). */
+interface PageAnnouncement {
+  id: string;
+  name: string;
+  start: number;
+  duration: number;
+  status: "ok" | "error";
+  open: boolean;
+}
+
+// tracepanel-js's browser recording marks each Response and XMLHttpRequest with the view or action that made it.
+const PAGE = Symbol.for("tracepanel.page");
+// The views and actions it announced before the widget listened.
+const ANNOUNCED = Symbol.for("tracepanel.pages");
+
+/** Each view and action the browser recording announces: those before the widget listened, then each as it comes. */
+function followPages(onPage: (announced: PageAnnouncement) => void): void {
+  for (const item of announcedPages()) onPage(item);
+  window.addEventListener("tracepanel:page", (event) => onPage((event as CustomEvent<PageAnnouncement>).detail));
+}
+
+/**
+ * Before the page's first request: its own view, as the browser recording timed it (the SPA's counterpart of a
+ * server page's load), with no time while it still loads.
+ */
+function addView(parent: HTMLElement, view: PageAnnouncement): void {
+  addName(parent, { name: `VIEW ${view.name}` }, false);
+  if (!view.open) addTime(parent, view.duration / 1000);
+}
+
+/** Nothing on this page yet: its server didn't trace it and nothing records it in the browser. */
+function addWaiting(parent: HTMLElement): void {
+  const idle = document.createElement("span");
+  idle.className = "idle";
+  idle.textContent = "Waiting for requests";
+  segment(parent).append(idle);
+}
+
+function idleLabel(view: PageAnnouncement | null, runtime: string | undefined): string {
+  const shown = view ? `view of ${view.name}, no requests yet` : "no requests yet";
+  return `tracepanel: ${shown}${runtime ? `. Served by ${runtime}` : ""}`;
+}
+
+function firstOf(...ids: (string | undefined)[]): string | null {
+  return ids.find((id) => id !== undefined) ?? null;
+}
+
+/** A view's name has no action after its path: "/books", not "/books › click "Save"". */
+function isView(entry: TabEntry | undefined): boolean {
+  return entry?.summary?.kind === "page" && !entry.summary.name.includes(" › ");
+}
+
+/**
+ * Before a new view goes in: the last one, when nothing came after it (no request, no action), leaves the list. A
+ * reload of an SPA's page would otherwise stack views with nothing under them; the latest view always stays.
+ */
+function dropEmptyView(tab: TabEntry[], name: string): TabEntry[] {
+  const last = tab.at(-1);
+  if (!name.includes(" › ") && isView(last) && !tab.some((item) => item.parent === last?.id)) return tab.slice(0, -1);
+  return tab;
+}
+
+/** What the browser recording announced before the widget listened, oldest first. */
+function announcedPages(): PageAnnouncement[] {
+  const announced = (globalThis as unknown as Record<symbol, Map<string, PageAnnouncement> | undefined>)[ANNOUNCED];
+  return announced ? [...announced.values()] : [];
+}
+
+function pageOf(carrier: object): string | undefined {
+  const page = (carrier as Record<symbol, unknown>)[PAGE];
+  return typeof page === "string" ? page : undefined;
 }
 
 export interface HtmxInfo {
@@ -332,7 +407,7 @@ function intercept(onRequest: (info: TraceInfo) => void): void {
     try {
       const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
       const info = fromResponse(method, response.url, response.status, (name) => response.headers.get(name));
-      if (info) onRequest(info);
+      if (info) onRequest({ ...info, page: pageOf(response) });
     } catch {
       // Never break the page because of the widget.
     }
@@ -351,7 +426,7 @@ function intercept(onRequest: (info: TraceInfo) => void): void {
         const info = fromResponse(method.toUpperCase(), this.responseURL || String(url), this.status, (name) =>
           this.getResponseHeader(name),
         );
-        if (info) onRequest({ ...info, htmx: htmxRequests.get(this) });
+        if (info) onRequest({ ...info, htmx: htmxRequests.get(this), page: pageOf(this) });
       } catch {
         // Never break the page because of the widget.
       }
@@ -531,6 +606,9 @@ export interface EntrySummary {
   /** Which findings (n+1, duplicates…), once the agent has them: the panel's row names them before its trace loads. */
   kinds?: string[] | undefined;
   htmx?: HtmxInfo | undefined;
+  /** A view or an action recorded in the browser, not a request: its requests are listed under it. */
+  kind?: "page" | undefined;
+  failed?: boolean | undefined;
 }
 
 /** A traced request made in this browser tab: a page load (parent null) or a fetch/XHR of that page. */
@@ -614,6 +692,29 @@ function isEntry(value: unknown): value is TabEntry {
     "parent" in value &&
     (value.parent === null || typeof value.parent === "string")
   );
+}
+
+const RUNTIME_KEY = "tracepanel:runtime";
+
+/**
+ * What served the page: as its server says, else what answered this tab's calls, learned from the first one's trace
+ * (an SPA) and kept for the tab, so a reload shows the mark before its first request.
+ */
+function learnedRuntime(given: string | undefined): string | undefined {
+  if (given) return given;
+  try {
+    return sessionStorage.getItem(RUNTIME_KEY) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function learnRuntime(label: string | undefined): void {
+  try {
+    if (label) sessionStorage.setItem(RUNTIME_KEY, label);
+  } catch {
+    // Storage blocked: the next page learns it again.
+  }
 }
 
 /** Tab history lives in sessionStorage: per browser tab, survives navigations, gone when the tab closes. */
@@ -702,9 +803,11 @@ export function mount(options: WidgetOptions = {}): Widget {
   const stats = query<HTMLElement>(root, ".stats");
   // What served the page, as the panel shows it (Django, FastAPI, Flask, Python, Go): which backend, at a glance.
   const runtimeMark = query<HTMLElement>(root, ".runtime");
-  showRuntime(runtimeMark, options.runtime);
-  // A page its server didn't label (an SPA from a dev server): what answered its first traced call.
-  let runtime = options.runtime;
+  // A page its server didn't label (an SPA from a dev server): what answered this tab's first traced call.
+  let runtime = learnedRuntime(options.runtime);
+  showRuntime(runtimeMark, runtime);
+  // This page's latest view, from the browser recording: what the pill shows before the page's first request.
+  let view: PageAnnouncement | null = null;
   let runtimeAsked = Boolean(runtime);
   const panel = query<HTMLElement>(root, ".panel");
   const panelUrl = options.api ? new URL(options.api, location.href) : null;
@@ -757,13 +860,18 @@ export function mount(options: WidgetOptions = {}): Widget {
   // Set while drawing the pill for a new AJAX call: its name pulses once.
   let pulse = false;
 
+  /** The list's "this page" row: the page's own load, else its view in the browser (an SPA), as the pill shows. */
+  function currentPage(): string | null {
+    return pageCleared ? null : firstOf(page?.trace, view?.id);
+  }
+
   function sendTab(): void {
     if (frame?.contentWindow && panelUrl) {
       frame.contentWindow.postMessage(
         {
           type: "tracepanel:tab",
           entries: tab,
-          current: pageCleared ? null : (page?.trace ?? null),
+          current: currentPage(),
           runtime: runtime ?? null,
         },
         panelUrl.origin,
@@ -804,13 +912,11 @@ export function mount(options: WidgetOptions = {}): Widget {
    */
   function renderIdle(): void {
     stats.textContent = "";
-    const idle = document.createElement("span");
-    idle.className = "idle";
-    idle.textContent = "Waiting for requests";
-    segment(stats).append(idle);
+    if (view) addView(stats, view);
+    else addWaiting(stats);
     fitBadge();
-    badge.dataset["verdict"] = "ok";
-    badge.setAttribute("aria-label", `tracepanel: no requests yet${runtime ? `. Served by ${runtime}` : ""}`);
+    badge.dataset["verdict"] = view?.status === "error" ? "error" : "ok";
+    badge.setAttribute("aria-label", idleLabel(view, runtime));
   }
 
   /** A page htmx loaded (a boosted link or form): it heads the list, and what follows is its requests. */
@@ -865,11 +971,48 @@ export function mount(options: WidgetOptions = {}): Widget {
     runtimeAsked = true;
     await askConsole(`api/traces/${encodeURIComponent(info.trace)}`, (body) => {
       runtime = traceRuntime((body as { attrs?: Record<string, unknown> }).attrs ?? {});
+      learnRuntime(runtime);
       showRuntime(runtimeMark, runtime);
       render();
       sendTab();
       return true;
     });
+    // Not stored in time (an agent just started): the next request asks again.
+    runtimeAsked = runtime !== undefined;
+  }
+
+  /** A view or an action from the browser recording: a row of its own, its requests under it; updated as it ends. */
+  function recordPage(announced: PageAnnouncement): void {
+    if (!announced.name.includes(" › ")) {
+      view = announced;
+      render();
+    }
+    const entry: TabEntry = {
+      id: announced.id,
+      parent: null,
+      summary: {
+        name: announced.name,
+        status: null,
+        start: announced.start,
+        duration: announced.duration,
+        queries: 0,
+        issues: 0,
+        kind: "page",
+        failed: announced.status === "error",
+      },
+    };
+    const at = tab.findIndex((item) => item.id === announced.id);
+    tab =
+      at === -1
+        ? [...dropEmptyView(tab, announced.name), entry]
+        : tab.map((item, index) => (index === at ? entry : item));
+    saveTab(tab);
+    sendTab();
+  }
+
+  /** What a request is listed under: the view or action that made it, else the page it was made on. */
+  function parentOf(info: TraceInfo): string | null {
+    return info.page ?? page?.trace ?? null;
   }
 
   function record(info: TraceInfo): void {
@@ -881,7 +1024,7 @@ export function mount(options: WidgetOptions = {}): Widget {
     }
     later.push(info);
     if (info.trace) {
-      tab = [...tab, { id: info.trace, parent: page?.trace ?? null, summary: summaryOf(info) }];
+      tab = [...tab, { id: info.trace, parent: parentOf(info), summary: summaryOf(info) }];
       saveTab(tab);
     }
     // The latest request takes the pill (and keeps it until the next one), with a short pulse.
@@ -1000,6 +1143,8 @@ export function mount(options: WidgetOptions = {}): Widget {
   render();
   if (page) void resolveIssues(page);
   listen();
+  // The browser recording's views and actions: those announced before the widget mounted, then each as it comes.
+  followPages(recordPage);
   deliver = record;
   for (const info of pending.splice(0)) record(info);
 
