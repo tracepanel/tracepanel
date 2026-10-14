@@ -15,7 +15,9 @@ export const test = base.extend<{ problems: string[] }>({
       });
       page.on("pageerror", (error) => problems.push(`uncaught: ${error.message}`));
       page.on("response", (response) => {
-        if (response.status() >= 500) problems.push(`${response.status()} ${response.url()}`);
+        // The console's and the agent's answers: a test app's own API (/app/, app.ts) fails on purpose.
+        const own = new URL(response.url()).pathname.startsWith("/app/");
+        if (response.status() >= 500 && !own) problems.push(`${response.status()} ${response.url()}`);
       });
       await use(problems);
       expect(problems, "the page's console, uncaught errors and failed calls").toEqual([]);
