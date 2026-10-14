@@ -28,6 +28,10 @@
   and the panel names a Node.js trace's runtime Node, not Nodejs.
 - The console refreshes every 15 seconds by default, not every 5. A choice
   you made in its refresh menu stays.
+- Before a page makes its first traced request (an SPA from a dev server),
+  the widget's pill says "Waiting for requests", not `GET /` at 0 ms.
+- An error's local variables line up: the names take the width of the
+  longest one, not a third of the frame.
 
 ## 0.1.1 (2026-10-13)
 

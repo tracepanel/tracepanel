@@ -130,6 +130,8 @@ const STYLE = `
     font: 500 12.5px "Geist Mono Variable", "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace; color: #fff;
   }
   .name[data-pulse] { animation: pulse 700ms ease-out; }
+  .idle { color: #9aa1af; font-size: 12.5px; white-space: nowrap; }
+  :host([data-theme="light"]) .idle { color: #6b7280; }
   @keyframes pulse {
     from { box-shadow: 0 0 0 0 rgb(165 135 255 / 0.6); }
     to { box-shadow: 0 0 0 8px rgb(165 135 255 / 0); }
@@ -492,6 +494,21 @@ function pillLabel(all: readonly TraceInfo[], runtime: string | undefined): stri
 }
 
 /** Which request the pill is about: its method and path (a GraphQL operation by its name). */
+/** The worst state of the page's requests: an error, else a finding, else ok. */
+function verdict(all: readonly TraceInfo[]): "ok" | "warn" | "error" {
+  return all.map(state).reduce((a, b) => (SEVERITY[b] > SEVERITY[a] ? b : a), "ok");
+}
+
+/** One request's segments: its name, status, time, queries and findings. */
+function addRequest(parent: HTMLElement, shown: TraceInfo, pulse: boolean): void {
+  addName(parent, shown, pulse);
+  addStatus(parent, shown.status);
+  addTime(parent, shown.totalMs ?? 0);
+  addQueries(parent, shown.queries ?? 0);
+  // Findings are amber whatever else happened: a failure says so in its status, and in the page's count.
+  if (shown.issues) addIssues(parent, shown.issues, "warn");
+}
+
 function addName(parent: HTMLElement, info: TraceInfo, pulse: boolean): void {
   const name = document.createElement("span");
   name.className = "name";
@@ -766,21 +783,34 @@ export function mount(options: WidgetOptions = {}): Widget {
    */
   function render(): void {
     const all = requests();
-    const shown = all.at(-1) ?? {};
-    const worst = all.map(state).reduce((a, b) => (SEVERITY[b] > SEVERITY[a] ? b : a), "ok");
+    if (all.length === 0) renderIdle();
+    else renderPill(all);
+  }
 
+  /** The latest request, with the page's count and verdict. */
+  function renderPill(all: TraceInfo[]): void {
     stats.textContent = "";
-    addName(stats, shown, pulse);
-    addStatus(stats, shown.status);
-    addTime(stats, shown.totalMs ?? 0);
-    addQueries(stats, shown.queries ?? 0);
-    // Findings are amber whatever else happened: a failure says so in its status, and in the page's count.
-    if (shown.issues) addIssues(stats, shown.issues, "warn");
+    addRequest(stats, all.at(-1) ?? {}, pulse);
     if (all.length > 1) addPage(stats, all);
     fitBadge();
-    badge.dataset["verdict"] = worst;
+    badge.dataset["verdict"] = verdict(all);
     // No title: the hover card shows all of it (and more); screen readers get the summary.
     badge.setAttribute("aria-label", pillLabel(all, runtime));
+  }
+
+  /**
+   * Nothing traced on this page yet: its server didn't trace it (an SPA's dev server served it) and it made no calls.
+   * The pill says so, with no request, time or queries to show.
+   */
+  function renderIdle(): void {
+    stats.textContent = "";
+    const idle = document.createElement("span");
+    idle.className = "idle";
+    idle.textContent = "Waiting for requests";
+    segment(stats).append(idle);
+    fitBadge();
+    badge.dataset["verdict"] = "ok";
+    badge.setAttribute("aria-label", `tracepanel: no requests yet${runtime ? `. Served by ${runtime}` : ""}`);
   }
 
   /** A page htmx loaded (a boosted link or form): it heads the list, and what follows is its requests. */
