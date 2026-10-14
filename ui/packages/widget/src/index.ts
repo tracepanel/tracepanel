@@ -65,6 +65,10 @@ function idleLabel(view: PageAnnouncement | null, runtime: string | undefined): 
   return `tracepanel: ${shown}${runtime ? `. Served by ${runtime}` : ""}`;
 }
 
+function firstOf(...ids: (string | undefined)[]): string | null {
+  return ids.find((id) => id !== undefined) ?? null;
+}
+
 /** A view's name has no action after its path: "/books", not "/books › click "Save"". */
 function isView(entry: TabEntry | undefined): boolean {
   return entry?.summary?.kind === "page" && !entry.summary.name.includes(" › ");
@@ -856,13 +860,18 @@ export function mount(options: WidgetOptions = {}): Widget {
   // Set while drawing the pill for a new AJAX call: its name pulses once.
   let pulse = false;
 
+  /** The list's "this page" row: the page's own load, else its view in the browser (an SPA), as the pill shows. */
+  function currentPage(): string | null {
+    return pageCleared ? null : firstOf(page?.trace, view?.id);
+  }
+
   function sendTab(): void {
     if (frame?.contentWindow && panelUrl) {
       frame.contentWindow.postMessage(
         {
           type: "tracepanel:tab",
           entries: tab,
-          current: pageCleared ? null : (page?.trace ?? null),
+          current: currentPage(),
           runtime: runtime ?? null,
         },
         panelUrl.origin,
