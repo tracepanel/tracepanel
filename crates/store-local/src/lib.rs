@@ -358,6 +358,54 @@ mod tests {
     }
 
     #[test]
+    fn an_upgraded_app_is_one_app_labelled_as_it_runs_now() {
+        let dir =
+            std::env::temp_dir().join(format!("tracepanel-store-upgrade-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = path_in(&dir);
+        let mut store = Store::open(&path).unwrap();
+        let run = |id: &str, start: i64, java: &str, spring: &str| {
+            let doc = serde_json::json!({
+                "id": id, "kind": "http", "name": "GET /", "start": start, "duration": 10, "status": "ok",
+                "attrs": {"service.name": "shop", "service.role": "web", "telemetry.sdk.language": "java",
+                          "process.runtime.version": java, "tracepanel.framework": spring},
+                "spans": [], "logs": [], "errors": [], "links": [], "issues": [],
+            });
+            Received {
+                trace: serde_json::from_value(doc.clone()).unwrap(),
+                doc: doc.to_string(),
+            }
+        };
+        // Before the upgrade, then after it: the largest strings would be Java 8.0 and Spring Boot 4.9.
+        store
+            .write(&[run("OLD", 1_000, "8.0.2", "Spring Boot 4.9.2")])
+            .unwrap();
+        store
+            .write(&[run("NEW", 2_000, "21.0.9", "Spring Boot 4.10.0")])
+            .unwrap();
+        let services = Reader::new(&path).list_services("").unwrap();
+
+        assert_eq!(
+            services["apps"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|app| (
+                    app["service"].clone(),
+                    app["traces"].clone(),
+                    app["runtime"].clone()
+                ))
+                .collect::<Vec<_>>(),
+            [(
+                Value::from("shop"),
+                Value::from(2),
+                Value::from("Java 21 · Spring Boot 4.10")
+            )]
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn a_trace_received_twice_counts_once() {
         let dir =
             std::env::temp_dir().join(format!("tracepanel-store-twice-{}", std::process::id()));
