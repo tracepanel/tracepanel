@@ -1,6 +1,7 @@
 import { ago, duration } from "./format";
 import { DatabaseIcon } from "./icons";
 import { ISSUE_LABELS } from "./labels";
+import { pageParts } from "./lib/page";
 import { IssueChip, MethodBadge, RoutePath, StatusBadge } from "./primitives";
 import type { IssueKind, TraceSummary } from "./types";
 
@@ -159,18 +160,6 @@ function RequestName({
       </span>
     </>
   );
-}
-
-/**
- * A browser view or action's name, "/books" or "/books › click "Save"", in parts: what was done as a badge (VIEW,
- * CLICK, SUBMIT, BG), the control it was done on, the page.
- */
-function pageParts(name: string): { badge: string; label: string; page: string | null } {
-  const [page = name, action] = name.split(" › ");
-  if (!action) return { badge: "VIEW", label: page, page: null };
-  const [verb = "", ...rest] = action.split(" ");
-  if (verb === "background") return { badge: "BG", label: "background", page };
-  return { badge: verb.toUpperCase(), label: rest.join(" ") || verb, page };
 }
 
 /** A view or an action recorded in the browser: its badge, the control, then its page. */

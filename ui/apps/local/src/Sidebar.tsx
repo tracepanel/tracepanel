@@ -61,14 +61,15 @@ export interface NavItem {
 export const NAV_GROUPS: { title: string | null; items: NavItem[] }[] = [
   {
     title: "Entry points",
+    // In the order work comes in: the user's pages in the browser, the requests they make, what those start.
     items: [
+      { section: "pages", label: "Pages", icon: AppWindowIcon },
       { section: "endpoints", label: "HTTP", icon: RouteIcon },
       { section: "graphql", label: "GraphQL", icon: BracesIcon },
       { section: "tasks", label: "Tasks", icon: ListChecksIcon },
       { section: "websockets", label: "WebSockets", icon: CableIcon },
       { section: "jobs", label: "Jobs", icon: TerminalIcon },
       { section: "rpc", label: "RPC", icon: WaypointsIcon },
-      { section: "pages", label: "Pages", icon: AppWindowIcon },
     ],
   },
   {
