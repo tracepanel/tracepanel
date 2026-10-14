@@ -1150,15 +1150,21 @@ components:
     PageRow:
       type: object
       additionalProperties: false
-      required: [page, views, failures, p50, p95, total, avg_calls, with_issues, last_seen]
+      description: >-
+        A page's view (its load, an SPA's route change) or an action on it (what the user did that called the API:
+        a click, a submit; background when nobody did). A page's view comes first, then its actions.
+      required: [name, page, action, trigger, count, failures, p50, p95, total, avg_calls, with_issues, last_seen]
       properties:
+        name: { type: string, description: "The traces' name, the group's key: /books, or /books › click \"Save\"." }
         page: { type: string, description: "The page's path: /books/42." }
-        views: { type: integer }
-        failures: { type: integer, description: Views with an error in the page. }
+        action: { type: [string, "null"], description: "What the user did: click \"Save\". None for a view." }
+        trigger: { type: [string, "null"], description: "load, navigation, click, submit or background." }
+        count: { type: integer, description: "Views, or times the action was done." }
+        failures: { type: integer, description: Views or actions with an error in the page or a failed call. }
         p50: { $ref: "#/components/schemas/Duration" }
         p95: { $ref: "#/components/schemas/Duration" }
         total: { $ref: "#/components/schemas/Duration" }
-        avg_calls: { type: number, description: Requests to its API per view. }
+        avg_calls: { type: number, description: Requests to the API per view or action. }
         with_issues: { type: integer }
         last_seen: { $ref: "#/components/schemas/Time" }
     GraphqlDetail:

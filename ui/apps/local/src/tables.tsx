@@ -29,6 +29,7 @@ import { Badge } from "@tracepanel/ui/components/ui/badge";
 import { Button } from "@tracepanel/ui/components/ui/button";
 import { TableCell, TableRow } from "@tracepanel/ui/components/ui/table";
 import { systemOfPage } from "@tracepanel/ui/lib/systems";
+import { cn } from "@tracepanel/ui/lib/utils";
 import { ArrowRightIcon, ListFilterIcon } from "lucide-react";
 import { Fragment, type ReactNode, useEffect, useState } from "react";
 import { currentPeriod, endpointGroup, go, groupRoute, href, issueRoute, traceHref, withPeriod } from "./routes";
@@ -954,11 +955,31 @@ const JOB_SOURCES: Record<string, string> = { "manage.py": "manage.py", custom: 
 /** A row of a list grouped by name (jobs, RPC methods): its name, a badge, how often it ran, failures and time. */
 type NamedRow = Pick<JobRow, "failures" | "with_issues" | "p95" | "last_seen"> & {
   name: string;
-  badge: string;
+  /** The first two cells, when not the name and a badge (a page and the action on it). */
+  label?: ReactNode;
+  badge: ReactNode;
   count: number;
   /** Queries per run or call, calls per page view. */
   average: number;
 };
+
+/** A named row's first two cells: its name and badge, or the label and the node a table gives instead. */
+function NamedCells({ item }: { item: NamedRow }) {
+  const badge =
+    typeof item.badge === "string" ? (
+      <Badge variant="outline" className="font-mono text-xs">
+        {item.badge}
+      </Badge>
+    ) : (
+      item.badge
+    );
+  return (
+    <>
+      <Td className="max-w-[26.25rem]">{item.label ?? <Mono className="block truncate">{item.name}</Mono>}</Td>
+      <Td className="max-w-[22rem]">{badge}</Td>
+    </>
+  );
+}
 
 function NamedTable({
   section,
@@ -987,14 +1008,7 @@ function NamedTable({
     >
       {items.map((item) => (
         <Tr key={item.name} tone={rowTone(item)} href={href(groupRoute(section, item.name))}>
-          <Td className="max-w-[26.25rem]">
-            <Mono className="block truncate">{item.name}</Mono>
-          </Td>
-          <Td>
-            <Badge variant="outline" className="font-mono text-xs">
-              {item.badge}
-            </Badge>
-          </Td>
+          <NamedCells item={item} />
           <Td num>{item.count}</Td>
           <Td num className={item.failures ? "font-semibold text-error" : "text-muted-foreground"}>
             {item.failures || "—"}
@@ -1041,15 +1055,35 @@ export function RpcTable({ items }: { items: readonly RpcRow[] }) {
   return <NamedTable section="rpc" head={["Method", "System", "Calls", "Queries / call"]} items={rows} />;
 }
 
+/** What a row of Pages is: a page's view, or an action on it with what started it (click "Save"). */
+function PageAction({ item }: { item: PageRow }) {
+  if (!item.action) return <span className="text-muted-foreground">view</span>;
+  return (
+    <span className="block truncate">
+      <Badge variant="outline" className="mr-2 font-mono text-xs">
+        {item.trigger ?? "action"}
+      </Badge>
+      {item.action.replace(/^(click|submit) /, "")}
+    </span>
+  );
+}
+
+/**
+ * Pages and what is done on them: a page's views (its load, an SPA's route change), then its actions (a click or a
+ * submit that called the API, background calls nobody started); the path once, the actions under it.
+ */
 export function PagesTable({ items }: { items: readonly PageRow[] }) {
-  const rows = items.map((item) => ({
+  const rows = items.map((item, index) => ({
     ...item,
-    name: item.page,
-    badge: "page",
-    count: item.views,
+    label: (
+      <Mono className={cn("block truncate", items[index - 1]?.page === item.page && "text-muted-foreground/50")}>
+        {item.page}
+      </Mono>
+    ),
+    badge: <PageAction item={item} />,
     average: item.avg_calls,
   }));
-  return <NamedTable section="pages" head={["Page", "Kind", "Views", "Calls / view"]} items={rows} />;
+  return <NamedTable section="pages" head={["Page", "Action", "Count", "Calls each"]} items={rows} />;
 }
 
 export function WebsocketsTable({ items }: { items: readonly WebsocketRow[] }) {

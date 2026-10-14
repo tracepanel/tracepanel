@@ -2,6 +2,7 @@ import { AttrsTable } from "./AttrsTable";
 import { Badge } from "./components/ui/badge";
 import { duration } from "./format";
 import { GraphqlCode } from "./GraphqlCode";
+import { traceRuntime } from "./lib/runtime";
 import { linkProps, type TraceLinks } from "./links";
 import { type PropRow, PropTable } from "./PropTable";
 import { MethodBadge, RoutePath, StatusBadge } from "./primitives";
@@ -39,22 +40,10 @@ function userRows(attrs: Attrs): PropRow[] {
   ];
 }
 
-/** What ran the trace: "Python 3.12.3 (cpython) · Django 6.0.1", "Go go1.27.1 · net/http". */
+/** What ran the trace: "Python 3.12.3 (cpython) · Django 6.0.1", "Go 1.27.1 · net/http". */
 function runtimeRows(attrs: Attrs): PropRow[] {
-  const language = text(attrs["telemetry.sdk.language"]);
-  if (!language) return [];
-  const name = text(attrs["process.runtime.name"]);
-  const version = text(attrs["process.runtime.version"]);
-  const framework = text(attrs["tracepanel.framework"]);
-  const runtime = [
-    `${language[0]?.toUpperCase()}${language.slice(1)}`,
-    version,
-    name && name !== language ? `(${name})` : null,
-  ]
-    .filter(Boolean)
-    .join(" ");
-  const value = framework ? `${runtime} · ${framework}` : runtime;
-  return [{ label: "Runtime", value, copy: value }];
+  const value = traceRuntime(attrs, true);
+  return value ? [{ label: "Runtime", value, copy: value }] : [];
 }
 
 /** HX-* response headers, in the order htmx applies them. */

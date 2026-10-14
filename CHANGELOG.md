@@ -4,12 +4,15 @@
 
 ### Added
 
-- A Pages section in the console: the pages a browser viewed, by path, with
-  their load time, errors and the calls each made to its API, a page per
-  path, and `page:` in search. A trace of kind `page` comes from the
-  browser: tracepanel-js records a page's load, its `fetch()` calls, its
-  errors and its console, and sends them to the console's address,
-  `POST /api/ingest`, as an SDK sends its traces. A dev server (Vite's plugin)
+- A Pages section in the console: each page a browser viewed, then what
+  users did on it. A view is the page's load or an SPA's route change. An
+  action is a click or a submit that called the API (`click "Save"`), or
+  background calls nobody started. Each row has its count, failures, time and
+  the calls it made to the API, opens its own page, and `page:` searches
+  them. A trace of kind `page` comes from the browser: tracepanel-js records
+  a page's views and actions with their `fetch()` calls, errors and console,
+  and sends them to the console's address, `POST /api/ingest`, as an SDK
+  sends its traces. A dev server (Vite's plugin)
   serves that address on the page's origin. The console takes JSON only, so a
   page on another site can't send to it.
 
@@ -20,6 +23,9 @@
   plain server. An app the JavaScript SDK traces is labelled Node 26 or Bun
   1.3, not by OpenTelemetry's language name, nodejs.
 - A trace's SQL tab is named **DB**: the tabs fit on a narrower panel.
+- The page widget shows the framework of the app that answered a page's
+  calls when the page's server didn't name one (an SPA from a dev server),
+  and the panel names a Node.js trace's runtime Node, not Nodejs.
 - The console refreshes every 15 seconds by default, not every 5. A choice
   you made in its refresh menu stays.
 
