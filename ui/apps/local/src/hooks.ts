@@ -11,6 +11,9 @@ export interface EntrySummary {
   kinds?: string[] | undefined;
   /** Sent by htmx: the element that sent it, where the answer went, whether it loaded a page. */
   htmx?: { trigger?: string | undefined; target?: string | undefined; boosted?: boolean | undefined } | undefined;
+  /** A view or an action recorded in the browser (tracepanel-js), not a request: its requests come under it. */
+  kind?: "page" | undefined;
+  failed?: boolean | undefined;
 }
 
 export interface TabEntry {

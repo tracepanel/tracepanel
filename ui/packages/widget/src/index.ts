@@ -18,6 +18,40 @@ export interface TraceInfo {
   issuesPending?: boolean | undefined;
   /** Sent by htmx: what triggered it and where the answer goes. */
   htmx?: HtmxInfo | undefined;
+  /** The page's view or the action on it that made the call, as tracepanel-js records them in the browser. */
+  page?: string | undefined;
+}
+
+/** A view or an action tracepanel-js records in the browser, as it announces them (tracepanel:page). */
+interface PageAnnouncement {
+  id: string;
+  name: string;
+  start: number;
+  duration: number;
+  status: "ok" | "error";
+  open: boolean;
+}
+
+// tracepanel-js's browser recording marks each Response and XMLHttpRequest with the view or action that made it.
+const PAGE = Symbol.for("tracepanel.page");
+// The views and actions it announced before the widget listened.
+const ANNOUNCED = Symbol.for("tracepanel.pages");
+
+/** Each view and action the browser recording announces: those before the widget listened, then each as it comes. */
+function followPages(onPage: (announced: PageAnnouncement) => void): void {
+  for (const item of announcedPages()) onPage(item);
+  window.addEventListener("tracepanel:page", (event) => onPage((event as CustomEvent<PageAnnouncement>).detail));
+}
+
+/** What the browser recording announced before the widget listened, oldest first. */
+function announcedPages(): PageAnnouncement[] {
+  const announced = (globalThis as unknown as Record<symbol, Map<string, PageAnnouncement> | undefined>)[ANNOUNCED];
+  return announced ? [...announced.values()] : [];
+}
+
+function pageOf(carrier: object): string | undefined {
+  const page = (carrier as Record<symbol, unknown>)[PAGE];
+  return typeof page === "string" ? page : undefined;
 }
 
 export interface HtmxInfo {
@@ -332,7 +366,7 @@ function intercept(onRequest: (info: TraceInfo) => void): void {
     try {
       const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
       const info = fromResponse(method, response.url, response.status, (name) => response.headers.get(name));
-      if (info) onRequest(info);
+      if (info) onRequest({ ...info, page: pageOf(response) });
     } catch {
       // Never break the page because of the widget.
     }
@@ -351,7 +385,7 @@ function intercept(onRequest: (info: TraceInfo) => void): void {
         const info = fromResponse(method.toUpperCase(), this.responseURL || String(url), this.status, (name) =>
           this.getResponseHeader(name),
         );
-        if (info) onRequest({ ...info, htmx: htmxRequests.get(this) });
+        if (info) onRequest({ ...info, htmx: htmxRequests.get(this), page: pageOf(this) });
       } catch {
         // Never break the page because of the widget.
       }
@@ -531,6 +565,9 @@ export interface EntrySummary {
   /** Which findings (n+1, duplicates…), once the agent has them: the panel's row names them before its trace loads. */
   kinds?: string[] | undefined;
   htmx?: HtmxInfo | undefined;
+  /** A view or an action recorded in the browser, not a request: its requests are listed under it. */
+  kind?: "page" | undefined;
+  failed?: boolean | undefined;
 }
 
 /** A traced request made in this browser tab: a page load (parent null) or a fetch/XHR of that page. */
@@ -870,6 +907,35 @@ export function mount(options: WidgetOptions = {}): Widget {
       sendTab();
       return true;
     });
+    // Not stored in time (an agent just started): the next request asks again.
+    runtimeAsked = runtime !== undefined;
+  }
+
+  /** A view or an action from the browser recording: a row of its own, its requests under it; updated as it ends. */
+  function recordPage(announced: PageAnnouncement): void {
+    const entry: TabEntry = {
+      id: announced.id,
+      parent: null,
+      summary: {
+        name: announced.name,
+        status: null,
+        start: announced.start,
+        duration: announced.duration,
+        queries: 0,
+        issues: 0,
+        kind: "page",
+        failed: announced.status === "error",
+      },
+    };
+    const at = tab.findIndex((item) => item.id === announced.id);
+    tab = at === -1 ? [...tab, entry] : tab.map((item, index) => (index === at ? entry : item));
+    saveTab(tab);
+    sendTab();
+  }
+
+  /** What a request is listed under: the view or action that made it, else the page it was made on. */
+  function parentOf(info: TraceInfo): string | null {
+    return info.page ?? page?.trace ?? null;
   }
 
   function record(info: TraceInfo): void {
@@ -881,7 +947,7 @@ export function mount(options: WidgetOptions = {}): Widget {
     }
     later.push(info);
     if (info.trace) {
-      tab = [...tab, { id: info.trace, parent: page?.trace ?? null, summary: summaryOf(info) }];
+      tab = [...tab, { id: info.trace, parent: parentOf(info), summary: summaryOf(info) }];
       saveTab(tab);
     }
     // The latest request takes the pill (and keeps it until the next one), with a short pulse.
@@ -1000,6 +1066,8 @@ export function mount(options: WidgetOptions = {}): Widget {
   render();
   if (page) void resolveIssues(page);
   listen();
+  // The browser recording's views and actions: those announced before the widget mounted, then each as it comes.
+  followPages(recordPage);
   deliver = record;
   for (const info of pending.splice(0)) record(info);
 

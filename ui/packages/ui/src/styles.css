@@ -412,6 +412,13 @@ a.dt-request-row {
 .dt-request-row[data-depth="1"] {
   padding-left: 2.625rem;
 }
+/* A view or an action in the browser heads its requests, like a group's title. */
+.dt-request-row[data-kind="page"] {
+  background: color-mix(in srgb, var(--dt-hover) 55%, transparent);
+}
+.dt-request-row[data-kind="page"]:hover {
+  background: var(--dt-hover);
+}
 .dt-request-row[data-depth="1"]::after {
   content: "";
   position: absolute;

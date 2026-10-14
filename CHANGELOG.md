@@ -16,6 +16,10 @@
   serves that address on the page's origin. The console takes JSON only, so a
   page on another site can't send to it.
 
+- The panel lists what the user did in the browser when tracepanel-js
+  records the page: each view and action (`click "Save"`) is a row, its
+  requests under it, and opens with its calls, errors and console.
+
 ### Changed
 
 - The panel, the console and the services map show the mark of a Node.js
