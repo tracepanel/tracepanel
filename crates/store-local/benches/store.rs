@@ -170,7 +170,7 @@ const SEARCHES: [&str; 8] = [
 const ROUNDS: usize = 600;
 
 #[divan::bench]
-fn parse_searches(bencher: Bencher) {
+fn parse_search_rounds(bencher: Bencher) {
     // Warmed up first: the allocator's and the parser's first use, which the measured pass would otherwise carry.
     std::hint::black_box(search::parse(SEARCHES[0]));
     bencher.bench_local(|| {
