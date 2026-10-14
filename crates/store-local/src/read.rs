@@ -997,7 +997,7 @@ fn by_system(
 fn language_name(language: Option<String>, runtime: Option<String>) -> Option<String> {
     match (language.as_deref(), runtime.as_deref()) {
         (Some("webjs"), _) => Some("Browser".into()),
-        (Some("nodejs" | "js" | "webjs"), Some("bun")) => Some("Bun".into()),
+        (Some("nodejs" | "js"), Some("bun")) => Some("Bun".into()),
         (Some("nodejs"), _) => Some("Node".into()),
         _ => language,
     }
