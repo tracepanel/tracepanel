@@ -23,6 +23,17 @@
   shows a server page's own load, and the runtime's mark it learned in the
   tab.
 
+- Apps in more languages and frameworks in the console, the panel and the
+  services map. Java by its release (`Java 21 · Spring Boot 4.1`, `Java 8` for
+  1.8) and Kotlin by Kotlin's own version. OpenTelemetry's other languages read
+  as people write them (.NET, C++, PHP, Ruby, Rust, Swift, Erlang, and Deno by
+  its runtime). Marks for Spring, Ktor, Quarkus, Rails, Laravel, Symfony,
+  ASP.NET Core, Phoenix, Actix Web, Rocket, Vapor, Fastify, Koa, Hono, Gin,
+  aiohttp and Falcon, and for those languages. A trace that comes over OTLP is
+  labelled with its framework from the instrumentation that recorded it: these,
+  and Micronaut, Vert.x, Javalin, Helidon, Play, Starlette, Tornado, Pyramid,
+  hapi, Echo, Fiber, Sinatra, Slim and Axum.
+
 ### Changed
 
 - The panel, the console and the services map show the mark of a Node.js

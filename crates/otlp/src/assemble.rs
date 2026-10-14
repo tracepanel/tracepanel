@@ -259,6 +259,74 @@ fn kind_of(root: &Span, attrs: &Map<String, Value>) -> (&'static str, &'static s
     ("command", "command")
 }
 
+/// Instrumentation scopes, as OpenTelemetry's libraries and agents name them (lowercased), and the framework each
+/// one means: the first that matches names the trace's.
+const FRAMEWORKS: &[(&str, &str)] = &[
+    // The JVM.
+    ("spring-webmvc", "Spring"),
+    ("spring-webflux", "Spring"),
+    ("ktor", "Ktor"),
+    ("micronaut", "Micronaut"),
+    ("quarkus", "Quarkus"),
+    ("vertx-web", "Vert.x"),
+    ("javalin", "Javalin"),
+    ("helidon", "Helidon"),
+    ("dropwizard", "Dropwizard"),
+    ("io.opentelemetry.play", "Play"),
+    ("grails", "Grails"),
+    // Python.
+    ("instrumentation.django", "Django"),
+    ("instrumentation.fastapi", "FastAPI"),
+    ("instrumentation.flask", "Flask"),
+    ("instrumentation.starlette", "Starlette"),
+    ("instrumentation.falcon", "Falcon"),
+    ("instrumentation.tornado", "Tornado"),
+    ("instrumentation.pyramid", "Pyramid"),
+    ("instrumentation.aiohttp_server", "aiohttp"),
+    // Node.js.
+    ("instrumentation-express", "Express"),
+    ("instrumentation-nestjs-core", "NestJS"),
+    ("instrumentation-fastify", "Fastify"),
+    ("@fastify/otel", "Fastify"),
+    ("instrumentation-koa", "Koa"),
+    ("instrumentation-hapi", "hapi"),
+    ("@hono/otel", "Hono"),
+    ("next.js", "Next.js"),
+    // Go.
+    ("otelgin", "Gin"),
+    ("gin-gonic", "Gin"),
+    ("otelecho", "Echo"),
+    ("labstack/echo", "Echo"),
+    ("gofiber", "Fiber"),
+    ("gorilla/mux", "gorilla/mux"),
+    // Ruby.
+    ("instrumentation::rails", "Rails"),
+    ("instrumentation::sinatra", "Sinatra"),
+    // PHP.
+    ("php.laravel", "Laravel"),
+    ("php.symfony", "Symfony"),
+    ("php.slim", "Slim"),
+    // .NET.
+    ("aspnetcore", "ASP.NET Core"),
+    // Elixir.
+    ("opentelemetry_phoenix", "Phoenix"),
+    // Rust.
+    ("actix", "Actix Web"),
+    ("axum", "Axum"),
+    ("rocket", "Rocket"),
+    // Swift.
+    ("vapor", "Vapor"),
+];
+
+/// The framework an instrumentation scope belongs to, if it is one's.
+fn framework(scope: &str) -> Option<&'static str> {
+    let scope = scope.to_lowercase();
+    FRAMEWORKS
+        .iter()
+        .find(|(part, _)| scope.contains(part))
+        .map(|(_, name)| *name)
+}
+
 /// The first of `from` the attributes have, as `to`.
 fn copy(out: &mut Map<String, Value>, attrs: &Map<String, Value>, to: &str, from: &[&str]) {
     if let Some(value) = from.iter().find_map(|key| attrs.get(*key)) {
@@ -443,7 +511,15 @@ fn errors(trace: u128, got: &Got, on_root: bool) -> Vec<Value> {
 fn document(trace: u128, root: &Got, root_id: u64, members: &[u64], bucket: &Bucket) -> Value {
     let root_attrs = attributes(&root.span.attributes);
     let (kind, role) = kind_of(&root.span, &root_attrs);
-    let attrs = trace_attrs(root, &root_attrs, kind, role);
+    let mut attrs = trace_attrs(root, &root_attrs, kind, role);
+    // The framework, as the SDKs name it: from the instrumentation that recorded the trace's spans (OpenTelemetry's
+    // Java agent records a Spring request from Tomcat, its controller from spring-webmvc).
+    if let Some(framework) = members
+        .iter()
+        .find_map(|id| framework(&bucket.spans[id].scope))
+    {
+        attrs.insert("tracepanel.framework".into(), Value::from(framework));
+    }
     let status_code = attrs
         .get("http.status_code")
         .and_then(Value::as_i64)
@@ -488,4 +564,38 @@ fn document(trace: u128, root: &Got, root_id: u64, members: &[u64], bucket: &Buc
         "links": [],
         "issues": [],
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::framework;
+
+    #[test]
+    fn a_scope_names_its_framework() {
+        assert_eq!(
+            [
+                "io.opentelemetry.spring-webmvc-6.0",
+                "OpenTelemetry.Instrumentation.AspNetCore",
+                "OpenTelemetry::Instrumentation::Rails",
+                "io.opentelemetry.contrib.php.laravel",
+                "go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin",
+                "opentelemetry_phoenix",
+                "@opentelemetry/instrumentation-fastify",
+                "io.opentelemetry.tomcat-10.0",
+                "opentelemetry.instrumentation.sqlalchemy",
+            ]
+            .map(framework),
+            [
+                Some("Spring"),
+                Some("ASP.NET Core"),
+                Some("Rails"),
+                Some("Laravel"),
+                Some("Gin"),
+                Some("Phoenix"),
+                Some("Fastify"),
+                None,
+                None,
+            ]
+        );
+    }
 }
