@@ -4,6 +4,10 @@
 
 ### Changed
 
+- The panel, the console and the services map show the mark of a Node.js
+  app's framework: Express, NestJS, Next.js, Nuxt, or Node.js or Bun for a
+  plain server. An app the JavaScript SDK traces is labelled Node 26 or Bun
+  1.3, not by OpenTelemetry's language name, nodejs.
 - A trace's SQL tab is named **DB**: the tabs fit on a narrower panel.
 
 ## 0.1.1 (2026-10-13)
