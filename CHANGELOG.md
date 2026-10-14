@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- A trace's SQL tab is named **DB**: the tabs fit on a narrower panel.
+
 ## 0.1.1 (2026-10-13)
 
 ### Changed
