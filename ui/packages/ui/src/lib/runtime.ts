@@ -14,7 +14,12 @@ export type RuntimeKind =
   | "nuxt"
   | "node"
   | "bun"
-  | "browser";
+  | "browser"
+  | "spring"
+  | "ktor"
+  | "quarkus"
+  | "java"
+  | "kotlin";
 
 const NAMES: Record<RuntimeKind, string> = {
   django: "Django",
@@ -29,10 +34,23 @@ const NAMES: Record<RuntimeKind, string> = {
   node: "Node.js",
   bun: "Bun",
   browser: "Browser",
+  spring: "Spring",
+  ktor: "Ktor",
+  quarkus: "Quarkus",
+  java: "Java",
+  kotlin: "Kotlin",
 };
 
 // Paths from Simple Icons 16.34.0 (CC0-1.0), drawn in currentColor: brand colours vanish on one theme or the other.
 export const RUNTIME_PATHS: Record<RuntimeKind, string> = {
+  spring:
+    "M21.8537 1.4158a10.4504 10.4504 0 0 1-1.284 2.2471A11.9666 11.9666 0 1 0 3.8518 20.7757l.4445.3951a11.9543 11.9543 0 0 0 19.6316-8.2971c.3457-3.0126-.568-6.8649-2.0743-11.458zM5.5805 20.8745a1.0174 1.0174 0 1 1-.1482-1.4323 1.0396 1.0396 0 0 1 .1482 1.4323zm16.1991-3.5806c-2.9385 3.9263-9.2601 2.5928-13.2852 2.7904 0 0-.7161.0494-1.4323.1481 0 0 .2717-.1234.6174-.2469 2.8398-.9877 4.1732-1.1853 5.9018-2.0743 3.2349-1.6545 6.4698-5.2844 7.1118-9.0379-1.2347 3.6053-4.9881 6.7167-8.3959 7.9761-2.3459.8643-6.5685 1.7039-6.5685 1.7039l-.1729-.0988c-2.8645-1.4076-2.9632-7.6304 2.2718-9.6306 2.2966-.889 4.4696-.395 6.9637-.9877 2.6422-.6174 5.7043-2.5929 6.939-5.1857 1.3828 4.1732 3.062 10.643.0493 14.6434z",
+  ktor: "M8 0 0 8l8 8V8h8zm8 8v8H8l8 8 8-8z",
+  quarkus:
+    "M3.981 0A3.993 3.993 0 0 0 0 3.981V20.02A3.993 3.993 0 0 0 3.981 24h10.983L12 16.8l-2.15 4.546H3.98c-.72 0-1.327-.608-1.327-1.327V3.98c0-.72.608-1.327 1.327-1.327h16.04c.72 0 1.327.608 1.327 1.327v16.04c0 .72-.608 1.327-1.327 1.327h-3.48L17.63 24h2.388A3.993 3.993 0 0 0 24 20.019V3.98A3.993 3.993 0 0 0 20.019 0zm4.324 4.217v3.858l3.341-1.93zm7.39 0l-3.341 1.929 3.34 1.929zM12 6.35L8.305 8.483 12 10.617l3.695-2.134zM8.104 8.832v4.266l3.695 2.133v-4.266zm7.792 0L12.2 10.965v4.266l3.695-2.133zm-8.146.204l-3.34 1.93 3.34 1.928zm8.5 0v3.858l3.34-1.929zm-8.146 4.47v3.859l3.341-1.93zm7.792 0l-3.341 1.93 3.34 1.929z",
+  // Java's own mark isn't free to use: OpenJDK's, the JVM most apps run on.
+  java: "M11.915 0 11.7.215C9.515 2.4 7.47 6.39 6.046 10.483c-1.064 1.024-3.633 2.81-3.711 3.551-.093.87 1.746 2.611 1.55 3.235-.198.625-1.304 1.408-1.014 1.939.1.188.823.011 1.277-.491a13.389 13.389 0 0 0-.017 2.14c.076.906.27 1.668.643 2.232.372.563.956.911 1.667.911.397 0 .727-.114 1.024-.264.298-.149.571-.33.91-.5.68-.34 1.634-.666 3.53-.604 1.903.062 2.872.39 3.559.704.687.314 1.15.664 1.925.664.767 0 1.395-.336 1.807-.9.412-.563.631-1.33.72-2.24.06-.623.055-1.32 0-2.066.454.45 1.117.604 1.213.424.29-.53-.816-1.314-1.013-1.937-.198-.624 1.642-2.366 1.549-3.236-.08-.748-2.707-2.568-3.748-3.586C16.428 6.374 14.308 2.394 12.13.215zm.175 6.038a2.95 2.95 0 0 1 2.943 2.942 2.95 2.95 0 0 1-2.943 2.943A2.95 2.95 0 0 1 9.148 8.98a2.95 2.95 0 0 1 2.942-2.942zM8.685 7.983a3.515 3.515 0 0 0-.145.997c0 1.951 1.6 3.55 3.55 3.55 1.95 0 3.55-1.598 3.55-3.55 0-.329-.046-.648-.132-.951.334.095.64.208.915.336a42.699 42.699 0 0 1 2.042 5.829c.678 2.545 1.01 4.92.846 6.607-.082.844-.29 1.51-.606 1.94-.315.431-.713.651-1.315.651-.593 0-.932-.27-1.673-.61-.741-.338-1.825-.694-3.792-.758-1.974-.064-3.073.293-3.821.669-.375.188-.659.373-.911.5s-.466.2-.752.2c-.53 0-.876-.209-1.16-.64-.285-.43-.474-1.101-.545-1.948-.141-1.693.176-4.069.823-6.614a43.155 43.155 0 0 1 1.934-5.783c.348-.167.749-.31 1.192-.425zm-3.382 4.362a.216.216 0 0 1 .13.031c-.166.56-.323 1.116-.463 1.665a33.849 33.849 0 0 0-.547 2.555 3.9 3.9 0 0 0-.2-.39c-.58-1.012-.914-1.642-1.16-2.08.315-.24 1.679-1.755 2.24-1.781zm13.394.01c.562.027 1.926 1.543 2.24 1.783-.246.438-.58 1.068-1.16 2.08a4.428 4.428 0 0 0-.163.309 32.354 32.354 0 0 0-.562-2.49 40.579 40.579 0 0 0-.482-1.652.216.216 0 0 1 .127-.03z",
+  kotlin: "M24 24H0V0h24L12 12Z",
   // A page in the browser (tracepanel-js's recording): a window with its tab bar, no browser's brand.
   browser:
     "M3 3h18a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm0 6v10h18V9H3zm2-4a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm3 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm3 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2z",
@@ -65,6 +83,9 @@ const FRAMEWORKS = new Map<string, RuntimeKind>([
   ["NestJS", "nestjs"],
   ["Next.js", "nextjs"],
   ["Nuxt", "nuxt"],
+  ["Spring", "spring"],
+  ["Ktor", "ktor"],
+  ["Quarkus", "quarkus"],
 ]);
 const LANGUAGES = new Map<string, RuntimeKind>([
   ["Python", "python"],
@@ -72,6 +93,8 @@ const LANGUAGES = new Map<string, RuntimeKind>([
   ["Node", "node"],
   ["Bun", "bun"],
   ["Browser", "browser"],
+  ["Java", "java"],
+  ["Kotlin", "kotlin"],
 ]);
 
 /**
@@ -107,6 +130,11 @@ function implementation(attrs: Attrs, language: string): string | undefined {
   return name && !["node", "bun", language.toLowerCase()].includes(name.toLowerCase()) ? `(${name})` : undefined;
 }
 
+/** The language's version: a Kotlin app names Kotlin's own; the JVM's is process.runtime.version. */
+function languageVersion(attrs: Attrs): string | undefined {
+  return textOf(attrs["tracepanel.language.version"]) ?? textOf(attrs["process.runtime.version"]);
+}
+
 /**
  * What ran a trace, as the SDKs label a page's runtime: "Node 26.11.1 · Express 5.3.0"; `detailed` names the
  * implementation too, as the panel does: "Python 3.14.0 (cpython) · Django 6.1".
@@ -114,7 +142,7 @@ function implementation(attrs: Attrs, language: string): string | undefined {
 export function traceRuntime(attrs: Attrs, detailed = false): string | undefined {
   const language = languageName(attrs);
   if (!language) return undefined;
-  const version = textOf(attrs["process.runtime.version"]);
+  const version = languageVersion(attrs);
   const runtime = [language, version, detailed ? implementation(attrs, language) : undefined].filter(Boolean).join(" ");
   const framework = textOf(attrs["tracepanel.framework"]);
   return framework ? `${runtime} · ${framework}` : runtime;

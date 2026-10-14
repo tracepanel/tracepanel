@@ -23,6 +23,13 @@
   shows a server page's own load, and the runtime's mark it learned in the
   tab.
 
+- Java and Kotlin apps in the console, the panel and the services map: Java
+  by its release (`Java 21 · Spring Boot 4.1`, `Java 8` for 1.8), Kotlin by
+  Kotlin's own version, and the marks of Spring, Ktor, Quarkus, Java and
+  Kotlin. A trace OpenTelemetry sends over OTLP is labelled with its framework
+  too, from the instrumentation that recorded it: Spring, Ktor, Micronaut,
+  Quarkus, Vert.x, and the others the SDKs already name.
+
 ### Changed
 
 - The panel, the console and the services map show the mark of a Node.js

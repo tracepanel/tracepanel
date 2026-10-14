@@ -259,6 +259,30 @@ fn kind_of(root: &Span, attrs: &Map<String, Value>) -> (&'static str, &'static s
     ("command", "command")
 }
 
+/// Instrumentation scopes, as OpenTelemetry's libraries and agents name them, and the framework each one means.
+const FRAMEWORKS: &[(&str, &str)] = &[
+    ("spring-webmvc", "Spring"),
+    ("spring-webflux", "Spring"),
+    ("ktor", "Ktor"),
+    ("micronaut", "Micronaut"),
+    ("quarkus", "Quarkus"),
+    ("vertx-web", "Vert.x"),
+    ("instrumentation.django", "Django"),
+    ("instrumentation.fastapi", "FastAPI"),
+    ("instrumentation.flask", "Flask"),
+    ("instrumentation-express", "Express"),
+    ("instrumentation-nestjs-core", "NestJS"),
+    ("gin-gonic", "Gin"),
+];
+
+/// The framework an instrumentation scope belongs to, if it is one's.
+fn framework(scope: &str) -> Option<&'static str> {
+    FRAMEWORKS
+        .iter()
+        .find(|(part, _)| scope.contains(part))
+        .map(|(_, name)| *name)
+}
+
 /// The first of `from` the attributes have, as `to`.
 fn copy(out: &mut Map<String, Value>, attrs: &Map<String, Value>, to: &str, from: &[&str]) {
     if let Some(value) = from.iter().find_map(|key| attrs.get(*key)) {
@@ -443,7 +467,15 @@ fn errors(trace: u128, got: &Got, on_root: bool) -> Vec<Value> {
 fn document(trace: u128, root: &Got, root_id: u64, members: &[u64], bucket: &Bucket) -> Value {
     let root_attrs = attributes(&root.span.attributes);
     let (kind, role) = kind_of(&root.span, &root_attrs);
-    let attrs = trace_attrs(root, &root_attrs, kind, role);
+    let mut attrs = trace_attrs(root, &root_attrs, kind, role);
+    // The framework, as the SDKs name it: from the instrumentation that recorded the trace's spans (OpenTelemetry's
+    // Java agent records a Spring request from Tomcat, its controller from spring-webmvc).
+    if let Some(framework) = members
+        .iter()
+        .find_map(|id| framework(&bucket.spans[id].scope))
+    {
+        attrs.insert("tracepanel.framework".into(), Value::from(framework));
+    }
     let status_code = attrs
         .get("http.status_code")
         .and_then(Value::as_i64)

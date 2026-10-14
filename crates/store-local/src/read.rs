@@ -569,7 +569,8 @@ impl Reader {
                  SUM(status = 'error') AS errors, SUM(duration) AS total, MAX(start) AS last_seen, \
                  MAX({LANGUAGE}) AS language, \
                  MAX(json_extract(attrs, '$.\"process.runtime.name\"')) AS runtime_name, \
-                 MAX(json_extract(attrs, '$.\"process.runtime.version\"')) AS version, \
+                 MAX(COALESCE(json_extract(attrs, '$.\"tracepanel.language.version\"'), \
+                     json_extract(attrs, '$.\"process.runtime.version\"'))) AS version, \
                  MAX(json_extract(attrs, '$.\"tracepanel.framework\"')) AS framework \
                  FROM traces WHERE {condition} GROUP BY service, role ORDER BY service, role"
             ),
@@ -1003,7 +1004,23 @@ fn language_name(language: Option<String>, runtime: Option<String>) -> Option<St
     }
 }
 
-/// What runs an app, as the SDKs label it for the panel: "Python 3.12 · Django 6.0", "Go 1.27".
+/// A language's version as people say it: Java by its feature release (21, not 21.0.9+10-LTS; 8 for 1.8.0_392),
+/// the others by major and minor.
+fn short_version(language: &str, version: &str) -> String {
+    let version = version.split(['+', '-']).next().unwrap_or(version);
+    let mut parts = version.split(['.', '_']);
+    if language == "Java" {
+        return match (parts.next(), parts.next()) {
+            (Some("1"), Some(minor)) => minor.to_owned(),
+            (Some(feature), _) => feature.to_owned(),
+            _ => version.to_owned(),
+        };
+    }
+    version.split('.').take(2).collect::<Vec<_>>().join(".")
+}
+
+/// What runs an app, as the SDKs label it for the panel: "Python 3.12 · Django 6.0", "Go 1.27", "Java 21 · Spring
+/// Boot 4.1". A Kotlin app names Kotlin's own version (tracepanel.language.version), not the JVM's.
 fn runtime_label(
     language: Option<String>,
     version: Option<String>,
@@ -1014,18 +1031,18 @@ fn runtime_label(
     let language = name
         .next()
         .map(|first| first.to_uppercase().chain(name).collect::<String>())?;
-    let short = |text: &str| text.split('.').take(2).collect::<Vec<_>>().join(".");
     let runtime = match version {
-        Some(version) => format!("{language} {}", short(&version)),
+        Some(version) => format!("{language} {}", short_version(&language, &version)),
         None => language,
     };
     Some(match framework {
         Some(framework) => {
-            let (name, version) = framework.split_once(' ').unwrap_or((&framework, ""));
-            let framework = if version.is_empty() {
-                name.to_owned()
-            } else {
-                format!("{name} {}", short(version))
+            // A framework's version is its last word: "Spring Boot 4.1.1", "Next.js 16.4.0".
+            let framework = match framework.rsplit_once(' ') {
+                Some((name, version)) if version.starts_with(|c: char| c.is_ascii_digit()) => {
+                    format!("{name} {}", short_version(name, version))
+                }
+                _ => framework,
             };
             format!("{runtime} · {framework}")
         }
@@ -1128,6 +1145,27 @@ mod tests {
         assert_eq!(
             label(browser.as_deref(), None, None).as_deref(),
             Some("Browser")
+        );
+    }
+
+    #[test]
+    fn a_jvm_app_is_labelled_by_its_language_and_framework() {
+        assert_eq!(
+            label(Some("java"), Some("21.0.9"), Some("Spring Boot 4.1.1")).as_deref(),
+            Some("Java 21 · Spring Boot 4.1")
+        );
+        // OpenTelemetry's Java agent sends the JVM's full version; Java 8 calls itself 1.8.
+        assert_eq!(
+            label(Some("java"), Some("21.0.9+10-LTS"), None).as_deref(),
+            Some("Java 21")
+        );
+        assert_eq!(
+            label(Some("java"), Some("1.8.0_392"), None).as_deref(),
+            Some("Java 8")
+        );
+        assert_eq!(
+            label(Some("kotlin"), Some("2.3.0"), Some("Ktor 3.2.1")).as_deref(),
+            Some("Kotlin 2.3 · Ktor 3.2")
         );
     }
 }

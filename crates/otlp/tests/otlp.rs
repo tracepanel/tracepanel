@@ -311,6 +311,46 @@ fn otlp_json_as_the_specification_writes_it() {
 }
 
 #[test]
+fn a_spring_app_under_the_java_agent_is_labelled_java_and_spring() {
+    // As OpenTelemetry's Java agent sends a Spring MVC request: Tomcat records it, spring-webmvc its controller.
+    let export = json!({"resourceSpans": [{
+        "resource": {"attributes": [
+            {"key": "service.name", "value": {"stringValue": "petclinic"}},
+            {"key": "telemetry.sdk.language", "value": {"stringValue": "java"}},
+            {"key": "process.runtime.version", "value": {"stringValue": "21.0.9+10-LTS"}}]},
+        "scopeSpans": [
+            {"scope": {"name": "io.opentelemetry.tomcat-10.0"}, "spans": [
+                {"traceId": "5b8efff798038103d269b633813fc60d", "spanId": "eee19b7ec3c1b176", "name": "GET /owners/{id}",
+                 "kind": 2, "startTimeUnixNano": "1544712660000000000", "endTimeUnixNano": "1544712661000000000",
+                 "attributes": [{"key": "http.request.method", "value": {"stringValue": "GET"}},
+                                {"key": "http.route", "value": {"stringValue": "/owners/{id}"}}]}]},
+            {"scope": {"name": "io.opentelemetry.spring-webmvc-6.0"}, "spans": [
+                {"traceId": "5b8efff798038103d269b633813fc60d", "spanId": "eee19b7ec3c1b177",
+                 "parentSpanId": "eee19b7ec3c1b176", "name": "OwnerController.show", "kind": 1,
+                 "startTimeUnixNano": "1544712660100000000", "endTimeUnixNano": "1544712660900000000"}]}]}]});
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/json"),
+    );
+    let mut assembler = Assembler::default();
+    let start = Instant::now();
+    assembler.add(
+        tracepanel_otlp::decode(&headers, export.to_string().as_bytes()).unwrap(),
+        start,
+    );
+    let docs = assembler.ready(start + QUIET);
+
+    assert_eq!(
+        (
+            &docs[0]["attrs"]["telemetry.sdk.language"],
+            &docs[0]["attrs"]["tracepanel.framework"]
+        ),
+        (&json!("java"), &json!("Spring"))
+    );
+}
+
+#[test]
 fn a_grpc_call_served_is_an_rpc_trace() {
     let export = json!({"resourceSpans": [{
         "resource": {"attributes": [{"key": "service.name", "value": {"stringValue": "greeter"}}]},
