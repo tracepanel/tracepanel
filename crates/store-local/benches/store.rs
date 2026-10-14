@@ -152,11 +152,28 @@ fn list_endpoints(bencher: Bencher) {
     });
 }
 
+/// Searches as the console writes them: filters with each operator, quoted values (escaped quotes too), free text.
+const SEARCHES: [&str; 8] = [
+    r#"route:/api/* status>=500 duration>250ms has:n+1 user:"ann lee" -db:replica"#,
+    r#"kind:page name:"/books › click \"Save\"" since:15m"#,
+    "has:error since:1h service:shop",
+    "method:POST route:/api/orders/* status:422",
+    r#""connection reset" level:error logger:payments"#,
+    "queries>20 duration>1s has:duplicates until:5m",
+    "system:redis op:get key:session:* since:24h",
+    "trace:01M4WQ420S1RX820WR9NMWZ8YJ",
+];
+
+/// Searches parsed: each of SEARCHES, so one pass measures the parser, not the noise of one short call (the
+/// benchmarks' simulation runs a pass once).
 #[divan::bench]
-fn parse_a_search(bencher: Bencher) {
+fn parse_searches(bencher: Bencher) {
+    // Warmed up first: the allocator's and the parser's first use, which the measured pass would otherwise carry.
+    std::hint::black_box(search::parse(SEARCHES[0]));
     bencher.bench_local(|| {
-        search::parse(
-            r#"route:/api/* status>=500 duration>250ms has:n+1 user:"ann lee" -db:replica"#,
-        )
+        SEARCHES
+            .iter()
+            .map(|query| search::parse(query).len())
+            .sum::<usize>()
     });
 }
