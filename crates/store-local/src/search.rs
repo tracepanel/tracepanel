@@ -11,13 +11,6 @@ use std::sync::LazyLock;
 /// The portable field spec (`schema/search.json`), which the console's API serves.
 pub const SPEC: &str = include_str!("../../../schema/search.json");
 
-static TOKEN: LazyLock<Regex> = LazyLock::new(|| {
-    // A quoted value may hold a quote or a backslash escaped (name:"/ › click \"Save\""), as the console writes it.
-    Regex::new(
-        r#"(?:(?P<key>[a-z][a-z0-9_.]*)(?P<op>>=|<=|!=|:|>|<)(?P<value>"(?:[^"\\]|\\.)*"|\S+))|(?P<text>"(?:[^"\\]|\\.)*"|\S+)"#,
-    )
-        .unwrap()
-});
 static DURATION: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^(?P<number>\d+(?:\.\d+)?)(?P<unit>us|µs|ms|s)?$").unwrap());
 static AGO: LazyLock<Regex> =
@@ -44,6 +37,49 @@ pub struct Term {
     pub value: String,
 }
 
+const OPERATORS: [&str; 6] = [">=", "<=", "!=", ":", ">", "<"];
+
+/// The end of a quoted value that starts `text` (at its opening quote), past its closing quote. A quote or a
+/// backslash inside it is escaped (name:"/ › click \"Save\""), as the console writes it. None when it never closes.
+fn quoted_end(text: &str) -> Option<usize> {
+    let mut escaped = false;
+    for (at, char) in text.char_indices().skip(1) {
+        match char {
+            _ if escaped => escaped = false,
+            '\\' => escaped = true,
+            '"' => return Some(at + 1),
+            _ => {}
+        }
+    }
+    None
+}
+
+/// One value or word at the start of `text`: quoted, else up to the next space.
+fn word_end(text: &str) -> usize {
+    let bare = text.find(char::is_whitespace).unwrap_or(text.len());
+    if text.starts_with('"') {
+        // A quote that never closes is part of a bare word, as a word is anything up to a space.
+        return quoted_end(text).unwrap_or(bare);
+    }
+    bare
+}
+
+/// A filter's key and operator at the start of `text` (`status>=`), and where its value starts.
+fn key_and_op(text: &str) -> Option<(&str, &'static str, usize)> {
+    if !text.starts_with(|char: char| char.is_ascii_lowercase()) {
+        return None;
+    }
+    let key_len = text
+        .find(|char: char| {
+            !(char.is_ascii_lowercase() || char.is_ascii_digit() || char == '_' || char == '.')
+        })
+        .unwrap_or(text.len());
+    let op = OPERATORS
+        .into_iter()
+        .find(|op| text[key_len..].starts_with(op))?;
+    Some((&text[..key_len], op, key_len + op.len()))
+}
+
 /// A value without its quotes, its escaped quotes and backslashes as they are; a bare value as it is.
 fn unquote(value: &str) -> String {
     let Some(inner) = value
@@ -52,6 +88,9 @@ fn unquote(value: &str) -> String {
     else {
         return value.trim_matches('"').to_owned();
     };
+    if !inner.contains('\\') {
+        return inner.to_owned();
+    }
     let mut out = String::with_capacity(inner.len());
     let mut chars = inner.chars();
     while let Some(char) = chars.next() {
@@ -63,22 +102,36 @@ fn unquote(value: &str) -> String {
     out
 }
 
+/// A filter at the start of `text` and where it ends. A key with nothing after its operator (`status:`) is a word.
+fn filter(text: &str) -> Option<(Term, usize)> {
+    let (key, op, at) = key_and_op(text)?;
+    let end = at + word_end(&text[at..]);
+    let term = Term {
+        key: Some(key.to_owned()),
+        op: op.to_owned(),
+        value: unquote(&text[at..end]),
+    };
+    (end > at).then_some((term, end))
+}
+
+/// The terms of a search, in order: `key:value` filters (any operator) and words of free text, either quoted.
 pub fn parse(query: &str) -> Vec<Term> {
-    TOKEN
-        .captures_iter(query.trim())
-        .map(|found| match found.name("text") {
-            Some(text) => Term {
+    let mut terms = Vec::new();
+    let mut rest = query.trim_start();
+    while !rest.is_empty() {
+        let (term, end) = filter(rest).unwrap_or_else(|| {
+            let end = word_end(rest);
+            let word = Term {
                 key: None,
                 op: ":".into(),
-                value: unquote(text.as_str()),
-            },
-            None => Term {
-                key: Some(found["key"].to_owned()),
-                op: found["op"].to_owned(),
-                value: unquote(&found["value"]),
-            },
-        })
-        .collect()
+                value: unquote(&rest[..end]),
+            };
+            (word, end)
+        });
+        terms.push(term);
+        rest = rest[end..].trim_start();
+    }
+    terms
 }
 
 /// Python's repr() of a string, as error messages quote values.
