@@ -27,6 +27,8 @@
   plain server. An app the JavaScript SDK traces is labelled Node 26 or Bun
   1.3, not by OpenTelemetry's language name, nodejs.
 - A trace's SQL tab is named **DB**: the tabs fit on a narrower panel.
+- Search reads a quote escaped inside a quoted value (`name:"/ › click
+  \"Save\""`): an action's page, named after a button, lists its calls.
 - The page widget shows the framework of the app that answered a page's
   calls when the page's server didn't name one (an SPA from a dev server),
   and the panel names a Node.js trace's runtime Node, not Nodejs.

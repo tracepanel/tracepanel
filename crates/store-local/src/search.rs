@@ -12,7 +12,10 @@ use std::sync::LazyLock;
 pub const SPEC: &str = include_str!("../../../schema/search.json");
 
 static TOKEN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(?:(?P<key>[a-z][a-z0-9_.]*)(?P<op>>=|<=|!=|:|>|<)(?P<value>"[^"]*"|\S+))|(?P<text>"[^"]*"|\S+)"#)
+    // A quoted value may hold a quote or a backslash escaped (name:"/ › click \"Save\""), as the console writes it.
+    Regex::new(
+        r#"(?:(?P<key>[a-z][a-z0-9_.]*)(?P<op>>=|<=|!=|:|>|<)(?P<value>"(?:[^"\\]|\\.)*"|\S+))|(?P<text>"(?:[^"\\]|\\.)*"|\S+)"#,
+    )
         .unwrap()
 });
 static DURATION: LazyLock<Regex> =
@@ -41,8 +44,23 @@ pub struct Term {
     pub value: String,
 }
 
+/// A value without its quotes, its escaped quotes and backslashes as they are; a bare value as it is.
 fn unquote(value: &str) -> String {
-    value.trim_matches('"').to_owned()
+    let Some(inner) = value
+        .strip_prefix('"')
+        .and_then(|rest| rest.strip_suffix('"'))
+    else {
+        return value.trim_matches('"').to_owned();
+    };
+    let mut out = String::with_capacity(inner.len());
+    let mut chars = inner.chars();
+    while let Some(char) = chars.next() {
+        match char {
+            '\\' => out.extend(chars.next()),
+            char => out.push(char),
+        }
+    }
+    out
 }
 
 pub fn parse(query: &str) -> Vec<Term> {
@@ -459,6 +477,30 @@ mod tests {
             (Some(now - 900_000_000), Some(now - 300_000_000))
         );
         assert_eq!(period("route:/api/* since>15m", now), (None, None));
+    }
+
+    #[test]
+    fn a_quoted_value_keeps_its_escaped_quotes() {
+        assert_eq!(
+            parse(r#"kind:page name:"/ › click \"Save\"" "a \\ b""#),
+            vec![
+                Term {
+                    key: Some("kind".into()),
+                    op: ":".into(),
+                    value: "page".into()
+                },
+                Term {
+                    key: Some("name".into()),
+                    op: ":".into(),
+                    value: r#"/ › click "Save""#.into()
+                },
+                Term {
+                    key: None,
+                    op: ":".into(),
+                    value: r"a \ b".into()
+                },
+            ]
+        );
     }
 
     #[test]
