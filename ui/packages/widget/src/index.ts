@@ -43,6 +43,21 @@ function followPages(onPage: (announced: PageAnnouncement) => void): void {
   window.addEventListener("tracepanel:page", (event) => onPage((event as CustomEvent<PageAnnouncement>).detail));
 }
 
+/** A view's name has no action after its path: "/books", not "/books › click "Save"". */
+function isView(entry: TabEntry | undefined): boolean {
+  return entry?.summary?.kind === "page" && !entry.summary.name.includes(" › ");
+}
+
+/**
+ * Before a new view goes in: the last one, when nothing came after it (no request, no action), leaves the list. A
+ * reload of an SPA's page would otherwise stack views with nothing under them; the latest view always stays.
+ */
+function dropEmptyView(tab: TabEntry[], name: string): TabEntry[] {
+  const last = tab.at(-1);
+  if (!name.includes(" › ") && isView(last) && !tab.some((item) => item.parent === last?.id)) return tab.slice(0, -1);
+  return tab;
+}
+
 /** What the browser recording announced before the widget listened, oldest first. */
 function announcedPages(): PageAnnouncement[] {
   const announced = (globalThis as unknown as Record<symbol, Map<string, PageAnnouncement> | undefined>)[ANNOUNCED];
@@ -928,7 +943,10 @@ export function mount(options: WidgetOptions = {}): Widget {
       },
     };
     const at = tab.findIndex((item) => item.id === announced.id);
-    tab = at === -1 ? [...tab, entry] : tab.map((item, index) => (index === at ? entry : item));
+    tab =
+      at === -1
+        ? [...dropEmptyView(tab, announced.name), entry]
+        : tab.map((item, index) => (index === at ? entry : item));
     saveTab(tab);
     sendTab();
   }
