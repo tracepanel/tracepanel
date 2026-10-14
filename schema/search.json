@@ -114,6 +114,18 @@
       "type": "text",
       "help": "Route of the request that logged it"
     },
+    "kind": {
+      "type": "text",
+      "help": "Kind of the trace that logged it: http, task, command, page"
+    },
+    "task": {
+      "type": "text",
+      "help": "Task that logged it, * wildcards: shop.tasks.*"
+    },
+    "job": {
+      "type": "text",
+      "help": "Job (a command, a scheduled run) that logged it"
+    },
     "path": {
       "type": "text",
       "help": "Path of the request that logged it"

@@ -524,11 +524,62 @@ function logContext(log: LogRow): LogField[] {
   return [["app", log.service, { service: term(log.service) }], requestField(log), ...user];
 }
 
-/** "GET /api/stats/ → 200", filtering by its path; a task's or job's name as it is. */
+/** What wrote a record, by its trace's kind: a request, a task, a job, a page. */
+const SOURCES: Record<string, string> = { task: "task", command: "job", page: "page", websocket: "connection" };
+
+function sourceOf(log: LogRow): string {
+  return SOURCES[log.trace_kind] ?? "request";
+}
+
+// The search key a task's or a job's records are found by: its name.
+const NAMED: Record<string, "task" | "job"> = { task: "task", command: "job" };
+
+/** "GET /api/stats/ → 200", filtering by its path; a task or a job by its name, filtering by it. */
 function requestField(log: LogRow): LogField {
-  if (!(log.method && log.path)) return ["request", log.trace_name];
-  const status = log.http_status ? ` → ${log.http_status}` : "";
-  return ["request", `${log.method} ${log.path}${status}`, { path: term(log.path) }];
+  const named = NAMED[log.trace_kind];
+  if (named) return [named, log.trace_name, { [named]: term(log.trace_name) }];
+  return log.method && log.path ? httpField(log.method, log.path, log.http_status) : [sourceOf(log), log.trace_name];
+}
+
+function httpField(method: string, path: string, status: number | null | undefined): LogField {
+  return ["request", `${method} ${path}${status ? ` → ${status}` : ""}`, { path: term(path) }];
+}
+
+/** Shortcuts to the records around this one: its trace's, every run of its task or job, its logger's, its path's. */
+function LogSources({ log, onFilter }: { log: LogRow; onFilter: (terms: Record<string, string>) => void }) {
+  const named = NAMED[log.trace_kind];
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="mr-1 text-base text-muted-foreground">Show logs from</span>
+      <Button variant="outline" size="xs" onClick={() => onFilter({ trace: log.trace_id })}>
+        this {sourceOf(log)}
+      </Button>
+      {named ? (
+        <Button variant="outline" size="xs" onClick={() => onFilter({ [named]: log.trace_name })}>
+          every run of {log.trace_name}
+        </Button>
+      ) : null}
+      <Button variant="outline" size="xs" onClick={() => onFilter({ logger: log.logger })}>
+        this logger
+      </Button>
+      {log.path ? (
+        <Button variant="outline" size="xs" onClick={() => onFilter({ path: log.path ?? "" })}>
+          this path
+        </Button>
+      ) : null}
+      {log.user_id ? (
+        <Button variant="outline" size="xs" onClick={() => onFilter({ user: log.user_id ?? "" })}>
+          this user
+        </Button>
+      ) : null}
+      <Button size="xs" className="ml-auto" asChild>
+        <a href={traceHref(log.trace_id, "logs")}>
+          Open {sourceOf(log)}
+          <ArrowRightIcon />
+        </a>
+      </Button>
+    </div>
+  );
 }
 
 function LogDetails({ log, onFilter }: { log: LogRow; onFilter: (terms: Record<string, string>) => void }) {
@@ -545,31 +596,7 @@ function LogDetails({ log, onFilter }: { log: LogRow; onFilter: (terms: Record<s
   ];
   return (
     <div className="grid gap-3.5">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="mr-1 text-base text-muted-foreground">Show logs from</span>
-        <Button variant="outline" size="xs" onClick={() => onFilter({ trace: log.trace_id })}>
-          this request
-        </Button>
-        <Button variant="outline" size="xs" onClick={() => onFilter({ logger: log.logger })}>
-          this logger
-        </Button>
-        {log.path ? (
-          <Button variant="outline" size="xs" onClick={() => onFilter({ path: log.path ?? "" })}>
-            this path
-          </Button>
-        ) : null}
-        {log.user_id ? (
-          <Button variant="outline" size="xs" onClick={() => onFilter({ user: log.user_id ?? "" })}>
-            this user
-          </Button>
-        ) : null}
-        <Button size="xs" className="ml-auto" asChild>
-          <a href={traceHref(log.trace_id, "logs")}>
-            Open request
-            <ArrowRightIcon />
-          </a>
-        </Button>
-      </div>
+      <LogSources log={log} onFilter={onFilter} />
       <div className="group/message relative rounded-md border bg-background">
         <pre className="m-0 px-4 py-3 pr-12 font-mono text-base whitespace-pre-wrap">{log.message}</pre>
         <CopyButton text={log.message} label="Copy message" className="absolute top-2 right-2" />

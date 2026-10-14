@@ -582,4 +582,58 @@ mod tests {
         );
         let _ = std::fs::remove_dir_all(&dir);
     }
+
+    #[test]
+    fn a_tasks_or_a_jobs_records_are_found_by_its_name() {
+        let dir = std::env::temp_dir().join(format!(
+            "tracepanel-store-log-sources-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = path_in(&dir);
+        let mut store = Store::open(&path).unwrap();
+        let logged = |id: &str, kind: &str, name: &str, message: &str| {
+            let doc = serde_json::json!({
+                "id": id, "kind": kind, "name": name, "start": 0, "duration": 1000, "status": "ok",
+                "attrs": {"service.name": "shop"}, "spans": [], "errors": [], "links": [], "issues": [],
+                "logs": [{"span_id": null, "time": 10, "level": "info", "logger": "shop", "message": message,
+                          "exception": null, "attrs": {}}],
+            });
+            Received {
+                trace: serde_json::from_value(doc.clone()).unwrap(),
+                doc: doc.to_string(),
+            }
+        };
+        store
+            .write(&[
+                logged("L1", "task", "Orders.onOrder", "order for Book 5"),
+                logged("L2", "command", "Notifier.refreshStats", "stats refreshed"),
+                logged("L3", "http", "GET /books", "listed 30 books"),
+            ])
+            .unwrap();
+        let reader = Reader::new(&path);
+        let messages = |query: &str| -> Vec<Value> {
+            reader
+                .search_logs(query, 50, None)
+                .unwrap()
+                .items
+                .iter()
+                .map(|log| log["message"].clone())
+                .collect()
+        };
+
+        assert_eq!(
+            messages("task:Orders.onOrder"),
+            [Value::from("order for Book 5")]
+        );
+        assert_eq!(messages("task:Orders.*"), [Value::from("order for Book 5")]);
+        assert_eq!(
+            messages("job:Notifier.refreshStats"),
+            [Value::from("stats refreshed")]
+        );
+        assert_eq!(messages("kind:http"), [Value::from("listed 30 books")]);
+        // A job of the same name is no task.
+        assert_eq!(messages("task:Notifier.refreshStats"), Vec::<Value>::new());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

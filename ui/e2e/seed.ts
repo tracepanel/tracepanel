@@ -105,12 +105,28 @@ function pages(): Doc[] {
 /** A task a worker ran and a job a command ran: the Tasks and Jobs sections. */
 function background(): Doc[] {
   const worker = { "service.name": "shop", "service.role": "worker", "telemetry.sdk.language": "python" };
-  const task = trace("task", "shop.tasks.send_receipt", { ...worker, "task.id": "t-1", "task.state": "SUCCESS" });
-  const job = trace("command", "manage.py rebuild_index", {
-    "service.name": "shop",
-    "service.role": "command",
-    "telemetry.sdk.language": "python",
+  const log = (logger: string, message: string): Doc => ({
+    // biome-ignore lint/style/useNamingConvention: a log record as the SDKs send it.
+    span_id: null,
+    time: 1_000,
+    level: "info",
+    logger,
+    message,
+    exception: null,
+    attrs: {},
   });
+  const task = trace(
+    "task",
+    "shop.tasks.send_receipt",
+    { ...worker, "task.id": "t-1", "task.state": "SUCCESS" },
+    { logs: [log("shop.tasks", "receipt sent to ann@example.com")] },
+  );
+  const job = trace(
+    "command",
+    "manage.py rebuild_index",
+    { "service.name": "shop", "service.role": "command", "telemetry.sdk.language": "python" },
+    { logs: [log("shop.index", "index rebuilt: 120 books")] },
+  );
   return [task, job];
 }
 

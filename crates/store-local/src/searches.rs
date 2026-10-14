@@ -141,6 +141,7 @@ pub(crate) fn log_search(fts: bool) -> search::Schema {
             ("logger", "logs.logger"),
             ("trace", "logs.trace_id"),
             ("route", "traces.route"),
+            ("kind", "traces.kind"),
             ("path", "traces.path"),
             ("user", "traces.user_id"),
             ("service", "traces.service"),
@@ -166,7 +167,8 @@ pub(crate) fn log_search(fts: bool) -> search::Schema {
                 )
             }
         }),
-        vec![],
+        // A task's or a job's records, by its name: the trace that logged them was one.
+        vec![("task", named("task")), ("job", named("command"))],
         // Keys come from the query grammar ([a-z0-9_.] only), so they are safe inside the JSON path.
         vec![(
             "extra.*",
@@ -177,6 +179,15 @@ pub(crate) fn log_search(fts: bool) -> search::Schema {
             }),
         )],
     )
+}
+
+/// A trace's name, for traces of `kind` alone: a log's `task:` and `job:`.
+fn named(kind: &'static str) -> Compiler {
+    let name = search::text("traces.name");
+    Box::new(move |term| {
+        let (clause, params) = name(term)?;
+        Ok((format!("traces.kind = '{kind}' AND ({clause})"), params))
+    })
 }
 
 /// `failed:true` (or `failed:false`): calls whose span failed, on every list of calls.

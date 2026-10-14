@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Logs: a record a task or a job wrote is found by its name, with the Task
+  and Job filters or `task:` and `job:`, and `kind:` finds the records of
+  each kind of trace. A task's record says it was a task's, with a button
+  for every run of it, and opens the task.
+- A search chip can be changed: click it, and it goes back into the box as
+  text, Enter makes it a chip again.
+
+### Fixed
+
+- Enter in the search box took the first suggestion, not what was typed:
+  `logger:org` became the first of the loggers starting with org. Enter
+  takes what was typed, a suggestion only when the arrows picked one, and
+  Tab the first. Typing the start of several values
+  suggests all of them first, with a wildcard (`logger:org*`).
+- A filter's menu found nothing when its key was typed in its box too
+  (`logger:org` in the Logger menu).
+
 ## 0.2.0 (2026-10-14)
 
 Pages: what users do in a browser, each view and action over the requests it
