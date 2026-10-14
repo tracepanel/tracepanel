@@ -1477,7 +1477,11 @@ details[data-focused] > .dt-sql-group {
   color: var(--dt-text-3);
   font-size: var(--dt-size-sm);
 }
+/* One grid for every row: the names' column fits the longest name (up to 16rem), the values take the rest. */
 .dt-locals {
+  display: grid;
+  grid-template-columns: fit-content(16rem) minmax(0, 1fr);
+  column-gap: 1.25rem;
   margin: 0;
   padding: 0.375rem 0.75rem 0.625rem;
   border-top: 1px solid var(--dt-border);
@@ -1485,8 +1489,8 @@ details[data-focused] > .dt-sql-group {
 }
 .dt-locals div {
   display: grid;
-  grid-template-columns: minmax(5rem, 0.35fr) 1fr;
-  gap: 0.625rem;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
   padding: 0.1875rem 0;
 }
 .dt-locals dt {
