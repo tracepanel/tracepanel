@@ -25,12 +25,18 @@ export function serviceTarget(node: ServiceNode): Route {
   return { name: "traces", q: withPeriod(`peer:${node.id}`, currentPeriod()) };
 }
 
-/** Where an app's own work is listed: requests for web, tasks for a worker, runs for a command. */
+// Where an app's own work is listed: requests for web, tasks for a worker, runs for a command, views for a browser.
+const ROLE_SECTIONS: Record<string, Route["name"]> = {
+  web: "endpoints",
+  worker: "tasks",
+  command: "jobs",
+  browser: "pages",
+};
+
+/** The section that lists an app's own work, or every trace for a role it doesn't know. */
 export function appTarget(app: ServiceApp): Route {
-  if (app.role === "web") return { name: "endpoints", q: "" };
-  if (app.role === "worker") return { name: "tasks", q: "" };
-  if (app.role === "command") return { name: "jobs", q: "" };
-  return { name: "traces", q: "" };
+  const section = ROLE_SECTIONS[app.role] ?? "traces";
+  return { name: section, q: "" } as Route;
 }
 
 /** One project, however many roles it runs as (web, worker, command): its rows summed, the busiest role first. */
