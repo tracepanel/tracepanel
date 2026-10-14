@@ -255,6 +255,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/pages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pages viewed in a browser (tracepanel-js's browser recording) by path, busiest first. */
+        get: operations["listPages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ingest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Traces a page recorded in the browser, sent as an SDK sends them: a JSON array of traces. */
+        post: operations["ingestTraces"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/graphql/detail": {
         parameters: {
             query?: never;
@@ -521,7 +555,7 @@ export interface components {
         TraceSummary: {
             id: string;
             /** @enum {string} */
-            kind: "http" | "task" | "command" | "websocket" | "rpc";
+            kind: "http" | "task" | "command" | "websocket" | "rpc" | "page";
             name: string;
             start: components["schemas"]["Time"];
             duration: components["schemas"]["Duration"];
@@ -564,7 +598,7 @@ export interface components {
             exception: string | null;
             attrs: components["schemas"]["Attrs"];
             /** @enum {string} */
-            trace_kind: "http" | "task" | "command" | "websocket" | "rpc";
+            trace_kind: "http" | "task" | "command" | "websocket" | "rpc" | "page";
             /**
              * @description As the trace's htmx.
              * @enum {string|null}
@@ -595,7 +629,7 @@ export interface components {
             sent: boolean | null;
             html: boolean;
             /** @enum {string} */
-            trace_kind: "http" | "task" | "command" | "websocket" | "rpc";
+            trace_kind: "http" | "task" | "command" | "websocket" | "rpc" | "page";
             /**
              * @description As the trace's htmx.
              * @enum {string|null}
@@ -724,12 +758,12 @@ export interface components {
         };
         KindStats: components["schemas"]["GroupStats"] & {
             /** @enum {string} */
-            kind: "http" | "task" | "command" | "websocket" | "rpc";
+            kind: "http" | "task" | "command" | "websocket" | "rpc" | "page";
         };
         /** @description One operation: a trace kind plus name, e.g. http "GET /posts/<int:pk>/". */
         OperationStats: components["schemas"]["GroupStats"] & {
             /** @enum {string} */
-            kind: "http" | "task" | "command" | "websocket" | "rpc";
+            kind: "http" | "task" | "command" | "websocket" | "rpc" | "page";
             name: string;
             /** @description For requests. */
             method: string | null;
@@ -801,6 +835,8 @@ export interface components {
                 jobs: number;
                 /** @description RPC calls served: gRPC and other RPC systems' servers. */
                 rpc: number;
+                /** @description Pages viewed in a browser. */
+                pages: number;
                 /** @description The systems with operations, by family then name: the console lists a page for each. */
                 systems: {
                     system: string;
@@ -820,6 +856,8 @@ export interface components {
             job: string[];
             /** @description RPC methods served, Service/Method. */
             rpc: string[];
+            /** @description Paths of pages viewed in a browser. */
+            page: string[];
             route: string[];
             logger: string[];
             /** @description Database aliases. */
@@ -847,6 +885,7 @@ export interface components {
             graphql: components["schemas"]["SearchFields"];
             jobs: components["schemas"]["SearchFields"];
             rpc: components["schemas"]["SearchFields"];
+            pages: components["schemas"]["SearchFields"];
             traces: components["schemas"]["SearchFields"];
             logs: components["schemas"]["SearchFields"];
             mails: components["schemas"]["SearchFields"];
@@ -941,6 +980,20 @@ export interface components {
             p95: components["schemas"]["Duration"];
             total: components["schemas"]["Duration"];
             avg_queries: number;
+            with_issues: number;
+            last_seen: components["schemas"]["Time"];
+        };
+        PageRow: {
+            /** @description The page's path: /books/42. */
+            page: string;
+            views: number;
+            /** @description Views with an error in the page. */
+            failures: number;
+            p50: components["schemas"]["Duration"];
+            p95: components["schemas"]["Duration"];
+            total: components["schemas"]["Duration"];
+            /** @description Requests to its API per view. */
+            avg_calls: number;
             with_issues: number;
             last_seen: components["schemas"]["Time"];
         };
@@ -1144,7 +1197,7 @@ export interface components {
              * @description otel is an OpenTelemetry span as its instrumentation recorded it, with otel.span_kind and otel.scope among its attributes: the agent maps it to one of the other kinds before it stores the trace, so the console never returns one.
              * @enum {unknown}
              */
-            kind: "http" | "middleware" | "framework" | "view" | "template" | "sql" | "transaction" | "cache" | "redis" | "mail" | "signal" | "http.client" | "task.enqueue" | "task.run" | "command" | "function" | "event" | "websocket" | "websocket.send" | "channel.send" | "graphql" | "mongodb" | "elasticsearch" | "cassandra" | "dynamodb" | "memcached" | "kafka" | "rabbitmq" | "sqs" | "grpc" | "db" | "messaging" | "rpc" | "otel";
+            kind: "http" | "middleware" | "framework" | "view" | "template" | "sql" | "transaction" | "cache" | "redis" | "mail" | "signal" | "http.client" | "task.enqueue" | "task.run" | "command" | "function" | "event" | "websocket" | "websocket.send" | "channel.send" | "graphql" | "mongodb" | "elasticsearch" | "cassandra" | "dynamodb" | "memcached" | "kafka" | "rabbitmq" | "sqs" | "grpc" | "db" | "messaging" | "rpc" | "otel" | "page";
             name: string;
             start: components["schemas"]["trace.schema"]["$defs"]["time"];
             duration: components["schemas"]["trace.schema"]["$defs"]["duration"];
@@ -1205,7 +1258,7 @@ export interface components {
         "trace.schema": {
             id: components["schemas"]["trace.schema"]["$defs"]["id"];
             /** @enum {unknown} */
-            kind: "http" | "task" | "command" | "websocket" | "rpc";
+            kind: "http" | "task" | "command" | "websocket" | "rpc" | "page";
             /** @description Human-readable name, e.g. "GET /posts/<int:pk>/". */
             name: string;
             start: components["schemas"]["trace.schema"]["$defs"]["time"];
@@ -1238,7 +1291,7 @@ export interface components {
                      * @description otel is an OpenTelemetry span as its instrumentation recorded it, with otel.span_kind and otel.scope among its attributes: the agent maps it to one of the other kinds before it stores the trace, so the console never returns one.
                      * @enum {unknown}
                      */
-                    kind: "http" | "middleware" | "framework" | "view" | "template" | "sql" | "transaction" | "cache" | "redis" | "mail" | "signal" | "http.client" | "task.enqueue" | "task.run" | "command" | "function" | "event" | "websocket" | "websocket.send" | "channel.send" | "graphql" | "mongodb" | "elasticsearch" | "cassandra" | "dynamodb" | "memcached" | "kafka" | "rabbitmq" | "sqs" | "grpc" | "db" | "messaging" | "rpc" | "otel";
+                    kind: "http" | "middleware" | "framework" | "view" | "template" | "sql" | "transaction" | "cache" | "redis" | "mail" | "signal" | "http.client" | "task.enqueue" | "task.run" | "command" | "function" | "event" | "websocket" | "websocket.send" | "channel.send" | "graphql" | "mongodb" | "elasticsearch" | "cassandra" | "dynamodb" | "memcached" | "kafka" | "rabbitmq" | "sqs" | "grpc" | "db" | "messaging" | "rpc" | "otel" | "page";
                     name: string;
                     start: components["schemas"]["trace.schema"]["$defs"]["time"];
                     duration: components["schemas"]["trace.schema"]["$defs"]["duration"];
@@ -1776,6 +1829,77 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadSearch"];
+        };
+    };
+    listPages: {
+        parameters: {
+            query?: {
+                /** @description Search query: free text plus key:value filters, e.g. route:/api/* status>=500 "timed out". */
+                q?: components["parameters"]["q"];
+                limit?: components["parameters"]["limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pages. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        pages: components["schemas"]["PageRow"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadSearch"];
+        };
+    };
+    ingestTraces: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": Record<string, never>[];
+            };
+        };
+        responses: {
+            /** @description Taken; the agent stores them as an SDK's. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        taken: number;
+                    };
+                };
+            };
+            /** @description Not a JSON array of traces. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not application/json. */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     getGraphqlOperation: {

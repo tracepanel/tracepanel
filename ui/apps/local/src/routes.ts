@@ -2,8 +2,8 @@ import type { TraceLinks } from "@tracepanel/ui";
 import { useEffect, useState } from "react";
 
 /** Where work comes in: each has an overview of its groups and a list of its calls. */
-export type EntrySection = "endpoints" | "graphql" | "tasks" | "websockets" | "jobs" | "rpc";
-export const ENTRY_SECTIONS: EntrySection[] = ["endpoints", "graphql", "tasks", "websockets", "jobs", "rpc"];
+export type EntrySection = "endpoints" | "graphql" | "tasks" | "websockets" | "jobs" | "rpc" | "pages";
+export const ENTRY_SECTIONS: EntrySection[] = ["endpoints", "graphql", "tasks", "websockets", "jobs", "rpc", "pages"];
 
 /** A system's page of operations: `calls/sql`, `calls/redis`, `calls/mongodb`, `calls/neo4j`… one per system in the data. */
 export type CallsSection = `calls/${string}`;

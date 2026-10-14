@@ -70,6 +70,7 @@ export function scopedSource(source: DataSource, service: string): DataSource {
     listGraphql: (query) => source.listGraphql(q(query)),
     listJobs: (query) => source.listJobs(q(query)),
     listRpcs: (query) => source.listRpcs(q(query)),
+    listPages: (query) => source.listPages(q(query)),
     summarizeTraces: (query) => source.summarizeTraces(q(query)),
     listServices: (query) => source.listServices(q(query)),
     tracesOverview: (query, group) => source.tracesOverview(q(query), group),

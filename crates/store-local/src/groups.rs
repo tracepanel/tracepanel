@@ -597,6 +597,41 @@ impl Reader {
         Ok(busiest(items, limit))
     }
 
+    /// Pages viewed in a browser (kind page: tracepanel-js's browser recording) by path; busiest first. Their time is
+    /// the page's load, their calls the requests the page made to its API.
+    pub fn list_pages(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
+        let schema = name_search("pages", "page", vec![]);
+        let (condition, params) = search::compile_where(query, &schema)?;
+        let db = self.connect()?;
+        let rows = objects(
+            &db,
+            &format!(
+                "SELECT name, duration, status, start, issues, \
+                 (SELECT COUNT(*) FROM calls WHERE calls.trace_id = traces.id AND calls.system = 'http') AS queries \
+                 FROM traces WHERE kind = 'page' AND {condition}"
+            ),
+            params,
+        )?;
+        let items = grouped(rows, |row| text_of(&row["name"]))
+            .into_iter()
+            .map(|(page, rows)| {
+                let durations = durations(&rows);
+                serde_json::json!({
+                    "page": page,
+                    "views": rows.len(),
+                    "failures": failed(&rows),
+                    "p50": pct(&durations, 0.5),
+                    "p95": pct(&durations, 0.95),
+                    "total": durations.iter().sum::<i64>(),
+                    "avg_calls": avg_queries(&rows),
+                    "with_issues": with_issues(&rows),
+                    "last_seen": last_seen(&rows),
+                })
+            })
+            .collect();
+        Ok(busiest(items, limit))
+    }
+
     /// Monitoring over every trace matching a search, whatever its kind; `group` "endpoint" puts requests by route.
     pub fn traces_overview(
         &self,

@@ -38,6 +38,7 @@ export type ResolverStats = Schemas["ResolverStats"];
 export type TraceGroup = Schemas["TraceGroup"];
 export type JobRow = Schemas["JobRow"];
 export type RpcRow = Schemas["RpcRow"];
+export type PageRow = Schemas["PageRow"];
 export type Related = Schemas["Related"];
 export type ServiceApp = Schemas["ServiceApp"];
 export type ServiceNode = Schemas["ServiceNode"];

@@ -52,6 +52,7 @@ export const GRAPHQL_OPERATIONS: OverviewScope = { filter: "operation:*", noun: 
 export const WEBSOCKET_EVENTS: OverviewScope = { filter: "kind:websocket", noun: "event", group: "events" };
 export const JOB_RUNS: OverviewScope = { filter: "kind:command", noun: "run", group: "jobs" };
 export const RPC_CALLS: OverviewScope = { filter: "kind:rpc", noun: "call", group: "methods" };
+export const PAGE_VIEWS: OverviewScope = { filter: "kind:page", noun: "view", group: "pages" };
 
 const KIND_BADGES: Record<string, string> = { command: "job", websocket: "ws" };
 

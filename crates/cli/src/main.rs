@@ -227,6 +227,7 @@ async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
     };
     let server = tokio::spawn({
         let activity = activity.clone();
+        let sink = sink.clone();
         async move { tracepanel_protocol::serve(listener, sink, activity).await }
     });
     let console = match serve {
@@ -238,7 +239,12 @@ async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
             std::fs::write(&console_file, format!("{url}\n"))?;
             Some((
                 url,
-                tokio::spawn(serve_console(listener, reader, activity.clone())),
+                tokio::spawn(serve_console(
+                    listener,
+                    reader,
+                    activity.clone(),
+                    sink.clone(),
+                )),
             ))
         }
         None => None,
@@ -355,8 +361,10 @@ async fn serve_console(
     listener: tokio::net::TcpListener,
     reader: store_local::Reader,
     activity: Activity,
+    sink: tracepanel_protocol::Sink,
 ) {
-    if let Err(error) = tracepanel_server::serve_on(listener, reader, activity).await {
+    // The console takes a page's browser traces too, on its own address (a dev server proxies it to the page).
+    if let Err(error) = tracepanel_server::serve_on(listener, reader, activity, Some(sink)).await {
         eprintln!("tracepanel-agent: console stopped: {error}");
     }
 }
