@@ -999,7 +999,12 @@ fn language_name(language: Option<String>, runtime: Option<String>) -> Option<St
     match (language.as_deref(), runtime.as_deref()) {
         (Some("webjs"), _) => Some("Browser".into()),
         (Some("nodejs" | "js"), Some("bun")) => Some("Bun".into()),
+        (Some("nodejs" | "js"), Some("deno")) => Some("Deno".into()),
         (Some("nodejs"), _) => Some("Node".into()),
+        // OpenTelemetry's other language names, as people write them.
+        (Some("dotnet"), _) => Some(".NET".into()),
+        (Some("cpp"), _) => Some("C++".into()),
+        (Some("php"), _) => Some("PHP".into()),
         _ => language,
     }
 }
@@ -1145,6 +1150,38 @@ mod tests {
         assert_eq!(
             label(browser.as_deref(), None, None).as_deref(),
             Some("Browser")
+        );
+    }
+
+    #[test]
+    fn every_opentelemetry_language_is_named_as_people_write_it() {
+        let named = |language: &str, runtime: Option<&str>| {
+            language_name(Some(language.into()), runtime.map(str::to_owned))
+        };
+
+        assert_eq!(
+            [
+                named("dotnet", None),
+                named("cpp", None),
+                named("php", None),
+                named("js", Some("deno")),
+                named("ruby", None),
+            ],
+            [
+                Some(".NET".to_owned()),
+                Some("C++".to_owned()),
+                Some("PHP".to_owned()),
+                Some("Deno".to_owned()),
+                Some("ruby".to_owned()),
+            ]
+        );
+        assert_eq!(
+            label(Some("ruby"), Some("3.4.1"), Some("Rails 8.0.2")).as_deref(),
+            Some("Ruby 3.4 · Rails 8.0")
+        );
+        assert_eq!(
+            label(Some(".NET"), Some("9.0.4"), Some("ASP.NET Core 9.0.4")).as_deref(),
+            Some(".NET 9.0 · ASP.NET Core 9.0")
         );
     }
 
