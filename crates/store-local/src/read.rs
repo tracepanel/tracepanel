@@ -567,6 +567,7 @@ impl Reader {
                 "SELECT service, {SERVICE_ROLE} AS role, COUNT(*) AS traces, \
                  SUM(status = 'error') AS errors, SUM(duration) AS total, MAX(start) AS last_seen, \
                  MAX({LANGUAGE}) AS language, \
+                 MAX(json_extract(attrs, '$.\"process.runtime.name\"')) AS runtime_name, \
                  MAX(json_extract(attrs, '$.\"process.runtime.version\"')) AS version, \
                  MAX(json_extract(attrs, '$.\"tracepanel.framework\"')) AS framework \
                  FROM traces WHERE {condition} GROUP BY service, role ORDER BY service, role"
@@ -584,7 +585,11 @@ impl Reader {
                     "errors": int(&row, "errors"),
                     "total": int(&row, "total"),
                     "last_seen": int(&row, "last_seen"),
-                    "runtime": runtime_label(text("language"), text("version"), text("framework")),
+                    "runtime": runtime_label(
+                        language_name(text("language"), text("runtime_name")),
+                        text("version"),
+                        text("framework"),
+                    ),
                 })
             })
             .collect())
@@ -985,6 +990,15 @@ fn by_system(
     Ok(Value::Object(by_system))
 }
 
+/// The language as the panel names it: OpenTelemetry's `nodejs` is Node, or Bun when Bun runs it.
+fn language_name(language: Option<String>, runtime: Option<String>) -> Option<String> {
+    match (language.as_deref(), runtime.as_deref()) {
+        (Some("nodejs" | "js" | "webjs"), Some("bun")) => Some("Bun".into()),
+        (Some("nodejs"), _) => Some("Node".into()),
+        _ => language,
+    }
+}
+
 /// What runs an app, as the SDKs label it for the panel: "Python 3.12 · Django 6.0", "Go 1.27".
 fn runtime_label(
     language: Option<String>,
@@ -1058,7 +1072,7 @@ fn linked_ids(related: &Value) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::runtime_label;
+    use super::{language_name, runtime_label};
 
     fn label(
         language: Option<&str>,
@@ -1091,5 +1105,20 @@ mod tests {
             Some("Python · Flask")
         );
         assert_eq!(label(None, Some("3.12.4"), Some("Django 6.0.1")), None);
+    }
+
+    #[test]
+    fn a_node_or_bun_app_is_labelled_by_its_runtime() {
+        let node = language_name(Some("nodejs".into()), Some("node".into()));
+        let bun = language_name(Some("nodejs".into()), Some("bun".into()));
+
+        assert_eq!(
+            label(node.as_deref(), Some("26.11.1"), Some("Next.js 16.4.0")).as_deref(),
+            Some("Node 26.11 · Next.js 16.4")
+        );
+        assert_eq!(
+            label(bun.as_deref(), Some("1.3.4"), Some("Bun.serve")).as_deref(),
+            Some("Bun 1.3 · Bun.serve")
+        );
     }
 }
