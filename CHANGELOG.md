@@ -1,20 +1,23 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 (2026-10-14)
+
+Pages: what users do in a browser, each view and action over the requests it
+made, in the console and in the panel. Apps in many more languages and
+frameworks, the JVM's first.
 
 ### Added
 
-- A Pages section in the console: each page a browser viewed, then what
-  users did on it. A view is the page's load or an SPA's route change. An
-  action is a click or a submit that called the API (`click "Save"`), or
-  background calls nobody started. Each row has its count, failures, time and
-  the calls it made to the API, opens its own page, and `page:` searches
-  them. A trace of kind `page` comes from the browser: tracepanel-js records
-  a page's views and actions with their `fetch()` calls, errors and console,
-  and sends them to the console's address, `POST /api/ingest`, as an SDK
-  sends its traces. A dev server (Vite's plugin)
-  serves that address on the page's origin. The console takes JSON only, so a
-  page on another site can't send to it.
+- A Pages section in the console: each page a browser viewed, then what users
+  did on it. A view is the page's load or an SPA's route change. An action is a
+  click or a submit that called the API (`click "Save"`), or background calls
+  nobody started. Each row has its count, failures, time and the calls it made
+  to the API, opens its own page, and `page:` searches them. A trace of kind
+  `page` comes from the browser: tracepanel-js records a page's views and
+  actions with their `fetch()` calls, errors and console, and sends them to the
+  console's address, `POST /api/ingest`, as an SDK sends its traces. A dev
+  server (Vite's plugin) serves that address on the page's origin. The console
+  takes JSON only, so a page on another site can't send to it.
 
 - The panel lists what the user did in the browser when tracepanel-js
   records the page: each view and action (`click "Save"`) is a row, its
@@ -22,6 +25,10 @@
   the page's first request, the pill shows its view and load time, as it
   shows a server page's own load, and the runtime's mark it learned in the
   tab.
+
+- A browser app in Services: its row opens Pages, the map draws its work as
+  coming from Users, and `role:browser` finds it. An app recorded in the browser
+  is labelled Browser.
 
 - Apps in more languages and frameworks in the console, the panel and the
   services map. Java by its release (`Java 21 · Spring Boot 4.1`, `Java 8` for
@@ -52,6 +59,14 @@
   the widget's pill says "Waiting for requests", not `GET /` at 0 ms.
 - An error's local variables line up: the names take the width of the
   longest one, not a third of the frame.
+- Pages leads the entry points in the sidebar: work comes in from the browser,
+  then its requests, then what they start.
+- A view's or an action's trace is headed by what was done on which page (CLICK
+  "Save" · /books), not by its path's first word.
+- A span's attribute values wrap at spaces first, and the mono ones are the size
+  of the text beside them.
+- The services map's entries have a mark: a globe for Clients, a terminal for
+  CLI · cron, people for Users.
 
 ### Fixed
 
