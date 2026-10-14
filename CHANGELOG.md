@@ -18,7 +18,10 @@
 
 - The panel lists what the user did in the browser when tracepanel-js
   records the page: each view and action (`click "Save"`) is a row, its
-  requests under it, and opens with its calls, errors and console.
+  requests under it, and opens with its calls, errors and console. Before
+  the page's first request, the pill shows its view and load time, as it
+  shows a server page's own load, and the runtime's mark it learned in the
+  tab.
 
 ### Changed
 

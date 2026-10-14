@@ -43,6 +43,28 @@ function followPages(onPage: (announced: PageAnnouncement) => void): void {
   window.addEventListener("tracepanel:page", (event) => onPage((event as CustomEvent<PageAnnouncement>).detail));
 }
 
+/**
+ * Before the page's first request: its own view, as the browser recording timed it (the SPA's counterpart of a
+ * server page's load), with no time while it still loads.
+ */
+function addView(parent: HTMLElement, view: PageAnnouncement): void {
+  addName(parent, { name: `VIEW ${view.name}` }, false);
+  if (!view.open) addTime(parent, view.duration / 1000);
+}
+
+/** Nothing on this page yet: its server didn't trace it and nothing records it in the browser. */
+function addWaiting(parent: HTMLElement): void {
+  const idle = document.createElement("span");
+  idle.className = "idle";
+  idle.textContent = "Waiting for requests";
+  segment(parent).append(idle);
+}
+
+function idleLabel(view: PageAnnouncement | null, runtime: string | undefined): string {
+  const shown = view ? `view of ${view.name}, no requests yet` : "no requests yet";
+  return `tracepanel: ${shown}${runtime ? `. Served by ${runtime}` : ""}`;
+}
+
 /** A view's name has no action after its path: "/books", not "/books › click "Save"". */
 function isView(entry: TabEntry | undefined): boolean {
   return entry?.summary?.kind === "page" && !entry.summary.name.includes(" › ");
@@ -668,6 +690,29 @@ function isEntry(value: unknown): value is TabEntry {
   );
 }
 
+const RUNTIME_KEY = "tracepanel:runtime";
+
+/**
+ * What served the page: as its server says, else what answered this tab's calls, learned from the first one's trace
+ * (an SPA) and kept for the tab, so a reload shows the mark before its first request.
+ */
+function learnedRuntime(given: string | undefined): string | undefined {
+  if (given) return given;
+  try {
+    return sessionStorage.getItem(RUNTIME_KEY) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function learnRuntime(label: string | undefined): void {
+  try {
+    if (label) sessionStorage.setItem(RUNTIME_KEY, label);
+  } catch {
+    // Storage blocked: the next page learns it again.
+  }
+}
+
 /** Tab history lives in sessionStorage: per browser tab, survives navigations, gone when the tab closes. */
 function loadTab(): TabEntry[] {
   try {
@@ -754,9 +799,11 @@ export function mount(options: WidgetOptions = {}): Widget {
   const stats = query<HTMLElement>(root, ".stats");
   // What served the page, as the panel shows it (Django, FastAPI, Flask, Python, Go): which backend, at a glance.
   const runtimeMark = query<HTMLElement>(root, ".runtime");
-  showRuntime(runtimeMark, options.runtime);
-  // A page its server didn't label (an SPA from a dev server): what answered its first traced call.
-  let runtime = options.runtime;
+  // A page its server didn't label (an SPA from a dev server): what answered this tab's first traced call.
+  let runtime = learnedRuntime(options.runtime);
+  showRuntime(runtimeMark, runtime);
+  // This page's latest view, from the browser recording: what the pill shows before the page's first request.
+  let view: PageAnnouncement | null = null;
   let runtimeAsked = Boolean(runtime);
   const panel = query<HTMLElement>(root, ".panel");
   const panelUrl = options.api ? new URL(options.api, location.href) : null;
@@ -856,13 +903,11 @@ export function mount(options: WidgetOptions = {}): Widget {
    */
   function renderIdle(): void {
     stats.textContent = "";
-    const idle = document.createElement("span");
-    idle.className = "idle";
-    idle.textContent = "Waiting for requests";
-    segment(stats).append(idle);
+    if (view) addView(stats, view);
+    else addWaiting(stats);
     fitBadge();
-    badge.dataset["verdict"] = "ok";
-    badge.setAttribute("aria-label", `tracepanel: no requests yet${runtime ? `. Served by ${runtime}` : ""}`);
+    badge.dataset["verdict"] = view?.status === "error" ? "error" : "ok";
+    badge.setAttribute("aria-label", idleLabel(view, runtime));
   }
 
   /** A page htmx loaded (a boosted link or form): it heads the list, and what follows is its requests. */
@@ -917,6 +962,7 @@ export function mount(options: WidgetOptions = {}): Widget {
     runtimeAsked = true;
     await askConsole(`api/traces/${encodeURIComponent(info.trace)}`, (body) => {
       runtime = traceRuntime((body as { attrs?: Record<string, unknown> }).attrs ?? {});
+      learnRuntime(runtime);
       showRuntime(runtimeMark, runtime);
       render();
       sendTab();
@@ -928,6 +974,10 @@ export function mount(options: WidgetOptions = {}): Widget {
 
   /** A view or an action from the browser recording: a row of its own, its requests under it; updated as it ends. */
   function recordPage(announced: PageAnnouncement): void {
+    if (!announced.name.includes(" › ")) {
+      view = announced;
+      render();
+    }
     const entry: TabEntry = {
       id: announced.id,
       parent: null,

@@ -58,7 +58,7 @@ export interface NavItem {
  * Where work comes in (one entry point per kind of trace), what it touched, and what went wrong. Entry points
  * without stored traces are hidden: a project without Celery has no Tasks.
  */
-export const NAV_GROUPS: { title: string | null; items: NavItem[] }[] = [
+const NAV_GROUPS: { title: string | null; items: NavItem[] }[] = [
   {
     title: "Entry points",
     // In the order work comes in: the user's pages in the browser, the requests they make, what those start.
