@@ -1,6 +1,15 @@
 import { duration, RuntimeIcon, runtimeKind, ServiceIcon, type ServiceMap, systemName } from "@tracepanel/ui";
 import { cn } from "@tracepanel/ui/lib/utils";
-import { CheckIcon, CopyIcon, MinusIcon, PlusIcon } from "lucide-react";
+import {
+  CheckIcon,
+  CopyIcon,
+  GlobeIcon,
+  type LucideIcon,
+  MinusIcon,
+  PlusIcon,
+  TerminalIcon,
+  UsersIcon,
+} from "lucide-react";
 import { type CSSProperties, type ReactNode, useCallback, useMemo, useState } from "react";
 import { type Box, type Diagram, type Link, laidOut, mermaidOf, type Placed } from "./architecture";
 import { href, type Route } from "./routes";
@@ -207,12 +216,17 @@ function Card({
   );
 }
 
+// Where each role's work comes from: requests over the network, a command line or a schedule, people in a browser.
+const ENTRY_ICONS: Record<string, LucideIcon> = { web: GlobeIcon, command: TerminalIcon, browser: UsersIcon };
+
 function EntryBox({ placed, label }: { placed: Placed<Box>; label: string }) {
+  const Icon = ENTRY_ICONS[placed.item.id.replace(/^entry:/, "")];
   return (
     <span
       style={at(placed)}
-      className="absolute grid place-items-center rounded-full border border-dashed bg-card text-xs text-text-2"
+      className="absolute flex items-center justify-center gap-1.5 rounded-full border border-dashed bg-card text-xs text-text-2"
     >
+      {Icon ? <Icon size={13} aria-hidden="true" className="shrink-0 text-muted-foreground" /> : null}
       {label}
     </span>
   );
