@@ -91,7 +91,7 @@ function findingsOf(trace: Trace): Trace["issues"] {
  */
 type CallsTabId = "sql" | "cache" | "http";
 const CALLS_TABS: readonly { id: CallsTabId; system: string; label: string; icon: typeof GlobeIcon }[] = [
-  { id: "sql", system: "sql", label: "Database", icon: DatabaseIcon },
+  { id: "sql", system: "sql", label: "DB", icon: DatabaseIcon },
   { id: "cache", system: "cache", label: "Cache", icon: ZapIcon },
   // HTTP calls are spans of kind `http.client`.
   { id: "http", system: "http.client", label: "HTTP calls", icon: ArrowUpRightIcon },
