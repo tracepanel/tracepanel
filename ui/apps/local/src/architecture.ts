@@ -47,7 +47,8 @@ const hostId = (key: string) => `host:${key}`;
 const projectId = (service: string) => `project:${service}`;
 
 /** Where each role's work comes from, when the store says nothing more: requests from clients, commands from a shell. */
-const ENTRIES: Record<string, string> = { web: "Clients", command: "CLI · cron" };
+// What starts each role's work. A web app a browser app calls is called, so its arrow comes from the browser's box.
+const ENTRIES: Record<string, string> = { web: "Clients", command: "CLI · cron", browser: "Users" };
 
 const roleOf = (service: string, role: string | null) => roleId(service, role ?? "web");
 

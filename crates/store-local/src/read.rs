@@ -992,10 +992,12 @@ fn by_system(
     Ok(Value::Object(by_system))
 }
 
-/// The language as the panel names it: OpenTelemetry's `nodejs` is Node, or Bun when Bun runs it.
+/// The language as the panel names it: OpenTelemetry's `nodejs` is Node, or Bun when Bun runs it; `webjs`, a page
+/// recorded in the browser, is the browser.
 fn language_name(language: Option<String>, runtime: Option<String>) -> Option<String> {
     match (language.as_deref(), runtime.as_deref()) {
-        (Some("nodejs" | "js" | "webjs"), Some("bun")) => Some("Bun".into()),
+        (Some("webjs"), _) => Some("Browser".into()),
+        (Some("nodejs" | "js"), Some("bun")) => Some("Bun".into()),
         (Some("nodejs"), _) => Some("Node".into()),
         _ => language,
     }
@@ -1121,6 +1123,11 @@ mod tests {
         assert_eq!(
             label(bun.as_deref(), Some("1.3.4"), Some("Bun.serve")).as_deref(),
             Some("Bun 1.3 · Bun.serve")
+        );
+        let browser = language_name(Some("webjs".into()), None);
+        assert_eq!(
+            label(browser.as_deref(), None, None).as_deref(),
+            Some("Browser")
         );
     }
 }

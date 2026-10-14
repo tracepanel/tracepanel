@@ -329,7 +329,13 @@ const QUICK: Record<Exclude<Section, CallsSection>, Control[]> = {
       values: ["app", "database", "cache", "mail", "queue", "http"],
       format: capital,
     },
-    { label: "Role", title: "Filter by role", key: "role", values: ["web", "worker", "command"], format: capital },
+    {
+      label: "Role",
+      title: "Filter by role",
+      key: "role",
+      values: ["web", "worker", "command", "browser"],
+      format: capital,
+    },
   ],
 };
 
