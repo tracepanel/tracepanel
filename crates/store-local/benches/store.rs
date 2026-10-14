@@ -164,16 +164,19 @@ const SEARCHES: [&str; 8] = [
     "trace:01M4WQ420S1RX820WR9NMWZ8YJ",
 ];
 
-/// Searches parsed: each of SEARCHES, so one pass measures the parser, not the noise of one short call (the
-/// benchmarks' simulation runs a pass once).
+/// SEARCHES parsed ROUNDS times in a pass. The benchmarks' simulation runs a pass once, and a runner's environment
+/// moves a pass by some 40 µs whatever it does: a pass of a few µs read that as a change of half its time. Over a
+/// millisecond of parsing it is noise, and a change to the parser shows.
+const ROUNDS: usize = 600;
+
 #[divan::bench]
 fn parse_searches(bencher: Bencher) {
     // Warmed up first: the allocator's and the parser's first use, which the measured pass would otherwise carry.
     std::hint::black_box(search::parse(SEARCHES[0]));
     bencher.bench_local(|| {
-        SEARCHES
-            .iter()
-            .map(|query| search::parse(query).len())
+        (0..ROUNDS)
+            .flat_map(|_| SEARCHES.iter())
+            .map(|query| search::parse(std::hint::black_box(query)).len())
             .sum::<usize>()
     });
 }
