@@ -12,6 +12,7 @@ import { duration, percent, since } from "./format";
 import { GraphqlCode } from "./GraphqlCode";
 import { ChevronRightIcon, CloseIcon } from "./icons";
 import { keyed } from "./keys";
+import { AllAttributes, LogRecordDetails } from "./LogRecordDetails";
 import { breakdown, CATEGORY_LABELS, type Category } from "./lib/breakdown";
 import { callFields } from "./lib/callFields";
 import { callTemplate, groupNoun } from "./lib/calls";
@@ -728,16 +729,7 @@ type DetailsProps<T extends Node["type"]> = {
 };
 
 function LogDetails({ node }: DetailsProps<"log">) {
-  return (
-    <div className="grid gap-3 p-4">
-      <p className="dt-map-details-title">
-        Log · {node.log.level} · {node.log.logger}
-      </p>
-      <pre className="m-0 overflow-auto rounded-md border bg-muted/60 px-4 py-3 font-mono text-sm whitespace-pre-wrap">
-        {node.log.exception ? `${node.log.message}\n\n${node.log.exception}` : node.log.message}
-      </pre>
-    </div>
-  );
+  return <LogRecordDetails log={node.log} />;
 }
 
 function ErrorDetails({ node }: DetailsProps<"error">) {
@@ -779,27 +771,6 @@ function GroupDetails({ node }: DetailsProps<"group">) {
         ))}
       </p>
     </div>
-  );
-}
-
-// The statement is shown formatted above; its fingerprint would repeat it on one line.
-const HIDDEN = new Set(["db.statement", "db.fingerprint", "graphql.document"]);
-
-/** Every attribute, raw; under a heading when the call's fields in words come before them. */
-function AllAttributes({ attrs, titled }: { attrs: Attrs; titled: boolean }) {
-  const shown = Object.entries(attrs).filter(([key, value]) => !HIDDEN.has(key) && value !== null && value !== "");
-  if (shown.length === 0) return null;
-  return (
-    <section className="grid gap-2" aria-label="All attributes">
-      {titled ? (
-        <h3 className="text-sm font-medium text-muted-foreground">
-          All attributes <span className="tabular-nums">{shown.length}</span>
-        </h3>
-      ) : null}
-      <PropTable
-        rows={shown.map(([key, value]) => ({ label: key, value: String(value), copy: String(value), mono: true }))}
-      />
-    </section>
   );
 }
 

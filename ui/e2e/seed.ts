@@ -155,7 +155,7 @@ function messages(): Doc[] {
       logger: "org.apache.kafka",
       message: "Kafka producer started",
       exception: null,
-      attrs: {},
+      attrs: { "code.function": "send", "thread.name": "kafka-producer-network-thread" },
     },
     {
       span_id: `${id}R`,

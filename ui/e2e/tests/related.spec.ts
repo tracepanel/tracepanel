@@ -131,3 +131,26 @@ test("a call another project's agent served shows under it, opening in that proj
     "http://127.0.0.1:9999/#/t/01M4R1ER9RWER0QHV07BJDSZ7Z",
   );
 });
+
+test("a record in the call tree shows where it was logged, its attributes", async ({ page }) => {
+  await page.goto(`/#/traces?q=${encodeURIComponent("route:/api/books/announce")}`);
+  await page.getByRole("main").getByRole("table").getByRole("link").first().click();
+  await page.getByText("Kafka producer started").first().click();
+  const details = page.getByRole("complementary", { name: "Details" });
+
+  await expect(details.getByRole("region", { name: "All attributes" })).toContainText("thread.name");
+  await expect(details).toContainText("kafka-producer-network-thread");
+});
+
+test("a record in a trace's Logs tab opens its attributes", async ({ page }) => {
+  await page.goto(`/#/traces?q=${encodeURIComponent("route:/api/books/announce")}`);
+  await page.getByRole("main").getByRole("table").getByRole("link").first().click();
+  await page.getByRole("tab", { name: /^Logs/ }).click();
+  const record = page.getByRole("button", { name: "Kafka producer started", exact: true });
+
+  await expect(record).toHaveAttribute("aria-expanded", "false");
+  await record.click();
+
+  await expect(record).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByText("kafka-producer-network-thread")).toBeVisible();
+});
