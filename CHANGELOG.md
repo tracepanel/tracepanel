@@ -56,10 +56,9 @@ upgrade.
 
 ### Fixed
 
-- A trace's Logs tab lists its records as the Logs page does: the same
-  rows, opened in place with the same details (the message to copy, every
-  field a filter on the Logs page), and a link to the span each was logged
-  in. A record picked in the call tree shows its fields too.
+- A record shows where it was logged, its code, thread, template and extra
+  fields, as the logs list does: picked in the call tree, or opened by its
+  message in a trace's Logs tab.
 - A trace's Logs tab overlapped a record's time and level once the time was
   a clock. The line between the call tree and its pane runs down the whole
   view, however few the rows.

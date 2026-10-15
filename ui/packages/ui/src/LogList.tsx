@@ -1,4 +1,4 @@
-import { createContext, type ReactNode, useContext, useState } from "react";
+import { useState } from "react";
 import { clock, since } from "./format";
 import { keyed } from "./keys";
 import { linkProps, type TraceLinks } from "./links";
@@ -29,7 +29,11 @@ export function LogList({
           </a>
         </p>
       ) : null}
-      <Records logs={logs} start={start} onShowSpan={onShowSpan} />
+      <ol className="dt-logs">
+        {keyed(logs, (log) => `${log.time}:${log.logger}:${log.message}`).map(({ key, item: log }) => (
+          <LogRecord key={key} log={log} start={start} onShowSpan={onShowSpan} />
+        ))}
+      </ol>
     </>
   );
 }
@@ -89,31 +93,5 @@ function LogAttrs({ log }: { log: Log }) {
     <div className="dt-log-attrs">
       <PropTable rows={rows} />
     </div>
-  );
-}
-
-/** How the host lists a trace's records, as it lists logs elsewhere (the console: its Logs page's rows). */
-export type LogsRenderer = (logs: readonly Log[], showSpan: (spanId: string) => void) => ReactNode;
-
-/** The host's way to list a trace's records; none: the plain list below. */
-export const LogsRendering = createContext<LogsRenderer | null>(null);
-
-function Records({
-  logs,
-  start,
-  onShowSpan,
-}: {
-  logs: readonly Log[];
-  start: number;
-  onShowSpan?: ((spanId: string) => void) | undefined;
-}) {
-  const render = useContext(LogsRendering);
-  if (render) return <div className="p-4">{render(logs, onShowSpan ?? (() => undefined))}</div>;
-  return (
-    <ol className="dt-logs">
-      {keyed(logs, (log) => `${log.time}:${log.logger}:${log.message}`).map(({ key, item: log }) => (
-        <LogRecord key={key} log={log} start={start} onShowSpan={onShowSpan} />
-      ))}
-    </ol>
   );
 }

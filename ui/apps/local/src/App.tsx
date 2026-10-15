@@ -12,7 +12,6 @@ import {
   type IssueKind,
   LayersIcon,
   Logo,
-  LogsRendering,
   MethodBadge,
   type TabId,
   TraceList,
@@ -38,7 +37,6 @@ import { ScopeProvider } from "./scope";
 import { graphqlOperation } from "./sections";
 import { tabOf } from "./TracePage";
 import { TraceScreen } from "./TraceScreen";
-import { renderTraceLogs } from "./tables";
 import { NARROW_ICON, SwitchUser } from "./UserSwitcher";
 
 const base = location.href.split("#")[0] ?? location.href;
@@ -844,18 +842,15 @@ export function App() {
   const route = useRoute();
   return (
     <TooltipProvider delayDuration={300}>
-      {/* A trace's Logs tab lists its records as the Logs page does. */}
-      <LogsRendering.Provider value={renderTraceLogs}>
-        <RefreshProvider>
-          {embedded ? (
-            <PanelApp route={route} />
-          ) : (
-            <ScopeProvider>
-              <Console route={route} source={source} />
-            </ScopeProvider>
-          )}
-        </RefreshProvider>
-      </LogsRendering.Provider>
+      <RefreshProvider>
+        {embedded ? (
+          <PanelApp route={route} />
+        ) : (
+          <ScopeProvider>
+            <Console route={route} source={source} />
+          </ScopeProvider>
+        )}
+      </RefreshProvider>
     </TooltipProvider>
   );
 }
