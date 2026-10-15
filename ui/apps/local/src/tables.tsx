@@ -32,6 +32,7 @@ import { systemOfPage } from "@tracepanel/ui/lib/systems";
 import { cn } from "@tracepanel/ui/lib/utils";
 import { ArrowRightIcon, ListFilterIcon } from "lucide-react";
 import { Fragment, type ReactNode, useEffect, useState } from "react";
+import { useCapability } from "./hooks";
 import { currentPeriod, endpointGroup, go, groupRoute, href, issueRoute, traceHref, withPeriod } from "./routes";
 import { graphqlOperation } from "./sections";
 import { DataTable, LevelBadge, Meter, Mono, Td, Th, Tr } from "./ui";
@@ -331,14 +332,20 @@ interface TableProps<T> {
   onOpen: (key: string | null) => void;
 }
 
+/** Whether a statement gets a plan: a SELECT, where the app behind the console runs EXPLAIN. */
+function useExplains(source: DataSource, statement: string): boolean {
+  return useCapability(source, "explain") && /^\s*SELECT\b/i.test(statement);
+}
+
 /** What an open SQL row adds: the statement and its plan. */
 function SqlDetails({ item, source }: { item: CallRow; source: DataSource }) {
   const statement = item.statement ?? item.template;
   const vendor = item.vendor ?? "";
+  const explainable = useExplains(source, statement);
   return (
     <>
       <SqlCode sql={statement} vendor={vendor} />
-      {/^\s*SELECT\b/i.test(statement) ? (
+      {explainable ? (
         <ExplainView vendor={vendor} load={(analyze) => source.explain(item.sample_trace, item.sample_span, analyze)} />
       ) : null}
     </>

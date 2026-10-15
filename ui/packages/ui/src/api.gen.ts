@@ -428,6 +428,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What the console's backend can do beyond the store.
+         * @description The agent answers none: an app that serves the console on its own origin answers what it adds, such as running EXPLAIN on its database. The console shows those features only where they work.
+         */
+        get: operations["capabilities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/store": {
         parameters: {
             query?: never;
@@ -857,6 +877,12 @@ export interface components {
                     family: "sql" | "redis" | "cache" | "datastore" | "messaging" | "rpc" | "http";
                 }[];
             };
+        };
+        Capabilities: {
+            /** @description The app runs EXPLAIN of a recorded query on its database (api/explain). */
+            explain: boolean;
+            /** @description The app can switch the user this browser is logged in as (api/users, api/users/me, api/users/switch). */
+            users: boolean;
         };
         KnownValues: {
             /** @description Celery task names. */
@@ -2137,6 +2163,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Counts"];
+                };
+            };
+        };
+    };
+    capabilities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Capabilities. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Capabilities"];
                 };
             };
         };

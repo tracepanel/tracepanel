@@ -264,6 +264,13 @@ async fn the_agent_finds_the_issues_and_the_api_returns_them() {
     assert_eq!(values["targets"]["http"], serde_json::json!(["127.0.0.1"]));
     assert_eq!(values["targets"]["redis"], serde_json::json!(["redis"]));
 
+    // The agent alone runs no EXPLAIN and switches no user: an app serving the console answers for itself.
+    let (_, capabilities) = get(&router, "/api/capabilities").await;
+    assert_eq!(
+        capabilities,
+        serde_json::json!({"explain": false, "users": false})
+    );
+
     let (status, counts) = get(&router, "/api/counts").await;
     assert_eq!(status, StatusCode::OK);
     let systems = |counts: &Value| {

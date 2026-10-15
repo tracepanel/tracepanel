@@ -8,6 +8,7 @@ import {
   type TraceViewProps,
 } from "@tracepanel/ui";
 import { type ReactNode, useEffect, useState } from "react";
+import { useCapability } from "./hooks";
 import { track, useRefresh } from "./refresh";
 import { withShare } from "./ShareDialog";
 
@@ -56,6 +57,11 @@ function useRelated(id: string, source: DataSource): (traceId: string) => Relate
   return (traceId) => (related?.id === traceId ? related.related : undefined);
 }
 
+/** Its queries' EXPLAIN, where the app behind the console runs it. */
+function explainer(source: DataSource, traceId: string, explainable: boolean) {
+  return explainable ? (span: string, analyze: boolean) => source.explain(traceId, span, analyze) : undefined;
+}
+
 export function TraceScreen({
   id,
   source,
@@ -72,6 +78,8 @@ export function TraceScreen({
 }: TraceScreenProps) {
   const [trace, setTrace] = useState<Trace | null | undefined>(undefined);
   const related = useRelated(id, source);
+  // EXPLAIN only where the app behind the console runs it.
+  const explainable = useCapability(source, "explain");
   useEffect(() => {
     let cancelled = false;
     let timer: number | undefined;
@@ -116,7 +124,7 @@ export function TraceScreen({
       trace={trace}
       explore={explore?.(trace)}
       onTabChange={onTabChange}
-      onExplain={(span, analyze) => source.explain(trace.id, span, analyze)}
+      onExplain={explainer(source, trace.id, explainable)}
       initialTab={initialTab}
       preferredTab={preferredTab}
       actions={withShare(trace, source, actions, shareable === true)}

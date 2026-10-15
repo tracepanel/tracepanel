@@ -1,3 +1,4 @@
+import type { Capabilities, DataSource } from "@tracepanel/ui";
 import { useEffect, useState } from "react";
 
 export interface EntrySummary {
@@ -112,4 +113,28 @@ export function usePolling<T>(load: () => Promise<T>, intervalMs = 2000): T | un
     };
   }, [load, intervalMs]);
   return value;
+}
+
+const CAPABILITIES = new WeakMap<DataSource, Promise<Capabilities>>();
+
+/** Whether the console's backend runs EXPLAIN or switches users: asked once per source; no until it answers. */
+export function useCapability(source: DataSource, name: keyof Capabilities): boolean {
+  return useCapabilities(source)?.[name] === true;
+}
+
+function useCapabilities(source: DataSource): Capabilities | undefined {
+  const [capabilities, setCapabilities] = useState<Capabilities>();
+  useEffect(() => {
+    let asked = CAPABILITIES.get(source);
+    if (!asked) {
+      asked = source.capabilities().catch(() => ({ explain: false, users: false }));
+      CAPABILITIES.set(source, asked);
+    }
+    let current = true;
+    asked.then((answer) => current && setCapabilities(answer));
+    return () => {
+      current = false;
+    };
+  }, [source]);
+  return capabilities;
 }
