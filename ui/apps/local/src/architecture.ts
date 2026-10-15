@@ -29,13 +29,15 @@ export interface Placed<T> {
   height: number;
 }
 
+export type Point = { x: number; y: number };
+
 export interface Diagram {
   width: number;
   height: number;
   boxes: Placed<Box>[];
   /** A frame per project around its roles, named after it. */
   projects: Placed<string>[];
-  links: { link: Link; points: { x: number; y: number }[] }[];
+  links: { link: Link; points: Point[] }[];
 }
 
 const SIZES: Record<Box["type"], [number, number]> = { entry: [116, 30], role: [248, 44], host: [264, 44] };
@@ -187,12 +189,49 @@ export function laidOut(map: ServiceMap): Diagram {
   layout(graph);
   const size = graph.graph();
   const placed = boxes.map((item) => placedIn(graph, item, item.id));
-  return {
+  return fitted({
     width: size.width ?? 0,
     height: size.height ?? 0,
     boxes: placed,
     projects: projects.flatMap((service) => framesOf(service, placed)),
     links: links.map((link) => ({ link, points: graph.edge(link.from, link.to)?.points ?? [] })),
+  });
+}
+
+/** Room around everything drawn: a line's bend is not cut by the edge. */
+const MARGIN = 12;
+
+/** Every corner of what is drawn: boxes, frames, and the points a line bends through. */
+function cornersOf(diagram: Diagram): Point[] {
+  const corners = (placed: { x: number; y: number; width: number; height: number }): Point[] => [
+    { x: placed.x - placed.width / 2, y: placed.y - placed.height / 2 },
+    { x: placed.x + placed.width / 2, y: placed.y + placed.height / 2 },
+  ];
+  return [
+    ...diagram.boxes.flatMap(corners),
+    ...diagram.projects.flatMap(corners),
+    ...diagram.links.flatMap(({ points }) => points),
+  ];
+}
+
+/**
+ * The diagram moved to fit what is drawn. dagre sizes it by its boxes; a line routed around them bends past that
+ * edge (above the top row, before the first column), where the scrolling view cuts it.
+ */
+function fitted(diagram: Diagram): Diagram {
+  const corners = cornersOf(diagram);
+  if (corners.length === 0) return diagram;
+  const left = Math.min(...corners.map((point) => point.x)) - MARGIN;
+  const top = Math.min(...corners.map((point) => point.y)) - MARGIN;
+  const right = Math.max(...corners.map((point) => point.x)) + MARGIN;
+  const bottom = Math.max(...corners.map((point) => point.y)) + MARGIN;
+  const move = <T extends Point>(point: T): T => ({ ...point, x: point.x - left, y: point.y - top });
+  return {
+    width: right - left,
+    height: bottom - top,
+    boxes: diagram.boxes.map(move),
+    projects: diagram.projects.map(move),
+    links: diagram.links.map(({ link, points }) => ({ link, points: points.map(move) })),
   };
 }
 

@@ -70,3 +70,10 @@ test("a query has no Explain where the console's backend can't run it: the agent
   await expect(region.getByText("WITH c").nth(1)).toBeVisible();
   await expect(region.getByRole("button", { name: /^Explain/ })).toHaveCount(0);
 });
+
+test("Tasks' System menu offers what ran this project's tasks, nothing it doesn't have", async ({ page }) => {
+  await page.goto("/#/tasks");
+  await page.getByRole("button", { name: "System" }).click();
+
+  await expect(page.getByRole("option")).toHaveText(["RabbitMQ"]);
+});

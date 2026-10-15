@@ -887,7 +887,9 @@ export interface components {
         KnownValues: {
             /** @description Celery task names. */
             task: string[];
-            /** @description Celery queues tasks ran from. */
+            /** @description What ran the tasks: celery, dramatiq, rq, django, spring, or a broker's listener (rabbitmq, kafka). */
+            task_system: string[];
+            /** @description Queues tasks ran from. */
             queue: string[];
             /** @description Job names: management commands and tracepanel.trace() blocks. */
             job: string[];

@@ -4,6 +4,10 @@
 
 ### Added
 
+- A group's page picks its period, from the same presets and range as a
+  list's Time, or by dragging over its calls chart.
+- Tasks' System menu offers what ran this project's tasks (Celery, RQ,
+  Spring's @Async, a RabbitMQ or Kafka listener), not Python's list.
 - Logs: a record a task or a job wrote is found by its name, with the Task
   and Job filters or `task:` and `job:`, and `kind:` finds the records of
   each kind of trace. A task's record says it was a task's, with a button
@@ -26,6 +30,12 @@
 
 ### Fixed
 
+- A group with one call, or calls a moment apart, gets a time axis of 10
+  minutes, not one moment repeated.
+- The services map shows whole, its lines' bends included: it scrolls only
+  sideways, and a line routed around the boxes is inside the diagram.
+- Stat tiles that don't fit one row split into two even ones, never one
+  tile alone on the second.
 - Enter in the search box took the first suggestion, not what was typed:
   `logger:org` became the first of the loggers starting with org. Enter
   takes what was typed, a suggestion only when the arrows picked one, and

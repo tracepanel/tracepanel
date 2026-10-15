@@ -74,6 +74,8 @@ export function Console({ route, source: everything }: { route: Route; source: D
     targets: {},
     ops: {},
     task: [],
+    // biome-ignore lint/style/useNamingConvention: wire format.
+    task_system: [],
     queue: [],
     job: [],
     rpc: [],

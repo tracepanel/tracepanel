@@ -12,7 +12,7 @@ import { Badge } from "@tracepanel/ui/components/ui/badge";
 import { Card } from "@tracepanel/ui/components/ui/card";
 import { ChevronRightIcon } from "lucide-react";
 import { useEffect, useState } from "react";
-import { CallsChart, LatencyChart, Stat } from "./Charts";
+import { CallsChart, LatencyChart, Stat, StatGrid } from "./Charts";
 import { track, useRefresh } from "./refresh";
 import { currentPeriod, endpointGroup, groupRoute, href, withPeriod } from "./routes";
 import { BY_NAME } from "./sections";
@@ -193,7 +193,7 @@ export function TracesOverview({
       </header>
       {open ? (
         <>
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-2.5">
+          <StatGrid>
             <Stat label={capitalize(nouns)} value={String(s.calls)} sub={`${s.with_issues} with issues`} />
             <Stat
               label="Errors"
@@ -213,7 +213,7 @@ export function TracesOverview({
             <Stat label="p95" value={duration(s.p95)} />
             <Stat label="p99" value={duration(s.p99)} sub={`max ${duration(s.max)}`} />
             <Stat label="Avg queries" value={String(s.avg_queries)} sub={`DB ${duration(s.avg_db_time)} avg`} />
-          </div>
+          </StatGrid>
           {scope.filter === "" && overview.kinds.length > 1 ? (
             <div className="flex flex-wrap gap-2">
               {overview.kinds.map((kind) => (

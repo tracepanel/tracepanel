@@ -2,7 +2,7 @@ import { duration, type HistogramBucket, type SeriesBucket } from "@tracepanel/u
 import { Card } from "@tracepanel/ui/components/ui/card";
 import { cn } from "@tracepanel/ui/lib/utils";
 import type React from "react";
-import { type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
+import { Children, type CSSProperties, type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
 
 // Series colors are theme tokens (--dt-chart-1/2), validated with the dataviz palette checker on each theme's
 // surface: lightness band, chroma, CVD and normal-vision separation, contrast — all pass.
@@ -585,6 +585,27 @@ export function Histogram({
 }
 
 /* ---------- stat tile ---------- */
+
+/**
+ * Stat tiles in one row; where they don't fit, in two even rows (8 as 4 and 4, 7 as 4 and 3), then two a row: never
+ * one left alone on a row of its own.
+ */
+export function StatGrid({ label, className, children }: { label?: string; className?: string; children: ReactNode }) {
+  const count = Children.toArray(children).length;
+  const style = { "--stats": count, "--stats-half": Math.ceil(count / 2) } as CSSProperties;
+  return (
+    <section
+      className={cn(
+        "grid grid-cols-[repeat(var(--stats),minmax(0,1fr))] gap-2.5 max-[1280px]:grid-cols-[repeat(var(--stats-half),minmax(0,1fr))] max-[640px]:grid-cols-2",
+        className,
+      )}
+      style={style}
+      aria-label={label}
+    >
+      {children}
+    </section>
+  );
+}
 
 const STAT = "grid content-start gap-1.5 rounded-xl border bg-card px-5 py-4";
 

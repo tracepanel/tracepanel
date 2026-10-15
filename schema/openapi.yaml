@@ -1037,10 +1037,14 @@ components:
     KnownValues:
       type: object
       additionalProperties: false
-      required: [route, log_route, logger, db, targets, ops, task, queue, job, rpc, page, in, span, extra]
+      required: [route, log_route, logger, db, targets, ops, task, task_system, queue, job, rpc, page, in, span, extra]
       properties:
         task: { type: array, description: Celery task names., items: { type: string } }
-        queue: { type: array, description: Celery queues tasks ran from., items: { type: string } }
+        task_system:
+          type: array
+          description: "What ran the tasks: celery, dramatiq, rq, django, spring, or a broker's listener (rabbitmq, kafka)."
+          items: { type: string }
+        queue: { type: array, description: Queues tasks ran from., items: { type: string } }
         job: { type: array, description: "Job names: management commands and tracepanel.trace() blocks.", items: { type: string } }
         rpc: { type: array, description: "RPC methods served, Service/Method.", items: { type: string } }
         page: { type: array, description: "Paths of pages viewed in a browser.", items: { type: string } }

@@ -693,7 +693,8 @@ mod tests {
         let logged = |id: &str, kind: &str, name: &str, message: &str| {
             let doc = serde_json::json!({
                 "id": id, "kind": kind, "name": name, "start": 0, "duration": 1000, "status": "ok",
-                "attrs": {"service.name": "shop"}, "spans": [], "errors": [], "links": [], "issues": [],
+                "attrs": {"service.name": "shop", "task.system": (kind == "task").then_some("rabbitmq")},
+                "spans": [], "errors": [], "links": [], "issues": [],
                 "logs": [{"span_id": null, "time": 10, "level": "info", "logger": "shop", "message": message,
                           "exception": null, "attrs": {}}],
             });
@@ -732,6 +733,11 @@ mod tests {
         assert_eq!(messages("kind:http"), [Value::from("listed 30 books")]);
         // A job of the same name is no task.
         assert_eq!(messages("task:Notifier.refreshStats"), Vec::<Value>::new());
+        // What ran the tasks, for the Tasks page's System menu: only what this project has.
+        assert_eq!(
+            reader.known_values("").unwrap()["task_system"],
+            serde_json::json!(["rabbitmq"])
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -34,7 +34,7 @@ import { ArrowRightIcon, ListFilterIcon } from "lucide-react";
 import { Fragment, type ReactNode, useEffect, useState } from "react";
 import { useCapability } from "./hooks";
 import { currentPeriod, endpointGroup, go, groupRoute, href, issueRoute, traceHref, withPeriod } from "./routes";
-import { graphqlOperation } from "./sections";
+import { graphqlOperation, taskSystem } from "./sections";
 import { DataTable, LevelBadge, Meter, Mono, Td, Th, Tr } from "./ui";
 
 export function TracesTable({
@@ -919,9 +919,6 @@ export function KindBadge({ kind }: { kind: string }) {
   );
 }
 
-/** task.system: which queue ran the task. */
-const TASK_SYSTEMS: Record<string, string> = { celery: "Celery", django: "Django Tasks" };
-
 export function TasksTable({ items }: { items: readonly TaskRow[] }) {
   const slowest = Math.max(...items.map((item) => item.p95), 1);
   return (
@@ -951,7 +948,7 @@ export function TasksTable({ items }: { items: readonly TaskRow[] }) {
           </Td>
           <Td>
             <Badge variant="outline" className="text-xs">
-              {TASK_SYSTEMS[item.system] ?? item.system}
+              {taskSystem(item.system)}
             </Badge>
           </Td>
           <Td num>{item.runs}</Td>
