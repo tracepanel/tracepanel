@@ -3,6 +3,7 @@ import {
   ago,
   type CallRow,
   CopyButton,
+  clock,
   type DataSource,
   duration,
   type EndpointRow,
@@ -11,7 +12,10 @@ import {
   IssueChip,
   type IssueRow,
   type JobRow,
+  keyed,
+  type Log,
   type LogRow,
+  type LogsRenderer,
   MailList,
   type MailRow,
   MethodBadge,
@@ -476,22 +480,10 @@ export function LogsTable({
         <Fragment key={log.id}>
           <Tr
             selected={open === String(log.id)}
-            tone={
-              log.level === "error" || log.level === "critical" ? "error" : log.level === "warning" ? "warn" : undefined
-            }
+            tone={levelTone(log.level)}
             onClick={() => onOpen(open === String(log.id) ? null : String(log.id))}
           >
-            <Td className="text-muted-foreground tabular-nums">{new Date(log.time / 1000).toLocaleTimeString()}</Td>
-            <Td>
-              <LevelBadge level={log.level} />
-            </Td>
-            {/* Takes the width the other columns leave and truncates: the table never outgrows the page. */}
-            <Td className="w-full max-w-0">
-              <Mono className="block truncate">{log.message}</Mono>
-            </Td>
-            <Td>
-              <Mono className="text-base text-muted-foreground">{log.logger}</Mono>
-            </Td>
+            <LogCells log={log} />
             <Td>
               <SourceCell
                 kind={log.trace_kind}
@@ -652,18 +644,29 @@ function LogDetails({ log, onFilter }: { log: LogRow; onFilter: (terms: Record<s
   const fields: LogField[] = [
     ...logContext(log),
     ["trace_id", log.trace_id, { trace: log.trace_id }],
-    ["logger", log.logger, { logger: term(log.logger) }],
-    ["level", log.level, { level: log.level }],
-    ["time", new Date(log.time / 1000).toISOString()],
-    ...Object.entries(log.attrs).map(([key, value]): LogField => {
-      const text = String(value);
-      return [key, text, attrFilter(key, text)];
-    }),
+    ...recordFields(log),
   ];
   return (
     <div className="grid gap-3.5">
       <LogSources log={log} onFilter={onFilter} />
       <LoggedIn log={log} onFilter={onFilter} />
+      <LogBody log={log} fields={fields} onFilter={onFilter} />
+    </div>
+  );
+}
+
+/** A record's message, its exception and its fields, each field a filter (where the search has one) and a copy. */
+function LogBody({
+  log,
+  fields,
+  onFilter,
+}: {
+  log: Pick<Log, "message" | "exception">;
+  fields: LogField[];
+  onFilter: (terms: Record<string, string>) => void;
+}) {
+  return (
+    <>
       <div className="group/message relative rounded-md border bg-background">
         <pre className="m-0 px-4 py-3 pr-12 font-mono text-base whitespace-pre-wrap">{log.message}</pre>
         <CopyButton text={log.message} label="Copy message" className="absolute top-2 right-2" />
@@ -698,7 +701,106 @@ function LogDetails({ log, onFilter }: { log: LogRow; onFilter: (terms: Record<s
           </Fragment>
         ))}
       </dl>
+    </>
+  );
+}
+
+/** A record's own fields: who logged it, how loud, when, and its attributes (code, thread, template, extra). */
+function recordFields(log: Log): LogField[] {
+  return [
+    ["logger", log.logger, { logger: term(log.logger) }],
+    ["level", log.level, { level: log.level }],
+    ["time", new Date(log.time / 1000).toISOString()],
+    ...Object.entries(log.attrs).map(([key, value]): LogField => {
+      const text = String(value);
+      return [key, text, attrFilter(key, text)];
+    }),
+  ];
+}
+
+/** A record's cells, the same wherever records are listed: its time, level, message and logger. */
+function LogCells({ log }: { log: Pick<Log, "time" | "level" | "message" | "logger"> }) {
+  return (
+    <>
+      <Td className="text-muted-foreground tabular-nums">{clock(log.time)}</Td>
+      <Td>
+        <LevelBadge level={log.level} />
+      </Td>
+      {/* Takes the width the other columns leave and truncates: the table never outgrows the page. */}
+      <Td className="w-full max-w-0">
+        <Mono className="block truncate">{log.message}</Mono>
+      </Td>
+      <Td>
+        <Mono className="text-base text-muted-foreground">{log.logger}</Mono>
+      </Td>
+    </>
+  );
+}
+
+/** A row's tone by its level: warnings amber, errors red, as everywhere logs are listed. */
+function levelTone(level: string): "error" | "warn" | undefined {
+  if (level === "error" || level === "critical") return "error";
+  return level === "warning" ? "warn" : undefined;
+}
+
+/** A trace's Logs tab as the Logs page lists records (given to the trace view through LogsRendering). */
+export const renderTraceLogs: LogsRenderer = (logs, showSpan) => <TraceLogsTable logs={logs} onShowSpan={showSpan} />;
+
+/** The call tree at the span a record was logged in, where the Logs page's records have the same link. */
+function ToSpan({ spanId, onShowSpan }: { spanId: string | null | undefined; onShowSpan: (spanId: string) => void }) {
+  if (!spanId) return null;
+  return (
+    <div className="flex">
+      <Button variant="ghost" size="xs" className="ml-auto" onClick={() => onShowSpan(spanId)}>
+        In the call tree
+        <ArrowRightIcon />
+      </Button>
     </div>
+  );
+}
+
+/**
+ * A trace's records, as the Logs page lists them: the same rows, open in place with the same details, where a field's
+ * filter opens the Logs page searching for it, and each record leads to the span it was logged in.
+ */
+function TraceLogsTable({ logs, onShowSpan }: { logs: readonly Log[]; onShowSpan: (spanId: string) => void }) {
+  const [open, setOpen] = useState<string | null>(null);
+  const onFilter = (terms: Record<string, string>) =>
+    go({
+      name: "logs",
+      q: Object.entries(terms)
+        .map(([key, value]) => `${key}:${value}`)
+        .join(" "),
+    });
+  return (
+    <DataTable
+      head={
+        <>
+          <Th>Time</Th>
+          <Th>Level</Th>
+          <Th>Message</Th>
+          <Th>Logger</Th>
+        </>
+      }
+    >
+      {keyed(logs, (log) => `${log.time}:${log.logger}:${log.message}`).map(({ key, item: log }) => (
+        <Fragment key={key}>
+          <Tr selected={open === key} tone={levelTone(log.level)} onClick={() => setOpen(open === key ? null : key)}>
+            <LogCells log={log} />
+          </Tr>
+          {open === key ? (
+            <TableRow className="hover:bg-transparent">
+              <TableCell colSpan={4} className="bg-muted/40 px-5 py-4 whitespace-normal">
+                <div className="grid gap-3.5">
+                  <ToSpan spanId={log.span_id} onShowSpan={onShowSpan} />
+                  <LogBody log={log} fields={recordFields(log)} onFilter={onFilter} />
+                </div>
+              </TableCell>
+            </TableRow>
+          ) : null}
+        </Fragment>
+      ))}
+    </DataTable>
   );
 }
 
