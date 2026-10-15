@@ -56,7 +56,7 @@ function compose(filters: readonly Filter[], text: string): string {
 // A filter as typed: key, operator, value.
 const FILTER = /^([a-z][a-z0-9_.]*)(>=|<=|!=|:|>|<)(.*)$/;
 // Keys whose values come from the store (the routes, the loggers seen), not from a fixed list.
-const FROM_STORE = new Set(["route", "logger", "db", "task", "job", "queue"]);
+const FROM_STORE = new Set(["route", "logger", "db", "task", "job", "queue", "in", "span"]);
 
 /** Values after `key:` that start as typed; the start of several (logger:org) offers them all with a wildcard first. */
 function valueSuggestions(key: string, op: string, partial: string, values: readonly string[]): Suggestion[] {
@@ -124,7 +124,10 @@ interface QuickOption {
 
 /** Values the console knows from stored data (routes, loggers, database aliases, tasks, jobs, log extras). */
 export type KnownValues = Partial<
-  Record<"route" | "logger" | "db" | "task" | "queue" | "job" | "rpc" | "page" | "extra", readonly string[]>
+  Record<
+    "route" | "logger" | "db" | "task" | "queue" | "job" | "rpc" | "page" | "in" | "span" | "extra",
+    readonly string[]
+  >
 > & {
   /** Each system's targets and operations, by the name its page has (`sql`, `redis`, `mongodb`…). */
   targets?: Readonly<Record<string, readonly string[]>>;
@@ -305,6 +308,13 @@ const QUICK: Record<Exclude<Section, CallsSection>, Control[]> = {
     // Records a task or a job wrote: shown when the project has any.
     { label: "Task", title: "Filter by task", key: "task", values: (known) => known.task ?? [] },
     { label: "Job", title: "Filter by job", key: "job", values: (known) => known.job ?? [] },
+    // Where in the work it was logged: inside a Kafka call, a SQL query, a view.
+    {
+      label: "Inside",
+      title: "Logged inside a call or span of this kind",
+      key: "in",
+      values: (known) => known.in ?? [],
+    },
   ],
   errors: [{ ...TIME, verb: "Last seen" }, ROUTE],
   issues: [

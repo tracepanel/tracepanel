@@ -12,7 +12,8 @@ test("Enter takes the filter as typed, a suggestion only when one is picked", as
 
   await expect(page).toHaveURL(/q=logger%3Ablog\.views$/);
   await expect(page.getByRole("button", { name: "Edit logger:blog.views" })).toBeVisible();
-  for (const row of await rows(page).all()) await expect(row).toContainText("blog.views");
+  await expect(rows(page).first()).toContainText("blog.views");
+  await expect(rows(page).filter({ hasNotText: "blog.views" })).toHaveCount(0);
 });
 
 test("the start of several loggers suggests all of them, with a wildcard", async ({ page }) => {

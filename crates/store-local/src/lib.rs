@@ -569,6 +569,7 @@ mod tests {
         assert_eq!(
             counts["sections"],
             serde_json::json!({"http": 1, "graphql": 0, "tasks": 0, "websockets": 0, "jobs": 0, "rpc": 0, "pages": 0,
+                               "mails": 0,
                                "systems": [{"system": "redis", "family": "redis", "label": "Redis"},
                                            {"system": "cache", "family": "cache", "label": "Cache"}]})
         );
@@ -579,6 +580,102 @@ mod tests {
         assert_eq!(
             known["ops"],
             serde_json::json!({"cache": ["get"], "redis": ["GET", "INCR"]})
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_record_is_found_by_the_spans_it_was_logged_in() {
+        let dir = std::env::temp_dir().join(format!(
+            "tracepanel-store-log-context-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = path_in(&dir);
+        let mut store = Store::open(&path).unwrap();
+        let span = |id: &str, parent: Option<&str>, kind: &str, name: &str, attrs: Value| {
+            serde_json::json!({"id": id, "parent_id": parent, "kind": kind, "name": name, "start": 0, "duration": 10,
+                               "status": "ok", "attrs": attrs})
+        };
+        let log = |span_id: Option<&str>, message: &str| {
+            serde_json::json!({"span_id": span_id, "time": 10, "level": "info", "logger": "shop", "message": message,
+                               "exception": null, "attrs": {}})
+        };
+        let mut order = log(Some("V"), "order for Book 5");
+        order["attrs"] = serde_json::json!({"log.template": "order for {}"});
+        let doc = serde_json::json!({
+            "id": "C1", "kind": "http", "name": "POST /api/orders", "start": 0, "duration": 1000, "status": "ok",
+            "attrs": {"service.name": "shop"}, "errors": [], "links": [], "issues": [],
+            "spans": [
+                span("R", None, "http", "POST /api/orders", serde_json::json!({})),
+                span("V", Some("R"), "view", "shop.ShopController.order", serde_json::json!({})),
+                span("K", Some("V"), "kafka", "publish orders",
+                     serde_json::json!({"messaging.system": "kafka", "messaging.destination.name": "orders"})),
+            ],
+            "logs": [
+                log(Some("K"), "initializing Kafka metrics"),
+                order,
+                log(Some("R"), "request in"),
+                log(None, "outside"),
+            ],
+        });
+        store
+            .write(&[Received {
+                trace: serde_json::from_value(doc.clone()).unwrap(),
+                doc: doc.to_string(),
+            }])
+            .unwrap();
+        let reader = Reader::new(&path);
+        let messages = |query: &str| -> Vec<Value> {
+            reader
+                .search_logs(query, 50, None)
+                .unwrap()
+                .items
+                .iter()
+                .map(|log| log["message"].clone())
+                .collect()
+        };
+        let kafka = reader.search_logs("in:kafka", 50, None).unwrap().items;
+
+        assert_eq!(
+            messages("in:kafka"),
+            [Value::from("initializing Kafka metrics")]
+        );
+        assert_eq!(
+            messages("span:shop.ShopController.*"),
+            [
+                Value::from("order for Book 5"),
+                Value::from("initializing Kafka metrics")
+            ]
+        );
+        assert_eq!(
+            messages("in!=kafka"),
+            [
+                Value::from("outside"),
+                Value::from("request in"),
+                Value::from("order for Book 5")
+            ]
+        );
+
+        assert_eq!(
+            messages("template:\"order for {}\""),
+            [Value::from("order for Book 5")]
+        );
+
+        assert_eq!(kafka[0]["span_id"], "K");
+        assert_eq!(
+            kafka[0]["spans"],
+            serde_json::json!([
+                {"kind": "kafka", "system": "kafka", "name": "publish orders"},
+                {"kind": "view", "system": "view", "name": "shop.ShopController.order"},
+            ])
+        );
+
+        let known = reader.known_values("").unwrap();
+        assert_eq!(known["in"], serde_json::json!(["kafka", "view"]));
+        assert_eq!(
+            known["span"],
+            serde_json::json!(["publish orders", "shop.ShopController.order"])
         );
         let _ = std::fs::remove_dir_all(&dir);
     }

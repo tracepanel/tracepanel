@@ -37,7 +37,7 @@ import { ScopeProvider } from "./scope";
 import { graphqlOperation } from "./sections";
 import { tabOf } from "./TracePage";
 import { TraceScreen } from "./TraceScreen";
-import { NARROW_ICON, UserSwitcher } from "./UserSwitcher";
+import { NARROW_ICON, SwitchUser } from "./UserSwitcher";
 
 const base = location.href.split("#")[0] ?? location.href;
 const api = new URL("api/", base);
@@ -696,7 +696,7 @@ function PanelApp({ route }: { route: Route }) {
   const selectedKind = rows.find((row) => row.trace.id === selectedId)?.trace.kind;
   const panelActions = (
     <>
-      <UserSwitcher source={source} onSwitched={() => tellWidget("tracepanel:reload")} />
+      <SwitchUser source={source} onSwitched={() => tellWidget("tracepanel:reload")} />
       <Button
         variant="outline"
         size="sm"

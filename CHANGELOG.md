@@ -10,6 +10,12 @@
   for every run of it, and opens the task.
 - A search chip can be changed: click it, and it goes back into the box as
   text, Enter makes it a chip again.
+- Logs know where in the work they were logged: each record keeps the span
+  it was written in and the spans around it. `in:kafka`, `in:sql` or
+  `in:view` finds the records logged inside such a call, `span:` inside a
+  span by its name, and a record's details show the chain, each step a
+  click away. `template:` finds every record written from the same message.
+  The store's format changes: the local store starts empty.
 - A call's details in the call tree start with its fields in its system's
   words: a Kafka publish's topic, partition and offset, a RabbitMQ queue or
   exchange and routing key, a Redis command's key, a gRPC call's service and
@@ -30,6 +36,11 @@
 - Typing a filter into the search box with pauses (`logger:o`) could empty
   it: the page took a search that matched nothing for an empty store and
   replaced the box. A filter still being typed stays out of the search.
+- Emails is listed only once the app has sent one: only some frameworks
+  send them through what an SDK records.
+- The panel asks who the user is, and offers to switch, only when the
+  page's app can (Django says so on the page): other apps got a 404 for it.
+- A stack's frames with no source are one line each, with nothing to open.
 - A trace's Logs tab shows when each record was logged (14:03:21.146), the
   time since the request started on hover. The logs and emails lists name
   their last column Source and Sent from: a task's or a job's, not only a

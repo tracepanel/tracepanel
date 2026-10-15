@@ -78,6 +78,8 @@ export function Console({ route, source: everything }: { route: Route; source: D
     job: [],
     rpc: [],
     page: [],
+    in: [],
+    span: [],
     extra: [],
   };
 

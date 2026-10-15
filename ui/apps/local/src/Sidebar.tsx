@@ -94,8 +94,11 @@ const NAV_GROUPS: { title: string | null; items: NavItem[] }[] = [
 
 export const NAV: NavItem[] = NAV_GROUPS.flatMap((group) => group.items);
 
-/** The sections shown only once there is something in them; HTTP always (it is where a project starts). */
-const OPTIONAL = ["graphql", "tasks", "websockets", "jobs", "rpc", "pages"] as const;
+/**
+ * The sections shown only once there is something in them; HTTP always (it is where a project starts). Emails too:
+ * only some frameworks send them through what an SDK records (Django's mail).
+ */
+const OPTIONAL = ["graphql", "tasks", "websockets", "jobs", "rpc", "pages", "mails"] as const;
 
 /** Entry points with traces, and a page for each system the app called. */
 function visibleSections(counts: Counts | undefined): Set<Section> {

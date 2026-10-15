@@ -219,6 +219,7 @@ export function httpSource(base: string | URL): DataSource {
             jobs: 0,
             rpc: 0,
             pages: 0,
+            mails: 0,
             systems: [],
           },
         }
@@ -237,6 +238,8 @@ export function httpSource(base: string | URL): DataSource {
           job: [],
           rpc: [],
           page: [],
+          in: [],
+          span: [],
           extra: [],
         }
       );

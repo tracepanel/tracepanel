@@ -45,3 +45,38 @@ test("a message's details are in its broker's words first: a Kafka topic, a Rabb
   await expect(details).toContainText("Routing key");
   await expect(details).toContainText("BookEvents.java:31");
 });
+
+test("a record is found by the call it was logged in, and says where that was", async ({ page }) => {
+  await page.goto(`/#/logs?q=${encodeURIComponent("in:kafka")}`);
+  const list = page.getByRole("region", { name: "Logs" });
+  const rows = list.getByRole("rowgroup").last().getByRole("row");
+
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText("Kafka producer started");
+
+  await rows.first().click();
+  const where = list.getByRole("navigation", { name: "Logged in" });
+  await expect(where.getByRole("button", { name: /publish book-events/ })).toBeVisible();
+  await expect(where.getByRole("link", { name: "In the call tree" })).toBeVisible();
+
+  await page.goto(`/#/logs?q=${encodeURIComponent("in!=kafka route:/api/books/announce")}`);
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText("3 books announced");
+});
+
+test("a library frame with no source is one line, nothing to open", async ({ page, request }) => {
+  const found = (await (
+    await request.get(`/api/traces?q=${encodeURIComponent("route:/boom service:api")}&limit=1`)
+  ).json()) as {
+    traces: { id: string }[];
+  };
+  await page.goto(`/#/t/${found.traces[0]?.id}`);
+  await page.getByRole("tab", { name: /^Error/ }).click();
+  await page
+    .getByText(/library frames/)
+    .first()
+    .click();
+
+  await expect(page.getByText("runtime.goexit")).toBeVisible();
+  await expect(page.getByText("Source not available.")).toHaveCount(0);
+});

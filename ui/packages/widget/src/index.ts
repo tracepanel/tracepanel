@@ -111,6 +111,8 @@ export interface WidgetOptions {
   initial?: TraceInfo | undefined;
   /** What served the page, e.g. "Python 3.12 · Django 6.0" or "Go 1.27 · net/http": shown in the panel. */
   runtime?: string | undefined;
+  /** The app can switch the user it runs as (Django): the panel offers it, and asks who it is, only then. */
+  users?: boolean | undefined;
 }
 
 export interface Widget {
@@ -782,6 +784,13 @@ function showRuntime(element: HTMLElement, label: string | undefined): void {
   element.append(svg, runtimeName(kind));
 }
 
+/** The panel's address at `hash`; with `users`, it offers to switch the user (the app can). */
+function panelAddress(panel: URL, hash: string, users: boolean | undefined): string {
+  const address = new URL(hash, panel);
+  if (users) address.searchParams.set("users", "1");
+  return address.href;
+}
+
 export function mount(options: WidgetOptions = {}): Widget {
   const host = document.createElement("tracepanel-widget");
   const root = host.attachShadow({ mode: "open" });
@@ -1049,7 +1058,7 @@ export function mount(options: WidgetOptions = {}): Widget {
 
   function open(hash = "#/"): void {
     if (!panelUrl) return;
-    const url = new URL(hash, panelUrl).href;
+    const url = panelAddress(panelUrl, hash, options.users);
     if (!frame) {
       frame = document.createElement("iframe");
       frame.title = "Tracepanel";
@@ -1223,6 +1232,7 @@ if (script && !mounted) {
         issuesPending: data["tracepanelIssues"] === PENDING,
       },
       runtime: data["tracepanelRuntime"],
+      users: data["tracepanelUsers"] === "1",
     });
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);
   else start();

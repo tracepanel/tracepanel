@@ -139,6 +139,8 @@ pub(crate) fn log_search(fts: bool) -> search::Schema {
         &[
             ("level", "logs.level_no"),
             ("logger", "logs.logger"),
+            // The message before its values were put in (`order for {} ({} in stock)`): every record like this one.
+            ("template", "json_extract(logs.attrs, '$.\"log.template\"')"),
             ("trace", "logs.trace_id"),
             ("route", "traces.route"),
             ("kind", "traces.kind"),
@@ -168,7 +170,13 @@ pub(crate) fn log_search(fts: bool) -> search::Schema {
             }
         }),
         // A task's or a job's records, by its name: the trace that logged them was one.
-        vec![("task", named("task")), ("job", named("command"))],
+        // Where it was logged: inside a call of a system or a kind of span, inside a span by its name.
+        vec![
+            ("task", named("task")),
+            ("job", named("command")),
+            ("in", inside(&["kind", "system"])),
+            ("span", inside(&["name"])),
+        ],
         // Keys come from the query grammar ([a-z0-9_.] only), so they are safe inside the JSON path.
         vec![(
             "extra.*",
@@ -187,6 +195,37 @@ fn named(kind: &'static str) -> Compiler {
     Box::new(move |term| {
         let (clause, params) = name(term)?;
         Ok((format!("traces.kind = '{kind}' AND ({clause})"), params))
+    })
+}
+
+/// A log's `in:` and `span:`: records logged inside a span whose fields match, the one they were logged in or one
+/// around it. `!=` is outside every such span, not inside some other one.
+fn inside(fields: &'static [&'static str]) -> Compiler {
+    let compilers: Vec<Compiler> = fields
+        .iter()
+        .map(|field| search::text(&format!("json_extract(span.value, '$.{field}')")))
+        .collect();
+    Box::new(move |term| {
+        if term.op != ":" && term.op != "!=" {
+            return compilers[0](term);
+        }
+        let matching = Term {
+            op: ":".into(),
+            ..term.clone()
+        };
+        let mut clauses = Vec::new();
+        let mut params = Vec::new();
+        for compile in &compilers {
+            let (clause, more) = compile(&matching)?;
+            clauses.push(format!("({clause})"));
+            params.extend(more);
+        }
+        let exists = format!(
+            "EXISTS (SELECT 1 FROM json_each(logs.spans) AS span WHERE {})",
+            clauses.join(" OR ")
+        );
+        let negated = if term.op == "!=" { "NOT " } else { "" };
+        Ok((format!("{negated}{exists}"), params))
     })
 }
 

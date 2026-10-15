@@ -597,6 +597,15 @@ export interface components {
             message: string;
             exception: string | null;
             attrs: components["schemas"]["Attrs"];
+            /** @description The span it was logged in; null outside every span. */
+            span_id: string | null;
+            /** @description The span it was logged in and the spans around it, innermost first, up to the trace's own (left out). */
+            spans: {
+                kind: string;
+                /** @description The system a call is to (kafka, sql); a span's kind otherwise. */
+                system: string;
+                name: string;
+            }[];
             /** @enum {string} */
             trace_kind: "http" | "task" | "command" | "websocket" | "rpc" | "page";
             /**
@@ -837,6 +846,8 @@ export interface components {
                 rpc: number;
                 /** @description Pages viewed in a browser. */
                 pages: number;
+                /** @description Emails sent: the console hides Emails without any. */
+                mails: number;
                 /** @description The systems with operations, by family then name: the console lists a page for each. */
                 systems: {
                     system: string;
@@ -870,6 +881,10 @@ export interface components {
             ops: {
                 [key: string]: string[];
             };
+            /** @description Kinds and systems of the spans records were logged inside. */
+            in: string[];
+            /** @description Names of the spans records were logged inside. */
+            span: string[];
             /** @description extra.* keys seen in logs. */
             extra: string[];
         };

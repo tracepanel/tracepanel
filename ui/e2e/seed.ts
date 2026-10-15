@@ -146,6 +146,27 @@ function messages(): Doc[] {
       "server.port": 9092,
     },
   });
+  // The broker's client logs as it connects: inside the publish, and the request's own line outside every call.
+  announce["logs"] = [
+    {
+      span_id: `${id}K`,
+      time: 5_100,
+      level: "info",
+      logger: "org.apache.kafka",
+      message: "Kafka producer started",
+      exception: null,
+      attrs: {},
+    },
+    {
+      span_id: `${id}R`,
+      time: 6_000,
+      level: "info",
+      logger: "shop.books",
+      message: "3 books announced",
+      exception: null,
+      attrs: {},
+    },
+  ];
   const delivered = [1, 2, 3].map((n) =>
     trace(
       "task",

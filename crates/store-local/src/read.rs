@@ -355,6 +355,16 @@ impl Reader {
             "queue": distinct(&format!(
                 "SELECT DISTINCT {QUEUE} FROM traces WHERE kind = 'task' AND {QUEUE} IS NOT NULL AND {traces} ORDER BY 1"
             ))?,
+            // What records were logged inside: the kinds and systems of spans, and the spans by name.
+            "in": distinct(&format!(
+                "SELECT value FROM (SELECT json_extract(span.value, '$.kind') AS value FROM logs, json_each(logs.spans) \
+                 AS span WHERE {of_trace} UNION SELECT json_extract(span.value, '$.system') FROM logs, \
+                 json_each(logs.spans) AS span WHERE {of_trace}) ORDER BY 1"
+            ))?,
+            "span": distinct(&format!(
+                "SELECT DISTINCT json_extract(span.value, '$.name') FROM logs, json_each(logs.spans) AS span \
+                 WHERE {of_trace} ORDER BY 1 LIMIT 500"
+            ))?,
             "extra": distinct(&format!(
                 "SELECT DISTINCT json_each.key FROM (SELECT attrs FROM logs WHERE {of_trace}) AS logs, \
                  json_each(logs.attrs) WHERE json_each.key LIKE 'extra.%' ORDER BY 1"
@@ -641,7 +651,7 @@ impl Reader {
             &db,
             &format!(
                 "SELECT logs.id, logs.trace_id, logs.time, logs.level, logs.logger, logs.message, logs.exception, \
-                 logs.attrs, traces.kind AS trace_kind, traces.htmx AS trace_htmx, traces.name AS trace_name, \
+                 logs.attrs, logs.span_id, logs.spans, traces.kind AS trace_kind, traces.htmx AS trace_htmx, traces.name AS trace_name, \
                  traces.method, traces.path, traces.http_status, traces.user_id, traces.service \
                  FROM logs JOIN traces ON traces.id = logs.trace_id WHERE {condition} \
                  ORDER BY logs.time DESC, logs.id DESC LIMIT ?"
@@ -661,6 +671,11 @@ impl Reader {
                     "attrs".into(),
                     attrs.unwrap_or(Value::Object(serde_json::Map::new())),
                 );
+                let spans = row
+                    .get("spans")
+                    .and_then(Value::as_str)
+                    .and_then(|text| serde_json::from_str(text).ok());
+                row.insert("spans".into(), spans.unwrap_or(Value::Array(vec![])));
                 Value::Object(row)
             })
             .collect();
@@ -935,6 +950,12 @@ impl Reader {
                 .unwrap_or(usize::MAX)
         };
         systems.sort_by(|(a, af), (b, bf)| rank(af).cmp(&rank(bf)).then_with(|| a.cmp(b)));
+        // Emails the app sent: only some frameworks send them through what an SDK records (Django's mail).
+        let mails: i64 = db.query_row(
+            "SELECT count(*) FROM mails WHERE ?1 IS NULL OR trace_id IN (SELECT id FROM traces WHERE service = ?1)",
+            [service],
+            |row| row.get(0),
+        )?;
         let count = |map: &HashMap<String, i64>, key: &str| map.get(key).copied().unwrap_or(0);
         let errors = count(&kinds, "error");
         Ok(serde_json::json!({
@@ -949,6 +970,7 @@ impl Reader {
                 "jobs": count(&traces, "command"),
                 "rpc": count(&traces, "rpc"),
                 "pages": count(&traces, "page"),
+                "mails": mails,
                 "systems": systems
                     .iter()
                     .map(|(system, family)| {

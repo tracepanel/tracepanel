@@ -1405,6 +1405,20 @@ details[data-focused] > .dt-sql-group {
 .dt-frame-fn {
   font: 600 var(--dt-size-sm) var(--dt-mono);
 }
+/* A frame with nothing to open: a line, aligned with the frames that open (past their chevron). */
+.dt-frame-bare {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  padding: 0.375rem 0.75rem 0.375rem 2.25rem;
+}
+.dt-frame-bare .dt-frame-fn {
+  overflow: hidden;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .dt-frame[data-app] > summary .dt-frame-fn {
   color: var(--dt-text);
 }

@@ -107,6 +107,9 @@ pub struct Span {
 
 #[derive(Debug, Deserialize)]
 pub struct Log {
+    /// The span it was logged in; none outside every span.
+    #[serde(default)]
+    pub span_id: Option<String>,
     pub time: i64,
     pub level: String,
     pub logger: String,

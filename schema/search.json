@@ -106,6 +106,10 @@
       "type": "text",
       "help": "Logger name, * wildcards: blog.*"
     },
+      "template": {
+        "type": "text",
+        "help": "The message as written, before its values: every record like this one"
+      },
     "trace": {
       "type": "text",
       "help": "Trace id"
@@ -126,6 +130,14 @@
       "type": "text",
       "help": "Job (a command, a scheduled run) that logged it"
     },
+      "in": {
+        "type": "text",
+        "help": "Logged inside a call or span of this kind: in:kafka, in:sql, in:view"
+      },
+      "span": {
+        "type": "text",
+        "help": "Logged inside this span, * wildcards: span:shop.views.*"
+      },
     "path": {
       "type": "text",
       "help": "Path of the request that logged it"
