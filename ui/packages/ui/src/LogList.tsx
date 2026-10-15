@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { clock, since } from "./format";
 import { keyed } from "./keys";
+import { LogRecordDetails } from "./LogRecordDetails";
 import { linkProps, type TraceLinks } from "./links";
-import { PropTable } from "./PropTable";
 import type { Log } from "./types";
 
 export function LogList({
@@ -38,7 +38,7 @@ export function LogList({
   );
 }
 
-/** One record: a click on its message opens where it was logged (its logger in full, code, thread, extra fields). */
+/** One record, compact; a click on it opens its details below, as the call tree shows a picked record. */
 function LogRecord({
   log,
   start,
@@ -50,20 +50,40 @@ function LogRecord({
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <li className="dt-log" data-level={log.level}>
+    // biome-ignore lint/a11y/useKeyWithClickEvents: the message inside is the button the keyboard opens it with.
+    <li
+      className="dt-log"
+      data-level={log.level}
+      data-open={open || undefined}
+      onClick={(event) => opens(event.target) && setOpen(!open)}
+    >
       <time className="dt-log-time" dateTime={new Date(log.time / 1000).toISOString()} title={since(log.time, start)}>
         {clock(log.time)}
       </time>
       <span className="dt-log-level">{log.level}</span>
-      <button type="button" className="dt-log-message" aria-expanded={open} onClick={() => setOpen(!open)}>
+      <button type="button" className="dt-log-message" aria-expanded={open}>
         {log.message}
       </button>
       <span className="dt-log-logger">{log.logger}</span>
       <ShowSpan spanId={log.span_id} onShowSpan={onShowSpan} />
-      {log.exception ? <pre className="dt-code dt-log-exception">{log.exception}</pre> : null}
-      {open ? <LogAttrs log={log} /> : null}
+      <Exception text={open ? null : log.exception} />
+      {open ? (
+        <div className="dt-log-details">
+          <LogRecordDetails log={log} />
+        </div>
+      ) : null}
     </li>
   );
+}
+
+/** Whether a click in a row opens it: anywhere but its call tree link and its opened details. */
+function opens(target: EventTarget): boolean {
+  return !(target as Element).closest("a, .dt-log-span, .dt-log-details");
+}
+
+/** A record's exception under it, while its details (which show it) are closed. */
+function Exception({ text }: { text: string | null | undefined }) {
+  return text ? <pre className="dt-code dt-log-exception">{text}</pre> : null;
 }
 
 /** The call tree opened at the span a record was logged in, when it was logged in one. */
@@ -79,19 +99,5 @@ function ShowSpan({
     <button type="button" className="dt-log-span" onClick={() => onShowSpan(spanId)}>
       In the call tree
     </button>
-  );
-}
-
-function LogAttrs({ log }: { log: Log }) {
-  const rows = [
-    { label: "logger", value: log.logger, copy: log.logger, mono: true },
-    ...Object.entries(log.attrs)
-      .filter(([, value]) => value !== null && value !== "")
-      .map(([key, value]) => ({ label: key, value: String(value), copy: String(value), mono: true })),
-  ];
-  return (
-    <div className="dt-log-attrs">
-      <PropTable rows={rows} />
-    </div>
   );
 }

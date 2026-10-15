@@ -57,8 +57,8 @@ upgrade.
 ### Fixed
 
 - A record shows where it was logged, its code, thread, template and extra
-  fields, as the logs list does: picked in the call tree, or opened by its
-  message in a trace's Logs tab.
+  fields: picked in the call tree, or opened by a click on it in a trace's
+  Logs tab, which shows it as the call tree does.
 - A trace's Logs tab overlapped a record's time and level once the time was
   a clock. The line between the call tree and its pane runs down the whole
   view, however few the rows.
