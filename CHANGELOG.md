@@ -4,6 +4,12 @@
 
 ### Added
 
+- The agent stores a trace with at most 2,000 spans and 1,000 log records,
+  whatever sent it: an SDK without limits of its own or OpenTelemetry. Its
+  earliest spans are kept, each with its parent, and its first records. The
+  Request tab says how many went (`tracepanel.dropped_spans`, `_logs`).
+- A stored trace says when the agent received it (`received`): the Request
+  tab says when the app's clock is off this machine's.
 - A group's page picks its period, from the same presets and range as a
   list's Time, or by dragging over its calls chart.
 - Tasks' System menu offers what ran this project's tasks (Celery, RQ,

@@ -297,6 +297,28 @@ mod tests {
     }
 
     #[test]
+    fn a_stored_trace_says_when_the_agent_received_it() {
+        let dir =
+            std::env::temp_dir().join(format!("tracepanel-store-received-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = path_in(&dir);
+        let mut store = Store::open(&path).unwrap();
+        let before = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_micros() as i64;
+
+        store.write(&[request_as("r1", 5)]).unwrap();
+        let doc: Value =
+            serde_json::from_str(&Reader::new(&path).get_trace("r1").unwrap().unwrap()).unwrap();
+
+        // By the agent's clock, the app's own times left as sent.
+        assert!(doc["received"].as_i64().unwrap() >= before);
+        assert_eq!(doc["start"], 5);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn every_table_with_rows_per_trace_is_cleared_with_its_trace() {
         let db = rusqlite::Connection::open_in_memory().unwrap();
         db.execute_batch(SCHEMA).unwrap();

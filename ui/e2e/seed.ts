@@ -236,10 +236,26 @@ async function stored(expected: Record<string, number>): Promise<boolean> {
   return false;
 }
 
+/** A request whose SDK dropped spans and records over its limits. */
+function late(): Doc {
+  return trace("http", "GET /api/clock", {
+    "service.name": "shop",
+    "http.method": "GET",
+    "http.path": "/api/clock",
+    "http.route": "/api/clock",
+    "http.status_code": 200,
+    "tracepanel.dropped_spans": 501,
+    "tracepanel.dropped_logs": 1503,
+  });
+}
+
 export default async function seed(): Promise<void> {
   const docs = [...examples(), ...pages(), ...background(), ...messages()];
   const first = Date.now() * 1000 - SPREAD_US * (docs.length + 1);
   const moved = docs.map((doc, index) => shift(doc, first + index * SPREAD_US - Number(doc["start"])) as Doc);
+  // A trace from an app whose clock is two hours behind, and that went over the limits: the oldest of all, so no list
+  // opens on it.
+  moved.push(shift(late(), first - 2 * 3_600_000_000) as Doc);
   const response = await fetch(`${CONSOLE}api/ingest`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

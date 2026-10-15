@@ -99,8 +99,11 @@ impl Store {
 
     pub fn write(&mut self, traces: &[Received]) -> rusqlite::Result<()> {
         let tx = self.db.transaction()?;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |since| since.as_micros() as i64);
         for received in traces {
-            write_trace(&tx, self.fts, &received.trace, &received.doc)?;
+            write_trace(&tx, self.fts, &received.trace, &stamped(&received.doc, now))?;
         }
         self.written_since_prune += traces.len() as i64;
         // Rotation scans every table: once the store is 10% over its limit, not on every write.
@@ -109,6 +112,17 @@ impl Store {
             self.written_since_prune = 0;
         }
         tx.commit()
+    }
+}
+
+/// The doc with when this agent received it (`received`, µs, by this machine's clock): the console compares it with
+/// the trace's own times, which the app's clock gave, to tell when that clock is off.
+fn stamped(doc: &str, now: i64) -> String {
+    let body = doc.trim_end();
+    match body.strip_suffix('}') {
+        Some(open) if open.trim_end().ends_with('{') => format!("{open}\"received\":{now}}}"),
+        Some(open) => format!("{open},\"received\":{now}}}"),
+        None => doc.to_owned(),
     }
 }
 
