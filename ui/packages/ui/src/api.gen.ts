@@ -913,7 +913,7 @@ export interface components {
             };
             /** @description Kinds and systems of the spans records were logged inside. */
             in: string[];
-            /** @description Names of the spans records were logged inside. */
+            /** @description Names of the traces' spans (their roots left out). */
             span: string[];
             /** @description extra.* keys seen in logs. */
             extra: string[];

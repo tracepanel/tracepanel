@@ -167,6 +167,17 @@ function messages(): Doc[] {
       attrs: {},
     },
   ];
+  // A span whose parent never arrived (cut by a limit, lost on the way): the call tree still shows it.
+  (announce["spans"] as Doc[]).push({
+    id: `${id}O`,
+    parent_id: "gone",
+    kind: "function",
+    name: "orphan block",
+    start: 6_000,
+    duration: 500,
+    status: "ok",
+    attrs: {},
+  });
   const delivered = [1, 2, 3].map((n) =>
     trace(
       "task",

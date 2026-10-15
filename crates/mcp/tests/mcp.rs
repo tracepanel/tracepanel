@@ -605,7 +605,7 @@ async fn mistakes_come_back_for_the_model_to_correct() {
         tool(&server, "find_traces", json!({"query": "colour:red"})).await,
         (
             "Unknown filter 'colour'. Use one of: cache, call, db, duration, has, kind, method, name, operation, path, \
-             peer, queries, queue, route, service, since, state, status, system, task, trace, until, user, view"
+             peer, queries, queue, route, service, since, span, state, status, system, task, trace, until, user, view"
                 .to_owned(),
             true
         )

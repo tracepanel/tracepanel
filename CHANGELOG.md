@@ -4,6 +4,9 @@
 
 ### Added
 
+- `span:` finds traces by any of their spans' names, a view, a template or
+  the app's own block, with `*` wildcards. Its hints name the spans that
+  aren't calls (those have `call:`, `db:` and the rest).
 - A group's page picks its period, from the same presets and range as a
   list's Time, or by dragging over its calls chart.
 - Tasks' System menu offers what ran this project's tasks (Celery, RQ,
@@ -30,6 +33,8 @@
 
 ### Fixed
 
+- A span whose parent never reached the agent (cut by a limit, lost on the
+  way) was missing from the call tree: it shows under the request.
 - Rotation kept the issues of the traces it removed as they were: counted
   with their old occurrences, first seen and latest trace, and an issue
   with no trace left stayed listed, its latest trace not found. Issues are

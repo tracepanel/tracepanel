@@ -94,6 +94,8 @@ pub(crate) fn trace_search() -> search::Schema {
         vec![
             ("method", search::upper_text("method")),
             ("has", Box::new(has)),
+            // A span by its name, whatever it is: the trace's `spans` rows.
+            ("span", with_span()),
             (
                 "call",
                 Box::new(|term| {
@@ -195,6 +197,25 @@ fn named(kind: &'static str) -> Compiler {
     Box::new(move |term| {
         let (clause, params) = name(term)?;
         Ok((format!("traces.kind = '{kind}' AND ({clause})"), params))
+    })
+}
+
+/// A trace's `span:`: traces with a span of that name; `!=` those with none.
+fn with_span() -> Compiler {
+    let name = search::text("spans.name");
+    Box::new(move |term| {
+        if term.op != ":" && term.op != "!=" {
+            return name(term);
+        }
+        let (clause, params) = name(&Term {
+            op: ":".into(),
+            ..term.clone()
+        })?;
+        let negated = if term.op == "!=" { "NOT " } else { "" };
+        Ok((
+            format!("id {negated}IN (SELECT trace_id FROM spans WHERE {clause})"),
+            params,
+        ))
     })
 }
 

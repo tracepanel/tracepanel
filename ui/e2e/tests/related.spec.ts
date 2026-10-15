@@ -80,3 +80,17 @@ test("a library frame with no source is one line, nothing to open", async ({ pag
   await expect(page.getByText("runtime.goexit")).toBeVisible();
   await expect(page.getByText("Source not available.")).toHaveCount(0);
 });
+
+test("a span whose parent never arrived still shows, under the request", async ({ page }) => {
+  await page.goto(`/#/traces?q=${encodeURIComponent("route:/api/books/announce")}`);
+  await page.getByRole("main").getByRole("table").getByRole("link").first().click();
+
+  await expect(page.getByText("orphan block")).toBeVisible();
+});
+
+test("span: finds the traces with a span by that name, whatever it is", async ({ page }) => {
+  await page.goto(`/#/traces?q=${encodeURIComponent("span:blog/async_post_list.html")}`);
+
+  await expect(page.getByText("1 shown")).toBeVisible();
+  await expect(page.getByRole("main").getByText("/async/")).toBeVisible();
+});
