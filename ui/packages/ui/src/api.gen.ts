@@ -819,7 +819,10 @@ export interface components {
             title: string;
             culprit: string | null;
             hint: string | null;
+            /** @description Every time it happened */
             occurrences: number;
+            /** @description How many of its traces the store still holds: 0 when all rotated out. */
+            stored?: number;
             first_seen: components["schemas"]["Time"];
             last_seen: components["schemas"]["Time"];
             last_trace_id: string;

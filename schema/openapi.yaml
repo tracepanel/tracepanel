@@ -949,7 +949,8 @@ components:
         title: { type: string }
         culprit: { type: [string, "null"] }
         hint: { type: [string, "null"] }
-        occurrences: { type: integer }
+        occurrences: { type: integer, description: Every time it happened, its traces rotated out of the store included. }
+        stored: { type: integer, description: "How many of its traces the store still holds: 0 when all rotated out." }
         first_seen: { $ref: "#/components/schemas/Time" }
         last_seen: { $ref: "#/components/schemas/Time" }
         last_trace_id: { type: string }

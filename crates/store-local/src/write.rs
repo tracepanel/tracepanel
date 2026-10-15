@@ -140,10 +140,10 @@ pub(crate) fn prune(db: &Connection, fts: bool, max_traces: i64) -> rusqlite::Re
     if pruned == 0 {
         return Ok(());
     }
-    // The issues they were occurrences of: counted again from the traces left once they go.
+    // The issues whose latest trace goes: pointed at the newest one they still have.
     db.execute_batch(
         "CREATE TEMP TABLE IF NOT EXISTS touched (fingerprint TEXT PRIMARY KEY); DELETE FROM touched;
-         INSERT OR IGNORE INTO touched SELECT fingerprint FROM issue_traces WHERE trace_id IN (SELECT id FROM pruned);",
+         INSERT OR IGNORE INTO touched SELECT fingerprint FROM issues WHERE last_trace_id IN (SELECT id FROM pruned);",
     )?;
     db.execute("DELETE FROM traces WHERE id IN (SELECT id FROM pruned)", [])?;
     delete_rows(db, fts, "trace_id IN (SELECT id FROM pruned)", [])?;
@@ -152,31 +152,19 @@ pub(crate) fn prune(db: &Connection, fts: bool, max_traces: i64) -> rusqlite::Re
         "DELETE FROM links WHERE linked_trace IN (SELECT id FROM pruned)",
         [],
     )?;
-    recount_issues(db, "fingerprint IN (SELECT fingerprint FROM touched)")
+    relink_issues(db)
 }
 
-/// The issues `which` picks, as the stored traces show them: how often, first and last seen, the latest trace. One
-/// with no trace left goes: its list of occurrences would be empty, its latest trace not found.
-fn recount_issues(db: &Connection, which: &str) -> rusqlite::Result<()> {
+/// The issues rotation took the latest trace of, pointed at the newest they still have. Their occurrences and first
+/// seen stay: an issue counts every time it happened, not only what the store still holds. With no trace left, the
+/// latest stays as it was, and the console says its traces were rotated out.
+fn relink_issues(db: &Connection) -> rusqlite::Result<()> {
     db.execute(
-        &format!(
-            "DELETE FROM issues WHERE {which}
-               AND NOT EXISTS (SELECT 1 FROM issue_traces WHERE issue_traces.fingerprint = issues.fingerprint)"
-        ),
-        [],
-    )?;
-    db.execute(
-        &format!(
-            "UPDATE issues SET
-                 occurrences = (SELECT count(*) FROM issue_traces o WHERE o.fingerprint = issues.fingerprint),
-                 first_seen = (SELECT min(t.start) FROM issue_traces o JOIN traces t ON t.id = o.trace_id
-                               WHERE o.fingerprint = issues.fingerprint),
-                 last_seen = (SELECT max(t.start) FROM issue_traces o JOIN traces t ON t.id = o.trace_id
-                              WHERE o.fingerprint = issues.fingerprint),
-                 last_trace_id = (SELECT t.id FROM issue_traces o JOIN traces t ON t.id = o.trace_id
-                                  WHERE o.fingerprint = issues.fingerprint ORDER BY t.start DESC LIMIT 1)
-             WHERE {which}"
-        ),
+        "UPDATE issues SET last_trace_id = (
+             SELECT t.id FROM issue_traces o JOIN traces t ON t.id = o.trace_id
+             WHERE o.fingerprint = issues.fingerprint ORDER BY t.start DESC LIMIT 1)
+         WHERE fingerprint IN (SELECT fingerprint FROM touched)
+           AND EXISTS (SELECT 1 FROM issue_traces o WHERE o.fingerprint = issues.fingerprint)",
         [],
     )?;
     Ok(())
@@ -345,14 +333,15 @@ pub(crate) fn write_trace(
                 .execute(params![db.last_insert_rowid(), log.message, log.logger])?;
         }
     }
-    for span in trace.spans.iter().filter(|span| span.parent_id.is_some()) {
-        db.prepare_cached(
-            "INSERT INTO spans (trace_id, span_id, kind, name) VALUES (?1, ?2, ?3, ?4)",
-        )?
-        .execute(params![trace.id, span.id, span.kind, span.name])?;
-    }
     for span in &trace.spans {
         let Some(operation) = tracepanel_analysis::calls::operation(trace, span) else {
+            // Any other span by its name, for span:; a call has its row in calls, with its name too.
+            if span.parent_id.is_some() {
+                db.prepare_cached(
+                    "INSERT INTO spans (trace_id, span_id, kind, name) VALUES (?1, ?2, ?3, ?4)",
+                )?
+                .execute(params![trace.id, span.id, span.kind, span.name])?;
+            }
             continue;
         };
         db.prepare_cached(

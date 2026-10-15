@@ -200,20 +200,25 @@ fn named(kind: &'static str) -> Compiler {
     })
 }
 
-/// A trace's `span:`: traces with a span of that name; `!=` those with none.
+/// A trace's `span:`: traces with a span of that name, a call's or any other's; `!=` those with none.
 fn with_span() -> Compiler {
-    let name = search::text("spans.name");
+    let name = search::text("name");
     Box::new(move |term| {
         if term.op != ":" && term.op != "!=" {
             return name(term);
         }
-        let (clause, params) = name(&Term {
+        let (clause, mut params) = name(&Term {
             op: ":".into(),
             ..term.clone()
         })?;
+        // The same name in both: a call's in calls, any other span's in spans.
+        params.extend(params.clone());
         let negated = if term.op == "!=" { "NOT " } else { "" };
         Ok((
-            format!("id {negated}IN (SELECT trace_id FROM spans WHERE {clause})"),
+            format!(
+                "id {negated}IN (SELECT trace_id FROM spans WHERE {clause} \
+                 UNION SELECT trace_id FROM calls WHERE {clause})"
+            ),
             params,
         ))
     })

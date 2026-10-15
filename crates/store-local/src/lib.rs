@@ -232,7 +232,7 @@ mod tests {
     }
 
     #[test]
-    fn rotation_recounts_the_issues_and_drops_links_to_traces_gone() {
+    fn rotation_keeps_the_issues_whole_and_drops_links_to_traces_gone() {
         let dir = std::env::temp_dir().join(format!(
             "tracepanel-store-prune-issues-{}",
             std::process::id()
@@ -260,7 +260,7 @@ mod tests {
                 doc: doc.to_string(),
             }
         };
-        // Each write rotates (a limit of 2): t0 and t1 go, and with them the issue only t0 had.
+        // Each write rotates (a limit of 2): t0 and t1 go.
         for received in [
             trace("t0", 0, "G", None),
             trace("t1", 1, "F", None),
@@ -291,7 +291,14 @@ mod tests {
             .query_row("SELECT count(*) FROM links", [], |row| row.get(0))
             .unwrap();
 
-        assert_eq!(issues, [("F".to_owned(), 2, 2, 3, "t3".to_owned())]);
+        // Every time it happened, rotated out or not: G keeps its one occurrence with no trace left, F its three.
+        assert_eq!(
+            issues,
+            [
+                ("G".to_owned(), 1, 0, 0, "t0".to_owned()),
+                ("F".to_owned(), 3, 1, 3, "t3".to_owned())
+            ]
+        );
         assert_eq!(links, 0);
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -325,6 +332,7 @@ mod tests {
             .write(&[
                 trace("A", "reports.build_pdf"),
                 trace("B", "reports.send_mail"),
+                request_as("C", 9),
             ])
             .unwrap();
         let reader = Reader::new(&path);
@@ -342,9 +350,20 @@ mod tests {
 
         assert_eq!(ids("span:reports.build_pdf"), ["A"]);
         assert_eq!(ids("span:reports.*"), ["A", "B"]);
-        assert_eq!(ids("span!=reports.build_pdf"), ["B"]);
+        assert_eq!(ids("span!=reports.build_pdf"), ["B", "C"]);
+        // A call by its name too, from calls: the spans table holds the other spans alone.
+        assert_eq!(ids("span:INCR*"), ["C"]);
+        let rows: i64 = rusqlite::Connection::open(&path)
+            .unwrap()
+            .query_row(
+                "SELECT count(*) FROM spans WHERE trace_id = 'C'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(rows, 0);
         // The root is the trace itself, found by its name already.
-        assert_eq!(ids("span:GET*"), Vec::<String>::new());
+        assert_eq!(ids("span:GET /report"), Vec::<String>::new());
         let _ = std::fs::remove_dir_all(&dir);
     }
 

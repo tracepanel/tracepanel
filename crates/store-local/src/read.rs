@@ -2,6 +2,10 @@
 
 use super::*;
 
+/// How many of an issue's traces the store still holds: what can be opened of the occurrences it counts.
+const STORED: &str =
+    "(SELECT count(*) FROM issue_traces t WHERE t.fingerprint = issues.fingerprint) AS stored";
+
 /// The columns a trace has in lists.
 pub(crate) const LISTING: &str = "id, kind, name, start, duration, status, http_status, method, path, route, view, user_id, \
     queries, db_time, issues, issue_kinds, errors, logs, mails, db_aliases, cache_aliases, task_state, htmx";
@@ -370,12 +374,9 @@ impl Reader {
                  AS span WHERE {of_trace} UNION SELECT json_extract(span.value, '$.system') FROM logs, \
                  json_each(logs.spans) AS span WHERE {of_trace}) ORDER BY 1"
             ))?,
-            // Spans by name, for span: in traces and in logs; calls left out (they have call:, db: and the rest).
-            "span": distinct(&format!(
-                "SELECT DISTINCT name FROM spans WHERE {of_trace} AND NOT EXISTS \
-                 (SELECT 1 FROM calls WHERE calls.trace_id = spans.trace_id AND calls.span_id = spans.span_id) \
-                 ORDER BY 1 LIMIT 500"
-            ))?,
+            // Spans by name, for span: in traces and in logs: the spans table, without the calls (they have call:,
+            // db: and the rest).
+            "span": distinct(&format!("SELECT DISTINCT name FROM spans WHERE {of_trace} ORDER BY 1 LIMIT 500"))?,
             "extra": distinct(&format!(
                 "SELECT DISTINCT json_each.key FROM (SELECT attrs FROM logs WHERE {of_trace}) AS logs, \
                  json_each(logs.attrs) WHERE json_each.key LIKE 'extra.%' ORDER BY 1"
@@ -390,7 +391,9 @@ impl Reader {
         let db = self.connect()?;
         let rows = objects(
             &db,
-            &format!("SELECT * FROM issues WHERE {condition} ORDER BY last_seen DESC LIMIT ?"),
+            &format!(
+                "SELECT *, {STORED} FROM issues WHERE {condition} ORDER BY last_seen DESC LIMIT ?"
+            ),
             params,
         )?;
         rows.into_iter()
@@ -420,7 +423,7 @@ impl Reader {
         let db = self.connect()?;
         let Some(mut row) = objects(
             &db,
-            "SELECT * FROM issues WHERE fingerprint = ?",
+            &format!("SELECT *, {STORED} FROM issues WHERE fingerprint = ?"),
             vec![Sql::Text(fingerprint.to_owned())],
         )?
         .pop() else {
