@@ -162,3 +162,75 @@ async fn an_agent_answers_where_it_listens_and_not_elsewhere() {
     assert!(!tracepanel_protocol::answers("tcp:127.0.0.1:9"));
     assert!(!tracepanel_protocol::answers("udp:somewhere"));
 }
+
+#[tokio::test]
+async fn an_app_that_can_explain_answers_the_agents_request_down_its_own_connection() {
+    let (address, received, activity) = agent().await;
+    let (mut stream, answer) = hello(
+        &address,
+        serde_json::json!({"protocol": PROTOCOL, "service": "shop", "capabilities": ["explain"]}),
+    )
+    .await;
+    assert_eq!(answer["ok"], true);
+    // The agent has the app once the hello is read.
+    for _ in 0..200 {
+        if activity.apps.can("explain") {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    let apps = activity.apps.clone();
+    let asked = tokio::spawn(async move {
+        apps.ask(
+            "shop",
+            "explain",
+            serde_json::json!({"explain": {"sql": "EXPLAIN SELECT 1", "params": []}}),
+            Duration::from_secs(5),
+        )
+        .await
+    });
+
+    // The app reads the request as a frame and answers with an object frame.
+    let mut length = [0u8; 4];
+    stream.read_exact(&mut length).await.unwrap();
+    let mut frame = vec![0u8; u32::from_be_bytes(length) as usize];
+    stream.read_exact(&mut frame).await.unwrap();
+    let request: serde_json::Value = serde_json::from_slice(&frame).unwrap();
+    let reply = serde_json::json!({"answer": request["id"], "columns": ["QUERY PLAN"], "rows": [["Result"]]});
+    send(&mut stream, reply.to_string().as_bytes()).await;
+    let answer = asked.await.unwrap().unwrap();
+
+    assert_eq!(request["explain"]["sql"], "EXPLAIN SELECT 1");
+    assert_eq!(answer["rows"], serde_json::json!([["Result"]]));
+    // An answer is no traces.
+    assert!(received.lock().unwrap().is_empty());
+
+    drop(stream);
+    for _ in 0..200 {
+        if !activity.apps.can("explain") {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    assert!(!activity.apps.can("explain"));
+}
+
+#[tokio::test]
+async fn nothing_connected_can_explain_says_so() {
+    let (_, _, activity) = agent().await;
+
+    let asked = activity
+        .apps
+        .ask(
+            "shop",
+            "explain",
+            serde_json::json!({}),
+            Duration::from_millis(100),
+        )
+        .await;
+
+    assert_eq!(
+        asked,
+        Err("No app of service shop that can explain is connected.".to_owned())
+    );
+}

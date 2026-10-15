@@ -1,0 +1,190 @@
+//! EXPLAIN of a recorded query, run by the app that recorded it: the agent has no way to the app's database, the app
+//! has its connection. The agent writes the statement for the database (EXPLAIN, EXPLAIN ANALYZE), sends it down the
+//! app's connection (`Apps::ask`), and reads the plan the rows make: one implementation for every SDK.
+
+use serde_json::{Map, Value, json};
+
+/// What to ask the app: the EXPLAIN to run, its parameters, and which database (the span's).
+pub(crate) struct Request {
+    pub vendor: String,
+    pub alias: String,
+    pub analyze: bool,
+    pub body: Value,
+}
+
+/// The request for a span, or why there is none (with the status to answer).
+pub(crate) fn request(span: &Map<String, Value>, analyze: bool) -> Result<Request, (u16, String)> {
+    if span.get("kind").and_then(Value::as_str) != Some("sql") {
+        return Err((404, "not found".into()));
+    }
+    let attrs = span
+        .get("attrs")
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default();
+    let text = |key: &str| {
+        attrs
+            .get(key)
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_owned()
+    };
+    let statement = text("db.statement");
+    let first = statement
+        .split_whitespace()
+        .next()
+        .unwrap_or_default()
+        .to_ascii_uppercase();
+    if first != "SELECT" && first != "WITH" {
+        return Err((422, "Only SELECT statements can be explained.".into()));
+    }
+    let Some(params) = attrs.get("db.params").and_then(Value::as_array).cloned() else {
+        return Err((422, "Parameters of this query were not recorded.".into()));
+    };
+    let vendor = [text("db.system"), text("db.vendor")]
+        .into_iter()
+        .find(|vendor| !vendor.is_empty())
+        .unwrap_or_default();
+    let (prefix, analyzed) = match vendor.as_str() {
+        "sqlite" => ("EXPLAIN QUERY PLAN ", false),
+        "postgresql" if analyze => ("EXPLAIN (ANALYZE, BUFFERS) ", true),
+        "mysql" | "mariadb" if analyze => ("EXPLAIN ANALYZE ", true),
+        _ => ("EXPLAIN ", false),
+    };
+    let alias = [text("db.alias")]
+        .into_iter()
+        .find(|alias| !alias.is_empty())
+        .unwrap_or_else(|| "default".into());
+    Ok(Request {
+        body: json!({"explain": {
+            "sql": format!("{prefix}{statement}"),
+            "params": params,
+            "vendor": vendor,
+            "alias": alias,
+            "server": attrs.get("server.address"),
+            "port": attrs.get("server.port"),
+            "database": attrs.get("db.namespace").or_else(|| attrs.get("db.name")),
+            // EXPLAIN ANALYZE runs the query: the app rolls back whatever it did.
+            "analyze": analyzed,
+        }}),
+        vendor,
+        alias,
+        analyze: analyzed,
+    })
+}
+
+/// The plan the app's rows make: lines with their depth and what to look at (a full scan, a sort that spills).
+pub(crate) fn plan(request: &Request, answer: &Value) -> Value {
+    let columns: Vec<String> = answer
+        .get("columns")
+        .and_then(Value::as_array)
+        .map(|columns| {
+            columns
+                .iter()
+                .map(|column| column.as_str().unwrap_or_default().to_owned())
+                .collect()
+        })
+        .unwrap_or_default();
+    let rows: Vec<Vec<Value>> = answer
+        .get("rows")
+        .and_then(Value::as_array)
+        .map(|rows| {
+            rows.iter()
+                .map(|row| row.as_array().cloned().unwrap_or_default())
+                .collect()
+        })
+        .unwrap_or_default();
+    let lines = match request.vendor.as_str() {
+        "sqlite" => sqlite(&rows),
+        _ if columns.len() == 1 => text_plan(&rows),
+        _ => table(&columns, &rows),
+    };
+    json!({"vendor": request.vendor, "alias": request.alias, "analyzed": request.analyze, "lines": lines})
+}
+
+fn line(depth: usize, text: String, warning: Option<String>) -> Value {
+    json!({"depth": depth, "text": text, "warning": warning})
+}
+
+fn cell(value: &Value) -> String {
+    match value {
+        Value::String(text) => text.clone(),
+        Value::Null => String::new(),
+        other => other.to_string(),
+    }
+}
+
+/// SQLite's (id, parent, notused, detail): depth follows the parent chain.
+fn sqlite(rows: &[Vec<Value>]) -> Vec<Value> {
+    let mut depth = std::collections::HashMap::from([(0i64, -1i64)]);
+    rows.iter()
+        .map(|row| {
+            let id = row.first().and_then(Value::as_i64).unwrap_or(0);
+            let parent = row.get(1).and_then(Value::as_i64).unwrap_or(0);
+            let level = depth.get(&parent).copied().unwrap_or(-1) + 1;
+            depth.insert(id, level);
+            let detail = row.get(3).map(cell).unwrap_or_default();
+            let warning = detail
+                .strip_prefix("SCAN ")
+                .filter(|scan| !scan.contains(" USING "))
+                .map(|scan| {
+                    let table = scan
+                        .trim_start_matches("TABLE ")
+                        .split_whitespace()
+                        .next()
+                        .unwrap_or_default();
+                    format!("Full scan of {table}: no index is used")
+                });
+            line(level.max(0) as usize, detail, warning)
+        })
+        .collect()
+}
+
+/// A plan as text (PostgreSQL, MySQL's ANALYZE, H2): "->" nodes indented 6 a level, their details 2 deeper.
+fn text_plan(rows: &[Vec<Value>]) -> Vec<Value> {
+    rows.iter()
+        .flat_map(|row| {
+            row.first()
+                .map(cell)
+                .unwrap_or_default()
+                .lines()
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+        })
+        .map(|text| {
+            let trimmed = text.trim();
+            let indent = text.len() - text.trim_start().len();
+            let node = trimmed.starts_with("->");
+            let body = trimmed.trim_start_matches("->").trim().to_owned();
+            let depth = if node {
+                (indent + 2) / 6
+            } else {
+                (indent + 4) / 6
+            };
+            let warning = if let Some(rest) = body.split("Seq Scan on ").nth(1) {
+                let table = rest.split_whitespace().next().unwrap_or_default();
+                Some(format!("Sequential scan of {table}: no index is used"))
+            } else if body.contains("Sort Method: external") {
+                Some("Sort spills to disk".to_owned())
+            } else {
+                None
+            };
+            line(depth, body, warning)
+        })
+        .collect()
+}
+
+/// A tabular plan (MySQL's EXPLAIN): one line per row, as `column=value` pairs.
+fn table(columns: &[String], rows: &[Vec<Value>]) -> Vec<Value> {
+    rows.iter()
+        .map(|row| {
+            let pairs: Vec<String> = columns
+                .iter()
+                .zip(row)
+                .filter(|(_, value)| !value.is_null())
+                .map(|(column, value)| format!("{column}={}", cell(value)))
+                .collect();
+            line(0, pairs.join("  "), None)
+        })
+        .collect()
+}
