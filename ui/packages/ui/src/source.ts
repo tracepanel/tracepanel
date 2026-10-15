@@ -2,6 +2,7 @@ import type { Snapshot } from "./snapshot";
 import type {
   CallRow,
   CallsSummary,
+  Capabilities,
   Counts,
   EndpointDetail,
   EndpointRow,
@@ -89,6 +90,8 @@ export interface DataSource {
   searchUsers(q: string): Promise<User[]>;
   /** Log this browser session in as another user (or out with null). */
   switchUser(id: string | null): Promise<User | null>;
+  /** What the backend adds to the store: EXPLAIN where the app serving the console runs it. */
+  capabilities(): Promise<Capabilities>;
   explain(traceId: string, spanId: string, analyze: boolean): Promise<ExplainPlan>;
   listIssues(q?: string): Promise<IssueRow[]>;
   /** One issue; with `q` (since:, until:), its series and requests within that period. */
@@ -169,6 +172,9 @@ export function httpSource(base: string | URL): DataSource {
     },
     async tracesOverview(q = "", group = "operation") {
       return (await getJson<TracesOverview>(url("traces/overview", { q, group }))) ?? EMPTY_OVERVIEW;
+    },
+    async capabilities() {
+      return (await getJson<Capabilities>(url("capabilities"))) ?? { explain: false, users: false };
     },
     async explain(trace, span, analyze) {
       const response = await fetch(url("explain", { trace, span, analyze: analyze ? 1 : null }));

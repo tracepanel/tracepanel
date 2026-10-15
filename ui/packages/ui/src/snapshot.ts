@@ -100,6 +100,8 @@ const EMPTY: Omit<DataSource, "getTrace" | "related" | "explain"> = {
     span: [],
     extra: [],
   }),
+  // A snapshot is a file: nothing behind it runs EXPLAIN.
+  capabilities: async () => ({ explain: false, users: false }),
   counts: async () => ({
     issues: 0,
     errors: 0,

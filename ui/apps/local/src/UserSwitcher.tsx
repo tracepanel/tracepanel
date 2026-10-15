@@ -13,6 +13,7 @@ import { useCloseOnBlur } from "@tracepanel/ui/hooks/useCloseOnBlur";
 import { cn } from "@tracepanel/ui/lib/utils";
 import { ArrowLeftRightIcon, CheckIcon, LogOutIcon, UserRoundIcon } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { useCapability } from "./hooks";
 
 /**
  * A narrow panel (docked right) shows its bar's actions as icons only: the outlined ones (the user, Console) then
@@ -46,13 +47,9 @@ function Role({ user }: { user: User }) {
  * Shown only where the backend offers it (Django with django.contrib.auth and sessions). After a switch the page
  * reloads (`onSwitched`), so it renders for the new user.
  */
-// The page's app can switch the user (Django): the widget says so in the panel's address. Elsewhere there is no one to
-// ask who the user is.
-const SWITCHING = new URLSearchParams(location.search).has("users");
-
-/** The switcher where the page's app offers one; nothing elsewhere. */
+/** The switcher where the app behind the console offers one (Django); nothing elsewhere, and nobody asked. */
 export function SwitchUser(props: { source: DataSource; onSwitched: () => void }) {
-  return SWITCHING ? <UserSwitcher {...props} /> : null;
+  return useCapability(props.source, "users") ? <UserSwitcher {...props} /> : null;
 }
 
 function UserSwitcher({ source, onSwitched }: { source: DataSource; onSwitched: () => void }) {

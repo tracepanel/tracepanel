@@ -35,6 +35,7 @@ pub fn router(reader: Reader, activity: Activity) -> Router {
         .route("/api/traces/{id}/related", get(related))
         .route("/api/snapshot/{id}", get(snapshot))
         .route("/api/counts", get(counts))
+        .route("/api/capabilities", get(capabilities))
         .route("/api/search", get(search_spec))
         .route("/api/logs", get(logs))
         .route("/api/calls", get(calls))
@@ -501,6 +502,14 @@ async fn overview(State(reader): State<Shared>, Query(query): Params) -> Respons
             reader.traces_overview(&q, 60, &group)
         })
         .await,
+    )
+}
+
+/// What the console's backend adds to the store: nothing here. An app serving the console answers for itself.
+async fn capabilities() -> Response {
+    json_response(
+        StatusCode::OK,
+        r#"{"explain":false,"users":false}"#.to_owned(),
     )
 }
 

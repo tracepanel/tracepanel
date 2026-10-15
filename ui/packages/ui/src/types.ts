@@ -64,6 +64,7 @@ export type SeriesBucket = Schemas["SeriesBucket"];
 export type HistogramBucket = Schemas["HistogramBucket"];
 export type Counts = Schemas["Counts"];
 export type KnownValues = Schemas["KnownValues"];
+export type Capabilities = Schemas["Capabilities"];
 export type SearchSpec = Schemas["SearchSpec"];
 export type User = Schemas["User"];
 export type SearchResource = keyof SearchSpec;

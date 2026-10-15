@@ -40,8 +40,10 @@
   not every route. A filter's menu has one Clear.
 - Emails is listed only once the app has sent one: only some frameworks
   send them through what an SDK records.
-- The panel asks who the user is, and offers to switch, only when the
-  page's app can (Django says so on the page): other apps got a 404 for it.
+- The console asks what the app behind it can do (`api/capabilities`):
+  Explain shows only where the app runs EXPLAIN on its database (Python,
+  Java), the user switcher only where it can switch users (Django). The
+  agent alone answers neither, and nothing asks for what can't answer.
 - A stack's frames with no source are one line each, with nothing to open.
 - A trace's Logs tab shows when each record was logged (14:03:21.146), the
   time since the request started on hover. The logs and emails lists name

@@ -61,3 +61,12 @@ test("an issue's page names the endpoint it was found in", async ({ page }) => {
 
   await expect(page.getByRole("main")).toContainText("GET /api/posts");
 });
+
+test("a query has no Explain where the console's backend can't run it: the agent alone", async ({ page }) => {
+  await page.goto("/#/calls/sql");
+  const region = page.getByRole("region", { name: "Database" });
+  await region.getByRole("rowgroup").last().getByRole("row").first().click();
+
+  await expect(region.getByText("WITH c").nth(1)).toBeVisible();
+  await expect(region.getByRole("button", { name: /^Explain/ })).toHaveCount(0);
+});

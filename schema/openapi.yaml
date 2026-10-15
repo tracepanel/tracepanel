@@ -508,6 +508,19 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Counts" }
+  /capabilities:
+    get:
+      operationId: capabilities
+      summary: What the console's backend can do beyond the store.
+      description: >-
+        The agent answers none: an app that serves the console on its own origin answers what it adds, such as
+        running EXPLAIN on its database. The console shows those features only where they work.
+      responses:
+        "200":
+          description: Capabilities.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Capabilities" }
   /store:
     delete:
       operationId: clearStore
@@ -1012,6 +1025,15 @@ components:
                   system: { type: string }
                   label: { type: string, description: "Its name in the console: MongoDB, NATS, Google Pub/Sub, or the system's own." }
                   family: { type: string, enum: [sql, redis, cache, datastore, messaging, rpc, http] }
+    Capabilities:
+      type: object
+      additionalProperties: false
+      required: [explain, users]
+      properties:
+        explain: { type: boolean, description: The app runs EXPLAIN of a recorded query on its database (api/explain). }
+        users:
+          type: boolean
+          description: The app can switch the user this browser is logged in as (api/users, api/users/me, api/users/switch).
     KnownValues:
       type: object
       additionalProperties: false
