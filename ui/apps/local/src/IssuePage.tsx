@@ -119,26 +119,7 @@ export function IssuePage({
         ) : null}
       </div>
 
-      <section className="grid grid-cols-[minmax(0,1fr)] gap-2.5">
-        <h2 className="flex items-baseline gap-3 text-xl font-semibold">
-          Latest occurrence
-          <a
-            href={traceHref(issue.last_trace_id, error ? "error" : "issues")}
-            className="text-base font-medium text-brand hover:underline"
-          >
-            Open request →
-          </a>
-        </h2>
-        <Card className="p-0 shadow-none">
-          <TraceScreen
-            id={issue.last_trace_id}
-            source={source}
-            explore={(trace) => exploreFor(trace, href)}
-            links={consoleLinks()}
-            initialTab={error ? "error" : "issues"}
-          />
-        </Card>
-      </section>
+      <LatestOccurrence issue={issue} error={error} source={source} />
 
       <section className="grid grid-cols-[minmax(0,1fr)] gap-2.5">
         <h2 className="text-xl font-semibold">
@@ -147,5 +128,44 @@ export function IssuePage({
         <TracesTable items={issue.traces} selectedId={null} hrefFor={traceHref} />
       </section>
     </div>
+  );
+}
+
+/**
+ * The newest of its requests, opened; with none left (every one rotated out of the store, the issue still counting
+ * them), what happened to them.
+ */
+function LatestOccurrence({ issue, error, source }: { issue: IssueDetail; error: boolean; source: DataSource }) {
+  if (issue.traces.length === 0) return <RotatedOut occurrences={issue.occurrences} />;
+  return (
+    <section className="grid grid-cols-[minmax(0,1fr)] gap-2.5">
+      <h2 className="flex items-baseline gap-3 text-xl font-semibold">
+        Latest occurrence
+        <a
+          href={traceHref(issue.last_trace_id, error ? "error" : "issues")}
+          className="text-base font-medium text-brand hover:underline"
+        >
+          Open request →
+        </a>
+      </h2>
+      <Card className="p-0 shadow-none">
+        <TraceScreen
+          id={issue.last_trace_id}
+          source={source}
+          explore={(trace) => exploreFor(trace, href)}
+          links={consoleLinks()}
+          initialTab={error ? "error" : "issues"}
+        />
+      </Card>
+    </section>
+  );
+}
+
+function RotatedOut({ occurrences }: { occurrences: number }) {
+  return (
+    <Empty title="Its requests were rotated out">
+      The store keeps the newest traces: the requests of its {occurrences}{" "}
+      {occurrences === 1 ? "occurrence" : "occurrences"} are gone. It shows here again the next time it happens.
+    </Empty>
   );
 }

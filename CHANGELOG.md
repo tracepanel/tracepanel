@@ -30,11 +30,11 @@
 
 ### Fixed
 
-- Rotation kept the issues of the traces it removed as they were: counted
-  with their old occurrences, first seen and latest trace, and an issue
-  with no trace left stayed listed, its latest trace not found. Issues are
-  counted again from the traces kept, and one with none goes, as do links
-  to the traces removed.
+- An issue whose requests rotation removed pointed at a latest trace that
+  was gone, and its page showed it as not found. An issue still counts
+  every time it happened (its occurrences and first seen stay), its latest
+  trace is the newest still stored, and with none left its page says they
+  were rotated out. Links to the traces removed go with them.
 - A group with one call, or calls a moment apart, gets a time axis of 10
   minutes, not one moment repeated.
 - The services map shows whole, its lines' bends included: it scrolls only
