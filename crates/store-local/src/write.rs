@@ -125,12 +125,51 @@ pub(crate) fn prune(db: &Connection, fts: bool, max_traces: i64) -> rusqlite::Re
     if pruned == 0 {
         return Ok(());
     }
+    // The issues they were occurrences of: counted again from the traces left once they go.
+    db.execute_batch(
+        "CREATE TEMP TABLE IF NOT EXISTS touched (fingerprint TEXT PRIMARY KEY); DELETE FROM touched;
+         INSERT OR IGNORE INTO touched SELECT fingerprint FROM issue_traces WHERE trace_id IN (SELECT id FROM pruned);",
+    )?;
     db.execute("DELETE FROM traces WHERE id IN (SELECT id FROM pruned)", [])?;
-    delete_rows(db, fts, "trace_id IN (SELECT id FROM pruned)", [])
+    delete_rows(db, fts, "trace_id IN (SELECT id FROM pruned)", [])?;
+    // Links of the traces left to the ones gone: nothing to open at their other end.
+    db.execute(
+        "DELETE FROM links WHERE linked_trace IN (SELECT id FROM pruned)",
+        [],
+    )?;
+    recount_issues(db, "fingerprint IN (SELECT fingerprint FROM touched)")
 }
 
-/// The tables with rows per trace: a trace's statements, calls, logs, issues, peers and links.
-const PER_TRACE: [&str; 9] = [
+/// The issues `which` picks, as the stored traces show them: how often, first and last seen, the latest trace. One
+/// with no trace left goes: its list of occurrences would be empty, its latest trace not found.
+fn recount_issues(db: &Connection, which: &str) -> rusqlite::Result<()> {
+    db.execute(
+        &format!(
+            "DELETE FROM issues WHERE {which}
+               AND NOT EXISTS (SELECT 1 FROM issue_traces WHERE issue_traces.fingerprint = issues.fingerprint)"
+        ),
+        [],
+    )?;
+    db.execute(
+        &format!(
+            "UPDATE issues SET
+                 occurrences = (SELECT count(*) FROM issue_traces o WHERE o.fingerprint = issues.fingerprint),
+                 first_seen = (SELECT min(t.start) FROM issue_traces o JOIN traces t ON t.id = o.trace_id
+                               WHERE o.fingerprint = issues.fingerprint),
+                 last_seen = (SELECT max(t.start) FROM issue_traces o JOIN traces t ON t.id = o.trace_id
+                              WHERE o.fingerprint = issues.fingerprint),
+                 last_trace_id = (SELECT t.id FROM issue_traces o JOIN traces t ON t.id = o.trace_id
+                                  WHERE o.fingerprint = issues.fingerprint ORDER BY t.start DESC LIMIT 1)
+             WHERE {which}"
+        ),
+        [],
+    )?;
+    Ok(())
+}
+
+/// The tables with rows per trace: a trace's statements, calls, logs, issues, peers and links. A new table with a
+/// trace_id column goes here too, or its rows outlive their traces (a test reads the schema for them).
+pub(crate) const PER_TRACE: [&str; 9] = [
     "logs",
     "calls",
     "issue_traces",

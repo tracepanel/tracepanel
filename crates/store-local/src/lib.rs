@@ -231,6 +231,95 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    #[test]
+    fn rotation_recounts_the_issues_and_drops_links_to_traces_gone() {
+        let dir = std::env::temp_dir().join(format!(
+            "tracepanel-store-prune-issues-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = path_in(&dir);
+        let mut store = Store::open(&path).unwrap();
+        store.max_traces = 2;
+        let issue = |fingerprint: &str| {
+            serde_json::json!({"fingerprint": fingerprint, "fingerprint_version": 1, "kind": "error",
+                               "title": fingerprint, "culprit": null, "hint": null})
+        };
+        let trace = |id: &str, start: i64, fingerprint: &str, sent_by: Option<&str>| {
+            let links: Vec<Value> = sent_by
+                .map(|sender| serde_json::json!({"kind": "sent_by", "trace_id": sender, "span_id": "S"}))
+                .into_iter()
+                .collect();
+            let doc = serde_json::json!({
+                "id": id, "kind": "task", "name": "BookEvents.onAnnounced", "start": start, "duration": 1,
+                "status": "error", "attrs": {"service.name": "shop"}, "spans": [], "logs": [], "errors": [],
+                "links": links, "issues": [issue(fingerprint)],
+            });
+            Received {
+                trace: serde_json::from_value(doc.clone()).unwrap(),
+                doc: doc.to_string(),
+            }
+        };
+        // Each write rotates (a limit of 2): t0 and t1 go, and with them the issue only t0 had.
+        for received in [
+            trace("t0", 0, "G", None),
+            trace("t1", 1, "F", None),
+            trace("t2", 2, "F", Some("t0")),
+            trace("t3", 3, "F", None),
+        ] {
+            store.write(&[received]).unwrap();
+        }
+        let db = rusqlite::Connection::open(&path).unwrap();
+        let issues: Vec<(String, i64, i64, i64, String)> = db
+            .prepare(
+                "SELECT fingerprint, occurrences, first_seen, last_seen, last_trace_id FROM issues",
+            )
+            .unwrap()
+            .query_map([], |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                ))
+            })
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        let links: i64 = db
+            .query_row("SELECT count(*) FROM links", [], |row| row.get(0))
+            .unwrap();
+
+        assert_eq!(issues, [("F".to_owned(), 2, 2, 3, "t3".to_owned())]);
+        assert_eq!(links, 0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn every_table_with_rows_per_trace_is_cleared_with_its_trace() {
+        let db = rusqlite::Connection::open_in_memory().unwrap();
+        db.execute_batch(SCHEMA).unwrap();
+        let tables: Vec<String> = db
+            .prepare(
+                "SELECT m.name FROM sqlite_master m, pragma_table_info(m.name) c
+                 WHERE m.type = 'table' AND c.name = 'trace_id' ORDER BY m.name",
+            )
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        let mut cleared: Vec<String> = write::PER_TRACE
+            .iter()
+            .map(|table| (*table).to_owned())
+            .collect();
+        cleared.sort();
+
+        // A table missing here keeps its rows after rotation removes their trace.
+        assert_eq!(tables, cleared);
+    }
+
     /// A trace of `service` with W3C ids: called through `parent` (another trace's span), calling out through `out`.
     fn w3c_trace(
         id: &str,

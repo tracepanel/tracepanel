@@ -1,5 +1,5 @@
--- tracepanel's local store: one SQLite file per format version, shared by every process of a project and, when it
--- runs, written by tracepanel-agent instead (which reads this file too: keep both writers in step).
+-- tracepanel's local store: one SQLite file per format version, written by the project's tracepanel-agent alone. The
+-- trace's doc is what was received; every other table is derived from it (crates/store-local/src/write.rs).
 -- version: 20
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS traces (
