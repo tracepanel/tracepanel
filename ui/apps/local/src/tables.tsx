@@ -460,7 +460,8 @@ export function LogsTable({
           <Th>Level</Th>
           <Th>Message</Th>
           <Th>Logger</Th>
-          <Th>Request</Th>
+          {/* A request, a task, a job or a page: what was running when it was logged. */}
+          <Th>Source</Th>
         </>
       }
     >
@@ -721,7 +722,7 @@ export function MailsTable({
           <Th>Subject</Th>
           <Th>To</Th>
           <Th>From</Th>
-          <Th>Request</Th>
+          <Th>Sent from</Th>
           <Th num>When</Th>
         </>
       }

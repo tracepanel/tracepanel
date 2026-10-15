@@ -11,15 +11,28 @@ export interface Loaded<T> {
  * Loads on every change of `q`, on "refresh now", and on the auto-refresh interval (times `slower`) while visible.
  * `slower` 0: no interval, for summaries that change slowly (the page refreshes on "refresh now" only).
  */
-export function useSearch<T>(load: (q: string) => Promise<T>, q: string, slower = 1): Loaded<T> {
-  const [state, setState] = useState<Loaded<T>>({ data: undefined, error: null });
-  // Another loader is another resource (a page switching from groups to calls): its old data would show for a moment
-  // as the new resource's. A new `q` for the same loader keeps the old rows until the new ones arrive.
+/**
+ * Calls `reset` when the rows on screen stop being of what is asked for. Another loader is another resource (a page
+ * switching from groups to calls): its old data would show for a moment as the new resource's. A new `q` for the
+ * same loader keeps the old rows until the new ones arrive, except no search at all: the whole list is never the last
+ * search's rows, or a search that matched nothing would pass for nothing stored yet.
+ */
+function useResource(load: unknown, q: string, reset: () => void): void {
   const [loader, setLoader] = useState(() => load);
+  const [searched, setSearched] = useState(q);
   if (loader !== load) {
     setLoader(() => load);
-    setState({ data: undefined, error: null });
+    reset();
   }
+  if (searched !== q) {
+    setSearched(q);
+    if (!q) reset();
+  }
+}
+
+export function useSearch<T>(load: (q: string) => Promise<T>, q: string, slower = 1): Loaded<T> {
+  const [state, setState] = useState<Loaded<T>>({ data: undefined, error: null });
+  useResource(load, q, () => setState({ data: undefined, error: null }));
   const { tick, cycle } = useRefresh();
   // The shared clock's cycles, every `slower`th of them: all screens reload together.
   const due = slower ? Math.floor(cycle / slower) : 0;

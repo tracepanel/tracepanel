@@ -74,3 +74,12 @@ test("the Logger menu finds loggers with the key typed in its box too", async ({
 
   await expect(page.getByRole("option")).toHaveCount(2);
 });
+
+test("typing a filter key by key, with pauses, keeps every letter in the box", async ({ page }) => {
+  await page.goto("/#/logs");
+  // A person's pace: each pause long enough for the box to search what it has, half a filter included.
+  await search(page).pressSequentially("logger:b", { delay: 450 });
+
+  await expect(search(page)).toHaveValue("logger:b");
+  await expect(page.getByRole("button", { name: /^logger:blog\.views/ })).toBeVisible();
+});

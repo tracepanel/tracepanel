@@ -89,6 +89,16 @@ function fieldSuggestions(
     .map(([name, help]) => ({ insert: `${name}:`, label: `${name}:`, help }));
 }
 
+/**
+ * What was typed, without a filter still being typed at its end (`logger:`, `level:wa`): searched half-typed, its key
+ * and colon went out as free text, and finishing it then emptied the search.
+ */
+function settled(text: string, keys: ReadonlySet<string>): string {
+  const words = text.split(/\s+/);
+  const typing = isKey(FILTER.exec(String(words.at(-1)))?.[1] ?? "", keys);
+  return typing ? words.slice(0, -1).join(" ") : text;
+}
+
 // The arrows move the pick, down from none to the first, up from none to the last, and round.
 const MOVES = new Map([
   ["ArrowDown", 1],
@@ -552,14 +562,15 @@ export function SearchBar({ section, family, q, spec, error, known, count, calls
   // typed (a trailing space included). Any other `q` (a chip, a quick filter, Back) replaces the text.
   const sent = useRef<string | null>(null);
   useEffect(() => {
-    if (q !== sent.current) setText(parsed.text);
+    // No q (a section's address without ?q=) is the empty search the box sent itself, not another one.
+    if ((q ?? "") !== sent.current) setText(parsed.text);
   }, [q, parsed.text]);
   // Free text is debounced; chips apply at once. A filter being typed (`state:fai`) stays in the box and out of the
   // search until it is finished with a space, Enter or a suggestion: searching it half-typed would turn it into a
   // chip mid-word and send the rest of the typing into an empty box.
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      const next = compose(parsed.filters, parseQuery(text, keys).text);
+      const next = compose(parsed.filters, parseQuery(settled(text, keys), keys).text);
       if (next !== compose(parsed.filters, parsed.text)) {
         sent.current = next;
         onChange(next, true);

@@ -10,6 +10,13 @@
   for every run of it, and opens the task.
 - A search chip can be changed: click it, and it goes back into the box as
   text, Enter makes it a chip again.
+- A call's details in the call tree start with its fields in its system's
+  words: a Kafka publish's topic, partition and offset, a RabbitMQ queue or
+  exchange and routing key, a Redis command's key, a gRPC call's service and
+  method. Every attribute follows, as recorded.
+- A request's Request tab lists its own fields first and the traces linked
+  to it after them, alike ones as one row: 36 deliveries to one listener are
+  `×36`, with how many failed.
 
 ### Fixed
 
@@ -20,6 +27,13 @@
   suggests all of them first, with a wildcard (`logger:org*`).
 - A filter's menu found nothing when its key was typed in its box too
   (`logger:org` in the Logger menu).
+- Typing a filter into the search box with pauses (`logger:o`) could empty
+  it: the page took a search that matched nothing for an empty store and
+  replaced the box. A filter still being typed stays out of the search.
+- A trace's Logs tab shows when each record was logged (14:03:21.146), the
+  time since the request started on hover. The logs and emails lists name
+  their last column Source and Sent from: a task's or a job's, not only a
+  request's.
 
 ## 0.2.0 (2026-10-14)
 
