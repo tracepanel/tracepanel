@@ -103,3 +103,31 @@ test("the Request tab says what went unrecorded, and when the app's clock is off
   await expect(page.getByText("501 spans and 1503 log records: over the limit of one trace")).toBeVisible();
   await expect(page.getByText(/The app's clock is about 2\.\d h behind this machine's/)).toBeVisible();
 });
+
+test("a call another project's agent served shows under it, opening in that project's console", async ({ page }) => {
+  // The agent of the other project as the related traces bring it: the call's span here, its trace and console.
+  await page.route("**/api/traces/*/related", async (route) => {
+    const related = await (await route.fetch()).json();
+    const trace = await (await page.request.get(route.request().url().replace("/related", ""))).json();
+    const call = trace.spans.find((span: { kind: string }) => span.kind === "rabbitmq");
+    related.remote_calls = [
+      {
+        // biome-ignore lint/style/useNamingConvention: the API's wire format.
+        span_id: call.id,
+        trace: { ...related.delivered[0], id: "01M4R1ER9RWER0QHV07BJDSZ7Z", name: "POST /orders" },
+        console: "http://127.0.0.1:9999/",
+        project: "orders",
+      },
+    ];
+    await route.fulfill({ json: related });
+  });
+  await page.goto(`/#/traces?q=${encodeURIComponent("route:/api/books/announce")}`);
+  await page.getByRole("main").getByRole("table").getByRole("link").first().click();
+  await page.getByText("POST /orders").first().click();
+
+  await expect(page.getByText("orders", { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open in orders's console" })).toHaveAttribute(
+    "href",
+    "http://127.0.0.1:9999/#/t/01M4R1ER9RWER0QHV07BJDSZ7Z",
+  );
+});

@@ -4,6 +4,11 @@
 
 ### Added
 
+- A call an app of another project on this machine served shows under it in
+  the call tree, opening in that project's console. Agents with a console
+  say where they are in the user's cache (with a token only they and this
+  user can read), and ask each other which of their traces served a call,
+  by the W3C ids the call carried.
 - EXPLAIN in the agent's own console: an app that says it can (in its
   hello) runs a recorded query's EXPLAIN on its database when the agent asks
   it, down the connection it sends its traces on. The agent writes the

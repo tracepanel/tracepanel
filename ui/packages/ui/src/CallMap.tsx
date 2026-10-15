@@ -32,7 +32,7 @@ type Node =
   | { type: "error"; key: string; error: TraceError }
   // A trace of its own under a span of this one: a task it enqueued, run in a worker (or still waiting for one), or
   // the trace another app served for one of its calls (`kind: "call"`).
-  | { type: "task"; key: string; run: TraceSummary; kind: "task" | "call" }
+  | { type: "task"; key: string; run: TraceSummary; kind: "task" | "call"; remote?: Remote | undefined }
   | { type: "waiting"; key: string; span: Span; kind: "task" };
 
 function startOf(node: Node): number {
@@ -94,6 +94,20 @@ function collapse(nodes: Node[]): Node[] {
   return result;
 }
 
+/** Another project's trace on this machine, and where its console is: it opens there. */
+interface Remote {
+  console: string;
+  project: string;
+}
+
+/** The traces other projects' agents have for this trace's calls, under the calls. */
+function remoteNodes(related: Related): [string, Node][] {
+  return (related.remote_calls ?? []).map(({ span_id, trace, console, project }): [string, Node] => [
+    span_id,
+    { type: "task", key: `remote:${trace.id}`, run: trace, kind: "call", remote: { console, project } },
+  ]);
+}
+
 /** Each trace of its own under a span of this one, by that span's id. */
 function linked(runs: readonly TraceSummary[], related: Related, kind: "task" | "call"): [string, Node][] {
   return runs.flatMap((run): [string, Node][] => {
@@ -113,7 +127,7 @@ function linkedNodes(trace: Trace, related: Related | undefined): [string, Node]
   const waiting = trace.spans
     .filter((span) => span.kind === "task.enqueue" && !run.has(span.id))
     .map((span): [string, Node] => [span.id, { type: "waiting", key: `waiting:${span.id}`, span, kind: "task" }]);
-  return [...tasks, ...linked(related.calls, related, "call"), ...waiting];
+  return [...tasks, ...linked(related.calls, related, "call"), ...remoteNodes(related), ...waiting];
 }
 
 /**
@@ -410,6 +424,7 @@ function runView(node: Extract<Node, { type: "task" }>, trace: Trace): LinkedVie
       <>
         <span className="dt-map-text">{node.run.name}</span>
         <TaskState state={node.run.task_state} />
+        {node.remote ? <span className="dt-map-project">{node.remote.project}</span> : null}
       </>
     ),
     track: <Bar trace={trace} start={node.run.start} length={node.run.duration} />,
@@ -636,19 +651,47 @@ function runRows(run: TraceSummary, label: string) {
 }
 
 /** A trace of its own this trace led to: what it was, when it started, how long it took, a link to it. */
+/** Where a linked trace opens: here, or in its own project's console in a tab of its own. */
+function OpenRun({
+  run,
+  words,
+  links,
+  remote,
+}: {
+  run: TraceSummary;
+  words: { open: string };
+  links?: TraceLinks | undefined;
+  remote?: Remote | undefined;
+}) {
+  if (remote) {
+    return (
+      <a className="dt-map-open" href={`${remote.console}#/t/${run.id}`} target="_blank" rel="noopener">
+        Open in {remote.project}'s console
+      </a>
+    );
+  }
+  const open = links?.trace;
+  return open ? (
+    <a className="dt-map-open" {...linkProps(links, open(run.id))}>
+      {words.open}
+    </a>
+  ) : null;
+}
+
 function RunDetails({
   run,
   kind,
   trace,
   links,
+  remote,
 }: {
   run: TraceSummary;
   kind: "task" | "call";
   trace: Trace;
   links?: TraceLinks | undefined;
+  remote?: Remote | undefined;
 }) {
   const words = RUN_WORDS[kind];
-  const open = links?.trace;
   return (
     <div className="grid gap-3 p-4">
       <p className="dt-map-details-title">
@@ -656,11 +699,7 @@ function RunDetails({
         {duration(run.duration)}
       </p>
       <PropTable rows={runRows(run, words.label)} />
-      {open ? (
-        <a className="dt-map-open" {...linkProps(links, open(run.id))}>
-          {words.open}
-        </a>
-      ) : null}
+      <OpenRun run={run} words={words} links={links} remote={remote} />
     </div>
   );
 }
@@ -679,7 +718,7 @@ function WaitingDetails({ span }: { span: Span }) {
 
 function LinkedDetails({ node, trace, links }: { node: Linked; trace: Trace; links?: TraceLinks | undefined }) {
   if (node.type === "waiting") return <WaitingDetails span={node.span} />;
-  return <RunDetails run={node.run} kind={node.kind} trace={trace} links={links} />;
+  return <RunDetails run={node.run} kind={node.kind} trace={trace} links={links} remote={node.remote} />;
 }
 
 type DetailsProps<T extends Node["type"]> = {

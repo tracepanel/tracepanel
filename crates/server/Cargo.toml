@@ -16,6 +16,8 @@ mime_guess = "2"
 rust-embed = { version = "8", features = ["include-exclude"] }
 serde_json.workspace = true
 tokio.workspace = true
+# Asks the agents of other projects on this machine (neighbors.rs): plain HTTP to 127.0.0.1, no TLS.
+ureq = { version = "3.4.2", default-features = false, features = ["json"] }
 
 [dev-dependencies]
 jsonschema = { version = "0.58.6", default-features = false }
