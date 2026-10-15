@@ -3,6 +3,9 @@
 //! The console's API (`schema/openapi.yaml`), read from the store. EXPLAIN and switching users need the app's
 //! framework: the app serves them itself and forwards the rest here (Django's `/__tracepanel__/`).
 
+mod explain;
+
+use axum::Extension;
 use axum::Router;
 use axum::body::Bytes;
 use axum::extract::{DefaultBodyLimit, Path, Query, State};
@@ -36,6 +39,7 @@ pub fn router(reader: Reader, activity: Activity) -> Router {
         .route("/api/snapshot/{id}", get(snapshot))
         .route("/api/counts", get(counts))
         .route("/api/capabilities", get(capabilities))
+        .route("/api/explain", get(explain))
         .route("/api/search", get(search_spec))
         .route("/api/logs", get(logs))
         .route("/api/calls", get(calls))
@@ -61,7 +65,12 @@ pub fn router(reader: Reader, activity: Activity) -> Router {
         .fallback(static_handler)
         .with_state(Arc::new(reader))
         // A console in use keeps an agent started on demand running.
-        .layer(axum::middleware::from_fn_with_state(activity, touch))
+        .layer(axum::middleware::from_fn_with_state(
+            activity.clone(),
+            touch,
+        ))
+        // The apps connected now: EXPLAIN goes to the one that recorded the query.
+        .layer(Extension(activity))
         .layer(axum::middleware::from_fn(local_pages))
 }
 
@@ -506,11 +515,74 @@ async fn overview(State(reader): State<Shared>, Query(query): Params) -> Respons
 }
 
 /// What the console's backend adds to the store: nothing here. An app serving the console answers for itself.
-async fn capabilities() -> Response {
+/// What the console's backend adds to the store: EXPLAIN once a connected app can run it on its database. An app that
+/// serves the console on its own origin answers for itself.
+async fn capabilities(Extension(activity): Extension<Activity>) -> Response {
+    let explain = activity.apps.can("explain");
     json_response(
         StatusCode::OK,
-        r#"{"explain":false,"users":false}"#.to_owned(),
+        json!({"explain": explain, "users": false}).to_string(),
     )
+}
+
+/// How long the app has to run an EXPLAIN (ANALYZE runs the query itself).
+const EXPLAIN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+
+/// `api/explain?trace=&span=&analyze=`: the recorded query's plan, from the app that recorded it.
+async fn explain(
+    State(reader): State<Shared>,
+    Extension(activity): Extension<Activity>,
+    Query(params): Params,
+) -> Response {
+    let trace = params.get("trace").cloned().unwrap_or_default();
+    let span = params.get("span").cloned().unwrap_or_default();
+    if !is_id(&trace) {
+        return not_found();
+    }
+    let doc = match read(&reader, move |reader| Ok(reader.get_trace(&trace)?)).await {
+        Ok(Some(doc)) => doc,
+        Ok(None) => return not_found(),
+        Err(failure) => return failure.into_response(),
+    };
+    let doc: Value = serde_json::from_str(&doc).unwrap_or_default();
+    let Some(found) = doc["spans"].as_array().and_then(|spans| {
+        spans
+            .iter()
+            .find(|candidate| candidate["id"] == span.as_str())
+            .and_then(Value::as_object)
+    }) else {
+        return not_found();
+    };
+    let request = match explain::request(
+        found,
+        params.get("analyze").map(String::as_str) == Some("1"),
+    ) {
+        Ok(request) => request,
+        Err((404, _)) => return not_found(),
+        Err((_, error)) => {
+            return json_response(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                json!({"error": error}).to_string(),
+            );
+        }
+    };
+    let service = doc["attrs"]["service.name"].as_str().unwrap_or_default();
+    let body = request.body.clone();
+    match activity
+        .apps
+        .ask(service, "explain", body, EXPLAIN_TIMEOUT)
+        .await
+    {
+        Ok(answer) if answer.get("error").is_some() => json_response(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            json!({"error": answer["error"]}).to_string(),
+        ),
+        Ok(answer) => json_response(StatusCode::OK, explain::plan(&request, &answer).to_string()),
+        Err(error) => json_response(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            json!({"error": error}).to_string(),
+        ),
+    }
 }
 
 async fn search_spec() -> Response {

@@ -19,10 +19,144 @@ use tokio::net::TcpListener;
 use tokio::net::UnixListener;
 
 /// When the agent was last used, and by how many SDK connections now: an agent started on demand exits once idle.
+/// `apps` are the connected apps that do something for the console besides sending traces.
 #[derive(Clone, Default)]
 pub struct Activity {
     last: Arc<std::sync::atomic::AtomicI64>,
     open: Arc<std::sync::atomic::AtomicUsize>,
+    pub apps: Apps,
+}
+
+/// The apps connected now that can do something for the console (EXPLAIN a query on their database: `explain`),
+/// and the requests sent to them still waiting for their answer. A request goes down the connection the app sends
+/// its traces on, as a frame; its answer comes back up it as a frame, an object where traces are a list.
+#[derive(Clone, Default)]
+pub struct Apps {
+    inner: Arc<std::sync::Mutex<AppsInner>>,
+}
+
+#[derive(Default)]
+struct AppsInner {
+    next: u64,
+    apps: Vec<App>,
+    waiting: std::collections::HashMap<u64, tokio::sync::oneshot::Sender<Value>>,
+}
+
+struct App {
+    connection: u64,
+    service: String,
+    capabilities: Vec<String>,
+    requests: tokio::sync::mpsc::UnboundedSender<Vec<u8>>,
+}
+
+impl Apps {
+    /// Whether a connected app can do `capability`.
+    pub fn can(&self, capability: &str) -> bool {
+        let inner = self
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        inner
+            .apps
+            .iter()
+            .any(|app| app.capabilities.iter().any(|can| can == capability))
+    }
+
+    /// `request` sent to the app of `service` that can do `capability` (the only one that can, when none is of that
+    /// service), and its answer, within `timeout`.
+    pub async fn ask(
+        &self,
+        service: &str,
+        capability: &str,
+        mut request: Value,
+        timeout: std::time::Duration,
+    ) -> Result<Value, String> {
+        let (id, answer) = {
+            let mut inner = self
+                .inner
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let able: Vec<&App> = inner
+                .apps
+                .iter()
+                .filter(|app| app.capabilities.iter().any(|can| can == capability))
+                .collect();
+            let app = able
+                .iter()
+                .find(|app| app.service == service)
+                .or_else(|| (able.len() == 1).then(|| &able[0]))
+                .ok_or_else(|| {
+                    format!("No app of service {service} that can {capability} is connected.")
+                })?;
+            let requests = app.requests.clone();
+            inner.next += 1;
+            let id = inner.next;
+            request["id"] = Value::from(id);
+            let (sender, answer) = tokio::sync::oneshot::channel();
+            inner.waiting.insert(id, sender);
+            let body = request.to_string().into_bytes();
+            let mut frame = (body.len() as u32).to_be_bytes().to_vec();
+            frame.extend(body);
+            if requests.send(frame).is_err() {
+                inner.waiting.remove(&id);
+                return Err("The app's connection closed.".into());
+            }
+            (id, answer)
+        };
+        match tokio::time::timeout(timeout, answer).await {
+            Ok(Ok(answer)) => Ok(answer),
+            _ => {
+                let mut inner = self
+                    .inner
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                inner.waiting.remove(&id);
+                Err("The app didn't answer in time.".into())
+            }
+        }
+    }
+
+    fn register(
+        &self,
+        service: String,
+        capabilities: Vec<String>,
+        requests: tokio::sync::mpsc::UnboundedSender<Vec<u8>>,
+    ) -> u64 {
+        let mut inner = self
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        inner.next += 1;
+        let connection = inner.next;
+        inner.apps.push(App {
+            connection,
+            service,
+            capabilities,
+            requests,
+        });
+        connection
+    }
+
+    fn unregister(&self, connection: u64) {
+        let mut inner = self
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        inner.apps.retain(|app| app.connection != connection);
+    }
+
+    fn answered(&self, answer: Value) {
+        let Some(id) = answer.get("answer").and_then(Value::as_u64) else {
+            return;
+        };
+        let mut inner = self
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(waiting) = inner.waiting.remove(&id) {
+            let _ = waiting.send(answer);
+        }
+    }
 }
 
 impl Activity {
@@ -237,6 +371,11 @@ struct Hello {
     max_traces: Option<i64>,
     #[serde(default)]
     thresholds: Thresholds,
+    /// The app's service.name and what it can do for the console (`explain`): SDKs from before send neither.
+    #[serde(default)]
+    service: String,
+    #[serde(default)]
+    capabilities: Vec<String>,
 }
 
 /// The limits issues are found with, as the SDK is configured (these defaults otherwise).
@@ -345,12 +484,13 @@ where
     });
 }
 
-async fn connection<S: AsyncRead + AsyncWrite + Unpin>(
+async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send + 'static>(
     stream: S,
     sink: Sink,
     activity: &Activity,
 ) -> std::io::Result<()> {
-    let mut reader = BufReader::new(stream);
+    let (read, mut write) = tokio::io::split(stream);
+    let mut reader = BufReader::new(read);
     let mut line = String::new();
     if reader.read_line(&mut line).await? == 0 {
         return Ok(());
@@ -362,13 +502,38 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin>(
         None => serde_json::json!({"ok": true}),
         Some(error) => serde_json::json!({"ok": false, "error": error}),
     };
-    reader
-        .get_mut()
-        .write_all(format!("{answer}\n").as_bytes())
-        .await?;
+    write.write_all(format!("{answer}\n").as_bytes()).await?;
     if refusal.is_some() {
         return Ok(());
     }
+    // An app that can do something for the console takes requests down this connection, one frame each.
+    let registered = (!hello.capabilities.is_empty()).then(|| {
+        let (requests, mut queue) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
+        tokio::spawn(async move {
+            while let Some(frame) = queue.recv().await {
+                if write.write_all(&frame).await.is_err() {
+                    return;
+                }
+            }
+        });
+        activity
+            .apps
+            .register(hello.service.clone(), hello.capabilities.clone(), requests)
+    });
+    let result = frames(&mut reader, &sink, activity, &hello).await;
+    if let Some(connection) = registered {
+        activity.apps.unregister(connection);
+    }
+    result
+}
+
+/// Frames until the app goes: lists of traces for the sink, objects answering the requests sent to it.
+async fn frames<R: AsyncRead + Unpin>(
+    reader: &mut BufReader<R>,
+    sink: &Sink,
+    activity: &Activity,
+    hello: &Hello,
+) -> std::io::Result<()> {
     loop {
         let mut length = [0u8; 4];
         match reader.read_exact(&mut length).await {
@@ -383,6 +548,12 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin>(
         let mut frame = vec![0u8; length];
         reader.read_exact(&mut frame).await?;
         activity.touch();
+        if frame.first() == Some(&b'{') {
+            if let Ok(answer) = serde_json::from_slice(&frame) {
+                activity.apps.answered(answer);
+            }
+            continue;
+        }
         sink(Batch {
             frame,
             max_traces: hello.max_traces,

@@ -4,6 +4,11 @@
 
 ### Added
 
+- EXPLAIN in the agent's own console: an app that says it can (in its
+  hello) runs a recorded query's EXPLAIN on its database when the agent asks
+  it, down the connection it sends its traces on. The agent writes the
+  statement and reads the plan from the rows, for every SDK alike, and the
+  console offers Explain once such an app is connected.
 - `span:` finds traces by any of their spans' names, a view, a template or
   the app's own block, with `*` wildcards. Its hints name the spans that
   aren't calls (those have `call:`, `db:` and the rest).
