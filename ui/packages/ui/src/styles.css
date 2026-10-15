@@ -1269,7 +1269,8 @@ details[data-focused] > .dt-sql-group {
 }
 .dt-log {
   display: grid;
-  grid-template-columns: 3.5rem 4rem minmax(0, 1fr) auto auto;
+  /* The time as a clock (13:49:33.784): as wide as it is, the same in every row. */
+  grid-template-columns: max-content 4rem minmax(0, 1fr) auto auto;
   gap: 0.625rem;
   align-items: baseline;
   padding: 0.4375rem 1rem 0.4375rem 0.8125rem;
@@ -1932,6 +1933,8 @@ details[data-focused] > .dt-sql-group {
   /* The reader's width once they dragged the pane's edge (see .dt-map-resize). */
   grid-template-columns: minmax(0, 1fr) var(--dt-side-width, minmax(20rem, 40%));
   align-items: start;
+  /* As tall as the view at least: the line between the tree and the pane runs down it, however few the rows. */
+  min-height: var(--dt-side-height, auto);
 }
 .dt-map-tree {
   min-width: 0;

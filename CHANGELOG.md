@@ -56,6 +56,11 @@ upgrade.
 
 ### Fixed
 
+- A record picked in the call tree shows where it was logged: its code,
+  thread, template and extra fields, as the logs list does.
+- A trace's Logs tab overlapped a record's time and level once the time was
+  a clock. The line between the call tree and its pane runs down the whole
+  view, however few the rows.
 - A span whose parent never reached the agent (cut by a limit, lost on the
   way) was missing from the call tree: it shows under the request.
 - An issue whose requests rotation removed pointed at a latest trace that

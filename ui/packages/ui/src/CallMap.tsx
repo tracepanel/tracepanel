@@ -736,6 +736,8 @@ function LogDetails({ node }: DetailsProps<"log">) {
       <pre className="m-0 overflow-auto rounded-md border bg-muted/60 px-4 py-3 font-mono text-sm whitespace-pre-wrap">
         {node.log.exception ? `${node.log.message}\n\n${node.log.exception}` : node.log.message}
       </pre>
+      {/* Where it was logged (code.*, thread.*), its template and the record's extra fields. */}
+      <AllAttributes attrs={node.log.attrs} titled={true} />
     </div>
   );
 }
