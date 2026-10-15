@@ -1,6 +1,14 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 (2026-10-15)
+
+Logs in their context: each record knows the spans it was written in, and
+the search finds it by them. EXPLAIN in the agent's own console, run by the
+app that recorded the query, and calls to another project's app followed to
+its trace. Limits on one trace, and a store that keeps its issues whole.
+
+The store's format changes: a project's local store starts empty after the
+upgrade.
 
 ### Added
 
@@ -38,7 +46,6 @@
   `in:view` finds the records logged inside such a call, `span:` inside a
   span by its name, and a record's details show the chain, each step a
   click away. `template:` finds every record written from the same message.
-  The store's format changes: the local store starts empty.
 - A call's details in the call tree start with its fields in its system's
   words: a Kafka publish's topic, partition and offset, a RabbitMQ queue or
   exchange and routing key, a Redis command's key, a gRPC call's service and
@@ -65,8 +72,8 @@
 - Enter in the search box took the first suggestion, not what was typed:
   `logger:org` became the first of the loggers starting with org. Enter
   takes what was typed, a suggestion only when the arrows picked one, and
-  Tab the first. Typing the start of several values
-  suggests all of them first, with a wildcard (`logger:org*`).
+  Tab the first. Typing the start of several values suggests all of them
+  first, with a wildcard (`logger:org*`).
 - A filter's menu found nothing when its key was typed in its box too
   (`logger:org` in the Logger menu).
 - Typing a filter into the search box with pauses (`logger:o`) could empty
@@ -76,10 +83,10 @@
   not every route. A filter's menu has one Clear.
 - Emails is listed only once the app has sent one: only some frameworks
   send them through what an SDK records.
-- The console asks what the app behind it can do (`api/capabilities`):
-  Explain shows only where the app runs EXPLAIN on its database (Python,
-  Java), the user switcher only where it can switch users (Django). The
-  agent alone answers neither, and nothing asks for what can't answer.
+- The console asks what the backend behind it can do (`api/capabilities`):
+  Explain shows only where EXPLAIN runs (the app serving the console, or a
+  connected app that runs it for the agent), the user switcher only where
+  the app can switch users (Django). Nothing asks for what can't answer.
 - A stack's frames with no source are one line each, with nothing to open.
 - A trace's Logs tab shows when each record was logged (14:03:21.146), the
   time since the request started on hover. The logs and emails lists name
