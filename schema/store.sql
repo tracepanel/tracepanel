@@ -1,6 +1,6 @@
 -- tracepanel's local store: one SQLite file per format version, written by the project's tracepanel-agent alone. The
 -- trace's doc is what was received; every other table is derived from it (crates/store-local/src/write.rs).
--- version: 20
+-- version: 21
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS traces (
     id TEXT PRIMARY KEY,
@@ -106,6 +106,16 @@ CREATE INDEX IF NOT EXISTS calls_group ON calls (
 );
 CREATE INDEX IF NOT EXISTS calls_trace ON calls (trace_id);
 CREATE INDEX IF NOT EXISTS calls_system ON calls (system);
+-- A trace's spans that aren't calls, by kind and name, its root left out (the trace is named after it): with the
+-- calls' names, what `span:` finds traces by, whatever the span is (a view, a template, the app's own block). Its
+-- names are matched with wildcards, which no index on them would serve.
+CREATE TABLE IF NOT EXISTS spans (
+    trace_id TEXT NOT NULL,
+    span_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    name TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS spans_trace ON spans (trace_id);
 CREATE TABLE IF NOT EXISTS mails (
     trace_id TEXT NOT NULL,
     span_id TEXT NOT NULL,

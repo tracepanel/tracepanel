@@ -304,6 +304,70 @@ mod tests {
     }
 
     #[test]
+    fn a_trace_is_found_by_any_of_its_spans_by_name() {
+        let dir = std::env::temp_dir().join(format!(
+            "tracepanel-store-span-search-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = path_in(&dir);
+        let mut store = Store::open(&path).unwrap();
+        let trace = |id: &str, block: &str| {
+            let doc = serde_json::json!({
+                "id": id, "kind": "http", "name": "GET /report", "start": 0, "duration": 10, "status": "ok",
+                "attrs": {"service.name": "shop"}, "logs": [], "errors": [], "links": [], "issues": [],
+                "spans": [
+                    {"id": "R", "parent_id": null, "kind": "http", "name": "GET /report", "start": 0, "duration": 10,
+                     "status": "ok", "attrs": {}},
+                    {"id": "B", "parent_id": "R", "kind": "function", "name": block, "start": 1, "duration": 5,
+                     "status": "ok", "attrs": {}},
+                ],
+            });
+            Received {
+                trace: serde_json::from_value(doc.clone()).unwrap(),
+                doc: doc.to_string(),
+            }
+        };
+        store
+            .write(&[
+                trace("A", "reports.build_pdf"),
+                trace("B", "reports.send_mail"),
+                request_as("C", 9),
+            ])
+            .unwrap();
+        let reader = Reader::new(&path);
+        let ids = |query: &str| -> Vec<String> {
+            let mut found: Vec<String> = reader
+                .search_traces(query, 50, None)
+                .unwrap()
+                .items
+                .iter()
+                .map(|trace| trace["id"].as_str().unwrap().to_owned())
+                .collect();
+            found.sort();
+            found
+        };
+
+        assert_eq!(ids("span:reports.build_pdf"), ["A"]);
+        assert_eq!(ids("span:reports.*"), ["A", "B"]);
+        assert_eq!(ids("span!=reports.build_pdf"), ["B", "C"]);
+        // A call by its name too, from calls: the spans table holds the other spans alone.
+        assert_eq!(ids("span:INCR*"), ["C"]);
+        let rows: i64 = rusqlite::Connection::open(&path)
+            .unwrap()
+            .query_row(
+                "SELECT count(*) FROM spans WHERE trace_id = 'C'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(rows, 0);
+        // The root is the trace itself, found by its name already.
+        assert_eq!(ids("span:GET /report"), Vec::<String>::new());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn a_stored_trace_says_when_the_agent_received_it() {
         let dir =
             std::env::temp_dir().join(format!("tracepanel-store-received-{}", std::process::id()));
@@ -792,9 +856,10 @@ mod tests {
         let known = reader.known_values("").unwrap();
         assert_eq!(known["log_route"], serde_json::json!(["/api/orders"]));
         assert_eq!(known["in"], serde_json::json!(["kafka", "view"]));
+        // Calls have their own keys: the hints name the other spans.
         assert_eq!(
             known["span"],
-            serde_json::json!(["publish orders", "shop.ShopController.order"])
+            serde_json::json!(["shop.ShopController.order"])
         );
         let _ = std::fs::remove_dir_all(&dir);
     }

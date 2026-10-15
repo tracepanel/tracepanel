@@ -374,10 +374,9 @@ impl Reader {
                  AS span WHERE {of_trace} UNION SELECT json_extract(span.value, '$.system') FROM logs, \
                  json_each(logs.spans) AS span WHERE {of_trace}) ORDER BY 1"
             ))?,
-            "span": distinct(&format!(
-                "SELECT DISTINCT json_extract(span.value, '$.name') FROM logs, json_each(logs.spans) AS span \
-                 WHERE {of_trace} ORDER BY 1 LIMIT 500"
-            ))?,
+            // Spans by name, for span: in traces and in logs: the spans table, without the calls (they have call:,
+            // db: and the rest).
+            "span": distinct(&format!("SELECT DISTINCT name FROM spans WHERE {of_trace} ORDER BY 1 LIMIT 500"))?,
             "extra": distinct(&format!(
                 "SELECT DISTINCT json_each.key FROM (SELECT attrs FROM logs WHERE {of_trace}) AS logs, \
                  json_each(logs.attrs) WHERE json_each.key LIKE 'extra.%' ORDER BY 1"

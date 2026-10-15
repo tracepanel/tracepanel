@@ -7,7 +7,7 @@ use super::*;
 pub const SCHEMA: &str = include_str!("../../../schema/store.sql");
 pub(crate) const FTS_SCHEMA: &str =
     "CREATE VIRTUAL TABLE IF NOT EXISTS logs_fts USING fts5(message, logger)";
-pub(crate) const TABLES: [&str; 13] = [
+pub(crate) const TABLES: [&str; 14] = [
     "meta",
     "traces",
     "issues",
@@ -15,6 +15,7 @@ pub(crate) const TABLES: [&str; 13] = [
     "logs",
     "logs_fts",
     "calls",
+    "spans",
     "mails",
     "links",
     "peers",
@@ -171,9 +172,10 @@ fn relink_issues(db: &Connection) -> rusqlite::Result<()> {
 
 /// The tables with rows per trace: a trace's statements, calls, logs, issues, peers and links. A new table with a
 /// trace_id column goes here too, or its rows outlive their traces (a test reads the schema for them).
-pub(crate) const PER_TRACE: [&str; 9] = [
+pub(crate) const PER_TRACE: [&str; 10] = [
     "logs",
     "calls",
+    "spans",
     "issue_traces",
     "mails",
     "links",
@@ -333,6 +335,13 @@ pub(crate) fn write_trace(
     }
     for span in &trace.spans {
         let Some(operation) = tracepanel_analysis::calls::operation(trace, span) else {
+            // Any other span by its name, for span:; a call has its row in calls, with its name too.
+            if span.parent_id.is_some() {
+                db.prepare_cached(
+                    "INSERT INTO spans (trace_id, span_id, kind, name) VALUES (?1, ?2, ?3, ?4)",
+                )?
+                .execute(params![trace.id, span.id, span.kind, span.name])?;
+            }
             continue;
         };
         db.prepare_cached(

@@ -116,10 +116,21 @@ function linkedNodes(trace: Trace, related: Related | undefined): [string, Node]
   return [...tasks, ...linked(related.calls, related, "call"), ...waiting];
 }
 
+/**
+ * Where a span hangs: under its parent, or, its parent not in the trace (cut by a limit, lost on the way), under the
+ * root, so it still shows.
+ */
+function parentFinder(trace: Trace): (span: Span) => string | null {
+  const ids = new Set(trace.spans.map((span) => span.id));
+  const root = trace.spans.find((span) => span.parent_id === null)?.id ?? null;
+  return (span) => (span.parent_id === null || ids.has(span.parent_id) ? span.parent_id : root);
+}
+
 function buildTree(trace: Trace, related: Related | undefined): Node[] {
   const children = new Map<string | null, Node[]>();
   const push = (parent: string | null, node: Node) => children.set(parent, [...(children.get(parent) ?? []), node]);
-  for (const span of trace.spans) push(span.parent_id, { type: "span", key: span.id, span, children: [] });
+  const parentOf = parentFinder(trace);
+  for (const span of trace.spans) push(parentOf(span), { type: "span", key: span.id, span, children: [] });
   for (const [parent, node] of linkedNodes(trace, related)) push(parent, node);
   for (const { key, item } of keyed(trace.logs, (log) => `log:${log.time}:${log.message}`)) {
     push(item.span_id, { type: "log", key, log: item });

@@ -40,6 +40,10 @@
       "type": "has",
       "help": "n+1, duplicates, slow-sql, slow-http, slow-call, long-transaction, in-transaction, htmx, queue-wait, blocking-call, large-result, error, issues, logs, mail"
     },
+      "span": {
+        "type": "text",
+        "help": "Has a span by this name, * wildcards: span:shop.views.*"
+      },
     "db": {
       "type": "text",
       "help": "Used this database alias: db:replica"

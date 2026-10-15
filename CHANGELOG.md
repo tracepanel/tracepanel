@@ -4,6 +4,9 @@
 
 ### Added
 
+- `span:` finds traces by any of their spans' names, a view, a template or
+  the app's own block, with `*` wildcards. Its hints name the spans that
+  aren't calls (those have `call:`, `db:` and the rest).
 - The agent stores a trace with at most 2,000 spans and 1,000 log records,
   whatever sent it: an SDK without limits of its own or OpenTelemetry. Its
   earliest spans are kept, each with its parent, and its first records. The
@@ -36,6 +39,8 @@
 
 ### Fixed
 
+- A span whose parent never reached the agent (cut by a limit, lost on the
+  way) was missing from the call tree: it shows under the request.
 - An issue whose requests rotation removed pointed at a latest trace that
   was gone, and its page showed it as not found. An issue still counts
   every time it happened (its occurrences and first seen stay), its latest

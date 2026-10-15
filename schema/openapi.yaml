@@ -1062,7 +1062,7 @@ components:
           description: "Each system's operations (as /counts names the systems): {\"mongodb\": [\"find\", \"insert\"]}."
           additionalProperties: { type: array, items: { type: string } }
         in: { type: array, description: "Kinds and systems of the spans records were logged inside.", items: { type: string } }
-        span: { type: array, description: "Names of the spans records were logged inside.", items: { type: string } }
+        span: { type: array, description: "Names of the traces' spans (their roots left out).", items: { type: string } }
         extra: { type: array, description: "extra.* keys seen in logs.", items: { type: string } }
     SearchField:
       type: object
