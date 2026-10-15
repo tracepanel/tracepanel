@@ -240,6 +240,8 @@ export function httpSource(base: string | URL): DataSource {
           targets: {},
           ops: {},
           task: [],
+          // biome-ignore lint/style/useNamingConvention: wire format.
+          task_system: [],
           queue: [],
           job: [],
           rpc: [],

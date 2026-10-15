@@ -30,7 +30,7 @@ export const ENTRY: Record<
     label: "Tasks",
     title: "Tasks",
     description:
-      "Task runs (Celery, Dramatiq, RQ, Django Tasks): volume, failures, retries and time waiting in the queue.",
+      "Background work: task runs and the messages listeners take, with failures, retries and time in the queue.",
     calls: "Runs",
     scope: "kind:task",
     group: (key) => `task:${quote(key)}`,
@@ -165,4 +165,19 @@ export function crumbsFor(route: Route, from: string): { label: string; href: st
         ];
   if (route.name === "home" || route.name === "trace") return [];
   return [{ label: sectionLabel(route.name), href: from }];
+}
+
+/** task.system as people name it: which queue, framework or broker ran the task. */
+const TASK_SYSTEMS: Record<string, string> = {
+  celery: "Celery",
+  dramatiq: "Dramatiq",
+  rq: "RQ",
+  django: "Django Tasks",
+  spring: "Spring @Async",
+  rabbitmq: "RabbitMQ",
+  kafka: "Kafka",
+};
+
+export function taskSystem(system: string): string {
+  return TASK_SYSTEMS[system] ?? system.charAt(0).toUpperCase() + system.slice(1);
 }

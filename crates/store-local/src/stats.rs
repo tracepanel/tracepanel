@@ -22,6 +22,9 @@ pub(crate) fn int(row: &serde_json::Map<String, Value>, key: &str) -> i64 {
     row.get(key).and_then(Value::as_i64).unwrap_or(0)
 }
 
+/// The shortest window a series spans when no period is asked for: 10 minutes up to the last call.
+const MIN_WINDOW_US: i64 = 10 * 60 * 1_000_000;
+
 /// Failed work: the trace ended in error or answered 5xx.
 pub(crate) fn is_error(row: &serde_json::Map<String, Value>) -> bool {
     row.get("status").and_then(Value::as_str) == Some("error") || int(row, "http_status") >= 500
@@ -34,14 +37,22 @@ pub fn stats(
     start: Option<i64>,
     end: Option<i64>,
 ) -> Value {
-    let start = start.or_else(|| rows.first().map(|row| int(row, "start")));
+    let asked = start;
     let end = end.or_else(|| rows.last().map(|row| int(row, "start")));
+    let start = start.or_else(|| rows.first().map(|row| int(row, "start")));
     let (Some(start), Some(end)) = (start, end) else {
         return serde_json::json!({"summary": null, "series": [], "histogram": []});
     };
     if end < start {
         return serde_json::json!({"summary": null, "series": [], "histogram": []});
     }
+    // Without a period asked for, calls close together (one call, a burst) still get a window to stand in: the
+    // series would span a moment, every bucket the same time.
+    let start = if asked.is_none() {
+        start.min(end - MIN_WINDOW_US)
+    } else {
+        start
+    };
     let mut durations: Vec<i64> = rows.iter().map(|row| int(row, "duration")).collect();
     durations.sort_unstable();
     let width = ((end - start) / buckets + 1).max(1);

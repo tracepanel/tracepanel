@@ -7,6 +7,7 @@ import { SearchIcon, XIcon } from "lucide-react";
 import { type KeyboardEvent as BoxKeyEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { FilterMenu } from "./FilterMenu";
 import { type CallsSection, type EntrySection, type Section, systemOfSection } from "./routes";
+import { taskSystem } from "./sections";
 import { TimeRange } from "./TimeRange";
 import { parseAbsolute, shortTime } from "./time";
 import { LevelBadge } from "./ui";
@@ -125,7 +126,19 @@ interface QuickOption {
 /** Values the console knows from stored data (routes, loggers, database aliases, tasks, jobs, log extras). */
 export type KnownValues = Partial<
   Record<
-    "route" | "logger" | "db" | "task" | "queue" | "job" | "rpc" | "page" | "in" | "span" | "log_route" | "extra",
+    | "route"
+    | "logger"
+    | "db"
+    | "task"
+    | "queue"
+    | "job"
+    | "rpc"
+    | "page"
+    | "in"
+    | "span"
+    | "log_route"
+    | "task_system"
+    | "extra",
     readonly string[]
   >
 > & {
@@ -350,10 +363,11 @@ const QUICK: Record<Exclude<Section, CallsSection>, Control[]> = {
     QUEUE,
     {
       label: "System",
-      title: "Filter by queue system",
+      title: "Filter by what ran them",
       key: "system",
-      values: ["celery", "dramatiq", "rq", "django"],
-      format: (value) => ({ django: "Django Tasks", rq: "RQ" })[value] ?? capital(value),
+      // What this project's tasks ran on: no Celery in a Java app.
+      values: (known) => known.task_system ?? [],
+      format: taskSystem,
     },
   ],
   mails: [{ ...TIME, verb: "Sent" }],

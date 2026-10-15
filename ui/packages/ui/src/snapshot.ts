@@ -90,6 +90,8 @@ const EMPTY: Omit<DataSource, "getTrace" | "related" | "explain"> = {
     targets: {},
     ops: {},
     task: [],
+    // biome-ignore lint/style/useNamingConvention: wire format.
+    task_system: [],
     queue: [],
     job: [],
     rpc: [],

@@ -13,6 +13,24 @@ test("the map draws the apps, their systems, and where their work comes from", a
   await expect(map.getByText("CLI · cron")).toBeVisible();
 });
 
+test("every line of the map is drawn whole, its bends inside the diagram", async ({ page }) => {
+  await page.goto("/#/services");
+  const map = page.getByRole("region", { name: "Architecture" });
+  await expect(map.getByText("CLI · cron")).toBeVisible();
+
+  // Each line's box against the diagram's: a line routed around the boxes once bent past its top, and was cut.
+  const outside = await map.locator("svg.absolute").evaluate((svg: SVGSVGElement) => {
+    const width = svg.width.baseVal.value;
+    const height = svg.height.baseVal.value;
+    return [...svg.querySelectorAll<SVGPathElement>("g > path")].filter((path) => {
+      const box = path.getBBox();
+      return box.x < 0 || box.y < 0 || box.x + box.width > width || box.y + box.height > height;
+    }).length;
+  });
+
+  expect(outside).toBe(0);
+});
+
 test("Mermaid copies the map as a flowchart, and zoom changes its scale", async ({ page }) => {
   await page.goto("/#/services");
   const map = page.getByRole("region", { name: "Architecture" });

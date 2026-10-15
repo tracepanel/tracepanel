@@ -12,15 +12,57 @@ import {
 import { Button } from "@tracepanel/ui/components/ui/button";
 import { ArrowRightIcon } from "lucide-react";
 import { useEffect, useState } from "react";
-import { CallsChart, Histogram, LatencyChart, Stat } from "./Charts";
+import { CallsChart, Histogram, LatencyChart, Stat, StatGrid } from "./Charts";
 import { PeriodChip } from "./PeriodChip";
 import { RefreshControl, track, useRefresh } from "./refresh";
-import { type EntrySection, go, href, issueRoute, traceHref, withPeriod } from "./routes";
+import { type EntrySection, go, href, issueRoute, periodOf, traceHref, withPeriod } from "./routes";
 import { ENTRY } from "./sections";
+import { TimeRange } from "./TimeRange";
 import { TracesTable } from "./tables";
+import { isoWithOffset } from "./time";
 import { Breadcrumbs, DataTable, Loading, Meter, Mono, Td, Th, Tr } from "./ui";
 
 type Group = TraceGroup | GraphqlDetail;
+
+/** A group over another period: since:/until: in its address. */
+function goPeriod(section: EntrySection, key: string, since: string | undefined, until: string | undefined): void {
+  const period = [since ? `since:${since}` : "", until ? `until:${until}` : ""].filter(Boolean).join(" ");
+  go({ name: "group", section, key, q: period || undefined });
+}
+
+/** Drag on the calls chart to look at that stretch; none where the group has no period (a GraphQL operation). */
+function zoom(section: EntrySection, key: string) {
+  if (section === "graphql") return undefined;
+  return (start: number, end: number) => goPeriod(section, key, isoWithOffset(start), isoWithOffset(end));
+}
+
+/** The period the page looks at, to pick another one: the same presets and range as a list's Time. */
+function GroupPeriod({ section, groupKey, period }: { section: EntrySection; groupKey: string; period: string }) {
+  const [open, setOpen] = useState(false);
+  if (section === "graphql") {
+    return (
+      <PeriodChip
+        period={period}
+        allTime={href({ name: "group", section, key: groupKey })}
+        unsupported="an operation's detail has no period, so this shows all time"
+      />
+    );
+  }
+  const bound = (key: string) =>
+    periodOf(period)
+      .split(/\s+/)
+      .find((term) => term.startsWith(`${key}:`))
+      ?.slice(key.length + 1);
+  return (
+    <TimeRange
+      since={bound("since")}
+      until={bound("until")}
+      open={open}
+      onOpenChange={setOpen}
+      onChange={(since, until) => goPeriod(section, groupKey, since, until)}
+    />
+  );
+}
 
 /**
  * The data of one group over a period: a GraphQL operation has its own endpoint (with resolvers, and no period),
@@ -120,16 +162,10 @@ export function GroupPage({
             <ArrowRightIcon />
           </Button>
         </div>
-        <PeriodChip
-          period={period}
-          allTime={href({ name: "group", section, key: groupKey })}
-          unsupported={
-            section === "graphql" ? "an operation's detail has no period, so this shows all time" : undefined
-          }
-        />
+        <GroupPeriod section={section} groupKey={groupKey} period={period} />
       </header>
 
-      <section className="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-2.5" aria-label="Summary">
+      <StatGrid label="Summary">
         <Stat
           label="Calls"
           value={String(s.calls)}
@@ -147,11 +183,11 @@ export function GroupPage({
         <Stat label="p95" value={duration(s.p95)} tone={s.p95 > 500_000 ? "warn" : undefined} />
         <Stat label="p99" value={duration(s.p99)} sub={`max ${duration(s.max)}`} />
         <Stat label="Avg queries" value={String(s.avg_queries)} sub={`DB ${duration(s.avg_db_time)} avg`} />
-      </section>
+      </StatGrid>
 
       <div className="grid grid-cols-2 gap-4 max-[1100px]:grid-cols-1 [&>:first-child]:col-span-full">
         <LatencyChart series={group.series} />
-        <CallsChart series={group.series} />
+        <CallsChart series={group.series} onSelect={zoom(section, groupKey)} />
         <Histogram histogram={group.histogram} p50={s.p50} p95={s.p95} />
       </div>
 

@@ -11,7 +11,7 @@ import {
   UsersIcon,
 } from "lucide-react";
 import { type CSSProperties, type ReactNode, useCallback, useMemo, useState } from "react";
-import { type Box, type Diagram, type Link, laidOut, mermaidOf, type Placed } from "./architecture";
+import { type Box, type Diagram, type Link, laidOut, mermaidOf, type Placed, type Point } from "./architecture";
 import { href, type Route } from "./routes";
 import { appTarget, type Host, hostUses, hostWhere, serviceTarget } from "./services";
 
@@ -289,8 +289,6 @@ function ProjectFrame({ placed }: { placed: Placed<string> }) {
 
 /* ---------- links ---------- */
 
-type Point = { x: number; y: number };
-
 function midpoint(a: Point, b: Point): string {
   return `${(a.x + b.x) / 2} ${(a.y + b.y) / 2}`;
 }
@@ -420,7 +418,7 @@ export function ServicesMap({ map }: { map: ServiceMap }) {
   return (
     <section className="mb-6 rounded-xl border bg-muted/20 max-[900px]:hidden" aria-label="Architecture">
       <Toolbar map={map} zoom={zoom} />
-      <div ref={measured} className="max-h-[75vh] overflow-auto px-4 pt-1 pb-4">
+      <div ref={measured} className="overflow-x-auto px-4 pt-1 pb-4">
         <div className="relative mx-auto" style={{ width: diagram.width, height: diagram.height, zoom: zoom.zoom }}>
           {diagram.projects.map((placed) => (
             <ProjectFrame key={placed.item} placed={placed} />

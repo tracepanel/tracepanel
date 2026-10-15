@@ -357,6 +357,10 @@ impl Reader {
             "job": distinct(&format!("SELECT DISTINCT name FROM traces WHERE kind = 'command' AND {traces} ORDER BY 1"))?,
             "rpc": distinct(&format!("SELECT DISTINCT name FROM traces WHERE kind = 'rpc' AND {traces} ORDER BY 1"))?,
             "page": distinct(&format!("SELECT DISTINCT name FROM traces WHERE kind = 'page' AND {traces} ORDER BY 1"))?,
+            // What ran the tasks: celery, rq, django, spring (@Async), rabbitmq, kafka (a listener's deliveries).
+            "task_system": distinct(&format!(
+                "SELECT DISTINCT {SYSTEM} FROM traces WHERE kind = 'task' AND {SYSTEM} IS NOT NULL AND {traces} ORDER BY 1"
+            ))?,
             "queue": distinct(&format!(
                 "SELECT DISTINCT {QUEUE} FROM traces WHERE kind = 'task' AND {QUEUE} IS NOT NULL AND {traces} ORDER BY 1"
             ))?,

@@ -1,6 +1,6 @@
 import { type CallsSummary, type DataSource, duration, percent } from "@tracepanel/ui";
 import { useCallback } from "react";
-import { Stat } from "./Charts";
+import { Stat, StatGrid } from "./Charts";
 import { useSearch } from "./data";
 
 function plural(count: number, one: string, many: string): string {
@@ -42,7 +42,7 @@ function Failed({ errors, calls, onFailed }: { errors: number; calls: number; on
 function CallsTiles({ summary, onFailed }: { summary: CallsSummary; onFailed: () => void }) {
   const { calls, traces, errors } = summary;
   return (
-    <section className="mb-5 grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-2.5" aria-label="Summary">
+    <StatGrid label="Summary" className="mb-5">
       <Stat label="Calls" value={String(calls)} sub={`in ${plural(traces, "request", "requests")}`} />
       <Stat
         label="Time"
@@ -56,7 +56,7 @@ function CallsTiles({ summary, onFailed }: { summary: CallsSummary; onFailed: ()
       />
       <Failed errors={errors} calls={calls} onFailed={onFailed} />
       <HitRate summary={summary} />
-    </section>
+    </StatGrid>
   );
 }
 
