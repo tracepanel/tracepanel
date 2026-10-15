@@ -42,6 +42,63 @@ function userRows(attrs: Attrs): PropRow[] {
 }
 
 /** What ran the trace: "Python 3.12.3 (cpython) · Django 6.0.1", "Go 1.27.1 · net/http". */
+/** "501 spans": a count with its noun, when there is any. */
+function counted(value: unknown, noun: string): string[] {
+  const count = Number(value ?? 0);
+  return count > 0 ? [`${count} ${noun}${count === 1 ? "" : "s"}`] : [];
+}
+
+/** What went unrecorded, over the SDK's or the agent's limits: the call tree and logs show the rest. */
+function droppedRows(attrs: Attrs): PropRow[] {
+  const parts = [
+    ...counted(attrs["tracepanel.dropped_spans"], "span"),
+    ...counted(attrs["tracepanel.dropped_logs"], "log record"),
+  ];
+  if (parts.length === 0) return [];
+  return [
+    {
+      label: "Not recorded",
+      value: <span className="text-warn">{parts.join(" and ")}: over the limit of one trace</span>,
+    },
+  ];
+}
+
+/** A gap between clocks, roughly: 40 s, 12 min, 2.0 h. */
+function roughly(us: number): string {
+  const seconds = us / 1_000_000;
+  if (seconds < 90) return `${Math.round(seconds)} s`;
+  if (seconds < 90 * 60) return `${Math.round(seconds / 60)} min`;
+  return `${(seconds / 3600).toFixed(1)} h`;
+}
+
+// How far the app's clock may be from this machine's before it is called out: past what sending takes.
+const AHEAD_US = 10_000_000;
+const BEHIND_US = 60_000_000;
+
+/**
+ * How far the app's clock is off this machine's (µs, ahead above zero), when it is: the trace ended (by the app's
+ * clock) after the agent had it, or long before. Times across apps then don't line up, nor does `since:`.
+ */
+function clockOff(trace: Trace): number | null {
+  if (typeof trace.received !== "number") return null;
+  const off = trace.start + trace.duration - trace.received;
+  return off > AHEAD_US || off < -BEHIND_US ? off : null;
+}
+
+function ClockNote({ off }: { off: number }) {
+  return (
+    <span className="text-warn">
+      The app's clock is about {roughly(Math.abs(off))} {off > 0 ? "ahead of" : "behind"} this machine's
+      {off > 0 ? "" : ", or it sent the trace that late"}
+    </span>
+  );
+}
+
+function clockRows(trace: Trace): PropRow[] {
+  const off = clockOff(trace);
+  return off === null ? [] : [{ label: "Clock", value: <ClockNote off={off} /> }];
+}
+
 function runtimeRows(attrs: Attrs): PropRow[] {
   const value = traceRuntime(attrs, true);
   return value ? [{ label: "Runtime", value, copy: value }] : [];
@@ -254,6 +311,8 @@ function ownRows(trace: Trace): PropRow[] {
     ...userRows(attrs),
     ...htmxRows(attrs),
     ...runtimeRows(attrs),
+    ...droppedRows(attrs),
+    ...clockRows(trace),
     { label: "Started", value: new Date(trace.start / 1000).toLocaleString() },
     { label: "Duration", value: duration(trace.duration) },
     { label: "Trace ID", value: trace.id, copy: trace.id, mono: true },

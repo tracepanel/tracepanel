@@ -80,3 +80,12 @@ test("a library frame with no source is one line, nothing to open", async ({ pag
   await expect(page.getByText("runtime.goexit")).toBeVisible();
   await expect(page.getByText("Source not available.")).toHaveCount(0);
 });
+
+test("the Request tab says what went unrecorded, and when the app's clock is off", async ({ page }) => {
+  await page.goto(`/#/traces?q=${encodeURIComponent("route:/api/clock")}`);
+  await page.getByRole("main").getByRole("table").getByRole("link").first().click();
+  await page.getByRole("tab", { name: /^Request/ }).click();
+
+  await expect(page.getByText("501 spans and 1503 log records: over the limit of one trace")).toBeVisible();
+  await expect(page.getByText(/The app's clock is about 2\.\d h behind this machine's/)).toBeVisible();
+});

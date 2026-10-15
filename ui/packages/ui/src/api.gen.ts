@@ -1327,6 +1327,8 @@ export interface components {
             links: components["schemas"]["trace.schema"]["$defs"]["link"][];
             /** @description Found by the agent: SDKs send an empty list, the console's API returns the trace with its issues. */
             issues: components["schemas"]["trace.schema"]["$defs"]["issue"][];
+            /** @description When the agent received it, by its machine's clock: set by the agent, never sent. Against start and duration (the app's clock) it tells a clock that is off. */
+            received?: components["schemas"]["trace.schema"]["$defs"]["time"];
             $defs: {
                 /** @description ULID. */
                 id: string;
