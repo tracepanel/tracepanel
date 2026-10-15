@@ -163,13 +163,72 @@ impl Batch {
         let docs: Vec<&RawValue> = serde_json::from_slice(&self.frame)?;
         docs.into_iter()
             .map(|doc| {
-                Ok(Received {
-                    trace: serde_json::from_str(doc.get())?,
-                    doc: doc.get().to_owned(),
-                })
+                let trace: Trace = serde_json::from_str(doc.get())?;
+                if trace.spans.len() <= MAX_SPANS && trace.logs.len() <= MAX_LOGS {
+                    return Ok(Received {
+                        trace,
+                        doc: doc.get().to_owned(),
+                    });
+                }
+                limited(doc.get())
             })
             .collect()
     }
+}
+
+/// The most spans a trace is stored with; the rest are counted (`tracepanel.dropped_spans`). Whatever sent it (an SDK
+/// without a limit of its own, OpenTelemetry), one runaway trace can't fill the store or the console.
+pub const MAX_SPANS: usize = 2000;
+/// The most log records a trace is stored with; the rest are counted (`tracepanel.dropped_logs`).
+pub const MAX_LOGS: usize = 1000;
+
+/// A trace over the limits, cut down to them: its earliest spans (a parent starts before its children, so every span
+/// kept keeps its parent) with its roots always, its first records, and how many went in its attrs.
+fn limited(text: &str) -> serde_json::Result<Received> {
+    let mut doc: Value = serde_json::from_str(text)?;
+    let spans = cut(&mut doc, "spans", MAX_SPANS, |span| {
+        let root = span.get("parent_id").is_none_or(Value::is_null);
+        (
+            !root,
+            span.get("start").and_then(Value::as_i64).unwrap_or(0),
+        )
+    });
+    let logs = cut(&mut doc, "logs", MAX_LOGS, |log| {
+        (false, log.get("time").and_then(Value::as_i64).unwrap_or(0))
+    });
+    if let Some(attrs) = doc.get_mut("attrs").and_then(Value::as_object_mut) {
+        for (key, dropped) in [
+            ("tracepanel.dropped_spans", spans),
+            ("tracepanel.dropped_logs", logs),
+        ] {
+            let before = attrs.get(key).and_then(Value::as_u64).unwrap_or(0);
+            if dropped > 0 {
+                attrs.insert(key.to_owned(), Value::from(before + dropped as u64));
+            }
+        }
+    }
+    Ok(Received {
+        trace: serde_json::from_value(doc.clone())?,
+        doc: doc.to_string(),
+    })
+}
+
+/// The list at `key` cut to `limit` items, the ones `order` puts first kept in their own order; how many went.
+fn cut(doc: &mut Value, key: &str, limit: usize, order: impl Fn(&Value) -> (bool, i64)) -> usize {
+    let Some(items) = doc.get_mut(key).and_then(Value::as_array_mut) else {
+        return 0;
+    };
+    if items.len() <= limit {
+        return 0;
+    }
+    let mut ranked: Vec<usize> = (0..items.len()).collect();
+    ranked.sort_by_key(|index| order(&items[*index]));
+    let mut kept: Vec<usize> = ranked.into_iter().take(limit).collect();
+    kept.sort_unstable();
+    let dropped = items.len() - kept.len();
+    let all = std::mem::take(items);
+    *items = kept.into_iter().map(|index| all[index].clone()).collect();
+    dropped
 }
 
 #[derive(Deserialize)]
