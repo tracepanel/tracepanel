@@ -26,3 +26,15 @@ export function tone(status: number | null, issues: number): Tone {
 export function percent(part: number, total: number): string {
   return total > 0 ? `${Math.round((part / total) * 100)}%` : "0%";
 }
+
+/** A moment as a log line shows it, to the millisecond, in local time: 14:03:21.146. */
+export function clock(us: number): string {
+  const at = new Date(us / 1000);
+  const time = at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+  return `${time}.${String(at.getMilliseconds()).padStart(3, "0")}`;
+}
+
+/** When a record was made, said in words: "146 ms after the request started". */
+export function since(us: number, start: number): string {
+  return `${duration(Math.max(us - start, 0))} after the request started`;
+}

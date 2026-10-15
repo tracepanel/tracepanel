@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { AttrsTable } from "./AttrsTable";
 import { Badge } from "./components/ui/badge";
 import { duration } from "./format";
@@ -133,37 +134,80 @@ export interface RequestInfoProps {
   links?: TraceLinks | undefined;
 }
 
-function LinkedTrace({ trace, links }: { trace: TraceSummary; links?: TraceLinks | undefined }) {
+/** Traces of the same kind and name as one: 36 deliveries to one listener, the first standing for them. */
+interface Group {
+  first: TraceSummary;
+  count: number;
+  failed: number;
+}
+
+function TraceBadge({ trace }: { trace: TraceSummary }) {
+  if (trace.kind === "http") return <MethodBadge method={trace.method} />;
+  return (
+    <Badge variant="outline" className="font-mono text-2xs uppercase">
+      {trace.kind}
+    </Badge>
+  );
+}
+
+/** How many it stands for and how many failed; one alone, whether it failed and how long it took. */
+function Tally({ group: { first, count, failed } }: { group: Group }) {
+  if (count > 1) {
+    return (
+      <>
+        <span className="shrink-0 text-sm text-muted-foreground tabular-nums">×{count}</span>
+        {failed > 0 ? <span className="text-sm text-error">{failed} failed</span> : null}
+      </>
+    );
+  }
+  return (
+    <>
+      {failed > 0 ? <span className="text-sm text-error">failed</span> : null}
+      <span className="ml-auto shrink-0 text-sm text-muted-foreground tabular-nums">{duration(first.duration)}</span>
+    </>
+  );
+}
+
+function LinkedTrace({ group, links }: { group: Group; links?: TraceLinks | undefined }) {
+  const trace = group.first;
   const body = (
     <span className="flex min-w-0 items-center gap-2">
-      {trace.kind === "http" ? (
-        <MethodBadge method={trace.method} />
-      ) : (
-        <Badge variant="outline" className="font-mono text-2xs uppercase">
-          {trace.kind}
-        </Badge>
-      )}
+      <TraceBadge trace={trace} />
       <span className="truncate font-mono text-base">{trace.path ?? trace.name}</span>
-      {trace.status === "error" ? <span className="text-sm text-error">failed</span> : null}
-      <span className="ml-auto shrink-0 text-sm text-muted-foreground tabular-nums">{duration(trace.duration)}</span>
+      <Tally group={group} />
     </span>
   );
-  return links?.trace ? (
+  if (!links?.trace) return body;
+  return (
     <a
       className="block w-full rounded-md py-0.5 text-left hover:bg-accent"
       {...linkProps(links, links.trace(trace.id))}
     >
       {body}
     </a>
-  ) : (
-    body
   );
+}
+
+function groupKey(trace: TraceSummary): string {
+  return `${trace.kind} ${trace.path ?? trace.name}`;
+}
+
+/** Traces of the same kind and name as one row: 36 deliveries to one listener. */
+function grouped(traces: readonly TraceSummary[]): Group[] {
+  const groups = new Map<string, Group>();
+  for (const trace of traces) {
+    const group = groups.get(groupKey(trace)) ?? { first: trace, count: 0, failed: 0 };
+    group.count += 1;
+    group.failed += Number(trace.status === "error");
+    groups.set(groupKey(trace), group);
+  }
+  return [...groups.values()];
 }
 
 function relatedRows(related: Related | undefined, links: TraceLinks | undefined): PropRow[] {
   if (!related) return [];
   const one = (label: string, trace: Related["enqueued_by"]): PropRow[] =>
-    trace ? [{ label, value: <LinkedTrace trace={trace} links={links} /> }] : [];
+    trace ? grouped([trace]).map((group) => ({ label, value: <LinkedTrace group={group} links={links} /> })) : [];
   const many = (single: string, plural: string, traces: Related["enqueued"]): PropRow[] =>
     traces.length
       ? [
@@ -171,8 +215,8 @@ function relatedRows(related: Related | undefined, links: TraceLinks | undefined
             label: traces.length === 1 ? single : `${plural} (${traces.length})`,
             value: (
               <span className="grid w-full gap-0.5">
-                {traces.map((child) => (
-                  <LinkedTrace key={child.id} trace={child} links={links} />
+                {grouped(traces).map((group) => (
+                  <LinkedTrace key={group.first.id} group={group} links={links} />
                 ))}
               </span>
             ),
@@ -191,24 +235,21 @@ function relatedRows(related: Related | undefined, links: TraceLinks | undefined
   ];
 }
 
-/** Overview of the traced request or task run: what ran, how it went, who caused it; every id copies. */
-export function RequestInfo({ trace, related, links }: RequestInfoProps) {
+/** A row of text, when there is any. */
+function textRow(label: string, value: string | null, shown: ReactNode = value): PropRow[] {
+  return value ? [{ label, value: shown, copy: value, mono: true }] : [];
+}
+
+/** The request's or run's own fields: what ran, how it went, who made it. */
+function ownRows(trace: Trace): PropRow[] {
   const attrs = trace.attrs;
-  const path = text(attrs["http.path"]);
   const route = text(attrs["http.route"]);
-  const view = text(attrs["code.view"]);
   const status = attrs["http.status_code"];
-  const document = text(attrs["graphql.document"]);
-  // The document is shown formatted above: not again, on one line, among the attributes.
-  const listed = document
-    ? Object.fromEntries(Object.entries(attrs).filter(([key]) => key !== "graphql.document"))
-    : attrs;
-  const rows: PropRow[] = [
+  return [
     ...(trace.kind === "task" ? taskRows(trace) : []),
-    ...relatedRows(related, links),
-    ...(path ? [{ label: "URL", value: path, copy: path, mono: true }] : []),
-    ...(route ? [{ label: "Route", value: <RoutePath path={route} />, copy: route, mono: true }] : []),
-    ...(view ? [{ label: "View", value: view, copy: view, mono: true }] : []),
+    ...textRow("URL", text(attrs["http.path"])),
+    ...textRow("Route", route, <RoutePath path={route ?? ""} />),
+    ...textRow("View", text(attrs["code.view"])),
     ...(typeof status === "number" ? [{ label: "Status", value: <StatusBadge status={status} /> }] : []),
     ...userRows(attrs),
     ...htmxRows(attrs),
@@ -217,22 +258,48 @@ export function RequestInfo({ trace, related, links }: RequestInfoProps) {
     { label: "Duration", value: duration(trace.duration) },
     { label: "Trace ID", value: trace.id, copy: trace.id, mono: true },
   ];
+}
 
+/** A titled part of the overview, when it has anything to show. */
+function Part({ label, title, children }: { label: string; title: ReactNode; children: ReactNode }) {
+  return (
+    <section className="grid gap-2" aria-label={label}>
+      <h3 className="text-sm font-medium text-muted-foreground">{title}</h3>
+      {children}
+    </section>
+  );
+}
+
+/** Overview of the traced request or task run: what ran, how it went, who caused it; every id copies. */
+export function RequestInfo({ trace, related, links }: RequestInfoProps) {
+  const document = text(trace.attrs["graphql.document"]);
+  // The document is shown formatted above: not again, on one line, among the attributes.
+  const { "graphql.document": _, ...listed } = trace.attrs;
+  // The traces it is linked to come after its own: what queued it, what it called, what it delivered to.
+  const linked = relatedRows(related, links);
   return (
     <div className="grid gap-4 p-4">
-      <PropTable rows={rows} />
-      {document ? (
-        <section className="grid gap-2" aria-label="GraphQL query">
-          <h3 className="text-sm font-medium text-muted-foreground">Query</h3>
-          <GraphqlCode document={document} />
-        </section>
+      <PropTable rows={ownRows(trace)} />
+      {linked.length ? (
+        <Part label="Related traces" title="Related traces">
+          <PropTable rows={linked} />
+        </Part>
       ) : null}
-      <section className="grid gap-2" aria-label="All attributes">
-        <h3 className="text-sm font-medium text-muted-foreground">
-          All attributes <span className="tabular-nums">{Object.keys(listed).length}</span>
-        </h3>
+      {document ? (
+        <Part label="GraphQL query" title="Query">
+          <GraphqlCode document={document} />
+        </Part>
+      ) : null}
+      <Part
+        label="All attributes"
+        title={
+          <>
+            All attributes <span className="tabular-nums">{Object.keys(listed).length}</span>
+          </>
+        }
+      >
         <AttrsTable attrs={listed} />
-      </section>
+      </Part>
     </div>
   );
 }

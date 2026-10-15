@@ -94,12 +94,16 @@ const EMPTY: Omit<DataSource, "getTrace" | "related" | "explain"> = {
     job: [],
     rpc: [],
     page: [],
+    in: [],
+    // biome-ignore lint/style/useNamingConvention: wire format.
+    log_route: [],
+    span: [],
     extra: [],
   }),
   counts: async () => ({
     issues: 0,
     errors: 0,
-    sections: { http: 0, graphql: 0, tasks: 0, websockets: 0, jobs: 0, rpc: 0, pages: 0, systems: [] },
+    sections: { http: 0, graphql: 0, tasks: 0, websockets: 0, jobs: 0, rpc: 0, pages: 0, mails: 0, systems: [] },
   }),
   currentUser: noUsers,
   searchUsers: none,

@@ -1,4 +1,4 @@
-import { duration } from "./format";
+import { clock, since } from "./format";
 import { keyed } from "./keys";
 import { linkProps, type TraceLinks } from "./links";
 import type { Log } from "./types";
@@ -30,7 +30,13 @@ export function LogList({
       <ol className="dt-logs">
         {keyed(logs, (log) => `${log.time}:${log.logger}:${log.message}`).map(({ key, item: log }) => (
           <li key={key} className="dt-log" data-level={log.level}>
-            <span className="dt-log-time">+{duration(Math.max(log.time - start, 0))}</span>
+            <time
+              className="dt-log-time"
+              dateTime={new Date(log.time / 1000).toISOString()}
+              title={since(log.time, start)}
+            >
+              {clock(log.time)}
+            </time>
             <span className="dt-log-level">{log.level}</span>
             <span className="dt-log-message">{log.message}</span>
             <span className="dt-log-logger">{log.logger}</span>

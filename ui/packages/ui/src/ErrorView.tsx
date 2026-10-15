@@ -95,7 +95,26 @@ function Locals({ locals }: { locals: Record<string, string> }) {
   );
 }
 
+/** Whether a frame has anything to open: its source or its locals. */
+function hasBody(frame: Frame): boolean {
+  return (frame.context_start !== null && frame.context.length > 0) || Boolean(frame.locals);
+}
+
+/** A frame with no source or locals: one line, nothing to open. A library's by its module too (Thread.run). */
+function BareFrame({ frame }: { frame: Frame }) {
+  const name = frame.in_app || !frame.module ? frame.function : `${frame.module}.${frame.function}`;
+  return (
+    <div className="dt-frame dt-frame-bare" data-app={frame.in_app ? "" : undefined}>
+      <span className="dt-frame-fn">{name}</span>
+      <code className="dt-frame-loc">
+        {frame.filename}:{frame.lineno}
+      </code>
+    </div>
+  );
+}
+
 function FrameView({ frame, open }: { frame: Frame; open: boolean }) {
+  if (!hasBody(frame)) return <BareFrame frame={frame} />;
   return (
     <details className="dt-frame" data-app={frame.in_app ? "" : undefined} open={open}>
       <summary>

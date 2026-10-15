@@ -1,5 +1,53 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Logs: a record a task or a job wrote is found by its name, with the Task
+  and Job filters or `task:` and `job:`, and `kind:` finds the records of
+  each kind of trace. A task's record says it was a task's, with a button
+  for every run of it, and opens the task.
+- A search chip can be changed: click it, and it goes back into the box as
+  text, Enter makes it a chip again.
+- Logs know where in the work they were logged: each record keeps the span
+  it was written in and the spans around it. `in:kafka`, `in:sql` or
+  `in:view` finds the records logged inside such a call, `span:` inside a
+  span by its name, and a record's details show the chain, each step a
+  click away. `template:` finds every record written from the same message.
+  The store's format changes: the local store starts empty.
+- A call's details in the call tree start with its fields in its system's
+  words: a Kafka publish's topic, partition and offset, a RabbitMQ queue or
+  exchange and routing key, a Redis command's key, a gRPC call's service and
+  method. Every attribute follows, as recorded.
+- A request's Request tab lists its own fields first and the traces linked
+  to it after them, alike ones as one row: 36 deliveries to one listener are
+  `×36`, with how many failed.
+
+### Fixed
+
+- Enter in the search box took the first suggestion, not what was typed:
+  `logger:org` became the first of the loggers starting with org. Enter
+  takes what was typed, a suggestion only when the arrows picked one, and
+  Tab the first. Typing the start of several values
+  suggests all of them first, with a wildcard (`logger:org*`).
+- A filter's menu found nothing when its key was typed in its box too
+  (`logger:org` in the Logger menu).
+- Typing a filter into the search box with pauses (`logger:o`) could empty
+  it: the page took a search that matched nothing for an empty store and
+  replaced the box. A filter still being typed stays out of the search.
+- The logs' Route menu offers the routes whose requests logged anything,
+  not every route. A filter's menu has one Clear.
+- Emails is listed only once the app has sent one: only some frameworks
+  send them through what an SDK records.
+- The panel asks who the user is, and offers to switch, only when the
+  page's app can (Django says so on the page): other apps got a 404 for it.
+- A stack's frames with no source are one line each, with nothing to open.
+- A trace's Logs tab shows when each record was logged (14:03:21.146), the
+  time since the request started on hover. The logs and emails lists name
+  their last column Source and Sent from: a task's or a job's, not only a
+  request's.
+
 ## 0.2.0 (2026-10-14)
 
 Pages: what users do in a browser, each view and action over the requests it

@@ -100,17 +100,111 @@ function pages(): Doc[] {
   return [view, save, broken];
 }
 
+/** A request that published a message per book, and the listener's run of each, delivered from it. */
+function messages(): Doc[] {
+  const announce = trace("http", "POST /api/books/announce", {
+    "service.name": "shop",
+    "http.method": "POST",
+    "http.path": "/api/books/announce",
+    "http.route": "/api/books/announce",
+    "http.status_code": 202,
+  });
+  const id = String(announce["id"]);
+  for (const n of [1, 2, 3]) {
+    (announce["spans"] as Doc[]).push({
+      id: `${id}P${n}`,
+      parent_id: `${id}R`,
+      kind: "rabbitmq",
+      name: "publish book-announcements",
+      start: n * 1_000,
+      duration: 500,
+      status: "ok",
+      attrs: {
+        "messaging.system": "rabbitmq",
+        "messaging.operation": "publish",
+        "messaging.destination.name": "book-announcements",
+        "messaging.rabbitmq.destination.routing_key": "book-announcements",
+        "code.origin": "src/main/java/shop/BookEvents.java:31 in announce",
+      },
+    });
+  }
+  (announce["spans"] as Doc[]).push({
+    id: `${id}K`,
+    parent_id: `${id}R`,
+    kind: "kafka",
+    name: "publish book-events",
+    start: 5_000,
+    duration: 700,
+    status: "ok",
+    attrs: {
+      "messaging.system": "kafka",
+      "messaging.operation": "publish",
+      "messaging.destination.name": "book-events",
+      "messaging.kafka.partition": 2,
+      "messaging.kafka.offset": 41,
+      "server.address": "localhost",
+      "server.port": 9092,
+    },
+  });
+  // The broker's client logs as it connects: inside the publish, and the request's own line outside every call.
+  announce["logs"] = [
+    {
+      span_id: `${id}K`,
+      time: 5_100,
+      level: "info",
+      logger: "org.apache.kafka",
+      message: "Kafka producer started",
+      exception: null,
+      attrs: {},
+    },
+    {
+      span_id: `${id}R`,
+      time: 6_000,
+      level: "info",
+      logger: "shop.books",
+      message: "3 books announced",
+      exception: null,
+      attrs: {},
+    },
+  ];
+  const delivered = [1, 2, 3].map((n) =>
+    trace(
+      "task",
+      "BookEvents.onAnnounced",
+      { "service.name": "shop", "task.system": "rabbitmq", "task.queue": "book-announcements" },
+      { links: [{ kind: "sent_by", trace_id: id, span_id: `${id}P${n}` }] },
+    ),
+  );
+  return [announce, ...delivered];
+}
+
 // biome-ignore-end lint/style/useNamingConvention: traces as the SDKs send them; their field names are the wire format.
 
 /** A task a worker ran and a job a command ran: the Tasks and Jobs sections. */
 function background(): Doc[] {
   const worker = { "service.name": "shop", "service.role": "worker", "telemetry.sdk.language": "python" };
-  const task = trace("task", "shop.tasks.send_receipt", { ...worker, "task.id": "t-1", "task.state": "SUCCESS" });
-  const job = trace("command", "manage.py rebuild_index", {
-    "service.name": "shop",
-    "service.role": "command",
-    "telemetry.sdk.language": "python",
+  const log = (logger: string, message: string): Doc => ({
+    // biome-ignore lint/style/useNamingConvention: a log record as the SDKs send it.
+    span_id: null,
+    time: 1_000,
+    level: "info",
+    logger,
+    message,
+    exception: null,
+    attrs: {},
   });
+  const task = trace(
+    "task",
+    "shop.tasks.send_receipt",
+    { ...worker, "task.id": "t-1", "task.state": "SUCCESS" },
+    { logs: [log("shop.tasks", "receipt sent to ann@example.com")] },
+  );
+  const job = trace(
+    "command",
+    "manage.py rebuild_index",
+    { "service.name": "shop", "service.role": "command", "telemetry.sdk.language": "python" },
+    { logs: [log("shop.index", "index rebuilt: 120 books")] },
+  );
   return [task, job];
 }
 
@@ -143,7 +237,7 @@ async function stored(expected: Record<string, number>): Promise<boolean> {
 }
 
 export default async function seed(): Promise<void> {
-  const docs = [...examples(), ...pages(), ...background()];
+  const docs = [...examples(), ...pages(), ...background(), ...messages()];
   const first = Date.now() * 1000 - SPREAD_US * (docs.length + 1);
   const moved = docs.map((doc, index) => shift(doc, first + index * SPREAD_US - Number(doc["start"])) as Doc);
   const response = await fetch(`${CONSOLE}api/ingest`, {

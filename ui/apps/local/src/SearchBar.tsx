@@ -4,7 +4,7 @@ import { Button } from "@tracepanel/ui/components/ui/button";
 import { type Family, systemOfPage } from "@tracepanel/ui/lib/systems";
 import { cn } from "@tracepanel/ui/lib/utils";
 import { SearchIcon, XIcon } from "lucide-react";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent as BoxKeyEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { FilterMenu } from "./FilterMenu";
 import { type CallsSection, type EntrySection, type Section, systemOfSection } from "./routes";
 import { TimeRange } from "./TimeRange";
@@ -51,6 +51,70 @@ function compose(filters: readonly Filter[], text: string): string {
   return [...filters.map(serialize), text.trim()].filter(Boolean).join(" ");
 }
 
+/* ---------- suggestions for the word being typed ---------- */
+
+// A filter as typed: key, operator, value.
+const FILTER = /^([a-z][a-z0-9_.]*)(>=|<=|!=|:|>|<)(.*)$/;
+// Keys whose values come from the store (the routes, the loggers seen), not from a fixed list.
+const FROM_STORE = new Set(["route", "logger", "db", "task", "job", "queue", "in", "span"]);
+
+/** Values after `key:` that start as typed; the start of several (logger:org) offers them all with a wildcard first. */
+function valueSuggestions(key: string, op: string, partial: string, values: readonly string[]): Suggestion[] {
+  const matching = values.filter((value) => value.toLowerCase().startsWith(partial.toLowerCase()) && value !== partial);
+  const all: Suggestion[] =
+    partial && !partial.endsWith("*") && matching.length > 1
+      ? [{ insert: `${key}${op}${partial}*`, label: `${key}${op}${partial}*`, help: `all ${matching.length}` }]
+      : [];
+  // The field's help is the same on every value: leave it out.
+  const each = matching
+    .slice(0, 8 - all.length)
+    .map((value) => ({ insert: `${key}${op}${value}`, label: `${key}${op}${value}`, help: "" }));
+  return [...all, ...each];
+}
+
+/** Field names that start as typed; prefix fields (extra.*) expand into the keys seen so far: extra.order_id… */
+function fieldSuggestions(
+  word: string,
+  fields: Record<string, { help: string }>,
+  extra: readonly string[],
+): Suggestion[] {
+  const names = Object.entries(fields).flatMap(([name, field]) =>
+    name.endsWith(".*")
+      ? extra.filter((key) => key.startsWith(name.slice(0, -1))).map((key) => [key, field.help] as const)
+      : [[name, field.help] as const],
+  );
+  return names
+    .filter(([name]) => name.startsWith(word.toLowerCase()) && name !== word)
+    .slice(0, 8)
+    .map(([name, help]) => ({ insert: `${name}:`, label: `${name}:`, help }));
+}
+
+/**
+ * What was typed, without a filter still being typed at its end (`logger:`, `level:wa`): searched half-typed, its key
+ * and colon went out as free text, and finishing it then emptied the search.
+ */
+function settled(text: string, keys: ReadonlySet<string>): string {
+  const words = text.split(/\s+/);
+  const typing = isKey(FILTER.exec(String(words.at(-1)))?.[1] ?? "", keys);
+  return typing ? words.slice(0, -1).join(" ") : text;
+}
+
+// The arrows move the pick, down from none to the first, up from none to the last, and round.
+const MOVES = new Map([
+  ["ArrowDown", 1],
+  ["ArrowUp", -1],
+]);
+// Enter takes the suggestion picked, Tab the picked one or the first.
+const PICKS = new Map<string, (suggestions: readonly Suggestion[], cursor: number) => Suggestion | undefined>([
+  ["Enter", (suggestions, cursor) => suggestions[cursor]],
+  ["Tab", (suggestions, cursor) => suggestions[cursor] ?? suggestions[0]],
+]);
+
+function moved(cursor: number, step: number, count: number): number {
+  const from = step > 0 ? Math.max(cursor, -1) : Math.max(cursor, 0);
+  return (from + step + count) % count;
+}
+
 /* ---------- quick filters per section ---------- */
 
 interface QuickOption {
@@ -60,7 +124,10 @@ interface QuickOption {
 
 /** Values the console knows from stored data (routes, loggers, database aliases, tasks, jobs, log extras). */
 export type KnownValues = Partial<
-  Record<"route" | "logger" | "db" | "task" | "queue" | "job" | "rpc" | "page" | "extra", readonly string[]>
+  Record<
+    "route" | "logger" | "db" | "task" | "queue" | "job" | "rpc" | "page" | "in" | "span" | "log_route" | "extra",
+    readonly string[]
+  >
 > & {
   /** Each system's targets and operations, by the name its page has (`sql`, `redis`, `mongodb`…). */
   targets?: Readonly<Record<string, readonly string[]>>;
@@ -237,7 +304,18 @@ const QUICK: Record<Exclude<Section, CallsSection>, Control[]> = {
       display: (level) => <LevelBadge level={level} />,
     },
     { label: "Logger", title: "Filter by logger", key: "logger", values: (known) => known.logger ?? [] },
-    ROUTE,
+    // The routes whose requests logged anything: the others would find nothing here.
+    { ...ROUTE, values: (known) => known.log_route ?? [] },
+    // Records a task or a job wrote: shown when the project has any.
+    { label: "Task", title: "Filter by task", key: "task", values: (known) => known.task ?? [] },
+    { label: "Job", title: "Filter by job", key: "job", values: (known) => known.job ?? [] },
+    // Where in the work it was logged: inside a Kafka call, a SQL query, a view.
+    {
+      label: "Inside",
+      title: "Logged inside",
+      key: "in",
+      values: (known) => known.in ?? [],
+    },
   ],
   errors: [{ ...TIME, verb: "Last seen" }, ROUTE],
   issues: [
@@ -486,7 +564,8 @@ export function SearchBar({ section, family, q, spec, error, known, count, calls
   const parsed = useMemo(() => parseQuery(q, keys), [q, keys]);
   const [text, setText] = useState(parsed.text);
   const [open, setOpen] = useState<string | null>(null);
-  const [cursor, setCursor] = useState(0);
+  // The suggestion picked with the arrows; -1, none: Enter then takes what was typed, Tab the first suggestion.
+  const [cursor, setCursor] = useState(-1);
   const [focused, setFocused] = useState(false);
   const input = useRef<HTMLInputElement>(null);
 
@@ -494,14 +573,15 @@ export function SearchBar({ section, family, q, spec, error, known, count, calls
   // typed (a trailing space included). Any other `q` (a chip, a quick filter, Back) replaces the text.
   const sent = useRef<string | null>(null);
   useEffect(() => {
-    if (q !== sent.current) setText(parsed.text);
+    // No q (a section's address without ?q=) is the empty search the box sent itself, not another one.
+    if ((q ?? "") !== sent.current) setText(parsed.text);
   }, [q, parsed.text]);
   // Free text is debounced; chips apply at once. A filter being typed (`state:fai`) stays in the box and out of the
   // search until it is finished with a space, Enter or a suggestion: searching it half-typed would turn it into a
   // chip mid-word and send the rest of the typing into an empty box.
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      const next = compose(parsed.filters, parseQuery(text, keys).text);
+      const next = compose(parsed.filters, parseQuery(settled(text, keys), keys).text);
       if (next !== compose(parsed.filters, parsed.text)) {
         sent.current = next;
         onChange(next, true);
@@ -526,36 +606,12 @@ export function SearchBar({ section, family, q, spec, error, known, count, calls
   const word = text.split(/\s+/).at(-1) ?? "";
   const suggestions: Suggestion[] = useMemo(() => {
     if (!word) return [];
-    const valueMatch = /^([a-z][a-z0-9_.]*)(>=|<=|!=|:|>|<)(.*)$/.exec(word);
-    if (valueMatch) {
-      const [, key = "", op = ":", partial = ""] = valueMatch;
-      if (!isKey(key, keys)) return [];
-      const values =
-        (key === "route" || key === "logger" || key === "db" || key === "task" || key === "queue"
-          ? known[key]
-          : VALUES[key]) ?? [];
-      return values
-        .filter((value) => value.toLowerCase().startsWith(partial.toLowerCase()) && value !== partial)
-        .slice(0, 8)
-        .map((value) => ({
-          insert: `${key}${op}${value}`,
-          label: `${key}${op}${value}`,
-          // The field's help is the same on every value: leave it out.
-          help: "",
-        }));
-    }
-    // Prefix fields (extra.*) expand into the keys seen so far: extra.order_id, extra.user_id…
-    const names = Object.entries(fields).flatMap(([name, field]) =>
-      name.endsWith(".*")
-        ? (known.extra ?? [])
-            .filter((key) => key.startsWith(name.slice(0, -1)))
-            .map((key) => [key, field.help] as const)
-        : [[name, field.help] as const],
-    );
-    return names
-      .filter(([name]) => name.startsWith(word.toLowerCase()) && name !== word)
-      .slice(0, 8)
-      .map(([name, help]) => ({ insert: `${name}:`, label: `${name}:`, help }));
+    const valueMatch = FILTER.exec(word);
+    if (!valueMatch) return fieldSuggestions(word, fields, known.extra ?? []);
+    const [, key = "", op = ":", partial = ""] = valueMatch;
+    if (!isKey(key, keys)) return [];
+    const stored = FROM_STORE.has(key) ? (known as Record<string, unknown>)[key] : VALUES[key];
+    return valueSuggestions(key, op, partial, Array.isArray(stored) ? (stored as string[]) : []);
   }, [word, keys, fields, known]);
 
   const accept = (suggestion: Suggestion) => {
@@ -569,9 +625,59 @@ export function SearchBar({ section, family, q, spec, error, known, count, calls
         setFilters([...parsed.filters, { key: match[1] ?? "", op: match[2] ?? ":", value: match[3] ?? "" }], head);
       setText(head);
     }
-    setCursor(0);
+    setCursor(-1);
     input.current?.focus();
   };
+
+  /** A chip back into the box as text, to change it: Enter or a space makes it a chip again. */
+  const edit = (index: number) => {
+    const filter = parsed.filters[index];
+    if (!filter) return;
+    const next = compose(
+      parsed.filters.filter((_, i) => i !== index),
+      parsed.text,
+    );
+    // The query without it, but the box keeps the text being edited.
+    sent.current = next;
+    onChange(next);
+    const typed = `${text.trim() ? `${text.trim()} ` : ""}${serialize(filter)}`;
+    setText(typed);
+    setCursor(-1);
+    window.setTimeout(() => {
+      input.current?.focus();
+      input.current?.setSelectionRange(typed.length, typed.length);
+    }, 0);
+  };
+
+  /** The arrows pick a suggestion, Enter takes the picked one, Tab the picked or the first: whether it was one of them. */
+  const suggestionKey = (event: BoxKeyEvent<HTMLInputElement>): boolean => {
+    const step = MOVES.get(event.key);
+    // Enter with none picked takes what was typed, as typed: not a suggestion's key then.
+    const done = step ? move(step) : take(PICKS.get(event.key)?.(suggestions, cursor));
+    if (done) event.preventDefault();
+    return done;
+  };
+  const move = (step: number) => {
+    setCursor(moved(cursor, step, suggestions.length));
+    return true;
+  };
+  const take = (chosen: Suggestion | undefined) => {
+    if (chosen) accept(chosen);
+    return chosen !== undefined;
+  };
+
+  /** Enter makes what was typed chips, Backspace on an empty box takes the last chip back, Escape empties the box. */
+  const boxKeys = new Map<string, () => void>([
+    ["Enter", () => commitTypedFilters()],
+    [
+      "Backspace",
+      () => {
+        if (text === "" && parsed.filters.length > 0) setFilters(parsed.filters.slice(0, -1));
+      },
+    ],
+    ["Escape", () => setText("")],
+  ]);
+  const boxKey = (key: string) => boxKeys.get(key)?.();
 
   const commitTypedFilters = () => {
     // "status>=500 " typed by hand turns into a chip as soon as it is complete.
@@ -610,9 +716,17 @@ export function SearchBar({ section, family, q, spec, error, known, count, calls
             variant="outline"
             className="h-7 gap-0.5 rounded-md border-brand/35 bg-brand-soft pr-0.5 pl-2 font-mono text-base font-normal"
           >
-            <span className="text-brand">{filter.key}</span>
-            <span className="text-muted-foreground">{filter.op}</span>
-            <span title={filter.value}>{chipValue(filter)}</span>
+            <button
+              type="button"
+              aria-label={`Edit ${serialize(filter)}`}
+              title={`${serialize(filter)}: click to edit`}
+              className="flex cursor-text items-baseline rounded-sm"
+              onClick={() => edit(index)}
+            >
+              <span className="text-brand">{filter.key}</span>
+              <span className="text-muted-foreground">{filter.op}</span>
+              <span>{chipValue(filter)}</span>
+            </button>
             <button
               type="button"
               aria-label={`Remove ${serialize(filter)}`}
@@ -639,27 +753,11 @@ export function SearchBar({ section, family, q, spec, error, known, count, calls
           onBlur={() => window.setTimeout(() => setFocused(false), 120)}
           onChange={(event) => {
             setText(event.target.value);
-            setCursor(0);
+            setCursor(-1);
             if (event.target.value.endsWith(" ")) window.setTimeout(commitTypedFilters, 0);
           }}
           onKeyDown={(event) => {
-            const suggestion = suggestions[cursor];
-            if (showSuggestions && event.key === "ArrowDown") {
-              event.preventDefault();
-              setCursor((cursor + 1) % suggestions.length);
-            } else if (showSuggestions && event.key === "ArrowUp") {
-              event.preventDefault();
-              setCursor((cursor - 1 + suggestions.length) % suggestions.length);
-            } else if (showSuggestions && suggestion && (event.key === "Enter" || event.key === "Tab")) {
-              event.preventDefault();
-              accept(suggestion);
-            } else if (event.key === "Enter") {
-              commitTypedFilters();
-            } else if (event.key === "Backspace" && text === "" && parsed.filters.length > 0) {
-              setFilters(parsed.filters.slice(0, -1));
-            } else if (event.key === "Escape") {
-              setText("");
-            }
+            if (!(showSuggestions && suggestionKey(event))) boxKey(event.key);
           }}
         />
         {q ? (
@@ -756,6 +854,7 @@ function QuickControl({ control, known, filters, open, onToggle, onChange }: Qui
       <FilterMenu
         label={control.label}
         title={control.title}
+        searchKey={control.key}
         summary={
           picked.size === 0 ? null : picked.size === 1 ? format([...picked][0] ?? "") : `${picked.size} selected`
         }

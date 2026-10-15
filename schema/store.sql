@@ -1,6 +1,6 @@
 -- tracepanel's local store: one SQLite file per format version, shared by every process of a project and, when it
 -- runs, written by tracepanel-agent instead (which reads this file too: keep both writers in step).
--- version: 19
+-- version: 20
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS traces (
     id TEXT PRIMARY KEY,
@@ -64,7 +64,11 @@ CREATE TABLE IF NOT EXISTS logs (
     logger TEXT NOT NULL,
     message TEXT NOT NULL,
     exception TEXT,
-    attrs TEXT NOT NULL
+    attrs TEXT NOT NULL,
+    -- The span it was logged in, and the spans around it up to the trace's own (left out: the trace is its source
+    -- already), innermost first, as [{kind, system, name}]: a Kafka publish in a view. `in:` and `span:` search them.
+    span_id TEXT,
+    spans TEXT NOT NULL DEFAULT '[]'
 );
 CREATE INDEX IF NOT EXISTS logs_time ON logs (time DESC);
 CREATE INDEX IF NOT EXISTS logs_trace ON logs (trace_id);

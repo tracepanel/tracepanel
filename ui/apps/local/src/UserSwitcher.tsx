@@ -46,7 +46,16 @@ function Role({ user }: { user: User }) {
  * Shown only where the backend offers it (Django with django.contrib.auth and sessions). After a switch the page
  * reloads (`onSwitched`), so it renders for the new user.
  */
-export function UserSwitcher({ source, onSwitched }: { source: DataSource; onSwitched: () => void }) {
+// The page's app can switch the user (Django): the widget says so in the panel's address. Elsewhere there is no one to
+// ask who the user is.
+const SWITCHING = new URLSearchParams(location.search).has("users");
+
+/** The switcher where the page's app offers one; nothing elsewhere. */
+export function SwitchUser(props: { source: DataSource; onSwitched: () => void }) {
+  return SWITCHING ? <UserSwitcher {...props} /> : null;
+}
+
+function UserSwitcher({ source, onSwitched }: { source: DataSource; onSwitched: () => void }) {
   const [current, setCurrent] = useState<User | null | undefined>(undefined);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");

@@ -78,6 +78,10 @@ export function Console({ route, source: everything }: { route: Route; source: D
     job: [],
     rpc: [],
     page: [],
+    in: [],
+    // biome-ignore lint/style/useNamingConvention: wire format.
+    log_route: [],
+    span: [],
     extra: [],
   };
 

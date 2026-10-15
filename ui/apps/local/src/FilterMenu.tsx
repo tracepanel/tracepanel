@@ -6,7 +6,6 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-  CommandSeparator,
 } from "@tracepanel/ui/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@tracepanel/ui/components/ui/popover";
 import { cn } from "@tracepanel/ui/lib/utils";
@@ -37,6 +36,8 @@ export interface FilterMenuProps {
   onOpenChange: (open: boolean) => void;
   onSelect: (value: string) => void;
   onClear: () => void;
+  /** The search key the menu sets (logger): typed in its own box too (logger:org), it is left out of the match. */
+  searchKey?: string | undefined;
 }
 
 const SEARCH_FROM = 7;
@@ -53,6 +54,7 @@ export function FilterMenu({
   onOpenChange,
   onSelect,
   onClear,
+  searchKey,
 }: FilterMenuProps) {
   // Nothing is highlighted until the pointer or the arrow keys pick a row: cmdk marks the first one when the value
   // is empty, so it starts at one no row has.
@@ -86,7 +88,7 @@ export function FilterMenu({
       </PopoverTrigger>
       {/* As wide as its longest value, within bounds. */}
       <PopoverContent align="start" className="w-auto max-w-80 min-w-52 p-1">
-        <Command value={active} onValueChange={setActive}>
+        <Command value={active} onValueChange={setActive} filter={(value, search) => matches(value, search, searchKey)}>
           <div className="flex items-center justify-between gap-4 px-2.5 pt-1.5 pb-1 text-sm font-medium text-muted-foreground">
             {title}
             {summary ? (
@@ -140,25 +142,16 @@ export function FilterMenu({
                 </CommandItem>
               ))}
             </CommandGroup>
-            {multiple && summary ? (
-              <>
-                <CommandSeparator />
-                <CommandGroup>
-                  <CommandItem
-                    onSelect={() => {
-                      onClear();
-                      onOpenChange(false);
-                    }}
-                    className="justify-center text-base text-muted-foreground"
-                  >
-                    Clear selection
-                  </CommandItem>
-                </CommandGroup>
-              </>
-            ) : null}
           </CommandList>
         </Command>
       </PopoverContent>
     </Popover>
   );
+}
+
+/** A row the menu's box finds: its text contains what was typed, a typed `key:` (logger:org) left out. */
+function matches(value: string, search: string, key: string | undefined): number {
+  const typed = search.trim().toLowerCase();
+  const wanted = key && typed.startsWith(`${key}:`) ? typed.slice(key.length + 1) : typed;
+  return value.toLowerCase().includes(wanted) ? 1 : 0;
 }

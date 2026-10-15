@@ -8,19 +8,20 @@ import {
   useRef,
   useState,
 } from "react";
-import { duration, percent } from "./format";
+import { duration, percent, since } from "./format";
 import { GraphqlCode } from "./GraphqlCode";
 import { ChevronRightIcon, CloseIcon } from "./icons";
 import { keyed } from "./keys";
 import { breakdown, CATEGORY_LABELS, type Category } from "./lib/breakdown";
+import { callFields } from "./lib/callFields";
 import { callTemplate, groupNoun } from "./lib/calls";
 import { CALL_KINDS, DATASTORES, MESSAGING, RPC } from "./lib/systems";
 import { linkProps, type TraceLinks } from "./links";
-import { PropTable } from "./PropTable";
+import { type PropRow, PropTable } from "./PropTable";
 import { AliasChip, IssueChip } from "./primitives";
 import { SideResize, useSideWidth } from "./SideResize";
 import { SqlCode } from "./SqlCode";
-import type { IssueKind, Log, Related, Span, Trace, TraceError, TraceSummary } from "./types";
+import type { Attrs, IssueKind, Log, Related, Span, Trace, TraceError, TraceSummary } from "./types";
 
 /* ---------- tree ---------- */
 
@@ -473,7 +474,9 @@ function Rows({ nodes, depth, ctx }: { nodes: Node[]; depth: number; ctx: RowCon
                   <span className="dt-map-text">{text}</span>
                 </span>
                 <Bar trace={ctx.trace} start={time} length={0} point={true} />
-                <span className="dt-map-time">+{duration(Math.max(time - ctx.trace.start, 0))}</span>
+                <span className="dt-map-time" title={`Logged ${since(time, ctx.trace.start)}`}>
+                  +{duration(Math.max(time - ctx.trace.start, 0))}
+                </span>
               </button>
               <RowDetails id={node.key} ctx={ctx} />
             </Fragment>
@@ -668,74 +671,130 @@ function LinkedDetails({ node, trace, links }: { node: Linked; trace: Trace; lin
   return <RunDetails run={node.run} kind={node.kind} trace={trace} links={links} />;
 }
 
-function Details({ node, trace, links }: { node: Node; trace: Trace; links?: TraceLinks | undefined }) {
-  if (node.type === "task" || node.type === "waiting") return <LinkedDetails node={node} trace={trace} links={links} />;
-  if (node.type === "log") {
-    return (
-      <div className="grid gap-3 p-4">
-        <p className="dt-map-details-title">
-          Log · {node.log.level} · {node.log.logger}
-        </p>
-        <pre className="m-0 overflow-auto rounded-md border bg-muted/60 px-4 py-3 font-mono text-sm whitespace-pre-wrap">
-          {node.log.exception ? `${node.log.message}\n\n${node.log.exception}` : node.log.message}
-        </pre>
-      </div>
-    );
-  }
-  if (node.type === "error") {
-    return (
-      <div className="grid gap-3 p-4">
-        <p className="dt-map-details-title">Error</p>
-        <p className="dt-error-message">
-          <b>{node.error.type.replace(/^builtins\./, "")}</b>: {node.error.message}
-        </p>
-      </div>
-    );
-  }
-  if (node.type === "group") {
-    const first = node.spans[0];
-    const origins = new Set(node.spans.map((span) => String(span.attrs["code.origin"] ?? "")));
-    return (
-      <div className="grid gap-3 p-4">
-        <p className="dt-map-details-title">
-          {node.spans.length} similar {groupNoun(first)} ·{" "}
-          {duration(node.spans.reduce((sum, span) => sum + span.duration, 0))} total
-        </p>
-        {first?.kind === "sql" ? (
-          <SqlCode sql={String(first.attrs["db.statement"] ?? "")} vendor={String(first.attrs["db.vendor"] ?? "")} />
-        ) : null}
-        <p className="flex flex-wrap items-center gap-2 text-base text-muted-foreground [&_code]:rounded [&_code]:bg-muted [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-sm [&_code]:text-foreground">
-          from{" "}
-          {[...origins].map((origin) => (
-            <code key={origin}>{origin}</code>
-          ))}
-        </p>
-      </div>
-    );
-  }
-  const { span } = node;
-  // The root span stands for the whole request: its details are the trace's own attributes.
-  const attrs = span.parent_id === null ? { ...trace.attrs, ...span.attrs } : span.attrs;
-  // The statement is shown formatted above; its fingerprint would repeat it on one line.
-  const hidden = new Set(["db.statement", "db.fingerprint", "graphql.document"]);
-  const shown = Object.entries(attrs).filter(([key, value]) => !hidden.has(key) && value !== null && value !== "");
-  const offset = duration(Math.max(span.start - trace.start, 0));
+type DetailsProps<T extends Node["type"]> = {
+  node: Extract<Node, { type: T }>;
+  trace: Trace;
+  links?: TraceLinks | undefined;
+};
+
+function LogDetails({ node }: DetailsProps<"log">) {
   return (
     <div className="grid gap-3 p-4">
       <p className="dt-map-details-title">
-        {span.kind === "http" ? "request" : span.kind} · started at +{offset} · took {duration(span.duration)}
+        Log · {node.log.level} · {node.log.logger}
       </p>
-      {span.kind === "sql" ? (
-        <SqlCode sql={String(attrs["db.statement"] ?? span.name)} vendor={String(attrs["db.vendor"] ?? "")} />
-      ) : null}
-      {typeof attrs["graphql.document"] === "string" ? <GraphqlCode document={attrs["graphql.document"]} /> : null}
-      {shown.length === 0 ? null : (
-        <PropTable
-          rows={shown.map(([key, value]) => ({ label: key, value: String(value), copy: String(value), mono: true }))}
-        />
-      )}
+      <pre className="m-0 overflow-auto rounded-md border bg-muted/60 px-4 py-3 font-mono text-sm whitespace-pre-wrap">
+        {node.log.exception ? `${node.log.message}\n\n${node.log.exception}` : node.log.message}
+      </pre>
     </div>
   );
+}
+
+function ErrorDetails({ node }: DetailsProps<"error">) {
+  return (
+    <div className="grid gap-3 p-4">
+      <p className="dt-map-details-title">Error</p>
+      <p className="dt-error-message">
+        <b>{node.error.type.replace(/^builtins\./, "")}</b>: {node.error.message}
+      </p>
+    </div>
+  );
+}
+
+/** A SQL call's statement, formatted. */
+function Statement({ span, attrs }: { span: Span; attrs: Attrs }) {
+  if (span.kind !== "sql") return null;
+  return <SqlCode sql={String(attrs["db.statement"] ?? span.name)} vendor={String(attrs["db.vendor"] ?? "")} />;
+}
+
+function GroupDetails({ node }: DetailsProps<"group">) {
+  const [first] = node.spans;
+  const origins = new Set(node.spans.map((span) => String(span.attrs["code.origin"] ?? "")));
+  return (
+    <div className="grid gap-3 p-4">
+      <p className="dt-map-details-title">
+        {node.spans.length} similar {groupNoun(first)} ·{" "}
+        {duration(node.spans.reduce((sum, span) => sum + span.duration, 0))} total
+      </p>
+      {first ? (
+        <>
+          <Statement span={first} attrs={first.attrs} />
+          <PropTable rows={summaryRows(first, false)} />
+        </>
+      ) : null}
+      <p className="flex flex-wrap items-center gap-2 text-base text-muted-foreground [&_code]:rounded [&_code]:bg-muted [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-sm [&_code]:text-foreground">
+        from{" "}
+        {[...origins].map((origin) => (
+          <code key={origin}>{origin}</code>
+        ))}
+      </p>
+    </div>
+  );
+}
+
+// The statement is shown formatted above; its fingerprint would repeat it on one line.
+const HIDDEN = new Set(["db.statement", "db.fingerprint", "graphql.document"]);
+
+/** Every attribute, raw; under a heading when the call's fields in words come before them. */
+function AllAttributes({ attrs, titled }: { attrs: Attrs; titled: boolean }) {
+  const shown = Object.entries(attrs).filter(([key, value]) => !HIDDEN.has(key) && value !== null && value !== "");
+  if (shown.length === 0) return null;
+  return (
+    <section className="grid gap-2" aria-label="All attributes">
+      {titled ? (
+        <h3 className="text-sm font-medium text-muted-foreground">
+          All attributes <span className="tabular-nums">{shown.length}</span>
+        </h3>
+      ) : null}
+      <PropTable
+        rows={shown.map(([key, value]) => ({ label: key, value: String(value), copy: String(value), mono: true }))}
+      />
+    </section>
+  );
+}
+
+function SpanTitle({ span, trace }: { span: Span; trace: Trace }) {
+  const offset = duration(Math.max(span.start - trace.start, 0));
+  return (
+    <p className="dt-map-details-title">
+      {span.kind === "http" ? "request" : span.kind} · started at +{offset} · took {duration(span.duration)}
+    </p>
+  );
+}
+
+function SpanDetails({ node: { span }, trace }: DetailsProps<"span">) {
+  // The root span stands for the whole request: its details are the trace's own attributes. A call's own fields come
+  // in words first (its topic, its URL, where in the code); every attribute after them, raw.
+  const [attrs, summary] =
+    span.parent_id === null ? [{ ...trace.attrs, ...span.attrs }, []] : [span.attrs, summaryRows(span)];
+  const document = attrs["graphql.document"];
+  return (
+    <div className="grid gap-3 p-4">
+      <SpanTitle span={span} trace={trace} />
+      <Statement span={span} attrs={attrs} />
+      {typeof document === "string" ? <GraphqlCode document={document} /> : null}
+      {summary.length ? <PropTable rows={summary} /> : null}
+      <AllAttributes attrs={attrs} titled={summary.length > 0} />
+    </div>
+  );
+}
+
+const DETAILS: { [T in Node["type"]]: (props: DetailsProps<T>) => ReactNode } = {
+  span: SpanDetails,
+  group: GroupDetails,
+  log: LogDetails,
+  error: ErrorDetails,
+  task: LinkedDetails,
+  waiting: LinkedDetails,
+};
+
+function Details(props: DetailsProps<Node["type"]>) {
+  const Shown = DETAILS[props.node.type] as (props: DetailsProps<Node["type"]>) => ReactNode;
+  return <Shown {...props} />;
+}
+
+function summaryRows(span: Span, origin = true): PropRow[] {
+  return callFields(span, origin).map(({ label, value }) => ({ label, value, copy: value, mono: true }));
 }
 
 /* ---------- side pane ---------- */

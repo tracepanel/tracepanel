@@ -263,14 +263,15 @@ pub(crate) fn write_trace(
             doc,
         ],
     )?;
+    let context = Context::of(trace);
     for log in &trace.logs {
         let level = LEVELS
             .iter()
             .find(|(name, _)| *name == log.level)
             .map_or(0, |(_, number)| *number);
         db.prepare_cached(
-            "INSERT INTO logs (trace_id, time, level, level_no, logger, message, exception, attrs)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            "INSERT INTO logs (trace_id, time, level, level_no, logger, message, exception, attrs, span_id, spans)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         )?
         .execute(params![
             trace.id,
@@ -280,7 +281,9 @@ pub(crate) fn write_trace(
             log.logger,
             log.message,
             log.exception,
-            Value::Object(log.attrs.clone()).to_string()
+            Value::Object(log.attrs.clone()).to_string(),
+            log.span_id,
+            context.around(log.span_id.as_deref()),
         ])?;
         if fts {
             db.prepare_cached("INSERT INTO logs_fts (rowid, message, logger) VALUES (?1, ?2, ?3)")?
@@ -470,4 +473,46 @@ pub(crate) fn link_tasks(db: &Connection, trace: &Trace) -> rusqlite::Result<()>
         params![trace.id],
     )?;
     Ok(())
+}
+
+/// Where in a trace its records were logged: each span's parent, and what it is (its kind, the system it calls, its
+/// name).
+struct Context<'a> {
+    spans: HashMap<&'a str, (Option<&'a str>, Value)>,
+}
+
+impl<'a> Context<'a> {
+    fn of(trace: &'a Trace) -> Self {
+        let spans = if trace.logs.is_empty() {
+            HashMap::new()
+        } else {
+            trace
+                .spans
+                .iter()
+                .map(|span| {
+                    let system = tracepanel_analysis::calls::operation(trace, span)
+                        .map_or_else(|| span.kind.clone(), |operation| operation.system);
+                    let what =
+                        serde_json::json!({"kind": span.kind, "system": system, "name": span.name});
+                    (span.id.as_str(), (span.parent_id.as_deref(), what))
+                })
+                .collect()
+        };
+        Self { spans }
+    }
+
+    /// The span a record was logged in and the spans around it, innermost first, up to the trace's own: a JSON list.
+    fn around(&self, span_id: Option<&str>) -> String {
+        let mut chain = Vec::new();
+        let mut next = span_id;
+        // A parent that loops back (a broken SDK) ends the chain where it would repeat.
+        while let Some((Some(parent), what)) = next.and_then(|id| self.spans.get(id)) {
+            if chain.len() == self.spans.len() {
+                break;
+            }
+            chain.push(what.clone());
+            next = Some(*parent);
+        }
+        Value::Array(chain).to_string()
+    }
 }

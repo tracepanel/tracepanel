@@ -698,8 +698,8 @@ components:
     LogRow:
       type: object
       additionalProperties: false
-      required: [id, trace_id, time, level, logger, message, exception, attrs, trace_kind, trace_htmx, trace_name, method,
-        path, http_status, user_id, service]
+      required: [id, trace_id, time, level, logger, message, exception, attrs, span_id, spans, trace_kind, trace_htmx,
+        trace_name, method, path, http_status, user_id, service]
       properties:
         id: { type: integer }
         trace_id: { type: string }
@@ -709,6 +709,19 @@ components:
         message: { type: string }
         exception: { type: [string, "null"] }
         attrs: { $ref: "#/components/schemas/Attrs" }
+        span_id: { type: [string, "null"], description: The span it was logged in; null outside every span. }
+        spans:
+          type: array
+          description: >-
+            The span it was logged in and the spans around it, innermost first, up to the trace's own (left out).
+          items:
+            type: object
+            additionalProperties: false
+            required: [kind, system, name]
+            properties:
+              kind: { type: string }
+              system: { type: string, description: "The system a call is to (kafka, sql); a span's kind otherwise." }
+              name: { type: string }
         trace_kind: { type: string, enum: [http, task, command, websocket, rpc, page] }
         trace_htmx: { type: [string, "null"], enum: [request, boosted, null], description: As the trace's htmx. }
         trace_name: { type: string }
@@ -977,7 +990,7 @@ components:
           type: object
           description: Stored traces per entry point; the console hides entry points with none.
           additionalProperties: false
-          required: [http, graphql, tasks, websockets, jobs, rpc, pages, systems]
+          required: [http, graphql, tasks, websockets, jobs, rpc, pages, mails, systems]
           properties:
             http: { type: integer, description: HTTP requests that are not GraphQL operations. }
             graphql: { type: integer }
@@ -986,6 +999,7 @@ components:
             jobs: { type: integer, description: Management commands and tracepanel.trace() blocks. }
             rpc: { type: integer, description: "RPC calls served: gRPC and other RPC systems' servers." }
             pages: { type: integer, description: "Pages viewed in a browser." }
+            mails: { type: integer, description: "Emails sent: the console hides Emails without any." }
             systems:
               type: array
               description: >-
@@ -1001,7 +1015,7 @@ components:
     KnownValues:
       type: object
       additionalProperties: false
-      required: [route, logger, db, targets, ops, task, queue, job, rpc, page, extra]
+      required: [route, log_route, logger, db, targets, ops, task, queue, job, rpc, page, in, span, extra]
       properties:
         task: { type: array, description: Celery task names., items: { type: string } }
         queue: { type: array, description: Celery queues tasks ran from., items: { type: string } }
@@ -1009,6 +1023,7 @@ components:
         rpc: { type: array, description: "RPC methods served, Service/Method.", items: { type: string } }
         page: { type: array, description: "Paths of pages viewed in a browser.", items: { type: string } }
         route: { type: array, items: { type: string } }
+        log_route: { type: array, description: Routes whose requests logged anything., items: { type: string } }
         logger: { type: array, items: { type: string } }
         db: { type: array, description: Database aliases., items: { type: string } }
         targets:
@@ -1019,6 +1034,8 @@ components:
           type: object
           description: "Each system's operations (as /counts names the systems): {\"mongodb\": [\"find\", \"insert\"]}."
           additionalProperties: { type: array, items: { type: string } }
+        in: { type: array, description: "Kinds and systems of the spans records were logged inside.", items: { type: string } }
+        span: { type: array, description: "Names of the spans records were logged inside.", items: { type: string } }
         extra: { type: array, description: "extra.* keys seen in logs.", items: { type: string } }
     SearchField:
       type: object

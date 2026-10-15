@@ -460,7 +460,8 @@ export function LogsTable({
           <Th>Level</Th>
           <Th>Message</Th>
           <Th>Logger</Th>
-          <Th>Request</Th>
+          {/* A request, a task, a job or a page: what was running when it was logged. */}
+          <Th>Source</Th>
         </>
       }
     >
@@ -519,57 +520,143 @@ type LogField = [key: string, value: string, filter?: Record<string, string> | u
  * Where the record was written, from its trace: the app, the request (or task, job) and its status, the user. The
  * record carries none of it itself; the trace does, once for all of its records.
  */
+/** The search a record's attribute narrows to, when it is one the search knows: an extra= field, its template. */
+function attrFilter(key: string, value: string): Record<string, string> | undefined {
+  if (key.startsWith("extra.")) return { [key]: term(value) };
+  return key === "log.template" ? { template: term(value) } : undefined;
+}
+
 function logContext(log: LogRow): LogField[] {
   const user: LogField[] = log.user_id ? [["user", log.user_id, { user: term(log.user_id) }]] : [];
   return [["app", log.service, { service: term(log.service) }], requestField(log), ...user];
 }
 
-/** "GET /api/stats/ → 200", filtering by its path; a task's or job's name as it is. */
+/** What wrote a record, by its trace's kind: a request, a task, a job, a page. */
+const SOURCES: Record<string, string> = { task: "task", command: "job", page: "page", websocket: "connection" };
+
+function sourceOf(log: LogRow): string {
+  return SOURCES[log.trace_kind] ?? "request";
+}
+
+// The search key a task's or a job's records are found by: its name.
+const NAMED: Record<string, "task" | "job"> = { task: "task", command: "job" };
+
+/** "GET /api/stats/ → 200", filtering by its path; a task or a job by its name, filtering by it. */
 function requestField(log: LogRow): LogField {
-  if (!(log.method && log.path)) return ["request", log.trace_name];
-  const status = log.http_status ? ` → ${log.http_status}` : "";
-  return ["request", `${log.method} ${log.path}${status}`, { path: term(log.path) }];
+  const named = NAMED[log.trace_kind];
+  if (named) return [named, log.trace_name, { [named]: term(log.trace_name) }];
+  return log.method && log.path ? httpField(log.method, log.path, log.http_status) : [sourceOf(log), log.trace_name];
+}
+
+function httpField(method: string, path: string, status: number | null | undefined): LogField {
+  return ["request", `${method} ${path}${status ? ` → ${status}` : ""}`, { path: term(path) }];
+}
+
+/** Shortcuts to the records around this one: its trace's, every run of its task or job, its logger's, its path's. */
+function LogSources({ log, onFilter }: { log: LogRow; onFilter: (terms: Record<string, string>) => void }) {
+  const named = NAMED[log.trace_kind];
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="mr-1 text-base text-muted-foreground">Show logs from</span>
+      <Button variant="outline" size="xs" onClick={() => onFilter({ trace: log.trace_id })}>
+        this {sourceOf(log)}
+      </Button>
+      {named ? (
+        <Button variant="outline" size="xs" onClick={() => onFilter({ [named]: log.trace_name })}>
+          every run of {log.trace_name}
+        </Button>
+      ) : null}
+      <Button variant="outline" size="xs" onClick={() => onFilter({ logger: log.logger })}>
+        this logger
+      </Button>
+      {log.path ? (
+        <Button variant="outline" size="xs" onClick={() => onFilter({ path: log.path ?? "" })}>
+          this path
+        </Button>
+      ) : null}
+      {log.user_id ? (
+        <Button variant="outline" size="xs" onClick={() => onFilter({ user: log.user_id ?? "" })}>
+          this user
+        </Button>
+      ) : null}
+      <Button size="xs" className="ml-auto" asChild>
+        <a href={traceHref(log.trace_id, "logs")}>
+          Open {sourceOf(log)}
+          <ArrowRightIcon />
+        </a>
+      </Button>
+    </div>
+  );
+}
+
+/** The spans around a record, outermost first, each with its path from the outermost: a key no two share. */
+function outward(spans: LogRow["spans"]): { path: string; span: LogRow["spans"][number] }[] {
+  const reversed = [...spans].reverse();
+  return reversed.map((span, depth) => ({
+    path: reversed
+      .slice(0, depth + 1)
+      .map((around) => around.name)
+      .join(" › "),
+    span,
+  }));
+}
+
+/**
+ * Where in its trace a record was logged: the spans around it, outermost first, each one's records a click away, and
+ * the call tree open at the innermost.
+ */
+function LoggedIn({ log, onFilter }: { log: LogRow; onFilter: (terms: Record<string, string>) => void }) {
+  if (log.spans.length === 0) return null;
+  return (
+    <nav className="flex flex-wrap items-center gap-1.5 text-base" aria-label="Logged in">
+      <span className="mr-1 text-muted-foreground">Logged in</span>
+      {outward(log.spans).map(({ path, span }, index) => (
+        <Fragment key={path}>
+          {index > 0 ? <span className="text-muted-foreground">›</span> : null}
+          <Button
+            variant="outline"
+            size="xs"
+            title={`Show logs from inside ${span.name}`}
+            onClick={() => onFilter({ span: term(span.name) })}
+          >
+            <Badge variant="outline" className="font-mono text-2xs uppercase">
+              {span.system}
+            </Badge>
+            <span className="max-w-80 truncate font-mono">{span.name}</span>
+          </Button>
+        </Fragment>
+      ))}
+      <Button variant="ghost" size="xs" onClick={() => onFilter({ in: log.spans[0]?.system ?? "" })}>
+        every record inside {log.spans[0]?.system}
+      </Button>
+      {log.span_id ? (
+        <Button variant="ghost" size="xs" className="ml-auto" asChild>
+          <a href={traceHref(log.trace_id, "tree", log.span_id)}>
+            In the call tree
+            <ArrowRightIcon />
+          </a>
+        </Button>
+      ) : null}
+    </nav>
+  );
 }
 
 function LogDetails({ log, onFilter }: { log: LogRow; onFilter: (terms: Record<string, string>) => void }) {
   const fields: LogField[] = [
     ...logContext(log),
-    ["trace_id", log.trace_id],
-    ["logger", log.logger],
-    ["level", log.level],
+    ["trace_id", log.trace_id, { trace: log.trace_id }],
+    ["logger", log.logger, { logger: term(log.logger) }],
+    ["level", log.level, { level: log.level }],
     ["time", new Date(log.time / 1000).toISOString()],
     ...Object.entries(log.attrs).map(([key, value]): LogField => {
       const text = String(value);
-      return [key, text, key.startsWith("extra.") ? { [key]: term(text) } : undefined];
+      return [key, text, attrFilter(key, text)];
     }),
   ];
   return (
     <div className="grid gap-3.5">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="mr-1 text-base text-muted-foreground">Show logs from</span>
-        <Button variant="outline" size="xs" onClick={() => onFilter({ trace: log.trace_id })}>
-          this request
-        </Button>
-        <Button variant="outline" size="xs" onClick={() => onFilter({ logger: log.logger })}>
-          this logger
-        </Button>
-        {log.path ? (
-          <Button variant="outline" size="xs" onClick={() => onFilter({ path: log.path ?? "" })}>
-            this path
-          </Button>
-        ) : null}
-        {log.user_id ? (
-          <Button variant="outline" size="xs" onClick={() => onFilter({ user: log.user_id ?? "" })}>
-            this user
-          </Button>
-        ) : null}
-        <Button size="xs" className="ml-auto" asChild>
-          <a href={traceHref(log.trace_id, "logs")}>
-            Open request
-            <ArrowRightIcon />
-          </a>
-        </Button>
-      </div>
+      <LogSources log={log} onFilter={onFilter} />
+      <LoggedIn log={log} onFilter={onFilter} />
       <div className="group/message relative rounded-md border bg-background">
         <pre className="m-0 px-4 py-3 pr-12 font-mono text-base whitespace-pre-wrap">{log.message}</pre>
         <CopyButton text={log.message} label="Copy message" className="absolute top-2 right-2" />
@@ -694,7 +781,7 @@ export function MailsTable({
           <Th>Subject</Th>
           <Th>To</Th>
           <Th>From</Th>
-          <Th>Request</Th>
+          <Th>Sent from</Th>
           <Th num>When</Th>
         </>
       }
