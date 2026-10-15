@@ -1307,6 +1307,22 @@ details[data-focused] > .dt-sql-group {
   font: var(--dt-size-sm) var(--dt-mono);
   overflow-wrap: anywhere;
 }
+/* The message opens the record's attributes: a button that reads as the text it is. */
+button.dt-log-message {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+button.dt-log-message:hover {
+  text-decoration: underline dotted var(--dt-text-3);
+}
+.dt-log-attrs {
+  grid-column: 1 / -1;
+  padding: 0.25rem 0 0.375rem;
+}
 .dt-log-logger {
   max-width: 8.75rem;
   overflow: hidden;
