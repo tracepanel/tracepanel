@@ -23,6 +23,23 @@ export function AllAttributes({ attrs, titled }: { attrs: Attrs; titled: boolean
   );
 }
 
+// Where a record was written first, then its thread, its template, anything else, and the app's own extra= fields.
+const FIRST = ["code.filepath", "code.lineno", "code.function", "thread.name", "thread.id", "log.template"];
+
+function rank(key: string): number {
+  const at = FIRST.indexOf(key);
+  if (at >= 0) return at;
+  return key.startsWith("extra.") ? FIRST.length + 1 : FIRST.length;
+}
+
+/**
+ * A record's attributes in one order wherever it is shown: the store keeps them sorted by name, a trace as its SDK
+ * sent them, and the same record read differently in the two.
+ */
+export function logAttrs(attrs: Attrs): Attrs {
+  return Object.fromEntries(Object.entries(attrs).sort(([a], [b]) => rank(a) - rank(b) || a.localeCompare(b))) as Attrs;
+}
+
 /** Its level and logger, its message (with its exception), and where it was logged: code, thread, template, extra. */
 export function LogRecordDetails({ log }: { log: Log }) {
   return (
@@ -33,7 +50,7 @@ export function LogRecordDetails({ log }: { log: Log }) {
       <pre className="m-0 overflow-auto rounded-md border bg-muted/60 px-4 py-3 font-mono text-sm whitespace-pre-wrap">
         {log.exception ? `${log.message}\n\n${log.exception}` : log.message}
       </pre>
-      <AllAttributes attrs={log.attrs} titled={true} />
+      <AllAttributes attrs={logAttrs(log.attrs)} titled={true} />
     </div>
   );
 }

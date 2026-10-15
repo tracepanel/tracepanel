@@ -10,6 +10,7 @@ export { IssueList } from "./IssueList";
 export * from "./icons";
 export { LogList } from "./LogList";
 export * from "./Logo";
+export { logAttrs } from "./LogRecordDetails";
 export { ISSUE_LABELS } from "./labels";
 export { queryFingerprint } from "./lib/fingerprint";
 export { isTyping } from "./lib/keys";

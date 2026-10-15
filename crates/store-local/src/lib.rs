@@ -823,6 +823,11 @@ mod tests {
             messages("in:kafka"),
             [Value::from("initializing Kafka metrics")]
         );
+        // Logged in that span itself, by its id.
+        assert_eq!(
+            messages("span_id:K"),
+            [Value::from("initializing Kafka metrics")]
+        );
         assert_eq!(
             messages("span:shop.ShopController.*"),
             [

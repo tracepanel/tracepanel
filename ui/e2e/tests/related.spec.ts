@@ -154,3 +154,30 @@ test("a record in a trace's Logs tab opens its attributes", async ({ page }) => 
   await expect(record).toHaveAttribute("aria-expanded", "true");
   await expect(page.getByText("kafka-producer-network-thread")).toBeVisible();
 });
+
+test("a record's attributes are in the same order on the Logs page and in its trace", async ({ page }) => {
+  const order = (text: string) =>
+    ["code.filepath", "code.lineno", "code.function", "thread.name"].map((key) => text.indexOf(key));
+  const sorted = (positions: number[]) =>
+    positions.every((at, index) => at >= 0 && (index === 0 || at > (positions[index - 1] ?? 0)));
+
+  await page.goto(`/#/logs?q=${encodeURIComponent("Kafka producer started")}`);
+  await page.getByRole("region", { name: "Logs" }).getByText("Kafka producer started").first().click();
+  const onPage = order(await page.getByRole("region", { name: "Logs" }).innerText());
+  // Its span among its fields too, after its trace.
+  await expect(page.getByRole("region", { name: "Logs" }).getByText("span_id", { exact: true })).toBeVisible();
+  // And a filter: the records logged in that span.
+  await page.getByRole("button", { name: /^Show logs with span_id = / }).click();
+  await expect(page).toHaveURL(/span_id%3A/);
+  await expect(page.getByRole("region", { name: "Logs" }).getByText("Kafka producer started").first()).toBeVisible();
+  await page.goto(`/#/logs?q=${encodeURIComponent("Kafka producer started")}`);
+  await page.getByRole("region", { name: "Logs" }).getByText("Kafka producer started").first().click();
+
+  await page.goto(`/#/traces?q=${encodeURIComponent("route:/api/books/announce")}`);
+  await page.getByRole("main").getByRole("table").getByRole("link").first().click();
+  await page.getByText("Kafka producer started").first().click();
+  const inTrace = order(await page.getByRole("region", { name: "All attributes" }).innerText());
+
+  expect(sorted(onPage)).toBe(true);
+  expect(sorted(inTrace)).toBe(true);
+});
