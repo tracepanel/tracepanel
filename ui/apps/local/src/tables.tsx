@@ -12,6 +12,7 @@ import {
   type IssueRow,
   type JobRow,
   type LogRow,
+  logAttrs,
   MailList,
   type MailRow,
   MethodBadge,
@@ -652,10 +653,13 @@ function LogDetails({ log, onFilter }: { log: LogRow; onFilter: (terms: Record<s
   const fields: LogField[] = [
     ...logContext(log),
     ["trace_id", log.trace_id, { trace: log.trace_id }],
+    // The span it was logged in, filtered by span_id: (the trace's call tree opens at it).
+    // biome-ignore lint/style/useNamingConvention: the search's key, as the query spells it.
+    ...(log.span_id ? [["span_id", log.span_id, { span_id: log.span_id }] as LogField] : []),
     ["logger", log.logger, { logger: term(log.logger) }],
     ["level", log.level, { level: log.level }],
     ["time", new Date(log.time / 1000).toISOString()],
-    ...Object.entries(log.attrs).map(([key, value]): LogField => {
+    ...Object.entries(logAttrs(log.attrs)).map(([key, value]): LogField => {
       const text = String(value);
       return [key, text, attrFilter(key, text)];
     }),

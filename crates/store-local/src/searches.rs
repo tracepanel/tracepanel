@@ -144,6 +144,7 @@ pub(crate) fn log_search(fts: bool) -> search::Schema {
             // The message before its values were put in (`order for {} ({} in stock)`): every record like this one.
             ("template", "json_extract(logs.attrs, '$.\"log.template\"')"),
             ("trace", "logs.trace_id"),
+            ("span_id", "logs.span_id"),
             ("route", "traces.route"),
             ("kind", "traces.kind"),
             ("path", "traces.path"),

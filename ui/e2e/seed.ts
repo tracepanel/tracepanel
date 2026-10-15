@@ -155,7 +155,13 @@ function messages(): Doc[] {
       logger: "org.apache.kafka",
       message: "Kafka producer started",
       exception: null,
-      attrs: { "code.function": "send", "thread.name": "kafka-producer-network-thread" },
+      // Out of order on purpose, as an SDK may send them: every view lists them the same way.
+      attrs: {
+        "thread.name": "kafka-producer-network-thread",
+        "code.function": "send",
+        "code.lineno": 42,
+        "code.filepath": "shop/events.py",
+      },
     },
     {
       span_id: `${id}R`,

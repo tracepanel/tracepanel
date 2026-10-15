@@ -12,6 +12,8 @@ upgrade.
 
 ### Added
 
+- `span_id:` finds the records logged in a span, and a record's details on
+  the Logs page show its span, a filter away.
 - A call an app of another project on this machine served shows under it in
   the call tree, opening in that project's console. Agents with a console
   say where they are in the user's cache (with a token only they and this
@@ -56,6 +58,10 @@ upgrade.
 
 ### Fixed
 
+- A record's attributes came in another order on the Logs page than in its
+  trace (the store keeps them sorted by name). Both list them the same way:
+  where it was logged first, then its thread and template, its extra fields
+  last.
 - A record shows where it was logged, its code, thread, template and extra
   fields: picked in the call tree, or opened by a click on it in a trace's
   Logs tab, which shows it as the call tree does.

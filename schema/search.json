@@ -118,6 +118,10 @@
       "type": "text",
       "help": "Trace id"
     },
+      "span_id": {
+        "type": "text",
+        "help": "The span it was logged in, by id"
+      },
     "route": {
       "type": "text",
       "help": "Route of the request that logged it"
