@@ -605,7 +605,7 @@ mod tests {
         order["attrs"] = serde_json::json!({"log.template": "order for {}"});
         let doc = serde_json::json!({
             "id": "C1", "kind": "http", "name": "POST /api/orders", "start": 0, "duration": 1000, "status": "ok",
-            "attrs": {"service.name": "shop"}, "errors": [], "links": [], "issues": [],
+            "attrs": {"service.name": "shop", "http.route": "/api/orders"}, "errors": [], "links": [], "issues": [],
             "spans": [
                 span("R", None, "http", "POST /api/orders", serde_json::json!({})),
                 span("V", Some("R"), "view", "shop.ShopController.order", serde_json::json!({})),
@@ -672,6 +672,7 @@ mod tests {
         );
 
         let known = reader.known_values("").unwrap();
+        assert_eq!(known["log_route"], serde_json::json!(["/api/orders"]));
         assert_eq!(known["in"], serde_json::json!(["kafka", "view"]));
         assert_eq!(
             known["span"],

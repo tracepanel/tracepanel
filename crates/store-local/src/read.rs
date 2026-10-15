@@ -345,6 +345,11 @@ impl Reader {
         Ok(serde_json::json!({
             "route": distinct(&format!("SELECT DISTINCT route FROM traces WHERE route != '' AND {traces} ORDER BY 1"))?,
             "logger": distinct(&format!("SELECT DISTINCT logger FROM logs WHERE {of_trace} ORDER BY 1"))?,
+            // The routes whose requests logged anything: what the logs' Route menu offers.
+            "log_route": distinct(&format!(
+                "SELECT DISTINCT route FROM traces WHERE route != '' AND {traces} AND id IN (SELECT trace_id FROM logs) \
+                 ORDER BY 1"
+            ))?,
             "db": distinct(&format!("SELECT DISTINCT target FROM calls WHERE system = 'sql' AND {of_trace} ORDER BY 1"))?,
             "targets": by_system(&db, "target", of_trace, service)?,
             "ops": by_system(&db, "op", of_trace, service)?,

@@ -6,7 +6,6 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-  CommandSeparator,
 } from "@tracepanel/ui/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@tracepanel/ui/components/ui/popover";
 import { cn } from "@tracepanel/ui/lib/utils";
@@ -143,22 +142,6 @@ export function FilterMenu({
                 </CommandItem>
               ))}
             </CommandGroup>
-            {multiple && summary ? (
-              <>
-                <CommandSeparator />
-                <CommandGroup>
-                  <CommandItem
-                    onSelect={() => {
-                      onClear();
-                      onOpenChange(false);
-                    }}
-                    className="justify-center text-base text-muted-foreground"
-                  >
-                    Clear selection
-                  </CommandItem>
-                </CommandGroup>
-              </>
-            ) : null}
           </CommandList>
         </Command>
       </PopoverContent>

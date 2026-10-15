@@ -239,6 +239,8 @@ export function httpSource(base: string | URL): DataSource {
           rpc: [],
           page: [],
           in: [],
+          // biome-ignore lint/style/useNamingConvention: wire format.
+          log_route: [],
           span: [],
           extra: [],
         }

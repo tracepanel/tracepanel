@@ -125,7 +125,7 @@ interface QuickOption {
 /** Values the console knows from stored data (routes, loggers, database aliases, tasks, jobs, log extras). */
 export type KnownValues = Partial<
   Record<
-    "route" | "logger" | "db" | "task" | "queue" | "job" | "rpc" | "page" | "in" | "span" | "extra",
+    "route" | "logger" | "db" | "task" | "queue" | "job" | "rpc" | "page" | "in" | "span" | "log_route" | "extra",
     readonly string[]
   >
 > & {
@@ -304,14 +304,15 @@ const QUICK: Record<Exclude<Section, CallsSection>, Control[]> = {
       display: (level) => <LevelBadge level={level} />,
     },
     { label: "Logger", title: "Filter by logger", key: "logger", values: (known) => known.logger ?? [] },
-    ROUTE,
+    // The routes whose requests logged anything: the others would find nothing here.
+    { ...ROUTE, values: (known) => known.log_route ?? [] },
     // Records a task or a job wrote: shown when the project has any.
     { label: "Task", title: "Filter by task", key: "task", values: (known) => known.task ?? [] },
     { label: "Job", title: "Filter by job", key: "job", values: (known) => known.job ?? [] },
     // Where in the work it was logged: inside a Kafka call, a SQL query, a view.
     {
       label: "Inside",
-      title: "Logged inside a call or span of this kind",
+      title: "Logged inside",
       key: "in",
       values: (known) => known.in ?? [],
     },

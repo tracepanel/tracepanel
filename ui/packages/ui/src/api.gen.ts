@@ -870,6 +870,8 @@ export interface components {
             /** @description Paths of pages viewed in a browser. */
             page: string[];
             route: string[];
+            /** @description Routes whose requests logged anything. */
+            log_route: string[];
             logger: string[];
             /** @description Database aliases. */
             db: string[];

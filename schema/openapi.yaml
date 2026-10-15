@@ -1015,7 +1015,7 @@ components:
     KnownValues:
       type: object
       additionalProperties: false
-      required: [route, logger, db, targets, ops, task, queue, job, rpc, page, in, span, extra]
+      required: [route, log_route, logger, db, targets, ops, task, queue, job, rpc, page, in, span, extra]
       properties:
         task: { type: array, description: Celery task names., items: { type: string } }
         queue: { type: array, description: Celery queues tasks ran from., items: { type: string } }
@@ -1023,6 +1023,7 @@ components:
         rpc: { type: array, description: "RPC methods served, Service/Method.", items: { type: string } }
         page: { type: array, description: "Paths of pages viewed in a browser.", items: { type: string } }
         route: { type: array, items: { type: string } }
+        log_route: { type: array, description: Routes whose requests logged anything., items: { type: string } }
         logger: { type: array, items: { type: string } }
         db: { type: array, description: Database aliases., items: { type: string } }
         targets:

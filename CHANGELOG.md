@@ -36,6 +36,8 @@
 - Typing a filter into the search box with pauses (`logger:o`) could empty
   it: the page took a search that matched nothing for an empty store and
   replaced the box. A filter still being typed stays out of the search.
+- The logs' Route menu offers the routes whose requests logged anything,
+  not every route. A filter's menu has one Clear.
 - Emails is listed only once the app has sent one: only some frameworks
   send them through what an SDK records.
 - The panel asks who the user is, and offers to switch, only when the
