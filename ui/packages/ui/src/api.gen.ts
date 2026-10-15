@@ -1202,6 +1202,16 @@ export interface components {
             called_by: components["schemas"]["TraceSummary"] | null;
             /** @description The traces other apps served for this trace's calls, oldest first. */
             calls: components["schemas"]["TraceSummary"][];
+            /** @description The traces another project's agent on this machine has for this trace's calls no trace here answered, asked by the W3C ids they carried: each with the call's span here, and that project's console. */
+            remote_calls?: {
+                /** @description The call's span in this trace. */
+                span_id: string;
+                trace: components["schemas"]["TraceSummary"];
+                /** @description The other project's console, http://127.0.0.1:PORT/. */
+                console: string;
+                /** @description The other project's folder name. */
+                project: string;
+            }[];
             /** @description For the traces in enqueued, connection_events, delivered and calls: the span of this trace each came from (the task.enqueue, channel.send or outgoing call span), by trace id. The call tree shows a task under the span that enqueued it, and a call's trace under the call. */
             via: {
                 [key: string]: string;

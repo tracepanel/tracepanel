@@ -1385,6 +1385,20 @@ components:
           type: array
           description: The traces other apps served for this trace's calls, oldest first.
           items: { $ref: "#/components/schemas/TraceSummary" }
+        remote_calls:
+          type: array
+          description: >-
+            The traces another project's agent on this machine has for this trace's calls no trace here answered,
+            asked by the W3C ids they carried: each with the call's span here, and that project's console.
+          items:
+            type: object
+            additionalProperties: false
+            required: [span_id, trace, console, project]
+            properties:
+              span_id: { type: string, description: The call's span in this trace. }
+              trace: { $ref: "#/components/schemas/TraceSummary" }
+              console: { type: string, description: "The other project's console, http://127.0.0.1:PORT/." }
+              project: { type: string, description: The other project's folder name. }
         via:
           type: object
           description: >-

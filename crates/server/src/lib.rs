@@ -4,6 +4,7 @@
 //! framework: the app serves them itself and forwards the rest here (Django's `/__tracepanel__/`).
 
 mod explain;
+pub mod neighbors;
 
 use axum::Extension;
 use axum::Router;
@@ -40,6 +41,7 @@ pub fn router(reader: Reader, activity: Activity) -> Router {
         .route("/api/counts", get(counts))
         .route("/api/capabilities", get(capabilities))
         .route("/api/explain", get(explain))
+        .route("/api/w3c", get(served))
         .route("/api/search", get(search_spec))
         .route("/api/logs", get(logs))
         .route("/api/calls", get(calls))
@@ -248,7 +250,17 @@ async fn related(State(reader): State<Shared>, Path(id): Path<String>) -> Respon
     if !is_id(&id) {
         return not_found();
     }
-    answer(read(&reader, move |reader| Ok(reader.related(&id)?)).await)
+    let calls = id.clone();
+    let mut related = match read(&reader, move |reader| Ok(reader.related(&id)?)).await {
+        Ok(related) => related,
+        Err(failure) => return failure.into_response(),
+    };
+    // Calls no trace here answered: the agents of the other projects on this machine may have served them.
+    let unanswered = read(&reader, move |reader| Ok(reader.unanswered_calls(&calls)?))
+        .await
+        .unwrap_or_default();
+    related["remote_calls"] = Value::Array(remote_calls(unanswered).await);
+    json_response(StatusCode::OK, related.to_string())
 }
 
 /// A trace to share and what is linked to it (`Reader::snapshot`); `values=1` keeps what otherwise stays local.
@@ -512,6 +524,73 @@ async fn overview(State(reader): State<Shared>, Query(query): Params) -> Respons
         })
         .await,
     )
+}
+
+/// This agent as its neighbours know it: the token they must bring, and its console. Set once it serves a console.
+static IDENTITY: std::sync::OnceLock<(String, String)> = std::sync::OnceLock::new();
+
+/// Who this agent is to its neighbours: what they must bring (`token`), where its `console` is.
+pub fn identify(token: String, console: String) {
+    let _ = IDENTITY.set((token, console));
+}
+
+/// For each call no trace here answered, the trace another project's agent has for it, with its console.
+async fn remote_calls(unanswered: Vec<(String, String, String)>) -> Vec<Value> {
+    let Some((_, console)) = IDENTITY.get() else {
+        return Vec::new();
+    };
+    if unanswered.is_empty() {
+        return Vec::new();
+    }
+    let console = console.clone();
+    tokio::task::spawn_blocking(move || {
+        let neighbours = neighbors::neighbours(&console);
+        unanswered
+            .iter()
+            .filter_map(|(w3c_trace, w3c_span, span)| {
+                neighbours.iter().find_map(|neighbour| {
+                    let mut found = neighbors::ask(neighbour, w3c_trace, w3c_span)?;
+                    found["span_id"] = Value::from(span.clone());
+                    Some(found)
+                })
+            })
+            .collect()
+    })
+    .await
+    .unwrap_or_default()
+}
+
+/// `api/w3c?trace=&span=`: which trace here served the call with those W3C ids. For neighbours only: the request
+/// brings this agent's token from the registry.
+async fn served(
+    State(reader): State<Shared>,
+    headers: HeaderMap,
+    Query(params): Params,
+) -> Response {
+    let Some((token, _)) = IDENTITY.get() else {
+        return not_found();
+    };
+    if headers
+        .get("x-tracepanel-token")
+        .and_then(|value| value.to_str().ok())
+        != Some(token.as_str())
+    {
+        return json_response(
+            StatusCode::FORBIDDEN,
+            json!({"error": "not a neighbour"}).to_string(),
+        );
+    }
+    let w3c_trace = params.get("trace").cloned().unwrap_or_default();
+    let w3c_span = params.get("span").cloned().unwrap_or_default();
+    match read(&reader, move |reader| {
+        Ok(reader.served(&w3c_trace, &w3c_span)?)
+    })
+    .await
+    {
+        Ok(Some(trace)) => json_response(StatusCode::OK, json!({"trace": trace}).to_string()),
+        Ok(None) => not_found(),
+        Err(failure) => failure.into_response(),
+    }
 }
 
 /// What the console's backend adds to the store: nothing here. An app serving the console answers for itself.

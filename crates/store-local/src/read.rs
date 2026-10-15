@@ -1,6 +1,7 @@
 //! Reading for the console: the reader, row helpers, one trace and its relations, lists with cursors, logs, queries, emails, issues, services, counts.
 
 use super::*;
+use rusqlite::OptionalExtension;
 
 /// How many of an issue's traces the store still holds: what can be opened of the occurrences it counts.
 const STORED: &str =
@@ -805,6 +806,38 @@ impl Reader {
     }
 
     /// Traces by id (the panel's tab history) or the latest ones.
+    /// The trace that served a call another project's app made, by the W3C ids the call carried (its trace and the
+    /// span that called): what a neighbouring agent asks this one.
+    pub fn served(&self, w3c_trace: &str, w3c_span: &str) -> rusqlite::Result<Option<Value>> {
+        let db = self.connect()?;
+        let id: Option<String> = db
+            .query_row(
+                "SELECT trace_id FROM w3c WHERE side = 'in' AND w3c_trace = ?1 AND w3c_span = ?2 LIMIT 1",
+                [w3c_trace, w3c_span],
+                |row| row.get(0),
+            )
+            .optional()?;
+        Ok(match id {
+            Some(id) => self.list_traces(&[id], 1)?.into_iter().next(),
+            None => None,
+        })
+    }
+
+    /// This trace's calls that carried it on to another app no trace here answered: (its W3C trace, the call's W3C
+    /// span, the call's span), for the agents of other projects to be asked.
+    pub fn unanswered_calls(&self, id: &str) -> rusqlite::Result<Vec<(String, String, String)>> {
+        let db = self.connect()?;
+        let mut statement = db.prepare(
+            "SELECT o.w3c_trace, o.w3c_span, o.span_id FROM w3c o
+             WHERE o.trace_id = ?1 AND o.side = 'out' AND o.span_id IS NOT NULL
+               AND NOT EXISTS (SELECT 1 FROM w3c i WHERE i.side = 'in' AND i.w3c_trace = o.w3c_trace
+                                                     AND i.w3c_span = o.w3c_span)
+             LIMIT 20",
+        )?;
+        let rows = statement.query_map([id], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?;
+        rows.collect()
+    }
+
     pub fn list_traces(&self, ids: &[String], limit: i64) -> rusqlite::Result<Vec<Value>> {
         let db = self.connect()?;
         let mut params: Vec<Sql> = ids.iter().map(|id| Sql::Text(id.clone())).collect();

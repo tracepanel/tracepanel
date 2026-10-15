@@ -230,6 +230,8 @@ async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
         let sink = sink.clone();
         async move { tracepanel_protocol::serve(listener, sink, activity).await }
     });
+    // This agent's entry among its neighbours, while it serves a console: removed as it goes.
+    let mut registration = None;
     let console = match serve {
         Some(addr) => {
             let listener = tokio::net::TcpListener::bind(&addr).await?;
@@ -237,6 +239,11 @@ async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
             let url = format!("http://{}/", listener.local_addr()?);
             // Where an app's own console (Django's /__tracepanel__/) sends its API calls.
             std::fs::write(&console_file, format!("{url}\n"))?;
+            // Where the agents of other projects on this machine find it, to ask which of its traces served their
+            // apps' calls.
+            let token = tracepanel_server::neighbors::token();
+            tracepanel_server::identify(token.clone(), url.clone());
+            registration = tracepanel_server::neighbors::register(&dir, &url, &token).ok();
             Some((
                 url,
                 tokio::spawn(serve_console(
@@ -281,6 +288,7 @@ async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
     // What was received gets written before exiting.
     let _ = queue.send(Message::Stop);
     let _ = writer.join();
+    drop(registration);
     let _ = std::fs::remove_file(&addr_file);
     let _ = std::fs::remove_file(&console_file);
     if let Some(socket) = address.strip_prefix("unix:") {
