@@ -1,4 +1,4 @@
-import { format } from "sql-formatter";
+import { formatDialect, mysql, postgresql, sqlite } from "sql-formatter";
 
 /** Django's `%s` / `%(name)s` placeholders read as `?`; `%%` (a literal percent sign) is left alone. */
 export function placeholders(sql: string): string {
@@ -11,10 +11,11 @@ export function formatSql(sql: string, vendor = "postgresql"): string {
 }
 
 function formatRaw(sql: string, vendor: string): string {
-  const language = vendor === "sqlite" ? "sqlite" : vendor === "mysql" ? "mysql" : "postgresql";
+  // Only the dialects a vendor can name: the others stay out of the bundle.
+  const dialect = vendor === "sqlite" ? sqlite : vendor === "mysql" ? mysql : postgresql;
   try {
-    return format(sql, {
-      language,
+    return formatDialect(sql, {
+      dialect,
       keywordCase: "upper",
       tabWidth: 2,
       linesBetweenQueries: 1,
