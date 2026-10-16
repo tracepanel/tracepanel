@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- The source around an error's frame is highlighted in JavaScript,
+  TypeScript, Java and Kotlin too, as in Python and Go.
+
+### Changed
+
+- The console's script is a fifth smaller (913 KB from 1,172 KB): SQL is
+  formatted with the dialects of PostgreSQL, MySQL and SQLite only, and the
+  source around a frame is highlighted by a tokenizer of the console's own,
+  in place of Prism's grammars.
+
 ## 0.3.0 (2026-10-15)
 
 Logs in their context: each record knows the spans it was written in, and

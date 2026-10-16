@@ -1,4 +1,4 @@
-import { Highlight, type PrismTheme } from "prism-react-renderer";
+import { languageOf, tokenizeLines } from "./highlight";
 import { ChevronRightIcon } from "./icons";
 import { keyed } from "./keys";
 import { linkProps, type TraceLinks } from "./links";
@@ -22,16 +22,6 @@ function groups(frames: readonly Frame[]): Group[] {
   return result;
 }
 
-// Prism's own colors stay out: the token classes take the console's, in either theme.
-const NO_THEME: PrismTheme = { plain: {}, styles: [] };
-
-/** The language a frame's file is written in, by its name; others are shown as plain text. */
-function languageOf(filename: string): "python" | "go" | null {
-  if (filename.endsWith(".py")) return "python";
-  if (filename.endsWith(".go")) return "go";
-  return null;
-}
-
 function Source({ frame }: { frame: Frame }) {
   if (frame.context_start === null || frame.context.length === 0) {
     return <p className="dt-frame-nosource">Source not available.</p>;
@@ -39,29 +29,31 @@ function Source({ frame }: { frame: Frame }) {
   const start = frame.context_start;
   const language = languageOf(frame.filename);
   if (language === null) return <PlainSource frame={frame} start={start} />;
-  // A window of a file: a string or comment opened above it is read as code, which is the price of a window.
+  const lines = tokenizeLines(frame.context, language);
   return (
-    <Highlight code={frame.context.join("\n")} language={language} theme={NO_THEME}>
-      {({ tokens, getTokenProps }) => (
-        <ol className="dt-source" start={start}>
-          {tokens.map((line, index) => {
-            const number = start + index;
-            return (
-              <li key={number} data-current={number === frame.lineno ? "" : undefined}>
-                <span className="dt-source-no">{number}</span>
-                <code>
-                  {line.every((token) => token.empty)
-                    ? " "
-                    : keyed(line, (token) => token.content).map(({ key, item: token }) => (
-                        <span key={key} {...getTokenProps({ token })} />
-                      ))}
-                </code>
-              </li>
-            );
-          })}
-        </ol>
-      )}
-    </Highlight>
+    <ol className="dt-source" start={start}>
+      {lines.map((line, index) => {
+        const number = start + index;
+        return (
+          <li key={number} data-current={number === frame.lineno ? "" : undefined}>
+            <span className="dt-source-no">{number}</span>
+            <code>
+              {line.length === 0
+                ? " "
+                : keyed(line, (token) => token.text).map(({ key, item: token }) =>
+                    token.type === "plain" ? (
+                      <span key={key}>{token.text}</span>
+                    ) : (
+                      <span key={key} className={`token ${token.type}`}>
+                        {token.text}
+                      </span>
+                    ),
+                  )}
+            </code>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
