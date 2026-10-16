@@ -57,6 +57,9 @@ export default defineConfig({
     ...(watchOut ? { outDir: watchOut, emptyOutDir: false } : {}),
     // Maps next to the files, without a sourceMappingURL in them: the agent embeds the minified files only.
     sourcemap: "hidden",
+    // One file by design (below), served from this machine: Vite's 500 kB is for chunks loaded over the internet.
+    // The bundle is about 900 kB; past 1,000 kB it warns again, as a regression to look at.
+    chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
         // One file of code: no chunk with a hashed name to version.
