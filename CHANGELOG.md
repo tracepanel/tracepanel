@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.3.1 (2026-10-16)
+
+A lighter console, and highlighted source in more languages.
 
 ### Added
 
