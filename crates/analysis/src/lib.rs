@@ -1141,6 +1141,33 @@ mod tests {
     }
 
     #[test]
+    fn a_call_recorded_by_two_layers_is_one_call() {
+        // Next.js's fetch span, and undici's span for the same request under it.
+        let mut nested = request(&[
+            get("https://api.example.com/rates"),
+            get("https://api.example.com/rates"),
+        ]);
+        nested.spans[1].parent_id = Some(nested.spans[0].id.clone());
+
+        assert_eq!(found(&nested), []);
+
+        // The same request twice, side by side: still a duplicate.
+        let siblings = request(&[
+            get("https://api.example.com/rates"),
+            get("https://api.example.com/rates"),
+        ]);
+
+        assert_eq!(
+            found(&siblings),
+            [(
+                "duplicates".to_owned(),
+                "Duplicate calls: 2 identical · GET api.example.com/rates".to_owned(),
+                2
+            )]
+        );
+    }
+
+    #[test]
     fn single_calls_and_calls_from_library_code_are_no_issue() {
         // Made by a library, with no project frame to point at.
         let mut library = get("https://auth.example.com/keys");

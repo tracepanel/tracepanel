@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- An HTTP call that two layers of instrumentation both record, such as
+  Next.js's fetch and undici under it, counts as one call. It is no longer
+  reported as a duplicate of itself.
+
 ## 0.3.1 (2026-10-16)
 
 A lighter console, and highlighted source in more languages.
