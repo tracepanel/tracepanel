@@ -3,6 +3,7 @@ import { ChevronRightIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 import { ExplainView } from "./ExplainView";
 import { duration } from "./format";
+import { focusMark, useScrollToFocus } from "./hooks/useScrollToFocus";
 import { queryFingerprint } from "./lib/fingerprint";
 import { linkProps, type TraceLinks } from "./links";
 import { AliasChip, IssueChip } from "./primitives";
@@ -94,7 +95,7 @@ function Row({
   children: React.ReactNode;
 }) {
   return (
-    <li className={cn("border-b last:border-b-0", focused && "bg-brand-soft/40")}>
+    <li {...focusMark(focused)} className={cn("border-b last:border-b-0", focused && "bg-brand-soft/40")}>
       <details open={open} className="group/row">
         <summary className="grid cursor-pointer list-none grid-cols-[14px_36px_minmax(0,1fr)_auto_88px_64px] items-center gap-2.5 px-3 py-1.5 hover:bg-accent [&::-webkit-details-marker]:hidden">
           <ChevronRightIcon className="size-4 text-muted-foreground transition-transform group-open/row:rotate-90" />
@@ -120,6 +121,7 @@ export function SqlList({ spans, issueBySpan, focus, onExplain, links }: SqlList
   const groups = useMemo(() => groupSpans(spans, issueBySpan), [spans, issueBySpan]);
   const heaviestGroup = Math.max(...groups.map((group) => group.total), 1);
   const slowestSpan = Math.max(...spans.map((span) => span.duration), 1);
+  const list = useScrollToFocus<HTMLUListElement>(focus);
 
   if (spans.length === 0)
     return <p className="px-4 py-6 text-sm text-muted-foreground">No database queries in this request.</p>;
@@ -145,7 +147,7 @@ export function SqlList({ spans, issueBySpan, focus, onExplain, links }: SqlList
         </div>
       </div>
 
-      <ul className="m-0 list-none overflow-hidden rounded-lg border bg-card p-0">
+      <ul ref={list} className="m-0 list-none overflow-hidden rounded-lg border bg-card p-0">
         {mode === "grouped"
           ? groups.map((group) => {
               const first = group.spans[0];

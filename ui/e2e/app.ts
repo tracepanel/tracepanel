@@ -10,7 +10,8 @@ export interface Call {
   trace: string;
   queries: number;
   totalMs: number;
-  issues?: number;
+  /** "pending": the agent finds them after the response, as the SDKs say. */
+  issues?: number | "pending";
 }
 
 /** The page's own request, as a server that traced it writes it on the widget's script tag. */

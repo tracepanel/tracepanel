@@ -2,6 +2,7 @@ import { cn } from "@tracepanel/ui/lib/utils";
 import { ChevronRightIcon } from "lucide-react";
 import { useMemo } from "react";
 import { duration } from "./format";
+import { focusMark, useScrollToFocus } from "./hooks/useScrollToFocus";
 import { callTemplate } from "./lib/calls";
 import { IssueChip } from "./primitives";
 import type { IssueKind, Span } from "./types";
@@ -84,6 +85,7 @@ function Call({ span, index, focused }: { span: Span; index: number; focused: bo
 export function CallsList({ spans, issueBySpan, focus }: CallsListProps) {
   const groups = useMemo(() => groupCalls(spans, issueBySpan), [spans, issueBySpan]);
   const heaviest = Math.max(...groups.map((group) => group.total), 1);
+  const list = useScrollToFocus<HTMLUListElement>(focus);
   if (spans.length === 0)
     return <p className="px-4 py-6 text-sm text-muted-foreground">No calls of this kind in this request.</p>;
   return (
@@ -91,11 +93,15 @@ export function CallsList({ spans, issueBySpan, focus }: CallsListProps) {
       <span className="text-sm text-muted-foreground">
         {spans.length} {spans.length === 1 ? "call" : "calls"} · {groups.length} unique
       </span>
-      <ul className="m-0 list-none overflow-hidden rounded-lg border bg-card p-0">
+      <ul ref={list} className="m-0 list-none overflow-hidden rounded-lg border bg-card p-0">
         {groups.map((group) => {
           const focused = focus ? group.spans.some((span) => focus.has(span.id)) : false;
           return (
-            <li key={group.template} className={cn("border-b last:border-b-0", focused && "bg-brand-soft/40")}>
+            <li
+              key={group.template}
+              {...focusMark(focused)}
+              className={cn("border-b last:border-b-0", focused && "bg-brand-soft/40")}
+            >
               <details open={focused} className="group/row">
                 <summary className="grid cursor-pointer list-none grid-cols-[14px_36px_minmax(0,1fr)_auto_88px_64px] items-center gap-2.5 px-3 py-1.5 hover:bg-accent [&::-webkit-details-marker]:hidden">
                   <ChevronRightIcon className="size-4 text-muted-foreground transition-transform group-open/row:rotate-90" />

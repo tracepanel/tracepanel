@@ -756,12 +756,26 @@ function settled(body: unknown, use: (body: unknown) => boolean): boolean {
   return body !== undefined && use(body);
 }
 
+/** `duration` in microseconds: the root span's, as the panel shows it. */
 // biome-ignore lint/style/useNamingConvention: the API's field name.
-type ListedTrace = { id: string; issues?: number; issue_kinds?: string[] };
+type ListedTrace = { id: string; issues?: number; issue_kinds?: string[]; duration?: number };
 
 /** One trace from a listing of traces by id, if the agent has stored it. */
 function listedTrace(body: unknown, id: string | undefined): ListedTrace | undefined {
   return (body as { traces?: ListedTrace[] }).traces?.find((trace) => trace.id === id);
+}
+
+/**
+ * A request's time once the agent stored it: the root span's, as the panel shows it. The header's is taken before the
+ * response is sent, the span's after: near .5 ms the two would read a millisecond apart.
+ */
+function storedMs(row: ListedTrace, header: number | undefined): number | undefined {
+  return row.duration === undefined ? header : row.duration / 1000;
+}
+
+/** A tab entry's summary with what the agent found: its issues, their kinds and the stored time. */
+function stored(summary: EntrySummary, row: ListedTrace): EntrySummary {
+  return { ...summary, issues: row.issues ?? 0, kinds: row.issue_kinds, duration: row.duration ?? summary.duration };
 }
 
 /** The mark and name of what served the page; an unknown runtime keeps its language's first word. */
@@ -958,8 +972,9 @@ export function mount(options: WidgetOptions = {}): Widget {
   function applyIssues(info: TraceInfo, row: ListedTrace): void {
     info.issues = row.issues ?? 0;
     info.issuesPending = false;
+    info.totalMs = storedMs(row, info.totalMs);
     const entry = tab.find((item) => item.id === info.trace);
-    if (entry?.summary) entry.summary = { ...entry.summary, issues: info.issues, kinds: row.issue_kinds };
+    if (entry?.summary) entry.summary = stored(entry.summary, row);
     saveTab(tab);
     render();
     sendTab();
