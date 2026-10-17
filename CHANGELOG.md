@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.3 (2026-10-17)
+
+### Fixed
+
+- "Show N queries" on an issue scrolls to the group it opens. A group last in
+  a long list used to open below the fold.
+- The widget's pill shows a request's time as the console does. It read the
+  time the app wrote before sending the response, so near half a millisecond
+  the two could differ by one: 650 ms in the pill, 649 ms in the console.
+
 ## 0.3.2 (2026-10-17)
 
 ### Fixed
