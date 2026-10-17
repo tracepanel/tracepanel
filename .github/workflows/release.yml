@@ -86,3 +86,24 @@ jobs:
         # Wheels and the sdist only: the run also holds the npm packages (.tgz), which npm.yml stages once this run
         # succeeds, the same build on both registries.
         run: uv publish --trusted-publishing always dist/*.whl dist/*.tar.gz
+
+  # The release on GitHub, after the registry took it: its notes are the changelog's entry for the version.
+  github:
+    name: GitHub release
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          awk -v head="## $GITHUB_REF_NAME " 'index($0, head) == 1 {on=1; next} /^## / {on=0} on' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then echo "::error::CHANGELOG.md has no entry for $GITHUB_REF_NAME" && exit 1; fi
+          case "$GITHUB_REF_NAME" in
+            *a[0-9]*|*b[0-9]*|*rc[0-9]*|*-*) pre=--prerelease ;;
+            *) pre= ;;
+          esac
+          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md --verify-tag $pre
