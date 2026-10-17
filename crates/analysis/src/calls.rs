@@ -472,7 +472,23 @@ fn call_of<'a>(operation: &Operation, span: &'a Span) -> Call<'a> {
     }
 }
 
-/// The engine's order: the families as the issues always came (HTTP, Redis, cache), then the others; inside a family,
+/// An HTTP call recorded twice: a span under an `http.client` span for the same method and URL, as when two layers of
+/// instrumentation each record one request (Next.js's fetch and undici under it). The outer span is the call.
+fn nested_http_repeat(trace: &Trace, call: &Call<'_>) -> bool {
+    if call.span.kind != "http.client" {
+        return false;
+    }
+    let Some(parent_id) = call.span.parent_id.as_deref() else {
+        return false;
+    };
+    trace
+        .spans
+        .iter()
+        .find(|candidate| candidate.id == parent_id)
+        .is_some_and(|parent| parent.kind == "http.client" && http_call(parent).exact == call.exact)
+}
+
+/// The engine's order:the families as the issues always came (HTTP, Redis, cache), then the others; inside a family,
 /// its systems as they first appear.
 const ENGINE_ORDER: &[&str] = &["http", "redis", "cache", "datastore", "rpc", "messaging"];
 
@@ -495,6 +511,9 @@ pub(crate) fn operation_issues(trace: &Trace, thresholds: &Thresholds) -> Vec<Is
             continue;
         }
         let call = call_of(&operation, span);
+        if nested_http_repeat(trace, &call) {
+            continue;
+        }
         let system = (operation.family, operation.system.clone());
         if !order.contains_key(&system) {
             systems.push(system.clone());
