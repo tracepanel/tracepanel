@@ -27,6 +27,25 @@ test("an endpoint's N+1 shows in its trace, down to the repeated query", async (
   await expect(page.getByRole("heading", { level: 1, name: "GET /api/posts" })).toBeVisible();
 });
 
+test("Show N queries on an issue scrolls to the group it opened", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 360 });
+  await page.goto("/#/endpoints");
+  await page
+    .getByRole("main")
+    .getByRole("link", { name: /^GET \/api\/posts / })
+    .first()
+    .click();
+  await page.getByRole("table").last().getByRole("link").first().click();
+  await page.getByRole("tab", { name: /^Issues/ }).click();
+
+  await page
+    .getByRole("button", { name: /^Show \d+ queries/ })
+    .first()
+    .click();
+
+  await expect(page.getByRole("tabpanel").locator("li[data-focused]").first()).toBeInViewport();
+});
+
 test("an error leads to its endpoint, and its call's trace opens on the stack", async ({ page }) => {
   await page.goto("/#/errors");
   await page

@@ -1,4 +1,5 @@
 // The widget on an app's page: the pill's states, the panel it opens, and the tab's list.
+import { CONSOLE } from "../agent.ts";
 import { type Call, openApp, panel, pill, traceId } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
 
@@ -58,6 +59,15 @@ test("on a page that isn't UTF-8, the widget's text still reads right", async ({
   await page.getByRole("button", { name: "Load posts" }).click();
 
   await expect(pill(page)).toHaveAccessibleName(/GET \/app\/api\/posts → 200 · 5 ms/);
+});
+
+test("once the agent stored the request, the pill shows its time as the panel does", async ({ page }) => {
+  const call = { ...(await posts()), totalMs: 0.4, issues: "pending" as const };
+  const stored = (await (await fetch(`${CONSOLE}api/traces/${call.trace}`)).json()) as { duration: number };
+  await openApp(page, { posts: call });
+  await page.getByRole("button", { name: "Load posts" }).click();
+
+  await expect(pill(page)).toHaveAccessibleName(new RegExp(` · ${Math.round(stored.duration / 1000)} ms · `));
 });
 
 test("the panel opens on the latest request's trace, from the agent", async ({ page }) => {
