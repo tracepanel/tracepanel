@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.4 (2026-10-18)
+
+### Fixed
+
+- A Spring Boot app is named Spring Boot in the widget and the console, as
+  the Java SDK labels it. It read "Spring", the first word of the name. A
+  Spring MVC app seen through OpenTelemetry is still named Spring.
+
 ## 0.3.3 (2026-10-17)
 
 ### Fixed
