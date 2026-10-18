@@ -27,6 +27,7 @@ from pathlib import Path
 SCOPE = "@tracepanel"
 LICENSE = "FSL-1.1-ALv2"
 REPOSITORY = "https://github.com/tracepanel/tracepanel"
+HOMEPAGE = "https://tracepanel.dev"
 LICENSE_FILES = ("LICENSE", "NOTICE", "THIRD-PARTY-NOTICES")
 
 # The wheel's Rust target: the package's platform, and npm's os, cpu and libc for it (None: any libc).
@@ -208,7 +209,7 @@ def common(name: str, description: str, version: str) -> dict[str, object]:
         "version": version,
         "description": description,
         "license": LICENSE,
-        "homepage": REPOSITORY,
+        "homepage": HOMEPAGE,
         "repository": {"type": "git", "url": f"git+{REPOSITORY}.git"},
     }
 
