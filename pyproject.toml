@@ -19,7 +19,8 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/tracepanel/tracepanel"
+Homepage = "https://tracepanel.dev"
+Documentation = "https://tracepanel.dev/docs"
 Repository = "https://github.com/tracepanel/tracepanel"
 Issues = "https://github.com/tracepanel/tracepanel/issues"
 
