@@ -537,11 +537,14 @@ a.dt-request-row {
   /* Room on the left for the "this page" dot, clear of the method's badge. */
   padding: 0.375rem 0.75rem 0.375rem 1.125rem;
 }
+/* Narrow too, a view's or an action's requests sit under it: indented, with the tree's corner. */
 .dt-requests[data-compact] .dt-request-row[data-depth="1"] {
-  padding-left: 1.125rem;
+  padding-left: 2rem;
 }
 .dt-requests[data-compact] .dt-request-row[data-depth="1"]::after {
-  display: none;
+  left: 1rem;
+  width: 0.5rem;
+  height: 1rem;
 }
 .dt-requests[data-compact] .dt-request-main {
   grid-column: 1;
