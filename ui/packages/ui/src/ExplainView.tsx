@@ -1,8 +1,9 @@
 import { CircleCheckIcon, TriangleAlertIcon } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Badge } from "./components/ui/badge";
 import { Button } from "./components/ui/button";
 import { keyed } from "./keys";
+import { type PlanToken, tokenizePlan } from "./lib/plan";
 import type { ExplainPlan } from "./types";
 
 export interface ExplainViewProps {
@@ -85,9 +86,7 @@ export function ExplainView({ load, vendor }: ExplainViewProps) {
         <ol className="m-0 grid list-none rounded-md border bg-muted/60 py-1.5">
           {keyed(plan.lines, (line) => `${line.depth}:${line.text}`).map(({ key, item: line }) => (
             <li key={key} className="grid gap-0.5 py-1 pr-3" style={{ paddingLeft: `${0.75 + line.depth * 1.25}rem` }}>
-              <code className={`font-mono text-sm whitespace-pre-wrap ${line.warning ? "text-warn" : ""}`}>
-                {line.text}
-              </code>
+              <PlanText text={line.text} warning={Boolean(line.warning)} />
               {line.warning ? (
                 <span className="flex items-center gap-1.5 text-sm text-text-2">
                   <TriangleAlertIcon className="size-3.5 text-warn" />
@@ -99,5 +98,31 @@ export function ExplainView({ load, vendor }: ExplainViewProps) {
         </ol>
       ) : null}
     </section>
+  );
+}
+
+const PLAN_CLASSES: Record<PlanToken["type"], string | undefined> = {
+  op: "dt-plan-op",
+  label: "dt-plan-label",
+  keyword: "dt-sql-keyword",
+  name: "dt-sql-identifier",
+  key: "dt-plan-key",
+  number: "dt-sql-number",
+  string: "dt-sql-string",
+  text: undefined,
+};
+
+/** A plan line in colour, as the statement above it: its operation, the tables and indexes, the numbers. */
+function PlanText({ text, warning }: { text: string; warning: boolean }) {
+  const tokens = useMemo(() => tokenizePlan(text), [text]);
+  return (
+    <code className="dt-plan-line font-mono text-sm whitespace-pre-wrap" data-warning={warning ? "" : undefined}>
+      {tokens.map((token, index) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: the parts of one line never reorder.
+        <span key={index} className={PLAN_CLASSES[token.type]}>
+          {token.text}
+        </span>
+      ))}
+    </code>
   );
 }
