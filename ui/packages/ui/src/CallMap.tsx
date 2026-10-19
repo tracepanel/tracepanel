@@ -16,10 +16,12 @@ import { AllAttributes, LogRecordDetails } from "./LogRecordDetails";
 import { breakdown, CATEGORY_LABELS, type Category } from "./lib/breakdown";
 import { callFields } from "./lib/callFields";
 import { callTemplate, groupNoun } from "./lib/calls";
+import { runtimeKind, traceRuntime } from "./lib/runtime";
 import { CALL_KINDS, DATASTORES, MESSAGING, RPC } from "./lib/systems";
 import { linkProps, type TraceLinks } from "./links";
 import { type PropRow, PropTable } from "./PropTable";
 import { AliasChip, IssueChip } from "./primitives";
+import { RuntimeIcon } from "./RuntimeIcon";
 import { SideResize, useSideWidth } from "./SideResize";
 import { SqlCode } from "./SqlCode";
 import type { Attrs, IssueKind, Log, Related, Span, Trace, TraceError, TraceSummary } from "./types";
@@ -32,8 +34,16 @@ type Node =
   | { type: "log"; key: string; log: Log }
   | { type: "error"; key: string; error: TraceError }
   // A trace of its own under a span of this one: a task it enqueued, run in a worker (or still waiting for one), or
-  // the trace another app served for one of its calls (`kind: "call"`).
-  | { type: "task"; key: string; run: TraceSummary; kind: "task" | "call"; remote?: Remote | undefined }
+  // the trace another app served for one of its calls (`kind: "call"`), with that trace's own rows when it came whole.
+  | {
+      type: "task";
+      key: string;
+      run: TraceSummary;
+      kind: "task" | "call";
+      remote?: Remote | undefined;
+      whole?: Trace | undefined;
+      children: Node[];
+    }
   | { type: "waiting"; key: string; span: Span; kind: "task" };
 
 function startOf(node: Node): number {
@@ -101,11 +111,24 @@ interface Remote {
   project: string;
 }
 
+/** A call's trace as a row of this tree, with that trace's own rows under it when it came whole. */
+function callNode(key: string, run: TraceSummary, related: Related, remote?: Remote): Node {
+  const whole = related.call_traces?.[run.id];
+  return { type: "task", key, run, kind: "call", remote, whole, children: whole ? servedRows(whole) : [] };
+}
+
+/** What the other app did for the call: its request's rows, the request itself being the call's row. */
+function servedRows(whole: Trace): Node[] {
+  return buildTree(whole, undefined).flatMap((node) =>
+    node.type === "span" && node.span.parent_id === null ? node.children : [node],
+  );
+}
+
 /** The traces other projects' agents have for this trace's calls, under the calls. */
 function remoteNodes(related: Related): [string, Node][] {
   return (related.remote_calls ?? []).map(({ span_id, trace, console, project }): [string, Node] => [
     span_id,
-    { type: "task", key: `remote:${trace.id}`, run: trace, kind: "call", remote: { console, project } },
+    callNode(`remote:${trace.id}`, trace, related, { console, project }),
   ]);
 }
 
@@ -113,8 +136,13 @@ function remoteNodes(related: Related): [string, Node][] {
 function linked(runs: readonly TraceSummary[], related: Related, kind: "task" | "call"): [string, Node][] {
   return runs.flatMap((run): [string, Node][] => {
     const span = related.via[run.id];
-    return span ? [[span, { type: "task", key: `${kind}:${run.id}`, run, kind }]] : [];
+    if (!span) return [];
+    return [[span, kind === "call" ? callNode(`call:${run.id}`, run, related) : taskNode(run)]];
   });
+}
+
+function taskNode(run: TraceSummary): Node {
+  return { type: "task", key: `task:${run.id}`, run, kind: "task", children: [] };
 }
 
 /**
@@ -226,7 +254,7 @@ function markTree(nodes: Node[], active: ReadonlySet<FilterId>, marks = new Map<
   for (const node of nodes) {
     const filter = FILTER_OF.get(kindOf(node));
     const matches = filter !== undefined && active.has(filter);
-    const below = node.type === "span" ? markTree(node.children, active, marks) : false;
+    const below = markTree(childrenOf(node), active, marks);
     if (matches) marks.set(node.key, "match");
     else if (below) marks.set(node.key, "path");
     any = any || matches || below;
@@ -425,12 +453,35 @@ function runView(node: Extract<Node, { type: "task" }>, trace: Trace): LinkedVie
       <>
         <span className="dt-map-text">{node.run.name}</span>
         <TaskState state={node.run.task_state} />
-        {node.remote ? <span className="dt-map-project">{node.remote.project}</span> : null}
+        {node.kind === "call" ? <AppChip node={node} /> : null}
       </>
     ),
     track: <Bar trace={trace} start={node.run.start} length={node.run.duration} />,
     time: duration(node.run.duration),
   };
+}
+
+/** Which app served a call: its runtime's mark, and its project (another agent's) or its service (this one's). */
+function AppChip({ node }: { node: Extract<Node, { type: "task" }> }) {
+  const name = appName(node);
+  if (!name) return null;
+  const runtime = traceRuntime(node.whole?.attrs ?? {});
+  return (
+    <span className="dt-map-app" title={[name, runtime].filter(Boolean).join(" · ")}>
+      <RuntimeMark runtime={runtime} />
+      {name}
+    </span>
+  );
+}
+
+function appName(node: Extract<Node, { type: "task" }>): string | undefined {
+  const service = node.whole?.attrs["service.name"];
+  return node.remote?.project ?? (typeof service === "string" ? service : undefined);
+}
+
+function RuntimeMark({ runtime }: { runtime: string | undefined }) {
+  const kind = runtime ? runtimeKind(runtime) : null;
+  return kind ? <RuntimeIcon kind={kind} /> : null;
 }
 
 /** A task enqueued that no worker has run yet. */
@@ -445,30 +496,79 @@ function waitingView(node: Extract<Node, { type: "waiting" }>, trace: Trace): Li
 }
 
 /** A trace of its own under a span of this one: a task (or one waiting for a worker), or another app's trace. */
-function LinkedRow({ node, ctx, indent, dim }: { node: Linked; ctx: RowContext; indent: CSSProperties; dim: boolean }) {
-  const view = node.type === "task" ? runView(node, ctx.trace) : waitingView(node, ctx.trace);
+function LinkedRow({
+  node,
+  ctx,
+  indent,
+  depth,
+  dim,
+}: {
+  node: Linked;
+  ctx: RowContext;
+  indent: CSSProperties;
+  depth: number;
+  dim: boolean;
+}) {
+  const children = childrenOf(node);
+  // Open from the start: what the other app did is why it is here.
+  const open = children.length > 0 ? dim || !ctx.collapsed.has(node.key) : undefined;
   return (
-    <Fragment>
-      <button
-        type="button"
-        className="dt-map-row"
-        data-dim={dim ? "" : undefined}
-        data-kind="task"
-        data-status={view.status}
-        aria-current={ctx.selected === node.key ? "true" : undefined}
-        onClick={() => ctx.onSelect(node.key)}
-      >
-        <span className="dt-map-name" style={indent}>
-          <span className="dt-map-caret" />
-          <span className="dt-map-kind">{view.kind}</span>
-          {view.text}
-        </span>
-        {view.track}
-        <span className="dt-map-time">{view.time}</span>
-      </button>
+    <div>
+      <LinkedButton node={node} ctx={ctx} indent={indent} dim={dim} open={open} />
       <RowDetails id={node.key} ctx={ctx} />
-    </Fragment>
+      {open ? <Rows nodes={children} depth={depth + 1} ctx={ctx} /> : null}
+    </div>
   );
+}
+
+/** The linked row itself; `open` is set when it has rows to fold: a first click selects it, a second folds it. */
+function LinkedButton({
+  node,
+  ctx,
+  indent,
+  dim,
+  open,
+}: {
+  node: Linked;
+  ctx: RowContext;
+  indent: CSSProperties;
+  dim: boolean;
+  open: boolean | undefined;
+}) {
+  const view = linkedView(node, ctx.trace);
+  const selected = ctx.selected === node.key;
+  return (
+    <button
+      type="button"
+      className="dt-map-row"
+      data-dim={dim ? "" : undefined}
+      data-kind="task"
+      data-status={view.status}
+      aria-expanded={open}
+      aria-current={selected ? "true" : undefined}
+      onClick={() => {
+        if (selected && open !== undefined) ctx.onToggle(node.key);
+        ctx.onSelect(node.key);
+      }}
+    >
+      <span className="dt-map-name" style={indent}>
+        <span className="dt-map-caret">{open === undefined ? null : <ChevronRightIcon />}</span>
+        <span className="dt-map-kind">{view.kind}</span>
+        {view.text}
+      </span>
+      {view.track}
+      <span className="dt-map-time">{view.time}</span>
+    </button>
+  );
+}
+
+function linkedView(node: Linked, trace: Trace): LinkedView {
+  return node.type === "task" ? runView(node, trace) : waitingView(node, trace);
+}
+
+/** The rows under a row: a span's, or those of a call's trace that came whole. */
+function childrenOf(node: Node): Node[] {
+  return node.type === "span" || node.type === "task" ? node.children : [];
 }
 
 function Rows({ nodes, depth, ctx }: { nodes: Node[]; depth: number; ctx: RowContext }) {
@@ -510,7 +610,7 @@ function Rows({ nodes, depth, ctx }: { nodes: Node[]; depth: number; ctx: RowCon
           );
         }
         if (node.type === "task" || node.type === "waiting") {
-          return <LinkedRow key={node.key} node={node} ctx={ctx} indent={indent} dim={mark === "path"} />;
+          return <LinkedRow key={node.key} node={node} ctx={ctx} indent={indent} depth={depth} dim={mark === "path"} />;
         }
         if (node.type === "group") {
           const open = ctx.collapsed.has(`open:${node.key}`);
@@ -620,19 +720,32 @@ function TaskState({ state }: { state: string | null }) {
 
 /* ---------- details of the selected row ---------- */
 
-function findNode(nodes: Node[], key: string): Node | undefined {
+/** The row with this key, and the trace it belongs to: this one, or a call's trace opened under the call. */
+function findNode(nodes: Node[], key: string, trace: Trace): Found | undefined {
   for (const node of nodes) {
-    if (node.key === key) return node;
-    if (node.type === "group") {
-      const span = node.spans.find((item) => item.id === key);
-      if (span) return { type: "span", key: span.id, span, children: [] };
-    }
-    if (node.type === "span") {
-      const found = findNode(node.children, key);
-      if (found) return found;
-    }
+    const found = findIn(node, key, trace);
+    if (found) return found;
   }
   return undefined;
+}
+
+type Found = { node: Node; trace: Trace };
+
+function findIn(node: Node, key: string, trace: Trace): Found | undefined {
+  if (node.key === key) return { node, trace };
+  if (node.type === "group") return groupSpan(node, key, trace);
+  return findNode(childrenOf(node), key, ownerOf(node, trace));
+}
+
+/** One call of a group, as its own row. */
+function groupSpan(node: Extract<Node, { type: "group" }>, key: string, trace: Trace): Found | undefined {
+  const span = node.spans.find((item) => item.id === key);
+  return span ? { node: { type: "span", key: span.id, span, children: [] }, trace } : undefined;
+}
+
+/** The trace a row's children belong to: a call's own when it came whole. */
+function ownerOf(node: Node, trace: Trace): Trace {
+  return node.type === "task" && node.whole ? node.whole : trace;
 }
 
 /** How a run's details name it: a task a worker ran, or the trace another app served for a call. */
@@ -909,8 +1022,8 @@ function useScrolledToInitial(initialSpan: string | undefined): RefObject<HTMLDi
 }
 
 function detailsOf(tree: Node[], selected: string | null, trace: Trace, links: TraceLinks | undefined): ReactNode {
-  const node = selected ? findNode(tree, selected) : undefined;
-  return node ? <Details node={node} trace={trace} links={links} /> : null;
+  const found = selected ? findNode(tree, selected, trace) : undefined;
+  return found ? <Details node={found.node} trace={found.trace} links={links} /> : null;
 }
 
 /** Keys toggled in and out of a set: the folded rows, the opened groups. */
@@ -934,6 +1047,18 @@ function marksOf(tree: Node[], active: ReadonlySet<FilterId>): Map<string, Mark>
   return found;
 }
 
+/** This trace's issues by span, and those of the calls' traces opened under the calls. */
+function withCallIssues(
+  issueBySpan: ReadonlyMap<string, IssueKind>,
+  related: Related | undefined,
+): ReadonlyMap<string, IssueKind> {
+  const issues = Object.values(related?.call_traces ?? {}).flatMap((trace) => trace.issues);
+  return new Map([
+    ...issueBySpan,
+    ...issues.flatMap((issue) => issue.span_ids.map((id): [string, IssueKind] => [id, issue.kind])),
+  ]);
+}
+
 /** The request as a call tree: what ran inside what, in order, and how long each part took. */
 export function CallMap({
   trace,
@@ -951,6 +1076,7 @@ export function CallMap({
   initialSpan?: string | undefined;
 }) {
   const tree = useMemo(() => buildTree(trace, related), [trace, related]);
+  const issues = useMemo(() => withCallIssues(issueBySpan, related), [issueBySpan, related]);
   const { selected, select, close } = useSelection(initialSpan);
   const map = useRef<HTMLDivElement>(null);
   const side = useSidePane(map);
@@ -975,7 +1101,7 @@ export function CallMap({
             depth={0}
             ctx={{
               trace,
-              issueBySpan,
+              issueBySpan: issues,
               selected,
               onSelect: select,
               collapsed,

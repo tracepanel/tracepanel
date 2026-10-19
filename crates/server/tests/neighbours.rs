@@ -79,7 +79,7 @@ async fn a_call_another_projects_app_served_is_listed_with_that_projects_console
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&cache);
-    // SAFETY: this test file sets it before any thread reads it, and its only test runs alone in its process.
+    // SAFETY: the other test of this file reads no environment: its call is answered in its own store.
     unsafe { std::env::set_var("TRACEPANEL_CACHE_DIR", &cache) };
     let token = tracepanel_server::neighbors::token();
     tracepanel_server::identify(token.clone(), "http://127.0.0.1:1/".to_owned());
@@ -119,7 +119,34 @@ async fn a_call_another_projects_app_served_is_listed_with_that_projects_console
         remote[0]["project"],
         format!("tracepanel-neighbours-{}-orders", std::process::id())
     );
+    // The whole trace comes too, for the call tree to open under the call, and not in the list of calls.
+    assert_eq!(remote[0].get("detail"), None);
+    assert_eq!(
+        related["call_traces"]["01M4R1ER9RWER0QHV07BJDSZ7B"]["id"],
+        "01M4R1ER9RWER0QHV07BJDSZ7B"
+    );
+    assert_eq!(
+        related["call_traces"]["01M4R1ER9RWER0QHV07BJDSZ7B"]["spans"][0]["name"],
+        "POST /orders"
+    );
     // Without the registry's token, a neighbour says nothing.
     assert_eq!(refused, StatusCode::FORBIDDEN);
     let _ = std::fs::remove_dir_all(&cache);
+}
+
+#[tokio::test]
+async fn a_call_another_app_of_this_project_served_comes_whole() {
+    let both = tracepanel_server::router(
+        Reader::new(&store("both", &[caller(), callee()])),
+        Activity::default(),
+    );
+
+    let (status, related) = get(&both, "/api/traces/01M4R1ER9RWER0QHV07BJDSZ7A/related").await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(related["calls"][0]["id"], "01M4R1ER9RWER0QHV07BJDSZ7B");
+    assert_eq!(
+        related["call_traces"]["01M4R1ER9RWER0QHV07BJDSZ7B"]["spans"][0]["name"],
+        "POST /orders"
+    );
 }

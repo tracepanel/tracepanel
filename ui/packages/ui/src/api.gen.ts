@@ -1212,6 +1212,10 @@ export interface components {
                 /** @description The other project's folder name. */
                 project: string;
             }[];
+            /** @description The whole traces of calls and remote_calls (up to 20 of calls), by trace id: the call tree opens each under its call. */
+            call_traces?: {
+                [key: string]: components["schemas"]["trace.schema"];
+            };
             /** @description For the traces in enqueued, connection_events, delivered and calls: the span of this trace each came from (the task.enqueue, channel.send or outgoing call span), by trace id. The call tree shows a task under the span that enqueued it, and a call's trace under the call. */
             via: {
                 [key: string]: string;

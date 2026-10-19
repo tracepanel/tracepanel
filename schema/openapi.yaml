@@ -1399,6 +1399,12 @@ components:
               trace: { $ref: "#/components/schemas/TraceSummary" }
               console: { type: string, description: "The other project's console, http://127.0.0.1:PORT/." }
               project: { type: string, description: The other project's folder name. }
+        call_traces:
+          type: object
+          description: >-
+            The whole traces of calls and remote_calls (up to 20 of calls), by trace id: the call tree opens each
+            under its call.
+          additionalProperties: { $ref: "trace.schema.json" }
         via:
           type: object
           description: >-
