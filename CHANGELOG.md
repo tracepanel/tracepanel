@@ -8,11 +8,6 @@
   binary of each platform, with the platform as its classifier
   (`darwin-arm64`, `linux-x64-gnu`, …). The same binaries as on PyPI and npm,
   for the Java SDK, which reaches Maven Central or a company's mirror of it.
-
-## Unreleased
-
-### Added
-
 - Releases carry signed build provenance: the wheels and the sdist, the npm
   packages, and the agent's binary for each platform. `gh attestation verify
   FILE --repo tracepanel/tracepanel` checks one. The files on PyPI carry PEP
