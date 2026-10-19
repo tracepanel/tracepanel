@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.3.6 (2026-10-19)
+
+### Changed
+
+- In the call tree, a click on a row's chevron opens or closes the rows
+  under it and nothing else. It used to select the row and open its
+  details too. On a focused row the arrow keys do the same.
+- The chip naming the app that served a call has the size and shape of the
+  row's other chips.
+
+### Fixed
+
+- In the panel, the calls a page view or an action made are listed under
+  it, with a tree's corner, also in the narrow list and also when the page
+  records itself after the badge loaded. They were listed flat, apart from
+  what made them.
+
 ## 0.3.5 (2026-10-19)
 
 ### Added
