@@ -50,7 +50,11 @@ export function IssueChip({ kind, count }: { kind: IssueKind; count?: number | u
 /** Database or cache alias, shown only when it is not "default". */
 export function AliasChip({ value }: { value: unknown }) {
   if (value === undefined || value === null || value === "" || value === "default") return null;
-  return <span className="dt-alias">{String(value)}</span>;
+  return (
+    <span className="dt-alias" title={String(value)}>
+      {String(value)}
+    </span>
+  );
 }
 
 /** Route patterns like /posts/<int:pk>/ with the parameter parts dimmed. */
