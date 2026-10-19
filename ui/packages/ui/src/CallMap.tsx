@@ -1,6 +1,7 @@
 import {
   type CSSProperties,
   Fragment,
+  type KeyboardEvent,
   type ReactNode,
   type RefObject,
   useEffect,
@@ -550,9 +551,10 @@ function LinkedButton({
         if (selected && open !== undefined) ctx.onToggle(node.key);
         ctx.onSelect(node.key);
       }}
+      onKeyDown={foldKeys(open, () => ctx.onToggle(node.key))}
     >
       <span className="dt-map-name" style={indent}>
-        <span className="dt-map-caret">{open === undefined ? null : <ChevronRightIcon />}</span>
+        <Caret open={open} onToggle={() => ctx.onToggle(node.key)} />
         <span className="dt-map-kind">{view.kind}</span>
         {view.text}
       </span>
@@ -630,11 +632,10 @@ function Rows({ nodes, depth, ctx }: { nodes: Node[]; depth: number; ctx: RowCon
                   ctx.onSelect(node.key);
                   ctx.onToggle(`open:${node.key}`);
                 }}
+                onKeyDown={foldKeys(open, () => ctx.onToggle(`open:${node.key}`))}
               >
                 <span className="dt-map-name" style={indent}>
-                  <span className="dt-map-caret">
-                    <ChevronRightIcon />
-                  </span>
+                  <Caret open={open} onToggle={() => ctx.onToggle(`open:${node.key}`)} />
                   <span className="dt-map-kind">{first?.kind}</span>
                   <span className="dt-map-text">{callTemplate(first)}</span>
                   <AliasChip value={first?.attrs["db.alias"] ?? first?.attrs["cache.alias"]} />
@@ -669,6 +670,7 @@ function Rows({ nodes, depth, ctx }: { nodes: Node[]; depth: number; ctx: RowCon
         const { span } = node;
         const hasChildren = node.children.length > 0;
         const open = hasChildren && (mark === "path" || !ctx.collapsed.has(node.key));
+        const fold = foldOf(hasChildren, open);
         const issue = ctx.issueBySpan.get(span.id);
         return (
           <div key={node.key}>
@@ -689,9 +691,10 @@ function Rows({ nodes, depth, ctx }: { nodes: Node[]; depth: number; ctx: RowCon
                 }
                 ctx.onSelect(node.key);
               }}
+              onKeyDown={foldKeys(fold, () => ctx.onToggle(node.key))}
             >
               <span className="dt-map-name" style={indent}>
-                <span className="dt-map-caret">{hasChildren ? <ChevronRightIcon /> : null}</span>
+                <Caret open={fold} onToggle={() => ctx.onToggle(node.key)} />
                 <span className="dt-map-kind">{span.kind === "http" ? "request" : span.kind}</span>
                 <span className="dt-map-text">{span.name}</span>
                 <AliasChip value={span.attrs["db.alias"] ?? span.attrs["cache.alias"]} />
@@ -707,6 +710,43 @@ function Rows({ nodes, depth, ctx }: { nodes: Node[]; depth: number; ctx: RowCon
       })}
     </>
   );
+}
+
+/**
+ * The fold of a row with rows under it: a click on it opens or closes them only, without selecting the row and
+ * opening its details. A row without any has the empty slot, so names line up.
+ */
+function Caret({ open, onToggle }: { open: boolean | undefined; onToggle: () => void }) {
+  if (open === undefined) return <span className="dt-map-caret" />;
+  return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: inside the row's button; the keyboard folds with the arrows (foldKeys).
+    // biome-ignore lint/a11y/useKeyWithClickEvents: the row's button takes the keys.
+    <span
+      className="dt-map-caret"
+      data-toggle=""
+      onClick={(event) => {
+        event.stopPropagation();
+        onToggle();
+      }}
+    >
+      <ChevronRightIcon />
+    </span>
+  );
+}
+
+/** A row's fold: open or closed, or none for a row with nothing under it. */
+function foldOf(hasChildren: boolean, open: boolean): boolean | undefined {
+  return hasChildren ? open : undefined;
+}
+
+/** As in any tree: → opens a closed row's children, ← closes an open one's. */
+function foldKeys(open: boolean | undefined, toggle: () => void): (event: KeyboardEvent) => void {
+  const key = open ? "ArrowLeft" : "ArrowRight";
+  return (event) => {
+    if (open === undefined || event.key !== key) return;
+    event.preventDefault();
+    toggle();
+  };
 }
 
 function TaskState({ state }: { state: string | null }) {

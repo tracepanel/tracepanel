@@ -36,3 +36,32 @@ for (const width of [1440, 900]) {
     }
   });
 }
+
+test("a row's fold opens and closes its rows without opening its details; the arrow keys do too", async ({ page }) => {
+  await page.goto(`/#/t/${await traceId("PATCH /campaigns/{id}/report")}?tab=calls`);
+  const row = page.getByRole("button", { name: /^transaction/ }).first();
+  const fold = row.locator(".dt-map-caret[data-toggle]");
+  const details = page.getByRole("complementary", { name: "Details" });
+
+  await expect(row).toHaveAttribute("aria-expanded", "true");
+
+  await fold.click();
+
+  await expect(row).toHaveAttribute("aria-expanded", "false");
+  await expect(row).not.toHaveAttribute("aria-current", "true");
+  await expect(details).toHaveCount(0);
+
+  await fold.click();
+
+  await expect(row).toHaveAttribute("aria-expanded", "true");
+
+  await row.focus();
+  await page.keyboard.press("ArrowLeft");
+
+  await expect(row).toHaveAttribute("aria-expanded", "false");
+
+  await page.keyboard.press("ArrowRight");
+
+  await expect(row).toHaveAttribute("aria-expanded", "true");
+  await expect(details).toHaveCount(0);
+});
