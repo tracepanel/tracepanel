@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.3.5 (2026-10-19)
+
+### Added
+
+- The call tree opens the trace another app served for a call under that
+  call: the app's view, queries, calls and issues. A chip names the app and
+  its runtime. This works when the apps share an agent and when each project
+  runs its own. A call used to show the other app's trace as one row.
+- A query plan is in colour, as the statement above it. The operation stands
+  out, a full scan's in the warning colour. Tables and indexes read as names,
+  and the costs recede.
+
+### Changed
+
+- The panel's list of requests marks a request's issues with one chip and
+  their count, so the path keeps its room. The chip's title names them.
+- Explain and Explain analyze follow the query plan's heading. On a wide
+  statement they were scrolled out of view at the far end.
+- The console and the panel are 5% smaller.
+
+### Fixed
+
+- EXPLAIN runs a query that has no parameters, such as one with its values
+  written in the SQL. It answered that the parameters were not recorded.
+- In the call tree, a row with a long database alias and an issue keeps its
+  call's text in view. The alias, the chip and the text ran into each other
+  and into the bar.
+- On the Services page, an app's calls to itself are a loop on its box. They
+  were drawn as a stray line under it.
+
 ## 0.3.4 (2026-10-18)
 
 ### Fixed
