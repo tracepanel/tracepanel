@@ -5,10 +5,8 @@
 use rusqlite::types::Value as Sql;
 use rusqlite::{Connection, params};
 use serde_json::Value;
-use sha1::{Digest, Sha1};
 use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
-use tracepanel_analysis::calls::Operation;
 use tracepanel_protocol::{Attrs, Received, Span, Trace};
 
 pub mod search;
@@ -33,7 +31,7 @@ pub use read::{Page, ReadError, Reader};
 /// The store's errors (SQLite's).
 pub use rusqlite::Error;
 pub use stats::{SLOW_REQUEST_US, stats};
-pub use values::{call_key, query_fingerprint};
+pub use tracepanel_analysis::calls::{call_key, query_fingerprint};
 pub use write::{DEFAULT_MAX_TRACES, SCHEMA, Store, path_in, version};
 
 #[cfg(test)]
@@ -52,33 +50,6 @@ mod tests {
         assert!(truthy(Some(&Value::from("x"))));
         assert_eq!(py_str(&Value::from(true)), "True");
         assert_eq!(py_str(&serde_json::json!(1.0)), "1.0");
-        assert_eq!(query_fingerprint("SELECT 1", "default").len(), 16);
-    }
-
-    #[test]
-    fn an_operation_s_key_is_its_system_target_op_template_and_via() {
-        let operation = |system: &str, target: &str, via: Option<&'static str>| Operation {
-            system: system.into(),
-            family: "http",
-            target: target.into(),
-            op: "GET".into(),
-            template: "/users/{id}".into(),
-            name: String::new(),
-            statement: None,
-            vendor: None,
-            params_hash: None,
-            via,
-            hit: None,
-        };
-        let key = call_key(&operation("http", "api.example.com", None));
-        assert_eq!(key.len(), 16);
-        assert_eq!(key, call_key(&operation("http", "api.example.com", None)));
-        assert_ne!(key, call_key(&operation("http", "other.example.com", None)));
-        assert_ne!(key, call_key(&operation("grpc", "api.example.com", None)));
-        assert_ne!(
-            key,
-            call_key(&operation("http", "api.example.com", Some("cache")))
-        );
     }
 
     /// A request that reads three users through Django's cache (on Redis), a Redis GET under each, and one direct

@@ -83,9 +83,63 @@
     "received": {
       "$ref": "#/$defs/time",
       "description": "When the agent received it, by its machine's clock: set by the agent, never sent. Against start and duration (the app's clock) it tells a clock that is off."
+    },
+    "calls": {
+      "type": "array",
+      "description": "Its spans that are calls to another system, as the agent's analysis reads them: set by the agent on a trace it sends on, never by an SDK. The rest of each call is its span's.",
+      "items": {
+        "$ref": "#/$defs/call"
+      }
     }
   },
   "$defs": {
+    "call": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["span_id", "key", "system", "family", "target", "op", "template", "vendor", "via", "hit"],
+      "properties": {
+        "span_id": {
+          "$ref": "#/$defs/id",
+          "description": "The span the call is."
+        },
+        "key": {
+          "type": "string",
+          "description": "What groups its repeats: 16 hex, the console's op: and query: key."
+        },
+        "system": {
+          "type": "string",
+          "description": "What it is listed under: sql, redis, cache, http, mongodb, kafka, grpc, or a system's own name."
+        },
+        "family": {
+          "type": "string",
+          "description": "The rules its issues follow: sql, redis, cache, http, rpc, datastore, messaging."
+        },
+        "target": {
+          "type": "string",
+          "description": "Where it went: a database alias, an instance, a host, a topic, an RPC service."
+        },
+        "op": {
+          "type": "string",
+          "description": "The verb: SELECT, GET, find, publish, the RPC method."
+        },
+        "template": {
+          "type": "string",
+          "description": "What its repeats share: a SQL fingerprint, a key or path with its ids as {id}."
+        },
+        "vendor": {
+          "type": ["string", "null"],
+          "description": "SQL: the database vendor; a cache: its backend."
+        },
+        "via": {
+          "type": ["string", "null"],
+          "description": "Redis: what sent the command (direct, cache, task)."
+        },
+        "hit": {
+          "type": ["boolean", "null"],
+          "description": "A cache get: whether it found the key."
+        }
+      }
+    },
     "id": {
       "type": "string",
       "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$",

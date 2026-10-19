@@ -77,9 +77,11 @@ fn valid_environment(name: &str) -> bool {
             .all(|byte| matches!(byte, b'a'..=b'z' | b'0'..=b'9' | b'.' | b'_' | b'-'))
 }
 
-/// A trace as the cloud gets it: what stays local stripped, the environment stamped unless it names its own.
+/// A trace as the cloud gets it: what stays local stripped, the environment stamped unless it names its own, and its
+/// calls to other systems as the analysis reads them (`calls`), so the cloud groups them by the same keys.
 pub fn prepare(doc: &str, environment: &str) -> Option<Value> {
     let mut trace: Value = serde_json::from_str(doc).ok()?;
+    let calls = calls_of(doc);
     let object = trace.as_object_mut()?;
     let attrs = object
         .entry("attrs")
@@ -93,7 +95,37 @@ pub fn prepare(doc: &str, environment: &str) -> Option<Value> {
         }
     }
     tracepanel_protocol::local::strip(&mut trace);
+    if let (Some(calls), Some(object)) = (calls, trace.as_object_mut()) {
+        object.insert("calls".into(), calls);
+    }
     Some(trace)
+}
+
+/// Each span that is a call to another system, by its span's id, with what the analysis makes of it: the rest (its
+/// name, statement, time, outcome, line of code) the cloud reads off the span itself. None for a document that isn't a
+/// whole trace.
+fn calls_of(doc: &str) -> Option<Value> {
+    let trace: tracepanel_protocol::Trace = serde_json::from_str(doc).ok()?;
+    let calls = trace
+        .spans
+        .iter()
+        .filter_map(|span| {
+            let operation = tracepanel_analysis::calls::operation(&trace, span)?;
+            Some(serde_json::json!({
+                "span_id": span.id,
+                "key": tracepanel_analysis::calls::call_key(&operation),
+                "system": operation.system,
+                "family": operation.family,
+                "target": operation.target,
+                "op": operation.op,
+                "template": operation.template,
+                "vendor": operation.vendor,
+                "via": operation.via,
+                "hit": operation.hit,
+            }))
+        })
+        .collect();
+    Some(Value::Array(calls))
 }
 
 /// How the sending thread paces itself; the defaults suit an agent, tests shorten them.
@@ -613,6 +645,38 @@ mod tests {
             assert!(attrs.contains_key("db.statement"));
             assert!(attrs.contains_key("db.params_hash"));
         }
+    }
+
+    #[test]
+    fn a_recorded_trace_carries_its_calls_as_the_analysis_reads_them() {
+        let doc = include_str!("../../../schema/examples/python-django-n-plus-one.json");
+        let trace: tracepanel_protocol::Trace = serde_json::from_str(doc).unwrap();
+
+        let prepared = prepare(doc, "production").unwrap();
+
+        let calls = prepared["calls"].as_array().unwrap();
+        let sql: Vec<&tracepanel_protocol::Span> = trace
+            .spans
+            .iter()
+            .filter(|span| span.kind == "sql")
+            .collect();
+        assert_eq!(calls.len(), sql.len());
+        let first = tracepanel_analysis::calls::operation(&trace, sql[0]).unwrap();
+        assert_eq!(
+            calls[0],
+            json!({
+                "span_id": sql[0].id,
+                "key": tracepanel_analysis::calls::call_key(&first),
+                "system": "sql",
+                "family": "sql",
+                "target": first.target,
+                "op": first.op,
+                "template": first.template,
+                "vendor": first.vendor,
+                "via": null,
+                "hit": null,
+            })
+        );
     }
 
     #[test]

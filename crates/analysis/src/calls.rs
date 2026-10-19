@@ -629,3 +629,71 @@ fn group_issues(
     }
     issues
 }
+
+/// The first 16 hex of SHA-1: the ids the console's lists group by and link with.
+fn short_sha1(text: &str) -> String {
+    Sha1::digest(text.as_bytes())
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>()[..16]
+        .to_owned()
+}
+
+pub fn query_fingerprint(statement: &str, alias: &str) -> String {
+    short_sha1(&format!("{alias}|{statement}"))
+}
+
+/// An operation's id (`op:<key>` in search), the group a list of operations shows as one row. SQL's is its
+/// statement's fingerprint key (`query:<key>`); every other system's is over "system|target|op|template|via": the same
+/// Redis command made directly and under a cache operation are two rows.
+pub fn call_key(operation: &Operation) -> String {
+    if operation.family == "sql" {
+        return query_fingerprint(&operation.template, &operation.target);
+    }
+    short_sha1(&format!(
+        "{}|{}|{}|{}|{}",
+        operation.system,
+        operation.target,
+        operation.op,
+        operation.template,
+        operation.via.unwrap_or_default()
+    ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_query_s_key_is_16_hex_of_its_statement_and_alias() {
+        let key = query_fingerprint("SELECT 1", "default");
+        assert_eq!(key.len(), 16);
+        assert_ne!(key, query_fingerprint("SELECT 1", "replica"));
+    }
+
+    #[test]
+    fn an_operation_s_key_is_its_system_target_op_template_and_via() {
+        let operation = |system: &str, target: &str, via: Option<&'static str>| Operation {
+            system: system.into(),
+            family: "http",
+            target: target.into(),
+            op: "GET".into(),
+            template: "/users/{id}".into(),
+            name: String::new(),
+            statement: None,
+            vendor: None,
+            params_hash: None,
+            via,
+            hit: None,
+        };
+        let key = call_key(&operation("http", "api.example.com", None));
+        assert_eq!(key.len(), 16);
+        assert_eq!(key, call_key(&operation("http", "api.example.com", None)));
+        assert_ne!(key, call_key(&operation("http", "other.example.com", None)));
+        assert_ne!(key, call_key(&operation("grpc", "api.example.com", None)));
+        assert_ne!(
+            key,
+            call_key(&operation("http", "api.example.com", Some("cache")))
+        );
+    }
+}
