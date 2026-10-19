@@ -1,0 +1,106 @@
+# /// script
+# requires-python = ">=3.11"
+# ///
+"""The agent on Maven Central, made from the npm packages of the same build: the binary of each is the one on PyPI.
+
+One component, `dev.tracepanel:tracepanel-agent`, a POM with no jar of its own (packaging pom), and the binary of each
+platform beside it, under the platform's npm name as its classifier: `tracepanel-agent-0.3.8-darwin-arm64.exe`, as
+protoc is published. The Java SDK downloads the one it runs on, from Maven Central or a company's mirror of it.
+
+    uv run --no-project scripts/maven.py VERSION NPM_PACKAGES OUT
+
+NPM_PACKAGES holds the npm packages (.tgz) that scripts/npm.py made. OUT gets the bundle in the Maven repository
+layout, with the checksums the Central Portal asks for. The signatures (.asc) are added after, by gpg, where the key
+is. Python's standard library only.
+"""
+
+import hashlib
+import json
+import sys
+import tarfile
+from pathlib import Path
+from xml.sax.saxutils import escape
+
+GROUP = "dev.tracepanel"
+ARTIFACT = "tracepanel-agent"
+PREFIX = "@tracepanel/agent-"
+PLATFORMS = 15
+
+POM = """\
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>{group}</groupId>
+  <artifactId>{artifact}</artifactId>
+  <version>{version}</version>
+  <packaging>pom</packaging>
+  <name>Tracepanel agent</name>
+  <description>The Tracepanel agent: it keeps the traces, finds the issues and serves the console. One executable per
+    platform, its classifier the platform: {classifiers}.</description>
+  <url>https://tracepanel.dev</url>
+  <inceptionYear>2026</inceptionYear>
+  <licenses>
+    <license>
+      <name>FSL-1.1-ALv2</name>
+      <url>https://github.com/tracepanel/tracepanel/blob/{version}/LICENSE</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+  <developers>
+    <developer>
+      <id>tracepanel</id>
+      <name>Tracepanel</name>
+      <url>https://tracepanel.dev</url>
+    </developer>
+  </developers>
+  <scm>
+    <url>https://github.com/tracepanel/tracepanel</url>
+    <connection>scm:git:https://github.com/tracepanel/tracepanel.git</connection>
+    <developerConnection>scm:git:ssh://git@github.com/tracepanel/tracepanel.git</developerConnection>
+    <tag>{version}</tag>
+  </scm>
+</project>
+"""
+
+
+def binaries(packages: Path) -> dict[str, bytes]:
+    """Each platform package's binary, by its platform; @tracepanel/agent itself holds the launcher and is left out."""
+    found: dict[str, bytes] = {}
+    for path in sorted(packages.glob("*.tgz")):
+        with tarfile.open(path) as tgz:
+            manifest = json.load(tgz.extractfile("package/package.json"))
+            name = manifest["name"]
+            if not name.startswith(PREFIX):
+                continue
+            files = [member for member in tgz.getmembers() if member.isfile() and member.name.startswith("package/bin/")]
+            if len(files) != 1:
+                sys.exit(f"{path.name}: {len(files)} files in bin/, expected the binary alone")
+            found[name.removeprefix(PREFIX)] = tgz.extractfile(files[0]).read()
+    return found
+
+
+def write(path: Path, data: bytes) -> None:
+    """The file, and the checksums the Central Portal asks for (md5 and sha1) and the stronger ones it takes."""
+    path.write_bytes(data)
+    for algorithm in ("md5", "sha1", "sha256", "sha512"):
+        path.with_name(f"{path.name}.{algorithm}").write_text(hashlib.new(algorithm, data).hexdigest())
+
+
+def main(version: str, packages: Path, out: Path) -> None:
+    found = binaries(packages)
+    if len(found) != PLATFORMS:
+        sys.exit(f"{len(found)} platform packages in {packages}, expected {PLATFORMS}")
+    directory = out.joinpath(*GROUP.split("."), ARTIFACT, version)
+    directory.mkdir(parents=True, exist_ok=True)
+    pom = POM.format(group=GROUP, artifact=ARTIFACT, version=escape(version), classifiers=", ".join(sorted(found)))
+    write(directory / f"{ARTIFACT}-{version}.pom", pom.encode())
+    for platform, binary in sorted(found.items()):
+        write(directory / f"{ARTIFACT}-{version}-{platform}.exe", binary)
+        print(f"{platform}: {len(binary):,} bytes, sha512 {hashlib.sha512(binary).hexdigest()[:16]}…")
+
+
+if __name__ == "__main__":
+    if len(sys.argv) != 4:
+        sys.exit(__doc__)
+    main(sys.argv[1], Path(sys.argv[2]), Path(sys.argv[3]))
