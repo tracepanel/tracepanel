@@ -182,19 +182,43 @@ function framesOf(service: string, boxes: readonly Placed<Box>[]): Placed<string
   );
 }
 
+/** How far a call to itself loops out of the box's right side, and how far apart it leaves and comes back. */
+const LOOP = { out: 28, apart: 10 };
+
+/**
+ * A role's calls to itself (an app calling its own API over HTTP): a loop out of its box's right side and back.
+ * dagre lays a self edge out on its own terms, points that run out and back on one line below the box.
+ */
+function loopOn(box: Placed<Box> | undefined): Point[] {
+  if (!box) return [];
+  const right = box.x + box.width / 2;
+  return [
+    { x: right, y: box.y - LOOP.apart },
+    { x: right + LOOP.out, y: box.y - LOOP.apart },
+    { x: right + LOOP.out, y: box.y + LOOP.apart },
+    { x: right, y: box.y + LOOP.apart },
+  ];
+}
+
 /** Left to right in layers: what calls comes before what it calls, so a broker sits between a web app and its worker. */
 export function laidOut(map: ServiceMap): Diagram {
   const { boxes, links, projects } = graphOf(map);
-  const graph = dagreGraph(boxes, links);
+  const graph = dagreGraph(
+    boxes,
+    links.filter((link) => link.from !== link.to),
+  );
   layout(graph);
   const size = graph.graph();
   const placed = boxes.map((item) => placedIn(graph, item, item.id));
+  const byId = new Map(placed.map((box) => [box.item.id, box]));
+  const pointsOf = (link: Link): Point[] =>
+    link.from === link.to ? loopOn(byId.get(link.from)) : (graph.edge(link.from, link.to)?.points ?? []);
   return fitted({
     width: size.width ?? 0,
     height: size.height ?? 0,
     boxes: placed,
     projects: projects.flatMap((service) => framesOf(service, placed)),
-    links: links.map((link) => ({ link, points: graph.edge(link.from, link.to)?.points ?? [] })),
+    links: links.map((link) => ({ link, points: pointsOf(link) })),
   });
 }
 
