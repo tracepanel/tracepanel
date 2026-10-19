@@ -183,6 +183,8 @@ function fromWidget(entry: TabEntry): TraceSummary | undefined {
   const [method, ...path] = summary.name.split(" ");
   return {
     id: entry.id,
+    // Not known until the agent has the trace: the row names no app until then.
+    service: "",
     kind: "http",
     name: summary.name,
     start: summary.start,
@@ -218,6 +220,7 @@ function rowFromWidget(entry: TabEntry): TraceSummary | undefined {
 function pageFromWidget(id: string, summary: EntrySummary): TraceSummary {
   return {
     id,
+    service: "",
     kind: "page",
     name: summary.name,
     start: summary.start,
@@ -268,6 +271,12 @@ function arrange(history: TabHistory, traces: readonly TraceSummary[]): TraceRow
   };
   const roots = [...(children.get(null) ?? [])].reverse();
   return roots.flatMap((root) => [row(root, 0), ...(children.get(root.id) ?? []).map((trace) => row(trace, 1))]);
+}
+
+/** Whether the requests come from more than one app: then each row names its own. */
+function manyApps(rows: readonly TraceRow[]): boolean {
+  const apps = rows.filter((row) => row.trace.kind !== "page" && row.trace.service).map((row) => row.trace.service);
+  return new Set(apps).size > 1;
 }
 
 /** Oldest page first, each followed by its requests: new requests land at the bottom, as in the Network tab. */
@@ -453,6 +462,7 @@ function RequestSwitcher({
           </div>
           <TraceList
             rows={rows}
+            services={manyApps(rows)}
             selectedId={selectedId}
             currentId={currentId}
             onSelect={(id) => {
@@ -648,6 +658,7 @@ function PageRequests({
       ) : null}
       <TraceList
         compact={true}
+        services={manyApps(rows)}
         rows={rows}
         selectedId={selectedId}
         currentId={currentId}

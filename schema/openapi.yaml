@@ -677,9 +677,10 @@ components:
       description: A trace without its document, as in lists.
       additionalProperties: false
       required: [id, kind, name, start, duration, status, http_status, method, path, route, view, user_id, queries,
-        db_time, issues, errors, logs, mails, issue_kinds, db_aliases, cache_aliases, task_state, htmx]
+        db_time, issues, errors, logs, mails, issue_kinds, db_aliases, cache_aliases, task_state, htmx, service]
       properties:
         id: { type: string }
+        service: { type: string, description: "The app that recorded it (its trace's service.name)." }
         kind: { type: string, enum: [http, task, command, websocket, rpc, page] }
         name: { type: string }
         start: { $ref: "#/components/schemas/Time" }

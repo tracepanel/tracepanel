@@ -168,7 +168,7 @@ test("a call's trace that came whole opens under the call: the other app's own r
   const app = page.getByRole("button", { name: /^app GET \/api\/posts/ });
 
   await expect(app).toHaveAttribute("aria-expanded", "true");
-  await expect(app.locator(".dt-map-app")).toHaveText("posts-service");
+  await expect(app.locator(".dt-app-chip")).toHaveText("posts-service");
   await expect(page.locator('.dt-map-row[data-kind="sql"]').getByText("N+1").first()).toBeVisible();
 
   await app.click();

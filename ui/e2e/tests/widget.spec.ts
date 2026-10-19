@@ -191,3 +191,28 @@ test("Follow new stays on the action a request belongs to, once the action is st
   await expect(rows.nth(1)).toHaveAttribute("aria-current", "true");
   await expect(rows.nth(2)).not.toHaveAttribute("aria-current", "true");
 });
+
+test("with requests from more than one app, each row of the tab's list names its app", async ({ page }) => {
+  const books: Call = { status: 200, trace: await traceId("GET /books"), queries: 21, totalMs: 2 };
+  await openApp(page, { posts: await posts(), books });
+
+  await page.getByRole("button", { name: "Load posts" }).click();
+  await page.getByRole("button", { name: "Load books" }).click();
+  await pill(page).click();
+  const rows = panel(page).getByRole("region", { name: "Pages and requests in this browser tab" }).getByRole("button");
+
+  await expect(rows.filter({ hasText: "/api/posts" }).locator(".dt-app-chip")).toHaveText("shop-api");
+  await expect(rows.filter({ hasText: /GET\s*\/books/ }).locator(".dt-app-chip")).toHaveText("api");
+});
+
+test("with requests from one app only, the rows name no app", async ({ page }) => {
+  await openApp(page, { posts: await posts(), boom: await broken() });
+
+  await page.getByRole("button", { name: "Load posts" }).click();
+  await page.getByRole("button", { name: "Load boom" }).click();
+  await pill(page).click();
+  const rows = panel(page).getByRole("region", { name: "Pages and requests in this browser tab" }).getByRole("button");
+
+  await expect(rows).toHaveCount(2);
+  await expect(rows.locator(".dt-app-chip")).toHaveCount(0);
+});

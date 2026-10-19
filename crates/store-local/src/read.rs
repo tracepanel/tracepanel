@@ -9,7 +9,7 @@ const STORED: &str =
 
 /// The columns a trace has in lists.
 pub(crate) const LISTING: &str = "id, kind, name, start, duration, status, http_status, method, path, route, view, user_id, \
-    queries, db_time, issues, issue_kinds, errors, logs, mails, db_aliases, cache_aliases, task_state, htmx";
+    queries, db_time, issues, issue_kinds, errors, logs, mails, db_aliases, cache_aliases, task_state, htmx, service";
 pub(crate) const LIST_COLUMNS: [&str; 3] = ["issue_kinds", "db_aliases", "cache_aliases"];
 pub(crate) const RELATED_LIMIT: i64 = 100;
 
