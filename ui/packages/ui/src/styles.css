@@ -554,6 +554,13 @@ a.dt-request-row {
 .dt-requests[data-compact] .dt-request-path {
   min-width: 5ch;
 }
+/* Narrow, the app's chip gives way first: the path is what the row is about. */
+.dt-requests[data-compact] .dt-request-main .dt-app-chip {
+  flex: 0 4 auto;
+  min-width: 2.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .dt-requests[data-compact] .dt-tag {
   flex: 0 1 auto;
   min-width: 0;
@@ -1439,7 +1446,7 @@ button.dt-log-message {
 /* Another project's trace: which project, beside its name. */
 /* The app that served a call, as the pill names the page's: its runtime's mark and its name. */
 /* The app that served a call: its runtime's mark and its name, the size and shape of the row's other chips. */
-.dt-map-app {
+.dt-app-chip {
   display: inline-flex;
   flex: none;
   align-items: center;
@@ -1453,7 +1460,7 @@ button.dt-log-message {
   white-space: nowrap;
   vertical-align: 1px;
 }
-.dt-map-app .dt-icon {
+.dt-app-chip .dt-icon {
   width: 0.6875rem;
   height: 0.6875rem;
 }

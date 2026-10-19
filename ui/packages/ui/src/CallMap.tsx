@@ -17,12 +17,11 @@ import { AllAttributes, LogRecordDetails } from "./LogRecordDetails";
 import { breakdown, CATEGORY_LABELS, type Category } from "./lib/breakdown";
 import { callFields } from "./lib/callFields";
 import { callTemplate, groupNoun } from "./lib/calls";
-import { runtimeKind, traceRuntime } from "./lib/runtime";
+import { traceRuntime } from "./lib/runtime";
 import { CALL_KINDS, DATASTORES, MESSAGING, RPC } from "./lib/systems";
 import { linkProps, type TraceLinks } from "./links";
 import { type PropRow, PropTable } from "./PropTable";
-import { AliasChip, IssueChip } from "./primitives";
-import { RuntimeIcon } from "./RuntimeIcon";
+import { AliasChip, AppChip, IssueChip } from "./primitives";
 import { SideResize, useSideWidth } from "./SideResize";
 import { SqlCode } from "./SqlCode";
 import type { Attrs, IssueKind, Log, Related, Span, Trace, TraceError, TraceSummary } from "./types";
@@ -454,7 +453,7 @@ function runView(node: Extract<Node, { type: "task" }>, trace: Trace): LinkedVie
       <>
         <span className="dt-map-text">{node.run.name}</span>
         <TaskState state={node.run.task_state} />
-        {node.kind === "call" ? <AppChip node={node} /> : null}
+        {node.kind === "call" ? <CallApp node={node} /> : null}
       </>
     ),
     track: <Bar trace={trace} start={node.run.start} length={node.run.duration} />,
@@ -463,26 +462,14 @@ function runView(node: Extract<Node, { type: "task" }>, trace: Trace): LinkedVie
 }
 
 /** Which app served a call: its runtime's mark, and its project (another agent's) or its service (this one's). */
-function AppChip({ node }: { node: Extract<Node, { type: "task" }> }) {
+function CallApp({ node }: { node: Extract<Node, { type: "task" }> }) {
   const name = appName(node);
-  if (!name) return null;
-  const runtime = traceRuntime(node.whole?.attrs ?? {});
-  return (
-    <span className="dt-map-app" title={[name, runtime].filter(Boolean).join(" · ")}>
-      <RuntimeMark runtime={runtime} />
-      {name}
-    </span>
-  );
+  return name ? <AppChip name={name} runtime={traceRuntime(node.whole?.attrs ?? {})} /> : null;
 }
 
 function appName(node: Extract<Node, { type: "task" }>): string | undefined {
   const service = node.whole?.attrs["service.name"];
   return node.remote?.project ?? (typeof service === "string" ? service : undefined);
-}
-
-function RuntimeMark({ runtime }: { runtime: string | undefined }) {
-  const kind = runtime ? runtimeKind(runtime) : null;
-  return kind ? <RuntimeIcon kind={kind} /> : null;
 }
 
 /** A task enqueued that no worker has run yet. */

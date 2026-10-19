@@ -574,6 +574,8 @@ export interface components {
         /** @description A trace without its document, as in lists. */
         TraceSummary: {
             id: string;
+            /** @description The app that recorded it (its trace's service.name). */
+            service: string;
             /** @enum {string} */
             kind: "http" | "task" | "command" | "websocket" | "rpc" | "page";
             name: string;

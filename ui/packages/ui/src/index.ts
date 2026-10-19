@@ -19,7 +19,7 @@ export { linkProps, type TraceLinks } from "./links";
 export { MailList } from "./MailList";
 export { Metrics } from "./Metrics";
 export * from "./PropTable";
-export { AliasChip, Empty, IssueChip, MethodBadge, RichText, RoutePath, StatusBadge } from "./primitives";
+export { AliasChip, AppChip, Empty, IssueChip, MethodBadge, RichText, RoutePath, StatusBadge } from "./primitives";
 export { RequestInfo } from "./RequestInfo";
 export { RuntimeIcon } from "./RuntimeIcon";
 export { SERVICE_KINDS, ServiceIcon, serviceWhere, systemName } from "./ServiceMap";

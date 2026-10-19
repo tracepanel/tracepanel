@@ -3,7 +3,7 @@ import { ago, duration } from "./format";
 import { DatabaseIcon } from "./icons";
 import { ISSUE_LABELS } from "./labels";
 import { pageParts } from "./lib/page";
-import { IssueChip, MethodBadge, RoutePath, StatusBadge } from "./primitives";
+import { AppChip, IssueChip, MethodBadge, RoutePath, StatusBadge } from "./primitives";
 import type { IssueKind, TraceSummary } from "./types";
 
 export interface TraceRow {
@@ -24,10 +24,12 @@ export interface TraceListProps {
   newIds?: ReadonlySet<string> | undefined;
   /** One line per request, for short lists next to a trace. */
   compact?: boolean | undefined;
+  /** Several apps in the list: each request names the app that served it (a view or an action is the browser's). */
+  services?: boolean | undefined;
   onSelect: (id: string) => void;
 }
 
-export function TraceList({ rows, selectedId, currentId, newIds, compact, onSelect }: TraceListProps) {
+export function TraceList({ rows, selectedId, currentId, newIds, compact, services, onSelect }: TraceListProps) {
   return (
     <ul className="dt-requests" data-compact={compact ? "" : undefined}>
       {rows.map(({ trace, depth = 0, trigger, target }) => (
@@ -48,6 +50,7 @@ export function TraceList({ rows, selectedId, currentId, newIds, compact, onSele
               ) : (
                 <RequestName trace={trace} trigger={trigger} target={target} />
               )}
+              <RowApp trace={trace} shown={services} />
               {trace.id === currentId ? (
                 compact ? (
                   // Narrow: a dot, so the path keeps its room; the row is also highlighted.
@@ -68,6 +71,11 @@ export function TraceList({ rows, selectedId, currentId, newIds, compact, onSele
       ))}
     </ul>
   );
+}
+
+/** The app a request came from, when the list holds several and the agent has the request (a view is the browser's). */
+function RowApp({ trace, shown }: { trace: TraceSummary; shown: boolean | undefined }) {
+  return shown && trace.kind !== "page" && trace.service ? <AppChip name={trace.service} /> : null;
 }
 
 /**

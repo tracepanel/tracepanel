@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import { ISSUE_LABELS } from "./labels";
+import { runtimeKind } from "./lib/runtime";
+import { RuntimeIcon } from "./RuntimeIcon";
 import type { IssueKind } from "./types";
 
 /**
@@ -101,5 +103,19 @@ export function Empty({ title, children, action }: { title: string; children?: R
       {children ? <p className="dt-empty-text">{children}</p> : null}
       {action ? <p className="dt-empty-action">{action}</p> : null}
     </div>
+  );
+}
+
+/**
+ * The app that served something: its runtime's mark when known, and its name. The same chip names the app of a call's
+ * trace in the call tree and of a request in a list that holds several apps.
+ */
+export function AppChip({ name, runtime }: { name: string; runtime?: string | undefined }) {
+  const kind = runtime ? runtimeKind(runtime) : null;
+  return (
+    <span className="dt-app-chip" title={runtime ? `${name} · ${runtime}` : name}>
+      {kind ? <RuntimeIcon kind={kind} /> : null}
+      {name}
+    </span>
   );
 }
