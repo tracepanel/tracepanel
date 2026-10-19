@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.3.7 (2026-10-19)
+
+### Added
+
+- Each trace in a list (`GET /api/traces`) carries its `service`.
+
+### Changed
+
+- With the page recording on, the panel's Follow new opens the view or the
+  action a new request belongs to, once the agent has it, and stays there
+  while that group's requests arrive. It used to jump to each request.
+- When the requests in a tab come from more than one app, each request's row
+  in the panel names its app, as the call tree does. A Next.js page and the
+  API it calls can both answer `GET /projects`, and the two rows looked
+  alike.
+
 ## 0.3.6 (2026-10-19)
 
 ### Changed
