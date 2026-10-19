@@ -1,0 +1,159 @@
+name: Maven Central
+
+# The agent on Maven Central, for the Java SDK: dev.tracepanel:tracepanel-agent, the binary of each platform under its
+# npm name as the classifier (scripts/maven.py). Java teams reach Maven Central, or a company's mirror of it, where npm
+# may be out of reach.
+#
+# - After a release (release.yml, on a version tag) publishes to PyPI: it publishes the binaries that release built,
+#   taken out of its npm packages. The binaries on Maven Central are the ones on PyPI and npm, byte for byte.
+# - By hand, with a version already on PyPI (0.3.7): the same, from that release's wheels on PyPI.
+#
+# The Central Portal has no trusted publishing: it takes a user token and a PGP signature on every file. Both are in
+# the environment maven-central, as secrets: MAVEN_CENTRAL_USERNAME and MAVEN_CENTRAL_PASSWORD (a Central Portal user
+# token for the dev.tracepanel namespace), SIGNING_KEY (an armored private key, its public half on a key server) and
+# SIGNING_KEY_PASSWORD.
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "A version on PyPI, such as 0.3.7: its binaries go to Maven Central unchanged"
+        required: true
+
+permissions:
+  contents: read
+
+# Release may complete twice for one tag; a version is uploaded once.
+concurrency:
+  group: maven-central-${{ inputs.version || github.event.workflow_run.head_branch }}
+
+jobs:
+  bundle:
+    name: The bundle
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch'
+      || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      # The release's run, to download its npm packages.
+      actions: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.3.0
+
+      - name: The version
+        id: version
+        env:
+          # The tag that ran Release, or the version given by hand.
+          VERSION: ${{ inputs.version || github.event.workflow_run.head_branch }}
+        run: |
+          case "$VERSION" in
+            [0-9]*.[0-9]*.[0-9]*) echo "version=$VERSION" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::$VERSION isn't a version" && exit 1 ;;
+          esac
+
+      - name: The release's npm packages
+        if: github.event_name == 'workflow_run'
+        uses: actions/download-artifact@v8
+        with:
+          name: npm-packages
+          path: npm-dist
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - uses: actions/setup-node@v7
+        if: github.event_name == 'workflow_dispatch'
+        with:
+          node-version: 24
+
+      - name: The packages, made from the release's wheels on PyPI
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          uv run --no-project scripts/npm.py --download "$VERSION" wheels
+          uv run --no-project scripts/npm.py wheels npm
+          mkdir npm-dist
+          for package in npm/*/; do (cd "$package" && npm pack --pack-destination ../../npm-dist); done
+
+      - name: Make the bundle
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: uv run --no-project scripts/maven.py "$VERSION" npm-dist bundle
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: maven-bundle
+          path: bundle/
+
+  publish:
+    name: Publish to Maven Central
+    needs: bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment:
+      name: maven-central
+      url: https://central.sonatype.com/artifact/dev.tracepanel/tracepanel-agent
+    env:
+      VERSION: ${{ needs.bundle.outputs.version }}
+    steps:
+      # A version on Maven Central can't be replaced or removed: one already there is done.
+      - name: Already on Maven Central?
+        id: there
+        run: |
+          pom="https://repo1.maven.org/maven2/dev/tracepanel/tracepanel-agent/$VERSION/tracepanel-agent-$VERSION.pom"
+          if curl --silent --fail --head --output /dev/null "$pom"; then
+            echo "::notice::tracepanel-agent $VERSION is on Maven Central already"
+            echo "there=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/download-artifact@v8
+        if: steps.there.outputs.there != 'true'
+        with:
+          name: maven-bundle
+          path: bundle
+
+      - name: Sign every file
+        if: steps.there.outputs.there != 'true'
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: |
+          echo "$SIGNING_KEY" | gpg --batch --import
+          find bundle -type f ! -name "*.md5" ! -name "*.sha1" ! -name "*.sha256" ! -name "*.sha512" -print0 |
+            xargs -0 -n1 gpg --batch --yes --pinentry-mode loopback --passphrase "$SIGNING_KEY_PASSWORD" \
+              --armor --detach-sign
+          (cd bundle && zip -qr ../bundle.zip .)
+
+      # Uploaded, validated by the Central Portal and released (AUTOMATIC), then followed until it is published.
+      - name: Upload and publish
+        if: steps.there.outputs.there != 'true'
+        env:
+          USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+        run: |
+          token=$(printf '%s:%s' "$USERNAME" "$PASSWORD" | base64 -w0)
+          api=https://central.sonatype.com/api/v1/publisher
+          id=$(curl --silent --show-error --fail-with-body -H "Authorization: Bearer $token" \
+            -F "bundle=@bundle.zip;type=application/octet-stream" \
+            "$api/upload?name=tracepanel-agent-$VERSION&publishingType=AUTOMATIC")
+          echo "deployment $id"
+          for attempt in $(seq 1 100); do
+            status=$(curl --silent --show-error --fail-with-body -X POST -H "Authorization: Bearer $token" \
+              "$api/status?id=$id")
+            state=$(echo "$status" | jq -r .deploymentState)
+            echo "$state"
+            case "$state" in
+              PUBLISHED) echo "::notice::tracepanel-agent $VERSION is on Maven Central" && exit 0 ;;
+              FAILED) echo "$status" | jq . && echo "::error::the Central Portal refused the bundle" && exit 1 ;;
+            esac
+            sleep 30
+          done
+          echo "::error::deployment $id is still $state" && exit 1

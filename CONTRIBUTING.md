@@ -133,6 +133,15 @@ hand with a version on PyPI, it makes the packages from that release's wheels.
 It publishes through npm's trusted publishing, with no token: each package
 trusts this repository's `npm.yml` in the `npm` environment.
 
+They go to Maven Central too, for the Java SDK. `scripts/maven.py` takes each
+binary out of its npm package and lays out `dev.tracepanel:tracepanel-agent`,
+a POM with the binary of each platform beside it under the platform's npm name
+as its classifier, as protoc is published. `Maven Central` (`maven.yml`) signs
+the files and uploads them through the Central Portal once `Release` has
+published a tag to PyPI, or by hand for a version on PyPI. The Central Portal
+has no trusted publishing: the token and the signing key are secrets of the
+`maven-central` environment.
+
 ## Update dependencies
 
 After changing Rust or UI dependencies, regenerate the licenses the agent ships
