@@ -63,9 +63,65 @@ jobs:
     needs: [version, ci]
     uses: ./.github/workflows/wheels.yml
 
+  # Signed build provenance (Sigstore, through GitHub's attestations) for every file the release ships, and for the
+  # agent's binary of each platform on its own: the same bytes pip, npm and the Java SDK install. Anyone checks one with
+  # `gh attestation verify FILE --repo tracepanel/tracepanel`. Nothing is published without it.
+  attest:
+    name: Attest the build
+    needs: wheels
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: The binaries, out of the npm platform packages
+        run: |
+          mkdir binaries
+          for package in dist/tracepanel-agent-*.tgz; do
+            unpacked=$(mktemp -d)
+            tar -xzf "$package" -C "$unpacked"
+            # @tracepanel/agent itself holds the launcher, not a binary.
+            platform=$(jq -r '.name | select(startswith("@tracepanel/agent-")) | ltrimstr("@tracepanel/agent-")' \
+              "$unpacked/package/package.json")
+            [ -n "$platform" ] || continue
+            for binary in "$unpacked"/package/bin/*; do
+              case "$binary" in
+                *.exe) cp "$binary" "binaries/tracepanel-agent-$platform.exe" ;;
+                *) cp "$binary" "binaries/tracepanel-agent-$platform" ;;
+              esac
+            done
+          done
+          ls -l binaries
+          [ "$(ls binaries | wc -l)" -ge 15 ] || { echo "::error::fewer than 15 binaries" && exit 1; }
+
+      - uses: actions/attest@v4
+        with:
+          subject-path: |
+            dist/*.whl
+            dist/*.tar.gz
+            dist/*.tgz
+            binaries/*
+
+      - name: Each binary verifies
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for binary in binaries/*; do
+            gh attestation verify "$binary" --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" > /dev/null
+            echo "verified $binary"
+          done
+
   publish:
     name: Publish to PyPI
-    needs: wheels
+    needs: [wheels, attest]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment:
@@ -81,6 +137,11 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+
+      # PEP 740 attestations, signed with this job's identity, the one PyPI's trusted publisher names: PyPI shows each
+      # file's provenance and pip can check it. uv publish uploads them beside their files.
+      - name: Sign for PyPI
+        run: uvx --from pypi-attestations==0.0.30 pypi-attestations sign dist/*.whl dist/*.tar.gz
 
       - name: Publish
         # Wheels and the sdist only: the run also holds the npm packages (.tgz), which npm.yml stages once this run

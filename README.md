@@ -139,6 +139,29 @@ as passwords, tokens and keys.
 
 Python 3.11 and newer, Django 5.2 and newer.
 
+## Verify a build
+
+Each release signs where its files came from: the wheels and the sdist, the
+npm packages, and the agent's binary for each platform. pip, npm and the Java
+SDK install the same binary, so one check covers all three. To check it with
+the GitHub CLI:
+
+```bash
+# Installed with pip
+gh attestation verify "$(which tracepanel-agent)" --repo tracepanel/tracepanel
+# Installed with npm (node_modules/.bin holds a launcher, not the binary)
+gh attestation verify "$(node -p "require('@tracepanel/agent').binaryPath()")" \
+  --repo tracepanel/tracepanel
+# Downloaded by the Java SDK
+gh attestation verify ~/.cache/tracepanel/agent/VERSION/PLATFORM/tracepanel-agent \
+  --repo tracepanel/tracepanel
+```
+
+A downloaded wheel, sdist or npm package checks the same way.
+
+It passes when this repository's release workflow built the file from a
+tagged commit. PyPI also shows each file's provenance on the project's page.
+
 ## Links
 
 - [CHANGELOG.md](CHANGELOG.md): what changed in each version

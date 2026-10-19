@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Releases carry signed build provenance: the wheels and the sdist, the npm
+  packages, and the agent's binary for each platform. `gh attestation verify
+  FILE --repo tracepanel/tracepanel` checks one. The files on PyPI carry PEP
+  740 attestations too.
+
 ## 0.3.7 (2026-10-19)
 
 ### Added
