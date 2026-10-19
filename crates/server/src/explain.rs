@@ -38,8 +38,11 @@ pub(crate) fn request(span: &Map<String, Value>, analyze: bool) -> Result<Reques
     if first != "SELECT" && first != "WITH" {
         return Err((422, "Only SELECT statements can be explained.".into()));
     }
-    let Some(params) = attrs.get("db.params").and_then(Value::as_array).cloned() else {
-        return Err((422, "Parameters of this query were not recorded.".into()));
+    // A query with no placeholder has no parameters to record.
+    let params = match attrs.get("db.params").and_then(Value::as_array) {
+        Some(params) => params.clone(),
+        None if !has_placeholders(&statement) => Vec::new(),
+        None => return Err((422, "Parameters of this query were not recorded.".into())),
     };
     let vendor = [text("db.system"), text("db.vendor")]
         .into_iter()
@@ -71,6 +74,49 @@ pub(crate) fn request(span: &Map<String, Value>, analyze: bool) -> Result<Reques
         alias,
         analyze: analyzed,
     })
+}
+
+/// Whether a statement takes parameters: `%s`, `%(name)s`, `?`, `:name` (not a `::` cast) or `$1`, outside its
+/// quoted strings and names and its comments.
+fn has_placeholders(statement: &str) -> bool {
+    let chars: Vec<char> = statement.chars().collect();
+    let mut at = 0;
+    while let Some(&char) = chars.get(at) {
+        let next = chars.get(at + 1).copied().unwrap_or_default();
+        let skipped = match (char, next) {
+            ('\'' | '"' | '`', _) => Some(closing(&chars, at + 1, &[char])),
+            ('-', '-') => Some(closing(&chars, at + 2, &['\n'])),
+            ('/', '*') => Some(closing(&chars, at + 2, &['*', '/'])),
+            _ => None,
+        };
+        if let Some(end) = skipped {
+            at = end;
+            continue;
+        }
+        let before = at
+            .checked_sub(1)
+            .and_then(|before| chars.get(before))
+            .copied();
+        let placeholder = match char {
+            '%' => next == 's' || next == '(',
+            '?' => true,
+            ':' => before != Some(':') && (next.is_ascii_alphabetic() || next == '_'),
+            '$' => next.is_ascii_digit(),
+            _ => false,
+        };
+        if placeholder {
+            return true;
+        }
+        at += 1;
+    }
+    false
+}
+
+/// Where a quote or comment that opened before `from` ends: past its `end`, or at the statement's end.
+fn closing(chars: &[char], from: usize, end: &[char]) -> usize {
+    (from..chars.len())
+        .find(|&at| chars[at..].starts_with(end))
+        .map_or(chars.len(), |at| at + end.len())
 }
 
 /// The plan the app's rows make: lines with their depth and what to look at (a full scan, a sort that spills).
@@ -187,4 +233,59 @@ fn table(columns: &[String], rows: &[Vec<Value>]) -> Vec<Value> {
             line(0, pairs.join("  "), None)
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sql(statement: &str, params: Option<Value>) -> Result<Request, (u16, String)> {
+        let mut attrs = json!({"db.system": "sqlite", "db.statement": statement});
+        if let Some(params) = params {
+            attrs["db.params"] = params;
+        }
+        let span = json!({"kind": "sql", "attrs": attrs});
+        request(span.as_object().unwrap(), false)
+    }
+
+    #[test]
+    fn a_query_with_no_placeholder_is_explained_with_no_parameters() {
+        for statement in [
+            "SELECT name, type FROM sqlite_master WHERE type IN ('table', 'view') AND NOT name = 'sqlite_sequence'",
+            "SELECT name FROM users WHERE name = ':name?' -- by %s",
+            "SELECT id::text FROM users /* $1 */",
+        ] {
+            let explained =
+                sql(statement, None).map(|request| request.body["explain"]["params"].clone());
+
+            assert_eq!(explained, Ok(json!([])), "{statement}");
+        }
+    }
+
+    #[test]
+    fn a_query_with_placeholders_needs_its_parameters() {
+        for statement in [
+            "SELECT * FROM users WHERE id = %s",
+            "SELECT * FROM users WHERE id = %(id)s",
+            "SELECT * FROM users WHERE id = ?",
+            "SELECT * FROM users WHERE id = :id",
+            "SELECT * FROM users WHERE id = $1",
+        ] {
+            assert_eq!(
+                sql(statement, None).err(),
+                Some((
+                    422,
+                    "Parameters of this query were not recorded.".to_owned()
+                )),
+                "{statement}"
+            );
+        }
+
+        let explained = sql("SELECT * FROM users WHERE id = ?", Some(json!([7])));
+
+        assert_eq!(
+            explained.map(|request| request.body["explain"]["params"].clone()),
+            Ok(json!([7]))
+        );
+    }
 }
