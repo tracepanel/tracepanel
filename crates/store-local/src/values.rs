@@ -79,33 +79,3 @@ pub(crate) fn text(value: Option<&Value>) -> Option<String> {
 pub(crate) fn port(value: Option<&Value>) -> Option<i64> {
     value.and_then(Value::as_i64)
 }
-
-/// The first 16 hex of SHA-1: the ids the console's lists group by and link with.
-fn short_sha1(text: &str) -> String {
-    Sha1::digest(text.as_bytes())
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect::<String>()[..16]
-        .to_owned()
-}
-
-pub fn query_fingerprint(statement: &str, alias: &str) -> String {
-    short_sha1(&format!("{alias}|{statement}"))
-}
-
-/// An operation's id (`op:<key>` in search), the group a list of operations shows as one row. SQL's is its
-/// statement's fingerprint key (`query:<key>`); every other system's is over "system|target|op|template|via": the same
-/// Redis command made directly and under a cache operation are two rows.
-pub fn call_key(operation: &Operation) -> String {
-    if operation.family == "sql" {
-        return query_fingerprint(&operation.template, &operation.target);
-    }
-    short_sha1(&format!(
-        "{}|{}|{}|{}|{}",
-        operation.system,
-        operation.target,
-        operation.op,
-        operation.template,
-        operation.via.unwrap_or_default()
-    ))
-}
