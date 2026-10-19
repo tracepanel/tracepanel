@@ -23,7 +23,16 @@ import { Button } from "@tracepanel/ui/components/ui/button";
 import { TooltipProvider } from "@tracepanel/ui/components/ui/tooltip";
 import { useCloseOnBlur } from "@tracepanel/ui/hooks/useCloseOnBlur";
 import { cn, rem } from "@tracepanel/ui/lib/utils";
-import { type ReactNode, type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  type ReactNode,
+  type RefObject,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { ClearDialog } from "./ClearDialog";
 import { Console } from "./Console";
 import { exploreFor } from "./explore";
@@ -275,7 +284,8 @@ function isChildOf(history: TabHistory | null, row: TraceRow, pageId: string): b
   return history?.entries.some((entry) => entry.id === row.trace.id && entry.parent === pageId) ?? false;
 }
 
-function useTabRows(history: TabHistory | null): TraceRow[] {
+/** The tab's rows, and which of them the agent has stored (the others are the widget's own, still on their way). */
+function useTabRows(history: TabHistory | null): { rows: TraceRow[]; stored: ReadonlySet<string> } {
   const ids = history?.entries.map((entry) => entry.id) ?? [];
   const key = ids.join(",");
   // biome-ignore lint/correctness/useExhaustiveDependencies: `key` identifies the id list.
@@ -284,7 +294,25 @@ function useTabRows(history: TabHistory | null): TraceRow[] {
     [key],
   );
   const traces = usePolling(load);
-  return history ? arrange(history, traces ?? []) : [];
+  const stored = useMemo(() => new Set((traces ?? []).map((trace) => trace.id)), [traces]);
+  return { rows: history ? arrange(history, traces ?? []) : [], stored };
+}
+
+/**
+ * What Follow new opens for the newest row: the row itself, or, for a request a view or an action in the browser
+ * made, that view or action once it is stored. Its call tree has all of its requests, and its group's next ones
+ * leave it open.
+ */
+function followTarget(rows: readonly TraceRow[], stored: ReadonlySet<string>): string | undefined {
+  const latest = rows.at(-1);
+  if (latest?.depth !== 1) return latest?.trace.id;
+  return groupOrRequest(rows, stored, latest.trace.id);
+}
+
+/** The view or action heading the newest rows, when the agent has it; else the request itself. */
+function groupOrRequest(rows: readonly TraceRow[], stored: ReadonlySet<string>, request: string): string {
+  const head = [...rows].reverse().find((row) => row.depth === 0);
+  return head?.trace.kind === "page" && stored.has(head.trace.id) ? head.trace.id : request;
 }
 
 /** What served the page, as its mark and name; the versions in the tooltip ("Python 3.12 · Django 6.0"). */
@@ -637,7 +665,7 @@ function PageRequests({
 
 function PanelApp({ route }: { route: Route }) {
   const history = useTabHistory();
-  const rows = useTabRows(history);
+  const { rows, stored } = useTabRows(history);
   const currentId = history?.current ?? null;
   const pageRows = currentId
     ? rows.filter((row) => row.trace.id === currentId || isChildOf(history, row, currentId))
@@ -668,7 +696,7 @@ function PanelApp({ route }: { route: Route }) {
   };
   const tabRows = split ? chronological(rows) : rows;
   const followRows = split ? tabRows : pageRows;
-  const latestChild = followRows.length > 1 ? followRows.at(-1)?.trace.id : undefined;
+  const latestChild = followRows.length > 1 ? followTarget(followRows, stored) : undefined;
   const followed = useRef(latestChild);
   // The history the panel opens with is what was already there, not a new request: the request a link asked for
   // (the pill's card) stays on screen. Only requests that arrive after it are followed.

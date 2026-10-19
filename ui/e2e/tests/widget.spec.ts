@@ -164,3 +164,30 @@ test("calls to an API on another origin sit under the action that made them, wit
     .poll(() => rows.evaluateAll((buttons) => buttons.map((button) => button.getAttribute("data-depth"))))
     .toEqual(["0", "0", "1", "0", "1"]);
 });
+
+test("Follow new stays on the action a request belongs to, once the action is stored", async ({ page }) => {
+  // The agent as it answers once the recording sent the actions: each one the widget lists is stored too.
+  await page.route("**/api/traces?*", async (route) => {
+    const ids = new URL(route.request().url()).searchParams.get("ids")?.split(",") ?? [];
+    const answer = await (await route.fetch()).json();
+    const [template] = answer.traces;
+    const known = new Set(answer.traces.map((trace: { id: string }) => trace.id));
+    const pages = template
+      ? ids
+          .filter((id) => !known.has(id))
+          .map((id) => ({ ...template, id, kind: "page", name: '/app/ › click "posts"' }))
+      : [];
+    await route.fulfill({ json: { ...answer, traces: [...answer.traces, ...pages] } });
+  });
+  await openApp(page, { posts: await posts(), boom: await broken() }, { recording: true });
+  await pill(page).click();
+  const rows = panel(page).getByRole("region", { name: "Pages and requests in this browser tab" }).getByRole("button");
+  await expect(rows.first()).toBeVisible();
+
+  await page.getByRole("button", { name: "Do posts" }).click();
+
+  // The view, the click, its request: the click stays open, not the request under it.
+  await expect(rows).toHaveCount(3);
+  await expect(rows.nth(1)).toHaveAttribute("aria-current", "true");
+  await expect(rows.nth(2)).not.toHaveAttribute("aria-current", "true");
+});
