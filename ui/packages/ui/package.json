@@ -14,13 +14,13 @@
     "./components/*": "./src/components/*.tsx"
   },
   "peerDependencies": {
-    "react": "^19.0.0"
+    "react": "^19.3.1"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",
-    "lefthook": "2.2.1",
+    "lefthook": "2.2.2",
     "openapi-typescript": "7.13.0",
-    "react": "^19.0.0",
+    "react": "^19.3.1",
     "typescript": "npm:@typescript/typescript6@^6.0.2"
   },
   "scripts": {
@@ -32,8 +32,8 @@
     "clsx": "2.1.1",
     "cmdk": "1.1.1",
     "graphql": "17.0.2",
-    "lucide-react": "1.54.0",
-    "radix-ui": "1.7.0",
+    "lucide-react": "1.58.0",
+    "radix-ui": "1.8.1",
     "sql-formatter": "^15.9.0",
     "tailwind-merge": "3.7.0"
   }
