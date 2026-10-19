@@ -79,6 +79,10 @@ test("the panel opens on the latest request's trace, from the agent", async ({ p
     /GET\s*\/api\/posts/,
   );
   await expect(panel(page).getByRole("tab", { name: "Call tree" })).toHaveAttribute("aria-selected", "true");
+  // The tab's narrow list marks the request's findings by their number, their names in the title.
+  const findings = panel(page).locator(".dt-chip-compact");
+  await expect(findings).toHaveText("1");
+  await expect(findings).toHaveAttribute("title", "N+1");
   await expect(panel(page).getByRole("button", { name: /SELECT author .*×13 N\+1/ })).toBeVisible();
 });
 

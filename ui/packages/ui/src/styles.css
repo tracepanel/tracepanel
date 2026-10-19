@@ -579,10 +579,15 @@ a.dt-request-row {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.dt-request-chips-more {
+.dt-chip-compact {
   flex: none;
-  color: var(--dt-text-3);
-  font-size: var(--dt-size-2xs);
+  gap: 0.1875rem;
+  padding: 0 0.375rem;
+  font-variant-numeric: tabular-nums;
+}
+.dt-chip-compact .lucide {
+  width: 0.75rem;
+  height: 0.75rem;
 }
 /* This page, in the narrow list: a dot after the path. */
 /* Narrow list: the open page is a dot in the row's left gutter, beside the tone edge, so it sits in the same place on
