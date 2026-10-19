@@ -112,7 +112,7 @@ fn has_placeholders(statement: &str) -> bool {
     false
 }
 
-/// Where a quote or comment that opened before `from` ends: just past `end`, or the statement's end.
+/// Where a quote or comment that opened before `from` ends: past its `end`, or at the statement's end.
 fn closing(chars: &[char], from: usize, end: &[char]) -> usize {
     (from..chars.len())
         .find(|&at| chars[at..].starts_with(end))
