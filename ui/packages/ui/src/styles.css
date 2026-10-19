@@ -1435,23 +1435,24 @@ button.dt-log-message {
 }
 /* Another project's trace: which project, beside its name. */
 /* The app that served a call, as the pill names the page's: its runtime's mark and its name. */
+/* The app that served a call: its runtime's mark and its name, the size and shape of the row's other chips. */
 .dt-map-app {
   display: inline-flex;
   flex: none;
   align-items: center;
   gap: 0.25rem;
-  margin-left: 0.5rem;
-  padding: 0.0625rem 0.5rem;
-  border-radius: 999px;
-  background: var(--dt-accent-bg);
-  color: var(--dt-text);
-  font-size: var(--dt-size-xs);
-  font-weight: 600;
+  margin-left: 0.375rem;
+  padding: 0 0.375rem;
+  border: 1px solid color-mix(in srgb, var(--dt-accent) 40%, transparent);
+  border-radius: 0.25rem;
+  color: var(--dt-accent);
+  font: 600 var(--dt-size-2xs) / 1rem var(--dt-mono);
   white-space: nowrap;
+  vertical-align: 1px;
 }
 .dt-map-app .dt-icon {
-  width: 0.75rem;
-  height: 0.75rem;
+  width: 0.6875rem;
+  height: 0.6875rem;
 }
 .dt-frame-fn {
   font: 600 var(--dt-size-sm) var(--dt-mono);
@@ -1809,6 +1810,18 @@ button.dt-log-message {
 }
 .dt-map-caret .dt-icon {
   transition: transform 120ms ease;
+}
+/* The fold is its own target: a bigger hit area than the chevron, a hover of its own. */
+.dt-map-caret[data-toggle] {
+  width: 1.125rem;
+  height: 1.125rem;
+  margin: 0 -0.125rem;
+  border-radius: 0.25rem;
+  cursor: pointer;
+}
+.dt-map-caret[data-toggle]:hover {
+  background: var(--dt-hover);
+  color: var(--dt-text);
 }
 .dt-map-row[aria-expanded="true"] .dt-map-caret .dt-icon {
   transform: rotate(90deg);
