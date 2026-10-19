@@ -58,34 +58,42 @@ const RECORDING = `
     if (action) Object.defineProperty(response, PAGE, { value: action.id });
     return response;
   };
-  window.act = async (label, key) => {
+  window.act = async (label, url) => {
     current = { id: id(), name: location.pathname + ' › click "' + label + '"', start: now(), duration: 0, status: "ok", open: true };
     announce(current);
-    const response = await fetch("/app/api/" + key);
+    const response = await fetch(url);
     announce({ ...current, duration: now() - current.start, status: response.status >= 500 ? "error" : "ok", open: false });
     current = null;
   };
 })();
 `;
 
+/** The page's API on another origin (a FastAPI app beside a Next one): its CORS lets the page read the SDK's headers. */
+export const OTHER_API = "http://api.example.test/app/";
+
 /**
- * Opens /app/ with a button per call: "Load <key>" fetches /app/api/<key>; with `recording`, "Do <key>" does it as
- * a click the browser recording sees. `server`: the page's own load was traced (a server-rendered page).
- * `charset`: the page's encoding, UTF-8 unless given.
+ * Opens /app/ with a button per call: "Load <key>" fetches /app/api/<key> (on `api`: <api>api/<key>); with
+ * `recording`, "Do <key>" does it as a click the browser recording sees. The recording starts before the widget,
+ * or after it with "after widget" (an app that starts it from its own code, once the widget loaded). `server`: the
+ * page's own load was traced (a server-rendered page). `charset`: the page's encoding, UTF-8 unless given.
  */
 export async function openApp(
   page: Page,
   calls: Record<string, Call>,
-  options: { server?: ServerPage; recording?: boolean; charset?: string } = {},
+  options: { server?: ServerPage; recording?: boolean | "after widget"; api?: string; charset?: string } = {},
 ): Promise<void> {
-  await page.route("**/app/api/*", (route) => {
+  const api = options.api ?? "/app/";
+  const cors = options.api
+    ? { "Access-Control-Allow-Origin": "*", "Access-Control-Expose-Headers": "Tracepanel-Id, Server-Timing" }
+    : {};
+  await page.route(options.api ? `${options.api}api/*` : "**/app/api/*", (route) => {
     const call = calls[new URL(route.request().url()).pathname.split("/").pop() ?? ""];
-    if (!call) return route.fulfill({ status: 404 });
+    if (!call) return route.fulfill({ status: 404, headers: cors });
     return route.fulfill({
       status: call.status,
       contentType: "application/json",
       body: "{}",
-      headers: { "Tracepanel-Id": call.trace, "Server-Timing": timing(call) },
+      headers: { ...cors, "Tracepanel-Id": call.trace, "Server-Timing": timing(call) },
     });
   });
   const server = options.server;
@@ -95,16 +103,18 @@ export async function openApp(
        data-tracepanel-issues="${server.issues ?? 0}" data-tracepanel-runtime="${server.runtime}"`
     : "";
   const buttons = Object.keys(calls)
-    .map((key) => `<button onclick="fetch('/app/api/${key}')">Load ${key}</button>`)
+    .map((key) => `<button onclick="fetch('${api}api/${key}')">Load ${key}</button>`)
     .concat(
       options.recording
-        ? Object.keys(calls).map((key) => `<button onclick="act('${key}', '${key}')">Do ${key}</button>`)
+        ? Object.keys(calls).map((key) => `<button onclick="act('${key}', '${api}api/${key}')">Do ${key}</button>`)
         : [],
     )
     .join("");
+  const recording = `<script>${RECORDING}</script>`;
   const html = `<!doctype html><html><head>
-    ${options.recording ? `<script>${RECORDING}</script>` : ""}
+    ${options.recording === true ? recording : ""}
     <script src="/widget.min.js" data-tracepanel-api="/" ${tag}></script>
+    ${options.recording === "after widget" ? recording : ""}
     <title>app</title></head><body>${buttons}</body></html>`;
   // An app's page names its encoding; one that isn't UTF-8 reads a script with no charset of its own in its own.
   const contentType = `text/html; charset=${options.charset ?? "utf-8"}`;

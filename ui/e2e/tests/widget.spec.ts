@@ -1,6 +1,6 @@
 // The widget on an app's page: the pill's states, the panel it opens, and the tab's list.
 import { CONSOLE } from "../agent.ts";
-import { type Call, openApp, panel, pill, traceId } from "../app.ts";
+import { type Call, OTHER_API, openApp, panel, pill, traceId } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
 
 async function posts(): Promise<Call> {
@@ -141,4 +141,26 @@ test("with the browser recording, the pill shows the page's view, and the panel 
     /^CLICK\s*"boom"/,
     /^GET\s*\/api\/error/,
   ]);
+});
+
+test("calls to an API on another origin sit under the action that made them, with a recording started after the widget", async ({
+  page,
+}) => {
+  await openApp(page, { posts: await posts(), boom: await broken() }, { recording: "after widget", api: OTHER_API });
+
+  await page.getByRole("button", { name: "Do posts" }).click();
+  await page.getByRole("button", { name: "Do boom" }).click();
+  await pill(page).click();
+  const rows = panel(page).getByRole("region", { name: "Pages and requests in this browser tab" }).getByRole("button");
+
+  await expect(rows).toHaveText([
+    /^VIEW\s*\/app\//,
+    /^CLICK\s*"posts"/,
+    /^GET\s*\/api\/posts/,
+    /^CLICK\s*"boom"/,
+    /^GET\s*\/api\/error/,
+  ]);
+  await expect
+    .poll(() => rows.evaluateAll((buttons) => buttons.map((button) => button.getAttribute("data-depth"))))
+    .toEqual(["0", "0", "1", "0", "1"]);
 });
