@@ -1,4 +1,5 @@
 // A trace's Request tab: the request itself first, then the traces linked to it, alike ones as one row.
+import { traceId } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
 
 test("a request's deliveries come after the request, the same listener's as one row", async ({ page }) => {
@@ -130,6 +131,50 @@ test("a call another project's agent served shows under it, opening in that proj
     "href",
     "http://127.0.0.1:9999/#/t/01M4R1ER9RWER0QHV07BJDSZ7Z",
   );
+});
+
+test("a call's trace that came whole opens under the call: the other app's own rows, its issues", async ({ page }) => {
+  // Another project's app served the call: its posts request, with its queries and its N+1, as its agent sends it.
+  const served = await (await page.request.get(`/api/traces/${await traceId("GET /api/posts")}`)).json();
+  const whole = {
+    ...served,
+    id: "01M4R1ER9RWER0QHV07BJDSZ7Y",
+    attrs: {
+      ...served.attrs,
+      "service.name": "posts",
+      "process.runtime.name": "cpython",
+      "tracepanel.framework": "FastAPI 0.120",
+    },
+  };
+  await page.route("**/api/traces/*/related", async (route) => {
+    const related = await (await route.fetch()).json();
+    const trace = await (await page.request.get(route.request().url().replace("/related", ""))).json();
+    const call = trace.spans.find((span: { kind: string }) => span.kind === "rabbitmq");
+    related.remote_calls = [
+      {
+        // biome-ignore lint/style/useNamingConvention: the API's wire format.
+        span_id: call.id,
+        trace: { ...related.delivered[0], id: whole.id, name: "GET /api/posts" },
+        console: "http://127.0.0.1:9999/",
+        project: "posts-service",
+      },
+    ];
+    // biome-ignore lint/style/useNamingConvention: the API's wire format.
+    related.call_traces = { [whole.id]: whole };
+    await route.fulfill({ json: related });
+  });
+  await page.goto(`/#/traces?q=${encodeURIComponent("route:/api/books/announce")}`);
+  await page.getByRole("main").getByRole("table").getByRole("link").first().click();
+  const app = page.getByRole("button", { name: /^app GET \/api\/posts/ });
+
+  await expect(app).toHaveAttribute("aria-expanded", "true");
+  await expect(app.locator(".dt-map-app")).toHaveText("posts-service");
+  await expect(page.locator('.dt-map-row[data-kind="sql"]').getByText("N+1").first()).toBeVisible();
+
+  await app.click();
+  await app.click();
+
+  await expect(app).toHaveAttribute("aria-expanded", "false");
 });
 
 test("a record in the call tree shows where it was logged, its attributes", async ({ page }) => {

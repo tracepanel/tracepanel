@@ -259,9 +259,47 @@ async fn related(State(reader): State<Shared>, Path(id): Path<String>) -> Respon
     let unanswered = read(&reader, move |reader| Ok(reader.unanswered_calls(&calls)?))
         .await
         .unwrap_or_default();
-    related["remote_calls"] = Value::Array(remote_calls(unanswered).await);
+    let mut remote = remote_calls(unanswered).await;
+    let ids: Vec<String> = related["calls"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|call| call["id"].as_str().map(str::to_owned))
+        .take(CALL_TRACES_LIMIT)
+        .collect();
+    let mut whole = whole_traces(&reader, ids).await;
+    // A neighbour's whole trace goes with the others, out of the list of calls.
+    for doc in remote
+        .iter_mut()
+        .filter_map(|call| call.as_object_mut()?.remove("detail"))
+    {
+        if let Some(id) = doc["id"].as_str().map(str::to_owned) {
+            whole.insert(id, doc);
+        }
+    }
+    related["remote_calls"] = Value::Array(remote);
+    related["call_traces"] = Value::Object(whole);
     json_response(StatusCode::OK, related.to_string())
 }
+
+/// These traces whole, by id: the ones this store has.
+async fn whole_traces(reader: &Shared, ids: Vec<String>) -> serde_json::Map<String, Value> {
+    let docs = read(reader, move |reader| {
+        Ok(ids
+            .iter()
+            .filter_map(|id| reader.get_trace(id).ok().flatten())
+            .collect::<Vec<_>>())
+    })
+    .await
+    .unwrap_or_default();
+    docs.iter()
+        .filter_map(|doc| serde_json::from_str::<Value>(doc).ok())
+        .filter_map(|doc| Some((doc["id"].as_str()?.to_owned(), doc)))
+        .collect()
+}
+
+/// How many of a trace's calls come whole, for the call tree to open under the call: a fan-out beyond it shows rows.
+const CALL_TRACES_LIMIT: usize = 20;
 
 /// A trace to share and what is linked to it (`Reader::snapshot`); `values=1` keeps what otherwise stays local.
 async fn snapshot(
@@ -587,7 +625,20 @@ async fn served(
     })
     .await
     {
-        Ok(Some(trace)) => json_response(StatusCode::OK, json!({"trace": trace}).to_string()),
+        // The whole trace too: the asking console opens it under its call.
+        Ok(Some(trace)) => {
+            let id = trace["id"].as_str().unwrap_or_default().to_owned();
+            let detail = read(&reader, move |reader| Ok(reader.get_trace(&id)?))
+                .await
+                .ok()
+                .flatten()
+                .and_then(|doc| serde_json::from_str::<Value>(&doc).ok())
+                .unwrap_or(Value::Null);
+            json_response(
+                StatusCode::OK,
+                json!({"trace": trace, "detail": detail}).to_string(),
+            )
+        }
         Ok(None) => not_found(),
         Err(failure) => failure.into_response(),
     }
