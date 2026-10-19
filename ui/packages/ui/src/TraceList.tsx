@@ -1,3 +1,4 @@
+import { TriangleAlertIcon } from "lucide-react";
 import { ago, duration } from "./format";
 import { DatabaseIcon } from "./icons";
 import { ISSUE_LABELS } from "./labels";
@@ -181,20 +182,26 @@ function PageName({ name }: { name: string }) {
  * The narrow list's last column (empty on a clean row, so the columns stay in place): the first finding, "+N" for
  * the rest, all of them in the tooltip. An error shows as its status and the red edge, not here.
  */
+/**
+ * The narrow list's findings: a mark and how many, in the first kind's colour, their names in its title. A label per
+ * finding ("Before commit +3") took the row's room from its path.
+ */
 function CompactChips({ kinds, issues }: { kinds: IssueKind[] | undefined; issues: number }) {
   const shown = (kinds ?? []).filter((kind) => kind !== "error");
-  const [first, ...rest] = shown;
+  // Findings of kinds not known yet (a row from the widget's summary, before its trace loads) count by their number.
+  const count = shown.length || issues;
+  if (count === 0) return <span className="dt-request-chips" />;
+  const names = shown.map((kind) => ISSUE_LABELS[kind]).join(", ");
   return (
-    <span className="dt-request-chips" title={shown.map((kind) => ISSUE_LABELS[kind]).join(", ") || undefined}>
-      {first ? (
-        <IssueChip kind={first} />
-      ) : issues > 0 ? (
-        // Findings of kinds not known yet (a row from the widget's summary, before its trace loads): their count.
-        <span className="dt-chip" data-kind="n+1">
-          {issues} {issues === 1 ? "issue" : "issues"}
-        </span>
-      ) : null}
-      {rest.length > 0 ? <span className="dt-request-chips-more">+{rest.length}</span> : null}
+    <span className="dt-request-chips">
+      <span
+        className="dt-chip dt-chip-compact"
+        data-kind={shown[0] ?? "n+1"}
+        title={names || `${count} ${count === 1 ? "issue" : "issues"}`}
+      >
+        <TriangleAlertIcon aria-hidden="true" />
+        {count}
+      </span>
     </span>
   );
 }

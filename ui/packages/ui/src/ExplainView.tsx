@@ -37,6 +37,24 @@ export function ExplainView({ load, vendor }: ExplainViewProps) {
     <section className="grid gap-2">
       <div className="flex flex-wrap items-center gap-2.5">
         <h4 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">Query plan</h4>
+        {/* Beside the heading, not at the far end: a wide row scrolls that end out of view. */}
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" className="h-7 shadow-none" disabled={loading} onClick={() => run(false)}>
+            {loading && !state.analyze ? "Explaining…" : plan ? "Explain again" : "Explain"}
+          </Button>
+          {canAnalyze ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 shadow-none"
+              disabled={loading}
+              title="Runs the query to measure real time and rows"
+              onClick={() => run(true)}
+            >
+              {loading && state.analyze ? "Analyzing…" : "Explain analyze"}
+            </Button>
+          ) : null}
+        </div>
         {plan ? (
           <>
             <span className="text-sm text-muted-foreground">
@@ -56,23 +74,6 @@ export function ExplainView({ load, vendor }: ExplainViewProps) {
             )}
           </>
         ) : null}
-        <div className="ml-auto flex gap-2">
-          <Button variant="outline" size="sm" className="h-7 shadow-none" disabled={loading} onClick={() => run(false)}>
-            {loading && !state.analyze ? "Explaining…" : plan ? "Explain again" : "Explain"}
-          </Button>
-          {canAnalyze ? (
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 shadow-none"
-              disabled={loading}
-              title="Runs the query to measure real time and rows"
-              onClick={() => run(true)}
-            >
-              {loading && state.analyze ? "Analyzing…" : "Explain analyze"}
-            </Button>
-          ) : null}
-        </div>
       </div>
       {state.status === "failed" ? <p className="text-sm text-error">{state.message}</p> : null}
       {state.status === "idle" ? (
