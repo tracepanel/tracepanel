@@ -1,0 +1,75 @@
+name: Dependabot UI build
+
+# A Dependabot pull request that bumps ui/'s packages changes what the UI builds to, and Dependabot can't build it:
+# CI's "ui-dist is this ui/" fails, and the next release stops at its Notices job. This builds ui-dist/ and both
+# notices files on the pull request's branch and commits them, then starts CI on the new commit: a push made with
+# GITHUB_TOKEN starts no workflow by itself, a workflow_dispatch does.
+#
+# The packages' code runs in the build (vite, its plugins). The checkout keeps no credentials, so that code never
+# sees a token; only the last step, which runs nothing from ui/, pushes.
+on:
+  pull_request:
+    paths: ["ui/**"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ui-dist for Dependabot
+    if: github.actor == 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          persist-credentials: false
+
+      # The same tools as CI's UI job: pnpm from ui/package.json, Node 26, uv for the licenses.
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: ui/package.json
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: pnpm
+          cache-dependency-path: ui/pnpm-lock.yaml
+
+      - uses: astral-sh/setup-uv@v10.3.0
+
+      - name: Build ui-dist and the notices
+        run: |
+          scripts/ui.sh
+          uv run --no-project scripts/notices.py
+
+      - id: changed
+        name: Anything to commit
+        run: |
+          if git diff --quiet -- ui-dist THIRD-PARTY-NOTICES; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            git diff --stat -- ui-dist THIRD-PARTY-NOTICES
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit, push and start CI on it
+        if: steps.changed.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ui-dist THIRD-PARTY-NOTICES
+          git commit -m "ui-dist and notices for the bumped UI dependencies"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:${BRANCH}"
+          gh workflow run ci.yml --ref "$BRANCH"
