@@ -225,6 +225,58 @@ function background(): Doc[] {
   return [task, job];
 }
 
+/** A report on a replica with a long name: a long transaction and slow queries, each with its alias and issue chip. */
+function report(): Doc {
+  const alias = "FANSIFTER_APP_REPORTING/QA";
+  const doc = trace("http", "PATCH /campaigns/{id}/report", {
+    "service.name": "shop",
+    "http.method": "PATCH",
+    "http.path": "/campaigns/7/report",
+    "http.route": "/campaigns/{id}/report",
+    "http.status_code": 200,
+  });
+  const id = doc["id"] as string;
+  const span = (
+    suffix: string,
+    parent: string,
+    kind: string,
+    name: string,
+    start: number,
+    duration: number,
+    attrs: Doc,
+  ) => ({
+    id: `${id}${suffix}`,
+    // biome-ignore lint/style/useNamingConvention: a span as the SDKs send it.
+    parent_id: `${id}${parent}`,
+    kind,
+    name,
+    start,
+    duration,
+    status: "ok",
+    attrs,
+  });
+  const select = (index: number, start: number, duration: number) =>
+    span(`Q${index}`, "T", "sql", `SELECT campaign_stats_${index}`, start, duration, {
+      "db.alias": alias,
+      "db.system": "postgresql",
+      "db.statement": `SELECT * FROM campaign_stats_${index} WHERE campaign_id = %s`,
+      "code.origin": "campaigns/reports.py:40 in build",
+    });
+  return {
+    ...doc,
+    duration: 5_900_000,
+    spans: [
+      { ...(doc["spans"] as Doc[])[0], duration: 5_900_000 },
+      span("V", "R", "view", "campaigns.api.report", 0, 5_900_000, {}),
+      span("T", "V", "transaction", "transaction", 100_000, 4_100_000, { "db.alias": alias }),
+      select(1, 200_000, 428_000),
+      select(2, 700_000, 371_000),
+      select(3, 1_100_000, 363_000),
+      select(4, 1_500_000, 245_000),
+    ],
+  };
+}
+
 function examples(): Doc[] {
   return readdirSync(EXAMPLES)
     .filter((file) => file.endsWith(".json") && file !== "expected.json")
@@ -267,7 +319,7 @@ function late(): Doc {
 }
 
 export default async function seed(): Promise<void> {
-  const docs = [...examples(), ...pages(), ...background(), ...messages()];
+  const docs = [...examples(), ...pages(), ...background(), ...messages(), report()];
   const first = Date.now() * 1000 - SPREAD_US * (docs.length + 1);
   const moved = docs.map((doc, index) => shift(doc, first + index * SPREAD_US - Number(doc["start"])) as Doc);
   // A trace from an app whose clock is two hours behind, and that went over the limits: the oldest of all, so no list
