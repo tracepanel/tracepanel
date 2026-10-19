@@ -1317,6 +1317,28 @@ export interface components {
             count: number;
             span_ids: components["schemas"]["trace.schema"]["$defs"]["id"][];
         };
+        call: {
+            /** @description The span the call is. */
+            span_id: components["schemas"]["trace.schema"]["$defs"]["id"];
+            /** @description What groups its repeats: 16 hex, the console's op: and query: key. */
+            key: string;
+            /** @description What it is listed under: sql, redis, cache, http, mongodb, kafka, grpc, or a system's own name. */
+            system: string;
+            /** @description The rules its issues follow: sql, redis, cache, http, rpc, datastore, messaging. */
+            family: string;
+            /** @description Where it went: a database alias, an instance, a host, a topic, an RPC service. */
+            target: string;
+            /** @description The verb: SELECT, GET, find, publish, the RPC method. */
+            op: string;
+            /** @description What its repeats share: a SQL fingerprint, a key or path with its ids as {id}. */
+            template: string;
+            /** @description SQL: the database vendor; a cache: its backend. */
+            vendor: string | null;
+            /** @description Redis: what sent the command (direct, cache, task). */
+            via: string | null;
+            /** @description A cache get: whether it found the key. */
+            hit: boolean | null;
+        };
         /**
          * Trace
          * @description One unit of work: an HTTP request, a background task or a management command, with its spans, logs, errors and detected issues. Times are Unix epoch microseconds (UTC); durations are microseconds.
@@ -1339,7 +1361,31 @@ export interface components {
             issues: components["schemas"]["trace.schema"]["$defs"]["issue"][];
             /** @description When the agent received it, by its machine's clock: set by the agent, never sent. Against start and duration (the app's clock) it tells a clock that is off. */
             received?: components["schemas"]["trace.schema"]["$defs"]["time"];
+            /** @description Its spans that are calls to another system, as the agent's analysis reads them: set by the agent on a trace it sends on, never by an SDK. The rest of each call is its span's. */
+            calls?: components["schemas"]["trace.schema"]["$defs"]["call"][];
             $defs: {
+                call: {
+                    /** @description The span the call is. */
+                    span_id: components["schemas"]["trace.schema"]["$defs"]["id"];
+                    /** @description What groups its repeats: 16 hex, the console's op: and query: key. */
+                    key: string;
+                    /** @description What it is listed under: sql, redis, cache, http, mongodb, kafka, grpc, or a system's own name. */
+                    system: string;
+                    /** @description The rules its issues follow: sql, redis, cache, http, rpc, datastore, messaging. */
+                    family: string;
+                    /** @description Where it went: a database alias, an instance, a host, a topic, an RPC service. */
+                    target: string;
+                    /** @description The verb: SELECT, GET, find, publish, the RPC method. */
+                    op: string;
+                    /** @description What its repeats share: a SQL fingerprint, a key or path with its ids as {id}. */
+                    template: string;
+                    /** @description SQL: the database vendor; a cache: its backend. */
+                    vendor: string | null;
+                    /** @description Redis: what sent the command (direct, cache, task). */
+                    via: string | null;
+                    /** @description A cache get: whether it found the key. */
+                    hit: boolean | null;
+                };
                 /** @description ULID. */
                 id: string;
                 /** @description Unix epoch microseconds, UTC. */

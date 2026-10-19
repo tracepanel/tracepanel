@@ -11,7 +11,8 @@ pre-commit:
       # root changes the CWD to ui/ and rewrites {staged_files} paths relative to it.
       root: ui/
       glob: "ui/**/*.{ts,tsx,css,json,mjs}"
-      run: pnpm exec biome check --write {staged_files}
+      # A commit of files biome ignores alone (api.gen.ts) has nothing for it to check, which isn't an error.
+      run: pnpm exec biome check --write --no-errors-on-unmatched {staged_files}
       stage_fixed: true
 
     - name: docs-lint

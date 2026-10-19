@@ -84,8 +84,9 @@ jobs:
           touched() { if echo "$files" | grep -qE "$2"; then echo "$1=true"; else echo "$1=false"; fi >> "$GITHUB_OUTPUT"; }
           # The crates, and what they embed at build time: the store's schema, the search fields, the examples.
           touched rust '^(crates/|Cargo\.(toml|lock)$|rust-toolchain\.toml$|schema/)'
-          # ui/, the build it makes (ui-dist/), and what checks it: the API it is typed from, its build script, hooks.
-          touched ui '^(ui/|ui-dist/|schema/openapi\.yaml$|scripts/(ui|notices)\.(sh|py)$|lefthook\.yml$)'
+          # ui/, the build it makes (ui-dist/), and what checks it: the API it is typed from (openapi.yaml and the trace schema
+          # it refers to), its build script, hooks.
+          touched ui '^(ui/|ui-dist/|schema/(openapi|trace\.schema)\.(yaml|json)$|scripts/(ui|notices)\.(sh|py)$|lefthook\.yml$)'
           # The pages, and the comments scripts/lint_docs.py reads (the crates' and the scripts').
           touched docs '(\.md$|^crates/.*\.rs$|^scripts/.*\.py$)'
 
