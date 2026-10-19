@@ -400,6 +400,21 @@ function listen(): void {
   intercept((info) => (deliver ? deliver(info) : pending.push(info)));
 }
 
+/** Runs `use` once the Response can carry its mark: now when it has it, else in the next task. */
+function afterMark(response: Response, use: () => void): void {
+  if (pageOf(response) !== undefined) {
+    use();
+    return;
+  }
+  window.setTimeout(() => {
+    try {
+      use();
+    } catch {
+      // Never break the page because of the widget.
+    }
+  });
+}
+
 function intercept(onRequest: (info: TraceInfo) => void): void {
   const originalFetch = window.fetch;
   window.fetch = async function (this: unknown, input: globalThis.RequestInfo | URL, init?: RequestInit) {
@@ -407,7 +422,9 @@ function intercept(onRequest: (info: TraceInfo) => void): void {
     try {
       const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
       const info = fromResponse(method, response.url, response.status, (name) => response.headers.get(name));
-      if (info) onRequest({ ...info, page: pageOf(response) });
+      // A recording that wrapped fetch after the widget (one started by the app's code, once the widget loaded)
+      // marks the Response only once this call has returned to it: read the mark after that, in the next task.
+      if (info) afterMark(response, () => onRequest({ ...info, page: pageOf(response) }));
     } catch {
       // Never break the page because of the widget.
     }
