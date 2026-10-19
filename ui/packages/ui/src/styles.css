@@ -2128,6 +2128,21 @@ button.dt-log-message {
   color: var(--dt-syn-operator);
 }
 
+/* A query plan's line: the operation stands out, a full scan's in the warning colour; the costs recede. */
+.dt-plan-op {
+  color: var(--dt-syn-function);
+  font-weight: 600;
+}
+.dt-plan-line[data-warning] .dt-plan-op {
+  color: var(--dt-warn-strong);
+}
+.dt-plan-label {
+  color: var(--dt-text-2);
+}
+.dt-plan-key {
+  color: var(--dt-syn-comment);
+}
+
 /* Frame headers never overflow the pane: names and paths truncate. */
 .dt-frame summary,
 .dt-frame-group > summary {
