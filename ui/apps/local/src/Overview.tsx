@@ -27,11 +27,12 @@ export function useOverviewOpen(): [boolean, () => void] {
   return [open, toggle];
 }
 
-/** The time an overview covers: "10/20/2026, 2:05:00 PM – 3:05:00 PM". */
+/** The time an overview covers, on the 24-hour clock the console's tables and charts use: "20/10/2026, 14:05:00 – 15:05:00". */
 export function OverviewRange({ from, to }: { from: number; to: number }) {
   return (
     <span className="text-base text-muted-foreground">
-      {new Date(from / 1000).toLocaleString()} – {new Date(to / 1000).toLocaleTimeString()}
+      {new Date(from / 1000).toLocaleString([], { hour12: false })} –{" "}
+      {new Date(to / 1000).toLocaleTimeString([], { hour12: false })}
     </span>
   );
 }

@@ -158,6 +158,10 @@
 
 ### Fixed
 
+- Tasks' Now table fits the page: a long worker name, arguments or error are
+  cut to one line, whole on hover. Now stands over the Overview, chevron for
+  chevron, busy or idle. An overview's time range is on the 24-hour clock,
+  as the tables and charts are.
 - A logs table with more columns than room no longer widens the page past
   the window, cutting off the chart and squeezing Message out: its columns
   fit the room again.

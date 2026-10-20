@@ -70,11 +70,12 @@ function NowToggle({ live, open, setOpen }: { live: LiveTasks; open: boolean; se
   return (
     <button
       type="button"
-      className="flex items-center gap-2 rounded-md py-1 text-left"
+      className="flex items-center gap-3 rounded-md py-1 text-left focus-visible:outline-2 focus-visible:outline-ring"
       aria-expanded={open}
       onClick={() => setOpen(!open)}
     >
-      <ChevronRightIcon className={cn("size-4 text-muted-foreground transition-transform", open && "rotate-90")} />
+      {/* The Overview's own chevron, size and gap: "Now" stands over "Overview". */}
+      <ChevronRightIcon className={cn("size-5 text-muted-foreground transition-transform", open && "rotate-90")} />
       <NowCounts live={live} />
     </button>
   );
@@ -83,7 +84,7 @@ function NowToggle({ live, open, setOpen }: { live: LiveTasks; open: boolean; se
 /** Nothing in flight: idle, with workers there to run what comes. */
 function NowIdle({ workers }: { workers: readonly LiveWorker[] }) {
   return (
-    <span className="flex items-center gap-2 py-1 pl-6">
+    <span className="flex items-center gap-2 py-1 pl-8">
       <span className="font-semibold text-foreground">Now</span>
       {workers.length ? <span className="text-muted-foreground">Idle</span> : null}
     </span>
@@ -166,7 +167,10 @@ const COLUMNS: readonly Column[] = [
     ),
   },
   // Where it is: the worker that runs it, or the queue it waits in.
-  { head: "Where", cell: (task) => <Mono className="text-sm">{task.worker ?? task.queue ?? "—"}</Mono> },
+  {
+    head: "Where",
+    cell: (task) => <Where task={task} />,
+  },
   { head: "For", num: true, cell: (task, now) => elapsed(now, stateSince(task)) },
   { head: "Attempt", num: true, cell: (task) => task.retries + 1 },
   // What a glance needs: why the last attempt failed, else what it was given.
@@ -213,11 +217,25 @@ function TickingRows({ live }: { live: LiveTasks }) {
 }
 
 /** Its arguments at a glance, whole on hover. */
+// A long value cut to one line, whole on hover: the table fits the page's width, as the console's other tables do.
+const CUT = "block max-w-[14rem] truncate text-sm";
+
+/** Where a task is: the worker that runs it, or the queue it waits in. */
+function Where({ task }: { task: LiveTask }) {
+  const where = task.worker ?? task.queue;
+  if (!where) return muted(null);
+  return (
+    <Mono className={CUT} title={where}>
+      {where}
+    </Mono>
+  );
+}
+
 function Arguments({ task }: { task: LiveTask }) {
   const text = argumentsOf(task);
   if (!text) return muted(null);
   return (
-    <Mono className="block max-w-[24rem] truncate text-sm text-muted-foreground" title={text}>
+    <Mono className={cn(CUT, "text-muted-foreground")} title={text}>
       {text}
     </Mono>
   );
@@ -225,7 +243,7 @@ function Arguments({ task }: { task: LiveTask }) {
 
 function LastError({ error }: { error: string }) {
   return (
-    <Mono className="block max-w-[24rem] truncate text-sm text-error" title={error}>
+    <Mono className={cn(CUT, "text-error")} title={error}>
       {error}
     </Mono>
   );

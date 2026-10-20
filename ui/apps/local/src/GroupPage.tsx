@@ -176,7 +176,7 @@ export function GroupPage({
         <Stat
           label="Calls"
           value={String(s.calls)}
-          sub={`since ${new Date(s.first_seen / 1000).toLocaleTimeString()}`}
+          sub={`since ${new Date(s.first_seen / 1000).toLocaleTimeString([], { hour12: false })}`}
         />
         <Stat
           label="Errors"
