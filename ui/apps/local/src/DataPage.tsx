@@ -4,10 +4,10 @@ import {
   Empty,
   type KnownValues,
   type LogBucket,
-  type LogRow,
   LogsChart,
   type SearchSpec,
 } from "@tracepanel/ui";
+import { Button } from "@tracepanel/ui/components/ui/button";
 import type { Family } from "@tracepanel/ui/lib/systems";
 import { type ReactNode, useCallback } from "react";
 import { SystemTiles } from "./CallsTiles";
@@ -90,7 +90,7 @@ function systemPristine(noun = "operations"): { title: string; text: string } {
 
 /** A paged list's body: loading, its rows with "Load older" while there are more, or what to say when it is empty. */
 function pagedBody<T>(
-  list: { items: T[] | undefined; hasMore: boolean; loading: boolean; more: () => void },
+  list: { items: T[] | undefined; error: string | null; hasMore: boolean; loading: boolean; more: () => void },
   moreLabel: string,
   rows: (items: T[]) => ReactNode,
   empty: ReactNode,
@@ -104,12 +104,22 @@ function pagedBody<T>(
       </>
     ),
     empty,
+    list.error,
   );
 }
 
-/** A list's body: loading, its rows, or what to say when nothing matches. */
-function listBody<T>(data: T[] | undefined, rows: (items: T[]) => ReactNode, empty: ReactNode): ReactNode {
-  if (data === undefined) return <Loading />;
+/**
+ * A list's body: loading, its rows, or what to say when nothing matches. With nothing loaded and an `error` (a search
+ * the store refused), no endless loading: the search box above says what is wrong.
+ */
+function listBody<T>(
+  data: T[] | undefined,
+  rows: (items: T[]) => ReactNode,
+  empty: ReactNode,
+  error: string | null = null,
+): ReactNode {
+  if (data === undefined)
+    return error ? <Empty title="Nothing to show">Fix the search above to see results.</Empty> : <Loading />;
   return data.length > 0 ? rows(data) : empty;
 }
 
@@ -122,32 +132,74 @@ function useLogSeries(source: DataSource, logs: boolean, q: string) {
   return useSearch(load, q, 0);
 }
 
-/** The Logs page's list: the records over time above them. */
-function logsBody(
-  items: LogRow[],
-  series: LogBucket[] | undefined,
-  refine: (terms: Record<string, string>) => void,
-  open: string | undefined,
-  setOpen: (key: string | null) => void,
-): ReactNode {
+/** The Logs page: the records over time, above their list or what to do when nothing matches. */
+function logsBody(page: BodyContext): ReactNode {
   return (
     <div className="grid gap-3">
-      <LogsOverTime series={series} onRefine={refine} />
-      <LogsTable items={items} onFilter={refine} open={open ?? null} onOpen={setOpen} />
+      <LogsOverTime series={page.data.logSeries.data} q={page.q} onRefine={page.refine} />
+      {pagedBody(
+        page.data.logs,
+        "Load older logs",
+        (items) => (
+          <LogsTable items={items} onFilter={page.refine} open={page.open ?? null} onOpen={page.setOpen} />
+        ),
+        <Empty
+          title="No log records match"
+          action={
+            page.q ? (
+              <Button variant="outline" size="sm" onClick={page.clear}>
+                Clear the search
+              </Button>
+            ) : null
+          }
+        >
+          A wider time range or fewer filters may find some.
+        </Empty>,
+      )}
     </div>
   );
 }
 
-/** The logs' records over time; a drag across it narrows the search to that time. None while loading or empty. */
+/** The levels a search has: `level:warning,error` → warning, error. */
+function levelsOf(q: string): string[] {
+  const term = q.split(/\s+/).find((token) => token.startsWith("level:"));
+  return term ? term.slice("level:".length).split(",").filter(Boolean) : [];
+}
+
+/** Whether a search has a time range: the chart stays then, empty, to show the range and drag another. */
+const ranged = (q: string) => /(^|\s)(since|until):/.test(q);
+
+/**
+ * The logs' records over time; a drag across it narrows the search to that time, the legend to those levels. None
+ * while loading, or when nothing matches outside a time range.
+ */
 function LogsOverTime({
   series,
+  q,
   onRefine,
 }: {
   series: LogBucket[] | undefined;
+  q: string;
   onRefine: (terms: Record<string, string>) => void;
 }) {
-  if (!series?.some((bucket) => bucket.count > 0)) return null;
-  return <LogsChart series={series} onSelect={(start, end) => onRefine(rangeTerms(start, end))} />;
+  if (!series || !(ranged(q) || series.some((bucket) => bucket.count > 0))) return null;
+  return (
+    <LogsChart
+      series={series}
+      onSelect={(start, end) => onRefine(rangeTerms(start, end))}
+      levels={{ chosen: levelsOf(q), onChoose: (levels) => onRefine({ level: levels.join(",") }) }}
+    />
+  );
+}
+
+/** How many records the search finds in all: the chart's counts, over every page of the list. */
+function seriesTotal(series: readonly LogBucket[] | undefined): number | undefined {
+  return series?.reduce((sum, bucket) => sum + bucket.count, 0);
+}
+
+/** How many are shown: "14 of 1,204" while older pages hold more. */
+function shownOf(size: number | undefined, total: number | undefined): number | string | undefined {
+  return size !== undefined && total !== undefined && total > size ? `${size} of ${total.toLocaleString()}` : size;
 }
 
 // What each list's pages are cut by: a trace's start, a record's or a mail's time.
@@ -257,6 +309,8 @@ interface BodyContext {
   noun: string | undefined;
   data: PageData;
   refine: (terms: Record<string, string>) => void;
+  /** The search emptied: every record again. */
+  clear: () => void;
   setOpen: (key: string | null) => void;
   setService: (service: string) => void;
 }
@@ -272,13 +326,7 @@ const BODIES: Partial<Record<Section, (page: BodyContext) => ReactNode>> = {
         Search names and paths, or filter: status&gt;=500, task:send_*, kind:command.
       </Empty>,
     ),
-  logs: (page) =>
-    pagedBody(
-      page.data.logs,
-      "Load older logs",
-      (items) => logsBody(items, page.data.logSeries.data, page.refine, page.open, page.setOpen),
-      <Empty title="No log records match">Records from requests, tasks and jobs are searchable here.</Empty>,
-    ),
+  logs: logsBody,
   mails: (page) =>
     pagedBody(
       page.data.mails,
@@ -345,7 +393,20 @@ export function DataPage({ section, q, open, source, spec, known, systems }: Dat
       </EmptyPage>
     );
   }
-  const body = pageBody({ section, system, q, open, source, noun: meta.noun, data, refine, setOpen, setService });
+  const clear = () => go({ name: section, q: "" });
+  const body = pageBody({
+    section,
+    system,
+    q,
+    open,
+    source,
+    noun: meta.noun,
+    data,
+    refine,
+    clear,
+    setOpen,
+    setService,
+  });
 
   // Services and Database are summaries: they change slowly, so they refresh on demand, not on a timer.
   return (
@@ -362,7 +423,7 @@ export function DataPage({ section, q, open, source, spec, known, systems }: Dat
         spec={spec}
         error={loaded.error}
         known={known}
-        count={loaded.size}
+        count={shownOf(loaded.size, section === "logs" ? seriesTotal(data.logSeries.data) : undefined)}
         onChange={setQuery}
       />
       <section className="min-h-0 flex-1 overflow-y-auto px-10 pb-10" aria-label={meta.label} data-scroll="">

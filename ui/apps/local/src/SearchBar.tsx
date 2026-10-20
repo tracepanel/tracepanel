@@ -312,7 +312,8 @@ const QUICK: Record<Exclude<Section, CallsSection>, Control[]> = {
       title: "Filter by level",
       key: "level",
       values: ["debug", "info", "warning", "error", "critical"],
-      format: capital,
+      // As the table and the chart name it.
+      format: (level) => level.toUpperCase(),
       display: (level) => <LogLevel level={level} />,
     },
     { label: "Logger", title: "Filter by logger", key: "logger", values: (known) => known.logger ?? [] },
@@ -562,8 +563,8 @@ export interface SearchBarProps {
   error: string | null;
   /** Values from stored data, offered in menus and after `route:`, `logger:`, `db:`. */
   known: KnownValues;
-  /** Results shown for the current query, if known. */
-  count?: number | undefined;
+  /** Results shown for the current query, if known: a number, or "14 of 1,204" when more match than are shown. */
+  count?: number | string | undefined;
   /** The list of this entry point's calls: its own quick filters on the traces search. */
   callsOf?: EntrySection | undefined;
   /** `typed`: the box's own debounced text, which replaces the history entry; a chip or a menu adds one. */

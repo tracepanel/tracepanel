@@ -238,7 +238,7 @@ test("the records over time sit above the table, by level, and a drag across the
   await page.goto("/#/logs");
   const chart = page.getByRole("img", { name: "Log records over time, by level" });
   await expect(chart).toBeVisible();
-  await expect(page.getByRole("button", { name: "error", exact: true, pressed: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "ERROR", exact: true, pressed: true })).toBeVisible();
 
   const before = await rows(page).count();
   const box = await chart.boundingBox();
@@ -272,4 +272,49 @@ test("the records over time fold to their title, and stay folded after a reload"
   await title.click();
 
   await expect(chart).toBeVisible();
+});
+
+test("the chart's legend filters the list by level, as the Level filter does", async ({ page }) => {
+  await page.goto("/#/logs");
+  const legend = (name: string) => page.getByRole("button", { name, exact: true });
+
+  await legend("INFO").click();
+  await legend("DEBUG").click();
+
+  // What is left: warnings and errors, critical ones with them.
+  await expect(page).toHaveURL(/level(%3A|:)warning(%2C|,)error(%2C|,)critical/);
+  await expect(legend("INFO")).toHaveAttribute("aria-pressed", "false");
+  await expect(legend("WARNING")).toHaveAttribute("aria-pressed", "true");
+  // The Level column, second: its text is the level as stored, shown in capitals.
+  const levels = await region(page).locator("tr[data-record] td:nth-child(2)").allTextContents();
+  expect(levels.length).toBeGreaterThan(0);
+  for (const level of levels) {
+    expect(["warning", "error", "critical"]).toContain(level);
+  }
+
+  await legend("INFO").click();
+  await legend("DEBUG").click();
+
+  // Every level again: no filter left.
+  await expect(page).not.toHaveURL(/level/);
+});
+
+test("a search that finds nothing keeps the chart of its time range, and offers to clear it", async ({ page }) => {
+  await page.goto(
+    `/#/logs?q=${encodeURIComponent("nothing-logs-this since:2000-01-01T00:00:00 until:2000-01-01T00:10:00")}`,
+  );
+
+  await expect(page.getByText("No log records match")).toBeVisible();
+  await expect(page.getByRole("img", { name: "Log records over time, by level" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Clear the search" }).click();
+
+  await expect(rows(page).first()).toBeVisible();
+});
+
+test("a search the store refuses says so, rather than loading for ever", async ({ page }) => {
+  await page.goto(`/#/logs?q=${encodeURIComponent("level:loud")}`);
+
+  await expect(page.getByText("Nothing to show")).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "Loading" })).toHaveCount(0);
 });

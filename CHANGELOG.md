@@ -24,6 +24,12 @@
 
 ### Changed
 
+- The logs chart and the list agree: a click on the legend filters the list by
+  level, as the Level filter does (it hid the level in the chart alone), and
+  levels are named in capitals in the table, the chart and the filter alike.
+  The count says "50 of 1,204" while older pages hold more. A search that
+  finds nothing keeps the chart of its time range and offers to clear it. One
+  the store refuses no longer shows a loading bar for ever.
 - The logs table reads and moves like a list of records: a message's text
   selects and copies (the row opens the record, unless text was selected),
   the arrow keys go from record to record, Enter opens one and Escape closes

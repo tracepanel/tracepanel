@@ -551,11 +551,43 @@ export function CallsChart({
 
 /** The levels from the bottom of a bar up, each in the color its records' dot has in the table. */
 const LOG_LEVELS: readonly (LegendItem & { levels: readonly string[] })[] = [
-  { key: "debug", label: "debug", className: "bg-muted-foreground/50", levels: ["debug"] },
-  { key: "info", label: "info", className: "bg-info", levels: ["info"] },
-  { key: "warning", label: "warning", className: "bg-warn", levels: ["warning"] },
-  { key: "error", label: "error", className: "bg-error", levels: ["error", "critical"] },
+  // Named as the table and the Level filter name them.
+  { key: "debug", label: "DEBUG", className: "bg-muted-foreground/50", levels: ["debug"] },
+  { key: "info", label: "INFO", className: "bg-info", levels: ["info"] },
+  { key: "warning", label: "WARNING", className: "bg-warn", levels: ["warning"] },
+  { key: "error", label: "ERROR", className: "bg-error", levels: ["error", "critical"] },
 ];
+
+/** The search's levels, and what picks others: the legend filters the list too, not the chart alone. */
+export interface LevelFilter {
+  /** The levels the search has (`level:warning,error`); none: every level. */
+  chosen: readonly string[];
+  onChoose: (levels: readonly string[]) => void;
+}
+
+/** The legend's hidden levels and its toggle: the search's, with a level filter, else the chart's own. */
+function useLevelToggle(
+  levels: LevelFilter | undefined,
+): [ReadonlySet<string>, (key: string, all: readonly LegendItem[]) => void] {
+  const own = useSeriesToggle();
+  if (!levels) return own;
+  return [unchosen(levels.chosen), (key) => levels.onChoose(rechosen(levels.chosen, key))];
+}
+
+/** The legend's entries the search leaves out: none without a level filter. */
+function unchosen(chosen: readonly string[]): ReadonlySet<string> {
+  if (chosen.length === 0) return new Set();
+  return new Set(LOG_LEVELS.filter((item) => !item.levels.some((level) => chosen.includes(level))).map((i) => i.key));
+}
+
+/** The levels after a legend click: an entry in or out, the last one kept, all of them the same as none. */
+function rechosen(chosen: readonly string[], key: string): string[] {
+  const hidden = new Set(unchosen(chosen));
+  if (hidden.has(key)) hidden.delete(key);
+  else if (hidden.size < LOG_LEVELS.length - 1) hidden.add(key);
+  if (hidden.size === 0) return [];
+  return LOG_LEVELS.filter((item) => !hidden.has(item.key)).flatMap((item) => item.levels);
+}
 
 const FILL: Record<string, string> = {
   debug: "fill-muted-foreground/50",
@@ -580,6 +612,17 @@ function sliceTime(start: number, end: number): string {
   return from === to ? `${from} · ${duration(end - start)}` : `${from}–${to}`;
 }
 
+const TIP_TONE: Record<string, string> = { error: "text-error", warning: "text-warn" };
+
+/** A level's count in a slice's tooltip: "3 ERROR", in the level's colour when it is a warning or worse. */
+function TipLevel({ level, count }: { level: string; count: number }) {
+  return (
+    <span className={TIP_TONE[level]}>
+      {count} {LOG_LEVELS.find((item) => item.key === level)?.label ?? level}
+    </span>
+  );
+}
+
 function LogTip({ bucket }: { bucket: LogBucket }) {
   return (
     <>
@@ -588,11 +631,7 @@ function LogTip({ bucket }: { bucket: LogBucket }) {
         {bucket.count} {bucket.count === 1 ? "record" : "records"}
       </span>
       {stacked(bucket, new Set()).map(({ key, count }) =>
-        count > 0 ? (
-          <span key={key} className={key === "error" ? "text-error" : key === "warning" ? "text-warn" : undefined}>
-            {count} {key}
-          </span>
-        ) : null,
+        count > 0 ? <TipLevel key={key} level={key} count={count} /> : null,
       )}
     </>
   );
@@ -636,11 +675,14 @@ const readFolded = (raw: unknown): boolean => raw === true;
 export function LogsChart({
   series,
   onSelect,
+  levels,
 }: {
   series: readonly LogBucket[];
   onSelect?: ((start: number, end: number) => void) | undefined;
+  /** The search's level filter: the legend shows and changes it. Without it, the legend hides levels in the chart. */
+  levels?: LevelFilter | undefined;
 }) {
-  const [hidden, toggle] = useSeriesToggle();
+  const [hidden, toggle] = useLevelToggle(levels);
   // Folded to its title, as this browser last left it: room for more records.
   const [folded, setFolded] = useStored("tracepanel:logs:chart-folded", readFolded);
   const brush = useBrush(
