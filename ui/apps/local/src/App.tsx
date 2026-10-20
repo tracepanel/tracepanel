@@ -369,6 +369,7 @@ function ListControls({
       <span className="list-count">{count}</span>
       <span className="ml-auto flex shrink-0 items-center gap-1">
         <FollowToggle follow={follow} onFollow={onFollow} />
+        <ProfileToggle source={source} />
         <ClearButton onClear={onClear} />
       </span>
     </>
@@ -773,7 +774,6 @@ function PanelApp({ route }: { route: Route }) {
           <ExternalIcon />
         </a>
       </Hint>
-      <ProfileToggle source={source} />
       <ShareAction traceId={selectedId} source={source} compact={true} />
       <ThemeToggle compact={true} />
       <DockButton dock={dock} />
@@ -832,6 +832,7 @@ function PanelApp({ route }: { route: Route }) {
             {/* No count here: the rows are right below; Clear's tooltip says how many. */}
             <span className="ml-auto flex shrink-0 items-center gap-2">
               <FollowToggle follow={follow} onFollow={onFollow} />
+              <ProfileToggle source={source} />
               <ClearButton onClear={() => setClearing(true)} label={`Clear ${requestCount}`} />
             </span>
           </div>

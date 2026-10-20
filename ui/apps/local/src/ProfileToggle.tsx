@@ -16,7 +16,10 @@ function profile(on: boolean): void {
 }
 
 const HINTS = {
-  off: { title: "Profile requests", detail: "Record where each request's time goes in code, until you turn it off." },
+  off: {
+    title: "Profile new requests",
+    detail: "Record where the time of each request from now on goes in code, until you turn it off.",
+  },
   on: { title: "Profiling is on", detail: "Every request this browser makes is profiled. Click to stop." },
 };
 
@@ -36,7 +39,10 @@ function ProfileButton() {
     <Hint title={hint.title} detail={hint.detail}>
       <button
         type="button"
-        className={cn("icon-button", on && "bg-brand-soft text-brand hover:bg-brand-soft hover:text-brand")}
+        className={cn(
+          "icon-button",
+          on && "bg-orange-500/15 text-orange-500 hover:bg-orange-500/25 hover:text-orange-500",
+        )}
         aria-label={hint.title}
         aria-pressed={on}
         onClick={() => {
@@ -44,7 +50,7 @@ function ProfileButton() {
           setOn(!on);
         }}
       >
-        <FlameIcon className={cn("size-4", on && "fill-current")} />
+        <FlameIcon className={cn("size-4", on && "fill-amber-400 drop-shadow-[0_0_4px_rgb(249_115_22/0.6)]")} />
       </button>
     </Hint>
   );
