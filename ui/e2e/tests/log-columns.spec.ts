@@ -131,3 +131,28 @@ test("a trace's Logs tab is the same table, with its own columns and times since
 
   await expect(page.getByRole("tab", { name: /^Call tree/ })).toHaveAttribute("aria-selected", "true");
 });
+
+test("an attribute picked from the menu becomes a column of its own, after a reload too, until reset", async ({
+  page,
+}) => {
+  await page.goto("/#/logs");
+  await region(page).getByRole("button", { name: "Columns" }).click();
+  await page.getByRole("menuitem", { name: "Attribute columns" }).click();
+  // The submenu's own items: the attribute keys of the records listed.
+  const offered = page.getByRole("menu").last().getByRole("menuitemcheckbox");
+  const key = (await offered.first().textContent()) ?? "";
+  await offered.first().click();
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+
+  await expect(header(page, key)).toBeVisible();
+
+  await page.reload();
+
+  await expect(header(page, key)).toBeVisible();
+
+  await region(page).getByRole("button", { name: "Columns" }).click();
+  await page.getByRole("menuitem", { name: "Reset to defaults" }).click();
+
+  await expect(header(page, key)).toHaveCount(0);
+});

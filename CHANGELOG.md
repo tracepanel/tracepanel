@@ -43,6 +43,11 @@
   menu shows and hides columns (App, Trace and Attributes are there too) and
   switches the time between the time of day and how long ago (in a trace:
   since the request started). The browser keeps these choices.
+- Logs: any attribute of the records listed can be a column of its own,
+  picked from the columns menu's Attribute columns.
+- A log record's details say where it was logged ("Logged inside" and the
+  spans around it), and the Show logs from row adds this call and any call
+  of its kind to this request, logger and path.
 
 - The agent is on Maven Central, as `dev.tracepanel:tracepanel-agent`: the
   binary of each platform, with the platform as its classifier

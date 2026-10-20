@@ -33,7 +33,7 @@ import { Button } from "@tracepanel/ui/components/ui/button";
 import { TableCell, TableRow } from "@tracepanel/ui/components/ui/table";
 import { systemOfPage } from "@tracepanel/ui/lib/systems";
 import { cn } from "@tracepanel/ui/lib/utils";
-import { ArrowRightIcon, ListFilterIcon } from "lucide-react";
+import { ArrowRightIcon, ChevronRightIcon, ListFilterIcon } from "lucide-react";
 import { Fragment, type ReactNode, useEffect, useState } from "react";
 import { useCapability } from "./hooks";
 import { currentPeriod, endpointGroup, go, groupRoute, href, issueRoute, traceHref, withPeriod } from "./routes";
@@ -565,6 +565,22 @@ function httpField(method: string, path: string, status: number | null | undefin
   return ["request", `${method} ${path}${status ? ` → ${status}` : ""}`, { path: term(path) }];
 }
 
+/** The records logged inside the same call as this one (a view, a query, a Kafka send), and inside any of its kind. */
+function InsideSources({ log, onFilter }: { log: LogRow; onFilter: (terms: Record<string, string>) => void }) {
+  const innermost = log.spans[0];
+  if (innermost === undefined) return null;
+  return (
+    <>
+      <Button variant="outline" size="xs" onClick={() => onFilter({ span: term(innermost.name) })}>
+        this {innermost.system} call
+      </Button>
+      <Button variant="outline" size="xs" onClick={() => onFilter({ in: innermost.system })}>
+        any {innermost.system} call
+      </Button>
+    </>
+  );
+}
+
 /** Shortcuts to the records around this one: its trace's, every run of its task or job, its logger's, its path's. */
 function LogSources({ log, onFilter }: { log: LogRow; onFilter: (terms: Record<string, string>) => void }) {
   const named = NAMED[log.trace_kind];
@@ -592,6 +608,7 @@ function LogSources({ log, onFilter }: { log: LogRow; onFilter: (terms: Record<s
           this user
         </Button>
       ) : null}
+      <InsideSources log={log} onFilter={onFilter} />
       <Button size="xs" className="ml-auto" asChild>
         <a href={traceHref(log.trace_id, "logs")}>
           Open {sourceOf(log)}
@@ -614,34 +631,25 @@ function outward(spans: LogRow["spans"]): { path: string; span: LogRow["spans"][
   }));
 }
 
-/**
- * Where in its trace a record was logged: the spans around it, outermost first, each one's records a click away, and
- * the call tree open at the innermost.
- */
-function LoggedIn({ log, onFilter }: { log: LogRow; onFilter: (terms: Record<string, string>) => void }) {
+/** Where in its trace a record was logged: the spans around it, outermost first, and the call tree open there. */
+function LoggedIn({ log }: { log: LogRow }) {
   if (log.spans.length === 0) return null;
   return (
-    <nav className="flex flex-wrap items-center gap-1.5 text-base" aria-label="Logged in">
-      <span className="mr-1 text-muted-foreground">Logged in</span>
+    <section className="flex flex-wrap items-center gap-1.5 text-sm" aria-label="Logged inside">
+      <span className="mr-1 text-base text-muted-foreground">Logged inside</span>
       {outward(log.spans).map(({ path, span }, index) => (
         <Fragment key={path}>
-          {index > 0 ? <span className="text-muted-foreground">›</span> : null}
-          <Button
-            variant="outline"
-            size="xs"
-            title={`Show logs from inside ${span.name}`}
-            onClick={() => onFilter({ span: term(span.name) })}
-          >
+          {index > 0 ? <ChevronRightIcon className="size-3.5 text-muted-foreground" aria-hidden="true" /> : null}
+          <span className="inline-flex min-w-0 items-center gap-1.5 rounded-md border bg-muted/40 px-1.5 py-0.5">
             <Badge variant="outline" className="font-mono text-2xs uppercase">
               {span.system}
             </Badge>
-            <span className="max-w-80 truncate font-mono">{span.name}</span>
-          </Button>
+            <span className="max-w-80 truncate font-mono text-xs" title={span.name}>
+              {span.name}
+            </span>
+          </span>
         </Fragment>
       ))}
-      <Button variant="ghost" size="xs" onClick={() => onFilter({ in: log.spans[0]?.system ?? "" })}>
-        every record inside {log.spans[0]?.system}
-      </Button>
       {log.span_id ? (
         <Button variant="ghost" size="xs" className="ml-auto" asChild>
           <a href={traceHref(log.trace_id, "tree", log.span_id)}>
@@ -650,7 +658,7 @@ function LoggedIn({ log, onFilter }: { log: LogRow; onFilter: (terms: Record<str
           </a>
         </Button>
       ) : null}
-    </nav>
+    </section>
   );
 }
 
@@ -672,7 +680,7 @@ function LogDetails({ log, onFilter }: { log: LogRow; onFilter: (terms: Record<s
   return (
     <div className="grid gap-3.5">
       <LogSources log={log} onFilter={onFilter} />
-      <LoggedIn log={log} onFilter={onFilter} />
+      <LoggedIn log={log} />
       <div className="group/message relative rounded-md border bg-background">
         <pre className="m-0 px-4 py-3 pr-12 font-mono text-base whitespace-pre-wrap">{log.message}</pre>
         <CopyButton text={log.message} label="Copy message" className="absolute top-2 right-2" />

@@ -56,9 +56,13 @@ test("a record is found by the call it was logged in, and says where that was", 
   await expect(rows.first()).toContainText("Kafka producer started");
 
   await rows.first().click();
-  const where = list.getByRole("navigation", { name: "Logged in" });
-  await expect(where.getByRole("button", { name: /publish book-events/ })).toBeVisible();
+  const where = list.getByRole("region", { name: "Logged inside" });
+  await expect(where).toContainText("publish book-events");
   await expect(where.getByRole("link", { name: "In the call tree" })).toBeVisible();
+
+  await list.getByRole("button", { name: "any kafka call" }).click();
+
+  await expect(page).toHaveURL(/in(%3A|:)kafka/);
 
   await page.goto(`/#/logs?q=${encodeURIComponent("in!=kafka route:/api/books/announce")}`);
   await expect(rows).toHaveCount(1);

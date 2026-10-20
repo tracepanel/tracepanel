@@ -2,7 +2,15 @@
 // record, its details opened under it; columns the reader sizes and picks, kept per browser.
 import { cn } from "@tracepanel/ui/lib/utils";
 import type { MouseEvent, ReactNode } from "react";
-import { DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem } from "./components/ui/dropdown-menu";
+import {
+  DropdownMenuCheckboxItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+} from "./components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./components/ui/table";
 import { ago, clock, duration, since } from "./format";
 import { type ColumnSpec, type Columns, useColumns } from "./hooks/useColumns";
@@ -125,6 +133,77 @@ function leading<R extends LogLike>(mode: TimeMode, start: number | undefined): 
   ];
 }
 
+/** Attribute keys the reader made columns of, as stored: a list of strings, anything else none. */
+const readKeys = (raw: unknown): string[] =>
+  Array.isArray(raw) ? raw.filter((key): key is string => typeof key === "string") : [];
+
+/** How many attribute keys the menu offers: the records' own, most common first. */
+const OFFERED = 40;
+
+/** The attribute keys of the records listed, most common first: what the menu offers as columns. */
+function attributeKeys(logs: readonly LogLike[]): string[] {
+  const counts = new Map<string, number>();
+  for (const log of logs) {
+    for (const key of Object.keys(log.attrs)) counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return [...counts]
+    .sort(([a, x], [b, y]) => y - x || a.localeCompare(b))
+    .slice(0, OFFERED)
+    .map(([key]) => key);
+}
+
+/** A column per attribute the reader picked: its value in each record, nothing where a record has none. */
+function attributeColumns<R extends LogLike>(keys: readonly string[]): LogColumn<R>[] {
+  return keys.map((key) => ({
+    id: `attr:${key}`,
+    label: key,
+    width: 9,
+    cell: (log) => <AttributeValue value={log.attrs[key]} />,
+  }));
+}
+
+function AttributeValue({ value }: { value: unknown }) {
+  if (value === undefined || value === null) return <span className="text-muted-foreground/60">—</span>;
+  const text = typeof value === "string" ? value : JSON.stringify(value);
+  return (
+    <span className="font-mono text-xs" title={text}>
+      {text}
+    </span>
+  );
+}
+
+/** The columns menu's list of attribute keys: one checked shows that attribute as a column. */
+function AttributeColumnsMenu({
+  keys,
+  picked,
+  onPick,
+}: {
+  keys: readonly string[];
+  picked: readonly string[];
+  onPick: (keys: string[]) => void;
+}) {
+  const offered = [...new Set([...picked, ...keys])];
+  if (offered.length === 0) return null;
+  return (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger>Attribute columns</DropdownMenuSubTrigger>
+      <DropdownMenuSubContent className="max-h-80 w-64 overflow-y-auto">
+        {offered.map((key) => (
+          <DropdownMenuCheckboxItem
+            key={key}
+            checked={picked.includes(key)}
+            onCheckedChange={(checked) => onPick(checked ? [...picked, key] : picked.filter((each) => each !== key))}
+            onSelect={(event) => event.preventDefault()}
+            className="font-mono text-xs"
+          >
+            {key}
+          </DropdownMenuCheckboxItem>
+        ))}
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
+  );
+}
+
 function trailing<R extends LogLike>(): LogColumn<R>[] {
   return [
     { id: "attributes", label: "Attributes", width: 16, hidden: true, cell: (log) => <Attributes attrs={log.attrs} /> },
@@ -162,6 +241,7 @@ function LogHead({
   mode,
   onMode,
   relativeLabel,
+  attributes,
 }: {
   columns: Columns;
   widths: ReadonlyMap<string, number>;
@@ -170,6 +250,8 @@ function LogHead({
   mode: TimeMode;
   onMode: (mode: TimeMode) => void;
   relativeLabel: string;
+  /** The menu's attribute columns. */
+  attributes: ReactNode;
 }) {
   return (
     <TableHeader className="bg-muted">
@@ -186,6 +268,7 @@ function LogHead({
         ))}
         <TableHead className="w-9 px-1 text-right">
           <ColumnsMenu columns={columns} changed={changed} onReset={onReset}>
+            {attributes}
             <DropdownMenuLabel>Time</DropdownMenuLabel>
             <DropdownMenuRadioGroup value={mode} onValueChange={(value) => onMode(readTime(value))}>
               <DropdownMenuRadioItem value="clock" onSelect={(event) => event.preventDefault()}>
@@ -269,7 +352,8 @@ export function LogTable<R extends LogLike>({
   stickyHeader?: boolean;
 }) {
   const [mode, setMode] = useStored(`tracepanel:columns:${table}:time`, readTime);
-  const all = [...leading<R>(mode, start), ...extra, ...trailing<R>()];
+  const [picked, setPicked] = useStored(`tracepanel:columns:${table}:attributes`, readKeys);
+  const all = [...leading<R>(mode, start), ...extra, ...attributeColumns<R>(picked), ...trailing<R>()];
   const columns = useColumns(table, all);
   const shown = all.filter(columns.isShown);
   // The columns menu's own column is w-9.
@@ -277,17 +361,19 @@ export function LogTable<R extends LogLike>({
   const reset = () => {
     columns.reset();
     setMode("clock");
+    setPicked([]);
   };
   return (
     <Table ref={ref} className="table-fixed text-sm" stickyHeader={stickyHeader}>
       <LogHead
         columns={columns}
         widths={widths}
-        changed={columns.changed || mode !== "clock"}
+        changed={columns.changed || mode !== "clock" || picked.length > 0}
         onReset={reset}
         mode={mode}
         onMode={setMode}
         relativeLabel={start === undefined ? "Time ago" : "Since the request started"}
+        attributes={<AttributeColumnsMenu keys={attributeKeys(logs)} picked={picked} onPick={setPicked} />}
       />
       <TableBody>
         {logs.map((log) => {
