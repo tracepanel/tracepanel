@@ -395,6 +395,17 @@ function requestRows(attrs: Attrs): PropRow[] {
   );
 }
 
+/** The request's body, under the table, when the app read one. */
+function BodyPart({ attrs }: { attrs: Attrs }) {
+  const body = text(attrs["http.request.body"]);
+  if (!body) return null;
+  return (
+    <Part label="Request body" title="Request body">
+      <RequestBody body={body} truncated={attrs["http.request.body.truncated"] === true} />
+    </Part>
+  );
+}
+
 /** A titled part of the overview, when it has anything to show. */
 function Part({ label, title, children }: { label: string; title: ReactNode; children: ReactNode }) {
   return (
@@ -416,14 +427,7 @@ export function RequestInfo({ trace, related, links }: RequestInfoProps) {
   return (
     <div className="grid gap-4 p-4">
       <PropTable rows={[...ownRows(trace), ...requestRows(trace.attrs)]} />
-      {text(trace.attrs["http.request.body"]) ? (
-        <Part label="Request body" title="Request body">
-          <RequestBody
-            body={text(trace.attrs["http.request.body"]) ?? ""}
-            truncated={trace.attrs["http.request.body.truncated"] === true}
-          />
-        </Part>
-      ) : null}
+      <BodyPart attrs={trace.attrs} />
       {linked.length ? (
         <Part label="Related traces" title="Related traces">
           <PropTable rows={linked} />
