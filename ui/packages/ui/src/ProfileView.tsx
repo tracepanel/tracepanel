@@ -19,6 +19,60 @@ function node(frame: Frame | null, key: string): Node {
   return { frame, key, total: 0, self: 0, children: new Map() };
 }
 
+const OUTSIDE: Frame = {
+  function: "(outside your code)",
+  module: null,
+  file: "",
+  line: 0,
+  // biome-ignore lint/style/useNamingConvention: wire format.
+  in_app: false,
+};
+
+/** The same stacks, merged where they are now alike. */
+function merged(profile: Profile, frames: Frame[], stacks: { frames: number[]; count: number }[]): Profile {
+  const counts = new Map<string, { frames: number[]; count: number }>();
+  for (const stack of stacks) {
+    const key = stack.frames.join(",");
+    const found = counts.get(key);
+    if (found) found.count += stack.count;
+    else counts.set(key, { ...stack });
+  }
+  return { ...profile, frames, stacks: [...counts.values()] };
+}
+
+/** The project's own frames alone: library time counts toward the call of yours it ran under. */
+function ownCode(profile: Profile): Profile {
+  const outside = profile.frames.length;
+  const stacks = profile.stacks.map((stack) => {
+    const own = stack.frames.filter((index) => profile.frames[index]?.in_app);
+    return { frames: own.length ? own : [outside], count: stack.count };
+  });
+  return merged(profile, [...profile.frames, OUTSIDE], stacks);
+}
+
+/** Frames kept above the first of the project's own, out of what every stack starts with: the middleware around it. */
+const CONTEXT = 3;
+
+/** Every frame, less the library frames every stack starts with (the server, the thread) but the last few. */
+function allFrames(profile: Profile): Profile {
+  const [first, ...rest] = profile.stacks;
+  if (!first) return profile;
+  const shared = rest.reduce(
+    (length, stack) => Math.min(length, commonLength(first.frames, stack.frames)),
+    first.frames.length,
+  );
+  const library = first.frames.slice(0, shared).findIndex((index) => profile.frames[index]?.in_app);
+  const cut = Math.max(0, (library === -1 ? shared : library) - CONTEXT);
+  const stacks = profile.stacks.map((stack) => ({ frames: stack.frames.slice(cut), count: stack.count }));
+  return merged(profile, profile.frames, stacks);
+}
+
+function commonLength(a: readonly number[], b: readonly number[]): number {
+  let at = 0;
+  while (at < a.length && at < b.length && a[at] === b[at]) at += 1;
+  return at;
+}
+
 /** A node's child for a frame, made the first time the path reaches it. */
 function child(at: Node, index: number, profile: Profile): Node {
   const found = at.children.get(index);
@@ -99,8 +153,37 @@ export function ProfilePane({ trace, open }: { trace: Trace; open: boolean }) {
   return open && trace.profile ? <ProfileView profile={trace.profile} /> : null;
 }
 
-/** Where the trace's time went in code: a flame graph from the outermost call down, and the functions by their time. */
+/** Where the trace's time went in code: your own code by default, every frame when asked. */
 function ProfileView({ profile }: { profile: Profile }) {
+  const [own, setOwn] = useState(true);
+  const view = useMemo(() => (own ? ownCode(profile) : allFrames(profile)), [profile, own]);
+  const choice = (mine: boolean, label: string) => (
+    <button
+      type="button"
+      aria-pressed={own === mine}
+      onClick={() => setOwn(mine)}
+      className={cn(
+        "rounded-md px-2.5 py-1 text-sm",
+        own === mine ? "bg-accent font-medium text-foreground" : "text-muted-foreground hover:text-foreground",
+      )}
+    >
+      {label}
+    </button>
+  );
+  return (
+    <div className="grid gap-3 p-4">
+      <div className="flex items-center gap-1">
+        {choice(true, "Your code")}
+        {choice(false, "All frames")}
+      </div>
+      {/* Keyed: a zoom belongs to the frames it was made in. */}
+      <Flame key={String(own)} profile={view} />
+    </div>
+  );
+}
+
+/** A flame graph from the outermost call down, and the functions by their time. */
+function Flame({ profile }: { profile: Profile }) {
   const root = useMemo(() => tree(profile), [profile]);
   const rows = useMemo(() => functions(profile).slice(0, 30), [profile]);
   const [focus, setFocus] = useState<Node>(root);
@@ -111,7 +194,7 @@ function ProfileView({ profile }: { profile: Profile }) {
     <div className="grid gap-5 p-4">
       <p className="text-sm text-muted-foreground">
         {profile.samples.toLocaleString()} samples, one every {duration(profile.interval_us)}: about{" "}
-        {time(profile.samples)} of code seen running. Your code is in color; libraries and Python are gray.
+        {time(profile.samples)} of code seen running. Your code is in color, the rest gray.
         {focus !== root ? (
           <>
             {" "}
