@@ -2,8 +2,9 @@
 // show or hide columns. The choices live in useColumns, per browser.
 
 import { cn } from "@tracepanel/ui/lib/utils";
-import { Columns3CogIcon } from "lucide-react";
+import { Columns3CogIcon, XIcon } from "lucide-react";
 import {
+  type DragEvent,
   type KeyboardEvent,
   type PointerEvent,
   type ReactNode,
@@ -224,35 +225,127 @@ function sized(width: number | undefined, draft: number | undefined) {
   return { flex: width === undefined, shown, style: shown === undefined ? undefined : { width: `${shown}px` } };
 }
 
+// What a header carries while it is dragged onto another: its column's id.
+const DRAGGED = "application/x-tracepanel-column";
+
+/** A header a column can be dropped on: `onMove` gets the dropped column's id; `over` while one is above it. */
+function useDrop(onMove: ((moved: string) => void) | undefined) {
+  const [over, setOver] = useState(false);
+  if (onMove === undefined) return { over, props: {} };
+  const carries = (event: DragEvent) => event.dataTransfer.types.includes(DRAGGED);
+  return {
+    over,
+    props: {
+      onDragOver: (event: DragEvent) => {
+        if (!carries(event)) return;
+        event.preventDefault();
+        setOver(true);
+      },
+      onDragLeave: () => setOver(false),
+      onDrop: (event: DragEvent) => {
+        setOver(false);
+        const moved = event.dataTransfer.getData(DRAGGED);
+        if (moved) onMove(moved);
+      },
+    },
+  };
+}
+
+/** The header's name, dragged to move its column before or after another. */
+function DragLabel({ id, label, movable }: { id: string; label: string; movable: boolean }) {
+  return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: moving a column is a pointer shortcut; the menu's reset undoes it.
+    <span
+      draggable={movable}
+      title={movable ? "Drag to move the column" : undefined}
+      onDragStart={(event) => {
+        event.dataTransfer.setData(DRAGGED, id);
+        event.dataTransfer.effectAllowed = "move";
+      }}
+      className={cn("block truncate", movable && "cursor-grab active:cursor-grabbing")}
+    >
+      {label}
+    </span>
+  );
+}
+
+/** A column the reader added, taken off from its header. */
+function RemoveColumn({ label, onRemove }: { label: string; onRemove: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label={`Remove the ${label} column`}
+      title={`Remove the ${label} column`}
+      onClick={onRemove}
+      className="absolute top-1/2 right-2 flex size-4 -translate-y-1/2 items-center justify-center rounded-sm bg-muted text-muted-foreground opacity-0 transition-opacity group-hover/head:opacity-100 hover:text-foreground focus-visible:opacity-100"
+    >
+      <XIcon className="size-3" />
+    </button>
+  );
+}
+
+/** A header's own buttons: the remove one, for a column the reader added, and the resize handle, on its edge. */
+function HeadControls({
+  label,
+  onRemove,
+  edge,
+  width,
+  onDraft,
+  onWidth,
+}: {
+  label: string;
+  onRemove: (() => void) | undefined;
+  edge: ColumnEdge | undefined;
+  width: number | undefined;
+  onDraft: (width: number | undefined) => void;
+  onWidth: (width: number) => void;
+}) {
+  return (
+    <>
+      {onRemove ? <RemoveColumn label={label} onRemove={onRemove} /> : null}
+      {edge ? <ResizeHandle label={label} edge={edge} width={width} onDraft={onDraft} onWidth={onWidth} /> : null}
+    </>
+  );
+}
+
 /**
  * A column's header cell, `width` px wide; without one, it takes what the others leave. `edge` puts the resize handle
- * on the side that faces that column; none, the column has no handle.
+ * on the side that faces that column; none, the column has no handle. With `onMove`, its name drags onto another
+ * header to move the column there; with `onRemove`, a button on hover takes the column off.
  */
 export function ColumnHead({
+  id,
   label,
   width,
   onWidth,
   edge,
+  onMove,
+  onRemove,
   className,
 }: {
+  id: string;
   label: string;
   width: number | undefined;
   onWidth: (width: number) => void;
   edge?: ColumnEdge | undefined;
+  onMove?: ((moved: string) => void) | undefined;
+  onRemove?: (() => void) | undefined;
   className?: string | undefined;
 }) {
   const [draft, setDraft] = useState<number | undefined>(undefined);
   const { flex, shown, style } = sized(width, draft);
+  const drop = useDrop(onMove);
   return (
     <TableHead
       data-flex={flex || undefined}
       style={style}
-      className={cn("relative", className)}
+      className={cn("group/head relative", drop.over && "bg-brand-soft", className)}
       // Its name is its label: the resize handle inside has a name of its own.
       aria-label={label}
+      {...drop.props}
     >
-      <span className="block truncate">{label}</span>
-      {edge ? <ResizeHandle label={label} edge={edge} width={shown} onDraft={setDraft} onWidth={onWidth} /> : null}
+      <DragLabel id={id} label={label} movable={onMove !== undefined} />
+      <HeadControls label={label} onRemove={onRemove} edge={edge} width={shown} onDraft={setDraft} onWidth={onWidth} />
     </TableHead>
   );
 }

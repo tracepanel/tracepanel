@@ -1,7 +1,7 @@
 import { type ReactNode, useState } from "react";
-import { CopyButton } from "./CopyButton";
 import { ChevronDownIcon } from "./icons";
 import { cn } from "./lib/utils";
+import { NameValues } from "./NameValues";
 import { Segmented } from "./Segmented";
 import type { Attrs } from "./types";
 
@@ -178,30 +178,9 @@ function BrowserHeaders({ count, open, onToggle }: { count: number; open: boolea
   );
 }
 
-/** Names and values in rows: a column of names, values that wrap, a copy button on hover. */
+/** Names and values, as every such list shows them. */
 function Pairs({ pairs }: { pairs: readonly Pair[] }) {
-  return (
-    <dl className="m-0 grid grid-cols-[minmax(7rem,11rem)_minmax(0,1fr)_auto] font-mono text-xs">
-      {pairs.map(([name, value]) => (
-        <div
-          key={`${name}=${value}`}
-          className="group/pair col-span-3 grid grid-cols-subgrid border-t first:border-t-0 hover:bg-muted/40"
-        >
-          <dt className="truncate py-1.5 pr-4 pl-3 text-muted-foreground" title={name}>
-            {name}
-          </dt>
-          <dd className="m-0 py-1.5 [overflow-wrap:anywhere]">{value}</dd>
-          <span className="flex items-start py-1 pr-2 pl-1">
-            <CopyButton
-              text={value}
-              label={`Copy ${name}`}
-              className="size-5 opacity-0 transition-opacity group-hover/pair:opacity-100 focus-visible:opacity-100"
-            />
-          </span>
-        </div>
-      ))}
-    </dl>
-  );
+  return <NameValues rows={pairs.map(([name, value]) => ({ name, value }))} />;
 }
 
 /** A card per namespace, its name and count above it: groups apart at a glance, names lined up across them. */

@@ -58,7 +58,7 @@ test("a record is found by the call it was logged in, and says where that was", 
   await rows.first().click();
   const where = list.getByRole("region", { name: "Logged inside" });
   await expect(where).toContainText("publish book-events");
-  await expect(where.getByRole("link", { name: "In the call tree" })).toBeVisible();
+  await expect(where.getByRole("link", { name: /publish book-events/ })).toHaveAttribute("href", /tab=tree/);
 
   await list.getByRole("button", { name: "any kafka call" }).click();
 

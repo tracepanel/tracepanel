@@ -1,7 +1,7 @@
 // Log records as one table wherever they are listed: the console's Logs page and a trace's Logs tab. One line per
 // record, its details opened under it; columns the reader sizes and picks, kept per browser.
 import { cn } from "@tracepanel/ui/lib/utils";
-import type { MouseEvent, ReactNode } from "react";
+import { createContext, type MouseEvent, type ReactNode, useContext } from "react";
 import {
   DropdownMenuCheckboxItem,
   DropdownMenuLabel,
@@ -133,6 +133,23 @@ function leading<R extends LogLike>(mode: TimeMode, start: number | undefined): 
   ];
 }
 
+/** The attribute columns of the table a record's details open in: whether a key is one, and to make it one or not. */
+export interface AttributeColumns {
+  has: (key: string) => boolean;
+  toggle: (key: string) => void;
+}
+
+const AttributeColumnsContext = createContext<AttributeColumns | null>(null);
+
+/** The attribute columns of the table around: null outside one. */
+export function useAttributeColumns(): AttributeColumns | null {
+  return useContext(AttributeColumnsContext);
+}
+
+function toggled(keys: readonly string[], key: string): string[] {
+  return keys.includes(key) ? keys.filter((each) => each !== key) : [...keys, key];
+}
+
 /** Attribute keys the reader made columns of, as stored: a list of strings, anything else none. */
 const readKeys = (raw: unknown): string[] =>
   Array.isArray(raw) ? raw.filter((key): key is string => typeof key === "string") : [];
@@ -152,10 +169,13 @@ function attributeKeys(logs: readonly LogLike[]): string[] {
     .map(([key]) => key);
 }
 
+// An attribute column's id: this, then the attribute's key.
+const ATTRIBUTE = "attr:";
+
 /** A column per attribute the reader picked: its value in each record, nothing where a record has none. */
 function attributeColumns<R extends LogLike>(keys: readonly string[]): LogColumn<R>[] {
   return keys.map((key) => ({
-    id: `attr:${key}`,
+    id: `${ATTRIBUTE}${key}`,
     label: key,
     width: 9,
     cell: (log) => <AttributeValue value={log.attrs[key]} />,
@@ -233,6 +253,11 @@ function opens(event: MouseEvent): boolean {
   return !(event.target as Element).closest("a, button:not([aria-expanded]), [role=separator]");
 }
 
+/** What takes a column off from its header: only an attribute's, which the reader added. */
+function removable(id: string, onRemove: (key: string) => void): (() => void) | undefined {
+  return id.startsWith(ATTRIBUTE) ? () => onRemove(id.slice(ATTRIBUTE.length)) : undefined;
+}
+
 function LogHead({
   columns,
   widths,
@@ -242,6 +267,7 @@ function LogHead({
   onMode,
   relativeLabel,
   attributes,
+  onRemoveAttribute,
 }: {
   columns: Columns;
   widths: ReadonlyMap<string, number>;
@@ -252,6 +278,7 @@ function LogHead({
   relativeLabel: string;
   /** The menu's attribute columns. */
   attributes: ReactNode;
+  onRemoveAttribute: (key: string) => void;
 }) {
   return (
     <TableHeader className="bg-muted">
@@ -259,6 +286,9 @@ function LogHead({
         {columns.shown.map((spec, index) => (
           <ColumnHead
             key={spec.id}
+            id={spec.id}
+            onMove={(moved) => columns.move(moved, spec.id)}
+            onRemove={removable(spec.id, onRemoveAttribute)}
             label={spec.label}
             width={widths.get(spec.id)}
             onWidth={(width) => columns.setWidth(spec.id, width)}
@@ -355,7 +385,7 @@ export function LogTable<R extends LogLike>({
   const [picked, setPicked] = useStored(`tracepanel:columns:${table}:attributes`, readKeys);
   const all = [...leading<R>(mode, start), ...extra, ...attributeColumns<R>(picked), ...trailing<R>()];
   const columns = useColumns(table, all);
-  const shown = all.filter(columns.isShown);
+  const shown = columns.shown;
   // The columns menu's own column is w-9.
   const { ref, widths } = useColumnWidths(columns, 2.25);
   const reset = () => {
@@ -363,34 +393,41 @@ export function LogTable<R extends LogLike>({
     setMode("clock");
     setPicked([]);
   };
+  const pinned: AttributeColumns = {
+    has: (key) => picked.includes(key),
+    toggle: (key) => setPicked(toggled(picked, key)),
+  };
   return (
-    <Table ref={ref} className="table-fixed text-sm" stickyHeader={stickyHeader}>
-      <LogHead
-        columns={columns}
-        widths={widths}
-        changed={columns.changed || mode !== "clock" || picked.length > 0}
-        onReset={reset}
-        mode={mode}
-        onMode={setMode}
-        relativeLabel={start === undefined ? "Time ago" : "Since the request started"}
-        attributes={<AttributeColumnsMenu keys={attributeKeys(logs)} picked={picked} onPick={setPicked} />}
-      />
-      <TableBody>
-        {logs.map((log) => {
-          const key = keyOf(log);
-          return (
-            <LogRecordRow
-              key={key}
-              log={log}
-              shown={shown}
-              open={open === key}
-              onToggle={() => onOpen(open === key ? null : key)}
-              action={action}
-              details={details}
-            />
-          );
-        })}
-      </TableBody>
-    </Table>
+    <AttributeColumnsContext.Provider value={pinned}>
+      <Table ref={ref} className="table-fixed text-sm" stickyHeader={stickyHeader}>
+        <LogHead
+          columns={columns}
+          widths={widths}
+          changed={columns.changed || mode !== "clock" || picked.length > 0}
+          onReset={reset}
+          mode={mode}
+          onMode={setMode}
+          relativeLabel={start === undefined ? "Time ago" : "Since the request started"}
+          attributes={<AttributeColumnsMenu keys={attributeKeys(logs)} picked={picked} onPick={setPicked} />}
+          onRemoveAttribute={(key) => setPicked(picked.filter((each) => each !== key))}
+        />
+        <TableBody>
+          {logs.map((log) => {
+            const key = keyOf(log);
+            return (
+              <LogRecordRow
+                key={key}
+                log={log}
+                shown={shown}
+                open={open === key}
+                onToggle={() => onOpen(open === key ? null : key)}
+                action={action}
+                details={details}
+              />
+            );
+          })}
+        </TableBody>
+      </Table>
+    </AttributeColumnsContext.Provider>
   );
 }

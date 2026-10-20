@@ -18,6 +18,7 @@ import {
   MailList,
   type MailRow,
   MethodBadge,
+  NameValues,
   type PageRow,
   RoutePath,
   type RpcRow,
@@ -26,6 +27,7 @@ import {
   StatusBadge,
   type TaskRow,
   type TraceSummary,
+  useAttributeColumns,
   type WebsocketRow,
 } from "@tracepanel/ui";
 import { Badge } from "@tracepanel/ui/components/ui/badge";
@@ -33,7 +35,7 @@ import { Button } from "@tracepanel/ui/components/ui/button";
 import { TableCell, TableRow } from "@tracepanel/ui/components/ui/table";
 import { systemOfPage } from "@tracepanel/ui/lib/systems";
 import { cn } from "@tracepanel/ui/lib/utils";
-import { ArrowRightIcon, ChevronRightIcon, ListFilterIcon } from "lucide-react";
+import { ArrowRightIcon, ChevronRightIcon, Columns3Icon, ListFilterIcon } from "lucide-react";
 import { Fragment, type ReactNode, useEffect, useState } from "react";
 import { useCapability } from "./hooks";
 import { currentPeriod, endpointGroup, go, groupRoute, href, issueRoute, traceHref, withPeriod } from "./routes";
@@ -631,34 +633,80 @@ function outward(spans: LogRow["spans"]): { path: string; span: LogRow["spans"][
   }));
 }
 
-/** Where in its trace a record was logged: the spans around it, outermost first, and the call tree open there. */
+/**
+ * Where in its trace a record was logged: the spans around it, outermost first, as one link to the call tree open at
+ * the innermost.
+ */
 function LoggedIn({ log }: { log: LogRow }) {
   if (log.spans.length === 0) return null;
-  return (
-    <section className="flex flex-wrap items-center gap-1.5 text-sm" aria-label="Logged inside">
-      <span className="mr-1 text-base text-muted-foreground">Logged inside</span>
-      {outward(log.spans).map(({ path, span }, index) => (
-        <Fragment key={path}>
+  const path = (
+    <>
+      {outward(log.spans).map(({ path: key, span }, index) => (
+        <Fragment key={key}>
           {index > 0 ? <ChevronRightIcon className="size-3.5 text-muted-foreground" aria-hidden="true" /> : null}
-          <span className="inline-flex min-w-0 items-center gap-1.5 rounded-md border bg-muted/40 px-1.5 py-0.5">
-            <Badge variant="outline" className="font-mono text-2xs uppercase">
-              {span.system}
-            </Badge>
-            <span className="max-w-80 truncate font-mono text-xs" title={span.name}>
-              {span.name}
-            </span>
-          </span>
+          <Badge variant="outline" className="font-mono text-2xs uppercase">
+            {span.system}
+          </Badge>
+          <span className="max-w-80 truncate font-mono text-xs">{span.name}</span>
         </Fragment>
       ))}
+    </>
+  );
+  return (
+    <section className="flex flex-wrap items-center gap-2" aria-label="Logged inside">
+      <span className="mr-1 text-base text-muted-foreground">Logged inside</span>
       {log.span_id ? (
-        <Button variant="ghost" size="xs" className="ml-auto" asChild>
-          <a href={traceHref(log.trace_id, "tree", log.span_id)}>
-            In the call tree
-            <ArrowRightIcon />
-          </a>
-        </Button>
-      ) : null}
+        <a
+          href={traceHref(log.trace_id, "tree", log.span_id)}
+          title="Open the call tree here"
+          className="inline-flex min-w-0 items-center gap-1.5 rounded-md border bg-background px-2 py-0.5 hover:border-brand/40 hover:bg-brand-soft"
+        >
+          {path}
+          <ArrowRightIcon className="size-3.5 text-muted-foreground" aria-hidden="true" />
+        </a>
+      ) : (
+        <span className="inline-flex min-w-0 items-center gap-1.5 rounded-md border bg-background px-2 py-0.5">
+          {path}
+        </span>
+      )}
     </section>
+  );
+}
+
+/** A field's filter: the logs with that value. */
+function FilterBy({ name, value, onFilter }: { name: string; value: string; onFilter: () => void }) {
+  return (
+    <Button
+      variant="ghost"
+      size="icon-xs"
+      className="size-5 text-muted-foreground"
+      title={`Show logs with ${name} = ${value}`}
+      aria-label={`Show logs with ${name} = ${value}`}
+      onClick={onFilter}
+    >
+      <ListFilterIcon />
+    </Button>
+  );
+}
+
+/** An attribute shown as a column of the table, or no longer: what the columns menu does, from the record. */
+function AsColumn({ name }: { name: string }) {
+  const columns = useAttributeColumns();
+  if (columns === null) return null;
+  const shown = columns.has(name);
+  const label = shown ? `Remove the ${name} column` : `Show ${name} as a column`;
+  return (
+    <Button
+      variant="ghost"
+      size="icon-xs"
+      className={cn("size-5", shown ? "text-brand" : "text-muted-foreground")}
+      title={label}
+      aria-label={label}
+      aria-pressed={shown}
+      onClick={() => columns.toggle(name)}
+    >
+      <Columns3Icon />
+    </Button>
   );
 }
 
@@ -682,7 +730,7 @@ function LogDetails({ log, onFilter }: { log: LogRow; onFilter: (terms: Record<s
       <LogSources log={log} onFilter={onFilter} />
       <LoggedIn log={log} />
       <div className="group/message relative rounded-md border bg-background">
-        <pre className="m-0 px-4 py-3 pr-12 font-mono text-base whitespace-pre-wrap">{log.message}</pre>
+        <pre className="m-0 px-3 py-2 pr-10 font-mono text-sm whitespace-pre-wrap">{log.message}</pre>
         <CopyButton text={log.message} label="Copy message" className="absolute top-2 right-2" />
       </div>
       {log.exception ? (
@@ -690,31 +738,18 @@ function LogDetails({ log, onFilter }: { log: LogRow; onFilter: (terms: Record<s
           {log.exception}
         </pre>
       ) : null}
-      <dl className="grid grid-cols-[max-content_minmax(0,1fr)_auto] items-center overflow-hidden rounded-md border bg-background text-base">
-        {fields.map(([key, value, filter]) => (
-          <Fragment key={key}>
-            <dt className="border-b px-3 py-1.5 font-mono text-muted-foreground">{key}</dt>
-            <dd className="m-0 truncate border-b px-3 py-1.5 font-mono" title={value}>
-              {value}
-            </dd>
-            <span className="flex items-center border-b px-1.5 py-1">
-              {filter ? (
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  className="text-muted-foreground"
-                  title={`Show logs with ${key} = ${value}`}
-                  aria-label={`Show logs with ${key} = ${value}`}
-                  onClick={() => onFilter(filter)}
-                >
-                  <ListFilterIcon />
-                </Button>
-              ) : null}
-              <CopyButton text={value} label={`Copy ${key}`} className="size-6 border-0" />
-            </span>
-          </Fragment>
-        ))}
-      </dl>
+      <div className="overflow-hidden rounded-md border bg-background">
+        <NameValues
+          rows={fields.map(([key, value, filter]) => ({
+            name: key,
+            value,
+            actions: [
+              filter ? <FilterBy key="filter" name={key} value={value} onFilter={() => onFilter(filter)} /> : null,
+              key in log.attrs ? <AsColumn key="column" name={key} /> : null,
+            ],
+          }))}
+        />
+      </div>
     </div>
   );
 }

@@ -46,11 +46,17 @@
 - The density rule applies: the shared styles' own root size won over it,
   so it did nothing. It now sets the size the UI was always shown at, 15px
   at the usual 16px browser size.
-- Logs: any attribute of the records listed can be a column of its own,
-  picked from the columns menu's Attribute columns.
-- A log record's details say where it was logged ("Logged inside" and the
-  spans around it), and the Show logs from row adds this call and any call
-  of its kind to this request, logger and path.
+- Logs: any attribute can be a column of its own, from the columns menu's
+  Attribute columns, or from the attribute's own button in an opened record.
+  The column's header takes it off again. A column's name drags onto another
+  header to move it there, and the browser keeps the order.
+- A log record's details say where it was logged ("Logged inside"): the
+  spans around it, as one link to the call tree there. The Show logs from row
+  adds this call and any call of its kind to this request, logger and path.
+  Its fields are a compact list, the same as a request's headers, with their
+  buttons lined up.
+- The console's filter buttons (Time, Level, Route…) are smaller, to sit
+  with the denser tables.
 
 - The agent is on Maven Central, as `dev.tracepanel:tracepanel-agent`: the
   binary of each platform, with the platform as its classifier

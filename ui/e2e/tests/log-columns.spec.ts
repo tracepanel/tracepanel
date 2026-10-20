@@ -156,3 +156,40 @@ test("an attribute picked from the menu becomes a column of its own, after a rel
 
   await expect(header(page, key)).toHaveCount(0);
 });
+
+test("a column dragged onto another moves there, and stays there after a reload", async ({ page }) => {
+  await page.goto("/#/logs");
+  const names = region(page).getByRole("columnheader");
+  await expect(names.first()).toHaveAccessibleName("Time");
+
+  await header(page, "Logger").getByText("Logger").dragTo(header(page, "Time"));
+
+  await expect(names.first()).toHaveAccessibleName("Logger");
+
+  await page.reload();
+
+  await expect(names.first()).toHaveAccessibleName("Logger");
+});
+
+test("an attribute of an opened record becomes a column from there, and its header takes it off", async ({ page }) => {
+  await page.goto("/#/logs");
+  const record = rows(page).filter({ hasText: "listing 50 posts for AnonymousUser" });
+  await record.getByRole("button", { name: /^listing 50 posts/ }).click();
+  const show = region(page)
+    .getByRole("button", { name: /^Show .+ as a column$/ })
+    .first();
+  const key = ((await show.getAttribute("aria-label")) ?? "").replace(/^Show (.+) as a column$/, "$1");
+
+  await show.click();
+
+  await expect(header(page, key)).toBeVisible();
+  // The record's own button says so too: pressed, it takes the column off again.
+  await expect(region(page).getByRole("button", { name: `Remove the ${key} column`, pressed: true })).toBeVisible();
+
+  await header(page, key).hover();
+  await header(page, key)
+    .getByRole("button", { name: `Remove the ${key} column` })
+    .click();
+
+  await expect(header(page, key)).toHaveCount(0);
+});
