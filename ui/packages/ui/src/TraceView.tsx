@@ -36,7 +36,7 @@ import { isTyping } from "./lib/keys";
 import { pageParts } from "./lib/page";
 import { linkProps, type TraceLinks } from "./links";
 import { Metrics } from "./Metrics";
-import { ProfileView } from "./ProfileView";
+import { ProfilePane } from "./ProfileView";
 import { MethodBadge, RoutePath, StatusBadge } from "./primitives";
 import { RequestInfo } from "./RequestInfo";
 import { type Explain, SqlList } from "./SqlList";
@@ -374,7 +374,7 @@ export function TraceView({
         />
       ) : null}
       <SpanLists active={active} calls={calls} sql={{ issueBySpan, focus, onExplain, links }} />
-      {active === "profile" && trace.profile ? <ProfileView profile={trace.profile} /> : null}
+      <ProfilePane trace={trace} open={active === "profile"} />
       {active === "error" ? (
         <ErrorView
           errors={trace.errors}

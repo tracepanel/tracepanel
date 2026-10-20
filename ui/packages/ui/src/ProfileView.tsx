@@ -19,22 +19,26 @@ function node(frame: Frame | null, key: string): Node {
   return { frame, key, total: 0, self: 0, children: new Map() };
 }
 
+/** A node's child for a frame, made the first time the path reaches it. */
+function child(at: Node, index: number, profile: Profile): Node {
+  const found = at.children.get(index);
+  if (found) return found;
+  const made = node(profile.frames[index] ?? null, `${at.key}/${index}`);
+  at.children.set(index, made);
+  return made;
+}
+
 /** The stacks merged into one tree from the outermost frame in: a call path is one node however often it was seen. */
 function tree(profile: Profile): Node {
   const root = node(null, "root");
   for (const stack of profile.stacks) {
     root.total += stack.count;
-    let at = root;
-    for (const index of stack.frames) {
-      let next = at.children.get(index);
-      if (!next) {
-        next = node(profile.frames[index] ?? null, `${at.key}/${index}`);
-        at.children.set(index, next);
-      }
+    const leaf = stack.frames.reduce((at, index) => {
+      const next = child(at, index, profile);
       next.total += stack.count;
-      at = next;
-    }
-    at.self += stack.count;
+      return next;
+    }, root);
+    leaf.self += stack.count;
   }
   return root;
 }
@@ -43,14 +47,18 @@ function tree(profile: Profile): Node {
 function functions(profile: Profile): { frame: Frame; self: number; total: number }[] {
   const self = new Map<number, number>();
   const total = new Map<number, number>();
+  const add = (counts: Map<number, number>, index: number, samples: number) =>
+    counts.set(index, (counts.get(index) ?? 0) + samples);
   for (const stack of profile.stacks) {
-    const last = stack.frames[stack.frames.length - 1];
-    if (last !== undefined) self.set(last, (self.get(last) ?? 0) + stack.count);
-    for (const index of new Set(stack.frames)) total.set(index, (total.get(index) ?? 0) + stack.count);
+    // The innermost frame was running; every frame of the stack, counted once, was on it.
+    add(self, stack.frames[stack.frames.length - 1] ?? -1, stack.count);
+    for (const index of new Set(stack.frames)) add(total, index, stack.count);
   }
   return [...total.entries()]
-    .map(([index, samples]) => ({ index, frame: profile.frames[index], self: self.get(index) ?? 0, total: samples }))
-    .filter((row): row is { index: number; frame: Frame; self: number; total: number } => row.frame !== undefined)
+    .flatMap(([index, samples]) => {
+      const frame = profile.frames[index];
+      return frame ? [{ frame, self: self.get(index) ?? 0, total: samples }] : [];
+    })
     .sort((a, b) => b.self - a.self || b.total - a.total);
 }
 
@@ -86,8 +94,13 @@ function where(frame: Frame): string {
 
 const ROW = 22;
 
+/** The Profile tab's content, when it is the tab open and the trace has a profile. */
+export function ProfilePane({ trace, open }: { trace: Trace; open: boolean }) {
+  return open && trace.profile ? <ProfileView profile={trace.profile} /> : null;
+}
+
 /** Where the trace's time went in code: a flame graph from the outermost call down, and the functions by their time. */
-export function ProfileView({ profile }: { profile: Profile }) {
+function ProfileView({ profile }: { profile: Profile }) {
   const root = useMemo(() => tree(profile), [profile]);
   const rows = useMemo(() => functions(profile).slice(0, 30), [profile]);
   const [focus, setFocus] = useState<Node>(root);
