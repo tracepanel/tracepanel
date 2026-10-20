@@ -644,18 +644,22 @@ async fn served(
     }
 }
 
-/// What the console's backend adds to the store: nothing here. An app serving the console answers for itself.
-/// What the console's backend adds to the store: EXPLAIN once a connected app can run it on its database. An app that
-/// serves the console on its own origin answers for itself.
-async fn capabilities(Extension(activity): Extension<Activity>) -> Response {
-    let apps = &activity.apps;
+/// The header an app's console proxy puts on what it forwards: the app's service, so the console it serves is offered
+/// what that app answers at its console (EXPLAIN in Python and Java, Django's user switching).
+const VIA_APP: &str = "tracepanel-console";
+
+/// What the console can offer beyond the store, as the connected apps said in their hello: the one place that answers
+/// it, whichever app or console asks.
+async fn capabilities(Extension(activity): Extension<Activity>, headers: HeaderMap) -> Response {
+    let via = headers.get(VIA_APP).and_then(|value| value.to_str().ok());
+    let offers = |capability| activity.apps.offers(capability, via);
     json_response(
         StatusCode::OK,
         json!({
-            "explain": apps.can("explain"),
-            "users": false,
-            "profile": apps.can("profile"),
-            "request": apps.can("request"),
+            "explain": offers("explain"),
+            "users": offers("users"),
+            "profile": offers("profile"),
+            "request": offers("request"),
         })
         .to_string(),
     )

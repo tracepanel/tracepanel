@@ -4,6 +4,12 @@
 
 ### Added
 
+- An app says what it offers the console in its hello, the one place it says
+  so: `capabilities` for what it does down its connection or records in its
+  traces, `console` for what it answers at its own console (EXPLAIN in
+  Python and Java, switching users in Django). The agent alone answers
+  `api/capabilities` from it, and offers the `console` ones only to the
+  console that app serves (named in a `Tracepanel-Console` header).
 - The panel lists a form's POST that redirected, before the page it led to:
   the SDK names it in a short-lived cookie, and the next page's widget picks
   it up.
