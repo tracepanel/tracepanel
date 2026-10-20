@@ -260,10 +260,14 @@ const LIVE_SAYS: Record<string, [label: string, title: string]> = {
 /**
  * Live, for a list that follows what happens as it happens (the logs, as a tail): reloads every 2 seconds while on,
  * kept per browser. `paused` while the reader is reading (a record open, the list scrolled down): it holds still then,
- * and says so.
+ * and says so. `on`: on until turned off, rather than off until turned on.
  */
-export function LiveToggle({ list, paused }: { list: string; paused: boolean }) {
-  const [live, setLive] = useStored(`tracepanel:${list}:live`, readLive);
+export function LiveToggle({ list, paused, on }: { list: string; paused: boolean; on?: boolean }) {
+  // On unless turned off, with `on`: for a list whose whole point is now (the tasks in flight).
+  const [live, setLive] = useStored(
+    `tracepanel:${list}:live`,
+    (raw) => readLive(raw) || (on === true && raw === undefined),
+  );
   useLive(live && !paused);
   const [label, title] = LIVE_SAYS[String(live && paused)] ?? [];
   return (

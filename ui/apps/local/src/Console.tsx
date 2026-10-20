@@ -6,7 +6,7 @@ import { type CSSProperties, useCallback, useEffect, useMemo, useState } from "r
 import { ClearDialog } from "./ClearDialog";
 import { DataPage } from "./DataPage";
 import { useSearch } from "./data";
-import { EntryPage } from "./EntryPage";
+import { EntryRoute } from "./EntryPage";
 import { GroupPage } from "./GroupPage";
 import { IssuePage } from "./IssuePage";
 import { useRowKeys } from "./keyboard";
@@ -132,7 +132,7 @@ export function Console({ route, source: everything }: { route: Route; source: D
     );
   } else if (route.name !== "home" && isEntry(route.name)) {
     page = (
-      <EntryPage
+      <EntryRoute
         // The page stays across By … / All …: the overview keeps its charts, only the list below changes.
         key={route.name}
         section={route.name}

@@ -207,6 +207,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tasks/live": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tasks in flight (queued, running, waiting to be retried) and the workers seen, from the apps' task events.
+         * @description A task's trace reaches the store when the task ends; until then the apps' task events say where it is. The agent keeps them in memory, not in the store: a task that finishes leaves this list, and its trace is listed under /tasks. A running task whose worker stopped sending heartbeats for two minutes is dropped, a queued or retrying one after an hour without news, a worker not heard from for an hour too. An app whose events reach the agent says `live_tasks` in its hello (see /capabilities).
+         */
+        get: operations["liveTasks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/graphql": {
         parameters: {
             query?: never;
@@ -457,7 +477,7 @@ export interface paths {
         };
         /**
          * What the console's backend can do beyond the store.
-         * @description The agent answers it, and it alone, from what the connected apps said in their hello: what an app does down its connection or records in its traces (`capabilities`: `explain`, `profile`, `request`), and what it answers at its own console (`console`: `explain`, `users`). The latter are offered only to the console an app serves, which names the app in a `Tracepanel-Console` header: the agent's own console has nowhere to run them. The console shows a feature only where it works.
+         * @description The agent answers it, and it alone, from what the connected apps said in their hello: what an app does down its connection or records in its traces (`capabilities`: `explain`, `profile`, `request`, `live_tasks`), and what it answers at its own console (`console`: `explain`, `users`). The latter are offered only to the console an app serves, which names the app in a `Tracepanel-Console` header: the agent's own console has nowhere to run them. The console shows a feature only where it works.
          */
         get: operations["capabilities"];
         put?: never;
@@ -913,6 +933,8 @@ export interface components {
             };
         };
         Capabilities: {
+            /** @description An app sends task events (Celery, from the Python SDK): the Tasks page lists the tasks in flight (api/tasks/live). */
+            live_tasks: boolean;
             /** @description The app runs EXPLAIN of a recorded query on its database (api/explain). */
             explain: boolean;
             /** @description The app profiles a request when asked (the tracepanel_profile cookie or the X-Tracepanel-Profile header): the console offers to record the next one with a profile. */
@@ -1010,6 +1032,57 @@ export interface components {
             with_issues: number;
             queues: string[];
             last_seen: components["schemas"]["Time"];
+        };
+        LiveTasks: {
+            /** @description The agent's clock: how long a task has waited or run is now minus its time. */
+            now: components["schemas"]["Time"];
+            /** @description Newest first. */
+            tasks: components["schemas"]["LiveTask"][];
+            /** @description By name. */
+            workers: components["schemas"]["LiveWorker"][];
+        };
+        LiveTask: {
+            /** @description The task's id in its queue. */
+            id: string;
+            /** @description What runs it: celery (the task queues that send task events). */
+            system: string;
+            /** @description Dotted task name. */
+            name: string;
+            /** @description service.name of the app that last told of it. */
+            service: string;
+            /**
+             * @description queued: sent, no worker took it yet; running; retrying: an attempt failed, the next one waits.
+             * @enum {string}
+             */
+            state: "queued" | "running" | "retrying";
+            queue: string | null;
+            /** @description The worker that runs it or ran its last attempt (celery@host). */
+            worker: string | null;
+            /** @description When it was last sent to its queue (a retry sends it again). */
+            enqueued_at: number | null;
+            /** @description When its current or last attempt started. */
+            started_at: number | null;
+            /** @description How many times it was retried: the attempt is retries + 1. */
+            retries: number;
+            /** @description Its positional arguments as the SDK wrote them (cut short */
+            args: string | null;
+            kwargs: string | null;
+            /** @description Why the last attempt failed (retrying). */
+            error: string | null;
+            /** @description The trace and span that sent it, when it was sent inside one. */
+            enqueued_by: null | {
+                trace_id: string;
+                span_id: string;
+            };
+        };
+        LiveWorker: {
+            /** @description The worker's name (Celery's node name: celery@host). */
+            name: string;
+            system: string;
+            service: string;
+            last_seen: components["schemas"]["Time"];
+            /** @description The tasks it runs now. */
+            in_flight: number;
         };
         GraphqlRow: {
             /** @description Type and name: query PostList; an unnamed operation by its root fields, query { posts }. */
@@ -1948,6 +2021,29 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadSearch"];
+        };
+    };
+    liveTasks: {
+        parameters: {
+            query?: {
+                /** @description Only what this app (service.name) recorded; every app when left out. */
+                service?: components["parameters"]["service"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tasks in flight and workers. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LiveTasks"];
+                };
+            };
         };
     };
     listGraphqlOperations: {

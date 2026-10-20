@@ -13,6 +13,7 @@ import type {
   IssueRow,
   JobRow,
   KnownValues,
+  LiveTasks,
   LogBucket,
   LogRow,
   MailRow,
@@ -64,6 +65,8 @@ export interface DataSource {
   callsSummary(system: string, q: string): Promise<CallsSummary | null>;
   listEndpoints(q: string): Promise<EndpointRow[]>;
   listTasks(q: string): Promise<TaskRow[]>;
+  /** The tasks in flight (queued, running, waiting to be retried) and the workers; with `service`, that app's. */
+  liveTasks(service?: string): Promise<LiveTasks>;
   listWebsockets(q: string): Promise<WebsocketRow[]>;
   listGraphql(q: string): Promise<GraphqlRow[]>;
   /** With `service`, only that app's calls. */
@@ -116,6 +119,19 @@ async function getJson<T>(url: URL): Promise<T | null> {
   if (!response.ok) throw new Error(`tracepanel API ${url.pathname}: HTTP ${response.status}`);
   return (await response.json()) as T;
 }
+
+/** A backend that adds nothing to the store: no EXPLAIN, no users, nothing in flight. */
+export const NO_CAPABILITIES: Capabilities = {
+  explain: false,
+  users: false,
+  profile: false,
+  request: false,
+  // biome-ignore lint/style/useNamingConvention: wire format.
+  live_tasks: false,
+};
+
+/** Nothing in flight: what a source without task events answers. */
+export const NO_LIVE_TASKS: LiveTasks = { now: 0, tasks: [], workers: [] };
 
 /** No linked traces: what a trace page shows when the API has nothing (or is unreachable). */
 const NO_RELATED: Related = {
@@ -181,14 +197,7 @@ export function httpSource(base: string | URL): DataSource {
       return (await getJson<TracesOverview>(url("traces/overview", { q, group }))) ?? EMPTY_OVERVIEW;
     },
     async capabilities() {
-      return (
-        (await getJson<Capabilities>(url("capabilities"))) ?? {
-          explain: false,
-          users: false,
-          profile: false,
-          request: false,
-        }
-      );
+      return (await getJson<Capabilities>(url("capabilities"))) ?? NO_CAPABILITIES;
     },
     async explain(trace, span, analyze) {
       const response = await fetch(url("explain", { trace, span, analyze: analyze ? 1 : null }));
@@ -270,6 +279,9 @@ export function httpSource(base: string | URL): DataSource {
     },
     async listTasks(q = "") {
       return (await getJson<{ tasks: TaskRow[] }>(url("tasks", { q })))?.tasks ?? [];
+    },
+    async liveTasks(service) {
+      return (await getJson<LiveTasks>(url("tasks/live", { service }))) ?? NO_LIVE_TASKS;
     },
     getGraphqlOperation(operation, service) {
       return getJson<GraphqlDetail>(url("graphql/detail", { operation, service }));

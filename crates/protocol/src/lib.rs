@@ -3,8 +3,10 @@
 //! A connection starts with a hello line from the SDK, `{"protocol": 1, "max_traces": 2000, "thresholds": {...}}`,
 //! answered with `{"ok": true}` or `{"ok": false, "error": "..."}`. Then frames: a 4-byte big-endian length and a JSON
 //! array of traces (`schema/trace.schema.json`). The SDKs only record: the
-//! agent finds the issues, with the SDK's thresholds.
+//! agent finds the issues, with the SDK's thresholds. A frame that is an object is not traces: an app's answer to a
+//! request sent to it, or task events (`{"tasks": [...]}`, see [`live`]).
 
+pub mod live;
 pub mod local;
 
 use serde::{Deserialize, Serialize};
@@ -19,12 +21,14 @@ use tokio::net::TcpListener;
 use tokio::net::UnixListener;
 
 /// When the agent was last used, and by how many SDK connections now: an agent started on demand exits once idle.
-/// `apps` are the connected apps that do something for the console besides sending traces.
+/// `apps` are the connected apps that do something for the console besides sending traces, `tasks` the tasks in
+/// flight their task events tell of.
 #[derive(Clone, Default)]
 pub struct Activity {
     last: Arc<std::sync::atomic::AtomicI64>,
     open: Arc<std::sync::atomic::AtomicUsize>,
     pub apps: Apps,
+    pub tasks: live::LiveTasks,
 }
 
 /// The apps connected now that can do something for the console (EXPLAIN a query on their database: `explain`),
@@ -552,7 +556,8 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send + 'static>(
     result
 }
 
-/// Frames until the app goes: lists of traces for the sink, objects answering the requests sent to it.
+/// Frames until the app goes: lists of traces for the sink; objects with task events, or answering the requests
+/// sent to it.
 async fn frames<R: AsyncRead + Unpin>(
     reader: &mut BufReader<R>,
     sink: &Sink,
@@ -574,8 +579,13 @@ async fn frames<R: AsyncRead + Unpin>(
         reader.read_exact(&mut frame).await?;
         activity.touch();
         if frame.first() == Some(&b'{') {
-            if let Ok(answer) = serde_json::from_slice(&frame) {
-                activity.apps.answered(answer);
+            if let Ok(object) = serde_json::from_slice::<Value>(&frame) {
+                match live::LiveTasks::events(&object) {
+                    Some(events) => {
+                        activity.tasks.take(events, &hello.service, live::now_us());
+                    }
+                    None => activity.apps.answered(object),
+                }
             }
             continue;
         }
