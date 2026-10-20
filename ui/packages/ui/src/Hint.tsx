@@ -1,5 +1,9 @@
-import type { ReactNode } from "react";
+import type { FocusEvent, ReactNode } from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./components/ui/tooltip";
+
+function keyboardOnly(event: FocusEvent<HTMLElement>): void {
+  if (!event.currentTarget.matches(":focus-visible")) event.preventDefault();
+}
 
 /**
  * What a control does, on hover: its name in bold, a line on what happens, and its key. The one tooltip of every icon
@@ -20,7 +24,10 @@ export function Hint({
 }) {
   return (
     <Tooltip>
-      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      {/* Opened by focus only from the keyboard: a clicked button keeps focus, and its hint would stay over the next. */}
+      <TooltipTrigger asChild onFocus={keyboardOnly}>
+        {children}
+      </TooltipTrigger>
       <TooltipContent
         side={side}
         sideOffset={8}

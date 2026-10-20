@@ -759,19 +759,22 @@ function PanelApp({ route }: { route: Route }) {
   const panelActions = (
     <>
       <Shown when={!toolbarInTrace}>{switchUser}</Shown>
-      <ProfileToggle source={source} />
-      <ShareAction traceId={selectedId} source={source} compact={true} />
-      <Hint title="Open in the console" detail="This request in the full console, in a new tab.">
+      <Hint
+        title="Open in the console"
+        detail="This request in the full console, in a new tab: every request, issue and query."
+      >
         <a
-          className="icon-button"
+          className="mr-1 inline-flex h-7 items-center gap-1.5 rounded-md bg-brand-soft px-2.5 text-sm font-medium text-brand transition-colors hover:bg-brand/25"
           href={`${base}${selectedId ? href({ name: "trace", id: selectedId, tab, from: sectionFor(selectedKind) }) : "#/"}`}
           target="_blank"
           rel="noreferrer"
-          aria-label="Open in the console"
         >
+          Console
           <ExternalIcon />
         </a>
       </Hint>
+      <ProfileToggle source={source} />
+      <ShareAction traceId={selectedId} source={source} compact={true} />
       <ThemeToggle compact={true} />
       <DockButton dock={dock} />
       <Hint title="Close" keys="Esc">
