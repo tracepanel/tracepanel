@@ -202,12 +202,16 @@ test("the records over time sit above the table, by level, and a drag across the
   await expect(chart).toBeVisible();
   await expect(page.getByRole("button", { name: "error", exact: true, pressed: true })).toBeVisible();
 
+  const before = await rows(page).count();
   const box = await chart.boundingBox();
   if (!box) throw new Error("no chart");
-  await page.mouse.move(box.x + box.width * 0.2, box.y + box.height / 2);
+  // From the first bar to the last: the whole period, every record in it.
+  await page.mouse.move(box.x + 60, box.y + box.height / 2);
   await page.mouse.down();
-  await page.mouse.move(box.x + box.width * 0.9, box.y + box.height / 2, { steps: 5 });
+  await page.mouse.move(box.x + box.width - 60, box.y + box.height / 2, { steps: 5 });
   await page.mouse.up();
 
   await expect(page).toHaveURL(/since(%3A|:).*until(%3A|:)/);
+  // The range rounds out to whole seconds: a record in the last second is not cut off.
+  await expect(rows(page)).toHaveCount(before);
 });

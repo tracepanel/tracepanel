@@ -526,12 +526,17 @@ function stacked(bucket: LogBucket, hidden: ReadonlySet<string>): { key: string;
 }
 
 /** A slice's tooltip: its time, then its records by level. */
+/** A slice's time: from–to, or, for a slice under a second, when and how long. */
+function sliceTime(start: number, end: number): string {
+  const from = clock(start, true);
+  const to = clock(end, true);
+  return from === to ? `${from} · ${duration(end - start)}` : `${from}–${to}`;
+}
+
 function LogTip({ bucket }: { bucket: LogBucket }) {
   return (
     <>
-      <b>
-        {clock(bucket.start, true)}–{clock(bucket.end, true)}
-      </b>
+      <b>{sliceTime(bucket.start, bucket.end)}</b>
       <span>
         {bucket.count} {bucket.count === 1 ? "record" : "records"}
       </span>

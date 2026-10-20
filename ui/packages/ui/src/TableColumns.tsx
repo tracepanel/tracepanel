@@ -2,7 +2,7 @@
 // show or hide columns. The choices live in useColumns, per browser.
 
 import { cn } from "@tracepanel/ui/lib/utils";
-import { Columns3CogIcon, XIcon } from "lucide-react";
+import { Columns3CogIcon, GripVerticalIcon, XIcon } from "lucide-react";
 import {
   type DragEvent,
   type KeyboardEvent,
@@ -264,6 +264,13 @@ function DragLabel({ id, label, movable }: { id: string; label: string; movable:
       }}
       className={cn("block truncate", movable && "cursor-grab active:cursor-grabbing")}
     >
+      {/* A grip on hover: the name can be dragged onto another header. */}
+      {movable ? (
+        <GripVerticalIcon
+          aria-hidden="true"
+          className="absolute top-1/2 left-0 size-3 -translate-y-1/2 text-muted-foreground opacity-0 transition-opacity group-hover/head:opacity-70"
+        />
+      ) : null}
       {label}
     </span>
   );

@@ -49,7 +49,8 @@
 - Logs: any attribute can be a column of its own, from the columns menu's
   Attribute columns, or from the attribute's own button in an opened record.
   The column's header takes it off again. A column's name drags onto another
-  header to move it there, and the browser keeps the order.
+  header to move it there (a grip shows on hover), and the browser keeps the
+  order.
 - A log record's details say where it was logged ("Logged inside"): the
   spans around it, as one link to the call tree there. The Show logs from row
   adds this call and any call of its kind to this request, logger and path.
@@ -84,6 +85,9 @@
 
 ### Fixed
 
+- A time range picked on a chart (drag to zoom) rounds out to whole seconds.
+  It rounded the end down, and a record or a call in the range's last second
+  dropped out of the list it narrowed.
 - In the console, the Request tab no longer repeats the method, URL, status
   and time the trace's own header already shows. The panel, which hides that
   header, keeps them on top of the tab.

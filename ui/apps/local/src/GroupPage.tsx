@@ -23,7 +23,7 @@ import { type EntrySection, go, href, issueRoute, periodOf, traceHref, withPerio
 import { ENTRY } from "./sections";
 import { TimeRange } from "./TimeRange";
 import { TracesTable } from "./tables";
-import { isoWithOffset } from "./time";
+import { rangeTerms } from "./time";
 import { Breadcrumbs, DataTable, Loading, Meter, Mono, Td, Th, Tr } from "./ui";
 
 type Group = TraceGroup | GraphqlDetail;
@@ -37,7 +37,10 @@ function goPeriod(section: EntrySection, key: string, since: string | undefined,
 /** Drag on the calls chart to look at that stretch; none where the group has no period (a GraphQL operation). */
 function zoom(section: EntrySection, key: string) {
   if (section === "graphql") return undefined;
-  return (start: number, end: number) => goPeriod(section, key, isoWithOffset(start), isoWithOffset(end));
+  return (start: number, end: number) => {
+    const { since, until } = rangeTerms(start, end);
+    goPeriod(section, key, since, until);
+  };
 }
 
 /** The period the page looks at, to pick another one: the same presets and range as a list's Time. */

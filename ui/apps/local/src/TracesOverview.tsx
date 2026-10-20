@@ -19,7 +19,7 @@ import { useEffect, useState } from "react";
 import { track, useRefresh } from "./refresh";
 import { currentPeriod, endpointGroup, groupRoute, href, withPeriod } from "./routes";
 import { BY_NAME } from "./sections";
-import { isoWithOffset } from "./time";
+import { rangeTerms } from "./time";
 
 const STORAGE_KEY = "tracepanel:overview";
 
@@ -158,7 +158,7 @@ export function TracesOverview({
           series={overview.series}
           title={`${capitalize(nouns)} over time`}
           noun={scope.noun}
-          onSelect={(start, end) => onRefine({ since: isoWithOffset(start), until: isoWithOffset(end) })}
+          onSelect={(start, end) => onRefine(rangeTerms(start, end))}
         />
       </section>
     );
@@ -238,7 +238,7 @@ export function TracesOverview({
               series={overview.series}
               title={`${capitalize(nouns)} over time`}
               noun={scope.noun}
-              onSelect={(start, end) => onRefine({ since: isoWithOffset(start), until: isoWithOffset(end) })}
+              onSelect={(start, end) => onRefine(rangeTerms(start, end))}
             />
             <LatencyChart series={overview.series} />
           </div>

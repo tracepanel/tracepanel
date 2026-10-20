@@ -22,7 +22,7 @@ import { useScope } from "./scope";
 import { pageMeta } from "./sections";
 import { byProject } from "./services";
 import { CallsTable, IssuesTable, LogsTable, MailsTable, TracesTable } from "./tables";
-import { isoWithOffset } from "./time";
+import { rangeTerms } from "./time";
 import { Loading, LoadMore, PageHeader } from "./ui";
 
 type DataSection = Exclude<Section, EntrySection>;
@@ -147,12 +147,7 @@ function LogsOverTime({
   onRefine: (terms: Record<string, string>) => void;
 }) {
   if (!series?.some((bucket) => bucket.count > 0)) return null;
-  return (
-    <LogsChart
-      series={series}
-      onSelect={(start, end) => onRefine({ since: isoWithOffset(start), until: isoWithOffset(end) })}
-    />
-  );
+  return <LogsChart series={series} onSelect={(start, end) => onRefine(rangeTerms(start, end))} />;
 }
 
 /** Everything a page loads: each list only on its own page (the others resolve empty at once). */
