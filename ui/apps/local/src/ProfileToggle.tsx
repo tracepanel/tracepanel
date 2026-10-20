@@ -1,0 +1,50 @@
+import type { DataSource } from "@tracepanel/ui";
+import { cn } from "@tracepanel/ui/lib/utils";
+import { FlameIcon } from "lucide-react";
+import { useState } from "react";
+import { useCapability } from "./hooks";
+
+// While it is set, the app profiles every request this browser makes; a session cookie, so closing the browser ends it.
+const COOKIE = "tracepanel_profile";
+
+function profiling(): boolean {
+  return document.cookie.split("; ").some((pair) => pair === `${COOKIE}=1`);
+}
+
+function profile(on: boolean): void {
+  document.cookie = on ? `${COOKIE}=1; Path=/; SameSite=Lax` : `${COOKIE}=; Max-Age=0; Path=/; SameSite=Lax`;
+}
+
+const TITLES = {
+  off: "Profile requests: where their time goes in code",
+  on: "Profiling every request this browser makes: click to stop",
+};
+
+/**
+ * Profiling on or off for this browser: a cookie on the app's own origin (the panel is on it) that the app sees on
+ * each request. Shown only when a connected app profiles on request.
+ */
+export function ProfileToggle({ source }: { source: DataSource }) {
+  return useCapability(source, "profile") ? <ProfileButton /> : null;
+}
+
+/** An icon among the panel's own (share, theme, dock), lit while profiling is on. */
+function ProfileButton() {
+  const [on, setOn] = useState(profiling);
+  const title = TITLES[on ? "on" : "off"];
+  return (
+    <button
+      type="button"
+      className={cn("icon-button", on && "bg-brand-soft text-brand hover:bg-brand-soft hover:text-brand")}
+      title={title}
+      aria-label={title}
+      aria-pressed={on}
+      onClick={() => {
+        profile(!on);
+        setOn(!on);
+      }}
+    >
+      <FlameIcon className={cn("size-4", on && "fill-current")} />
+    </button>
+  );
+}

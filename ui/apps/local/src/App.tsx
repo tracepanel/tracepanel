@@ -37,7 +37,7 @@ import { ClearDialog } from "./ClearDialog";
 import { Console } from "./Console";
 import { exploreFor } from "./explore";
 import { type EntrySummary, type TabEntry, type TabHistory, usePolling, useTabHistory } from "./hooks";
-import { ProfileNext } from "./ProfileNext";
+import { ProfileToggle } from "./ProfileToggle";
 import { RefreshProvider } from "./refresh";
 import { consoleLinks, go, href, type Route, useRoute } from "./routes";
 import { SearchPalette } from "./SearchPalette";
@@ -754,7 +754,7 @@ function PanelApp({ route }: { route: Route }) {
           <ExternalIcon />
         </a>
       </Button>
-      <ProfileNext source={source} />
+      <ProfileToggle source={source} />
       <ShareAction traceId={selectedId} source={source} compact={true} />
       <ThemeToggle compact={true} />
       <button
