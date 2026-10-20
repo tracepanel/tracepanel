@@ -293,6 +293,7 @@ function Tip({ hovered: { node, x, y }, total, time }: { hovered: Hovered; total
   if (!frame) return null;
   return (
     <div
+      role="tooltip"
       className="pointer-events-none absolute z-10 grid w-max max-w-md gap-1 rounded-md border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg"
       style={{ left: Math.max(8, x - 120), top: y + 18 }}
     >

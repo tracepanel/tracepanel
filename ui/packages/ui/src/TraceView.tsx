@@ -345,7 +345,7 @@ export function TraceView({
 
   const panel = (
     <div role="tabpanel" className="dt-tabpanel">
-      {active === "request" ? <RequestInfo trace={trace} related={related} links={links} /> : null}
+      {active === "request" ? <RequestInfo trace={trace} related={related} links={links} hero={compact} /> : null}
       {active === "tree" ? (
         <CallMap trace={trace} issueBySpan={issueBySpan} related={related} links={links} initialSpan={treeSpan} />
       ) : null}
