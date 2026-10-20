@@ -138,11 +138,20 @@ function useOlder<T>(load: PageLoad<T>, q: string, first: Page<T> | undefined) {
   return { older, next, loading, more };
 }
 
-/** The rows as last whole: while the rows between pages load, the list stays as it was, never with a gap. */
+/**
+ * The rows as last whole: while the rows between pages load, the list stays as it was, never with a gap. The same
+ * rows are the same list, so what is worked out from them (a long list's lines) isn't worked out again each render.
+ */
 function useWhole<T>(items: T[] | undefined): T[] | undefined {
   const [shown, setShown] = useState<T[] | undefined>(undefined);
-  if (items && !sameRows(shown, items)) setShown(items);
-  return items ?? shown;
+  const next = whole(shown, items);
+  if (next !== shown) setShown(next);
+  return next;
+}
+
+/** The rows to show: the ones shown while the new ones are the same or still loading, else the new ones. */
+function whole<T>(shown: T[] | undefined, items: T[] | undefined): T[] | undefined {
+  return items === undefined || sameRows(shown, items) ? shown : items;
 }
 
 /**

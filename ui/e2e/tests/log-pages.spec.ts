@@ -64,3 +64,108 @@ test("a day's heading tops its records when they are of another day than the one
   await expect(list.getByRole("cell", { name: heading(now - day), exact: true })).toHaveCount(1);
   await expect(list.getByRole("cell", { name: heading(now), exact: true })).toHaveCount(0);
 });
+
+test("a long list draws only the rows in view, and scrolling still reaches its end", async ({ page }) => {
+  const body = (await (await fetch(`${CONSOLE}api/logs`)).json()) as { logs: Record<string, unknown>[] };
+  const model = body.logs[0];
+  if (!model) throw new Error("no stored record");
+  const at = Date.now() * 1000;
+  // Thousands of records, a page of a thousand: three pages loaded as the end of the list comes into view.
+  const total = 3000;
+  const records = Array.from({ length: total }, (_, n) => ({
+    ...model,
+    id: n + 1,
+    time: at - n * 1000,
+    message: `record ${total - n}`,
+  }));
+  await page.route(/\/api\/logs(\?|$)/, async (route) => {
+    const before = new URL(route.request().url()).searchParams.get("before");
+    const rows = records.filter((row) => before === null || row.time < Number(before));
+    const items = rows.slice(0, 1000);
+    await route.fulfill({ json: { logs: items, next: rows.length > 1000 ? (items.at(-1)?.time ?? null) : null } });
+  });
+  await page.goto("/#/logs");
+  const region = page.getByRole("region", { name: "Logs" });
+  const rows = region.locator("tr[data-record]");
+  await expect(rows.first()).toContainText(`record ${total}`);
+
+  // To the end: each page as the end of the list comes into view, and the first record's row gone from the page.
+  const last = region.getByText("record 1", { exact: true });
+  await expect(async () => {
+    await region.evaluate((element) => element.scrollTo(0, element.scrollHeight));
+    await expect(last).toHaveCount(1, { timeout: 500 });
+  }).toPass();
+  await expect(page.getByRole("button", { name: "Load older logs" })).toHaveCount(0);
+  expect(await rows.count()).toBeLessThan(150);
+  await expect(rows.filter({ hasText: `record ${total}` })).toHaveCount(0);
+
+  // And back to the top: the newest again, the window moved with the scroll.
+  await region.evaluate((element) => element.scrollTo(0, 0));
+  await expect(rows.first()).toContainText(`record ${total}`);
+  expect(await rows.count()).toBeLessThan(150);
+
+  // The arrows go on past the rows drawn: the window follows the focus down.
+  await rows.first().focus();
+  for (let step = 0; step < 80; step += 1) await page.keyboard.press("ArrowDown");
+  await expect(page.locator("tr[data-record]:focus")).toContainText(`record ${total - 80}`);
+});
+
+/** The stored records' first, to make others from: whatever the API answers for one, with these fields. */
+async function aRecord(fields: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const body = (await (await fetch(`${CONSOLE}api/logs`)).json()) as { logs: Record<string, unknown>[] };
+  const model = body.logs[0];
+  if (!model) throw new Error("no stored record");
+  return { ...model, time: Date.now() * 1000, ...fields };
+}
+
+const TRACEBACK = `Traceback (most recent call last):
+  File "/srv/shop/orders/views.py", line 41, in checkout
+    total = price(order)
+  File "/srv/shop/orders/pricing.py", line 12, in price
+    return rates[order.currency] * order.amount
+  File "/usr/lib/python3.12/site-packages/django/utils/functional.py", line 57, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+KeyError: 'EUR'`;
+
+test("an exception opens as its frames: the error first, the app's frames, the library's folded, the raw text a click away", async ({
+  page,
+}) => {
+  const record = await aRecord({ level: "error", message: "checkout failed", exception: TRACEBACK });
+  await page.route(/\/api\/logs(\?|$)/, (route) => route.fulfill({ json: { logs: [record], next: null } }));
+  await page.goto("/#/logs");
+  await page.locator("tr[data-record]").first().click();
+  const exception = page.getByRole("region", { name: "Exception" });
+
+  await expect(exception.locator(".dt-error-type")).toHaveText("KeyError");
+  await expect(exception.locator(".dt-error-message")).toHaveText("'EUR'");
+  const frame = (name: string) => exception.locator(".dt-frame-fn").getByText(name, { exact: true });
+  await expect(frame("checkout")).toBeVisible();
+  await expect(frame("price")).toBeVisible();
+  // The deepest of the app's frames is where it went wrong: open, its line shown.
+  await expect(exception.getByText("return rates[order.currency] * order.amount")).toBeVisible();
+  await expect(exception.getByText("1 library frame")).toBeVisible();
+  await expect(frame("__get__")).toBeHidden();
+
+  await exception.getByRole("tab", { name: "Raw" }).click();
+
+  await expect(exception.locator("pre")).toHaveText(TRACEBACK);
+  await expect(exception.getByRole("button", { name: "Copy exception" })).toBeVisible();
+});
+
+test("a JSON message opens indented, the row keeps it on one line, the raw text a click away", async ({ page }) => {
+  const message = '{"event": "order.paid", "order": {"id": 12, "items": [1, 2]}}';
+  const record = await aRecord({ message });
+  await page.route(/\/api\/logs(\?|$)/, (route) => route.fulfill({ json: { logs: [record], next: null } }));
+  await page.goto("/#/logs");
+  const row = page.locator("tr[data-record]").first();
+
+  await expect(row).toContainText(message);
+  await row.click();
+  const opened = page.getByRole("region", { name: "Message" });
+
+  await expect(opened.locator("pre")).toHaveText(JSON.stringify(JSON.parse(message), null, 2));
+
+  await opened.getByRole("tab", { name: "Raw" }).click();
+
+  await expect(opened.locator("pre")).toHaveText(message);
+});

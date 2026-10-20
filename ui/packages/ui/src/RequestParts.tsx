@@ -1,5 +1,6 @@
 import { type ReactNode, useState } from "react";
 import { ChevronDownIcon } from "./icons";
+import { indentedJson } from "./json";
 import { cn } from "./lib/utils";
 import { NameValues } from "./NameValues";
 import { Segmented } from "./Segmented";
@@ -51,11 +52,7 @@ function fromBrowser(name: string): boolean {
 
 /** A body as it reads best: JSON indented, anything else as it came. */
 function readable(body: string): string {
-  try {
-    return JSON.stringify(JSON.parse(body), null, 2);
-  } catch {
-    return body;
-  }
+  return indentedJson(body) ?? body;
 }
 
 /** The other attributes by namespace (`code.*`, `http.*`…), keys without it; keys with none last. */

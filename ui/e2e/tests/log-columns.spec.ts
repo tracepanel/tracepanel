@@ -256,22 +256,31 @@ test("the records over time sit above the table, by level, and a drag across the
   await expect(rows(page)).toHaveCount(before);
 });
 
-test("the records over time fold to their title, and stay folded after a reload", async ({ page }) => {
+test("the Logs page's Overview folds to its numbers, as an entry point's does, and stays folded after a reload", async ({
+  page,
+}) => {
   await page.goto("/#/logs");
+  const overview = page.getByRole("region", { name: "Overview" });
   const chart = page.getByRole("img", { name: "Log records over time, by level" });
-  const title = page.getByRole("button", { name: "Records over time" });
+  const heading = overview.getByRole("button", { name: /^Overview/ });
   await expect(chart).toBeVisible();
+  await expect(overview.getByText("Records over time")).toBeVisible();
 
-  await title.click();
+  await heading.click();
 
   await expect(chart).toHaveCount(0);
-  await expect(title).toHaveAttribute("aria-expanded", "false");
+  await expect(heading).toHaveAttribute("aria-expanded", "false");
+  await expect(heading).toContainText(/\d+ records/);
+  await expect(heading).toContainText(/\d+ errors?/);
+  await expect(heading).toContainText(/\d+ warnings?/);
+  // A click is no keyboard focus: no ring.
+  expect(await heading.evaluate((element) => element.matches(":focus-visible"))).toBe(false);
 
   await page.reload();
 
   await expect(chart).toHaveCount(0);
 
-  await title.click();
+  await heading.click();
 
   await expect(chart).toBeVisible();
 });
@@ -283,8 +292,8 @@ test("the chart's legend filters the list by level, as the Level filter does", a
   await legend("INFO").click();
   await legend("DEBUG").click();
 
-  // What is left: warnings and errors, critical ones with them.
-  await expect(page).toHaveURL(/level(%3A|:)warning(%2C|,)error(%2C|,)critical/);
+  // What is left: warnings and errors, critical ones with them, as the Level menu's "WARNING and above" says them.
+  await expect(page).toHaveURL(/level(%3E|>)(%3D|=)warning/);
   await expect(legend("INFO")).toHaveAttribute("aria-pressed", "false");
   await expect(legend("WARNING")).toHaveAttribute("aria-pressed", "true");
   // The Level column, second: its text is the level as stored, shown in capitals.
@@ -405,4 +414,22 @@ test("every column that may go hides from its header, Message alone stays", asyn
   await region(page).getByRole("button", { name: "Columns" }).click();
 
   await expect(page.getByRole("menuitemcheckbox", { name: "Logger" })).toHaveAttribute("aria-checked", "false");
+});
+
+test("the Level menu offers WARNING and above: one filter, shown in the legend too", async ({ page }) => {
+  await page.goto("/#/logs");
+  await page.getByRole("button", { name: "Level", exact: true }).click();
+  await page.getByRole("option", { name: "WARNING and above" }).click();
+
+  await expect(page).toHaveURL(/level(%3E|>)(%3D|=)warning/);
+  await expect(page.getByRole("button", { name: "Edit level>=warning" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Level · ≥ WARNING/ })).toBeVisible();
+  const legend = (name: string) => page.getByRole("button", { name, exact: true });
+  await expect(legend("INFO")).toHaveAttribute("aria-pressed", "false");
+  await expect(legend("WARNING")).toHaveAttribute("aria-pressed", "true");
+  await expect(legend("ERROR")).toHaveAttribute("aria-pressed", "true");
+
+  // ERROR unchecked from there: the levels left, one by one. (A level's tag is in capitals by its style.)
+  await page.getByRole("option", { name: "error", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Edit level:warning,critical" })).toBeVisible();
 });

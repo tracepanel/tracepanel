@@ -1,10 +1,14 @@
 // A log record's details, one look wherever it opens: the Logs page, a trace's Logs tab, the call tree's pane.
-import type { ReactNode } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { CopyButton } from "./CopyButton";
+import { ExceptionView } from "./ErrorView";
 import { localTime } from "./format";
+import { jsonDocument } from "./json";
 import { cn } from "./lib/utils";
 import { type NameValue, NameValues } from "./NameValues";
 import { PropTable } from "./PropTable";
+import { Segmented } from "./Segmented";
+import { parseTraceback } from "./traceback";
 import type { Attrs, Log } from "./types";
 
 // The statement is shown formatted above; its fingerprint would repeat it on one line.
@@ -45,8 +49,21 @@ export function logAttrs(attrs: Attrs): Attrs {
   return Object.fromEntries(Object.entries(attrs).sort(([a], [b]) => rank(a) - rank(b) || a.localeCompare(b))) as Attrs;
 }
 
-/** A block of text to read whole and copy: the message, or its exception in the error's colour. */
-function TextBlock({ text, label, error = false }: { text: string; label: string; error?: boolean }) {
+/**
+ * A block of text to read whole and copy: the message, or its exception in the error's colour. `copy` off: the bar
+ * above it has the button.
+ */
+function TextBlock({
+  text,
+  label,
+  error = false,
+  copy = true,
+}: {
+  text: string;
+  label: string;
+  error?: boolean;
+  copy?: boolean;
+}) {
   return (
     <div
       className={cn("group/text relative rounded-md border bg-background", error && "border-error/30 bg-error-soft")}
@@ -59,8 +76,73 @@ function TextBlock({ text, label, error = false }: { text: string; label: string
       >
         {text}
       </pre>
-      <CopyButton text={text} label={label} className="absolute top-2 right-2" />
+      {copy ? <CopyButton text={text} label={label} className="absolute top-2 right-2" /> : null}
     </div>
+  );
+}
+
+type View = "read" | "raw";
+
+/**
+ * Text the console reads into something better (a traceback's frames, a JSON document indented), with the text as it
+ * came a click away: a bar names it, picks the view and copies the text as it came, whichever is shown.
+ */
+function ReadOrRaw({
+  label,
+  read,
+  text,
+  error = false,
+  children,
+}: {
+  label: string;
+  /** The read view's name: "Frames", "JSON". */
+  read: string;
+  text: string;
+  error?: boolean;
+  children: ReactNode;
+}) {
+  const [view, setView] = useState<View>("read");
+  return (
+    <section aria-label={label} className="grid gap-2">
+      <div className="flex items-center gap-2">
+        <h3 className="text-sm font-medium text-muted-foreground">{label}</h3>
+        <span className="ml-auto flex items-center gap-1.5">
+          <Segmented
+            segments={[
+              { id: "read", label: read },
+              { id: "raw", label: "Raw" },
+            ]}
+            value={view}
+            onChange={setView}
+            label={`${label} as`}
+          />
+          <CopyButton text={text} label={`Copy ${label.toLowerCase()}`} />
+        </span>
+      </div>
+      {view === "read" ? children : <TextBlock text={text} label={label} error={error} copy={false} />}
+    </section>
+  );
+}
+
+/** The message; a JSON object or array indented, the text as logged a click away. */
+function MessageBlock({ text }: { text: string }) {
+  const json = useMemo(() => jsonDocument(text), [text]);
+  if (json === null) return <TextBlock text={text} label="Copy message" />;
+  return (
+    <ReadOrRaw label="Message" read="JSON" text={text}>
+      <TextBlock text={json} label="Copy message" copy={false} />
+    </ReadOrRaw>
+  );
+}
+
+/** The exception: its frames as an error shows them, when its traceback reads as one; else its text. */
+function ExceptionBlock({ text }: { text: string }) {
+  const exception = useMemo(() => parseTraceback(text), [text]);
+  if (exception === null) return <TextBlock text={text} label="Copy exception" error={true} />;
+  return (
+    <ReadOrRaw label="Exception" read="Frames" text={text} error={true}>
+      <ExceptionView exception={exception} />
+    </ReadOrRaw>
   );
 }
 
@@ -89,8 +171,8 @@ export function LogRecord({
   return (
     <div className="grid gap-3.5">
       {header}
-      <TextBlock text={log.message} label="Copy message" />
-      {log.exception ? <TextBlock text={log.exception} label="Copy exception" error={true} /> : null}
+      <MessageBlock text={log.message} />
+      {log.exception ? <ExceptionBlock text={log.exception} /> : null}
       <section aria-label="Fields" className="overflow-hidden rounded-md border bg-background">
         <NameValues
           rows={[...context, ...own.map(([name, value]) => ({ name, value, actions: actions?.(name, value) ?? [] }))]}

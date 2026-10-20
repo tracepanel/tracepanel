@@ -4,6 +4,19 @@
 
 ### Added
 
+- The search box lists the fields a page searches by, with what each takes,
+  when it is empty or after a space: `level:`, `logger:`, `route:`, `in:`,
+  `extra.*` and the rest on Logs, each page its own. The arrows and Enter
+  take one to type its value.
+- An opened record's exception shows as an error's frames: its type and
+  message first, the app's frames in view and the libraries' folded into "N
+  library frames". It reads Python tracebacks, JVM stack traces and
+  JavaScript stacks. Raw shows the text as logged, and copy copies it.
+- A message that is a JSON object or array opens indented, with Raw beside
+  it. The table keeps it on one line.
+- "WARNING and above" and "ERROR and above" in the Level filter, as
+  `level>=warning`. The chart's legend shows such a filter, and a click on it
+  that leaves a level and those above writes one too.
 - Live on the Tasks page, next to By task and All runs: the tasks in flight
   now, every 2 seconds. Running tasks show their worker, how long they have
   run, their id and arguments. Queued ones show how long they have waited
@@ -46,6 +59,12 @@
 
 ### Changed
 
+- The logs table draws only the rows in view and a screenful around them.
+  Thousands of records loaded scroll as lightly as a hundred.
+- The Logs page has the Overview of an entry point's page: its records over
+  time when open, how many records, errors and warnings when folded. The
+  chart no longer folds on its own. Every page folds its Overview with the
+  others, as this browser last left it.
 - Every table's text is one size, the logs' a step up and the others' a step
   down to meet it.
 - Debug records step back in the logs table, and a record opened from a link

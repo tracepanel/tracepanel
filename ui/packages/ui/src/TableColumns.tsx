@@ -402,8 +402,9 @@ export function ColumnHead({
       style={style}
       className={cn(
         "group/head relative transition-colors",
-        // A header that moves says so on hover: a step darker, a grip at its end, the grab cursor on its name.
-        onStep && "hover:bg-foreground/[0.04]",
+        // A header that moves says so on hover: a step darker, a grip at its end, the grab cursor on its name. Opaque:
+        // a sticky header's rows scroll under it.
+        onStep && "hover:bg-[color-mix(in_oklab,var(--color-muted),var(--color-foreground)_4%)]",
         drop.over && "bg-brand-soft",
         className,
       )}

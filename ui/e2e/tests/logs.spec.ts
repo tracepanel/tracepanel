@@ -84,3 +84,48 @@ test("typing a filter key by key, with pauses, keeps every letter in the box", a
   await expect(search(page)).toHaveValue("logger:b");
   await expect(page.getByRole("button", { name: /^logger:blog\.views/ })).toBeVisible();
 });
+
+test("an empty box lists the fields to filter by; the arrows and Enter take one to type its value", async ({
+  page,
+}) => {
+  await page.goto("/#/logs");
+  await search(page).focus();
+  const level = page.getByRole("button", { name: /^level: debug, info, warning, error, critical/ });
+
+  await expect(page.getByText("Filter by", { exact: true })).toBeVisible();
+  await expect(level).toBeVisible();
+  await expect(page.getByRole("button", { name: /^logger: Logger name/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^extra\.\* / })).toBeVisible();
+
+  await search(page).press("ArrowDown");
+  await expect(level).toHaveAttribute("data-active", "");
+  await search(page).press("Enter");
+
+  await expect(search(page)).toHaveValue("level:");
+  await expect(search(page)).toBeFocused();
+  // Then the field's values.
+  await expect(page.getByRole("button", { name: "level:warning", exact: true })).toBeVisible();
+});
+
+test("the fields come back after a space, Escape puts them away, and Tab leaves the box", async ({ page }) => {
+  await page.goto("/#/logs");
+  await search(page).fill("boot ");
+  const logger = page.getByRole("button", { name: /^logger: Logger name/ });
+
+  await expect(logger).toBeVisible();
+  await search(page).press("Escape");
+  await expect(logger).toHaveCount(0);
+
+  await search(page).focus();
+  await search(page).press("Tab");
+  await expect(search(page)).not.toBeFocused();
+  await expect(page).not.toHaveURL(/level/);
+});
+
+test("each page lists its own fields", async ({ page }) => {
+  await page.goto("/#/tasks");
+  await search(page).focus();
+
+  await expect(page.getByRole("button", { name: /^state: / })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^logger: / })).toHaveCount(0);
+});

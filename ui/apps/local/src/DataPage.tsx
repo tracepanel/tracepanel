@@ -14,6 +14,7 @@ import { SystemTiles } from "./CallsTiles";
 import { usePaged, useSearch } from "./data";
 import { EmptyPage } from "./EmptyPage";
 import { refineQuery } from "./EntryPage";
+import { OverviewNumbers, OverviewRange, OverviewSection, useOverviewOpen } from "./Overview";
 import { LiveToggle, RefreshControl } from "./refresh";
 import { type CallsSection, type EntrySection, go, type Section, systemOfSection, traceHref } from "./routes";
 import { SearchBar } from "./SearchBar";
@@ -136,8 +137,9 @@ function useLogSeries(source: DataSource, logs: boolean, q: string) {
 function logsBody(page: BodyContext): ReactNode {
   return (
     // One column no wider than the page: a table with more columns than room fits them in, rather than widening it.
-    <div className="grid grid-cols-[minmax(0,1fr)] gap-3">
-      <LogsOverTime series={page.data.logSeries.data} q={page.q} onRefine={page.refine} />
+    // The Overview keeps its own room below it, as on an entry point's page.
+    <div className="grid grid-cols-[minmax(0,1fr)]">
+      <LogsOverview series={page.data.logSeries.data} q={page.q} onRefine={page.refine} />
       {pagedBody(
         page.data.logs,
         "Load older logs",
@@ -174,20 +176,72 @@ function freeText(q: string): string[] {
     .filter((word) => !/^-|[:<>=]/.test(word));
 }
 
-/** The levels a search has: `level:warning,error` → warning, error. */
+const LEVELS = ["debug", "info", "warning", "error", "critical"];
+
+/** The levels a search has: `level:warning,error` → warning, error; `level>=warning` → warning and every one above. */
 function levelsOf(q: string): string[] {
-  const term = q.split(/\s+/).find((token) => token.startsWith("level:"));
-  return term ? term.slice("level:".length).split(",").filter(Boolean) : [];
+  const term = q.split(/\s+/).find((token) => /^level(:|>=)/.test(token));
+  if (!term) return [];
+  if (!term.startsWith("level>=")) return term.slice("level:".length).split(",").filter(Boolean);
+  return LEVELS.slice(Math.max(LEVELS.indexOf(term.slice("level>=".length).toLowerCase()), 0));
+}
+
+/**
+ * The search's level filter for the levels the legend leaves shown: a level and every one above it as `level>=`, as
+ * the Level menu says it, any other pick as a list.
+ */
+function levelTerm(levels: readonly string[]): string {
+  const from = levels[0] ?? "";
+  return isRange(levels, from) ? `>=${from}` : levels.join(",");
+}
+
+/** Whether the levels are `from` and every one above it, more than one. */
+function isRange(levels: readonly string[], from: string): boolean {
+  const above = LEVELS.slice(LEVELS.indexOf(from));
+  return levels.length > 1 && above.length === levels.length && above.every((level) => levels.includes(level));
 }
 
 /** Whether a search has a time range: the chart stays then, empty, to show the range and drag another. */
 const ranged = (q: string) => /(^|\s)(since|until):/.test(q);
 
+/** A slice's records of some levels. */
+const countOf = (bucket: LogBucket, levels: readonly string[]) =>
+  levels.reduce((sum, level) => sum + (bucket.levels[level] ?? 0), 0);
+
+/** "1,204 records", in the tone of what they are when there are any. */
+function Counted({ count, noun, tone = "" }: { count: number; noun: string; tone?: string }) {
+  return (
+    <span className={count > 0 ? tone : ""}>
+      {count.toLocaleString()} {count === 1 ? noun : `${noun}s`}
+    </span>
+  );
+}
+
+/** The Overview folded: how many records, errors and warnings the search finds, on one line. */
+function LogNumbers({ series }: { series: readonly LogBucket[] }) {
+  const sum = (levels: readonly string[]) => series.reduce((total, bucket) => total + countOf(bucket, levels), 0);
+  return (
+    <OverviewNumbers>
+      <Counted count={sum(LEVELS)} noun="record" />
+      <Counted count={sum(["error", "critical"])} noun="error" tone="text-error" />
+      <Counted count={sum(["warning"])} noun="warning" tone="text-warn" />
+    </OverviewNumbers>
+  );
+}
+
+/** The time the series covers: its first slice's start to its last one's end. */
+function SeriesRange({ series }: { series: readonly LogBucket[] }) {
+  const from = Math.min(...series.map((bucket) => bucket.start));
+  const to = Math.max(...series.map((bucket) => bucket.end));
+  return <OverviewRange from={from} to={to} />;
+}
+
 /**
- * The logs' records over time; a drag across it narrows the search to that time, the legend to those levels. None
- * while loading, or when nothing matches outside a time range.
+ * The Logs page's Overview, as an entry point's: its records over time, a drag across them narrowing the search to
+ * that time, the legend to those levels; folded, their numbers. None while loading, or when nothing matches outside a
+ * time range.
  */
-function LogsOverTime({
+function LogsOverview({
   series,
   q,
   onRefine,
@@ -196,13 +250,21 @@ function LogsOverTime({
   q: string;
   onRefine: (terms: Record<string, string>) => void;
 }) {
+  const [open, toggle] = useOverviewOpen();
   if (!series || !(ranged(q) || series.some((bucket) => bucket.count > 0))) return null;
   return (
-    <LogsChart
-      series={series}
-      onSelect={(start, end) => onRefine(rangeTerms(start, end))}
-      levels={{ chosen: levelsOf(q), onChoose: (levels) => onRefine({ level: levels.join(",") }) }}
-    />
+    <OverviewSection
+      open={open}
+      onToggle={toggle}
+      range={<SeriesRange series={series} />}
+      numbers={<LogNumbers series={series} />}
+    >
+      <LogsChart
+        series={series}
+        onSelect={(start, end) => onRefine(rangeTerms(start, end))}
+        levels={{ chosen: levelsOf(q), onChoose: (levels) => onRefine({ level: levelTerm(levels) }) }}
+      />
+    </OverviewSection>
   );
 }
 

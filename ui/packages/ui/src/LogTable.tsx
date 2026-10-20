@@ -1,15 +1,20 @@
 // Log records as one table wherever they are listed: the console's Logs page and a trace's Logs tab. One line per
 // record, its details opened under it; columns the reader sizes and picks, kept per browser.
+
+import { useVirtualizer, type Virtualizer } from "@tanstack/react-virtual";
 import { cn } from "@tracepanel/ui/lib/utils";
 import {
   createContext,
-  Fragment,
   type KeyboardEvent,
   type MouseEvent,
   type ReactNode,
+  type RefObject,
+  useCallback,
   useContext,
-  useEffect,
+  useLayoutEffect,
+  useMemo,
   useRef,
+  useState,
 } from "react";
 import {
   DropdownMenuCheckboxItem,
@@ -395,32 +400,65 @@ function LogHead({
 }
 
 /**
- * A row opened as it mounts (from the page's address, a link to a record) scrolled into view; a row opened later is
- * where the reader clicked it already.
+ * A row opened as the table mounts (from the page's address, a link to a record) scrolled into view; a row opened later
+ * is where the reader clicked it already. Before the table windows its rows: they are all there to find it among.
  */
-function useScrollOpened(open: boolean) {
-  const ref = useRef<HTMLTableRowElement>(null);
+function useRevealOpened(body: RefObject<HTMLTableSectionElement | null>) {
   // biome-ignore lint/correctness/useExhaustiveDependencies: as it mounts only.
-  useEffect(() => {
-    if (open) ref.current?.scrollIntoView({ block: "center" });
+  useLayoutEffect(() => {
+    body.current?.querySelector("[data-record][aria-expanded=true]")?.scrollIntoView({ block: "center" });
   }, []);
-  return ref;
 }
 
-/** A local day, as the rows' times can't say it: "Monday, October 19". */
-function dayOf(us: number): string {
-  return new Date(us / 1000).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
-}
+// A local day, as the rows' times can't say it: "Monday, October 19". One formatter for every row of a long list.
+const DAY = new Intl.DateTimeFormat([], { weekday: "long", month: "long", day: "numeric" });
+
+const dayOf = (us: number): string => DAY.format(new Date(us / 1000));
 
 /**
- * The day above a record when it is another than the record's above, or (the first) another than today: the time
- * column shows the time of day only.
+ * What the table's body lists, a line each: a record, its details under it when open, and a day's heading above a
+ * record of another day than the one above it (or, the first, than today): the time column shows the time of day only.
  */
-function DayHeading({ time, before, span }: { time: number; before: number | undefined; span: number }) {
-  const day = dayOf(time);
-  if (day === dayOf(before ?? Date.now() * 1000)) return null;
+type Line<R> =
+  | { kind: "day"; key: string; day: string }
+  | { kind: "record"; key: string; log: R }
+  | { kind: "details"; key: string; log: R };
+
+function linesOf<R extends LogLike>(logs: readonly R[], keyOf: (log: R) => string, open: string | null): Line<R>[] {
+  const lines: Line<R>[] = [];
+  let above = dayOf(Date.now() * 1000);
+  for (const log of logs) {
+    const key = keyOf(log);
+    const day = dayOf(log.time);
+    if (day !== above) lines.push({ kind: "day", key: `day:${key}`, day });
+    lines.push({ kind: "record", key, log });
+    if (key === open) lines.push({ kind: "details", key: `open:${key}`, log });
+    above = day;
+  }
+  return lines;
+}
+
+/** A line's height before it is measured: a record's one line, a heading's smaller one, details' a guess. */
+const ESTIMATE: Record<Line<unknown>["kind"], number> = { day: 26, record: 31, details: 320 };
+
+/** What a line's row needs from the table: its columns, the opened record, and the place's details and button. */
+interface RowContext<R> {
+  shown: readonly LogColumn<R>[];
+  open: string | null;
+  onOpen: (key: string | null) => void;
+  action: ((log: R) => ReactNode) | undefined;
+  details: (log: R) => ReactNode;
+}
+
+/** A windowed row's place among the lines, and what measures it: its height counts once it is drawn. */
+interface Placed {
+  index: number;
+  measure: ((element: Element | null) => void) | undefined;
+}
+
+function DayHeading({ day, span, placed }: { day: string; span: number; placed: Placed }) {
   return (
-    <TableRow className="hover:bg-transparent">
+    <TableRow ref={placed.measure} data-index={placed.index} className="hover:bg-transparent">
       <TableCell colSpan={span} className="bg-muted/60 py-1 pl-4 text-xs font-semibold text-muted-foreground">
         {day}
       </TableCell>
@@ -430,48 +468,169 @@ function DayHeading({ time, before, span }: { time: number; before: number | und
 
 function LogRecordRow<R extends LogLike>({
   log,
-  shown,
-  open,
-  onToggle,
-  action,
-  details,
+  rowKey,
+  context,
+  placed,
 }: {
   log: R;
-  shown: readonly LogColumn<R>[];
-  open: boolean;
-  onToggle: () => void;
-  action: ((log: R) => ReactNode) | undefined;
-  details: (log: R) => ReactNode;
+  rowKey: string;
+  context: RowContext<R>;
+  placed: Placed;
 }) {
-  const ref = useScrollOpened(open);
+  const { shown, open, onOpen, action } = context;
+  const opened = open === rowKey;
+  const onToggle = () => onOpen(opened ? null : rowKey);
   return (
-    <>
-      <TableRow
-        ref={ref}
-        data-level={log.level}
-        data-record=""
-        tabIndex={0}
-        aria-expanded={open}
-        className={ROW}
-        onClick={(event) => opens(event) && onToggle()}
-        onKeyDown={(event) => onRowKey(event, open, onToggle)}
-      >
-        {shown.map((column) => (
-          <TableCell key={column.id} className={CELL}>
-            {column.cell(log, open)}
-          </TableCell>
-        ))}
-        <TableCell className="px-1 py-0 text-right">{action?.(log)}</TableCell>
-      </TableRow>
-      {open ? (
-        <TableRow className="hover:bg-transparent">
-          <TableCell colSpan={shown.length + 1} className="bg-muted/40 p-0 whitespace-normal">
-            {details(log)}
-          </TableCell>
-        </TableRow>
-      ) : null}
-    </>
+    <TableRow
+      ref={placed.measure}
+      data-index={placed.index}
+      data-level={log.level}
+      data-record=""
+      tabIndex={0}
+      aria-expanded={opened}
+      className={ROW}
+      onClick={(event) => opens(event) && onToggle()}
+      onKeyDown={(event) => onRowKey(event, opened, onToggle)}
+    >
+      {shown.map((column) => (
+        <TableCell key={column.id} className={CELL}>
+          {column.cell(log, opened)}
+        </TableCell>
+      ))}
+      <TableCell className="px-1 py-0 text-right">{action?.(log)}</TableCell>
+    </TableRow>
   );
+}
+
+function DetailsRow<R>({ log, context, placed }: { log: R; context: RowContext<R>; placed: Placed }) {
+  return (
+    <TableRow ref={placed.measure} data-index={placed.index} className="hover:bg-transparent">
+      <TableCell colSpan={context.shown.length + 1} className="bg-muted/40 p-0 whitespace-normal">
+        {context.details(log)}
+      </TableCell>
+    </TableRow>
+  );
+}
+
+function LineRow<R extends LogLike>({
+  line,
+  context,
+  placed,
+}: {
+  line: Line<R>;
+  context: RowContext<R>;
+  placed: Placed;
+}) {
+  if (line.kind === "day") return <DayHeading day={line.day} span={context.shown.length + 1} placed={placed} />;
+  if (line.kind === "details") return <DetailsRow log={line.log} context={context} placed={placed} />;
+  return <LogRecordRow log={line.log} rowKey={line.key} context={context} placed={placed} />;
+}
+
+/** The height of the rows not drawn, above or below the window: one empty row keeps the scrollbar true. */
+function Spacer({ height, span }: { height: number; span: number }) {
+  if (height <= 0) return null;
+  return (
+    // biome-ignore lint/a11y/noAriaHiddenOnFocusable: a spacer is no row to read or reach, only the height of those not drawn.
+    <tr aria-hidden="true" style={{ height }}>
+      <td colSpan={span} className="p-0" />
+    </tr>
+  );
+}
+
+/** The page's scrolling section the table is in, once it is mounted; none when the table lists every row. */
+function useScroller(body: RefObject<HTMLTableSectionElement | null>, windowed: boolean): HTMLElement | null {
+  const [scroller, setScroller] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    setScroller(windowed ? (body.current?.closest<HTMLElement>("[data-scroll]") ?? null) : null);
+  }, [body, windowed]);
+  return scroller;
+}
+
+/**
+ * Where the body starts in the scrolling section's content: what lies above it (the chart, the header row) moves it,
+ * so it is measured again whenever the section's content changes size.
+ */
+function useScrollMargin(body: RefObject<HTMLTableSectionElement | null>, scroller: HTMLElement | null): number {
+  const [margin, setMargin] = useState(0);
+  useLayoutEffect(() => {
+    if (!scroller) return;
+    const measure = () => setMargin(offsetIn(body.current, scroller));
+    measure();
+    const observer = new ResizeObserver(measure);
+    for (const child of scroller.children) observer.observe(child);
+    return () => observer.disconnect();
+  }, [body, scroller]);
+  return margin;
+}
+
+function offsetIn(element: Element | null, scroller: HTMLElement): number {
+  if (!element) return 0;
+  return element.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
+}
+
+/** The lines drawn, and the heights of those above and below them that are not. */
+interface LineWindow {
+  indexes: readonly number[];
+  before: number;
+  after: number;
+  measure: Placed["measure"];
+}
+
+/**
+ * The lines in view and a screenful around them, in the page's scrolling section: thousands of records loaded keep
+ * the page as light as a hundred. Without the section (`windowed` off, or before it is found), every line.
+ */
+function useLineWindow<R>(
+  lines: readonly Line<R>[],
+  body: RefObject<HTMLTableSectionElement | null>,
+  windowed: boolean,
+): LineWindow {
+  const scroller = useScroller(body, windowed);
+  const margin = useScrollMargin(body, scroller);
+  const virtualizer = useVirtualizer<HTMLElement, Element>({
+    count: lines.length,
+    getScrollElement: () => scroller,
+    estimateSize: useCallback((index: number) => ESTIMATE[lines[index]?.kind ?? "record"], [lines]),
+    getItemKey: useCallback((index: number) => lines[index]?.key ?? index, [lines]),
+    overscan: 12,
+    scrollMargin: margin,
+    enabled: scroller !== null,
+    useFlushSync: false,
+  });
+  return scroller ? windowOf(virtualizer, margin) : everyLine(lines);
+}
+
+function everyLine(lines: readonly unknown[]): LineWindow {
+  return { indexes: lines.map((_, index) => index), before: 0, after: 0, measure: undefined };
+}
+
+/** The lines the virtualizer has in its window, and the room of those above and below it. */
+function windowOf(virtualizer: Virtualizer<HTMLElement, Element>, margin: number): LineWindow {
+  const items = virtualizer.getVirtualItems();
+  const top = items[0]?.start ?? margin;
+  const bottom = items.reduce((end, item) => Math.max(end, item.end), margin);
+  return {
+    indexes: items.map((item) => item.index),
+    before: top - margin,
+    after: virtualizer.getTotalSize() - (bottom - margin),
+    measure: virtualizer.measureElement,
+  };
+}
+
+/** What the table draws of the records: its lines, the window of them in view, the attribute keys they have. */
+function useLogLines<R extends LogLike>(
+  logs: readonly R[],
+  keyOf: (log: R) => string,
+  open: string | null,
+  windowed: boolean,
+) {
+  // Worked out again when the records change, not on each render: a long list has thousands.
+  const offered = useMemo(() => attributeKeys(logs), [logs]);
+  const lines = useMemo(() => linesOf(logs, keyOf, open), [logs, keyOf, open]);
+  const body = useRef<HTMLTableSectionElement>(null);
+  useRevealOpened(body);
+  const view = useLineWindow(lines, body, windowed);
+  return { offered, lines, body, view };
 }
 
 /**
@@ -492,6 +651,7 @@ export function LogTable<R extends LogLike>({
   action,
   stickyHeader = false,
   highlight = [],
+  windowed = false,
 }: {
   table: string;
   logs: readonly R[];
@@ -505,6 +665,8 @@ export function LogTable<R extends LogLike>({
   stickyHeader?: boolean;
   /** The search's words, marked where a message has them. */
   highlight?: readonly string[] | undefined;
+  /** Draws only the rows in view of the page's scrolling section (`[data-scroll]`): for lists that grow long. */
+  windowed?: boolean;
 }) {
   const [mode, setMode] = useStored(`tracepanel:columns:${table}:time`, readTime);
   const [picked, setPicked] = useStored(`tracepanel:columns:${table}:attributes`, readKeys);
@@ -518,6 +680,9 @@ export function LogTable<R extends LogLike>({
     setMode("clock");
     setPicked([]);
   };
+  const { offered, lines, body, view } = useLogLines(logs, keyOf, open, windowed);
+  const context: RowContext<R> = { shown, open, onOpen, action, details };
+  const span = shown.length + 1;
   const pinned: AttributeColumns = {
     has: (key) => picked.includes(key),
     toggle: (key) => setPicked(toggled(picked, key)),
@@ -534,26 +699,18 @@ export function LogTable<R extends LogLike>({
           mode={mode}
           onMode={setMode}
           relativeLabel={start === undefined ? "Time ago" : "Since the request started"}
-          attributes={<AttributeColumnsMenu keys={attributeKeys(logs)} picked={picked} onPick={setPicked} />}
+          attributes={<AttributeColumnsMenu keys={offered} picked={picked} onPick={setPicked} />}
           onRemoveAttribute={(key) => setPicked(picked.filter((each) => each !== key))}
         />
-        <TableBody>
-          {logs.map((log, index) => {
-            const key = keyOf(log);
-            return (
-              <Fragment key={key}>
-                <DayHeading time={log.time} before={logs[index - 1]?.time} span={shown.length + 1} />
-                <LogRecordRow
-                  log={log}
-                  shown={shown}
-                  open={open === key}
-                  onToggle={() => onOpen(open === key ? null : key)}
-                  action={action}
-                  details={details}
-                />
-              </Fragment>
-            );
+        <TableBody ref={body}>
+          <Spacer height={view.before} span={span} />
+          {view.indexes.map((index) => {
+            const line = lines[index];
+            return line ? (
+              <LineRow key={line.key} line={line} context={context} placed={{ index, measure: view.measure }} />
+            ) : null;
           })}
+          <Spacer height={view.after} span={span} />
         </TableBody>
       </Table>
     </AttributeColumnsContext.Provider>

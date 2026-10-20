@@ -511,7 +511,7 @@ export function LogsTable({
       <LogTable
         table="logs"
         logs={items}
-        keyOf={(log) => String(log.id)}
+        keyOf={logKey}
         columns={LOG_COLUMNS}
         open={open}
         onOpen={onOpen}
@@ -522,10 +522,14 @@ export function LogsTable({
           </div>
         )}
         stickyHeader={true}
+        windowed={true}
       />
     </div>
   );
 }
+
+/** A record's key in the list and in the page's address: its id. */
+const logKey = (log: LogRow): string => String(log.id);
 
 /** A value as a search term: quoted when it has spaces. */
 function term(value: string): string {
