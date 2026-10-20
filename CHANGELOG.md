@@ -43,9 +43,9 @@
   menu shows and hides columns (App, Trace and Attributes are there too) and
   switches the time between the time of day and how long ago (in a trace:
   since the request started). The browser keeps these choices.
-- The console and the panel are 10% denser: 13.5px for the root size the
-  whole UI follows, at the usual 16px browser size, instead of 15px. The
-  density rule hadn't applied: the shared styles' own size won over it.
+- The density rule applies: the shared styles' own root size won over it,
+  so it did nothing. It now sets the size the UI was always shown at, 15px
+  at the usual 16px browser size.
 - Logs: any attribute of the records listed can be a column of its own,
   picked from the columns menu's Attribute columns.
 - A log record's details say where it was logged ("Logged inside" and the
