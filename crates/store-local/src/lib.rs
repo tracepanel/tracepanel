@@ -738,6 +738,62 @@ mod tests {
     }
 
     #[test]
+    fn records_are_counted_over_time_by_level() {
+        let dir = std::env::temp_dir().join(format!(
+            "tracepanel-store-log-series-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = path_in(&dir);
+        let mut store = Store::open(&path).unwrap();
+        let minute = 60_000_000_i64;
+        let log = |time: i64, level: &str| {
+            serde_json::json!({"span_id": null, "time": time, "level": level, "logger": "shop", "message": "m",
+                               "exception": null, "attrs": {}})
+        };
+        let doc = serde_json::json!({
+            "id": "S1", "kind": "http", "name": "GET /", "start": 0, "duration": 1000, "status": "ok",
+            "attrs": {"service.name": "shop"}, "errors": [], "links": [], "issues": [],
+            "spans": [{"id": "R", "parent_id": null, "kind": "http", "name": "GET /", "start": 0, "duration": 10,
+                       "status": "ok", "attrs": {}}],
+            "logs": [log(0, "info"), log(1, "error"), log(30 * minute, "info"), log(59 * minute, "warning")],
+        });
+        store
+            .write(&[Received {
+                trace: serde_json::from_value(doc.clone()).unwrap(),
+                doc: doc.to_string(),
+            }])
+            .unwrap();
+        let reader = Reader::new(&path);
+        let series = reader.log_series("", 60).unwrap()["series"]
+            .as_array()
+            .unwrap()
+            .clone();
+        let total: i64 = series
+            .iter()
+            .map(|bucket| bucket["count"].as_i64().unwrap())
+            .sum();
+
+        assert_eq!(series.len(), 60);
+        assert_eq!(total, 4);
+        assert_eq!(
+            series[0]["levels"],
+            serde_json::json!({"info": 1, "error": 1})
+        );
+        assert_eq!(series[59]["levels"], serde_json::json!({"warning": 1}));
+        // A search counts only what it finds.
+        let errors = reader.log_series("level:error", 60).unwrap();
+        let counted: i64 = errors["series"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|b| b["count"].as_i64().unwrap())
+            .sum();
+        assert_eq!(counted, 1);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn a_record_is_found_by_the_spans_it_was_logged_in() {
         let dir = std::env::temp_dir().join(format!(
             "tracepanel-store-log-context-{}",

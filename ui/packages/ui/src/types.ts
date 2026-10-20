@@ -25,6 +25,7 @@ export type IssueKind = Schemas["IssueKind"];
 
 export type TraceSummary = Schemas["TraceSummary"];
 export type LogRow = Schemas["LogRow"];
+export type LogBucket = Schemas["LogBucket"];
 export type MailRow = Schemas["MailRow"];
 export type CallRow = Schemas["CallRow"];
 export type CallsSummary = Schemas["CallsSummary"];

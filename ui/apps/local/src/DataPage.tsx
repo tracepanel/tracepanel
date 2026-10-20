@@ -1,4 +1,13 @@
-import { type CallRow, type DataSource, Empty, type KnownValues, type SearchSpec } from "@tracepanel/ui";
+import {
+  type CallRow,
+  type DataSource,
+  Empty,
+  type KnownValues,
+  type LogBucket,
+  type LogRow,
+  LogsChart,
+  type SearchSpec,
+} from "@tracepanel/ui";
 import type { Family } from "@tracepanel/ui/lib/systems";
 import { type ReactNode, useCallback } from "react";
 import { SystemTiles } from "./CallsTiles";
@@ -13,6 +22,7 @@ import { useScope } from "./scope";
 import { pageMeta } from "./sections";
 import { byProject } from "./services";
 import { CallsTable, IssuesTable, LogsTable, MailsTable, TracesTable } from "./tables";
+import { isoWithOffset } from "./time";
 import { Loading, LoadMore, PageHeader } from "./ui";
 
 type DataSection = Exclude<Section, EntrySection>;
@@ -103,15 +113,50 @@ function listBody<T>(data: T[] | undefined, rows: (items: T[]) => ReactNode, emp
   return data.length > 0 ? rows(data) : empty;
 }
 
-export function DataPage({ section, q, open, source, spec, known, systems }: DataPageProps) {
-  const { setService } = useScope();
-  const { system, family, meta, pristine } = pageOfSection(section, systems);
-  // Opening a row replaces the entry: it is no step to go Back through, but it survives leaving and coming back.
-  const setOpen = (key: string | null) => go({ name: section, q, open: key ?? undefined }, true);
-  // Typing replaces the entry, so Back skips the letters; a chip or a menu adds one, so Back undoes it.
-  const setQuery = (next: string, typed = false) => go({ name: section, q: next }, typed);
-  const refine = (terms: Record<string, string>) => go({ name: section, q: refineQuery(q, terms) });
+/** The logs' chart data: how many records the search finds over time, by level; none off the Logs page. */
+function useLogSeries(source: DataSource, logs: boolean, q: string) {
+  const load = useCallback(
+    (query: string) => (logs && source.logSeries ? source.logSeries(query) : Promise.resolve(undefined)),
+    [source, logs],
+  );
+  return useSearch(load, q, 0);
+}
 
+/** The Logs page's list: the records over time above them. */
+function logsBody(
+  items: LogRow[],
+  series: LogBucket[] | undefined,
+  refine: (terms: Record<string, string>) => void,
+  open: string | undefined,
+  setOpen: (key: string | null) => void,
+): ReactNode {
+  return (
+    <div className="grid gap-3">
+      <LogsOverTime series={series} onRefine={refine} />
+      <LogsTable items={items} onFilter={refine} open={open ?? null} onOpen={setOpen} />
+    </div>
+  );
+}
+
+/** The logs' records over time; a drag across it narrows the search to that time. None while loading or empty. */
+function LogsOverTime({
+  series,
+  onRefine,
+}: {
+  series: LogBucket[] | undefined;
+  onRefine: (terms: Record<string, string>) => void;
+}) {
+  if (!series?.some((bucket) => bucket.count > 0)) return null;
+  return (
+    <LogsChart
+      series={series}
+      onSelect={(start, end) => onRefine({ since: isoWithOffset(start), until: isoWithOffset(end) })}
+    />
+  );
+}
+
+/** Everything a page loads: each list only on its own page (the others resolve empty at once). */
+function usePageData(section: Section, system: string | null, source: DataSource, q: string) {
   const traces = usePaged(
     useCallback(
       (query: string, before: number | null) =>
@@ -128,6 +173,7 @@ export function DataPage({ section, q, open, source, spec, known, systems }: Dat
     ),
     q,
   );
+  const logSeries = useLogSeries(source, section === "logs", q);
   const mails = usePaged(
     useCallback(
       (query: string, before: number | null) =>
@@ -152,10 +198,15 @@ export function DataPage({ section, q, open, source, spec, known, systems }: Dat
     q,
     0,
   );
-  const issues = useSearch(
+  const issues = useIssues(source, section, q);
+  return { traces, logs, logSeries, mails, services, stats, issues };
+}
+
+/** One list of issue groups, split in two: what failed (Errors), and what could be better (Issues). */
+function useIssues(source: DataSource, section: Section, q: string) {
+  return useSearch(
     useCallback(
       (query: string) =>
-        // One list of issue groups, split in two: what failed, and what could be better.
         section === "errors"
           ? source.listIssues(`kind:error ${query}`.trim())
           : section === "issues"
@@ -165,19 +216,124 @@ export function DataPage({ section, q, open, source, spec, known, systems }: Dat
     ),
     q,
   );
+}
 
-  const loaded =
-    {
-      traces: { size: traces.items?.length, error: traces.error },
-      logs: { size: logs.items?.length, error: logs.error },
-      mails: { size: mails.items?.length, error: mails.error },
-      services: {
-        size: services.data ? byProject(services.data.apps).length + services.data.services.length : undefined,
-        error: services.error,
-      },
-      errors: { size: issues.data?.length, error: issues.error },
-      issues: { size: issues.data?.length, error: issues.error },
-    }[section as string] ?? listed(stats);
+type PageData = ReturnType<typeof usePageData>;
+
+type Loaded = { size: number | undefined; error: string | null };
+
+function paged(list: { items?: readonly unknown[] | undefined; error: string | null }): Loaded {
+  return { size: list.items?.length, error: list.error };
+}
+
+function servicesLoaded({ services }: PageData): Loaded {
+  const map = services.data;
+  return { size: map ? byProject(map.apps).length + map.services.length : undefined, error: services.error };
+}
+
+/** How many rows each page has, and its search's error: the search bar shows them. A system's page, its calls. */
+const LOADED: Partial<Record<Section, (data: PageData) => Loaded>> = {
+  traces: (data) => paged(data.traces),
+  logs: (data) => paged(data.logs),
+  mails: (data) => paged(data.mails),
+  services: servicesLoaded,
+  errors: (data) => listed(data.issues),
+  issues: (data) => listed(data.issues),
+};
+
+function loadedOf(section: Section, data: PageData): Loaded {
+  return (LOADED[section] ?? ((page: PageData) => listed(page.stats)))(data);
+}
+
+/** What a page's body needs: its section and search, what it loaded, and what its rows do. */
+interface BodyContext {
+  section: Section;
+  system: string | null;
+  q: string;
+  open: string | undefined;
+  source: DataSource;
+  noun: string | undefined;
+  data: PageData;
+  refine: (terms: Record<string, string>) => void;
+  setOpen: (key: string | null) => void;
+  setService: (service: string) => void;
+}
+
+/** The body of each page that has its own; the others list calls (a system's page) or issues. */
+const BODIES: Partial<Record<Section, (page: BodyContext) => ReactNode>> = {
+  traces: (page) =>
+    pagedBody(
+      page.data.traces,
+      "Load older",
+      (items) => <TracesTable items={items} selectedId={null} hrefFor={traceHref} />,
+      <Empty title="No traces match">
+        Search names and paths, or filter: status&gt;=500, task:send_*, kind:command.
+      </Empty>,
+    ),
+  logs: (page) =>
+    pagedBody(
+      page.data.logs,
+      "Load older logs",
+      (items) => logsBody(items, page.data.logSeries.data, page.refine, page.open, page.setOpen),
+      <Empty title="No log records match">Records from requests, tasks and jobs are searchable here.</Empty>,
+    ),
+  mails: (page) =>
+    pagedBody(
+      page.data.mails,
+      "Load older emails",
+      (items) => <MailsTable items={items} source={page.source} open={page.open ?? null} onOpen={page.setOpen} />,
+      <Empty title={page.q ? "No emails match" : "No emails yet"}>Emails your app sends show up here.</Empty>,
+    ),
+  services: servicesBody,
+};
+
+function servicesBody({ data, q, setService }: BodyContext): ReactNode {
+  const map = data.services.data;
+  if (!map) return <Loading />;
+  if (map.apps.length + map.services.length > 0) return <ServicesView map={map} onApp={setService} />;
+  return (
+    <Empty title={q ? "No services match" : "No services yet"}>
+      Databases, caches, mail servers and brokers appear here after the first call that uses them.
+    </Empty>
+  );
+}
+
+function callsBody({ system, q, source, data, open, setOpen, refine, noun }: BodyContext & { system: string }) {
+  return (
+    <>
+      <SystemTiles system={system} q={q} source={source} onFailed={() => refine({ failed: "true" })} />
+      {listBody(
+        data.stats.data,
+        (items) => (
+          <CallsTable items={items} source={source} open={open ?? null} onOpen={setOpen} />
+        ),
+        <Empty title={`No ${noun ?? "operations"} match`}>Try a broader search, or another filter.</Empty>,
+      )}
+    </>
+  );
+}
+
+function pageBody(page: BodyContext): ReactNode {
+  const own = BODIES[page.section];
+  if (own) return own(page);
+  if (page.system) return callsBody({ ...page, system: page.system });
+  return listBody(
+    page.data.issues.data,
+    (items) => <IssuesTable items={items} />,
+    <Empty title={`No ${page.section} match`}>Try a broader search.</Empty>,
+  );
+}
+
+export function DataPage({ section, q, open, source, spec, known, systems }: DataPageProps) {
+  const { setService } = useScope();
+  const { system, family, meta, pristine } = pageOfSection(section, systems);
+  // Opening a row replaces the entry: it is no step to go Back through, but it survives leaving and coming back.
+  const setOpen = (key: string | null) => go({ name: section, q, open: key ?? undefined }, true);
+  // Typing replaces the entry, so Back skips the letters; a chip or a menu adds one, so Back undoes it.
+  const setQuery = (next: string, typed = false) => go({ name: section, q: next }, typed);
+  const refine = (terms: Record<string, string>) => go({ name: section, q: refineQuery(q, terms) });
+  const data = usePageData(section, system, source, q);
+  const loaded = loadedOf(section, data);
 
   // Nothing stored yet (not a search that matched nothing): no search, filters or refresh to show.
   if (!q && loaded.size === 0 && pristine) {
@@ -187,63 +343,7 @@ export function DataPage({ section, q, open, source, spec, known, systems }: Dat
       </EmptyPage>
     );
   }
-
-  let body: ReactNode;
-  if (section === "traces") {
-    body = pagedBody(
-      traces,
-      "Load older",
-      (items) => <TracesTable items={items} selectedId={null} hrefFor={traceHref} />,
-      <Empty title="No traces match">
-        Search names and paths, or filter: status&gt;=500, task:send_*, kind:command.
-      </Empty>,
-    );
-  } else if (section === "logs") {
-    body = pagedBody(
-      logs,
-      "Load older logs",
-      (items) => <LogsTable items={items} onFilter={refine} open={open ?? null} onOpen={setOpen} />,
-      <Empty title="No log records match">Records from requests, tasks and jobs are searchable here.</Empty>,
-    );
-  } else if (section === "mails") {
-    body = pagedBody(
-      mails,
-      "Load older emails",
-      (items) => <MailsTable items={items} source={source} open={open ?? null} onOpen={setOpen} />,
-      <Empty title={q ? "No emails match" : "No emails yet"}>Emails your app sends show up here.</Empty>,
-    );
-  } else if (section === "services") {
-    body = services.data ? (
-      services.data.apps.length + services.data.services.length ? (
-        <ServicesView map={services.data} onApp={setService} />
-      ) : (
-        <Empty title={q ? "No services match" : "No services yet"}>
-          Databases, caches, mail servers and brokers appear here after the first call that uses them.
-        </Empty>
-      )
-    ) : (
-      <Loading />
-    );
-  } else if (system) {
-    body = (
-      <>
-        <SystemTiles system={system} q={q} source={source} onFailed={() => refine({ failed: "true" })} />
-        {listBody(
-          stats.data,
-          (items) => (
-            <CallsTable items={items} source={source} open={open ?? null} onOpen={setOpen} />
-          ),
-          <Empty title={`No ${meta.noun ?? "operations"} match`}>Try a broader search, or another filter.</Empty>,
-        )}
-      </>
-    );
-  } else {
-    body = listBody(
-      issues.data,
-      (items) => <IssuesTable items={items} />,
-      <Empty title={`No ${section} match`}>Try a broader search.</Empty>,
-    );
-  }
+  const body = pageBody({ section, system, q, open, source, noun: meta.noun, data, refine, setOpen, setService });
 
   // Services and Database are summaries: they change slowly, so they refresh on demand, not on a timer.
   return (

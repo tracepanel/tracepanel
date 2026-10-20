@@ -3,7 +3,7 @@ import { Children, type CSSProperties, type ReactNode, type RefObject, useEffect
 import { Card } from "./components/ui/card";
 import { duration } from "./format";
 import { cn } from "./lib/utils";
-import type { HistogramBucket, SeriesBucket } from "./types";
+import type { HistogramBucket, LogBucket, SeriesBucket } from "./types";
 
 // Series colors are theme tokens (--dt-chart-1/2), validated with the dataviz palette checker on each theme's
 // surface: lightness band, chroma, CVD and normal-vision separation, contrast — all pass.
@@ -98,9 +98,19 @@ function Frame({
   );
 }
 
-function AxisY({ max, width, format }: { max: number; width: number; format: (value: number) => string }) {
-  const ticks = [0, 0.25, 0.5, 0.75, 1];
-  const plot = HEIGHT - PAD.top - PAD.bottom;
+function AxisY({
+  max,
+  width,
+  format,
+  height = HEIGHT,
+}: {
+  max: number;
+  width: number;
+  format: (value: number) => string;
+  height?: number;
+}) {
+  const ticks = height < HEIGHT ? [0, 0.5, 1] : [0, 0.25, 0.5, 0.75, 1];
+  const plot = height - PAD.top - PAD.bottom;
   return (
     <g className="[&_line]:stroke-(--dt-grid) [&_text]:fill-muted-foreground [&_text]:text-xs [&_text]:tabular-nums">
       {ticks.map((tick) => {
@@ -118,17 +128,25 @@ function AxisY({ max, width, format }: { max: number; width: number; format: (va
   );
 }
 
-function AxisX({ series, width }: { series: Series; width: number }) {
+function AxisX({
+  series,
+  width,
+  height = HEIGHT,
+}: {
+  series: readonly { start: number; end: number }[];
+  width: number;
+  height?: number;
+}) {
   const first = series[0];
   const last = series.at(-1);
   if (!first || !last) return null;
   const seconds = last.end - first.start < SHORT_RANGE_US;
   return (
     <g className="[&_line]:stroke-(--dt-grid) [&_text]:fill-muted-foreground [&_text]:text-xs [&_text]:tabular-nums">
-      <text x={PAD.left} y={HEIGHT - 6}>
+      <text x={PAD.left} y={height - 6}>
         {clock(first.start, seconds)}
       </text>
-      <text x={width - PAD.right} y={HEIGHT - 6} textAnchor="end">
+      <text x={width - PAD.right} y={height - 6} textAnchor="end">
         {clock(last.end, seconds)}
       </text>
     </g>
@@ -330,6 +348,19 @@ export function LatencyChart({ series }: { series: Series }) {
   );
 }
 
+/** Where a bar chart's bars go: the plot's height, a slot per bar, a bar's width, the baseline, and which bar a
+ * pointer is over. */
+function barLayout(width: number, height: number, count: number) {
+  const plotW = width - PAD.left - PAD.right;
+  const plotH = height - PAD.top - PAD.bottom;
+  const slot = plotW / Math.max(count, 1);
+  const indexAt = (event: React.PointerEvent<SVGSVGElement>) => {
+    const box = event.currentTarget.getBoundingClientRect();
+    return Math.min(Math.max(Math.floor((event.clientX - box.left - PAD.left) / slot), 0), count - 1);
+  };
+  return { plotH, slot, barW: Math.max(Math.min(slot - 2, 18), 2), base: PAD.top + plotH, indexAt };
+}
+
 /* ---------- calls over time: bars, errors stacked on top; drag to pick a time range ---------- */
 
 interface CallsChartProps {
@@ -373,15 +404,7 @@ export function CallsChart({
         const visible = (bucket: Series[number]) =>
           (showOk ? bucket.calls - bucket.errors : 0) + (showErrors ? bucket.errors : 0);
         const max = niceCount(Math.max(...series.map(visible), 1));
-        const plotW = width - PAD.left - PAD.right;
-        const plotH = HEIGHT - PAD.top - PAD.bottom;
-        const slot = plotW / Math.max(series.length, 1);
-        const barW = Math.max(Math.min(slot - 2, 18), 2);
-        const base = PAD.top + plotH;
-        const indexAt = (event: React.PointerEvent<SVGSVGElement>) => {
-          const box = event.currentTarget.getBoundingClientRect();
-          return Math.min(Math.max(Math.floor((event.clientX - box.left - PAD.left) / slot), 0), series.length - 1);
-        };
+        const { plotH, slot, barW, base, indexAt } = barLayout(width, HEIGHT, series.length);
         const low = drag ? Math.min(drag.from, drag.to) : 0;
         const high = drag ? Math.max(drag.from, drag.to) : 0;
         return (
@@ -474,6 +497,200 @@ export function CallsChart({
         );
       }}
     </Frame>
+  );
+}
+
+/* ---------- log records over time: a bar per slice, its levels stacked; drag to pick a time range ---------- */
+
+/** The levels from the bottom of a bar up, each in the color its records' dot has in the table. */
+const LOG_LEVELS: readonly (LegendItem & { levels: readonly string[] })[] = [
+  { key: "debug", label: "debug", className: "bg-muted-foreground/50", levels: ["debug"] },
+  { key: "info", label: "info", className: "bg-info", levels: ["info"] },
+  { key: "warning", label: "warning", className: "bg-warn", levels: ["warning"] },
+  { key: "error", label: "error", className: "bg-error", levels: ["error", "critical"] },
+];
+
+const FILL: Record<string, string> = {
+  debug: "fill-muted-foreground/50",
+  info: "fill-info",
+  warning: "fill-warn",
+  error: "fill-error",
+};
+
+/** The records of a slice in each level the legend shows, bottom up. */
+function stacked(bucket: LogBucket, hidden: ReadonlySet<string>): { key: string; count: number }[] {
+  return LOG_LEVELS.filter((level) => !hidden.has(level.key)).map((level) => ({
+    key: level.key,
+    count: level.levels.reduce((sum, name) => sum + (bucket.levels[name] ?? 0), 0),
+  }));
+}
+
+/** A slice's tooltip: its time, then its records by level. */
+function LogTip({ bucket }: { bucket: LogBucket }) {
+  return (
+    <>
+      <b>
+        {clock(bucket.start, true)}–{clock(bucket.end, true)}
+      </b>
+      <span>
+        {bucket.count} {bucket.count === 1 ? "record" : "records"}
+      </span>
+      {stacked(bucket, new Set()).map(({ key, count }) =>
+        count > 0 ? (
+          <span key={key} className={key === "error" ? "text-error" : key === "warning" ? "text-warn" : undefined}>
+            {count} {key}
+          </span>
+        ) : null,
+      )}
+    </>
+  );
+}
+
+/** Picking slices by dragging across them: the indexes from and to, while the pointer is down. */
+function useBrush(count: number, onSelect: ((low: number, high: number) => void) | undefined) {
+  const [drag, setDrag] = useState<{ from: number; to: number } | null>(null);
+  const low = drag ? Math.min(drag.from, drag.to) : 0;
+  const high = drag ? Math.max(drag.from, drag.to) : 0;
+  const handlers = (indexAt: (event: React.PointerEvent<SVGSVGElement>) => number) =>
+    onSelect === undefined || count === 0
+      ? {}
+      : {
+          onPointerDown: (event: React.PointerEvent<SVGSVGElement>) => {
+            if (event.button !== 0) return;
+            event.currentTarget.setPointerCapture(event.pointerId);
+            const index = indexAt(event);
+            setDrag({ from: index, to: index });
+          },
+          onPointerMove: (event: React.PointerEvent<SVGSVGElement>) => {
+            if (drag) setDrag({ from: drag.from, to: indexAt(event) });
+          },
+          onPointerUp: () => {
+            if (drag) onSelect(low, high);
+            setDrag(null);
+          },
+          onPointerCancel: () => setDrag(null),
+        };
+  return { drag: drag !== null, low, high, handlers };
+}
+
+const LOG_HEIGHT = 132;
+
+/**
+ * Log records over time: a bar per slice of the period, its levels stacked, debug at the bottom and errors on top.
+ * A level hides from the legend; with `onSelect`, a drag across the bars picks their time range [start, end) in µs.
+ */
+export function LogsChart({
+  series,
+  onSelect,
+}: {
+  series: readonly LogBucket[];
+  onSelect?: ((start: number, end: number) => void) | undefined;
+}) {
+  const [hidden, toggle] = useSeriesToggle();
+  const brush = useBrush(
+    series.length,
+    onSelect &&
+      ((low, high) => {
+        const first = series[low];
+        const last = series[high];
+        if (first && last) onSelect(first.start, last.end);
+      }),
+  );
+  const legend = (
+    <Legend
+      items={LOG_LEVELS}
+      hidden={hidden}
+      onToggle={toggle}
+      extra={onSelect ? <span className="pl-1.5 font-normal">drag to zoom</span> : null}
+    />
+  );
+  return (
+    <Frame title="Records over time" legend={legend}>
+      {(width, setHover) => {
+        const total = (bucket: LogBucket) => stacked(bucket, hidden).reduce((sum, level) => sum + level.count, 0);
+        const max = niceCount(Math.max(...series.map(total), 1));
+        const { plotH, slot, barW, base, indexAt } = barLayout(width, LOG_HEIGHT, series.length);
+        return (
+          <svg
+            width={width}
+            height={LOG_HEIGHT}
+            role="img"
+            aria-label="Log records over time, by level"
+            data-brush={onSelect ? "" : undefined}
+            {...brush.handlers(indexAt)}
+          >
+            <AxisY max={max} width={width} height={LOG_HEIGHT} format={(value) => String(Math.round(value))} />
+            <AxisX series={series} width={width} height={LOG_HEIGHT} />
+            {brush.drag ? (
+              <rect
+                className="fill-brand/15 stroke-brand/60"
+                x={PAD.left + brush.low * slot}
+                y={PAD.top}
+                width={(brush.high - brush.low + 1) * slot}
+                height={plotH}
+                rx={4}
+              />
+            ) : null}
+            {series.map((bucket, index) => {
+              const left = PAD.left + index * slot + (slot - barW) / 2;
+              return (
+                <LogBar
+                  key={bucket.start}
+                  levels={stacked(bucket, hidden)}
+                  left={left}
+                  width={barW}
+                  base={base}
+                  scale={plotH / max}
+                  onHover={() =>
+                    setHover({
+                      x: left + barW / 2,
+                      y: base - total(bucket) * (plotH / max),
+                      content: <LogTip bucket={bucket} />,
+                    })
+                  }
+                  hitTop={PAD.top}
+                  hitHeight={plotH}
+                />
+              );
+            })}
+          </svg>
+        );
+      }}
+    </Frame>
+  );
+}
+
+/** A slice's bar: its levels stacked bottom up, with a hit area the slice's full height for its tooltip. */
+function LogBar({
+  levels,
+  left,
+  width,
+  base,
+  scale,
+  onHover,
+  hitTop,
+  hitHeight,
+}: {
+  levels: readonly { key: string; count: number }[];
+  left: number;
+  width: number;
+  base: number;
+  scale: number;
+  onHover: () => void;
+  hitTop: number;
+  hitHeight: number;
+}) {
+  let top = base;
+  return (
+    <g onPointerEnter={onHover}>
+      <rect x={left - 2} y={hitTop} width={width + 4} height={hitHeight} fill="transparent" />
+      {levels.map(({ key, count }) => {
+        if (count === 0) return null;
+        const height = Math.max(count * scale, 2);
+        top -= height;
+        return <rect key={key} x={left} y={top} width={width} height={height} rx={1.5} className={FILL[key]} />;
+      })}
+    </g>
   );
 }
 

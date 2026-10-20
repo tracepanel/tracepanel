@@ -55,6 +55,10 @@
   adds this call and any call of its kind to this request, logger and path.
   Its fields are a compact list, the same as a request's headers, with their
   buttons lined up.
+- Logs: the records over time sit above the table, a bar per slice of the
+  period, its levels stacked. A level hides from the legend, and a drag
+  across the bars narrows the search to that time, as the calls' chart does.
+  `GET /api/logs/series?q=` gives the counts by level.
 - The console's filter buttons (Time, Level, Route…) are smaller, to sit
   with the denser tables.
 

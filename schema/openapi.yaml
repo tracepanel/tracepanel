@@ -132,6 +132,27 @@ paths:
                   logs: { type: array, items: { $ref: "#/components/schemas/LogRow" } }
                   next: { $ref: "#/components/schemas/Cursor" }
         "400": { $ref: "#/components/responses/BadSearch" }
+  /logs/series:
+    get:
+      operationId: logSeries
+      summary: How many log records matching a search were logged over time, by level.
+      description: >-
+        60 slices of the period the search's since: and until: give, else of the records' own (at least ten minutes,
+        up to the last one). Each slice counts its records, in all and by level.
+      parameters:
+        - $ref: "#/components/parameters/q"
+      responses:
+        "200":
+          description: The series.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [series]
+                additionalProperties: false
+                properties:
+                  series: { type: array, items: { $ref: "#/components/schemas/LogBucket" } }
+        "400": { $ref: "#/components/responses/BadSearch" }
   /mails:
     get:
       operationId: searchMails
@@ -896,6 +917,18 @@ components:
         slow: { type: integer }
         p50: { type: [integer, "null"] }
         p95: { type: [integer, "null"] }
+    LogBucket:
+      type: object
+      additionalProperties: false
+      required: [start, end, count, levels]
+      properties:
+        start: { $ref: "#/components/schemas/Time" }
+        end: { $ref: "#/components/schemas/Time" }
+        count: { type: integer }
+        levels:
+          type: object
+          description: Records by level (debug, info, warning, error, critical); a level with none is left out.
+          additionalProperties: { type: integer }
     HistogramBucket:
       type: object
       additionalProperties: false

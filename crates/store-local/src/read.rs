@@ -72,6 +72,24 @@ pub enum ReadError {
     Store(rusqlite::Error),
 }
 
+/// The window a log series spans: [start, end] as asked or as the records lie; without a start asked for, at least
+/// ten minutes up to the end, so a burst of records still has a span to stand in.
+fn log_window(start: Option<i64>, end: Option<i64>, asked: bool) -> Option<(i64, i64)> {
+    const MIN_WINDOW_US: i64 = 10 * 60 * 1_000_000;
+    let (start, end) = (start?, end?);
+    if end < start {
+        return None;
+    }
+    Some((
+        if asked {
+            start
+        } else {
+            start.min(end - MIN_WINDOW_US)
+        },
+        end,
+    ))
+}
+
 impl From<rusqlite::Error> for ReadError {
     fn from(error: rusqlite::Error) -> Self {
         Self::Store(error)
@@ -642,6 +660,64 @@ impl Reader {
         }
         tx.commit()?;
         Ok(count)
+    }
+
+    /// How many records matching `query` were logged in each of `buckets` slices of time, by level: the period the
+    /// query's since:/until: give, else the records' own (at least ten minutes, up to the last one).
+    pub fn log_series(&self, query: &str, buckets: i64) -> Result<Value, ReadError> {
+        let db = self.connect()?;
+        let fts = db.query_row(
+            "SELECT count(*) FROM sqlite_master WHERE name = 'logs_fts'",
+            [],
+            |row| row.get::<_, i64>(0),
+        )? > 0;
+        let (condition, params) = search::compile_where(query, &log_search(fts))?;
+        let from = format!("FROM logs JOIN traces ON traces.id = logs.trace_id WHERE {condition}");
+        let (first, last): (Option<i64>, Option<i64>) = db.query_row(
+            &format!("SELECT min(logs.time), max(logs.time) {from}"),
+            rusqlite::params_from_iter(params.iter()),
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+        let (since, until) = search::period(query, search::now_us());
+        let Some((start, end)) = log_window(since.or(first), until.or(last), since.is_some())
+        else {
+            return Ok(serde_json::json!({"series": []}));
+        };
+        let buckets = buckets.max(1);
+        let width = ((end - start) / buckets + 1).max(1);
+        let mut counts: Vec<serde_json::Map<String, Value>> =
+            vec![serde_json::Map::new(); buckets as usize];
+        let mut query_params = vec![Sql::Integer(start), Sql::Integer(width)];
+        query_params.extend(params);
+        let mut statement = db.prepare(&format!(
+            "SELECT (logs.time - ?) / ? AS bucket, logs.level, count(*) {from} GROUP BY bucket, logs.level"
+        ))?;
+        let rows = statement.query_map(rusqlite::params_from_iter(query_params.iter()), |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, i64>(2)?,
+            ))
+        })?;
+        for row in rows {
+            let (bucket, level, count) = row?;
+            if let Some(levels) = usize::try_from(bucket)
+                .ok()
+                .and_then(|at| counts.get_mut(at))
+            {
+                levels.insert(level, Value::from(count));
+            }
+        }
+        let series: Vec<Value> = counts
+            .into_iter()
+            .enumerate()
+            .map(|(index, levels)| {
+                let low = start + index as i64 * width;
+                let total: i64 = levels.values().filter_map(Value::as_i64).sum();
+                serde_json::json!({"start": low, "end": low + width, "count": total, "levels": levels})
+            })
+            .collect();
+        Ok(serde_json::json!({"series": series}))
     }
 
     pub fn search_logs(

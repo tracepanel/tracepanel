@@ -193,3 +193,21 @@ test("an attribute of an opened record becomes a column from there, and its head
 
   await expect(header(page, key)).toHaveCount(0);
 });
+
+test("the records over time sit above the table, by level, and a drag across them narrows the search to that time", async ({
+  page,
+}) => {
+  await page.goto("/#/logs");
+  const chart = page.getByRole("img", { name: "Log records over time, by level" });
+  await expect(chart).toBeVisible();
+  await expect(page.getByRole("button", { name: "error", exact: true, pressed: true })).toBeVisible();
+
+  const box = await chart.boundingBox();
+  if (!box) throw new Error("no chart");
+  await page.mouse.move(box.x + box.width * 0.2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.9, box.y + box.height / 2, { steps: 5 });
+  await page.mouse.up();
+
+  await expect(page).toHaveURL(/since(%3A|:).*until(%3A|:)/);
+});

@@ -13,6 +13,7 @@ import type {
   IssueRow,
   JobRow,
   KnownValues,
+  LogBucket,
   LogRow,
   MailRow,
   Page,
@@ -54,6 +55,8 @@ export interface DataSource {
   searchTraces(q: string, before?: number | null): Promise<Page<TraceSummary>>;
   getTrace(id: string): Promise<Trace | null>;
   searchLogs(q: string, before?: number | null): Promise<Page<LogRow>>;
+  /** How many records the search finds over time, by level; a source without it shows no chart. */
+  logSeries?(q: string): Promise<LogBucket[]>;
   searchMails(q: string, before?: number | null): Promise<Page<MailRow>>;
   /** One system's calls (`sql`, `redis`, `http`, `mongodb`, `neo4j`…) by what they repeat, heaviest first. */
   listCalls(system: string, q: string): Promise<CallRow[]>;
@@ -156,6 +159,10 @@ export function httpSource(base: string | URL): DataSource {
     async searchLogs(q, before) {
       const body = await getJson<{ logs: LogRow[]; next: number | null }>(url("logs", { q, before }));
       return { items: body?.logs ?? [], next: body?.next ?? null };
+    },
+    async logSeries(q) {
+      const body = await getJson<{ series: LogBucket[] }>(url("logs/series", { q }));
+      return body?.series ?? [];
     },
     async searchMails(q, before) {
       const body = await getJson<{ mails: MailRow[]; next: number | null }>(url("mails", { q, before }));
