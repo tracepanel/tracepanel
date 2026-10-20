@@ -215,3 +215,23 @@ test("the records over time sit above the table, by level, and a drag across the
   // The range rounds out to whole seconds: a record in the last second is not cut off.
   await expect(rows(page)).toHaveCount(before);
 });
+
+test("the records over time fold to their title, and stay folded after a reload", async ({ page }) => {
+  await page.goto("/#/logs");
+  const chart = page.getByRole("img", { name: "Log records over time, by level" });
+  const title = page.getByRole("button", { name: "Records over time" });
+  await expect(chart).toBeVisible();
+
+  await title.click();
+
+  await expect(chart).toHaveCount(0);
+  await expect(title).toHaveAttribute("aria-expanded", "false");
+
+  await page.reload();
+
+  await expect(chart).toHaveCount(0);
+
+  await title.click();
+
+  await expect(chart).toBeVisible();
+});

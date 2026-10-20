@@ -262,16 +262,16 @@ function DragLabel({ id, label, movable }: { id: string; label: string; movable:
         event.dataTransfer.setData(DRAGGED, id);
         event.dataTransfer.effectAllowed = "move";
       }}
-      className={cn("block truncate", movable && "cursor-grab active:cursor-grabbing")}
+      className={cn("flex min-w-0 items-center", movable && "cursor-grab active:cursor-grabbing")}
     >
-      {/* A grip on hover: the name can be dragged onto another header. */}
+      {/* A grip on hover, in the line: it opens room for itself rather than covering the name. */}
       {movable ? (
         <GripVerticalIcon
           aria-hidden="true"
-          className="absolute top-1/2 left-0 size-3 -translate-y-1/2 text-muted-foreground opacity-0 transition-opacity group-hover/head:opacity-70"
+          className="size-3 w-0 shrink-0 text-muted-foreground opacity-0 transition-all group-hover/head:mr-1 group-hover/head:w-3 group-hover/head:opacity-70"
         />
       ) : null}
-      {label}
+      <span className="truncate">{label}</span>
     </span>
   );
 }

@@ -1,7 +1,9 @@
+import { ChevronDownIcon } from "lucide-react";
 import type React from "react";
 import { Children, type CSSProperties, type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
 import { Card } from "./components/ui/card";
 import { duration } from "./format";
+import { useStored } from "./hooks/useStored";
 import { cn } from "./lib/utils";
 import type { HistogramBucket, LogBucket, SeriesBucket } from "./types";
 
@@ -73,27 +75,70 @@ function Tooltip({ hover }: { hover: Hover | null }) {
   );
 }
 
+/** A chart's folding: whether it is folded to its title, and what folds or unfolds it. */
+interface Folding {
+  folded: boolean;
+  onFold: (folded: boolean) => void;
+}
+
+/** A chart's title: with `folding`, a button that folds the chart to it and opens it again. */
+function FrameTitle({ title, folding }: { title: string; folding: Folding | undefined }) {
+  if (!folding) return <span>{title}</span>;
+  return (
+    <button
+      type="button"
+      aria-expanded={!folding.folded}
+      onClick={() => folding.onFold(!folding.folded)}
+      className="-ml-1 inline-flex items-center gap-1 rounded-md px-1 hover:bg-accent"
+    >
+      <ChevronDownIcon
+        aria-hidden="true"
+        className={cn("size-4 text-muted-foreground transition-transform", folding.folded && "-rotate-90")}
+      />
+      {title}
+    </button>
+  );
+}
+
+type Plot = (width: number, setHover: (hover: Hover | null) => void) => ReactNode;
+
+/** The chart, mounted only while it is open: it measures its width as it mounts. */
+function FoldedPlot({ folded, children }: { folded: boolean; children: Plot }) {
+  return folded ? null : <FramePlot>{children}</FramePlot>;
+}
+
+/** The chart itself, with its tooltip. */
+function FramePlot({ children }: { children: Plot }) {
+  const [ref, width] = useWidth();
+  const [hover, setHover] = useState<Hover | null>(null);
+  return (
+    <div className="relative [&_svg]:block [&_svg]:overflow-visible" ref={ref} onPointerLeave={() => setHover(null)}>
+      {children(width, setHover)}
+      <Tooltip hover={hover} />
+    </div>
+  );
+}
+
 function Frame({
   title,
   legend,
+  folding,
   children,
 }: {
   title: string;
   legend?: ReactNode;
+  /** The chart folds to its title from there, as the page keeps it. */
+  folding?: Folding | undefined;
   children: (width: number, setHover: (hover: Hover | null) => void) => ReactNode;
 }) {
-  const [ref, width] = useWidth();
-  const [hover, setHover] = useState<Hover | null>(null);
+  const folded = folding?.folded === true;
   return (
-    <Card className="m-0 gap-2 rounded-xl px-5 pt-4 pb-3 shadow-none">
+    <Card className={cn("m-0 gap-2 rounded-xl px-5 pt-4 pb-3 shadow-none", folded && "py-2.5")}>
       <div className="flex items-center justify-between gap-3 text-md font-semibold">
-        <span>{title}</span>
-        {legend}
+        <FrameTitle title={title} folding={folding} />
+        {folded ? null : legend}
       </div>
-      <div className="relative [&_svg]:block [&_svg]:overflow-visible" ref={ref} onPointerLeave={() => setHover(null)}>
-        {children(width, setHover)}
-        <Tooltip hover={hover} />
-      </div>
+      <FoldedPlot folded={folded}>{children}</FoldedPlot>
     </Card>
   );
 }
@@ -584,6 +629,8 @@ const LOG_HEIGHT = 132;
  * Log records over time: a bar per slice of the period, its levels stacked, debug at the bottom and errors on top.
  * A level hides from the legend; with `onSelect`, a drag across the bars picks their time range [start, end) in µs.
  */
+const readFolded = (raw: unknown): boolean => raw === true;
+
 export function LogsChart({
   series,
   onSelect,
@@ -592,6 +639,8 @@ export function LogsChart({
   onSelect?: ((start: number, end: number) => void) | undefined;
 }) {
   const [hidden, toggle] = useSeriesToggle();
+  // Folded to its title, as this browser last left it: room for more records.
+  const [folded, setFolded] = useStored("tracepanel:logs:chart-folded", readFolded);
   const brush = useBrush(
     series.length,
     onSelect &&
@@ -610,7 +659,7 @@ export function LogsChart({
     />
   );
   return (
-    <Frame title="Records over time" legend={legend}>
+    <Frame title="Records over time" legend={legend} folding={{ folded, onFold: setFolded }}>
       {(width, setHover) => {
         const total = (bucket: LogBucket) => stacked(bucket, hidden).reduce((sum, level) => sum + level.count, 0);
         const max = niceCount(Math.max(...series.map(total), 1));
@@ -647,11 +696,16 @@ export function LogsChart({
                   base={base}
                   scale={plotH / max}
                   onHover={() =>
-                    setHover({
-                      x: left + barW / 2,
-                      y: base - total(bucket) * (plotH / max),
-                      content: <LogTip bucket={bucket} />,
-                    })
+                    // An empty slice has nothing to say.
+                    setHover(
+                      bucket.count > 0
+                        ? {
+                            x: left + barW / 2,
+                            y: base - total(bucket) * (plotH / max),
+                            content: <LogTip bucket={bucket} />,
+                          }
+                        : null,
+                    )
                   }
                   hitTop={PAD.top}
                   hitHeight={plotH}

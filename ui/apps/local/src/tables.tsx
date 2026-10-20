@@ -466,6 +466,7 @@ const LOG_COLUMNS: LogColumn<LogRow>[] = [
         path={log.path}
         name={log.trace_name}
         className="max-w-none"
+        compact={true}
       />
     ),
   },
@@ -936,6 +937,7 @@ function SourceCell({
   path,
   name,
   className,
+  compact = false,
 }: {
   kind: TraceSummary["kind"];
   htmx: TraceSummary["htmx"];
@@ -944,23 +946,48 @@ function SourceCell({
   name: string;
   /** `max-w-none` in a column of a fixed width, which holds the limit itself. */
   className?: string;
+  /** The size of a dense table's cells (the logs'): the badge and the path at the text's size. */
+  compact?: boolean;
 }) {
   const operation = graphqlOperation({ kind, name });
   return (
     // A table cell ignores max-width: the cell's content holds the limit, so a long task name truncates.
-    <span className={cn("flex max-w-[21.25rem] min-w-0 items-center gap-2", className)}>
-      {operation ? (
-        <KindBadge kind="graphql" />
-      ) : kind === "http" ? (
-        <MethodBadge method={method} htmx={htmx} />
-      ) : (
-        <KindBadge kind={kind} />
+    <span
+      className={cn(
+        "flex max-w-[21.25rem] min-w-0 items-center gap-2",
+        compact &&
+          "gap-1.5 [&_.dt-method]:min-w-0 [&_.dt-method]:px-1 [&_.dt-method]:text-2xs [&_[data-slot=badge]]:h-4",
+        className,
       )}
-      <Mono className="truncate text-base">
-        {operation ?? (kind === "http" ? (path ?? name) : kind === "websocket" ? name.replace(/^WS /, "") : name)}
+    >
+      <SourceBadge kind={kind} graphql={operation !== null} method={method} htmx={htmx} />
+      <Mono className={cn("truncate", compact ? "text-xs" : "text-base")}>
+        {operation ?? sourceText(kind, path, name)}
       </Mono>
     </span>
   );
+}
+
+/** What a source is, at its start: an HTTP request's method, else its kind (a task, a job, a GraphQL operation). */
+function SourceBadge({
+  kind,
+  graphql,
+  method,
+  htmx,
+}: {
+  kind: TraceSummary["kind"];
+  graphql: boolean;
+  method: string | null;
+  htmx: TraceSummary["htmx"];
+}) {
+  if (graphql) return <KindBadge kind="graphql" />;
+  return kind === "http" ? <MethodBadge method={method} htmx={htmx} /> : <KindBadge kind={kind} />;
+}
+
+/** A source's text: a request's path, a WebSocket's without its "WS ", anything else its name. */
+function sourceText(kind: TraceSummary["kind"], path: string | null, name: string): string {
+  if (kind === "http") return path ?? name;
+  return kind === "websocket" ? name.replace(/^WS /, "") : name;
 }
 
 export function KindBadge({ kind }: { kind: string }) {

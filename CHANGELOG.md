@@ -59,7 +59,8 @@
 - Logs: the records over time sit above the table, a bar per slice of the
   period, its levels stacked. A level hides from the legend, and a drag
   across the bars narrows the search to that time, as the calls' chart does.
-  `GET /api/logs/series?q=` gives the counts by level.
+  `GET /api/logs/series?q=` gives the counts by level. The chart folds to its
+  title, and the browser keeps it folded.
 - The console's filter buttons (Time, Level, Route…) are smaller, to sit
   with the denser tables.
 
