@@ -1,18 +1,21 @@
 import {
+  CallsChart,
   type DataSource,
   duration,
+  LatencyChart,
   MethodBadge,
   type OperationStats,
   type TracesOverview as Overview,
   percent,
   RoutePath,
   SearchError,
+  Stat,
+  StatGrid,
 } from "@tracepanel/ui";
 import { Badge } from "@tracepanel/ui/components/ui/badge";
 import { Card } from "@tracepanel/ui/components/ui/card";
 import { ChevronRightIcon } from "lucide-react";
 import { useEffect, useState } from "react";
-import { CallsChart, LatencyChart, Stat, StatGrid } from "./Charts";
 import { track, useRefresh } from "./refresh";
 import { currentPeriod, endpointGroup, groupRoute, href, withPeriod } from "./routes";
 import { BY_NAME } from "./sections";

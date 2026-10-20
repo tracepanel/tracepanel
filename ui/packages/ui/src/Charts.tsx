@@ -1,8 +1,9 @@
-import { duration, type HistogramBucket, type SeriesBucket } from "@tracepanel/ui";
-import { Card } from "@tracepanel/ui/components/ui/card";
-import { cn } from "@tracepanel/ui/lib/utils";
 import type React from "react";
 import { Children, type CSSProperties, type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
+import { Card } from "./components/ui/card";
+import { duration } from "./format";
+import { cn } from "./lib/utils";
+import type { HistogramBucket, SeriesBucket } from "./types";
 
 // Series colors are theme tokens (--dt-chart-1/2), validated with the dataviz palette checker on each theme's
 // surface: lightness band, chroma, CVD and normal-vision separation, contrast — all pass.
