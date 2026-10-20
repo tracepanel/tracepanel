@@ -216,3 +216,108 @@ test("with requests from one app only, the rows name no app", async ({ page }) =
   await expect(rows).toHaveCount(2);
   await expect(rows.locator(".dt-app-chip")).toHaveCount(0);
 });
+
+test("a form's POST that redirected heads the page it led to: the app names it in a cookie, read once", async ({
+  page,
+  context,
+}) => {
+  await context.addCookies([
+    { name: "tracepanel_redirect", value: await traceId("POST /accounts/login/"), url: CONSOLE },
+  ]);
+  await openApp(
+    page,
+    {},
+    {
+      server: {
+        status: 200,
+        trace: await traceId("GET /"),
+        queries: 154,
+        totalMs: 27,
+        runtime: "Python 3.11 · Django 5.2",
+      },
+    },
+  );
+  await pill(page).click();
+  const rows = panel(page).getByRole("region", { name: "Pages and requests in this browser tab" }).getByRole("button");
+
+  await expect(rows.nth(0)).toHaveText(/^POST\s*\/accounts\/login\/.*302/);
+  await expect(rows.nth(1)).toHaveText(/^GET\s*\//);
+  expect((await context.cookies()).map((cookie) => cookie.name)).not.toContain("tracepanel_redirect");
+});
+
+test("in the panel, the Request tab heads with the request at a glance", async ({ page }) => {
+  await openApp(page, { posts: await posts() });
+  await page.getByRole("button", { name: "Load posts" }).click();
+  await pill(page).click();
+  await panel(page)
+    .getByRole("tab", { name: /^Request/ })
+    .click();
+
+  await expect(panel(page).locator(".dt-tabpanel header")).toContainText(/GET\s*\/api\/posts\s*200/);
+});
+
+test("docked at the bottom, the panel leaves room to scroll to the page's end, even where the root is as tall as the window", async ({
+  page,
+}) => {
+  await openApp(page, { posts: await posts() });
+  // As Django's admin: html, body and a wrapper the window's height, the content overflowing them.
+  await page.evaluate(() => {
+    document.documentElement.style.height = "100%";
+    document.body.style.cssText = "height: 100%; margin: 0";
+    const wrapper = document.createElement("div");
+    wrapper.style.height = "100%";
+    wrapper.innerHTML = '<div style="height: 3000px"></div><p id="end">The end</p>';
+    document.body.prepend(wrapper);
+  });
+  await pill(page).click();
+  await expect(page.locator("iframe")).toBeVisible();
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  const end = await page.locator("#end").boundingBox();
+  const top = await page.locator("iframe").boundingBox();
+
+  expect(end && top && end.y + end.height <= top.y).toBe(true);
+});
+
+test("Profile sits with Follow new and Clear; on, it lights, sets the cookie that profiles each request, and says so", async ({
+  page,
+  context,
+}) => {
+  await page.route("**/api/capabilities", (route) =>
+    route.fulfill({ json: { explain: false, users: false, profile: true, request: true } }),
+  );
+  await openApp(page, { posts: await posts() });
+  await page.getByRole("button", { name: "Load posts" }).click();
+  await pill(page).click();
+  const controls = panel(page)
+    .locator("span")
+    .filter({ has: panel(page).getByText("Follow new") })
+    .filter({ has: panel(page).getByRole("button", { name: /^Clear/ }) })
+    .last();
+
+  await controls.getByRole("button", { name: "Profile new requests" }).click();
+  const on = panel(page).getByRole("button", { name: "Profiling is on" });
+
+  await expect(on).toHaveAttribute("aria-pressed", "true");
+  expect((await context.cookies()).find((cookie) => cookie.name === "tracepanel_profile")?.value).toBe("1");
+
+  // After a click, a hint opens once the pointer comes back to its button.
+  await panel(page).getByText("Follow new").hover();
+  await on.hover();
+
+  await expect(panel(page).getByRole("tooltip")).toContainText("Every request this browser makes is profiled");
+});
+
+test("Console opens the request in the full console, and its hint says so", async ({ page }) => {
+  const call = await posts();
+  await openApp(page, { posts: call });
+  await page.getByRole("button", { name: "Load posts" }).click();
+  await pill(page).click();
+  const console = panel(page).getByRole("link", { name: /Console/ });
+
+  await expect(console).toHaveAttribute("href", new RegExp(`#/t/${call.trace}`));
+  await expect(console).toHaveAttribute("target", "_blank");
+
+  await console.hover();
+
+  await expect(panel(page).getByRole("tooltip")).toContainText("This request in the full console, in a new tab");
+});

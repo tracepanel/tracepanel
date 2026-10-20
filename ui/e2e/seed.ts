@@ -195,8 +195,6 @@ function messages(): Doc[] {
   return [announce, ...delivered];
 }
 
-// biome-ignore-end lint/style/useNamingConvention: traces as the SDKs send them; their field names are the wire format.
-
 /** A task a worker ran and a job a command ran: the Tasks and Jobs sections. */
 function background(): Doc[] {
   const worker = { "service.name": "shop", "service.role": "worker", "telemetry.sdk.language": "python" };
@@ -318,8 +316,121 @@ function late(): Doc {
   });
 }
 
+const SHOP = { "service.name": "shop", "telemetry.sdk.language": "python" };
+
+/**
+ * A sign-in form's POST, answered with a redirect, as the Python SDK records what a request carried: its headers
+ * (the browser's own among them), query, form body, cookies, session, and the response's headers.
+ */
+function signIn(): Doc {
+  return trace("http", "POST /accounts/login/", {
+    ...SHOP,
+    "http.method": "POST",
+    "http.path": "/accounts/login/",
+    "http.route": "/accounts/login/",
+    "http.status_code": 302,
+    "code.view": "accounts.views.login",
+    "url.query": "next=/orders/",
+    "http.request.header.host": "127.0.0.1:8000",
+    "http.request.header.origin": "http://127.0.0.1:8000",
+    "http.request.header.content_type": "application/x-www-form-urlencoded",
+    "http.request.header.accept": "text/html",
+    "http.request.header.accept_language": "en-GB",
+    "http.request.header.user_agent": "Mozilla/5.0",
+    "http.request.header.sec_fetch_mode": "navigate",
+    "http.request.body": "csrfmiddlewaretoken=********&username=ann&password=********",
+    "http.request.cookie.csrftoken": "********",
+    "http.request.cookie.theme": "dark",
+    "session._auth_user_id": "7",
+    "http.response.header.location": "/orders/",
+    "http.response.header.set_cookie": "********",
+  });
+}
+
+/** A request profiled by its sampler: most of its time in the ORM, under a function of the project's own. */
+function profiled(): Doc {
+  const frame = (fn: string, module: string, file: string, line: number, inApp: boolean) => ({
+    function: fn,
+    module,
+    file,
+    line,
+    in_app: inApp,
+  });
+  return trace(
+    "http",
+    "GET /reports/sales",
+    {
+      ...SHOP,
+      "http.method": "GET",
+      "http.path": "/reports/sales",
+      "http.route": "/reports/sales",
+      "http.status_code": 200,
+    },
+    {
+      duration: 120_000,
+      profile: {
+        interval_us: 1_000,
+        samples: 100,
+        frames: [
+          frame("WSGIHandler.__call__", "django.core.handlers.wsgi", "django/core/handlers/wsgi.py", 124, false),
+          frame("sales", "reports.views", "reports/views.py", 18, true),
+          frame("totals", "reports.queries", "reports/queries.py", 42, true),
+          frame(
+            "SQLCompiler.execute_sql",
+            "django.db.models.sql.compiler",
+            "django/db/models/sql/compiler.py",
+            1574,
+            false,
+          ),
+          frame("Template.render", "django.template.base", "django/template/base.py", 171, false),
+        ],
+        stacks: [
+          { frames: [0, 1, 2, 3], count: 60 },
+          { frames: [0, 1, 4], count: 30 },
+          { frames: [0, 1], count: 10 },
+        ],
+      },
+    },
+  );
+}
+
+/** A page of a library's own (an admin's list): its queries are made by no code of the project's. */
+function adminList(): Doc {
+  const doc = trace("http", "GET /admin/users/", {
+    ...SHOP,
+    "http.method": "GET",
+    "http.path": "/admin/users/",
+    "http.route": "/admin/users/",
+    "http.status_code": 200,
+  });
+  const id = String(doc["id"]);
+  const count = (index: number, caller: string) => ({
+    id: `${id}C${index}`,
+    parent_id: `${id}R`,
+    kind: "sql",
+    name: "SELECT COUNT auth_user",
+    start: index * 1_000,
+    duration: 500,
+    status: "ok",
+    attrs: {
+      "db.alias": "default",
+      "db.system": "sqlite",
+      "db.statement": 'SELECT COUNT(*) AS "__count" FROM "auth_user"',
+      "code.origin": null,
+      "code.caller": caller,
+    },
+  });
+  (doc["spans"] as Doc[]).push(
+    count(1, "django/core/paginator.py:110 in Paginator.count"),
+    count(2, "django/contrib/admin/views/main.py:320 in ChangeList.get_results"),
+  );
+  return doc;
+}
+
+// biome-ignore-end lint/style/useNamingConvention: traces as the SDKs send them; their field names are the wire format.
+
 export default async function seed(): Promise<void> {
-  const docs = [...examples(), ...pages(), ...background(), ...messages(), report()];
+  const docs = [...examples(), ...pages(), ...background(), ...messages(), report(), signIn(), profiled(), adminList()];
   const first = Date.now() * 1000 - SPREAD_US * (docs.length + 1);
   const moved = docs.map((doc, index) => shift(doc, first + index * SPREAD_US - Number(doc["start"])) as Doc);
   // A trace from an app whose clock is two hours behind, and that went over the limits: the oldest of all, so no list

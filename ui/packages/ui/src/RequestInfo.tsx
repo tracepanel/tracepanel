@@ -190,6 +190,8 @@ export interface RequestInfoProps {
   /** Traces linked to this one (Celery): shown with links when given. */
   related?: Related | undefined;
   links?: TraceLinks | undefined;
+  /** The method, URL, status and time on top of the tab: where the trace's own header is hidden (the panel). */
+  hero?: boolean | undefined;
 }
 
 /** Traces of the same kind and name as one: 36 deliveries to one listener, the first standing for them. */
@@ -311,6 +313,11 @@ function whatRan(trace: Trace): PropRow[] {
   ];
 }
 
+/** Whether the tab heads with the request at a glance: asked for, and a request it is. */
+function heroShown(trace: Trace, wanted: boolean | undefined): boolean {
+  return wanted === true && isRequest(trace);
+}
+
 function isRequest(trace: Trace): boolean {
   return trace.kind !== "task" && typeof trace.attrs["http.path"] === "string";
 }
@@ -347,9 +354,8 @@ function Hero({ trace }: { trace: Trace }) {
 }
 
 /** The request's or run's own fields: what ran (unless the hero shows it), how it went, who made it. */
-function ownRows(trace: Trace): PropRow[] {
+function ownRows(trace: Trace, hero: boolean): PropRow[] {
   const attrs = trace.attrs;
-  const hero = isRequest(trace);
   return [
     ...(trace.kind === "task" ? taskRows(trace) : []),
     ...(hero ? [] : whatRan(trace)),
@@ -375,7 +381,8 @@ function Part({ label, title, children }: { label: string; title: ReactNode; chi
 }
 
 /** Overview of the traced request or task run: what ran, how it went, who caused it; every id copies. */
-export function RequestInfo({ trace, related, links }: RequestInfoProps) {
+export function RequestInfo({ trace, related, links, hero: wanted }: RequestInfoProps) {
+  const hero = heroShown(trace, wanted);
   const document = text(trace.attrs["graphql.document"]);
   // The document is shown formatted in its own part: not again, on one line, among the attributes.
   const { "graphql.document": _, ...rest } = trace.attrs;
@@ -385,8 +392,8 @@ export function RequestInfo({ trace, related, links }: RequestInfoProps) {
   const linked = relatedRows(related, links);
   return (
     <div className="@container grid gap-5 p-4">
-      {isRequest(trace) ? <Hero trace={trace} /> : null}
-      <FactGrid rows={ownRows(trace)} />
+      {hero ? <Hero trace={trace} /> : null}
+      <FactGrid rows={ownRows(trace, hero)} />
       {linked.length ? (
         <Part label="Related traces" title="Related traces">
           <PropTable dense rows={linked} />

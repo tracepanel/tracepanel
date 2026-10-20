@@ -136,9 +136,11 @@ export function RequestParts({ parts }: { parts: readonly Part[] }) {
         onChange={setPicked}
       />
       {open.bare ? (
-        <div role="tabpanel">{open.content}</div>
+        <div role="tabpanel" aria-label={open.label}>
+          {open.content}
+        </div>
       ) : (
-        <div className="overflow-hidden rounded-lg border bg-card" role="tabpanel">
+        <div className="overflow-hidden rounded-lg border bg-card" role="tabpanel" aria-label={open.label}>
           {open.content}
         </div>
       )}

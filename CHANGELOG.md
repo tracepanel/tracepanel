@@ -49,6 +49,12 @@
 - `GET /api/capabilities` says whether a connected app profiles on request
   (`profile`) and records what its requests carry (`request`).
 
+### Fixed
+
+- In the console, the Request tab no longer repeats the method, URL, status
+  and time the trace's own header already shows. The panel, which hides that
+  header, keeps them on top of the tab.
+
 ## 0.3.7 (2026-10-19)
 
 ### Added
