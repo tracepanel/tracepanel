@@ -1109,18 +1109,6 @@ a.dt-request-row {
 .dt-issue-link:hover {
   text-decoration: underline;
 }
-.dt-log-span {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--dt-brand, currentColor);
-  font: inherit;
-  font-size: var(--dt-size-xs);
-  white-space: nowrap;
-}
-.dt-log-span:hover {
-  text-decoration: underline;
-}
 .dt-logs-more {
   margin: 0;
   padding: 0.625rem 1rem 0;
@@ -1276,90 +1264,6 @@ details[data-focused] > .dt-sql-group {
 }
 
 /* ---------- Logs tab ---------- */
-
-.dt-logs {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.dt-log {
-  display: grid;
-  /* The time as a clock (13:49:33.784): as wide as it is, the same in every row. */
-  grid-template-columns: max-content 4rem minmax(0, 1fr) auto auto;
-  gap: 0.625rem;
-  align-items: baseline;
-  padding: 0.4375rem 1rem 0.4375rem 0.8125rem;
-  border-bottom: 1px solid var(--dt-border);
-  border-left: 3px solid transparent;
-}
-.dt-log[data-level="warning"] {
-  border-left-color: var(--dt-warn-strong);
-  background: color-mix(in srgb, var(--dt-warn-bg) 60%, transparent);
-}
-.dt-log[data-level="error"],
-.dt-log[data-level="critical"] {
-  border-left-color: var(--dt-error);
-  background: color-mix(in srgb, var(--dt-error-bg) 60%, transparent);
-}
-.dt-log-time {
-  color: var(--dt-text-3);
-  font-size: var(--dt-size-xs);
-  font-variant-numeric: tabular-nums;
-}
-.dt-log-level {
-  color: var(--dt-text-2);
-  font: 600 var(--dt-size-xs) var(--dt-mono);
-  text-transform: uppercase;
-}
-.dt-log[data-level="warning"] .dt-log-level {
-  color: var(--dt-warn);
-}
-.dt-log[data-level="error"] .dt-log-level,
-.dt-log[data-level="critical"] .dt-log-level {
-  color: var(--dt-error);
-}
-.dt-log-message {
-  font: var(--dt-size-sm) var(--dt-mono);
-  overflow-wrap: anywhere;
-}
-/* The whole row opens the record, as a row of the call tree does; its message is the button the keyboard reaches. */
-.dt-log {
-  cursor: pointer;
-}
-.dt-log:hover {
-  background: var(--dt-hover);
-}
-.dt-log[data-open] {
-  background: var(--dt-selected);
-}
-button.dt-log-message {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.dt-log-details {
-  grid-column: 1 / -1;
-  margin: 0.375rem -1rem -0.4375rem -0.8125rem;
-  border-top: 1px solid var(--dt-border);
-  background: var(--dt-bg);
-  cursor: default;
-}
-.dt-log-logger {
-  max-width: 8.75rem;
-  overflow: hidden;
-  color: var(--dt-text-3);
-  font-size: var(--dt-size-xs);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.dt-log-exception {
-  grid-column: 1 / -1;
-  margin: 0.25rem -1rem -0.4375rem -0.8125rem;
-  padding-left: 1rem;
-}
 
 /* ---------- Error tab ---------- */
 

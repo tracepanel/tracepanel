@@ -222,22 +222,3 @@ export function Breadcrumbs({ items }: { items: readonly { label: ReactNode; hre
     </nav>
   );
 }
-
-const LEVEL_TONE: Record<string, string> = {
-  debug: "border-border bg-muted text-muted-foreground",
-  info: "border-info/25 bg-info-soft text-info",
-  warning: "border-warn/30 bg-warn-soft text-warn",
-  error: "border-error/30 bg-error-soft text-error",
-  critical: "border-error bg-error text-white",
-};
-
-/** A log level as a colored tag: the same in the logs table and the Level filter. */
-export function LevelBadge({ level }: { level: string }) {
-  return (
-    <span
-      className={`inline-flex rounded-md border px-1.5 py-px font-mono text-2xs font-semibold tracking-wide uppercase ${LEVEL_TONE[level] ?? LEVEL_TONE["debug"]}`}
-    >
-      {level}
-    </span>
-  );
-}

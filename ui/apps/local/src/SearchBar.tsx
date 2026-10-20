@@ -1,4 +1,4 @@
-import { IssueChip, type IssueKind, type SearchResource, type SearchSpec } from "@tracepanel/ui";
+import { IssueChip, type IssueKind, LogLevel, type SearchResource, type SearchSpec } from "@tracepanel/ui";
 import { Badge } from "@tracepanel/ui/components/ui/badge";
 import { Button } from "@tracepanel/ui/components/ui/button";
 import { type Family, systemOfPage } from "@tracepanel/ui/lib/systems";
@@ -10,7 +10,6 @@ import { type CallsSection, type EntrySection, type Section, systemOfSection } f
 import { taskSystem } from "./sections";
 import { TimeRange } from "./TimeRange";
 import { parseAbsolute, shortTime } from "./time";
-import { LevelBadge } from "./ui";
 
 /* ---------- query model: filters as chips, free text in the input ---------- */
 
@@ -314,7 +313,7 @@ const QUICK: Record<Exclude<Section, CallsSection>, Control[]> = {
       key: "level",
       values: ["debug", "info", "warning", "error", "critical"],
       format: capital,
-      display: (level) => <LevelBadge level={level} />,
+      display: (level) => <LogLevel level={level} />,
     },
     { label: "Logger", title: "Filter by logger", key: "logger", values: (known) => known.logger ?? [] },
     // The routes whose requests logged anything: the others would find nothing here.

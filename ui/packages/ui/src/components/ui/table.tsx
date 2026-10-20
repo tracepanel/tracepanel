@@ -1,10 +1,30 @@
 import { cn } from "@tracepanel/ui/lib/utils";
 import type * as React from "react";
 
-function Table({ className, ...props }: React.ComponentProps<"table">) {
+/**
+ * `stickyHeader` keeps the header row in view while the page scrolls under it. The container then clips instead of
+ * scrolling sideways (a scrolling container would hold the header in place itself), so such a table has to fit its
+ * width: fixed column widths and one column that takes the rest.
+ */
+function Table({
+  className,
+  stickyHeader = false,
+  ...props
+}: React.ComponentProps<"table"> & { stickyHeader?: boolean }) {
   return (
-    <div data-slot="table-container" className="relative w-full overflow-x-auto">
-      <table data-slot="table" className={cn("w-full caption-bottom text-sm", className)} {...props} />
+    <div
+      data-slot="table-container"
+      className={cn("relative w-full", stickyHeader ? "overflow-x-clip" : "overflow-x-auto")}
+    >
+      <table
+        data-slot="table"
+        className={cn(
+          "w-full caption-bottom text-sm",
+          stickyHeader && "[&>thead]:sticky [&>thead]:top-0 [&>thead]:z-10",
+          className,
+        )}
+        {...props}
+      />
     </div>
   );
 }

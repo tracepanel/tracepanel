@@ -11,7 +11,9 @@ import {
   IssueChip,
   type IssueRow,
   type JobRow,
+  type LogColumn,
   type LogRow,
+  LogTable,
   logAttrs,
   MailList,
   type MailRow,
@@ -36,7 +38,7 @@ import { Fragment, type ReactNode, useEffect, useState } from "react";
 import { useCapability } from "./hooks";
 import { currentPeriod, endpointGroup, go, groupRoute, href, issueRoute, traceHref, withPeriod } from "./routes";
 import { graphqlOperation, taskSystem } from "./sections";
-import { DataTable, LevelBadge, Meter, Mono, Td, Th, Tr } from "./ui";
+import { DataTable, Meter, Mono, Td, Th, Tr } from "./ui";
 
 export function TracesTable({
   items,
@@ -447,6 +449,44 @@ function RepeatedCount({ most }: { most: number }) {
   );
 }
 
+// The Logs page's own columns, after Logger: what was running when a record was logged (a request, a task, a job or
+// a page), the app, the trace.
+const LOG_COLUMNS: LogColumn<LogRow>[] = [
+  {
+    id: "source",
+    label: "Source",
+    width: 14,
+    cell: (log) => (
+      <SourceCell
+        kind={log.trace_kind}
+        htmx={log.trace_htmx}
+        method={log.method}
+        path={log.path}
+        name={log.trace_name}
+        className="max-w-none"
+      />
+    ),
+  },
+  {
+    id: "service",
+    label: "App",
+    width: 6,
+    hidden: true,
+    cell: (log) => <span className="text-muted-foreground">{log.service}</span>,
+  },
+  {
+    id: "trace",
+    label: "Trace",
+    width: 8,
+    hidden: true,
+    cell: (log) => (
+      <a className="font-mono text-muted-foreground hover:text-foreground" href={traceHref(log.trace_id, "logs")}>
+        {log.trace_id}
+      </a>
+    ),
+  },
+];
+
 export function LogsTable({
   items,
   onFilter,
@@ -461,58 +501,23 @@ export function LogsTable({
   onFilter: (terms: Record<string, string>) => void;
 }) {
   return (
-    <DataTable
-      head={
-        <>
-          <Th>Time</Th>
-          <Th>Level</Th>
-          <Th>Message</Th>
-          <Th>Logger</Th>
-          {/* A request, a task, a job or a page: what was running when it was logged. */}
-          <Th>Source</Th>
-        </>
-      }
-    >
-      {items.map((log) => (
-        <Fragment key={log.id}>
-          <Tr
-            selected={open === String(log.id)}
-            tone={
-              log.level === "error" || log.level === "critical" ? "error" : log.level === "warning" ? "warn" : undefined
-            }
-            onClick={() => onOpen(open === String(log.id) ? null : String(log.id))}
-          >
-            <Td className="text-muted-foreground tabular-nums">{new Date(log.time / 1000).toLocaleTimeString()}</Td>
-            <Td>
-              <LevelBadge level={log.level} />
-            </Td>
-            {/* Takes the width the other columns leave and truncates: the table never outgrows the page. */}
-            <Td className="w-full max-w-0">
-              <Mono className="block truncate">{log.message}</Mono>
-            </Td>
-            <Td>
-              <Mono className="text-base text-muted-foreground">{log.logger}</Mono>
-            </Td>
-            <Td>
-              <SourceCell
-                kind={log.trace_kind}
-                htmx={log.trace_htmx}
-                method={log.method}
-                path={log.path}
-                name={log.trace_name}
-              />
-            </Td>
-          </Tr>
-          {open === String(log.id) ? (
-            <TableRow className="hover:bg-transparent">
-              <TableCell colSpan={5} className="bg-muted/40 px-5 py-4 whitespace-normal">
-                <LogDetails log={log} onFilter={onFilter} />
-              </TableCell>
-            </TableRow>
-          ) : null}
-        </Fragment>
-      ))}
-    </DataTable>
+    // Clipped, not hidden: the header stays in view as the page scrolls.
+    <div className="overflow-clip rounded-lg border bg-card">
+      <LogTable
+        table="logs"
+        logs={items}
+        keyOf={(log) => String(log.id)}
+        columns={LOG_COLUMNS}
+        open={open}
+        onOpen={onOpen}
+        details={(log) => (
+          <div className="px-5 py-4">
+            <LogDetails log={log} onFilter={onFilter} />
+          </div>
+        )}
+        stickyHeader={true}
+      />
+    </div>
   );
 }
 
@@ -887,17 +892,20 @@ function SourceCell({
   method,
   path,
   name,
+  className,
 }: {
   kind: TraceSummary["kind"];
   htmx: TraceSummary["htmx"];
   method: string | null;
   path: string | null;
   name: string;
+  /** `max-w-none` in a column of a fixed width, which holds the limit itself. */
+  className?: string;
 }) {
   const operation = graphqlOperation({ kind, name });
   return (
     // A table cell ignores max-width: the cell's content holds the limit, so a long task name truncates.
-    <span className="flex max-w-[21.25rem] min-w-0 items-center gap-2">
+    <span className={cn("flex max-w-[21.25rem] min-w-0 items-center gap-2", className)}>
       {operation ? (
         <KindBadge kind="graphql" />
       ) : kind === "http" ? (

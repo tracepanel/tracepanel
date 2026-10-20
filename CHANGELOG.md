@@ -34,6 +34,15 @@
 - The panel header is quieter: Explore, the user and Console are plain
   buttons and icons, and the user sits next to the request list.
 - With the panel docked at the bottom, the page scrolls to its end above it.
+- Logs: one table on the Logs page and in a trace's Logs tab. A record takes
+  one line, its message cut short (the whole of it on hover and in its
+  details), and an exception's last line follows it in red. The level is a
+  colored dot and its name. The header stays in view as the page scrolls.
+- Logs columns: drag a header's edge to resize a column, double-click it to
+  fit the column to its values, or move it with the arrow keys. The columns
+  menu shows and hides columns (App, Trace and Attributes are there too) and
+  switches the time between the time of day and how long ago (in a trace:
+  since the request started). The browser keeps these choices.
 
 - The agent is on Maven Central, as `dev.tracepanel:tracepanel-agent`: the
   binary of each platform, with the platform as its classifier

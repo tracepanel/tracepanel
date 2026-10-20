@@ -13,6 +13,7 @@ export * from "./icons";
 export { LogList } from "./LogList";
 export * from "./Logo";
 export { logAttrs } from "./LogRecordDetails";
+export { type LogColumn, LogLevel, LogTable } from "./LogTable";
 export { ISSUE_LABELS } from "./labels";
 export { queryFingerprint } from "./lib/fingerprint";
 export { isTyping } from "./lib/keys";
