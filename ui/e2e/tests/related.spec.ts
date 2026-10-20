@@ -187,8 +187,11 @@ test("a record in the call tree shows where it was logged, its attributes", asyn
   await page.getByText("Kafka producer started").first().click();
   const details = page.getByRole("complementary", { name: "Details" });
 
-  await expect(details.getByRole("region", { name: "All attributes" })).toContainText("thread.name");
+  await expect(details.getByRole("region", { name: "Fields" })).toContainText("thread.name");
   await expect(details).toContainText("kafka-producer-network-thread");
+  // The record as the Logs page shows it: its message to copy, its fields with theirs.
+  await expect(details.getByRole("button", { name: "Copy message" })).toBeAttached();
+  await expect(details.getByRole("button", { name: "Copy thread.name" })).toBeAttached();
 });
 
 test("a record in a trace's Logs tab opens its attributes", async ({ page }) => {
@@ -225,7 +228,7 @@ test("a record's attributes are in the same order on the Logs page and in its tr
   await page.goto(`/#/traces?q=${encodeURIComponent("route:/api/books/announce")}`);
   await page.getByRole("main").getByRole("table").getByRole("link").first().click();
   await page.getByText("Kafka producer started").first().click();
-  const inTrace = order(await page.getByRole("region", { name: "All attributes" }).innerText());
+  const inTrace = order(await page.getByRole("region", { name: "Fields" }).innerText());
 
   expect(sorted(onPage)).toBe(true);
   expect(sorted(inTrace)).toBe(true);

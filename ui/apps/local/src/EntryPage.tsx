@@ -43,6 +43,9 @@ const SCOPES: Record<EntrySection, OverviewScope> = {
 const GRAPHQL_TYPES = ["query", "mutation", "subscription"] as const;
 
 /** Replaces the terms of the given keys in a query, keeps the rest. */
+// A page of calls is cut by their start.
+const startOf = (trace: { start: number }) => trace.start;
+
 export function refineQuery(q: string, terms: Record<string, string>): string {
   const keys = Object.keys(terms);
   const kept = q
@@ -141,6 +144,7 @@ export function EntryPage({ section, q, view, source, spec, known }: EntryPagePr
       [source, entry.scope, view],
     ),
     q,
+    startOf,
   );
 
   const loaded =

@@ -24,6 +24,10 @@
 
 ### Changed
 
+- A log record opens the same way everywhere: on the Logs page, in a trace's
+  Logs tab and in the call tree, its message and its exception to copy, then
+  its fields with their own copy buttons. Its time is local, to the
+  millisecond, with the date and the offset (it was UTC).
 - One set of proportions across the console: the sidebar at the page's text
   size (it was larger than the pages it leads to), one header style for every
   table, a lower search box, and charts on the tables' 24-hour clock. The
@@ -90,6 +94,9 @@
 
 ### Fixed
 
+- A list's auto-refresh no longer loses rows once older pages are loaded. New
+  rows pushed rows out of the first page, while the older pages still began
+  where it used to end, and the rows between showed nowhere.
 - A time range picked on a chart (drag to zoom) rounds out to whole seconds.
   It rounded the end down, and a record or a call in the range's last second
   dropped out of the list it narrowed.

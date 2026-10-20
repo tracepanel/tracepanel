@@ -34,6 +34,15 @@ export function clock(us: number): string {
   return `${time}.${String(at.getMilliseconds()).padStart(3, "0")}`;
 }
 
+/** A moment in full, in local time, as its row shows it plus the date and the offset: 2026-10-20 15:27:31.008 +03:00. */
+export function localTime(us: number): string {
+  const at = new Date(us / 1000);
+  const pad = (value: number) => String(Math.abs(value)).padStart(2, "0");
+  const offset = -at.getTimezoneOffset();
+  const zone = `${offset < 0 ? "-" : "+"}${pad(Math.trunc(offset / 60))}:${pad(offset % 60)}`;
+  return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())} ${clock(us)} ${zone}`;
+}
+
 /** When a record was made, said in words: "146 ms after the request started". */
 export function since(us: number, start: number): string {
   return `${duration(Math.max(us - start, 0))} after the request started`;

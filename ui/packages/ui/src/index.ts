@@ -12,7 +12,7 @@ export { IssueList } from "./IssueList";
 export * from "./icons";
 export { LogList } from "./LogList";
 export * from "./Logo";
-export { logAttrs } from "./LogRecordDetails";
+export { LogRecord, logAttrs } from "./LogRecordDetails";
 export { type AttributeColumns, type LogColumn, LogLevel, LogTable, useAttributeColumns } from "./LogTable";
 export { ISSUE_LABELS } from "./labels";
 export { queryFingerprint } from "./lib/fingerprint";

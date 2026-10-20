@@ -1,4 +1,9 @@
-// A log record's details as the call tree shows a picked one, in its pane and in a trace's Logs tab alike.
+// A log record's details, one look wherever it opens: the Logs page, a trace's Logs tab, the call tree's pane.
+import type { ReactNode } from "react";
+import { CopyButton } from "./CopyButton";
+import { localTime } from "./format";
+import { cn } from "./lib/utils";
+import { type NameValue, NameValues } from "./NameValues";
 import { PropTable } from "./PropTable";
 import type { Attrs, Log } from "./types";
 
@@ -40,17 +45,76 @@ export function logAttrs(attrs: Attrs): Attrs {
   return Object.fromEntries(Object.entries(attrs).sort(([a], [b]) => rank(a) - rank(b) || a.localeCompare(b))) as Attrs;
 }
 
-/** Its level and logger, its message (with its exception), and where it was logged: code, thread, template, extra. */
-export function LogRecordDetails({ log }: { log: Log }) {
+/** A block of text to read whole and copy: the message, or its exception in the error's colour. */
+function TextBlock({ text, label, error = false }: { text: string; label: string; error?: boolean }) {
   return (
-    <div className="grid gap-3 p-4">
-      <p className="dt-map-details-title">
-        Log · {log.level} · {log.logger}
-      </p>
-      <pre className="m-0 overflow-auto rounded-md border bg-muted/60 px-4 py-3 font-mono text-sm whitespace-pre-wrap">
-        {log.exception ? `${log.message}\n\n${log.exception}` : log.message}
+    <div
+      className={cn("group/text relative rounded-md border bg-background", error && "border-error/30 bg-error-soft")}
+    >
+      <pre
+        className={cn(
+          "m-0 px-3 py-2 pr-10 font-mono text-sm whitespace-pre-wrap [overflow-wrap:anywhere]",
+          error && "max-h-80 overflow-auto",
+        )}
+      >
+        {text}
       </pre>
-      <AllAttributes attrs={logAttrs(log.attrs)} titled={true} />
+      <CopyButton text={text} label={label} className="absolute top-2 right-2" />
+    </div>
+  );
+}
+
+/**
+ * A log record, one look wherever it opens (the Logs page, a trace's Logs tab, the call tree): `header` above it (where
+ * to go from it), its message and its exception, then its fields: `context` first (its trace's: the app, the request),
+ * then its own logger, level and time, then its attributes. `actions` are a field's own buttons, before its copy one.
+ */
+export function LogRecord({
+  log,
+  header,
+  context = [],
+  actions,
+}: {
+  log: Log;
+  header?: ReactNode;
+  context?: readonly NameValue[];
+  actions?: ((name: string, value: string) => readonly ReactNode[]) | undefined;
+}) {
+  const own: [string, string][] = [
+    ["logger", log.logger],
+    ["level", log.level],
+    ["time", localTime(log.time)],
+    ...Object.entries(logAttrs(log.attrs)).map(([key, value]): [string, string] => [key, show(value)]),
+  ];
+  return (
+    <div className="grid gap-3.5">
+      {header}
+      <TextBlock text={log.message} label="Copy message" />
+      {log.exception ? <TextBlock text={log.exception} label="Copy exception" error={true} /> : null}
+      <section aria-label="Fields" className="overflow-hidden rounded-md border bg-background">
+        <NameValues
+          rows={[...context, ...own.map(([name, value]) => ({ name, value, actions: actions?.(name, value) ?? [] }))]}
+        />
+      </section>
+    </div>
+  );
+}
+
+/** A value as text: a list or an object as JSON, as an attribute column shows it. */
+function show(value: unknown): string {
+  return typeof value === "string" ? value : JSON.stringify(value);
+}
+
+/** A record opened in a trace: in its Logs tab, and (`titled`) in the call tree's pane. */
+export function LogRecordDetails({ log, titled = false }: { log: Log; titled?: boolean }) {
+  return (
+    <div className={cn("grid gap-3", titled ? "p-4" : "px-5 py-4")}>
+      {titled ? (
+        <p className="dt-map-details-title">
+          Log · {log.level} · {log.logger}
+        </p>
+      ) : null}
+      <LogRecord log={log} />
     </div>
   );
 }

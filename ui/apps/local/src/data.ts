@@ -56,29 +56,116 @@ export function useSearch<T>(load: (q: string) => Promise<T>, q: string, slower 
   return state;
 }
 
-/** Cursor pages: the first page refreshes, older pages are appended on demand. */
-export function usePaged<T>(load: (q: string, before: number | null) => Promise<Page<T>>, q: string) {
-  const first = useSearch(
-    useCallback((query: string) => load(query, null), [load]),
-    q,
-  );
-  const [older, setOlder] = useState<{ items: T[]; next: number | null; q: string }>({ items: [], next: null, q });
+type PageLoad<T> = (q: string, before: number | null) => Promise<Page<T>>;
+
+/**
+ * What lies between a refreshed first page and the older pages shown under it. New rows push rows out of the first
+ * page, while the older pages still start where it used to end (`boundary`): without these, those rows would show
+ * nowhere. Pages from `from` down, every row at or after the boundary.
+ */
+async function between<T>(
+  load: PageLoad<T>,
+  q: string,
+  from: number | null,
+  boundary: number,
+  cursorOf: (item: T) => number,
+): Promise<T[]> {
+  const items: T[] = [];
+  let cursor = from;
+  while (cursor !== null && cursor > boundary) {
+    const page = await load(q, cursor);
+    const kept = page.items.filter((item) => cursorOf(item) >= boundary);
+    items.push(...kept);
+    if (kept.length < page.items.length) break;
+    cursor = page.next;
+  }
+  return items;
+}
+
+interface Older<T> {
+  items: T[];
+  next: number | null;
+  q: string;
+  /** Where the first page ended when the first older page was asked for: the older pages are all before it. */
+  boundary: number | null;
+}
+
+/** The rows between the first page and the older ones, for the first page they were loaded under. */
+function useBetween<T>(
+  load: PageLoad<T>,
+  first: Page<T> | undefined,
+  older: Older<T>,
+  cursorOf: (item: T) => number,
+): T[] | undefined {
+  const [bridge, setBridge] = useState<{ under: Page<T> | undefined; items: T[] }>({ under: undefined, items: [] });
+  useEffect(() => {
+    if (!first || older.boundary === null) return;
+    let cancelled = false;
+    between(load, older.q, first.next, older.boundary, cursorOf).then(
+      (items) => !cancelled && setBridge({ under: first, items }),
+      () => !cancelled && setBridge({ under: first, items: [] }),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [load, first, older.q, older.boundary, cursorOf]);
+  if (older.boundary === null) return [];
+  return bridge.under === first ? bridge.items : undefined;
+}
+
+/** The cursor of the next older page: past the older pages once there are some, else past the first. */
+function nextCursor<T>(older: Older<T>, first: Page<T> | undefined): number | null {
+  return older.items.length > 0 ? older.next : (first?.next ?? null);
+}
+
+/** The older pages, appended one at a time; a new search starts them over. */
+function useOlder<T>(load: PageLoad<T>, q: string, first: Page<T> | undefined) {
+  const [older, setOlder] = useState<Older<T>>({ items: [], next: null, q, boundary: null });
   const [loading, setLoading] = useState(false);
-  if (older.q !== q) setOlder({ items: [], next: null, q });
-  const next = older.items.length > 0 ? older.next : (first.data?.next ?? null);
+  if (older.q !== q) setOlder({ items: [], next: null, q, boundary: null });
+  const next = nextCursor(older, first);
   const more = () => {
     // One page at a time: scrolling and the button may both ask.
     if (next === null || loading) return;
     setLoading(true);
+    const boundary = older.boundary ?? next;
     load(q, next)
-      .then((page) => setOlder((current) => ({ items: [...current.items, ...page.items], next: page.next, q })))
+      .then((page) =>
+        setOlder((current) => ({ items: [...current.items, ...page.items], next: page.next, q, boundary })),
+      )
       .finally(() => setLoading(false));
   };
+  return { older, next, loading, more };
+}
+
+/** The rows as last whole: while the rows between pages load, the list stays as it was, never with a gap. */
+function useWhole<T>(items: T[] | undefined): T[] | undefined {
+  const [shown, setShown] = useState<T[] | undefined>(undefined);
+  if (items && !sameRows(shown, items)) setShown(items);
+  return items ?? shown;
+}
+
+/**
+ * Cursor pages: the first page refreshes, older pages are appended on demand, and the rows a refresh pushes out of
+ * the first page stay listed between the two. `cursorOf` is the value a page's cursor is (a row's time).
+ */
+export function usePaged<T>(load: PageLoad<T>, q: string, cursorOf: (item: T) => number) {
+  const first = useSearch(
+    useCallback((query: string) => load(query, null), [load]),
+    q,
+  );
+  const { older, next, loading, more } = useOlder(load, q, first.data);
+  const bridge = useBetween(load, first.data, older, cursorOf);
+  const whole = useWhole(first.data && bridge ? [...first.data.items, ...bridge, ...older.items] : undefined);
   return {
-    items: first.data ? [...first.data.items, ...older.items] : undefined,
+    items: first.data ? whole : undefined,
     error: first.error,
     hasMore: next !== null,
     loading,
     more,
   };
+}
+
+function sameRows<T>(a: readonly T[] | undefined, b: readonly T[]): boolean {
+  return a !== undefined && a.length === b.length && a.every((item, index) => item === b[index]);
 }

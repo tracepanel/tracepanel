@@ -150,6 +150,10 @@ function LogsOverTime({
   return <LogsChart series={series} onSelect={(start, end) => onRefine(rangeTerms(start, end))} />;
 }
 
+// What each list's pages are cut by: a trace's start, a record's or a mail's time.
+const startOf = (trace: { start: number }) => trace.start;
+const timeOf = (row: { time: number }) => row.time;
+
 /** Everything a page loads: each list only on its own page (the others resolve empty at once). */
 function usePageData(section: Section, system: string | null, source: DataSource, q: string) {
   const traces = usePaged(
@@ -159,6 +163,7 @@ function usePageData(section: Section, system: string | null, source: DataSource
       [source, section],
     ),
     q,
+    startOf,
   );
   const logs = usePaged(
     useCallback(
@@ -167,6 +172,7 @@ function usePageData(section: Section, system: string | null, source: DataSource
       [source, section],
     ),
     q,
+    timeOf,
   );
   const logSeries = useLogSeries(source, section === "logs", q);
   const mails = usePaged(
@@ -176,6 +182,7 @@ function usePageData(section: Section, system: string | null, source: DataSource
       [source, section],
     ),
     q,
+    timeOf,
   );
   const services = useSearch(
     useCallback(

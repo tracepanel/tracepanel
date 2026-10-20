@@ -2,7 +2,6 @@ import {
   AliasChip,
   ago,
   type CallRow,
-  CopyButton,
   type DataSource,
   duration,
   type EndpointRow,
@@ -12,13 +11,12 @@ import {
   type IssueRow,
   type JobRow,
   type LogColumn,
+  LogRecord,
   type LogRow,
   LogTable,
-  logAttrs,
   MailList,
   type MailRow,
   MethodBadge,
-  NameValues,
   type PageRow,
   RoutePath,
   type RpcRow,
@@ -711,47 +709,38 @@ function AsColumn({ name }: { name: string }) {
   );
 }
 
+/** The search a record's own field narrows to: its logger, its level, an attribute the search knows. */
+function ownFilter(name: string, value: string): Record<string, string> | undefined {
+  if (name === "logger") return { logger: term(value) };
+  if (name === "level") return { level: value };
+  return attrFilter(name, value);
+}
+
 function LogDetails({ log, onFilter }: { log: LogRow; onFilter: (terms: Record<string, string>) => void }) {
-  const fields: LogField[] = [
+  const filterBy = (name: string, value: string, filter: Record<string, string> | undefined) =>
+    filter ? <FilterBy key="filter" name={name} value={value} onFilter={() => onFilter(filter)} /> : null;
+  const context: LogField[] = [
     ...logContext(log),
     ["trace_id", log.trace_id, { trace: log.trace_id }],
     // The span it was logged in, filtered by span_id: (the trace's call tree opens at it).
     // biome-ignore lint/style/useNamingConvention: the search's key, as the query spells it.
     ...(log.span_id ? [["span_id", log.span_id, { span_id: log.span_id }] as LogField] : []),
-    ["logger", log.logger, { logger: term(log.logger) }],
-    ["level", log.level, { level: log.level }],
-    ["time", new Date(log.time / 1000).toISOString()],
-    ...Object.entries(logAttrs(log.attrs)).map(([key, value]): LogField => {
-      const text = String(value);
-      return [key, text, attrFilter(key, text)];
-    }),
   ];
   return (
-    <div className="grid gap-3.5">
-      <LogSources log={log} onFilter={onFilter} />
-      <LoggedIn log={log} />
-      <div className="group/message relative rounded-md border bg-background">
-        <pre className="m-0 px-3 py-2 pr-10 font-mono text-sm whitespace-pre-wrap">{log.message}</pre>
-        <CopyButton text={log.message} label="Copy message" className="absolute top-2 right-2" />
-      </div>
-      {log.exception ? (
-        <pre className="m-0 max-h-80 overflow-auto rounded-md border border-error/30 bg-error-soft px-4 py-3 font-mono text-sm text-foreground">
-          {log.exception}
-        </pre>
-      ) : null}
-      <div className="overflow-hidden rounded-md border bg-background">
-        <NameValues
-          rows={fields.map(([key, value, filter]) => ({
-            name: key,
-            value,
-            actions: [
-              filter ? <FilterBy key="filter" name={key} value={value} onFilter={() => onFilter(filter)} /> : null,
-              key in log.attrs ? <AsColumn key="column" name={key} /> : null,
-            ],
-          }))}
-        />
-      </div>
-    </div>
+    <LogRecord
+      log={log}
+      header={
+        <>
+          <LogSources log={log} onFilter={onFilter} />
+          <LoggedIn log={log} />
+        </>
+      }
+      context={context.map(([name, value, filter]) => ({ name, value, actions: [filterBy(name, value, filter)] }))}
+      actions={(name, value) => [
+        filterBy(name, value, ownFilter(name, value)),
+        name in log.attrs ? <AsColumn key="column" name={name} /> : null,
+      ]}
+    />
   );
 }
 
