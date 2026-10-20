@@ -55,7 +55,10 @@ async fn a_query_is_explained_by_the_app_that_recorded_it() {
     let (status, before) = get(&router, "/api/capabilities").await;
     assert_eq!(
         (status, before),
-        (StatusCode::OK, json!({"explain": false, "users": false, "profile": false, "request": false}))
+        (
+            StatusCode::OK,
+            json!({"explain": false, "users": false, "profile": false, "request": false})
+        )
     );
 
     // The app: says it can explain, then answers the first request with PostgreSQL's plan.
@@ -127,7 +130,10 @@ async fn a_query_is_explained_by_the_app_that_recorded_it() {
             {"depth": 1, "text": "Filter: (id = 7)", "warning": null},
         ]})
     );
-    assert_eq!(after, json!({"explain": true, "users": false, "profile": false, "request": false}));
+    assert_eq!(
+        after,
+        json!({"explain": true, "users": false, "profile": false, "request": false})
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
