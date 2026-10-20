@@ -1,4 +1,4 @@
-import { ListTreeIcon } from "lucide-react";
+import { ArrowRightIcon, ListTreeIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "./components/ui/button";
 import { keyed } from "./keys";
@@ -6,6 +6,25 @@ import { LogRecordDetails } from "./LogRecordDetails";
 import { LogTable } from "./LogTable";
 import { linkProps, type TraceLinks } from "./links";
 import type { Log } from "./types";
+
+/** Over a trace's records: how many, and the way to the Logs page to filter and search them with every other. */
+function LogsBar({ count, traceId, links }: { count: number; traceId: string; links: TraceLinks | undefined }) {
+  return (
+    <div className="flex items-center gap-3 px-4 py-2.5 text-base text-muted-foreground">
+      <span className="tabular-nums">
+        {count} {count === 1 ? "record" : "records"}
+      </span>
+      {links?.logs ? (
+        <Button variant="outline" size="xs" className="ml-auto" asChild>
+          <a {...linkProps(links, links.logs(traceId))}>
+            Open in Logs
+            <ArrowRightIcon />
+          </a>
+        </Button>
+      ) : null}
+    </div>
+  );
+}
 
 /** A trace's records, as the Logs page lists records: one line each, a click opens its details below. */
 export function LogList({
@@ -31,13 +50,7 @@ export function LogList({
   if (logs.length === 0) return <p className="dt-note">No log records in this request.</p>;
   return (
     <>
-      {links?.logs ? (
-        <p className="dt-logs-more">
-          <a className="dt-issue-link" {...linkProps(links, links.logs(traceId))}>
-            In the logs list, to filter and search →
-          </a>
-        </p>
-      ) : null}
+      <LogsBar count={logs.length} traceId={traceId} links={links} />
       <LogTable
         table="trace-logs"
         logs={logs}

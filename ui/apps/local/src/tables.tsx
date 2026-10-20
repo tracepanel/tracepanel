@@ -2,6 +2,7 @@ import {
   AliasChip,
   ago,
   type CallRow,
+  CopyButton,
   type DataSource,
   duration,
   type EndpointRow,
@@ -493,8 +494,11 @@ export function LogsTable({
   onFilter,
   open,
   onOpen,
+  highlight,
 }: {
   items: readonly LogRow[];
+  /** The search's words, marked in the messages. */
+  highlight?: readonly string[];
   /** The record shown open, by id, kept in the URL by the page. */
   open: string | null;
   onOpen: (key: string | null) => void;
@@ -511,6 +515,7 @@ export function LogsTable({
         columns={LOG_COLUMNS}
         open={open}
         onOpen={onOpen}
+        highlight={highlight}
         details={(log) => (
           <div className="px-5 py-4">
             <LogDetails log={log} onFilter={onFilter} />
@@ -610,7 +615,12 @@ function LogSources({ log, onFilter }: { log: LogRow; onFilter: (terms: Record<s
         </Button>
       ) : null}
       <InsideSources log={log} onFilter={onFilter} />
-      <Button size="xs" className="ml-auto" asChild>
+      <span className="ml-auto flex items-center gap-1">
+        <CopyButton text={JSON.stringify(log, null, 2)} label="Copy the record as JSON" />
+        {/* The page's address opens this record: the URL keeps it. */}
+        <CopyButton text={window.location.href} label="Copy a link to the record" icon="link" />
+      </span>
+      <Button size="xs" asChild>
         <a href={traceHref(log.trace_id, "logs")}>
           Open {sourceOf(log)}
           <ArrowRightIcon />

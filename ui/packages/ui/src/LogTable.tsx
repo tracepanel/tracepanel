@@ -1,7 +1,16 @@
 // Log records as one table wherever they are listed: the console's Logs page and a trace's Logs tab. One line per
 // record, its details opened under it; columns the reader sizes and picks, kept per browser.
 import { cn } from "@tracepanel/ui/lib/utils";
-import { createContext, Fragment, type KeyboardEvent, type MouseEvent, type ReactNode, useContext } from "react";
+import {
+  createContext,
+  Fragment,
+  type KeyboardEvent,
+  type MouseEvent,
+  type ReactNode,
+  useContext,
+  useEffect,
+  useRef,
+} from "react";
 import {
   DropdownMenuCheckboxItem,
   DropdownMenuLabel,
@@ -89,14 +98,32 @@ function lastLine(text: string): string {
  * The message on one line (the whole of it on hover, and in the details), text to select and copy: the row opens the
  * record. An exception's last line follows in what the message leaves.
  */
-function Message({ log }: { log: LogLike }) {
+function Message({ log, terms }: { log: LogLike; terms: readonly string[] }) {
   return (
     <span className="flex min-w-0 items-baseline gap-2.5">
       <span title={log.message.slice(0, 2000)} className="max-w-full shrink-0 truncate font-mono">
-        {log.message}
+        <Marked text={log.message} terms={terms} />
       </span>
       {log.exception ? <span className="min-w-0 truncate font-mono text-error">{lastLine(log.exception)}</span> : null}
     </span>
+  );
+}
+
+/** The text with what the search's words found in it marked, case aside. */
+export function Marked({ text, terms }: { text: string; terms: readonly string[] }) {
+  const words = terms.filter(Boolean).map((term) => term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  if (words.length === 0) return text;
+  // Split on a capturing group: the found words land at the odd places.
+  const parts = text.split(new RegExp(`(${words.join("|")})`, "i"));
+  return parts.map((part, index) =>
+    index % 2 === 1 ? (
+      // biome-ignore lint/suspicious/noArrayIndexKey: the parts of one text, in its order.
+      <mark key={index} className="rounded-xs bg-warn/25 text-inherit">
+        {part}
+      </mark>
+    ) : (
+      part
+    ),
   );
 }
 
@@ -107,14 +134,18 @@ function Attributes({ attrs }: { attrs: LogLike["attrs"] }) {
       {Object.entries(logAttrs(attrs)).map(([key, value]) => (
         <span key={key} className="mr-3">
           <span className="text-muted-foreground">{key}=</span>
-          {String(value)}
+          {typeof value === "string" ? value : JSON.stringify(value)}
         </span>
       ))}
     </span>
   );
 }
 
-function leading<R extends LogLike>(mode: TimeMode, start: number | undefined): LogColumn<R>[] {
+function leading<R extends LogLike>(
+  mode: TimeMode,
+  start: number | undefined,
+  terms: readonly string[],
+): LogColumn<R>[] {
   return [
     {
       id: "time",
@@ -124,7 +155,7 @@ function leading<R extends LogLike>(mode: TimeMode, start: number | undefined): 
       cell: (log) => <LogTime time={log.time} mode={mode} start={start} />,
     },
     { id: "level", label: "Level", width: 5.5, fixed: true, cell: (log) => <LogLevel level={log.level} /> },
-    { id: "message", label: "Message", required: true, cell: (log) => <Message log={log} /> },
+    { id: "message", label: "Message", required: true, cell: (log) => <Message log={log} terms={terms} /> },
     {
       id: "logger",
       label: "Logger",
@@ -230,7 +261,14 @@ function AttributeColumnsMenu({
 
 function trailing<R extends LogLike>(): LogColumn<R>[] {
   return [
-    { id: "attributes", label: "Attributes", width: 16, hidden: true, cell: (log) => <Attributes attrs={log.attrs} /> },
+    // Every attribute on one line; Attribute columns picks one for a column of its own.
+    {
+      id: "attributes",
+      label: "All attributes",
+      width: 16,
+      hidden: true,
+      cell: (log) => <Attributes attrs={log.attrs} />,
+    },
   ];
 }
 
@@ -248,6 +286,8 @@ const CELL = "truncate px-2 py-1 first:pl-4";
 // A warning or a failure marks the row's edge, as the console's other lists mark theirs.
 const ROW = cn(
   "cursor-pointer focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
+  // Debug records are the quiet ones: their text steps back, as a console dims its verbose lines.
+  "data-[level=debug]:text-muted-foreground",
   "data-[level=warning]:[&>td:first-child]:shadow-[inset_3px_0_0_var(--color-warn)]",
   "data-[level=error]:[&>td:first-child]:shadow-[inset_3px_0_0_var(--color-error)]",
   "data-[level=critical]:[&>td:first-child]:shadow-[inset_3px_0_0_var(--color-error)]",
@@ -319,6 +359,10 @@ function LogHead({
             key={spec.id}
             id={spec.id}
             onMove={(moved) => columns.move(moved, spec.id)}
+            onStep={(by) => {
+              const next = columns.shown[index + by];
+              if (next) columns.move(spec.id, next.id);
+            }}
             onRemove={removable(spec.id, onRemoveAttribute)}
             label={spec.label}
             width={widths.get(spec.id)}
@@ -344,6 +388,19 @@ function LogHead({
       </TableRow>
     </TableHeader>
   );
+}
+
+/**
+ * A row opened as it mounts (from the page's address, a link to a record) scrolled into view; a row opened later is
+ * where the reader clicked it already.
+ */
+function useScrollOpened(open: boolean) {
+  const ref = useRef<HTMLTableRowElement>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: as it mounts only.
+  useEffect(() => {
+    if (open) ref.current?.scrollIntoView({ block: "center" });
+  }, []);
+  return ref;
 }
 
 /** A local day, as the rows' times can't say it: "Monday, October 19". */
@@ -382,9 +439,11 @@ function LogRecordRow<R extends LogLike>({
   action: ((log: R) => ReactNode) | undefined;
   details: (log: R) => ReactNode;
 }) {
+  const ref = useScrollOpened(open);
   return (
     <>
       <TableRow
+        ref={ref}
         data-level={log.level}
         data-record=""
         tabIndex={0}
@@ -428,6 +487,7 @@ export function LogTable<R extends LogLike>({
   details,
   action,
   stickyHeader = false,
+  highlight = [],
 }: {
   table: string;
   logs: readonly R[];
@@ -439,10 +499,12 @@ export function LogTable<R extends LogLike>({
   details: (log: R) => ReactNode;
   action?: ((log: R) => ReactNode) | undefined;
   stickyHeader?: boolean;
+  /** The search's words, marked where a message has them. */
+  highlight?: readonly string[] | undefined;
 }) {
   const [mode, setMode] = useStored(`tracepanel:columns:${table}:time`, readTime);
   const [picked, setPicked] = useStored(`tracepanel:columns:${table}:attributes`, readKeys);
-  const all = [...leading<R>(mode, start), ...extra, ...attributeColumns<R>(picked), ...trailing<R>()];
+  const all = [...leading<R>(mode, start, highlight), ...extra, ...attributeColumns<R>(picked), ...trailing<R>()];
   const columns = useColumns(table, all);
   const shown = columns.shown;
   // The columns menu's own column is w-9.

@@ -318,3 +318,54 @@ test("a search the store refuses says so, rather than loading for ever", async (
   await expect(page.getByText("Nothing to show")).toBeVisible();
   await expect(page.getByRole("status").filter({ hasText: "Loading" })).toHaveCount(0);
 });
+
+test("Live reloads the records, and holds while one is open", async ({ page }) => {
+  await page.goto("/#/logs");
+  const live = page.getByRole("checkbox", { name: /^Live/ });
+
+  // The switch's own label: the box itself is hidden under its track, as the panel's Follow new is.
+  await page.getByText("Live", { exact: true }).click();
+
+  await expect(live).toBeChecked();
+
+  await rows(page).first().click();
+
+  await expect(page.getByText("Live · paused")).toBeVisible();
+});
+
+test("the search's words are marked in the messages", async ({ page }) => {
+  await page.goto(`/#/logs?q=${encodeURIComponent("posts")}`);
+
+  await expect(rows(page).first().locator("mark").first()).toHaveText(/^posts$/i);
+});
+
+test("an opened record copies as JSON, and as a link to itself", async ({ page }) => {
+  await page.goto("/#/logs");
+  await rows(page).first().click();
+
+  await expect(region(page).getByRole("button", { name: "Copy the record as JSON" })).toBeVisible();
+  await expect(region(page).getByRole("button", { name: "Copy a link to the record" })).toBeVisible();
+});
+
+test("a column's name, focused, moves its column with the arrow keys", async ({ page }) => {
+  await page.goto("/#/logs");
+  const names = region(page).getByRole("columnheader");
+  await expect(names.nth(3)).toHaveAccessibleName("Logger");
+
+  await region(page).getByRole("button", { name: "Move the Logger column with the arrow keys" }).focus();
+  await page.keyboard.press("ArrowLeft");
+
+  await expect(names.nth(2)).toHaveAccessibleName("Logger");
+  await expect(names.nth(3)).toHaveAccessibleName("Message");
+});
+
+test("a trace's Logs tab counts its records and opens them in Logs", async ({ page }) => {
+  await page.goto(`/#/t/${await traceId("POST /api/books/announce")}?tab=logs`);
+  const panel = page.getByRole("tabpanel");
+
+  await expect(panel.getByText("2 records")).toBeVisible();
+
+  await panel.getByRole("link", { name: "Open in Logs" }).click();
+
+  await expect(page).toHaveURL(/#\/logs\?q=trace/);
+});

@@ -9,12 +9,12 @@ import {
 } from "@tracepanel/ui";
 import { Button } from "@tracepanel/ui/components/ui/button";
 import type { Family } from "@tracepanel/ui/lib/systems";
-import { type ReactNode, useCallback } from "react";
+import { type ReactNode, useCallback, useState } from "react";
 import { SystemTiles } from "./CallsTiles";
 import { usePaged, useSearch } from "./data";
 import { EmptyPage } from "./EmptyPage";
 import { refineQuery } from "./EntryPage";
-import { RefreshControl } from "./refresh";
+import { LiveToggle, RefreshControl } from "./refresh";
 import { type CallsSection, type EntrySection, go, type Section, systemOfSection, traceHref } from "./routes";
 import { SearchBar } from "./SearchBar";
 import { ServicesView } from "./ServicesView";
@@ -141,7 +141,13 @@ function logsBody(page: BodyContext): ReactNode {
         page.data.logs,
         "Load older logs",
         (items) => (
-          <LogsTable items={items} onFilter={page.refine} open={page.open ?? null} onOpen={page.setOpen} />
+          <LogsTable
+            items={items}
+            onFilter={page.refine}
+            open={page.open ?? null}
+            onOpen={page.setOpen}
+            highlight={freeText(page.q)}
+          />
         ),
         <Empty
           title="No log records match"
@@ -158,6 +164,13 @@ function logsBody(page: BodyContext): ReactNode {
       )}
     </div>
   );
+}
+
+/** A search's own words, not its filters: `"Kafka producer" level:info boot` → Kafka producer, boot. */
+function freeText(q: string): string[] {
+  return [...q.matchAll(/"([^"]+)"|(\S+)/g)]
+    .map(([, quoted, word]) => quoted ?? word ?? "")
+    .filter((word) => !/^-|[:<>=]/.test(word));
 }
 
 /** The levels a search has: `level:warning,error` → warning, error. */
@@ -374,6 +387,19 @@ function pageBody(page: BodyContext): ReactNode {
   );
 }
 
+/**
+ * The header's controls: refresh, and on the Logs page Live too, paused (`reading`) while a record is open or the
+ * list is scrolled down. Services and Database are summaries: they change slowly, so they refresh on demand only.
+ */
+function headerActions(section: DataSection, reading: boolean): ReactNode {
+  return (
+    <div className="flex items-center">
+      {section === "logs" ? <LiveToggle list="logs" paused={reading} /> : null}
+      <RefreshControl live={!isSummary(section)} />
+    </div>
+  );
+}
+
 export function DataPage({ section, q, open, source, spec, known, systems }: DataPageProps) {
   const { setService } = useScope();
   const { system, family, meta, pristine } = pageOfSection(section, systems);
@@ -383,6 +409,7 @@ export function DataPage({ section, q, open, source, spec, known, systems }: Dat
   const setQuery = (next: string, typed = false) => go({ name: section, q: next }, typed);
   const refine = (terms: Record<string, string>) => go({ name: section, q: refineQuery(q, terms) });
   const data = usePageData(section, system, source, q);
+  const [scrolled, setScrolled] = useState(false);
   const loaded = loadedOf(section, data);
 
   // Nothing stored yet (not a search that matched nothing): no search, filters or refresh to show.
@@ -414,7 +441,7 @@ export function DataPage({ section, q, open, source, spec, known, systems }: Dat
       <PageHeader
         title={section === "traces" ? "Search" : meta.label}
         description={meta.description}
-        actions={<RefreshControl live={!isSummary(section)} />}
+        actions={headerActions(section, open !== undefined || scrolled)}
       />
       <SearchBar
         section={section}
@@ -426,7 +453,12 @@ export function DataPage({ section, q, open, source, spec, known, systems }: Dat
         count={shownOf(loaded.size, section === "logs" ? seriesTotal(data.logSeries.data) : undefined)}
         onChange={setQuery}
       />
-      <section className="min-h-0 flex-1 overflow-y-auto px-10 pb-10" aria-label={meta.label} data-scroll="">
+      <section
+        className="min-h-0 flex-1 overflow-y-auto px-10 pb-10"
+        aria-label={meta.label}
+        data-scroll=""
+        onScroll={(event) => setScrolled(event.currentTarget.scrollTop > 40)}
+      >
         {body}
       </section>
     </main>

@@ -1109,10 +1109,6 @@ a.dt-request-row {
 .dt-issue-link:hover {
   text-decoration: underline;
 }
-.dt-logs-more {
-  margin: 0;
-  padding: 0.625rem 1rem 0;
-}
 .dt-issue-hint code {
   padding: 0 0.25rem;
   border-radius: 0.25rem;

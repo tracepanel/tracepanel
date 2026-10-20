@@ -5,6 +5,7 @@ import { cn } from "@tracepanel/ui/lib/utils";
 import { Columns3CogIcon, GripVerticalIcon, XIcon } from "lucide-react";
 import {
   type DragEvent,
+  type HTMLAttributes,
   type KeyboardEvent,
   type PointerEvent,
   type ReactNode,
@@ -255,21 +256,55 @@ function useDrop(onMove: ((moved: string) => void) | undefined) {
   };
 }
 
-/** The header's name, dragged to move its column before or after another. */
-function DragLabel({ id, label, movable }: { id: string; label: string; movable: boolean }) {
+// A column's step from the keyboard, by the arrow pressed on its focused name.
+const STEPS = new Map([
+  ["ArrowLeft", -1],
+  ["ArrowRight", 1],
+]);
+
+/**
+ * What makes a header's name move its column: dragged onto another header, or focused, a step with the arrow keys.
+ * None when the column stays where it is.
+ */
+function movable(
+  id: string,
+  label: string,
+  onStep: ((by: number) => void) | undefined,
+): HTMLAttributes<HTMLSpanElement> {
+  if (onStep === undefined) return {};
+  return {
+    draggable: true,
+    tabIndex: 0,
+    role: "button",
+    "aria-label": `Move the ${label} column with the arrow keys`,
+    title: "Drag to move the column (or focus it and press ← →)",
+    className: "cursor-grab active:cursor-grabbing",
+    onKeyDown: (event: KeyboardEvent) => {
+      const by = STEPS.get(event.key);
+      if (by === undefined) return;
+      onStep(by);
+      event.preventDefault();
+    },
+    onDragStart: (event: DragEvent) => {
+      event.dataTransfer.setData(DRAGGED, id);
+      event.dataTransfer.effectAllowed = "move";
+    },
+  };
+}
+
+/** The header's name, dragged to move its column before or after another; focused, the arrow keys move it a step. */
+function DragLabel({ id, label, onStep }: { id: string; label: string; onStep: ((by: number) => void) | undefined }) {
+  const { className, ...props } = movable(id, label, onStep);
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: moving a column is a pointer shortcut; the menu's reset undoes it.
     <span
-      draggable={movable}
-      title={movable ? "Drag to move the column" : undefined}
-      onDragStart={(event) => {
-        event.dataTransfer.setData(DRAGGED, id);
-        event.dataTransfer.effectAllowed = "move";
-      }}
-      className={cn("flex min-w-0 items-center", movable && "cursor-grab active:cursor-grabbing")}
+      {...props}
+      className={cn(
+        "flex min-w-0 items-center rounded-sm focus-visible:outline-2 focus-visible:outline-ring",
+        className,
+      )}
     >
       {/* A grip on hover, in the line: it opens room for itself rather than covering the name. */}
-      {movable ? (
+      {onStep ? (
         <GripVerticalIcon
           aria-hidden="true"
           className="size-3 w-0 shrink-0 text-muted-foreground opacity-0 transition-all group-hover/head:mr-1 group-hover/head:w-3 group-hover/head:opacity-70"
@@ -331,6 +366,7 @@ export function ColumnHead({
   onWidth,
   edge,
   onMove,
+  onStep,
   onRemove,
   className,
 }: {
@@ -340,6 +376,8 @@ export function ColumnHead({
   onWidth: (width: number) => void;
   edge?: ColumnEdge | undefined;
   onMove?: ((moved: string) => void) | undefined;
+  /** Moves the column a step left (-1) or right (1): the keyboard's way to do what a drag does. */
+  onStep?: ((by: number) => void) | undefined;
   onRemove?: (() => void) | undefined;
   className?: string | undefined;
 }) {
@@ -355,7 +393,7 @@ export function ColumnHead({
       aria-label={label}
       {...drop.props}
     >
-      <DragLabel id={id} label={label} movable={onMove !== undefined} />
+      <DragLabel id={id} label={label} onStep={onStep} />
       <HeadControls label={label} onRemove={onRemove} edge={edge} width={shown} onDraft={setDraft} onWidth={onWidth} />
     </TableHead>
   );

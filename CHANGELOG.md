@@ -4,6 +4,13 @@
 
 ### Added
 
+- Live on the Logs page: the records reload every 2 seconds, as a tail does,
+  and hold while one is open or the list is scrolled down. The browser keeps
+  it on.
+- The search's words are marked in the logs' messages. An opened record
+  copies as JSON, or as a link to itself. A column's name, focused, moves its
+  column with the arrow keys. A trace's Logs tab counts its records and opens
+  them in Logs.
 - An app says what it offers the console in its hello, the one place it says
   so: `capabilities` for what it does down its connection or records in its
   traces, `console` for what it answers at its own console (EXPLAIN in
@@ -24,6 +31,9 @@
 
 ### Changed
 
+- Debug records step back in the logs table, and a record opened from a link
+  scrolls into view. All attributes (the column) writes lists and objects as
+  JSON, as the record's fields do.
 - The logs chart and the list agree: a click on the legend filters the list by
   level, as the Level filter does (it hid the level in the chart alone), and
   levels are named in capitals in the table, the chart and the filter alike.

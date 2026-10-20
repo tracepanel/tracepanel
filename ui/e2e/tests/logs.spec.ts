@@ -70,7 +70,7 @@ test("a job's records are found by its name", async ({ page }) => {
 
 test("the Logger menu finds loggers with the key typed in its box too", async ({ page }) => {
   await page.goto("/#/logs");
-  await page.getByRole("button", { name: "Logger" }).click();
+  await page.getByRole("button", { name: "Logger", exact: true }).click();
   await page.getByPlaceholder("Filter logger…").fill("logger:blog");
 
   await expect(page.getByRole("option")).toHaveCount(2);
