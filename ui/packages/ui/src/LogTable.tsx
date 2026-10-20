@@ -178,6 +178,9 @@ function attributeColumns<R extends LogLike>(keys: readonly string[]): LogColumn
     id: `${ATTRIBUTE}${key}`,
     label: key,
     width: 9,
+    // Shown while picked, whatever was stored: it comes and goes from Attribute columns, a record or its header, so
+    // the columns list above doesn't offer it a second time.
+    required: true,
     cell: (log) => <AttributeValue value={log.attrs[key]} />,
   }));
 }
@@ -237,7 +240,8 @@ function edgeOf(shown: readonly ColumnSpec[], index: number): ColumnEdge | undef
   return index < flex ? "end" : "start";
 }
 
-const HEAD = "h-8 px-2 text-2xs font-semibold tracking-wide text-muted-foreground uppercase first:pl-4";
+// The console's table headers (text, weight, case), a little lower for one-line rows.
+const HEAD = "h-9 px-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase first:pl-4";
 const CELL = "truncate px-2 py-1 first:pl-4";
 
 // A warning or a failure marks the row's edge, as the console's other lists mark theirs.

@@ -47,11 +47,13 @@ function niceMax(value: number): number {
   return step * magnitude * 4;
 }
 
-/** Time of day; seconds are shown when the whole range is short. */
+/** Time of day on the 24-hour clock the tables use; seconds are shown when the whole range is short. */
 function clock(us: number, withSeconds = false): string {
   return new Date(us / 1000).toLocaleTimeString(
     [],
-    withSeconds ? { hour: "2-digit", minute: "2-digit", second: "2-digit" } : { hour: "2-digit", minute: "2-digit" },
+    withSeconds
+      ? { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }
+      : { hour: "2-digit", minute: "2-digit", hour12: false },
   );
 }
 

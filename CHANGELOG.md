@@ -24,6 +24,10 @@
 
 ### Changed
 
+- One set of proportions across the console: the sidebar at the page's text
+  size (it was larger than the pages it leads to), one header style for every
+  table, a lower search box, and charts on the tables' 24-hour clock. The
+  columns menu lists an attribute column once, under Attribute columns.
 - Request tab: the method, URL, status and time on top, the request's facts
   in a card, then its parts in one card with a switch, as browser devtools
   show them: Headers, Query, Body, Cookies, Session, Response and every other

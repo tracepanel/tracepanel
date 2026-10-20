@@ -152,6 +152,9 @@ test("an attribute picked from the menu becomes a column of its own, after a rel
   await expect(header(page, key)).toBeVisible();
 
   await region(page).getByRole("button", { name: "Columns" }).click();
+  // Listed once: in Attribute columns, not again among the table's own columns.
+  await expect(page.getByRole("menuitemcheckbox", { name: key, exact: true })).toHaveCount(0);
+
   await page.getByRole("menuitem", { name: "Reset to defaults" }).click();
 
   await expect(header(page, key)).toHaveCount(0);

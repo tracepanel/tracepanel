@@ -37,7 +37,7 @@ export function Th({ num, className, ...props }: ComponentProps<typeof TableHead
   return (
     <TableHead
       className={cn(
-        "h-12 px-5 text-sm font-semibold tracking-wide text-muted-foreground uppercase first:pl-6",
+        "h-10 px-5 text-xs font-semibold tracking-wide text-muted-foreground uppercase first:pl-6",
         num && "text-right",
         className,
       )}
@@ -47,7 +47,7 @@ export function Th({ num, className, ...props }: ComponentProps<typeof TableHead
 }
 
 export function Td({ num, className, ...props }: ComponentProps<typeof TableCell> & { num?: boolean }) {
-  return <TableCell className={cn("px-5 py-4 first:pl-6", num && "text-right tabular-nums", className)} {...props} />;
+  return <TableCell className={cn("px-5 py-3 first:pl-6", num && "text-right tabular-nums", className)} {...props} />;
 }
 
 // What a click inside a row means for itself rather than for the row.

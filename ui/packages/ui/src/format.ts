@@ -12,7 +12,7 @@ export function ago(us: number, now: number = Date.now()): string {
   const seconds = Math.max(0, Math.round((now - us / 1000) / 1000));
   if (seconds < 60) return `${seconds}s ago`;
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-  return new Date(us / 1000).toLocaleTimeString();
+  return new Date(us / 1000).toLocaleTimeString([], { hour12: false });
 }
 
 export type Tone = "ok" | "warn" | "error";

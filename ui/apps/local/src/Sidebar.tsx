@@ -299,12 +299,13 @@ function toneOf(section: Section): "error" | "warn" {
 
 function navClass(rail: boolean, current: boolean): string {
   return cn(
-    "relative flex h-11 items-center rounded-lg text-lg font-medium whitespace-nowrap text-sidebar-foreground no-underline",
-    rail ? "w-11 justify-center" : "gap-3.5 px-3.5",
+    "relative flex items-center rounded-lg font-medium whitespace-nowrap text-sidebar-foreground no-underline",
+    // The page's own text size, not larger: the list is a way around, the page is what's read.
+    rail ? "size-11 justify-center" : "h-9 gap-3 px-3.5 text-md",
     "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
     "focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none",
     current &&
-      "bg-sidebar-accent font-semibold text-sidebar-accent-foreground before:absolute before:inset-y-2 before:-left-2.5 before:w-1 before:rounded-full before:bg-brand",
+      "bg-sidebar-accent font-semibold text-sidebar-accent-foreground before:absolute before:inset-y-1.5 before:-left-2.5 before:w-1 before:rounded-full before:bg-brand",
   );
 }
 
@@ -339,7 +340,7 @@ function RailNavLink({ entry: { section, label, icon: Icon }, current, counts }:
 function OpenNavLink({ entry: { section, label, icon: Icon }, current, counts }: NavLinkProps) {
   return (
     <a href={`#/${section}`} aria-current={current ? "page" : undefined} className={navClass(false, current)}>
-      <Icon className={cn("size-5 shrink-0", current && "text-brand")} />
+      <Icon className={cn("size-[1.125rem] shrink-0", current && "text-brand")} />
       <OpenCount label={label} count={navCount(section, counts)} tone={toneOf(section)} />
     </a>
   );

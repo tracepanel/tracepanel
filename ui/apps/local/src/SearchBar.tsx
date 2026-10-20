@@ -716,7 +716,7 @@ export function SearchBar({ section, family, q, spec, error, known, count, calls
       <div
         data-error={error ? "" : undefined}
         className={cn(
-          "flex min-h-12 flex-wrap items-center gap-2 rounded-lg border border-input bg-background py-1.5 pr-2 pl-3.5",
+          "flex min-h-10 flex-wrap items-center gap-2 rounded-lg border border-input bg-background py-1 pr-2 pl-3.5",
           "focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/30",
           "data-[error]:border-error",
         )}
