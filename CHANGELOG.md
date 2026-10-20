@@ -12,6 +12,10 @@
   packages, and the agent's binary for each platform. `gh attestation verify
   FILE --repo tracepanel/tracepanel` checks one. The files on PyPI carry PEP
   740 attestations too.
+- The Request tab shows what a request carried, as an SDK records it: its
+  query, headers, body (JSON indented), cookies and session, and the
+  response's headers. They stay on this machine: the cloud and a snapshot
+  without values get none of them.
 
 ## 0.3.7 (2026-10-19)
 

@@ -128,7 +128,9 @@ leave out SQL parameters and local variables unless you start
 Traces stay in `.tracepanel/` in your project. Add it to `.gitignore`. By
 default the console listens on `127.0.0.1`, and the agent takes traces from
 this machine only. Tracepanel masks values under names that look secret, such
-as passwords, tokens and keys.
+as passwords, tokens and keys. What stays on this machine even when traces go
+to Tracepanel Cloud: SQL parameters, email bodies, a request's query, headers,
+body, cookies and session, and the local variables of an error's frames.
 
 ## Platforms
 

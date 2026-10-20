@@ -319,6 +319,93 @@ function ownRows(trace: Trace): PropRow[] {
   ];
 }
 
+/** What the request carried and what its response said, as the app's SDK recorded them (this machine only). */
+const REQUEST_PREFIXES = {
+  headers: "http.request.header.",
+  cookies: "http.request.cookie.",
+  session: "session.",
+  response: "http.response.header.",
+} as const;
+const REQUEST_KEYS = new Set(["url.query", "http.request.body", "http.request.body.truncated"]);
+
+/** Shown in their own parts: not again among all the attributes. */
+function isRequestDetail(key: string): boolean {
+  return REQUEST_KEYS.has(key) || Object.values(REQUEST_PREFIXES).some((prefix) => key.startsWith(prefix));
+}
+
+/** The attributes under a prefix, by what follows it, sorted; `name` spells the rest as the reader knows it. */
+function prefixed(attrs: Attrs, prefix: string, name: (key: string) => string = (key) => key): PropRow[] {
+  return Object.entries(attrs)
+    .filter(([key]) => key.startsWith(prefix))
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => {
+      const shown = typeof value === "string" ? value : JSON.stringify(value);
+      return { label: name(key.slice(prefix.length)), value: shown, copy: shown, mono: true };
+    });
+}
+
+/** A header as HTTP spells it: attribute keys take no dashes, so content-type was kept as content_type. */
+function header(key: string): string {
+  return key.replaceAll("_", "-");
+}
+
+/** A query string as its parameters, each as often as it came. */
+function queryRows(query: string | null): PropRow[] {
+  if (!query) return [];
+  return [...new URLSearchParams(query)].map(([name, value]) => ({ label: name, value, copy: value, mono: true }));
+}
+
+/** A body as it reads best: JSON indented, anything else as it came. */
+function readable(body: string): string {
+  try {
+    return JSON.stringify(JSON.parse(body), null, 2);
+  } catch {
+    return body;
+  }
+}
+
+function RequestBody({ body, truncated }: { body: string; truncated: boolean }) {
+  return (
+    <div className="grid gap-1">
+      <pre className="max-h-96 overflow-auto rounded-md border bg-muted/40 p-3 font-mono text-sm whitespace-pre-wrap">
+        {readable(body)}
+      </pre>
+      {truncated ? <p className="text-xs text-muted-foreground">Cut at 16 KB.</p> : null}
+    </div>
+  );
+}
+
+/** The request's own parts as headed rows of the overview's table, so every value lines up: its query, headers,
+ * cookies and session, then the response's headers. */
+function requestRows(attrs: Attrs): PropRow[] {
+  const parts: [string, PropRow[]][] = [
+    ["Query", queryRows(text(attrs["url.query"]))],
+    ["Request headers", prefixed(attrs, REQUEST_PREFIXES.headers, header)],
+    ["Cookies", prefixed(attrs, REQUEST_PREFIXES.cookies)],
+    ["Session", prefixed(attrs, REQUEST_PREFIXES.session)],
+    ["Response headers", prefixed(attrs, REQUEST_PREFIXES.response, header)],
+  ];
+  return parts.flatMap(([title, rows]) =>
+    rows.length
+      ? [
+          { label: title, value: rows.length, heading: true, id: `part:${title}` },
+          ...rows.map((row) => ({ ...row, id: `${title}:${row.label}` })),
+        ]
+      : [],
+  );
+}
+
+/** The request's body, under the table, when the app read one. */
+function BodyPart({ attrs }: { attrs: Attrs }) {
+  const body = text(attrs["http.request.body"]);
+  if (!body) return null;
+  return (
+    <Part label="Request body" title="Request body">
+      <RequestBody body={body} truncated={attrs["http.request.body.truncated"] === true} />
+    </Part>
+  );
+}
+
 /** A titled part of the overview, when it has anything to show. */
 function Part({ label, title, children }: { label: string; title: ReactNode; children: ReactNode }) {
   return (
@@ -333,15 +420,17 @@ function Part({ label, title, children }: { label: string; title: ReactNode; chi
 export function RequestInfo({ trace, related, links }: RequestInfoProps) {
   const document = text(trace.attrs["graphql.document"]);
   // The document is shown formatted above: not again, on one line, among the attributes.
-  const { "graphql.document": _, ...listed } = trace.attrs;
+  const { "graphql.document": _, ...rest } = trace.attrs;
+  const listed = Object.fromEntries(Object.entries(rest).filter(([key]) => !isRequestDetail(key)));
   // The traces it is linked to come after its own: what queued it, what it called, what it delivered to.
   const linked = relatedRows(related, links);
   return (
     <div className="grid gap-4 p-4">
-      <PropTable rows={ownRows(trace)} />
+      <PropTable dense rows={[...ownRows(trace), ...requestRows(trace.attrs)]} />
+      <BodyPart attrs={trace.attrs} />
       {linked.length ? (
         <Part label="Related traces" title="Related traces">
-          <PropTable rows={linked} />
+          <PropTable dense rows={linked} />
         </Part>
       ) : null}
       {document ? (

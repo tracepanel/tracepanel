@@ -1,19 +1,31 @@
 //! What stays on this machine when a trace leaves it: for Tracepanel Cloud, or in a snapshot shared without its
-//! values. Query parameters, mail bodies, who a user is beyond their id, a log record's own fields (`extra=`) and the
+//! values. Query parameters, mail bodies, who a user is beyond their id, what a request carried (its query string,
+//! headers, body, cookies and session) and its response's headers, a log record's own fields (`extra=`) and the
 //! local variables of an error's frames.
 
 use serde_json::{Map, Value};
 
-/// Attributes that stay on this machine: parameters, mail bodies, who a user is beyond their id.
-const LOCAL_ONLY: [&str; 5] = [
+/// Attributes that stay on this machine: parameters, mail bodies, who a user is beyond their id, a request's query
+/// string and body.
+const LOCAL_ONLY: [&str; 8] = [
     "db.params",
     "mail.body",
     "mail.html",
     "user.username",
     "user.email",
+    "url.query",
+    "http.request.body",
+    "http.request.body.truncated",
 ];
-/// A log record's own fields, as `extra=` passed them.
-const LOCAL_ONLY_PREFIX: &str = "extra.";
+/// Attributes under these stay on this machine too: a log record's own fields (as `extra=` passed them), a request's
+/// headers, cookies and session, and its response's headers.
+const LOCAL_ONLY_PREFIXES: [&str; 5] = [
+    "extra.",
+    "http.request.header.",
+    "http.request.cookie.",
+    "session.",
+    "http.response.header.",
+];
 
 /// The trace document without what stays local: its attributes, its spans' and its logs' stripped, its errors' frames
 /// without their local variables (the field kept, as null, as the schema wants it).
@@ -49,7 +61,10 @@ fn items<'a>(object: &'a mut Map<String, Value>, key: &str) -> impl Iterator<Ite
 
 fn strip_attrs(attrs: &mut Map<String, Value>) {
     attrs.retain(|key, _| {
-        !LOCAL_ONLY.contains(&key.as_str()) && !key.starts_with(LOCAL_ONLY_PREFIX)
+        !LOCAL_ONLY.contains(&key.as_str())
+            && !LOCAL_ONLY_PREFIXES
+                .iter()
+                .any(|prefix| key.starts_with(prefix))
     });
 }
 
@@ -67,6 +82,29 @@ fn forget_locals(error: &mut Value) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn what_a_request_carried_stays_local() {
+        let mut trace = serde_json::json!({
+            "attrs": {
+                "http.route": "/orders/",
+                "url.query": "page=2",
+                "http.request.header.user-agent": "curl/8",
+                "http.request.body": "{\"items\":3}",
+                "http.request.body.truncated": true,
+                "http.request.cookie.theme": "dark",
+                "session.cart": "[3]",
+                "http.response.header.content-type": "application/json",
+            },
+        });
+
+        strip(&mut trace);
+
+        assert_eq!(
+            trace,
+            serde_json::json!({"attrs": {"http.route": "/orders/"}})
+        );
+    }
 
     #[test]
     fn what_stays_local_goes_and_the_rest_stays() {
