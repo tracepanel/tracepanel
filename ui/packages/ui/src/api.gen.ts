@@ -886,6 +886,10 @@ export interface components {
         Capabilities: {
             /** @description The app runs EXPLAIN of a recorded query on its database (api/explain). */
             explain: boolean;
+            /** @description The app profiles a request when asked (the tracepanel_profile cookie or the X-Tracepanel-Profile header): the console offers to record the next one with a profile. */
+            profile: boolean;
+            /** @description The app records what its requests carry (query, headers, body, cookies, session). */
+            request: boolean;
             /** @description The app can switch the user this browser is logged in as (api/users, api/users/me, api/users/switch). */
             users: boolean;
         };
@@ -1345,6 +1349,28 @@ export interface components {
             /** @description A cache get: whether it found the key. */
             hit: boolean | null;
         };
+        profile: {
+            /** @description How often a sample was taken, in microseconds: a sample stands for this much time. */
+            interval_us: number;
+            /** @description Samples taken while the trace ran. */
+            samples: number;
+            /** @description The functions the stacks name, each once. */
+            frames: {
+                function: string;
+                module?: string | null;
+                /** @description As the project sees it: relative to its root for its own code. */
+                file: string;
+                /** @description Where the function is defined. */
+                line: number;
+                /** @description The project's own code, not a library's or the runtime's. */
+                in_app: boolean;
+            }[];
+            /** @description Each stack seen, outermost frame first, as indexes into frames, and how many samples saw it. */
+            stacks: {
+                frames: number[];
+                count: number;
+            }[];
+        };
         /**
          * Trace
          * @description One unit of work: an HTTP request, a background task or a management command, with its spans, logs, errors and detected issues. Times are Unix epoch microseconds (UTC); durations are microseconds.
@@ -1369,7 +1395,31 @@ export interface components {
             received?: components["schemas"]["trace.schema"]["$defs"]["time"];
             /** @description Its spans that are calls to another system, as the agent's analysis reads them: set by the agent on a trace it sends on, never by an SDK. The rest of each call is its span's. */
             calls?: components["schemas"]["trace.schema"]["$defs"]["call"][];
+            /** @description Where the trace's time went in code, sampled: what was running every interval_us while it ran, as stacks of frames. Recorded when asked for (a setting, or a request's X-Tracepanel-Profile header); left out otherwise. */
+            profile?: components["schemas"]["trace.schema"]["$defs"]["profile"];
             $defs: {
+                profile: {
+                    /** @description How often a sample was taken, in microseconds: a sample stands for this much time. */
+                    interval_us: number;
+                    /** @description Samples taken while the trace ran. */
+                    samples: number;
+                    /** @description The functions the stacks name, each once. */
+                    frames: {
+                        function: string;
+                        module?: string | null;
+                        /** @description As the project sees it: relative to its root for its own code. */
+                        file: string;
+                        /** @description Where the function is defined. */
+                        line: number;
+                        /** @description The project's own code, not a library's or the runtime's. */
+                        in_app: boolean;
+                    }[];
+                    /** @description Each stack seen, outermost frame first, as indexes into frames, and how many samples saw it. */
+                    stacks: {
+                        frames: number[];
+                        count: number;
+                    }[];
+                };
                 call: {
                     /** @description The span the call is. */
                     span_id: components["schemas"]["trace.schema"]["$defs"]["id"];

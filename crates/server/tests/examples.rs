@@ -268,7 +268,7 @@ async fn the_agent_finds_the_issues_and_the_api_returns_them() {
     let (_, capabilities) = get(&router, "/api/capabilities").await;
     assert_eq!(
         capabilities,
-        serde_json::json!({"explain": false, "users": false})
+        serde_json::json!({"explain": false, "users": false, "profile": false, "request": false})
     );
 
     let (status, counts) = get(&router, "/api/counts").await;

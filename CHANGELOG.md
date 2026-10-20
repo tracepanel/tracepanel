@@ -16,6 +16,13 @@
   query, headers, body (JSON indented), cookies and session, and the
   response's headers. They stay on this machine: the cloud and a snapshot
   without values get none of them.
+- A trace can carry a profile, sampled by an SDK when asked for: the trace
+  view shows it in a Profile tab, a flame graph from the outermost call down
+  and the functions by their own time and in all. The panel's Profile button
+  asks the app to profile the next request, when the app can. Profiles stay
+  on this machine.
+- `GET /api/capabilities` says whether a connected app profiles on request
+  (`profile`) and records what its requests carry (`request`).
 
 ## 0.3.7 (2026-10-19)
 

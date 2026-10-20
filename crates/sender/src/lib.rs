@@ -95,8 +95,12 @@ pub fn prepare(doc: &str, environment: &str) -> Option<Value> {
         }
     }
     tracepanel_protocol::local::strip(&mut trace);
-    if let (Some(calls), Some(object)) = (calls, trace.as_object_mut()) {
-        object.insert("calls".into(), calls);
+    if let Some(object) = trace.as_object_mut() {
+        // A profile is for the developer who asked for it, and large: the cloud has no use for it yet.
+        object.remove("profile");
+        if let Some(calls) = calls {
+            object.insert("calls".into(), calls);
+        }
     }
     Some(trace)
 }
@@ -618,6 +622,22 @@ mod tests {
                 }],
                 "issues": [{"fingerprint": "5f2c9a8e1b7d4c3a"}]
             })
+        );
+    }
+
+    #[test]
+    fn a_profile_stays_on_this_machine() {
+        let doc = json!({
+            "id": "x",
+            "attrs": {},
+            "profile": {"interval_us": 5000, "samples": 1, "frames": [], "stacks": []}
+        });
+
+        let prepared = prepare(&doc.to_string(), "production").unwrap();
+
+        assert_eq!(
+            prepared,
+            json!({"id": "x", "attrs": {"deployment.environment.name": "production"}})
         );
     }
 

@@ -127,7 +127,7 @@ function useCapabilities(source: DataSource): Capabilities | undefined {
   useEffect(() => {
     let asked = CAPABILITIES.get(source);
     if (!asked) {
-      asked = source.capabilities().catch(() => ({ explain: false, users: false }));
+      asked = source.capabilities().catch(() => ({ explain: false, users: false, profile: false, request: false }));
       CAPABILITIES.set(source, asked);
     }
     let current = true;

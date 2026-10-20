@@ -174,7 +174,14 @@ export function httpSource(base: string | URL): DataSource {
       return (await getJson<TracesOverview>(url("traces/overview", { q, group }))) ?? EMPTY_OVERVIEW;
     },
     async capabilities() {
-      return (await getJson<Capabilities>(url("capabilities"))) ?? { explain: false, users: false };
+      return (
+        (await getJson<Capabilities>(url("capabilities"))) ?? {
+          explain: false,
+          users: false,
+          profile: false,
+          request: false,
+        }
+      );
     },
     async explain(trace, span, analyze) {
       const response = await fetch(url("explain", { trace, span, analyze: analyze ? 1 : null }));

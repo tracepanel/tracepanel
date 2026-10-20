@@ -648,10 +648,16 @@ async fn served(
 /// What the console's backend adds to the store: EXPLAIN once a connected app can run it on its database. An app that
 /// serves the console on its own origin answers for itself.
 async fn capabilities(Extension(activity): Extension<Activity>) -> Response {
-    let explain = activity.apps.can("explain");
+    let apps = &activity.apps;
     json_response(
         StatusCode::OK,
-        json!({"explain": explain, "users": false}).to_string(),
+        json!({
+            "explain": apps.can("explain"),
+            "users": false,
+            "profile": apps.can("profile"),
+            "request": apps.can("request"),
+        })
+        .to_string(),
     )
 }
 
