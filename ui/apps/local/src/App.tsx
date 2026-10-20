@@ -737,7 +737,6 @@ function PanelApp({ route }: { route: Route }) {
   const panelActions = (
     <>
       <SwitchUser source={source} onSwitched={() => tellWidget("tracepanel:reload")} />
-      <ProfileNext source={source} />
       <Button
         variant="outline"
         size="sm"
@@ -755,6 +754,7 @@ function PanelApp({ route }: { route: Route }) {
           <ExternalIcon />
         </a>
       </Button>
+      <ProfileNext source={source} />
       <ShareAction traceId={selectedId} source={source} compact={true} />
       <ThemeToggle compact={true} />
       <button

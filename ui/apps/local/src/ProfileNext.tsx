@@ -1,10 +1,8 @@
 import type { DataSource } from "@tracepanel/ui";
-import { Button } from "@tracepanel/ui/components/ui/button";
 import { cn } from "@tracepanel/ui/lib/utils";
 import { FlameIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useCapability } from "./hooks";
-import { NARROW_ICON } from "./UserSwitcher";
 
 // One-shot: the app profiles the next request that carries it, and deletes it in that request's answer.
 const COOKIE = "tracepanel_profile";
@@ -34,6 +32,7 @@ export function ProfileNext({ source }: { source: DataSource }) {
   return useCapability(source, "profile") ? <ProfileButton /> : null;
 }
 
+/** An icon among the panel's own (share, theme, dock): a dot on it while it waits for the request. */
 function ProfileButton() {
   const [waiting, setWaiting] = useState(false);
   // The app deletes the cookie with the request it profiled; the button follows.
@@ -42,24 +41,21 @@ function ProfileButton() {
     const timer = setInterval(() => setWaiting(armed()), 500);
     return () => clearInterval(timer);
   }, [waiting]);
+  const title = TITLES[waiting ? "waiting" : "idle"];
   return (
-    <Button
-      variant="outline"
-      size="sm"
+    <button
+      type="button"
+      className={cn("icon-button relative", waiting && "text-brand")}
+      title={title}
+      aria-label={title}
       aria-pressed={waiting}
-      title={TITLES[waiting ? "waiting" : "idle"]}
-      className={cn(
-        "mr-1 h-7 gap-1.5 px-2.5 text-sm shadow-none",
-        NARROW_ICON,
-        waiting && "border-brand/40 bg-brand-soft text-brand",
-      )}
       onClick={() => {
         ask(!waiting);
         setWaiting(!waiting);
       }}
     >
-      <FlameIcon />
-      <span className="bar-label">{waiting ? "Waiting…" : "Profile"}</span>
-    </Button>
+      <FlameIcon className="size-4" />
+      {waiting ? <span className="absolute top-1 right-1 size-1.5 animate-pulse rounded-full bg-brand" /> : null}
+    </button>
   );
 }
