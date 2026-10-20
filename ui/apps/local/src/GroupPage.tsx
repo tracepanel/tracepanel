@@ -1,18 +1,22 @@
 import {
+  CallsChart,
   type DataSource,
   duration,
   Empty,
   type GraphqlDetail,
+  Histogram,
   IssueGroupList,
+  LatencyChart,
   MethodBadge,
   percent,
   RoutePath,
+  Stat,
+  StatGrid,
   type TraceGroup,
 } from "@tracepanel/ui";
 import { Button } from "@tracepanel/ui/components/ui/button";
 import { ArrowRightIcon } from "lucide-react";
 import { useEffect, useState } from "react";
-import { CallsChart, Histogram, LatencyChart, Stat, StatGrid } from "./Charts";
 import { PeriodChip } from "./PeriodChip";
 import { RefreshControl, track, useRefresh } from "./refresh";
 import { type EntrySection, go, href, issueRoute, periodOf, traceHref, withPeriod } from "./routes";

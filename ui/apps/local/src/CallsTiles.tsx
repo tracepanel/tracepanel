@@ -1,6 +1,5 @@
-import { type CallsSummary, type DataSource, duration, percent } from "@tracepanel/ui";
+import { type CallsSummary, type DataSource, duration, percent, Stat, StatGrid } from "@tracepanel/ui";
 import { useCallback } from "react";
-import { Stat, StatGrid } from "./Charts";
 import { useSearch } from "./data";
 
 function plural(count: number, one: string, many: string): string {

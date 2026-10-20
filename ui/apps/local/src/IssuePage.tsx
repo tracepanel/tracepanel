@@ -1,8 +1,7 @@
-import { ago, type DataSource, Empty, IssueChip, type IssueDetail, RichText } from "@tracepanel/ui";
+import { ago, CallsChart, type DataSource, Empty, IssueChip, type IssueDetail, RichText } from "@tracepanel/ui";
 import { Card } from "@tracepanel/ui/components/ui/card";
 import { LightbulbIcon } from "lucide-react";
 import { useEffect, useState } from "react";
-import { CallsChart } from "./Charts";
 import { exploreFor } from "./explore";
 import { PeriodChip } from "./PeriodChip";
 import { consoleLinks, href, traceHref } from "./routes";
