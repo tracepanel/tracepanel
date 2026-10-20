@@ -44,6 +44,7 @@ pub fn router(reader: Reader, activity: Activity) -> Router {
         .route("/api/w3c", get(served))
         .route("/api/search", get(search_spec))
         .route("/api/logs", get(logs))
+        .route("/api/logs/series", get(log_series))
         .route("/api/calls", get(calls))
         .route("/api/calls/summary", get(calls_summary))
         .route("/api/mails", get(mails))
@@ -327,6 +328,12 @@ async fn counts(State(reader): State<Shared>, Query(query): Params) -> Response 
         )
         .await,
     )
+}
+
+/// `api/logs/series?q=`: how many records matching the search were logged over time, by level, in 60 slices.
+async fn log_series(State(reader): State<Shared>, Query(query): Params) -> Response {
+    let q = q(&query);
+    answer(read(&reader, move |reader| reader.log_series(&q, 60)).await)
 }
 
 async fn logs(State(reader): State<Shared>, Query(query): Params) -> Response {

@@ -14,6 +14,18 @@ export function isoWithOffset(at: Date | number): string {
   );
 }
 
+/**
+ * The search terms for a time range picked on a chart, [start, end) in epoch µs: whole seconds that hold all of it,
+ * the start rounded down and the end up. Rounding the end down would leave out a record in its last second.
+ */
+export function rangeTerms(start: number, end: number): { since: string; until: string } {
+  const second = 1_000_000;
+  return {
+    since: isoWithOffset(Math.floor(start / second) * second),
+    until: isoWithOffset(Math.ceil(end / second) * second),
+  };
+}
+
 /** A since:/until: value as a Date, when it is an absolute time (not "15m"). */
 export function parseAbsolute(value: string): Date | null {
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value)) return null;

@@ -7,6 +7,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@tracepanel/ui/components/ui/dropdown-menu";
+import { useStored } from "@tracepanel/ui/hooks/useStored";
 import { cn } from "@tracepanel/ui/lib/utils";
 import { ChevronDownIcon, RefreshCwIcon } from "lucide-react";
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useState, useSyncExternalStore } from "react";
@@ -243,4 +244,43 @@ export function RefreshControl({ live = true }: { live?: boolean }) {
       </DropdownMenu>
     </div>
   );
+}
+
+// Live: as often as a list can follow what happens, not so often the agent notices.
+const LIVE_MS = 2000;
+
+const readLive = (raw: unknown): boolean => raw === true;
+
+// What the toggle says, held (live, but paused) or not.
+const LIVE_SAYS: Record<string, [label: string, title: string]> = {
+  true: ["Live · paused", "Paused while a record is open or the list is scrolled down"],
+  false: ["Live", "Reload every 2 seconds"],
+};
+
+/**
+ * Live, for a list that follows what happens as it happens (the logs, as a tail): reloads every 2 seconds while on,
+ * kept per browser. `paused` while the reader is reading (a record open, the list scrolled down): it holds still then,
+ * and says so.
+ */
+export function LiveToggle({ list, paused }: { list: string; paused: boolean }) {
+  const [live, setLive] = useStored(`tracepanel:${list}:live`, readLive);
+  useLive(live && !paused);
+  const [label, title] = LIVE_SAYS[String(live && paused)] ?? [];
+  return (
+    <label className="toggle mr-3 text-base font-medium" title={title}>
+      <input type="checkbox" checked={live} onChange={(event) => setLive(event.target.checked)} />
+      <span className="toggle-track" aria-hidden="true" />
+      {label}
+    </label>
+  );
+}
+
+/** "Refresh now" every 2 seconds while `running`. */
+function useLive(running: boolean) {
+  const { now } = useRefresh();
+  useEffect(() => {
+    if (!running) return;
+    const timer = window.setInterval(now, LIVE_MS);
+    return () => window.clearInterval(timer);
+  }, [running, now]);
 }

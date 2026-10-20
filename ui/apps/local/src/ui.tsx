@@ -23,7 +23,8 @@ export function DataTable({
         dense && "[&_td]:px-3 [&_td:first-child]:pl-4 [&_th]:px-3 [&_th:first-child]:pl-4",
       )}
     >
-      <Table className="text-md">
+      {/* The size of every table's rows, the logs' too: one size of table text across the console. */}
+      <Table className="text-base">
         <TableHeader className="bg-muted">
           <TableRow className="hover:bg-transparent">{head}</TableRow>
         </TableHeader>
@@ -37,7 +38,7 @@ export function Th({ num, className, ...props }: ComponentProps<typeof TableHead
   return (
     <TableHead
       className={cn(
-        "h-12 px-5 text-sm font-semibold tracking-wide text-muted-foreground uppercase first:pl-6",
+        "h-10 px-5 text-xs font-semibold tracking-wide text-muted-foreground uppercase first:pl-6",
         num && "text-right",
         className,
       )}
@@ -47,7 +48,7 @@ export function Th({ num, className, ...props }: ComponentProps<typeof TableHead
 }
 
 export function Td({ num, className, ...props }: ComponentProps<typeof TableCell> & { num?: boolean }) {
-  return <TableCell className={cn("px-5 py-4 first:pl-6", num && "text-right tabular-nums", className)} {...props} />;
+  return <TableCell className={cn("px-5 py-3 first:pl-6", num && "text-right tabular-nums", className)} {...props} />;
 }
 
 // What a click inside a row means for itself rather than for the row.
@@ -220,24 +221,5 @@ export function Breadcrumbs({ items }: { items: readonly { label: ReactNode; hre
         </span>
       ))}
     </nav>
-  );
-}
-
-const LEVEL_TONE: Record<string, string> = {
-  debug: "border-border bg-muted text-muted-foreground",
-  info: "border-info/25 bg-info-soft text-info",
-  warning: "border-warn/30 bg-warn-soft text-warn",
-  error: "border-error/30 bg-error-soft text-error",
-  critical: "border-error bg-error text-white",
-};
-
-/** A log level as a colored tag: the same in the logs table and the Level filter. */
-export function LevelBadge({ level }: { level: string }) {
-  return (
-    <span
-      className={`inline-flex rounded-md border px-1.5 py-px font-mono text-2xs font-semibold tracking-wide uppercase ${LEVEL_TONE[level] ?? LEVEL_TONE["debug"]}`}
-    >
-      {level}
-    </span>
   );
 }

@@ -4,6 +4,13 @@
 
 ### Added
 
+- Live on the Logs page: the records reload every 2 seconds, as a tail does,
+  and hold while one is open or the list is scrolled down. The browser keeps
+  it on.
+- The search's words are marked in the logs' messages. An opened record
+  copies as JSON, or as a link to itself. A column's name, focused, moves its
+  column with the arrow keys. A trace's Logs tab counts its records and opens
+  them in Logs.
 - An app says what it offers the console in its hello, the one place it says
   so: `capabilities` for what it does down its connection or records in its
   traces, `console` for what it answers at its own console (EXPLAIN in
@@ -24,6 +31,30 @@
 
 ### Changed
 
+- Every table's text is one size, the logs' a step up and the others' a step
+  down to meet it.
+- Debug records step back in the logs table, and a record opened from a link
+  scrolls into view. All attributes (the column) writes lists and objects as
+  JSON, as the record's fields do.
+- The logs chart and the list agree: a click on the legend filters the list by
+  level, as the Level filter does (it hid the level in the chart alone), and
+  levels are named in capitals in the table, the chart and the filter alike.
+  The count says "50 of 1,204" while older pages hold more. A search that
+  finds nothing keeps the chart of its time range and offers to clear it. One
+  the store refuses no longer shows a loading bar for ever.
+- The logs table reads and moves like a list of records: a message's text
+  selects and copies (the row opens the record, unless text was selected),
+  the arrow keys go from record to record, Enter opens one and Escape closes
+  it. A day's heading tops records of another day than today's, Time and
+  Level keep their width in a narrow panel.
+- A log record opens the same way everywhere: on the Logs page, in a trace's
+  Logs tab and in the call tree, its message and its exception to copy, then
+  its fields with their own copy buttons. Its time is local, to the
+  millisecond, with the date and the offset (it was UTC).
+- One set of proportions across the console: the sidebar at the page's text
+  size (it was larger than the pages it leads to), one header style for every
+  table, a lower search box, and charts on the tables' 24-hour clock. The
+  columns menu lists an attribute column once, under Attribute columns.
 - Request tab: the method, URL, status and time on top, the request's facts
   in a card, then its parts in one card with a switch, as browser devtools
   show them: Headers, Query, Body, Cookies, Session, Response and every other
@@ -34,6 +65,36 @@
 - The panel header is quieter: Explore, the user and Console are plain
   buttons and icons, and the user sits next to the request list.
 - With the panel docked at the bottom, the page scrolls to its end above it.
+- Logs: one table on the Logs page and in a trace's Logs tab. A record takes
+  one line, its message cut short (the whole of it on hover and in its
+  details), and an exception's last line follows it in red. The level is a
+  colored dot and its name. The header stays in view as the page scrolls.
+- Logs columns: drag a header's edge to resize a column, double-click it to
+  fit the column to its values, or move it with the arrow keys. The columns
+  menu shows and hides columns (App, Trace and Attributes are there too) and
+  switches the time between the time of day and how long ago (in a trace:
+  since the request started). The browser keeps these choices.
+- The density rule applies: the shared styles' own root size won over it,
+  so it did nothing. It now sets the size the UI was always shown at, 15px
+  at the usual 16px browser size.
+- Logs: any attribute can be a column of its own, from the columns menu's
+  Attribute columns, or from the attribute's own button in an opened record.
+  The column's header takes it off again. A column's name drags onto another
+  header to move it there (a grip shows at the header's end on hover), and the
+  browser keeps the order. Every column but Message hides from its header's
+  ×, as from the columns menu.
+- A log record's details say where it was logged ("Logged inside"): the
+  spans around it, as one link to the call tree there. The Show logs from row
+  adds this call and any call of its kind to this request, logger and path.
+  Its fields are a compact list, the same as a request's headers, with their
+  buttons lined up.
+- Logs: the records over time sit above the table, a bar per slice of the
+  period, its levels stacked. A level hides from the legend, and a drag
+  across the bars narrows the search to that time, as the calls' chart does.
+  `GET /api/logs/series?q=` gives the counts by level. The chart folds to its
+  title, and the browser keeps it folded.
+- The console's filter buttons (Time, Level, Route…) are smaller, to sit
+  with the denser tables.
 
 - The agent is on Maven Central, as `dev.tracepanel:tracepanel-agent`: the
   binary of each platform, with the platform as its classifier
@@ -57,6 +118,15 @@
 
 ### Fixed
 
+- A logs table with more columns than room no longer widens the page past
+  the window, cutting off the chart and squeezing Message out: its columns
+  fit the room again.
+- A list's auto-refresh no longer loses rows once older pages are loaded. New
+  rows pushed rows out of the first page, while the older pages still began
+  where it used to end, and the rows between showed nowhere.
+- A time range picked on a chart (drag to zoom) rounds out to whole seconds.
+  It rounded the end down, and a record or a call in the range's last second
+  dropped out of the list it narrowed.
 - In the console, the Request tab no longer repeats the method, URL, status
   and time the trace's own header already shows. The panel, which hides that
   header, keeps them on top of the tab.

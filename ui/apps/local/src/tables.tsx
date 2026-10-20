@@ -11,8 +11,10 @@ import {
   IssueChip,
   type IssueRow,
   type JobRow,
+  type LogColumn,
+  LogRecord,
   type LogRow,
-  logAttrs,
+  LogTable,
   MailList,
   type MailRow,
   MethodBadge,
@@ -24,6 +26,7 @@ import {
   StatusBadge,
   type TaskRow,
   type TraceSummary,
+  useAttributeColumns,
   type WebsocketRow,
 } from "@tracepanel/ui";
 import { Badge } from "@tracepanel/ui/components/ui/badge";
@@ -31,12 +34,12 @@ import { Button } from "@tracepanel/ui/components/ui/button";
 import { TableCell, TableRow } from "@tracepanel/ui/components/ui/table";
 import { systemOfPage } from "@tracepanel/ui/lib/systems";
 import { cn } from "@tracepanel/ui/lib/utils";
-import { ArrowRightIcon, ListFilterIcon } from "lucide-react";
+import { ArrowRightIcon, ChevronRightIcon, Columns3Icon, ListFilterIcon } from "lucide-react";
 import { Fragment, type ReactNode, useEffect, useState } from "react";
 import { useCapability } from "./hooks";
 import { currentPeriod, endpointGroup, go, groupRoute, href, issueRoute, traceHref, withPeriod } from "./routes";
 import { graphqlOperation, taskSystem } from "./sections";
-import { DataTable, LevelBadge, Meter, Mono, Td, Th, Tr } from "./ui";
+import { DataTable, Meter, Mono, Td, Th, Tr } from "./ui";
 
 export function TracesTable({
   items,
@@ -447,13 +450,55 @@ function RepeatedCount({ most }: { most: number }) {
   );
 }
 
+// The Logs page's own columns, after Logger: what was running when a record was logged (a request, a task, a job or
+// a page), the app, the trace.
+const LOG_COLUMNS: LogColumn<LogRow>[] = [
+  {
+    id: "source",
+    label: "Source",
+    width: 14,
+    cell: (log) => (
+      <SourceCell
+        kind={log.trace_kind}
+        htmx={log.trace_htmx}
+        method={log.method}
+        path={log.path}
+        name={log.trace_name}
+        className="max-w-none"
+        compact={true}
+      />
+    ),
+  },
+  {
+    id: "service",
+    label: "App",
+    width: 6,
+    hidden: true,
+    cell: (log) => <span className="text-muted-foreground">{log.service}</span>,
+  },
+  {
+    id: "trace",
+    label: "Trace",
+    width: 8,
+    hidden: true,
+    cell: (log) => (
+      <a className="font-mono text-muted-foreground hover:text-foreground" href={traceHref(log.trace_id, "logs")}>
+        {log.trace_id}
+      </a>
+    ),
+  },
+];
+
 export function LogsTable({
   items,
   onFilter,
   open,
   onOpen,
+  highlight,
 }: {
   items: readonly LogRow[];
+  /** The search's words, marked in the messages. */
+  highlight?: readonly string[];
   /** The record shown open, by id, kept in the URL by the page. */
   open: string | null;
   onOpen: (key: string | null) => void;
@@ -461,58 +506,24 @@ export function LogsTable({
   onFilter: (terms: Record<string, string>) => void;
 }) {
   return (
-    <DataTable
-      head={
-        <>
-          <Th>Time</Th>
-          <Th>Level</Th>
-          <Th>Message</Th>
-          <Th>Logger</Th>
-          {/* A request, a task, a job or a page: what was running when it was logged. */}
-          <Th>Source</Th>
-        </>
-      }
-    >
-      {items.map((log) => (
-        <Fragment key={log.id}>
-          <Tr
-            selected={open === String(log.id)}
-            tone={
-              log.level === "error" || log.level === "critical" ? "error" : log.level === "warning" ? "warn" : undefined
-            }
-            onClick={() => onOpen(open === String(log.id) ? null : String(log.id))}
-          >
-            <Td className="text-muted-foreground tabular-nums">{new Date(log.time / 1000).toLocaleTimeString()}</Td>
-            <Td>
-              <LevelBadge level={log.level} />
-            </Td>
-            {/* Takes the width the other columns leave and truncates: the table never outgrows the page. */}
-            <Td className="w-full max-w-0">
-              <Mono className="block truncate">{log.message}</Mono>
-            </Td>
-            <Td>
-              <Mono className="text-base text-muted-foreground">{log.logger}</Mono>
-            </Td>
-            <Td>
-              <SourceCell
-                kind={log.trace_kind}
-                htmx={log.trace_htmx}
-                method={log.method}
-                path={log.path}
-                name={log.trace_name}
-              />
-            </Td>
-          </Tr>
-          {open === String(log.id) ? (
-            <TableRow className="hover:bg-transparent">
-              <TableCell colSpan={5} className="bg-muted/40 px-5 py-4 whitespace-normal">
-                <LogDetails log={log} onFilter={onFilter} />
-              </TableCell>
-            </TableRow>
-          ) : null}
-        </Fragment>
-      ))}
-    </DataTable>
+    // Clipped, not hidden: the header stays in view as the page scrolls.
+    <div className="overflow-clip rounded-lg border bg-card">
+      <LogTable
+        table="logs"
+        logs={items}
+        keyOf={(log) => String(log.id)}
+        columns={LOG_COLUMNS}
+        open={open}
+        onOpen={onOpen}
+        highlight={highlight}
+        details={(log) => (
+          <div className="px-5 py-4">
+            <LogDetails log={log} onFilter={onFilter} />
+          </div>
+        )}
+        stickyHeader={true}
+      />
+    </div>
   );
 }
 
@@ -560,6 +571,22 @@ function httpField(method: string, path: string, status: number | null | undefin
   return ["request", `${method} ${path}${status ? ` → ${status}` : ""}`, { path: term(path) }];
 }
 
+/** The records logged inside the same call as this one (a view, a query, a Kafka send), and inside any of its kind. */
+function InsideSources({ log, onFilter }: { log: LogRow; onFilter: (terms: Record<string, string>) => void }) {
+  const innermost = log.spans[0];
+  if (innermost === undefined) return null;
+  return (
+    <>
+      <Button variant="outline" size="xs" onClick={() => onFilter({ span: term(innermost.name) })}>
+        this {innermost.system} call
+      </Button>
+      <Button variant="outline" size="xs" onClick={() => onFilter({ in: innermost.system })}>
+        any {innermost.system} call
+      </Button>
+    </>
+  );
+}
+
 /** Shortcuts to the records around this one: its trace's, every run of its task or job, its logger's, its path's. */
 function LogSources({ log, onFilter }: { log: LogRow; onFilter: (terms: Record<string, string>) => void }) {
   const named = NAMED[log.trace_kind];
@@ -587,7 +614,13 @@ function LogSources({ log, onFilter }: { log: LogRow; onFilter: (terms: Record<s
           this user
         </Button>
       ) : null}
-      <Button size="xs" className="ml-auto" asChild>
+      <InsideSources log={log} onFilter={onFilter} />
+      <span className="ml-auto flex items-center gap-1">
+        <CopyButton text={JSON.stringify(log, null, 2)} label="Copy the record as JSON" />
+        {/* The page's address opens this record: the URL keeps it. */}
+        <CopyButton text={window.location.href} label="Copy a link to the record" icon="link" />
+      </span>
+      <Button size="xs" asChild>
         <a href={traceHref(log.trace_id, "logs")}>
           Open {sourceOf(log)}
           <ArrowRightIcon />
@@ -610,99 +643,114 @@ function outward(spans: LogRow["spans"]): { path: string; span: LogRow["spans"][
 }
 
 /**
- * Where in its trace a record was logged: the spans around it, outermost first, each one's records a click away, and
- * the call tree open at the innermost.
+ * Where in its trace a record was logged: the spans around it, outermost first, as one link to the call tree open at
+ * the innermost.
  */
-function LoggedIn({ log, onFilter }: { log: LogRow; onFilter: (terms: Record<string, string>) => void }) {
+function LoggedIn({ log }: { log: LogRow }) {
   if (log.spans.length === 0) return null;
-  return (
-    <nav className="flex flex-wrap items-center gap-1.5 text-base" aria-label="Logged in">
-      <span className="mr-1 text-muted-foreground">Logged in</span>
-      {outward(log.spans).map(({ path, span }, index) => (
-        <Fragment key={path}>
-          {index > 0 ? <span className="text-muted-foreground">›</span> : null}
-          <Button
-            variant="outline"
-            size="xs"
-            title={`Show logs from inside ${span.name}`}
-            onClick={() => onFilter({ span: term(span.name) })}
-          >
-            <Badge variant="outline" className="font-mono text-2xs uppercase">
-              {span.system}
-            </Badge>
-            <span className="max-w-80 truncate font-mono">{span.name}</span>
-          </Button>
+  const path = (
+    <>
+      {outward(log.spans).map(({ path: key, span }, index) => (
+        <Fragment key={key}>
+          {index > 0 ? <ChevronRightIcon className="size-3.5 text-muted-foreground" aria-hidden="true" /> : null}
+          <Badge variant="outline" className="font-mono text-2xs uppercase">
+            {span.system}
+          </Badge>
+          <span className="max-w-80 truncate font-mono text-xs">{span.name}</span>
         </Fragment>
       ))}
-      <Button variant="ghost" size="xs" onClick={() => onFilter({ in: log.spans[0]?.system ?? "" })}>
-        every record inside {log.spans[0]?.system}
-      </Button>
+    </>
+  );
+  return (
+    <section className="flex flex-wrap items-center gap-2" aria-label="Logged inside">
+      <span className="mr-1 text-base text-muted-foreground">Logged inside</span>
       {log.span_id ? (
-        <Button variant="ghost" size="xs" className="ml-auto" asChild>
-          <a href={traceHref(log.trace_id, "tree", log.span_id)}>
-            In the call tree
-            <ArrowRightIcon />
-          </a>
-        </Button>
-      ) : null}
-    </nav>
+        <a
+          href={traceHref(log.trace_id, "tree", log.span_id)}
+          title="Open the call tree here"
+          className="inline-flex min-w-0 items-center gap-1.5 rounded-md border bg-background px-2 py-0.5 hover:border-brand/40 hover:bg-brand-soft"
+        >
+          {path}
+          <ArrowRightIcon className="size-3.5 text-muted-foreground" aria-hidden="true" />
+        </a>
+      ) : (
+        <span className="inline-flex min-w-0 items-center gap-1.5 rounded-md border bg-background px-2 py-0.5">
+          {path}
+        </span>
+      )}
+    </section>
   );
 }
 
+/** A field's filter: the logs with that value. */
+function FilterBy({ name, value, onFilter }: { name: string; value: string; onFilter: () => void }) {
+  return (
+    <Button
+      variant="ghost"
+      size="icon-xs"
+      className="size-5 text-muted-foreground"
+      title={`Show logs with ${name} = ${value}`}
+      aria-label={`Show logs with ${name} = ${value}`}
+      onClick={onFilter}
+    >
+      <ListFilterIcon />
+    </Button>
+  );
+}
+
+/** An attribute shown as a column of the table, or no longer: what the columns menu does, from the record. */
+function AsColumn({ name }: { name: string }) {
+  const columns = useAttributeColumns();
+  if (columns === null) return null;
+  const shown = columns.has(name);
+  const label = shown ? `Hide the ${name} column` : `Show ${name} as a column`;
+  return (
+    <Button
+      variant="ghost"
+      size="icon-xs"
+      className={cn("size-5", shown ? "text-brand" : "text-muted-foreground")}
+      title={label}
+      aria-label={label}
+      aria-pressed={shown}
+      onClick={() => columns.toggle(name)}
+    >
+      <Columns3Icon />
+    </Button>
+  );
+}
+
+/** The search a record's own field narrows to: its logger, its level, an attribute the search knows. */
+function ownFilter(name: string, value: string): Record<string, string> | undefined {
+  if (name === "logger") return { logger: term(value) };
+  if (name === "level") return { level: value };
+  return attrFilter(name, value);
+}
+
 function LogDetails({ log, onFilter }: { log: LogRow; onFilter: (terms: Record<string, string>) => void }) {
-  const fields: LogField[] = [
+  const filterBy = (name: string, value: string, filter: Record<string, string> | undefined) =>
+    filter ? <FilterBy key="filter" name={name} value={value} onFilter={() => onFilter(filter)} /> : null;
+  const context: LogField[] = [
     ...logContext(log),
     ["trace_id", log.trace_id, { trace: log.trace_id }],
     // The span it was logged in, filtered by span_id: (the trace's call tree opens at it).
     // biome-ignore lint/style/useNamingConvention: the search's key, as the query spells it.
     ...(log.span_id ? [["span_id", log.span_id, { span_id: log.span_id }] as LogField] : []),
-    ["logger", log.logger, { logger: term(log.logger) }],
-    ["level", log.level, { level: log.level }],
-    ["time", new Date(log.time / 1000).toISOString()],
-    ...Object.entries(logAttrs(log.attrs)).map(([key, value]): LogField => {
-      const text = String(value);
-      return [key, text, attrFilter(key, text)];
-    }),
   ];
   return (
-    <div className="grid gap-3.5">
-      <LogSources log={log} onFilter={onFilter} />
-      <LoggedIn log={log} onFilter={onFilter} />
-      <div className="group/message relative rounded-md border bg-background">
-        <pre className="m-0 px-4 py-3 pr-12 font-mono text-base whitespace-pre-wrap">{log.message}</pre>
-        <CopyButton text={log.message} label="Copy message" className="absolute top-2 right-2" />
-      </div>
-      {log.exception ? (
-        <pre className="m-0 max-h-80 overflow-auto rounded-md border border-error/30 bg-error-soft px-4 py-3 font-mono text-sm text-foreground">
-          {log.exception}
-        </pre>
-      ) : null}
-      <dl className="grid grid-cols-[max-content_minmax(0,1fr)_auto] items-center overflow-hidden rounded-md border bg-background text-base">
-        {fields.map(([key, value, filter]) => (
-          <Fragment key={key}>
-            <dt className="border-b px-3 py-1.5 font-mono text-muted-foreground">{key}</dt>
-            <dd className="m-0 truncate border-b px-3 py-1.5 font-mono" title={value}>
-              {value}
-            </dd>
-            <span className="flex items-center border-b px-1.5 py-1">
-              {filter ? (
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  className="text-muted-foreground"
-                  title={`Show logs with ${key} = ${value}`}
-                  aria-label={`Show logs with ${key} = ${value}`}
-                  onClick={() => onFilter(filter)}
-                >
-                  <ListFilterIcon />
-                </Button>
-              ) : null}
-              <CopyButton text={value} label={`Copy ${key}`} className="size-6 border-0" />
-            </span>
-          </Fragment>
-        ))}
-      </dl>
-    </div>
+    <LogRecord
+      log={log}
+      header={
+        <>
+          <LogSources log={log} onFilter={onFilter} />
+          <LoggedIn log={log} />
+        </>
+      }
+      context={context.map(([name, value, filter]) => ({ name, value, actions: [filterBy(name, value, filter)] }))}
+      actions={(name, value) => [
+        filterBy(name, value, ownFilter(name, value)),
+        name in log.attrs ? <AsColumn key="column" name={name} /> : null,
+      ]}
+    />
   );
 }
 
@@ -887,29 +935,57 @@ function SourceCell({
   method,
   path,
   name,
+  className,
+  compact = false,
 }: {
   kind: TraceSummary["kind"];
   htmx: TraceSummary["htmx"];
   method: string | null;
   path: string | null;
   name: string;
+  /** `max-w-none` in a column of a fixed width, which holds the limit itself. */
+  className?: string;
+  /** The size of a dense table's cells (the logs'): the badge and the path at the text's size. */
+  compact?: boolean;
 }) {
   const operation = graphqlOperation({ kind, name });
   return (
     // A table cell ignores max-width: the cell's content holds the limit, so a long task name truncates.
-    <span className="flex max-w-[21.25rem] min-w-0 items-center gap-2">
-      {operation ? (
-        <KindBadge kind="graphql" />
-      ) : kind === "http" ? (
-        <MethodBadge method={method} htmx={htmx} />
-      ) : (
-        <KindBadge kind={kind} />
+    <span
+      className={cn(
+        "flex max-w-[21.25rem] min-w-0 items-center gap-2",
+        compact &&
+          "gap-1.5 [&_.dt-method]:min-w-0 [&_.dt-method]:px-1 [&_.dt-method]:text-2xs [&_[data-slot=badge]]:h-4",
+        className,
       )}
-      <Mono className="truncate text-base">
-        {operation ?? (kind === "http" ? (path ?? name) : kind === "websocket" ? name.replace(/^WS /, "") : name)}
-      </Mono>
+    >
+      <SourceBadge kind={kind} graphql={operation !== null} method={method} htmx={htmx} />
+      {/* In a dense table, the row's own size: the badge sets the path apart, not a smaller type. */}
+      <Mono className={cn("truncate", !compact && "text-base")}>{operation ?? sourceText(kind, path, name)}</Mono>
     </span>
   );
+}
+
+/** What a source is, at its start: an HTTP request's method, else its kind (a task, a job, a GraphQL operation). */
+function SourceBadge({
+  kind,
+  graphql,
+  method,
+  htmx,
+}: {
+  kind: TraceSummary["kind"];
+  graphql: boolean;
+  method: string | null;
+  htmx: TraceSummary["htmx"];
+}) {
+  if (graphql) return <KindBadge kind="graphql" />;
+  return kind === "http" ? <MethodBadge method={method} htmx={htmx} /> : <KindBadge kind={kind} />;
+}
+
+/** A source's text: a request's path, a WebSocket's without its "WS ", anything else its name. */
+function sourceText(kind: TraceSummary["kind"], path: string | null, name: string): string {
+  if (kind === "http") return path ?? name;
+  return kind === "websocket" ? name.replace(/^WS /, "") : name;
 }
 
 export function KindBadge({ kind }: { kind: string }) {

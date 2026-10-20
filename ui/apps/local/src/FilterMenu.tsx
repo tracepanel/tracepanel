@@ -72,7 +72,7 @@ export function FilterMenu({
           variant="outline"
           size="sm"
           className={cn(
-            "h-9 gap-1.5 bg-muted px-3.5 text-md font-medium shadow-none",
+            "h-7 gap-1.5 bg-muted px-2.5 text-sm font-medium shadow-none",
             summary && "border-brand/40 bg-brand-soft hover:bg-brand-soft",
           )}
         >

@@ -1,4 +1,4 @@
-import { IssueChip, type IssueKind, type SearchResource, type SearchSpec } from "@tracepanel/ui";
+import { IssueChip, type IssueKind, LogLevel, type SearchResource, type SearchSpec } from "@tracepanel/ui";
 import { Badge } from "@tracepanel/ui/components/ui/badge";
 import { Button } from "@tracepanel/ui/components/ui/button";
 import { type Family, systemOfPage } from "@tracepanel/ui/lib/systems";
@@ -10,7 +10,6 @@ import { type CallsSection, type EntrySection, type Section, systemOfSection } f
 import { taskSystem } from "./sections";
 import { TimeRange } from "./TimeRange";
 import { parseAbsolute, shortTime } from "./time";
-import { LevelBadge } from "./ui";
 
 /* ---------- query model: filters as chips, free text in the input ---------- */
 
@@ -313,8 +312,9 @@ const QUICK: Record<Exclude<Section, CallsSection>, Control[]> = {
       title: "Filter by level",
       key: "level",
       values: ["debug", "info", "warning", "error", "critical"],
-      format: capital,
-      display: (level) => <LevelBadge level={level} />,
+      // As the table and the chart name it.
+      format: (level) => level.toUpperCase(),
+      display: (level) => <LogLevel level={level} />,
     },
     { label: "Logger", title: "Filter by logger", key: "logger", values: (known) => known.logger ?? [] },
     // The routes whose requests logged anything: the others would find nothing here.
@@ -563,8 +563,8 @@ export interface SearchBarProps {
   error: string | null;
   /** Values from stored data, offered in menus and after `route:`, `logger:`, `db:`. */
   known: KnownValues;
-  /** Results shown for the current query, if known. */
-  count?: number | undefined;
+  /** Results shown for the current query, if known: a number, or "14 of 1,204" when more match than are shown. */
+  count?: number | string | undefined;
   /** The list of this entry point's calls: its own quick filters on the traces search. */
   callsOf?: EntrySection | undefined;
   /** `typed`: the box's own debounced text, which replaces the history entry; a chip or a menu adds one. */
@@ -717,7 +717,7 @@ export function SearchBar({ section, family, q, spec, error, known, count, calls
       <div
         data-error={error ? "" : undefined}
         className={cn(
-          "flex min-h-12 flex-wrap items-center gap-2 rounded-lg border border-input bg-background py-1.5 pr-2 pl-3.5",
+          "flex min-h-10 flex-wrap items-center gap-2 rounded-lg border border-input bg-background py-1 pr-2 pl-3.5",
           "focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/30",
           "data-[error]:border-error",
         )}

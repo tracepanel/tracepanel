@@ -1,19 +1,33 @@
 import { cn } from "@tracepanel/ui/lib/utils";
-import { CheckIcon, CopyIcon } from "lucide-react";
+import { CheckIcon, CopyIcon, LinkIcon } from "lucide-react";
 import { useState } from "react";
 import { Button } from "./components/ui/button";
 
-/** Copies `text` to the clipboard; the icon turns into a check for a moment. */
-export function CopyButton({ text, label = "Copy", className }: { text: string; label?: string; className?: string }) {
+const ICONS = { copy: CopyIcon, link: LinkIcon };
+
+/** Copies `text` to the clipboard; the icon (`link` for an address) turns into a check for a moment. */
+export function CopyButton({
+  text,
+  label = "Copy",
+  className,
+  icon = "copy",
+}: {
+  text: string;
+  label?: string;
+  className?: string;
+  icon?: "copy" | "link";
+}) {
   const [copied, setCopied] = useState(false);
+  const said = copied ? "Copied" : label;
+  const Icon = copied ? CheckIcon : ICONS[icon];
   return (
     <Button
       type="button"
       variant="outline"
       size="icon-sm"
       className={cn("size-7 bg-background shadow-none", className)}
-      aria-label={copied ? "Copied" : label}
-      title={copied ? "Copied" : label}
+      aria-label={said}
+      title={said}
       onClick={(event) => {
         event.stopPropagation();
         navigator.clipboard.writeText(text).then(
@@ -25,7 +39,7 @@ export function CopyButton({ text, label = "Copy", className }: { text: string; 
         );
       }}
     >
-      {copied ? <CheckIcon className="text-ok" /> : <CopyIcon />}
+      <Icon className={cn(copied && "text-ok")} />
     </Button>
   );
 }

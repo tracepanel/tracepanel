@@ -26,11 +26,15 @@
   }
 }
 
+/* The density: every size is in rem, so this one value scales the whole UI. A percentage keeps the reader's own
+   browser font size in the sum (15px at the usual 16px). Outside the layers, and on :root: the shared styles' html
+   size (@tracepanel/ui) would win over a layered rule. */
+:root {
+  font-size: 93.75%;
+}
+
 @layer base {
   html {
-    /* The density: every size is in rem, so this one value scales the whole UI. A percentage keeps the reader's
-       own browser font size in the sum. */
-    font-size: 67.7%;
     font-family: var(--dt-font);
     /* Geist: figures of one width, so numbers line up in tables and do not jitter as they update. */
     font-variant-numeric: tabular-nums;

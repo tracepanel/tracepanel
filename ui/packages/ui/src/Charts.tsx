@@ -1,9 +1,11 @@
+import { ChevronDownIcon } from "lucide-react";
 import type React from "react";
 import { Children, type CSSProperties, type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
 import { Card } from "./components/ui/card";
 import { duration } from "./format";
+import { useStored } from "./hooks/useStored";
 import { cn } from "./lib/utils";
-import type { HistogramBucket, SeriesBucket } from "./types";
+import type { HistogramBucket, LogBucket, SeriesBucket } from "./types";
 
 // Series colors are theme tokens (--dt-chart-1/2), validated with the dataviz palette checker on each theme's
 // surface: lightness band, chroma, CVD and normal-vision separation, contrast — all pass.
@@ -45,11 +47,13 @@ function niceMax(value: number): number {
   return step * magnitude * 4;
 }
 
-/** Time of day; seconds are shown when the whole range is short. */
+/** Time of day on the 24-hour clock the tables use; seconds are shown when the whole range is short. */
 function clock(us: number, withSeconds = false): string {
   return new Date(us / 1000).toLocaleTimeString(
     [],
-    withSeconds ? { hour: "2-digit", minute: "2-digit", second: "2-digit" } : { hour: "2-digit", minute: "2-digit" },
+    withSeconds
+      ? { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }
+      : { hour: "2-digit", minute: "2-digit", hour12: false },
   );
 }
 
@@ -73,34 +77,87 @@ function Tooltip({ hover }: { hover: Hover | null }) {
   );
 }
 
+/** A chart's folding: whether it is folded to its title, and what folds or unfolds it. */
+interface Folding {
+  folded: boolean;
+  onFold: (folded: boolean) => void;
+}
+
+/** A chart's title: with `folding`, a button that folds the chart to it and opens it again. */
+function FrameTitle({ title, folding }: { title: string; folding: Folding | undefined }) {
+  if (!folding) return <span>{title}</span>;
+  return (
+    <button
+      type="button"
+      aria-expanded={!folding.folded}
+      onClick={() => folding.onFold(!folding.folded)}
+      className="-ml-1 inline-flex items-center gap-1 rounded-md px-1 hover:bg-accent"
+    >
+      <ChevronDownIcon
+        aria-hidden="true"
+        className={cn("size-4 text-muted-foreground transition-transform", folding.folded && "-rotate-90")}
+      />
+      {title}
+    </button>
+  );
+}
+
+type Plot = (width: number, setHover: (hover: Hover | null) => void) => ReactNode;
+
+/** The chart, mounted only while it is open: it measures its width as it mounts. */
+function FoldedPlot({ folded, children }: { folded: boolean; children: Plot }) {
+  return folded ? null : <FramePlot>{children}</FramePlot>;
+}
+
+/** The chart itself, with its tooltip. */
+function FramePlot({ children }: { children: Plot }) {
+  const [ref, width] = useWidth();
+  const [hover, setHover] = useState<Hover | null>(null);
+  return (
+    <div className="relative [&_svg]:block [&_svg]:overflow-visible" ref={ref} onPointerLeave={() => setHover(null)}>
+      {children(width, setHover)}
+      <Tooltip hover={hover} />
+    </div>
+  );
+}
+
 function Frame({
   title,
   legend,
+  folding,
   children,
 }: {
   title: string;
   legend?: ReactNode;
+  /** The chart folds to its title from there, as the page keeps it. */
+  folding?: Folding | undefined;
   children: (width: number, setHover: (hover: Hover | null) => void) => ReactNode;
 }) {
-  const [ref, width] = useWidth();
-  const [hover, setHover] = useState<Hover | null>(null);
+  const folded = folding?.folded === true;
   return (
-    <Card className="m-0 gap-2 rounded-xl px-5 pt-4 pb-3 shadow-none">
+    <Card className={cn("m-0 gap-2 rounded-xl px-5 pt-4 pb-3 shadow-none", folded && "py-2.5")}>
       <div className="flex items-center justify-between gap-3 text-md font-semibold">
-        <span>{title}</span>
-        {legend}
+        <FrameTitle title={title} folding={folding} />
+        {folded ? null : legend}
       </div>
-      <div className="relative [&_svg]:block [&_svg]:overflow-visible" ref={ref} onPointerLeave={() => setHover(null)}>
-        {children(width, setHover)}
-        <Tooltip hover={hover} />
-      </div>
+      <FoldedPlot folded={folded}>{children}</FoldedPlot>
     </Card>
   );
 }
 
-function AxisY({ max, width, format }: { max: number; width: number; format: (value: number) => string }) {
-  const ticks = [0, 0.25, 0.5, 0.75, 1];
-  const plot = HEIGHT - PAD.top - PAD.bottom;
+function AxisY({
+  max,
+  width,
+  format,
+  height = HEIGHT,
+}: {
+  max: number;
+  width: number;
+  format: (value: number) => string;
+  height?: number;
+}) {
+  const ticks = height < HEIGHT ? [0, 0.5, 1] : [0, 0.25, 0.5, 0.75, 1];
+  const plot = height - PAD.top - PAD.bottom;
   return (
     <g className="[&_line]:stroke-(--dt-grid) [&_text]:fill-muted-foreground [&_text]:text-xs [&_text]:tabular-nums">
       {ticks.map((tick) => {
@@ -118,17 +175,25 @@ function AxisY({ max, width, format }: { max: number; width: number; format: (va
   );
 }
 
-function AxisX({ series, width }: { series: Series; width: number }) {
+function AxisX({
+  series,
+  width,
+  height = HEIGHT,
+}: {
+  series: readonly { start: number; end: number }[];
+  width: number;
+  height?: number;
+}) {
   const first = series[0];
   const last = series.at(-1);
   if (!first || !last) return null;
   const seconds = last.end - first.start < SHORT_RANGE_US;
   return (
     <g className="[&_line]:stroke-(--dt-grid) [&_text]:fill-muted-foreground [&_text]:text-xs [&_text]:tabular-nums">
-      <text x={PAD.left} y={HEIGHT - 6}>
+      <text x={PAD.left} y={height - 6}>
         {clock(first.start, seconds)}
       </text>
-      <text x={width - PAD.right} y={HEIGHT - 6} textAnchor="end">
+      <text x={width - PAD.right} y={height - 6} textAnchor="end">
         {clock(last.end, seconds)}
       </text>
     </g>
@@ -330,6 +395,19 @@ export function LatencyChart({ series }: { series: Series }) {
   );
 }
 
+/** Where a bar chart's bars go: the plot's height, a slot per bar, a bar's width, the baseline, and which bar a
+ * pointer is over. */
+function barLayout(width: number, height: number, count: number) {
+  const plotW = width - PAD.left - PAD.right;
+  const plotH = height - PAD.top - PAD.bottom;
+  const slot = plotW / Math.max(count, 1);
+  const indexAt = (event: React.PointerEvent<SVGSVGElement>) => {
+    const box = event.currentTarget.getBoundingClientRect();
+    return Math.min(Math.max(Math.floor((event.clientX - box.left - PAD.left) / slot), 0), count - 1);
+  };
+  return { plotH, slot, barW: Math.max(Math.min(slot - 2, 18), 2), base: PAD.top + plotH, indexAt };
+}
+
 /* ---------- calls over time: bars, errors stacked on top; drag to pick a time range ---------- */
 
 interface CallsChartProps {
@@ -373,15 +451,7 @@ export function CallsChart({
         const visible = (bucket: Series[number]) =>
           (showOk ? bucket.calls - bucket.errors : 0) + (showErrors ? bucket.errors : 0);
         const max = niceCount(Math.max(...series.map(visible), 1));
-        const plotW = width - PAD.left - PAD.right;
-        const plotH = HEIGHT - PAD.top - PAD.bottom;
-        const slot = plotW / Math.max(series.length, 1);
-        const barW = Math.max(Math.min(slot - 2, 18), 2);
-        const base = PAD.top + plotH;
-        const indexAt = (event: React.PointerEvent<SVGSVGElement>) => {
-          const box = event.currentTarget.getBoundingClientRect();
-          return Math.min(Math.max(Math.floor((event.clientX - box.left - PAD.left) / slot), 0), series.length - 1);
-        };
+        const { plotH, slot, barW, base, indexAt } = barLayout(width, HEIGHT, series.length);
         const low = drag ? Math.min(drag.from, drag.to) : 0;
         const high = drag ? Math.max(drag.from, drag.to) : 0;
         return (
@@ -474,6 +544,256 @@ export function CallsChart({
         );
       }}
     </Frame>
+  );
+}
+
+/* ---------- log records over time: a bar per slice, its levels stacked; drag to pick a time range ---------- */
+
+/** The levels from the bottom of a bar up, each in the color its records' dot has in the table. */
+const LOG_LEVELS: readonly (LegendItem & { levels: readonly string[] })[] = [
+  // Named as the table and the Level filter name them.
+  { key: "debug", label: "DEBUG", className: "bg-muted-foreground/50", levels: ["debug"] },
+  { key: "info", label: "INFO", className: "bg-info", levels: ["info"] },
+  { key: "warning", label: "WARNING", className: "bg-warn", levels: ["warning"] },
+  { key: "error", label: "ERROR", className: "bg-error", levels: ["error", "critical"] },
+];
+
+/** The search's levels, and what picks others: the legend filters the list too, not the chart alone. */
+export interface LevelFilter {
+  /** The levels the search has (`level:warning,error`); none: every level. */
+  chosen: readonly string[];
+  onChoose: (levels: readonly string[]) => void;
+}
+
+/** The legend's hidden levels and its toggle: the search's, with a level filter, else the chart's own. */
+function useLevelToggle(
+  levels: LevelFilter | undefined,
+): [ReadonlySet<string>, (key: string, all: readonly LegendItem[]) => void] {
+  const own = useSeriesToggle();
+  if (!levels) return own;
+  return [unchosen(levels.chosen), (key) => levels.onChoose(rechosen(levels.chosen, key))];
+}
+
+/** The legend's entries the search leaves out: none without a level filter. */
+function unchosen(chosen: readonly string[]): ReadonlySet<string> {
+  if (chosen.length === 0) return new Set();
+  return new Set(LOG_LEVELS.filter((item) => !item.levels.some((level) => chosen.includes(level))).map((i) => i.key));
+}
+
+/** The levels after a legend click: an entry in or out, the last one kept, all of them the same as none. */
+function rechosen(chosen: readonly string[], key: string): string[] {
+  const hidden = new Set(unchosen(chosen));
+  if (hidden.has(key)) hidden.delete(key);
+  else if (hidden.size < LOG_LEVELS.length - 1) hidden.add(key);
+  if (hidden.size === 0) return [];
+  return LOG_LEVELS.filter((item) => !hidden.has(item.key)).flatMap((item) => item.levels);
+}
+
+const FILL: Record<string, string> = {
+  debug: "fill-muted-foreground/50",
+  info: "fill-info",
+  warning: "fill-warn",
+  error: "fill-error",
+};
+
+/** The records of a slice in each level the legend shows, bottom up. */
+function stacked(bucket: LogBucket, hidden: ReadonlySet<string>): { key: string; count: number }[] {
+  return LOG_LEVELS.filter((level) => !hidden.has(level.key)).map((level) => ({
+    key: level.key,
+    count: level.levels.reduce((sum, name) => sum + (bucket.levels[name] ?? 0), 0),
+  }));
+}
+
+/** A slice's tooltip: its time, then its records by level. */
+/** A slice's time: from–to, or, for a slice under a second, when and how long. */
+function sliceTime(start: number, end: number): string {
+  const from = clock(start, true);
+  const to = clock(end, true);
+  return from === to ? `${from} · ${duration(end - start)}` : `${from}–${to}`;
+}
+
+const TIP_TONE: Record<string, string> = { error: "text-error", warning: "text-warn" };
+
+/** A level's count in a slice's tooltip: "3 ERROR", in the level's colour when it is a warning or worse. */
+function TipLevel({ level, count }: { level: string; count: number }) {
+  return (
+    <span className={TIP_TONE[level]}>
+      {count} {LOG_LEVELS.find((item) => item.key === level)?.label ?? level}
+    </span>
+  );
+}
+
+function LogTip({ bucket }: { bucket: LogBucket }) {
+  return (
+    <>
+      <b>{sliceTime(bucket.start, bucket.end)}</b>
+      <span>
+        {bucket.count} {bucket.count === 1 ? "record" : "records"}
+      </span>
+      {stacked(bucket, new Set()).map(({ key, count }) =>
+        count > 0 ? <TipLevel key={key} level={key} count={count} /> : null,
+      )}
+    </>
+  );
+}
+
+/** Picking slices by dragging across them: the indexes from and to, while the pointer is down. */
+function useBrush(count: number, onSelect: ((low: number, high: number) => void) | undefined) {
+  const [drag, setDrag] = useState<{ from: number; to: number } | null>(null);
+  const low = drag ? Math.min(drag.from, drag.to) : 0;
+  const high = drag ? Math.max(drag.from, drag.to) : 0;
+  const handlers = (indexAt: (event: React.PointerEvent<SVGSVGElement>) => number) =>
+    onSelect === undefined || count === 0
+      ? {}
+      : {
+          onPointerDown: (event: React.PointerEvent<SVGSVGElement>) => {
+            if (event.button !== 0) return;
+            event.currentTarget.setPointerCapture(event.pointerId);
+            const index = indexAt(event);
+            setDrag({ from: index, to: index });
+          },
+          onPointerMove: (event: React.PointerEvent<SVGSVGElement>) => {
+            if (drag) setDrag({ from: drag.from, to: indexAt(event) });
+          },
+          onPointerUp: () => {
+            if (drag) onSelect(low, high);
+            setDrag(null);
+          },
+          onPointerCancel: () => setDrag(null),
+        };
+  return { drag: drag !== null, low, high, handlers };
+}
+
+const LOG_HEIGHT = 132;
+
+/**
+ * Log records over time: a bar per slice of the period, its levels stacked, debug at the bottom and errors on top.
+ * A level hides from the legend; with `onSelect`, a drag across the bars picks their time range [start, end) in µs.
+ */
+const readFolded = (raw: unknown): boolean => raw === true;
+
+export function LogsChart({
+  series,
+  onSelect,
+  levels,
+}: {
+  series: readonly LogBucket[];
+  onSelect?: ((start: number, end: number) => void) | undefined;
+  /** The search's level filter: the legend shows and changes it. Without it, the legend hides levels in the chart. */
+  levels?: LevelFilter | undefined;
+}) {
+  const [hidden, toggle] = useLevelToggle(levels);
+  // Folded to its title, as this browser last left it: room for more records.
+  const [folded, setFolded] = useStored("tracepanel:logs:chart-folded", readFolded);
+  const brush = useBrush(
+    series.length,
+    onSelect &&
+      ((low, high) => {
+        const first = series[low];
+        const last = series[high];
+        if (first && last) onSelect(first.start, last.end);
+      }),
+  );
+  const legend = (
+    <Legend
+      items={LOG_LEVELS}
+      hidden={hidden}
+      onToggle={toggle}
+      extra={onSelect ? <span className="pl-1.5 font-normal">drag to zoom</span> : null}
+    />
+  );
+  return (
+    <Frame title="Records over time" legend={legend} folding={{ folded, onFold: setFolded }}>
+      {(width, setHover) => {
+        const total = (bucket: LogBucket) => stacked(bucket, hidden).reduce((sum, level) => sum + level.count, 0);
+        const max = niceCount(Math.max(...series.map(total), 1));
+        const { plotH, slot, barW, base, indexAt } = barLayout(width, LOG_HEIGHT, series.length);
+        return (
+          <svg
+            width={width}
+            height={LOG_HEIGHT}
+            role="img"
+            aria-label="Log records over time, by level"
+            data-brush={onSelect ? "" : undefined}
+            {...brush.handlers(indexAt)}
+          >
+            <AxisY max={max} width={width} height={LOG_HEIGHT} format={(value) => String(Math.round(value))} />
+            <AxisX series={series} width={width} height={LOG_HEIGHT} />
+            {brush.drag ? (
+              <rect
+                className="fill-brand/15 stroke-brand/60"
+                x={PAD.left + brush.low * slot}
+                y={PAD.top}
+                width={(brush.high - brush.low + 1) * slot}
+                height={plotH}
+                rx={4}
+              />
+            ) : null}
+            {series.map((bucket, index) => {
+              const left = PAD.left + index * slot + (slot - barW) / 2;
+              return (
+                <LogBar
+                  key={bucket.start}
+                  levels={stacked(bucket, hidden)}
+                  left={left}
+                  width={barW}
+                  base={base}
+                  scale={plotH / max}
+                  onHover={() =>
+                    // An empty slice has nothing to say.
+                    setHover(
+                      bucket.count > 0
+                        ? {
+                            x: left + barW / 2,
+                            y: base - total(bucket) * (plotH / max),
+                            content: <LogTip bucket={bucket} />,
+                          }
+                        : null,
+                    )
+                  }
+                  hitTop={PAD.top}
+                  hitHeight={plotH}
+                />
+              );
+            })}
+          </svg>
+        );
+      }}
+    </Frame>
+  );
+}
+
+/** A slice's bar: its levels stacked bottom up, with a hit area the slice's full height for its tooltip. */
+function LogBar({
+  levels,
+  left,
+  width,
+  base,
+  scale,
+  onHover,
+  hitTop,
+  hitHeight,
+}: {
+  levels: readonly { key: string; count: number }[];
+  left: number;
+  width: number;
+  base: number;
+  scale: number;
+  onHover: () => void;
+  hitTop: number;
+  hitHeight: number;
+}) {
+  let top = base;
+  return (
+    <g onPointerEnter={onHover}>
+      <rect x={left - 2} y={hitTop} width={width + 4} height={hitHeight} fill="transparent" />
+      {levels.map(({ key, count }) => {
+        if (count === 0) return null;
+        const height = Math.max(count * scale, 2);
+        top -= height;
+        return <rect key={key} x={left} y={top} width={width} height={height} rx={1.5} className={FILL[key]} />;
+      })}
+    </g>
   );
 }
 

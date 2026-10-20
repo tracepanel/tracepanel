@@ -869,7 +869,7 @@ type DetailsProps<T extends Node["type"]> = {
 };
 
 function LogDetails({ node }: DetailsProps<"log">) {
-  return <LogRecordDetails log={node.log} />;
+  return <LogRecordDetails log={node.log} titled={true} />;
 }
 
 function ErrorDetails({ node }: DetailsProps<"error">) {

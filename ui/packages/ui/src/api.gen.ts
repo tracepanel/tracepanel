@@ -102,6 +102,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/logs/series": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How many log records matching a search were logged over time, by level.
+         * @description 60 slices of the period the search's since: and until: give, else of the records' own (at least ten minutes, up to the last one). Each slice counts its records, in all and by level.
+         */
+        get: operations["logSeries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/mails": {
         parameters: {
             query?: never;
@@ -775,6 +795,15 @@ export interface components {
             slow: number;
             p50: number | null;
             p95: number | null;
+        };
+        LogBucket: {
+            start: components["schemas"]["Time"];
+            end: components["schemas"]["Time"];
+            count: number;
+            /** @description Records by level (debug, info, warning, error, critical); a level with none is left out. */
+            levels: {
+                [key: string]: number;
+            };
         };
         HistogramBucket: {
             from: components["schemas"]["Duration"];
@@ -1742,6 +1771,32 @@ export interface operations {
                     "application/json": {
                         logs: components["schemas"]["LogRow"][];
                         next: components["schemas"]["Cursor"];
+                    };
+                };
+            };
+            400: components["responses"]["BadSearch"];
+        };
+    };
+    logSeries: {
+        parameters: {
+            query?: {
+                /** @description Search query: free text plus key:value filters, e.g. route:/api/* status>=500 "timed out". */
+                q?: components["parameters"]["q"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The series. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        series: components["schemas"]["LogBucket"][];
                     };
                 };
             };

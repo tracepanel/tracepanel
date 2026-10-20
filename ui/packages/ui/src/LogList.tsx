@@ -1,10 +1,32 @@
-import { useState } from "react";
-import { clock, since } from "./format";
+import { ArrowRightIcon, ListTreeIcon } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Button } from "./components/ui/button";
 import { keyed } from "./keys";
 import { LogRecordDetails } from "./LogRecordDetails";
+import { LogTable } from "./LogTable";
 import { linkProps, type TraceLinks } from "./links";
 import type { Log } from "./types";
 
+/** Over a trace's records: how many, and the way to the Logs page to filter and search them with every other. */
+function LogsBar({ count, traceId, links }: { count: number; traceId: string; links: TraceLinks | undefined }) {
+  return (
+    <div className="flex items-center gap-3 px-4 py-2.5 text-base text-muted-foreground">
+      <span className="tabular-nums">
+        {count} {count === 1 ? "record" : "records"}
+      </span>
+      {links?.logs ? (
+        <Button variant="outline" size="xs" className="ml-auto" asChild>
+          <a {...linkProps(links, links.logs(traceId))}>
+            Open in Logs
+            <ArrowRightIcon />
+          </a>
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
+/** A trace's records, as the Logs page lists records: one line each, a click opens its details below. */
 export function LogList({
   logs,
   start,
@@ -19,71 +41,28 @@ export function LogList({
   /** Open the call tree at the span a record was logged in. */
   onShowSpan?: ((spanId: string) => void) | undefined;
 }) {
+  const [open, setOpen] = useState<string | null>(null);
+  // Records carry no id: their time, logger and message, and a counter for repeats, keep them apart.
+  const keys = useMemo(
+    () => new Map(keyed(logs, (log) => `${log.time}:${log.logger}:${log.message}`).map(({ key, item }) => [item, key])),
+    [logs],
+  );
   if (logs.length === 0) return <p className="dt-note">No log records in this request.</p>;
   return (
     <>
-      {links?.logs ? (
-        <p className="dt-logs-more">
-          <a className="dt-issue-link" {...linkProps(links, links.logs(traceId))}>
-            In the logs list, to filter and search →
-          </a>
-        </p>
-      ) : null}
-      <ol className="dt-logs">
-        {keyed(logs, (log) => `${log.time}:${log.logger}:${log.message}`).map(({ key, item: log }) => (
-          <LogRecord key={key} log={log} start={start} onShowSpan={onShowSpan} />
-        ))}
-      </ol>
+      <LogsBar count={logs.length} traceId={traceId} links={links} />
+      <LogTable
+        table="trace-logs"
+        logs={logs}
+        keyOf={(log) => keys.get(log) ?? ""}
+        start={start}
+        open={open}
+        onOpen={setOpen}
+        details={(log) => <LogRecordDetails log={log} />}
+        action={(log) => <ShowSpan spanId={log.span_id} onShowSpan={onShowSpan} />}
+      />
     </>
   );
-}
-
-/** One record, compact; a click on it opens its details below, as the call tree shows a picked record. */
-function LogRecord({
-  log,
-  start,
-  onShowSpan,
-}: {
-  log: Log;
-  start: number;
-  onShowSpan?: ((spanId: string) => void) | undefined;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    // biome-ignore lint/a11y/useKeyWithClickEvents: the message inside is the button the keyboard opens it with.
-    <li
-      className="dt-log"
-      data-level={log.level}
-      data-open={open || undefined}
-      onClick={(event) => opens(event.target) && setOpen(!open)}
-    >
-      <time className="dt-log-time" dateTime={new Date(log.time / 1000).toISOString()} title={since(log.time, start)}>
-        {clock(log.time)}
-      </time>
-      <span className="dt-log-level">{log.level}</span>
-      <button type="button" className="dt-log-message" aria-expanded={open}>
-        {log.message}
-      </button>
-      <span className="dt-log-logger">{log.logger}</span>
-      <ShowSpan spanId={log.span_id} onShowSpan={onShowSpan} />
-      <Exception text={open ? null : log.exception} />
-      {open ? (
-        <div className="dt-log-details">
-          <LogRecordDetails log={log} />
-        </div>
-      ) : null}
-    </li>
-  );
-}
-
-/** Whether a click in a row opens it: anywhere but its call tree link and its opened details. */
-function opens(target: EventTarget): boolean {
-  return !(target as Element).closest("a, .dt-log-span, .dt-log-details");
-}
-
-/** A record's exception under it, while its details (which show it) are closed. */
-function Exception({ text }: { text: string | null | undefined }) {
-  return text ? <pre className="dt-code dt-log-exception">{text}</pre> : null;
 }
 
 /** The call tree opened at the span a record was logged in, when it was logged in one. */
@@ -96,8 +75,15 @@ function ShowSpan({
 }) {
   if (!onShowSpan || !spanId) return null;
   return (
-    <button type="button" className="dt-log-span" onClick={() => onShowSpan(spanId)}>
-      In the call tree
-    </button>
+    <Button
+      variant="ghost"
+      size="icon-xs"
+      className="text-muted-foreground"
+      aria-label="In the call tree"
+      title="In the call tree"
+      onClick={() => onShowSpan(spanId)}
+    >
+      <ListTreeIcon />
+    </Button>
   );
 }
