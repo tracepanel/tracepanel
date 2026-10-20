@@ -130,6 +130,15 @@ export const NO_CAPABILITIES: Capabilities = {
   live_tasks: false,
 };
 
+/** An empty store, with nothing in flight: what a source answers that has nothing to count. */
+export const NO_COUNTS: Counts = {
+  issues: 0,
+  errors: 0,
+  sections: { http: 0, graphql: 0, tasks: 0, websockets: 0, jobs: 0, rpc: 0, pages: 0, mails: 0, systems: [] },
+  // biome-ignore lint/style/useNamingConvention: wire format.
+  live_tasks: false,
+};
+
 /** Nothing in flight: what a source without task events answers. */
 export const NO_LIVE_TASKS: LiveTasks = { now: 0, tasks: [], workers: [] };
 
@@ -236,23 +245,7 @@ export function httpSource(base: string | URL): DataSource {
       return ((await response.json()) as { deleted: number }).deleted;
     },
     async counts(service) {
-      return (
-        (await getJson<Counts>(url("counts", { service }))) ?? {
-          issues: 0,
-          errors: 0,
-          sections: {
-            http: 0,
-            graphql: 0,
-            tasks: 0,
-            websockets: 0,
-            jobs: 0,
-            rpc: 0,
-            pages: 0,
-            mails: 0,
-            systems: [],
-          },
-        }
-      );
+      return (await getJson<Counts>(url("counts", { service }))) ?? NO_COUNTS;
     },
     async knownValues(service) {
       return (

@@ -36,7 +36,7 @@ import {
 import { ClearDialog } from "./ClearDialog";
 import { Console } from "./Console";
 import { exploreFor } from "./explore";
-import { type EntrySummary, type TabEntry, type TabHistory, usePolling, useTabHistory } from "./hooks";
+import { type EntrySummary, type TabEntry, type TabHistory, useNewIds, usePolling, useTabHistory } from "./hooks";
 import { ProfileToggle } from "./ProfileToggle";
 import { RefreshProvider } from "./refresh";
 import { consoleLinks, go, href, type Route, useRoute } from "./routes";
@@ -531,28 +531,6 @@ function writeFollow(value: boolean): void {
   } catch {
     // Storage can be blocked; the toggle then lasts for this panel only.
   }
-}
-
-/** Ids that appeared since the previous render, kept for a moment to highlight them. */
-function useNewIds(ids: readonly string[]): ReadonlySet<string> {
-  const seen = useRef<Set<string> | null>(null);
-  const [fresh, setFresh] = useState<ReadonlySet<string>>(new Set());
-  const key = ids.join(",");
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `key` identifies the id list.
-  useEffect(() => {
-    if (seen.current === null) {
-      seen.current = new Set(ids);
-      return;
-    }
-    const known = seen.current;
-    const added = ids.filter((id) => !known.has(id));
-    for (const id of added) known.add(id);
-    if (added.length === 0) return;
-    setFresh(new Set(added));
-    const timer = window.setTimeout(() => setFresh(new Set()), 1600);
-    return () => window.clearTimeout(timer);
-  }, [key]);
-  return fresh;
 }
 
 /** Close enough to the end to count as reading the newest requests. */

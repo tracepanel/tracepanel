@@ -1057,8 +1057,13 @@ components:
     Counts:
       type: object
       additionalProperties: false
-      required: [issues, errors, sections]
+      required: [issues, errors, sections, live_tasks]
       properties:
+        live_tasks:
+          type: boolean
+          description: >-
+            Tasks in flight or workers seen (api/tasks/live), or a connected app that sends task events: the console
+            shows Tasks before any task's trace is stored.
         issues: { type: integer, description: "Issue groups besides errors: N+1, duplicates, slow queries and calls, blocking calls, transactions, htmx." }
         errors: { type: integer, description: Error groups. }
         sections:
@@ -1095,8 +1100,8 @@ components:
         live_tasks:
           type: boolean
           description: >-
-            An app sends task events (Celery, from the Python SDK): the Tasks page lists the tasks in flight
-            (api/tasks/live).
+            An app sends task events (Celery, RQ, Dramatiq and Django Tasks, from the Python SDK): the Tasks page
+            lists the tasks in flight (api/tasks/live).
         explain: { type: boolean, description: The app runs EXPLAIN of a recorded query on its database (api/explain). }
         profile:
           type: boolean

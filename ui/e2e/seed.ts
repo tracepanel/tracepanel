@@ -45,7 +45,7 @@ function shift(value: unknown, delta: number): unknown {
 }
 
 // biome-ignore-start lint/style/useNamingConvention: traces as the SDKs send them; their field names are the wire format.
-function trace(kind: string, name: string, attrs: Doc, extra: Partial<Doc> = {}): Doc {
+export function trace(kind: string, name: string, attrs: Doc, extra: Partial<Doc> = {}): Doc {
   const id = ulid(Date.now());
   return {
     id,

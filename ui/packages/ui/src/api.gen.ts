@@ -903,6 +903,8 @@ export interface components {
             recent: components["schemas"]["TraceSummary"][];
         };
         Counts: {
+            /** @description Tasks in flight or workers seen (api/tasks/live), or a connected app that sends task events: the console shows Tasks before any task's trace is stored. */
+            live_tasks: boolean;
             /** @description Issue groups besides errors: N+1, duplicates, slow queries and calls, blocking calls, transactions, htmx. */
             issues: number;
             /** @description Error groups. */
@@ -933,7 +935,7 @@ export interface components {
             };
         };
         Capabilities: {
-            /** @description An app sends task events (Celery, from the Python SDK): the Tasks page lists the tasks in flight (api/tasks/live). */
+            /** @description An app sends task events (Celery, RQ, Dramatiq and Django Tasks, from the Python SDK): the Tasks page lists the tasks in flight (api/tasks/live). */
             live_tasks: boolean;
             /** @description The app runs EXPLAIN of a recorded query on its database (api/explain). */
             explain: boolean;

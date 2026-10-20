@@ -320,14 +320,29 @@ async fn snapshot(
     }
 }
 
-async fn counts(State(reader): State<Shared>, Query(query): Params) -> Response {
+/// `api/counts`: the store's, and `live_tasks`, whether the Tasks page has something now before any task's trace is
+/// stored (tasks in flight or workers seen, or an app that sends task events).
+async fn counts(
+    State(reader): State<Shared>,
+    Extension(activity): Extension<Activity>,
+    Query(query): Params,
+) -> Response {
     let service = query.get("service").cloned();
+    let scope = service.clone().unwrap_or_default();
+    let live = activity.apps.says("live_tasks", &scope)
+        || activity
+            .tasks
+            .any(&scope, tracepanel_protocol::live::now_us());
     answer(
         read(
             &reader,
             move |reader| Ok(reader.counts(service.as_deref())?),
         )
-        .await,
+        .await
+        .map(|mut counts| {
+            counts["live_tasks"] = json!(live);
+            counts
+        }),
     )
 }
 

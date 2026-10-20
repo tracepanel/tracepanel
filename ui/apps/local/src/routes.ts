@@ -12,24 +12,21 @@ export type CallsSection = `calls/${string}`;
 export type Section = EntrySection | "services" | CallsSection | "mails" | "logs" | "errors" | "issues" | "traces";
 const SECTIONS: Section[] = [...ENTRY_SECTIONS, "services", "mails", "logs", "errors", "issues", "traces"];
 
-/** An entry point's list: its groups, every call, or (tasks) what is in flight now. */
-export type EntryView = "overview" | "calls" | "live";
+/** An entry point's list: its groups, or every call. */
+export type EntryView = "overview" | "calls";
 
-// `view=` as a link writes it; the overview is the default and goes without.
-const VIEWS: Record<string, EntryView> = { calls: "calls", live: "live" };
-
-function viewParam(view: EntryView | undefined): string | undefined {
-  return view === "overview" ? undefined : view;
-}
+// What `view=` says: every call, or Live on (an old link to Tasks' Live).
+const VIEWS: Record<string, { view?: EntryView; live?: boolean }> = { calls: { view: "calls" }, live: { live: true } };
 
 /**
- * `#/<section>?q=…&view=calls` a section (`view=live`: the tasks in flight), `#/group/<section>/<key>` one group of an entry point (an endpoint, an
+ * `#/<section>?q=…&view=calls` a section, `#/group/<section>/<key>` one group of an entry point (an endpoint, an
  * operation, a task, a consumer, a job), `#/t/<id>?from=…&tab=…` a trace: one page wherever it is opened from,
- * with `from` (the hash it was opened from) for the way back.
+ * with `from` (the hash it was opened from) for the way back. `view=live` (Tasks' Live was a list of its own once)
+ * opens the section with Live on (`live`): it is read, never written.
  */
 export type Route =
   | { name: "home" }
-  | { name: Section; q: string; view?: EntryView | undefined; open?: string | undefined }
+  | { name: Section; q: string; view?: EntryView | undefined; open?: string | undefined; live?: boolean | undefined }
   | { name: "group"; section: EntrySection; key: string; q?: string | undefined }
   | { name: "trace"; id: string; from?: string | undefined; tab?: string | undefined; span?: string | undefined }
   | { name: "issue"; fingerprint: string; error?: boolean | undefined; q?: string | undefined };
@@ -120,8 +117,7 @@ export function parse(hash: string): Route {
   }
   const section = sectionOf(path);
   if (section) {
-    const view = VIEWS[params.get("view") ?? ""];
-    return { name: section, q, view, open: params.get("open") ?? undefined };
+    return { name: section, q, open: params.get("open") ?? undefined, ...VIEWS[params.get("view") ?? ""] };
   }
   return { name: "home" };
 }
@@ -149,8 +145,7 @@ export function href(route: Route): string {
   }
   const params = new URLSearchParams();
   if (route.q) params.set("q", route.q);
-  const view = viewParam(route.view);
-  if (view) params.set("view", view);
+  if (route.view === "calls") params.set("view", "calls");
   // The row a list has open (a statement, a log record, an email): it is still open after Back.
   if (route.open) params.set("open", route.open);
   return `#/${route.name}${params.size ? `?${params}` : ""}`;

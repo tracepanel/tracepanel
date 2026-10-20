@@ -1,5 +1,5 @@
 import { type Capabilities, type DataSource, NO_CAPABILITIES } from "@tracepanel/ui";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export interface EntrySummary {
   name: string;
@@ -137,4 +137,43 @@ function useCapabilities(source: DataSource): Capabilities | undefined {
     };
   }, [source]);
   return capabilities;
+}
+
+/** The ids not seen before, now seen; `newestFirst`: only those above the first one seen before (see useNewIds). */
+function takeArrivals(ids: readonly string[], known: Set<string>, newestFirst: boolean): string[] {
+  const head = newestFirst
+    ? ids.slice(
+        0,
+        Math.max(
+          ids.findIndex((id) => known.has(id)),
+          0,
+        ),
+      )
+    : ids;
+  const arrived = head.filter((id) => !known.has(id));
+  for (const id of ids) known.add(id);
+  return arrived;
+}
+
+/**
+ * Ids that appeared since the previous render, kept for a moment to highlight them. `newestFirst`: a list that grows at
+ * the top (the newest first) and loads older rows at the bottom: only the rows above the ones seen before are new.
+ */
+export function useNewIds(ids: readonly string[], newestFirst = false): ReadonlySet<string> {
+  const seen = useRef<Set<string> | null>(null);
+  const [fresh, setFresh] = useState<ReadonlySet<string>>(new Set());
+  const key = ids.join(",");
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `key` identifies the id list.
+  useEffect(() => {
+    if (seen.current === null) {
+      seen.current = new Set(ids);
+      return;
+    }
+    const arrived = takeArrivals(ids, seen.current, newestFirst);
+    if (arrived.length === 0) return;
+    setFresh(new Set(arrived));
+    const timer = window.setTimeout(() => setFresh(new Set()), 1600);
+    return () => window.clearTimeout(timer);
+  }, [key]);
+  return fresh;
 }
