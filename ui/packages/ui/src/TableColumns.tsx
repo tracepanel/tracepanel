@@ -189,11 +189,15 @@ function ResizeHandle({
  */
 function fitWidths(columns: Columns, room: number, rem: number): Map<string, number> {
   const wanted = columns.shown.flatMap((spec) =>
-    spec.width === undefined ? [] : [[spec.id, columns.widthOf(spec.id) ?? spec.width * rem] as const],
+    spec.width === undefined ? [] : [[spec, columns.widthOf(spec.id) ?? spec.width * rem] as const],
   );
-  const total = wanted.reduce((sum, [, width]) => sum + width, 0);
-  const scale = room > 0 && total + MIN_REST > room ? Math.max(room - MIN_REST, 0) / total : 1;
-  return new Map(wanted.map(([id, width]) => [id, Math.floor(width * scale)]));
+  // Fixed columns keep their width; the others share what is left.
+  const sum = (fixed: boolean) =>
+    wanted.reduce((total, [spec, width]) => (spec.fixed === fixed ? total + width : total), 0);
+  const total = sum(false);
+  const left = room - sum(true) - MIN_REST;
+  const scale = room > 0 && total > left ? Math.max(left, 0) / total : 1;
+  return new Map(wanted.map(([spec, width]) => [spec.id, Math.floor(spec.fixed ? width : width * scale)]));
 }
 
 /**

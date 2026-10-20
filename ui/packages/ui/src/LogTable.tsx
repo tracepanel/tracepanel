@@ -1,7 +1,7 @@
 // Log records as one table wherever they are listed: the console's Logs page and a trace's Logs tab. One line per
 // record, its details opened under it; columns the reader sizes and picks, kept per browser.
 import { cn } from "@tracepanel/ui/lib/utils";
-import { createContext, type MouseEvent, type ReactNode, useContext } from "react";
+import { createContext, Fragment, type KeyboardEvent, type MouseEvent, type ReactNode, useContext } from "react";
 import {
   DropdownMenuCheckboxItem,
   DropdownMenuLabel,
@@ -86,20 +86,15 @@ function lastLine(text: string): string {
 }
 
 /**
- * The message on one line (the whole of it on hover, and in the details); the button opens the record. An exception's
- * last line follows in what the message leaves.
+ * The message on one line (the whole of it on hover, and in the details), text to select and copy: the row opens the
+ * record. An exception's last line follows in what the message leaves.
  */
-function Message({ log, open }: { log: LogLike; open: boolean }) {
+function Message({ log }: { log: LogLike }) {
   return (
     <span className="flex min-w-0 items-baseline gap-2.5">
-      <button
-        type="button"
-        aria-expanded={open}
-        title={log.message.length > 60 ? log.message.slice(0, 2000) : undefined}
-        className="max-w-full shrink-0 cursor-pointer truncate text-left font-mono focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
-      >
+      <span title={log.message.slice(0, 2000)} className="max-w-full shrink-0 truncate font-mono">
         {log.message}
-      </button>
+      </span>
       {log.exception ? <span className="min-w-0 truncate font-mono text-error">{lastLine(log.exception)}</span> : null}
     </span>
   );
@@ -121,9 +116,15 @@ function Attributes({ attrs }: { attrs: LogLike["attrs"] }) {
 
 function leading<R extends LogLike>(mode: TimeMode, start: number | undefined): LogColumn<R>[] {
   return [
-    { id: "time", label: "Time", width: 7, cell: (log) => <LogTime time={log.time} mode={mode} start={start} /> },
-    { id: "level", label: "Level", width: 5.5, cell: (log) => <LogLevel level={log.level} /> },
-    { id: "message", label: "Message", required: true, cell: (log, open) => <Message log={log} open={open} /> },
+    {
+      id: "time",
+      label: "Time",
+      width: 7,
+      fixed: true,
+      cell: (log) => <LogTime time={log.time} mode={mode} start={start} />,
+    },
+    { id: "level", label: "Level", width: 5.5, fixed: true, cell: (log) => <LogLevel level={log.level} /> },
+    { id: "message", label: "Message", required: true, cell: (log) => <Message log={log} /> },
     {
       id: "logger",
       label: "Logger",
@@ -246,15 +247,41 @@ const CELL = "truncate px-2 py-1 first:pl-4";
 
 // A warning or a failure marks the row's edge, as the console's other lists mark theirs.
 const ROW = cn(
-  "cursor-pointer",
+  "cursor-pointer focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
   "data-[level=warning]:[&>td:first-child]:shadow-[inset_3px_0_0_var(--color-warn)]",
   "data-[level=error]:[&>td:first-child]:shadow-[inset_3px_0_0_var(--color-error)]",
   "data-[level=critical]:[&>td:first-child]:shadow-[inset_3px_0_0_var(--color-error)]",
 );
 
-/** Whether a click in a row opens it: anywhere but a link or another button in it (its message is the opener). */
+/** Whether a click in a row opens it: anywhere but a link or a button in it, and not the end of selecting its text. */
 function opens(event: MouseEvent): boolean {
-  return !(event.target as Element).closest("a, button:not([aria-expanded]), [role=separator]");
+  if (window.getSelection()?.toString()) return false;
+  return !(event.target as Element).closest("a, button, [role=separator]");
+}
+
+/** The record row next to this one, up or down, past what isn't one (a record's details, a day's heading). */
+function neighbour(row: HTMLElement, by: number): HTMLElement | undefined {
+  const rows = [...(row.parentElement?.querySelectorAll<HTMLElement>("[data-record]") ?? [])];
+  return rows[rows.indexOf(row) + by];
+}
+
+/** A record row's keys: the arrows move to the next record, Enter or Space opens and closes it, Escape closes it. */
+type RowKey = (row: HTMLElement, open: boolean, onToggle: () => void) => void;
+// A Map: the keys are as KeyboardEvent.key spells them.
+const ROW_KEYS = new Map<string, RowKey>([
+  ["ArrowDown", (row) => neighbour(row, 1)?.focus()],
+  ["ArrowUp", (row) => neighbour(row, -1)?.focus()],
+  ["Enter", (_, __, onToggle) => onToggle()],
+  [" ", (_, __, onToggle) => onToggle()],
+  ["Escape", (_, open, onToggle) => open && onToggle()],
+]);
+
+function onRowKey(event: KeyboardEvent<HTMLTableRowElement>, open: boolean, onToggle: () => void) {
+  const key = ROW_KEYS.get(event.key);
+  // A key in a control inside the row (a details' button) is the control's.
+  if (!key || event.target !== event.currentTarget) return;
+  key(event.currentTarget, open, onToggle);
+  event.preventDefault();
 }
 
 /** What takes a column off from its header: only an attribute's, which the reader added. */
@@ -319,6 +346,27 @@ function LogHead({
   );
 }
 
+/** A local day, as the rows' times can't say it: "Monday, October 19". */
+function dayOf(us: number): string {
+  return new Date(us / 1000).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
+}
+
+/**
+ * The day above a record when it is another than the record's above, or (the first) another than today: the time
+ * column shows the time of day only.
+ */
+function DayHeading({ time, before, span }: { time: number; before: number | undefined; span: number }) {
+  const day = dayOf(time);
+  if (day === dayOf(before ?? Date.now() * 1000)) return null;
+  return (
+    <TableRow className="hover:bg-transparent">
+      <TableCell colSpan={span} className="bg-muted/60 py-1 pl-4 text-xs font-semibold text-muted-foreground">
+        {day}
+      </TableCell>
+    </TableRow>
+  );
+}
+
 function LogRecordRow<R extends LogLike>({
   log,
   shown,
@@ -336,8 +384,15 @@ function LogRecordRow<R extends LogLike>({
 }) {
   return (
     <>
-      {/* biome-ignore lint/a11y/useKeyWithClickEvents: the message inside is the button the keyboard opens it with. */}
-      <TableRow data-level={log.level} className={ROW} onClick={(event) => opens(event) && onToggle()}>
+      <TableRow
+        data-level={log.level}
+        data-record=""
+        tabIndex={0}
+        aria-expanded={open}
+        className={ROW}
+        onClick={(event) => opens(event) && onToggle()}
+        onKeyDown={(event) => onRowKey(event, open, onToggle)}
+      >
         {shown.map((column) => (
           <TableCell key={column.id} className={CELL}>
             {column.cell(log, open)}
@@ -416,18 +471,20 @@ export function LogTable<R extends LogLike>({
           onRemoveAttribute={(key) => setPicked(picked.filter((each) => each !== key))}
         />
         <TableBody>
-          {logs.map((log) => {
+          {logs.map((log, index) => {
             const key = keyOf(log);
             return (
-              <LogRecordRow
-                key={key}
-                log={log}
-                shown={shown}
-                open={open === key}
-                onToggle={() => onOpen(open === key ? null : key)}
-                action={action}
-                details={details}
-              />
+              <Fragment key={key}>
+                <DayHeading time={log.time} before={logs[index - 1]?.time} span={shown.length + 1} />
+                <LogRecordRow
+                  log={log}
+                  shown={shown}
+                  open={open === key}
+                  onToggle={() => onOpen(open === key ? null : key)}
+                  action={action}
+                  details={details}
+                />
+              </Fragment>
             );
           })}
         </TableBody>

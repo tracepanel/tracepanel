@@ -16,19 +16,54 @@ test("a record takes one line, however long its message; its details open under 
   // Narrow enough that the message is longer than its column.
   await page.setViewportSize({ width: 1000, height: 800 });
   await page.goto("/#/logs");
-  const long = rows(page).filter({ hasText: "listing 50 posts with select_related" });
-  const message = long.getByRole("button", { name: /^listing 50 posts with select_related/ });
+  const long = region(page).locator("tr[data-record]").filter({ hasText: "listing 50 posts with select_related" });
+  const message = long.getByText(/^listing 50 posts with select_related/);
 
   // One line: a row is about as tall as its text, the message cut short rather than wrapped.
   await expect(message).toBeVisible();
   expect((await long.boundingBox())?.height).toBeLessThan(36);
   expect(await message.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
 
-  await message.focus();
+  await long.focus();
   await page.keyboard.press("Enter");
 
-  await expect(message).toHaveAttribute("aria-expanded", "true");
+  await expect(long).toHaveAttribute("aria-expanded", "true");
   await expect(region(page).getByRole("link", { name: "Open request" })).toBeVisible();
+
+  await page.keyboard.press("Escape");
+
+  await expect(long).toHaveAttribute("aria-expanded", "false");
+});
+
+test("the arrow keys go from record to record, past an opened one's details", async ({ page }) => {
+  await page.goto("/#/logs");
+  const records = region(page).locator("tr[data-record]");
+  await records.first().focus();
+  await page.keyboard.press("Enter");
+
+  await page.keyboard.press("ArrowDown");
+
+  await expect(records.nth(1)).toBeFocused();
+
+  await page.keyboard.press("ArrowUp");
+
+  await expect(records.first()).toBeFocused();
+  await expect(records.first()).toHaveAttribute("aria-expanded", "true");
+});
+
+test("a message's text can be selected without opening its record", async ({ page }) => {
+  await page.goto("/#/logs");
+  const record = rows(page).filter({ hasText: "listing 50 posts for AnonymousUser" });
+  const box = await record.getByText("listing 50 posts for AnonymousUser", { exact: true }).boundingBox();
+  if (!box) throw new Error("no message");
+
+  await page.mouse.move(box.x + 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width - 2, box.y + box.height / 2, { steps: 5 });
+  await page.mouse.up();
+
+  expect(await page.evaluate(() => window.getSelection()?.toString())).toContain("listing 50 posts");
+  await expect(record).toHaveAttribute("aria-expanded", "false");
 });
 
 test("a column dragged wider stays wider after a reload, and a double click fits it", async ({ page }) => {
@@ -177,7 +212,7 @@ test("a column dragged onto another moves there, and stays there after a reload"
 test("an attribute of an opened record becomes a column from there, and its header takes it off", async ({ page }) => {
   await page.goto("/#/logs");
   const record = rows(page).filter({ hasText: "listing 50 posts for AnonymousUser" });
-  await record.getByRole("button", { name: /^listing 50 posts/ }).click();
+  await record.click();
   const show = region(page)
     .getByRole("button", { name: /^Show .+ as a column$/ })
     .first();

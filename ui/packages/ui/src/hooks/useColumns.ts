@@ -10,6 +10,8 @@ export interface ColumnSpec {
   hidden?: boolean;
   /** Always shown: the menu doesn't offer to hide it. */
   required?: boolean;
+  /** Kept at its width when the table is narrow: its content has one width (a time, a level), cut it would say less. */
+  fixed?: boolean;
 }
 
 /** What the reader changed: widths dragged (px), columns shown or hidden, by column id, and the columns' order. */

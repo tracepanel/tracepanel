@@ -24,6 +24,11 @@
 
 ### Changed
 
+- The logs table reads and moves like a list of records: a message's text
+  selects and copies (the row opens the record, unless text was selected),
+  the arrow keys go from record to record, Enter opens one and Escape closes
+  it. A day's heading tops records of another day than today's, Time and
+  Level keep their width in a narrow panel.
 - A log record opens the same way everywhere: on the Logs page, in a trace's
   Logs tab and in the call tree, its message and its exception to copy, then
   its fields with their own copy buttons. Its time is local, to the

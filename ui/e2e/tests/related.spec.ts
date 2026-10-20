@@ -198,7 +198,7 @@ test("a record in a trace's Logs tab opens its attributes", async ({ page }) => 
   await page.goto(`/#/traces?q=${encodeURIComponent("route:/api/books/announce")}`);
   await page.getByRole("main").getByRole("table").getByRole("link").first().click();
   await page.getByRole("tab", { name: /^Logs/ }).click();
-  const record = page.getByRole("button", { name: "Kafka producer started", exact: true });
+  const record = page.locator("tr[data-record]").filter({ hasText: "Kafka producer started" });
 
   await expect(record).toHaveAttribute("aria-expanded", "false");
   await record.click();

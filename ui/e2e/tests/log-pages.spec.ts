@@ -39,7 +39,28 @@ test("rows a refresh pushes off the first page stay between it and the older pag
   await page.getByRole("button", { name: "Refresh now" }).first().click();
 
   await expect(rows).toHaveCount(15);
-  expect(await rows.getByRole("button", { name: /^record \d+$/ }).allTextContents()).toEqual(
+  expect(await rows.getByText(/^record \d+$/).allTextContents()).toEqual(
     Array.from({ length: 15 }, (_, n) => `record ${15 - n}`),
   );
+});
+
+test("a day's heading tops its records when they are of another day than the ones above", async ({ page }) => {
+  const body = (await (await fetch(`${CONSOLE}api/logs`)).json()) as { logs: Record<string, unknown>[] };
+  const model = body.logs[0];
+  if (!model) throw new Error("no stored record");
+  const now = Date.now() * 1000;
+  const day = 24 * 3600 * 1_000_000;
+  const record = (time: number, message: string) => ({ ...model, time, message });
+  const records = [record(now, "today"), record(now - day, "yesterday"), record(now - day - 1, "yesterday too")];
+  await serve(page, () => records);
+  const heading = (time: number) =>
+    new Date(time / 1000).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
+
+  await page.goto("/#/logs");
+  const list = page.getByRole("region", { name: "Logs" }).getByRole("rowgroup").last();
+
+  // Today's records under no heading: the time column's times are today's.
+  await expect(list.getByRole("row").first()).toContainText("today");
+  await expect(list.getByRole("cell", { name: heading(now - day), exact: true })).toHaveCount(1);
+  await expect(list.getByRole("cell", { name: heading(now), exact: true })).toHaveCount(0);
 });
