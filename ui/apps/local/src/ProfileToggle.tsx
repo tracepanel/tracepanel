@@ -39,18 +39,17 @@ function ProfileButton() {
     <Hint title={hint.title} detail={hint.detail}>
       <button
         type="button"
-        className={cn(
-          "icon-button",
-          on && "bg-orange-500/15 text-orange-500 hover:bg-orange-500/25 hover:text-orange-500",
-        )}
+        className={cn("icon-button", on && "text-orange-500 hover:text-orange-500")}
         aria-label={hint.title}
         aria-pressed={on}
-        onClick={() => {
+        onClick={(event) => {
           profile(!on);
           setOn(!on);
+          // A mouse click leaves no focus ring behind; the keyboard keeps it (detail is 0 for Enter and Space).
+          if (event.detail > 0) event.currentTarget.blur();
         }}
       >
-        <FlameIcon className={cn("size-4", on && "fill-amber-400 drop-shadow-[0_0_4px_rgb(249_115_22/0.6)]")} />
+        <FlameIcon className={cn("size-4", on && "fill-orange-500/30")} />
       </button>
     </Hint>
   );

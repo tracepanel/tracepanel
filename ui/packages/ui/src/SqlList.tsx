@@ -116,6 +116,17 @@ function Row({
   );
 }
 
+/** Where a query was made in your code; a query no code of yours made (Django's admin, a library) says so. */
+function CalledFrom({ span, className }: { span: Span; className?: string }) {
+  const origin = span.attrs["code.origin"];
+  if (typeof origin === "string" && origin) return <code className={cn("font-mono", className)}>{origin}</code>;
+  return (
+    <span className={cn("text-muted-foreground", className)} title="No frame of your code was on the stack">
+      Made by a library, not your code
+    </span>
+  );
+}
+
 export function SqlList({ spans, issueBySpan, focus, onExplain, links }: SqlListProps) {
   const [mode, setMode] = useState<"grouped" | "timeline">("grouped");
   const groups = useMemo(() => groupSpans(spans, issueBySpan), [spans, issueBySpan]);
@@ -188,7 +199,7 @@ export function SqlList({ spans, issueBySpan, focus, onExplain, links }: SqlList
                           )}
                         >
                           <span className="text-right text-muted-foreground tabular-nums">{index + 1}</span>
-                          <code className="truncate font-mono">{String(span.attrs["code.origin"] ?? "—")}</code>
+                          <CalledFrom span={span} className="truncate" />
                           <span className="tabular-nums">{duration(span.duration)}</span>
                         </li>
                       ))}
@@ -225,7 +236,7 @@ export function SqlList({ spans, issueBySpan, focus, onExplain, links }: SqlList
                 ) : null}
                 <section className="grid gap-1">
                   <Heading>Called from</Heading>
-                  <code className="font-mono text-sm">{String(span.attrs["code.origin"] ?? "—")}</code>
+                  <CalledFrom span={span} className="text-sm" />
                 </section>
                 <AllRequests span={span} links={links} />
               </Row>

@@ -765,7 +765,7 @@ function PanelApp({ route }: { route: Route }) {
         detail="This request in the full console, in a new tab: every request, issue and query."
       >
         <a
-          className="mr-1 inline-flex h-7 items-center gap-1.5 rounded-md bg-brand-soft px-2.5 text-sm font-medium text-brand transition-colors hover:bg-brand/25"
+          className="mr-1 inline-flex h-7 items-center gap-1.5 rounded-md bg-brand px-3 text-sm font-medium text-white shadow-sm shadow-brand/30 transition-[filter,box-shadow] hover:shadow-md hover:shadow-brand/40 hover:brightness-110 [&_svg]:size-3.5"
           href={`${base}${selectedId ? href({ name: "trace", id: selectedId, tab, from: sectionFor(selectedKind) }) : "#/"}`}
           target="_blank"
           rel="noreferrer"
