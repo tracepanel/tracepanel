@@ -80,6 +80,8 @@ export interface Part {
   label: string;
   count?: number | undefined;
   content: ReactNode;
+  /** Shown as it is, not in the card: content made of cards of its own. */
+  bare?: boolean;
 }
 
 function pairsPart(id: string, label: string, pairs: Pair[]): Part[] {
@@ -115,6 +117,7 @@ export function requestParts(attrs: Attrs, others: Attrs, extra: readonly Part[]
       label: "Attributes",
       count: Object.keys(others).length,
       content: <Groups groups={groups} />,
+      bare: true,
     },
   ];
 }
@@ -132,9 +135,13 @@ export function RequestParts({ parts }: { parts: readonly Part[] }) {
         value={open.id}
         onChange={setPicked}
       />
-      <div className="overflow-hidden rounded-lg border bg-card" role="tabpanel">
-        {open.content}
-      </div>
+      {open.bare ? (
+        <div role="tabpanel">{open.content}</div>
+      ) : (
+        <div className="overflow-hidden rounded-lg border bg-card" role="tabpanel">
+          {open.content}
+        </div>
+      )}
     </section>
   );
 }
@@ -172,13 +179,13 @@ function BrowserHeaders({ count, open, onToggle }: { count: number; open: boolea
 /** Names and values in rows: a column of names, values that wrap, a copy button on hover. */
 function Pairs({ pairs }: { pairs: readonly Pair[] }) {
   return (
-    <dl className="m-0 grid grid-cols-[minmax(7rem,max-content)_minmax(0,1fr)_auto] font-mono text-xs">
+    <dl className="m-0 grid grid-cols-[minmax(7rem,11rem)_minmax(0,1fr)_auto] font-mono text-xs">
       {pairs.map(([name, value]) => (
         <div
           key={`${name}=${value}`}
           className="group/pair col-span-3 grid grid-cols-subgrid border-t first:border-t-0 hover:bg-muted/40"
         >
-          <dt className="max-w-56 truncate py-1.5 pr-4 pl-3 text-muted-foreground" title={name}>
+          <dt className="truncate py-1.5 pr-4 pl-3 text-muted-foreground" title={name}>
             {name}
           </dt>
           <dd className="m-0 py-1.5 [overflow-wrap:anywhere]">{value}</dd>
@@ -195,19 +202,27 @@ function Pairs({ pairs }: { pairs: readonly Pair[] }) {
   );
 }
 
-/** Pairs under a band per namespace. */
+/** A card per namespace, its name and count above it: groups apart at a glance, names lined up across them. */
 function Groups({ groups }: { groups: readonly [string, Pair[]][] }) {
-  if (!groups.length) return <p className="px-3 py-2 text-xs text-muted-foreground">No other attributes.</p>;
-  return groups.map(([name, pairs], at) => (
-    <div key={name} className={cn(at > 0 && "border-t")}>
-      <h4 className="flex items-baseline gap-1.5 bg-muted/40 px-3 py-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-        {name} <span className="font-normal tabular-nums">{pairs.length}</span>
-      </h4>
-      <div className="border-t">
-        <Pairs pairs={pairs} />
-      </div>
+  if (!groups.length) {
+    return <p className="rounded-lg border bg-card px-3 py-2 text-xs text-muted-foreground">No other attributes.</p>;
+  }
+  return (
+    <div className="grid gap-4">
+      {groups.map(([name, pairs]) => (
+        <section key={name} className="grid gap-1.5" aria-label={name}>
+          <h4 className="flex items-center gap-2 px-1 text-xs font-semibold text-foreground">
+            <span className="size-1.5 rounded-full bg-brand" />
+            {name}
+            <span className="font-normal text-muted-foreground tabular-nums">{pairs.length}</span>
+          </h4>
+          <div className="overflow-hidden rounded-lg border bg-card">
+            <Pairs pairs={pairs} />
+          </div>
+        </section>
+      ))}
     </div>
-  ));
+  );
 }
 
 /** A form's fields as names and values; any other body as text. */
