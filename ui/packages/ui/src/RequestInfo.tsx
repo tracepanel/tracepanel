@@ -333,15 +333,20 @@ function isRequestDetail(key: string): boolean {
   return REQUEST_KEYS.has(key) || Object.values(REQUEST_PREFIXES).some((prefix) => key.startsWith(prefix));
 }
 
-/** The attributes under a prefix, by what follows it, sorted. */
-function prefixed(attrs: Attrs, prefix: string): PropRow[] {
+/** The attributes under a prefix, by what follows it, sorted; `name` spells the rest as the reader knows it. */
+function prefixed(attrs: Attrs, prefix: string, name: (key: string) => string = (key) => key): PropRow[] {
   return Object.entries(attrs)
     .filter(([key]) => key.startsWith(prefix))
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, value]) => {
       const shown = typeof value === "string" ? value : JSON.stringify(value);
-      return { label: key.slice(prefix.length), value: shown, copy: shown, mono: true };
+      return { label: name(key.slice(prefix.length)), value: shown, copy: shown, mono: true };
     });
+}
+
+/** A header as HTTP spells it: attribute keys take no dashes, so content-type was kept as content_type. */
+function header(key: string): string {
+  return key.replaceAll("_", "-");
 }
 
 /** A query string as its parameters, each as often as it came. */
@@ -375,12 +380,12 @@ function RequestParts({ attrs }: { attrs: Attrs }) {
   const body = text(attrs["http.request.body"]);
   const parts: [string, PropRow[]][] = [
     ["Query", queryRows(text(attrs["url.query"]))],
-    ["Request headers", prefixed(attrs, REQUEST_PREFIXES.headers)],
+    ["Request headers", prefixed(attrs, REQUEST_PREFIXES.headers, header)],
   ];
   const after: [string, PropRow[]][] = [
     ["Cookies", prefixed(attrs, REQUEST_PREFIXES.cookies)],
     ["Session", prefixed(attrs, REQUEST_PREFIXES.session)],
-    ["Response headers", prefixed(attrs, REQUEST_PREFIXES.response)],
+    ["Response headers", prefixed(attrs, REQUEST_PREFIXES.response, header)],
   ];
   const table = ([title, rows]: [string, PropRow[]]) =>
     rows.length ? (
