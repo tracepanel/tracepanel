@@ -1,7 +1,9 @@
+import type { ReactNode } from "react";
 import { languageOf, tokenizeLines } from "./highlight";
 import { ChevronRightIcon } from "./icons";
 import { keyed } from "./keys";
 import { linkProps, type TraceLinks } from "./links";
+import type { ParsedException } from "./traceback";
 import type { ChainedError, Frame, Issue, TraceError } from "./types";
 
 type Group = { app: true; frame: Frame } | { app: false; frames: Frame[] };
@@ -162,6 +164,46 @@ function Chained({ error }: { error: ChainedError }) {
   );
 }
 
+/** An error's head: its type and message, then what the place adds (handled or not, a link to its issue). */
+function ErrorHead({ type, message, children }: { type: string; message: string; children?: ReactNode }) {
+  return (
+    <header className="dt-error-head">
+      <p className="dt-error-type">{shortType(type)}</p>
+      {message ? <p className="dt-error-message">{message}</p> : null}
+      {children}
+    </header>
+  );
+}
+
+/**
+ * A log record's exception, read from its traceback: the same head, frames and chain as a trace's error, the app's
+ * frames in view and the libraries' folded, without the source and locals a stored error has.
+ */
+export function ExceptionView({ exception }: { exception: ParsedException }) {
+  return (
+    <div>
+      <ErrorHead type={exception.type} message={exception.message}>
+        <p className="dt-error-meta">{exception.frames.length} frames · most recent call last</p>
+      </ErrorHead>
+      <Frames frames={exception.frames} />
+      {exception.chain.map((inner, index) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: the chain order is fixed for a record's text.
+        <Chained key={index} error={inner} />
+      ))}
+    </div>
+  );
+}
+
+/** The way from an error to its issue: every time it happened. */
+function IssueLink({ links, issue }: { links: TraceLinks | undefined; issue: Issue | undefined }) {
+  if (!(links?.issue && issue)) return null;
+  return (
+    <a className="dt-issue-link" {...linkProps(links, links.issue(issue.fingerprint, "error"))}>
+      Every time it happened →
+    </a>
+  );
+}
+
 export function ErrorView({
   errors,
   issues = [],
@@ -177,18 +219,12 @@ export function ErrorView({
     <>
       {keyed(errors, (error) => `${error.time}:${error.type}`).map(({ key, item: error }, index) => (
         <section key={key} className="dt-error">
-          <header className="dt-error-head">
-            <p className="dt-error-type">{shortType(error.type)}</p>
-            <p className="dt-error-message">{error.message}</p>
+          <ErrorHead type={error.type} message={error.message}>
             <p className="dt-error-meta">
               {error.handled ? "Handled" : "Unhandled"} · {error.frames.length} frames · most recent call last
             </p>
-            {links?.issue && issues[index] ? (
-              <a className="dt-issue-link" {...linkProps(links, links.issue(issues[index].fingerprint, "error"))}>
-                Every time it happened →
-              </a>
-            ) : null}
-          </header>
+            <IssueLink links={links} issue={issues[index]} />
+          </ErrorHead>
           <Frames frames={error.frames} />
           {error.chain.map((inner, index) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: the chain order is fixed for a stored error.

@@ -14,22 +14,12 @@ import {
 } from "@tracepanel/ui";
 import { Badge } from "@tracepanel/ui/components/ui/badge";
 import { Card } from "@tracepanel/ui/components/ui/card";
-import { ChevronRightIcon } from "lucide-react";
 import { useEffect, useState } from "react";
+import { OverviewNumbers, OverviewRange, OverviewSection, useOverviewOpen } from "./Overview";
 import { track, useRefresh } from "./refresh";
 import { currentPeriod, endpointGroup, groupRoute, href, withPeriod } from "./routes";
 import { BY_NAME } from "./sections";
 import { rangeTerms } from "./time";
-
-const STORAGE_KEY = "tracepanel:overview";
-
-function readOpen(): boolean {
-  try {
-    return localStorage.getItem(STORAGE_KEY) !== "closed";
-  } catch {
-    return true;
-  }
-}
 
 /** What the overview counts: every trace (Traces) or one kind of entry point (HTTP requests). */
 export interface OverviewScope {
@@ -93,7 +83,7 @@ export function TracesOverview({
   const [overview, setOverview] = useState<Overview | null>(null);
   // A search the overview can't run: said, not hidden behind the last result.
   const [failed, setFailed] = useState<string | null>(null);
-  const [open, setOpen] = useState(readOpen);
+  const [open, toggle] = useOverviewOpen();
 
   const { cycle, tick } = useRefresh();
   // biome-ignore lint/correctness/useExhaustiveDependencies: `tick` reloads on "refresh now", `cycle` on the clock.
@@ -117,15 +107,6 @@ export function TracesOverview({
     };
   }, [query, scope.groupBy, source, cycle, tick]);
 
-  const toggle = () => {
-    setOpen(!open);
-    try {
-      localStorage.setItem(STORAGE_KEY, open ? "closed" : "open");
-    } catch {
-      // Private mode: the choice lasts until reload.
-    }
-  };
-
   if (failed) {
     return (
       <p className="pb-6 text-sm text-error" role="alert">
@@ -139,21 +120,7 @@ export function TracesOverview({
     // An empty window still shows its timeline, so a range can be widened again from the chart.
     return (
       <section className="grid gap-3 pb-6" aria-label="Activity">
-        {overview.kinds.length > 1 ? (
-          <div className="flex flex-wrap gap-2">
-            {overview.kinds.map((kind) => (
-              <button
-                key={kind.kind}
-                type="button"
-                className="flex items-center gap-2 rounded-full border bg-card px-3.5 py-1.5 text-sm hover:bg-accent"
-                onClick={() => onRefine({ kind: kind.kind })}
-              >
-                <span className="font-medium">{KIND_LABEL[kind.kind] ?? kind.kind}</span>
-                <span className="text-muted-foreground tabular-nums">{kind.calls}</span>
-              </button>
-            ))}
-          </div>
-        ) : null}
+        <KindChips kinds={overview.kinds} failures={false} onRefine={onRefine} />
         <CallsChart
           series={overview.series}
           title={`${capitalize(nouns)} over time`}
@@ -165,103 +132,100 @@ export function TracesOverview({
   }
   const threshold = duration(overview.slow_threshold);
   return (
-    <section className="grid gap-5 pb-8" aria-label="Overview">
-      <header>
+    <OverviewSection
+      open={open}
+      onToggle={toggle}
+      range={<OverviewRange from={s.first_seen} to={s.last_seen} />}
+      numbers={
+        // Folded: the numbers that matter, on one line.
+        <OverviewNumbers>
+          <span>
+            {s.calls} {s.calls === 1 ? scope.noun : nouns}
+          </span>
+          <span className={s.errors ? "text-error" : ""}>{percent(s.errors, s.calls)} errors</span>
+          <span>p95 {duration(s.p95)}</span>
+          {s.slow ? <span className="text-warn">{s.slow} slow</span> : null}
+        </OverviewNumbers>
+      }
+    >
+      <StatGrid>
+        <Stat label={capitalize(nouns)} value={String(s.calls)} sub={`${s.with_issues} with issues`} />
+        <Stat
+          label="Errors"
+          value={percent(s.errors, s.calls)}
+          sub={`${s.errors} of ${s.calls}`}
+          tone={s.errors ? "error" : undefined}
+          onClick={s.errors ? () => onRefine({ has: "error" }) : undefined}
+        />
+        <Stat
+          label={`Slow ≥ ${threshold}`}
+          value={String(s.slow)}
+          sub={percent(s.slow, s.calls)}
+          tone={s.slow ? "warn" : undefined}
+          onClick={s.slow ? () => onRefine({ duration: `>${overview.slow_threshold / 1000}ms` }) : undefined}
+        />
+        <Stat label="p50" value={duration(s.p50)} />
+        <Stat label="p95" value={duration(s.p95)} />
+        <Stat label="p99" value={duration(s.p99)} sub={`max ${duration(s.max)}`} />
+        <Stat label="Avg queries" value={String(s.avg_queries)} sub={`DB ${duration(s.avg_db_time)} avg`} />
+      </StatGrid>
+      {scope.filter === "" ? <KindChips kinds={overview.kinds} failures={true} onRefine={onRefine} /> : null}
+      <div className="grid grid-cols-2 gap-4 max-[1100px]:grid-cols-1">
+        <CallsChart
+          series={overview.series}
+          title={`${capitalize(nouns)} over time`}
+          noun={scope.noun}
+          onSelect={(start, end) => onRefine(rangeTerms(start, end))}
+        />
+        <LatencyChart series={overview.series} />
+      </div>
+      <div className="grid grid-cols-2 gap-4 max-[1100px]:grid-cols-1">
+        <OperationList
+          title={`Slowest ${scope.group}`}
+          empty={`No ${nouns} yet.`}
+          items={overview.slowest}
+          noun={scope.noun}
+          metric={(item) => `p95 ${duration(item.p95)}`}
+        />
+        <OperationList
+          title={`Failing ${scope.group}`}
+          empty="No errors in this range."
+          items={overview.failing}
+          noun={scope.noun}
+          metric={(item) => `${item.errors} ${item.errors === 1 ? "error" : "errors"}`}
+          tone="error"
+        />
+      </div>
+    </OverviewSection>
+  );
+}
+
+/** The kinds of traces the overview counts, each a chip that narrows to it (`failures`: how many of each failed). */
+function KindChips({
+  kinds,
+  failures,
+  onRefine,
+}: {
+  kinds: Overview["kinds"];
+  failures: boolean;
+  onRefine: (terms: Record<string, string>) => void;
+}) {
+  if (kinds.length < 2) return null;
+  return (
+    <div className="flex flex-wrap gap-2">
+      {kinds.map((kind) => (
         <button
+          key={kind.kind}
           type="button"
-          className="group/overview flex w-full items-center gap-3 rounded-md py-1 text-left"
-          onClick={toggle}
-          aria-expanded={open}
+          className="flex items-center gap-2 rounded-full border bg-card px-3.5 py-1.5 text-sm hover:bg-accent"
+          onClick={() => onRefine({ kind: kind.kind })}
         >
-          <ChevronRightIcon
-            className={`size-5 text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`}
-          />
-          <h2 className="text-xl font-semibold">Overview</h2>
-          {open ? (
-            <span className="text-base text-muted-foreground">
-              {new Date(s.first_seen / 1000).toLocaleString()} – {new Date(s.last_seen / 1000).toLocaleTimeString()}
-            </span>
-          ) : (
-            // Folded: the numbers that matter, on one line.
-            <span className="flex flex-wrap gap-x-4 text-md text-text-2 tabular-nums">
-              <span>
-                {s.calls} {s.calls === 1 ? scope.noun : nouns}
-              </span>
-              <span className={s.errors ? "text-error" : ""}>{percent(s.errors, s.calls)} errors</span>
-              <span>p95 {duration(s.p95)}</span>
-              {s.slow ? <span className="text-warn">{s.slow} slow</span> : null}
-            </span>
-          )}
+          <span className="font-medium">{KIND_LABEL[kind.kind] ?? kind.kind}</span>
+          <span className="text-muted-foreground tabular-nums">{kind.calls}</span>
+          {failures && kind.errors ? <span className="text-error tabular-nums">· {kind.errors} failed</span> : null}
         </button>
-      </header>
-      {open ? (
-        <>
-          <StatGrid>
-            <Stat label={capitalize(nouns)} value={String(s.calls)} sub={`${s.with_issues} with issues`} />
-            <Stat
-              label="Errors"
-              value={percent(s.errors, s.calls)}
-              sub={`${s.errors} of ${s.calls}`}
-              tone={s.errors ? "error" : undefined}
-              onClick={s.errors ? () => onRefine({ has: "error" }) : undefined}
-            />
-            <Stat
-              label={`Slow ≥ ${threshold}`}
-              value={String(s.slow)}
-              sub={percent(s.slow, s.calls)}
-              tone={s.slow ? "warn" : undefined}
-              onClick={s.slow ? () => onRefine({ duration: `>${overview.slow_threshold / 1000}ms` }) : undefined}
-            />
-            <Stat label="p50" value={duration(s.p50)} />
-            <Stat label="p95" value={duration(s.p95)} />
-            <Stat label="p99" value={duration(s.p99)} sub={`max ${duration(s.max)}`} />
-            <Stat label="Avg queries" value={String(s.avg_queries)} sub={`DB ${duration(s.avg_db_time)} avg`} />
-          </StatGrid>
-          {scope.filter === "" && overview.kinds.length > 1 ? (
-            <div className="flex flex-wrap gap-2">
-              {overview.kinds.map((kind) => (
-                <button
-                  key={kind.kind}
-                  type="button"
-                  className="flex items-center gap-2 rounded-full border bg-card px-3.5 py-1.5 text-sm hover:bg-accent"
-                  onClick={() => onRefine({ kind: kind.kind })}
-                >
-                  <span className="font-medium">{KIND_LABEL[kind.kind] ?? kind.kind}</span>
-                  <span className="text-muted-foreground tabular-nums">{kind.calls}</span>
-                  {kind.errors ? <span className="text-error tabular-nums">· {kind.errors} failed</span> : null}
-                </button>
-              ))}
-            </div>
-          ) : null}
-          <div className="grid grid-cols-2 gap-4 max-[1100px]:grid-cols-1">
-            <CallsChart
-              series={overview.series}
-              title={`${capitalize(nouns)} over time`}
-              noun={scope.noun}
-              onSelect={(start, end) => onRefine(rangeTerms(start, end))}
-            />
-            <LatencyChart series={overview.series} />
-          </div>
-          <div className="grid grid-cols-2 gap-4 max-[1100px]:grid-cols-1">
-            <OperationList
-              title={`Slowest ${scope.group}`}
-              empty={`No ${nouns} yet.`}
-              items={overview.slowest}
-              noun={scope.noun}
-              metric={(item) => `p95 ${duration(item.p95)}`}
-            />
-            <OperationList
-              title={`Failing ${scope.group}`}
-              empty="No errors in this range."
-              items={overview.failing}
-              noun={scope.noun}
-              metric={(item) => `${item.errors} ${item.errors === 1 ? "error" : "errors"}`}
-              tone="error"
-            />
-          </div>
-        </>
-      ) : null}
-    </section>
+      ))}
+    </div>
   );
 }
 

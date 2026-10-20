@@ -4,8 +4,16 @@ import { Button } from "@tracepanel/ui/components/ui/button";
 import { type Family, systemOfPage } from "@tracepanel/ui/lib/systems";
 import { cn } from "@tracepanel/ui/lib/utils";
 import { SearchIcon, XIcon } from "lucide-react";
-import { type KeyboardEvent as BoxKeyEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { FilterMenu } from "./FilterMenu";
+import {
+  type KeyboardEvent as BoxKeyEvent,
+  type ReactNode,
+  type RefObject,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { type FilterItem, FilterMenu } from "./FilterMenu";
 import { type CallsSection, type EntrySection, type Section, systemOfSection } from "./routes";
 import { taskSystem } from "./sections";
 import { TimeRange } from "./TimeRange";
@@ -104,10 +112,11 @@ const MOVES = new Map([
   ["ArrowDown", 1],
   ["ArrowUp", -1],
 ]);
-// Enter takes the suggestion picked, Tab the picked one or the first.
-const PICKS = new Map<string, (suggestions: readonly Suggestion[], cursor: number) => Suggestion | undefined>([
+// Enter takes the suggestion picked, Tab the picked one or, once something is typed, the first.
+type Pick = (suggestions: readonly Suggestion[], cursor: number, typed: boolean) => Suggestion | undefined;
+const PICKS = new Map<string, Pick>([
   ["Enter", (suggestions, cursor) => suggestions[cursor]],
-  ["Tab", (suggestions, cursor) => suggestions[cursor] ?? suggestions[0]],
+  ["Tab", (suggestions, cursor, typed) => suggestions[cursor] ?? (typed ? suggestions[0] : undefined)],
 ]);
 
 function moved(cursor: number, step: number, count: number): number {
@@ -166,9 +175,15 @@ interface MultiFilter {
   display?: (value: string) => ReactNode;
 }
 
-type Control = QuickFilter | MultiFilter | TimeControl;
+/** The Level filter: single levels, and `atLeast` offered as a level and every one above it (`level>=warning`). */
+interface LevelsFilter extends MultiFilter {
+  atLeast: readonly string[];
+}
+
+type Control = QuickFilter | MultiFilter | LevelsFilter | TimeControl;
 
 const isMulti = (control: Control): control is MultiFilter => "key" in control;
+const isLevels = (control: Control): control is LevelsFilter => "atLeast" in control;
 const isTime = (control: Control): control is TimeControl => "verb" in control;
 
 const f = (key: string, op: string, value: string): Filter => ({ key, op, value });
@@ -315,7 +330,8 @@ const QUICK: Record<Exclude<Section, CallsSection>, Control[]> = {
       // As the table and the chart name it.
       format: (level) => level.toUpperCase(),
       display: (level) => <LogLevel level={level} />,
-    },
+      atLeast: ["warning", "error"],
+    } satisfies LevelsFilter,
     { label: "Logger", title: "Filter by logger", key: "logger", values: (known) => known.logger ?? [] },
     // The routes whose requests logged anything: the others would find nothing here.
     { ...ROUTE, values: (known) => known.log_route ?? [] },
@@ -552,37 +568,81 @@ interface Suggestion {
   insert: string;
   label: string;
   help: string;
+  /** The start of a filter (`extra.`): taking it leaves it in the box to type on, as a field's `key:` does. */
+  more?: boolean;
 }
 
-export interface SearchBarProps {
-  section: Section;
-  /** A system's page: its family, for the filters' words (from the agent's counts). */
-  family?: Family | undefined;
-  q: string;
-  spec: SearchSpec | null;
-  error: string | null;
-  /** Values from stored data, offered in menus and after `route:`, `logger:`, `db:`. */
-  known: KnownValues;
-  /** Results shown for the current query, if known: a number, or "14 of 1,204" when more match than are shown. */
-  count?: number | string | undefined;
-  /** The list of this entry point's calls: its own quick filters on the traces search. */
-  callsOf?: EntrySection | undefined;
-  /** `typed`: the box's own debounced text, which replaces the history entry; a chip or a menu adds one. */
-  onChange: (q: string, typed?: boolean) => void;
+type Fields = Record<string, { help: string }>;
+
+/**
+ * The fields the page searches by, each once with its help, for an empty box: what there is to filter by before a
+ * letter is typed. A prefix field (`extra.*`) offers its prefix, and its keys come up as it is typed on.
+ */
+function allFields(fields: Fields): Suggestion[] {
+  return Object.entries(fields).map(([name, { help }]) =>
+    name.endsWith(".*")
+      ? { insert: name.slice(0, -1), label: name, help, more: true }
+      : { insert: `${name}:`, label: `${name}:`, help },
+  );
 }
 
-export function SearchBar({ section, family, q, spec, error, known, count, callsOf, onChange }: SearchBarProps) {
-  // Errors are the issues of kind error: the same search.
-  const fields = spec?.[searchResourceOf(section)] ?? {};
-  const keys = useMemo(() => new Set(Object.keys(fields)), [fields]);
-  const parsed = useMemo(() => parseQuery(q, keys), [q, keys]);
-  const [text, setText] = useState(parsed.text);
-  const [open, setOpen] = useState<string | null>(null);
-  // The suggestion picked with the arrows; -1, none: Enter then takes what was typed, Tab the first suggestion.
+/** What the store (or a fixed list) knows of a key's values: the routes after `route:`, the levels after `level:`. */
+function knownValues(key: string, known: KnownValues): string[] {
+  const stored = FROM_STORE.has(key) ? (known as Record<string, unknown>)[key] : VALUES[key];
+  return Array.isArray(stored) ? (stored as string[]) : [];
+}
+
+/** Suggestions for a word being typed: field names, or a filter's values once its key and operator are there. */
+function typedSuggestions(word: string, keys: ReadonlySet<string>, fields: Fields, known: KnownValues): Suggestion[] {
+  const valueMatch = FILTER.exec(word);
+  if (!valueMatch) return fieldSuggestions(word, fields, known.extra ?? []);
+  const [, key = "", op = ":", partial = ""] = valueMatch;
+  return isKey(key, keys) ? valueSuggestions(key, op, partial, knownValues(key, known)) : [];
+}
+
+/** Suggestions for the word being typed; with none (an empty box, or after a space), every field the page has. */
+function useSuggestions(word: string, keys: ReadonlySet<string>, fields: Fields, known: KnownValues): Suggestion[] {
+  return useMemo(
+    () => (word ? typedSuggestions(word, keys, fields, known) : allFields(fields)),
+    [word, keys, fields, known],
+  );
+}
+
+/**
+ * The suggestion picked with the arrows; -1, none: Enter then takes what was typed, Tab the first suggestion. With
+ * nothing typed, Tab leaves the box as it would without the list: the list there is a guide, not a guess.
+ */
+function usePicker(suggestions: readonly Suggestion[], typed: boolean, accept: (suggestion: Suggestion) => void) {
   const [cursor, setCursor] = useState(-1);
-  const [focused, setFocused] = useState(false);
-  const input = useRef<HTMLInputElement>(null);
+  /** The arrows pick a suggestion, Enter takes the picked one, Tab the picked or the first: whether it was one of them. */
+  const onKey = (event: BoxKeyEvent<HTMLInputElement>): boolean => {
+    const step = MOVES.get(event.key);
+    // Enter with none picked takes what was typed, as typed: not a suggestion's key then.
+    const done = step ? move(step) : take(PICKS.get(event.key)?.(suggestions, cursor, typed));
+    if (done) event.preventDefault();
+    return done;
+  };
+  const move = (step: number) => {
+    setCursor(moved(cursor, step, suggestions.length));
+    return true;
+  };
+  const take = (chosen: Suggestion | undefined) => {
+    if (chosen) accept(chosen);
+    return chosen !== undefined;
+  };
+  return { cursor, setCursor, onKey };
+}
 
+type Parsed = ReturnType<typeof parseQuery>;
+
+/** The text in the box, and the search it sends: typed text debounced, a filter being typed held back. */
+function useBoxText(
+  q: string,
+  parsed: Parsed,
+  keys: ReadonlySet<string>,
+  onChange: (q: string, typed?: boolean) => void,
+) {
+  const [text, setText] = useState(parsed.text);
   // The search this box sent last: when `q` comes back as exactly that, it is the box's own echo and the text stays as
   // typed (a trailing space included). Any other `q` (a chip, a quick filter, Back) replaces the text.
   const sent = useRef<string | null>(null);
@@ -603,6 +663,11 @@ export function SearchBar({ section, family, q, spec, error, known, count, calls
     }, 300);
     return () => window.clearTimeout(timer);
   }, [text, parsed, keys, onChange]);
+  return { text, setText, sent };
+}
+
+/** `/` anywhere but in a text box goes to the search. */
+function useSlashFocus(input: RefObject<HTMLInputElement | null>) {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "/" && document.activeElement?.tagName !== "INPUT") {
@@ -612,34 +677,37 @@ export function SearchBar({ section, family, q, spec, error, known, count, calls
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, []);
+  }, [input]);
+}
 
+/** A typed filter as a chip: `status>=500`. */
+const filterOf = ([, key = "", op = ":", value = ""]: RegExpExecArray): Filter => ({ key, op, value });
+
+interface Box {
+  text: string;
+  setText: (text: string) => void;
+  parsed: Parsed;
+  keys: ReadonlySet<string>;
+  onChange: (q: string, typed?: boolean) => void;
+  sent: RefObject<string | null>;
+  input: RefObject<HTMLInputElement | null>;
+}
+
+/** Filters as chips: a suggestion taken, typed filters finished, a chip back into the box to change it. */
+function useChipEditing(box: Box, word: string, resetCursor: () => void) {
+  const { text, setText, parsed, keys, onChange, sent, input } = box;
   const setFilters = (filters: Filter[], nextText = text) => onChange(compose(filters, nextText));
-
-  // Suggestions for the word being typed: field names first, then values after `key:`.
-  const word = text.split(/\s+/).at(-1) ?? "";
-  const suggestions: Suggestion[] = useMemo(() => {
-    if (!word) return [];
-    const valueMatch = FILTER.exec(word);
-    if (!valueMatch) return fieldSuggestions(word, fields, known.extra ?? []);
-    const [, key = "", op = ":", partial = ""] = valueMatch;
-    if (!isKey(key, keys)) return [];
-    const stored = FROM_STORE.has(key) ? (known as Record<string, unknown>)[key] : VALUES[key];
-    return valueSuggestions(key, op, partial, Array.isArray(stored) ? (stored as string[]) : []);
-  }, [word, keys, fields, known]);
 
   const accept = (suggestion: Suggestion) => {
     const head = text.slice(0, text.length - word.length);
-    if (suggestion.insert.endsWith(":")) {
-      setText(`${head}${suggestion.insert}`);
-    } else {
+    if (suggestion.more || suggestion.insert.endsWith(":")) setText(`${head}${suggestion.insert}`);
+    else {
       // A complete filter becomes a chip.
-      const match = /^([a-z][a-z0-9_.]*)(>=|<=|!=|:|>|<)(.*)$/.exec(suggestion.insert);
-      if (match)
-        setFilters([...parsed.filters, { key: match[1] ?? "", op: match[2] ?? ":", value: match[3] ?? "" }], head);
+      const match = FILTER.exec(suggestion.insert);
+      if (match) setFilters([...parsed.filters, filterOf(match)], head);
       setText(head);
     }
-    setCursor(-1);
+    resetCursor();
     input.current?.focus();
   };
 
@@ -656,42 +724,12 @@ export function SearchBar({ section, family, q, spec, error, known, count, calls
     onChange(next);
     const typed = `${text.trim() ? `${text.trim()} ` : ""}${serialize(filter)}`;
     setText(typed);
-    setCursor(-1);
+    resetCursor();
     window.setTimeout(() => {
       input.current?.focus();
       input.current?.setSelectionRange(typed.length, typed.length);
     }, 0);
   };
-
-  /** The arrows pick a suggestion, Enter takes the picked one, Tab the picked or the first: whether it was one of them. */
-  const suggestionKey = (event: BoxKeyEvent<HTMLInputElement>): boolean => {
-    const step = MOVES.get(event.key);
-    // Enter with none picked takes what was typed, as typed: not a suggestion's key then.
-    const done = step ? move(step) : take(PICKS.get(event.key)?.(suggestions, cursor));
-    if (done) event.preventDefault();
-    return done;
-  };
-  const move = (step: number) => {
-    setCursor(moved(cursor, step, suggestions.length));
-    return true;
-  };
-  const take = (chosen: Suggestion | undefined) => {
-    if (chosen) accept(chosen);
-    return chosen !== undefined;
-  };
-
-  /** Enter makes what was typed chips, Backspace on an empty box takes the last chip back, Escape empties the box. */
-  const boxKeys = new Map<string, () => void>([
-    ["Enter", () => commitTypedFilters()],
-    [
-      "Backspace",
-      () => {
-        if (text === "" && parsed.filters.length > 0) setFilters(parsed.filters.slice(0, -1));
-      },
-    ],
-    ["Escape", () => setText("")],
-  ]);
-  const boxKey = (key: string) => boxKeys.get(key)?.();
 
   const commitTypedFilters = () => {
     // "status>=500 " typed by hand turns into a chip as soon as it is complete.
@@ -702,16 +740,236 @@ export function SearchBar({ section, family, q, spec, error, known, count, calls
     }
   };
 
-  // A menu left open belongs to the page it was opened on.
+  /** Backspace on an empty box takes the last chip back. */
+  const dropLast = () => {
+    if (text === "" && parsed.filters.length > 0) setFilters(parsed.filters.slice(0, -1));
+  };
+
+  const remove = (index: number) => setFilters(parsed.filters.filter((_, i) => i !== index));
+
+  return { setFilters, accept, edit, commitTypedFilters, dropLast, remove };
+}
+
+/** The menu open among the quick filters; a menu left open belongs to the page it was opened on. */
+function useOpenMenu(section: Section) {
+  const [open, setOpen] = useState<string | null>(null);
   const [menuSection, setMenuSection] = useState(section);
   if (menuSection !== section) {
     setMenuSection(section);
     setOpen(null);
   }
+  return [open, setOpen] as const;
+}
 
-  const quick = controlsFor(section, family, callsOf);
-  const showSuggestions = focused && suggestions.length > 0;
+/**
+ * Whether the suggestions show: while the box has the focus, until Escape puts them away (typing or focusing again
+ * brings them back).
+ */
+function useListShown() {
+  const [focused, setFocused] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+  return {
+    shown: focused && !dismissed,
+    focus: () => {
+      setFocused(true);
+      setDismissed(false);
+    },
+    blur: () => window.setTimeout(() => setFocused(false), 120),
+    dismiss: () => setDismissed(true),
+    typed: () => setDismissed(false),
+  };
+}
 
+function FilterChip({ filter, onEdit, onRemove }: { filter: Filter; onEdit: () => void; onRemove: () => void }) {
+  return (
+    <Badge
+      variant="outline"
+      className="h-7 gap-0.5 rounded-md border-brand/35 bg-brand-soft pr-0.5 pl-2 font-mono text-base font-normal"
+    >
+      <button
+        type="button"
+        aria-label={`Edit ${serialize(filter)}`}
+        title={`${serialize(filter)}: click to edit`}
+        className="flex cursor-text items-baseline rounded-sm"
+        onClick={onEdit}
+      >
+        <span className="text-brand">{filter.key}</span>
+        <span className="text-muted-foreground">{filter.op}</span>
+        <span>{chipValue(filter)}</span>
+      </button>
+      <button
+        type="button"
+        aria-label={`Remove ${serialize(filter)}`}
+        className="ml-0.5 grid size-5 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+        onClick={onRemove}
+      >
+        <XIcon className="size-3" />
+      </button>
+    </Badge>
+  );
+}
+
+/** A suggestion in the list: the picked one keeps itself in view as the arrows move through a long list. */
+function SuggestionItem({
+  suggestion,
+  active,
+  onPick,
+}: {
+  suggestion: Suggestion;
+  active: boolean;
+  onPick: () => void;
+}) {
+  const ref = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (active) ref.current?.scrollIntoView({ block: "nearest" });
+  }, [active]);
+  return (
+    <button
+      ref={ref}
+      type="button"
+      data-active={active ? "" : undefined}
+      className="flex w-full min-w-0 items-baseline gap-4 rounded-sm px-2.5 py-1.5 text-left text-base text-muted-foreground hover:bg-accent data-[active]:bg-accent data-[active]:text-foreground"
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={onPick}
+    >
+      <code
+        className={cn(
+          "min-w-0 truncate font-mono text-sm font-semibold text-brand",
+          suggestion.help ? "w-40 shrink-0" : "flex-1",
+        )}
+      >
+        {suggestion.label}
+      </code>
+      {suggestion.help ? <span className="min-w-0 truncate">{suggestion.help}</span> : null}
+    </button>
+  );
+}
+
+/** The suggestions under the box; for an empty box, the page's fields under a heading that says so. */
+function SuggestionList({
+  suggestions,
+  cursor,
+  fields,
+  onPick,
+}: {
+  suggestions: readonly Suggestion[];
+  cursor: number;
+  fields: boolean;
+  onPick: (suggestion: Suggestion) => void;
+}) {
+  return (
+    <div className="absolute top-[4.5rem] left-10 z-30 max-h-96 w-[min(560px,calc(100%-5rem))] overflow-y-auto rounded-lg border bg-popover p-1 shadow-lg">
+      {fields ? <p className="px-2.5 pt-1.5 pb-1 text-sm font-medium text-muted-foreground">Filter by</p> : null}
+      {suggestions.map((suggestion, index) => (
+        <SuggestionItem
+          key={suggestion.insert}
+          suggestion={suggestion}
+          active={index === cursor}
+          onPick={() => onPick(suggestion)}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** How many results the search shows: "14 shown", or "14 of 1,204 shown". */
+function ShownCount({ count }: { count: number | string | undefined }) {
+  if (count === undefined) return null;
+  return <span className="ml-auto text-base text-muted-foreground tabular-nums">{count} shown</span>;
+}
+
+/** Clear while there is a search, else the `/` that focuses the box. */
+function ClearOrHint({ q, onClear }: { q: string; onClear: () => void }) {
+  return q ? (
+    <Button variant="ghost" size="sm" className="h-7 text-muted-foreground" onClick={onClear}>
+      Clear
+    </Button>
+  ) : (
+    <kbd className="mr-1 rounded border px-1.5 font-mono text-xs text-muted-foreground">/</kbd>
+  );
+}
+
+export interface SearchBarProps {
+  section: Section;
+  /** A system's page: its family, for the filters' words (from the agent's counts). */
+  family?: Family | undefined;
+  q: string;
+  spec: SearchSpec | null;
+  error: string | null;
+  /** Values from stored data, offered in menus and after `route:`, `logger:`, `db:`. */
+  known: KnownValues;
+  /** Results shown for the current query, if known: a number, or "14 of 1,204" when more match than are shown. */
+  count?: number | string | undefined;
+  /** The list of this entry point's calls: its own quick filters on the traces search. */
+  callsOf?: EntrySection | undefined;
+  /** `typed`: the box's own debounced text, which replaces the history entry; a chip or a menu adds one. */
+  onChange: (q: string, typed?: boolean) => void;
+}
+
+/** The word being typed: the text's last; none after a space. */
+const lastWord = (text: string): string => text.split(/\s+/).at(-1) ?? "";
+
+/** The fields a page's search has, as the agent's spec describes them. */
+function fieldsOf(spec: SearchSpec | null, section: Section): Fields {
+  // Errors are the issues of kind error: the same search.
+  return spec?.[searchResourceOf(section)] ?? {};
+}
+
+/** The box: its text, its suggestions, the chips it makes and what its keys do. */
+function useSearchBox({ section, q, spec, known, onChange }: SearchBarProps) {
+  const fields = fieldsOf(spec, section);
+  const keys = useMemo(() => new Set(Object.keys(fields)), [fields]);
+  const parsed = useMemo(() => parseQuery(q, keys), [q, keys]);
+  const input = useRef<HTMLInputElement>(null);
+  const { text, setText, sent } = useBoxText(q, parsed, keys, onChange);
+  useSlashFocus(input);
+  const word = lastWord(text);
+  const suggestions = useSuggestions(word, keys, fields, known);
+  const list = useListShown();
+  const reset = () => picker.setCursor(-1);
+  const chips = useChipEditing({ text, setText, parsed, keys, onChange, sent, input }, word, reset);
+  const picker = usePicker(suggestions, word !== "", chips.accept);
+  // Enter makes what was typed chips, Backspace on an empty box takes the last chip back, Escape empties the box and
+  // puts the suggestions away.
+  const boxKeys = new Map<string, () => void>([
+    ["Enter", chips.commitTypedFilters],
+    ["Backspace", chips.dropLast],
+    [
+      "Escape",
+      () => {
+        setText("");
+        list.dismiss();
+      },
+    ],
+  ]);
+  const showSuggestions = list.shown && suggestions.length > 0;
+  return {
+    parsed,
+    input,
+    text,
+    word,
+    suggestions,
+    showSuggestions,
+    list,
+    picker,
+    chips,
+    onType: (value: string) => {
+      setText(value);
+      reset();
+      list.typed();
+      if (value.endsWith(" ")) window.setTimeout(chips.commitTypedFilters, 0);
+    },
+    onKey: (event: BoxKeyEvent<HTMLInputElement>) => {
+      if (!(showSuggestions && picker.onKey(event))) boxKeys.get(event.key)?.();
+    },
+  };
+}
+
+export function SearchBar(props: SearchBarProps) {
+  const { section, family, q, error, known, count, callsOf, onChange } = props;
+  const box = useSearchBox(props);
+  const [open, setOpen] = useOpenMenu(section);
+  const { parsed, chips } = box;
   return (
     <div className="relative px-10 pt-5 pb-6">
       <div
@@ -724,88 +982,40 @@ export function SearchBar({ section, family, q, spec, error, known, count, calls
       >
         <SearchIcon className="size-4 shrink-0 text-muted-foreground" />
         {parsed.filters.map((filter, index) => (
-          <Badge
+          <FilterChip
             // biome-ignore lint/suspicious/noArrayIndexKey: a chip is a position in the query; a filter may repeat.
             key={`${serialize(filter)}:${index}`}
-            variant="outline"
-            className="h-7 gap-0.5 rounded-md border-brand/35 bg-brand-soft pr-0.5 pl-2 font-mono text-base font-normal"
-          >
-            <button
-              type="button"
-              aria-label={`Edit ${serialize(filter)}`}
-              title={`${serialize(filter)}: click to edit`}
-              className="flex cursor-text items-baseline rounded-sm"
-              onClick={() => edit(index)}
-            >
-              <span className="text-brand">{filter.key}</span>
-              <span className="text-muted-foreground">{filter.op}</span>
-              <span>{chipValue(filter)}</span>
-            </button>
-            <button
-              type="button"
-              aria-label={`Remove ${serialize(filter)}`}
-              className="ml-0.5 grid size-5 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
-              onClick={() => setFilters(parsed.filters.filter((_, i) => i !== index))}
-            >
-              <XIcon className="size-3" />
-            </button>
-          </Badge>
+            filter={filter}
+            onEdit={() => chips.edit(index)}
+            onRemove={() => chips.remove(index)}
+          />
         ))}
         <input
-          ref={input}
+          ref={box.input}
           type="search"
-          value={text}
-          placeholder={
-            parsed.filters.length
-              ? "Add text or filters…"
-              : `Search or type a filter, e.g. ${exampleFor(section, family, callsOf)}`
-          }
+          value={box.text}
+          placeholder={placeholderFor(parsed.filters.length > 0, section, family, callsOf)}
           aria-label="Search"
           spellCheck={false}
           className="h-9 min-w-40 flex-1 bg-transparent font-mono text-md outline-none placeholder:font-sans placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden"
-          onFocus={() => setFocused(true)}
-          onBlur={() => window.setTimeout(() => setFocused(false), 120)}
-          onChange={(event) => {
-            setText(event.target.value);
-            setCursor(-1);
-            if (event.target.value.endsWith(" ")) window.setTimeout(commitTypedFilters, 0);
-          }}
-          onKeyDown={(event) => {
-            if (!(showSuggestions && suggestionKey(event))) boxKey(event.key);
-          }}
+          onFocus={box.list.focus}
+          onBlur={box.list.blur}
+          onChange={(event) => box.onType(event.target.value)}
+          onKeyDown={box.onKey}
         />
-        {q ? (
-          <Button variant="ghost" size="sm" className="h-7 text-muted-foreground" onClick={() => onChange("")}>
-            Clear
-          </Button>
-        ) : (
-          <kbd className="mr-1 rounded border px-1.5 font-mono text-xs text-muted-foreground">/</kbd>
-        )}
+        <ClearOrHint q={q} onClear={() => onChange("")} />
       </div>
-      {showSuggestions ? (
-        <div className="absolute top-[4.5rem] left-10 z-30 w-[min(560px,calc(100%-5rem))] rounded-lg border bg-popover p-1 shadow-lg">
-          {suggestions.map((suggestion, index) => (
-            <button
-              key={suggestion.insert}
-              type="button"
-              data-active={index === cursor ? "" : undefined}
-              className="flex w-full min-w-0 items-baseline gap-4 rounded-sm px-2.5 py-1.5 text-left text-base text-muted-foreground hover:bg-accent data-[active]:bg-accent data-[active]:text-foreground"
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => accept(suggestion)}
-            >
-              <code
-                className={`min-w-0 truncate font-mono text-sm font-semibold text-brand ${suggestion.help ? "w-40 shrink-0" : "flex-1"}`}
-              >
-                {suggestion.label}
-              </code>
-              {suggestion.help ? <span className="min-w-0 truncate">{suggestion.help}</span> : null}
-            </button>
-          ))}
-        </div>
+      {box.showSuggestions ? (
+        <SuggestionList
+          suggestions={box.suggestions}
+          cursor={box.picker.cursor}
+          fields={box.word === ""}
+          onPick={chips.accept}
+        />
       ) : null}
       {error ? <p className="mt-2 text-base text-error">{error}</p> : null}
       <div className="mt-4 flex flex-wrap items-center gap-2.5">
-        {quick.map((control) => (
+        {controlsFor(section, family, callsOf).map((control) => (
           <QuickControl
             key={control.label}
             control={control}
@@ -814,17 +1024,25 @@ export function SearchBar({ section, family, q, spec, error, known, count, calls
             open={open === control.label}
             onToggle={() => setOpen(open === control.label ? null : control.label)}
             onChange={(filters, close) => {
-              setFilters(filters);
+              chips.setFilters(filters);
               if (close) setOpen(null);
             }}
           />
         ))}
-        {count !== undefined ? (
-          <span className="ml-auto text-base text-muted-foreground tabular-nums">{count} shown</span>
-        ) : null}
+        <ShownCount count={count} />
       </div>
     </div>
   );
+}
+
+/** The box's placeholder: an example of the page's search, or, with chips already, that more may be added. */
+function placeholderFor(
+  chips: boolean,
+  section: Section,
+  family: Family | undefined,
+  callsOf: EntrySection | undefined,
+): string {
+  return chips ? "Add text or filters…" : `Search or type a filter, e.g. ${exampleFor(section, family, callsOf)}`;
 }
 
 interface QuickControlProps {
@@ -836,85 +1054,203 @@ interface QuickControlProps {
   onChange: (filters: Filter[], close: boolean) => void;
 }
 
-function QuickControl({ control, known, filters, open, onToggle, onChange }: QuickControlProps) {
-  const onOpenChange = (next: boolean) => next !== open && onToggle();
-  if (isTime(control)) {
-    const bound = (key: string) => filters.find((item) => item.key === key && item.op === ":")?.value;
-    return (
-      <TimeRange
-        since={bound("since")}
-        until={bound("until")}
-        verb={control.verb}
-        open={open}
-        onOpenChange={onOpenChange}
-        onChange={(since, until) => {
-          const rest = filters.filter((item) => item.key !== "since" && item.key !== "until");
-          const next = [...rest];
-          if (since) next.push(f("since", ":", since));
-          if (until) next.push(f("until", ":", until));
-          onChange(next, true);
-        }}
-      />
-    );
-  }
-  if (isMulti(control)) {
-    const values = typeof control.values === "function" ? control.values(known) : control.values;
-    if (values.length === 0) return null;
-    const format = control.format ?? ((value: string) => value);
-    const current = filters.find((item) => item.key === control.key && item.op === ":");
-    const picked = new Set(current ? current.value.split(",").filter(Boolean) : []);
-    const rest = filters.filter((item) => item !== current);
-    return (
-      <FilterMenu
-        label={control.label}
-        title={control.title}
-        searchKey={control.key}
-        summary={
-          picked.size === 0 ? null : picked.size === 1 ? format([...picked][0] ?? "") : `${picked.size} selected`
-        }
-        items={values.map((value) => ({
-          value,
-          label: format(value),
-          selected: picked.has(value),
-          tone: control.tone?.(value),
-          display: control.display?.(value),
-        }))}
-        multiple={true}
-        open={open}
-        onOpenChange={onOpenChange}
-        onSelect={(value) => {
-          const next = new Set(picked);
-          if (next.has(value)) next.delete(value);
-          else next.add(value);
-          // Keep the menu's order so the query reads the same however values were clicked.
-          const ordered = values.filter((item) => next.has(item));
-          onChange(ordered.length ? [...rest, f(control.key, ":", ordered.join(","))] : rest, false);
-        }}
-        onClear={() => onChange(rest, true)}
-      />
-    );
-  }
-  const options = typeof control.options === "function" ? control.options(known) : control.options;
+/** A quick filter as its kind shows it: the time range, a level, a pick of values, or a pick of one option. */
+function QuickControl(props: QuickControlProps) {
+  const View = viewOf(props.control);
+  return <View {...props} />;
+}
+
+function viewOf(control: Control): (props: QuickControlProps) => ReactNode {
+  if (isTime(control)) return TimeQuick;
+  if (isLevels(control)) return LevelQuick;
+  return isMulti(control) ? MultiQuick : OptionsQuick;
+}
+
+/** A menu's open state as a Popover reports it: a change only toggles it. */
+const openChange = (open: boolean, onToggle: () => void) => (next: boolean) => next !== open && onToggle();
+
+function TimeQuick({ control, filters, open, onToggle, onChange }: QuickControlProps) {
+  const bound = (key: string) => filters.find((item) => item.key === key && item.op === ":")?.value;
+  return (
+    <TimeRange
+      since={bound("since")}
+      until={bound("until")}
+      verb={(control as TimeControl).verb}
+      open={open}
+      onOpenChange={openChange(open, onToggle)}
+      onChange={(since, until) => {
+        const rest = filters.filter((item) => item.key !== "since" && item.key !== "until");
+        const next = [...rest];
+        if (since) next.push(f("since", ":", since));
+        if (until) next.push(f("until", ":", until));
+        onChange(next, true);
+      }}
+    />
+  );
+}
+
+/** A multi filter's values: its own list, or what the store knows. */
+function valuesOf(control: MultiFilter, known: KnownValues): readonly string[] {
+  return typeof control.values === "function" ? control.values(known) : control.values;
+}
+
+/** The values a `key:a,b` filter has picked. */
+function pickedOf(current: Filter | undefined): Set<string> {
+  return new Set(current ? current.value.split(",").filter(Boolean) : []);
+}
+
+/** What a menu's button says of its pick: the one value, or how many. */
+function pickSummary(picked: ReadonlySet<string>, format: (value: string) => string): string | null {
+  if (picked.size === 0) return null;
+  return picked.size === 1 ? format([...picked][0] ?? "") : `${picked.size} selected`;
+}
+
+/** A value in or out of a pick. */
+function flipped(picked: ReadonlySet<string>, value: string): Set<string> {
+  const next = new Set(picked);
+  if (!next.delete(value)) next.add(value);
+  return next;
+}
+
+const asIs = (value: string) => value;
+
+/** The menu's rows for a multi filter's values: each as the console shows it elsewhere. */
+function multiItems(control: MultiFilter, values: readonly string[], picked: ReadonlySet<string>): FilterItem[] {
+  const format = control.format ?? asIs;
+  return values.map((value) => ({
+    value,
+    label: format(value),
+    selected: picked.has(value),
+    tone: control.tone?.(value),
+    display: control.display?.(value),
+  }));
+}
+
+/** The filters with one key's pick: `key:a,b` in the menu's order, so the query reads the same however clicked. */
+function withPick(rest: Filter[], key: string, values: readonly string[], picked: ReadonlySet<string>): Filter[] {
+  const ordered = values.filter((item) => picked.has(item));
+  return ordered.length ? [...rest, f(key, ":", ordered.join(","))] : rest;
+}
+
+function MultiQuick({ control, known, filters, open, onToggle, onChange }: QuickControlProps) {
+  const multi = control as MultiFilter;
+  const values = valuesOf(multi, known);
+  if (values.length === 0) return null;
+  const current = filters.find((item) => item.key === multi.key && item.op === ":");
+  const picked = pickedOf(current);
+  const rest = filters.filter((item) => item !== current);
+  return (
+    <FilterMenu
+      label={multi.label}
+      title={multi.title}
+      searchKey={multi.key}
+      summary={pickSummary(picked, multi.format ?? asIs)}
+      items={multiItems(multi, values, picked)}
+      multiple={true}
+      open={open}
+      onOpenChange={openChange(open, onToggle)}
+      onSelect={(value) => onChange(withPick(rest, multi.key, values, flipped(picked, value)), false)}
+      onClear={() => onChange(rest, true)}
+    />
+  );
+}
+
+function optionsOf(quick: QuickFilter, known: KnownValues): QuickOption[] {
+  return typeof quick.options === "function" ? quick.options(known) : quick.options;
+}
+
+/** The option whose terms the search has, all of them. */
+function activeOption(options: readonly QuickOption[], filters: readonly Filter[]): QuickOption | undefined {
+  return options.find((option) =>
+    option.terms.every((term) => filters.some((item) => serialize(item) === serialize(term))),
+  );
+}
+
+function OptionsQuick({ control, known, filters, open, onToggle, onChange }: QuickControlProps) {
+  const quick = control as QuickFilter;
+  const options = optionsOf(quick, known);
   if (options.length === 0) return null;
   // Replace only this control's own terms: `has:` is shared by Issue and Contains.
   const owned = new Set(options.flatMap((option) => option.terms.map(serialize)));
   const rest = filters.filter((item) => !owned.has(serialize(item)));
-  const active = options.find((option) =>
-    option.terms.every((term) => filters.some((item) => serialize(item) === serialize(term))),
-  );
+  const active = activeOption(options, filters);
   return (
     <FilterMenu
-      label={control.label}
-      title={control.title}
+      label={quick.label}
+      title={quick.title}
       summary={active?.label ?? null}
       items={options.map((option) => ({ value: option.label, label: option.label, selected: option === active }))}
       multiple={false}
       open={open}
-      onOpenChange={onOpenChange}
+      onOpenChange={openChange(open, onToggle)}
       onSelect={(label) => {
         const option = options.find((item) => item.label === label);
         if (option) onChange(option === active ? rest : [...rest, ...option.terms], true);
       }}
+      onClear={() => onChange(rest, true)}
+    />
+  );
+}
+
+/* ---------- the Level filter: single levels, or a level and every one above it ---------- */
+
+const LEVELS = ["debug", "info", "warning", "error", "critical"];
+// A row of the menu that picks a level and those above it: its value, `>=` and the level.
+const AT_LEAST = ">=";
+
+/** The levels a search's level filters let through: `level>=warning`'s, else `level:a,b`'s. */
+function levelPick(filters: readonly Filter[]): { from: string | undefined; picked: Set<string> } {
+  const from = filters.find((item) => item.key === "level" && item.op === AT_LEAST)?.value.toLowerCase();
+  if (from) return { from, picked: new Set(LEVELS.slice(LEVELS.indexOf(from))) };
+  return { from, picked: pickedOf(filters.find((item) => item.key === "level" && item.op === ":")) };
+}
+
+/** A "WARNING and above" row: the level's tag, as in the table, and the words. */
+function AtLeast({ level }: { level: string }) {
+  return (
+    <span className="flex items-center gap-1.5">
+      <LogLevel level={level} />
+      <span className="text-muted-foreground">and above</span>
+    </span>
+  );
+}
+
+/** The Level menu's rows: each level, then "WARNING and above" and "ERROR and above". */
+function levelItems(control: LevelsFilter, from: string | undefined, picked: ReadonlySet<string>): FilterItem[] {
+  const ranges = control.atLeast.map((level) => ({
+    value: `${AT_LEAST}${level}`,
+    label: `${level.toUpperCase()} and above`,
+    selected: from === level,
+    display: <AtLeast level={level} />,
+  }));
+  return [...multiItems(control, LEVELS, picked), ...ranges];
+}
+
+/**
+ * The filters after a pick in the Level menu: a range replaces any level filter (or goes, picked again); a single
+ * level is checked or unchecked among those shown checked, a range's included.
+ */
+function levelFilters(rest: Filter[], value: string, from: string | undefined, picked: ReadonlySet<string>): Filter[] {
+  if (!value.startsWith(AT_LEAST)) return withPick(rest, "level", LEVELS, flipped(picked, value));
+  const level = value.slice(AT_LEAST.length);
+  return level === from ? rest : [...rest, f("level", AT_LEAST, level)];
+}
+
+function LevelQuick({ control, filters, open, onToggle, onChange }: QuickControlProps) {
+  const levels = control as LevelsFilter;
+  const { from, picked } = levelPick(filters);
+  const rest = filters.filter((item) => item.key !== "level");
+  return (
+    <FilterMenu
+      label={levels.label}
+      title={levels.title}
+      searchKey="level"
+      summary={from ? `≥ ${from.toUpperCase()}` : pickSummary(picked, (level) => level.toUpperCase())}
+      items={levelItems(levels, from, picked)}
+      multiple={true}
+      open={open}
+      onOpenChange={openChange(open, onToggle)}
+      onSelect={(value) => onChange(levelFilters(rest, value, from, picked), false)}
       onClear={() => onChange(rest, true)}
     />
   );

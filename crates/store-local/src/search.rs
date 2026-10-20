@@ -597,6 +597,37 @@ mod tests {
     }
 
     #[test]
+    fn a_level_compares_by_its_rank() {
+        let level = level("level_no");
+        let term = |op: &str, value: &str| Term {
+            key: Some("level".into()),
+            op: op.into(),
+            value: value.into(),
+        };
+        assert_eq!(
+            level(&term(">=", "warning")).unwrap(),
+            ("level_no >= ?".into(), vec![Sql::Real(30.0)])
+        );
+        assert_eq!(
+            level(&term(">", "ERROR")).unwrap(),
+            ("level_no > ?".into(), vec![Sql::Real(40.0)])
+        );
+        assert_eq!(
+            level(&term(":", "warning,error")).unwrap(),
+            (
+                "level_no IN (?, ?)".into(),
+                vec![Sql::Real(30.0), Sql::Real(40.0)]
+            )
+        );
+        assert_eq!(
+            level(&term(">=", "loud")).unwrap_err(),
+            SearchError(
+                "level expects a level (debug, info, warning, error, critical), got 'loud'".into()
+            )
+        );
+    }
+
+    #[test]
     fn repr_quotes_like_python() {
         assert_eq!(py_repr("abc"), "'abc'");
         assert_eq!(py_repr("it's"), "\"it's\"");
