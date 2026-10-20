@@ -211,8 +211,7 @@ function Groups({ groups }: { groups: readonly [string, Pair[]][] }) {
     <div className="grid gap-4">
       {groups.map(([name, pairs]) => (
         <section key={name} className="grid gap-1.5" aria-label={name}>
-          <h4 className="flex items-center gap-2 px-1 text-xs font-semibold text-foreground">
-            <span className="size-1.5 rounded-full bg-brand" />
+          <h4 className="flex items-baseline gap-1.5 px-1 text-[11px] font-semibold tracking-wider text-foreground/80 uppercase">
             {name}
             <span className="font-normal text-muted-foreground tabular-nums">{pairs.length}</span>
           </h4>
