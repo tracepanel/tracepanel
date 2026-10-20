@@ -886,6 +886,10 @@ export interface components {
         Capabilities: {
             /** @description The app runs EXPLAIN of a recorded query on its database (api/explain). */
             explain: boolean;
+            /** @description The app profiles a request when asked (the tracepanel_profile cookie or the X-Tracepanel-Profile header): the console offers to record the next one with a profile. */
+            profile: boolean;
+            /** @description The app records what its requests carry (query, headers, body, cookies, session). */
+            request: boolean;
             /** @description The app can switch the user this browser is logged in as (api/users, api/users/me, api/users/switch). */
             users: boolean;
         };

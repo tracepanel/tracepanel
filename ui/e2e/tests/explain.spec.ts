@@ -5,7 +5,9 @@ import { expect, test } from "../fixtures.ts";
 
 test("a plan's lines are in colour: operations, names, numbers; a full scan's operation warns", async ({ page }) => {
   // An app that runs EXPLAIN, as the agent answers once one is connected.
-  await page.route("**/api/capabilities", (route) => route.fulfill({ json: { explain: true, users: false } }));
+  await page.route("**/api/capabilities", (route) =>
+    route.fulfill({ json: { explain: true, users: false, profile: false, request: false } }),
+  );
   await page.route("**/api/explain?*", (route) =>
     route.fulfill({
       json: {

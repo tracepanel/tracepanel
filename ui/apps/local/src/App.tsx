@@ -37,6 +37,7 @@ import { ClearDialog } from "./ClearDialog";
 import { Console } from "./Console";
 import { exploreFor } from "./explore";
 import { type EntrySummary, type TabEntry, type TabHistory, usePolling, useTabHistory } from "./hooks";
+import { ProfileNext } from "./ProfileNext";
 import { RefreshProvider } from "./refresh";
 import { consoleLinks, go, href, type Route, useRoute } from "./routes";
 import { SearchPalette } from "./SearchPalette";
@@ -736,6 +737,7 @@ function PanelApp({ route }: { route: Route }) {
   const panelActions = (
     <>
       <SwitchUser source={source} onSwitched={() => tellWidget("tracepanel:reload")} />
+      <ProfileNext source={source} />
       <Button
         variant="outline"
         size="sm"

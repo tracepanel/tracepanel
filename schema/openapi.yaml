@@ -1030,9 +1030,17 @@ components:
     Capabilities:
       type: object
       additionalProperties: false
-      required: [explain, users]
+      required: [explain, users, profile, request]
       properties:
         explain: { type: boolean, description: The app runs EXPLAIN of a recorded query on its database (api/explain). }
+        profile:
+          type: boolean
+          description: >-
+            The app profiles a request when asked (the tracepanel_profile cookie or the X-Tracepanel-Profile header):
+            the console offers to record the next one with a profile.
+        request:
+          type: boolean
+          description: The app records what its requests carry (query, headers, body, cookies, session).
         users:
           type: boolean
           description: The app can switch the user this browser is logged in as (api/users, api/users/me, api/users/switch).
