@@ -319,6 +319,88 @@ function ownRows(trace: Trace): PropRow[] {
   ];
 }
 
+/** What the request carried and what its response said, as the app's SDK recorded them (this machine only). */
+const REQUEST_PREFIXES = {
+  headers: "http.request.header.",
+  cookies: "http.request.cookie.",
+  session: "session.",
+  response: "http.response.header.",
+} as const;
+const REQUEST_KEYS = new Set(["url.query", "http.request.body", "http.request.body.truncated"]);
+
+/** Shown in their own parts: not again among all the attributes. */
+function isRequestDetail(key: string): boolean {
+  return REQUEST_KEYS.has(key) || Object.values(REQUEST_PREFIXES).some((prefix) => key.startsWith(prefix));
+}
+
+/** The attributes under a prefix, by what follows it, sorted. */
+function prefixed(attrs: Attrs, prefix: string): PropRow[] {
+  return Object.entries(attrs)
+    .filter(([key]) => key.startsWith(prefix))
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => {
+      const shown = typeof value === "string" ? value : JSON.stringify(value);
+      return { label: key.slice(prefix.length), value: shown, copy: shown, mono: true };
+    });
+}
+
+/** A query string as its parameters, each as often as it came. */
+function queryRows(query: string | null): PropRow[] {
+  if (!query) return [];
+  return [...new URLSearchParams(query)].map(([name, value]) => ({ label: name, value, copy: value, mono: true }));
+}
+
+/** A body as it reads best: JSON indented, anything else as it came. */
+function readable(body: string): string {
+  try {
+    return JSON.stringify(JSON.parse(body), null, 2);
+  } catch {
+    return body;
+  }
+}
+
+function RequestBody({ body, truncated }: { body: string; truncated: boolean }) {
+  return (
+    <div className="grid gap-1">
+      <pre className="max-h-96 overflow-auto rounded-md border bg-muted/40 p-3 font-mono text-sm whitespace-pre-wrap">
+        {readable(body)}
+      </pre>
+      {truncated ? <p className="text-xs text-muted-foreground">Cut at 16 KB.</p> : null}
+    </div>
+  );
+}
+
+/** The request's own parts: its query, headers, body, cookies and session, then the response's headers. */
+function RequestParts({ attrs }: { attrs: Attrs }) {
+  const body = text(attrs["http.request.body"]);
+  const parts: [string, PropRow[]][] = [
+    ["Query", queryRows(text(attrs["url.query"]))],
+    ["Request headers", prefixed(attrs, REQUEST_PREFIXES.headers)],
+  ];
+  const after: [string, PropRow[]][] = [
+    ["Cookies", prefixed(attrs, REQUEST_PREFIXES.cookies)],
+    ["Session", prefixed(attrs, REQUEST_PREFIXES.session)],
+    ["Response headers", prefixed(attrs, REQUEST_PREFIXES.response)],
+  ];
+  const table = ([title, rows]: [string, PropRow[]]) =>
+    rows.length ? (
+      <Part key={title} label={title} title={title}>
+        <PropTable rows={rows} />
+      </Part>
+    ) : null;
+  return (
+    <>
+      {parts.map(table)}
+      {body ? (
+        <Part label="Request body" title="Request body">
+          <RequestBody body={body} truncated={attrs["http.request.body.truncated"] === true} />
+        </Part>
+      ) : null}
+      {after.map(table)}
+    </>
+  );
+}
+
 /** A titled part of the overview, when it has anything to show. */
 function Part({ label, title, children }: { label: string; title: ReactNode; children: ReactNode }) {
   return (
@@ -333,7 +415,8 @@ function Part({ label, title, children }: { label: string; title: ReactNode; chi
 export function RequestInfo({ trace, related, links }: RequestInfoProps) {
   const document = text(trace.attrs["graphql.document"]);
   // The document is shown formatted above: not again, on one line, among the attributes.
-  const { "graphql.document": _, ...listed } = trace.attrs;
+  const { "graphql.document": _, ...rest } = trace.attrs;
+  const listed = Object.fromEntries(Object.entries(rest).filter(([key]) => !isRequestDetail(key)));
   // The traces it is linked to come after its own: what queued it, what it called, what it delivered to.
   const linked = relatedRows(related, links);
   return (
@@ -344,6 +427,7 @@ export function RequestInfo({ trace, related, links }: RequestInfoProps) {
           <PropTable rows={linked} />
         </Part>
       ) : null}
+      <RequestParts attrs={trace.attrs} />
       {document ? (
         <Part label="GraphQL query" title="Query">
           <GraphqlCode document={document} />
