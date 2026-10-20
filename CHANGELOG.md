@@ -158,6 +158,23 @@
 
 ### Fixed
 
+- Pages hold still while they load. The menu shows no entry point it then
+  takes away, and keeps its items while another app's load. The filters come
+  in one step with the values they offer, in a row that keeps its height. An
+  entry point's Now, Overview, switch and list show together, as do the Logs'
+  chart and list and a system's tiles and list. A page that may turn out
+  empty shows its title until it knows, not a search it then takes away.
+  Switching By task and All runs keeps the rows on screen, dimmed, until the
+  others come. An issue's requests no longer move down when its latest
+  occurrence loads.
+- With Live on, on Logs and Tasks, Live is the only clock: the toggle says
+  "Live · every 2s" (or paused), and the interval menu gives way to Refresh.
+- A system's tiles fill their row when there is no hit rate to show.
+- A trace page's tiles have no stray line under them and through their gaps,
+  and are the other pages' tiles: their corners and number size. Its tabs sit
+  in the page's column, the first at its left edge.
+- A menu longer than the sidebar fades out at its foot instead of cutting an
+  item in half.
 - Tasks' Now table fits the page: a long worker name, arguments or error are
   cut to one line, whole on hover. Now stands over the Overview, chevron for
   chevron, busy or idle. An overview's time range is on the 24-hour clock,

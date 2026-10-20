@@ -1,11 +1,11 @@
-import { type Counts, type DataSource, type KnownValues, LogoMark, type SearchSpec } from "@tracepanel/ui";
+import { type Counts, type DataSource, LogoMark, type SearchSpec } from "@tracepanel/ui";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@tracepanel/ui/components/ui/dialog";
 import { cn } from "@tracepanel/ui/lib/utils";
 import { MenuIcon, SearchIcon } from "lucide-react";
 import { type CSSProperties, useCallback, useEffect, useMemo, useState } from "react";
 import { ClearDialog } from "./ClearDialog";
 import { DataPage } from "./DataPage";
-import { useSearch } from "./data";
+import { useLast, useSearch } from "./data";
 import { EntryPage } from "./EntryPage";
 import { GroupPage } from "./GroupPage";
 import { IssuePage } from "./IssuePage";
@@ -35,6 +35,27 @@ function sectionOf(route: Route): Section | null {
   return route.name;
 }
 
+/**
+ * What the menu and the filters are made of: the counts per section and the values stored. Kept while another app's
+ * load, so the menu and the filters don't blink out and back; undefined until the first answer.
+ */
+function useCatalog(source: DataSource) {
+  const counts = useLast(
+    useSearch(
+      useCallback((): Promise<Counts | undefined> => source.counts(), [source]),
+      "",
+    ).data,
+  );
+  const known = useLast(
+    useSearch(
+      useCallback(() => source.knownValues(), [source]),
+      "",
+      3,
+    ).data,
+  );
+  return { counts, known };
+}
+
 export function Console({ route, source: everything }: { route: Route; source: DataSource }) {
   // Several apps sending to one agent: the one chosen narrows every page (scope.tsx).
   const { service, setService } = useScope();
@@ -59,33 +80,7 @@ export function Console({ route, source: everything }: { route: Route; source: D
   useEffect(() => {
     source.searchSpec().then(setSpec, () => undefined);
   }, [source]);
-  const counts = useSearch(
-    useCallback((): Promise<Counts | undefined> => source.counts(), [source]),
-    "",
-  ).data;
-  const known: KnownValues = useSearch(
-    useCallback(() => source.knownValues(), [source]),
-    "",
-    3,
-  ).data ?? {
-    route: [],
-    logger: [],
-    db: [],
-    targets: {},
-    ops: {},
-    task: [],
-    // biome-ignore lint/style/useNamingConvention: wire format.
-    task_system: [],
-    queue: [],
-    job: [],
-    rpc: [],
-    page: [],
-    in: [],
-    // biome-ignore lint/style/useNamingConvention: wire format.
-    log_route: [],
-    span: [],
-    extra: [],
-  };
+  const { counts, known } = useCatalog(source);
 
   // The console opens on HTTP: where every Django project's work comes in.
   useEffect(() => {

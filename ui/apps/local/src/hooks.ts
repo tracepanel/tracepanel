@@ -122,7 +122,8 @@ export function useCapability(source: DataSource, name: keyof Capabilities): boo
   return useCapabilities(source)?.[name] === true;
 }
 
-function useCapabilities(source: DataSource): Capabilities | undefined {
+/** What the console's backend offers; undefined until it answers. */
+export function useCapabilities(source: DataSource): Capabilities | undefined {
   const [capabilities, setCapabilities] = useState<Capabilities>();
   useEffect(() => {
     let asked = CAPABILITIES.get(source);

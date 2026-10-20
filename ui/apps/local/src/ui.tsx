@@ -144,6 +144,22 @@ export function Meter({ value, max, children }: { value: number; max: number; ch
   );
 }
 
+/** What loads, hidden in its place under a loading bar until `ready`: then all of it at once, nothing moving. */
+export function Reveal({ ready, children }: { ready: boolean; children: ReactNode }) {
+  return (
+    <div className="relative">
+      {ready ? null : (
+        <div className="absolute inset-x-0 top-0">
+          <Loading />
+        </div>
+      )}
+      <div className={cn(!ready && "invisible")} aria-busy={!ready}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 export function Loading() {
   return (
     <div role="status" className="h-0.5 overflow-hidden">

@@ -8,11 +8,11 @@ import {
 } from "@tracepanel/ui";
 import { cn } from "@tracepanel/ui/lib/utils";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
-import { usePaged, useSearch } from "./data";
-import { EmptyPage } from "./EmptyPage";
+import { useLatch, usePaged, useSearch } from "./data";
+import { EmptyPage, PageShell } from "./EmptyPage";
 import { useNewIds } from "./hooks";
-import { NowStrip, useNow } from "./LiveTasks";
-import { LiveToggle, RefreshControl, turnLiveOn } from "./refresh";
+import { type Now, NowStrip, useNow } from "./LiveTasks";
+import { LiveRefresh, RefreshControl, turnLiveOn } from "./refresh";
 import { type EntrySection, type EntryView, go, href, traceHref } from "./routes";
 import { SearchBar } from "./SearchBar";
 import { ENTRY } from "./sections";
@@ -37,7 +37,7 @@ import {
   TracesTable,
   WebsocketsTable,
 } from "./tables";
-import { Loading, LoadMore, PageHeader } from "./ui";
+import { Loading, LoadMore, PageHeader, Reveal } from "./ui";
 
 const SCOPES: Record<EntrySection, OverviewScope> = {
   endpoints: HTTP_REQUESTS,
@@ -119,7 +119,8 @@ interface EntryPageProps {
   view: EntryView;
   source: DataSource;
   spec: SearchSpec | null;
-  known: KnownValues;
+  /** Undefined until loaded. */
+  known: KnownValues | undefined;
   /** An old link to Tasks' Live (`view=live`): the page with Live on. */
   live?: boolean | undefined;
 }
@@ -191,53 +192,67 @@ function ListNav({
  * consumers, jobs) and its calls (traces of this kind only, newest first). Every row opens a group page or a trace.
  * Tasks have Now besides, what is in flight, above the overview, and Live in the header, as the logs do.
  */
-export function EntryPage({ section, q, view, source, spec, known, live }: EntryPageProps) {
+export function EntryPage(props: EntryPageProps) {
+  const { section, q, view, source, live } = props;
+  useLiveLink(section, q, live);
+  const data = useEntryData(source, section, view, q);
+  const now = useNow(source, section === "tasks");
+  // Whether the page has answered once: from then on another list loads under the page, not instead of it.
+  const answered = useLatch(settled(data.loaded) && now.settled);
   const entry = ENTRY[section];
-  // Before the search spec loads, every term goes along.
-  const keysOf = (resource: SearchResource) => (spec ? new Set(Object.keys(spec[resource] ?? {})) : null);
+  if (!(q || answered)) return <PageShell title={entry.title} description={entry.description} />;
+  if (nothingStored(q, data.loaded, now)) return <EntryEmpty section={section} />;
+  return <EntryScreen {...props} data={data} now={now} />;
+}
+
+type EntryData = ReturnType<typeof useEntryData>;
+
+/** Whether a list has answered: its rows, or why it has none. */
+function settled(loaded: EntryData["loaded"]): boolean {
+  return loaded.size !== undefined || loaded.error !== null;
+}
+
+/**
+ * Nothing stored for this entry point at all (not a search that matched nothing): no search or overview to show.
+ * Tasks in flight are something: the page shows them, and its runs once they end.
+ */
+function nothingStored(q: string, loaded: EntryData["loaded"], now: Now): boolean {
+  return !q && loaded.size === 0 && !now.shown;
+}
+
+function EntryEmpty({ section }: { section: EntrySection }) {
+  const entry = ENTRY[section];
+  return (
+    <EmptyPage
+      section={section}
+      title={entry.title}
+      description={entry.description}
+      empty={`No ${entry.label} traffic yet`}
+    >
+      {entry.calls} show up here as your app handles them.
+    </EmptyPage>
+  );
+}
+
+/** The page: its header, search and filters, then Now, the overview, the switch and the list, shown together. */
+function EntryScreen({
+  section,
+  q,
+  view,
+  source,
+  spec,
+  known,
+  data,
+  now,
+}: EntryPageProps & { data: EntryData; now: Now }) {
+  const entry = ENTRY[section];
   // Typing replaces the entry, so Back skips the letters; a chip or a menu adds one, so Back undoes it.
-  const setQuery = (next: string, typed = false) => go({ name: section, q: next, view }, typed);
+  const setQuery = (next: string, typed?: boolean) => go({ name: section, q: next, view }, typed);
   const refine = (terms: Record<string, string>) => go({ name: section, q: refineQuery(q, terms), view });
   const [scrolled, setScrolled] = useState(false);
-  useLiveLink(section, q, live);
-  const { groups, calls, loaded } = useEntryData(source, section, view, q);
-  const now = useNow(source, section === "tasks");
-
-  // Nothing stored for this entry point at all (not a search that matched nothing): no search or overview to show.
-  // Tasks in flight are something: the page shows them, and its runs once they end.
-  if (!q && loaded.size === 0 && !now.shown) {
-    return (
-      <EmptyPage
-        section={section}
-        title={entry.title}
-        description={entry.description}
-        empty={`No ${entry.label} traffic yet`}
-      >
-        {entry.calls} show up here as your app handles them.
-      </EmptyPage>
-    );
-  }
-
-  // One page: Now (tasks), the overview (folded with its chevron), then the list, grouped or every call; all share
-  // the search.
-  const body = (
-    <>
-      <NowStrip now={now} />
-      <TracesOverview
-        q={carryQuery(q, keysOf("traces"), true)}
-        scope={SCOPES[section]}
-        source={source}
-        onRefine={refine}
-      />
-      <ListNav section={section} view={view} q={q} spec={spec} />
-      {view === "calls" ? (
-        <CallsList key={q} calls={calls} section={section} q={q} />
-      ) : (
-        <GroupsList groups={groups.data} section={section} q={q} />
-      )}
-    </>
-  );
-
+  const [overviewSettled, settleOverview] = useState(false);
+  // Now, the overview, the switch and the list show together, once all have answered: none pushes the others down.
+  const ready = useLatch(overviewSettled && settled(data.loaded) && now.settled);
   return (
     <main className="flex min-h-0 min-w-0 flex-col bg-background">
       <PageHeader
@@ -245,26 +260,93 @@ export function EntryPage({ section, q, view, source, spec, known, live }: Entry
         description={entry.description}
         actions={<EntryActions section={section} reading={scrolled} />}
       />
-      {section === "graphql" ? <GraphqlTypes q={q} view={view} refine={refine} /> : null}
-      <SearchBar
-        section={view === "calls" ? "traces" : section}
-        callsOf={view === "calls" ? section : undefined}
-        q={q}
-        spec={spec}
-        error={loaded.error}
-        known={known}
-        count={loaded.size}
-        onChange={setQuery}
-      />
+      <EntrySearch {...{ section, q, view, spec, known, refine }} loaded={data.loaded} onChange={setQuery} />
       <section
         className="min-h-0 flex-1 overflow-y-auto px-10 pb-10"
         aria-label={entry.title}
         data-scroll=""
         onScroll={(event) => setScrolled(event.currentTarget.scrollTop > 40)}
       >
-        {body}
+        <Reveal ready={ready}>
+          {/* One page: Now (tasks), the overview (folded with its chevron), then the list, grouped or every call;
+              all share the search. */}
+          <NowStrip now={now} />
+          <TracesOverview
+            q={carryQuery(q, searchKeys(spec, "traces"), true)}
+            scope={SCOPES[section]}
+            source={source}
+            onRefine={refine}
+            onSettled={() => settleOverview(true)}
+          />
+          <ListNav section={section} view={view} q={q} spec={spec} />
+          <EntryList section={section} q={q} view={view} data={data} />
+        </Reveal>
       </section>
     </main>
+  );
+}
+
+/** The search of the view on screen: the groups' own, or the calls' (the traces' search, this kind only). */
+function EntrySearch({
+  section,
+  q,
+  view,
+  spec,
+  known,
+  loaded,
+  refine,
+  onChange,
+}: Pick<EntryPageProps, "section" | "q" | "view" | "spec" | "known"> & {
+  loaded: EntryData["loaded"];
+  refine: (terms: Record<string, string>) => void;
+  onChange: (q: string, typed?: boolean) => void;
+}) {
+  const calls = view === "calls";
+  return (
+    <>
+      {section === "graphql" ? <GraphqlTypes q={q} view={view} refine={refine} /> : null}
+      <SearchBar
+        section={calls ? "traces" : section}
+        callsOf={calls ? section : undefined}
+        q={q}
+        spec={spec}
+        error={loaded.error}
+        known={known}
+        count={loaded.size}
+        onChange={onChange}
+      />
+    </>
+  );
+}
+
+/** The list under the switch; By task ↔ All runs keeps the rows on screen, dimmed, until the other list's arrive. */
+function EntryList({ section, q, view, data }: { section: EntrySection; q: string; view: EntryView; data: EntryData }) {
+  return (
+    <Held ready={settled(data.loaded)}>
+      {view === "calls" ? (
+        <CallsList key={q} calls={data.calls} section={section} q={q} />
+      ) : (
+        <GroupsList groups={data.groups.data} section={section} q={q} />
+      )}
+    </Held>
+  );
+}
+
+/** The last rows shown, dimmed, while the next ones load: a list never empties to fill again. */
+function Held({ ready, children }: { ready: boolean; children: ReactNode }) {
+  const [last, setLast] = useState<ReactNode>(null);
+  if (ready && last !== children) setLast(children);
+  if (ready) return children;
+  return <Dimmed held={last}>{children}</Dimmed>;
+}
+
+/** The rows held while others load, dimmed; before there were any, what loads (its bar). */
+function Dimmed({ held, children }: { held: ReactNode; children: ReactNode }) {
+  if (held === null) return children;
+  return (
+    <div className="pointer-events-none opacity-50 transition-opacity" aria-busy>
+      {held}
+    </div>
   );
 }
 
@@ -299,12 +381,7 @@ function useEntryData(source: DataSource, section: EntrySection, view: EntryView
 
 /** The header's controls: refresh, and on Tasks Live too, paused while the list is scrolled down (as on Logs). */
 function EntryActions({ section, reading }: { section: EntrySection; reading: boolean }) {
-  return (
-    <div className="flex items-center">
-      {section === "tasks" ? <LiveToggle list="tasks" paused={reading} /> : null}
-      <RefreshControl />
-    </div>
-  );
+  return section === "tasks" ? <LiveRefresh list="tasks" paused={reading} /> : <RefreshControl />;
 }
 
 /** What an empty list says: Tasks' runs come once a task in flight ends. */

@@ -1,5 +1,5 @@
 import { type CallsSummary, type DataSource, duration, percent, Stat, StatGrid } from "@tracepanel/ui";
-import { useCallback } from "react";
+import { type ReactNode, useCallback } from "react";
 import { useSearch } from "./data";
 
 function plural(count: number, one: string, many: string): string {
@@ -11,13 +11,15 @@ function when<T>(value: T | null | undefined, text: (value: T) => string): strin
   return value ? text(value) : undefined;
 }
 
-/** A cache's gets that hit; nothing for other systems (null hits and misses), or a cache with no gets. */
-function HitRate({ summary }: { summary: CallsSummary }) {
+/**
+ * A cache's gets that hit; nothing for other systems (null hits and misses), or a cache with no gets. A tile or
+ * nothing, decided here: the grid sizes its columns by the tiles it is given, and an empty one would take a column.
+ */
+function hitRate(summary: CallsSummary): ReactNode {
   const hits = summary.hits ?? 0;
   const gets = hits + (summary.misses ?? 0);
-  return gets ? (
-    <Stat label="Hit rate" value={percent(hits, gets)} sub={`${hits} of ${plural(gets, "get", "gets")}`} />
-  ) : null;
+  if (!gets) return null;
+  return <Stat label="Hit rate" value={percent(hits, gets)} sub={`${hits} of ${plural(gets, "get", "gets")}`} />;
 }
 
 /** The calls that failed; with any, a click shows only them. */
@@ -54,27 +56,24 @@ function CallsTiles({ summary, onFailed }: { summary: CallsSummary; onFailed: ()
         sub={when(summary.most_per_trace, (most) => `up to ${most} in one`)}
       />
       <Failed errors={errors} calls={calls} onFailed={onFailed} />
-      <HitRate summary={summary} />
+      {hitRate(summary)}
     </StatGrid>
   );
 }
 
-/** The tiles above a system's page, loaded with its search; none while it has no calls. */
-export function SystemTiles({
-  system,
-  q,
-  source,
-  onFailed,
-}: {
-  system: string;
-  q: string;
-  source: DataSource;
-  onFailed: () => void;
-}) {
-  const summary = useSearch(
-    useCallback((query: string) => source.callsSummary(system, query), [source, system]),
+/** A system's calls summed up with the page's search; none off a system's page. */
+export function useCallsSummary(source: DataSource, system: string | null, q: string) {
+  return useSearch(
+    useCallback(
+      (query: string) => (system ? source.callsSummary(system, query) : Promise.resolve(null)),
+      [source, system],
+    ),
     q,
     0,
   );
-  return summary.data?.calls ? <CallsTiles summary={summary.data} onFailed={onFailed} /> : null;
+}
+
+/** The tiles above a system's page, with its search; none while it has no calls. */
+export function SystemTiles({ summary, onFailed }: { summary: CallsSummary | null | undefined; onFailed: () => void }) {
+  return summary?.calls ? <CallsTiles summary={summary} onFailed={onFailed} /> : null;
 }

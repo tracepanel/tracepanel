@@ -1,4 +1,4 @@
-import { IssueChip, type IssueKind, LogLevel, type SearchResource, type SearchSpec } from "@tracepanel/ui";
+import { IssueChip, type IssueKind, LogLevel, NO_KNOWN, type SearchResource, type SearchSpec } from "@tracepanel/ui";
 import { Badge } from "@tracepanel/ui/components/ui/badge";
 import { Button } from "@tracepanel/ui/components/ui/button";
 import { type Family, systemOfPage } from "@tracepanel/ui/lib/systems";
@@ -896,8 +896,8 @@ export interface SearchBarProps {
   q: string;
   spec: SearchSpec | null;
   error: string | null;
-  /** Values from stored data, offered in menus and after `route:`, `logger:`, `db:`. */
-  known: KnownValues;
+  /** Values from stored data, offered in menus and after `route:`, `logger:`, `db:`; undefined until loaded. */
+  known: KnownValues | undefined;
   /** Results shown for the current query, if known: a number, or "14 of 1,204" when more match than are shown. */
   count?: number | string | undefined;
   /** The list of this entry point's calls: its own quick filters on the traces search. */
@@ -924,7 +924,7 @@ function useSearchBox({ section, q, spec, known, onChange }: SearchBarProps) {
   const { text, setText, sent } = useBoxText(q, parsed, keys, onChange);
   useSlashFocus(input);
   const word = lastWord(text);
-  const suggestions = useSuggestions(word, keys, fields, known);
+  const suggestions = useSuggestions(word, keys, fields, known ?? NO_KNOWN);
   const list = useListShown();
   const reset = () => picker.setCursor(-1);
   const chips = useChipEditing({ text, setText, parsed, keys, onChange, sent, input }, word, reset);
@@ -1014,24 +1014,62 @@ export function SearchBar(props: SearchBarProps) {
         />
       ) : null}
       {error ? <p className="mt-2 text-base text-error">{error}</p> : null}
-      <div className="mt-4 flex flex-wrap items-center gap-2.5">
-        {controlsFor(section, family, callsOf).map((control) => (
-          <QuickControl
-            key={control.label}
-            control={control}
-            known={known}
-            filters={parsed.filters}
-            open={open === control.label}
-            onToggle={() => setOpen(open === control.label ? null : control.label)}
-            onChange={(filters, close) => {
-              chips.setFilters(filters);
-              if (close) setOpen(null);
-            }}
-          />
-        ))}
-        <ShownCount count={count} />
-      </div>
+      <FilterRow
+        controls={controlsFor(section, family, callsOf)}
+        known={known}
+        filters={parsed.filters}
+        open={open}
+        setOpen={setOpen}
+        setFilters={chips.setFilters}
+        count={count}
+      />
     </div>
+  );
+}
+
+/**
+ * The quick filters and how many results show. Its height is kept from the start: the filters arrive with the values
+ * they offer, all at once, and the count beside them, and nothing under them moves.
+ */
+function FilterRow({
+  controls,
+  known,
+  filters,
+  open,
+  setOpen,
+  setFilters,
+  count,
+}: {
+  controls: Control[];
+  known: KnownValues | undefined;
+  filters: Filter[];
+  open: string | null;
+  setOpen: (label: string | null) => void;
+  setFilters: (filters: Filter[]) => void;
+  count: number | string | undefined;
+}) {
+  const shown = known ? controls : [];
+  return (
+    <fieldset
+      className="m-0 mt-4 flex min-h-[1.875rem] min-w-0 flex-wrap items-center gap-2.5 border-0 p-0"
+      aria-label="Filters"
+    >
+      {shown.map((control) => (
+        <QuickControl
+          key={control.label}
+          control={control}
+          known={known ?? NO_KNOWN}
+          filters={filters}
+          open={open === control.label}
+          onToggle={() => setOpen(open === control.label ? null : control.label)}
+          onChange={(next, close) => {
+            setFilters(next);
+            if (close) setOpen(null);
+          }}
+        />
+      ))}
+      <ShownCount count={count} />
+    </fieldset>
   );
 }
 

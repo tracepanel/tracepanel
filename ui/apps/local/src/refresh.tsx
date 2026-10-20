@@ -251,27 +251,37 @@ const LIVE_MS = 2000;
 
 const readLive = (raw: unknown): boolean => raw === true;
 
-// What the toggle says, held (live, but paused) or not.
-const LIVE_SAYS: Record<string, [label: string, title: string]> = {
-  true: ["Live · paused", "Paused while a record is open or the list is scrolled down"],
-  false: ["Live", "Reload every 2 seconds"],
+// What the toggle says: off, on, or on but held while the reader reads.
+const LIVE_SAYS: Record<"off" | "on" | "paused", [label: string, title: string]> = {
+  off: ["Live", "Reload every 2 seconds"],
+  on: ["Live · every 2s", "Reloads every 2 seconds"],
+  paused: ["Live · paused", "Paused while a record is open or the list is scrolled down"],
 };
 
+function liveState(live: boolean, paused: boolean): keyof typeof LIVE_SAYS {
+  if (!live) return "off";
+  return paused ? "paused" : "on";
+}
+
 /**
- * Live, for a list that follows what happens as it happens (the logs, as a tail): reloads every 2 seconds while on,
- * kept per browser. `paused` while the reader is reading (a record open, the list scrolled down): it holds still then,
- * and says so.
+ * The header's controls of a list that follows what happens as it happens (the logs, the tasks): Live, which reloads
+ * it every 2 seconds while on, kept per browser, and refresh. `paused` while the reader is reading (a record open, the
+ * list scrolled down): it holds still then, and says so. While Live is on it is the only clock: the interval menu
+ * goes, "Refresh now" stays.
  */
-export function LiveToggle({ list, paused }: { list: string; paused: boolean }) {
+export function LiveRefresh({ list, paused }: { list: string; paused: boolean }) {
   const [live, setLive] = useStored(`tracepanel:${list}:live`, readLive);
   useLive(live && !paused);
-  const [label, title] = LIVE_SAYS[String(live && paused)] ?? [];
+  const [label, title] = LIVE_SAYS[liveState(live, paused)];
   return (
-    <label className="toggle mr-3 text-base font-medium" title={title}>
-      <input type="checkbox" checked={live} onChange={(event) => setLive(event.target.checked)} />
-      <span className="toggle-track" aria-hidden="true" />
-      {label}
-    </label>
+    <div className="flex items-center">
+      <label className="toggle mr-3 text-base font-medium" title={title}>
+        <input type="checkbox" checked={live} onChange={(event) => setLive(event.target.checked)} />
+        <span className="toggle-track" aria-hidden="true" />
+        {label}
+      </label>
+      <RefreshControl live={!live} />
+    </div>
   );
 }
 

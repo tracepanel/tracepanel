@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { Section } from "./routes";
 import { NAV } from "./Sidebar";
-import { PageHeader } from "./ui";
+import { Loading, PageHeader } from "./ui";
 
 /**
  * A section with nothing stored yet: its title and what will show up, without the search, filters and refresh that
@@ -36,6 +36,21 @@ export function EmptyPage({
           <p className="text-md text-muted-foreground">{children}</p>
         </div>
       </section>
+    </main>
+  );
+}
+
+/**
+ * A section before its first answer, when it may yet turn out empty: its title only, under a loading bar. Then the
+ * page or its empty state, whichever it is, without showing a search and filters an empty one would take away.
+ */
+export function PageShell({ title, description }: { title: string; description: string }) {
+  return (
+    <main className="flex min-h-0 min-w-0 flex-col bg-background">
+      <PageHeader title={title} description={description} />
+      <div className="px-10 pt-5" aria-busy>
+        <Loading />
+      </div>
     </main>
   );
 }

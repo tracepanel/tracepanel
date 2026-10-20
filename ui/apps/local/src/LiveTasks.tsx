@@ -1,4 +1,11 @@
-import { type DataSource, type LiveTask, type LiveTasks, type LiveWorker, NO_LIVE_TASKS } from "@tracepanel/ui";
+import {
+  type Capabilities,
+  type DataSource,
+  type LiveTask,
+  type LiveTasks,
+  type LiveWorker,
+  NO_LIVE_TASKS,
+} from "@tracepanel/ui";
 import { Badge } from "@tracepanel/ui/components/ui/badge";
 import { useStored } from "@tracepanel/ui/hooks/useStored";
 import { argumentsOf, byState, elapsed, LIVE_STATES, stateSince } from "@tracepanel/ui/lib/liveTasks";
@@ -6,7 +13,7 @@ import { cn } from "@tracepanel/ui/lib/utils";
 import { ChevronRightIcon } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { useSearch } from "./data";
-import { useCapability } from "./hooks";
+import { useCapabilities } from "./hooks";
 import { groupRoute, href, traceHref } from "./routes";
 import { taskSystem } from "./sections";
 import { TaskState } from "./tables";
@@ -21,6 +28,8 @@ export interface Now {
   live: LiveTasks | undefined;
   /** An app sends task events, or the agent has some: a project without a task queue has no Now. */
   shown: boolean;
+  /** Whether `shown` is known: the tasks in flight and the capabilities answered (always, off Tasks). */
+  settled: boolean;
 }
 
 /** Nothing in flight for a page other than Tasks: it asks nothing. */
@@ -34,12 +43,21 @@ function hasLive(live: LiveTasks | undefined): boolean {
 
 /** Now, for Tasks only: other entry points ask nothing. */
 export function useNow(source: DataSource, tasks: boolean): Now {
-  const sends = useCapability(source, "live_tasks");
+  const capabilities = useCapabilities(source);
   const live = useSearch(
     useCallback(() => loadNow(source, tasks), [source, tasks]),
     "",
   ).data;
-  return { live, shown: tasks && (sends || hasLive(live)) };
+  return { live, shown: tasks && sendsOrHas(capabilities, live), settled: !tasks || both(capabilities, live) };
+}
+
+/** An app says it sends task events, or the agent has some. */
+function sendsOrHas(capabilities: Capabilities | undefined, live: LiveTasks | undefined): boolean {
+  return capabilities?.live_tasks === true || hasLive(live);
+}
+
+function both(capabilities: Capabilities | undefined, live: LiveTasks | undefined): boolean {
+  return capabilities !== undefined && live !== undefined;
 }
 
 const OPEN_KEY = "tracepanel:tasks:now-open";

@@ -799,22 +799,41 @@ tr[data-new] {
   gap: 0.625rem;
   border: 0;
   background: none;
+  /* The strip's shadow, with no strip: it would show under the cards and through the gaps between them. */
+  box-shadow: none;
 }
 .dt-trace[data-variant="full"] .dt-metric {
   align-content: start;
   gap: 0.375rem;
   padding: 1rem 1.25rem;
   border: 1px solid var(--dt-border);
-  border-radius: 0.75rem;
+  /* Stat's corners (rounded-xl). */
+  border-radius: calc(var(--radius) + 4px);
   background: var(--dt-card);
+}
+/* The tabs in the page's column, as wide as the tiles above them: their rule ends where the content does, and the
+   first tab starts at its edge. */
+.dt-trace[data-variant="full"] .dt-tabs {
+  margin-right: 1rem;
+  margin-left: 1rem;
+  padding: 0;
+  /* Stuck at the top, it still covers the rows scrolling under it from edge to edge. */
+  box-shadow:
+    -1rem 0 var(--dt-bg),
+    1rem 0 var(--dt-bg);
+}
+.dt-trace[data-variant="full"] .dt-tab:first-child {
+  padding-left: 0;
 }
 .dt-trace[data-variant="full"] .dt-metric-label {
   color: var(--dt-text-2);
   font-size: var(--dt-size-base);
 }
 .dt-trace[data-variant="full"] .dt-metric-value {
-  font-size: var(--dt-size-3xl);
-  line-height: 1.25;
+  /* Stat's number: the same size and spacing as the other pages' tiles. */
+  font-size: var(--dt-size-4xl);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
 }
 .dt-trace[data-variant="full"] .dt-metric-sub {
   font-size: var(--dt-size-base);

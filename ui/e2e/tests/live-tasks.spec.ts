@@ -59,7 +59,8 @@ test("Now: the tasks running, queued and retrying, the workers, and the tasks th
       queue: "mail",
       retries: 0,
       args: "(42,)",
-      kwargs: "{'to': 'ann@example.com'}",
+      // This run's own: the agent is shared, and tasks of earlier runs may still be queued.
+      kwargs: `{'to': 'ann@example.com', 'run': '${run}'}`,
       trace_id: request,
       span_id: "S",
     },
@@ -105,7 +106,7 @@ test("Now: the tasks running, queued and retrying, the workers, and the tasks th
     .getByRole("link")
     .filter({ hasText: "shop.jobs.rebuild_index" })
     .filter({ hasText: `rq-${run}` });
-  const queued = now.getByRole("link").filter({ hasText: "(42,) {'to': 'ann@example.com'}" });
+  const queued = now.getByRole("link").filter({ hasText: `(42,) {'to': 'ann@example.com', 'run': '${run}'}` });
   const retrying = now.getByRole("link").filter({ hasText: `celery@box-${run}` });
 
   await expect(running).toContainText("running");
