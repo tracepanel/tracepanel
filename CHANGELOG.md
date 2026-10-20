@@ -80,8 +80,9 @@
 - Logs: any attribute can be a column of its own, from the columns menu's
   Attribute columns, or from the attribute's own button in an opened record.
   The column's header takes it off again. A column's name drags onto another
-  header to move it there (a grip shows on hover), and the browser keeps the
-  order.
+  header to move it there (a grip shows at the header's end on hover), and the
+  browser keeps the order. Every column but Message hides from its header's
+  ×, as from the columns menu.
 - A log record's details say where it was logged ("Logged inside"): the
   spans around it, as one link to the call tree there. The Show logs from row
   adds this call and any call of its kind to this request, logger and path.

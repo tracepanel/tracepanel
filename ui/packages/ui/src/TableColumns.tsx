@@ -303,13 +303,6 @@ function DragLabel({ id, label, onStep }: { id: string; label: string; onStep: (
         className,
       )}
     >
-      {/* A grip on hover, in the line: it opens room for itself rather than covering the name. */}
-      {onStep ? (
-        <GripVerticalIcon
-          aria-hidden="true"
-          className="size-3 w-0 shrink-0 text-muted-foreground opacity-0 transition-all group-hover/head:mr-1 group-hover/head:w-3 group-hover/head:opacity-70"
-        />
-      ) : null}
       <span className="truncate">{label}</span>
     </span>
   );
@@ -320,8 +313,8 @@ function RemoveColumn({ label, onRemove }: { label: string; onRemove: () => void
   return (
     <button
       type="button"
-      aria-label={`Remove the ${label} column`}
-      title={`Remove the ${label} column`}
+      aria-label={`Hide the ${label} column`}
+      title={`Hide the ${label} column`}
       onClick={onRemove}
       className="absolute top-1/2 right-2 flex size-4 -translate-y-1/2 items-center justify-center rounded-sm bg-muted text-muted-foreground opacity-0 transition-opacity group-hover/head:opacity-100 hover:text-foreground focus-visible:opacity-100"
     >
@@ -330,9 +323,26 @@ function RemoveColumn({ label, onRemove }: { label: string; onRemove: () => void
   );
 }
 
+/**
+ * A grip on hover at the header's end, where nothing moves for it: the name stays over its column's values. `beside`
+ * the remove button when there is one.
+ */
+function Grip({ beside }: { beside: boolean }) {
+  return (
+    <GripVerticalIcon
+      aria-hidden="true"
+      className={cn(
+        "pointer-events-none absolute top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground opacity-0 transition-opacity group-hover/head:opacity-70",
+        beside ? "right-7" : "right-2",
+      )}
+    />
+  );
+}
+
 /** A header's own buttons: the remove one, for a column the reader added, and the resize handle, on its edge. */
 function HeadControls({
   label,
+  movable,
   onRemove,
   edge,
   width,
@@ -340,6 +350,7 @@ function HeadControls({
   onWidth,
 }: {
   label: string;
+  movable: boolean;
   onRemove: (() => void) | undefined;
   edge: ColumnEdge | undefined;
   width: number | undefined;
@@ -348,6 +359,7 @@ function HeadControls({
 }) {
   return (
     <>
+      {movable ? <Grip beside={onRemove !== undefined} /> : null}
       {onRemove ? <RemoveColumn label={label} onRemove={onRemove} /> : null}
       {edge ? <ResizeHandle label={label} edge={edge} width={width} onDraft={onDraft} onWidth={onWidth} /> : null}
     </>
@@ -388,13 +400,27 @@ export function ColumnHead({
     <TableHead
       data-flex={flex || undefined}
       style={style}
-      className={cn("group/head relative", drop.over && "bg-brand-soft", className)}
+      className={cn(
+        "group/head relative transition-colors",
+        // A header that moves says so on hover: a step darker, a grip at its end, the grab cursor on its name.
+        onStep && "hover:bg-foreground/[0.04]",
+        drop.over && "bg-brand-soft",
+        className,
+      )}
       // Its name is its label: the resize handle inside has a name of its own.
       aria-label={label}
       {...drop.props}
     >
       <DragLabel id={id} label={label} onStep={onStep} />
-      <HeadControls label={label} onRemove={onRemove} edge={edge} width={shown} onDraft={setDraft} onWidth={onWidth} />
+      <HeadControls
+        label={label}
+        movable={onStep !== undefined}
+        onRemove={onRemove}
+        edge={edge}
+        width={shown}
+        onDraft={setDraft}
+        onWidth={onWidth}
+      />
     </TableHead>
   );
 }

@@ -324,9 +324,13 @@ function onRowKey(event: KeyboardEvent<HTMLTableRowElement>, open: boolean, onTo
   event.preventDefault();
 }
 
-/** What takes a column off from its header: only an attribute's, which the reader added. */
-function removable(id: string, onRemove: (key: string) => void): (() => void) | undefined {
-  return id.startsWith(ATTRIBUTE) ? () => onRemove(id.slice(ATTRIBUTE.length)) : undefined;
+/**
+ * What takes a column off from its header, as the columns menu would: any column that may go (Message stays). An
+ * attribute's is unpicked, so the record's details offer it again; any other is hidden, the menu shows it back.
+ */
+function removable(spec: ColumnSpec, columns: Columns, onRemove: (key: string) => void): (() => void) | undefined {
+  if (spec.id.startsWith(ATTRIBUTE)) return () => onRemove(spec.id.slice(ATTRIBUTE.length));
+  return spec.required ? undefined : () => columns.setShown(spec.id, false);
 }
 
 function LogHead({
@@ -363,7 +367,7 @@ function LogHead({
               const next = columns.shown[index + by];
               if (next) columns.move(spec.id, next.id);
             }}
-            onRemove={removable(spec.id, onRemoveAttribute)}
+            onRemove={removable(spec, columns, onRemoveAttribute)}
             label={spec.label}
             width={widths.get(spec.id)}
             onWidth={(width) => columns.setWidth(spec.id, width)}

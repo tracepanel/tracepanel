@@ -703,7 +703,7 @@ function AsColumn({ name }: { name: string }) {
   const columns = useAttributeColumns();
   if (columns === null) return null;
   const shown = columns.has(name);
-  const label = shown ? `Remove the ${name} column` : `Show ${name} as a column`;
+  const label = shown ? `Hide the ${name} column` : `Show ${name} as a column`;
   return (
     <Button
       variant="ghost"

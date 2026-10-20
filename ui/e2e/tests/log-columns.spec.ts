@@ -224,11 +224,11 @@ test("an attribute of an opened record becomes a column from there, and its head
 
   await expect(header(page, key)).toBeVisible();
   // The record's own button says so too: pressed, it takes the column off again.
-  await expect(region(page).getByRole("button", { name: `Remove the ${key} column`, pressed: true })).toBeVisible();
+  await expect(region(page).getByRole("button", { name: `Hide the ${key} column`, pressed: true })).toBeVisible();
 
   await header(page, key).hover();
   await header(page, key)
-    .getByRole("button", { name: `Remove the ${key} column` })
+    .getByRole("button", { name: `Hide the ${key} column` })
     .click();
 
   await expect(header(page, key)).toHaveCount(0);
@@ -389,4 +389,20 @@ test("more columns than room fit the page: none pushes it wider, and Message kee
 
   expect(await scroller.evaluate((element) => element.scrollWidth - element.clientWidth)).toBe(0);
   expect((await header(page, "Message").boundingBox())?.width).toBeGreaterThan(100);
+});
+
+test("every column that may go hides from its header, Message alone stays", async ({ page }) => {
+  await page.goto("/#/logs");
+  await expect(rows(page).first()).toBeVisible();
+
+  await expect(header(page, "Message").getByRole("button", { name: /^Hide/ })).toHaveCount(0);
+
+  await header(page, "Logger").hover();
+  await header(page, "Logger").getByRole("button", { name: "Hide the Logger column" }).click();
+
+  await expect(header(page, "Logger")).toHaveCount(0);
+
+  await region(page).getByRole("button", { name: "Columns" }).click();
+
+  await expect(page.getByRole("menuitemcheckbox", { name: "Logger" })).toHaveAttribute("aria-checked", "false");
 });
