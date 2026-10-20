@@ -960,9 +960,8 @@ function SourceCell({
       )}
     >
       <SourceBadge kind={kind} graphql={operation !== null} method={method} htmx={htmx} />
-      <Mono className={cn("truncate", compact ? "text-xs" : "text-base")}>
-        {operation ?? sourceText(kind, path, name)}
-      </Mono>
+      {/* In a dense table, the row's own size: the badge sets the path apart, not a smaller type. */}
+      <Mono className={cn("truncate", !compact && "text-base")}>{operation ?? sourceText(kind, path, name)}</Mono>
     </span>
   );
 }

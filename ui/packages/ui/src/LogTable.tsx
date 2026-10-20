@@ -56,7 +56,7 @@ export function LogLevel({ level }: { level: string }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 font-mono text-2xs font-semibold tracking-wide uppercase",
+        "inline-flex items-center gap-1.5 font-mono text-xs font-semibold tracking-wide uppercase",
         LEVEL_TEXT[level] ?? LEVEL_TEXT["debug"],
       )}
     >
@@ -130,7 +130,7 @@ export function Marked({ text, terms }: { text: string; terms: readonly string[]
 /** A record's attributes on one line, `key=value`, in the order its details list them. */
 function Attributes({ attrs }: { attrs: LogLike["attrs"] }) {
   return (
-    <span className="font-mono text-xs">
+    <span className="font-mono">
       {Object.entries(logAttrs(attrs)).map(([key, value]) => (
         <span key={key} className="mr-3">
           <span className="text-muted-foreground">{key}=</span>
@@ -221,7 +221,7 @@ function AttributeValue({ value }: { value: unknown }) {
   if (value === undefined || value === null) return <span className="text-muted-foreground/60">—</span>;
   const text = typeof value === "string" ? value : JSON.stringify(value);
   return (
-    <span className="font-mono text-xs" title={text}>
+    <span className="font-mono" title={text}>
       {text}
     </span>
   );
@@ -281,7 +281,7 @@ function edgeOf(shown: readonly ColumnSpec[], index: number): ColumnEdge | undef
 
 // The console's table headers (text, weight, case), a little lower for one-line rows.
 const HEAD = "h-9 px-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase first:pl-4";
-const CELL = "truncate px-2 py-1 first:pl-4";
+const CELL = "truncate px-2 py-1.5 first:pl-4";
 
 // A warning or a failure marks the row's edge, as the console's other lists mark theirs.
 const ROW = cn(
@@ -520,7 +520,8 @@ export function LogTable<R extends LogLike>({
   };
   return (
     <AttributeColumnsContext.Provider value={pinned}>
-      <Table ref={ref} className="table-fixed text-sm" stickyHeader={stickyHeader}>
+      {/* A step under the console's other tables (text-md): dense, one line a record, still read at the same size. */}
+      <Table ref={ref} className="table-fixed text-base" stickyHeader={stickyHeader}>
         <LogHead
           columns={columns}
           widths={widths}

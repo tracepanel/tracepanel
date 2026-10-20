@@ -23,7 +23,8 @@ export function DataTable({
         dense && "[&_td]:px-3 [&_td:first-child]:pl-4 [&_th]:px-3 [&_th:first-child]:pl-4",
       )}
     >
-      <Table className="text-md">
+      {/* The size of every table's rows, the logs' too: one size of table text across the console. */}
+      <Table className="text-base">
         <TableHeader className="bg-muted">
           <TableRow className="hover:bg-transparent">{head}</TableRow>
         </TableHeader>

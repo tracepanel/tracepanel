@@ -135,7 +135,8 @@ function useLogSeries(source: DataSource, logs: boolean, q: string) {
 /** The Logs page: the records over time, above their list or what to do when nothing matches. */
 function logsBody(page: BodyContext): ReactNode {
   return (
-    <div className="grid gap-3">
+    // One column no wider than the page: a table with more columns than room fits them in, rather than widening it.
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-3">
       <LogsOverTime series={page.data.logSeries.data} q={page.q} onRefine={page.refine} />
       {pagedBody(
         page.data.logs,

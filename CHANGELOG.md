@@ -31,6 +31,8 @@
 
 ### Changed
 
+- Every table's text is one size, the logs' a step up and the others' a step
+  down to meet it.
 - Debug records step back in the logs table, and a record opened from a link
   scrolls into view. All attributes (the column) writes lists and objects as
   JSON, as the record's fields do.
@@ -115,6 +117,9 @@
 
 ### Fixed
 
+- A logs table with more columns than room no longer widens the page past
+  the window, cutting off the chart and squeezing Message out: its columns
+  fit the room again.
 - A list's auto-refresh no longer loses rows once older pages are loaded. New
   rows pushed rows out of the first page, while the older pages still began
   where it used to end, and the rows between showed nowhere.

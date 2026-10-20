@@ -199,6 +199,8 @@ test("a column dragged onto another moves there, and stays there after a reload"
   await page.goto("/#/logs");
   const names = region(page).getByRole("columnheader");
   await expect(names.first()).toHaveAccessibleName("Time");
+  // The records in: the headers have their widths, and stay where the drag aims.
+  await expect(rows(page).first()).toBeVisible();
 
   await header(page, "Logger").getByText("Logger").dragTo(header(page, "Time"));
 
@@ -368,4 +370,23 @@ test("a trace's Logs tab counts its records and opens them in Logs", async ({ pa
   await panel.getByRole("link", { name: "Open in Logs" }).click();
 
   await expect(page).toHaveURL(/#\/logs\?q=trace/);
+});
+
+test("more columns than room fit the page: none pushes it wider, and Message keeps some", async ({ page }) => {
+  await page.setViewportSize({ width: 1300, height: 800 });
+  await page.goto("/#/logs");
+  // Wide columns, dragged so in an earlier visit, and two attribute columns more.
+  await page.evaluate(() => {
+    localStorage.setItem("tracepanel:columns:logs:attributes", JSON.stringify(["code.lineno", "code.function"]));
+    localStorage.setItem(
+      "tracepanel:columns:logs",
+      JSON.stringify({ widths: { logger: 360, source: 330, trace: 370 }, shown: { trace: true }, order: [] }),
+    );
+  });
+  await page.reload();
+  const scroller = page.locator("[data-scroll]");
+  await expect(rows(page).first()).toBeVisible();
+
+  expect(await scroller.evaluate((element) => element.scrollWidth - element.clientWidth)).toBe(0);
+  expect((await header(page, "Message").boundingBox())?.width).toBeGreaterThan(100);
 });
