@@ -426,11 +426,11 @@ export function RequestInfo({ trace, related, links }: RequestInfoProps) {
   const linked = relatedRows(related, links);
   return (
     <div className="grid gap-4 p-4">
-      <PropTable rows={[...ownRows(trace), ...requestRows(trace.attrs)]} />
+      <PropTable dense rows={[...ownRows(trace), ...requestRows(trace.attrs)]} />
       <BodyPart attrs={trace.attrs} />
       {linked.length ? (
         <Part label="Related traces" title="Related traces">
-          <PropTable rows={linked} />
+          <PropTable dense rows={linked} />
         </Part>
       ) : null}
       {document ? (
