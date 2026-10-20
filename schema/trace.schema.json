@@ -90,9 +90,62 @@
       "items": {
         "$ref": "#/$defs/call"
       }
+    },
+    "profile": {
+      "description": "Where the trace's time went in code, sampled: what was running every interval_us while it ran, as stacks of frames. Recorded when asked for (a setting, or a request's X-Tracepanel-Profile header); left out otherwise.",
+      "$ref": "#/$defs/profile"
     }
   },
   "$defs": {
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["interval_us", "samples", "frames", "stacks"],
+      "properties": {
+        "interval_us": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "How often a sample was taken, in microseconds: a sample stands for this much time."
+        },
+        "samples": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Samples taken while the trace ran."
+        },
+        "frames": {
+          "type": "array",
+          "description": "The functions the stacks name, each once.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["function", "file", "line", "in_app"],
+            "properties": {
+              "function": { "type": "string" },
+              "module": { "type": ["string", "null"] },
+              "file": {
+                "type": "string",
+                "description": "As the project sees it: relative to its root for its own code."
+              },
+              "line": { "type": "integer", "description": "Where the function is defined." },
+              "in_app": { "type": "boolean", "description": "The project's own code, not a library's or the runtime's." }
+            }
+          }
+        },
+        "stacks": {
+          "type": "array",
+          "description": "Each stack seen, outermost frame first, as indexes into frames, and how many samples saw it.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["frames", "count"],
+            "properties": {
+              "frames": { "type": "array", "items": { "type": "integer", "minimum": 0 } },
+              "count": { "type": "integer", "minimum": 1 }
+            }
+          }
+        }
+      }
+    },
     "call": {
       "type": "object",
       "additionalProperties": false,

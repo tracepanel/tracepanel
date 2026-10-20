@@ -6,6 +6,7 @@ import {
   CircleAlertIcon,
   CompassIcon,
   DatabaseIcon,
+  FlameIcon,
   GlobeIcon,
   ListChecksIcon,
   ListIcon,
@@ -35,6 +36,7 @@ import { isTyping } from "./lib/keys";
 import { pageParts } from "./lib/page";
 import { linkProps, type TraceLinks } from "./links";
 import { Metrics } from "./Metrics";
+import { ProfileView } from "./ProfileView";
 import { MethodBadge, RoutePath, StatusBadge } from "./primitives";
 import { RequestInfo } from "./RequestInfo";
 import { type Explain, SqlList } from "./SqlList";
@@ -43,7 +45,7 @@ import { Tabs } from "./Tabs";
 import { Timeline } from "./Timeline";
 import type { Issue, IssueKind, Related, Trace } from "./types";
 
-export type TabId = "request" | "tree" | "issues" | "sql" | "cache" | "http" | "logs" | "error";
+export type TabId = "request" | "tree" | "issues" | "sql" | "cache" | "http" | "logs" | "error" | "profile";
 
 /** A way out of this trace that the page itself doesn't show: its group, its issues, what ran around it. */
 export interface ExploreItem {
@@ -137,6 +139,7 @@ const OPTIONAL_TABS: Partial<Record<TabId, (trace: Trace) => boolean>> = {
   sql: (trace) => callsByTab(trace).sql !== undefined,
   cache: (trace) => callsByTab(trace).cache !== undefined,
   http: (trace) => callsByTab(trace).http !== undefined,
+  profile: (trace) => trace.profile !== undefined,
 };
 
 function hasTab(trace: Trace, tab: TabId | undefined): tab is TabId {
@@ -249,6 +252,8 @@ function traceTabs({
     // What a request is most often opened for: its SQL, cache and HTTP calls, and its logs.
     ...callsTabs(calls),
     { id: "logs" as const, label: "Logs", icon: <ScrollTextIcon />, count: trace.logs.length },
+    // Recorded only when asked for: where the time went in code.
+    ...(trace.profile ? [{ id: "profile" as const, label: "Profile", icon: <FlameIcon /> }] : []),
   ];
 }
 
@@ -369,6 +374,7 @@ export function TraceView({
         />
       ) : null}
       <SpanLists active={active} calls={calls} sql={{ issueBySpan, focus, onExplain, links }} />
+      {active === "profile" && trace.profile ? <ProfileView profile={trace.profile} /> : null}
       {active === "error" ? (
         <ErrorView
           errors={trace.errors}
