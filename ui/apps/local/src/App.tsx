@@ -7,6 +7,7 @@ import {
   DockRightIcon,
   Empty,
   ExternalIcon,
+  Hint,
   httpSource,
   ISSUE_LABELS,
   type IssueKind,
@@ -19,10 +20,9 @@ import {
   type TraceSummary,
   withSnapshots,
 } from "@tracepanel/ui";
-import { Button } from "@tracepanel/ui/components/ui/button";
 import { TooltipProvider } from "@tracepanel/ui/components/ui/tooltip";
 import { useCloseOnBlur } from "@tracepanel/ui/hooks/useCloseOnBlur";
-import { cn, rem } from "@tracepanel/ui/lib/utils";
+import { rem } from "@tracepanel/ui/lib/utils";
 import {
   type ReactNode,
   type RefObject,
@@ -37,7 +37,7 @@ import { ClearDialog } from "./ClearDialog";
 import { Console } from "./Console";
 import { exploreFor } from "./explore";
 import { type EntrySummary, type TabEntry, type TabHistory, usePolling, useTabHistory } from "./hooks";
-import { ProfileNext } from "./ProfileNext";
+import { ProfileToggle } from "./ProfileToggle";
 import { RefreshProvider } from "./refresh";
 import { consoleLinks, go, href, type Route, useRoute } from "./routes";
 import { SearchPalette } from "./SearchPalette";
@@ -47,7 +47,7 @@ import { ScopeProvider } from "./scope";
 import { graphqlOperation } from "./sections";
 import { tabOf } from "./TracePage";
 import { TraceScreen } from "./TraceScreen";
-import { NARROW_ICON, SwitchUser } from "./UserSwitcher";
+import { SwitchUser } from "./UserSwitcher";
 
 const base = location.href.split("#")[0] ?? location.href;
 const api = new URL("api/", base);
@@ -369,6 +369,7 @@ function ListControls({
       <span className="list-count">{count}</span>
       <span className="ml-auto flex shrink-0 items-center gap-1">
         <FollowToggle follow={follow} onFollow={onFollow} />
+        <ProfileToggle source={source} />
         <ClearButton onClear={onClear} />
       </span>
     </>
@@ -378,9 +379,11 @@ function ListControls({
 /** Clear, where the requests are listed, as in the browser's Network tab. */
 function ClearButton({ onClear, label = "Clear requests" }: { onClear: () => void; label?: string }) {
   return (
-    <button type="button" className="icon-button" title={label} aria-label={label} onClick={onClear}>
-      <ClearIcon />
-    </button>
+    <Hint title={label} detail="Empties this tab's list. The requests stay in the console.">
+      <button type="button" className="icon-button" aria-label={label} onClick={onClear}>
+        <ClearIcon />
+      </button>
+    </Hint>
   );
 }
 
@@ -675,6 +678,23 @@ function PageRequests({
   );
 }
 
+/** Moves the panel to the other side: the bottom or the right. */
+function DockButton({ dock }: { dock: string }) {
+  const label = dock === "right" ? "Dock to bottom" : "Dock to right";
+  return (
+    <Hint title={label} detail="The panel remembers where you put it.">
+      <button type="button" className="icon-button" aria-label={label} onClick={() => tellWidget("tracepanel:dock")}>
+        {dock === "right" ? <DockBottomIcon /> : <DockRightIcon />}
+      </button>
+    </Hint>
+  );
+}
+
+/** Its children, when `when` holds. */
+function Shown({ when, children }: { when: boolean; children: ReactNode }) {
+  return when ? children : null;
+}
+
 function PanelApp({ route }: { route: Route }) {
   const history = useTabHistory();
   const { rows, stored } = useTabRows(history);
@@ -734,46 +754,39 @@ function PanelApp({ route }: { route: Route }) {
   }, []);
 
   const selectedKind = rows.find((row) => row.trace.id === selectedId)?.trace.kind;
+  const toolbarInTrace = split && selectedId !== null;
+  const switchUser = <SwitchUser source={source} onSwitched={() => tellWidget("tracepanel:reload")} />;
+  // One row of quiet icons: what is done to this trace or this panel; who you are sits with the list.
   const panelActions = (
     <>
-      <SwitchUser source={source} onSwitched={() => tellWidget("tracepanel:reload")} />
-      <Button
-        variant="outline"
-        size="sm"
-        className={cn("mr-1 h-7 gap-1.5 px-2.5 text-sm shadow-none", NARROW_ICON)}
-        asChild
+      <Shown when={!toolbarInTrace}>{switchUser}</Shown>
+      <Hint
+        title="Open in the console"
+        detail="This request in the full console, in a new tab: every request, issue and query."
       >
         <a
+          className="mr-1 inline-flex h-7 items-center gap-1.5 rounded-md bg-brand px-3 text-sm font-medium text-white shadow-sm shadow-brand/30 transition-[filter,box-shadow] hover:shadow-md hover:shadow-brand/40 hover:brightness-110 dark:bg-brand/20 dark:text-foreground dark:shadow-none dark:ring-1 dark:ring-brand/45 dark:ring-inset dark:hover:bg-brand/30 dark:hover:brightness-100 [&_svg]:size-3.5"
           href={`${base}${selectedId ? href({ name: "trace", id: selectedId, tab, from: sectionFor(selectedKind) }) : "#/"}`}
           target="_blank"
           rel="noreferrer"
-          title="Open this request in the full console, in a new tab"
-          aria-label="Open in the console"
         >
-          <span className="bar-label">Console</span>
+          Console
           <ExternalIcon />
         </a>
-      </Button>
-      <ProfileNext source={source} />
+      </Hint>
       <ShareAction traceId={selectedId} source={source} compact={true} />
       <ThemeToggle compact={true} />
-      <button
-        type="button"
-        className="icon-button"
-        title={dock === "right" ? "Dock to bottom" : "Dock to right"}
-        onClick={() => tellWidget("tracepanel:dock")}
-      >
-        {dock === "right" ? <DockBottomIcon /> : <DockRightIcon />}
-      </button>
-      <button type="button" className="icon-button" title="Close (Esc)" onClick={() => tellWidget("tracepanel:close")}>
-        <CloseIcon />
-      </button>
+      <DockButton dock={dock} />
+      <Hint title="Close" keys="Esc">
+        <button type="button" className="icon-button" aria-label="Close" onClick={() => tellWidget("tracepanel:close")}>
+          <CloseIcon />
+        </button>
+      </Hint>
     </>
   );
   const requestCount = `${tabRows.length} ${tabRows.length === 1 ? "request" : "requests"}`;
   // Docked at the bottom with a request open, the panel has no bar of its own: the logo over the list and the trace's
   // toolbar make one row across it (as in browser devtools).
-  const toolbarInTrace = split && selectedId !== null;
 
   return (
     <div className="panel">
@@ -815,9 +828,11 @@ function PanelApp({ route }: { route: Route }) {
         {toolbarInTrace ? (
           <div className="panel-brand">
             <Logo className="shrink-0 gap-1.5 text-md [&_svg]:size-5" />
+            {switchUser}
             {/* No count here: the rows are right below; Clear's tooltip says how many. */}
             <span className="ml-auto flex shrink-0 items-center gap-2">
               <FollowToggle follow={follow} onFollow={onFollow} />
+              <ProfileToggle source={source} />
               <ClearButton onClear={() => setClearing(true)} label={`Clear ${requestCount}`} />
             </span>
           </div>

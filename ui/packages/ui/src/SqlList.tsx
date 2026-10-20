@@ -116,6 +116,39 @@ function Row({
   );
 }
 
+/**
+ * Where a query was made: in your code, or, for a query no code of yours made (Django's admin, a library), the library
+ * code that asked for it, marked as such.
+ */
+function CalledFrom({ span, className }: { span: Span; className?: string }) {
+  const origin = text(span.attrs["code.origin"]);
+  if (origin) return <code className={cn("font-mono", className)}>{origin}</code>;
+  const caller = text(span.attrs["code.caller"]);
+  if (!caller) return <span className={cn("text-muted-foreground", className)}>Unknown: no caller was recorded</span>;
+  return <LibraryCaller caller={caller} className={className} />;
+}
+
+/** A string attribute, or null for none or an empty one. */
+function text(value: unknown): string | null {
+  return typeof value === "string" && value ? value : null;
+}
+
+function LibraryCaller({ caller, className }: { caller: string; className?: string | undefined }) {
+  return (
+    <span className={cn("flex min-w-0 items-center gap-2", className)}>
+      <span
+        className="shrink-0 rounded bg-muted px-1.5 text-[11px] leading-5 text-muted-foreground"
+        title="No code of yours was on the stack: this is the library code that asked for the query"
+      >
+        library
+      </span>
+      <code className="truncate font-mono text-muted-foreground" title={caller}>
+        {caller}
+      </code>
+    </span>
+  );
+}
+
 export function SqlList({ spans, issueBySpan, focus, onExplain, links }: SqlListProps) {
   const [mode, setMode] = useState<"grouped" | "timeline">("grouped");
   const groups = useMemo(() => groupSpans(spans, issueBySpan), [spans, issueBySpan]);
@@ -188,7 +221,7 @@ export function SqlList({ spans, issueBySpan, focus, onExplain, links }: SqlList
                           )}
                         >
                           <span className="text-right text-muted-foreground tabular-nums">{index + 1}</span>
-                          <code className="truncate font-mono">{String(span.attrs["code.origin"] ?? "—")}</code>
+                          <CalledFrom span={span} className="truncate" />
                           <span className="tabular-nums">{duration(span.duration)}</span>
                         </li>
                       ))}
@@ -225,7 +258,7 @@ export function SqlList({ spans, issueBySpan, focus, onExplain, links }: SqlList
                 ) : null}
                 <section className="grid gap-1">
                   <Heading>Called from</Heading>
-                  <code className="font-mono text-sm">{String(span.attrs["code.origin"] ?? "—")}</code>
+                  <CalledFrom span={span} className="text-sm" />
                 </section>
                 <AllRequests span={span} links={links} />
               </Row>

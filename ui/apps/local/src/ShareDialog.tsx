@@ -1,4 +1,4 @@
-import { type DataSource, type ExplainPlan, type Snapshot, snapshotFile, type Trace } from "@tracepanel/ui";
+import { type DataSource, type ExplainPlan, Hint, type Snapshot, snapshotFile, type Trace } from "@tracepanel/ui";
 import { Button } from "@tracepanel/ui/components/ui/button";
 import { Checkbox } from "@tracepanel/ui/components/ui/checkbox";
 import {
@@ -154,9 +154,11 @@ function ShareButton({ compact, onClick }: { compact: boolean; onClick: () => vo
   const title = "Share this trace as one HTML file";
   if (compact) {
     return (
-      <button type="button" className="icon-button" title={title} aria-label="Share" onClick={onClick}>
-        <Share2Icon aria-hidden="true" className="size-4" />
-      </button>
+      <Hint title="Share" detail="This trace as one HTML file: it opens anywhere, no Tracepanel needed.">
+        <button type="button" className="icon-button" aria-label="Share" onClick={onClick}>
+          <Share2Icon aria-hidden="true" className="size-4" />
+        </button>
+      </Hint>
     );
   }
   return (

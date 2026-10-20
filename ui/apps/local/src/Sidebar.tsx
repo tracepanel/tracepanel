@@ -1,4 +1,4 @@
-import { type Counts, Logo, LogoMark, RuntimeIcon, runtimeKind } from "@tracepanel/ui";
+import { type Counts, Hint, Logo, LogoMark, RuntimeIcon, runtimeKind } from "@tracepanel/ui";
 import { Button } from "@tracepanel/ui/components/ui/button";
 import {
   DropdownMenu,
@@ -551,15 +551,11 @@ export function ThemeToggle({ compact = false, side = "top" }: { compact?: boole
   const label = `Theme: ${current.label} · click for ${next.label}`;
   if (compact) {
     return (
-      <button
-        type="button"
-        className="icon-button"
-        title={label}
-        aria-label={label}
-        onClick={() => setTheme(next.value)}
-      >
-        <Icon className="size-4" />
-      </button>
+      <Hint title={`Theme: ${current.label}`} detail={`Click for ${next.label}.`}>
+        <button type="button" className="icon-button" aria-label={label} onClick={() => setTheme(next.value)}>
+          <Icon className="size-4" />
+        </button>
+      </Hint>
     );
   }
   return (

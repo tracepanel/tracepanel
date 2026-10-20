@@ -6,6 +6,7 @@ export * from "./CopyButton";
 export { ErrorView } from "./ErrorView";
 export * from "./ExplainView";
 export { ago, duration, percent, type Tone, tone } from "./format";
+export { Hint } from "./Hint";
 export { IssueGroupList } from "./IssueGroupList";
 export { IssueList } from "./IssueList";
 export * from "./icons";

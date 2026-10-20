@@ -1,264 +1,406 @@
-import { useMemo, useState } from "react";
+import { type MouseEvent, useMemo, useRef, useState } from "react";
 import { duration } from "./format";
+import {
+  allFrames,
+  type Box,
+  type Frame,
+  functions,
+  layout,
+  mostlyYours,
+  type Node,
+  ownCode,
+  type Profile,
+  packageOf,
+  packageTimes,
+  tree,
+  YOUR_CODE,
+} from "./lib/profile";
 import { cn } from "./lib/utils";
+import { Segmented } from "./Segmented";
 import type { Trace } from "./types";
 
-type Profile = NonNullable<Trace["profile"]>;
-type Frame = Profile["frames"][number];
-
-/** A function as the stacks reached it: its samples (here and below), its own, and the functions it called. */
-interface Node {
-  frame: Frame | null;
-  key: string;
-  total: number;
-  self: number;
-  children: Map<number, Node>;
+/** A package's color: a fill for boxes, a solid one for dots and bars. Your code is the brand's; the rest in order. */
+interface Tone {
+  fill: string;
+  dot: string;
 }
 
-function node(frame: Frame | null, key: string): Node {
-  return { frame, key, total: 0, self: 0, children: new Map() };
+const PALETTE: readonly Tone[] = [
+  { fill: "bg-sky-500/30 hover:bg-sky-500/50", dot: "bg-sky-500" },
+  { fill: "bg-emerald-500/30 hover:bg-emerald-500/50", dot: "bg-emerald-500" },
+  { fill: "bg-amber-500/30 hover:bg-amber-500/50", dot: "bg-amber-500" },
+  { fill: "bg-rose-500/30 hover:bg-rose-500/50", dot: "bg-rose-500" },
+  { fill: "bg-cyan-500/30 hover:bg-cyan-500/50", dot: "bg-cyan-500" },
+  { fill: "bg-orange-500/30 hover:bg-orange-500/50", dot: "bg-orange-500" },
+];
+const YOURS: Tone = { fill: "bg-brand/40 hover:bg-brand/60", dot: "bg-brand" };
+const REST: Tone = { fill: "bg-muted-foreground/20 hover:bg-muted-foreground/30", dot: "bg-muted-foreground/50" };
+
+type Palette = Map<string, Tone>;
+type Share = { name: string; samples: number };
+
+/** Your code, then the packages that took most, one color each; the rest share one gray as "other". */
+function colors(names: readonly string[]): Palette {
+  const others = names.filter((name) => name !== YOUR_CODE).slice(0, PALETTE.length);
+  return new Map([[YOUR_CODE, YOURS], ...others.map((name, at): [string, Tone] => [name, PALETTE[at] ?? REST])]);
 }
 
-const OUTSIDE: Frame = {
-  function: "(outside your code)",
-  module: null,
-  file: "",
-  line: 0,
-  // biome-ignore lint/style/useNamingConvention: wire format.
-  in_app: false,
-};
-
-/** The same stacks, merged where they are now alike. */
-function merged(profile: Profile, frames: Frame[], stacks: { frames: number[]; count: number }[]): Profile {
-  const counts = new Map<string, { frames: number[]; count: number }>();
-  for (const stack of stacks) {
-    const key = stack.frames.join(",");
-    const found = counts.get(key);
-    if (found) found.count += stack.count;
-    else counts.set(key, { ...stack });
-  }
-  return { ...profile, frames, stacks: [...counts.values()] };
+function toneOf(palette: Palette, name: string): Tone {
+  return palette.get(name) ?? REST;
 }
 
-/** The project's own frames alone: library time counts toward the call of yours it ran under. */
-function ownCode(profile: Profile): Profile {
-  const outside = profile.frames.length;
-  const stacks = profile.stacks.map((stack) => {
-    const own = stack.frames.filter((index) => profile.frames[index]?.in_app);
-    return { frames: own.length ? own : [outside], count: stack.count };
-  });
-  return merged(profile, [...profile.frames, OUTSIDE], stacks);
+/** A package as the legend names it: itself when it has a color, "other" when it is folded in with the rest. */
+function colored(palette: Palette, name: string): string {
+  return palette.has(name) ? name : "other";
 }
 
-/** Frames kept above the first of the project's own, out of what every stack starts with: the middleware around it. */
-const CONTEXT = 3;
-
-/** Every frame, less the library frames every stack starts with (the server, the thread) but the last few. */
-function allFrames(profile: Profile): Profile {
-  const [first, ...rest] = profile.stacks;
-  if (!first) return profile;
-  const shared = rest.reduce(
-    (length, stack) => Math.min(length, commonLength(first.frames, stack.frames)),
-    first.frames.length,
-  );
-  const library = first.frames.slice(0, shared).findIndex((index) => profile.frames[index]?.in_app);
-  const cut = Math.max(0, (library === -1 ? shared : library) - CONTEXT);
-  const stacks = profile.stacks.map((stack) => ({ frames: stack.frames.slice(cut), count: stack.count }));
-  return merged(profile, profile.frames, stacks);
+/** Faded while some packages are lit and this one isn't. */
+function faded(lit: ReadonlySet<string>, name: string): boolean {
+  return lit.size > 0 && !lit.has(name);
 }
 
-function commonLength(a: readonly number[], b: readonly number[]): number {
-  let at = 0;
-  while (at < a.length && at < b.length && a[at] === b[at]) at += 1;
-  return at;
-}
-
-/** A node's child for a frame, made the first time the path reaches it. */
-function child(at: Node, index: number, profile: Profile): Node {
-  const found = at.children.get(index);
-  if (found) return found;
-  const made = node(profile.frames[index] ?? null, `${at.key}/${index}`);
-  at.children.set(index, made);
-  return made;
-}
-
-/** The stacks merged into one tree from the outermost frame in: a call path is one node however often it was seen. */
-function tree(profile: Profile): Node {
-  const root = node(null, "root");
-  for (const stack of profile.stacks) {
-    root.total += stack.count;
-    const leaf = stack.frames.reduce((at, index) => {
-      const next = child(at, index, profile);
-      next.total += stack.count;
-      return next;
-    }, root);
-    leaf.self += stack.count;
-  }
-  return root;
-}
-
-/** Each function's samples: its own (it was running) and in all (it or what it called was), each stack counted once. */
-function functions(profile: Profile): { frame: Frame; self: number; total: number }[] {
-  const self = new Map<number, number>();
-  const total = new Map<number, number>();
-  const add = (counts: Map<number, number>, index: number, samples: number) =>
-    counts.set(index, (counts.get(index) ?? 0) + samples);
-  for (const stack of profile.stacks) {
-    // The innermost frame was running; every frame of the stack, counted once, was on it.
-    add(self, stack.frames[stack.frames.length - 1] ?? -1, stack.count);
-    for (const index of new Set(stack.frames)) add(total, index, stack.count);
-  }
-  return [...total.entries()]
-    .flatMap(([index, samples]) => {
-      const frame = profile.frames[index];
-      return frame ? [{ frame, self: self.get(index) ?? 0, total: samples }] : [];
-    })
-    .sort((a, b) => b.self - a.self || b.total - a.total);
-}
-
-/** A row of boxes per depth, each as wide as its share of the focused node's samples. */
-interface Box {
-  node: Node;
-  depth: number;
-  left: number;
-  width: number;
-}
-
-function layout(focus: Node): Box[] {
-  const boxes: Box[] = [];
-  const place = (at: Node, depth: number, left: number) => {
-    let x = left;
-    for (const child of [...at.children.values()].sort((a, b) => b.total - a.total)) {
-      const width = child.total / focus.total;
-      // Narrower than a pixel or so is noise at any width.
-      if (width >= 0.002) {
-        boxes.push({ node: child, depth, left: x, width });
-        place(child, depth + 1, x);
-      }
-      x += width;
-    }
-  };
-  place(focus, 0, 0);
-  return boxes;
+/** The lit packages with this one switched. */
+function toggled(lit: ReadonlySet<string>, name: string): ReadonlySet<string> {
+  const next = new Set(lit);
+  if (!next.delete(name)) next.add(name);
+  return next;
 }
 
 function where(frame: Frame): string {
-  return `${frame.file}:${frame.line}`;
+  return frame.file ? `${frame.file}:${frame.line}` : "";
 }
 
-const ROW = 22;
+const ROW = 20;
+/** A box narrower than this keeps its color but drops its name. */
+const LABELLED = 0.035;
+
+type Time = (samples: number) => string;
+
+const FRAMES = [
+  { id: "own", label: "Your code" },
+  { id: "all", label: "All frames" },
+] as const;
 
 /** The Profile tab's content, when it is the tab open and the trace has a profile. */
 export function ProfilePane({ trace, open }: { trace: Trace; open: boolean }) {
   return open && trace.profile ? <ProfileView profile={trace.profile} /> : null;
 }
 
-/** Where the trace's time went in code: your own code by default, every frame when asked. */
+/** Where the trace's time went in code: by package, as a flame graph of your code or of every frame, by function. */
 function ProfileView({ profile }: { profile: Profile }) {
-  const [own, setOwn] = useState(true);
+  const [own, setOwn] = useState(() => mostlyYours(profile));
+  const [lit, setLit] = useState<ReadonlySet<string>>(new Set());
+  const packages = useMemo(() => packageTimes(profile), [profile]);
+  const palette = useMemo(() => colors(packages.map((item) => item.name)), [packages]);
   const view = useMemo(() => (own ? ownCode(profile) : allFrames(profile)), [profile, own]);
-  const choice = (mine: boolean, label: string) => (
-    <button
-      type="button"
-      aria-pressed={own === mine}
-      onClick={() => setOwn(mine)}
-      className={cn(
-        "rounded-md px-2.5 py-1 text-sm",
-        own === mine ? "bg-accent font-medium text-foreground" : "text-muted-foreground hover:text-foreground",
-      )}
-    >
-      {label}
-    </button>
-  );
+  const time: Time = (samples) => duration(samples * profile.interval_us);
   return (
-    <div className="grid gap-3 p-4">
-      <div className="flex items-center gap-1">
-        {choice(true, "Your code")}
-        {choice(false, "All frames")}
-      </div>
+    <div className="@container grid gap-6 p-4">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div className="grid gap-0.5">
+          <span className="text-xs text-muted-foreground">Time in code</span>
+          <span className="text-2xl font-semibold tracking-tight tabular-nums">{time(profile.samples)}</span>
+          <span className="text-xs text-muted-foreground">
+            {profile.samples.toLocaleString()} samples, one every {duration(profile.interval_us)}
+          </span>
+        </div>
+        <Segmented
+          label="Frames shown"
+          segments={FRAMES}
+          value={own ? "own" : "all"}
+          onChange={(id) => setOwn(id === "own")}
+        />
+      </header>
+      <Packages
+        shares={summed(packages, palette)}
+        palette={palette}
+        total={profile.samples}
+        time={time}
+        lit={lit}
+        onLight={(name) => setLit(toggled(lit, name))}
+        onClear={() => setLit(new Set())}
+      />
       {/* Keyed: a zoom belongs to the frames it was made in. */}
-      <Flame key={String(own)} profile={view} />
+      <Flame key={String(own)} profile={view} palette={palette} lit={lit} time={time} />
     </div>
   );
 }
 
-/** A flame graph from the outermost call down, and the functions by their time. */
-function Flame({ profile }: { profile: Profile }) {
+/** The colored packages, then everything else as one "other". */
+function summed(packages: readonly Share[], palette: Palette): Share[] {
+  const named = packages.filter((item) => palette.has(item.name));
+  const other = packages.filter((item) => !palette.has(item.name)).reduce((sum, item) => sum + item.samples, 0);
+  return other ? [...named, { name: "other", samples: other }] : named;
+}
+
+/** Where the time went by package: one bar of shares, then each package on its line; a click lights its frames. */
+function Packages({
+  shares,
+  palette,
+  total,
+  time,
+  lit,
+  onLight,
+  onClear,
+}: {
+  shares: readonly Share[];
+  palette: Palette;
+  total: number;
+  time: Time;
+  lit: ReadonlySet<string>;
+  onLight: (name: string) => void;
+  onClear: () => void;
+}) {
+  return (
+    <section className="grid gap-3" aria-label="Time by package">
+      <div className="flex h-3 gap-0.5 overflow-hidden rounded-full">
+        {shares.map(({ name, samples }) => (
+          <span
+            key={name}
+            title={`${name}: ${time(samples)}`}
+            className={cn("h-full transition-opacity", toneOf(palette, name).dot, faded(lit, name) && "opacity-30")}
+            style={{ width: `${(samples / total) * 100}%` }}
+          />
+        ))}
+      </div>
+      <ul className="m-0 grid max-w-4xl list-none gap-x-8 gap-y-0.5 p-0 @xl:grid-cols-2">
+        {shares.map((share) => (
+          <PackageLine
+            key={share.name}
+            share={share}
+            tone={toneOf(palette, share.name)}
+            total={total}
+            time={time}
+            lit={lit.has(share.name)}
+            onLight={() => onLight(share.name)}
+          />
+        ))}
+      </ul>
+      {lit.size ? (
+        <button type="button" className="justify-self-start px-2 text-xs text-brand hover:underline" onClick={onClear}>
+          Show every package
+        </button>
+      ) : null}
+    </section>
+  );
+}
+
+function PackageLine({
+  share: { name, samples },
+  tone,
+  total,
+  time,
+  lit,
+  onLight,
+}: {
+  share: Share;
+  tone: Tone;
+  total: number;
+  time: Time;
+  lit: boolean;
+  onLight: () => void;
+}) {
+  return (
+    <li>
+      <button
+        type="button"
+        aria-pressed={lit}
+        onClick={onLight}
+        className={cn(
+          "grid w-full grid-cols-[auto_minmax(0,1fr)_2.5rem_4rem] items-center gap-2.5 rounded-md px-2 py-1 text-left text-xs transition-colors",
+          lit ? "bg-accent" : "hover:bg-accent/60",
+        )}
+      >
+        <span className={cn("size-2.5 rounded-sm", tone.dot)} />
+        <span className="truncate font-mono" title={name}>
+          {name}
+        </span>
+        <span className="text-right text-muted-foreground tabular-nums">{Math.round((samples / total) * 100)}%</span>
+        <span className="text-right tabular-nums">{time(samples)}</span>
+      </button>
+    </li>
+  );
+}
+
+interface Hovered {
+  node: Node;
+  x: number;
+  y: number;
+}
+
+/** A flame graph from the outermost call down (a click zooms in, a hover tells), and the functions by their time. */
+function Flame({
+  profile,
+  palette,
+  lit,
+  time,
+}: {
+  profile: Profile;
+  palette: Palette;
+  lit: ReadonlySet<string>;
+  time: Time;
+}) {
   const root = useMemo(() => tree(profile), [profile]);
   const rows = useMemo(() => functions(profile).slice(0, 30), [profile]);
   const [focus, setFocus] = useState<Node>(root);
   const boxes = useMemo(() => layout(focus), [focus]);
   const depth = Math.max(0, ...boxes.map((box) => box.depth)) + 1;
-  const time = (samples: number) => duration(samples * profile.interval_us);
+  const card = useRef<HTMLDivElement>(null);
+  const [hover, setHover] = useState<Hovered | null>(null);
+  const track = (event: MouseEvent, node: Node) => {
+    const at = card.current;
+    if (!at) return;
+    // In the card's scrolled content, where the tip is placed.
+    const area = at.getBoundingClientRect();
+    setHover({ node, x: event.clientX - area.left, y: event.clientY - area.top + at.scrollTop });
+  };
   return (
-    <div className="grid gap-5 p-4">
-      <p className="text-sm text-muted-foreground">
-        {profile.samples.toLocaleString()} samples, one every {duration(profile.interval_us)}: about{" "}
-        {time(profile.samples)} of code seen running. Your code is in color, the rest gray.
-        {focus !== root ? (
-          <>
-            {" "}
-            <button
-              type="button"
-              className="text-brand underline-offset-2 hover:underline"
-              onClick={() => setFocus(root)}
-            >
+    <div className="grid gap-6">
+      <section className="grid gap-2" aria-label="Flame graph">
+        <div className="flex h-5 items-center justify-between gap-3 text-xs text-muted-foreground">
+          <span>Calls, outermost on top. Click one to zoom in.</span>
+          {focus !== root ? (
+            <button type="button" className="text-brand hover:underline" onClick={() => setFocus(root)}>
               Show all
             </button>
-          </>
-        ) : null}
-      </p>
-      <div
-        className="relative w-full overflow-hidden rounded-md border bg-card"
-        style={{ height: depth * ROW }}
-        role="img"
-        aria-label="Flame graph of the trace's samples"
-      >
-        {boxes.map(({ node: at, depth: row, left, width }) => {
-          const frame = at.frame;
-          if (!frame) return null;
-          return (
-            <button
-              type="button"
-              key={at.key}
-              title={`${frame.function} · ${where(frame)}\n${time(at.total)} (${Math.round((at.total / root.total) * 100)}%), ${time(at.self)} in itself`}
-              onClick={() => setFocus(at)}
-              className={cn(
-                "absolute truncate border-r border-b border-card px-1.5 text-left font-mono text-xs leading-[22px]",
-                frame.in_app
-                  ? "bg-brand/25 text-foreground hover:bg-brand/40"
-                  : "bg-muted text-muted-foreground hover:bg-muted/70",
-              )}
-              style={{ top: row * ROW, left: `${left * 100}%`, width: `${width * 100}%`, height: ROW }}
-            >
-              {frame.function}
-            </button>
-          );
-        })}
-      </div>
-      <table className="w-full text-sm">
-        <thead className="text-left text-xs text-muted-foreground">
-          <tr>
-            <th className="py-1.5 font-medium">Function</th>
-            <th className="py-1.5 text-right font-medium">Itself</th>
-            <th className="py-1.5 text-right font-medium">In all</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map(({ frame, self, total }) => (
-            <tr key={`${frame.file}:${frame.line}:${frame.function}`} className="border-t">
-              <td className="max-w-0 py-1.5 pr-4">
-                <div className={cn("truncate font-mono", frame.in_app ? "text-foreground" : "text-muted-foreground")}>
-                  {frame.function}
-                </div>
-                <div className="truncate font-mono text-xs text-muted-foreground">{where(frame)}</div>
-              </td>
-              <td className="py-1.5 text-right tabular-nums">{self ? time(self) : "—"}</td>
-              <td className="py-1.5 text-right tabular-nums">{time(total)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+          ) : null}
+        </div>
+        <div ref={card} className="relative max-h-[30rem] overflow-y-auto rounded-lg border bg-card p-1.5">
+          <div className="relative w-full" style={{ height: depth * (ROW + 2) }} role="img" aria-label="Flame graph">
+            {boxes.map((box) => (
+              <FlameBox
+                key={box.node.key}
+                box={box}
+                tone={toneOf(palette, box.node.frame ? packageOf(box.node.frame) : "")}
+                faded={box.node.frame !== null && faded(lit, colored(palette, packageOf(box.node.frame)))}
+                onZoom={() => setFocus(box.node)}
+                onHover={(event) => track(event, box.node)}
+                onLeave={() => setHover(null)}
+              />
+            ))}
+          </div>
+          {hover ? <Tip hovered={hover} total={root.total} time={time} /> : null}
+        </div>
+      </section>
+      <Functions rows={rows} palette={palette} time={time} />
     </div>
+  );
+}
+
+/** What the box under the pointer is: its function, where it is, whole, and its time. */
+function Tip({ hovered: { node, x, y }, total, time }: { hovered: Hovered; total: number; time: Time }) {
+  const frame = node.frame;
+  if (!frame) return null;
+  return (
+    <div
+      className="pointer-events-none absolute z-10 grid w-max max-w-md gap-1 rounded-md border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg"
+      style={{ left: Math.max(8, x - 120), top: y + 18 }}
+    >
+      <span className="font-mono font-medium [overflow-wrap:anywhere]">{frame.function}</span>
+      <span className="font-mono text-muted-foreground [overflow-wrap:anywhere]">{where(frame)}</span>
+      <span className="tabular-nums">
+        {time(node.total)} · {Math.round((node.total / total) * 100)}% · {time(node.self)} in itself
+      </span>
+    </div>
+  );
+}
+
+function FlameBox({
+  box: { node, depth, left, width },
+  tone,
+  faded,
+  onZoom,
+  onHover,
+  onLeave,
+}: {
+  box: Box;
+  tone: Tone;
+  faded: boolean;
+  onZoom: () => void;
+  onHover: (event: MouseEvent) => void;
+  onLeave: () => void;
+}) {
+  const frame = node.frame;
+  if (!frame) return null;
+  return (
+    <button
+      type="button"
+      aria-label={`${frame.function} ${where(frame)}`}
+      onClick={onZoom}
+      onMouseMove={onHover}
+      onMouseLeave={onLeave}
+      className={cn(
+        "absolute truncate rounded px-1.5 text-left font-mono text-[11px] text-foreground transition-opacity",
+        tone.fill,
+        faded && "opacity-25",
+      )}
+      style={{
+        top: depth * (ROW + 2),
+        left: `calc(${left * 100}% + 1px)`,
+        width: `calc(${width * 100}% - 2px)`,
+        height: ROW,
+        lineHeight: `${ROW}px`,
+      }}
+    >
+      {width >= LABELLED && frame.function}
+    </button>
+  );
+}
+
+type FunctionRow = { frame: Frame; self: number; total: number };
+
+/** The functions by the time they ran themselves: each with where it is, whole, and a bar of its share. */
+function Functions({ rows, palette, time }: { rows: readonly FunctionRow[]; palette: Palette; time: Time }) {
+  const most = Math.max(1, ...rows.map((row) => row.self));
+  return (
+    <section className="grid gap-2" aria-label="Functions">
+      <div className="grid grid-cols-[minmax(0,1fr)_5rem_4.5rem] gap-3 px-3 text-xs text-muted-foreground">
+        <span>Function</span>
+        <span className="text-right">Itself</span>
+        <span className="text-right">In all</span>
+      </div>
+      <ol className="m-0 list-none overflow-hidden rounded-lg border bg-card p-0">
+        {rows.map((row) => (
+          <FunctionLine
+            key={`${row.frame.file}:${row.frame.line}:${row.frame.function}`}
+            row={row}
+            tone={toneOf(palette, packageOf(row.frame))}
+            most={most}
+            time={time}
+          />
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+function FunctionLine({
+  row: { frame, self, total },
+  tone,
+  most,
+  time,
+}: {
+  row: FunctionRow;
+  tone: Tone;
+  most: number;
+  time: Time;
+}) {
+  return (
+    <li className="grid grid-cols-[minmax(0,1fr)_5rem_4.5rem] items-center gap-3 border-t px-3 py-1.5 first:border-t-0 hover:bg-muted/40">
+      <div className="flex min-w-0 items-start gap-2">
+        <span className={cn("mt-1 size-2 shrink-0 rounded-sm", tone.dot)} />
+        <div className="grid min-w-0 gap-0.5">
+          <span className="font-mono text-xs [overflow-wrap:anywhere]">{frame.function}</span>
+          <span className="font-mono text-[11px] text-muted-foreground [overflow-wrap:anywhere]">{where(frame)}</span>
+        </div>
+      </div>
+      <div className="grid gap-1">
+        <span className="text-right text-xs tabular-nums">{self ? time(self) : "—"}</span>
+        <span className="h-1 overflow-hidden rounded-full bg-muted">
+          <span className={cn("block h-full rounded-full", tone.dot)} style={{ width: `${(self / most) * 100}%` }} />
+        </span>
+      </div>
+      <span className="text-right text-xs text-muted-foreground tabular-nums">{time(total)}</span>
+    </li>
   );
 }
