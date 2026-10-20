@@ -7,6 +7,7 @@ import {
   DockRightIcon,
   Empty,
   ExternalIcon,
+  Hint,
   httpSource,
   ISSUE_LABELS,
   type IssueKind,
@@ -377,9 +378,11 @@ function ListControls({
 /** Clear, where the requests are listed, as in the browser's Network tab. */
 function ClearButton({ onClear, label = "Clear requests" }: { onClear: () => void; label?: string }) {
   return (
-    <button type="button" className="icon-button" title={label} aria-label={label} onClick={onClear}>
-      <ClearIcon />
-    </button>
+    <Hint title={label} detail="Empties this tab's list. The requests stay in the console.">
+      <button type="button" className="icon-button" aria-label={label} onClick={onClear}>
+        <ClearIcon />
+      </button>
+    </Hint>
   );
 }
 
@@ -674,6 +677,18 @@ function PageRequests({
   );
 }
 
+/** Moves the panel to the other side: the bottom or the right. */
+function DockButton({ dock }: { dock: string }) {
+  const label = dock === "right" ? "Dock to bottom" : "Dock to right";
+  return (
+    <Hint title={label} detail="The panel remembers where you put it.">
+      <button type="button" className="icon-button" aria-label={label} onClick={() => tellWidget("tracepanel:dock")}>
+        {dock === "right" ? <DockBottomIcon /> : <DockRightIcon />}
+      </button>
+    </Hint>
+  );
+}
+
 /** Its children, when `when` holds. */
 function Shown({ when, children }: { when: boolean; children: ReactNode }) {
   return when ? children : null;
@@ -746,28 +761,24 @@ function PanelApp({ route }: { route: Route }) {
       <Shown when={!toolbarInTrace}>{switchUser}</Shown>
       <ProfileToggle source={source} />
       <ShareAction traceId={selectedId} source={source} compact={true} />
-      <a
-        className="icon-button"
-        href={`${base}${selectedId ? href({ name: "trace", id: selectedId, tab, from: sectionFor(selectedKind) }) : "#/"}`}
-        target="_blank"
-        rel="noreferrer"
-        title="Open this request in the full console, in a new tab"
-        aria-label="Open in the console"
-      >
-        <ExternalIcon />
-      </a>
+      <Hint title="Open in the console" detail="This request in the full console, in a new tab.">
+        <a
+          className="icon-button"
+          href={`${base}${selectedId ? href({ name: "trace", id: selectedId, tab, from: sectionFor(selectedKind) }) : "#/"}`}
+          target="_blank"
+          rel="noreferrer"
+          aria-label="Open in the console"
+        >
+          <ExternalIcon />
+        </a>
+      </Hint>
       <ThemeToggle compact={true} />
-      <button
-        type="button"
-        className="icon-button"
-        title={dock === "right" ? "Dock to bottom" : "Dock to right"}
-        onClick={() => tellWidget("tracepanel:dock")}
-      >
-        {dock === "right" ? <DockBottomIcon /> : <DockRightIcon />}
-      </button>
-      <button type="button" className="icon-button" title="Close (Esc)" onClick={() => tellWidget("tracepanel:close")}>
-        <CloseIcon />
-      </button>
+      <DockButton dock={dock} />
+      <Hint title="Close" keys="Esc">
+        <button type="button" className="icon-button" aria-label="Close" onClick={() => tellWidget("tracepanel:close")}>
+          <CloseIcon />
+        </button>
+      </Hint>
     </>
   );
   const requestCount = `${tabRows.length} ${tabRows.length === 1 ? "request" : "requests"}`;

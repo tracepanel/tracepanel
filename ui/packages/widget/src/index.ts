@@ -885,13 +885,46 @@ export function mount(options: WidgetOptions = {}): Widget {
   window.addEventListener("resize", fitBadge);
 
   // The page's own bottom padding, kept while the panel docked at the bottom takes its place, as devtools do.
-  const pagePadding = document.documentElement.style.paddingBottom;
+  // Room under the page for the panel docked at the bottom, so its end scrolls into view above it: a block placed
+  // where the page's scrolling ends. Padding or a block after the content is lost on pages whose root is as tall as
+  // the window and whose content overflows it (Django's admin).
+  const room = document.createElement("div");
+  room.setAttribute("aria-hidden", "true");
+  room.dataset["tracepanelRoom"] = "";
+  room.style.cssText = "position:absolute;left:0;top:0;width:1px;margin:0;padding:0;pointer-events:none";
 
-  /** Room under the page for the panel docked at the bottom, so its end can be scrolled into view; none otherwise. */
+  /** Moves the room to where the page's own scrolling ends: measured with the room out of the way, at the top. */
+  function placeRoom(): void {
+    room.style.top = "0";
+    room.style.top = `${document.documentElement.scrollHeight}px`;
+  }
+
   function makeRoom(): void {
     const covering = dock === "bottom" && panel.hasAttribute("data-open");
-    document.documentElement.style.paddingBottom = covering ? `${Math.min(height, window.innerHeight)}px` : pagePadding;
+    if (!covering) {
+      room.remove();
+      return;
+    }
+    room.style.height = `${Math.min(height, window.innerHeight)}px`;
+    if (!room.isConnected) document.body.append(room);
+    placeRoom();
   }
+
+  // The page grows (a list loads more, a section opens): near its end, the room follows it.
+  let placing = false;
+  window.addEventListener(
+    "scroll",
+    () => {
+      if (placing || !room.isConnected) return;
+      placing = true;
+      requestAnimationFrame(() => {
+        placing = false;
+        if (window.scrollY + window.innerHeight * 2 > document.documentElement.scrollHeight) placeRoom();
+      });
+    },
+    { passive: true },
+  );
+  window.addEventListener("resize", () => room.isConnected && placeRoom(), { passive: true });
 
   function setHeight(value: number): void {
     height = Math.round(Math.min(Math.max(value, MIN_HEIGHT), window.innerHeight - 40));

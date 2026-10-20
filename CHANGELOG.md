@@ -7,19 +7,24 @@
 - The panel lists a form's POST that redirected, before the page it led to:
   the SDK names it in a short-lived cookie, and the next page's widget picks
   it up.
-- Profile: where the time went by package (your code, `django.db`,
-  `django.template`, …) as a bar with a legend that lights a package's frames,
-  a colored flame graph, and a "Your code / All frames" switch. A page spent
-  mostly in libraries opens on all frames.
+- Profile: the time in code at a glance, then where it went by package
+  (your code, `django.db`, `django.template`, …). Click packages to light
+  their frames, one or several. A colored flame graph tells each call's path
+  and time on hover. The functions table shows each function's whole path.
+  "Your code / All frames" switches the frames, and a page spent mostly in
+  libraries opens on all frames.
 - The Profile button stays lit while it is on, and every request is profiled
   until it is turned off.
 
 ### Changed
 
-- Request tab: a compact grid of the request's facts, then its parts as tabs,
-  as browser devtools show them (Headers, Query, Body, Cookies, Session,
-  Response). The headers every browser sends are folded. A form's body shows
+- Request tab: the method, URL, status and time on top, the request's facts
+  in a card, then its parts in one card with a switch, as browser devtools
+  show them: Headers, Query, Body, Cookies, Session, Response and every other
+  attribute. The headers every browser sends are folded. A form's body shows
   as fields.
+- The panel's icon buttons explain themselves in a tooltip: what they do,
+  and their key.
 - The panel header is quieter: Explore, the user and Console are plain
   buttons and icons, and the user sits next to the request list.
 - With the panel docked at the bottom, the page scrolls to its end above it.

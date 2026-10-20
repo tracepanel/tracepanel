@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { AttrsTable } from "./AttrsTable";
 import { Badge } from "./components/ui/badge";
 import { FactGrid } from "./FactGrid";
 import { duration } from "./format";
@@ -8,7 +7,7 @@ import { traceRuntime } from "./lib/runtime";
 import { linkProps, type TraceLinks } from "./links";
 import { type PropRow, PropTable } from "./PropTable";
 import { MethodBadge, RoutePath, StatusBadge } from "./primitives";
-import { isRequestDetail, RequestParts } from "./RequestParts";
+import { isRequestDetail, RequestParts, requestParts } from "./RequestParts";
 import type { Attrs, Related, Trace, TraceSummary } from "./types";
 
 function text(value: unknown): string | null {
@@ -299,24 +298,68 @@ function textRow(label: string, value: string | null, shown: ReactNode = value):
   return value ? [{ label, value: shown, copy: value, mono: true }] : [];
 }
 
-/** The request's or run's own fields: what ran, how it went, who made it. */
-function ownRows(trace: Trace): PropRow[] {
+/** What a request was, in the hero above its facts: its method, URL, status and time; its view and route under. */
+function whatRan(trace: Trace): PropRow[] {
   const attrs = trace.attrs;
   const route = text(attrs["http.route"]);
   const status = attrs["http.status_code"];
   return [
-    ...(trace.kind === "task" ? taskRows(trace) : []),
     ...textRow("URL", text(attrs["http.path"])),
     ...textRow("Route", route, <RoutePath path={route ?? ""} />),
     ...textRow("View", text(attrs["code.view"])),
     ...(typeof status === "number" ? [{ label: "Status", value: <StatusBadge status={status} /> }] : []),
+  ];
+}
+
+function isRequest(trace: Trace): boolean {
+  return trace.kind !== "task" && typeof trace.attrs["http.path"] === "string";
+}
+
+/** Under the URL: the view that answered, and the route when it differs from the URL. */
+function ViewAndRoute({ view, route }: { view: string | null; route: string | null }) {
+  return (
+    <div className="flex min-w-0 flex-wrap gap-x-4 gap-y-0.5 font-mono text-xs text-muted-foreground">
+      {view ? <span className="[overflow-wrap:anywhere]">{view}</span> : null}
+      {route ? <RoutePath path={route} /> : null}
+    </div>
+  );
+}
+
+/** A request at a glance: method and URL large, how it ended and how long it took beside; its view and route under. */
+function Hero({ trace }: { trace: Trace }) {
+  const attrs = trace.attrs;
+  const route = text(attrs["http.route"]);
+  const view = text(attrs["code.view"]);
+  const status = attrs["http.status_code"];
+  return (
+    <header className="grid gap-1.5">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+        <MethodBadge method={text(attrs["http.method"])} />
+        <span className="min-w-0 font-mono text-base font-medium [overflow-wrap:anywhere]">
+          {text(attrs["http.path"])}
+        </span>
+        {typeof status === "number" ? <StatusBadge status={status} /> : null}
+        <span className="text-sm text-muted-foreground tabular-nums">{duration(trace.duration)}</span>
+      </div>
+      <ViewAndRoute view={view} route={route === attrs["http.path"] ? null : route} />
+    </header>
+  );
+}
+
+/** The request's or run's own fields: what ran (unless the hero shows it), how it went, who made it. */
+function ownRows(trace: Trace): PropRow[] {
+  const attrs = trace.attrs;
+  const hero = isRequest(trace);
+  return [
+    ...(trace.kind === "task" ? taskRows(trace) : []),
+    ...(hero ? [] : whatRan(trace)),
     ...userRows(attrs),
     ...htmxRows(attrs),
     ...runtimeRows(attrs),
     ...droppedRows(attrs),
     ...clockRows(trace),
     { label: "Started", value: new Date(trace.start / 1000).toLocaleString() },
-    { label: "Duration", value: duration(trace.duration) },
+    ...(hero ? [] : [{ label: "Duration", value: duration(trace.duration) }]),
     { label: "Trace ID", value: trace.id, copy: trace.id, mono: true },
   ];
 }
@@ -334,35 +377,22 @@ function Part({ label, title, children }: { label: string; title: ReactNode; chi
 /** Overview of the traced request or task run: what ran, how it went, who caused it; every id copies. */
 export function RequestInfo({ trace, related, links }: RequestInfoProps) {
   const document = text(trace.attrs["graphql.document"]);
-  // The document is shown formatted above: not again, on one line, among the attributes.
+  // The document is shown formatted in its own part: not again, on one line, among the attributes.
   const { "graphql.document": _, ...rest } = trace.attrs;
-  const listed = Object.fromEntries(Object.entries(rest).filter(([key]) => !isRequestDetail(key)));
+  const others = Object.fromEntries(Object.entries(rest).filter(([key]) => !isRequestDetail(key)));
+  const graphql = document ? [{ id: "graphql", label: "GraphQL", content: <GraphqlCode document={document} /> }] : [];
   // The traces it is linked to come after its own: what queued it, what it called, what it delivered to.
   const linked = relatedRows(related, links);
   return (
-    <div className="@container grid gap-4 p-4">
+    <div className="@container grid gap-5 p-4">
+      {isRequest(trace) ? <Hero trace={trace} /> : null}
       <FactGrid rows={ownRows(trace)} />
-      <RequestParts attrs={trace.attrs} />
       {linked.length ? (
         <Part label="Related traces" title="Related traces">
           <PropTable dense rows={linked} />
         </Part>
       ) : null}
-      {document ? (
-        <Part label="GraphQL query" title="Query">
-          <GraphqlCode document={document} />
-        </Part>
-      ) : null}
-      <Part
-        label="All attributes"
-        title={
-          <>
-            All attributes <span className="tabular-nums">{Object.keys(listed).length}</span>
-          </>
-        }
-      >
-        <AttrsTable attrs={listed} />
-      </Part>
+      <RequestParts parts={requestParts(trace.attrs, others, graphql)} />
     </div>
   );
 }

@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { CopyButton } from "./CopyButton";
+import { ChevronDownIcon } from "./icons";
 import { cn } from "./lib/utils";
+import { Segmented } from "./Segmented";
 import type { Attrs } from "./types";
 
-// What the request carried and what its response said, as the app's SDK recorded them (this machine only), shown as
-// browser devtools show a request: one part at a time, picked from a row of tabs.
+// What the request carried and what its response said, as the app's SDK recorded them (this machine only), and every
+// other attribute: one card, one part at a time, as browser devtools show a request.
 const PREFIXES = {
   headers: "http.request.header.",
   cookies: "http.request.cookie.",
@@ -13,7 +15,7 @@ const PREFIXES = {
 } as const;
 const KEYS = new Set(["url.query", "http.request.body", "http.request.body.truncated"]);
 
-/** Shown in the request's parts: not again among all the attributes. */
+/** Shown in the request's own parts: not again among the other attributes. */
 export function isRequestDetail(key: string): boolean {
   return KEYS.has(key) || Object.values(PREFIXES).some((prefix) => key.startsWith(prefix));
 }
@@ -56,104 +58,131 @@ function readable(body: string): string {
   }
 }
 
-interface Part {
+/** The other attributes by namespace (`code.*`, `http.*`…), keys without it; keys with none last. */
+function grouped(attrs: Attrs): [string, Pair[]][] {
+  const groups = new Map<string, Pair[]>();
+  for (const [key, value] of Object.entries(attrs).sort(([a], [b]) => a.localeCompare(b))) {
+    const [name, rest] = namespaced(key);
+    groups.set(name, [...(groups.get(name) ?? []), [rest, text(value)]]);
+  }
+  return [...groups].sort(([a], [b]) => Number(a === "other") - Number(b === "other"));
+}
+
+/** A key's namespace and the rest of it; a key without one is in "other", whole. */
+function namespaced(key: string): [string, string] {
+  const dot = key.indexOf(".");
+  return dot === -1 ? ["other", key] : [key.slice(0, dot), key.slice(dot + 1)];
+}
+
+/** A part shown in the card: its tab's name and count, and what it shows. */
+export interface Part {
   id: string;
   label: string;
   count?: number | undefined;
-  pairs?: Pair[];
+  content: ReactNode;
 }
 
-function parts(attrs: Attrs): Part[] {
-  const all: Part[] = [
-    { id: "headers", label: "Headers", pairs: under(attrs, PREFIXES.headers, dashed) },
-    { id: "query", label: "Query", pairs: queryPairs(attrs["url.query"]) },
-    { id: "body", label: "Body" },
-    { id: "cookies", label: "Cookies", pairs: under(attrs, PREFIXES.cookies) },
-    { id: "session", label: "Session", pairs: under(attrs, PREFIXES.session) },
-    { id: "response", label: "Response", pairs: under(attrs, PREFIXES.response, dashed) },
+function pairsPart(id: string, label: string, pairs: Pair[]): Part[] {
+  return pairs.length ? [{ id, label, count: pairs.length, content: <Pairs pairs={pairs} /> }] : [];
+}
+
+function bodyPart(attrs: Attrs): Part[] {
+  return typeof attrs["http.request.body"] === "string"
+    ? [{ id: "body", label: "Body", content: <Body attrs={attrs} /> }]
+    : [];
+}
+
+function headersPart(attrs: Attrs): Part[] {
+  const pairs = under(attrs, PREFIXES.headers, dashed);
+  return pairs.length
+    ? [{ id: "headers", label: "Headers", count: pairs.length, content: <Headers pairs={pairs} /> }]
+    : [];
+}
+
+/** The request's parts, then the given ones (a GraphQL query), then every other attribute. */
+export function requestParts(attrs: Attrs, others: Attrs, extra: readonly Part[] = []): Part[] {
+  const groups = grouped(others);
+  return [
+    ...headersPart(attrs),
+    ...pairsPart("query", "Query", queryPairs(attrs["url.query"])),
+    ...bodyPart(attrs),
+    ...pairsPart("cookies", "Cookies", under(attrs, PREFIXES.cookies)),
+    ...pairsPart("session", "Session", under(attrs, PREFIXES.session)),
+    ...pairsPart("response", "Response", under(attrs, PREFIXES.response, dashed)),
+    ...extra,
+    {
+      id: "attributes",
+      label: "Attributes",
+      count: Object.keys(others).length,
+      content: <Groups groups={groups} />,
+    },
   ];
-  const hasBody = typeof attrs["http.request.body"] === "string";
-  return all
-    .filter((part) => (part.pairs ? part.pairs.length > 0 : hasBody))
-    .map((part) => ({ ...part, count: part.pairs?.length }));
 }
 
-/** The request's parts, one at a time: headers, query, body, cookies, session, the response's headers. */
-export function RequestParts({ attrs }: { attrs: Attrs }) {
-  const shown = parts(attrs);
+/** The parts as one card: a switch above it, the chosen part inside. The switch stays on its part across traces. */
+export function RequestParts({ parts }: { parts: readonly Part[] }) {
   const [picked, setPicked] = useState<string | null>(null);
-  const open = shown.find((part) => part.id === picked) ?? shown[0];
+  const open = parts.find((part) => part.id === picked) ?? parts[0];
   if (!open) return null;
   return (
-    <section className="grid gap-2" aria-label="What the request carried">
-      <div className="flex flex-wrap items-center gap-1 border-b" role="tablist">
-        {shown.map((part) => (
-          <button
-            type="button"
-            role="tab"
-            key={part.id}
-            aria-selected={part === open}
-            onClick={() => setPicked(part.id)}
-            className={cn(
-              "-mb-px flex items-center gap-1.5 border-b-2 px-2.5 py-1.5 text-sm transition-colors",
-              part === open
-                ? "border-brand font-medium text-foreground"
-                : "border-transparent text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {part.label}
-            {part.count ? <span className="text-xs text-muted-foreground tabular-nums">{part.count}</span> : null}
-          </button>
-        ))}
+    <section className="grid gap-2" aria-label="Request details">
+      <Segmented
+        label="Request details"
+        segments={parts.map(({ id, label, count }) => ({ id, label, count }))}
+        value={open.id}
+        onChange={setPicked}
+      />
+      <div className="overflow-hidden rounded-lg border bg-card" role="tabpanel">
+        {open.content}
       </div>
-      <PartView part={open} attrs={attrs} />
     </section>
   );
 }
 
-/** How each part is shown: the body as text, the headers with the browser's folded, the rest as names and values. */
-const VIEWS: Record<string, (props: { part: Part; attrs: Attrs }) => React.ReactNode> = {
-  body: ({ attrs }) => <Body attrs={attrs} />,
-  headers: ({ part }) => <Headers pairs={part.pairs ?? []} />,
-};
-
-function PartView({ part, attrs }: { part: Part; attrs: Attrs }) {
-  const View = VIEWS[part.id] ?? (({ part: shown }) => <Pairs pairs={shown.pairs ?? []} />);
-  return <View part={part} attrs={attrs} />;
-}
-
-/** The headers the app chose or read first; the browser's own folded under a line that opens them. */
+/** The headers the app chose or read first; the browser's own folded under a row that opens them. */
 function Headers({ pairs }: { pairs: readonly Pair[] }) {
   const [all, setAll] = useState(false);
   const browser = pairs.filter(([name]) => fromBrowser(name));
   const own = pairs.filter(([name]) => !fromBrowser(name));
   return (
-    <div className="grid gap-1">
+    <>
       <Pairs pairs={all ? [...own, ...browser] : own} />
-      {browser.length ? (
-        <button
-          type="button"
-          onClick={() => setAll(!all)}
-          className="justify-self-start px-1 text-xs text-muted-foreground hover:text-foreground"
-        >
-          {all ? "Hide the browser's headers" : `+${browser.length} the browser sends with every request`}
-        </button>
-      ) : null}
-    </div>
+      <BrowserHeaders count={browser.length} open={all} onToggle={() => setAll(!all)} />
+    </>
   );
 }
 
-/** Names and values, packed: a fixed column of names, values that wrap, a copy button on hover. */
+/** The row that opens or folds the browser's own headers, when it sent any. */
+function BrowserHeaders({ count, open, onToggle }: { count: number; open: boolean; onToggle: () => void }) {
+  if (!count) return null;
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className="flex w-full items-center gap-1.5 border-t px-3 py-1.5 text-left text-xs text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+    >
+      <span className={cn("flex transition-transform [&_svg]:size-3.5", open && "rotate-180")}>
+        <ChevronDownIcon />
+      </span>
+      {open ? "Hide the browser's own headers" : `${count} more the browser sends with every request`}
+    </button>
+  );
+}
+
+/** Names and values in rows: a column of names, values that wrap, a copy button on hover. */
 function Pairs({ pairs }: { pairs: readonly Pair[] }) {
   return (
-    <dl className="m-0 grid grid-cols-[minmax(7rem,12rem)_minmax(0,1fr)_auto] font-mono text-xs">
+    <dl className="m-0 grid grid-cols-[minmax(7rem,max-content)_minmax(0,1fr)_auto] font-mono text-xs">
       {pairs.map(([name, value]) => (
-        <div key={name} className="group/pair contents">
-          <dt className="truncate py-1 pr-3 text-muted-foreground" title={name}>
+        <div
+          key={`${name}=${value}`}
+          className="group/pair col-span-3 grid grid-cols-subgrid border-t first:border-t-0 hover:bg-muted/40"
+        >
+          <dt className="max-w-56 truncate py-1.5 pr-4 pl-3 text-muted-foreground" title={name}>
             {name}
           </dt>
-          <dd className="m-0 py-1 [overflow-wrap:anywhere]">{value}</dd>
-          <span className="flex items-start pl-1">
+          <dd className="m-0 py-1.5 [overflow-wrap:anywhere]">{value}</dd>
+          <span className="flex items-start py-1 pr-2 pl-1">
             <CopyButton
               text={value}
               label={`Copy ${name}`}
@@ -166,6 +195,21 @@ function Pairs({ pairs }: { pairs: readonly Pair[] }) {
   );
 }
 
+/** Pairs under a band per namespace. */
+function Groups({ groups }: { groups: readonly [string, Pair[]][] }) {
+  if (!groups.length) return <p className="px-3 py-2 text-xs text-muted-foreground">No other attributes.</p>;
+  return groups.map(([name, pairs], at) => (
+    <div key={name} className={cn(at > 0 && "border-t")}>
+      <h4 className="flex items-baseline gap-1.5 bg-muted/40 px-3 py-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+        {name} <span className="font-normal tabular-nums">{pairs.length}</span>
+      </h4>
+      <div className="border-t">
+        <Pairs pairs={pairs} />
+      </div>
+    </div>
+  ));
+}
+
 /** A form's fields as names and values; any other body as text. */
 function Body({ attrs }: { attrs: Attrs }) {
   const form = String(attrs["http.request.header.content_type"] ?? "").startsWith("application/x-www-form-urlencoded");
@@ -175,13 +219,11 @@ function Body({ attrs }: { attrs: Attrs }) {
 function TextBody({ attrs }: { attrs: Attrs }) {
   const body = text(attrs["http.request.body"]);
   return (
-    <div className="grid gap-1">
-      <pre className="m-0 max-h-96 overflow-auto rounded-md bg-muted/40 p-3 font-mono text-xs whitespace-pre-wrap">
-        {readable(body)}
-      </pre>
+    <>
+      <pre className="m-0 max-h-96 overflow-auto p-3 font-mono text-xs whitespace-pre-wrap">{readable(body)}</pre>
       {attrs["http.request.body.truncated"] === true ? (
-        <p className="text-xs text-muted-foreground">Cut at 16 KB.</p>
+        <p className="border-t px-3 py-1.5 text-xs text-muted-foreground">Cut at 16 KB.</p>
       ) : null}
-    </div>
+    </>
   );
 }

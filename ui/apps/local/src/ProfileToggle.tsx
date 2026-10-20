@@ -1,4 +1,4 @@
-import type { DataSource } from "@tracepanel/ui";
+import { type DataSource, Hint } from "@tracepanel/ui";
 import { cn } from "@tracepanel/ui/lib/utils";
 import { FlameIcon } from "lucide-react";
 import { useState } from "react";
@@ -15,9 +15,9 @@ function profile(on: boolean): void {
   document.cookie = on ? `${COOKIE}=1; Path=/; SameSite=Lax` : `${COOKIE}=; Max-Age=0; Path=/; SameSite=Lax`;
 }
 
-const TITLES = {
-  off: "Profile requests: where their time goes in code",
-  on: "Profiling every request this browser makes: click to stop",
+const HINTS = {
+  off: { title: "Profile requests", detail: "Record where each request's time goes in code, until you turn it off." },
+  on: { title: "Profiling is on", detail: "Every request this browser makes is profiled. Click to stop." },
 };
 
 /**
@@ -31,20 +31,21 @@ export function ProfileToggle({ source }: { source: DataSource }) {
 /** An icon among the panel's own (share, theme, dock), lit while profiling is on. */
 function ProfileButton() {
   const [on, setOn] = useState(profiling);
-  const title = TITLES[on ? "on" : "off"];
+  const hint = HINTS[on ? "on" : "off"];
   return (
-    <button
-      type="button"
-      className={cn("icon-button", on && "bg-brand-soft text-brand hover:bg-brand-soft hover:text-brand")}
-      title={title}
-      aria-label={title}
-      aria-pressed={on}
-      onClick={() => {
-        profile(!on);
-        setOn(!on);
-      }}
-    >
-      <FlameIcon className={cn("size-4", on && "fill-current")} />
-    </button>
+    <Hint title={hint.title} detail={hint.detail}>
+      <button
+        type="button"
+        className={cn("icon-button", on && "bg-brand-soft text-brand hover:bg-brand-soft hover:text-brand")}
+        aria-label={hint.title}
+        aria-pressed={on}
+        onClick={() => {
+          profile(!on);
+          setOn(!on);
+        }}
+      >
+        <FlameIcon className={cn("size-4", on && "fill-current")} />
+      </button>
+    </Hint>
   );
 }
