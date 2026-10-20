@@ -375,34 +375,23 @@ function RequestBody({ body, truncated }: { body: string; truncated: boolean }) 
   );
 }
 
-/** The request's own parts: its query, headers, body, cookies and session, then the response's headers. */
-function RequestParts({ attrs }: { attrs: Attrs }) {
-  const body = text(attrs["http.request.body"]);
+/** The request's own parts as headed rows of the overview's table, so every value lines up: its query, headers,
+ * cookies and session, then the response's headers. */
+function requestRows(attrs: Attrs): PropRow[] {
   const parts: [string, PropRow[]][] = [
     ["Query", queryRows(text(attrs["url.query"]))],
     ["Request headers", prefixed(attrs, REQUEST_PREFIXES.headers, header)],
-  ];
-  const after: [string, PropRow[]][] = [
     ["Cookies", prefixed(attrs, REQUEST_PREFIXES.cookies)],
     ["Session", prefixed(attrs, REQUEST_PREFIXES.session)],
     ["Response headers", prefixed(attrs, REQUEST_PREFIXES.response, header)],
   ];
-  const table = ([title, rows]: [string, PropRow[]]) =>
-    rows.length ? (
-      <Part key={title} label={title} title={title}>
-        <PropTable rows={rows} />
-      </Part>
-    ) : null;
-  return (
-    <>
-      {parts.map(table)}
-      {body ? (
-        <Part label="Request body" title="Request body">
-          <RequestBody body={body} truncated={attrs["http.request.body.truncated"] === true} />
-        </Part>
-      ) : null}
-      {after.map(table)}
-    </>
+  return parts.flatMap(([title, rows]) =>
+    rows.length
+      ? [
+          { label: title, value: rows.length, heading: true, id: `part:${title}` },
+          ...rows.map((row) => ({ ...row, id: `${title}:${row.label}` })),
+        ]
+      : [],
   );
 }
 
@@ -426,13 +415,20 @@ export function RequestInfo({ trace, related, links }: RequestInfoProps) {
   const linked = relatedRows(related, links);
   return (
     <div className="grid gap-4 p-4">
-      <PropTable rows={ownRows(trace)} />
+      <PropTable rows={[...ownRows(trace), ...requestRows(trace.attrs)]} />
+      {text(trace.attrs["http.request.body"]) ? (
+        <Part label="Request body" title="Request body">
+          <RequestBody
+            body={text(trace.attrs["http.request.body"]) ?? ""}
+            truncated={trace.attrs["http.request.body.truncated"] === true}
+          />
+        </Part>
+      ) : null}
       {linked.length ? (
         <Part label="Related traces" title="Related traces">
           <PropTable rows={linked} />
         </Part>
       ) : null}
-      <RequestParts attrs={trace.attrs} />
       {document ? (
         <Part label="GraphQL query" title="Query">
           <GraphqlCode document={document} />
