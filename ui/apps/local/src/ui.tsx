@@ -99,6 +99,7 @@ export function Tr({
   selected,
   href,
   opening,
+  fresh,
   className,
   ...props
 }: ComponentProps<typeof TableRow> & {
@@ -107,11 +108,14 @@ export function Tr({
   href?: string;
   /** Called before `href` is followed, however (click, Enter, a new tab). */
   opening?: (() => void) | undefined;
+  /** Just arrived: highlighted for a moment, as the widget's list highlights a new request. */
+  fresh?: boolean | undefined;
 }) {
   return (
     <TableRow
       data-tone={tone}
       data-state={selected ? "selected" : undefined}
+      data-new={fresh ? "" : undefined}
       {...(href === undefined ? {} : linkProps(href, opening))}
       className={cn(
         "cursor-pointer data-[state=selected]:bg-brand-soft",

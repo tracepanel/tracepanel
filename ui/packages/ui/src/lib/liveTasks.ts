@@ -26,9 +26,12 @@ export function elapsed(now: number, at: number | null): string {
   return `${Math.floor(seconds / 3600)}h ${pad(Math.floor(seconds / 60) % 60)}m`;
 }
 
-/** Since when a task is in its state: a running one since it started, the others since they were (re)sent. */
+/**
+ * Since when a task is in its state: a running one since it started, the others since they were (re)sent; a retry
+ * not sent again yet, since its last attempt started.
+ */
 export function stateSince(task: LiveTask): number | null {
-  return task.state === "running" ? task.started_at : task.enqueued_at;
+  return task.state === "running" ? task.started_at : (task.enqueued_at ?? task.started_at);
 }
 
 /** Its arguments on one line, as the SDK wrote them: `(7,) {'to': 'ann'}`; empty when it sent none. */

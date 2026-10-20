@@ -17,14 +17,20 @@
 - "WARNING and above" and "ERROR and above" in the Level filter, as
   `level>=warning`. The chart's legend shows such a filter, and a click on it
   that leaves a level and those above writes one too.
-- Live on the Tasks page, next to By task and All runs: the tasks in flight
-  now, every 2 seconds. Running tasks show their worker, how long they have
-  run, their id and arguments. Queued ones show how long they have waited
-  and link to the trace that sent them. Retrying ones show their next
-  attempt and the last error. The workers show how many tasks each runs. A
-  task leaves Live when it ends, and its trace is listed as before. With
-  nothing in flight it says so, and how to start a worker when none was
-  seen.
+- Now on the Tasks page, one line above the overview: how many tasks are
+  running, queued and retrying, and the workers, each with the tasks it runs.
+  The counts open a table of the tasks in flight: how long each has run or
+  waited, its attempt, and its last error or its arguments. A row opens the
+  trace that sent the task. With nothing in flight the line says idle, and
+  before any worker is seen how to start one. Projects without task events
+  have no Now.
+- Live on the Tasks page, as on the Logs page: the overview, the list and Now
+  reload every 2 seconds, and hold while the list is scrolled down. Runs that
+  came in since the last reload are highlighted in All runs for a moment. A
+  link to the earlier Live list (`view=live`) opens Tasks with Live on.
+- Tasks is in the menu as soon as a worker sends task events, before any task
+  has ended. `api/counts` says so in `live_tasks`. With no runs stored yet the
+  page shows Now, and its list says runs show up when tasks finish.
 - Task events: an app tells the agent of a task's steps before its trace
   exists, in a frame that is an object on its connection (`{"tasks":
   [...]}`): `enqueued`, `started`, `retried`, `finished`, and a worker's

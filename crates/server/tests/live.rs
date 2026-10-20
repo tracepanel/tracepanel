@@ -48,11 +48,11 @@ async fn task_events_on_the_wire_are_listed_until_the_task_finishes() {
     let dir = std::env::temp_dir().join(format!("tracepanel-live-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
+    let path = tracepanel_store_local::path_in(&dir);
+    // An empty store: the counts come from it.
+    tracepanel_store_local::Store::open(&path).unwrap();
     let activity = Activity::default();
-    let router = tracepanel_server::router(
-        Reader::new(&tracepanel_store_local::path_in(&dir)),
-        activity.clone(),
-    );
+    let router = tracepanel_server::router(Reader::new(&path), activity.clone());
     let listener = Listener::tcp("127.0.0.1:0").await.unwrap();
     let address = listener.address().unwrap().replace("tcp:", "");
     let received = std::sync::Arc::new(std::sync::Mutex::new(0));
@@ -68,6 +68,9 @@ async fn task_events_on_the_wire_are_listed_until_the_task_finishes() {
         empty,
         json!({"now": empty["now"], "tasks": [], "workers": []})
     );
+
+    let (_, counts) = get(&router, "/api/counts").await;
+    assert_eq!(counts["live_tasks"], false);
 
     let mut app = BufReader::new(TcpStream::connect(&address).await.unwrap());
     let hello = json!({"protocol": PROTOCOL, "service": "shop", "capabilities": ["live_tasks"]});
@@ -91,6 +94,8 @@ async fn task_events_on_the_wire_are_listed_until_the_task_finishes() {
 
     let live = live_when(&router, |live| live["tasks"].as_array().unwrap().len() == 2).await;
     let (_, capabilities) = get(&router, "/api/capabilities").await;
+    let (_, counts) = get(&router, "/api/counts").await;
+    let (_, blog) = get(&router, "/api/counts?service=blog").await;
 
     assert_eq!(
         live["tasks"],
@@ -109,6 +114,15 @@ async fn task_events_on_the_wire_are_listed_until_the_task_finishes() {
         json!([{"name": "celery@box", "system": "celery", "service": "shop", "last_seen": live["workers"][0]["last_seen"], "in_flight": 1}])
     );
     assert_eq!(capabilities["live_tasks"], true);
+    // Tasks shows before any task's trace is stored: for this app, not another.
+    assert_eq!(
+        (
+            counts["live_tasks"].clone(),
+            counts["sections"]["tasks"].clone()
+        ),
+        (json!(true), json!(0))
+    );
+    assert_eq!(blog["live_tasks"], false);
     // Task events are no traces: nothing reached the store's queue.
     assert_eq!(*received.lock().unwrap(), 0);
 

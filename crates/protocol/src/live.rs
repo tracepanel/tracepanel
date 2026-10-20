@@ -199,6 +199,15 @@ impl LiveTasks {
             }).collect::<Vec<_>>(),
         })
     }
+    /// Whether there is anything in flight or a worker seen, of `service`'s app (every app's with ""): the console
+    /// shows Tasks before a task's trace is stored.
+    pub fn any(&self, service: &str, now: i64) -> bool {
+        let mut inner = self.inner.lock().unwrap_or_else(PoisonError::into_inner);
+        inner.prune(now);
+        let mine = |of: &str| service.is_empty() || of == service;
+        inner.tasks.values().any(|task| mine(&task.service))
+            || inner.workers.values().any(|worker| mine(&worker.service))
+    }
 }
 
 impl Task {
@@ -408,6 +417,24 @@ mod tests {
 
         assert_eq!(snapshot["tasks"], json!([]));
         assert_eq!(snapshot["workers"][0]["in_flight"], 0);
+    }
+
+    #[test]
+    fn any_says_whether_an_app_has_tasks_in_flight_or_workers() {
+        let live = LiveTasks::default();
+        assert!(!live.any("", T0));
+
+        live.take(
+            events(json!([{"event": "heartbeat", "system": "rq", "time": T0, "worker": "w1", "ids": []}])),
+            "shop",
+            T0,
+        );
+
+        assert!(live.any("", T0 + 1));
+        assert!(live.any("shop", T0 + 1));
+        assert!(!live.any("blog", T0 + 1));
+        // A worker not heard from for an hour is gone, and with it the app's live data.
+        assert!(!live.any("shop", T0 + WORKER_STALE_US));
     }
 
     #[test]

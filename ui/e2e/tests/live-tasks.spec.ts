@@ -1,13 +1,15 @@
-// The Tasks page's Live: the tasks in flight as an app's task events tell the agent, sent here down the SDKs' own
-// connection (a hello, then a frame that is an object), and gone from the list once they finish.
+// Tasks in flight: the Now line on the Tasks page, from the task events an app sends down the SDKs' own connection
+// (a hello, then a frame that is an object), and Live in the header, as on the Logs page.
 import { readFileSync } from "node:fs";
 import { createConnection, type Socket } from "node:net";
 import { join } from "node:path";
-import { STORE } from "../agent.ts";
+import type { Page } from "@playwright/test";
+import { CONSOLE, STORE } from "../agent.ts";
 import { traceId } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
+import { trace } from "../seed.ts";
 
-/** A connection to the agent, as an app with Celery opens one: its hello said and answered. */
+/** A connection to the agent, as an app with a task queue opens one: its hello said and answered. */
 async function connect(): Promise<Socket> {
   const address = readFileSync(join(STORE, "agent.addr"), "utf8").trim();
   const socket = address.startsWith("unix:")
@@ -30,7 +32,19 @@ function send(socket: Socket, events: Record<string, unknown>[]): void {
 const unique = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const nowUs = () => Date.now() * 1000;
 
-test("tasks queued, running and retrying, with the workers, until they finish", async ({ page }) => {
+/** The agent's answers, as a project with or without task events would give them. */
+async function answer(page: Page, live: Record<string, unknown>, sends: boolean): Promise<void> {
+  await page.route("**/api/tasks/live*", (route) => route.fulfill({ json: { now: nowUs(), ...live } }));
+  await page.route("**/api/capabilities*", async (route) => {
+    const response = await route.fetch();
+    // biome-ignore lint/style/useNamingConvention: the wire format.
+    await route.fulfill({ response, json: { ...(await response.json()), live_tasks: sends } });
+  });
+}
+
+test("Now: the tasks running, queued and retrying, the workers, and the tasks themselves under it", async ({
+  page,
+}) => {
   const run = unique();
   const request = await traceId("GET /reports/sales");
   const socket = await connect();
@@ -51,12 +65,12 @@ test("tasks queued, running and retrying, with the workers, until they finish", 
     },
     {
       event: "started",
-      system: "celery",
+      system: "rq",
       id: `running-${run}`,
-      name: "shop.tasks.rebuild_index",
+      name: "shop.jobs.rebuild_index",
       time: nowUs() - 95_000_000,
-      queue: "celery",
-      worker: `celery@box-${run}`,
+      queue: "default",
+      worker: `rq-${run}`,
       retries: 0,
       args: "('books',)",
       kwargs: "{}",
@@ -74,61 +88,146 @@ test("tasks queued, running and retrying, with the workers, until they finish", 
   ]);
   // biome-ignore-end lint/style/useNamingConvention: task events as the SDKs send them.
 
-  await page.goto("/#/tasks?view=live");
+  await page.goto("/#/tasks");
+  const now = page.getByRole("region", { name: "Now" });
 
-  await expect(page.getByRole("link", { name: "Live" })).toHaveAttribute("aria-current", "page");
-  const running = page.getByRole("region", { name: "Running now" });
-  const queued = page.getByRole("region", { name: "Queued" });
-  const retrying = page.getByRole("region", { name: "Retrying" });
-  const workers = page.getByRole("region", { name: "Workers" });
-  const row = (region: typeof running, id: string) => region.getByRole("link").filter({ hasText: id });
+  // One line above the overview, in the list's place on every entry page; Live is in the header, not a list.
+  await expect(now.getByRole("button", { expanded: false })).toContainText(
+    /Now\s*·\s*\d+ running\s*·\s*\d+ queued\s*·\s*\d+ retrying/,
+  );
+  await expect(now.getByRole("list", { name: "Workers" }).getByText(`rq-${run}`)).toBeVisible();
+  await expect(now.getByRole("list", { name: "Workers" }).getByText(`celery@box-${run}`)).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "List" }).getByRole("link")).toHaveText(["By task", "All runs"]);
+  await expect(now.getByRole("table")).toHaveCount(0);
 
-  await expect(row(running, `running-${run}`)).toContainText("shop.tasks.rebuild_index");
-  await expect(row(running, `running-${run}`)).toContainText(`celery@box-${run}`);
-  await expect(row(running, `running-${run}`)).toContainText(/1m 3\ds/);
-  await expect(row(running, `running-${run}`)).toContainText("('books',)");
+  await now.getByRole("button", { expanded: false }).click();
+  const running = now
+    .getByRole("link")
+    .filter({ hasText: "shop.jobs.rebuild_index" })
+    .filter({ hasText: `rq-${run}` });
+  const queued = now.getByRole("link").filter({ hasText: "(42,) {'to': 'ann@example.com'}" });
+  const retrying = now.getByRole("link").filter({ hasText: `celery@box-${run}` });
 
-  await expect(row(queued, `queued-${run}`)).toContainText("shop.tasks.send_receipt");
-  await expect(row(queued, `queued-${run}`)).toContainText("mail");
-  await expect(row(queued, `queued-${run}`)).toContainText("(42,) {'to': 'ann@example.com'}");
-  await expect(row(retrying, `retrying-${run}`)).toContainText("ConnectionError('CRM down')");
-  await expect(row(retrying, `retrying-${run}`)).toContainText("3");
+  await expect(running).toContainText("running");
+  await expect(running).toContainText("RQ");
+  await expect(running).toContainText(/1m 3\ds/);
+  await expect(queued).toContainText("queued");
+  await expect(queued).toContainText("mail");
+  await expect(retrying).toContainText("retrying");
+  await expect(retrying).toContainText("ConnectionError('CRM down')");
+  await expect(retrying).toContainText("3");
 
-  await expect(workers.getByRole("row").filter({ hasText: `celery@box-${run}` })).toContainText("1");
+  // The table stays open: the browser keeps the choice.
+  await page.reload();
 
-  // The trace that enqueued it opens from its row.
-  await row(queued, `queued-${run}`).getByRole("link", { name: "Open trace" }).click();
+  await expect(page.getByRole("region", { name: "Now" }).getByRole("table")).toBeVisible();
+
+  // A queued task's row opens the trace that enqueued it.
+  await queued.click();
+
   await expect(page).toHaveURL(new RegExp(`#/t/${request}`));
+
+  // With Live on, a task that ends leaves Now without a reload.
   await page.goBack();
+  await page.getByText("Live", { exact: true }).click();
+  send(socket, [{ event: "finished", system: "rq", id: `running-${run}`, time: nowUs(), state: "SUCCESS" }]);
 
-  // It ends: it leaves Live, without a reload.
-  send(socket, [{ event: "finished", system: "celery", id: `running-${run}`, time: nowUs(), state: "SUCCESS" }]);
-
-  await expect(row(running, `running-${run}`)).toHaveCount(0);
-  await expect(workers.getByRole("row").filter({ hasText: `celery@box-${run}` })).toContainText("0");
+  await expect(running).toHaveCount(0);
+  await expect(now.getByRole("list", { name: "Workers" }).getByText(`rq-${run}`)).toBeVisible();
   socket.destroy();
 });
 
-test("with nothing in flight and no worker seen, how to start one", async ({ page }) => {
-  await page.route("**/api/tasks/live*", (route) => route.fulfill({ json: { now: nowUs(), tasks: [], workers: [] } }));
+test("Now says idle with workers there, and lists them", async ({ page }) => {
+  // biome-ignore lint/style/useNamingConvention: the wire format.
+  const worker = { name: "celery@box", system: "celery", service: "shop", last_seen: nowUs(), in_flight: 0 };
+  await answer(page, { tasks: [], workers: [worker] }, true);
 
-  await page.goto("/#/tasks?view=live");
+  await page.goto("/#/tasks");
+  const now = page.getByRole("region", { name: "Now" });
 
-  await expect(page.getByText("No tasks running")).toBeVisible();
-  await expect(page.getByText(/No worker has been seen yet/)).toBeVisible();
+  await expect(now).toContainText("Now");
+  await expect(now).toContainText("Idle");
+  await expect(now.getByRole("list", { name: "Workers" })).toHaveText("celery@box0");
+  await expect(now.getByRole("button")).toHaveCount(0);
 });
 
-test("Live sits next to the task lists and leads back to them", async ({ page }) => {
+test("Now says how to start a worker when the app sends task events but none was seen", async ({ page }) => {
+  await answer(page, { tasks: [], workers: [] }, true);
+
   await page.goto("/#/tasks");
-  const lists = page.getByRole("navigation", { name: "List" });
 
-  await expect(lists.getByRole("link")).toHaveText(["By task", "All runs", "Live"]);
+  await expect(page.getByRole("region", { name: "Now" })).toContainText(
+    "No worker connected. Start one: celery -A <app> worker",
+  );
+});
 
-  await lists.getByRole("link", { name: "Live" }).click();
+test("a project without task events has no Now", async ({ page }) => {
+  await answer(page, { tasks: [], workers: [] }, false);
 
-  await expect(page).toHaveURL(/#\/tasks\?view=live$/);
+  await page.goto("/#/tasks");
 
-  await lists.getByRole("link", { name: "By task" }).click();
+  await expect(page.getByRole("main").getByRole("table").getByText("shop.tasks.send_receipt")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Now" })).toHaveCount(0);
+});
+
+test("Tasks is in the menu with a worker running before any task ended, and says its runs come", async ({ page }) => {
+  await answer(page, { tasks: [], workers: [] }, true);
+  const empty = async (route: Parameters<Parameters<Page["route"]>[1]>[0], json: unknown) => route.fulfill({ json });
+  await page.route("**/api/counts*", async (route) => {
+    const counts = await (await route.fetch()).json();
+    // biome-ignore lint/style/useNamingConvention: the wire format.
+    await route.fulfill({ json: { ...counts, sections: { ...counts.sections, tasks: 0 }, live_tasks: true } });
+  });
+  await page.route(/\/api\/tasks(\?|$)/, (route) => empty(route, { tasks: [] }));
+
+  await page.goto("/#/endpoints");
+  await page.getByRole("complementary").getByRole("link", { name: "Tasks" }).click();
+
+  await expect(page.getByRole("region", { name: "Now" })).toContainText("No worker connected");
+  await expect(page.getByText("No runs yet")).toBeVisible();
+  await expect(page.getByText("Runs show up here when tasks finish.")).toBeVisible();
+});
+
+test("without task events or stored runs, Tasks is not in the menu", async ({ page }) => {
+  await page.route("**/api/counts*", async (route) => {
+    const counts = await (await route.fetch()).json();
+    // biome-ignore lint/style/useNamingConvention: the wire format.
+    await route.fulfill({ json: { ...counts, sections: { ...counts.sections, tasks: 0 }, live_tasks: false } });
+  });
+
+  await page.goto("/#/endpoints");
+
+  await expect(page.getByRole("complementary").getByRole("link", { name: "HTTP", exact: true })).toBeVisible();
+  await expect(page.getByRole("complementary").getByRole("link", { name: "Tasks" })).toHaveCount(0);
+});
+
+test("an old link to Tasks' Live opens Tasks with Live on", async ({ page }) => {
+  await page.goto("/#/tasks?view=live");
 
   await expect(page).toHaveURL(/#\/tasks$/);
+  await expect(page.getByRole("checkbox", { name: /^Live/ })).toBeChecked();
+  await expect(page.getByRole("navigation", { name: "List" }).getByRole("link", { name: "By task" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+});
+
+test("with Live on, a run that just ended is highlighted in All runs", async ({ page }) => {
+  await page.goto("/#/tasks?view=calls");
+  await page.getByText("Live", { exact: true }).click();
+  const name = `shop.tasks.arrived_${unique().replace(/\W/g, "_")}`;
+  const start = nowUs();
+  const doc = trace("task", name, { "service.name": "shop", "service.role": "worker", "task.state": "SUCCESS" });
+  doc["start"] = start;
+  const response = await fetch(`${CONSOLE}api/ingest`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify([doc]),
+  });
+  expect(response.status).toBe(202);
+  const row = page.getByRole("main").getByRole("table").getByRole("link").filter({ hasText: name });
+
+  await expect(row).toHaveAttribute("data-new", "");
+  // A moment later it is a row like the others.
+  await expect(row).not.toHaveAttribute("data-new");
 });

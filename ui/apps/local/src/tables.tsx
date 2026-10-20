@@ -46,6 +46,7 @@ export function TracesTable({
   selectedId,
   hrefFor,
   compact = false,
+  newIds,
 }: {
   items: readonly TraceSummary[];
   selectedId: string | null;
@@ -53,6 +54,8 @@ export function TracesTable({
   hrefFor: (id: string) => string;
   /** Narrow list beside an open trace: drops the Queries column (the trace pane shows it). */
   compact?: boolean;
+  /** Rows that just arrived: highlighted for a moment. */
+  newIds?: ReadonlySet<string> | undefined;
 }) {
   return (
     <DataTable
@@ -74,6 +77,7 @@ export function TracesTable({
           selected={trace.id === selectedId}
           tone={trace.status === "error" ? "error" : trace.issues > 0 ? "warn" : undefined}
           href={hrefFor(trace.id)}
+          fresh={newIds?.has(trace.id)}
         >
           <Td>
             {graphqlOperation(trace) ? (
@@ -1316,9 +1320,13 @@ const TASK_STATE: Record<string, [string, string]> = {
   success: ["success", "border-ok/30 bg-ok-soft text-ok"],
   failure: ["failed", "border-error/30 bg-error-soft text-error"],
   retry: ["retry", "border-warn/30 bg-warn-soft text-warn"],
+  // A task in flight (Tasks' Now), before it has ended.
+  running: ["running", "border-brand/30 bg-brand-soft text-brand"],
+  queued: ["queued", "text-text-2"],
+  retrying: ["retrying", "border-warn/30 bg-warn-soft text-warn"],
 };
 
-/** How a task run ended, where requests show their status code. */
+/** How a task run ended, where requests show their status code; or where a task in flight is. */
 export function TaskState({ state }: { state: string }) {
   const [label, tone] = TASK_STATE[state] ?? [state, ""];
   return (

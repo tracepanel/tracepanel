@@ -1,5 +1,5 @@
 import type { components } from "./api.gen";
-import { type DataSource, NO_CAPABILITIES, NO_LIVE_TASKS } from "./source";
+import { type DataSource, NO_CAPABILITIES, NO_COUNTS, NO_LIVE_TASKS } from "./source";
 import type { ExplainPlan, Related, Trace } from "./types";
 
 /**
@@ -105,11 +105,7 @@ const EMPTY: Omit<DataSource, "getTrace" | "related" | "explain"> = {
   }),
   // A snapshot is a file: nothing behind it runs EXPLAIN.
   capabilities: async () => NO_CAPABILITIES,
-  counts: async () => ({
-    issues: 0,
-    errors: 0,
-    sections: { http: 0, graphql: 0, tasks: 0, websockets: 0, jobs: 0, rpc: 0, pages: 0, mails: 0, systems: [] },
-  }),
+  counts: async () => NO_COUNTS,
   currentUser: noUsers,
   searchUsers: none,
   switchUser: noUsers,

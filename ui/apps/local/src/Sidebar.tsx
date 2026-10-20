@@ -56,7 +56,8 @@ export interface NavItem {
 
 /**
  * Where work comes in (one entry point per kind of trace), what it touched, and what went wrong. Entry points
- * without stored traces are hidden: a project without Celery has no Tasks.
+ * without stored traces are hidden: a project without a task queue has no Tasks (one whose worker runs, but no task
+ * has ended yet, has: its Now).
  */
 const NAV_GROUPS: { title: string | null; items: NavItem[] }[] = [
   {
@@ -100,10 +101,17 @@ export const NAV: NavItem[] = NAV_GROUPS.flatMap((group) => group.items);
  */
 const OPTIONAL = ["graphql", "tasks", "websockets", "jobs", "rpc", "pages", "mails"] as const;
 
+/** What shows a section before it has traces: Tasks, with tasks in flight or an app that sends task events. */
+const LIVE: Partial<Record<Section, (counts: Counts) => boolean>> = { tasks: (counts) => counts.live_tasks };
+
+/** Whether a section has something to show: its traces, or (Tasks) what is in flight. */
+function hasData(counts: Counts, section: (typeof OPTIONAL)[number]): boolean {
+  return Boolean(counts.sections[section]) || LIVE[section]?.(counts) === true;
+}
+
 /** Entry points with traces, and a page for each system the app called. */
 function visibleSections(counts: Counts | undefined): Set<Section> {
-  const sections = counts?.sections;
-  const hidden = new Set<Section>(OPTIONAL.filter((section) => sections && !sections[section]));
+  const hidden = new Set<Section>(OPTIONAL.filter((section) => counts && !hasData(counts, section)));
   const shown = NAV.map((item) => item.section).filter((section) => !hidden.has(section));
   return new Set([...shown, ...systemItems(counts).map((item) => item.section)]);
 }

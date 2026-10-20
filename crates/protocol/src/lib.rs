@@ -69,6 +69,18 @@ impl Apps {
             .any(|app| app.capabilities.iter().any(|can| can == capability))
     }
 
+    /// Whether a connected app of `service` (any app with "") says `capability` in its hello.
+    pub fn says(&self, capability: &str, service: &str) -> bool {
+        let inner = self
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        inner.apps.iter().any(|app| {
+            (service.is_empty() || app.service == service)
+                && app.capabilities.iter().any(|can| can == capability)
+        })
+    }
+
     /// Whether the console can offer `capability`: an app does it down its connection (or records it in its traces),
     /// or the console is the one an app serves (`via`, its service) and that app answers it there.
     pub fn offers(&self, capability: &str, via: Option<&str>) -> bool {

@@ -431,7 +431,9 @@ a.dt-request-row {
   border-bottom-left-radius: 0.25rem;
 }
 
-.dt-request-row[data-new] {
+/* The console's tables too: a run that came in since the last refresh. */
+.dt-request-row[data-new],
+tr[data-new] {
   animation: dt-arrive 1.6s ease-out;
 }
 @keyframes dt-arrive {
@@ -440,7 +442,8 @@ a.dt-request-row {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .dt-request-row[data-new] {
+  .dt-request-row[data-new],
+  tr[data-new] {
     animation: none;
   }
 }
