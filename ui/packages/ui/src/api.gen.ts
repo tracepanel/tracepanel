@@ -437,7 +437,7 @@ export interface paths {
         };
         /**
          * What the console's backend can do beyond the store.
-         * @description The agent answers none: an app that serves the console on its own origin answers what it adds, such as running EXPLAIN on its database. The console shows those features only where they work.
+         * @description The agent answers it, and it alone, from what the connected apps said in their hello: what an app does down its connection or records in its traces (`capabilities`: `explain`, `profile`, `request`), and what it answers at its own console (`console`: `explain`, `users`). The latter are offered only to the console an app serves, which names the app in a `Tracepanel-Console` header: the agent's own console has nowhere to run them. The console shows a feature only where it works.
          */
         get: operations["capabilities"];
         put?: never;
@@ -2289,7 +2289,10 @@ export interface operations {
     capabilities: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description The service of the app whose console forwarded the request. */
+                "Tracepanel-Console"?: string;
+            };
             path?: never;
             cookie?: never;
         };

@@ -46,6 +46,9 @@ struct App {
     connection: u64,
     service: String,
     capabilities: Vec<String>,
+    /// What the app answers at its own console (under its prefix, on its origin), not down this connection: Python's
+    /// and Java's EXPLAIN, Django's user switching. Offered only to a console reached through that app.
+    console: Vec<String>,
     requests: tokio::sync::mpsc::UnboundedSender<Vec<u8>>,
 }
 
@@ -60,6 +63,20 @@ impl Apps {
             .apps
             .iter()
             .any(|app| app.capabilities.iter().any(|can| can == capability))
+    }
+
+    /// Whether the console can offer `capability`: an app does it down its connection (or records it in its traces),
+    /// or the console is the one an app serves (`via`, its service) and that app answers it there.
+    pub fn offers(&self, capability: &str, via: Option<&str>) -> bool {
+        let inner = self
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        inner.apps.iter().any(|app| {
+            app.capabilities.iter().any(|can| can == capability)
+                || (via == Some(app.service.as_str())
+                    && app.console.iter().any(|can| can == capability))
+        })
     }
 
     /// `request` sent to the app of `service` that can do `capability` (the only one that can, when none is of that
@@ -120,6 +137,7 @@ impl Apps {
         &self,
         service: String,
         capabilities: Vec<String>,
+        console: Vec<String>,
         requests: tokio::sync::mpsc::UnboundedSender<Vec<u8>>,
     ) -> u64 {
         let mut inner = self
@@ -132,6 +150,7 @@ impl Apps {
             connection,
             service,
             capabilities,
+            console,
             requests,
         });
         connection
@@ -376,6 +395,9 @@ struct Hello {
     service: String,
     #[serde(default)]
     capabilities: Vec<String>,
+    /// What the app answers at its own console rather than down this connection (see `App::console`).
+    #[serde(default)]
+    console: Vec<String>,
 }
 
 /// The limits issues are found with, as the SDK is configured (these defaults otherwise).
@@ -507,7 +529,7 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send + 'static>(
         return Ok(());
     }
     // An app that can do something for the console takes requests down this connection, one frame each.
-    let registered = (!hello.capabilities.is_empty()).then(|| {
+    let registered = (!(hello.capabilities.is_empty() && hello.console.is_empty())).then(|| {
         let (requests, mut queue) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
         tokio::spawn(async move {
             while let Some(frame) = queue.recv().await {
@@ -516,9 +538,12 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send + 'static>(
                 }
             }
         });
-        activity
-            .apps
-            .register(hello.service.clone(), hello.capabilities.clone(), requests)
+        activity.apps.register(
+            hello.service.clone(),
+            hello.capabilities.clone(),
+            hello.console.clone(),
+            requests,
+        )
     });
     let result = frames(&mut reader, &sink, activity, &hello).await;
     if let Some(connection) = registered {

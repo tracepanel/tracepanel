@@ -234,3 +234,39 @@ async fn nothing_connected_can_explain_says_so() {
         Err("No app of service shop that can explain is connected.".to_owned())
     );
 }
+
+#[tokio::test]
+async fn what_an_app_answers_at_its_own_console_is_offered_only_to_the_console_it_serves() {
+    let (address, _, activity) = agent().await;
+    let (stream, answer) = hello(
+        &address,
+        serde_json::json!({
+            "protocol": PROTOCOL,
+            "service": "shop",
+            "capabilities": ["profile", "request"],
+            "console": ["explain", "users"],
+        }),
+    )
+    .await;
+    assert_eq!(answer["ok"], true);
+    for _ in 0..200 {
+        if activity.apps.offers("profile", None) {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+
+    // In its traces, for any console.
+    assert!(activity.apps.offers("profile", None));
+    assert!(activity.apps.offers("request", Some("billing")));
+
+    // At its own console only: the agent's console, or another app's, can't run them.
+    assert!(activity.apps.offers("explain", Some("shop")));
+    assert!(activity.apps.offers("users", Some("shop")));
+    assert!(!activity.apps.offers("explain", None));
+    assert!(!activity.apps.offers("users", Some("billing")));
+    // Nor are they asked of it down the connection.
+    assert!(!activity.apps.can("explain"));
+
+    drop(stream);
+}
