@@ -393,9 +393,9 @@ export function TraceView({
       <DropdownMenu open={exploreOpen} onOpenChange={setExploreOpen}>
         <DropdownMenuTrigger asChild>
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
-            className="h-7 shrink-0 gap-1.5 px-2.5 text-sm shadow-none"
+            className="h-7 shrink-0 gap-1.5 px-2 text-sm font-normal shadow-none"
             aria-label="Explore"
           >
             <CompassIcon />

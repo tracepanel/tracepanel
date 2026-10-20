@@ -19,10 +19,9 @@ import {
   type TraceSummary,
   withSnapshots,
 } from "@tracepanel/ui";
-import { Button } from "@tracepanel/ui/components/ui/button";
 import { TooltipProvider } from "@tracepanel/ui/components/ui/tooltip";
 import { useCloseOnBlur } from "@tracepanel/ui/hooks/useCloseOnBlur";
-import { cn, rem } from "@tracepanel/ui/lib/utils";
+import { rem } from "@tracepanel/ui/lib/utils";
 import {
   type ReactNode,
   type RefObject,
@@ -47,7 +46,7 @@ import { ScopeProvider } from "./scope";
 import { graphqlOperation } from "./sections";
 import { tabOf } from "./TracePage";
 import { TraceScreen } from "./TraceScreen";
-import { NARROW_ICON, SwitchUser } from "./UserSwitcher";
+import { SwitchUser } from "./UserSwitcher";
 
 const base = location.href.split("#")[0] ?? location.href;
 const api = new URL("api/", base);
@@ -675,6 +674,11 @@ function PageRequests({
   );
 }
 
+/** Its children, when `when` holds. */
+function Shown({ when, children }: { when: boolean; children: ReactNode }) {
+  return when ? children : null;
+}
+
 function PanelApp({ route }: { route: Route }) {
   const history = useTabHistory();
   const { rows, stored } = useTabRows(history);
@@ -734,28 +738,24 @@ function PanelApp({ route }: { route: Route }) {
   }, []);
 
   const selectedKind = rows.find((row) => row.trace.id === selectedId)?.trace.kind;
+  const toolbarInTrace = split && selectedId !== null;
+  const switchUser = <SwitchUser source={source} onSwitched={() => tellWidget("tracepanel:reload")} />;
+  // One row of quiet icons: what is done to this trace or this panel; who you are sits with the list.
   const panelActions = (
     <>
-      <SwitchUser source={source} onSwitched={() => tellWidget("tracepanel:reload")} />
-      <Button
-        variant="outline"
-        size="sm"
-        className={cn("mr-1 h-7 gap-1.5 px-2.5 text-sm shadow-none", NARROW_ICON)}
-        asChild
-      >
-        <a
-          href={`${base}${selectedId ? href({ name: "trace", id: selectedId, tab, from: sectionFor(selectedKind) }) : "#/"}`}
-          target="_blank"
-          rel="noreferrer"
-          title="Open this request in the full console, in a new tab"
-          aria-label="Open in the console"
-        >
-          <span className="bar-label">Console</span>
-          <ExternalIcon />
-        </a>
-      </Button>
+      <Shown when={!toolbarInTrace}>{switchUser}</Shown>
       <ProfileToggle source={source} />
       <ShareAction traceId={selectedId} source={source} compact={true} />
+      <a
+        className="icon-button"
+        href={`${base}${selectedId ? href({ name: "trace", id: selectedId, tab, from: sectionFor(selectedKind) }) : "#/"}`}
+        target="_blank"
+        rel="noreferrer"
+        title="Open this request in the full console, in a new tab"
+        aria-label="Open in the console"
+      >
+        <ExternalIcon />
+      </a>
       <ThemeToggle compact={true} />
       <button
         type="button"
@@ -773,7 +773,6 @@ function PanelApp({ route }: { route: Route }) {
   const requestCount = `${tabRows.length} ${tabRows.length === 1 ? "request" : "requests"}`;
   // Docked at the bottom with a request open, the panel has no bar of its own: the logo over the list and the trace's
   // toolbar make one row across it (as in browser devtools).
-  const toolbarInTrace = split && selectedId !== null;
 
   return (
     <div className="panel">
@@ -815,6 +814,7 @@ function PanelApp({ route }: { route: Route }) {
         {toolbarInTrace ? (
           <div className="panel-brand">
             <Logo className="shrink-0 gap-1.5 text-md [&_svg]:size-5" />
+            {switchUser}
             {/* No count here: the rows are right below; Clear's tooltip says how many. */}
             <span className="ml-auto flex shrink-0 items-center gap-2">
               <FollowToggle follow={follow} onFollow={onFollow} />

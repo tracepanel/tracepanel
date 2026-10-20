@@ -199,6 +199,12 @@ function tip(at: Node, total: number, time: Time): string {
   return `${frame.function}\n${where(frame)}\n${time(at.total)} (${share}%) · ${time(at.self)} in itself`;
 }
 
+/** A box's colors: its package's, faded while another package is lit. */
+function boxColors(palette: Map<string, string>, name: string, lit: string | null): string {
+  const faded = lit !== null && lit !== name;
+  return cn(palette.get(name) ?? REST, faded && "opacity-30");
+}
+
 function FlameBox({
   box: { node: at, depth, left, width },
   palette,
@@ -212,8 +218,8 @@ function FlameBox({
   title: string;
   onZoom: () => void;
 }) {
-  if (!at.frame) return null;
-  const name = packageOf(at.frame);
+  const frame = at.frame;
+  if (!frame) return null;
   return (
     <button
       type="button"
@@ -221,8 +227,7 @@ function FlameBox({
       onClick={onZoom}
       className={cn(
         "absolute truncate rounded-[3px] px-1.5 text-left font-mono text-[11px] leading-[18px] text-foreground transition-opacity",
-        palette.get(name) ?? REST,
-        lit !== null && lit !== name && "opacity-30",
+        boxColors(palette, packageOf(frame), lit),
       )}
       style={{
         top: depth * (ROW + 1),
@@ -231,7 +236,7 @@ function FlameBox({
         height: ROW,
       }}
     >
-      {width >= LABELLED ? at.frame.function : ""}
+      {width >= LABELLED && frame.function}
     </button>
   );
 }

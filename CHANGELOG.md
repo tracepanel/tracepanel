@@ -4,6 +4,26 @@
 
 ### Added
 
+- The panel lists a form's POST that redirected, before the page it led to:
+  the SDK names it in a short-lived cookie, and the next page's widget picks
+  it up.
+- Profile: where the time went by package (your code, `django.db`,
+  `django.template`, …) as a bar with a legend that lights a package's frames,
+  a colored flame graph, and a "Your code / All frames" switch. A page spent
+  mostly in libraries opens on all frames.
+- The Profile button stays lit while it is on, and every request is profiled
+  until it is turned off.
+
+### Changed
+
+- Request tab: a compact grid of the request's facts, then its parts as tabs,
+  as browser devtools show them (Headers, Query, Body, Cookies, Session,
+  Response). The headers every browser sends are folded. A form's body shows
+  as fields.
+- The panel header is quieter: Explore, the user and Console are plain
+  buttons and icons, and the user sits next to the request list.
+- With the panel docked at the bottom, the page scrolls to its end above it.
+
 - The agent is on Maven Central, as `dev.tracepanel:tracepanel-agent`: the
   binary of each platform, with the platform as its classifier
   (`darwin-arm64`, `linux-x64-gnu`, …). The same binaries as on PyPI and npm,

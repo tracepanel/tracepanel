@@ -735,6 +735,30 @@ function learnRuntime(label: string | undefined): void {
 }
 
 /** Tab history lives in sessionStorage: per browser tab, survives navigations, gone when the tab closes. */
+// The requests that answered with a redirect on the way to this page (a form's POST, then 302): the app names them in
+// this cookie, as the page they led to is the first this widget sees.
+const REDIRECTS = "tracepanel_redirect";
+
+/** The ids the redirect cookie names, the cookie gone once read: each request shows once. */
+function takeRedirects(): string[] {
+  const pair = document.cookie.split("; ").find((item) => item.startsWith(`${REDIRECTS}=`));
+  if (!pair) return [];
+  document.cookie = `${REDIRECTS}=; Max-Age=0; Path=/; SameSite=Lax`;
+  return decodeURIComponent(pair.slice(REDIRECTS.length + 1))
+    .split(",")
+    .filter((id) => /^[0-9A-HJKMNP-TV-Z]{26}$/.test(id));
+}
+
+/** The tab's requests with those that redirected to this page, in the order they came, before it. */
+function withRedirects(entries: TabEntry[]): TabEntry[] {
+  const known = new Set(entries.map((entry) => entry.id));
+  const added = takeRedirects().filter((id) => !known.has(id));
+  if (!added.length) return entries;
+  const next = [...entries, ...added.map((id) => ({ id, parent: null }))];
+  saveTab(next);
+  return next;
+}
+
 function loadTab(): TabEntry[] {
   try {
     const parsed: unknown = JSON.parse(sessionStorage.getItem(TAB_KEY) ?? "[]");
@@ -860,15 +884,26 @@ export function mount(options: WidgetOptions = {}): Widget {
   }
   window.addEventListener("resize", fitBadge);
 
+  // The page's own bottom padding, kept while the panel docked at the bottom takes its place, as devtools do.
+  const pagePadding = document.documentElement.style.paddingBottom;
+
+  /** Room under the page for the panel docked at the bottom, so its end can be scrolled into view; none otherwise. */
+  function makeRoom(): void {
+    const covering = dock === "bottom" && panel.hasAttribute("data-open");
+    document.documentElement.style.paddingBottom = covering ? `${Math.min(height, window.innerHeight)}px` : pagePadding;
+  }
+
   function setHeight(value: number): void {
     height = Math.round(Math.min(Math.max(value, MIN_HEIGHT), window.innerHeight - 40));
     host.style.setProperty("--tracepanel-height", `${height}px`);
+    makeRoom();
   }
 
   function setDock(value: Dock): void {
     dock = value;
     host.dataset["dock"] = value;
     frame?.contentWindow?.postMessage({ type: "tracepanel:dock", dock }, "*");
+    makeRoom();
   }
 
   function panelState(): PanelState {
@@ -882,7 +917,7 @@ export function mount(options: WidgetOptions = {}): Widget {
   // Its trace was deleted from the store: the panel and the badge no longer show it.
   let pageCleared = false;
   let frame: HTMLIFrameElement | null = null;
-  let tab = loadTab();
+  let tab = withRedirects(loadTab());
   const initial = page;
   if (initial?.trace && !tab.some((entry) => entry.id === initial.trace)) {
     tab = [...tab, { id: initial.trace, parent: null, summary: summaryOf(initial) }];
@@ -1092,12 +1127,14 @@ export function mount(options: WidgetOptions = {}): Widget {
     }
     panel.toggleAttribute("data-open", true);
     badge.setAttribute("aria-expanded", "true");
+    makeRoom();
     savePanel(panelState());
   }
 
   function close(): void {
     panel.toggleAttribute("data-open", false);
     badge.setAttribute("aria-expanded", "false");
+    makeRoom();
     savePanel(panelState());
   }
 

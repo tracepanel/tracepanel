@@ -15,19 +15,27 @@ export const YOUR_CODE = "your code";
 
 /** What a frame belongs to: your code, or a library's package (django.db, django.template, requests, threading). */
 export function packageOf(frame: Frame): string {
-  if (frame.in_app) return YOUR_CODE;
-  const name = frame.module ?? frame.file.replace(/\.py$/, "").split("/").join(".");
-  const parts = name.split(".").filter(Boolean);
-  // Django is many packages in one: what a request spends there is told apart by the second part.
-  return (parts[0] === "django" ? parts.slice(0, 2) : parts.slice(0, 1)).join(".") || "(unknown)";
+  return frame.in_app ? YOUR_CODE : libraryOf(frame.module ?? frame.file.replace(/\.py$/, "").split("/").join("."));
+}
+
+/** A dotted module's package: its first part; Django's first two, as it is many packages in one. */
+function libraryOf(module: string): string {
+  const parts = module.split(".").filter(Boolean);
+  const depth = parts[0] === "django" ? 2 : 1;
+  return parts.slice(0, depth).join(".") || "(unknown)";
+}
+
+/** The package whose code a stack was running: its innermost frame's. */
+function runningIn(profile: Profile, stack: Stack): string {
+  const frame = profile.frames[stack.frames[stack.frames.length - 1] ?? -1];
+  return frame ? packageOf(frame) : "(unknown)";
 }
 
 /** The samples in which each package's code was running, most first. */
 export function packageTimes(profile: Profile): { name: string; samples: number }[] {
   const times = new Map<string, number>();
   for (const stack of profile.stacks) {
-    const frame = profile.frames[stack.frames[stack.frames.length - 1] ?? -1];
-    const name = frame ? packageOf(frame) : "(unknown)";
+    const name = runningIn(profile, stack);
     times.set(name, (times.get(name) ?? 0) + stack.count);
   }
   return [...times.entries()].map(([name, samples]) => ({ name, samples })).sort((a, b) => b.samples - a.samples);
@@ -50,14 +58,9 @@ function merged(profile: Profile, stacks: Stack[]): Profile {
  * that call); the server's frames above your first are left out. A stack without your code is left as it is.
  */
 function ownFrames(profile: Profile, frames: readonly number[]): number[] {
-  const kept: number[] = [];
-  let underYours = false;
-  for (const index of frames) {
-    const yours = profile.frames[index]?.in_app === true;
-    if (yours || underYours) kept.push(index);
-    // After a library call, its own calls are part of it: only the call itself stays.
-    underYours = yours;
-  }
+  const yours = frames.map((index) => profile.frames[index]?.in_app === true);
+  // A frame of yours, or the call one of yours made: after it, its own calls are part of it.
+  const kept = frames.filter((_, at) => yours[at] || yours[at - 1]);
   return kept.length ? kept : [...frames];
 }
 
@@ -78,7 +81,10 @@ function commonLength(a: readonly number[], b: readonly number[]): number {
 export function allFrames(profile: Profile): Profile {
   const [first, ...rest] = profile.stacks;
   if (!first) return profile;
-  const shared = rest.reduce((length, stack) => Math.min(length, commonLength(first.frames, stack.frames)), first.frames.length);
+  const shared = rest.reduce(
+    (length, stack) => Math.min(length, commonLength(first.frames, stack.frames)),
+    first.frames.length,
+  );
   const library = first.frames.slice(0, shared).findIndex((index) => profile.frames[index]?.in_app);
   const cut = Math.max(0, (library === -1 ? shared : library) - CONTEXT);
   return merged(
@@ -107,7 +113,13 @@ export interface Node {
 function child(at: Node, index: number, profile: Profile): Node {
   const found = at.children.get(index);
   if (found) return found;
-  const made: Node = { frame: profile.frames[index] ?? null, key: `${at.key}/${index}`, total: 0, self: 0, children: new Map() };
+  const made: Node = {
+    frame: profile.frames[index] ?? null,
+    key: `${at.key}/${index}`,
+    total: 0,
+    self: 0,
+    children: new Map(),
+  };
   at.children.set(index, made);
   return made;
 }
