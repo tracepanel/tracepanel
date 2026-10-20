@@ -116,13 +116,35 @@ function Row({
   );
 }
 
-/** Where a query was made in your code; a query no code of yours made (Django's admin, a library) says so. */
+/**
+ * Where a query was made: in your code, or, for a query no code of yours made (Django's admin, a library), the library
+ * code that asked for it, marked as such.
+ */
 function CalledFrom({ span, className }: { span: Span; className?: string }) {
-  const origin = span.attrs["code.origin"];
-  if (typeof origin === "string" && origin) return <code className={cn("font-mono", className)}>{origin}</code>;
+  const origin = text(span.attrs["code.origin"]);
+  if (origin) return <code className={cn("font-mono", className)}>{origin}</code>;
+  const caller = text(span.attrs["code.caller"]);
+  if (!caller) return <span className={cn("text-muted-foreground", className)}>Unknown: no caller was recorded</span>;
+  return <LibraryCaller caller={caller} className={className} />;
+}
+
+/** A string attribute, or null for none or an empty one. */
+function text(value: unknown): string | null {
+  return typeof value === "string" && value ? value : null;
+}
+
+function LibraryCaller({ caller, className }: { caller: string; className?: string | undefined }) {
   return (
-    <span className={cn("text-muted-foreground", className)} title="No frame of your code was on the stack">
-      Made by a library, not your code
+    <span className={cn("flex min-w-0 items-center gap-2", className)}>
+      <span
+        className="shrink-0 rounded bg-muted px-1.5 text-[11px] leading-5 text-muted-foreground"
+        title="No code of yours was on the stack: this is the library code that asked for the query"
+      >
+        library
+      </span>
+      <code className="truncate font-mono text-muted-foreground" title={caller}>
+        {caller}
+      </code>
     </span>
   );
 }
