@@ -56,6 +56,7 @@ pub fn router(reader: Reader, activity: Activity) -> Router {
         .route("/api/endpoints", get(endpoints))
         .route("/api/endpoints/detail", get(endpoint_detail))
         .route("/api/tasks", get(tasks))
+        .route("/api/tasks/live", get(live_tasks))
         .route("/api/websockets", get(websockets))
         .route("/api/graphql", get(graphql))
         .route("/api/graphql/detail", get(graphql_detail))
@@ -461,6 +462,15 @@ async fn tasks(State(reader): State<Shared>, Query(query): Params) -> Response {
     listing(reader, query, "tasks", Reader::list_tasks).await
 }
 
+/// `api/tasks/live`: the tasks in flight (queued, running, waiting to be retried) and the workers, from memory: the
+/// store has a task once it has ended.
+async fn live_tasks(Extension(activity): Extension<Activity>, Query(query): Params) -> Response {
+    let snapshot = activity
+        .tasks
+        .snapshot(&service(&query), tracepanel_protocol::live::now_us());
+    json_response(StatusCode::OK, snapshot.to_string())
+}
+
 async fn websockets(State(reader): State<Shared>, Query(query): Params) -> Response {
     listing(reader, query, "websockets", Reader::list_websockets).await
 }
@@ -667,6 +677,7 @@ async fn capabilities(Extension(activity): Extension<Activity>, headers: HeaderM
             "users": offers("users"),
             "profile": offers("profile"),
             "request": offers("request"),
+            "live_tasks": offers("live_tasks"),
         })
         .to_string(),
     )

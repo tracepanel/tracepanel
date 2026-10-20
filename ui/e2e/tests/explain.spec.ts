@@ -6,7 +6,8 @@ import { expect, test } from "../fixtures.ts";
 test("a plan's lines are in colour: operations, names, numbers; a full scan's operation warns", async ({ page }) => {
   // An app that runs EXPLAIN, as the agent answers once one is connected.
   await page.route("**/api/capabilities", (route) =>
-    route.fulfill({ json: { explain: true, users: false, profile: false, request: false } }),
+    // biome-ignore lint/style/useNamingConvention: wire format.
+    route.fulfill({ json: { explain: true, users: false, profile: false, request: false, live_tasks: false } }),
   );
   await page.route("**/api/explain?*", (route) =>
     route.fulfill({

@@ -12,10 +12,18 @@ export type CallsSection = `calls/${string}`;
 export type Section = EntrySection | "services" | CallsSection | "mails" | "logs" | "errors" | "issues" | "traces";
 const SECTIONS: Section[] = [...ENTRY_SECTIONS, "services", "mails", "logs", "errors", "issues", "traces"];
 
-export type EntryView = "overview" | "calls";
+/** An entry point's list: its groups, every call, or (tasks) what is in flight now. */
+export type EntryView = "overview" | "calls" | "live";
+
+// `view=` as a link writes it; the overview is the default and goes without.
+const VIEWS: Record<string, EntryView> = { calls: "calls", live: "live" };
+
+function viewParam(view: EntryView | undefined): string | undefined {
+  return view === "overview" ? undefined : view;
+}
 
 /**
- * `#/<section>?q=…&view=calls` a section, `#/group/<section>/<key>` one group of an entry point (an endpoint, an
+ * `#/<section>?q=…&view=calls` a section (`view=live`: the tasks in flight), `#/group/<section>/<key>` one group of an entry point (an endpoint, an
  * operation, a task, a consumer, a job), `#/t/<id>?from=…&tab=…` a trace: one page wherever it is opened from,
  * with `from` (the hash it was opened from) for the way back.
  */
@@ -112,7 +120,7 @@ export function parse(hash: string): Route {
   }
   const section = sectionOf(path);
   if (section) {
-    const view = params.get("view") === "calls" ? "calls" : undefined;
+    const view = VIEWS[params.get("view") ?? ""];
     return { name: section, q, view, open: params.get("open") ?? undefined };
   }
   return { name: "home" };
@@ -141,7 +149,8 @@ export function href(route: Route): string {
   }
   const params = new URLSearchParams();
   if (route.q) params.set("q", route.q);
-  if (route.view === "calls") params.set("view", "calls");
+  const view = viewParam(route.view);
+  if (view) params.set("view", view);
   // The row a list has open (a statement, a log record, an email): it is still open after Back.
   if (route.open) params.set("open", route.open);
   return `#/${route.name}${params.size ? `?${params}` : ""}`;

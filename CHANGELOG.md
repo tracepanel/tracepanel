@@ -4,6 +4,21 @@
 
 ### Added
 
+- Live on the Tasks page, next to By task and All runs: the tasks in flight
+  now, every 2 seconds. Running tasks show their worker, how long they have
+  run, their id and arguments. Queued ones show how long they have waited
+  and link to the trace that sent them. Retrying ones show their next
+  attempt and the last error. The workers show how many tasks each runs. A
+  task leaves Live when it ends, and its trace is listed as before. With
+  nothing in flight it says so, and how to start a worker when none was
+  seen.
+- Task events: an app tells the agent of a task's steps before its trace
+  exists, in a frame that is an object on its connection (`{"tasks":
+  [...]}`): `enqueued`, `started`, `retried`, `finished`, and a worker's
+  `heartbeat`. Any task queue can send them. The agent keeps the tasks in
+  flight in memory, not in the store, drops a running one whose worker went
+  silent for two minutes, and serves them at `api/tasks/live`. An app that
+  sends them says `live_tasks` in its hello, and `api/capabilities` says so.
 - Live on the Logs page: the records reload every 2 seconds, as a tail does,
   and hold while one is open or the list is scrolled down. The browser keeps
   it on.

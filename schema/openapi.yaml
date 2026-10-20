@@ -261,6 +261,24 @@ paths:
                 properties:
                   tasks: { type: array, items: { $ref: "#/components/schemas/TaskRow" } }
         "400": { $ref: "#/components/responses/BadSearch" }
+  /tasks/live:
+    get:
+      operationId: liveTasks
+      summary: Tasks in flight (queued, running, waiting to be retried) and the workers seen, from the apps' task events.
+      description: >-
+        A task's trace reaches the store when the task ends; until then the apps' task events say where it is. The
+        agent keeps them in memory, not in the store: a task that finishes leaves this list, and its trace is
+        listed under /tasks. A running task whose worker stopped sending heartbeats for two minutes is dropped, a
+        queued or retrying one after an hour without news, a worker not heard from for an hour too. An app whose
+        events reach the agent says `live_tasks` in its hello (see /capabilities).
+      parameters:
+        - $ref: "#/components/parameters/service"
+      responses:
+        "200":
+          description: Tasks in flight and workers.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LiveTasks" }
   /graphql:
     get:
       operationId: listGraphqlOperations
@@ -535,7 +553,7 @@ paths:
       summary: What the console's backend can do beyond the store.
       description: >-
         The agent answers it, and it alone, from what the connected apps said in their hello: what an app does down
-        its connection or records in its traces (`capabilities`: `explain`, `profile`, `request`), and what it answers
+        its connection or records in its traces (`capabilities`: `explain`, `profile`, `request`, `live_tasks`), and what it answers
         at its own console (`console`: `explain`, `users`). The latter are offered only to the console an app serves,
         which names the app in a `Tracepanel-Console` header: the agent's own console has nowhere to run them. The
         console shows a feature only where it works.
@@ -1072,8 +1090,13 @@ components:
     Capabilities:
       type: object
       additionalProperties: false
-      required: [explain, users, profile, request]
+      required: [explain, users, profile, request, live_tasks]
       properties:
+        live_tasks:
+          type: boolean
+          description: >-
+            An app sends task events (Celery, from the Python SDK): the Tasks page lists the tasks in flight
+            (api/tasks/live).
         explain: { type: boolean, description: The app runs EXPLAIN of a recorded query on its database (api/explain). }
         profile:
           type: boolean
@@ -1184,6 +1207,56 @@ components:
         with_issues: { type: integer }
         queues: { type: array, items: { type: string } }
         last_seen: { $ref: "#/components/schemas/Time" }
+    LiveTasks:
+      type: object
+      additionalProperties: false
+      required: [now, tasks, workers]
+      properties:
+        now: { $ref: "#/components/schemas/Time", description: "The agent's clock: how long a task has waited or run is now minus its time." }
+        tasks: { type: array, description: Newest first., items: { $ref: "#/components/schemas/LiveTask" } }
+        workers: { type: array, description: By name., items: { $ref: "#/components/schemas/LiveWorker" } }
+    LiveTask:
+      type: object
+      additionalProperties: false
+      required: [id, system, name, service, state, queue, worker, enqueued_at, started_at, retries, args, kwargs, error,
+        enqueued_by]
+      properties:
+        id: { type: string, description: The task's id in its queue. }
+        system: { type: string, description: "What runs it: celery (the task queues that send task events)." }
+        name: { type: string, description: Dotted task name. }
+        service: { type: string, description: "service.name of the app that last told of it." }
+        state:
+          type: string
+          enum: [queued, running, retrying]
+          description: "queued: sent, no worker took it yet; running; retrying: an attempt failed, the next one waits."
+        queue: { type: [string, "null"] }
+        worker: { type: [string, "null"], description: "The worker that runs it or ran its last attempt (celery@host)." }
+        enqueued_at: { type: [integer, "null"], description: When it was last sent to its queue (a retry sends it again). }
+        started_at: { type: [integer, "null"], description: When its current or last attempt started. }
+        retries: { type: integer, description: "How many times it was retried: the attempt is retries + 1." }
+        args: { type: [string, "null"], description: Its positional arguments as the SDK wrote them (cut short, masked). }
+        kwargs: { type: [string, "null"] }
+        error: { type: [string, "null"], description: Why the last attempt failed (retrying). }
+        enqueued_by:
+          description: The trace and span that sent it, when it was sent inside one.
+          oneOf:
+            - type: "null"
+            - type: object
+              additionalProperties: false
+              required: [trace_id, span_id]
+              properties:
+                trace_id: { type: string }
+                span_id: { type: string }
+    LiveWorker:
+      type: object
+      additionalProperties: false
+      required: [name, system, service, last_seen, in_flight]
+      properties:
+        name: { type: string, description: "The worker's name (Celery's node name: celery@host)." }
+        system: { type: string }
+        service: { type: string }
+        last_seen: { $ref: "#/components/schemas/Time" }
+        in_flight: { type: integer, description: The tasks it runs now. }
     GraphqlRow:
       type: object
       additionalProperties: false

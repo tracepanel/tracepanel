@@ -32,6 +32,10 @@ export type CallsSummary = Schemas["CallsSummary"];
 export type ExplainPlan = Schemas["ExplainPlan"];
 export type EndpointRow = Schemas["EndpointRow"];
 export type TaskRow = Schemas["TaskRow"];
+/** Tasks in flight and the workers seen (GET /tasks/live). */
+export type LiveTasks = Schemas["LiveTasks"];
+export type LiveTask = Schemas["LiveTask"];
+export type LiveWorker = Schemas["LiveWorker"];
 export type WebsocketRow = Schemas["WebsocketRow"];
 export type GraphqlRow = Schemas["GraphqlRow"];
 export type GraphqlDetail = Schemas["GraphqlDetail"];

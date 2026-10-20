@@ -3,6 +3,7 @@ import { cn } from "@tracepanel/ui/lib/utils";
 import { type ReactNode, useCallback } from "react";
 import { usePaged, useSearch } from "./data";
 import { EmptyPage } from "./EmptyPage";
+import { LiveTasksPage } from "./LiveTasks";
 import { RefreshControl } from "./refresh";
 import { type EntrySection, type EntryView, go, href, traceHref } from "./routes";
 import { SearchBar } from "./SearchBar";
@@ -113,11 +114,90 @@ interface EntryPageProps {
   known: KnownValues;
 }
 
+/** An entry point's page: its lists, or for tasks what is in flight now (Live), under the same switch. */
+export function EntryRoute(props: EntryPageProps) {
+  const { section, q, view, source, spec } = props;
+  if (view !== "live") return <EntryPage {...props} view={view} />;
+  return <LiveTasksPage source={source} nav={<ListNav section={section} view={view} q={q} spec={spec} />} />;
+}
+
+/** The lists each entry point has; tasks have Live besides. */
+const VIEWS: Record<EntrySection, readonly EntryView[]> = {
+  endpoints: ["overview", "calls"],
+  graphql: ["overview", "calls"],
+  tasks: ["overview", "calls", "live"],
+  websockets: ["overview", "calls"],
+  jobs: ["overview", "calls"],
+  rpc: ["overview", "calls"],
+  pages: ["overview", "calls"],
+};
+
+function viewLabel(section: EntrySection, view: EntryView): string {
+  const labels: Record<EntryView, string> = {
+    overview: `By ${GROUP_NOUN[section]}`,
+    calls: `All ${ENTRY[section].calls.toLowerCase()}`,
+    live: "Live",
+  };
+  return labels[view];
+}
+
+/** Whether a link to another list takes the search along: Live has none to give or take. */
+function carries(from: EntryView, to: EntryView): boolean {
+  return from !== to && !(from === "live" || to === "live");
+}
+
+/** The search fields of a resource; null before the search spec loads, when every term goes along. */
+function searchKeys(spec: SearchSpec | null, resource: SearchResource): ReadonlySet<string> | null {
+  return spec ? new Set(Object.keys(spec[resource] ?? {})) : null;
+}
+
+/** The search a list's link takes along: its own as it is, the other list's in that list's words. */
+function viewQuery(section: EntrySection, from: EntryView, to: EntryView, q: string, spec: SearchSpec | null): string {
+  if (!carries(from, to)) return q;
+  const calls = to === "calls";
+  return carryQuery(q, searchKeys(spec, calls ? "traces" : section), calls);
+}
+
+/** The switch between an entry point's lists: By task / All runs / Live. */
+function ListNav({
+  section,
+  view,
+  q,
+  spec,
+}: {
+  section: EntrySection;
+  view: EntryView;
+  q: string;
+  spec: SearchSpec | null;
+}) {
+  return (
+    <nav className="mb-3 flex w-fit gap-1 rounded-lg border bg-card p-1" aria-label="List">
+      {VIEWS[section].map((item) => (
+        <a
+          key={item}
+          href={href({
+            name: section,
+            view: item === "overview" ? undefined : item,
+            q: viewQuery(section, view, item, q, spec),
+          })}
+          aria-current={view === item ? "page" : undefined}
+          className={cn(
+            "rounded-md px-3.5 py-1.5 text-md font-medium text-text-2 no-underline hover:bg-accent hover:text-foreground",
+            view === item && "bg-brand-soft text-brand hover:bg-brand-soft hover:text-brand",
+          )}
+        >
+          {viewLabel(section, item)}
+        </a>
+      ))}
+    </nav>
+  );
+}
+
 /**
  * One entry point, the same shape for all: an overview (monitoring and its groups: endpoints, operations, tasks,
  * consumers, jobs) and its calls (traces of this kind only, newest first). Every row opens a group page or a trace.
  */
-export function EntryPage({ section, q, view, source, spec, known }: EntryPageProps) {
+function EntryPage({ section, q, view, source, spec, known }: EntryPageProps & { view: Exclude<EntryView, "live"> }) {
   const entry = ENTRY[section];
   // Before the search spec loads, every term goes along.
   const keysOf = (resource: SearchResource) => (spec ? new Set(Object.keys(spec[resource] ?? {})) : null);
@@ -206,25 +286,7 @@ export function EntryPage({ section, q, view, source, spec, known }: EntryPagePr
         source={source}
         onRefine={refine}
       />
-      <nav className="mb-3 flex w-fit gap-1 rounded-lg border bg-card p-1" aria-label="List">
-        {(["overview", "calls"] as const).map((item) => (
-          <a
-            key={item}
-            href={href({
-              name: section,
-              view: item === "calls" ? "calls" : undefined,
-              q: item === view ? q : carryQuery(q, keysOf(item === "calls" ? "traces" : section), item === "calls"),
-            })}
-            aria-current={view === item ? "page" : undefined}
-            className={cn(
-              "rounded-md px-3.5 py-1.5 text-md font-medium text-text-2 no-underline hover:bg-accent hover:text-foreground",
-              view === item && "bg-brand-soft text-brand hover:bg-brand-soft hover:text-brand",
-            )}
-          >
-            {item === "overview" ? `By ${GROUP_NOUN[section]}` : `All ${entry.calls.toLowerCase()}`}
-          </a>
-        ))}
-      </nav>
+      <ListNav section={section} view={view} q={q} spec={spec} />
       {list}
     </>
   );

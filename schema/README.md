@@ -27,6 +27,11 @@ are ULIDs.
 - **Issue**: a problem the agent finds (`n+1`, `duplicates`, `slow-sql`,
   `error` and others), with a stable `fingerprint`. SDKs send traces without
   issues.
+- **Task event**: a step of a task in flight (`enqueued`, `started`,
+  `retried`, `finished`, and a worker's `heartbeat`), sent before the task's
+  trace exists. The agent keeps the tasks in flight in memory, not in the
+  store, and serves them at `GET /api/tasks/live`. `crates/protocol/src/live.rs`
+  names the fields.
 
 ## Add an example
 

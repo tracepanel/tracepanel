@@ -1,4 +1,4 @@
-import type { Capabilities, DataSource } from "@tracepanel/ui";
+import { type Capabilities, type DataSource, NO_CAPABILITIES } from "@tracepanel/ui";
 import { useEffect, useState } from "react";
 
 export interface EntrySummary {
@@ -127,7 +127,7 @@ function useCapabilities(source: DataSource): Capabilities | undefined {
   useEffect(() => {
     let asked = CAPABILITIES.get(source);
     if (!asked) {
-      asked = source.capabilities().catch(() => ({ explain: false, users: false, profile: false, request: false }));
+      asked = source.capabilities().catch(() => NO_CAPABILITIES);
       CAPABILITIES.set(source, asked);
     }
     let current = true;
