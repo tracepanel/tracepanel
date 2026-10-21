@@ -1,6 +1,7 @@
 // Where a trace's time went, per category: plain data, no React; the console's call tree and the page widget both
 // draw from it.
 import type { Span, Trace } from "../types";
+import { handlerWord } from "./handler";
 import { DATASTORES, MESSAGING, RPC } from "./systems";
 
 export type Category =
@@ -16,7 +17,7 @@ export type Category =
   | "http"
   | "mail";
 
-export const CATEGORY_LABELS: Record<Category, string> = {
+const CATEGORY_LABELS: Record<Category, string> = {
   django: "Framework & middleware",
   view: "View code",
   code: "Your code",
@@ -29,6 +30,11 @@ export const CATEGORY_LABELS: Record<Category, string> = {
   http: "External calls",
   mail: "Email",
 };
+
+/** A category as the trace's app says it: a Python app's view code is a handler's elsewhere (Spring, Express). */
+export function categoryLabel(category: Category, trace: Pick<Trace, "attrs">): string {
+  return category === "view" ? `${handlerWord(trace.attrs)} code` : CATEGORY_LABELS[category];
+}
 
 const BY_KIND: Record<string, Category> = {
   sql: "sql",

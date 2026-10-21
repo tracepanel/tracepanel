@@ -7,6 +7,13 @@
 - The agent reads its cloud settings as `TRACEPANEL_API_KEY`, which was
   `TRACEPANEL_TOKEN`, and `TRACEPANEL_INGEST_URL`, which was
   `TRACEPANEL_CLOUD_URL`. The old names are no longer read.
+- The code that answered a request is a handler in Java, Kotlin and
+  JavaScript apps, and a view only in Python ones, as Django calls it. The
+  request's facts, the call tree, the time breakdown and the widget's card
+  say which by the trace's `telemetry.sdk.language`. A handler whose SDK
+  keeps a longer name, Spring's `com.shop.BookController.list` behind
+  `BookController#list`, shows it on hover. The data keeps `code.view` and
+  spans of kind `view`, and the search keeps `view:`.
 
 ### Fixed
 

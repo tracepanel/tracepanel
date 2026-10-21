@@ -1,6 +1,6 @@
 // The pill's hover card: the request at a glance (where its time went, what to fix first, what the page asked
 // for after it loaded) before opening the panel.
-import { breakdown, CATEGORY_LABELS, type Category } from "@tracepanel/ui/lib/breakdown";
+import { breakdown, categoryLabel } from "@tracepanel/ui/lib/breakdown";
 import type { Issue, Trace } from "@tracepanel/ui/types";
 import type { TraceInfo } from "./index";
 
@@ -206,13 +206,13 @@ function timeCell(info: TraceInfo): HTMLElement {
   return time;
 }
 
-/** "Most time: View code 4.6 ms · 78%": the bar's biggest part in words. */
-function mostLine(category: string, value: number, total: number): HTMLElement {
+/** "Most time: View code 4.6 ms · 78%" ("Handler code" outside Python): the bar's biggest part in words. */
+function mostLine(label: string, category: string, value: number, total: number): HTMLElement {
   const line = element("p", "card-most");
   line.dataset["category"] = category;
   line.append(
     element("i"),
-    `Most time: ${CATEGORY_LABELS[category as Category]} `,
+    `Most time: ${label} `,
     element("b", undefined, ms(value)),
     ` · ${Math.round((value / total) * 100)}%`,
   );
@@ -278,15 +278,16 @@ export function mountCard(root: ShadowRoot, badge: HTMLElement, source: CardSour
       const piece = element("span");
       piece.dataset["category"] = category;
       piece.style.flex = `${value / total} 1 0`;
-      piece.title = `${CATEGORY_LABELS[category as Category]} ${ms(value)}`;
+      piece.title = `${categoryLabel(category, trace)} ${ms(value)}`;
       bar.append(piece);
     }
     const [top] = [...parts].sort((a, b) => b[1] - a[1]);
     if (!top) return [bar];
     const [category, value] = top;
-    bar.setAttribute("aria-label", `Most time: ${CATEGORY_LABELS[category as Category]}, ${ms(value)}`);
+    const label = categoryLabel(category, trace);
+    bar.setAttribute("aria-label", `Most time: ${label}, ${ms(value)}`);
     // A failed request's story is its error (under Fix first), not where its time went.
-    return failed(info) ? [bar] : [bar, mostLine(category, value, total)];
+    return failed(info) ? [bar] : [bar, mostLine(label, category, value, total)];
   }
 
   function findings(info: TraceInfo, trace: Trace): HTMLElement | null {

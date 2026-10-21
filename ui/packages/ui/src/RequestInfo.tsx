@@ -3,6 +3,7 @@ import { Badge } from "./components/ui/badge";
 import { FactGrid } from "./FactGrid";
 import { duration } from "./format";
 import { GraphqlCode } from "./GraphqlCode";
+import { handlerFullName, handlerWord } from "./lib/handler";
 import { traceRuntime } from "./lib/runtime";
 import { linkProps, type TraceLinks } from "./links";
 import { type PropRow, PropTable } from "./PropTable";
@@ -300,15 +301,26 @@ function textRow(label: string, value: string | null, shown: ReactNode = value):
   return value ? [{ label, value: shown, copy: value, mono: true }] : [];
 }
 
-/** What a request was, in the hero above its facts: its method, URL, status and time; its view and route under. */
+/** The handler's name as the app names it, its full name on hover when the SDK keeps a longer one. */
+function HandlerName({ trace, name }: { trace: Trace; name: string }) {
+  const full = handlerFullName(trace);
+  return (
+    <span className="[overflow-wrap:anywhere]" title={full ?? undefined}>
+      {name}
+    </span>
+  );
+}
+
+/** What a request was, in the hero above its facts: its method, URL, status and time; its handler and route under. */
 function whatRan(trace: Trace): PropRow[] {
   const attrs = trace.attrs;
   const route = text(attrs["http.route"]);
+  const handler = text(attrs["code.view"]);
   const status = attrs["http.status_code"];
   return [
     ...textRow("URL", text(attrs["http.path"])),
     ...textRow("Route", route, <RoutePath path={route ?? ""} />),
-    ...textRow("View", text(attrs["code.view"])),
+    ...textRow(handlerWord(attrs), handler, <HandlerName trace={trace} name={handler ?? ""} />),
     ...(typeof status === "number" ? [{ label: "Status", value: <StatusBadge status={status} /> }] : []),
   ];
 }
@@ -322,21 +334,21 @@ function isRequest(trace: Trace): boolean {
   return trace.kind !== "task" && typeof trace.attrs["http.path"] === "string";
 }
 
-/** Under the URL: the view that answered, and the route when it differs from the URL. */
-function ViewAndRoute({ view, route }: { view: string | null; route: string | null }) {
+/** Under the URL: the view or handler that answered, and the route when it differs from the URL. */
+function HandlerAndRoute({ trace, route }: { trace: Trace; route: string | null }) {
+  const handler = text(trace.attrs["code.view"]);
   return (
     <div className="flex min-w-0 flex-wrap gap-x-4 gap-y-0.5 font-mono text-xs text-muted-foreground">
-      {view ? <span className="[overflow-wrap:anywhere]">{view}</span> : null}
+      {handler ? <HandlerName trace={trace} name={handler} /> : null}
       {route ? <RoutePath path={route} /> : null}
     </div>
   );
 }
 
-/** A request at a glance: method and URL large, how it ended and how long it took beside; its view and route under. */
+/** A request at a glance: method and URL large, how it ended and how long it took beside; its handler and route under. */
 function Hero({ trace }: { trace: Trace }) {
   const attrs = trace.attrs;
   const route = text(attrs["http.route"]);
-  const view = text(attrs["code.view"]);
   const status = attrs["http.status_code"];
   return (
     <header className="grid gap-1.5">
@@ -348,7 +360,7 @@ function Hero({ trace }: { trace: Trace }) {
         {typeof status === "number" ? <StatusBadge status={status} /> : null}
         <span className="text-sm text-muted-foreground tabular-nums">{duration(trace.duration)}</span>
       </div>
-      <ViewAndRoute view={view} route={route === attrs["http.path"] ? null : route} />
+      <HandlerAndRoute trace={trace} route={route === attrs["http.path"] ? null : route} />
     </header>
   );
 }
