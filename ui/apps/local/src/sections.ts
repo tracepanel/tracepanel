@@ -147,22 +147,31 @@ export function groupOf(trace: Trace): { section: EntrySection; key: string; lab
 }
 
 /** The crumbs leading back to the page a trace was opened from (`from`, its hash). */
+/** An issue's page is under Errors or Issues, as it was opened from. */
+function issueCrumbs(error: boolean, from: string): { label: string; href: string }[] {
+  return error
+    ? [
+        { label: "Errors", href: "#/errors" },
+        { label: "Error", href: from },
+      ]
+    : [
+        { label: "Issues", href: "#/issues" },
+        { label: "Issue", href: from },
+      ];
+}
+
 export function crumbsFor(route: Route, from: string): { label: string; href: string }[] {
   if (route.name === "group")
     return [
       { label: ENTRY[route.section].label, href: `#/${route.section}` },
       { label: route.key, href: from },
     ];
-  if (route.name === "issue")
-    return route.error
-      ? [
-          { label: "Errors", href: "#/errors" },
-          { label: "Error", href: from },
-        ]
-      : [
-          { label: "Issues", href: "#/issues" },
-          { label: "Issue", href: from },
-        ];
+  if (route.name === "issue") return issueCrumbs(route.error === true, from);
+  if (route.name === "app")
+    return [
+      { label: "Services", href: "#/services" },
+      { label: route.service, href: from },
+    ];
   if (route.name === "home" || route.name === "trace") return [];
   return [{ label: sectionLabel(route.name), href: from }];
 }

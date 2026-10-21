@@ -3,7 +3,8 @@
 // job. Sent to the agent as a page sends its traces (POST /api/ingest), moved to the last few minutes so the
 // console's default period shows them.
 import { readdirSync, readFileSync } from "node:fs";
-import { CONSOLE } from "./agent.ts";
+import { createConnection } from "node:net";
+import { CONSOLE, STORE } from "./agent.ts";
 
 type Doc = Record<string, unknown>;
 
@@ -427,10 +428,102 @@ function adminList(): Doc {
   return doc;
 }
 
+/**
+ * A page rendered from templates, as the Python SDK records them: the page's with its context (a queryset not yet
+ * run, a secret masked, a long value), and an include whose context wasn't recorded.
+ */
+function bookList(): Doc {
+  const doc = trace("http", "GET /books/", {
+    ...SHOP,
+    "http.method": "GET",
+    "http.path": "/books/",
+    "http.route": "/books/",
+    "http.status_code": 200,
+  });
+  const id = String(doc["id"]);
+  const template = (suffix: string, name: string, start: number, context: Doc) => ({
+    id: `${id}${suffix}`,
+    parent_id: `${id}R`,
+    kind: "template",
+    name,
+    start,
+    duration: 3_000,
+    status: "ok",
+    attrs: { "template.name": name, ...context },
+  });
+  const genres = Array.from({ length: 40 }, (_, index) => `'genre ${index}'`).join(", ");
+  (doc["spans"] as Doc[]).push(
+    template("T", "books/list.html", 1_000, {
+      "template.context.names": ["books", "csrf_token", "request", "genres", "title"],
+      "template.context.values": [
+        "<QuerySet of Book, not evaluated>",
+        "********",
+        "<WSGIRequest: GET '/books/'>",
+        `[${genres}]`,
+        "'All books'",
+      ],
+      "template.context.omitted": 2,
+    }),
+    template("F", "includes/footer.html", 2_000, {}),
+  );
+  return doc;
+}
+
+/** What the Python SDK says about the app in its hello: Django's settings, masked, and the versions it runs on. */
+const SHOP_APP = {
+  settings: {
+    DEBUG: "True",
+    SECRET_KEY: "********",
+    ALLOWED_HOSTS: "['localhost', '127.0.0.1']",
+    DATABASES:
+      "{'default': {'ENGINE': 'django.db.backends.postgresql', 'NAME': 'shop', 'USER': 'shop', 'PASSWORD': ********, 'HOST': 'localhost', 'PORT': '5432'}}",
+    SENTRY_DSN: "'https://********@o1.ingest.sentry.io/1'",
+    TIME_ZONE: "'UTC'",
+  },
+  versions: [
+    { name: "Python", version: "3.13.1", kind: "runtime" },
+    { name: "Django", version: "5.2.7", kind: "framework" },
+    { name: "psycopg", version: "3.2.10", kind: "package" },
+    { name: "tracepanel", version: "0.4.2", kind: "package" },
+  ],
+};
+
 // biome-ignore-end lint/style/useNamingConvention: traces as the SDKs send them; their field names are the wire format.
 
+/** The shop app's hello on the agent's socket, as an SDK connects: the agent keeps what it said after it goes. */
+async function hello(): Promise<void> {
+  const address = readFileSync(`${STORE}/agent.addr`, "utf8").trim();
+  const [kind, ...rest] = address.split(":");
+  const where = rest.join(":");
+  const target =
+    kind === "unix"
+      ? { path: where }
+      : { host: where.slice(0, where.lastIndexOf(":")), port: Number(where.slice(where.lastIndexOf(":") + 1)) };
+  await new Promise<void>((resolve, reject) => {
+    const socket = createConnection(target, () => {
+      socket.write(`${JSON.stringify({ protocol: 1, service: "shop", app: SHOP_APP })}\n`);
+    });
+    socket.on("data", () => {
+      socket.end();
+      resolve();
+    });
+    socket.on("error", reject);
+  });
+}
+
 export default async function seed(): Promise<void> {
-  const docs = [...examples(), ...pages(), ...background(), ...messages(), report(), signIn(), profiled(), adminList()];
+  await hello();
+  const docs = [
+    ...examples(),
+    ...pages(),
+    ...background(),
+    ...messages(),
+    report(),
+    signIn(),
+    profiled(),
+    adminList(),
+    bookList(),
+  ];
   const first = Date.now() * 1000 - SPREAD_US * (docs.length + 1);
   const moved = docs.map((doc, index) => shift(doc, first + index * SPREAD_US - Number(doc["start"])) as Doc);
   // A trace from an app whose clock is two hours behind, and that went over the limits: the oldest of all, so no list

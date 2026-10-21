@@ -32,6 +32,10 @@ are ULIDs.
   trace exists. The agent keeps the tasks in flight in memory, not in the
   store, and serves them at `GET /api/tasks/live`. `crates/protocol/src/live.rs`
   names the fields.
+- **App**: what an app says about itself once, in its hello (`app`): its
+  settings, masked by its SDK, and the versions of what it runs on. Per app,
+  not per request: the agent keeps the latest in memory and serves it at
+  `GET /api/app?service=`. `crates/protocol/src/about.rs` names the fields.
 
 ## Add an example
 

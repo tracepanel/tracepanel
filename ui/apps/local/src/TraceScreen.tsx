@@ -1,4 +1,5 @@
 import {
+  type App,
   type DataSource,
   Empty,
   type ExploreItem,
@@ -38,6 +39,35 @@ export interface TraceScreenProps {
   onLoaded?: (() => void) | undefined;
 }
 
+// What each app said, as last loaded: the next trace of the same app opens with its App tab at once (the panel
+// reopens the tab used last).
+const told = new Map<string, App | null>();
+
+/** What the app that served the trace said about itself, reloaded for each trace: the panel's App tab. */
+function useApp(source: DataSource, service: string | null): App | null {
+  const [, setLoaded] = useState(0);
+  useEffect(() => {
+    if (service === null || !source.app) return;
+    let cancelled = false;
+    const keep = (app: App | null) => {
+      told.set(service, app);
+      if (!cancelled) setLoaded((count) => count + 1);
+    };
+    source.app(service).then(keep, () => keep(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [source, service]);
+  return service === null ? null : (told.get(service) ?? null);
+}
+
+/** The service whose App tab the panel shows (its variants are compact and strip); none on a page. */
+function serviceOf(trace: Trace | null | undefined, variant: TraceScreenProps["variant"]): string | null {
+  const service = trace?.attrs["service.name"];
+  const panel = variant === "compact" || variant === "strip";
+  return panel && typeof service === "string" ? service : null;
+}
+
 /**
  * Traces linked to this one, reloaded while it is open (tasks a request enqueued finish later). Kept with the id
  * they are for: while the next trace loads, the one on screen doesn't get the next one's links.
@@ -64,31 +94,17 @@ function explainer(source: DataSource, traceId: string, explainable: boolean) {
   return explainable ? (span: string, analyze: boolean) => source.explain(traceId, span, analyze) : undefined;
 }
 
-export function TraceScreen({
-  id,
-  source,
-  explore,
-  onTabChange,
-  variant,
-  initialTab,
-  preferredTab,
-  actions,
-  links,
-  initialSpan,
-  back,
-  shareable,
-  onLoaded,
-}: TraceScreenProps) {
+/**
+ * The trace, once loaded (null when it is gone), retried briefly while it may not be stored yet. The trace on screen
+ * stays until the next one is loaded: following new requests swaps one for the other instead of blinking through an
+ * empty pane.
+ */
+function useTrace(id: string, source: DataSource, onLoaded: (() => void) | undefined): Trace | null | undefined {
   const [trace, setTrace] = useState<Trace | null | undefined>(undefined);
-  const related = useRelated(id, source);
-  // EXPLAIN only where the app behind the console runs it.
-  const explainable = useCapability(source, "explain");
   // biome-ignore lint/correctness/useExhaustiveDependencies: a new `onLoaded` is no new trace to load.
   useEffect(() => {
     let cancelled = false;
     let timer: number | undefined;
-    // The trace on screen stays until the next one is loaded: following new requests swaps one for the other
-    // instead of blinking through an empty pane.
     const show = (result: Trace | null) => {
       setTrace(result);
       onLoaded?.();
@@ -111,6 +127,30 @@ export function TraceScreen({
       window.clearTimeout(timer);
     };
   }, [id, source]);
+  return trace;
+}
+
+export function TraceScreen({
+  id,
+  source,
+  explore,
+  onTabChange,
+  variant,
+  initialTab,
+  preferredTab,
+  actions,
+  links,
+  initialSpan,
+  back,
+  shareable,
+  onLoaded,
+}: TraceScreenProps) {
+  const trace = useTrace(id, source, onLoaded);
+  const related = useRelated(id, source);
+  // The panel (compact, or docked as a strip) has an App tab: the console's trace page doesn't.
+  const app = useApp(source, serviceOf(trace, variant));
+  // EXPLAIN only where the app behind the console runs it.
+  const explainable = useCapability(source, "explain");
   if (trace === undefined) {
     return (
       <div className="app-loading" role="status">
@@ -140,6 +180,7 @@ export function TraceScreen({
       links={links}
       initialSpan={initialSpan}
       variant={variant}
+      app={app}
     />
   );
 }

@@ -1,7 +1,7 @@
 //! What stays on this machine when a trace leaves it: for Tracepanel Cloud, or in a snapshot shared without its
 //! values. Query parameters, mail bodies, who a user is beyond their id, what a request carried (its query string,
-//! headers, body, cookies and session) and its response's headers, a log record's own fields (`extra=`) and the
-//! local variables of an error's frames.
+//! headers, body, cookies and session) and its response's headers, a log record's own fields (`extra=`), the
+//! local variables of an error's frames and the context a template was rendered with.
 
 use serde_json::{Map, Value};
 
@@ -18,13 +18,14 @@ const LOCAL_ONLY: [&str; 8] = [
     "http.request.body.truncated",
 ];
 /// Attributes under these stay on this machine too: a log record's own fields (as `extra=` passed them), a request's
-/// headers, cookies and session, and its response's headers.
-const LOCAL_ONLY_PREFIXES: [&str; 5] = [
+/// headers, cookies and session, its response's headers, and a template's context (its names and their values).
+const LOCAL_ONLY_PREFIXES: [&str; 6] = [
     "extra.",
     "http.request.header.",
     "http.request.cookie.",
     "session.",
     "http.response.header.",
+    "template.context.",
 ];
 
 /// The trace document without what stays local: its attributes, its spans' and its logs' stripped, its errors' frames
@@ -110,7 +111,11 @@ mod tests {
     fn what_stays_local_goes_and_the_rest_stays() {
         let mut trace = serde_json::json!({
             "attrs": {"user.id": 7, "user.email": "ann@example.com", "http.route": "/"},
-            "spans": [{"attrs": {"db.statement": "SELECT 1 WHERE id = %s", "db.params": [7]}}],
+            "spans": [
+                {"attrs": {"db.statement": "SELECT 1 WHERE id = %s", "db.params": [7]}},
+                {"attrs": {"template.name": "books.html", "template.context.names": ["books"],
+                           "template.context.values": ["<QuerySet of Book, not evaluated>"]}},
+            ],
             "logs": [{"attrs": {"extra.order_id": 42, "code.origin": "app.py:3"}}],
             "errors": [{"frames": [{"locals": {"token": "x"}}], "chain": [{"frames": [{"locals": {"a": 1}}]}]}],
         });
@@ -121,7 +126,10 @@ mod tests {
             trace,
             serde_json::json!({
                 "attrs": {"user.id": 7, "http.route": "/"},
-                "spans": [{"attrs": {"db.statement": "SELECT 1 WHERE id = %s"}}],
+                "spans": [
+                    {"attrs": {"db.statement": "SELECT 1 WHERE id = %s"}},
+                    {"attrs": {"template.name": "books.html"}},
+                ],
                 "logs": [{"attrs": {"code.origin": "app.py:3"}}],
                 "errors": [{"frames": [{"locals": null}], "chain": [{"frames": [{"locals": null}]}]}],
             })

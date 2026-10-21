@@ -70,6 +70,9 @@ export type HistogramBucket = Schemas["HistogramBucket"];
 export type Counts = Schemas["Counts"];
 export type KnownValues = Schemas["KnownValues"];
 export type Capabilities = Schemas["Capabilities"];
+/** What an app said about itself in its hello: its settings, masked, and its versions (GET /app). */
+export type App = Schemas["App"];
+export type AppVersion = Schemas["AppVersion"];
 export type SearchSpec = Schemas["SearchSpec"];
 export type User = Schemas["User"];
 export type SearchResource = keyof SearchSpec;

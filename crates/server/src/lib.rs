@@ -40,6 +40,7 @@ pub fn router(reader: Reader, activity: Activity) -> Router {
         .route("/api/snapshot/{id}", get(snapshot))
         .route("/api/counts", get(counts))
         .route("/api/capabilities", get(capabilities))
+        .route("/api/app", get(app))
         .route("/api/explain", get(explain))
         .route("/api/w3c", get(served))
         .route("/api/search", get(search_spec))
@@ -696,6 +697,15 @@ async fn capabilities(Extension(activity): Extension<Activity>, headers: HeaderM
         })
         .to_string(),
     )
+}
+
+/// `api/app?service=`: what that app said about itself in its hello (its settings, masked by its SDK, and its
+/// versions), with this agent's version: per app, not per request.
+async fn app(Extension(activity): Extension<Activity>, Query(query): Params) -> Response {
+    let about = activity
+        .about
+        .of(&service(&query), env!("CARGO_PKG_VERSION"));
+    json_response(StatusCode::OK, about.to_string())
 }
 
 /// How long the app has to run an EXPLAIN (ANALYZE runs the query itself).

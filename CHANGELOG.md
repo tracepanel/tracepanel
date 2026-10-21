@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- An app's settings and versions, as a debug toolbar shows them. The panel
+  has an App tab after Request: the settings of the app that served the
+  request, a filter above them, secrets masked by the SDK as `********`, and
+  the versions of what it runs on, the agent's too. On the Services page an
+  app's row opens its page with the same, and a link to its own work, and a
+  trace's facts name its app, a link to that page. The SDK says them once,
+  in its hello, and the agent serves them at `api/app?service=`. The Python
+  SDK sends them from Django and Flask. For an app whose SDK doesn't, the
+  page says so and the panel has no App tab.
+- A template's context in the call tree. A template's details list each
+  name it was rendered with and its value, as the Python SDK recorded it:
+  repr-ed, cut, secrets masked, a long one folded under "Show all". A
+  template's context stays on this machine, as a request's headers do: a
+  snapshot shared without its values leaves it out.
+
 ## 0.4.1 (2026-10-21)
 
 ### Changed

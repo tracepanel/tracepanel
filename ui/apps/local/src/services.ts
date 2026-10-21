@@ -1,7 +1,7 @@
 // What the Services page shows, as data: the project's apps by project, its services by host, and where each leads.
 import { SERVICE_KINDS, type ServiceApp, type ServiceEdge, type ServiceNode, serviceWhere } from "@tracepanel/ui";
 import { SQL_VENDORS } from "@tracepanel/ui/lib/systems";
-import { callsSection, currentPeriod, type Route, withPeriod } from "./routes";
+import { callsSection, currentPeriod, type Route, type Section, withPeriod } from "./routes";
 
 /** The page of a service's operations: SQL for every SQL database, the cache's, HTTP calls, a datastore's own. */
 function pageOfService(node: ServiceNode): string | null {
@@ -26,7 +26,7 @@ export function serviceTarget(node: ServiceNode): Route {
 }
 
 // Where an app's own work is listed: requests for web, tasks for a worker, runs for a command, views for a browser.
-const ROLE_SECTIONS: Record<string, Route["name"]> = {
+const ROLE_SECTIONS: Record<string, Section> = {
   web: "endpoints",
   worker: "tasks",
   command: "jobs",
@@ -35,8 +35,12 @@ const ROLE_SECTIONS: Record<string, Route["name"]> = {
 
 /** The section that lists an app's own work, or every trace for a role it doesn't know. */
 export function appTarget(app: ServiceApp): Route {
-  const section = ROLE_SECTIONS[app.role] ?? "traces";
-  return { name: section, q: "" } as Route;
+  return { name: roleSection(app), q: "" };
+}
+
+/** The section that lists the work of an app's role: Endpoints for web, Tasks for a worker; every trace otherwise. */
+export function roleSection(app: ServiceApp): Section {
+  return ROLE_SECTIONS[app.role] ?? "traces";
 }
 
 /** One project, however many roles it runs as (web, worker, command): its rows summed, the busiest role first. */

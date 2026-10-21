@@ -1,3 +1,4 @@
+export { AppDetails, appSaidAnything } from "./AppDetails";
 export { AttrsTable } from "./AttrsTable";
 export { CallMap } from "./CallMap";
 export { CallsList } from "./CallsList";
