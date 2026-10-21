@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 (2026-10-21)
 
 ### Added
 
@@ -75,6 +75,9 @@
 
 ### Changed
 
+- The SDKs of 0.4 need this agent: an app says what it offers in its hello,
+  not at its own console. The SDKs of 0.3 keep installing an agent of 0.3
+  through their pins, so nothing changes for them until they upgrade.
 - The logs table and every other list share one header and one text size.
   The logs keep their compact rows. The columns fit the page's width, so a
   list with many columns no longer scrolls sideways, and the main column gets
