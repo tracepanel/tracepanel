@@ -14,7 +14,7 @@ import { SystemTiles, useCallsSummary } from "./CallsTiles";
 import { useLatch, usePaged, useSearch } from "./data";
 import { EmptyPage, PageShell } from "./EmptyPage";
 import { refineQuery } from "./EntryPage";
-import { OverviewNumbers, OverviewRange, OverviewSection, useOverviewOpen } from "./Overview";
+import { Figure, OverviewNumbers, OverviewRange, OverviewSection, useOverviewOpen } from "./Overview";
 import { LiveRefresh, RefreshControl } from "./refresh";
 import { type CallsSection, type EntrySection, go, type Section, systemOfSection, traceHref } from "./routes";
 import { SearchBar } from "./SearchBar";
@@ -210,11 +210,9 @@ const countOf = (bucket: LogBucket, levels: readonly string[]) =>
   levels.reduce((sum, level) => sum + (bucket.levels[level] ?? 0), 0);
 
 /** "1,204 records", in the tone of what they are when there are any. */
-function Counted({ count, noun, tone = "" }: { count: number; noun: string; tone?: string }) {
+function Counted({ count, noun, tone = "plain" }: { count: number; noun: string; tone?: "error" | "warn" | "plain" }) {
   return (
-    <span className={count > 0 ? tone : ""}>
-      {count.toLocaleString()} {count === 1 ? noun : `${noun}s`}
-    </span>
+    <Figure value={count.toLocaleString()} label={count === 1 ? noun : `${noun}s`} tone={count > 0 ? tone : "plain"} />
   );
 }
 
@@ -224,8 +222,8 @@ function LogNumbers({ series }: { series: readonly LogBucket[] }) {
   return (
     <OverviewNumbers>
       <Counted count={sum(LEVELS)} noun="record" />
-      <Counted count={sum(["error", "critical"])} noun="error" tone="text-error" />
-      <Counted count={sum(["warning"])} noun="warning" tone="text-warn" />
+      <Counted count={sum(["error", "critical"])} noun="error" tone="error" />
+      <Counted count={sum(["warning"])} noun="warning" tone="warn" />
     </OverviewNumbers>
   );
 }

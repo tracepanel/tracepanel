@@ -14,6 +14,7 @@ import { ChevronRightIcon } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { useSearch } from "./data";
 import { useCapabilities } from "./hooks";
+import { Figure, OverviewNumbers } from "./Overview";
 import { groupRoute, href, traceHref } from "./routes";
 import { taskSystem } from "./sections";
 import { TaskState } from "./tables";
@@ -74,12 +75,28 @@ function NowLine({ live }: { live: LiveTasks }) {
   const busy = live.tasks.length > 0;
   return (
     <section className="grid gap-3 pb-5" aria-label="Now">
-      <div className="flex min-h-8 flex-wrap items-center gap-x-4 gap-y-2 text-md text-text-2">
+      {/* A bar like the Overview folded: what runs now, then the workers at its end. */}
+      <div className="flex min-h-12 flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border bg-card px-4 py-2 text-md">
         {busy ? <NowToggle live={live} open={open} setOpen={setOpen} /> : <NowIdle workers={live.workers} />}
         <Workers workers={live.workers} />
       </div>
       {busy && open ? <InFlightTable live={live} /> : null}
     </section>
+  );
+}
+
+/** A light for the queue's state: pulsing while tasks run, steady when workers wait, hollow with none. */
+function Light({ state }: { state: "busy" | "ready" | "none" }) {
+  return (
+    <span className="relative flex size-2.5 shrink-0" aria-hidden="true">
+      {state === "busy" ? <span className="absolute inset-0 animate-ping rounded-full bg-ok opacity-60" /> : null}
+      <span
+        className={cn(
+          "relative size-2.5 rounded-full",
+          state === "none" ? "border-2 border-muted-foreground" : "bg-ok",
+        )}
+      />
+    </span>
   );
 }
 
@@ -99,52 +116,62 @@ function NowToggle({ live, open, setOpen }: { live: LiveTasks; open: boolean; se
   );
 }
 
-/** Nothing in flight: idle, with workers there to run what comes. */
+/** Nothing in flight: idle, with workers there to run what comes; or no worker to run it. */
 function NowIdle({ workers }: { workers: readonly LiveWorker[] }) {
   return (
-    <span className="flex items-center gap-2 py-1 pl-8">
+    <span className="flex items-center gap-3 py-1 pl-8">
       <span className="font-semibold text-foreground">Now</span>
-      {workers.length ? <span className="text-muted-foreground">Idle</span> : null}
+      <Light state={workers.length ? "ready" : "none"} />
+      <span className="text-muted-foreground">
+        {workers.length ? "Idle: workers are up, no task in flight" : "No worker connected"}
+      </span>
     </span>
   );
 }
 
-/** "Now · 2 running · 5 queued · 1 retrying": the states with tasks in them. */
+/** "Now  2 running | 5 queued | 1 retrying": the states with tasks in them. */
 function NowCounts({ live }: { live: LiveTasks }) {
   const groups = byState(live);
   return (
-    <span className="flex flex-wrap items-center gap-x-2 tabular-nums">
+    <span className="flex flex-wrap items-center gap-x-3">
       <span className="font-semibold text-foreground">Now</span>
-      {LIVE_STATES.filter((state) => groups[state].length).map((state) => (
-        <span key={state} className={cn(state === "retrying" && "text-warn")}>
-          · {groups[state].length} {state}
-        </span>
-      ))}
+      <Light state="busy" />
+      <OverviewNumbers>
+        {LIVE_STATES.filter((state) => groups[state].length).map((state) => (
+          <Figure
+            key={state}
+            value={groups[state].length}
+            label={state}
+            tone={state === "retrying" ? "warn" : "plain"}
+          />
+        ))}
+      </OverviewNumbers>
     </span>
   );
 }
 
-/** The workers seen, each with how many tasks it runs now; before any, how to start one. */
+/** The workers seen, each with what it does now; before any, how to start one. */
 function Workers({ workers }: { workers: readonly LiveWorker[] }) {
   if (workers.length === 0) {
     return (
       <span className="text-muted-foreground">
-        No worker connected. Start one: <Mono className="text-sm">celery -A &lt;app&gt; worker</Mono>
+        Start one: <Mono className="text-sm">celery -A &lt;app&gt; worker</Mono>
       </span>
     );
   }
   return (
-    <ul className="m-0 flex list-none flex-wrap items-center gap-1.5 p-0" aria-label="Workers">
+    <ul className="m-0 ml-auto flex list-none flex-wrap items-center gap-1.5 p-0" aria-label="Workers">
       {workers.map((worker) => (
         <li key={worker.name}>
           <Badge
             variant="outline"
-            className="gap-1.5 font-mono text-xs"
+            className="gap-2 bg-background py-1 text-xs"
             title={`${taskSystem(worker.system)} · ${worker.service}`}
           >
-            {worker.name}
-            <span className={cn("tabular-nums", worker.in_flight ? "text-brand" : "text-muted-foreground")}>
-              {worker.in_flight}
+            <Light state={worker.in_flight ? "busy" : "ready"} />
+            <span className="font-mono">{worker.name}</span>{" "}
+            <span className={cn("tabular-nums", worker.in_flight ? "text-foreground" : "text-muted-foreground")}>
+              {worker.in_flight ? `${worker.in_flight} running` : "idle"}
             </span>
           </Badge>
         </li>

@@ -94,7 +94,7 @@ test("Now: the tasks running, queued and retrying, the workers, and the tasks th
 
   // One line above the overview, in the list's place on every entry page; Live is in the header, not a list.
   await expect(now.getByRole("button", { expanded: false })).toContainText(
-    /Now\s*·\s*\d+ running\s*·\s*\d+ queued\s*·\s*\d+ retrying/,
+    /Now\s*\d+ running\s*\d+ queued\s*\d+ retrying/,
   );
   await expect(now.getByRole("list", { name: "Workers" }).getByText(`rq-${run}`)).toBeVisible();
   await expect(now.getByRole("list", { name: "Workers" }).getByText(`celery@box-${run}`)).toBeVisible();
@@ -147,8 +147,9 @@ test("Now says idle with workers there, and lists them", async ({ page }) => {
   const now = page.getByRole("region", { name: "Now" });
 
   await expect(now).toContainText("Now");
-  await expect(now).toContainText("Idle");
-  await expect(now.getByRole("list", { name: "Workers" })).toHaveText("celery@box0");
+  // Idle says so in words, and so does the worker: no bare count to puzzle over.
+  await expect(now).toContainText("Idle: workers are up, no task in flight");
+  await expect(now.getByRole("list", { name: "Workers" })).toHaveText("celery@box idle");
   await expect(now.getByRole("button")).toHaveCount(0);
 });
 
@@ -158,7 +159,7 @@ test("Now says how to start a worker when the app sends task events but none was
   await page.goto("/#/tasks");
 
   await expect(page.getByRole("region", { name: "Now" })).toContainText(
-    "No worker connected. Start one: celery -A <app> worker",
+    "No worker connectedStart one: celery -A <app> worker",
   );
 });
 

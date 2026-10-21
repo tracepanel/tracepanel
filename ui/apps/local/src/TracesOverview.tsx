@@ -15,7 +15,7 @@ import {
 import { Badge } from "@tracepanel/ui/components/ui/badge";
 import { Card } from "@tracepanel/ui/components/ui/card";
 import { useEffect, useState } from "react";
-import { OverviewNumbers, OverviewRange, OverviewSection, useOverviewOpen } from "./Overview";
+import { Figure, Measure, OverviewNumbers, OverviewRange, OverviewSection, useOverviewOpen } from "./Overview";
 import { track, useRefresh } from "./refresh";
 import { currentPeriod, endpointGroup, groupRoute, href, withPeriod } from "./routes";
 import { BY_NAME } from "./sections";
@@ -151,14 +151,7 @@ export function TracesOverview({
       range={<OverviewRange from={s.first_seen} to={s.last_seen} />}
       numbers={
         // Folded: the numbers that matter, on one line.
-        <OverviewNumbers>
-          <span>
-            {s.calls} {s.calls === 1 ? scope.noun : nouns}
-          </span>
-          <span className={s.errors ? "text-error" : ""}>{percent(s.errors, s.calls)} errors</span>
-          <span>p95 {duration(s.p95)}</span>
-          {s.slow ? <span className="text-warn">{s.slow} slow</span> : null}
-        </OverviewNumbers>
+        <TracesNumbers summary={s} scope={scope} />
       }
     >
       <StatGrid>
@@ -210,6 +203,18 @@ export function TracesOverview({
         />
       </div>
     </OverviewSection>
+  );
+}
+
+/** The Overview folded: how many, how many failed, p95, and how many were slow when any were. */
+function TracesNumbers({ summary: s, scope }: { summary: NonNullable<Overview["summary"]>; scope: OverviewScope }) {
+  return (
+    <OverviewNumbers>
+      <Figure value={s.calls.toLocaleString()} label={s.calls === 1 ? scope.noun : `${scope.noun}s`} />
+      <Figure value={percent(s.errors, s.calls)} label="errors" tone={s.errors ? "error" : "plain"} />
+      <Measure label="p95" value={duration(s.p95)} />
+      {s.slow ? <Figure value={s.slow.toLocaleString()} label="slow" tone="warn" /> : null}
+    </OverviewNumbers>
   );
 }
 

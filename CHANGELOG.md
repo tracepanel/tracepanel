@@ -175,6 +175,11 @@
   in the page's column, the first at its left edge.
 - A menu longer than the sidebar fades out at its foot instead of cutting an
   item in half.
+- A folded Overview is a bar like the tiles it hides, its numbers bold with
+  their labels quiet and a rule between them. Tasks' Now is the same bar
+  with a light: pulsing while tasks run, steady with workers idle, hollow
+  with none. It says what idle means, and each worker says idle or how many
+  it runs instead of a bare count.
 - Tasks' Now table fits the page: a long worker name, arguments or error are
   cut to one line, whole on hover. Now stands over the Overview, chevron for
   chevron, busy or idle. An overview's time range is on the 24-hour clock,
