@@ -3,7 +3,9 @@ import {
   ago,
   type CallRow,
   CopyButton,
+  type DataColumn,
   type DataSource,
+  DataTable,
   duration,
   type EndpointRow,
   ExplainView,
@@ -39,149 +41,187 @@ import { Fragment, type ReactNode, useEffect, useState } from "react";
 import { useCapability } from "./hooks";
 import { currentPeriod, endpointGroup, go, groupRoute, href, issueRoute, traceHref, withPeriod } from "./routes";
 import { graphqlOperation, taskSystem } from "./sections";
-import { DataTable, Meter, Mono, Td, Th, Tr } from "./ui";
+import { Meter, Mono, Tr } from "./ui";
 
+/** What a trace is: its method and path, a GraphQL operation, or its kind and name (a task, a job, a WebSocket). */
+function TraceName({ trace }: { trace: TraceSummary }) {
+  const operation = graphqlOperation(trace);
+  return (
+    <span className="flex min-w-0 items-center gap-2.5">
+      <SourceBadge kind={trace.kind} graphql={operation !== null} method={traceMethod(trace)} htmx={trace.htmx} />
+      <Mono className="truncate">{operation ?? sourceText(trace.kind, trace.path ?? null, trace.name)}</Mono>
+    </span>
+  );
+}
+
+function traceMethod(trace: TraceSummary): string | null {
+  return trace.method ?? trace.name.split(" ")[0] ?? null;
+}
+
+// A count that says something only when there is one: in its color then, a dash otherwise.
+const flagged = (tone: string) => (count: number) => (count ? `font-semibold ${tone}` : "text-muted-foreground");
+const errorCount = flagged("text-error");
+const warnCount = flagged("text-warn");
+const MUTED = "text-muted-foreground";
+
+const TRACE_COLUMNS: DataColumn<TraceSummary>[] = [
+  { id: "trace", label: "Trace", required: true, cell: (trace) => <TraceName trace={trace} /> },
+  {
+    id: "status",
+    label: "Status",
+    width: 6.5,
+    num: true,
+    cell: (trace) =>
+      trace.task_state ? <TaskState state={trace.task_state} /> : <StatusBadge status={trace.http_status} />,
+  },
+  { id: "duration", label: "Duration", width: 6.75, num: true, cell: (trace) => duration(trace.duration) },
+  { id: "queries", label: "Queries", width: 6.25, num: true, cell: (trace) => trace.queries },
+  {
+    id: "issues",
+    label: "Issues",
+    width: 14,
+    cell: (trace) => (
+      // One line, as every row of a list: a narrow column cuts the last chips off, wider shows them.
+      <span className="flex gap-1">
+        {(trace.issue_kinds ?? []).map((kind) => (
+          <IssueChip key={kind} kind={kind} />
+        ))}
+      </span>
+    ),
+  },
+  { id: "when", label: "When", width: 6.5, num: true, className: MUTED, cell: (trace) => ago(trace.start) },
+];
+
+const traceTone = (trace: TraceSummary) => (trace.status === "error" ? "error" : trace.issues > 0 ? "warn" : undefined);
+
+/**
+ * Traces, one a row, each a link to its trace. `table` names the list, where the reader's columns are kept: the
+ * search's results, an entry point's calls, a group's, an issue's.
+ */
 export function TracesTable({
+  table,
   items,
   selectedId,
   hrefFor,
-  compact = false,
   newIds,
 }: {
+  table: string;
   items: readonly TraceSummary[];
   selectedId: string | null;
   /** Where a row opens: its trace page, as a link. */
   hrefFor: (id: string) => string;
-  /** Narrow list beside an open trace: drops the Queries column (the trace pane shows it). */
-  compact?: boolean;
   /** Rows that just arrived: highlighted for a moment. */
   newIds?: ReadonlySet<string> | undefined;
 }) {
   return (
-    <DataTable
-      dense={compact}
-      head={
-        <>
-          <Th>Trace</Th>
-          <Th num>Status</Th>
-          <Th num>Duration</Th>
-          {compact ? null : <Th num>Queries</Th>}
-          <Th>Issues</Th>
-          <Th num>When</Th>
-        </>
+    <DataTable table={table} columns={TRACE_COLUMNS}>
+      {({ cells }) =>
+        items.map((trace) => (
+          <Tr
+            key={trace.id}
+            selected={trace.id === selectedId}
+            tone={traceTone(trace)}
+            href={hrefFor(trace.id)}
+            fresh={newIds?.has(trace.id)}
+          >
+            {cells(trace)}
+          </Tr>
+        ))
       }
-    >
-      {items.map((trace) => (
-        <Tr
-          key={trace.id}
-          selected={trace.id === selectedId}
-          tone={trace.status === "error" ? "error" : trace.issues > 0 ? "warn" : undefined}
-          href={hrefFor(trace.id)}
-          fresh={newIds?.has(trace.id)}
-        >
-          <Td>
-            {graphqlOperation(trace) ? (
-              <span className="flex min-w-0 items-center gap-2.5">
-                <KindBadge kind="graphql" />
-                <Mono className="truncate">{graphqlOperation(trace)}</Mono>
-              </span>
-            ) : trace.kind === "http" ? (
-              <span className="flex min-w-0 items-center gap-2.5">
-                <MethodBadge method={trace.method ?? trace.name.split(" ")[0]} htmx={trace.htmx} />
-                <Mono className="truncate">{trace.path ?? trace.name}</Mono>
-              </span>
-            ) : (
-              <span className="flex min-w-0 items-center gap-2.5">
-                <KindBadge kind={trace.kind} />
-                {/* The badge already says WS. */}
-                <Mono className="truncate">
-                  {trace.kind === "websocket" ? trace.name.replace(/^WS /, "") : trace.name}
-                </Mono>
-              </span>
-            )}
-          </Td>
-          <Td num>
-            {trace.task_state ? <TaskState state={trace.task_state} /> : <StatusBadge status={trace.http_status} />}
-          </Td>
-          <Td num>{duration(trace.duration)}</Td>
-          {compact ? null : <Td num>{trace.queries}</Td>}
-          <Td>
-            <span className="flex flex-wrap gap-1">
-              {(trace.issue_kinds ?? []).map((kind) => (
-                <IssueChip key={kind} kind={kind} />
-              ))}
-            </span>
-          </Td>
-          <Td num className="text-muted-foreground">
-            {ago(trace.start)}
-          </Td>
-        </Tr>
-      ))}
     </DataTable>
   );
 }
 
-export function EndpointsTable({ items }: { items: readonly EndpointRow[] }) {
-  const slowest = Math.max(...items.map((item) => item.p95), 1);
+/** One URL that serves many GraphQL operations: a button to see them one by one. */
+function GraphqlOperations({ item }: { item: EndpointRow }) {
+  if (item.graphql_operations === 0) return null;
   return (
-    <DataTable
-      head={
-        <>
-          <Th>Endpoint</Th>
-          <Th num>Calls</Th>
-          <Th num>p50</Th>
-          <Th>p95</Th>
-          <Th num>Queries / call</Th>
-          <Th num>With issues</Th>
-          <Th num>Errors</Th>
-          <Th num>Last</Th>
-        </>
-      }
+    <button
+      type="button"
+      className="ml-1 shrink-0 rounded-md border border-brand/30 bg-brand-soft px-1.5 font-sans text-xs text-brand hover:bg-brand/15"
+      title="One URL, many GraphQL operations: see them one by one"
+      onClick={(event) => {
+        event.stopPropagation();
+        go({ name: "graphql", q: withPeriod(`route:${item.route}`, currentPeriod()) });
+      }}
     >
-      {items.map((item) => (
-        <Tr
-          key={`${item.method} ${item.route}`}
-          tone={item.errors > 0 ? "error" : item.with_issues > 0 ? "warn" : undefined}
-          href={href(endpointGroup(item.method, item.route))}
-        >
-          <Td>
-            <span className="flex items-center gap-2.5">
-              <MethodBadge method={item.method} />
-              <RoutePath path={item.route} />
-              {item.graphql_operations > 0 ? (
-                <button
-                  type="button"
-                  className="ml-1 rounded-md border border-brand/30 bg-brand-soft px-1.5 font-sans text-xs text-brand hover:bg-brand/15"
-                  title="One URL, many GraphQL operations: see them one by one"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    go({ name: "graphql", q: withPeriod(`route:${item.route}`, currentPeriod()) });
-                  }}
-                >
-                  GraphQL · {item.graphql_operations} {item.graphql_operations === 1 ? "operation" : "operations"}
-                </button>
-              ) : null}
-            </span>
-          </Td>
-          <Td num>{item.calls}</Td>
-          <Td num>{duration(item.p50)}</Td>
-          <Td>
-            <Meter value={item.p95} max={slowest}>
-              {duration(item.p95)}
-            </Meter>
-          </Td>
-          <Td num>{item.avg_queries}</Td>
-          <Td num className={item.with_issues ? "font-semibold text-warn" : "text-muted-foreground"}>
-            {item.with_issues || "—"}
-          </Td>
-          <Td num className={item.errors ? "font-semibold text-error" : "text-muted-foreground"}>
-            {item.errors || "—"}
-          </Td>
-          <Td num className="text-muted-foreground">
-            {ago(item.last_seen)}
-          </Td>
-        </Tr>
-      ))}
+      GraphQL · {item.graphql_operations} {item.graphql_operations === 1 ? "operation" : "operations"}
+    </button>
+  );
+}
+
+/** A p95 column: a bar against the slowest of the list, the time beside it. */
+function p95Column<T extends { p95: number }>(items: readonly T[], label = "p95"): DataColumn<T> {
+  const slowest = Math.max(...items.map((item) => item.p95), 1);
+  return {
+    id: "p95",
+    label,
+    width: 8.5,
+    cell: (item) => (
+      <Meter value={item.p95} max={slowest}>
+        {duration(item.p95)}
+      </Meter>
+    ),
+  };
+}
+
+/** The Last column: when the list's item was last seen. */
+function lastColumn<T extends Pick<EndpointRow, "last_seen">>(): DataColumn<T> {
+  return { id: "last", label: "Last", width: 6.5, num: true, className: MUTED, cell: (item) => ago(item.last_seen) };
+}
+
+function endpointColumns(items: readonly EndpointRow[]): DataColumn<EndpointRow>[] {
+  return [
+    {
+      id: "endpoint",
+      label: "Endpoint",
+      required: true,
+      cell: (item) => (
+        <span className="flex min-w-0 items-center gap-2.5">
+          <MethodBadge method={item.method} />
+          <RoutePath path={item.route} />
+          <GraphqlOperations item={item} />
+        </span>
+      ),
+    },
+    { id: "calls", label: "Calls", width: 5.25, num: true, cell: (item) => item.calls },
+    { id: "p50", label: "p50", width: 5.5, num: true, cell: (item) => duration(item.p50) },
+    p95Column(items),
+    { id: "queries", label: "Queries / call", width: 9, num: true, cell: (item) => item.avg_queries },
+    {
+      id: "issues",
+      label: "With issues",
+      width: 7.75,
+      num: true,
+      className: (item) => warnCount(item.with_issues),
+      cell: (item) => item.with_issues || "—",
+    },
+    {
+      id: "errors",
+      label: "Errors",
+      width: 6,
+      num: true,
+      className: (item) => errorCount(item.errors),
+      cell: (item) => item.errors || "—",
+    },
+    lastColumn(),
+  ];
+}
+
+export function EndpointsTable({ items }: { items: readonly EndpointRow[] }) {
+  return (
+    <DataTable table="endpoints" columns={endpointColumns(items)}>
+      {({ cells }) =>
+        items.map((item) => (
+          <Tr
+            key={`${item.method} ${item.route}`}
+            tone={countTone(item.errors, item.with_issues)}
+            href={href(endpointGroup(item.method, item.route))}
+          >
+            {cells(item)}
+          </Tr>
+        ))
+      }
     </DataTable>
   );
 }
@@ -195,11 +235,59 @@ interface ExtraColumn<T> {
   cell: (item: T) => ReactNode;
 }
 
+function callStatsColumns<T extends CallStats>(
+  items: readonly T[],
+  name: (item: T) => ReactNode,
+  extra: ExtraColumn<T> | undefined,
+): DataColumn<T>[] {
+  const heaviest = Math.max(...items.map((item) => item.total), 1);
+  const own: DataColumn<T>[] = extra
+    ? [{ id: "extra", label: extra.head, width: 6.75, num: true, cell: extra.cell }]
+    : [];
+  return [
+    {
+      id: "name",
+      label: "Name",
+      required: true,
+      cell: (item) => (
+        <span className="flex flex-col gap-0.5">
+          <Mono className="flex min-w-0 items-center gap-2 font-semibold">{name(item)}</Mono>
+          <Mono className="truncate text-base text-muted-foreground">{item.origin}</Mono>
+        </span>
+      ),
+    },
+    { id: "calls", label: "Calls", width: 5.25, num: true, cell: (item) => item.calls },
+    { id: "requests", label: "Requests", width: 6.75, num: true, cell: (item) => item.traces },
+    {
+      id: "repeated",
+      label: "Max / request",
+      width: 9,
+      num: true,
+      cell: (item) => <RepeatedCount most={item.most_per_trace} />,
+    },
+    { id: "failed", label: "Failed", width: 5.5, num: true, cell: (item) => item.errors },
+    ...own,
+    {
+      id: "total",
+      label: "Total time",
+      width: 8.5,
+      cell: (item) => (
+        <Meter value={item.total} max={heaviest}>
+          {duration(item.total)}
+        </Meter>
+      ),
+    },
+    { id: "slowest", label: "Slowest", width: 6.5, num: true, cell: (item) => duration(item.slowest) },
+  ];
+}
+
 /**
  * The table of the pages of calls (Database, Redis, Cache, HTTP calls): the same columns on each, heaviest first.
- * A row opens in place to what the page shows for it: the statement, the ways to its requests.
+ * A row opens in place to what the page shows for it: the statement, the ways to its requests. `table` keeps each
+ * system's columns apart.
  */
 function CallStatsTable<T extends CallStats>({
+  table,
   items,
   keyOf,
   name,
@@ -208,6 +296,7 @@ function CallStatsTable<T extends CallStats>({
   open,
   onOpen,
 }: {
+  table: string;
   items: readonly T[];
   keyOf: (item: T) => string;
   name: (item: T) => ReactNode;
@@ -216,92 +305,34 @@ function CallStatsTable<T extends CallStats>({
   open: string | null;
   onOpen: (key: string | null) => void;
 }) {
-  const heaviest = Math.max(...items.map((item) => item.total), 1);
   return (
-    <DataTable
-      head={
-        <>
-          <Th>Name</Th>
-          <Th num>Calls</Th>
-          <Th num>Requests</Th>
-          <Th num>Max / request</Th>
-          <Th num>Failed</Th>
-          {extra ? <Th num>{extra.head}</Th> : null}
-          <Th>Total time</Th>
-          <Th num>Slowest</Th>
-        </>
+    <DataTable table={table} columns={callStatsColumns(items, name, extra)}>
+      {({ cells, span }) =>
+        items.map((item) => {
+          const key = keyOf(item);
+          const opened = open === key;
+          return (
+            <Fragment key={key}>
+              <Tr selected={opened} tone={toneOf(item)} onClick={() => onOpen(opened ? null : key)}>
+                {cells(item)}
+              </Tr>
+              <CallStatsDetails open={opened} span={span}>
+                {opened ? details(item) : null}
+              </CallStatsDetails>
+            </Fragment>
+          );
+        })
       }
-    >
-      {items.map((item) => (
-        <CallStatsRow
-          key={keyOf(item)}
-          item={item}
-          rowKey={keyOf(item)}
-          name={name}
-          extra={extra}
-          details={details}
-          heaviest={heaviest}
-          open={open === keyOf(item)}
-          onOpen={onOpen}
-        />
-      ))}
     </DataTable>
-  );
-}
-
-function CallStatsRow<T extends CallStats>({
-  item,
-  rowKey,
-  name,
-  extra,
-  details,
-  heaviest,
-  open,
-  onOpen,
-}: {
-  item: T;
-  rowKey: string;
-  name: (item: T) => ReactNode;
-  extra: ExtraColumn<T> | undefined;
-  details: (item: T) => ReactNode;
-  heaviest: number;
-  open: boolean;
-  onOpen: (key: string | null) => void;
-}) {
-  return (
-    <>
-      <Tr selected={open} tone={toneOf(item)} onClick={() => onOpen(open ? null : rowKey)}>
-        <Td>
-          <span className="flex flex-col gap-0.5">
-            <Mono className="flex items-center gap-2 font-semibold">{name(item)}</Mono>
-            <Mono className="text-base text-muted-foreground">{item.origin}</Mono>
-          </span>
-        </Td>
-        <Td num>{item.calls}</Td>
-        <Td num>{item.traces}</Td>
-        <Td num>
-          <RepeatedCount most={item.most_per_trace} />
-        </Td>
-        <Td num>{item.errors}</Td>
-        <ExtraCell item={item} extra={extra} />
-        <Td>
-          <Meter value={item.total} max={heaviest}>
-            {duration(item.total)}
-          </Meter>
-        </Td>
-        <Td num>{duration(item.slowest)}</Td>
-      </Tr>
-      <CallStatsDetails open={open} span={extra ? 8 : 7}>
-        {open ? details(item) : null}
-      </CallStatsDetails>
-    </>
   );
 }
 
 const toneOf = (item: CallStats) => (item.errors > 0 ? "error" : undefined);
 
-function ExtraCell<T>({ item, extra }: { item: T; extra: ExtraColumn<T> | undefined }) {
-  return extra ? <Td num>{extra.cell(item)}</Td> : null;
+/** A row that failed is red at its edge, one with issues amber. */
+function countTone(failures: number, issues: number): "error" | "warn" | undefined {
+  if (failures) return "error";
+  return issues ? "warn" : undefined;
 }
 
 /** An open row's details, across the table. */
@@ -407,6 +438,26 @@ function percentOf(part: number, whole: number): string {
   return `${Math.round((part / whole) * 100)}%`;
 }
 
+/** The system a page of calls lists: its rows', or its family's name while it has none. */
+function systemOf(items: readonly CallRow[], family: string): string {
+  return items[0]?.system ?? family;
+}
+
+/** What an open row of a page of calls shows: SQL's statement and plan, and the requests that made the call. */
+function CallDetails({ item, source }: { item: CallRow; source: DataSource }) {
+  return (
+    <>
+      {item.family === "sql" ? <SqlDetails item={item} source={source} /> : null}
+      <RequestLinks
+        q={`call:${item.key}`}
+        traces={item.traces}
+        what={systemOfPage(item.system, item.family).one}
+        sample={item.sample_trace}
+      />
+    </>
+  );
+}
+
 /**
  * One system's operations, the same table for every system: SQL, Redis, a cache, MongoDB, a broker, HTTP calls, or a
  * system the console has never heard of. An open row shows SQL's statement and plan, and the requests that made it.
@@ -415,21 +466,13 @@ export function CallsTable({ items, source, open, onOpen }: TableProps<CallRow> 
   const family = items[0]?.family ?? "datastore";
   return (
     <CallStatsTable
+      // Each system's page keeps its own columns.
+      table={`calls/${systemOf(items, family)}`}
       items={items}
       keyOf={(item) => item.key}
       name={(item) => <OpName item={item} />}
       extra={EXTRA[family]}
-      details={(item) => (
-        <>
-          {item.family === "sql" ? <SqlDetails item={item} source={source} /> : null}
-          <RequestLinks
-            q={`call:${item.key}`}
-            traces={item.traces}
-            what={systemOfPage(item.system, item.family).one}
-            sample={item.sample_trace}
-          />
-        </>
-      )}
+      details={(item) => <CallDetails item={item} source={source} />}
       open={open}
       onOpen={onOpen}
     />
@@ -460,7 +503,7 @@ const LOG_COLUMNS: LogColumn<LogRow>[] = [
   {
     id: "source",
     label: "Source",
-    width: 14,
+    width: 15.5,
     cell: (log) => (
       <SourceCell
         kind={log.trace_kind}
@@ -476,14 +519,14 @@ const LOG_COLUMNS: LogColumn<LogRow>[] = [
   {
     id: "service",
     label: "App",
-    width: 6,
+    width: 7.5,
     hidden: true,
     cell: (log) => <span className="text-muted-foreground">{log.service}</span>,
   },
   {
     id: "trace",
     label: "Trace",
-    width: 8,
+    width: 9.5,
     hidden: true,
     cell: (log) => (
       <a className="font-mono text-muted-foreground hover:text-foreground" href={traceHref(log.trace_id, "logs")}>
@@ -762,72 +805,112 @@ function LogDetails({ log, onFilter }: { log: LogRow; onFilter: (terms: Record<s
   );
 }
 
+/** An issue's title: an error's type in red and its message, the place it was raised under it. */
+function IssueTitle({ item }: { item: IssueRow }) {
+  const [type, ...message] = item.title.split(": ");
+  return (
+    <span className="flex flex-col gap-0.5">
+      {item.kind === "error" ? (
+        <span>
+          <strong className="font-semibold text-error">{type}</strong>
+          {message.length ? <span>: {message.join(": ")}</span> : null}
+        </span>
+      ) : (
+        <span className="font-medium">{item.title}</span>
+      )}
+      {item.culprit ? <Mono className="text-base text-muted-foreground">{item.culprit}</Mono> : null}
+    </span>
+  );
+}
+
+/** Up to three of the values, one a line, and how many more there are. */
+function FirstOf({ values, count }: { values: readonly string[]; count: number }) {
+  return (
+    <span className="flex flex-col gap-0.5">
+      {values.slice(0, count).map((value) => (
+        <Mono key={value} className="truncate text-base">
+          {value}
+        </Mono>
+      ))}
+      {values.length > count ? (
+        <span className="text-base text-muted-foreground">+{values.length - count} more</span>
+      ) : null}
+    </span>
+  );
+}
+
+const ISSUE_COLUMNS: DataColumn<IssueRow>[] = [
+  {
+    id: "issue",
+    label: "Issue",
+    required: true,
+    // The title wraps: it is the row's reading.
+    className: "whitespace-normal",
+    cell: (item) => <IssueTitle item={item} />,
+  },
+  { id: "type", label: "Type", width: 10, cell: (item) => <IssueChip kind={item.kind} /> },
+  { id: "endpoints", label: "Endpoints", width: 18, cell: (item) => <FirstOf values={item.endpoints} count={3} /> },
+  {
+    id: "events",
+    label: "Events",
+    width: 5.75,
+    num: true,
+    className: "font-semibold",
+    cell: (item) => item.occurrences,
+  },
+  { id: "last", label: "Last seen", width: 7, num: true, className: MUTED, cell: (item) => ago(item.last_seen) },
+  { id: "first", label: "First seen", width: 7.25, num: true, className: MUTED, cell: (item) => ago(item.first_seen) },
+];
+
 export function IssuesTable({ items }: { items: readonly IssueRow[] }) {
   return (
-    <DataTable
-      head={
-        <>
-          <Th>Issue</Th>
-          <Th>Type</Th>
-          <Th>Endpoints</Th>
-          <Th num>Events</Th>
-          <Th num>Last seen</Th>
-          <Th num>First seen</Th>
-        </>
-      }
-    >
-      {items.map((item) => {
-        const error = item.kind === "error";
-        const [type, ...message] = item.title.split(": ");
-        return (
+    <DataTable table="issues" columns={ISSUE_COLUMNS}>
+      {({ cells }) =>
+        items.map((item) => (
           <Tr
             key={item.fingerprint}
-            tone={error ? "error" : "warn"}
+            tone={item.kind === "error" ? "error" : "warn"}
             href={href(issueRoute(item.fingerprint, item.kind))}
           >
-            <Td className="whitespace-normal">
-              <span className="flex flex-col gap-0.5">
-                {error ? (
-                  <span>
-                    <strong className="font-semibold text-error">{type}</strong>
-                    {message.length ? <span>: {message.join(": ")}</span> : null}
-                  </span>
-                ) : (
-                  <span className="font-medium">{item.title}</span>
-                )}
-                {item.culprit ? <Mono className="text-base text-muted-foreground">{item.culprit}</Mono> : null}
-              </span>
-            </Td>
-            <Td>
-              <IssueChip kind={item.kind} />
-            </Td>
-            <Td>
-              <span className="flex flex-col gap-0.5">
-                {item.endpoints.slice(0, 3).map((endpoint) => (
-                  <Mono key={endpoint} className="text-base">
-                    {endpoint}
-                  </Mono>
-                ))}
-                {item.endpoints.length > 3 ? (
-                  <span className="text-base text-muted-foreground">+{item.endpoints.length - 3} more</span>
-                ) : null}
-              </span>
-            </Td>
-            <Td num className="font-semibold">
-              {item.occurrences}
-            </Td>
-            <Td num className="text-muted-foreground">
-              {ago(item.last_seen)}
-            </Td>
-            <Td num className="text-muted-foreground">
-              {ago(item.first_seen)}
-            </Td>
+            {cells(item)}
           </Tr>
-        );
-      })}
+        ))
+      }
     </DataTable>
   );
 }
+
+const MAIL_COLUMNS: DataColumn<MailRow>[] = [
+  {
+    id: "subject",
+    label: "Subject",
+    required: true,
+    cell: (mail) => <span className="block truncate font-medium">{mail.subject || "(no subject)"}</span>,
+  },
+  { id: "to", label: "To", width: 12, cell: (mail) => <FirstOf values={mail.recipients} count={2} /> },
+  {
+    id: "from",
+    label: "From",
+    width: 11,
+    cell: (mail) => <Mono className="text-base text-muted-foreground">{mail.sender ?? "—"}</Mono>,
+  },
+  {
+    id: "source",
+    label: "Sent from",
+    width: 18,
+    cell: (mail) => (
+      <SourceCell
+        kind={mail.trace_kind}
+        htmx={mail.trace_htmx}
+        method={mail.method}
+        path={mail.path}
+        name={mail.trace_name}
+        className="max-w-none"
+      />
+    ),
+  },
+  { id: "when", label: "When", width: 6.5, num: true, className: MUTED, cell: (mail) => ago(mail.time) },
+];
 
 export function MailsTable({
   items,
@@ -842,64 +925,27 @@ export function MailsTable({
   onOpen: (key: string | null) => void;
 }) {
   return (
-    <DataTable
-      head={
-        <>
-          <Th>Subject</Th>
-          <Th>To</Th>
-          <Th>From</Th>
-          <Th>Sent from</Th>
-          <Th num>When</Th>
-        </>
+    <DataTable table="mails" columns={MAIL_COLUMNS}>
+      {({ cells, span }) =>
+        items.map((mail) => (
+          <Fragment key={mail.span_id}>
+            <Tr
+              selected={open === mail.span_id}
+              tone={mail.sent === false ? "error" : undefined}
+              onClick={() => onOpen(open === mail.span_id ? null : mail.span_id)}
+            >
+              {cells(mail)}
+            </Tr>
+            {open === mail.span_id ? (
+              <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={span} className="bg-muted/40 px-5 py-4 whitespace-normal">
+                  <MailPreview mail={mail} source={source} />
+                </TableCell>
+              </TableRow>
+            ) : null}
+          </Fragment>
+        ))
       }
-    >
-      {items.map((mail) => (
-        <Fragment key={mail.span_id}>
-          <Tr
-            selected={open === mail.span_id}
-            tone={mail.sent === false ? "error" : undefined}
-            onClick={() => onOpen(open === mail.span_id ? null : mail.span_id)}
-          >
-            <Td className="max-w-[26.25rem]">
-              <span className="block truncate font-medium">{mail.subject || "(no subject)"}</span>
-            </Td>
-            <Td>
-              <span className="flex flex-col gap-0.5">
-                {mail.recipients.slice(0, 2).map((address) => (
-                  <Mono key={address} className="text-base">
-                    {address}
-                  </Mono>
-                ))}
-                {mail.recipients.length > 2 ? (
-                  <span className="text-sm text-muted-foreground">+{mail.recipients.length - 2} more</span>
-                ) : null}
-              </span>
-            </Td>
-            <Td>
-              <Mono className="text-base text-muted-foreground">{mail.sender ?? "—"}</Mono>
-            </Td>
-            <Td>
-              <SourceCell
-                kind={mail.trace_kind}
-                htmx={mail.trace_htmx}
-                method={mail.method}
-                path={mail.path}
-                name={mail.trace_name}
-              />
-            </Td>
-            <Td num className="text-muted-foreground">
-              {ago(mail.time)}
-            </Td>
-          </Tr>
-          {open === mail.span_id ? (
-            <TableRow className="hover:bg-transparent">
-              <TableCell colSpan={5} className="bg-muted/40 px-5 py-4 whitespace-normal">
-                <MailPreview mail={mail} source={source} />
-              </TableCell>
-            </TableRow>
-          ) : null}
-        </Fragment>
-      ))}
     </DataTable>
   );
 }
@@ -1007,124 +1053,140 @@ export function KindBadge({ kind }: { kind: string }) {
   );
 }
 
-export function TasksTable({ items }: { items: readonly TaskRow[] }) {
-  const slowest = Math.max(...items.map((item) => item.p95), 1);
+/** A name in a list's main column: one line, cut short with an ellipsis. */
+const nameCell = (name: string) => <Mono className="block truncate">{name}</Mono>;
+
+/** An outlined badge, its text in mono when it is a name (a queue, an operation's type). */
+function OutlineBadge({ children, mono = false }: { children: ReactNode; mono?: boolean }) {
   return (
-    <DataTable
-      head={
-        <>
-          <Th>Task</Th>
-          <Th>System</Th>
-          <Th num>Runs</Th>
-          <Th num>Failed</Th>
-          <Th num>Retried</Th>
-          <Th>p95</Th>
-          <Th num>Queue wait p95</Th>
-          <Th>Queues</Th>
-          <Th num>Last</Th>
-        </>
+    <Badge variant="outline" className={cn("text-xs", mono && "font-mono")}>
+      {children}
+    </Badge>
+  );
+}
+
+function taskColumns(items: readonly TaskRow[]): DataColumn<TaskRow>[] {
+  return [
+    { id: "task", label: "Task", required: true, cell: (item) => nameCell(item.task) },
+    {
+      id: "system",
+      label: "System",
+      width: 7.5,
+      cell: (item) => <OutlineBadge>{taskSystem(item.system)}</OutlineBadge>,
+    },
+    { id: "runs", label: "Runs", width: 5, num: true, cell: (item) => item.runs },
+    {
+      id: "failed",
+      label: "Failed",
+      width: 5.5,
+      num: true,
+      className: (item) => errorCount(item.failures),
+      cell: (item) => item.failures || "—",
+    },
+    {
+      id: "retried",
+      label: "Retried",
+      width: 6,
+      num: true,
+      className: (item) => warnCount(item.retries),
+      cell: (item) => item.retries || "—",
+    },
+    p95Column(items),
+    {
+      id: "wait",
+      label: "Queue wait p95",
+      width: 9.25,
+      num: true,
+      className: (item) => (item.wait_p95 === null ? MUTED : undefined),
+      cell: (item) => (item.wait_p95 === null ? "eager" : duration(item.wait_p95)),
+    },
+    {
+      id: "queues",
+      label: "Queues",
+      width: 11.25,
+      // In the menu, not on screen: the Queue filter says them, and the task's name keeps the room.
+      hidden: true,
+      cell: (item) => (
+        <span className="flex gap-1">
+          {item.queues.map((queue) => (
+            <OutlineBadge key={queue} mono={true}>
+              {queue}
+            </OutlineBadge>
+          ))}
+        </span>
+      ),
+    },
+    lastColumn<TaskRow>(),
+  ];
+}
+
+export function TasksTable({ items }: { items: readonly TaskRow[] }) {
+  return (
+    <DataTable table="tasks" columns={taskColumns(items)}>
+      {({ cells }) =>
+        items.map((item) => (
+          <Tr
+            key={item.task}
+            tone={countTone(item.failures, item.with_issues)}
+            href={href(groupRoute("tasks", item.task))}
+          >
+            {cells(item)}
+          </Tr>
+        ))
       }
-    >
-      {items.map((item) => (
-        <Tr
-          key={item.task}
-          tone={item.failures ? "error" : item.with_issues ? "warn" : undefined}
-          href={href(groupRoute("tasks", item.task))}
-        >
-          <Td className="max-w-[26.25rem]">
-            <Mono className="block truncate">{item.task}</Mono>
-          </Td>
-          <Td>
-            <Badge variant="outline" className="text-xs">
-              {taskSystem(item.system)}
-            </Badge>
-          </Td>
-          <Td num>{item.runs}</Td>
-          <Td num className={item.failures ? "font-semibold text-error" : "text-muted-foreground"}>
-            {item.failures || "—"}
-          </Td>
-          <Td num className={item.retries ? "font-semibold text-warn" : "text-muted-foreground"}>
-            {item.retries || "—"}
-          </Td>
-          <Td>
-            <Meter value={item.p95} max={slowest}>
-              {duration(item.p95)}
-            </Meter>
-          </Td>
-          <Td num className={item.wait_p95 === null ? "text-muted-foreground" : ""}>
-            {item.wait_p95 === null ? "eager" : duration(item.wait_p95)}
-          </Td>
-          <Td>
-            <span className="flex flex-wrap gap-1">
-              {item.queues.map((queue) => (
-                <Badge key={queue} variant="outline" className="font-mono text-xs">
-                  {queue}
-                </Badge>
-              ))}
-            </span>
-          </Td>
-          <Td num className="text-muted-foreground">
-            {ago(item.last_seen)}
-          </Td>
-        </Tr>
-      ))}
     </DataTable>
   );
 }
 
-export function GraphqlTable({ items }: { items: readonly GraphqlRow[] }) {
-  const slowest = Math.max(...items.map((item) => item.p95), 1);
+/** A GraphQL operation's name, or "anonymous" when the client sent none. */
+function OperationName({ name }: { name: string | null | undefined }) {
+  if (name) return nameCell(name);
   return (
-    <DataTable
-      head={
-        <>
-          <Th>Type</Th>
-          <Th>Operation name</Th>
-          <Th num>Calls</Th>
-          <Th num>Errors</Th>
-          <Th>p95</Th>
-          <Th num>p50</Th>
-          <Th num>Queries / call</Th>
-          <Th num>Last</Th>
-        </>
+    <span className="text-muted-foreground italic" title="The client sent no operationName">
+      anonymous
+    </span>
+  );
+}
+
+function graphqlColumns(items: readonly GraphqlRow[]): DataColumn<GraphqlRow>[] {
+  return [
+    {
+      id: "type",
+      label: "Type",
+      width: 7,
+      cell: (item) => <OutlineBadge mono={true}>{item.type ?? "query"}</OutlineBadge>,
+    },
+    { id: "operation", label: "Operation name", required: true, cell: (item) => <OperationName name={item.name} /> },
+    { id: "calls", label: "Calls", width: 5.25, num: true, cell: (item) => item.calls },
+    {
+      id: "errors",
+      label: "Errors",
+      width: 6,
+      num: true,
+      className: (item) => errorCount(item.errors),
+      cell: (item) => item.errors || "—",
+    },
+    p95Column(items),
+    { id: "p50", label: "p50", width: 5.5, num: true, cell: (item) => duration(item.p50) },
+    { id: "queries", label: "Queries / call", width: 9, num: true, cell: (item) => item.avg_queries },
+    lastColumn(),
+  ];
+}
+
+export function GraphqlTable({ items }: { items: readonly GraphqlRow[] }) {
+  return (
+    <DataTable table="graphql" columns={graphqlColumns(items)}>
+      {({ cells }) =>
+        items.map((item) => (
+          <Tr
+            key={item.operation}
+            tone={countTone(item.errors, item.with_issues)}
+            href={href(groupRoute("graphql", item.operation))}
+          >
+            {cells(item)}
+          </Tr>
+        ))
       }
-    >
-      {items.map((item) => (
-        <Tr
-          key={item.operation}
-          tone={item.errors ? "error" : item.with_issues ? "warn" : undefined}
-          href={href(groupRoute("graphql", item.operation))}
-        >
-          <Td>
-            <Badge variant="outline" className="font-mono text-xs">
-              {item.type ?? "query"}
-            </Badge>
-          </Td>
-          <Td className="max-w-[26.25rem]">
-            {item.name ? (
-              <Mono className="block truncate">{item.name}</Mono>
-            ) : (
-              <span className="text-muted-foreground italic" title="The client sent no operationName">
-                anonymous
-              </span>
-            )}
-          </Td>
-          <Td num>{item.calls}</Td>
-          <Td num className={item.errors ? "font-semibold text-error" : "text-muted-foreground"}>
-            {item.errors || "—"}
-          </Td>
-          <Td>
-            <Meter value={item.p95} max={slowest}>
-              {duration(item.p95)}
-            </Meter>
-          </Td>
-          <Td num>{duration(item.p50)}</Td>
-          <Td num>{item.avg_queries}</Td>
-          <Td num className="text-muted-foreground">
-            {ago(item.last_seen)}
-          </Td>
-        </Tr>
-      ))}
     </DataTable>
   );
 }
@@ -1142,22 +1204,28 @@ type NamedRow = Pick<JobRow, "failures" | "with_issues" | "p95" | "last_seen"> &
   average: number;
 };
 
-/** A named row's first two cells: its name and badge, or the label and the node a table gives instead. */
-function NamedCells({ item }: { item: NamedRow }) {
-  const badge =
-    typeof item.badge === "string" ? (
-      <Badge variant="outline" className="font-mono text-xs">
-        {item.badge}
-      </Badge>
-    ) : (
-      item.badge
-    );
-  return (
-    <>
-      <Td className="max-w-[26.25rem]">{item.label ?? <Mono className="block truncate">{item.name}</Mono>}</Td>
-      <Td className="max-w-[22rem]">{badge}</Td>
-    </>
-  );
+/** A named row's badge: a string as an outlined badge, a node (a page's action) as it is. */
+function NamedBadge({ badge }: { badge: ReactNode }) {
+  return typeof badge === "string" ? <OutlineBadge mono={true}>{badge}</OutlineBadge> : badge;
+}
+
+function namedColumns(head: [string, string, string, string], items: readonly NamedRow[]): DataColumn<NamedRow>[] {
+  return [
+    { id: "name", label: head[0], required: true, cell: (item) => item.label ?? nameCell(item.name) },
+    { id: "badge", label: head[1], width: 11, cell: (item) => <NamedBadge badge={item.badge} /> },
+    { id: "count", label: head[2], width: 5.5, num: true, cell: (item) => item.count },
+    {
+      id: "failed",
+      label: "Failed",
+      width: 5.5,
+      num: true,
+      className: (item) => errorCount(item.failures),
+      cell: (item) => item.failures || "—",
+    },
+    p95Column(items),
+    { id: "average", label: head[3], width: 8.75, num: true, cell: (item) => item.average },
+    lastColumn(),
+  ];
 }
 
 function NamedTable({
@@ -1170,46 +1238,21 @@ function NamedTable({
   head: [string, string, string, string];
   items: readonly NamedRow[];
 }) {
-  const slowest = Math.max(...items.map((item) => item.p95), 1);
   return (
-    <DataTable
-      head={
-        <>
-          <Th>{head[0]}</Th>
-          <Th>{head[1]}</Th>
-          <Th num>{head[2]}</Th>
-          <Th num>Failed</Th>
-          <Th>p95</Th>
-          <Th num>{head[3]}</Th>
-          <Th num>Last</Th>
-        </>
+    <DataTable table={section} columns={namedColumns(head, items)}>
+      {({ cells }) =>
+        items.map((item) => (
+          <Tr
+            key={item.name}
+            tone={countTone(item.failures, item.with_issues)}
+            href={href(groupRoute(section, item.name))}
+          >
+            {cells(item)}
+          </Tr>
+        ))
       }
-    >
-      {items.map((item) => (
-        <Tr key={item.name} tone={rowTone(item)} href={href(groupRoute(section, item.name))}>
-          <NamedCells item={item} />
-          <Td num>{item.count}</Td>
-          <Td num className={item.failures ? "font-semibold text-error" : "text-muted-foreground"}>
-            {item.failures || "—"}
-          </Td>
-          <Td>
-            <Meter value={item.p95} max={slowest}>
-              {duration(item.p95)}
-            </Meter>
-          </Td>
-          <Td num>{item.average}</Td>
-          <Td num className="text-muted-foreground">
-            {ago(item.last_seen)}
-          </Td>
-        </Tr>
-      ))}
     </DataTable>
   );
-}
-
-function rowTone(item: Pick<JobRow, "failures" | "with_issues">): "error" | "warn" | undefined {
-  if (item.failures) return "error";
-  return item.with_issues ? "warn" : undefined;
 }
 
 export function JobsTable({ items }: { items: readonly JobRow[] }) {
@@ -1265,53 +1308,52 @@ export function PagesTable({ items }: { items: readonly PageRow[] }) {
   return <NamedTable section="pages" head={["Page", "Action", "Count", "Calls each"]} items={rows} />;
 }
 
+function websocketColumns(items: readonly WebsocketRow[]): DataColumn<WebsocketRow>[] {
+  return [
+    { id: "consumer", label: "Consumer", required: true, cell: (item) => nameCell(item.consumer) },
+    { id: "connections", label: "Connections", width: 8, num: true, cell: (item) => item.connections },
+    { id: "received", label: "Received", width: 6.75, num: true, cell: (item) => item.received },
+    {
+      id: "delivered",
+      label: "From layer",
+      width: 7.25,
+      num: true,
+      className: (item) => (item.delivered ? undefined : MUTED),
+      cell: (item) => item.delivered || "—",
+    },
+    {
+      id: "errors",
+      label: "Errors",
+      width: 6,
+      num: true,
+      className: (item) => errorCount(item.errors),
+      cell: (item) => item.errors || "—",
+    },
+    p95Column(items, "Handler p95"),
+    {
+      id: "paths",
+      label: "Paths",
+      width: 10,
+      cell: (item) => <Mono className="block truncate text-muted-foreground">{item.paths.join(", ")}</Mono>,
+    },
+    lastColumn(),
+  ];
+}
+
 export function WebsocketsTable({ items }: { items: readonly WebsocketRow[] }) {
-  const slowest = Math.max(...items.map((item) => item.p95), 1);
   return (
-    <DataTable
-      head={
-        <>
-          <Th>Consumer</Th>
-          <Th num>Connections</Th>
-          <Th num>Received</Th>
-          <Th num>From layer</Th>
-          <Th num>Errors</Th>
-          <Th>Handler p95</Th>
-          <Th>Paths</Th>
-          <Th num>Last</Th>
-        </>
+    <DataTable table="websockets" columns={websocketColumns(items)}>
+      {({ cells }) =>
+        items.map((item) => (
+          <Tr
+            key={item.consumer}
+            tone={countTone(item.errors, item.with_issues)}
+            href={href(groupRoute("websockets", item.consumer))}
+          >
+            {cells(item)}
+          </Tr>
+        ))
       }
-    >
-      {items.map((item) => (
-        <Tr
-          key={item.consumer}
-          tone={item.errors ? "error" : item.with_issues ? "warn" : undefined}
-          href={href(groupRoute("websockets", item.consumer))}
-        >
-          <Td className="max-w-[22.5rem]">
-            <Mono className="block truncate">{item.consumer}</Mono>
-          </Td>
-          <Td num>{item.connections}</Td>
-          <Td num>{item.received}</Td>
-          <Td num className={item.delivered ? "" : "text-muted-foreground"}>
-            {item.delivered || "—"}
-          </Td>
-          <Td num className={item.errors ? "font-semibold text-error" : "text-muted-foreground"}>
-            {item.errors || "—"}
-          </Td>
-          <Td>
-            <Meter value={item.p95} max={slowest}>
-              {duration(item.p95)}
-            </Meter>
-          </Td>
-          <Td className="max-w-[16.25rem]">
-            <Mono className="block truncate text-muted-foreground">{item.paths.join(", ")}</Mono>
-          </Td>
-          <Td num className="text-muted-foreground">
-            {ago(item.last_seen)}
-          </Td>
-        </Tr>
-      ))}
     </DataTable>
   );
 }

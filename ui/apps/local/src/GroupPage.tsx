@@ -1,6 +1,8 @@
 import {
   CallsChart,
+  type DataColumn,
   type DataSource,
+  DataTable,
   duration,
   Empty,
   type GraphqlDetail,
@@ -24,7 +26,7 @@ import { ENTRY } from "./sections";
 import { TimeRange } from "./TimeRange";
 import { TracesTable } from "./tables";
 import { rangeTerms } from "./time";
-import { Breadcrumbs, DataTable, Loading, Meter, Mono, Td, Th, Tr } from "./ui";
+import { Breadcrumbs, Loading, Meter, Mono, Tr } from "./ui";
 
 type Group = TraceGroup | GraphqlDetail;
 
@@ -233,15 +235,50 @@ export function GroupPage({
       <div className="grid gap-7">
         <section>
           <h2 className="mb-2.5 text-xl font-semibold">Slowest calls</h2>
-          <TracesTable items={group.slowest} selectedId={null} hrefFor={traceHref} />
+          <TracesTable table="group:slowest" items={group.slowest} selectedId={null} hrefFor={traceHref} />
         </section>
         <section>
           <h2 className="mb-2.5 text-xl font-semibold">Recent calls</h2>
-          <TracesTable items={group.recent} selectedId={null} hrefFor={traceHref} />
+          <TracesTable table="group:recent" items={group.recent} selectedId={null} hrefFor={traceHref} />
         </section>
       </div>
     </div>
   );
+}
+
+type Resolver = GraphqlDetail["resolvers"][number];
+
+function resolverColumns(slowest: number): DataColumn<Resolver>[] {
+  return [
+    { id: "field", label: "Field", required: true, cell: (row) => <Mono>{row.field}</Mono> },
+    {
+      id: "runs",
+      label: "Runs / call",
+      width: 8,
+      num: true,
+      className: (row) => (row.per_call > 1 ? "font-semibold" : undefined),
+      cell: (row) => row.per_call,
+    },
+    {
+      id: "queries",
+      label: "Queries / call",
+      width: 9,
+      num: true,
+      className: (row) => (row.queries_per_call > 1 ? "font-semibold text-warn" : undefined),
+      cell: (row) => row.queries_per_call,
+    },
+    {
+      id: "total",
+      label: "Total time",
+      width: 8.5,
+      cell: (row) => (
+        <Meter value={row.total} max={slowest}>
+          {duration(row.total)}
+        </Meter>
+      ),
+    },
+    { id: "p95", label: "p95", width: 6.5, num: true, cell: (row) => duration(row.p95) },
+  ];
 }
 
 /** Where a GraphQL operation spends its time: each resolver, how often it runs per call, its SQL per call. */
@@ -259,36 +296,14 @@ function Resolvers({ operation }: { operation: GraphqlDetail }) {
         </pre>
       ) : null}
       {operation.resolvers.length > 0 ? (
-        <DataTable
-          head={
-            <>
-              <Th>Field</Th>
-              <Th num>Runs / call</Th>
-              <Th num>Queries / call</Th>
-              <Th>Total time</Th>
-              <Th num>p95</Th>
-            </>
+        <DataTable table="resolvers" columns={resolverColumns(slowest)}>
+          {({ cells }) =>
+            operation.resolvers.map((row) => (
+              <Tr key={row.field} tone={row.queries_per_call > row.per_call && row.per_call > 1 ? "warn" : undefined}>
+                {cells(row)}
+              </Tr>
+            ))
           }
-        >
-          {operation.resolvers.map((row) => (
-            <Tr key={row.field} tone={row.queries_per_call > row.per_call && row.per_call > 1 ? "warn" : undefined}>
-              <Td>
-                <Mono>{row.field}</Mono>
-              </Td>
-              <Td num className={row.per_call > 1 ? "font-semibold" : ""}>
-                {row.per_call}
-              </Td>
-              <Td num className={row.queries_per_call > 1 ? "font-semibold text-warn" : ""}>
-                {row.queries_per_call}
-              </Td>
-              <Td>
-                <Meter value={row.total} max={slowest}>
-                  {duration(row.total)}
-                </Meter>
-              </Td>
-              <Td num>{duration(row.p95)}</Td>
-            </Tr>
-          ))}
         </DataTable>
       ) : (
         <p className="text-muted-foreground">Only fields that read attributes: no resolvers of yours ran.</p>

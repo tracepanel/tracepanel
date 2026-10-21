@@ -3,6 +3,7 @@ export { CallMap } from "./CallMap";
 export { CallsList } from "./CallsList";
 export { CallsChart, Histogram, LatencyChart, LogsChart, Stat, StatGrid } from "./Charts";
 export * from "./CopyButton";
+export { type DataColumn, type DataRows, DataTable } from "./DataTable";
 export { ErrorView } from "./ErrorView";
 export * from "./ExplainView";
 export { ago, duration, percent, type Tone, tone } from "./format";

@@ -12,6 +12,8 @@ export interface ColumnSpec {
   required?: boolean;
   /** Kept at its width when the table is narrow: its content has one width (a time, a level), cut it would say less. */
   fixed?: boolean;
+  /** A column of numbers: its name and its values at the end, its values in figures of one width. */
+  num?: boolean;
 }
 
 /** What the reader changed: widths dragged (px), columns shown or hidden, by column id, and the columns' order. */

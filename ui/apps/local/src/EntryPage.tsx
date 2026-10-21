@@ -415,7 +415,7 @@ function CallsList({ calls, section, q }: { calls: Calls; section: EntrySection;
   const fresh = useNewIds(idsOf(calls.items), true);
   return rowsOr(calls.items, section, q, (items) => (
     <>
-      <TracesTable items={items} selectedId={null} hrefFor={traceHref} newIds={fresh} />
+      <TracesTable table={`${section}:calls`} items={items} selectedId={null} hrefFor={traceHref} newIds={fresh} />
       {calls.hasMore ? <LoadMore label="Load older" loading={calls.loading} onMore={calls.more} /> : null}
     </>
   ));
