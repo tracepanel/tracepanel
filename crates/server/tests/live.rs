@@ -135,7 +135,8 @@ async fn task_events_on_the_wire_are_listed_until_the_task_finishes() {
     let (_, other) = get(&router, "/api/tasks/live?service=blog").await;
 
     assert_eq!(live["tasks"][0]["id"], "t1");
-    assert_eq!(live["workers"][0]["in_flight"], 0);
+    // t1 waits in the queue the worker took t2 from: it is between two tasks, not idle.
+    assert_eq!(live["workers"][0]["in_flight"], 1);
     assert_eq!(other["tasks"], json!([]));
     let _ = std::fs::remove_dir_all(&dir);
 }

@@ -1083,7 +1083,7 @@ export interface components {
             system: string;
             service: string;
             last_seen: components["schemas"]["Time"];
-            /** @description The tasks it runs now. */
+            /** @description The tasks it runs now; one between two tasks while tasks of its queues wait. */
             in_flight: number;
         };
         GraphqlRow: {

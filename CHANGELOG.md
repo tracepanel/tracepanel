@@ -4,6 +4,9 @@
 
 ### Changed
 
+- The agent reads its cloud settings as `TRACEPANEL_API_KEY`, which was
+  `TRACEPANEL_TOKEN`, and `TRACEPANEL_INGEST_URL`, which was
+  `TRACEPANEL_CLOUD_URL`. The old names are no longer read.
 - The code that answered a request is a handler in Java, Kotlin and
   JavaScript apps, and a view only in Python ones, as Django calls it. The
   request's facts, the call tree, the time breakdown and the widget's card
@@ -11,6 +14,23 @@
   keeps a longer name, Spring's `com.shop.BookController.list` behind
   `BookController#list`, shows it on hover. The data keeps `code.view` and
   spans of kind `view`, and the search keeps `view:`.
+
+### Fixed
+
+- A worker on the Tasks page's Now no longer reads idle between two tasks
+  while tasks of its queues wait. An RQ worker forks a process for each job,
+  and the console often asked in that gap. A worker that ended a task in the
+  last 2 seconds, with a task of its queues still queued, counts one running
+  in `api/tasks/live`. A heartbeat names the worker of a running task whose
+  `started` event did not.
+- The p50 column on HTTP and GraphQL, Avg on Services and For in Now's table
+  are wide enough for their values at 1280 px and up: "810 ms" was cut to
+  "810 …".
+- The logs table has no day headings between records. Each record's time
+  says its day instead, today's too: "Oct 21 15:45:20.345", the Time column
+  wide enough for it. Time of day in the columns menu is Date and time now.
+- A column's resize edge is a darker gray on hover, while dragged and when
+  focused, not the brand's purple. From the keyboard it is thicker too.
 
 ## 0.4.0 (2026-10-21)
 
