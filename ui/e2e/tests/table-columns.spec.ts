@@ -180,7 +180,6 @@ test("the columns don't move after the first paint: their widths are there with 
 
   expect(await header(page, "Calls").boundingBox()).toEqual(at);
 });
-
 /** What a header cell and a body cell look like: their size, type, color and padding. */
 async function looks(page: Page) {
   const table = main(page).getByRole("table").first();
@@ -202,19 +201,23 @@ async function looks(page: Page) {
       .first()
       .evaluate((cell) => {
         const style = getComputedStyle(cell);
-        return { font: style.fontSize, padding: [style.paddingTop, style.paddingBottom, style.paddingLeft] };
+        return { font: style.fontSize, sides: [style.paddingLeft, style.paddingRight], height: style.paddingTop };
       }),
   };
 }
 
-test("every list's header and rows look as the logs table's do", async ({ page }) => {
+test("every list's header and rows look as the logs table's do, the logs' rows compact", async ({ page }) => {
   await open(page, "/#/logs");
   const logs = await looks(page);
+  const rem = await page.evaluate(() => Number.parseFloat(getComputedStyle(document.documentElement).fontSize));
+
+  // The logs are a stream read many lines at once: rows of one line with little room around it.
+  expect(logs.body.height).toBe(`${0.375 * rem}px`);
 
   for (const url of ["/#/endpoints", "/#/tasks", "/#/calls/sql", "/#/endpoints?view=calls"]) {
     await open(page, url);
 
-    expect(await looks(page)).toEqual(logs);
+    expect(await looks(page)).toEqual({ ...logs, body: { ...logs.body, height: `${0.75 * rem}px` } });
   }
 });
 
@@ -224,4 +227,19 @@ test("a column of numbers is aligned at its end, its name with it", async ({ pag
   await expect(header(page, "Calls")).toHaveCSS("text-align", "right");
   await expect(firstRow(page).getByRole("cell").nth(1)).toHaveCSS("text-align", "right");
   await expect(header(page, "Endpoint")).toHaveCSS("text-align", "left");
+});
+
+test("at 1440 px a list's main column has the room, and its short values are whole", async ({ page }) => {
+  await open(page, "/#/tasks");
+
+  expect(await widthOf(header(page, "Task"))).toBeGreaterThanOrEqual(320);
+  // Times, counts and badges show in full: what a narrow page cuts first is the main column's name.
+  for (const name of ["System", "Runs", "Failed", "Retried", "p95", "Queue wait p95", "Last"]) {
+    const index = await header(page, name).evaluate((cell) => (cell as HTMLTableCellElement).cellIndex);
+    const cut = await main(page)
+      .locator(`tbody tr > td:nth-child(${index + 1})`)
+      .evaluateAll((cells) => cells.filter((cell) => cell.scrollWidth > cell.clientWidth).length);
+
+    expect(cut, name).toBe(0);
+  }
 });

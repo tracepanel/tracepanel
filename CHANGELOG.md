@@ -75,9 +75,11 @@
 
 ### Changed
 
-- The logs table and every other list share one header and one row height,
-  the other lists' own. The columns fit the page's width, so a list with many
-  columns no longer scrolls sideways.
+- The logs table and every other list share one header and one text size.
+  The logs keep their compact rows. The columns fit the page's width, so a
+  list with many columns no longer scrolls sideways, and the main column gets
+  the room the short values leave. Tasks shows its queues from the columns
+  menu.
 
 - The logs table draws only the rows in view and a screenful around them.
   Thousands of records loaded scroll as lightly as a hundred.

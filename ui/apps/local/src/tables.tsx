@@ -74,8 +74,8 @@ const TRACE_COLUMNS: DataColumn<TraceSummary>[] = [
     cell: (trace) =>
       trace.task_state ? <TaskState state={trace.task_state} /> : <StatusBadge status={trace.http_status} />,
   },
-  { id: "duration", label: "Duration", width: 8, num: true, cell: (trace) => duration(trace.duration) },
-  { id: "queries", label: "Queries", width: 7, num: true, cell: (trace) => trace.queries },
+  { id: "duration", label: "Duration", width: 6.75, num: true, cell: (trace) => duration(trace.duration) },
+  { id: "queries", label: "Queries", width: 6.25, num: true, cell: (trace) => trace.queries },
   {
     id: "issues",
     label: "Issues",
@@ -89,7 +89,7 @@ const TRACE_COLUMNS: DataColumn<TraceSummary>[] = [
       </span>
     ),
   },
-  { id: "when", label: "When", width: 7.5, num: true, className: MUTED, cell: (trace) => ago(trace.start) },
+  { id: "when", label: "When", width: 6.5, num: true, className: MUTED, cell: (trace) => ago(trace.start) },
 ];
 
 const traceTone = (trace: TraceSummary) => (trace.status === "error" ? "error" : trace.issues > 0 ? "warn" : undefined);
@@ -156,7 +156,7 @@ function p95Column<T extends { p95: number }>(items: readonly T[], label = "p95"
   return {
     id: "p95",
     label,
-    width: 10,
+    width: 8.5,
     cell: (item) => (
       <Meter value={item.p95} max={slowest}>
         {duration(item.p95)}
@@ -184,14 +184,14 @@ function endpointColumns(items: readonly EndpointRow[]): DataColumn<EndpointRow>
         </span>
       ),
     },
-    { id: "calls", label: "Calls", width: 5.5, num: true, cell: (item) => item.calls },
-    { id: "p50", label: "p50", width: 6.5, num: true, cell: (item) => duration(item.p50) },
+    { id: "calls", label: "Calls", width: 5.25, num: true, cell: (item) => item.calls },
+    { id: "p50", label: "p50", width: 5.5, num: true, cell: (item) => duration(item.p50) },
     p95Column(items),
     { id: "queries", label: "Queries / call", width: 9, num: true, cell: (item) => item.avg_queries },
     {
       id: "issues",
       label: "With issues",
-      width: 7.5,
+      width: 7.75,
       num: true,
       className: (item) => warnCount(item.with_issues),
       cell: (item) => item.with_issues || "—",
@@ -242,7 +242,7 @@ function callStatsColumns<T extends CallStats>(
 ): DataColumn<T>[] {
   const heaviest = Math.max(...items.map((item) => item.total), 1);
   const own: DataColumn<T>[] = extra
-    ? [{ id: "extra", label: extra.head, width: 6.5, num: true, cell: extra.cell }]
+    ? [{ id: "extra", label: extra.head, width: 6.75, num: true, cell: extra.cell }]
     : [];
   return [
     {
@@ -256,12 +256,12 @@ function callStatsColumns<T extends CallStats>(
         </span>
       ),
     },
-    { id: "calls", label: "Calls", width: 5.5, num: true, cell: (item) => item.calls },
-    { id: "requests", label: "Requests", width: 7, num: true, cell: (item) => item.traces },
+    { id: "calls", label: "Calls", width: 5.25, num: true, cell: (item) => item.calls },
+    { id: "requests", label: "Requests", width: 6.75, num: true, cell: (item) => item.traces },
     {
       id: "repeated",
       label: "Max / request",
-      width: 9.5,
+      width: 9,
       num: true,
       cell: (item) => <RepeatedCount most={item.most_per_trace} />,
     },
@@ -270,7 +270,7 @@ function callStatsColumns<T extends CallStats>(
     {
       id: "total",
       label: "Total time",
-      width: 10,
+      width: 8.5,
       cell: (item) => (
         <Meter value={item.total} max={heaviest}>
           {duration(item.total)}
@@ -848,18 +848,18 @@ const ISSUE_COLUMNS: DataColumn<IssueRow>[] = [
     className: "whitespace-normal",
     cell: (item) => <IssueTitle item={item} />,
   },
-  { id: "type", label: "Type", width: 9.5, cell: (item) => <IssueChip kind={item.kind} /> },
-  { id: "endpoints", label: "Endpoints", width: 16, cell: (item) => <FirstOf values={item.endpoints} count={3} /> },
+  { id: "type", label: "Type", width: 10, cell: (item) => <IssueChip kind={item.kind} /> },
+  { id: "endpoints", label: "Endpoints", width: 18, cell: (item) => <FirstOf values={item.endpoints} count={3} /> },
   {
     id: "events",
     label: "Events",
-    width: 6,
+    width: 5.75,
     num: true,
     className: "font-semibold",
     cell: (item) => item.occurrences,
   },
   { id: "last", label: "Last seen", width: 7, num: true, className: MUTED, cell: (item) => ago(item.last_seen) },
-  { id: "first", label: "First seen", width: 7, num: true, className: MUTED, cell: (item) => ago(item.first_seen) },
+  { id: "first", label: "First seen", width: 7.25, num: true, className: MUTED, cell: (item) => ago(item.first_seen) },
 ];
 
 export function IssuesTable({ items }: { items: readonly IssueRow[] }) {
@@ -887,17 +887,17 @@ const MAIL_COLUMNS: DataColumn<MailRow>[] = [
     required: true,
     cell: (mail) => <span className="block truncate font-medium">{mail.subject || "(no subject)"}</span>,
   },
-  { id: "to", label: "To", width: 13, cell: (mail) => <FirstOf values={mail.recipients} count={2} /> },
+  { id: "to", label: "To", width: 12, cell: (mail) => <FirstOf values={mail.recipients} count={2} /> },
   {
     id: "from",
     label: "From",
-    width: 12,
+    width: 11,
     cell: (mail) => <Mono className="text-base text-muted-foreground">{mail.sender ?? "—"}</Mono>,
   },
   {
     id: "source",
     label: "Sent from",
-    width: 16,
+    width: 18,
     cell: (mail) => (
       <SourceCell
         kind={mail.trace_kind}
@@ -909,7 +909,7 @@ const MAIL_COLUMNS: DataColumn<MailRow>[] = [
       />
     ),
   },
-  { id: "when", label: "When", width: 7, num: true, className: MUTED, cell: (mail) => ago(mail.time) },
+  { id: "when", label: "When", width: 6.5, num: true, className: MUTED, cell: (mail) => ago(mail.time) },
 ];
 
 export function MailsTable({
@@ -1091,11 +1091,11 @@ function taskColumns(items: readonly TaskRow[]): DataColumn<TaskRow>[] {
       className: (item) => warnCount(item.retries),
       cell: (item) => item.retries || "—",
     },
-    { ...p95Column(items), width: 8 },
+    p95Column(items),
     {
       id: "wait",
       label: "Queue wait p95",
-      width: 9,
+      width: 9.25,
       num: true,
       className: (item) => (item.wait_p95 === null ? MUTED : undefined),
       cell: (item) => (item.wait_p95 === null ? "eager" : duration(item.wait_p95)),
@@ -1103,7 +1103,9 @@ function taskColumns(items: readonly TaskRow[]): DataColumn<TaskRow>[] {
     {
       id: "queues",
       label: "Queues",
-      width: 8.5,
+      width: 11.25,
+      // In the menu, not on screen: the Queue filter says them, and the task's name keeps the room.
+      hidden: true,
       cell: (item) => (
         <span className="flex gap-1">
           {item.queues.map((queue) => (
@@ -1155,7 +1157,7 @@ function graphqlColumns(items: readonly GraphqlRow[]): DataColumn<GraphqlRow>[] 
       cell: (item) => <OutlineBadge mono={true}>{item.type ?? "query"}</OutlineBadge>,
     },
     { id: "operation", label: "Operation name", required: true, cell: (item) => <OperationName name={item.name} /> },
-    { id: "calls", label: "Calls", width: 5.5, num: true, cell: (item) => item.calls },
+    { id: "calls", label: "Calls", width: 5.25, num: true, cell: (item) => item.calls },
     {
       id: "errors",
       label: "Errors",
@@ -1165,7 +1167,7 @@ function graphqlColumns(items: readonly GraphqlRow[]): DataColumn<GraphqlRow>[] 
       cell: (item) => item.errors || "—",
     },
     p95Column(items),
-    { id: "p50", label: "p50", width: 6.5, num: true, cell: (item) => duration(item.p50) },
+    { id: "p50", label: "p50", width: 5.5, num: true, cell: (item) => duration(item.p50) },
     { id: "queries", label: "Queries / call", width: 9, num: true, cell: (item) => item.avg_queries },
     lastColumn(),
   ];
@@ -1210,18 +1212,18 @@ function NamedBadge({ badge }: { badge: ReactNode }) {
 function namedColumns(head: [string, string, string, string], items: readonly NamedRow[]): DataColumn<NamedRow>[] {
   return [
     { id: "name", label: head[0], required: true, cell: (item) => item.label ?? nameCell(item.name) },
-    { id: "badge", label: head[1], width: 12, cell: (item) => <NamedBadge badge={item.badge} /> },
-    { id: "count", label: head[2], width: 6, num: true, cell: (item) => item.count },
+    { id: "badge", label: head[1], width: 11, cell: (item) => <NamedBadge badge={item.badge} /> },
+    { id: "count", label: head[2], width: 5.5, num: true, cell: (item) => item.count },
     {
       id: "failed",
       label: "Failed",
-      width: 6,
+      width: 5.5,
       num: true,
       className: (item) => errorCount(item.failures),
       cell: (item) => item.failures || "—",
     },
     p95Column(items),
-    { id: "average", label: head[3], width: 10, num: true, cell: (item) => item.average },
+    { id: "average", label: head[3], width: 8.75, num: true, cell: (item) => item.average },
     lastColumn(),
   ];
 }
@@ -1309,12 +1311,12 @@ export function PagesTable({ items }: { items: readonly PageRow[] }) {
 function websocketColumns(items: readonly WebsocketRow[]): DataColumn<WebsocketRow>[] {
   return [
     { id: "consumer", label: "Consumer", required: true, cell: (item) => nameCell(item.consumer) },
-    { id: "connections", label: "Connections", width: 8.5, num: true, cell: (item) => item.connections },
-    { id: "received", label: "Received", width: 7, num: true, cell: (item) => item.received },
+    { id: "connections", label: "Connections", width: 8, num: true, cell: (item) => item.connections },
+    { id: "received", label: "Received", width: 6.75, num: true, cell: (item) => item.received },
     {
       id: "delivered",
       label: "From layer",
-      width: 7.5,
+      width: 7.25,
       num: true,
       className: (item) => (item.delivered ? undefined : MUTED),
       cell: (item) => item.delivered || "—",

@@ -6,7 +6,7 @@ import { cn } from "@tracepanel/ui/lib/utils";
 import type { ReactNode } from "react";
 import { Table, TableBody, TableCell } from "./components/ui/table";
 import { type ColumnSpec, useColumns } from "./hooks/useColumns";
-import { BODY_CELL, ColumnsHeader, MENU_REM, useColumnWidths } from "./TableColumns";
+import { bodyCell, ColumnsHeader, type Density, MENU_REM, useColumnWidths } from "./TableColumns";
 
 /** A column of a list: its spec, and what its cell shows for an item. */
 export interface DataColumn<T> extends ColumnSpec {
@@ -26,13 +26,13 @@ function classOf<T>(column: DataColumn<T>, item: T): string | undefined {
 }
 
 /** An item's cells: one per shown column, then the columns menu's, empty. */
-function Cells<T>({ item, shown }: { item: T; shown: readonly DataColumn<T>[] }) {
+function Cells<T>({ item, shown, density }: { item: T; shown: readonly DataColumn<T>[]; density: Density }) {
   return (
     <>
       {shown.map((column) => (
         <TableCell
           key={column.id}
-          className={cn(BODY_CELL, "truncate", column.num && "text-right tabular-nums", classOf(column, item))}
+          className={cn(bodyCell(density), "truncate", column.num && "text-right tabular-nums", classOf(column, item))}
         >
           {column.cell(item)}
         </TableCell>
@@ -51,18 +51,24 @@ export function DataTable<T>({
   table,
   columns,
   stickyHeader = false,
+  density = "default",
   children,
 }: {
   table: string;
   columns: readonly DataColumn<T>[];
   /** Keeps the header in view while the page scrolls under it. */
   stickyHeader?: boolean | undefined;
+  /** How tall the rows are: `compact` for a stream of records read many lines at once. */
+  density?: Density | undefined;
   children: (rows: DataRows<T>) => ReactNode;
 }) {
   const arranged = useColumns(table, columns);
   const { ref, widths } = useColumnWidths(arranged, MENU_REM);
   const shown = arranged.shown;
-  const rows: DataRows<T> = { cells: (item) => <Cells item={item} shown={shown} />, span: shown.length + 1 };
+  const rows: DataRows<T> = {
+    cells: (item) => <Cells item={item} shown={shown} density={density} />,
+    span: shown.length + 1,
+  };
   return (
     // Clipped, not hidden: a sticky header stays in view as the page scrolls.
     <div className="overflow-clip rounded-lg border bg-card">

@@ -270,7 +270,7 @@ function resolverColumns(slowest: number): DataColumn<Resolver>[] {
     {
       id: "total",
       label: "Total time",
-      width: 10,
+      width: 8.5,
       cell: (row) => (
         <Meter value={row.total} max={slowest}>
           {duration(row.total)}

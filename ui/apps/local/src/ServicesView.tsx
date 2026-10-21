@@ -115,11 +115,11 @@ const COLUMNS: DataColumn<Line>[] = [
       </span>
     ),
   },
-  { id: "calls", label: "Calls", width: 5.5, num: true, cell: (line) => line.calls.toLocaleString() },
+  { id: "calls", label: "Calls", width: 5.25, num: true, cell: (line) => line.calls.toLocaleString() },
   {
     id: "time",
     label: "Time",
-    width: 10,
+    width: 8.5,
     cell: (line) => (
       <Meter value={line.total} max={line.most}>
         {duration(line.total)}
@@ -129,7 +129,7 @@ const COLUMNS: DataColumn<Line>[] = [
   {
     id: "avg",
     label: "Avg",
-    width: 5.5,
+    width: 5.75,
     num: true,
     cell: (line) => duration(Math.round(line.total / Math.max(line.calls, 1))),
   },

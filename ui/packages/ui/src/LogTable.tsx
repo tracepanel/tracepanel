@@ -30,7 +30,7 @@ import { ago, clock, duration, since } from "./format";
 import { type ColumnSpec, type Columns, useColumns } from "./hooks/useColumns";
 import { useStored } from "./hooks/useStored";
 import { logAttrs } from "./LogRecordDetails";
-import { BODY_CELL, ColumnsHeader, MENU_REM, useColumnWidths } from "./TableColumns";
+import { bodyCell, ColumnsHeader, MENU_REM, useColumnWidths } from "./TableColumns";
 import type { Log } from "./types";
 
 type LogLike = Pick<Log, "time" | "level" | "logger" | "message" | "exception" | "attrs">;
@@ -411,7 +411,7 @@ function linesOf<R extends LogLike>(logs: readonly R[], keyOf: (log: R) => strin
 }
 
 /** A line's height before it is measured: a record's one line, a heading's smaller one, details' a guess. */
-const ESTIMATE: Record<Line<unknown>["kind"], number> = { day: 26, record: 45, details: 320 };
+const ESTIMATE: Record<Line<unknown>["kind"], number> = { day: 26, record: 31, details: 320 };
 
 /** What a line's row needs from the table: its columns, the opened record, and the place's details and button. */
 interface RowContext<R> {
@@ -465,7 +465,7 @@ function LogRecordRow<R extends LogLike>({
       onKeyDown={(event) => onRowKey(event, opened, onToggle)}
     >
       {shown.map((column) => (
-        <TableCell key={column.id} className={cn(BODY_CELL, "truncate")}>
+        <TableCell key={column.id} className={cn(bodyCell("compact"), "truncate")}>
           {column.cell(log, opened)}
         </TableCell>
       ))}
@@ -661,7 +661,7 @@ export function LogTable<R extends LogLike>({
   };
   return (
     <AttributeColumnsContext.Provider value={pinned}>
-      {/* One density for every list of the console: the header and the rows of the others (TableColumns). */}
+      {/* The console's header and text, compact rows: a stream of records read many lines at once (TableColumns). */}
       <Table ref={ref} className="table-fixed text-base" stickyHeader={stickyHeader}>
         <LogHead
           columns={columns}

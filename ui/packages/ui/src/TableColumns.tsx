@@ -30,11 +30,26 @@ import { useCloseOnBlur } from "./hooks/useCloseOnBlur";
 import type { ColumnSpec, Columns } from "./hooks/useColumns";
 
 /**
- * One density for every list, the logs' too: a header cell's height, type and padding, a body cell's padding. The
- * table's own text is `text-base`.
+ * One header for every list, the logs' too: a header cell's height, type and padding. The table's own text is
+ * `text-base`.
  */
 const HEAD_CELL = "h-10 px-5 text-xs font-semibold tracking-wide text-muted-foreground uppercase first:pl-6";
-export const BODY_CELL = "px-5 py-3 first:pl-6";
+
+/**
+ * How tall a list's rows are: `default` for the lists of records a reader scans a row at a time, `compact` for a
+ * stream read many lines at once (the logs), one line of text with little room around it.
+ */
+export type Density = "default" | "compact";
+
+const BODY_CELLS = new Map<Density, string>([
+  ["default", "px-5 py-3 first:pl-6"],
+  ["compact", "px-5 py-1.5 first:pl-6"],
+]);
+
+/** A body cell's padding at the list's density: the same sides for every list, the height by density. */
+export function bodyCell(density: Density): string {
+  return BODY_CELLS.get(density) ?? "";
+}
 
 /** What the columns menu's own column takes, in rem: the header's last cell, empty in every row. */
 export const MENU_REM = 2.25;

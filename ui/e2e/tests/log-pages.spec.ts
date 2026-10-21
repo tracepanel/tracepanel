@@ -26,8 +26,6 @@ test("rows a refresh pushes off the first page stay between it and the older pag
   // Twelve records: a first page and two older ones.
   let records = Array.from({ length: 12 }, (_, n) => record(12 - n));
   await serve(page, () => records);
-  // Tall enough that the first page's end is in view, where the next page loads on its own.
-  await page.setViewportSize({ width: 1440, height: 1300 });
   await page.goto("/#/logs");
   const rows = page.getByRole("region", { name: "Logs" }).getByRole("rowgroup").last().getByRole("row");
   const older = page.getByRole("button", { name: "Load older logs" });
