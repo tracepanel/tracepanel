@@ -25,6 +25,7 @@ import { type PropRow, PropTable } from "./PropTable";
 import { AliasChip, AppChip, IssueChip } from "./primitives";
 import { SideResize, useSideWidth } from "./SideResize";
 import { SqlCode } from "./SqlCode";
+import { TemplateContext, withoutContext } from "./TemplateContext";
 import type { Attrs, IssueKind, Log, Related, Span, Trace, TraceError, TraceSummary } from "./types";
 
 /* ---------- tree ---------- */
@@ -938,8 +939,19 @@ function SpanDetails({ node: { span }, trace }: DetailsProps<"span">) {
       <Statement span={span} attrs={attrs} />
       {typeof document === "string" ? <GraphqlCode document={document} /> : null}
       {summary.length ? <PropTable rows={summary} /> : null}
-      <AllAttributes attrs={attrs} titled={summary.length > 0} />
+      <SpanAttributes span={span} attrs={attrs} titled={summary.length > 0} />
     </div>
+  );
+}
+
+/** Every attribute of a span; a template's context first, as rows of its own. */
+function SpanAttributes({ span, attrs, titled }: { span: Span; attrs: Attrs; titled: boolean }) {
+  const template = span.kind === "template";
+  return (
+    <>
+      {template ? <TemplateContext attrs={attrs} /> : null}
+      <AllAttributes attrs={withoutContext(attrs)} titled={titled || template} />
+    </>
   );
 }
 

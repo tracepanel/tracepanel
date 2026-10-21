@@ -13,6 +13,8 @@ export interface TraceLinks {
   call?: ((key: string) => string) | undefined;
   /** This trace's records in the logs list. */
   logs?: ((traceId: string) => string) | undefined;
+  /** The page of the app that recorded it (service.name): its settings and versions. */
+  app?: ((service: string) => string) | undefined;
   /** Open them in a new tab: the panel lives inside someone's page, the console does not. */
   newTab?: boolean | undefined;
 }

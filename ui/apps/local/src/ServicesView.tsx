@@ -14,17 +14,7 @@ import { Badge } from "@tracepanel/ui/components/ui/badge";
 import type { ReactNode } from "react";
 import { href } from "./routes";
 import { ServicesMap } from "./ServicesMap";
-import {
-  appTarget,
-  byHost,
-  byProject,
-  type Host,
-  hostEdges,
-  hostUses,
-  hostWhere,
-  type Project,
-  serviceTarget,
-} from "./services";
+import { byHost, byProject, type Host, hostEdges, hostUses, hostWhere, type Project, serviceTarget } from "./services";
 import { Meter, Mono, Tr } from "./ui";
 
 /** The icon in a tile, then the name over where it runs. */
@@ -71,7 +61,8 @@ function appLine(app: Project, most: number, onOpen: (() => void) | undefined): 
     most,
     errors: app.errors,
     lastSeen: app.last_seen,
-    href: href(appTarget(app.busiest)),
+    // Its page: its settings and versions, and where its own work is listed.
+    href: href({ name: "app", service: app.service }),
     opening: onOpen,
   };
 }

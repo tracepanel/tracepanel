@@ -1,5 +1,6 @@
 import {
   ArrowUpRightIcon,
+  BoxIcon,
   BugIcon,
   CableIcon,
   ChevronDownIcon,
@@ -17,6 +18,7 @@ import {
   ZapIcon,
 } from "lucide-react";
 import { type ComponentProps, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AppDetails, appSaidAnything } from "./AppDetails";
 import { CallMap } from "./CallMap";
 import { CallsList } from "./CallsList";
 import { Button } from "./components/ui/button";
@@ -43,9 +45,9 @@ import { type Explain, SqlList } from "./SqlList";
 import { type SystemCalls, systemCalls, systemOfIssue } from "./systemCalls";
 import { Tabs } from "./Tabs";
 import { Timeline } from "./Timeline";
-import type { Issue, IssueKind, Related, Trace } from "./types";
+import type { App, Issue, IssueKind, Related, Trace } from "./types";
 
-export type TabId = "request" | "tree" | "issues" | "sql" | "cache" | "http" | "logs" | "error" | "profile";
+export type TabId = "request" | "app" | "tree" | "issues" | "sql" | "cache" | "http" | "logs" | "error" | "profile";
 
 /** A way out of this trace that the page itself doesn't show: its group, its issues, what ran around it. */
 export interface ExploreItem {
@@ -133,7 +135,9 @@ function callsByTab(trace: Trace): Partial<Record<CallsTabId, SystemCalls>> {
 }
 
 /** The tabs a trace shows only when it has something for them (issues, an error, SQL, the cache, HTTP calls). */
-const OPTIONAL_TABS: Partial<Record<TabId, (trace: Trace) => boolean>> = {
+const OPTIONAL_TABS: Partial<Record<TabId, (trace: Trace, app?: App | null) => boolean>> = {
+  // The app's own, in the panel: when it said anything about itself.
+  app: (_trace, app) => appSaidAnything(app),
   issues: (trace) => findingsOf(trace).length > 0,
   error: (trace) => trace.errors.length > 0,
   sql: (trace) => callsByTab(trace).sql !== undefined,
@@ -142,9 +146,19 @@ const OPTIONAL_TABS: Partial<Record<TabId, (trace: Trace) => boolean>> = {
   profile: (trace) => trace.profile !== undefined,
 };
 
-function hasTab(trace: Trace, tab: TabId | undefined): tab is TabId {
+function hasTab(trace: Trace, tab: TabId | undefined, app?: App | null): tab is TabId {
   if (tab === undefined) return false;
-  return OPTIONAL_TABS[tab]?.(trace) ?? true;
+  return OPTIONAL_TABS[tab]?.(trace, app) ?? true;
+}
+
+/** The App tab's content: the app's settings and versions, when it said them. */
+function AppPane({ open, app }: { open: boolean; app: App | null | undefined }) {
+  if (!open || !appSaidAnything(app)) return null;
+  return (
+    <div className="@container p-4">
+      <AppDetails app={app} />
+    </div>
+  );
 }
 
 /** The tabs that list spans: SQL with its plans, the cache's and HTTP calls grouped by what they repeat. */
@@ -210,17 +224,24 @@ function callsTabs(calls: Partial<Record<CallsTabId, SystemCalls>>) {
   });
 }
 
+/** The App tab, when the app said anything about itself. */
+function appTab(app: App | null | undefined) {
+  return appSaidAnything(app) ? [{ id: "app" as const, label: "App", icon: <BoxIcon /> }] : [];
+}
+
 /** The trace's tabs, in the order they show: each list's only when it has anything. */
 function traceTabs({
   trace,
   outcome,
   findings,
   calls,
+  app,
 }: {
   trace: Trace;
   outcome: ReactNode;
   findings: readonly Issue[];
   calls: Partial<Record<CallsTabId, SystemCalls>>;
+  app: App | null | undefined;
 }) {
   const KindIcon = KIND_ICONS[trace.kind] ?? GlobeIcon;
   return [
@@ -249,16 +270,39 @@ function traceTabs({
       count: findings.length,
       tone: "warn" as const,
     }),
-    // What a request is most often opened for: its SQL, cache and HTTP calls, and its logs.
+    // What a request is most often opened for: its SQL, cache and HTTP calls, and its logs when it wrote any.
     ...callsTabs(calls),
-    { id: "logs" as const, label: "Logs", icon: <ScrollTextIcon />, count: trace.logs.length },
+    ...tabIfAny(trace.logs, { id: "logs" as const, label: "Logs", icon: <ScrollTextIcon />, count: trace.logs.length }),
     // Recorded only when asked for: where the time went in code.
     ...(trace.profile ? [{ id: "profile" as const, label: "Profile", icon: <FlameIcon /> }] : []),
+    // Last: the app that served it, its settings and versions, when its SDK says them. About the app, not this request.
+    ...appTab(app),
   ];
 }
 
 // task.state is upper case (SUCCESS, FAILURE…): looked up lower-cased.
 const STATE_TONES: Record<string, string> = { success: "ok", failure: "error", retry: "warn", skipped: "info" };
+
+function TaskStateBadge({ state }: { state: string }) {
+  return (
+    <span className="dt-status" data-tone={STATE_TONES[state.toLowerCase()] ?? "info"}>
+      {state.toLowerCase()}
+    </span>
+  );
+}
+
+/** How it went, on the Request tab: its status, a task's state, or that it failed. */
+function outcomeOf(trace: Trace): ReactNode {
+  const status = trace.attrs["http.status_code"];
+  const state = trace.attrs["task.state"];
+  if (typeof status === "number") return <StatusBadge status={status} />;
+  if (typeof state === "string") return <TaskStateBadge state={state} />;
+  return trace.status === "error" ? (
+    <span className="dt-status" data-tone="error">
+      failed
+    </span>
+  ) : null;
+}
 
 export interface TraceViewProps {
   trace: Trace;
@@ -285,6 +329,8 @@ export interface TraceViewProps {
   preferredTab?: TabId | undefined;
   /** EXPLAIN for a query of this trace; the SQL tab shows an Explain button when given. */
   onExplain?: Explain | undefined;
+  /** The app that served it, as it said itself: an App tab after Request when it said anything (the panel). */
+  app?: App | null | undefined;
 }
 
 export function TraceView({
@@ -298,6 +344,7 @@ export function TraceView({
   related,
   links,
   initialSpan,
+  app,
   variant = "full",
 }: TraceViewProps) {
   const compact = variant === "compact" || variant === "strip";
@@ -310,11 +357,11 @@ export function TraceView({
   const [active, setActive] = useState<TabId>(
     // A tab the link asked for that this trace has not (an error tab without an error) falls back like no tab.
     () =>
-      hasTab(trace, initialTab)
+      hasTab(trace, initialTab, app)
         ? initialTab
         : trace.errors.length > 0
           ? "error"
-          : hasTab(trace, preferredTab)
+          : hasTab(trace, preferredTab, app)
             ? preferredTab
             : "tree",
   );
@@ -325,20 +372,8 @@ export function TraceView({
   const [treeSpan, setTreeSpan] = useState(initialSpan);
 
   const status = trace.attrs["http.status_code"];
-  const state = trace.attrs["task.state"];
-  const outcome =
-    typeof status === "number" ? (
-      <StatusBadge status={status} />
-    ) : typeof state === "string" ? (
-      <span className="dt-status" data-tone={STATE_TONES[state.toLowerCase()] ?? "info"}>
-        {state.toLowerCase()}
-      </span>
-    ) : trace.status === "error" ? (
-      <span className="dt-status" data-tone="error">
-        failed
-      </span>
-    ) : null;
-  const tabs = traceTabs({ trace, outcome, findings, calls });
+  const outcome = outcomeOf(trace);
+  const tabs = traceTabs({ trace, outcome, findings, calls, app });
   const head = heading(trace);
   const path = trace.attrs["http.path"];
   const route = trace.attrs["http.route"];
@@ -346,6 +381,7 @@ export function TraceView({
   const panel = (
     <div role="tabpanel" className="dt-tabpanel">
       {active === "request" ? <RequestInfo trace={trace} related={related} links={links} hero={compact} /> : null}
+      <AppPane open={active === "app"} app={app} />
       {active === "tree" ? (
         <CallMap trace={trace} issueBySpan={issueBySpan} related={related} links={links} initialSpan={treeSpan} />
       ) : null}

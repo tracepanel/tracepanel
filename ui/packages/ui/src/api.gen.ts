@@ -488,6 +488,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/app": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What an app said about itself in its hello, and this agent's version.
+         * @description Per app, not per request: the app's settings (masked by its SDK before they leave the app) and the versions of what it runs on, as its latest hello said them (`app`). Kept in the agent's memory after the app goes, so an app that restarts or stopped still shows; an agent started anew knows them again at each app's next hello. An app whose SDK doesn't send them (JavaScript and Java today) has nulls.
+         */
+        get: operations["app"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/store": {
         parameters: {
             query?: never;
@@ -945,6 +965,28 @@ export interface components {
             request: boolean;
             /** @description The app can switch the user this browser is logged in as (api/users, api/users/me, api/users/switch). */
             users: boolean;
+        };
+        App: {
+            service: string;
+            /** @description This agent's version. */
+            agent: string;
+            /** @description A process of the app is connected to the agent now. */
+            connected: boolean;
+            /** @description When the agent had the app's settings and versions (its latest hello that said them). */
+            received: number | null;
+            /** @description The app's settings by name (Django's settings, Flask's app.config), each value as the SDK wrote it: repr-ed and cut, a secret's value `********`, a URL's credentials `********`. Null when the SDK sends none. */
+            settings: {
+                [key: string]: string;
+            } | null;
+            /** @description What the app runs on: the runtime first, then its framework, then the packages that matter (database drivers, task queues, the SDK). Null when the SDK sends none. */
+            versions: components["schemas"]["AppVersion"][] | null;
+        };
+        AppVersion: {
+            /** @description As the runtime or the package names itself: "Python", "Django", "psycopg". */
+            name: string;
+            version: string;
+            /** @enum {string} */
+            kind?: "runtime" | "framework" | "package";
         };
         KnownValues: {
             /** @description Celery task names. */
@@ -2458,6 +2500,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Capabilities"];
+                };
+            };
+        };
+    };
+    app: {
+        parameters: {
+            query: {
+                /** @description The app (service.name). */
+                service: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The app's account of itself. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["App"];
                 };
             };
         };

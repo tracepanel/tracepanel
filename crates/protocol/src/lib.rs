@@ -4,8 +4,10 @@
 //! answered with `{"ok": true}` or `{"ok": false, "error": "..."}`. Then frames: a 4-byte big-endian length and a JSON
 //! array of traces (`schema/trace.schema.json`). The SDKs only record: the
 //! agent finds the issues, with the SDK's thresholds. A frame that is an object is not traces: an app's answer to a
-//! request sent to it, or task events (`{"tasks": [...]}`, see [`live`]).
+//! request sent to it, or task events (`{"tasks": [...]}`, see [`live`]). The hello may tell about the app itself
+//! (`app`: its settings and versions, see [`about`]).
 
+pub mod about;
 pub mod live;
 pub mod local;
 
@@ -22,13 +24,14 @@ use tokio::net::UnixListener;
 
 /// When the agent was last used, and by how many SDK connections now: an agent started on demand exits once idle.
 /// `apps` are the connected apps that do something for the console besides sending traces, `tasks` the tasks in
-/// flight their task events tell of.
+/// flight their task events tell of, `about` what each app said about itself.
 #[derive(Clone, Default)]
 pub struct Activity {
     last: Arc<std::sync::atomic::AtomicI64>,
     open: Arc<std::sync::atomic::AtomicUsize>,
     pub apps: Apps,
     pub tasks: live::LiveTasks,
+    pub about: about::About,
 }
 
 /// The apps connected now that can do something for the console (EXPLAIN a query on their database: `explain`),
@@ -414,6 +417,9 @@ struct Hello {
     /// What the app answers at its own console rather than down this connection (see `App::console`).
     #[serde(default)]
     console: Vec<String>,
+    /// The app about itself (`settings`, `versions`), once per connection: SDKs from before send none.
+    #[serde(default)]
+    app: Option<Value>,
 }
 
 /// The limits issues are found with, as the SDK is configured (these defaults otherwise).
@@ -544,6 +550,9 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send + 'static>(
     if refusal.is_some() {
         return Ok(());
     }
+    activity
+        .about
+        .hello(&hello.service, hello.app.as_ref(), live::now_us());
     // An app that can do something for the console takes requests down this connection, one frame each.
     let registered = (!(hello.capabilities.is_empty() && hello.console.is_empty())).then(|| {
         let (requests, mut queue) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
@@ -565,6 +574,7 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send + 'static>(
     if let Some(connection) = registered {
         activity.apps.unregister(connection);
     }
+    activity.about.left(&hello.service);
     result
 }
 

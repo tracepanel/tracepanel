@@ -569,6 +569,27 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Capabilities" }
+  /app:
+    get:
+      operationId: app
+      summary: What an app said about itself in its hello, and this agent's version.
+      description: >-
+        Per app, not per request: the app's settings (masked by its SDK before they leave the app) and the versions
+        of what it runs on, as its latest hello said them (`app`). Kept in the agent's memory after the app goes, so
+        an app that restarts or stopped still shows; an agent started anew knows them again at each app's next hello.
+        An app whose SDK doesn't send them (JavaScript and Java today) has nulls.
+      parameters:
+        - name: service
+          in: query
+          required: true
+          description: The app (service.name).
+          schema: { type: string }
+      responses:
+        "200":
+          description: The app's account of itself.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/App" }
   /store:
     delete:
       operationId: clearStore
@@ -1114,6 +1135,37 @@ components:
         users:
           type: boolean
           description: The app can switch the user this browser is logged in as (api/users, api/users/me, api/users/switch).
+    App:
+      type: object
+      additionalProperties: false
+      required: [service, agent, connected, received, settings, versions]
+      properties:
+        service: { type: string }
+        agent: { type: string, description: This agent's version. }
+        connected: { type: boolean, description: A process of the app is connected to the agent now. }
+        received:
+          type: [integer, "null"]
+          description: When the agent had the app's settings and versions (its latest hello that said them).
+        settings:
+          type: [object, "null"]
+          description: >-
+            The app's settings by name (Django's settings, Flask's app.config), each value as the SDK wrote it:
+            repr-ed and cut, a secret's value `********`, a URL's credentials `********`. Null when the SDK sends none.
+          additionalProperties: { type: string }
+        versions:
+          type: [array, "null"]
+          description: >-
+            What the app runs on: the runtime first, then its framework, then the packages that matter (database
+            drivers, task queues, the SDK). Null when the SDK sends none.
+          items: { $ref: "#/components/schemas/AppVersion" }
+    AppVersion:
+      type: object
+      additionalProperties: false
+      required: [name, version]
+      properties:
+        name: { type: string, description: 'As the runtime or the package names itself: "Python", "Django", "psycopg".' }
+        version: { type: string }
+        kind: { type: string, enum: [runtime, framework, package] }
     KnownValues:
       type: object
       additionalProperties: false

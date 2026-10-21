@@ -2,7 +2,8 @@ import { type Counts, type DataSource, LogoMark, type SearchSpec } from "@tracep
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@tracepanel/ui/components/ui/dialog";
 import { cn } from "@tracepanel/ui/lib/utils";
 import { MenuIcon, SearchIcon } from "lucide-react";
-import { type CSSProperties, useCallback, useEffect, useMemo, useState } from "react";
+import { type CSSProperties, type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { AppPage } from "./AppPage";
 import { ClearDialog } from "./ClearDialog";
 import { DataPage } from "./DataPage";
 import { useLast, useSearch } from "./data";
@@ -32,8 +33,58 @@ function sectionOf(route: Route): Section | null {
   if (route.name === "group") return route.section;
   if (route.name === "issue") return route.error ? "errors" : "issues";
   if (route.name === "trace") return route.from ? sectionOf(parse(route.from)) : null;
-  if (route.name === "home") return null;
+  if (isOwnPage(route)) return OWN_PAGES[route.name];
   return route.name;
+}
+
+/** The pages that are no section of their own: home (it opens on HTTP), an app's page (under Services). */
+type OwnPage = Extract<Route, { name: "home" | "app" }>;
+const OWN_PAGES: Record<OwnPage["name"], Section | null> = { home: null, app: "services" };
+
+function isOwnPage(route: Route): route is OwnPage {
+  return route.name in OWN_PAGES;
+}
+
+/** A page of one thing: an issue, a group of an entry point, an app. */
+type DetailRoute = Extract<Route, { name: "issue" | "group" | "app" }>;
+const DETAIL_PAGES = new Set<Route["name"]>(["issue", "group", "app"]);
+
+function isDetail(route: Route): route is DetailRoute {
+  return DETAIL_PAGES.has(route.name);
+}
+
+function issuePage(route: Extract<Route, { name: "issue" }>, source: DataSource) {
+  const q = route.q ?? "";
+  return (
+    <IssuePage key={`${route.fingerprint} ${q}`} fingerprint={route.fingerprint} period={periodOf(q)} source={source} />
+  );
+}
+
+function groupPage(route: Extract<Route, { name: "group" }>, source: DataSource) {
+  const q = route.q ?? "";
+  return (
+    <GroupPage
+      key={`${route.section} ${route.key} ${q}`}
+      section={route.section}
+      groupKey={route.key}
+      period={periodOf(q)}
+      source={source}
+    />
+  );
+}
+
+/** The page of one issue, one group or one app, scrolled on its own. */
+function DetailPage({ route, source, everything }: { route: DetailRoute; source: DataSource; everything: DataSource }) {
+  let page: ReactNode;
+  if (route.name === "issue") page = issuePage(route, source);
+  else if (route.name === "group") page = groupPage(route, source);
+  // Its settings and versions are the app's whichever app the console is narrowed to.
+  else page = <AppPage key={route.service} service={route.service} source={everything} />;
+  return (
+    <main className="min-h-0 min-w-0 overflow-y-auto bg-background" data-scroll="">
+      {page}
+    </main>
+  );
 }
 
 /**
@@ -103,29 +154,8 @@ export function Console({ route, source: everything }: { route: Route; source: D
   let page = null;
   if (route.name === "trace")
     page = <TracePage id={route.id} from={route.from} tab={route.tab} span={route.span} source={source} />;
-  else if (route.name === "issue") {
-    page = (
-      <main className="min-h-0 min-w-0 overflow-y-auto bg-background" data-scroll="">
-        <IssuePage
-          key={`${route.fingerprint} ${route.q ?? ""}`}
-          fingerprint={route.fingerprint}
-          period={periodOf(route.q ?? "")}
-          source={source}
-        />
-      </main>
-    );
-  } else if (route.name === "group") {
-    page = (
-      <main className="min-h-0 min-w-0 overflow-y-auto bg-background" data-scroll="">
-        <GroupPage
-          key={`${route.section} ${route.key} ${route.q ?? ""}`}
-          section={route.section}
-          groupKey={route.key}
-          period={periodOf(route.q ?? "")}
-          source={source}
-        />
-      </main>
-    );
+  else if (isDetail(route)) {
+    page = <DetailPage route={route} source={source} everything={everything} />;
   } else if (route.name !== "home" && isEntry(route.name)) {
     page = (
       <EntryPage

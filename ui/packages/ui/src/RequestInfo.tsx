@@ -101,6 +101,20 @@ function clockRows(trace: Trace): PropRow[] {
   return off === null ? [] : [{ label: "Clock", value: <ClockNote off={off} /> }];
 }
 
+/** The app that recorded it, a link to its page (its settings and versions) where there is one. */
+function appRows(attrs: Attrs, links: TraceLinks | undefined): PropRow[] {
+  const service = text(attrs["service.name"]);
+  if (!service) return [];
+  const value = links?.app ? (
+    <a className="text-brand hover:underline" {...linkProps(links, links.app(service))}>
+      {service}
+    </a>
+  ) : (
+    service
+  );
+  return [{ label: "App", value, copy: service, mono: true }];
+}
+
 function runtimeRows(attrs: Attrs): PropRow[] {
   const value = traceRuntime(attrs, true);
   return value ? [{ label: "Runtime", value, copy: value }] : [];
@@ -366,13 +380,14 @@ function Hero({ trace }: { trace: Trace }) {
 }
 
 /** The request's or run's own fields: what ran (unless the hero shows it), how it went, who made it. */
-function ownRows(trace: Trace, hero: boolean): PropRow[] {
+function ownRows(trace: Trace, hero: boolean, links: TraceLinks | undefined): PropRow[] {
   const attrs = trace.attrs;
   return [
     ...(trace.kind === "task" ? taskRows(trace) : []),
     ...(hero ? [] : whatRan(trace)),
     ...userRows(attrs),
     ...htmxRows(attrs),
+    ...appRows(attrs, links),
     ...runtimeRows(attrs),
     ...droppedRows(attrs),
     ...clockRows(trace),
@@ -405,7 +420,7 @@ export function RequestInfo({ trace, related, links, hero: wanted }: RequestInfo
   return (
     <div className="@container grid gap-5 p-4">
       {hero ? <Hero trace={trace} /> : null}
-      <FactGrid rows={ownRows(trace, hero)} />
+      <FactGrid rows={ownRows(trace, hero, links)} />
       {linked.length ? (
         <Part label="Related traces" title="Related traces">
           <PropTable dense rows={linked} />

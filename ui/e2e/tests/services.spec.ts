@@ -45,7 +45,7 @@ test("Mermaid copies the map as a flowchart, and zoom changes its scale", async 
   await expect(scale).not.toHaveText(before ?? "");
 });
 
-test("a browser app's row opens its pages", async ({ page }) => {
+test("a browser app's row opens its page: no settings from its SDK, and a way to its pages", async ({ page }) => {
   await page.goto("/#/services");
   await page
     .getByRole("region", { name: "Services" })
@@ -53,10 +53,18 @@ test("a browser app's row opens its pages", async ({ page }) => {
     .getByRole("link", { name: /^Browser shop-web/ })
     .click();
 
+  await expect(page.getByRole("heading", { level: 1, name: "shop-web" })).toBeVisible();
+  await expect(page.getByText("No settings or versions from this app")).toBeVisible();
+
+  await page
+    .getByRole("navigation", { name: "Its work" })
+    .getByRole("link", { name: /^Pages/ })
+    .click();
+
   await expect(page.getByRole("heading", { level: 1, name: "Pages" })).toBeVisible();
 });
 
-test("a web app's row opens its endpoints, and the console narrows to that app", async ({ page }) => {
+test("a web app's row opens its page, and the console narrows to that app", async ({ page }) => {
   await page.goto("/#/services");
   await page
     .getByRole("region", { name: "Services" })
@@ -64,7 +72,11 @@ test("a web app's row opens its endpoints, and the console narrows to that app",
     .getByRole("link", { name: /^FastAPI shop-api/ })
     .click();
 
-  await expect(page.getByRole("heading", { level: 1, name: "HTTP" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "shop-api" })).toBeVisible();
   // The app switcher names the app now, with its mark.
   await expect(page.getByRole("button", { name: "FastAPI shop-api" })).toBeVisible();
+
+  await page.getByRole("navigation", { name: "Its work" }).getByRole("link", { name: /^HTTP/ }).click();
+
+  await expect(page.getByRole("heading", { level: 1, name: "HTTP" })).toBeVisible();
 });

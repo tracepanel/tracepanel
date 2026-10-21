@@ -37,7 +37,9 @@ test("the Request tab lists the trace's attributes, the DB tab its queries group
   const panel = page.getByRole("tabpanel");
 
   await expect(panel.getByRole("definition").filter({ hasText: "FastAPI 0.142.4" }).first()).toBeVisible();
-  await expect(panel.getByRole("definition").filter({ hasText: "shop-api" })).toBeVisible();
+  // The app among the facts, a link to its page; again among the attributes, as service.name.
+  await expect(panel.getByRole("link", { name: "shop-api", exact: true })).toHaveAttribute("href", "#/app/shop-api");
+  await expect(panel.getByRole("definition").filter({ hasText: "shop-api" })).toHaveCount(2);
 
   await page.getByRole("tab", { name: /^DB/ }).click();
 

@@ -1,5 +1,6 @@
 import type { Snapshot } from "./snapshot";
 import type {
+  App,
   CallRow,
   CallsSummary,
   Capabilities,
@@ -98,6 +99,8 @@ export interface DataSource {
   switchUser(id: string | null): Promise<User | null>;
   /** What the backend adds to the store: EXPLAIN where the app serving the console runs it. */
   capabilities(): Promise<Capabilities>;
+  /** What an app said about itself (its settings and versions); null where the agent doesn't serve it. Optional. */
+  app?: (service: string) => Promise<App | null>;
   explain(traceId: string, spanId: string, analyze: boolean): Promise<ExplainPlan>;
   listIssues(q?: string): Promise<IssueRow[]>;
   /** One issue; with `q` (since:, until:), its series and requests within that period. */
@@ -228,6 +231,10 @@ export function httpSource(base: string | URL): DataSource {
     },
     async capabilities() {
       return (await getJson<Capabilities>(url("capabilities"))) ?? NO_CAPABILITIES;
+    },
+    // An agent from before answers 404: the same as an app that said nothing.
+    app(service) {
+      return getJson<App>(url("app", { service }));
     },
     async explain(trace, span, analyze) {
       const response = await fetch(url("explain", { trace, span, analyze: analyze ? 1 : null }));

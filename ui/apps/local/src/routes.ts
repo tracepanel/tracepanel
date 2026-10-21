@@ -21,7 +21,7 @@ const VIEWS: Record<string, { view?: EntryView; live?: boolean }> = { calls: { v
 /**
  * `#/<section>?q=…&view=calls` a section, `#/group/<section>/<key>` one group of an entry point (an endpoint, an
  * operation, a task, a consumer, a job), `#/t/<id>?from=…&tab=…` a trace: one page wherever it is opened from,
- * with `from` (the hash it was opened from) for the way back. `view=live` (Tasks' Live was a list of its own once)
+ * with `from` (the hash it was opened from) for the way back, `#/app/<service>` an app's settings and versions. `view=live` (Tasks' Live was a list of its own once)
  * opens the section with Live on (`live`): it is read, never written.
  */
 export type Route =
@@ -29,7 +29,8 @@ export type Route =
   | { name: Section; q: string; view?: EntryView | undefined; open?: string | undefined; live?: boolean | undefined }
   | { name: "group"; section: EntrySection; key: string; q?: string | undefined }
   | { name: "trace"; id: string; from?: string | undefined; tab?: string | undefined; span?: string | undefined }
-  | { name: "issue"; fingerprint: string; error?: boolean | undefined; q?: string | undefined };
+  | { name: "issue"; fingerprint: string; error?: boolean | undefined; q?: string | undefined }
+  | { name: "app"; service: string };
 
 /** A trace id: a ULID, in Crockford's alphabet (no I, L, O or U). */
 export const TRACE_ID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
@@ -91,15 +92,31 @@ export function isEntry(section: string): section is EntrySection {
   return (ENTRY_SECTIONS as string[]).includes(section);
 }
 
+/** `issue/<fingerprint>?in=errors&q=…`: an issue's page. */
+function issueOf(path: string, params: URLSearchParams): Route | null {
+  const issue = /^issue\/([0-9a-f]{16})$/.exec(path);
+  if (!issue?.[1]) return null;
+  return {
+    name: "issue",
+    fingerprint: issue[1],
+    error: params.get("in") === "errors",
+    q: params.get("q") || undefined,
+  };
+}
+
+/** `app/<service>`: an app's page. */
+function appOf(path: string): Route | null {
+  const app = /^app\/(.+)$/.exec(path);
+  return app?.[1] ? { name: "app", service: decodeURIComponent(app[1]) } : null;
+}
+
 export function parse(hash: string): Route {
   const raw = hash.replace(/^#\/?/, "");
   const [path = "", query = ""] = raw.split("?");
   const params = new URLSearchParams(query);
   const q = params.get("q") ?? "";
-  const issue = /^issue\/([0-9a-f]{16})$/.exec(path);
-  if (issue?.[1]) {
-    return { name: "issue", fingerprint: issue[1], error: params.get("in") === "errors", q: q || undefined };
-  }
+  const named = issueOf(path, params) ?? appOf(path);
+  if (named) return named;
   // `traces/` is how the widget wrote it before; old links still open.
   const trace = /^(?:t|traces)\/(.+)$/.exec(path);
   if (trace?.[1] && TRACE_ID.test(trace[1])) {
@@ -122,6 +139,14 @@ export function parse(hash: string): Route {
   return { name: "home" };
 }
 
+/** Errors and other issues share a page; `in` says which list it belongs to, for the crumbs and the menu. */
+function issueHref(route: Extract<Route, { name: "issue" }>): string {
+  const params = new URLSearchParams();
+  if (route.error) params.set("in", "errors");
+  if (route.q) params.set("q", route.q);
+  return `#/issue/${route.fingerprint}${params.size ? `?${params}` : ""}`;
+}
+
 export function href(route: Route): string {
   if (route.name === "home") return "#/";
   if (route.name === "trace") {
@@ -132,13 +157,8 @@ export function href(route: Route): string {
     const query = params.size ? `?${params}` : "";
     return `#/t/${route.id}${query}`;
   }
-  // Errors and other issues share a page; `in` says which list it belongs to, for the crumbs and the menu.
-  if (route.name === "issue") {
-    const params = new URLSearchParams();
-    if (route.error) params.set("in", "errors");
-    if (route.q) params.set("q", route.q);
-    return `#/issue/${route.fingerprint}${params.size ? `?${params}` : ""}`;
-  }
+  if (route.name === "issue") return issueHref(route);
+  if (route.name === "app") return `#/app/${encodeURIComponent(route.service)}`;
   if (route.name === "group") {
     const query = route.q ? `?${new URLSearchParams({ q: route.q })}` : "";
     return `#/group/${route.section}/${encodeURIComponent(route.key)}${query}`;
@@ -189,6 +209,7 @@ export function consoleLinks(prefix = "", newTab = false): TraceLinks {
     issue: (fingerprint, kind) => `${prefix}${href(issueRoute(fingerprint, kind))}`,
     call: (key) => `${prefix}${href({ name: "traces", q: `call:${key}` })}`,
     logs: (traceId) => `${prefix}${href({ name: "logs", q: `trace:${traceId}` })}`,
+    app: (service) => `${prefix}${href({ name: "app", service })}`,
     newTab,
   };
 }
