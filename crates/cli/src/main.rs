@@ -2,7 +2,7 @@
 //! over a unix socket (TCP on Windows, or with `--listen tcp:HOST:PORT`), finds their issues, keeps them in the
 //! project's store and, with `--serve`, serves the console. OpenTelemetry exporters send it their spans over OTLP/HTTP
 //! (`--otlp`, 127.0.0.1:4318 by default, where they send them unless told otherwise). Its addresses go to `<dir>/agent.addr` and
-//! `<dir>/console.addr`, where the SDKs look for them. With `TRACEPANEL_TOKEN` set, it also sends the traces it keeps
+//! `<dir>/console.addr`, where the SDKs look for them. With `TRACEPANEL_API_KEY` set, it also sends the traces it keeps
 //! to Tracepanel Cloud (`tracepanel-sender`).
 
 #[cfg(all(target_arch = "arm", target_env = "musl"))]
