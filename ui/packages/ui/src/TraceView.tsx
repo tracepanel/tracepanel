@@ -253,8 +253,6 @@ function traceTabs({
       badge: outcome,
       detail: duration(trace.duration),
     },
-    // The app that served it, beside it: its settings and versions, when its SDK says them (the panel's only).
-    ...appTab(app),
     // Second, but open by default: the call tree is where a slow or failing request is explained.
     { id: "tree" as const, label: "Call tree", icon: <ListTreeIcon /> },
     // What failed comes before what could be better.
@@ -272,11 +270,13 @@ function traceTabs({
       count: findings.length,
       tone: "warn" as const,
     }),
-    // What a request is most often opened for: its SQL, cache and HTTP calls, and its logs.
+    // What a request is most often opened for: its SQL, cache and HTTP calls, and its logs when it wrote any.
     ...callsTabs(calls),
-    { id: "logs" as const, label: "Logs", icon: <ScrollTextIcon />, count: trace.logs.length },
+    ...tabIfAny(trace.logs, { id: "logs" as const, label: "Logs", icon: <ScrollTextIcon />, count: trace.logs.length }),
     // Recorded only when asked for: where the time went in code.
     ...(trace.profile ? [{ id: "profile" as const, label: "Profile", icon: <FlameIcon /> }] : []),
+    // Last: the app that served it, its settings and versions, when its SDK says them. About the app, not this request.
+    ...appTab(app),
   ];
 }
 

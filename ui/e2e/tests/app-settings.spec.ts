@@ -72,7 +72,8 @@ test("the panel's App tab shows the settings and versions of the app that served
   await pill(page).click();
   const tabs = panel(page).getByRole("tablist", { name: "Trace details" });
 
-  await expect(tabs.getByRole("tab")).toHaveText([/^Request/, "App", "Call tree", "Logs0"]);
+  // App comes last: it is about the app, not this request. A request that logged nothing has no Logs tab.
+  await expect(tabs.getByRole("tab")).toHaveText([/^Request/, "Call tree", "App"]);
 
   await tabs.getByRole("tab", { name: "App" }).click();
 
