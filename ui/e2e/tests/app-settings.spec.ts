@@ -18,9 +18,15 @@ test("an app's page lists its settings, secrets masked, a filter narrowing them,
     .getByRole("table")
     .getByRole("link", { name: /^Python shop\b/ })
     .click();
-  const settings = page.getByRole("region", { name: "Settings" });
+  const settings = page.getByRole("tabpanel", { name: "Settings" });
+  const filter = page.getByRole("searchbox", { name: "Filter settings" });
 
   await expect(page.getByRole("heading", { level: 1, name: "shop" })).toBeVisible();
+  // Settings and Versions are one switch, as a request's parts are: Settings first.
+  await expect(page.getByRole("tablist", { name: "App details" }).getByRole("tab")).toHaveText([
+    "Settings6",
+    "Versions5",
+  ]);
   await expect(settings.locator("dt")).toHaveText([
     "ALLOWED_HOSTS",
     "DATABASES",
@@ -32,15 +38,21 @@ test("an app's page lists its settings, secrets masked, a filter narrowing them,
   await expect(settings.getByRole("definition").nth(3)).toHaveText("********");
   await expect(settings.getByRole("definition").nth(4)).toHaveText("'https://********@o1.ingest.sentry.io/1'");
 
-  await settings.getByRole("searchbox", { name: "Filter settings" }).fill("postgres");
+  await filter.fill("postgres");
 
   await expect(settings.locator("dt")).toHaveText(["DATABASES"]);
 
-  await settings.getByRole("searchbox", { name: "Filter settings" }).fill("nothing like it");
+  await filter.fill("nothing like it");
 
   await expect(settings).toContainText("No setting matches “nothing like it”.");
 
-  const versions = page.getByRole("region", { name: "Versions" });
+  await page
+    .getByRole("tablist", { name: "App details" })
+    .getByRole("tab", { name: /^Versions/ })
+    .click();
+  const versions = page.getByRole("tabpanel", { name: "Versions" });
+
+  await expect(filter).toHaveCount(0);
   await expect(versions.locator("dt")).toHaveText(["Python", "Django", "psycopg", "tracepanel", "tracepanel-agent"]);
   await expect(versions.getByRole("definition").last()).toHaveText(await agentVersion());
 });
@@ -50,7 +62,7 @@ test("a request's facts name its app, a link to the app's page", async ({ page }
   await page.getByRole("link", { name: "shop", exact: true }).click();
 
   await expect(page).toHaveURL(/#\/app\/shop$/);
-  await expect(page.getByRole("region", { name: "Settings" })).toContainText("SECRET_KEY");
+  await expect(page.getByRole("tabpanel", { name: "Settings" })).toContainText("SECRET_KEY");
 });
 
 test("the panel's App tab shows the settings and versions of the app that served the request", async ({ page }) => {
@@ -64,8 +76,14 @@ test("the panel's App tab shows the settings and versions of the app that served
 
   await tabs.getByRole("tab", { name: "App" }).click();
 
-  await expect(panel(page).getByRole("region", { name: "Settings" })).toContainText("SECRET_KEY********");
-  await expect(panel(page).getByRole("region", { name: "Versions" })).toContainText("Django5.2.7");
+  await expect(panel(page).getByRole("tabpanel", { name: "Settings" })).toContainText("SECRET_KEY********");
+
+  await panel(page)
+    .getByRole("tablist", { name: "App details" })
+    .getByRole("tab", { name: /^Versions/ })
+    .click();
+
+  await expect(panel(page).getByRole("tabpanel", { name: "Versions" })).toContainText("Django5.2.7");
 });
 
 test("the panel has no App tab for an app whose SDK doesn't say its settings", async ({ page }) => {

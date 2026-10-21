@@ -1,9 +1,11 @@
 import { type App, AppDetails, type DataSource, RuntimeIcon, runtimeKind, type ServiceApp } from "@tracepanel/ui";
+import { ActivityIcon, type LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { href } from "./routes";
+import { NAV } from "./Sidebar";
 import { sectionLabel } from "./sections";
 import { appTarget, roleSection } from "./services";
-import { Breadcrumbs, Loading, Mono } from "./ui";
+import { Breadcrumbs, Loading } from "./ui";
 
 /** What the app said about itself (null when nothing, or an agent from before), and its roles on the service map. */
 function useAppPage(service: string, source: DataSource) {
@@ -33,17 +35,31 @@ function roleLabel(role: ServiceApp): string {
   return section === "traces" ? "Traces" : sectionLabel(section);
 }
 
+/** The role's section mark, as the menu shows it; a trace's mark where the role has no section of its own. */
+function roleIcon(role: ServiceApp): LucideIcon {
+  const section = roleSection(role);
+  return NAV.find((item) => item.section === section)?.icon ?? ActivityIcon;
+}
+
 /** Where the app's own work is listed: its requests, tasks, jobs or pages, a link for each role it runs as. */
 function RoleLinks({ roles }: { roles: readonly ServiceApp[] }) {
   if (!roles.length) return null;
   return (
-    <nav aria-label="Its work" className="flex flex-wrap gap-x-4 gap-y-1 text-md">
-      {roles.map((role) => (
-        <a key={role.role} href={href(appTarget(role))} className="text-brand hover:underline">
-          {roleLabel(role)}
-          <span className="ml-1.5 text-muted-foreground tabular-nums">{role.traces.toLocaleString()}</span>
-        </a>
-      ))}
+    <nav aria-label="Its work" className="flex flex-wrap gap-2">
+      {roles.map((role) => {
+        const Icon = roleIcon(role);
+        return (
+          <a
+            key={role.role}
+            href={href(appTarget(role))}
+            className="inline-flex items-center gap-2 rounded-lg border bg-card px-3 py-1.5 text-sm transition-colors hover:bg-accent"
+          >
+            <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
+            <span className="font-medium">{roleLabel(role)}</span>
+            <span className="text-muted-foreground tabular-nums">{role.traces.toLocaleString()}</span>
+          </a>
+        );
+      })}
     </nav>
   );
 }
@@ -65,7 +81,7 @@ function AppHeader({ service, roles }: { service: string; roles: readonly Servic
     <header className="grid gap-3">
       <Breadcrumbs items={[{ label: "Services", href: href({ name: "services", q: "" }) }, { label: service }]} />
       <Title service={service} runtime={runtime} />
-      {runtime ? <Mono className="text-sm text-muted-foreground">{runtime}</Mono> : null}
+      {runtime ? <p className="text-sm text-muted-foreground">{runtime}</p> : null}
       <RoleLinks roles={roles} />
     </header>
   );

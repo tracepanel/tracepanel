@@ -1,40 +1,15 @@
 import { SearchIcon } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { useState } from "react";
 import { Input } from "./components/ui/input";
 import { stamp } from "./format";
 import { NameValues } from "./NameValues";
 import { Empty } from "./primitives";
+import { Segmented } from "./Segmented";
 import type { App } from "./types";
 
 /** Whether the app said anything about itself: an SDK that doesn't (JavaScript, Java today) said neither. */
 export function appSaidAnything(app: App | null | undefined): app is App {
   return Boolean(app && (app.settings || app.versions));
-}
-
-/** A titled part of the app's details: its name and count above a card, as a request's parts are. */
-function Part({
-  label,
-  count,
-  tools,
-  children,
-}: {
-  label: string;
-  count?: number;
-  tools?: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <section className="grid gap-2" aria-label={label}>
-      <div className="flex min-h-7 items-center gap-3">
-        <h3 className="flex items-baseline gap-1.5 text-[11px] font-semibold tracking-wider text-foreground/80 uppercase">
-          {label}
-          {count === undefined ? null : <span className="font-normal text-muted-foreground tabular-nums">{count}</span>}
-        </h3>
-        {tools}
-      </div>
-      {children}
-    </section>
-  );
 }
 
 /** The settings whose name or value has `filter` in it, case aside. */
@@ -45,60 +20,100 @@ function matching(settings: Record<string, string>, filter: string): [string, st
   );
 }
 
-/** Every setting by name, the filter above them: secrets come masked from the app's SDK, as `********`. */
-function Settings({ settings }: { settings: Record<string, string> | null }) {
-  const [filter, setFilter] = useState("");
-  if (!settings) {
-    return (
-      <Part label="Settings">
-        <p className="rounded-lg border bg-card px-3 py-2 text-xs text-muted-foreground">
-          The app doesn't send its settings: its framework has none to send (FastAPI, Falcon), or the capture_settings
-          setting is off.
-        </p>
-      </Part>
-    );
-  }
-  const rows = matching(settings, filter);
-  const box = (
+/** The filter over the settings, beside the switch. */
+function SettingsFilter({ filter, onFilter }: { filter: string; onFilter: (filter: string) => void }) {
+  return (
     <div className="relative ml-auto w-64 max-w-full">
       <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
       <Input
         type="search"
         value={filter}
-        onChange={(event) => setFilter(event.target.value)}
+        onChange={(event) => onFilter(event.target.value)}
         placeholder="Filter settings…"
         aria-label="Filter settings"
         className="h-7 pl-8 text-xs md:text-xs"
       />
     </div>
   );
-  return (
-    <Part label="Settings" count={Object.keys(settings).length} tools={box}>
-      <div className="overflow-hidden rounded-lg border bg-card">
-        {rows.length ? (
-          <NameValues fold rows={rows.map(([name, value]) => ({ name, value }))} />
-        ) : (
-          <p className="px-3 py-2 text-xs text-muted-foreground">No setting matches “{filter.trim()}”.</p>
-        )}
-      </div>
-    </Part>
-  );
+}
+
+/** Every setting by name: secrets come masked from the app's SDK, as `********`. */
+function Settings({ settings, filter }: { settings: Record<string, string> | null; filter: string }) {
+  if (!settings) {
+    return (
+      <p className="px-3 py-2 text-xs text-muted-foreground">
+        The app doesn't send its settings: its framework has none to send (FastAPI, Falcon), or the capture_settings
+        setting is off.
+      </p>
+    );
+  }
+  const rows = matching(settings, filter);
+  if (!rows.length)
+    return <p className="px-3 py-2 text-xs text-muted-foreground">No setting matches “{filter.trim()}”.</p>;
+  return <NameValues fold rows={rows.map(([name, value]) => ({ name, value }))} />;
 }
 
 /** What the app runs on, then the agent that serves this console. */
-function Versions({ app }: { app: App }) {
-  const rows = [
+function versionRows(app: App): { name: string; value: string }[] {
+  return [
     ...(app.versions ?? []).map((each) => ({ name: each.name, value: each.version })),
     { name: "tracepanel-agent", value: app.agent },
   ];
+}
+
+type Part = "settings" | "versions";
+
+/** The switch's two parts, each with its count: the settings' only when the app sent them. */
+function partSegments(app: App, versions: number) {
+  return [
+    { id: "settings" as const, label: "Settings", count: app.settings ? Object.keys(app.settings).length : undefined },
+    { id: "versions" as const, label: "Versions", count: versions },
+  ];
+}
+
+/** Settings and Versions, one at a time behind a switch, as a request's parts are. */
+function Parts({ app }: { app: App }) {
+  const [picked, setPicked] = useState<Part>(app.settings ? "settings" : "versions");
+  const [filter, setFilter] = useState("");
+  const versions = versionRows(app);
+  const filtering = picked === "settings" && app.settings !== null;
   return (
-    <Part label="Versions" count={rows.length}>
-      <div className="overflow-hidden rounded-lg border bg-card">
-        <NameValues rows={rows} />
+    <section className="grid gap-2" aria-label="App details">
+      <div className="flex min-h-8 flex-wrap items-center gap-3">
+        <Segmented
+          label="App details"
+          segments={partSegments(app, versions.length)}
+          value={picked}
+          onChange={setPicked}
+        />
+        {filtering ? <SettingsFilter filter={filter} onFilter={setFilter} /> : null}
       </div>
-    </Part>
+      <div className="overflow-hidden rounded-lg border bg-card" role="tabpanel" aria-label={PART_LABEL.get(picked)}>
+        <PartBody picked={picked} app={app} filter={filter} versions={versions} />
+      </div>
+    </section>
   );
 }
+
+function PartBody({
+  picked,
+  app,
+  filter,
+  versions,
+}: {
+  picked: Part;
+  app: App;
+  filter: string;
+  versions: { name: string; value: string }[];
+}) {
+  if (picked === "versions") return <NameValues rows={versions} />;
+  return <Settings settings={app.settings} filter={filter} />;
+}
+
+const PART_LABEL = new Map<Part, string>([
+  ["settings", "Settings"],
+  ["versions", "Versions"],
+]);
 
 /** When the app said it, and whether it is connected now: an app that stopped still shows what it said last. */
 function Told({ app }: { app: App }) {
@@ -125,10 +140,9 @@ export function AppDetails({ app }: { app: App | null }) {
     );
   }
   return (
-    <div className="grid gap-5">
+    <div className="grid gap-3">
       <Told app={app} />
-      <Settings settings={app.settings} />
-      <Versions app={app} />
+      <Parts app={app} />
     </div>
   );
 }
