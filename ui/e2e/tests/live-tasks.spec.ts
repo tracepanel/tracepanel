@@ -9,6 +9,11 @@ import { autoRefresh, chooseLive, traceId } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
 import { trace } from "../seed.ts";
 
+// A refresh still in flight when a test ends must not read an answer the browser already dropped.
+test.afterEach(async ({ page }) => {
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+});
+
 /** A connection to the agent, as an app with a task queue opens one: its hello said and answered. */
 async function connect(): Promise<Socket> {
   const address = readFileSync(join(STORE, "agent.addr"), "utf8").trim();
@@ -150,7 +155,9 @@ test("Now says idle with workers there, and lists them", async ({ page }) => {
   // Idle says so in words, and so does the worker: no bare count to puzzle over.
   await expect(now).toContainText("Idle");
   // When the last run ended: a queue whose tasks take milliseconds still shows it works.
-  await expect(now.getByRole("link", { name: /^· last run \S+ (just now|\d+[smh] ago)$/ })).toBeVisible();
+  await expect(
+    now.getByRole("link", { name: /^last run \S+ (succeeded|failed) (just now|\d+[smh] ago)$/ }),
+  ).toBeVisible();
   await expect(now.getByRole("list", { name: "Workers" })).toHaveText("celery@box idle");
   await expect(now.getByRole("button")).toHaveCount(0);
 });

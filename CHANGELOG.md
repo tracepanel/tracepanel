@@ -198,13 +198,17 @@
   in the page's column, the first at its left edge.
 - A menu longer than the sidebar fades out at its foot instead of cutting an
   item in half.
-- A folded Overview is a bar like the tiles it hides, its numbers bold with
-  their labels quiet and a rule between them. The tiles are smaller, on
-  every page and the trace page alike.
-- Tasks' Now is one quiet line with a light: pulsing while tasks run, steady
-  with workers idle, hollow with none. Idle says when the last run ended, so
-  a queue whose tasks take milliseconds still shows it works. Each worker
-  says idle or how many it runs instead of a bare count.
+- The Overview is one bar, the same open or folded: its numbers bold with
+  their labels quiet and a rule between them, its time range at the end.
+  Only its chevron turns, and nothing on it moves. A range over two days
+  shows the end's date too. The tiles are smaller, on every page and the
+  trace page alike.
+- Tasks' Now is the Overview's bar with a light: pulsing while tasks run,
+  steady with workers idle, hollow with none. Idle names the last run, how
+  it ended and when, so a queue whose tasks take milliseconds still shows it
+  works. Each worker says idle or how many it runs instead of a bare count.
+- A narrow column's hover buttons no longer sit over its name: the name
+  makes room for them and stays where it was.
 - Tasks' Now table fits the page: a long worker name, arguments or error are
   cut to one line, whole on hover. Now stands over the Overview, chevron for
   chevron, busy or idle. An overview's time range is on the 24-hour clock,

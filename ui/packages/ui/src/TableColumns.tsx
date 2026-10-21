@@ -336,6 +336,13 @@ const GRIP_AT = new Map<Side, [alone: string, beside: string]>([
 
 const sideOf = (num: boolean): Side => (num ? "start" : "end");
 
+// Room for the hover controls on their side, so they never sit over the name: only the name's far end gives way (it
+// truncates sooner), its near end stays put. Wide enough for the remove button and the grip beside it.
+const ROOM_AT = new Map<Side, string>([
+  ["end", "group-hover/head:pr-6 group-focus-within/head:pr-6"],
+  ["start", "group-hover/head:pl-6 group-focus-within/head:pl-6"],
+]);
+
 /** A header cell's classes: the shared density, its name's side, and what a move says (hovered, dropped on). */
 function headClass(side: Side, moves: boolean, over: boolean, className: string | undefined): string {
   return cn(
@@ -356,13 +363,17 @@ function DragLabel({
   label,
   side,
   onStep,
+  room,
 }: {
   id: string;
   label: string;
   side: Side;
   onStep: ((by: number) => void) | undefined;
+  /** Whether the header has hover controls the name makes room for. */
+  room: boolean;
 }) {
-  const { className, ...props } = movable(id, label, onStep);
+  const { className: moves, ...props } = movable(id, label, onStep);
+  const className = cn(moves, room && ROOM_AT.get(side));
   return (
     <span
       {...props}
@@ -484,7 +495,13 @@ function ColumnHead({
       aria-label={label}
       {...drop.props}
     >
-      <DragLabel id={id} label={label} side={side} onStep={onStep} />
+      <DragLabel
+        id={id}
+        label={label}
+        side={side}
+        onStep={onStep}
+        room={onStep !== undefined || onRemove !== undefined}
+      />
       <HeadControls
         label={label}
         side={side}
