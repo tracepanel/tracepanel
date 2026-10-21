@@ -1,7 +1,7 @@
 // Pages that load hold still: with a slow agent, nothing shown is taken away again and nothing shown moves. Each
 // test records what the page shows at every change of the DOM, then reads the recording.
 import type { Page } from "@playwright/test";
-import { traceId } from "../app.ts";
+import { autoRefresh, traceId } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
 
 interface Frame {
@@ -54,6 +54,35 @@ function stayed(recorded: Frame[], name: string): boolean {
   const first = recorded.findIndex((frame) => frame.seen[name]);
   return first >= 0 && recorded.slice(first).every((frame) => frame.seen[name]);
 }
+
+test("a reload shows the console once, whole: the menu with every section and the page with its list", async ({
+  page,
+}) => {
+  await page.goto("/#/tasks");
+  await expect(page.getByRole("main").getByRole("table")).toBeVisible();
+  await slow(page);
+  // The first frame the console is shown in: what it had then.
+  await page.addInitScript(() => {
+    const at: { menu?: string; table?: boolean } = {};
+    (window as unknown as { firstShown: typeof at }).firstShown = at;
+    new MutationObserver(() => {
+      const shell = document.querySelector("[data-first-paint=shown]");
+      if (at.menu !== undefined || !shell?.querySelector("aside nav")) return;
+      at.menu = (shell.querySelector("aside nav") as HTMLElement).innerText.replace(/\s+/g, " ");
+      at.table = Boolean(shell.querySelector("main table"));
+    }).observe(document, { subtree: true, childList: true, attributes: true });
+  });
+
+  await page.reload();
+  await expect(page.getByRole("main").getByRole("table")).toBeVisible();
+  const first = await page.evaluate(
+    () => (window as unknown as { firstShown: { menu?: string; table?: boolean } }).firstShown,
+  );
+
+  expect(first.table).toBe(true);
+  expect(first.menu).toContain("Tasks");
+  expect(first.menu).toContain("Logs");
+});
 
 test("the menu shows no entry point it takes away once the counts come", async ({ page }) => {
   await slow(page, "**/api/counts*");
@@ -121,22 +150,22 @@ test("By task to All runs keeps the rows on screen, dimmed, until the runs come"
   expect(recorded.some((frame) => frame.seen["busy"])).toBe(true);
 });
 
-for (const path of ["#/logs", "#/tasks"]) {
-  test(`${path}: with Live on, Live is the only clock`, async ({ page }) => {
+for (const path of ["#/logs", "#/tasks", "#/endpoints"]) {
+  test(`${path}: Live is a choice of the one auto-refresh menu, not a switch beside it`, async ({ page }) => {
     await page.goto(`/${path}`);
     const header = page.getByRole("main").locator("header").first();
 
-    await expect(header.getByRole("button", { name: /^Every 15s/ })).toBeVisible();
+    await expect(autoRefresh(page)).toHaveText("Every 15s");
+    await expect(header.getByRole("checkbox")).toHaveCount(0);
 
-    await header.getByText("Live", { exact: true }).click();
+    await autoRefresh(page).click();
 
-    await expect(header.getByText("Live · every 2s")).toBeVisible();
-    await expect(header.getByRole("button", { name: /^Every/ })).toHaveCount(0);
+    await expect(page.getByRole("menuitemradio")).toHaveText([/^Live/, "Off", "5s", "15s", "1m"]);
+
+    await page.getByRole("menuitemradio", { name: /^Live/ }).click();
+
+    await expect(autoRefresh(page)).toHaveText("Live");
     await expect(header.getByRole("button", { name: "Refresh now" })).toBeVisible();
-
-    await header.getByText("Live · every 2s").click();
-
-    await expect(header.getByRole("button", { name: /^Every 15s/ })).toBeVisible();
   });
 }
 
@@ -174,7 +203,12 @@ test("an issue's requests don't move down when its latest occurrence loads", asy
 test("a trace page's tiles look like the other pages' tiles, with no line under them", async ({ page }) => {
   const look = (element: Element) => {
     const style = getComputedStyle(element);
-    return { radius: style.borderRadius, border: style.borderTopWidth, background: style.backgroundColor };
+    return {
+      radius: style.borderRadius,
+      border: style.borderTopWidth,
+      background: style.backgroundColor,
+      padding: style.padding,
+    };
   };
   await page.goto("/#/endpoints");
   const stat = await page

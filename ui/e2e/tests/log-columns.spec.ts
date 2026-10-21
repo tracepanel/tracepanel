@@ -1,7 +1,7 @@
 // The logs table: one line per record, columns the reader drags wider and picks, kept in the browser across reloads,
 // on the Logs page and in a trace's Logs tab alike.
 import type { Page } from "@playwright/test";
-import { traceId } from "../app.ts";
+import { autoRefresh, chooseLive, traceId } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
 
 const region = (page: Page) => page.getByRole("region", { name: "Logs" });
@@ -332,16 +332,14 @@ test("a search the store refuses says so, rather than loading for ever", async (
 
 test("Live reloads the records, and holds while one is open", async ({ page }) => {
   await page.goto("/#/logs");
-  const live = page.getByRole("checkbox", { name: /^Live/ });
 
-  // The switch's own label: the box itself is hidden under its track, as the panel's Follow new is.
-  await page.getByText("Live", { exact: true }).click();
+  await chooseLive(page);
 
-  await expect(live).toBeChecked();
+  await expect(autoRefresh(page)).toHaveText("Live");
 
   await rows(page).first().click();
 
-  await expect(page.getByText("Live · paused")).toBeVisible();
+  await expect(autoRefresh(page)).toHaveText("Live · paused");
 });
 
 test("the search's words are marked in the messages", async ({ page }) => {

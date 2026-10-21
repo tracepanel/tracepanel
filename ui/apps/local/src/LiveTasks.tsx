@@ -5,6 +5,7 @@ import {
   type LiveTasks,
   type LiveWorker,
   NO_LIVE_TASKS,
+  type TraceSummary,
 } from "@tracepanel/ui";
 import { Badge } from "@tracepanel/ui/components/ui/badge";
 import { useStored } from "@tracepanel/ui/hooks/useStored";
@@ -27,10 +28,17 @@ import { DataTable, Mono, Td, Th, Tr } from "./ui";
 /** What the page needs to know of Now: the tasks in flight, and whether to show the line at all. */
 export interface Now {
   live: LiveTasks | undefined;
+  /** The latest run that ended: idle says when, so a queue whose tasks end in milliseconds still shows it works. */
+  last: TraceSummary | undefined;
   /** An app sends task events, or the agent has some: a project without a task queue has no Now. */
   shown: boolean;
   /** Whether `shown` is known: the tasks in flight and the capabilities answered (always, off Tasks). */
   settled: boolean;
+}
+
+/** The newest run of a task, if any ended. */
+async function latestRun(source: DataSource): Promise<TraceSummary | undefined> {
+  return (await source.searchTraces("kind:task")).items[0];
 }
 
 /** Nothing in flight for a page other than Tasks: it asks nothing. */
@@ -49,7 +57,11 @@ export function useNow(source: DataSource, tasks: boolean): Now {
     useCallback(() => loadNow(source, tasks), [source, tasks]),
     "",
   ).data;
-  return { live, shown: tasks && sendsOrHas(capabilities, live), settled: !tasks || both(capabilities, live) };
+  const last = useSearch(
+    useCallback(() => (tasks ? latestRun(source) : Promise.resolve(undefined)), [source, tasks]),
+    "",
+  ).data;
+  return { live, last, shown: tasks && sendsOrHas(capabilities, live), settled: !tasks || both(capabilities, live) };
 }
 
 /** An app says it sends task events, or the agent has some. */
@@ -67,17 +79,21 @@ const readOpen = (raw: unknown): boolean => raw === true;
 /** The line: how many tasks run, wait and wait again, and the workers; the tasks in a table when opened. */
 export function NowStrip({ now }: { now: Now }) {
   if (!(now.shown && now.live)) return null;
-  return <NowLine live={now.live} />;
+  return <NowLine live={now.live} last={now.last} />;
 }
 
-function NowLine({ live }: { live: LiveTasks }) {
+function NowLine({ live, last }: { live: LiveTasks; last: TraceSummary | undefined }) {
   const [open, setOpen] = useStored(OPEN_KEY, readOpen);
   const busy = live.tasks.length > 0;
   return (
     <section className="grid gap-3 pb-5" aria-label="Now">
-      {/* A bar like the Overview folded: what runs now, then the workers at its end. */}
-      <div className="flex min-h-12 flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border bg-card px-4 py-2 text-md">
-        {busy ? <NowToggle live={live} open={open} setOpen={setOpen} /> : <NowIdle workers={live.workers} />}
+      {/* One quiet line: what runs now, then the workers at its end. */}
+      <div className="flex min-h-8 flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+        {busy ? (
+          <NowToggle live={live} open={open} setOpen={setOpen} />
+        ) : (
+          <NowIdle workers={live.workers} last={last} />
+        )}
         <Workers workers={live.workers} />
       </div>
       {busy && open ? <InFlightTable live={live} /> : null}
@@ -88,13 +104,10 @@ function NowLine({ live }: { live: LiveTasks }) {
 /** A light for the queue's state: pulsing while tasks run, steady when workers wait, hollow with none. */
 function Light({ state }: { state: "busy" | "ready" | "none" }) {
   return (
-    <span className="relative flex size-2.5 shrink-0" aria-hidden="true">
+    <span className="relative flex size-2 shrink-0" aria-hidden="true">
       {state === "busy" ? <span className="absolute inset-0 animate-ping rounded-full bg-ok opacity-60" /> : null}
       <span
-        className={cn(
-          "relative size-2.5 rounded-full",
-          state === "none" ? "border-2 border-muted-foreground" : "bg-ok",
-        )}
+        className={cn("relative size-2 rounded-full", state === "none" ? "border-2 border-muted-foreground" : "bg-ok")}
       />
     </span>
   );
@@ -116,17 +129,49 @@ function NowToggle({ live, open, setOpen }: { live: LiveTasks; open: boolean; se
   );
 }
 
-/** Nothing in flight: idle, with workers there to run what comes; or no worker to run it. */
-function NowIdle({ workers }: { workers: readonly LiveWorker[] }) {
+/** Nothing in flight: idle, with workers there to run what comes and when the last run ended; or no worker. */
+function NowIdle({ workers, last }: { workers: readonly LiveWorker[]; last: TraceSummary | undefined }) {
   return (
-    <span className="flex items-center gap-3 py-1 pl-8">
+    <span className="flex min-w-0 items-center gap-3 py-1 pl-8">
       <span className="font-semibold text-foreground">Now</span>
       <Light state={workers.length ? "ready" : "none"} />
-      <span className="text-muted-foreground">
-        {workers.length ? "Idle: workers are up, no task in flight" : "No worker connected"}
-      </span>
+      <span className="text-muted-foreground">{workers.length ? "Idle" : "No worker connected"}</span>
+      {last ? <LastRun run={last} /> : null}
     </span>
   );
+}
+
+/** "Last run refresh_stats · 12s ago", ticking: the queue works even when its tasks end too fast to be seen. */
+function LastRun({ run }: { run: TraceSummary }) {
+  const now = useClock();
+  return (
+    <a
+      href={traceHref(run.id)}
+      className="flex min-w-0 items-baseline gap-1.5 text-muted-foreground hover:text-foreground"
+    >
+      · last run <Mono className="truncate text-xs text-foreground">{run.name}</Mono>
+      <span className="tabular-nums whitespace-nowrap">{ago(now - (run.start + run.duration) / 1000)}</span>
+    </a>
+  );
+}
+
+/** "just now", "12s ago", "3m ago", "2h ago". */
+function ago(ms: number): string {
+  const seconds = Math.max(0, Math.round(ms / 1000));
+  if (seconds < 2) return "just now";
+  if (seconds < 60) return `${seconds}s ago`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  return `${Math.floor(seconds / 3600)}h ago`;
+}
+
+/** The time now, once a second. */
+function useClock(): number {
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  return now;
 }
 
 /** "Now  2 running | 5 queued | 1 retrying": the states with tasks in them. */
@@ -155,7 +200,7 @@ function Workers({ workers }: { workers: readonly LiveWorker[] }) {
   if (workers.length === 0) {
     return (
       <span className="text-muted-foreground">
-        Start one: <Mono className="text-sm">celery -A &lt;app&gt; worker</Mono>
+        Start one: <Mono className="text-xs">celery -A &lt;app&gt; worker</Mono>
       </span>
     );
   }
@@ -165,7 +210,7 @@ function Workers({ workers }: { workers: readonly LiveWorker[] }) {
         <li key={worker.name}>
           <Badge
             variant="outline"
-            className="gap-2 bg-background py-1 text-xs"
+            className="gap-1.5 bg-background text-xs font-normal"
             title={`${taskSystem(worker.system)} · ${worker.service}`}
           >
             <Light state={worker.in_flight ? "busy" : "ready"} />

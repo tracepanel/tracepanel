@@ -14,8 +14,9 @@ import { SystemTiles, useCallsSummary } from "./CallsTiles";
 import { useLatch, usePaged, useSearch } from "./data";
 import { EmptyPage, PageShell } from "./EmptyPage";
 import { refineQuery } from "./EntryPage";
+import { usePaintWhen } from "./firstPaint";
 import { Figure, OverviewNumbers, OverviewRange, OverviewSection, useOverviewOpen } from "./Overview";
-import { LiveRefresh, RefreshControl } from "./refresh";
+import { RefreshControl } from "./refresh";
 import { type CallsSection, type EntrySection, go, type Section, systemOfSection, traceHref } from "./routes";
 import { SearchBar } from "./SearchBar";
 import { ServicesView } from "./ServicesView";
@@ -466,12 +467,11 @@ function bodySettled(section: Section, system: string | null, data: PageData, lo
 }
 
 /**
- * The header's controls: refresh, and on the Logs page Live too, paused (`reading`) while a record is open or the
- * list is scrolled down. Services and Database are summaries: they change slowly, so they refresh on demand only.
+ * The header's controls: refresh and auto-refresh, held (`reading`) while a record is open or the list is scrolled
+ * down. Services and Database are summaries: they change slowly, so they refresh on demand only.
  */
 function headerActions(section: DataSection, reading: boolean): ReactNode {
-  if (section === "logs") return <LiveRefresh list="logs" paused={reading} />;
-  return <RefreshControl live={!isSummary(section)} />;
+  return <RefreshControl live={!isSummary(section)} paused={reading} />;
 }
 
 export function DataPage(props: DataPageProps) {
@@ -480,6 +480,7 @@ export function DataPage(props: DataPageProps) {
   const data = usePageData(section, page.system, source, q);
   const loaded = loadedOf(section, data);
   const answered = useLatch(listAnswered(loaded));
+  usePaintWhen(answered);
   const { meta, pristine } = page;
   // Before its first answer a page that may turn out empty shows its title only, then the page or its empty state.
   if (pristine && !(q || answered)) return <PageShell title={meta.label} description={meta.description} />;
@@ -516,6 +517,7 @@ function DataScreen({
   const [scrolled, setScrolled] = useState(false);
   // The list, the chart above it (Logs) and the tiles (a system's page) show together, once all have answered.
   const ready = useLatch(bodySettled(section, system, data, loaded));
+  usePaintWhen(ready);
   const clear = () => go({ name: section, q: "" });
   const body = pageBody({
     section,

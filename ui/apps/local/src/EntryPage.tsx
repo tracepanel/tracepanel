@@ -10,9 +10,10 @@ import { cn } from "@tracepanel/ui/lib/utils";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { useLatch, usePaged, useSearch } from "./data";
 import { EmptyPage, PageShell } from "./EmptyPage";
+import { usePaintWhen } from "./firstPaint";
 import { useNewIds } from "./hooks";
 import { type Now, NowStrip, useNow } from "./LiveTasks";
-import { LiveRefresh, RefreshControl, turnLiveOn } from "./refresh";
+import { LIVE_MS, RefreshControl, useRefresh } from "./refresh";
 import { type EntrySection, type EntryView, go, href, traceHref } from "./routes";
 import { SearchBar } from "./SearchBar";
 import { ENTRY } from "./sections";
@@ -125,12 +126,14 @@ interface EntryPageProps {
   live?: boolean | undefined;
 }
 
-/** An old link to Tasks' Live, a list of its own once: Live on, before its toggle reads it, at the page's own address. */
+/** An old link to Tasks' Live, a list of its own once: Live chosen, at the page's own address. */
 function useLiveLink(section: EntrySection, q: string, live: boolean | undefined): void {
-  if (live) turnLiveOn(section);
+  const { setInterval } = useRefresh();
   useEffect(() => {
-    if (live) go({ name: section, q }, true);
-  }, [live, section, q]);
+    if (!live) return;
+    setInterval(LIVE_MS);
+    go({ name: section, q }, true);
+  }, [live, section, q, setInterval]);
 }
 
 /** The lists of every entry point: its groups, every call. */
@@ -190,7 +193,7 @@ function ListNav({
 /**
  * One entry point, the same shape for all: an overview (monitoring and its groups: endpoints, operations, tasks,
  * consumers, jobs) and its calls (traces of this kind only, newest first). Every row opens a group page or a trace.
- * Tasks have Now besides, what is in flight, above the overview, and Live in the header, as the logs do.
+ * Tasks have Now besides, what is in flight, above the overview, and Live in the header's auto-refresh, as on Logs.
  */
 export function EntryPage(props: EntryPageProps) {
   const { section, q, view, source, live } = props;
@@ -199,6 +202,7 @@ export function EntryPage(props: EntryPageProps) {
   const now = useNow(source, section === "tasks");
   // Whether the page has answered once: from then on another list loads under the page, not instead of it.
   const answered = useLatch(settled(data.loaded) && now.settled);
+  usePaintWhen(answered);
   const entry = ENTRY[section];
   if (!(q || answered)) return <PageShell title={entry.title} description={entry.description} />;
   if (nothingStored(q, data.loaded, now)) return <EntryEmpty section={section} />;
@@ -255,11 +259,7 @@ function EntryScreen({
   const ready = useLatch(overviewSettled && settled(data.loaded) && now.settled);
   return (
     <main className="flex min-h-0 min-w-0 flex-col bg-background">
-      <PageHeader
-        title={entry.title}
-        description={entry.description}
-        actions={<EntryActions section={section} reading={scrolled} />}
-      />
+      <PageHeader title={entry.title} description={entry.description} actions={<EntryActions reading={scrolled} />} />
       <EntrySearch {...{ section, q, view, spec, known, refine }} loaded={data.loaded} onChange={setQuery} />
       <section
         className="min-h-0 flex-1 overflow-y-auto px-10 pb-10"
@@ -379,9 +379,9 @@ function useEntryData(source: DataSource, section: EntrySection, view: EntryView
   return { groups, calls, loaded };
 }
 
-/** The header's controls: refresh, and on Tasks Live too, paused while the list is scrolled down (as on Logs). */
-function EntryActions({ section, reading }: { section: EntrySection; reading: boolean }) {
-  return section === "tasks" ? <LiveRefresh list="tasks" paused={reading} /> : <RefreshControl />;
+/** The header's controls: refresh and auto-refresh, held while the list is scrolled down (as on Logs). */
+function EntryActions({ reading }: { reading: boolean }) {
+  return <RefreshControl paused={reading} />;
 }
 
 /** What an empty list says: Tasks' runs come once a task in flight ends. */
