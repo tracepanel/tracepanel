@@ -14,9 +14,10 @@ import { GraphqlCode } from "./GraphqlCode";
 import { ChevronRightIcon, CloseIcon } from "./icons";
 import { keyed } from "./keys";
 import { AllAttributes, LogRecordDetails } from "./LogRecordDetails";
-import { breakdown, CATEGORY_LABELS, type Category } from "./lib/breakdown";
+import { breakdown, type Category, categoryLabel } from "./lib/breakdown";
 import { callFields } from "./lib/callFields";
 import { callTemplate, groupNoun } from "./lib/calls";
+import { spanKindLabel } from "./lib/handler";
 import { traceRuntime } from "./lib/runtime";
 import { CALL_KINDS, DATASTORES, MESSAGING, RPC } from "./lib/systems";
 import { linkProps, type TraceLinks } from "./links";
@@ -310,16 +311,18 @@ function Share({
   value,
   total,
   filters,
+  trace,
 }: {
   category: Category;
   value: number;
   total: number;
   filters: FilterState;
+  trace: Trace;
 }) {
   const content = (
     <>
       <span className="dt-swatch" />
-      {CATEGORY_LABELS[category]}
+      {categoryLabel(category, trace)}
       <b>{duration(value)}</b>
       <span className="dt-breakdown-share">{percent(value, total)}</span>
     </>
@@ -361,7 +364,7 @@ function Breakdown({ trace, filters }: { trace: Trace; filters: FilterState }) {
       </div>
       <ul className="dt-breakdown-legend" aria-label="Where the time went, and what to show">
         {parts.map(([category, value]) => (
-          <Share key={category} category={category} value={value} total={total} filters={filters} />
+          <Share key={category} category={category} value={value} total={total} filters={filters} trace={trace} />
         ))}
         {others.map((filter) => (
           <li key={filter.id}>
@@ -623,7 +626,7 @@ function Rows({ nodes, depth, ctx }: { nodes: Node[]; depth: number; ctx: RowCon
               >
                 <span className="dt-map-name" style={indent}>
                   <Caret open={open} onToggle={() => ctx.onToggle(`open:${node.key}`)} />
-                  <span className="dt-map-kind">{first?.kind}</span>
+                  <span className="dt-map-kind">{spanKindLabel(first?.kind, ctx.trace.attrs)}</span>
                   <span className="dt-map-text">{callTemplate(first)}</span>
                   <AliasChip value={first?.attrs["db.alias"] ?? first?.attrs["cache.alias"]} />
                   <span className="dt-map-times">×{node.spans.length}</span>
@@ -682,7 +685,7 @@ function Rows({ nodes, depth, ctx }: { nodes: Node[]; depth: number; ctx: RowCon
             >
               <span className="dt-map-name" style={indent}>
                 <Caret open={fold} onToggle={() => ctx.onToggle(node.key)} />
-                <span className="dt-map-kind">{span.kind === "http" ? "request" : span.kind}</span>
+                <span className="dt-map-kind">{spanKindLabel(span.kind, ctx.trace.attrs)}</span>
                 <span className="dt-map-text">{span.name}</span>
                 <AliasChip value={span.attrs["db.alias"] ?? span.attrs["cache.alias"]} />
                 {issue ? <IssueChip kind={issue} /> : null}
@@ -918,7 +921,7 @@ function SpanTitle({ span, trace }: { span: Span; trace: Trace }) {
   const offset = duration(Math.max(span.start - trace.start, 0));
   return (
     <p className="dt-map-details-title">
-      {span.kind === "http" ? "request" : span.kind} · started at +{offset} · took {duration(span.duration)}
+      {spanKindLabel(span.kind, trace.attrs)} · started at +{offset} · took {duration(span.duration)}
     </p>
   );
 }
