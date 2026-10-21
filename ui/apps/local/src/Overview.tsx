@@ -29,10 +29,14 @@ export function useOverviewOpen(): [boolean, () => void] {
 
 /** The time an overview covers, on the 24-hour clock the console's tables and charts use: "20/10/2026, 14:05:00 – 15:05:00". */
 export function OverviewRange({ from, to }: { from: number; to: number }) {
+  const start = new Date(from / 1000);
+  const end = new Date(to / 1000);
+  // The end's date only when it is another day's: "20/10/2026, 09:29:34 – 21/10/2026, 13:26:06".
+  const sameDay = start.toDateString() === end.toDateString();
   return (
-    <span className="text-base text-muted-foreground">
-      {new Date(from / 1000).toLocaleString([], { hour12: false })} –{" "}
-      {new Date(to / 1000).toLocaleTimeString([], { hour12: false })}
+    <span className="text-sm text-muted-foreground tabular-nums">
+      {start.toLocaleString([], { hour12: false })} –{" "}
+      {sameDay ? end.toLocaleTimeString([], { hour12: false }) : end.toLocaleString([], { hour12: false })}
     </span>
   );
 }
@@ -42,7 +46,7 @@ export function OverviewNumbers({ children }: { children: ReactNode }) {
   return <span className="flex flex-wrap items-baseline gap-y-1 text-md">{children}</span>;
 }
 
-const FIGURE = "flex items-baseline gap-1.5 border-border px-4 tabular-nums not-first:border-l first:pl-0";
+export const FIGURE = "flex items-baseline gap-1.5 border-border px-4 tabular-nums not-first:border-l first:pl-0";
 const INK = { error: "text-error", warn: "text-warn", plain: "text-foreground" } as const;
 
 /**
@@ -69,17 +73,9 @@ export function Measure({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-/** Folded, the heading is a bar like the tiles it hides, so it reads as one thing to open. */
-const FOLDED_LOOK = {
-  bar: "border bg-card px-4 py-3 transition-colors hover:bg-accent",
-  heading: "text-md font-semibold",
-  chevron: "",
-};
-const OPEN_LOOK = { bar: "py-1", heading: "text-xl font-semibold", chevron: "rotate-90" };
-
 /**
- * An overview: its heading folds it (the chevron, "Overview", then `range` open or `numbers` folded), `children` are
- * what it shows open.
+ * An overview: one bar, the same open or folded (the chevron, "Overview", its `numbers`, its `range` at the end), that
+ * opens `children` under it. Only the chevron turns: nothing on the bar moves or changes size.
  */
 export function OverviewSection({
   open,
@@ -95,10 +91,10 @@ export function OverviewSection({
   children: ReactNode;
 }) {
   return (
-    <section className="grid gap-5 pb-8" aria-label="Overview">
+    <section className="grid gap-4 pb-8" aria-label="Overview">
       <header>
-        <OverviewHeading open={open} onToggle={onToggle}>
-          {open ? range : numbers}
+        <OverviewHeading open={open} onToggle={onToggle} range={range}>
+          {numbers}
         </OverviewHeading>
       </header>
       {open ? children : null}
@@ -106,19 +102,33 @@ export function OverviewSection({
   );
 }
 
-/** The heading that folds an overview, `children` after "Overview". The ring shows for the keyboard only. */
-function OverviewHeading({ open, onToggle, children }: { open: boolean; onToggle: () => void; children: ReactNode }) {
-  const look = open ? OPEN_LOOK : FOLDED_LOOK;
+/** The bar that folds an overview: `children` after "Overview", `range` at its end. The ring is the keyboard's only. */
+function OverviewHeading({
+  open,
+  onToggle,
+  range,
+  children,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  range: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <button
       type="button"
-      className={`group/overview flex w-full items-center gap-3 rounded-xl text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 ${look.bar}`}
+      className="flex w-full flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border bg-card px-4 py-3 text-left outline-none transition-colors hover:bg-accent focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
       onClick={onToggle}
       aria-expanded={open}
     >
-      <ChevronRightIcon className={`size-5 text-muted-foreground transition-transform ${look.chevron}`} />
-      <h2 className={look.heading}>Overview</h2>
+      <span className="flex items-center gap-3">
+        <ChevronRightIcon
+          className={`size-5 text-muted-foreground transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`}
+        />
+        <h2 className="text-md font-semibold">Overview</h2>
+      </span>
       {children}
+      <span className="ml-auto">{range}</span>
     </button>
   );
 }

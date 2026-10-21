@@ -13,11 +13,11 @@ import { Badge } from "@tracepanel/ui/components/ui/badge";
 import { useStored } from "@tracepanel/ui/hooks/useStored";
 import { argumentsOf, byState, elapsed, LIVE_STATES, stateSince } from "@tracepanel/ui/lib/liveTasks";
 import { cn } from "@tracepanel/ui/lib/utils";
-import { ChevronRightIcon } from "lucide-react";
+import { CheckIcon, ChevronRightIcon, XIcon } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { useSearch } from "./data";
 import { useCapabilities } from "./hooks";
-import { Figure, OverviewNumbers } from "./Overview";
+import { FIGURE, Figure, OverviewNumbers } from "./Overview";
 import { groupRoute, href, traceHref } from "./routes";
 import { taskSystem } from "./sections";
 import { TaskState } from "./tables";
@@ -89,8 +89,8 @@ function NowLine({ live, last }: { live: LiveTasks; last: TraceSummary | undefin
   const busy = live.tasks.length > 0;
   return (
     <section className="grid gap-3 pb-5" aria-label="Now">
-      {/* One quiet line: what runs now, then the workers at its end. */}
-      <div className="flex min-h-8 flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+      {/* The Overview's bar: what runs now, its numbers as the Overview says them, then the workers at its end. */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border bg-card px-4 py-3 text-md">
         {busy ? (
           <NowToggle live={live} open={open} setOpen={setOpen} />
         ) : (
@@ -131,28 +131,36 @@ function NowToggle({ live, open, setOpen }: { live: LiveTasks; open: boolean; se
   );
 }
 
-/** Nothing in flight: idle, with workers there to run what comes and when the last run ended; or no worker. */
+/** Nothing in flight: idle, with workers there to run what comes and the last run; or no worker. */
 function NowIdle({ workers, last }: { workers: readonly LiveWorker[]; last: TraceSummary | undefined }) {
   return (
-    <span className="flex min-w-0 items-center gap-3 py-1 pl-8">
+    <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 pl-8">
       <span className="font-semibold text-foreground">Now</span>
       <Light state={workers.length ? "ready" : "none"} />
-      <span className="text-muted-foreground">{workers.length ? "Idle" : "No worker connected"}</span>
-      {last ? <LastRun run={last} /> : null}
+      <OverviewNumbers>
+        <span className={FIGURE}>
+          <b className="font-semibold text-foreground">{workers.length ? "Idle" : "No worker connected"}</b>
+        </span>
+        {last ? <LastRun run={last} /> : null}
+      </OverviewNumbers>
     </span>
   );
 }
 
-/** "Last run refresh_stats · 12s ago", ticking: the queue works even when its tasks end too fast to be seen. */
+/** "last run refresh_stats ✓ 12s ago", ticking: the queue works even when its tasks end too fast to be seen. */
 function LastRun({ run }: { run: TraceSummary }) {
   const now = useClock();
+  const failed = run.status === "error";
   return (
-    <a
-      href={traceHref(run.id)}
-      className="flex min-w-0 items-baseline gap-1.5 text-muted-foreground hover:text-foreground"
-    >
-      · last run <Mono className="truncate text-xs text-foreground">{run.name}</Mono>
-      <span className="tabular-nums whitespace-nowrap">{ago(now - (run.start + run.duration) / 1000)}</span>
+    <a href={traceHref(run.id)} className={cn(FIGURE, "min-w-0 hover:[&_b]:underline")}>
+      <span className="whitespace-nowrap text-muted-foreground">last run</span>{" "}
+      <b className="truncate font-mono text-sm font-medium text-foreground">{run.name}</b>{" "}
+      {failed ? (
+        <XIcon className="size-4 shrink-0 self-center text-error" aria-label="failed" />
+      ) : (
+        <CheckIcon className="size-4 shrink-0 self-center text-ok" aria-label="succeeded" />
+      )}{" "}
+      <span className="whitespace-nowrap text-muted-foreground">{ago(now - (run.start + run.duration) / 1000)}</span>
     </a>
   );
 }

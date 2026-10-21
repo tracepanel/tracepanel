@@ -223,3 +223,27 @@ test("a trace page's tiles look like the other pages' tiles, with no line under 
   expect(await metrics.evaluate((element) => getComputedStyle(element).boxShadow)).toBe("none");
   expect(await metrics.locator(".dt-metric").first().evaluate(look)).toEqual(stat);
 });
+
+for (const path of ["#/endpoints", "#/logs"]) {
+  test(`${path}: the Overview's bar is the same open or folded, its numbers in it both ways`, async ({ page }) => {
+    await page.goto(`/${path}`);
+    const bar = page.getByRole("region", { name: "Overview" }).getByRole("button", { name: /^Overview/ });
+    const look = () =>
+      bar.evaluate((element) => {
+        const box = element.getBoundingClientRect();
+        const heading = element.querySelector("h2") as HTMLElement;
+        return { height: Math.round(box.height), top: Math.round(box.top), size: getComputedStyle(heading).fontSize };
+      });
+    await expect(bar).toHaveAttribute("aria-expanded", "true");
+    const open = await look();
+    const numbers = (await bar.innerText()).replace(/\s+/g, " ");
+
+    await bar.click();
+
+    await expect(bar).toHaveAttribute("aria-expanded", "false");
+    expect(await look()).toEqual(open);
+    expect((await bar.innerText()).replace(/\s+/g, " ")).toBe(numbers);
+    // A click is no keyboard focus: no ring.
+    expect(await bar.evaluate((element) => element.matches(":focus-visible"))).toBe(false);
+  });
+}

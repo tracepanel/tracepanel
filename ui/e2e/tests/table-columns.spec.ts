@@ -243,3 +243,27 @@ test("at 1440 px a list's main column has the room, and its short values are who
     expect(cut, name).toBe(0);
   }
 });
+
+test("a narrow column's hover buttons sit beside its name, not over it, and the name stays put", async ({ page }) => {
+  await page.goto("/#/tasks");
+  for (const name of ["Runs", "System"]) {
+    const head = page.getByRole("main").getByRole("columnheader", { name, exact: true });
+    const text = head.locator("span.truncate");
+    const before = await text.boundingBox();
+
+    await head.hover();
+    const hide = head.getByRole("button", { name: `Hide the ${name} column` });
+    await expect(hide).toHaveCSS("opacity", "1");
+    const after = await text.boundingBox();
+    const button = await hide.boundingBox();
+
+    if (!(before && after && button)) throw new Error(`no box for ${name}`);
+    // The name's near end stays where it was.
+    expect(name === "Runs" ? after.x + after.width : after.x).toBeCloseTo(
+      name === "Runs" ? before.x + before.width : before.x,
+      0,
+    );
+    // The button is clear of the name.
+    expect(button.x + button.width <= after.x || button.x >= after.x + after.width).toBe(true);
+  }
+});
