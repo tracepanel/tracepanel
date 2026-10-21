@@ -271,7 +271,7 @@ const COLUMNS: DataColumn<Ticking>[] = [
   },
   // Where it is: the worker that runs it, or the queue it waits in.
   { id: "where", label: "Where", width: 12, cell: ({ task }) => <Where task={task} /> },
-  { id: "for", label: "For", width: 5.5, num: true, cell: ({ task, now }) => elapsed(now, stateSince(task)) },
+  { id: "for", label: "For", width: 7, num: true, cell: ({ task, now }) => elapsed(now, stateSince(task)) },
   { id: "attempt", label: "Attempt", width: 6.5, num: true, cell: ({ task }) => task.retries + 1 },
   // What a glance needs: why the last attempt failed, else what it was given.
   {

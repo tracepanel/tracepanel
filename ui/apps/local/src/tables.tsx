@@ -185,7 +185,7 @@ function endpointColumns(items: readonly EndpointRow[]): DataColumn<EndpointRow>
       ),
     },
     { id: "calls", label: "Calls", width: 5.25, num: true, cell: (item) => item.calls },
-    { id: "p50", label: "p50", width: 5.5, num: true, cell: (item) => duration(item.p50) },
+    { id: "p50", label: "p50", width: 6.5, num: true, cell: (item) => duration(item.p50) },
     p95Column(items),
     { id: "queries", label: "Queries / call", width: 9, num: true, cell: (item) => item.avg_queries },
     {
@@ -1167,7 +1167,7 @@ function graphqlColumns(items: readonly GraphqlRow[]): DataColumn<GraphqlRow>[] 
       cell: (item) => item.errors || "—",
     },
     p95Column(items),
-    { id: "p50", label: "p50", width: 5.5, num: true, cell: (item) => duration(item.p50) },
+    { id: "p50", label: "p50", width: 6.5, num: true, cell: (item) => duration(item.p50) },
     { id: "queries", label: "Queries / call", width: 9, num: true, cell: (item) => item.avg_queries },
     lastColumn(),
   ];

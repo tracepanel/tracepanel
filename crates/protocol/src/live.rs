@@ -13,7 +13,7 @@
 
 use serde::Deserialize;
 use serde_json::{Value, json};
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::sync::{Arc, Mutex, PoisonError};
 
 /// A running task not seen for this long is gone: its worker sends a heartbeat every 30 seconds while it runs.
@@ -22,6 +22,10 @@ pub const RUNNING_STALE_US: i64 = 120_000_000;
 pub const WAITING_STALE_US: i64 = 3_600_000_000;
 /// A worker not heard from for this long leaves the list of workers.
 pub const WORKER_STALE_US: i64 = 3_600_000_000;
+/// A worker that ended a task this recently, with tasks of its queues still waiting, is still busy: between two
+/// tasks it takes the next one (RQ forks a process for each, Celery acknowledges and fetches), and a console that
+/// asks now and then would otherwise often find it idle while it works through a queue.
+pub const BETWEEN_TASKS_US: i64 = 2_000_000;
 /// How long a finished task's id is remembered: its enqueue, sent by another process, may come after it ended.
 const FINISHED_KEPT_US: i64 = 600_000_000;
 /// The most tasks kept: past it, new queued tasks are not added (a flood of them is still a flood without each).
@@ -110,11 +114,15 @@ struct Task {
     seen: i64,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 struct Worker {
     system: String,
     service: String,
     seen: i64,
+    /// When it last ended a task (finished, or to be retried), on the agent's clock.
+    ended: Option<i64>,
+    /// The queues it took tasks from.
+    queues: BTreeSet<String>,
 }
 
 #[derive(Default)]
@@ -184,11 +192,7 @@ impl LiveTasks {
             "now": now,
             "tasks": tasks.iter().map(|task| task.to_json()).collect::<Vec<_>>(),
             "workers": workers.iter().map(|(name, worker)| {
-                let in_flight = inner
-                    .tasks
-                    .values()
-                    .filter(|task| task.state == State::Running && task.worker.as_deref() == Some(name.as_str()))
-                    .count();
+                let in_flight = inner.in_flight(name, worker, now);
                 json!({
                     "name": name,
                     "system": worker.system,
@@ -267,32 +271,63 @@ impl Task {
 
 impl Inner {
     fn apply(&mut self, event: TaskEvent, service: &str, now: i64) {
-        if let Some(worker) = &event.worker {
-            self.workers.insert(
-                worker.clone(),
-                Worker {
-                    system: event.system.clone(),
-                    service: service.to_owned(),
-                    seen: now,
-                },
-            );
+        if let Some(name) = &event.worker {
+            let worker = self.workers.entry(name.clone()).or_default();
+            worker.system.clone_from(&event.system);
+            service.clone_into(&mut worker.service);
+            worker.seen = now;
         }
         match event.event.as_str() {
-            "heartbeat" => {
-                for id in &event.ids {
-                    if let Some(task) = self.tasks.get_mut(id) {
-                        task.seen = now;
-                    }
-                }
-            }
+            "heartbeat" => self.heartbeat(&event, now),
             "finished" => {
-                self.tasks.remove(&event.id);
+                let ran_on = self.tasks.remove(&event.id).and_then(|task| task.worker);
+                self.ended(ran_on.or(event.worker), now);
                 self.finished.insert(event.id, now);
             }
             "enqueued" => self.enqueued(event, service, now),
             "started" | "retried" => self.ran(event, service, now),
             _ => {}
         }
+    }
+
+    /// The tasks a worker process says it runs are alive, and run on that worker if no event said where.
+    fn heartbeat(&mut self, event: &TaskEvent, now: i64) {
+        for id in &event.ids {
+            if let Some(task) = self.tasks.get_mut(id) {
+                task.seen = now;
+                if task.worker.is_none() {
+                    task.worker.clone_from(&event.worker);
+                }
+            }
+        }
+    }
+
+    /// A worker ended a task: it may take the next one from its queues at once (see [`BETWEEN_TASKS_US`]).
+    fn ended(&mut self, worker: Option<String>, now: i64) {
+        if let Some(worker) = worker.and_then(|name| self.workers.get_mut(&name)) {
+            worker.ended = Some(now);
+        }
+    }
+
+    /// How many tasks a worker runs now: the running tasks that are its own, or one while it goes from the task it
+    /// ended to the next of its queues.
+    fn in_flight(&self, name: &str, worker: &Worker, now: i64) -> usize {
+        let running = self
+            .tasks
+            .values()
+            .filter(|task| task.state == State::Running && task.worker.as_deref() == Some(name))
+            .count();
+        let between = worker
+            .ended
+            .is_some_and(|ended| now - ended < BETWEEN_TASKS_US)
+            && self.tasks.values().any(|task| {
+                task.state == State::Queued
+                    && task.system == worker.system
+                    && task.queue.as_ref().is_none_or(|queue| {
+                        worker.queues.is_empty() || worker.queues.contains(queue)
+                    })
+            });
+        running.max(usize::from(between))
     }
 
     fn enqueued(&mut self, event: TaskEvent, service: &str, now: i64) {
@@ -328,6 +363,17 @@ impl Inner {
         task.service = service.to_owned();
         task.seen = now;
         task.worker = worker.or(task.worker.take());
+        task.learn(event);
+        if let Some(worker) = task
+            .worker
+            .as_ref()
+            .and_then(|name| self.workers.get_mut(name))
+        {
+            worker.queues.extend(task.queue.clone());
+            if retried {
+                worker.ended = Some(now);
+            }
+        }
         if retried {
             task.state = State::Retrying;
             task.error = error;
@@ -335,7 +381,6 @@ impl Inner {
             task.state = State::Running;
             task.started_at = Some(time);
         }
-        task.learn(event);
     }
 
     fn prune(&mut self, now: i64) {
@@ -417,6 +462,180 @@ mod tests {
 
         assert_eq!(snapshot["tasks"], json!([]));
         assert_eq!(snapshot["workers"][0]["in_flight"], 0);
+    }
+
+    fn in_flight(live: &LiveTasks, now: i64) -> Vec<(String, i64)> {
+        live.snapshot("", now)["workers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|worker| {
+                (
+                    worker["name"].as_str().unwrap().to_owned(),
+                    worker["in_flight"].as_i64().unwrap(),
+                )
+            })
+            .collect()
+    }
+
+    fn take(live: &LiveTasks, now: i64, value: Value) {
+        live.take(events(value), "shop", now);
+    }
+
+    #[test]
+    fn an_rq_worker_stays_busy_between_the_jobs_of_its_queue() {
+        let live = LiveTasks::default();
+        let w = || ("w1".to_owned(), 0);
+        take(
+            &live,
+            T0,
+            json!([
+                {"event": "heartbeat", "system": "rq", "time": T0, "worker": "w1", "ids": []},
+                {"event": "enqueued", "system": "rq", "id": "j1", "name": "a", "time": T0, "queue": "default"},
+                {"event": "enqueued", "system": "rq", "id": "j2", "name": "a", "time": T0, "queue": "default"},
+            ]),
+        );
+
+        assert_eq!(in_flight(&live, T0 + 1), [w()]);
+
+        // A work horse runs j1; the worker's own heartbeat, between, has no ids.
+        take(
+            &live,
+            T0 + 10,
+            json!([{"event": "started", "system": "rq", "id": "j1", "time": T0 + 10, "worker": "w1", "queue": "default"}]),
+        );
+        take(
+            &live,
+            T0 + 20,
+            json!([{"event": "heartbeat", "system": "rq", "time": T0 + 20, "worker": "w1", "ids": []}]),
+        );
+
+        assert_eq!(in_flight(&live, T0 + 30), [("w1".to_owned(), 1)]);
+
+        // j1 ends; until the next horse starts j2 the worker goes on with its queue.
+        take(
+            &live,
+            T0 + 40,
+            json!([{"event": "finished", "system": "rq", "id": "j1", "time": T0 + 40, "worker": "w1"}]),
+        );
+
+        assert_eq!(in_flight(&live, T0 + 50), [("w1".to_owned(), 1)]);
+        assert_eq!(in_flight(&live, T0 + 40 + BETWEEN_TASKS_US), [w()]);
+
+        take(
+            &live,
+            T0 + 60,
+            json!([{"event": "started", "system": "rq", "id": "j2", "time": T0 + 60, "worker": "w1", "queue": "default"}]),
+        );
+
+        assert_eq!(in_flight(&live, T0 + 70), [("w1".to_owned(), 1)]);
+
+        // The last job of the queue ends: nothing waits, the worker is idle at once.
+        take(
+            &live,
+            T0 + 80,
+            json!([{"event": "finished", "system": "rq", "id": "j2", "time": T0 + 80, "worker": "w1"}]),
+        );
+
+        assert_eq!(in_flight(&live, T0 + 90), [w()]);
+    }
+
+    #[test]
+    fn a_worker_is_not_busy_with_another_queue_s_tasks() {
+        let live = LiveTasks::default();
+        take(
+            &live,
+            T0,
+            json!([
+                {"event": "enqueued", "system": "rq", "id": "j1", "name": "a", "time": T0, "queue": "mail"},
+                {"event": "enqueued", "system": "rq", "id": "j2", "name": "a", "time": T0, "queue": "reports"},
+                {"event": "started", "system": "rq", "id": "j1", "time": T0, "worker": "w1", "queue": "mail"},
+                {"event": "finished", "system": "rq", "id": "j1", "time": T0 + 1, "worker": "w1"},
+            ]),
+        );
+
+        assert_eq!(in_flight(&live, T0 + 2), [("w1".to_owned(), 0)]);
+    }
+
+    #[test]
+    fn a_celery_worker_counts_the_tasks_its_processes_run() {
+        let live = LiveTasks::default();
+        take(
+            &live,
+            T0,
+            json!([
+                {"event": "started", "system": "celery", "id": "t1", "time": T0, "worker": "celery@box", "queue": "celery"},
+                {"event": "started", "system": "celery", "id": "t2", "time": T0, "worker": "celery@box", "queue": "celery"},
+                {"event": "started", "system": "celery", "id": "t3", "time": T0, "worker": "celery@box", "queue": "celery"},
+                {"event": "enqueued", "system": "celery", "id": "t4", "name": "a", "time": T0, "queue": "celery"},
+            ]),
+        );
+
+        assert_eq!(in_flight(&live, T0 + 1), [("celery@box".to_owned(), 3)]);
+
+        take(
+            &live,
+            T0 + 10,
+            json!([
+                {"event": "heartbeat", "system": "celery", "time": T0 + 10, "worker": "celery@box", "ids": ["t1", "t2"]},
+                {"event": "finished", "system": "celery", "id": "t3", "time": T0 + 10, "worker": "celery@box"},
+            ]),
+        );
+
+        assert_eq!(in_flight(&live, T0 + 11), [("celery@box".to_owned(), 2)]);
+
+        take(
+            &live,
+            T0 + 20,
+            json!([
+                {"event": "finished", "system": "celery", "id": "t1", "time": T0 + 20, "worker": "celery@box"},
+                {"event": "finished", "system": "celery", "id": "t2", "time": T0 + 20, "worker": "celery@box"},
+            ]),
+        );
+
+        // t4 waits: the worker is about to take it.
+        assert_eq!(in_flight(&live, T0 + 21), [("celery@box".to_owned(), 1)]);
+
+        take(
+            &live,
+            T0 + 30,
+            json!([
+                {"event": "started", "system": "celery", "id": "t4", "time": T0 + 30, "worker": "celery@box", "queue": "celery"},
+                {"event": "finished", "system": "celery", "id": "t4", "time": T0 + 40, "worker": "celery@box"},
+            ]),
+        );
+
+        assert_eq!(in_flight(&live, T0 + 41), [("celery@box".to_owned(), 0)]);
+    }
+
+    #[test]
+    fn a_heartbeat_tells_the_worker_of_a_task_started_without_one() {
+        let live = LiveTasks::default();
+        take(
+            &live,
+            T0,
+            json!([{"event": "started", "system": "rq", "id": "j1", "name": "a", "time": T0}]),
+        );
+
+        assert_eq!(in_flight(&live, T0 + 1), Vec::<(String, i64)>::new());
+
+        take(
+            &live,
+            T0 + 10,
+            json!([{"event": "heartbeat", "system": "rq", "time": T0 + 10, "worker": "w1", "ids": ["j1"]}]),
+        );
+
+        assert_eq!(in_flight(&live, T0 + 11), [("w1".to_owned(), 1)]);
+        assert_eq!(tasks(&live, T0 + 11)[0]["worker"], "w1");
+
+        // A retry ends the attempt.
+        take(
+            &live,
+            T0 + 20,
+            json!([{"event": "retried", "system": "rq", "id": "j1", "time": T0 + 20, "retries": 1}]),
+        );
+
+        assert_eq!(in_flight(&live, T0 + 21), [("w1".to_owned(), 0)]);
     }
 
     #[test]

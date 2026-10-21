@@ -130,11 +130,11 @@ test("columns hidden and shown from the menu stay so after a reload, until reset
   await expect(header(page, "Trace")).toHaveCount(0);
 });
 
-test("the time shows as a time of day or as how long ago, as last chosen", async ({ page }) => {
+test("the time shows as a date and time or as how long ago, as last chosen", async ({ page }) => {
   await page.goto("/#/logs");
   const time = rows(page).first().getByRole("cell").first();
 
-  await expect(time).toHaveText(/^\d\d:\d\d:\d\d\.\d{3}$/);
+  await expect(time).toHaveText(/^[A-Z][a-z]{2} \d\d \d\d:\d\d:\d\d\.\d{3}$/);
 
   await region(page).getByRole("button", { name: "Columns" }).click();
   await page.getByRole("menuitemradio", { name: "Time ago" }).click();

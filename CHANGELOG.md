@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- A worker on the Tasks page's Now no longer reads idle between two tasks
+  while tasks of its queues wait. An RQ worker forks a process for each job,
+  and the console often asked in that gap. A worker that ended a task in the
+  last 2 seconds, with a task of its queues still queued, counts one running
+  in `api/tasks/live`. A heartbeat names the worker of a running task whose
+  `started` event did not.
+- The p50 column on HTTP and GraphQL, Avg on Services and For in Now's table
+  are wide enough for their values at 1280 px and up: "810 ms" was cut to
+  "810 …".
+- The logs table has no day headings between records. Each record's time
+  says its day instead, today's too: "Oct 21 15:45:20.345", the Time column
+  wide enough for it. Time of day in the columns menu is Date and time now.
+- A column's resize edge is a darker gray on hover, while dragged and when
+  focused, not the brand's purple. From the keyboard it is thicker too.
+
 ## 0.4.0 (2026-10-21)
 
 ### Added
