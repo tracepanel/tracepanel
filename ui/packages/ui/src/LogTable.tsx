@@ -26,7 +26,7 @@ import {
   DropdownMenuSubTrigger,
 } from "./components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableRow } from "./components/ui/table";
-import { ago, clock, duration, since } from "./format";
+import { ago, duration, since, stamp } from "./format";
 import { type ColumnSpec, type Columns, useColumns } from "./hooks/useColumns";
 import { useStored } from "./hooks/useStored";
 import { logAttrs } from "./LogRecordDetails";
@@ -74,7 +74,7 @@ export function LogLevel({ level }: { level: string }) {
   );
 }
 
-/** When a record was made: the time of day, or how long after the request started (or how long ago). */
+/** When a record was made: its day and time, or how long after the request started (or how long ago). */
 type TimeMode = "clock" | "relative";
 
 const readTime = (raw: unknown): TimeMode => (raw === "relative" ? "relative" : "clock");
@@ -89,7 +89,7 @@ function LogTime({ time, mode, start }: { time: number; mode: TimeMode; start: n
       dateTime={at.toISOString()}
       title={`${at.toLocaleString()}, ${said}`}
     >
-      {mode === "relative" ? relative : clock(time)}
+      {mode === "relative" ? relative : stamp(time)}
     </time>
   );
 }
@@ -155,7 +155,7 @@ function leading<R extends LogLike>(
     {
       id: "time",
       label: "Time",
-      width: 8.5,
+      width: 12,
       fixed: true,
       cell: (log) => <LogTime time={log.time} mode={mode} start={start} />,
     },
@@ -293,7 +293,7 @@ function opens(event: MouseEvent): boolean {
   return !(event.target as Element).closest("a, button, [role=separator]");
 }
 
-/** The record row next to this one, up or down, past what isn't one (a record's details, a day's heading). */
+/** The record row next to this one, up or down, past what isn't one (a record's details). */
 function neighbour(row: HTMLElement, by: number): HTMLElement | undefined {
   const rows = [...(row.parentElement?.querySelectorAll<HTMLElement>("[data-record]") ?? [])];
   return rows[rows.indexOf(row) + by];
@@ -361,7 +361,7 @@ function LogHead({
       <DropdownMenuLabel>Time</DropdownMenuLabel>
       <DropdownMenuRadioGroup value={mode} onValueChange={(value) => onMode(readTime(value))}>
         <DropdownMenuRadioItem value="clock" onSelect={(event) => event.preventDefault()}>
-          Time of day
+          Date and time
         </DropdownMenuRadioItem>
         <DropdownMenuRadioItem value="relative" onSelect={(event) => event.preventDefault()}>
           {relativeLabel}
@@ -382,36 +382,19 @@ function useRevealOpened(body: RefObject<HTMLTableSectionElement | null>) {
   }, []);
 }
 
-// A local day, as the rows' times can't say it: "Monday, October 19". One formatter for every row of a long list.
-const DAY = new Intl.DateTimeFormat([], { weekday: "long", month: "long", day: "numeric" });
-
-const dayOf = (us: number): string => DAY.format(new Date(us / 1000));
-
-/**
- * What the table's body lists, a line each: a record, its details under it when open, and a day's heading above a
- * record of another day than the one above it (or, the first, than today): the time column shows the time of day only.
- */
-type Line<R> =
-  | { kind: "day"; key: string; day: string }
-  | { kind: "record"; key: string; log: R }
-  | { kind: "details"; key: string; log: R };
+/** What the table's body lists, a line each: a record, and its details under it when open. */
+type Line<R> = { kind: "record"; key: string; log: R } | { kind: "details"; key: string; log: R };
 
 function linesOf<R extends LogLike>(logs: readonly R[], keyOf: (log: R) => string, open: string | null): Line<R>[] {
-  const lines: Line<R>[] = [];
-  let above = dayOf(Date.now() * 1000);
-  for (const log of logs) {
+  return logs.flatMap((log): Line<R>[] => {
     const key = keyOf(log);
-    const day = dayOf(log.time);
-    if (day !== above) lines.push({ kind: "day", key: `day:${key}`, day });
-    lines.push({ kind: "record", key, log });
-    if (key === open) lines.push({ kind: "details", key: `open:${key}`, log });
-    above = day;
-  }
-  return lines;
+    const record: Line<R> = { kind: "record", key, log };
+    return key === open ? [record, { kind: "details", key: `open:${key}`, log }] : [record];
+  });
 }
 
-/** A line's height before it is measured: a record's one line, a heading's smaller one, details' a guess. */
-const ESTIMATE: Record<Line<unknown>["kind"], number> = { day: 26, record: 31, details: 320 };
+/** A line's height before it is measured: a record's one line, details' a guess. */
+const ESTIMATE: Record<Line<unknown>["kind"], number> = { record: 31, details: 320 };
 
 /** What a line's row needs from the table: its columns, the opened record, and the place's details and button. */
 interface RowContext<R> {
@@ -426,16 +409,6 @@ interface RowContext<R> {
 interface Placed {
   index: number;
   measure: ((element: Element | null) => void) | undefined;
-}
-
-function DayHeading({ day, span, placed }: { day: string; span: number; placed: Placed }) {
-  return (
-    <TableRow ref={placed.measure} data-index={placed.index} className="hover:bg-transparent">
-      <TableCell colSpan={span} className="bg-muted/60 py-1 pl-6 text-xs font-semibold text-muted-foreground">
-        {day}
-      </TableCell>
-    </TableRow>
-  );
 }
 
 function LogRecordRow<R extends LogLike>({
@@ -493,7 +466,6 @@ function LineRow<R extends LogLike>({
   context: RowContext<R>;
   placed: Placed;
 }) {
-  if (line.kind === "day") return <DayHeading day={line.day} span={context.shown.length + 1} placed={placed} />;
   if (line.kind === "details") return <DetailsRow log={line.log} context={context} placed={placed} />;
   return <LogRecordRow log={line.log} rowKey={line.key} context={context} placed={placed} />;
 }

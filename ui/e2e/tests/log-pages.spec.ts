@@ -44,7 +44,9 @@ test("rows a refresh pushes off the first page stay between it and the older pag
   );
 });
 
-test("a day's heading tops its records when they are of another day than the ones above", async ({ page }) => {
+test("every record's time says its day, today's too, and no heading rows stand between the records", async ({
+  page,
+}) => {
   const body = (await (await fetch(`${CONSOLE}api/logs`)).json()) as { logs: Record<string, unknown>[] };
   const model = body.logs[0];
   if (!model) throw new Error("no stored record");
@@ -53,16 +55,29 @@ test("a day's heading tops its records when they are of another day than the one
   const record = (time: number, message: string) => ({ ...model, time, message });
   const records = [record(now, "today"), record(now - day, "yesterday"), record(now - day - 1, "yesterday too")];
   await serve(page, () => records);
-  const heading = (time: number) =>
-    new Date(time / 1000).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
+  /** "Oct 21 15:45:20.345", in local time. */
+  const stamp = (time: number) => {
+    const at = new Date(time / 1000);
+    const month = at.toLocaleString("en-US", { month: "short" });
+    const clock = at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+    const ms = String(at.getMilliseconds()).padStart(3, "0");
+    return `${month} ${String(at.getDate()).padStart(2, "0")} ${clock}.${ms}`;
+  };
 
   await page.goto("/#/logs");
   const list = page.getByRole("region", { name: "Logs" }).getByRole("rowgroup").last();
+  const rows = list.getByRole("row");
 
-  // Today's records under no heading: the time column's times are today's.
-  await expect(list.getByRole("row").first()).toContainText("today");
-  await expect(list.getByRole("cell", { name: heading(now - day), exact: true })).toHaveCount(1);
-  await expect(list.getByRole("cell", { name: heading(now), exact: true })).toHaveCount(0);
+  await expect(rows).toHaveCount(3);
+  await expect(rows.nth(0).getByRole("cell").first()).toHaveText(stamp(now));
+  await expect(rows.nth(1).getByRole("cell").first()).toHaveText(stamp(now - day));
+  expect(await list.locator("tr:not([data-record])").count()).toBe(0);
+
+  // The arrow keys go from record to record.
+  await rows.nth(0).focus();
+  await page.keyboard.press("ArrowDown");
+
+  await expect(rows.nth(1)).toBeFocused();
 });
 
 test("a long list draws only the rows in view, and scrolling still reaches its end", async ({ page }) => {

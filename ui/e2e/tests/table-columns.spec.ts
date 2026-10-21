@@ -244,6 +244,61 @@ test("at 1440 px a list's main column has the room, and its short values are who
   }
 });
 
+/**
+ * The time columns of each list, with the longest value each usually holds: a duration ("810 ms": under a second, the
+ * widest the console writes), a log record's moment.
+ */
+const TIMES: [url: string, columns: string[], longest: string][] = [
+  ["/#/endpoints", ["p50", "p95"], "810 ms"],
+  ["/#/tasks", ["p95", "Queue wait p95"], "810 ms"],
+  ["/#/jobs", ["p95"], "810 ms"],
+  ["/#/pages", ["p95"], "810 ms"],
+  ["/#/services", ["Time", "Avg"], "810 ms"],
+  ["/#/calls/sql", ["Total time", "Slowest"], "810 ms"],
+  ["/#/calls/http", ["Total time", "Slowest"], "810 ms"],
+  ["/#/endpoints?view=calls", ["Duration"], "810 ms"],
+  ["/#/logs", ["Time"], "Oct 28 23:59:59.999"],
+];
+
+/** Whether the column's first value would be cut with `text` in its place: its own text, swapped and put back. */
+async function cutWith(page: Page, name: string, text: string): Promise<boolean> {
+  const index = await header(page, name).evaluate((cell) => (cell as HTMLTableCellElement).cellIndex);
+  return firstRow(page)
+    .locator(`td:nth-child(${index + 1})`)
+    .evaluate((cell, longest) => {
+      const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
+      let value: Text | null = null;
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        if (node.textContent?.trim()) value = node as Text;
+      }
+      if (!value) return true;
+      const own = value.data;
+      value.data = longest;
+      const cut = cell.scrollWidth > cell.clientWidth;
+      value.data = own;
+      return cut;
+    }, text);
+}
+
+for (const width of [1440, 1280]) {
+  test(`at ${width} px every list's time columns hold their longest usual value whole, and their names`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    for (const [url, columns, longest] of TIMES) {
+      await open(page, url);
+      for (const name of columns) {
+        const label = header(page, name).locator("span.truncate");
+
+        expect(await cutWith(page, name, longest), `${url} ${name}`).toBe(false);
+        expect(await label.evaluate((span) => span.scrollWidth > span.clientWidth), `${url} ${name}'s name`).toBe(
+          false,
+        );
+      }
+    }
+  });
+}
+
 test("a narrow column's hover buttons sit beside its name, not over it, and the name stays put", async ({ page }) => {
   await page.goto("/#/tasks");
   for (const name of ["Runs", "System"]) {

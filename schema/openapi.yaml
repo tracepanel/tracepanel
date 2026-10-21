@@ -1261,7 +1261,7 @@ components:
         system: { type: string }
         service: { type: string }
         last_seen: { $ref: "#/components/schemas/Time" }
-        in_flight: { type: integer, description: The tasks it runs now. }
+        in_flight: { type: integer, description: "The tasks it runs now; one between two tasks while tasks of its queues wait." }
     GraphqlRow:
       type: object
       additionalProperties: false
