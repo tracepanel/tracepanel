@@ -195,15 +195,9 @@ function NowCounts({ live }: { live: LiveTasks }) {
   );
 }
 
-/** The workers seen, each with what it does now; before any, how to start one. */
+/** The workers seen, each with what it does now; none before any is seen ("No worker connected" says so). */
 function Workers({ workers }: { workers: readonly LiveWorker[] }) {
-  if (workers.length === 0) {
-    return (
-      <span className="text-muted-foreground">
-        Start one: <Mono className="text-xs">celery -A &lt;app&gt; worker</Mono>
-      </span>
-    );
-  }
+  if (workers.length === 0) return null;
   return (
     <ul className="m-0 ml-auto flex list-none flex-wrap items-center gap-1.5 p-0" aria-label="Workers">
       {workers.map((worker) => (

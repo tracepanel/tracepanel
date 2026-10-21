@@ -155,7 +155,7 @@ test("Now says idle with workers there, and lists them", async ({ page }) => {
   await expect(now.getByRole("button")).toHaveCount(0);
 });
 
-test("Now says how to start a worker when the app sends task events but none was seen", async ({ page }) => {
+test("Now says no worker is connected when the app sends task events but none was seen", async ({ page }) => {
   await answer(page, { tasks: [], workers: [] }, true);
 
   await page.goto("/#/tasks");
@@ -163,7 +163,8 @@ test("Now says how to start a worker when the app sends task events but none was
   const now = page.getByRole("region", { name: "Now" });
 
   await expect(now).toContainText("No worker connected");
-  await expect(now).toContainText("Start one: celery -A <app> worker");
+  // No command to start one: it depends on the task queue, and the app knows it.
+  await expect(now).not.toContainText("Start one");
 });
 
 test("a project without task events has no Now", async ({ page }) => {
