@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Badge } from "./components/ui/badge";
 import { ISSUE_LABELS } from "./labels";
 import { runtimeKind } from "./lib/runtime";
 import { RuntimeIcon } from "./RuntimeIcon";
@@ -42,10 +43,10 @@ export function StatusBadge({ status }: { status: number | null | undefined }) {
 
 export function IssueChip({ kind, count }: { kind: IssueKind; count?: number | undefined }) {
   return (
-    <span className="dt-chip" data-kind={kind}>
+    <Badge variant={kind === "error" ? "error" : "warn"} size="compact" data-kind={kind}>
       {ISSUE_LABELS[kind]}
-      {count !== undefined && count > 1 ? <span className="dt-chip-count">{count}</span> : null}
-    </span>
+      {count !== undefined && count > 1 ? <span className="opacity-75">{count}</span> : null}
+    </Badge>
   );
 }
 

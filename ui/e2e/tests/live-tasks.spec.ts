@@ -1,11 +1,11 @@
 // Tasks in flight: the Now line on the Tasks page, from the task events an app sends down the SDKs' own connection
-// (a hello, then a frame that is an object), and Live in the header, as on the Logs page.
+// (a hello, then a frame that is an object), and Live in the header's auto-refresh, as on every page.
 import { readFileSync } from "node:fs";
 import { createConnection, type Socket } from "node:net";
 import { join } from "node:path";
 import type { Page } from "@playwright/test";
 import { CONSOLE, STORE } from "../agent.ts";
-import { traceId } from "../app.ts";
+import { autoRefresh, chooseLive, traceId } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
 import { trace } from "../seed.ts";
 
@@ -59,7 +59,8 @@ test("Now: the tasks running, queued and retrying, the workers, and the tasks th
       queue: "mail",
       retries: 0,
       args: "(42,)",
-      kwargs: "{'to': 'ann@example.com'}",
+      // This run's own: the agent is shared, and tasks of earlier runs may still be queued.
+      kwargs: `{'to': 'ann@example.com', 'run': '${run}'}`,
       trace_id: request,
       span_id: "S",
     },
@@ -93,7 +94,7 @@ test("Now: the tasks running, queued and retrying, the workers, and the tasks th
 
   // One line above the overview, in the list's place on every entry page; Live is in the header, not a list.
   await expect(now.getByRole("button", { expanded: false })).toContainText(
-    /Now\s*·\s*\d+ running\s*·\s*\d+ queued\s*·\s*\d+ retrying/,
+    /Now\s*\d+ running\s*\d+ queued\s*\d+ retrying/,
   );
   await expect(now.getByRole("list", { name: "Workers" }).getByText(`rq-${run}`)).toBeVisible();
   await expect(now.getByRole("list", { name: "Workers" }).getByText(`celery@box-${run}`)).toBeVisible();
@@ -105,7 +106,7 @@ test("Now: the tasks running, queued and retrying, the workers, and the tasks th
     .getByRole("link")
     .filter({ hasText: "shop.jobs.rebuild_index" })
     .filter({ hasText: `rq-${run}` });
-  const queued = now.getByRole("link").filter({ hasText: "(42,) {'to': 'ann@example.com'}" });
+  const queued = now.getByRole("link").filter({ hasText: `(42,) {'to': 'ann@example.com', 'run': '${run}'}` });
   const retrying = now.getByRole("link").filter({ hasText: `celery@box-${run}` });
 
   await expect(running).toContainText("running");
@@ -129,7 +130,7 @@ test("Now: the tasks running, queued and retrying, the workers, and the tasks th
 
   // With Live on, a task that ends leaves Now without a reload.
   await page.goBack();
-  await page.getByText("Live", { exact: true }).click();
+  await chooseLive(page);
   send(socket, [{ event: "finished", system: "rq", id: `running-${run}`, time: nowUs(), state: "SUCCESS" }]);
 
   await expect(running).toHaveCount(0);
@@ -146,8 +147,11 @@ test("Now says idle with workers there, and lists them", async ({ page }) => {
   const now = page.getByRole("region", { name: "Now" });
 
   await expect(now).toContainText("Now");
+  // Idle says so in words, and so does the worker: no bare count to puzzle over.
   await expect(now).toContainText("Idle");
-  await expect(now.getByRole("list", { name: "Workers" })).toHaveText("celery@box0");
+  // When the last run ended: a queue whose tasks take milliseconds still shows it works.
+  await expect(now.getByRole("link", { name: /^· last run \S+ (just now|\d+[smh] ago)$/ })).toBeVisible();
+  await expect(now.getByRole("list", { name: "Workers" })).toHaveText("celery@box idle");
   await expect(now.getByRole("button")).toHaveCount(0);
 });
 
@@ -156,9 +160,10 @@ test("Now says how to start a worker when the app sends task events but none was
 
   await page.goto("/#/tasks");
 
-  await expect(page.getByRole("region", { name: "Now" })).toContainText(
-    "No worker connected. Start one: celery -A <app> worker",
-  );
+  const now = page.getByRole("region", { name: "Now" });
+
+  await expect(now).toContainText("No worker connected");
+  await expect(now).toContainText("Start one: celery -A <app> worker");
 });
 
 test("a project without task events has no Now", async ({ page }) => {
@@ -205,7 +210,7 @@ test("an old link to Tasks' Live opens Tasks with Live on", async ({ page }) => 
   await page.goto("/#/tasks?view=live");
 
   await expect(page).toHaveURL(/#\/tasks$/);
-  await expect(page.getByRole("checkbox", { name: /^Live/ })).toBeChecked();
+  await expect(autoRefresh(page)).toHaveText(/^Live/);
   await expect(page.getByRole("navigation", { name: "List" }).getByRole("link", { name: "By task" })).toHaveAttribute(
     "aria-current",
     "page",
@@ -214,7 +219,7 @@ test("an old link to Tasks' Live opens Tasks with Live on", async ({ page }) => 
 
 test("with Live on, a run that just ended is highlighted in All runs", async ({ page }) => {
   await page.goto("/#/tasks?view=calls");
-  await page.getByText("Live", { exact: true }).click();
+  await chooseLive(page);
   const name = `shop.tasks.arrived_${unique().replace(/\W/g, "_")}`;
   const start = nowUs();
   const doc = trace("task", name, { "service.name": "shop", "service.role": "worker", "task.state": "SUCCESS" });

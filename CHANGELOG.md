@@ -158,6 +158,45 @@
 
 ### Fixed
 
+- Pages hold still while they load. The menu shows no entry point it then
+  takes away, and keeps its items while another app's load. The filters come
+  in one step with the values they offer, in a row that keeps its height. An
+  entry point's Now, Overview, switch and list show together, as do the Logs'
+  chart and list and a system's tiles and list. A page that may turn out
+  empty shows its title until it knows, not a search it then takes away.
+  Switching By task and All runs keeps the rows on screen, dimmed, until the
+  others come. An issue's requests no longer move down when its latest
+  occurrence loads.
+- Live is a choice of the one auto-refresh menu, on every page, instead of a
+  switch beside it: Live, Off, 5s, 15s, 1m. Chosen, the button says "Live"
+  with a pulsing light, or "Live · paused" while a record is open or the
+  list is scrolled down.
+- A load or a reload shows the console once, whole, and fades it in: the
+  menu with its sections and the page with its lists, not piece by piece.
+- A system's tiles fill their row when there is no hit rate to show.
+- A trace page's tiles have no stray line under them and through their gaps,
+  and are the other pages' tiles: their corners and number size. Its tabs sit
+  in the page's column, the first at its left edge.
+- A menu longer than the sidebar fades out at its foot instead of cutting an
+  item in half.
+- A folded Overview is a bar like the tiles it hides, its numbers bold with
+  their labels quiet and a rule between them. The tiles are smaller, on
+  every page and the trace page alike.
+- Tasks' Now is one quiet line with a light: pulsing while tasks run, steady
+  with workers idle, hollow with none. Idle says when the last run ended, so
+  a queue whose tasks take milliseconds still shows it works. Each worker
+  says idle or how many it runs instead of a bare count.
+- Tasks' Now table fits the page: a long worker name, arguments or error are
+  cut to one line, whole on hover. Now stands over the Overview, chevron for
+  chevron, busy or idle. An overview's time range is on the 24-hour clock,
+  as the tables and charts are.
+- The widget's pill, hover card and panel edge take their colors from the
+  console's palette, in both themes, where they kept a copy of their own: a
+  color changed for the console changes them too.
+- The chips in dense rows (findings in the request lists, the call tree and
+  the issue lists, an email's Sent or Not sent) are the console's badge in a
+  compact size, as tall as a line of the row's text. A row with one is no
+  taller than a row without.
 - A logs table with more columns than room no longer widens the page past
   the window, cutting off the chart and squeezing Message out: its columns
   fit the room again.

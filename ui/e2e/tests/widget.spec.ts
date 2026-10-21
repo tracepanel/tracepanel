@@ -1,4 +1,5 @@
 // The widget on an app's page: the pill's states, the panel it opens, and the tab's list.
+import { readFileSync } from "node:fs";
 import { CONSOLE } from "../agent.ts";
 import { type Call, OTHER_API, openApp, panel, pill, traceId } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
@@ -80,9 +81,7 @@ test("the panel opens on the latest request's trace, from the agent", async ({ p
   );
   await expect(panel(page).getByRole("tab", { name: "Call tree" })).toHaveAttribute("aria-selected", "true");
   // The tab's narrow list marks the request's findings by their number, their names in the title.
-  const findings = panel(page).locator(".dt-chip-compact");
-  await expect(findings).toHaveText("1");
-  await expect(findings).toHaveAttribute("title", "N+1");
+  await expect(panel(page).getByTitle("N+1", { exact: true })).toHaveText("1");
   await expect(panel(page).getByRole("button", { name: /SELECT author .*×13 N\+1/ })).toBeVisible();
 });
 
@@ -320,4 +319,38 @@ test("Console opens the request in the full console, and its hint says so", asyn
   await console.hover();
 
   await expect(panel(page).getByRole("tooltip")).toContainText("This request in the full console, in a new tab");
+});
+
+const STYLES = readFileSync(new URL("../../packages/ui/src/styles.css", import.meta.url), "utf8");
+
+/** A colour token's value in styles.css, as the browser computes it: `rgb(r, g, b)`. */
+function token(name: string, theme: "dark" | "light"): string {
+  const block = `\n${theme === "dark" ? ":root" : ':root[data-theme="light"]'} {`;
+  const start = STYLES.indexOf(block);
+  const hex = new RegExp(`${name}: #([0-9a-f]{6});`).exec(STYLES.slice(start, STYLES.indexOf("}", start)))?.[1];
+  if (!hex) throw new Error(`no ${name} in the ${theme} block`);
+  const [r, g, b] = [0, 2, 4].map((at) => Number.parseInt(hex.slice(at, at + 2), 16));
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+for (const theme of ["dark", "light"] as const) {
+  test(`the pill takes its colours from the design tokens, ${theme}`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: theme });
+    await openApp(page, { posts: await posts() });
+    await page.getByRole("button", { name: "Load posts" }).click();
+    const status = pill(page).locator(".status");
+
+    await expect(pill(page)).toHaveCSS("background-color", token("--dt-float", theme));
+    await expect(pill(page)).toHaveCSS("color", token("--dt-float-text", theme));
+    await expect(status).toHaveText("200");
+    await expect(status).toHaveCSS("color", token("--dt-ok", theme));
+  });
+}
+
+test("the widget's sources hold no colour of their own: its palette is the tokens'", () => {
+  for (const file of ["index.ts", "card.ts"]) {
+    const source = readFileSync(new URL(`../../packages/widget/src/${file}`, import.meta.url), "utf8");
+
+    expect(source.match(/#[0-9a-f]{3,8}\b|rgba?\(\s*\d/gi), file).toBeNull();
+  }
 });

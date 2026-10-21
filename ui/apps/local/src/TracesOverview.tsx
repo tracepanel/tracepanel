@@ -15,7 +15,7 @@ import {
 import { Badge } from "@tracepanel/ui/components/ui/badge";
 import { Card } from "@tracepanel/ui/components/ui/card";
 import { useEffect, useState } from "react";
-import { OverviewNumbers, OverviewRange, OverviewSection, useOverviewOpen } from "./Overview";
+import { Figure, Measure, OverviewNumbers, OverviewRange, OverviewSection, useOverviewOpen } from "./Overview";
 import { track, useRefresh } from "./refresh";
 import { currentPeriod, endpointGroup, groupRoute, href, withPeriod } from "./routes";
 import { BY_NAME } from "./sections";
@@ -68,6 +68,42 @@ interface TracesOverviewProps {
   source: DataSource;
   /** Sets filters on the search: keys given here replace the same keys in the query. */
   onRefine: (terms: Record<string, string>) => void;
+  /** Called once its first answer came, whatever it was: a page shows it and what is under it together. */
+  onSettled?: (() => void) | undefined;
+}
+
+/**
+ * The overview of a search, reloaded with the console's clock; `onSettled` once its first answer came, whatever it
+ * was. A search it can't run is said, not hidden behind the last result.
+ */
+function useOverview(
+  source: DataSource,
+  query: string,
+  groupBy: OverviewScope["groupBy"],
+  onSettled: (() => void) | undefined,
+): { overview: Overview | null; failed: string | null } {
+  const [overview, setOverview] = useState<Overview | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
+  const { cycle, tick } = useRefresh();
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `tick` reloads on "refresh now", `cycle` on the clock; a new `onSettled` is no new search.
+  useEffect(() => {
+    let cancelled = false;
+    const settle = (result: Overview | null, reason: string | null) => {
+      if (cancelled) return;
+      setOverview(result);
+      setFailed(reason);
+      onSettled?.();
+    };
+    // A rejected search is the query's fault, not a failed refresh.
+    track(source.tracesOverview(query, groupBy), (error) => !(error instanceof SearchError)).then(
+      (result) => settle(result, null),
+      (reason: unknown) => settle(null, reason instanceof Error ? reason.message : String(reason)),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [query, groupBy, source, cycle, tick]);
+  return { overview, failed };
 }
 
 /** Monitoring over every request the current search matches: volume, errors, latency, worst endpoints. */
@@ -77,35 +113,12 @@ export function TracesOverview({
   variant = "dashboard",
   source,
   onRefine,
+  onSettled,
 }: TracesOverviewProps) {
   const query = [scope.filter, q].filter(Boolean).join(" ");
   const nouns = `${scope.noun}s`;
-  const [overview, setOverview] = useState<Overview | null>(null);
-  // A search the overview can't run: said, not hidden behind the last result.
-  const [failed, setFailed] = useState<string | null>(null);
+  const { overview, failed } = useOverview(source, query, scope.groupBy, onSettled);
   const [open, toggle] = useOverviewOpen();
-
-  const { cycle, tick } = useRefresh();
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `tick` reloads on "refresh now", `cycle` on the clock.
-  useEffect(() => {
-    let cancelled = false;
-    // A rejected search is the query's fault, not a failed refresh.
-    track(source.tracesOverview(query, scope.groupBy), (error) => !(error instanceof SearchError)).then(
-      (result) => {
-        if (cancelled) return;
-        setOverview(result);
-        setFailed(null);
-      },
-      (reason: unknown) => {
-        if (cancelled) return;
-        setOverview(null);
-        setFailed(reason instanceof Error ? reason.message : String(reason));
-      },
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [query, scope.groupBy, source, cycle, tick]);
 
   if (failed) {
     return (
@@ -138,14 +151,7 @@ export function TracesOverview({
       range={<OverviewRange from={s.first_seen} to={s.last_seen} />}
       numbers={
         // Folded: the numbers that matter, on one line.
-        <OverviewNumbers>
-          <span>
-            {s.calls} {s.calls === 1 ? scope.noun : nouns}
-          </span>
-          <span className={s.errors ? "text-error" : ""}>{percent(s.errors, s.calls)} errors</span>
-          <span>p95 {duration(s.p95)}</span>
-          {s.slow ? <span className="text-warn">{s.slow} slow</span> : null}
-        </OverviewNumbers>
+        <TracesNumbers summary={s} scope={scope} />
       }
     >
       <StatGrid>
@@ -197,6 +203,18 @@ export function TracesOverview({
         />
       </div>
     </OverviewSection>
+  );
+}
+
+/** The Overview folded: how many, how many failed, p95, and how many were slow when any were. */
+function TracesNumbers({ summary: s, scope }: { summary: NonNullable<Overview["summary"]>; scope: OverviewScope }) {
+  return (
+    <OverviewNumbers>
+      <Figure value={s.calls.toLocaleString()} label={s.calls === 1 ? scope.noun : `${scope.noun}s`} />
+      <Figure value={percent(s.errors, s.calls)} label="errors" tone={s.errors ? "error" : "plain"} />
+      <Measure label="p95" value={duration(s.p95)} />
+      {s.slow ? <Figure value={s.slow.toLocaleString()} label="slow" tone="warn" /> : null}
+    </OverviewNumbers>
   );
 }
 

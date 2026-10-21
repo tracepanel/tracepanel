@@ -127,3 +127,17 @@ export const pill = (page: Page) => page.getByRole("button", { name: /^tracepane
 
 /** The panel the pill opens, in its frame. */
 export const panel = (page: Page) => page.frameLocator("iframe");
+
+/** The header's auto-refresh menu: its button says the choice ("Every 15s", "Live", "Live · paused"). */
+export const autoRefresh = (page: Page) =>
+  page
+    .getByRole("main")
+    .locator("header")
+    .first()
+    .getByRole("button", { name: /^(Every|Live|Auto-refresh)/ });
+
+/** Live, chosen from the header's auto-refresh menu, as a person turns it on. */
+export async function chooseLive(page: Page): Promise<void> {
+  await autoRefresh(page).click();
+  await page.getByRole("menuitemradio", { name: /^Live/ }).click();
+}

@@ -1,4 +1,6 @@
 // Corner badge, fetch and XHR capture, slide-out panel (iframe inside Shadow DOM).
+
+import TOKENS from "virtual:tracepanel-tokens";
 import { RUNTIME_PATHS, runtimeKind, runtimeName, traceRuntime } from "@tracepanel/ui/lib/runtime";
 import { CARD_STYLE, mountCard, plural } from "./card";
 
@@ -155,68 +157,101 @@ function watchTheme(host: HTMLElement): () => void {
 
 const STYLE = `
   :host { all: initial; }
+  /* The tones the pill and the card tint with, from the tokens: a verdict's amber and coral, the accent's violet.
+     The light theme's tints are lighter and take their hue from the stronger ink. */
+  :host {
+    --amber: rgb(from var(--dt-warn-bg) r g b / 1);
+    --coral: rgb(from var(--dt-error-bg) r g b / 1);
+    --violet: var(--dt-violet);
+    --tint-ok: rgb(from var(--dt-ok-bg) r g b / 0.13);
+    --tint-info: rgb(from var(--dt-info-bg) r g b / 0.15);
+    --tint-warn: rgb(from var(--amber) r g b / 0.15);
+    --tint-error: rgb(from var(--coral) r g b / 0.16);
+    --tint-violet: rgb(from var(--violet) r g b / 0.16);
+    --ring-warn: rgb(from var(--amber) r g b / 0.16);
+    --ring-error: rgb(from var(--coral) r g b / 0.3);
+    --edge-error: rgb(from var(--coral) r g b / 0.9);
+    --k-django: rgb(from var(--dt-k-django) r g b / 0.4);
+  }
+  :host([data-theme="light"]) {
+    --coral: var(--dt-error);
+    --violet: var(--dt-accent);
+    --tint-ok: rgb(from var(--dt-ok-bg) r g b / 0.12);
+    --tint-info: rgb(from var(--dt-info-bg) r g b / 0.09);
+    --tint-warn: rgb(from var(--amber) r g b / 0.1);
+    --tint-error: rgb(from var(--coral) r g b / 0.09);
+    --tint-violet: rgb(from var(--violet) r g b / 0.1);
+    --ring-warn: rgb(from var(--amber) r g b / 0.13);
+    --ring-error: rgb(from var(--coral) r g b / 0.22);
+    --edge-error: rgb(from var(--coral) r g b / 0.85);
+    --k-django: rgb(from var(--dt-k-django) r g b / 0.3);
+  }
   /* A dark pill in the corner: the request's verdict at a glance. Its ring is the verdict: none when all is well,
      amber when something wants a look, coral when it failed. */
   .badge {
     position: fixed; right: 16px; bottom: 16px; z-index: 2147483647;
     display: flex; align-items: center; gap: 0; max-width: calc(100vw - 32px);
-    height: 42px; padding: 0 6px 0 10px; border: 1px solid rgb(255 255 255 / 0.09); border-radius: 999px;
-    background: #0e1117; color: #e7e9ef;
-    box-shadow: 0 12px 32px rgb(10 12 17 / 0.32), 0 2px 6px rgb(10 12 17 / 0.2), inset 0 1px rgb(255 255 255 / 0.05);
+    height: 42px; padding: 0 6px 0 10px; border: 1px solid var(--dt-float-border); border-radius: 999px;
+    background: var(--dt-float); color: var(--dt-float-text);
+    box-shadow: var(--dt-float-shadow);
     font: 500 13px/1 "Geist Variable", "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
     font-variant-numeric: tabular-nums; cursor: pointer;
     transition: right 180ms ease-out, box-shadow 180ms ease-out, border-color 120ms ease-out;
   }
-  .badge[data-verdict="warn"] { border-color: rgb(245 181 68 / 0.45); box-shadow: 0 0 0 4px rgb(245 181 68 / 0.16), 0 12px 32px rgb(10 12 17 / 0.32); }
+  .badge[data-verdict="warn"] { border-color: rgb(from var(--amber) r g b / 0.45); box-shadow: 0 0 0 4px var(--ring-warn), var(--dt-float-drop); }
   /* A failure is the one thing not to miss: a solid coral edge and a stronger halo. */
-  .badge[data-verdict="error"] { border-color: rgb(255 107 94 / 0.9); box-shadow: 0 0 0 4px rgb(255 107 94 / 0.3), 0 12px 32px rgb(10 12 17 / 0.32); }
+  .badge[data-verdict="error"] { border-color: var(--edge-error); box-shadow: 0 0 0 4px var(--ring-error), var(--dt-float-drop); }
   /* Hover answers in place: the border, in the verdict's colour, gets stronger; the pill stays where it is. */
-  .badge:hover { border-color: rgb(255 255 255 / 0.24); }
-  .badge[data-verdict="warn"]:hover { border-color: rgb(245 181 68 / 0.85); }
-  .badge[data-verdict="error"]:hover { border-color: rgb(255 107 94); }
+  .badge:hover { border-color: var(--dt-float-border-hover); }
+  .badge[data-verdict="warn"]:hover { border-color: rgb(from var(--amber) r g b / 0.85); }
+  .badge[data-verdict="error"]:hover { border-color: var(--coral); }
   /* From the keyboard: the accent, thin, as everywhere in the UI (not the logo's lime, which read as a verdict). */
-  .badge:focus-visible { outline: 1.5px solid #a587ff; outline-offset: 3px; }
+  .badge:focus-visible { outline: 1.5px solid var(--violet); outline-offset: 3px; }
   .brand { display: flex; align-items: center; padding-right: 8px; }
   .brand svg { width: 22px; height: 22px; }
-  .runtime { align-self: center; display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 4px 7px; border-radius: 999px; background: rgb(255 255 255 / 0.07); color: #b9bfcd; font-size: 11px; font-weight: 600; letter-spacing: 0.01em; }
+  .logo-1 { fill: var(--dt-accent-strong); }
+  .logo-2 { fill: var(--dt-violet); }
+  .logo-3 { fill: var(--dt-lime); }
+  .runtime { align-self: center; display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 4px 7px; border-radius: 999px; background: var(--dt-float-chip); color: var(--dt-text-2); font-size: 11px; font-weight: 600; letter-spacing: 0.01em; }
   .brand .runtime svg { width: 12px; height: 12px; }
   .runtime:empty { display: none; }
   .stats { display: inline-flex; align-items: center; min-width: 0; height: 100%; }
   .seg { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px; white-space: nowrap; }
-  .seg + .seg { border-left: 1px solid rgb(255 255 255 / 0.1); }
-  .seg svg { width: 13px; height: 13px; color: #8c93a6; flex: none; }
-  .seg b { color: #fff; font-weight: 600; }
-  .unit { color: #8c93a6; }
-  .status { padding: 3px 7px; border-radius: 999px; font: 600 11.5px "Geist Mono Variable", "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace; background: rgb(184 242 92 / 0.13); color: #b8f25c; }
-  .status[data-tone="redirect"] { background: rgb(157 178 255 / 0.15); color: #9db2ff; }
-  .status[data-tone="client"] { background: rgb(245 181 68 / 0.15); color: #f5b544; }
-  .status[data-tone="server"] { background: rgb(255 107 94 / 0.16); color: #ff8a7a; }
-  .seg[data-speed="slow"] b { color: #f5b544; }
-  .seg[data-speed="very-slow"] b { color: #ff8a7a; }
-  .issues { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; background: rgb(245 181 68 / 0.15); color: #f5b544; font-weight: 600; font-size: 12px; }
+  .seg + .seg { border-left: 1px solid var(--dt-float-divider); }
+  .seg svg { width: 13px; height: 13px; color: var(--dt-text-3); flex: none; }
+  .seg b { color: var(--dt-float-strong); font-weight: 600; }
+  .unit { color: var(--dt-text-3); }
+  /* In the light theme every icon in the pill is grey, a finding's and a failure's too. */
+  :host([data-theme="light"]) .seg svg { color: var(--dt-text-3); }
+  .status { padding: 3px 7px; border-radius: 999px; font: 600 11.5px "Geist Mono Variable", "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace; background: var(--tint-ok); color: var(--dt-ok); }
+  .status[data-tone="redirect"] { background: var(--tint-info); color: var(--dt-info); }
+  .status[data-tone="client"] { background: var(--tint-warn); color: var(--dt-warn); }
+  .status[data-tone="server"] { background: var(--tint-error); color: var(--dt-error); }
+  .seg[data-speed="slow"] b { color: var(--dt-warn); }
+  .seg[data-speed="very-slow"] b { color: var(--dt-error); }
+  .issues { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; background: var(--tint-warn); color: var(--dt-warn); font-weight: 600; font-size: 12px; }
   .seg .issues svg { color: currentColor; }
-  .issues[data-tone="error"] { background: rgb(255 107 94 / 0.16); color: #ff8a7a; }
+  .issues[data-tone="error"] { background: var(--tint-error); color: var(--dt-error); }
   /* The page's count: a step back from the latest request's numbers; its failures stand out on their own. */
   .page .unit { margin-left: -1px; }
-  .failed { display: inline-flex; align-items: center; gap: 4px; margin-left: 3px; padding: 3px 8px; border-radius: 999px; background: rgb(255 107 94 / 0.16); color: #ff8a7a; font-weight: 600; font-size: 12px; }
+  .failed { display: inline-flex; align-items: center; gap: 4px; margin-left: 3px; padding: 3px 8px; border-radius: 999px; background: var(--tint-error); color: var(--dt-error); font-weight: 600; font-size: 12px; }
   .seg .failed svg { width: 12px; height: 12px; color: currentColor; }
   .name {
     max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-radius: 6px;
-    font: 500 12.5px "Geist Mono Variable", "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace; color: #fff;
+    font: 500 12.5px "Geist Mono Variable", "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace; color: var(--dt-float-strong);
   }
   .name[data-pulse] { animation: pulse 700ms ease-out; }
-  .idle { color: #9aa1af; font-size: 12.5px; white-space: nowrap; }
-  :host([data-theme="light"]) .idle { color: #6b7280; }
+  .idle { color: var(--dt-float-muted); font-size: 12.5px; white-space: nowrap; }
   @keyframes pulse {
-    from { box-shadow: 0 0 0 0 rgb(165 135 255 / 0.6); }
-    to { box-shadow: 0 0 0 8px rgb(165 135 255 / 0); }
+    from { box-shadow: 0 0 0 0 rgb(from var(--dt-violet) r g b / 0.6); }
+    to { box-shadow: 0 0 0 8px rgb(from var(--dt-violet) r g b / 0); }
   }
   .panel {
     position: fixed; top: 0; right: 0; bottom: 0; z-index: 2147483646;
-    width: min(var(--tracepanel-width, 600px), 100vw); border-left: 1px solid rgb(255 255 255 / 0.08);
-    background: #0a0c11;
+    width: min(var(--tracepanel-width, 600px), 100vw); border-left: 1px solid var(--dt-float-edge);
+    background: var(--dt-panel);
     backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-    box-shadow: -24px 0 60px rgb(10 12 17 / 0.4);
+    box-shadow: var(--dt-float-panel-shadow);
     transform: translateX(100%); visibility: hidden;
     transition: transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1), width 200ms ease-out, visibility 0s 200ms;
   }
@@ -227,48 +262,21 @@ const STYLE = `
   :host([data-crowded]:not([data-dock="bottom"])) .panel[data-open] ~ .badge { width: 42px; padding: 0; justify-content: center; }
   :host([data-crowded]:not([data-dock="bottom"])) .panel[data-open] ~ .badge :is(.stats, .runtime) { display: none; }
   :host([data-crowded]:not([data-dock="bottom"])) .panel[data-open] ~ .badge .brand { padding: 0; }
+  /* The theme (the console's Auto / Light / Dark choice, shared through localStorage) is the :host's data-theme. */
   .panel iframe { width: 100%; height: 100%; border: 0; display: block; background: transparent; color-scheme: dark; }
-  /* Light theme (the console's Auto / Light / Dark choice, shared through localStorage). */
-  :host([data-theme="light"]) .badge {
-    border-color: #e2e2dc; background: #ffffff; color: #16181d;
-    box-shadow: 0 10px 28px rgb(22 24 29 / 0.12), 0 1px 3px rgb(22 24 29 / 0.08);
-  }
-  :host([data-theme="light"]) .badge:hover { border-color: #b9b9b1; }
-  :host([data-theme="light"]) .badge:focus-visible { outline-color: #6d3fe0; }
-  :host([data-theme="light"]) .badge[data-verdict="warn"] { border-color: rgb(217 119 6 / 0.45); box-shadow: 0 0 0 4px rgb(217 119 6 / 0.13), 0 10px 28px rgb(22 24 29 / 0.12); }
-  :host([data-theme="light"]) .badge[data-verdict="error"] { border-color: rgb(208 52 44 / 0.85); box-shadow: 0 0 0 4px rgb(208 52 44 / 0.22), 0 10px 28px rgb(22 24 29 / 0.12); }
-  :host([data-theme="light"]) .badge[data-verdict="warn"]:hover { border-color: rgb(217 119 6 / 0.85); }
-  :host([data-theme="light"]) .badge[data-verdict="error"]:hover { border-color: rgb(208 52 44); }
-  :host([data-theme="light"]) .seg + .seg { border-left-color: #e2e2dc; }
-  :host([data-theme="light"]) .seg svg, :host([data-theme="light"]) .unit { color: #5f6470; }
-  :host([data-theme="light"]) .runtime { background: #f0f0ed; color: #3a3e47; }
-  :host([data-theme="light"]) .seg b, :host([data-theme="light"]) .name { color: #16181d; }
-  :host([data-theme="light"]) .seg[data-speed="slow"] b { color: #b45309; }
-  :host([data-theme="light"]) .seg[data-speed="very-slow"] b { color: #d0342c; }
-  :host([data-theme="light"]) .status { background: rgb(98 160 20 / 0.12); color: #3d7a0c; }
-  :host([data-theme="light"]) .status[data-tone="redirect"] { background: rgb(52 86 214 / 0.09); color: #3456d6; }
-  :host([data-theme="light"]) .status[data-tone="client"] { background: rgb(217 119 6 / 0.1); color: #b45309; }
-  :host([data-theme="light"]) .status[data-tone="server"] { background: rgb(208 52 44 / 0.09); color: #d0342c; }
-  :host([data-theme="light"]) .issues { background: rgb(217 119 6 / 0.1); color: #b45309; }
-  :host([data-theme="light"]) .issues[data-tone="error"] { background: rgb(208 52 44 / 0.09); color: #d0342c; }
-  :host([data-theme="light"]) .failed { background: rgb(208 52 44 / 0.09); color: #d0342c; }
-  :host([data-theme="light"]) .panel {
-    border-left-color: #e2e2dc; background: #ffffff;
-    box-shadow: -16px 0 40px rgb(22 24 29 / 0.12);
-  }
   :host([data-theme="light"]) .panel iframe { color-scheme: light; }
   .panel[data-instant], .panel[data-instant] ~ .badge, .panel[data-resizing], .panel[data-resizing] ~ .badge { transition: none; }
   .panel[data-resizing] iframe { pointer-events: none; }
   .resize { position: absolute; top: 0; bottom: 0; left: -4px; width: 8px; cursor: ew-resize; z-index: 1; }
   /* As the console's sidebar: the whole edge lights up, faint on hover, full while dragging. */
   .resize::after { content: ""; position: absolute; top: 0; bottom: 0; left: 3px; width: 2px; background: transparent; transition: background 120ms; }
-  .resize:hover::after { background: rgb(165 135 255 / 0.5); }
-  .panel[data-resizing] .resize::after { background: #a587ff; }
+  .resize:hover::after { background: rgb(from var(--dt-violet) r g b / 0.5); }
+  .panel[data-resizing] .resize::after { background: var(--dt-violet); }
   /* Docked at the bottom, like browser devtools: full width, the height is dragged from the top edge. */
   :host([data-dock="bottom"]) .panel {
     top: auto; left: 0; width: 100vw; height: min(var(--tracepanel-height, 360px), 100vh);
-    border-left: 0; border-top: 1px solid rgb(255 255 255 / 0.08);
-    box-shadow: 0 -24px 60px rgb(10 12 17 / 0.3);
+    border-left: 0; border-top: 1px solid var(--dt-float-edge);
+    box-shadow: var(--dt-float-panel-shadow-bottom);
     transform: translateY(100%);
     transition: transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1), height 200ms ease-out, visibility 0s 200ms;
   }
@@ -279,7 +287,6 @@ const STYLE = `
   /* While dragging, the size follows the pointer: no transition (these selectors outrank the dock rules). */
   :host .panel[data-resizing], :host .panel[data-resizing][data-open], :host .panel[data-resizing] ~ .badge,
   :host([data-dock="bottom"]) .panel[data-resizing][data-open] { transition: none; }
-  :host([data-theme="light"][data-dock="bottom"]) .panel { border-top-color: #e2e2dc; box-shadow: 0 -16px 40px rgb(22 24 29 / 0.12); }
   @media (prefers-reduced-motion: reduce) { .panel, .badge { transition: none; } .name[data-pulse] { animation: none; } }
 `;
 
@@ -842,10 +849,10 @@ export function mount(options: WidgetOptions = {}): Widget {
   const root = host.attachShadow({ mode: "open" });
   const applyTheme = watchTheme(host);
   root.innerHTML = `
-    <style>${STYLE}${CARD_STYLE}</style>
+    <style>${TOKENS}${STYLE}${CARD_STYLE}</style>
     <div class="panel" part="panel"><div class="resize" title="Drag to resize · double-click to reset"></div></div>
     <button class="badge" part="badge" type="button" aria-expanded="false">
-      <span class="brand"><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="6" width="26" height="5.5" rx="2.75" fill="#7c4ff0"/><rect x="9" y="13.25" width="18" height="5.5" rx="2.75" fill="#a587ff"/><rect x="15" y="20.5" width="10" height="5.5" rx="2.75" fill="#b6e24a"/></svg><span class="runtime"></span></span>
+      <span class="brand"><svg viewBox="0 0 32 32" aria-hidden="true"><rect class="logo-1" x="3" y="6" width="26" height="5.5" rx="2.75"/><rect class="logo-2" x="9" y="13.25" width="18" height="5.5" rx="2.75"/><rect class="logo-3" x="15" y="20.5" width="10" height="5.5" rx="2.75"/></svg><span class="runtime"></span></span>
       <span class="stats"></span>
     </button>`;
   document.body.append(host);

@@ -27,7 +27,7 @@ for (const width of [1440, 900]) {
     for (const row of await rows.all()) {
       const name = await box(row.locator(".dt-map-name"));
       const text = await box(row.locator(".dt-map-text"));
-      const chip = await box(row.locator(".dt-chip"));
+      const chip = await box(row.locator('[data-slot="badge"]'));
       const track = await box(row.locator(".dt-map-track"));
 
       expect(text.width).toBeGreaterThan(40);

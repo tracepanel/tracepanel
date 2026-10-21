@@ -1,4 +1,5 @@
 import { TriangleAlertIcon } from "lucide-react";
+import { Badge } from "./components/ui/badge";
 import { ago, duration } from "./format";
 import { DatabaseIcon } from "./icons";
 import { ISSUE_LABELS } from "./labels";
@@ -119,9 +120,9 @@ function FullMeta({ trace }: { trace: TraceSummary }) {
 function FullChips({ kinds, issues }: { kinds: IssueKind[] | undefined; issues: number }) {
   if (kinds === undefined) {
     return issues > 0 ? (
-      <span className="dt-chip" data-kind="n+1">
+      <Badge variant="warn" size="compact">
         {issues} {issues === 1 ? "issue" : "issues"}
-      </span>
+      </Badge>
     ) : null;
   }
   return (
@@ -202,14 +203,15 @@ function CompactChips({ kinds, issues }: { kinds: IssueKind[] | undefined; issue
   const names = shown.map((kind) => ISSUE_LABELS[kind]).join(", ");
   return (
     <span className="dt-request-chips">
-      <span
-        className="dt-chip dt-chip-compact"
-        data-kind={shown[0] ?? "n+1"}
+      <Badge
+        variant="warn"
+        size="compact"
+        className="gap-[0.1875rem] px-[0.375rem] tabular-nums"
         title={names || `${count} ${count === 1 ? "issue" : "issues"}`}
       >
         <TriangleAlertIcon aria-hidden="true" />
         {count}
-      </span>
+      </Badge>
     </span>
   );
 }

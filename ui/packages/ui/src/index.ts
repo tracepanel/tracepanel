@@ -30,7 +30,7 @@ export { SERVICE_KINDS, ServiceIcon, serviceWhere, systemName } from "./ServiceM
 export { SqlCode } from "./SqlCode";
 export { SqlList } from "./SqlList";
 export { readSnapshot, type Snapshot, snapshotFile, snapshotSource, withSnapshots } from "./snapshot";
-export { type DataSource, httpSource, NO_CAPABILITIES, NO_LIVE_TASKS, SearchError } from "./source";
+export { type DataSource, httpSource, NO_CAPABILITIES, NO_KNOWN, NO_LIVE_TASKS, SearchError } from "./source";
 export { formatSql, tokenizeSql } from "./sql";
 export { type Tab, Tabs } from "./Tabs";
 export { Timeline } from "./Timeline";

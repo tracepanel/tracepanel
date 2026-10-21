@@ -139,6 +139,27 @@ export const NO_COUNTS: Counts = {
   live_tasks: false,
 };
 
+/** No values known yet: no filter offers any. */
+export const NO_KNOWN: KnownValues = {
+  route: [],
+  logger: [],
+  db: [],
+  targets: {},
+  ops: {},
+  task: [],
+  // biome-ignore lint/style/useNamingConvention: wire format.
+  task_system: [],
+  queue: [],
+  job: [],
+  rpc: [],
+  page: [],
+  in: [],
+  // biome-ignore lint/style/useNamingConvention: wire format.
+  log_route: [],
+  span: [],
+  extra: [],
+};
+
 /** Nothing in flight: what a source without task events answers. */
 export const NO_LIVE_TASKS: LiveTasks = { now: 0, tasks: [], workers: [] };
 
@@ -248,27 +269,7 @@ export function httpSource(base: string | URL): DataSource {
       return (await getJson<Counts>(url("counts", { service }))) ?? NO_COUNTS;
     },
     async knownValues(service) {
-      return (
-        (await getJson<KnownValues>(url("values", { service }))) ?? {
-          route: [],
-          logger: [],
-          db: [],
-          targets: {},
-          ops: {},
-          task: [],
-          // biome-ignore lint/style/useNamingConvention: wire format.
-          task_system: [],
-          queue: [],
-          job: [],
-          rpc: [],
-          page: [],
-          in: [],
-          // biome-ignore lint/style/useNamingConvention: wire format.
-          log_route: [],
-          span: [],
-          extra: [],
-        }
-      );
+      return (await getJson<KnownValues>(url("values", { service }))) ?? NO_KNOWN;
     },
     async listTasks(q = "") {
       return (await getJson<{ tasks: TaskRow[] }>(url("tasks", { q })))?.tasks ?? [];

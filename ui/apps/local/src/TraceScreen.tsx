@@ -34,6 +34,8 @@ export interface TraceScreenProps {
   back?: ReactNode;
   /** A Share button, when the source can make a snapshot: the console's trace page. */
   shareable?: boolean | undefined;
+  /** Called once the trace has loaded, or is known to be gone: a page around it shows with it. */
+  onLoaded?: (() => void) | undefined;
 }
 
 /**
@@ -75,25 +77,31 @@ export function TraceScreen({
   initialSpan,
   back,
   shareable,
+  onLoaded,
 }: TraceScreenProps) {
   const [trace, setTrace] = useState<Trace | null | undefined>(undefined);
   const related = useRelated(id, source);
   // EXPLAIN only where the app behind the console runs it.
   const explainable = useCapability(source, "explain");
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new `onLoaded` is no new trace to load.
   useEffect(() => {
     let cancelled = false;
     let timer: number | undefined;
     // The trace on screen stays until the next one is loaded: following new requests swaps one for the other
     // instead of blinking through an empty pane.
+    const show = (result: Trace | null) => {
+      setTrace(result);
+      onLoaded?.();
+    };
     const attempt = (left: number) => {
       source.getTrace(id).then(
         (result) => {
           if (cancelled) return;
           if (result === null && left > 0) timer = window.setTimeout(() => attempt(left - 1), TRACE_RETRY_MS);
-          else setTrace(result);
+          else show(result);
         },
         () => {
-          if (!cancelled) setTrace(null);
+          if (!cancelled) show(null);
         },
       );
     };

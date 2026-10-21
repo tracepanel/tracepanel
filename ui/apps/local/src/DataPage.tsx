@@ -10,12 +10,13 @@ import {
 import { Button } from "@tracepanel/ui/components/ui/button";
 import type { Family } from "@tracepanel/ui/lib/systems";
 import { type ReactNode, useCallback, useState } from "react";
-import { SystemTiles } from "./CallsTiles";
-import { usePaged, useSearch } from "./data";
-import { EmptyPage } from "./EmptyPage";
+import { SystemTiles, useCallsSummary } from "./CallsTiles";
+import { useLatch, usePaged, useSearch } from "./data";
+import { EmptyPage, PageShell } from "./EmptyPage";
 import { refineQuery } from "./EntryPage";
-import { OverviewNumbers, OverviewRange, OverviewSection, useOverviewOpen } from "./Overview";
-import { LiveToggle, RefreshControl } from "./refresh";
+import { usePaintWhen } from "./firstPaint";
+import { Figure, OverviewNumbers, OverviewRange, OverviewSection, useOverviewOpen } from "./Overview";
+import { RefreshControl } from "./refresh";
 import { type CallsSection, type EntrySection, go, type Section, systemOfSection, traceHref } from "./routes";
 import { SearchBar } from "./SearchBar";
 import { ServicesView } from "./ServicesView";
@@ -24,7 +25,7 @@ import { pageMeta } from "./sections";
 import { byProject } from "./services";
 import { CallsTable, IssuesTable, LogsTable, MailsTable, TracesTable } from "./tables";
 import { rangeTerms } from "./time";
-import { Loading, LoadMore, PageHeader } from "./ui";
+import { Loading, LoadMore, PageHeader, Reveal } from "./ui";
 
 type DataSection = Exclude<Section, EntrySection>;
 
@@ -35,7 +36,8 @@ interface DataPageProps {
   open?: string | undefined;
   source: DataSource;
   spec: SearchSpec | null;
-  known: KnownValues;
+  /** Undefined until loaded. */
+  known: KnownValues | undefined;
   /** The systems in the store and their families (the agent's counts): a system's page takes its family's words. */
   systems?: readonly { system: string; family: Family; label: string }[] | undefined;
 }
@@ -209,11 +211,9 @@ const countOf = (bucket: LogBucket, levels: readonly string[]) =>
   levels.reduce((sum, level) => sum + (bucket.levels[level] ?? 0), 0);
 
 /** "1,204 records", in the tone of what they are when there are any. */
-function Counted({ count, noun, tone = "" }: { count: number; noun: string; tone?: string }) {
+function Counted({ count, noun, tone = "plain" }: { count: number; noun: string; tone?: "error" | "warn" | "plain" }) {
   return (
-    <span className={count > 0 ? tone : ""}>
-      {count.toLocaleString()} {count === 1 ? noun : `${noun}s`}
-    </span>
+    <Figure value={count.toLocaleString()} label={count === 1 ? noun : `${noun}s`} tone={count > 0 ? tone : "plain"} />
   );
 }
 
@@ -223,8 +223,8 @@ function LogNumbers({ series }: { series: readonly LogBucket[] }) {
   return (
     <OverviewNumbers>
       <Counted count={sum(LEVELS)} noun="record" />
-      <Counted count={sum(["error", "critical"])} noun="error" tone="text-error" />
-      <Counted count={sum(["warning"])} noun="warning" tone="text-warn" />
+      <Counted count={sum(["error", "critical"])} noun="error" tone="error" />
+      <Counted count={sum(["warning"])} noun="warning" tone="warn" />
     </OverviewNumbers>
   );
 }
@@ -329,7 +329,8 @@ function usePageData(section: Section, system: string | null, source: DataSource
     0,
   );
   const issues = useIssues(source, section, q);
-  return { traces, logs, logSeries, mails, services, stats, issues };
+  const summary = useCallsSummary(source, system, q);
+  return { traces, logs, logSeries, mails, services, stats, issues, summary };
 }
 
 /** One list of issue groups, split in two: what failed (Errors), and what could be better (Issues). */
@@ -424,10 +425,10 @@ function servicesBody({ data, q, setService }: BodyContext): ReactNode {
   );
 }
 
-function callsBody({ system, q, source, data, open, setOpen, refine, noun }: BodyContext & { system: string }) {
+function callsBody({ source, data, open, setOpen, refine, noun }: BodyContext) {
   return (
     <>
-      <SystemTiles system={system} q={q} source={source} onFailed={() => refine({ failed: "true" })} />
+      <SystemTiles summary={data.summary.data} onFailed={() => refine({ failed: "true" })} />
       {listBody(
         data.stats.data,
         (items) => (
@@ -442,7 +443,7 @@ function callsBody({ system, q, source, data, open, setOpen, refine, noun }: Bod
 function pageBody(page: BodyContext): ReactNode {
   const own = BODIES[page.section];
   if (own) return own(page);
-  if (page.system) return callsBody({ ...page, system: page.system });
+  if (page.system) return callsBody(page);
   return listBody(
     page.data.issues.data,
     (items) => <IssuesTable items={items} />,
@@ -450,39 +451,73 @@ function pageBody(page: BodyContext): ReactNode {
   );
 }
 
-/**
- * The header's controls: refresh, and on the Logs page Live too, paused (`reading`) while a record is open or the
- * list is scrolled down. Services and Database are summaries: they change slowly, so they refresh on demand only.
- */
-function headerActions(section: DataSection, reading: boolean): ReactNode {
-  return (
-    <div className="flex items-center">
-      {section === "logs" ? <LiveToggle list="logs" paused={reading} /> : null}
-      <RefreshControl live={!isSummary(section)} />
-    </div>
-  );
+const answered = (loaded: { data?: unknown; error: string | null }) =>
+  loaded.data !== undefined || loaded.error !== null;
+
+/** Whether a list has answered: its rows, or why it has none. */
+function listAnswered(loaded: Loaded): boolean {
+  return loaded.size !== undefined || loaded.error !== null;
 }
 
-export function DataPage({ section, q, open, source, spec, known, systems }: DataPageProps) {
-  const { setService } = useScope();
-  const { system, family, meta, pristine } = pageOfSection(section, systems);
-  // Opening a row replaces the entry: it is no step to go Back through, but it survives leaving and coming back.
-  const setOpen = (key: string | null) => go({ name: section, q, open: key ?? undefined }, true);
-  // Typing replaces the entry, so Back skips the letters; a chip or a menu adds one, so Back undoes it.
-  const setQuery = (next: string, typed = false) => go({ name: section, q: next }, typed);
-  const refine = (terms: Record<string, string>) => go({ name: section, q: refineQuery(q, terms) });
-  const data = usePageData(section, system, source, q);
-  const [scrolled, setScrolled] = useState(false);
-  const loaded = loadedOf(section, data);
+/** Whether all a page shows has answered: its list, and the Logs' chart or a system's tiles above it. */
+function bodySettled(section: Section, system: string | null, data: PageData, loaded: Loaded): boolean {
+  const chart = section !== "logs" || answered(data.logSeries);
+  const tiles = system === null || answered(data.summary);
+  return [listAnswered(loaded), chart, tiles].every(Boolean);
+}
 
+/**
+ * The header's controls: refresh and auto-refresh, held (`reading`) while a record is open or the list is scrolled
+ * down. Services and Database are summaries: they change slowly, so they refresh on demand only.
+ */
+function headerActions(section: DataSection, reading: boolean): ReactNode {
+  return <RefreshControl live={!isSummary(section)} paused={reading} />;
+}
+
+export function DataPage(props: DataPageProps) {
+  const { section, q, source, systems } = props;
+  const page = pageOfSection(section, systems);
+  const data = usePageData(section, page.system, source, q);
+  const loaded = loadedOf(section, data);
+  const answered = useLatch(listAnswered(loaded));
+  usePaintWhen(answered);
+  const { meta, pristine } = page;
+  // Before its first answer a page that may turn out empty shows its title only, then the page or its empty state.
+  if (pristine && !(q || answered)) return <PageShell title={meta.label} description={meta.description} />;
   // Nothing stored yet (not a search that matched nothing): no search, filters or refresh to show.
-  if (!q && loaded.size === 0 && pristine) {
+  if (pristine && !q && loaded.size === 0) {
     return (
       <EmptyPage section={section} title={meta.label} description={meta.description} empty={pristine.title}>
         {pristine.text}
       </EmptyPage>
     );
   }
+  return <DataScreen {...props} page={page} data={data} loaded={loaded} />;
+}
+
+/** The page: its header, search and filters, then what it lists (with its chart or tiles), shown together. */
+function DataScreen({
+  section,
+  q,
+  open,
+  source,
+  spec,
+  known,
+  page,
+  data,
+  loaded,
+}: DataPageProps & { page: ReturnType<typeof pageOfSection>; data: PageData; loaded: Loaded }) {
+  const { setService } = useScope();
+  const { system, family, meta } = page;
+  // Opening a row replaces the entry: it is no step to go Back through, but it survives leaving and coming back.
+  const setOpen = (key: string | null) => go({ name: section, q, open: key ?? undefined }, true);
+  // Typing replaces the entry, so Back skips the letters; a chip or a menu adds one, so Back undoes it.
+  const setQuery = (next: string, typed?: boolean) => go({ name: section, q: next }, typed);
+  const refine = (terms: Record<string, string>) => go({ name: section, q: refineQuery(q, terms) });
+  const [scrolled, setScrolled] = useState(false);
+  // The list, the chart above it (Logs) and the tiles (a system's page) show together, once all have answered.
+  const ready = useLatch(bodySettled(section, system, data, loaded));
+  usePaintWhen(ready);
   const clear = () => go({ name: section, q: "" });
   const body = pageBody({
     section,
@@ -513,7 +548,7 @@ export function DataPage({ section, q, open, source, spec, known, systems }: Dat
         spec={spec}
         error={loaded.error}
         known={known}
-        count={shownOf(loaded.size, section === "logs" ? seriesTotal(data.logSeries.data) : undefined)}
+        count={pageCount(section, loaded, data)}
         onChange={setQuery}
       />
       <section
@@ -522,8 +557,13 @@ export function DataPage({ section, q, open, source, spec, known, systems }: Dat
         data-scroll=""
         onScroll={(event) => setScrolled(event.currentTarget.scrollTop > 40)}
       >
-        {body}
+        <Reveal ready={ready}>{body}</Reveal>
       </section>
     </main>
   );
+}
+
+/** How many the search shows: on Logs, of how many the chart counts. */
+function pageCount(section: Section, loaded: Loaded, data: PageData): number | string | undefined {
+  return shownOf(loaded.size, section === "logs" ? seriesTotal(data.logSeries.data) : undefined);
 }

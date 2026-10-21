@@ -7,14 +7,13 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@tracepanel/ui/components/ui/dropdown-menu";
-import { useStored } from "@tracepanel/ui/hooks/useStored";
 import { cn } from "@tracepanel/ui/lib/utils";
 import { ChevronDownIcon, RefreshCwIcon } from "lucide-react";
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
 /** One auto-refresh setting for every screen of the console, plus a manual "refresh now". */
 interface Refresh {
-  /** Milliseconds between reloads; 0 turns auto-refresh off. */
+  /** Milliseconds between reloads; 0 turns auto-refresh off, `LIVE_MS` is Live. */
   interval: number;
   setInterval: (ms: number) => void;
   /** Bumped by "refresh now": screens reload when it changes. */
@@ -22,16 +21,26 @@ interface Refresh {
   now: () => void;
   /** Bumped every `interval` while the page is visible: one clock for every screen, so all reload together. */
   cycle: number;
+  /** Whether a screen holds the clock while its reader reads (a record open, a list scrolled down). */
+  paused: boolean;
+  setPaused: (paused: boolean) => void;
 }
 
 const KEY = "tracepanel:refresh";
+
+// Live: as often as a list can follow what happens, not so often the agent notices. It holds while the reader reads.
+export const LIVE_MS = 2000;
+
 const CHOICES: [number, string][] = [
+  [LIVE_MS, "Live"],
   [0, "Off"],
-  [2000, "2s"],
   [5000, "5s"],
   [15000, "15s"],
   [60000, "1m"],
 ];
+
+// What the menu's button says of an interval; Off and Live say their own.
+const EVERY = new Map(CHOICES.filter(([ms]) => ms && ms !== LIVE_MS).map(([ms, text]) => [ms, `Every ${text}`]));
 
 // Fresh enough for a local console, without its lists jumping under the reader every few seconds.
 const DEFAULT_MS = 15000;
@@ -51,6 +60,8 @@ const RefreshContext = createContext<Refresh>({
   tick: 0,
   now: () => undefined,
   cycle: 0,
+  paused: false,
+  setPaused: () => undefined,
 });
 
 /* ---------- What is loading: the button's spinner, its error, its "updated" time ---------- */
@@ -156,14 +167,15 @@ export function RefreshProvider({ children }: { children: ReactNode }) {
   const [interval, setIntervalState] = useState(read);
   const [tick, setTick] = useState(0);
   const [cycle, setCycle] = useState(0);
+  const [paused, setPaused] = useState(false);
   useEffect(() => {
-    if (!interval) return;
+    if (!interval || paused) return;
     const timer = window.setInterval(
       () => document.visibilityState === "visible" && setCycle((current) => current + 1),
       interval,
     );
     return () => window.clearInterval(timer);
-  }, [interval]);
+  }, [interval, paused]);
   const value = useMemo<Refresh>(
     () => ({
       interval,
@@ -178,8 +190,10 @@ export function RefreshProvider({ children }: { children: ReactNode }) {
       tick,
       now: () => setTick((current) => current + 1),
       cycle,
+      paused,
+      setPaused,
     }),
-    [interval, tick, cycle],
+    [interval, tick, cycle, paused],
   );
   return <RefreshContext.Provider value={value}>{children}</RefreshContext.Provider>;
 }
@@ -189,13 +203,14 @@ export function useRefresh(): Refresh {
 }
 
 /**
- * "Refresh now" and the auto-refresh interval, for page headers. `live={false}`: "Refresh now" only, for pages that
- * don't reload on a timer.
+ * "Refresh now" and the auto-refresh, for page headers: Live, Off or an interval, one choice for every screen.
+ * `live={false}`: "Refresh now" only, for pages that don't reload on a timer. `paused`: the page's reader is reading
+ * (a record open, the list scrolled down), so the clock holds, and the menu says so.
  */
-export function RefreshControl({ live = true }: { live?: boolean }) {
-  const { interval, setInterval, now } = useRefresh();
+export function RefreshControl({ live = true, paused = false }: { live?: boolean; paused?: boolean }) {
   const loading = useActivity();
   const title = useTitle(loading);
+  const { now } = useRefresh();
   if (!live) {
     return (
       <Button
@@ -211,7 +226,6 @@ export function RefreshControl({ live = true }: { live?: boolean }) {
       </Button>
     );
   }
-  const label = CHOICES.find(([ms]) => ms === interval)?.[1] ?? "Off";
   return (
     <div className="flex shrink-0 items-center">
       <Button
@@ -224,72 +238,82 @@ export function RefreshControl({ live = true }: { live?: boolean }) {
       >
         <RefreshIcon activity={loading} />
       </Button>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm" className="h-9 gap-1.5 rounded-l-none px-3 shadow-none">
-            {interval ? `Every ${label}` : "Auto-refresh off"}
-            <ChevronDownIcon className="text-muted-foreground" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-44">
-          <DropdownMenuLabel>Auto-refresh</DropdownMenuLabel>
-          <DropdownMenuRadioGroup value={String(interval)} onValueChange={(value) => setInterval(Number(value))}>
-            {CHOICES.map(([ms, text]) => (
-              <DropdownMenuRadioItem key={ms} value={String(ms)}>
-                {text}
-              </DropdownMenuRadioItem>
-            ))}
-          </DropdownMenuRadioGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <AutoRefresh paused={paused} />
     </div>
   );
 }
 
-// Live: as often as a list can follow what happens, not so often the agent notices.
-const LIVE_MS = 2000;
-
-const readLive = (raw: unknown): boolean => raw === true;
-
-// What the toggle says, held (live, but paused) or not.
-const LIVE_SAYS: Record<string, [label: string, title: string]> = {
-  true: ["Live · paused", "Paused while a record is open or the list is scrolled down"],
-  false: ["Live", "Reload every 2 seconds"],
-};
-
-/**
- * Live, for a list that follows what happens as it happens (the logs, as a tail): reloads every 2 seconds while on,
- * kept per browser. `paused` while the reader is reading (a record open, the list scrolled down): it holds still then,
- * and says so.
- */
-export function LiveToggle({ list, paused }: { list: string; paused: boolean }) {
-  const [live, setLive] = useStored(`tracepanel:${list}:live`, readLive);
-  useLive(live && !paused);
-  const [label, title] = LIVE_SAYS[String(live && paused)] ?? [];
+/** The auto-refresh menu: Live on top, then off and the intervals. */
+function AutoRefresh({ paused }: { paused: boolean }) {
+  const { interval, setInterval } = useRefresh();
+  useHold(paused);
   return (
-    <label className="toggle mr-3 text-base font-medium" title={title}>
-      <input type="checkbox" checked={live} onChange={(event) => setLive(event.target.checked)} />
-      <span className="toggle-track" aria-hidden="true" />
-      {label}
-    </label>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="sm" className="h-9 gap-2 rounded-l-none px-3 shadow-none">
+          <AutoRefreshLabel interval={interval} paused={paused} />
+          <ChevronDownIcon className="text-muted-foreground" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-60">
+        <DropdownMenuLabel>Auto-refresh</DropdownMenuLabel>
+        <DropdownMenuRadioGroup value={String(interval)} onValueChange={(value) => setInterval(Number(value))}>
+          {CHOICES.map(([ms, text]) => (
+            <DropdownMenuRadioItem key={ms} value={String(ms)}>
+              {ms === LIVE_MS ? <LiveChoice /> : text}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
-/** Turns a list's Live on before its page shows (an old link to Tasks' Live): the toggle reads it as it mounts. */
-export function turnLiveOn(list: string): void {
-  try {
-    localStorage.setItem(`tracepanel:${list}:live`, "true");
-  } catch {
-    // Blocked storage: the toggle stays as it was.
-  }
+/** Live in the menu: what it does under its name. */
+function LiveChoice() {
+  return (
+    <span className="grid">
+      <span className="flex items-center gap-2">
+        Live <LiveDot paused={false} />
+      </span>
+      <span className="text-xs text-muted-foreground">Every 2s, holds while you read</span>
+    </span>
+  );
 }
 
-/** "Refresh now" every 2 seconds while `running`. */
-function useLive(running: boolean) {
-  const { now } = useRefresh();
+/** What the menu's button says: "Live" with its light, "Live · paused", "Every 15s" or "Auto-refresh off". */
+function AutoRefreshLabel({ interval, paused }: { interval: number; paused: boolean }) {
+  if (interval === LIVE_MS) return <LiveLabel paused={paused} />;
+  return <>{EVERY.get(interval) ?? "Auto-refresh off"}</>;
+}
+
+function LiveLabel({ paused }: { paused: boolean }) {
+  const [label, title] = paused ? ["Live · paused", HELD] : ["Live", "Reloads every 2 seconds"];
+  return (
+    <span className="flex items-center gap-2" title={title}>
+      <LiveDot paused={paused} />
+      {label}
+    </span>
+  );
+}
+
+const HELD = "Paused while a record is open or the list is scrolled down";
+
+/** Live's light: pulsing while it follows, steady while it holds. */
+function LiveDot({ paused }: { paused: boolean }) {
+  return (
+    <span className="relative flex size-2" aria-hidden="true">
+      {paused ? null : <span className="absolute inset-0 animate-ping rounded-full bg-ok opacity-60" />}
+      <span className={cn("relative size-2 rounded-full", paused ? "bg-muted-foreground" : "bg-ok")} />
+    </span>
+  );
+}
+
+/** Holds the console's clock while `paused`, and lets it go when the page goes. */
+function useHold(paused: boolean): void {
+  const { setPaused } = useRefresh();
   useEffect(() => {
-    if (!running) return;
-    const timer = window.setInterval(now, LIVE_MS);
-    return () => window.clearInterval(timer);
-  }, [running, now]);
+    setPaused(paused);
+    return () => setPaused(false);
+  }, [paused, setPaused]);
 }

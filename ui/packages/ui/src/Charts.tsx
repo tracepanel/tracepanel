@@ -880,7 +880,7 @@ export function StatGrid({ label, className, children }: { label?: string; class
   );
 }
 
-const STAT = "grid content-start gap-1.5 rounded-xl border bg-card px-5 py-4";
+const STAT = "grid content-start gap-1 rounded-xl border bg-card px-4 py-3";
 
 export function Stat({
   label,
@@ -898,17 +898,17 @@ export function Stat({
 }) {
   const body = (
     <>
-      <span className="text-base font-medium text-muted-foreground">{label}</span>
+      <span className="text-sm font-medium text-muted-foreground">{label}</span>
       <span
         className={cn(
-          "text-4xl leading-tight font-semibold tracking-[-0.02em] tabular-nums",
+          "text-2xl leading-tight font-semibold tracking-[-0.02em] tabular-nums",
           tone === "warn" && "text-warn",
           tone === "error" && "text-error",
         )}
       >
         {value}
       </span>
-      {sub ? <span className="text-base text-text-2">{sub}</span> : null}
+      {sub ? <span className="text-sm text-text-2">{sub}</span> : null}
     </>
   );
   return onClick ? (

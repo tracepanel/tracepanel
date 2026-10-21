@@ -111,7 +111,8 @@ function hasData(counts: Counts, section: (typeof OPTIONAL)[number]): boolean {
 
 /** Entry points with traces, and a page for each system the app called. */
 function visibleSections(counts: Counts | undefined): Set<Section> {
-  const hidden = new Set<Section>(OPTIONAL.filter((section) => counts && !hasData(counts, section)));
+  // Before the counts, the optional sections are hidden too: one shown, then gone, is a flash.
+  const hidden = new Set<Section>(OPTIONAL.filter((section) => !(counts && hasData(counts, section))));
   const shown = NAV.map((item) => item.section).filter((section) => !hidden.has(section));
   return new Set([...shown, ...systemItems(counts).map((item) => item.section)]);
 }
@@ -190,6 +191,8 @@ export function Sidebar({
       <nav
         className={cn(
           "grid min-h-0 flex-1 content-start gap-5 overflow-y-auto overscroll-contain [scrollbar-width:thin]",
+          // A list longer than the column fades out at its foot rather than cutting an item in half.
+          "pb-6 [mask-image:linear-gradient(to_bottom,#000_calc(100%-2rem),transparent)]",
           rail ? "-mx-3 justify-items-center px-3" : "-mx-5 px-5",
         )}
       >
