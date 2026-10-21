@@ -174,6 +174,8 @@ const TASK_SYSTEMS: Record<string, string> = {
   rq: "RQ",
   django: "Django Tasks",
   spring: "Spring @Async",
+  scheduled: "Spring @Scheduled",
+  bullmq: "BullMQ",
   rabbitmq: "RabbitMQ",
   kafka: "Kafka",
 };
