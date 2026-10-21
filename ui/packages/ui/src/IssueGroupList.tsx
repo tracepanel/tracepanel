@@ -1,6 +1,7 @@
 import { ago } from "./format";
 import { IssueIcon } from "./icons";
-import { ISSUE_LABELS, issueTitle } from "./labels";
+import { issueTitle } from "./labels";
+import { IssueChip } from "./primitives";
 import type { IssueGroup } from "./types";
 
 export interface IssueGroupListProps {
@@ -26,9 +27,7 @@ export function IssueGroupList({ issues, hrefFor }: IssueGroupListProps) {
               <span className="dt-request-path dt-issue-row-title">{issueTitle(issue.title)}</span>
             </span>
             <span className="dt-request-meta">
-              <span className="dt-chip" data-kind={issue.kind}>
-                {ISSUE_LABELS[issue.kind]}
-              </span>
+              <IssueChip kind={issue.kind} />
               {issue.culprit ? <code className="dt-issue-row-where">{issue.culprit}</code> : null}
               <span>
                 {issue.occurrences} {issue.occurrences === 1 ? "request" : "requests"}

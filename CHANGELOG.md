@@ -190,6 +190,13 @@
   cut to one line, whole on hover. Now stands over the Overview, chevron for
   chevron, busy or idle. An overview's time range is on the 24-hour clock,
   as the tables and charts are.
+- The widget's pill, hover card and panel edge take their colors from the
+  console's palette, in both themes, where they kept a copy of their own: a
+  color changed for the console changes them too.
+- The chips in dense rows (findings in the request lists, the call tree and
+  the issue lists, an email's Sent or Not sent) are the console's badge in a
+  compact size, as tall as a line of the row's text. A row with one is no
+  taller than a row without.
 - A logs table with more columns than room no longer widens the page past
   the window, cutting off the chart and squeezing Message out: its columns
   fit the room again.

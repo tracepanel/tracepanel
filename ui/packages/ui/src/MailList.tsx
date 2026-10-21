@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Badge } from "./components/ui/badge";
 import { duration } from "./format";
 import type { Span } from "./types";
 
@@ -24,9 +25,9 @@ function Message({ span }: { span: Span }) {
     <article className="dt-mail" data-failed={failed ? "" : undefined}>
       <header className="dt-mail-head">
         <h3>{String(attrs["mail.subject"] || "(no subject)")}</h3>
-        <span className="dt-chip" data-kind={failed ? "error" : "ok"}>
+        <Badge variant={failed ? "error" : "ok"} size="compact">
           {failed ? "Not sent" : "Sent"}
-        </span>
+        </Badge>
         <span className="dt-mail-time">{duration(span.duration)}</span>
       </header>
       <dl className="dt-props dt-mail-props">

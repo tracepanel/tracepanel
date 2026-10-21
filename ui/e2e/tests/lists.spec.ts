@@ -77,3 +77,23 @@ test("Tasks' System menu offers what ran this project's tasks, nothing it doesn'
 
   await expect(page.getByRole("option")).toHaveText(["RabbitMQ"]);
 });
+
+test("A finding's compact badge leaves its row as tall as the row without it", async ({ page }) => {
+  await page.goto("/#/traces");
+  const badges = page.getByRole("main").locator('tbody tr [data-slot="badge"][data-size="compact"]');
+  await expect(badges.first()).toBeVisible();
+  // Each row with a badge, as tall as it is with its badges and without them.
+  const rows = await badges.evaluateAll((all) => {
+    const tall = [...new Set(all.map((badge) => badge.closest("tr") as HTMLElement))];
+    const height = (row: HTMLElement) => row.getBoundingClientRect().height;
+    const withBadges = tall.map(height);
+    const badge = all[0]?.getBoundingClientRect().height;
+    for (const each of all) (each as HTMLElement).style.display = "none";
+    return { withBadges, without: tall.map(height), badge };
+  });
+  const rem = await page.evaluate(() => Number.parseFloat(getComputedStyle(document.documentElement).fontSize));
+
+  expect(rows.withBadges.length).toBeGreaterThan(5);
+  expect(rows.withBadges).toEqual(rows.without);
+  expect(rows.badge).toBe(1.125 * rem);
+});

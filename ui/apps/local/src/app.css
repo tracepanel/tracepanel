@@ -1794,11 +1794,6 @@ body {
   content: "⚠";
 }
 
-.dt-chip[data-tone="ok"] {
-  background: var(--dt-ok-bg);
-  color: var(--dt-ok);
-}
-
 /* ---------- Select menu (GitHub-style) ---------- */
 
 .select {
