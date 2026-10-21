@@ -1,10 +1,10 @@
-//! Sends the traces the agent keeps to Tracepanel Cloud, when `TRACEPANEL_TOKEN` says so.
+//! Sends the traces the agent keeps to Tracepanel Cloud, when `TRACEPANEL_API_KEY` says so.
 //!
-//! Settings come from the environment, which an agent an SDK starts inherits from the app (a token on the command
+//! Settings come from the environment, which an agent an SDK starts inherits from the app (an API key on the command
 //! line would show in every process list):
 //!
-//! - `TRACEPANEL_TOKEN`: the project's token, one of its API keys; without it nothing is sent.
-//! - `TRACEPANEL_CLOUD_URL`: the ingest to send to, `DEFAULT_URL` unless set (locally `http://localhost:8102`).
+//! - `TRACEPANEL_API_KEY`: one of the project's API keys, from the cloud console; without it nothing is sent.
+//! - `TRACEPANEL_INGEST_URL`: where the agent sends traces, `DEFAULT_URL` unless set (locally `http://localhost:8102`).
 //! - `TRACEPANEL_ENVIRONMENT`: where the traces come from, `production` unless set; 1 to 64 of a-z, 0-9, `.`, `_`
 //!   and `-`. Stamped on each trace as `deployment.environment.name`, unless the trace names its own.
 //!
@@ -25,7 +25,7 @@ use std::sync::mpsc::{Receiver, RecvTimeoutError, SyncSender, TrySendError, sync
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-/// Where traces go unless `TRACEPANEL_CLOUD_URL` says otherwise.
+/// Where traces go unless `TRACEPANEL_INGEST_URL` says otherwise.
 pub const DEFAULT_URL: &str = "https://ingest.tracepanel.dev";
 /// What a trace that names no environment was sent from.
 pub const DEFAULT_ENVIRONMENT: &str = "production";
@@ -43,16 +43,16 @@ pub struct Config {
 }
 
 impl Config {
-    /// Read `TRACEPANEL_TOKEN`, `TRACEPANEL_CLOUD_URL` and `TRACEPANEL_ENVIRONMENT`; no token, no sending.
+    /// Read `TRACEPANEL_API_KEY`, `TRACEPANEL_INGEST_URL` and `TRACEPANEL_ENVIRONMENT`; no API key, no sending.
     pub fn from_env(var: impl Fn(&str) -> Option<String>) -> Result<Option<Self>, String> {
         let set = |name: &str| var(name).filter(|value| !value.trim().is_empty());
-        let Some(key) = set("TRACEPANEL_TOKEN") else {
+        let Some(key) = set("TRACEPANEL_API_KEY") else {
             return Ok(None);
         };
-        let url = set("TRACEPANEL_CLOUD_URL").unwrap_or_else(|| DEFAULT_URL.into());
+        let url = set("TRACEPANEL_INGEST_URL").unwrap_or_else(|| DEFAULT_URL.into());
         if !url.starts_with("https://") && !url.starts_with("http://") {
             return Err(format!(
-                "TRACEPANEL_CLOUD_URL takes an http(s) URL, not {url}"
+                "TRACEPANEL_INGEST_URL takes an http(s) URL, not {url}"
             ));
         }
         let environment =
@@ -533,7 +533,7 @@ mod tests {
     fn no_key_no_sending() {
         assert_eq!(Config::from_env(env(&[])), Ok(None));
         assert_eq!(
-            Config::from_env(env(&[("TRACEPANEL_TOKEN", " ")])),
+            Config::from_env(env(&[("TRACEPANEL_API_KEY", " ")])),
             Ok(None)
         );
     }
@@ -541,7 +541,7 @@ mod tests {
     #[test]
     fn a_key_sends_to_production_by_default() {
         assert_eq!(
-            Config::from_env(env(&[("TRACEPANEL_TOKEN", "secret")])),
+            Config::from_env(env(&[("TRACEPANEL_API_KEY", "secret")])),
             Ok(Some(Config {
                 key: "secret".into(),
                 url: DEFAULT_URL.into(),
@@ -550,8 +550,8 @@ mod tests {
         );
         assert_eq!(
             Config::from_env(env(&[
-                ("TRACEPANEL_TOKEN", "secret"),
-                ("TRACEPANEL_CLOUD_URL", "http://localhost:8102/"),
+                ("TRACEPANEL_API_KEY", "secret"),
+                ("TRACEPANEL_INGEST_URL", "http://localhost:8102/"),
                 ("TRACEPANEL_ENVIRONMENT", "staging-eu.1"),
             ])),
             Ok(Some(Config {
@@ -563,10 +563,32 @@ mod tests {
     }
 
     #[test]
-    fn an_environment_a_url_could_not_carry_is_refused() {
+    fn the_old_names_are_not_read() {
         assert_eq!(
             Config::from_env(env(&[
                 ("TRACEPANEL_TOKEN", "secret"),
+                ("TRACEPANEL_CLOUD_URL", "http://localhost:8102"),
+            ])),
+            Ok(None)
+        );
+        assert_eq!(
+            Config::from_env(env(&[
+                ("TRACEPANEL_API_KEY", "secret"),
+                ("TRACEPANEL_CLOUD_URL", "http://localhost:8102"),
+            ])),
+            Ok(Some(Config {
+                key: "secret".into(),
+                url: DEFAULT_URL.into(),
+                environment: "production".into(),
+            }))
+        );
+    }
+
+    #[test]
+    fn an_environment_a_url_could_not_carry_is_refused() {
+        assert_eq!(
+            Config::from_env(env(&[
+                ("TRACEPANEL_API_KEY", "secret"),
                 ("TRACEPANEL_ENVIRONMENT", "Prod EU"),
             ])),
             Err(
@@ -576,10 +598,10 @@ mod tests {
         );
         assert_eq!(
             Config::from_env(env(&[
-                ("TRACEPANEL_TOKEN", "secret"),
-                ("TRACEPANEL_CLOUD_URL", "ingest.example.com"),
+                ("TRACEPANEL_API_KEY", "secret"),
+                ("TRACEPANEL_INGEST_URL", "ingest.example.com"),
             ])),
-            Err("TRACEPANEL_CLOUD_URL takes an http(s) URL, not ingest.example.com".into())
+            Err("TRACEPANEL_INGEST_URL takes an http(s) URL, not ingest.example.com".into())
         );
     }
 

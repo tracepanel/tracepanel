@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Changed
+
+- The agent reads its cloud settings as `TRACEPANEL_API_KEY`, which was
+  `TRACEPANEL_TOKEN`, and `TRACEPANEL_INGEST_URL`, which was
+  `TRACEPANEL_CLOUD_URL`. The old names are no longer read.
+
 ### Fixed
 
 - A worker on the Tasks page's Now no longer reads idle between two tasks
