@@ -11,6 +11,8 @@ export interface TraceLinks {
   issue?: ((fingerprint: string, kind: IssueKind) => string) | undefined;
   /** Every request that made this call: the agent's key for it (`call:<key>`). */
   call?: ((key: string) => string) | undefined;
+  /** The traces a search finds (`group:<id>`: a task group's runs). */
+  search?: ((query: string) => string) | undefined;
   /** This trace's records in the logs list. */
   logs?: ((traceId: string) => string) | undefined;
   /** The page of the app that recorded it (service.name): its settings and versions. */

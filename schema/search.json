@@ -88,6 +88,10 @@
       "type": "text",
       "help": "Task queue system: celery, dramatiq, rq, django"
     },
+    "group": {
+      "type": "text",
+      "help": "The runs of a task group's tasks (task.group_id)"
+    },
     "service": {
       "type": "text",
       "help": "The app that recorded it (service.name): service:shop"

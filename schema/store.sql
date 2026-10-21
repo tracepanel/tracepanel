@@ -1,6 +1,6 @@
 -- tracepanel's local store: one SQLite file per format version, written by the project's tracepanel-agent alone. The
 -- trace's doc is what was received; every other table is derived from it (crates/store-local/src/write.rs).
--- version: 21
+-- version: 22
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS traces (
     id TEXT PRIMARY KEY,
@@ -175,3 +175,10 @@ CREATE INDEX IF NOT EXISTS task_enqueues_trace ON task_enqueues (trace_id);
 CREATE TABLE IF NOT EXISTS task_runs (task_id TEXT NOT NULL, trace_id TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS task_runs_task ON task_runs (task_id);
 CREATE INDEX IF NOT EXISTS task_runs_trace ON task_runs (trace_id);
+-- A task run's place in its workflow, from its attributes: its task's id ('id'), each task it follows ('follows':
+-- task.parent_id, then task.depends_on), the workflow's first task ('root'), its group ('group') and, for a
+-- callback, which one it is ('callback': on_success). A run's related traces list the steps before and after it,
+-- its root and its group's other tasks by these.
+CREATE TABLE IF NOT EXISTS task_workflow (trace_id TEXT NOT NULL, role TEXT NOT NULL, value TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS task_workflow_value ON task_workflow (value, role);
+CREATE INDEX IF NOT EXISTS task_workflow_trace ON task_workflow (trace_id);
