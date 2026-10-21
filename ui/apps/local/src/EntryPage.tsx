@@ -270,7 +270,7 @@ function EntryScreen({
         <Reveal ready={ready}>
           {/* One page: Now (tasks), the overview (folded with its chevron), then the list, grouped or every call;
               all share the search. */}
-          <NowStrip now={now} />
+          <NowStrip now={now} systems={known?.task_system} />
           <TracesOverview
             q={carryQuery(q, searchKeys(spec, "traces"), true)}
             scope={SCOPES[section]}

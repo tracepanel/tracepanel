@@ -22,8 +22,10 @@
   The counts open a table of the tasks in flight: how long each has run or
   waited, its attempt, and its last error or its arguments. A row opens the
   trace that sent the task. With nothing in flight the line says idle, and
-  before any worker is seen how to start one. Projects without task events
-  have no Now.
+  before any worker is seen how to start one for each task system the app
+  uses: `celery -A <app> worker`, `rq worker`, `dramatiq <module>` or
+  `python manage.py db_worker`. BullMQ, Spring, Kafka and RabbitMQ run in the
+  app's own process. Projects without task events have no Now.
 - Live on the Tasks page, as on the Logs page: the overview, the list and Now
   reload every 2 seconds, and hold while the list is scrolled down. Runs that
   came in since the last reload are highlighted in All runs for a moment. A

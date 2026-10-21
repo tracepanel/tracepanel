@@ -155,15 +155,74 @@ test("Now says idle with workers there, and lists them", async ({ page }) => {
   await expect(now.getByRole("button")).toHaveCount(0);
 });
 
-test("Now says how to start a worker when the app sends task events but none was seen", async ({ page }) => {
+/** The task systems the stored runs name, as the filters' values give them. */
+async function storedSystems(page: Page, systems: string[]): Promise<void> {
+  await page.route("**/api/values*", async (route) => {
+    const response = await route.fetch();
+    // biome-ignore lint/style/useNamingConvention: the wire format.
+    await route.fulfill({ response, json: { ...(await response.json()), task_system: systems } });
+  });
+}
+
+/** The hint the Now line gives with no worker seen, for an app whose runs name these systems. */
+async function startHint(page: Page, systems: string[]): Promise<string> {
   await answer(page, { tasks: [], workers: [] }, true);
+  await storedSystems(page, systems);
+  await page.goto("/#/tasks");
+  const now = page.getByRole("region", { name: "Now" });
+  await expect(now).toContainText("No worker connected");
+  return (await now.textContent()) ?? "";
+}
+
+const HINTS: [string[], string][] = [
+  [["celery"], "Start one: celery -A <app> worker"],
+  [["rq"], "Start one: rq worker"],
+  [["dramatiq"], "Start one: dramatiq <module>"],
+  [["django"], "Start one: python manage.py db_worker"],
+  [["bullmq"], "BullMQ runs in the app's own process: start the app"],
+  [["kafka", "spring"], "Kafka, Spring @Async run in the app's own process: start the app"],
+  [["celery", "rq"], "Start one: celery -A <app> worker · rq worker"],
+  [["celery", "rabbitmq"], "Start one: celery -A <app> worker · RabbitMQ runs in the app's own process: start the app"],
+  [[], "Start the app's task worker"],
+];
+
+for (const [systems, hint] of HINTS) {
+  test(`Now says how to start a worker of ${systems.join(" and ") || "an unknown system"} when none was seen`, async ({
+    page,
+  }) => {
+    const text = await startHint(page, systems);
+
+    expect(text.replace(/\s+/g, " ")).toContain(hint);
+    // Only the systems the app has: no other system's command.
+    if (!systems.includes("celery")) expect(text).not.toContain("celery");
+  });
+}
+
+test("Now's hint names the system of the tasks queued before any run ended", async ({ page }) => {
+  // biome-ignore-start lint/style/useNamingConvention: the wire format.
+  const task = {
+    id: "queued-1",
+    system: "rq",
+    name: "shop.jobs.resize",
+    service: "shop",
+    state: "queued",
+    queue: "default",
+    worker: null,
+    enqueued_at: nowUs(),
+    started_at: null,
+    retries: 0,
+    args: null,
+    kwargs: null,
+    error: null,
+    enqueued_by: null,
+  };
+  // biome-ignore-end lint/style/useNamingConvention: the wire format.
+  await answer(page, { tasks: [task], workers: [] }, true);
+  await storedSystems(page, []);
 
   await page.goto("/#/tasks");
 
-  const now = page.getByRole("region", { name: "Now" });
-
-  await expect(now).toContainText("No worker connected");
-  await expect(now).toContainText("Start one: celery -A <app> worker");
+  await expect(page.getByRole("region", { name: "Now" })).toContainText("Start one: rq worker");
 });
 
 test("a project without task events has no Now", async ({ page }) => {

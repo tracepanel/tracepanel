@@ -173,6 +173,7 @@ const TASK_SYSTEMS: Record<string, string> = {
   dramatiq: "Dramatiq",
   rq: "RQ",
   django: "Django Tasks",
+  bullmq: "BullMQ",
   spring: "Spring @Async",
   rabbitmq: "RabbitMQ",
   kafka: "Kafka",

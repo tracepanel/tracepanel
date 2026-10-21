@@ -12,7 +12,7 @@ import { useStored } from "@tracepanel/ui/hooks/useStored";
 import { argumentsOf, byState, elapsed, LIVE_STATES, stateSince } from "@tracepanel/ui/lib/liveTasks";
 import { cn } from "@tracepanel/ui/lib/utils";
 import { ChevronRightIcon } from "lucide-react";
-import { type ReactNode, useCallback, useEffect, useState } from "react";
+import { Fragment, type ReactNode, useCallback, useEffect, useState } from "react";
 import { useSearch } from "./data";
 import { useCapabilities } from "./hooks";
 import { Figure, OverviewNumbers } from "./Overview";
@@ -77,12 +77,20 @@ const OPEN_KEY = "tracepanel:tasks:now-open";
 const readOpen = (raw: unknown): boolean => raw === true;
 
 /** The line: how many tasks run, wait and wait again, and the workers; the tasks in a table when opened. */
-export function NowStrip({ now }: { now: Now }) {
+export function NowStrip({ now, systems }: { now: Now; systems?: readonly string[] | undefined }) {
   if (!(now.shown && now.live)) return null;
-  return <NowLine live={now.live} last={now.last} />;
+  return <NowLine live={now.live} last={now.last} systems={systems ?? []} />;
 }
 
-function NowLine({ live, last }: { live: LiveTasks; last: TraceSummary | undefined }) {
+function NowLine({
+  live,
+  last,
+  systems,
+}: {
+  live: LiveTasks;
+  last: TraceSummary | undefined;
+  systems: readonly string[];
+}) {
   const [open, setOpen] = useStored(OPEN_KEY, readOpen);
   const busy = live.tasks.length > 0;
   return (
@@ -94,7 +102,7 @@ function NowLine({ live, last }: { live: LiveTasks; last: TraceSummary | undefin
         ) : (
           <NowIdle workers={live.workers} last={last} />
         )}
-        <Workers workers={live.workers} />
+        <Workers workers={live.workers} systems={taskSystems(systems, live)} />
       </div>
       {busy && open ? <InFlightTable live={live} /> : null}
     </section>
@@ -195,15 +203,60 @@ function NowCounts({ live }: { live: LiveTasks }) {
   );
 }
 
+/** The task systems the app uses: those its stored runs name, and those of the tasks waiting now. */
+function taskSystems(stored: readonly string[], live: LiveTasks): string[] {
+  return [...new Set([...stored, ...live.tasks.map((task) => task.system)])].filter(Boolean);
+}
+
+/** How a system's worker starts, where it is a command of its own. */
+const WORKER_COMMANDS = new Map([
+  ["celery", "celery -A <app> worker"],
+  ["rq", "rq worker"],
+  ["dramatiq", "dramatiq <module>"],
+  ["django", "python manage.py db_worker"],
+]);
+
+/** Systems whose workers are the app's own process: a BullMQ Worker, Spring's @Async, a Kafka or RabbitMQ listener. */
+const IN_APP = new Set(["bullmq", "spring", "kafka", "rabbitmq"]);
+
+/** "Start one: celery -A <app> worker · rq worker", and the systems the app runs itself; a plain line for others. */
+function StartHint({ systems }: { systems: readonly string[] }) {
+  const commands = systems.flatMap((system) => WORKER_COMMANDS.get(system) ?? []);
+  const parts = [
+    commands.length ? <Commands key="commands" commands={commands} /> : null,
+    inAppHint(systems.filter((system) => IN_APP.has(system)).map(taskSystem)),
+  ].filter((part) => part !== null);
+  return (
+    <span className="text-muted-foreground">
+      {parts.length ? parts.flatMap((part, index) => (index ? [" · ", part] : [part])) : "Start the app's task worker"}
+    </span>
+  );
+}
+
+/** "BullMQ runs in the app's own process: start the app": no command of its own to give. */
+function inAppHint(labels: readonly string[]): string | null {
+  if (labels.length === 0) return null;
+  return `${labels.join(", ")} ${labels.length > 1 ? "run" : "runs"} in the app's own process: start the app`;
+}
+
+/** "Start one: celery -A <app> worker · rq worker". */
+function Commands({ commands }: { commands: readonly string[] }) {
+  return (
+    <>
+      Start one:{" "}
+      {commands.map((command, index) => (
+        <Fragment key={command}>
+          {index ? " · " : null}
+          <Mono className="text-xs">{command}</Mono>
+        </Fragment>
+      ))}
+    </>
+  );
+}
+
 /** The workers seen, each with what it does now; before any, how to start one. */
-function Workers({ workers }: { workers: readonly LiveWorker[] }) {
-  if (workers.length === 0) {
-    return (
-      <span className="text-muted-foreground">
-        Start one: <Mono className="text-xs">celery -A &lt;app&gt; worker</Mono>
-      </span>
-    );
-  }
+function Workers({ workers, systems }: { workers: readonly LiveWorker[]; systems: readonly string[] }) {
+  if (workers.length === 0) return <StartHint systems={systems} />;
   return (
     <ul className="m-0 ml-auto flex list-none flex-wrap items-center gap-1.5 p-0" aria-label="Workers">
       {workers.map((worker) => (
