@@ -237,3 +237,45 @@ test("with Live on, a run that just ended is highlighted in All runs", async ({ 
   // A moment later it is a row like the others.
   await expect(row).not.toHaveAttribute("data-new");
 });
+
+test("Spring's and BullMQ's tasks are named as people know them, and a worker says the app it serves", async ({
+  page,
+}) => {
+  const task = (id: string, system: string, name: string) => ({
+    id,
+    system,
+    name,
+    service: "shop",
+    state: "running",
+    queue: null,
+    worker: "shop@box",
+    // biome-ignore-start lint/style/useNamingConvention: the wire format.
+    enqueued_at: null,
+    started_at: nowUs() - 2_000_000,
+    retries: 0,
+    args: null,
+    kwargs: null,
+    error: null,
+    enqueued_by: null,
+    // biome-ignore-end lint/style/useNamingConvention: the wire format.
+  });
+  // A worker of one app runs @Async and @Scheduled alike: its label is the app, not the last task's system.
+  // biome-ignore lint/style/useNamingConvention: the wire format.
+  const worker = { name: "shop@box", system: "kafka", service: "shop", last_seen: nowUs(), in_flight: 2 };
+  await answer(
+    page,
+    {
+      tasks: [task("a", "scheduled", "Reports.nightly"), task("b", "bullmq", "mail:send")],
+      workers: [worker],
+    },
+    true,
+  );
+
+  await page.goto("/#/tasks");
+  const now = page.getByRole("region", { name: "Now" });
+  await now.getByRole("button", { expanded: false }).click();
+
+  await expect(now.getByRole("link").filter({ hasText: "Reports.nightly" })).toContainText("Spring @Scheduled");
+  await expect(now.getByRole("link").filter({ hasText: "mail:send" })).toContainText("BullMQ");
+  await expect(now.getByRole("list", { name: "Workers" }).getByTitle("shop", { exact: true })).toBeVisible();
+});

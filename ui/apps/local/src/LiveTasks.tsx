@@ -205,7 +205,9 @@ function Workers({ workers }: { workers: readonly LiveWorker[] }) {
           <Badge
             variant="outline"
             className="gap-1.5 bg-background text-xs font-normal"
-            title={`${taskSystem(worker.system)} · ${worker.service}`}
+            // The app it serves, not a system: one app's worker runs @Async and Kafka alike, and its last task's
+            // system would flip the label.
+            title={worker.service}
           >
             <Light state={worker.in_flight ? "busy" : "ready"} />
             <span className="font-mono">{worker.name}</span>{" "}

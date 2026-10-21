@@ -24,6 +24,9 @@
   trace that sent the task. With nothing in flight the line says idle and
   when the last run ended, and before any worker is seen that none is
   connected. Projects without task events have no Now.
+- Now names Spring's scheduled tasks "Spring @Scheduled" and BullMQ's jobs
+  "BullMQ". A worker's label says the app it serves, not the system of its
+  last task, which flipped for an app that runs several kinds.
 - Live on the Tasks page, as on the Logs page: the overview, the list and Now
   reload every 2 seconds, and hold while the list is scrolled down. Runs that
   came in since the last reload are highlighted in All runs for a moment. A
