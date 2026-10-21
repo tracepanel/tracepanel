@@ -127,7 +127,7 @@ export function IssuePage({
           <h2 className="text-xl font-semibold">
             Requests <span className="font-normal text-muted-foreground">· newest first</span>
           </h2>
-          <TracesTable items={issue.traces} selectedId={null} hrefFor={traceHref} />
+          <TracesTable table="issue:calls" items={issue.traces} selectedId={null} hrefFor={traceHref} />
         </section>
       </div>
     </Reveal>

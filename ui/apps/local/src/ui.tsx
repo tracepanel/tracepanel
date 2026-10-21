@@ -1,55 +1,12 @@
 import { Button } from "@tracepanel/ui/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@tracepanel/ui/components/ui/table";
+import { TableRow } from "@tracepanel/ui/components/ui/table";
 import { cn } from "@tracepanel/ui/lib/utils";
 import { ChevronRightIcon } from "lucide-react";
 import { type ComponentProps, type ReactNode, type SyntheticEvent, useEffect, useRef } from "react";
 import { follow, openInNewTab } from "./routes";
 
-/* Console building blocks on top of shadcn/ui: a GitHub-like boxed table, meters, loading, page header. */
-
-export function DataTable({
-  head,
-  children,
-  dense = false,
-}: {
-  head: ReactNode;
-  children: ReactNode;
-  dense?: boolean;
-}) {
-  return (
-    <div
-      className={cn(
-        "overflow-hidden rounded-lg border bg-card",
-        dense && "[&_td]:px-3 [&_td:first-child]:pl-4 [&_th]:px-3 [&_th:first-child]:pl-4",
-      )}
-    >
-      {/* The size of every table's rows, the logs' too: one size of table text across the console. */}
-      <Table className="text-base">
-        <TableHeader className="bg-muted">
-          <TableRow className="hover:bg-transparent">{head}</TableRow>
-        </TableHeader>
-        <TableBody>{children}</TableBody>
-      </Table>
-    </div>
-  );
-}
-
-export function Th({ num, className, ...props }: ComponentProps<typeof TableHead> & { num?: boolean }) {
-  return (
-    <TableHead
-      className={cn(
-        "h-10 px-5 text-xs font-semibold tracking-wide text-muted-foreground uppercase first:pl-6",
-        num && "text-right",
-        className,
-      )}
-      {...props}
-    />
-  );
-}
-
-export function Td({ num, className, ...props }: ComponentProps<typeof TableCell> & { num?: boolean }) {
-  return <TableCell className={cn("px-5 py-3 first:pl-6", num && "text-right tabular-nums", className)} {...props} />;
-}
+/* Console building blocks on top of shadcn/ui: table rows, meters, loading, page header. The lists themselves are
+   DataTable, from @tracepanel/ui. */
 
 // What a click inside a row means for itself rather than for the row.
 const OWN_CLICK = "a, button, input, select, textarea, summary, [role=button]";
@@ -129,17 +86,17 @@ export function Tr({
   );
 }
 
-/** A horizontal bar for a value relative to the largest in the table, with the value beside it. */
+/** A horizontal bar for a value relative to the largest in the table, with the value beside it; a narrow column narrows the bar. */
 export function Meter({ value, max, children }: { value: number; max: number; children: ReactNode }) {
   return (
-    <span className="flex items-center gap-2.5">
-      <span className="h-2 w-24 overflow-hidden rounded-full bg-muted-foreground/15">
+    <span className="flex min-w-0 items-center gap-2.5">
+      <span className="h-2 w-24 min-w-6 shrink overflow-hidden rounded-full bg-muted-foreground/15">
         <span
           className="block h-full rounded-full bg-chart-1"
           style={{ width: `${(value / Math.max(max, 1)) * 100}%` }}
         />
       </span>
-      <span className="tabular-nums">{children}</span>
+      <span className="shrink-0 tabular-nums">{children}</span>
     </span>
   );
 }

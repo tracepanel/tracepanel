@@ -19,9 +19,9 @@ test("a record takes one line, however long its message; its details open under 
   const long = region(page).locator("tr[data-record]").filter({ hasText: "listing 50 posts with select_related" });
   const message = long.getByText(/^listing 50 posts with select_related/);
 
-  // One line: a row is about as tall as its text, the message cut short rather than wrapped.
+  // One line: a row is one line of text and its padding, the message cut short rather than wrapped.
   await expect(message).toBeVisible();
-  expect((await long.boundingBox())?.height).toBeLessThan(36);
+  expect((await long.boundingBox())?.height).toBeLessThan(50);
   expect(await message.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
 
   await long.focus();

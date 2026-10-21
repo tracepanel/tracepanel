@@ -1,6 +1,8 @@
 import {
   type Capabilities,
+  type DataColumn,
   type DataSource,
+  DataTable,
   type LiveTask,
   type LiveTasks,
   type LiveWorker,
@@ -19,7 +21,7 @@ import { Figure, OverviewNumbers } from "./Overview";
 import { groupRoute, href, traceHref } from "./routes";
 import { taskSystem } from "./sections";
 import { TaskState } from "./tables";
-import { DataTable, Mono, Td, Th, Tr } from "./ui";
+import { Mono, Tr } from "./ui";
 
 /* The Tasks page's Now: what is in flight as the apps' task events tell the agent, on one line above the overview,
    and the tasks themselves in a table under it on demand. A task leaves it when it ends, and its run is listed with
@@ -232,35 +234,44 @@ function useAgentNow(live: LiveTasks): number {
   return received.now + (Date.now() - received.at) * 1000;
 }
 
-interface Column {
-  head: string;
-  num?: boolean;
-  cell: (task: LiveTask, now: number) => ReactNode;
+/** A task in flight, and the agent's clock as it ticks: how long it has run or waited is worked out from both. */
+interface Ticking {
+  task: LiveTask;
+  now: number;
 }
 
 const muted = (text: string | null | undefined) => <span className="text-muted-foreground">{text || "—"}</span>;
 
 /** Running, queued and retrying together: how long each has run or waited, the attempt, the last error. */
-const COLUMNS: readonly Column[] = [
-  { head: "Task", cell: (task) => <Mono className="block max-w-[26.25rem] truncate">{task.name || "—"}</Mono> },
-  { head: "State", cell: (task) => <TaskState state={task.state} /> },
+const COLUMNS: DataColumn<Ticking>[] = [
   {
-    head: "System",
-    cell: (task) => (
+    id: "task",
+    label: "Task",
+    required: true,
+    cell: ({ task }) => <Mono className="block truncate">{task.name || "—"}</Mono>,
+  },
+  { id: "state", label: "State", width: 7, cell: ({ task }) => <TaskState state={task.state} /> },
+  {
+    id: "system",
+    label: "System",
+    width: 7.5,
+    cell: ({ task }) => (
       <Badge variant="outline" className="text-xs">
         {taskSystem(task.system)}
       </Badge>
     ),
   },
   // Where it is: the worker that runs it, or the queue it waits in.
-  {
-    head: "Where",
-    cell: (task) => <Where task={task} />,
-  },
-  { head: "For", num: true, cell: (task, now) => elapsed(now, stateSince(task)) },
-  { head: "Attempt", num: true, cell: (task) => task.retries + 1 },
+  { id: "where", label: "Where", width: 12, cell: ({ task }) => <Where task={task} /> },
+  { id: "for", label: "For", width: 5.5, num: true, cell: ({ task, now }) => elapsed(now, stateSince(task)) },
+  { id: "attempt", label: "Attempt", width: 6.5, num: true, cell: ({ task }) => task.retries + 1 },
   // What a glance needs: why the last attempt failed, else what it was given.
-  { head: "Details", cell: (task) => (task.error ? <LastError error={task.error} /> : <Arguments task={task} />) },
+  {
+    id: "details",
+    label: "Details",
+    width: 16,
+    cell: ({ task }) => (task.error ? <LastError error={task.error} /> : <Arguments task={task} />),
+  },
 ];
 
 /** The rows ordered as the line counts them: running, then queued, then retrying; newest first in each. */
@@ -276,28 +287,18 @@ function rowHref(task: LiveTask): string {
 
 function InFlightTable({ live }: { live: LiveTasks }) {
   return (
-    <DataTable
-      head={COLUMNS.map((column) => (
-        <Th key={column.head} num={Boolean(column.num)}>
-          {column.head}
-        </Th>
-      ))}
-    >
+    <DataTable table="tasks:now" columns={COLUMNS}>
       {/* Keyed by the answer: each refresh starts the clock from the agent's own `now` again. */}
-      <TickingRows key={live.now} live={live} />
+      {({ cells }) => <TickingRows key={live.now} live={live} cells={cells} />}
     </DataTable>
   );
 }
 
-function TickingRows({ live }: { live: LiveTasks }) {
+function TickingRows({ live, cells }: { live: LiveTasks; cells: (item: Ticking) => ReactNode }) {
   const now = useAgentNow(live);
   return ordered(live).map((task) => (
     <Tr key={task.id} href={rowHref(task)} tone={task.state === "retrying" ? "warn" : undefined}>
-      {COLUMNS.map((column) => (
-        <Td key={column.head} num={Boolean(column.num)}>
-          {column.cell(task, now)}
-        </Td>
-      ))}
+      {cells({ task, now })}
     </Tr>
   ));
 }

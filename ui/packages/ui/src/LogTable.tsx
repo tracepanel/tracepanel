@@ -25,12 +25,12 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
 } from "./components/ui/dropdown-menu";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./components/ui/table";
+import { Table, TableBody, TableCell, TableRow } from "./components/ui/table";
 import { ago, clock, duration, since } from "./format";
 import { type ColumnSpec, type Columns, useColumns } from "./hooks/useColumns";
 import { useStored } from "./hooks/useStored";
 import { logAttrs } from "./LogRecordDetails";
-import { type ColumnEdge, ColumnHead, ColumnsMenu, useColumnWidths } from "./TableColumns";
+import { BODY_CELL, ColumnsHeader, MENU_REM, useColumnWidths } from "./TableColumns";
 import type { Log } from "./types";
 
 type LogLike = Pick<Log, "time" | "level" | "logger" | "message" | "exception" | "attrs">;
@@ -155,16 +155,16 @@ function leading<R extends LogLike>(
     {
       id: "time",
       label: "Time",
-      width: 7,
+      width: 8.5,
       fixed: true,
       cell: (log) => <LogTime time={log.time} mode={mode} start={start} />,
     },
-    { id: "level", label: "Level", width: 5.5, fixed: true, cell: (log) => <LogLevel level={log.level} /> },
+    { id: "level", label: "Level", width: 7, fixed: true, cell: (log) => <LogLevel level={log.level} /> },
     { id: "message", label: "Message", required: true, cell: (log) => <Message log={log} terms={terms} /> },
     {
       id: "logger",
       label: "Logger",
-      width: 9,
+      width: 10.5,
       cell: (log) => <span className="font-mono text-muted-foreground">{log.logger}</span>,
     },
   ];
@@ -214,7 +214,7 @@ function attributeColumns<R extends LogLike>(keys: readonly string[]): LogColumn
   return keys.map((key) => ({
     id: `${ATTRIBUTE}${key}`,
     label: key,
-    width: 9,
+    width: 10.5,
     // Shown while picked, whatever was stored: it comes and goes from Attribute columns, a record or its header, so
     // the columns list above doesn't offer it a second time.
     required: true,
@@ -270,23 +270,12 @@ function trailing<R extends LogLike>(): LogColumn<R>[] {
     {
       id: "attributes",
       label: "All attributes",
-      width: 16,
+      width: 17.5,
       hidden: true,
       cell: (log) => <Attributes attrs={log.attrs} />,
     },
   ];
 }
-
-/** Which header edge resizes a column: the one facing the column that takes the rest, which has none itself. */
-function edgeOf(shown: readonly ColumnSpec[], index: number): ColumnEdge | undefined {
-  const flex = shown.findIndex((spec) => spec.width === undefined);
-  if (index === flex) return undefined;
-  return index < flex ? "end" : "start";
-}
-
-// The console's table headers (text, weight, case), a little lower for one-line rows.
-const HEAD = "h-9 px-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase first:pl-4";
-const CELL = "truncate px-2 py-1.5 first:pl-4";
 
 // A warning or a failure marks the row's edge, as the console's other lists mark theirs.
 const ROW = cn(
@@ -361,41 +350,24 @@ function LogHead({
   onRemoveAttribute: (key: string) => void;
 }) {
   return (
-    <TableHeader className="bg-muted">
-      <TableRow className="hover:bg-transparent">
-        {columns.shown.map((spec, index) => (
-          <ColumnHead
-            key={spec.id}
-            id={spec.id}
-            onMove={(moved) => columns.move(moved, spec.id)}
-            onStep={(by) => {
-              const next = columns.shown[index + by];
-              if (next) columns.move(spec.id, next.id);
-            }}
-            onRemove={removable(spec, columns, onRemoveAttribute)}
-            label={spec.label}
-            width={widths.get(spec.id)}
-            onWidth={(width) => columns.setWidth(spec.id, width)}
-            edge={edgeOf(columns.shown, index)}
-            className={HEAD}
-          />
-        ))}
-        <TableHead className="w-9 px-1 text-right">
-          <ColumnsMenu columns={columns} changed={changed} onReset={onReset}>
-            {attributes}
-            <DropdownMenuLabel>Time</DropdownMenuLabel>
-            <DropdownMenuRadioGroup value={mode} onValueChange={(value) => onMode(readTime(value))}>
-              <DropdownMenuRadioItem value="clock" onSelect={(event) => event.preventDefault()}>
-                Time of day
-              </DropdownMenuRadioItem>
-              <DropdownMenuRadioItem value="relative" onSelect={(event) => event.preventDefault()}>
-                {relativeLabel}
-              </DropdownMenuRadioItem>
-            </DropdownMenuRadioGroup>
-          </ColumnsMenu>
-        </TableHead>
-      </TableRow>
-    </TableHeader>
+    <ColumnsHeader
+      columns={columns}
+      widths={widths}
+      changed={changed}
+      onReset={onReset}
+      onRemove={(spec) => removable(spec, columns, onRemoveAttribute)}
+    >
+      {attributes}
+      <DropdownMenuLabel>Time</DropdownMenuLabel>
+      <DropdownMenuRadioGroup value={mode} onValueChange={(value) => onMode(readTime(value))}>
+        <DropdownMenuRadioItem value="clock" onSelect={(event) => event.preventDefault()}>
+          Time of day
+        </DropdownMenuRadioItem>
+        <DropdownMenuRadioItem value="relative" onSelect={(event) => event.preventDefault()}>
+          {relativeLabel}
+        </DropdownMenuRadioItem>
+      </DropdownMenuRadioGroup>
+    </ColumnsHeader>
   );
 }
 
@@ -439,7 +411,7 @@ function linesOf<R extends LogLike>(logs: readonly R[], keyOf: (log: R) => strin
 }
 
 /** A line's height before it is measured: a record's one line, a heading's smaller one, details' a guess. */
-const ESTIMATE: Record<Line<unknown>["kind"], number> = { day: 26, record: 31, details: 320 };
+const ESTIMATE: Record<Line<unknown>["kind"], number> = { day: 26, record: 45, details: 320 };
 
 /** What a line's row needs from the table: its columns, the opened record, and the place's details and button. */
 interface RowContext<R> {
@@ -459,7 +431,7 @@ interface Placed {
 function DayHeading({ day, span, placed }: { day: string; span: number; placed: Placed }) {
   return (
     <TableRow ref={placed.measure} data-index={placed.index} className="hover:bg-transparent">
-      <TableCell colSpan={span} className="bg-muted/60 py-1 pl-4 text-xs font-semibold text-muted-foreground">
+      <TableCell colSpan={span} className="bg-muted/60 py-1 pl-6 text-xs font-semibold text-muted-foreground">
         {day}
       </TableCell>
     </TableRow>
@@ -493,7 +465,7 @@ function LogRecordRow<R extends LogLike>({
       onKeyDown={(event) => onRowKey(event, opened, onToggle)}
     >
       {shown.map((column) => (
-        <TableCell key={column.id} className={CELL}>
+        <TableCell key={column.id} className={cn(BODY_CELL, "truncate")}>
           {column.cell(log, opened)}
         </TableCell>
       ))}
@@ -673,8 +645,8 @@ export function LogTable<R extends LogLike>({
   const all = [...leading<R>(mode, start, highlight), ...extra, ...attributeColumns<R>(picked), ...trailing<R>()];
   const columns = useColumns(table, all);
   const shown = columns.shown;
-  // The columns menu's own column is w-9.
-  const { ref, widths } = useColumnWidths(columns, 2.25);
+  // The columns menu has a column of its own.
+  const { ref, widths } = useColumnWidths(columns, MENU_REM);
   const reset = () => {
     columns.reset();
     setMode("clock");
@@ -689,7 +661,7 @@ export function LogTable<R extends LogLike>({
   };
   return (
     <AttributeColumnsContext.Provider value={pinned}>
-      {/* A step under the console's other tables (text-md): dense, one line a record, still read at the same size. */}
+      {/* One density for every list of the console: the header and the rows of the others (TableColumns). */}
       <Table ref={ref} className="table-fixed text-base" stickyHeader={stickyHeader}>
         <LogHead
           columns={columns}

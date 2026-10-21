@@ -65,8 +65,19 @@
   libraries opens on all frames.
 - The Profile button stays lit while it is on, and every request is profiled
   until it is turned off.
+- Every list of the console has the logs table's columns: endpoints, calls,
+  traces, tasks and Now, jobs, pages, WebSockets, GraphQL, RPC, emails,
+  issues, services, a system's calls and a group's. Drag a header's edge to
+  resize a column, hide it with the × on its header and bring it back from
+  the columns menu, or move it by a drag or with the arrow keys. Each list
+  keeps its own columns in the browser. The list's main column (Endpoint,
+  Task, Trace and the like) always stays.
 
 ### Changed
+
+- The logs table and every other list share one header and one row height,
+  the other lists' own. The columns fit the page's width, so a list with many
+  columns no longer scrolls sideways.
 
 - The logs table draws only the rows in view and a screenful around them.
   Thousands of records loaded scroll as lightly as a hundred.

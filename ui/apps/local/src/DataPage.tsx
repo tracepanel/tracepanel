@@ -398,7 +398,7 @@ const BODIES: Partial<Record<Section, (page: BodyContext) => ReactNode>> = {
     pagedBody(
       page.data.traces,
       "Load older",
-      (items) => <TracesTable items={items} selectedId={null} hrefFor={traceHref} />,
+      (items) => <TracesTable table="traces" items={items} selectedId={null} hrefFor={traceHref} />,
       <Empty title="No traces match">
         Search names and paths, or filter: status&gt;=500, task:send_*, kind:command.
       </Empty>,

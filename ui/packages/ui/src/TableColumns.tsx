@@ -1,5 +1,6 @@
 // A table's columns as the reader arranges them: a header edge to drag for a wider or narrower column, and a menu to
-// show or hide columns. The choices live in useColumns, per browser.
+// show or hide columns. The choices live in useColumns, per browser. Every list of the console is built from these:
+// DataTable, and LogTable with rows of its own.
 
 import { cn } from "@tracepanel/ui/lib/utils";
 import { Columns3CogIcon, GripVerticalIcon, XIcon } from "lucide-react";
@@ -24,9 +25,19 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "./components/ui/dropdown-menu";
-import { TableHead } from "./components/ui/table";
+import { TableHead, TableHeader, TableRow } from "./components/ui/table";
 import { useCloseOnBlur } from "./hooks/useCloseOnBlur";
-import type { Columns } from "./hooks/useColumns";
+import type { ColumnSpec, Columns } from "./hooks/useColumns";
+
+/**
+ * One density for every list, the logs' too: a header cell's height, type and padding, a body cell's padding. The
+ * table's own text is `text-base`.
+ */
+const HEAD_CELL = "h-10 px-5 text-xs font-semibold tracking-wide text-muted-foreground uppercase first:pl-6";
+export const BODY_CELL = "px-5 py-3 first:pl-6";
+
+/** What the columns menu's own column takes, in rem: the header's last cell, empty in every row. */
+export const MENU_REM = 2.25;
 
 /** The narrowest a column gets, and what the column that takes the rest keeps at least. */
 const MIN_WIDTH = 40;
@@ -38,7 +49,7 @@ const KEY_STEPS = new Map([
 ]);
 
 /** Which edge of its header a column is dragged by: the one toward the column that takes the rest. */
-export type ColumnEdge = "start" | "end";
+type ColumnEdge = "start" | "end";
 
 function rowOf(head: HTMLTableCellElement): HTMLTableRowElement | null {
   return head.parentElement instanceof HTMLTableRowElement ? head.parentElement : null;
@@ -292,14 +303,57 @@ function movable(
   };
 }
 
+/**
+ * The side of a header its own buttons sit on: the end, away from the name; the start in a column of numbers, whose
+ * name sits at the end, over its values.
+ */
+type Side = "start" | "end";
+
+// The remove button at the side's edge, the grip beside it or in its place.
+const BUTTON_AT = new Map<Side, string>([
+  ["end", "right-2"],
+  ["start", "left-2"],
+]);
+const GRIP_AT = new Map<Side, [alone: string, beside: string]>([
+  ["end", ["right-2", "right-7"]],
+  ["start", ["left-2", "left-7"]],
+]);
+
+const sideOf = (num: boolean): Side => (num ? "start" : "end");
+
+/** A header cell's classes: the shared density, its name's side, and what a move says (hovered, dropped on). */
+function headClass(side: Side, moves: boolean, over: boolean, className: string | undefined): string {
+  return cn(
+    HEAD_CELL,
+    "group/head relative transition-colors",
+    side === "start" && "text-right",
+    // A header that moves says so on hover: a step darker, a grip at its end, the grab cursor on its name. Opaque:
+    // a sticky header's rows scroll under it.
+    moves && "hover:bg-[color-mix(in_oklab,var(--color-muted),var(--color-foreground)_4%)]",
+    over && "bg-brand-soft",
+    className,
+  );
+}
+
 /** The header's name, dragged to move its column before or after another; focused, the arrow keys move it a step. */
-function DragLabel({ id, label, onStep }: { id: string; label: string; onStep: ((by: number) => void) | undefined }) {
+function DragLabel({
+  id,
+  label,
+  side,
+  onStep,
+}: {
+  id: string;
+  label: string;
+  side: Side;
+  onStep: ((by: number) => void) | undefined;
+}) {
   const { className, ...props } = movable(id, label, onStep);
   return (
     <span
       {...props}
       className={cn(
         "flex min-w-0 items-center rounded-sm focus-visible:outline-2 focus-visible:outline-ring",
+        side === "start" && "justify-end",
         className,
       )}
     >
@@ -308,15 +362,18 @@ function DragLabel({ id, label, onStep }: { id: string; label: string; onStep: (
   );
 }
 
-/** A column the reader added, taken off from its header. */
-function RemoveColumn({ label, onRemove }: { label: string; onRemove: () => void }) {
+/** A column that may go, taken off from its header: the columns menu brings it back. */
+function RemoveColumn({ label, side, onRemove }: { label: string; side: Side; onRemove: () => void }) {
   return (
     <button
       type="button"
       aria-label={`Hide the ${label} column`}
       title={`Hide the ${label} column`}
       onClick={onRemove}
-      className="absolute top-1/2 right-2 flex size-4 -translate-y-1/2 items-center justify-center rounded-sm bg-muted text-muted-foreground opacity-0 transition-opacity group-hover/head:opacity-100 hover:text-foreground focus-visible:opacity-100"
+      className={cn(
+        "absolute top-1/2 flex size-4 -translate-y-1/2 items-center justify-center rounded-sm bg-muted text-muted-foreground opacity-0 transition-opacity group-hover/head:opacity-100 hover:text-foreground focus-visible:opacity-100",
+        BUTTON_AT.get(side),
+      )}
     >
       <XIcon className="size-3" />
     </button>
@@ -324,24 +381,26 @@ function RemoveColumn({ label, onRemove }: { label: string; onRemove: () => void
 }
 
 /**
- * A grip on hover at the header's end, where nothing moves for it: the name stays over its column's values. `beside`
+ * A grip on hover at the header's side, where nothing moves for it: the name stays over its column's values. `beside`
  * the remove button when there is one.
  */
-function Grip({ beside }: { beside: boolean }) {
+function Grip({ side, beside }: { side: Side; beside: boolean }) {
+  const [alone, next] = GRIP_AT.get(side) ?? ["", ""];
   return (
     <GripVerticalIcon
       aria-hidden="true"
       className={cn(
         "pointer-events-none absolute top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground opacity-0 transition-opacity group-hover/head:opacity-70",
-        beside ? "right-7" : "right-2",
+        beside ? next : alone,
       )}
     />
   );
 }
 
-/** A header's own buttons: the remove one, for a column the reader added, and the resize handle, on its edge. */
+/** A header's own buttons: the remove one, for a column that may go, and the resize handle, on its edge. */
 function HeadControls({
   label,
+  side,
   movable,
   onRemove,
   edge,
@@ -350,6 +409,7 @@ function HeadControls({
   onWidth,
 }: {
   label: string;
+  side: Side;
   movable: boolean;
   onRemove: (() => void) | undefined;
   edge: ColumnEdge | undefined;
@@ -359,8 +419,8 @@ function HeadControls({
 }) {
   return (
     <>
-      {movable ? <Grip beside={onRemove !== undefined} /> : null}
-      {onRemove ? <RemoveColumn label={label} onRemove={onRemove} /> : null}
+      {movable ? <Grip side={side} beside={onRemove !== undefined} /> : null}
+      {onRemove ? <RemoveColumn label={label} side={side} onRemove={onRemove} /> : null}
       {edge ? <ResizeHandle label={label} edge={edge} width={width} onDraft={onDraft} onWidth={onWidth} /> : null}
     </>
   );
@@ -369,14 +429,16 @@ function HeadControls({
 /**
  * A column's header cell, `width` px wide; without one, it takes what the others leave. `edge` puts the resize handle
  * on the side that faces that column; none, the column has no handle. With `onMove`, its name drags onto another
- * header to move the column there; with `onRemove`, a button on hover takes the column off.
+ * header to move the column there; with `onRemove`, a button on hover takes the column off. `num`: a column of
+ * numbers, its name at the end, over its values.
  */
-export function ColumnHead({
+function ColumnHead({
   id,
   label,
   width,
   onWidth,
   edge,
+  num = false,
   onMove,
   onStep,
   onRemove,
@@ -387,6 +449,7 @@ export function ColumnHead({
   width: number | undefined;
   onWidth: (width: number) => void;
   edge?: ColumnEdge | undefined;
+  num?: boolean | undefined;
   onMove?: ((moved: string) => void) | undefined;
   /** Moves the column a step left (-1) or right (1): the keyboard's way to do what a drag does. */
   onStep?: ((by: number) => void) | undefined;
@@ -396,25 +459,20 @@ export function ColumnHead({
   const [draft, setDraft] = useState<number | undefined>(undefined);
   const { flex, shown, style } = sized(width, draft);
   const drop = useDrop(onMove);
+  const side = sideOf(num);
   return (
     <TableHead
       data-flex={flex || undefined}
       style={style}
-      className={cn(
-        "group/head relative transition-colors",
-        // A header that moves says so on hover: a step darker, a grip at its end, the grab cursor on its name. Opaque:
-        // a sticky header's rows scroll under it.
-        onStep && "hover:bg-[color-mix(in_oklab,var(--color-muted),var(--color-foreground)_4%)]",
-        drop.over && "bg-brand-soft",
-        className,
-      )}
+      className={headClass(side, onStep !== undefined, drop.over, className)}
       // Its name is its label: the resize handle inside has a name of its own.
       aria-label={label}
       {...drop.props}
     >
-      <DragLabel id={id} label={label} onStep={onStep} />
+      <DragLabel id={id} label={label} side={side} onStep={onStep} />
       <HeadControls
         label={label}
+        side={side}
         movable={onStep !== undefined}
         onRemove={onRemove}
         edge={edge}
@@ -430,7 +488,7 @@ export function ColumnHead({
  * The columns menu: each column that may go, shown or hidden; `children` adds the table's own view options; reset
  * goes back to the defaults.
  */
-export function ColumnsMenu({
+function ColumnsMenu({
   columns,
   changed,
   onReset,
@@ -475,5 +533,73 @@ export function ColumnsMenu({
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+/** Which header edge resizes a column: the one facing the column that takes the rest, which has none itself. */
+function edgeOf(shown: readonly ColumnSpec[], index: number): ColumnEdge | undefined {
+  const flex = shown.findIndex((spec) => spec.width === undefined);
+  if (index === flex) return undefined;
+  return index < flex ? "end" : "start";
+}
+
+/** What takes a column off from its header, as the menu would: any column that may go; the required ones stay. */
+function hideOf(spec: ColumnSpec, columns: Columns): (() => void) | undefined {
+  return spec.required ? undefined : () => columns.setShown(spec.id, false);
+}
+
+/** The step a column's name takes it with the arrow keys: onto the shown column beside it, if any. */
+function stepOf(columns: Columns, index: number): (by: number) => void {
+  return (by) => {
+    const spec = columns.shown[index];
+    const next = columns.shown[index + by];
+    if (spec && next) columns.move(spec.id, next.id);
+  };
+}
+
+/**
+ * A table's header row: a ColumnHead for each shown column, in the reader's order and at the widths `widths` gives
+ * (useColumnWidths), and the columns menu in a last column of its own; `children` adds the table's own options to
+ * the menu. `onRemove` replaces what a header's remove button does for a column (none: the menu's hide).
+ */
+export function ColumnsHeader({
+  columns,
+  widths,
+  changed = columns.changed,
+  onReset = columns.reset,
+  onRemove = hideOf,
+  children,
+}: {
+  columns: Columns;
+  widths: ReadonlyMap<string, number>;
+  changed?: boolean | undefined;
+  onReset?: (() => void) | undefined;
+  onRemove?: ((spec: ColumnSpec, columns: Columns) => (() => void) | undefined) | undefined;
+  children?: ReactNode;
+}) {
+  return (
+    <TableHeader className="bg-muted">
+      <TableRow className="hover:bg-transparent">
+        {columns.shown.map((spec, index) => (
+          <ColumnHead
+            key={spec.id}
+            id={spec.id}
+            label={spec.label}
+            num={spec.num}
+            width={widths.get(spec.id)}
+            onWidth={(width) => columns.setWidth(spec.id, width)}
+            edge={edgeOf(columns.shown, index)}
+            onMove={(moved) => columns.move(moved, spec.id)}
+            onStep={stepOf(columns, index)}
+            onRemove={onRemove(spec, columns)}
+          />
+        ))}
+        <TableHead className="w-9 px-1 text-right">
+          <ColumnsMenu columns={columns} changed={changed} onReset={onReset}>
+            {children}
+          </ColumnsMenu>
+        </TableHead>
+      </TableRow>
+    </TableHeader>
   );
 }

@@ -73,7 +73,7 @@ test("a query has no Explain where the console's backend can't run it: the agent
 
 test("Tasks' System menu offers what ran this project's tasks, nothing it doesn't have", async ({ page }) => {
   await page.goto("/#/tasks");
-  await page.getByRole("button", { name: "System" }).click();
+  await page.getByRole("button", { name: "System", exact: true }).click();
 
   await expect(page.getByRole("option")).toHaveText(["RabbitMQ"]);
 });
