@@ -28,10 +28,21 @@ export function percent(part: number, total: number): string {
 }
 
 /** A moment as a log line shows it, to the millisecond, in local time: 14:03:21.146. */
-export function clock(us: number): string {
+function clock(us: number): string {
   const at = new Date(us / 1000);
   const time = at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
   return `${time}.${String(at.getMilliseconds()).padStart(3, "0")}`;
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/**
+ * A moment as a log row shows it, its day with it, in local time: Oct 21 15:45:20.345. Every row the same, today's
+ * too: one width down the column, and a row read alone still says which day.
+ */
+export function stamp(us: number): string {
+  const at = new Date(us / 1000);
+  return `${MONTHS[at.getMonth()]} ${String(at.getDate()).padStart(2, "0")} ${clock(us)}`;
 }
 
 /** A moment in full, in local time, as its row shows it plus the date and the offset: 2026-10-20 15:27:31.008 +03:00. */

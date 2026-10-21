@@ -129,7 +129,7 @@ const COLUMNS: DataColumn<Line>[] = [
   {
     id: "avg",
     label: "Avg",
-    width: 5.75,
+    width: 6.5,
     num: true,
     cell: (line) => duration(Math.round(line.total / Math.max(line.calls, 1))),
   },

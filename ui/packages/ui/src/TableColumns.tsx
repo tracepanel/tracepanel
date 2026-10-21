@@ -197,7 +197,10 @@ function ResizeHandle({
       className={cn(
         "absolute inset-y-0 z-10 w-2 cursor-col-resize touch-none outline-none",
         "after:absolute after:inset-y-2 after:left-1/2 after:w-px after:bg-border",
-        "hover:after:inset-y-0 hover:after:bg-ring focus-visible:after:inset-y-0 focus-visible:after:w-0.5 focus-visible:after:bg-ring",
+        // A step darker than the border while it is the one in hand, gray as the table: the brand's color is for
+        // what the reader picked. Focused from the keyboard, it is thicker too.
+        "hover:after:inset-y-0 hover:after:bg-muted-foreground active:after:inset-y-0 active:after:bg-muted-foreground",
+        "focus-visible:after:inset-y-0 focus-visible:after:w-0.5 focus-visible:after:bg-muted-foreground",
         edge === "end" ? "-right-1" : "-left-1",
       )}
       onPointerDown={down}
