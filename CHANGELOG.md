@@ -47,6 +47,21 @@
   run. A callback (`task.callback`, RQ's `on_success`, `on_failure` and
   `on_stopped`) says whose: Callback of.
 
+### Changed
+
+- Every list of names and values reads one way: a request's headers and
+  attributes, a call's fields and all its attributes, a log record's fields,
+  an app's settings, a template's context, an error's locals and an email's
+  addresses. A list is one item a line (`signal.unreceived`, `db.params`,
+  shown as JSON or joined with commas before), JSON and a Python repr are
+  laid out and coloured, a long value folds under "Show all", and each one
+  copies as it came. A log message that is JSON is coloured as well.
+- The call tree's request row shows the trace's attributes as its Request
+  tab does, by namespace. A task run, or a request with no other part, has
+  no switch above its attributes: "Attributes 8" heads one card, its
+  namespaces as headings inside it. An error's locals copy, and an email's
+  HTML and Text switch as a request's parts do.
+
 ### Fixed
 
 - The slowest and failing lists above a section's table no longer widen the

@@ -27,7 +27,7 @@ function rowsOf(attrs: Attrs): { name: string; value: string }[] | null {
 function ContextRows({ rows, omitted }: { rows: { name: string; value: string }[]; omitted: number }) {
   return (
     <div className="overflow-hidden rounded-lg border bg-card">
-      <NameValues fold rows={rows} />
+      <NameValues rows={rows} />
       {omitted > 0 ? (
         <p className="border-t px-3 py-1.5 text-xs text-muted-foreground">
           {omitted} more {omitted === 1 ? "name" : "names"} not recorded: over the limit of one template.

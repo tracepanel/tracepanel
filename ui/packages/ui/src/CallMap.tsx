@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { TraceAttributes } from "./Attributes";
 import { duration, percent, since } from "./format";
 import { GraphqlCode } from "./GraphqlCode";
 import { ChevronRightIcon, CloseIcon } from "./icons";
@@ -21,7 +22,8 @@ import { traceRuntime } from "./lib/runtime";
 import { isReceiver, raised } from "./lib/signals";
 import { CALL_KINDS, DATASTORES, MESSAGING, RPC } from "./lib/systems";
 import { linkProps, type TraceLinks } from "./links";
-import { type PropRow, PropTable } from "./PropTable";
+import { type NameValue, NameValues } from "./NameValues";
+import { PropTable } from "./PropTable";
 import { AliasChip, AppChip, IssueChip } from "./primitives";
 import { SideResize, useSideWidth } from "./SideResize";
 import { SignalNotes } from "./SignalNotes";
@@ -1030,7 +1032,7 @@ function GroupDetails({ node }: DetailsProps<"group">) {
       {first ? (
         <>
           <Statement span={first} attrs={first.attrs} />
-          <PropTable rows={summaryRows(first, false)} />
+          <Fields rows={summaryRows(first, false)} />
         </>
       ) : null}
       <p className="flex flex-wrap items-center gap-2 text-base text-muted-foreground [&_code]:rounded [&_code]:bg-muted [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-sm [&_code]:text-foreground">
@@ -1064,21 +1066,68 @@ function Raised({ attrs }: { attrs: Attrs }) {
   );
 }
 
-function SpanDetails({ node: { span }, trace }: DetailsProps<"span">) {
-  // The root span stands for the whole request: its details are the trace's own attributes. A call's own fields come
-  // in words first (its topic, its URL, where in the code); every attribute after them, raw.
-  const parent = trace.spans.find((each) => each.id === span.parent_id);
-  const [attrs, summary] =
-    span.parent_id === null ? [{ ...trace.attrs, ...span.attrs }, []] : [span.attrs, summaryRows(span, true, parent)];
+/** What every span's details open with: what it was, what it raised, its statement or its GraphQL document. */
+function SpanHead({
+  span,
+  trace,
+  parent,
+  attrs,
+}: {
+  span: Span;
+  trace: Trace;
+  parent?: Span | undefined;
+  attrs: Attrs;
+}) {
   const document = attrs["graphql.document"];
   return (
-    <div className="grid gap-3 p-4">
+    <>
       <SpanTitle span={span} trace={trace} parent={parent} />
       <Raised attrs={span.attrs} />
       <Statement span={span} attrs={attrs} />
       {typeof document === "string" ? <GraphqlCode document={document} /> : null}
-      {summary.length ? <PropTable rows={summary} /> : null}
-      <SpanAttributes span={span} attrs={attrs} titled={summary.length > 0} />
+    </>
+  );
+}
+
+function SpanDetails(props: DetailsProps<"span">) {
+  return props.node.span.parent_id === null ? <RootDetails {...props} /> : <CallDetails {...props} />;
+}
+
+/** The root span stands for the whole request: its details are the trace's own attributes, as its Request tab shows them. */
+function RootDetails({ node: { span }, trace }: DetailsProps<"span">) {
+  const attrs = { ...trace.attrs, ...span.attrs };
+  return (
+    <div className="grid gap-3 p-4">
+      <SpanHead span={span} trace={trace} attrs={attrs} />
+      <RootAttributes attrs={attrs} />
+    </div>
+  );
+}
+
+/** A call's own fields in words first (its topic, its URL, where in the code); every attribute after them. */
+function CallDetails({ node: { span }, trace }: DetailsProps<"span">) {
+  const parent = trace.spans.find((each) => each.id === span.parent_id);
+  const summary = summaryRows(span, true, parent);
+  return (
+    <div className="grid gap-3 p-4">
+      <SpanHead span={span} trace={trace} parent={parent} attrs={span.attrs} />
+      {summary.length ? <Fields rows={summary} /> : null}
+      <SpanAttributes span={span} attrs={span.attrs} titled={summary.length > 0} />
+    </div>
+  );
+}
+
+/** The trace's attributes on its request row: the GraphQL document is shown formatted above, not again on one line. */
+function RootAttributes({ attrs }: { attrs: Attrs }) {
+  const { "graphql.document": _, ...rest } = attrs;
+  return <TraceAttributes attrs={rest} />;
+}
+
+/** A call's fields in words, in a card: the one look of every list of names and values. */
+function Fields({ rows }: { rows: readonly NameValue[] }) {
+  return (
+    <div className="overflow-hidden rounded-lg border bg-card">
+      <NameValues rows={rows} />
     </div>
   );
 }
@@ -1109,14 +1158,9 @@ function Details(props: DetailsProps<Node["type"]>) {
 }
 
 /** A call's fields as rows; a list (a signal's receivers) one item a line. */
-function summaryRows(span: Span, origin = true, parent?: Span | undefined): PropRow[] {
+function summaryRows(span: Span, origin = true, parent?: Span | undefined): NameValue[] {
   const kind = isReceiver(span, parent) ? "receiver" : span.kind;
-  return callFields({ kind, attrs: span.attrs }, origin).map(({ label, value }) => ({
-    label,
-    value: value.includes("\n") ? <span className="whitespace-pre-line">{value}</span> : value,
-    copy: value,
-    mono: true,
-  }));
+  return callFields({ kind, attrs: span.attrs }, origin).map(({ label, value }) => ({ name: label, value }));
 }
 
 /* ---------- side pane ---------- */

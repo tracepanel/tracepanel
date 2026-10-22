@@ -1,26 +1,46 @@
 import { useState } from "react";
 import { Badge } from "./components/ui/badge";
 import { duration } from "./format";
-import type { Span } from "./types";
+import { type NameValue, NameValues } from "./NameValues";
+import { Segmented } from "./Segmented";
+import type { Attrs, Span } from "./types";
 
-function addresses(value: unknown): string {
-  return Array.isArray(value) ? value.map(String).join(", ") : value ? String(value) : "—";
+type View = "html" | "text";
+
+const VIEWS = [
+  { id: "html" as const, label: "HTML" },
+  { id: "text" as const, label: "Text" },
+];
+
+/** Whether a field says anything: an empty list of addresses doesn't. */
+function present(value: unknown): boolean {
+  return Array.isArray(value) ? value.length > 0 : Boolean(value);
+}
+
+/** A field as it reads: an address, a list of them one a line, a dash when it says nothing. */
+function said(value: unknown): unknown {
+  return present(value) ? value : "—";
+}
+
+/** Who it went from and to and how it was sent; Cc only when it had any. */
+function mailRows(attrs: Attrs): NameValue[] {
+  const backend = String(said(attrs["mail.backend"])).replace(/^django\.core\.mail\.backends\./, "");
+  const cc = present(attrs["mail.cc"]) ? [{ name: "Cc", value: attrs["mail.cc"] }] : [];
+  return [
+    { name: "From", value: said(attrs["mail.from"]) },
+    { name: "To", value: said(attrs["mail.to"]) },
+    ...cc,
+    { name: "Backend", value: backend },
+  ];
 }
 
 function Message({ span }: { span: Span }) {
   const attrs = span.attrs;
   const html = typeof attrs["mail.html"] === "string" ? attrs["mail.html"] : null;
   const text = typeof attrs["mail.body"] === "string" ? attrs["mail.body"] : null;
-  const [view, setView] = useState<"html" | "text">(html ? "html" : "text");
+  const [view, setView] = useState<View>(html ? "html" : "text");
   const sent = attrs["mail.sent"];
   const failed = span.status === "error" || sent === 0;
-  const cc = addresses(attrs["mail.cc"]);
-  const rows: [string, string][] = [
-    ["From", String(attrs["mail.from"] ?? "—")],
-    ["To", addresses(attrs["mail.to"])],
-    ...(cc !== "—" && cc !== "" ? ([["Cc", cc]] as [string, string][]) : []),
-    ["Backend", String(attrs["mail.backend"] ?? "—").replace(/^django\.core\.mail\.backends\./, "")],
-  ];
   return (
     <article className="dt-mail" data-failed={failed ? "" : undefined}>
       <header className="dt-mail-head">
@@ -30,24 +50,12 @@ function Message({ span }: { span: Span }) {
         </Badge>
         <span className="dt-mail-time">{duration(span.duration)}</span>
       </header>
-      <dl className="dt-props dt-mail-props">
-        {rows.map(([label, value]) => (
-          <div key={label}>
-            <dt>{label}</dt>
-            <dd>{value}</dd>
-          </div>
-        ))}
-      </dl>
+      <NameValues rows={mailRows(attrs)} />
       {html || text ? (
         <>
           {html && text ? (
-            <div className="dt-segmented dt-mail-switch">
-              <button type="button" aria-pressed={view === "html"} onClick={() => setView("html")}>
-                HTML
-              </button>
-              <button type="button" aria-pressed={view === "text"} onClick={() => setView("text")}>
-                Text
-              </button>
+            <div className="dt-mail-switch">
+              <Segmented label="Email as" segments={VIEWS} value={view} onChange={setView} />
             </div>
           ) : null}
           {view === "html" && html ? (
