@@ -1252,7 +1252,7 @@ fn linked_ids(related: &Value) -> Vec<String> {
                 .filter_map(|item| item["id"].as_str().map(str::to_owned)),
         );
     }
-    // A task run's workflow: its root, the steps before and after it, its group's other tasks.
+    // A task run's workflow: its root, the steps before and after it, its group's other tasks, its graph.
     let workflow = &related["workflow"];
     let steps = [
         &workflow["follows"],
@@ -1263,6 +1263,14 @@ fn linked_ids(related: &Value) -> Vec<String> {
         std::iter::once(&workflow["root"])
             .chain(steps.into_iter().filter_map(Value::as_array).flatten())
             .filter_map(|item| item["id"].as_str().map(str::to_owned)),
+    );
+    // The rest of its graph: a snapshot opens every run the graph shows.
+    ids.extend(
+        workflow["graph"]["nodes"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|node| node["trace"]["id"].as_str().map(str::to_owned)),
     );
     ids
 }
