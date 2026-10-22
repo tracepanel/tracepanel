@@ -1,5 +1,6 @@
 import { duration, localTime, stamp } from "./format";
 import { LinkedTrace, single, tracesRow } from "./LinkedTrace";
+import { plural } from "./lib/plural";
 import { linkProps, type TraceLinks } from "./links";
 import type { PropRow } from "./PropTable";
 import type { Attrs, Related, Trace, TraceSummary } from "./types";
@@ -167,7 +168,7 @@ function groupRows(attrs: Attrs, steps: Steps): PropRow[] {
   const tasks = steps.groupTasks;
   const value = (
     <GroupSearch group={group} links={steps.links}>
-      {tasks ? `${tasks} tasks` : group}
+      {tasks ? plural(tasks, "task", "tasks") : group}
     </GroupSearch>
   );
   return [{ label: "Group", value, copy: group }];
@@ -225,7 +226,7 @@ function groupPart(workflow: Workflow, links: TraceLinks | undefined): PropRow[]
       {more > 0 ? <MoreInGroup group={group} more={more} links={links} /> : null}
     </span>
   );
-  return [{ label: `Group (${group.tasks} tasks)`, id: "workflow-group", value }];
+  return [{ label: `Group (${plural(group.tasks, "task", "tasks")})`, id: "workflow-group", value }];
 }
 
 /** A callback's kind beside its name: on_success. */

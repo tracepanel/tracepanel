@@ -72,6 +72,24 @@ test("a long group draws its first few tasks and a search for them all", async (
   await expect(graph(page).getByRole("link", { name: /^\+295 more/ })).toHaveAttribute("href", /group(%3A|:)thumbs/);
 });
 
+test("a group of one task says one task, in its facts and its frame", async ({ page }) => {
+  await page.route("**/api/traces/*/related", async (route) => {
+    const related = await (await route.fetch()).json();
+    const workflow = related.workflow;
+    if (workflow?.group) {
+      const nodes: { group: string | null }[] = workflow.graph?.nodes ?? [];
+      const first = nodes.findIndex((node) => node.group === "thumbs");
+      workflow.graph.nodes = nodes.filter((node, n) => node.group !== "thumbs" || n === first);
+      workflow.group.tasks = 1;
+    }
+    await route.fulfill({ json: related });
+  });
+  const { facts } = await open(page, "shop.tasks.thumbnails_done");
+
+  await expect(beside(facts, "Group")).toHaveText("1 task");
+  await expect(graph(page).getByText("Group · 1 task", { exact: true })).toBeVisible();
+});
+
 test("a job that waited for another follows it; the graph draws both and its callback", async ({ page }) => {
   const waited = await open(page, "shop.jobs.publish_image");
 
