@@ -1404,6 +1404,35 @@ export interface components {
             callbacks: {
                 [key: string]: string;
             };
+            /** @description The whole workflow it belongs to, as the console draws it: null for a workflow of one task. */
+            graph: null | components["schemas"]["WorkflowGraph"];
+        };
+        /** @description A workflow's runs and how they lead to each other, found from one of them: the tasks it follows and those that follow it, its root and the tasks rooted there, its group, and so on from each. */
+        WorkflowGraph: {
+            /** @description The traces that started it (a request, a command), then one node per task in the order the tasks first ran: its latest run (a retried task is its last attempt). A callback, which has no task id, is a node of its own. */
+            nodes: {
+                trace: components["schemas"]["TraceSummary"];
+                /** @description Its task.id; null for a callback or a request. */
+                task_id: string | null;
+                /** @description The group it is one of (task.group_id); not for a run that follows one of them. */
+                group: string | null;
+                /** @description on_success, on_failure or on_stopped (RQ). */
+                callback: string | null;
+                /** @description How many runs of its task are stored: more than 1 when it retried. */
+                runs: number;
+            }[];
+            /** @description Which node leads to which, by trace id. */
+            edges: {
+                from: string;
+                to: string;
+                /**
+                 * @description follows: it follows that task (task.parent_id, task.depends_on); callback: it is that run's callback; sent: that run sent it and it names no parent; enqueued: a trace outside the workflow (a request) enqueued it.
+                 * @enum {string}
+                 */
+                kind: "follows" | "callback" | "sent" | "enqueued";
+            }[];
+            /** @description True when the workflow has more runs than the graph takes in (100). */
+            cut: boolean;
         };
         /** @description ULID. */
         id: string;

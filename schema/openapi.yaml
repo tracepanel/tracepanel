@@ -1604,7 +1604,7 @@ components:
         A task run's workflow, by the task ids its runs record. A step sent from inside the run before it is linked
         already (enqueued_by and enqueued): it is not listed here again.
       additionalProperties: false
-      required: [task_id, runs, root, follows, followed_by, group, callbacks]
+      required: [task_id, runs, root, follows, followed_by, group, callbacks, graph]
       properties:
         task_id: { type: [string, "null"], description: "This run's task.id (a callback has none)." }
         runs:
@@ -1651,3 +1651,55 @@ components:
             Which of the runs it led to (enqueued, followed_by) are its callbacks: RQ's on_success, on_failure or
             on_stopped, by trace id.
           additionalProperties: { type: string }
+        graph:
+          description: >-
+            The whole workflow it belongs to, as the console draws it: null for a workflow of one task.
+          oneOf:
+            - { type: "null" }
+            - $ref: "#/components/schemas/WorkflowGraph"
+    WorkflowGraph:
+      type: object
+      description: >-
+        A workflow's runs and how they lead to each other, found from one of them: the tasks it follows and those that
+        follow it, its root and the tasks rooted there, its group, and so on from each.
+      additionalProperties: false
+      required: [nodes, edges, cut]
+      properties:
+        nodes:
+          type: array
+          description: >-
+            The traces that started it (a request, a command), then one node per task in the order the tasks first
+            ran: its latest run (a retried task is its last attempt). A callback, which has no task id, is a node of
+            its own.
+          items:
+            type: object
+            additionalProperties: false
+            required: [trace, task_id, group, callback, runs]
+            properties:
+              trace: { $ref: "#/components/schemas/TraceSummary" }
+              task_id: { type: [string, "null"], description: "Its task.id; null for a callback or a request." }
+              group:
+                type: [string, "null"]
+                description: The group it is one of (task.group_id); not for a run that follows one of them.
+              callback: { type: [string, "null"], description: "on_success, on_failure or on_stopped (RQ)." }
+              runs: { type: integer, description: "How many runs of its task are stored: more than 1 when it retried." }
+        edges:
+          type: array
+          description: Which node leads to which, by trace id.
+          items:
+            type: object
+            additionalProperties: false
+            required: [from, to, kind]
+            properties:
+              from: { type: string }
+              to: { type: string }
+              kind:
+                type: string
+                enum: [follows, callback, sent, enqueued]
+                description: >-
+                  follows: it follows that task (task.parent_id, task.depends_on); callback: it is that run's
+                  callback; sent: that run sent it and it names no parent; enqueued: a trace outside the workflow
+                  (a request) enqueued it.
+        cut:
+          type: boolean
+          description: True when the workflow has more runs than the graph takes in (100).

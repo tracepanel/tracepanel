@@ -46,6 +46,15 @@
   follows, what it waits for, its root and its group, each a link to its
   run. A callback (`task.callback`, RQ's `on_success`, `on_failure` and
   `on_stopped`) says whose: Callback of.
+- A task workflow drawn whole. Below a run's related traces, the Workflow
+  part draws every run of its workflow, left to right as they ran: the
+  request that started it, each task's latest run with how it ended, how
+  long it took and how many runs it had, a group's tasks in a frame (its
+  first five, then a search for the rest), a callback on a dashed line. The
+  run on screen is marked, every other box opens its trace. The agent finds
+  the runs from the one asked for, by the same ids, at most 100 of them, and
+  sends them in `workflow.graph`: the nodes, the edges between them and
+  whether it was cut. A snapshot carries every run the graph shows.
 
 ### Changed
 

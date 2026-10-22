@@ -95,3 +95,43 @@ test("a delayed task says when it was due, and how late it started", async ({ pa
   await expect(beside(facts, "Due")).toHaveText(/^[A-Z][a-z]{2} \d{2} \d{2}:\d{2}:\d{2}\.\d{3} · 2 min late$/);
   await expect(beside(facts, "Priority")).toHaveText("5");
 });
+
+/** A run's workflow drawn whole: its boxes by their names, as their titles give them. */
+function graph(page: Page) {
+  return page.getByRole("region", { name: "Workflow" }).getByTestId("workflow-graph");
+}
+
+function box(page: Page, name: string): Locator {
+  return graph(page).locator(`[title^="${name}"]`);
+}
+
+test("a chain is drawn whole, the run on screen marked, the others links to their traces", async ({ page }) => {
+  await open(page, "shop.tasks.parse_feed");
+
+  await expect(box(page, "shop.tasks.fetch_feed")).toContainText("fetch_feed");
+  await expect(box(page, "shop.tasks.parse_feed")).toHaveAttribute("aria-current", "true");
+  await expect(box(page, "shop.tasks.store_feed")).toContainText("success");
+  await expect(graph(page).locator("svg path[marker-end]")).toHaveCount(2);
+
+  await box(page, "shop.tasks.store_feed").click();
+  await expect(page.getByRole("heading", { name: /shop\.tasks\.store_feed/ })).toBeVisible();
+});
+
+test("a chord is drawn as its request, the group in a frame, and the callback after it", async ({ page }) => {
+  await open(page, "shop.tasks.make_thumbnail");
+
+  await expect(box(page, "/api/thumbnails")).toContainText("POST");
+  await expect(graph(page).getByText("Group · 3 tasks")).toBeVisible();
+  await expect(box(page, "shop.tasks.make_thumbnail")).toHaveCount(3);
+  await expect(box(page, "shop.tasks.thumbnails_done")).toBeVisible();
+  // Into the group and out of it: one line each.
+  await expect(graph(page).locator("svg path[marker-end]")).toHaveCount(2);
+});
+
+test("a job's callback is drawn after it, named as one", async ({ page }) => {
+  await open(page, "shop.jobs.publish_image");
+
+  await expect(box(page, "shop.jobs.resize_image")).toBeVisible();
+  await expect(box(page, "shop.jobs.log_resized")).toContainText("on_success");
+  await expect(box(page, "shop.jobs.publish_image")).toHaveAttribute("aria-current", "true");
+});

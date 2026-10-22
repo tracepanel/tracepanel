@@ -13,6 +13,7 @@ import { MethodBadge, RoutePath, StatusBadge } from "./primitives";
 import { isRequestDetail, RequestParts, requestParts } from "./RequestParts";
 import type { Attrs, Related, Trace } from "./types";
 import { taskTimingRows, workflowFacts, workflowPart } from "./Workflow";
+import { WorkflowGraph } from "./WorkflowGraph";
 
 function text(value: unknown): string | null {
   return value === undefined || value === null || value === "" ? null : String(value);
@@ -337,6 +338,17 @@ function Part({ label, title, children }: { label: string; title: ReactNode; chi
   );
 }
 
+/** A task run's workflow drawn whole, when it is in one of more than one task. */
+function WorkflowSection({ trace, related, links }: Omit<RequestInfoProps, "hero">) {
+  const graph = related?.workflow?.graph;
+  if (!graph) return null;
+  return (
+    <Part label="Workflow" title="Workflow">
+      <WorkflowGraph graph={graph} current={trace.id} links={links} />
+    </Part>
+  );
+}
+
 /** Overview of the traced request or task run: what ran, how it went, who caused it; every id copies. */
 export function RequestInfo({ trace, related, links, hero: wanted }: RequestInfoProps) {
   const hero = heroShown(trace, wanted);
@@ -358,6 +370,7 @@ export function RequestInfo({ trace, related, links, hero: wanted }: RequestInfo
           <PropTable dense rows={linked} />
         </Part>
       ) : null}
+      <WorkflowSection trace={trace} related={related} links={links} />
       <RequestParts parts={requestParts(trace.attrs, others, graphql)} />
     </div>
   );
