@@ -1,10 +1,6 @@
-import { type CallsSummary, type DataSource, duration, percent, Stat, StatGrid } from "@tracepanel/ui";
+import { type CallsSummary, type DataSource, duration, percent, plural, Stat, StatGrid } from "@tracepanel/ui";
 import { type ReactNode, useCallback } from "react";
 import { useSearch } from "./data";
-
-function plural(count: number, one: string, many: string): string {
-  return `${count} ${count === 1 ? one : many}`;
-}
 
 /** What a tile says under its number, when there is something to say. */
 function when<T>(value: T | null | undefined, text: (value: T) => string): string | undefined {
