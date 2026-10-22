@@ -1413,8 +1413,23 @@ export interface components {
         duration: number;
         /** @enum {unknown} */
         status: "ok" | "error";
-        /** @description Namespaced attributes (http.*, db.*, cache.*, code.*, user.*, task.*). task.* is shared by every task queue (task.system says which: celery, django, dramatiq, rq). Values are scalars or lists of scalars. */
+        /** @description Namespaced attributes (http.*, db.*, cache.*, code.*, user.*, task.*, signal.*, exception.*). task.* is shared by every task queue (task.system says which: celery, django, dramatiq, rq). Values are scalars or lists of scalars. */
         attrs: {
+            /** @description On a signal span and on each of its receivers' spans: the signal's dotted path, e.g. "django.db.models.signals.post_save". The signal span's name is Django's own signal by its name ("post_save"), any other by this path. */
+            "signal.name"?: string;
+            /** @description On a signal span: who sent it, a model by its label ("auth.Group"), any other class by its dotted path. Absent for a send with no sender. */
+            "signal.sender"?: string;
+            /** @description On a signal span: the dotted path of each receiver it ran, in order. Each receiver is a function span under it. */
+            "signal.receivers"?: string[];
+            /** @description On a signal span: true for send_robust() and asend_robust(), which catch what a receiver raises. A failed receiver's span is then an error while the trace stays ok. */
+            "signal.robust"?: boolean;
+            /** @description On a trace: the sends nobody received, which make no span, once per signal and sender with how many times it was sent, e.g. "pre_save auth.Group: 3". */
+            "signal.unreceived"?: string[];
+            /** @description On a span that raised (a signal's receiver): the qualified exception class, e.g. "builtins.ConnectionError". */
+            "exception.type"?: string;
+            /** @description On a span that raised: the exception's message, cut at 1000 characters. */
+            "exception.message"?: string;
+        } & {
             [key: string]: (string | number | boolean | null) | (string | number | boolean | null)[];
         };
         frame: {
@@ -1628,8 +1643,23 @@ export interface components {
                 duration: number;
                 /** @enum {unknown} */
                 status: "ok" | "error";
-                /** @description Namespaced attributes (http.*, db.*, cache.*, code.*, user.*, task.*). task.* is shared by every task queue (task.system says which: celery, django, dramatiq, rq). Values are scalars or lists of scalars. */
+                /** @description Namespaced attributes (http.*, db.*, cache.*, code.*, user.*, task.*, signal.*, exception.*). task.* is shared by every task queue (task.system says which: celery, django, dramatiq, rq). Values are scalars or lists of scalars. */
                 attrs: {
+                    /** @description On a signal span and on each of its receivers' spans: the signal's dotted path, e.g. "django.db.models.signals.post_save". The signal span's name is Django's own signal by its name ("post_save"), any other by this path. */
+                    "signal.name"?: string;
+                    /** @description On a signal span: who sent it, a model by its label ("auth.Group"), any other class by its dotted path. Absent for a send with no sender. */
+                    "signal.sender"?: string;
+                    /** @description On a signal span: the dotted path of each receiver it ran, in order. Each receiver is a function span under it. */
+                    "signal.receivers"?: string[];
+                    /** @description On a signal span: true for send_robust() and asend_robust(), which catch what a receiver raises. A failed receiver's span is then an error while the trace stays ok. */
+                    "signal.robust"?: boolean;
+                    /** @description On a trace: the sends nobody received, which make no span, once per signal and sender with how many times it was sent, e.g. "pre_save auth.Group: 3". */
+                    "signal.unreceived"?: string[];
+                    /** @description On a span that raised (a signal's receiver): the qualified exception class, e.g. "builtins.ConnectionError". */
+                    "exception.type"?: string;
+                    /** @description On a span that raised: the exception's message, cut at 1000 characters. */
+                    "exception.message"?: string;
+                } & {
                     [key: string]: (string | number | boolean | null) | (string | number | boolean | null)[];
                 };
                 span: {

@@ -602,6 +602,155 @@ function bookList(): Doc {
   return doc;
 }
 
+/**
+ * An order placed, as the Python SDK records Django's signals: post_save with two receivers (one updates the stock, one
+ * fails under send_robust(): the trace stays ok), m2m_changed, a project signal sent three times in a loop, Django's
+ * user_logged_in sent from its own code, and the sends nobody received.
+ */
+function signals(): Doc {
+  const doc = trace(
+    "http",
+    "POST /orders/",
+    {
+      ...SHOP,
+      "http.method": "POST",
+      "http.path": "/orders/",
+      "http.route": "/orders/",
+      "http.status_code": 201,
+      "code.view": "shop.views.place_order",
+      "signal.unreceived": ["pre_save shop.Order: 3", "pre_delete auth.Group: 1"],
+    },
+    { duration: 60_000 },
+  );
+  const id = String(doc["id"]);
+  const spans = doc["spans"] as Doc[];
+  (spans[0] as Doc)["duration"] = 60_000;
+  const span = (suffix: string, parent: string, kind: string, name: string, at: [number, number], attrs: Doc): Doc => ({
+    id: `${id}${suffix}`,
+    parent_id: `${id}${parent}`,
+    kind,
+    name,
+    start: at[0],
+    duration: at[1],
+    status: "ok",
+    attrs,
+  });
+  const send = (suffix: string, name: string, at: [number, number], attrs: Doc) =>
+    span(suffix, "V", "signal", name.startsWith("shop.") ? name : name.slice(name.lastIndexOf(".") + 1), at, {
+      "signal.name": name,
+      ...attrs,
+    });
+  const receiver = (suffix: string, parent: string, path: string, line: number, at: [number, number], signal: string) =>
+    span(suffix, parent, "function", path, at, {
+      "code.function": path,
+      "code.filepath": path.startsWith("django.") ? "django/contrib/auth/models.py" : "shop/receivers.py",
+      "code.lineno": line,
+      "signal.name": signal,
+    });
+  const query = (
+    suffix: string,
+    parent: string,
+    name: string,
+    statement: string,
+    at: [number, number],
+    origin: string,
+  ) =>
+    span(suffix, parent, "sql", name, at, {
+      "db.alias": "default",
+      "db.system": "postgresql",
+      "db.statement": statement,
+      "code.origin": origin,
+    });
+  const saved = "django.db.models.signals.post_save";
+  const placed = "shop.signals.order_placed";
+  spans.push(
+    span("V", "R", "view", "shop.views.place_order", [500, 58_000], { "code.view": "shop.views.place_order" }),
+    query(
+      "I",
+      "V",
+      "INSERT shop_order",
+      'INSERT INTO "shop_order" ("total") VALUES (%s)',
+      [1_000, 800],
+      "shop/views.py:28 in place_order",
+    ),
+    send("S", saved, [2_000, 20_000], {
+      "signal.sender": "shop.Order",
+      "signal.receivers": ["shop.receivers.update_stock", "shop.receivers.notify_warehouse"],
+      "signal.robust": true,
+      "code.origin": "shop/views.py:28 in place_order",
+    }),
+    receiver("S1", "S", "shop.receivers.update_stock", 14, [2_100, 8_000], saved),
+    query(
+      "S1Q",
+      "S1",
+      "UPDATE shop_stock",
+      'UPDATE "shop_stock" SET "count" = "count" - 1',
+      [3_000, 5_000],
+      "shop/receivers.py:17 in update_stock",
+    ),
+    {
+      ...receiver("S2", "S", "shop.receivers.notify_warehouse", 21, [10_500, 11_000], saved),
+      status: "error",
+      attrs: {
+        "code.function": "shop.receivers.notify_warehouse",
+        "code.filepath": "shop/receivers.py",
+        "code.lineno": 21,
+        "signal.name": saved,
+        "exception.type": "builtins.ConnectionError",
+        "exception.message": "warehouse offline",
+      },
+    },
+    send("M", "django.db.models.signals.m2m_changed", [23_000, 3_000], {
+      "signal.sender": "shop.Order_tags",
+      "signal.receivers": ["shop.receivers.tags_changed"],
+      "code.origin": "shop/views.py:31 in place_order",
+    }),
+    receiver("M1", "M", "shop.receivers.tags_changed", 30, [23_100, 2_800], "django.db.models.signals.m2m_changed"),
+    ...[0, 1, 2].flatMap((n) => [
+      send(`P${n}`, placed, [27_000 + n * 2_000, 1_500], {
+        "signal.sender": "shop.Order",
+        "signal.receivers": ["shop.receivers.email_customer"],
+        "code.origin": "shop/views.py:35 in place_order",
+      }),
+      receiver(`P${n}R`, `P${n}`, "shop.receivers.email_customer", 40, [27_100 + n * 2_000, 1_300], placed),
+    ]),
+    send("L", "django.contrib.auth.signals.user_logged_in", [34_000, 4_000], {
+      "signal.sender": "auth.User",
+      "signal.receivers": ["django.contrib.auth.models.update_last_login"],
+      "code.origin": null,
+      "code.caller": "django/contrib/auth/__init__.py:152 in login",
+    }),
+    receiver(
+      "L1",
+      "L",
+      "django.contrib.auth.models.update_last_login",
+      19,
+      [34_100, 3_800],
+      "django.contrib.auth.signals.user_logged_in",
+    ),
+    query(
+      "L1Q",
+      "L1",
+      "UPDATE auth_user",
+      'UPDATE "auth_user" SET "last_login" = %s',
+      [34_500, 2_000],
+      "django/contrib/auth/models.py:21 in update_last_login",
+    ),
+  );
+  doc["logs"] = [
+    {
+      time: 21_600,
+      level: "error",
+      logger: "django.dispatch",
+      message: "Error calling notify_warehouse in Signal.send_robust() (warehouse offline)",
+      span_id: `${id}S`,
+      exception: null,
+      attrs: {},
+    },
+  ];
+  return doc;
+}
+
 /** What the Python SDK says about the app in its hello: Django's settings, masked, and the versions it runs on. */
 const SHOP_APP = {
   settings: {
@@ -665,6 +814,7 @@ export default async function seed(): Promise<void> {
     profiled(),
     adminList(),
     bookList(),
+    signals(),
     ...chain(),
     ...chord(),
     ...dependencies(),

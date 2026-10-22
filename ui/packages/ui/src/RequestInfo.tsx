@@ -6,6 +6,7 @@ import { GraphqlCode } from "./GraphqlCode";
 import { grouped, LinkedTrace, StateBadge, tracesRow } from "./LinkedTrace";
 import { handlerFullName, handlerWord } from "./lib/handler";
 import { traceRuntime } from "./lib/runtime";
+import { unreceived } from "./lib/signals";
 import { linkProps, type TraceLinks } from "./links";
 import { type PropRow, PropTable } from "./PropTable";
 import { MethodBadge, RoutePath, StatusBadge } from "./primitives";
@@ -63,6 +64,23 @@ function droppedRows(attrs: Attrs): PropRow[] {
     {
       label: "Not recorded",
       value: <span className="text-warn">{parts.join(" and ")}: over the limit of one trace</span>,
+    },
+  ];
+}
+
+/** The signals sent with no receiver: no span each, a count the SDK keeps (`signal.unreceived`). */
+function unreceivedRows(attrs: Attrs): PropRow[] {
+  const sends = unreceived(attrs).join(", ");
+  if (!sends) return [];
+  return [
+    {
+      label: "Sent with no receiver",
+      value: (
+        <span className="text-muted-foreground" title={sends}>
+          {sends}
+        </span>
+      ),
+      mono: true,
     },
   ];
 }
@@ -301,6 +319,7 @@ function ownRows(trace: Trace, hero: boolean, related: Related | undefined, link
     ...appRows(attrs, links),
     ...runtimeRows(attrs),
     ...droppedRows(attrs),
+    ...unreceivedRows(attrs),
     ...clockRows(trace),
     { label: "Started", value: new Date(trace.start / 1000).toLocaleString() },
     ...(hero ? [] : [{ label: "Duration", value: duration(trace.duration) }]),

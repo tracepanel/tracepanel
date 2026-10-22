@@ -547,7 +547,8 @@ sql app.sqlite3 · ×1 in 1 trace · up to 1 per trace · total 599 ms · slowes
 
     assert_eq!(
         tool(&server, "search_logs", json!({"query": "level>=warning"})).await.0,
-        "logs (2, newest first):
+        "logs (3, newest first):
+<ago> error django.dispatch: Error calling notify_warehouse in Signal.send_robust() (warehouse offline) · POST /checkout/ (01M4GPD7Q0K3VJ6TN8C2XWB4FR)
 <ago> error django.request: Internal Server Error: /error/ · GET /error/ (01M4GPC3BF07PDY3T2QJEPN5YZ)
 <ago> warning app.api: report scanned 2000000 rows · GET /api/report (01M4GPB3578QTR3FS1P9G47DTX)"
     );

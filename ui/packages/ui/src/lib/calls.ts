@@ -1,14 +1,26 @@
 // Outgoing calls (HTTP, cache) shown like queries: one row per call, and a template that groups the calls a loop
 // makes (`GET api.example.com/users/{id}`), as a statement's fingerprint groups its queries.
 import type { Span } from "../types";
+import { sendTemplate } from "./signals";
 import { SYSTEMS, type System, systemOfSpan } from "./systems";
 
 const SQL = SYSTEMS[0] as System;
 
 /** What a group of similar calls is called: "queries", "Redis commands", "HTTP calls" (one of them, for a count of 1). */
 export function groupNoun(span: Span | undefined, count = 2): string {
-  const system = (span && systemOfSpan(span)) ?? SQL;
-  return count === 1 ? system.one : system.many;
+  const nouns = nounsOf(span);
+  return count === 1 ? nouns.one : nouns.many;
+}
+
+const SENDS = { one: "send", many: "sends" };
+
+/** A signal's sends, or a system's calls. */
+function nounsOf(span: Span | undefined): { one: string; many: string } {
+  return span?.kind === "signal" ? SENDS : systemNouns(span);
+}
+
+function systemNouns(span: Span | undefined): System {
+  return (span && systemOfSpan(span)) ?? SQL;
 }
 
 const ID_SEGMENT = /^(\d+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{16,})$/i;
@@ -36,14 +48,15 @@ function endpointTemplate(name: string): string {
   return slash < 0 ? name : `${method} ${target.slice(0, slash)}${pathTemplate(target.slice(slash))}`;
 }
 
-const TEMPLATES: Record<string, (name: string) => string> = {
-  redis: keyTemplate,
-  cache: keyTemplate,
-  "http.client": endpointTemplate,
+const TEMPLATES: Record<string, (span: Span) => string> = {
+  redis: (span) => keyTemplate(span.name),
+  cache: (span) => keyTemplate(span.name),
+  "http.client": (span) => endpointTemplate(span.name),
+  signal: sendTemplate,
 };
 
-/** What a call is a repeat of: an HTTP call's endpoint, a key pattern, any other span's name. */
+/** What a call is a repeat of: an HTTP call's endpoint, a key pattern, a signal and its sender, any other's name. */
 export function callTemplate(span: Span | undefined): string {
   if (span === undefined) return "";
-  return (TEMPLATES[span.kind] ?? String)(span.name);
+  return TEMPLATES[span.kind]?.(span) ?? span.name;
 }

@@ -1,0 +1,167 @@
+{
+  "attrs": {
+    "code.view": "shop.views.checkout",
+    "http.method": "POST",
+    "http.path": "/checkout/",
+    "http.route": "/checkout/",
+    "http.status_code": 201,
+    "process.runtime.name": "cpython",
+    "process.runtime.version": "3.13.1",
+    "service.name": "shop",
+    "service.role": "web",
+    "signal.unreceived": [
+      "pre_save shop.Order: 1"
+    ],
+    "telemetry.sdk.language": "python",
+    "tracepanel.framework": "Django 5.2.18",
+    "user.id": null
+  },
+  "duration": 9800,
+  "errors": [],
+  "id": "01M4GPD7Q0K3VJ6TN8C2XWB4FR",
+  "issues": [],
+  "kind": "http",
+  "links": [],
+  "logs": [
+    {
+      "attrs": {
+        "code.filepath": ".venv/lib/python3.13/site-packages/django/dispatch/dispatcher.py",
+        "code.function": "send_robust",
+        "code.lineno": 287,
+        "log.template": "Error calling %s in Signal.send_robust() (%s)",
+        "process.pid": 20678,
+        "thread.name": "Thread-6 (process_request_thread)"
+      },
+      "exception": null,
+      "level": "error",
+      "logger": "django.dispatch",
+      "message": "Error calling notify_warehouse in Signal.send_robust() (warehouse offline)",
+      "span_id": "01M4GPD7Q1T0V1W2X3Y4Z5A6B7",
+      "time": 1791561700128000
+    }
+  ],
+  "name": "POST /checkout/",
+  "spans": [
+    {
+      "attrs": {},
+      "duration": 9800,
+      "id": "01M4GPD7Q0Y1A2B3C4D5E6F7G8",
+      "kind": "http",
+      "name": "POST /checkout/",
+      "parent_id": null,
+      "start": 1791561700120000,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.view": "shop.views.checkout"
+      },
+      "duration": 9400,
+      "id": "01M4GPD7Q0MV9W8X7Y6Z5A4B3C",
+      "kind": "view",
+      "name": "shop.views.checkout",
+      "parent_id": "01M4GPD7Q0Y1A2B3C4D5E6F7G8",
+      "start": 1791561700120200,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "shop/views.py:41 in checkout",
+        "code.template": null,
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "INSERT INTO \"shop_order\" (\"sku\", \"quantity\") VALUES (%s, %s)",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [],
+        "db.params_hash": "5f1c0a9e2b7d",
+        "db.statement": "INSERT INTO \"shop_order\" (\"sku\", \"quantity\") VALUES (%s, %s)",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 410,
+      "id": "01M4GPD7Q1J2K3M4N5P6Q7R8S9",
+      "kind": "sql",
+      "name": "INSERT shop_order",
+      "parent_id": "01M4GPD7Q0MV9W8X7Y6Z5A4B3C",
+      "start": 1791561700120600,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "shop/views.py:43 in checkout",
+        "signal.name": "shop.signals.stock_changed",
+        "signal.receivers": [
+          "shop.receivers.reserve_stock",
+          "shop.receivers.notify_warehouse"
+        ],
+        "signal.robust": true,
+        "signal.sender": "shop.Order"
+      },
+      "duration": 6900,
+      "id": "01M4GPD7Q1T0V1W2X3Y4Z5A6B7",
+      "kind": "signal",
+      "name": "shop.signals.stock_changed",
+      "parent_id": "01M4GPD7Q0MV9W8X7Y6Z5A4B3C",
+      "start": 1791561700121200,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.filepath": "shop/receivers.py",
+        "code.function": "shop.receivers.reserve_stock",
+        "code.lineno": 12,
+        "signal.name": "shop.signals.stock_changed"
+      },
+      "duration": 2100,
+      "id": "01M4GPD7Q2C8D9E0F1G2H3J4K5",
+      "kind": "function",
+      "name": "shop.receivers.reserve_stock",
+      "parent_id": "01M4GPD7Q1T0V1W2X3Y4Z5A6B7",
+      "start": 1791561700121300,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "shop/receivers.py:15 in reserve_stock",
+        "code.template": null,
+        "db.alias": "default",
+        "db.client": "django",
+        "db.fingerprint": "UPDATE \"shop_stock\" SET \"reserved\" = (\"shop_stock\".\"reserved\" + %s) WHERE \"shop_stock\".\"sku\" = %s",
+        "db.many": false,
+        "db.namespace": "db.sqlite3",
+        "db.params": [],
+        "db.params_hash": "5f1c0a9e2b7d",
+        "db.statement": "UPDATE \"shop_stock\" SET \"reserved\" = (\"shop_stock\".\"reserved\" + %s) WHERE \"shop_stock\".\"sku\" = %s",
+        "db.system": "sqlite",
+        "db.vendor": "sqlite"
+      },
+      "duration": 620,
+      "id": "01M4GPD7Q2M6N7P8Q9R0S1T2V3",
+      "kind": "sql",
+      "name": "UPDATE shop_stock",
+      "parent_id": "01M4GPD7Q2C8D9E0F1G2H3J4K5",
+      "start": 1791561700121500,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.filepath": "shop/receivers.py",
+        "code.function": "shop.receivers.notify_warehouse",
+        "code.lineno": 21,
+        "exception.message": "warehouse offline",
+        "exception.type": "builtins.ConnectionError",
+        "signal.name": "shop.signals.stock_changed"
+      },
+      "duration": 4500,
+      "id": "01M4GPD7Q3W4X5Y6Z7A8B9C0D1",
+      "kind": "function",
+      "name": "shop.receivers.notify_warehouse",
+      "parent_id": "01M4GPD7Q1T0V1W2X3Y4Z5A6B7",
+      "start": 1791561700123500,
+      "status": "error"
+    }
+  ],
+  "start": 1791561700120000,
+  "status": "ok"
+}

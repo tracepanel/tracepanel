@@ -11,11 +11,24 @@ export function handlerWord(attrs: Attrs): "View" | "Handler" {
   return typeof language !== "string" || language === "" || language === "python" ? "View" : "Handler";
 }
 
-/** A span's kind as the call tree names it: the root is the request, the handler's span a view or a handler. */
-export function spanKindLabel(kind: string | undefined, attrs: Attrs): string {
-  if (kind === "http") return "request";
-  if (kind === "view") return handlerWord(attrs).toLowerCase();
-  return kind ?? "";
+/**
+ * A span's kind as the call tree names it: the root is the request, the handler's span a view or a handler, a
+ * function a signal ran (its parent's kind) its receiver.
+ */
+export function spanKindLabel(kind: string | undefined, attrs: Attrs, parentKind?: string | undefined): string {
+  const own = ownKind(kind, parentKind);
+  const word = KIND_WORDS.get(own);
+  return word ? word(attrs) : own;
+}
+
+/** The kinds the call tree says in words of their own. */
+const KIND_WORDS = new Map<string, (attrs: Attrs) => string>([
+  ["http", () => "request"],
+  ["view", (attrs) => handlerWord(attrs).toLowerCase()],
+]);
+
+function ownKind(kind: string | undefined, parentKind: string | undefined): string {
+  return kind === "function" && parentKind === "signal" ? "receiver" : (kind ?? "");
 }
 
 /**
