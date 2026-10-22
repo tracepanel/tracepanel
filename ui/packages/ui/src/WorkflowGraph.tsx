@@ -1,20 +1,18 @@
 import { useId, useMemo } from "react";
 import { duration } from "./format";
-import { StateBadge } from "./LinkedTrace";
 import { linkProps, type TraceLinks } from "./links";
-import { MethodBadge } from "./primitives";
 import type { Related } from "./types";
 
 type WorkflowGraphData = NonNullable<NonNullable<Related["workflow"]>["graph"]>;
 type GraphNode = WorkflowGraphData["nodes"][number];
 type EdgeKind = WorkflowGraphData["edges"][number]["kind"];
 
-const NODE_W = 224;
-const NODE_H = 48;
-const COL_GAP = 48;
-const ROW_GAP = 10;
+const NODE_W = 208;
+const NODE_H = 30;
+const COL_GAP = 28;
+const ROW_GAP = 6;
 const GROUP_PAD = 8;
-const GROUP_HEAD = 22;
+const GROUP_HEAD = 20;
 /** A column's width: a group's frame around a box. */
 const SLOT_W = NODE_W + GROUP_PAD * 2;
 /** How many of a group's tasks are drawn before a "+N more" box that searches for them all. */
@@ -207,24 +205,52 @@ function shortName(node: GraphNode): string {
   return trace.name.split(/[.:]/).pop() || trace.name;
 }
 
-function Badge({ node }: { node: GraphNode }) {
+// A run's state as a dot: green done, red failed, amber retried; grey for anything else.
+const DOT = new Map<string, string>([
+  ["success", "bg-ok"],
+  ["failure", "bg-error"],
+  ["retry", "bg-warn"],
+]);
+
+/** A run's state in a word: failure when its trace failed, else its task state. */
+function stateOf(trace: GraphNode["trace"]): string {
+  return trace.status === "error" ? "failure" : (trace.task_state ?? "").toLowerCase();
+}
+
+/** What starts the box: a request's method, else its state as a dot (in words for a screen reader). */
+function Mark({ node }: { node: GraphNode }) {
   const trace = node.trace;
-  if (trace.kind === "http") return <MethodBadge method={trace.method} />;
-  if (trace.task_state) return <StateBadge state={trace.task_state} />;
-  return <span className="font-mono text-2xs text-muted-foreground uppercase">{trace.kind}</span>;
+  if (trace.kind === "http") {
+    return (
+      <span className="shrink-0 font-mono text-2xs font-semibold text-muted-foreground uppercase">{trace.method}</span>
+    );
+  }
+  return <StateDot state={stateOf(trace)} />;
+}
+
+function StateDot({ state }: { state: string }) {
+  return (
+    <>
+      <span
+        className={`size-2 shrink-0 rounded-full ${DOT.get(state) ?? "bg-muted-foreground/50"}`}
+        aria-hidden="true"
+      />
+      <span className="sr-only">{state}</span>
+    </>
+  );
 }
 
 /** What else to know at a glance: how long it took, how many runs (retries), which callback it is. */
 function Details({ node }: { node: GraphNode }) {
   const parts = [
     duration(node.trace.duration),
-    ...(node.runs > 1 ? [`${node.runs} runs`] : []),
+    ...(node.runs > 1 ? [`×${node.runs}`] : []),
     ...(node.callback ? [node.callback] : []),
   ];
-  return <span className="truncate text-xs text-muted-foreground tabular-nums">{parts.join(" · ")}</span>;
+  return <span className="ml-auto shrink-0 text-2xs text-muted-foreground tabular-nums">{parts.join(" · ")}</span>;
 }
 
-const BOX = "absolute flex flex-col justify-center gap-0.5 rounded-md border bg-card px-2.5";
+const BOX = "absolute flex items-center gap-1.5 rounded-md border px-2 text-xs";
 
 function boxStyle(card: Card) {
   return { left: card.x, top: card.y, width: NODE_W, height: NODE_H };
@@ -240,17 +266,17 @@ function MoreBox({
   more: NonNullable<Card["more"]>;
   links: TraceLinks | undefined;
 }) {
-  const body = <span className="text-sm text-muted-foreground">+{more.count} more</span>;
+  const body = <span className="text-muted-foreground">+{more.count} more</span>;
   if (!links?.search) {
     return (
-      <div className={BOX} style={boxStyle(card)}>
+      <div className={`${BOX} bg-card`} style={boxStyle(card)}>
         {body}
       </div>
     );
   }
   return (
     <a
-      className={`${BOX} hover:bg-accent`}
+      className={`${BOX} bg-card hover:bg-accent`}
       style={boxStyle(card)}
       title={`All runs of group ${more.group}`}
       {...linkProps(links, links.search(`group:${more.group}`))}
@@ -260,10 +286,9 @@ function MoreBox({
   );
 }
 
-/** A run's border: the brand's for the run on screen, red for one that failed. */
-function toneOf(node: GraphNode, here: boolean): string {
-  if (here) return "border-brand ring-1 ring-brand";
-  return node.trace.status === "error" ? "border-error/50" : "";
+/** The run on screen is filled with the brand's tint, no outline; a failed one says so with its dot. */
+function toneOf(here: boolean): string {
+  return here ? "bg-brand-soft font-semibold text-foreground" : "bg-card";
 }
 
 /** Its full name and task id, for the box's title. */
@@ -280,10 +305,8 @@ function traceLink(links: TraceLinks | undefined, node: GraphNode) {
 function RunBody({ node }: { node: GraphNode }) {
   return (
     <>
-      <span className="flex min-w-0 items-center gap-1.5">
-        <Badge node={node} />
-        <span className="truncate font-mono text-sm">{shortName(node)}</span>
-      </span>
+      <Mark node={node} />
+      <span className="min-w-0 truncate font-mono">{shortName(node)}</span>
       <Details node={node} />
     </>
   );
@@ -301,7 +324,7 @@ function RunBox({
   here: boolean;
   links: TraceLinks | undefined;
 }) {
-  const props = { className: `${BOX} ${toneOf(node, here)}`, style: boxStyle(card), title: titleOf(node) };
+  const props = { className: `${BOX} ${toneOf(here)}`, style: boxStyle(card), title: titleOf(node) };
   const link = here ? undefined : traceLink(links, node);
   if (!link) {
     return (
