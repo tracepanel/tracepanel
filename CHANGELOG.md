@@ -131,6 +131,8 @@
   all now reads "<1%" or ">99%", wherever the console and the panel show a
   percent (the tiles of every page, a cache's hit rate, the time breakdown,
   a profile).
+- A count of one reads as one: a task's group of one says "1 task" in its
+  facts and its workflow graph, and an endpoint in the search "1 call".
 
 ## 0.4.1 (2026-10-21)
 

@@ -19,6 +19,7 @@ export { ISSUE_LABELS } from "./labels";
 export { queryFingerprint } from "./lib/fingerprint";
 export { isTyping } from "./lib/keys";
 export { percent } from "./lib/percent";
+export { plural } from "./lib/plural";
 export { type RuntimeKind, runtimeKind, runtimeName } from "./lib/runtime";
 export { linkProps, type TraceLinks } from "./links";
 export { MailList } from "./MailList";
