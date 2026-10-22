@@ -128,6 +128,10 @@
 
 ### Fixed
 
+- The GraphQL page's By operation table shows an operation's type whole:
+  `mutation` and `subscription` were cut short. A row with no type, a
+  document that didn't parse, has no type pill and is named as the SDK names
+  it (`syntax error`), not `query` and `anonymous`.
 - A worker that stopped leaves the Tasks page's Now within 90 seconds, not
   an hour later as an idle worker. Workers beat every 30 seconds, and three
   missed heartbeats drop a worker and the tasks it ran. A worker that stops
