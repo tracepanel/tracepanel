@@ -2,6 +2,7 @@
 // coloured, a long one folded, each copied as it came; a trace's attributes the same in its Request tab and on its
 // call tree's request row.
 import type { Locator, Page } from "@playwright/test";
+import { pythonLiteral } from "../../packages/ui/src/lib/pyliteral.ts";
 import { isRepr, prettyRepr, shapeOf } from "../../packages/ui/src/lib/values.ts";
 import { traceId } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
@@ -167,12 +168,31 @@ test("a task's long result is laid out and coloured in its facts, whole, not cut
   await page.goto(`/#/t/${await traceId("shop.tasks.send_reminder")}?tab=request`);
   const facts = page.getByRole("main");
   // The facts' Result, not the same value again in the attributes below.
-  const result = facts.locator("dd").filter({ hasText: "'List 0': 100" }).first();
+  // Shown as the JSON the Python literal stands for.
+  const result = facts.locator("dd").filter({ hasText: '"List 0": 100' }).first();
 
-  await expect(result).toContainText("'List 4': 100");
+  await expect(result).toContainText('"List 4": 100');
   await result.getByRole("button", { name: /^Show all/ }).click();
 
-  await expect(result).toContainText("'List 11': 100");
+  await expect(result).toContainText('"List 11": 100');
   await expect(result.locator(".token.string").first()).toBeVisible();
   expect(await result.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+});
+
+test("a task's arguments and result, Python literals, read as the JSON they stand for", () => {
+  expect(pythonLiteral("()")).toEqual([]);
+  expect(pythonLiteral("(42, 'a')")).toEqual([42, "a"]);
+  expect(pythonLiteral("{'attempts': 3, 'ok': True, 'none': None, 'f': -1.5}")).toEqual({
+    attempts: 3,
+    ok: true,
+    none: null,
+    f: -1.5,
+  });
+  expect(pythonLiteral("[{'to': 'ann@example.com'}, (1,)]")).toEqual([{ to: "ann@example.com" }, [1]]);
+  expect(pythonLiteral("'it\\'s'")).toBe("it's");
+
+  // Not a literal, whole: shown as it came.
+  expect(pythonLiteral("<User: ann>")).toBeUndefined();
+  expect(pythonLiteral("{'a': 1, 'b': ...")).toBeUndefined();
+  expect(pythonLiteral("datetime.date(2026, 10, 22)")).toBeUndefined();
 });

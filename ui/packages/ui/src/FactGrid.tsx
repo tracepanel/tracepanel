@@ -8,35 +8,32 @@ import type { PropRow } from "./PropTable";
  * its result) follow them, a line each across the box, laid out whole.
  */
 export function FactGrid({ rows }: { rows: readonly PropRow[] }) {
-  const short = rows.filter((row) => !row.wide);
-  const wide = rows.filter((row) => row.wide);
+  // Short facts first, two to a line where there is room; the wide ones after them, a line each, in the same columns.
+  const ordered = [...rows.filter((row) => !row.wide), ...rows.filter((row) => row.wide)];
   return (
-    <div className="grid gap-1 rounded-lg border bg-muted/30 px-3 py-2.5 text-sm">
-      <dl className="m-0 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-1 @2xl:grid-cols-[max-content_minmax(0,1fr)_max-content_minmax(0,1fr)]">
-        {short.map((row) => (
-          <Fact key={row.id ?? row.label} row={row} />
-        ))}
-      </dl>
-      {wide.length ? (
-        <dl className="m-0 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-1">
-          {wide.map((row) => (
-            <Fact key={row.id ?? row.label} row={row} />
-          ))}
-        </dl>
-      ) : null}
-    </div>
+    <dl className="m-0 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-1 rounded-lg border bg-muted/30 px-3 py-2.5 text-sm @2xl:grid-cols-[max-content_minmax(0,1fr)_max-content_minmax(0,1fr)]">
+      {ordered.map((row) => (
+        <Fact key={row.id ?? row.label} row={row} />
+      ))}
+    </dl>
   );
 }
 
-const WIDE = { cell: "items-start", value: "min-w-0 flex-1 py-0.5" };
-const SHORT = { cell: "items-center", value: "min-w-0 truncate" };
+// A wide fact starts its own line, under the first column of names, and takes the rest of it.
+const WIDE = { name: "col-start-1", cell: "items-start @2xl:col-span-3", value: "min-w-0 flex-1 py-0.5" };
+const SHORT = { name: "", cell: "items-center", value: "min-w-0 truncate" };
 
 /** One fact: its name, its value (whole and wrapped when wide, else cut to a line) and, on hover, its copy button. */
 function Fact({ row }: { row: PropRow }) {
   const look = row.wide ? WIDE : SHORT;
   return (
     <div className="group/fact contents">
-      <dt className="flex min-h-6 items-center self-start text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+      <dt
+        className={cn(
+          "flex min-h-6 items-center self-start text-[11px] font-medium tracking-wide text-muted-foreground uppercase",
+          look.name,
+        )}
+      >
         {row.label}
       </dt>
       <dd className={cn("m-0 flex min-h-6 min-w-0 gap-1", look.cell, { "font-mono text-xs": row.mono })}>

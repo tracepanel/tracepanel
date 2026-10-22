@@ -1,3 +1,4 @@
+import { shownValue } from "./lib/pyliteral";
 import { NAME_VALUE_COLUMNS, NameValues } from "./NameValues";
 import type { Attrs } from "./types";
 
@@ -15,7 +16,7 @@ function grouped(attrs: Attrs): [string, { name: string; value: unknown }[]][] {
   const groups = new Map<string, { name: string; value: unknown }[]>();
   for (const [key, value] of Object.entries(attrs).sort(([a], [b]) => a.localeCompare(b))) {
     const [space, name] = namespaced(key);
-    groups.set(space, [...(groups.get(space) ?? []), { name, value }]);
+    groups.set(space, [...(groups.get(space) ?? []), { name, value: shownValue(key, value) }]);
   }
   return [...groups].sort(([a], [b]) => Number(a === "other") - Number(b === "other"));
 }
