@@ -158,6 +158,10 @@
   `[names]`, `TOP` and `@P1`.
 - A count of one reads as one: a task's group of one says "1 task" in its
   facts and its workflow graph, and an endpoint in the search "1 call".
+- Agents started at the same moment on one store, as an app's workers start
+  them when they fork together, no longer leave two running: the first holds
+  `agent.lock` in the store's directory, the others exit at once with status
+  3, and every process sends to that one, which the console shows live.
 
 ## 0.4.1 (2026-10-21)
 
