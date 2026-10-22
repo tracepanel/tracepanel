@@ -216,7 +216,7 @@
     },
     "attrs": {
       "type": "object",
-      "description": "Namespaced attributes (http.*, db.*, cache.*, code.*, user.*, task.*, signal.*, exception.*). task.* is shared by every task queue (task.system says which: celery, django, dramatiq, rq). Values are scalars or lists of scalars.",
+      "description": "Namespaced attributes (http.*, db.*, cache.*, code.*, user.*, task.*, signal.*, exception.*). task.* is shared by every task queue (task.system says which: celery, django, django-q, dramatiq, huey, rq, channels). Values are scalars or lists of scalars.",
       "propertyNames": {
         "pattern": "^[a-z][a-z0-9_]*(\\.[a-z0-9_]+)+$"
       },

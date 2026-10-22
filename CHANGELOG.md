@@ -82,6 +82,9 @@
 
 ### Changed
 
+- Tasks from Huey, django-q2 and Channels workers are named as their
+  projects name them in a run's System column and filters: Huey, django-q2,
+  Channels. The API schema lists them among the task systems.
 - The Tasks page's Now shows a task's arguments as the JSON its trace shows,
   `[42] {"to": "ann"}`, not as Python wrote them, and empty ones not at all.
   A long task name is cut at its start, so its handler stays in sight.
