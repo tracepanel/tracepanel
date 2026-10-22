@@ -223,17 +223,23 @@ export interface RequestInfoProps {
   hero?: boolean | undefined;
 }
 
+/**
+ * The traces this one is linked to, each once: a task a broker delivered was both enqueued and sent by the same
+ * request, and it is listed under the first of those names only.
+ */
 function relatedRows(related: Related | undefined, links: TraceLinks | undefined, taken: Set<string>): PropRow[] {
   if (!related) return [];
-  const one = (label: string, trace: Related["enqueued_by"]): PropRow[] =>
-    trace && !taken.has(trace.id)
-      ? grouped([trace]).map((group) => ({ label, value: <LinkedTrace group={group} links={links} /> }))
-      : [];
+  const shown = new Set(taken);
+  const one = (label: string, trace: Related["enqueued_by"]): PropRow[] => {
+    if (!trace || shown.has(trace.id)) return [];
+    shown.add(trace.id);
+    return grouped([trace]).map((group) => ({ label, value: <LinkedTrace group={group} links={links} /> }));
+  };
   const many = (single: string, plural: string, all: Related["enqueued"]): PropRow[] =>
     tracesRow(
       single,
       plural,
-      all.filter((trace) => !taken.has(trace.id)),
+      all.filter((trace) => !shown.has(trace.id)),
       links,
     );
   return [

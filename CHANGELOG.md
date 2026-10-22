@@ -135,6 +135,9 @@
 
 ### Fixed
 
+- A trace a task or message is linked to in two ways, a request that both
+  enqueued and sent it through a broker, is listed once in Related traces,
+  as what enqueued it, not again as what sent it.
 - The GraphQL page's By operation table shows an operation's type whole:
   `mutation` and `subscription` were cut short. A row with no type, a
   document that didn't parse, has no type pill and is named as the SDK names
