@@ -10,7 +10,6 @@ import {
   type KeyboardEvent,
   type PointerEvent,
   type ReactNode,
-  useCallback,
   useLayoutEffect,
   useRef,
   useState,
@@ -26,7 +25,7 @@ import {
   DropdownMenuTrigger,
 } from "./components/ui/dropdown-menu";
 import { TableHead, TableHeader, TableRow } from "./components/ui/table";
-import { useCloseOnBlur } from "./hooks/useCloseOnBlur";
+import { useMenuOpen } from "./hooks/useCloseOnBlur";
 import type { ColumnSpec, Columns } from "./hooks/useColumns";
 
 /**
@@ -536,9 +535,7 @@ function ColumnsMenu({
   children?: ReactNode;
 }) {
   // In the panel a click on the page doesn't reach the menu: it closes when the frame loses focus.
-  const [open, setOpen] = useState(false);
-  const close = useCallback(() => setOpen(false), []);
-  useCloseOnBlur(open, close);
+  const [open, setOpen] = useMenuOpen();
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
