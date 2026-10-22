@@ -122,6 +122,11 @@
 
 ### Fixed
 
+- A worker that stopped leaves the Tasks page's Now within 90 seconds, not
+  an hour later as an idle worker. Workers beat every 30 seconds, and three
+  missed heartbeats drop a worker and the tasks it ran. A worker that stops
+  cleanly says so in a `worker_stopped` task event and leaves at once, with
+  any task still running on it.
 - A group page's Time button is its own size again, not stretched across
   the page.
 - The slowest and failing lists above a section's table no longer widen the

@@ -216,7 +216,7 @@ export interface paths {
         };
         /**
          * Tasks in flight (queued, running, waiting to be retried) and the workers seen, from the apps' task events.
-         * @description A task's trace reaches the store when the task ends; until then the apps' task events say where it is. The agent keeps them in memory, not in the store: a task that finishes leaves this list, and its trace is listed under /tasks. A running task whose worker stopped sending heartbeats for two minutes is dropped, a queued or retrying one after an hour without news, a worker not heard from for an hour too. An app whose events reach the agent says `live_tasks` in its hello (see /capabilities).
+         * @description A task's trace reaches the store when the task ends; until then the apps' task events say where it is. The agent keeps them in memory, not in the store: a task that finishes leaves this list, and its trace is listed under /tasks. Workers send a heartbeat every 30 seconds: a worker not heard from for 90 seconds (three heartbeats) is dropped, and so is a running task whose worker sent no heartbeat with it for as long. A worker that stops cleanly says so (`worker_stopped`) and leaves at once, with the tasks it still ran. A queued or retrying task is dropped after an hour without news. An app whose events reach the agent says `live_tasks` in its hello (see /capabilities).
          */
         get: operations["liveTasks"];
         put?: never;
