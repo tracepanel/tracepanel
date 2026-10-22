@@ -132,6 +132,11 @@
   `mutation` and `subscription` were cut short. A row with no type, a
   document that didn't parse, has no type pill and is named as the SDK names
   it (`syntax error`), not `query` and `anonymous`.
+- A worker that stopped leaves the Tasks page's Now within 90 seconds, not
+  an hour later as an idle worker. Workers beat every 30 seconds, and three
+  missed heartbeats drop a worker and the tasks it ran. A worker that stops
+  cleanly says so in a `worker_stopped` task event and leaves at once, with
+  any task still running on it.
 - A trace's tabs never show cut. In the panel, docked at the bottom or on
   the right, and in the console, the tabs that don't fit go into a More menu
   at the row's end, with their counts, and a dot on it when one of them has
@@ -157,6 +162,10 @@
   `[names]`, `TOP` and `@P1`.
 - A count of one reads as one: a task's group of one says "1 task" in its
   facts and its workflow graph, and an endpoint in the search "1 call".
+- Agents started at the same moment on one store, as an app's workers start
+  them when they fork together, no longer leave two running: the first holds
+  `agent.lock` in the store's directory, the others exit at once with status
+  3, and every process sends to that one, which the console shows live.
 
 ## 0.4.1 (2026-10-21)
 
