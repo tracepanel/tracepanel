@@ -128,6 +128,11 @@
 
 ### Fixed
 
+- A worker that stopped leaves the Tasks page's Now within 90 seconds, not
+  an hour later as an idle worker. Workers beat every 30 seconds, and three
+  missed heartbeats drop a worker and the tasks it ran. A worker that stops
+  cleanly says so in a `worker_stopped` task event and leaves at once, with
+  any task still running on it.
 - A trace's tabs never show cut. In the panel, docked at the bottom or on
   the right, and in the console, the tabs that don't fit go into a More menu
   at the row's end, with their counts, and a dot on it when one of them has
