@@ -50,7 +50,7 @@ function Settings({ settings, filter }: { settings: Record<string, string> | nul
   const rows = matching(settings, filter);
   if (!rows.length)
     return <p className="px-3 py-2 text-xs text-muted-foreground">No setting matches “{filter.trim()}”.</p>;
-  return <NameValues fold rows={rows.map(([name, value]) => ({ name, value }))} />;
+  return <NameValues rows={rows.map(([name, value]) => ({ name, value }))} />;
 }
 
 /** What the app runs on, then the agent that serves this console. */
