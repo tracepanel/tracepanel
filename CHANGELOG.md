@@ -4,6 +4,14 @@
 
 ### Added
 
+- Queries a template made as it rendered say so. In the DB tab and the call
+  tree such a query has a chip with its template and line
+  (`template blog/list.html:4`), its "Called from" names the view's line it
+  was rendered from, and its details have a Template row. An N+1 a template
+  made opens its hint with the template and its line, then the fix:
+  `select_related()` for a lookup by key, `prefetch_related()` for related
+  rows, or for an ORM the agent doesn't know, loading them in the view. The
+  line comes from `code.template_line`, which the Python SDK records.
 - An app's settings and versions, as a debug toolbar shows them. The panel
   has an App tab after Request: the settings of the app that served the
   request, a filter above them, secrets masked by the SDK as `********`, and

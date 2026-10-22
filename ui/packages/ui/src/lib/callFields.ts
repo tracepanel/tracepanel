@@ -30,6 +30,14 @@ const OPERATION: Field = [
 ];
 const DATABASE: Field = ["Database", ["db.namespace", "db.name"]];
 
+/** The template a query ran in as it rendered, with its line when the SDK knows it: `blog/list.html:4`. */
+export function templatePlace(attrs: Readonly<Attrs>): string | null {
+  const name = attrs["code.template"];
+  if (typeof name !== "string" || !name) return null;
+  const line = attrs["code.template_line"];
+  return typeof line === "number" ? `${name}:${line}` : name;
+}
+
 const BY_SYSTEM = new Map<string, readonly Field[]>([
   [
     "sql",
@@ -38,6 +46,8 @@ const BY_SYSTEM = new Map<string, readonly Field[]>([
       ["Engine", ["db.system.name", "db.system", "db.vendor"]],
       ["Rows", ["db.response.returned_rows"]],
       SERVER,
+      // The template that made the query as it rendered.
+      ["Template", ["code.template"], (value, attrs) => templatePlace(attrs) ?? String(value)],
     ],
   ],
   [

@@ -4,9 +4,10 @@ import { useMemo, useState } from "react";
 import { ExplainView } from "./ExplainView";
 import { duration } from "./format";
 import { focusMark, useScrollToFocus } from "./hooks/useScrollToFocus";
+import { templatePlace } from "./lib/callFields";
 import { queryFingerprint } from "./lib/fingerprint";
 import { linkProps, type TraceLinks } from "./links";
-import { AliasChip, IssueChip } from "./primitives";
+import { AliasChip, IssueChip, TemplateChip } from "./primitives";
 import { SqlCode } from "./SqlCode";
 import type { ExplainPlan, IssueKind, Span } from "./types";
 
@@ -77,6 +78,7 @@ function Row({
   lead,
   name,
   alias,
+  from,
   issue,
   share,
   time,
@@ -87,6 +89,8 @@ function Row({
   lead: string;
   name: string;
   alias: unknown;
+  /** The attributes of a query that a template made, for its chip. */
+  from: Span["attrs"] | undefined;
   issue: IssueKind | undefined;
   share: number;
   time: number;
@@ -103,6 +107,7 @@ function Row({
           <span className="flex min-w-0 items-center gap-2 font-mono text-base">
             <span className="truncate">{name}</span>
             <AliasChip value={alias} />
+            {from ? <TemplateChip attrs={from} /> : null}
           </span>
           {issue ? <IssueChip kind={issue} /> : <span />}
           <span className="h-1.5 overflow-hidden rounded-full bg-muted-foreground/15" aria-hidden="true">
@@ -117,10 +122,21 @@ function Row({
 }
 
 /**
- * Where a query was made: in your code, or, for a query no code of yours made (Django's admin, a library), the library
+ * Where a query was made: the template that made it as it rendered, if one did, and in your code, or, for a query no code of yours made (Django's admin, a library), the library
  * code that asked for it, marked as such.
  */
 function CalledFrom({ span, className }: { span: Span; className?: string }) {
+  if (!templatePlace(span.attrs)) return <CalledFromCode span={span} className={className} />;
+  return (
+    <span className={cn("flex min-w-0 items-center gap-2", className)}>
+      <TemplateChip attrs={span.attrs} />
+      <span className="shrink-0 text-muted-foreground">rendered from</span>
+      <CalledFromCode span={span} className="truncate" />
+    </span>
+  );
+}
+
+function CalledFromCode({ span, className }: { span: Span; className?: string | undefined }) {
   const origin = text(span.attrs["code.origin"]);
   if (origin) return <code className={cn("font-mono", className)}>{origin}</code>;
   const caller = text(span.attrs["code.caller"]);
@@ -146,6 +162,30 @@ function LibraryCaller({ caller, className }: { caller: string; className?: stri
         {caller}
       </code>
     </span>
+  );
+}
+
+/** Where each query of a group was made, one line each, with its time. */
+function CalledFromList({ spans, focus }: { spans: readonly Span[]; focus: ReadonlySet<string> | undefined }) {
+  return (
+    <section className="grid gap-2">
+      <Heading>{spans.length === 1 ? "Called from" : `Called ${spans.length} times from`}</Heading>
+      <ol className="m-0 grid list-none overflow-hidden rounded-md border bg-background p-0">
+        {spans.map((span, index) => (
+          <li
+            key={span.id}
+            className={cn(
+              "grid grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-3 border-b px-3 py-1.5 text-sm last:border-b-0",
+              focus?.has(span.id) && "bg-brand-soft",
+            )}
+          >
+            <span className="text-right text-muted-foreground tabular-nums">{index + 1}</span>
+            <CalledFrom span={span} className="truncate" />
+            <span className="tabular-nums">{duration(span.duration)}</span>
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }
 
@@ -191,6 +231,7 @@ export function SqlList({ spans, issueBySpan, focus, onExplain, links }: SqlList
                   lead={`${group.spans.length}×`}
                   name={group.name}
                   alias={first?.attrs["db.alias"]}
+                  from={group.spans.find((span) => templatePlace(span.attrs))?.attrs}
                   issue={group.issue}
                   share={group.total / heaviestGroup}
                   time={group.total}
@@ -207,26 +248,7 @@ export function SqlList({ spans, issueBySpan, focus, onExplain, links }: SqlList
                       load={(analyze) => onExplain(first.id, analyze)}
                     />
                   ) : null}
-                  <section className="grid gap-2">
-                    <Heading>
-                      {group.spans.length === 1 ? "Called from" : `Called ${group.spans.length} times from`}
-                    </Heading>
-                    <ol className="m-0 grid list-none overflow-hidden rounded-md border bg-background p-0">
-                      {group.spans.map((span, index) => (
-                        <li
-                          key={span.id}
-                          className={cn(
-                            "grid grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-3 border-b px-3 py-1.5 text-sm last:border-b-0",
-                            focus?.has(span.id) && "bg-brand-soft",
-                          )}
-                        >
-                          <span className="text-right text-muted-foreground tabular-nums">{index + 1}</span>
-                          <CalledFrom span={span} className="truncate" />
-                          <span className="tabular-nums">{duration(span.duration)}</span>
-                        </li>
-                      ))}
-                    </ol>
-                  </section>
+                  <CalledFromList spans={group.spans} focus={focus} />
                   {first ? <AllRequests span={first} links={links} /> : null}
                 </Row>
               );
@@ -237,6 +259,7 @@ export function SqlList({ spans, issueBySpan, focus, onExplain, links }: SqlList
                 lead={String(index + 1)}
                 name={span.name}
                 alias={span.attrs["db.alias"]}
+                from={span.attrs}
                 issue={issueBySpan.get(span.id)}
                 share={span.duration / slowestSpan}
                 time={span.duration}
