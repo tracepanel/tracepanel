@@ -1,4 +1,12 @@
-import { IssueChip, type IssueKind, LogLevel, NO_KNOWN, type SearchResource, type SearchSpec } from "@tracepanel/ui";
+import {
+  IssueChip,
+  type IssueKind,
+  LogLevel,
+  NO_KNOWN,
+  type SearchResource,
+  type SearchSpec,
+  TaskName,
+} from "@tracepanel/ui";
 import { Badge } from "@tracepanel/ui/components/ui/badge";
 import { Button } from "@tracepanel/ui/components/ui/button";
 import { type Family, systemOfPage } from "@tracepanel/ui/lib/systems";
@@ -266,7 +274,15 @@ const CONTAINS: QuickFilter = {
     { label: "Emails", terms: [f("has", ":", "mail")] },
   ],
 };
-const TASK: MultiFilter = { label: "Task", title: "Filter by task", key: "task", values: (known) => known.task ?? [] };
+/** A task in a menu: cut where a task's name is everywhere, in the menu's own type. */
+const taskItem = (task: string) => <TaskName name={task} className="font-sans" />;
+const TASK: MultiFilter = {
+  label: "Task",
+  title: "Filter by task",
+  key: "task",
+  values: (known) => known.task ?? [],
+  display: taskItem,
+};
 const STATE: MultiFilter = {
   label: "State",
   title: "Filter by outcome",
@@ -336,7 +352,7 @@ const QUICK: Record<Exclude<Section, CallsSection>, Control[]> = {
     // The routes whose requests logged anything: the others would find nothing here.
     { ...ROUTE, values: (known) => known.log_route ?? [] },
     // Records a task or a job wrote: shown when the project has any.
-    { label: "Task", title: "Filter by task", key: "task", values: (known) => known.task ?? [] },
+    TASK,
     { label: "Job", title: "Filter by job", key: "job", values: (known) => known.job ?? [] },
     // Where in the work it was logged: inside a Kafka call, a SQL query, a view.
     {

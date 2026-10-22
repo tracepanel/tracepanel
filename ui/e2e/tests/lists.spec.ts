@@ -75,7 +75,7 @@ test("Tasks' System menu offers what ran this project's tasks, nothing it doesn'
   await page.goto("/#/tasks?view=overview");
   await page.getByRole("button", { name: "System", exact: true }).click();
 
-  await expect(page.getByRole("option")).toHaveText(["Celery", "RabbitMQ", "RQ"]);
+  await expect(page.getByRole("option")).toHaveText(["Celery", "Channels", "RabbitMQ", "RQ"]);
 });
 
 test("A finding's compact badge leaves its row as tall as the row without it", async ({ page }) => {

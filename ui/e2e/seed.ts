@@ -338,6 +338,40 @@ function dependencies(): Doc[] {
   return [request, resize, callback, publish];
 }
 
+// A consumer's handlers: long names alike but for their ends, which is what tells them apart.
+export const CONSUMER = "chat.workers.media.consumers.ThumbnailConsumer";
+export const HANDLERS = ["thumbnails_regenerate", "thumbnails_purge", "thumbnails_notify"].map(
+  (handler) => `${CONSUMER}.${handler}`,
+);
+
+/** A request that sent each handler of one consumer a message, and their runs: the last one failed. */
+function handlers(): Doc[] {
+  const request = sender("POST", "/api/media/rebuild");
+  const runs = HANDLERS.map((name, n) => {
+    const failed = n === HANDLERS.length - 1;
+    const doc = run(
+      name,
+      { "task.system": "channels", "task.id": `handler-${n}`, ...(failed ? { "task.state": "FAILURE" } : {}) },
+      enqueue(request, `E${n}`, name, `handler-${n}`),
+      failed ? { status: "error" } : {},
+    );
+    if (!failed) return doc;
+    const root = (doc["spans"] as Doc[])[0] as Doc;
+    (doc["spans"] as Doc[])[0] = { ...root, status: "error" };
+    const error = {
+      chain: [],
+      frames: [],
+      handled: false,
+      message: "thumbnail service unavailable",
+      span_id: root["id"],
+      time: 2_000,
+      type: "ConnectionError",
+    };
+    return { ...doc, errors: [error] };
+  });
+  return [request, ...runs];
+}
+
 /** An RQ job its 30 s job_timeout stopped, and a Celery task that ran when due (its countdown) with a priority. */
 function limits(): Doc[] {
   const stopped = run(
@@ -924,6 +958,7 @@ export default async function seed(): Promise<void> {
   await hello();
   const docs = [
     ...examples(),
+    ...handlers(),
     ...pages(),
     ...background(),
     ...messages(),

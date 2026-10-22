@@ -14,11 +14,12 @@ import {
   RoutePath,
   Stat,
   StatGrid,
+  TaskName,
   type TraceGroup,
 } from "@tracepanel/ui";
 import { Button } from "@tracepanel/ui/components/ui/button";
 import { ArrowRightIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { PeriodChip } from "./PeriodChip";
 import { RefreshControl, track, useRefresh } from "./refresh";
 import { type EntrySection, go, href, issueRoute, periodOf, traceHref, withPeriod } from "./routes";
@@ -96,9 +97,14 @@ function Title({ section, groupKey }: { section: EntrySection; groupKey: string 
   return (
     <>
       <MethodBadge method={badge} />
-      <span className="truncate">{groupKey}</span>
+      {section === "tasks" ? <TaskName name={groupKey} /> : <span className="truncate">{groupKey}</span>}
     </>
   );
+}
+
+/** The group's crumb, in the crumbs' own type: a task's name cut where it is everywhere. */
+function crumb(section: EntrySection, groupKey: string): ReactNode {
+  return section === "tasks" ? <TaskName name={groupKey} className="font-sans" /> : groupKey;
 }
 
 export function GroupPage({
@@ -149,7 +155,10 @@ export function GroupPage({
       <header className="grid gap-2">
         <div className="flex items-center justify-between gap-3">
           <Breadcrumbs
-            items={[{ label: entry.label, href: href({ name: section, q: period }) }, { label: groupKey }]}
+            items={[
+              { label: entry.label, href: href({ name: section, q: period }) },
+              { label: crumb(section, groupKey) },
+            ]}
           />
           <RefreshControl />
         </div>

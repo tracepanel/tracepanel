@@ -88,6 +88,13 @@
 - The Tasks page's Now shows a task's arguments as the JSON its trace shows,
   `[42] {"to": "ann"}`, not as Python wrote them, and empty ones not at all.
   A long task name is cut at its start, so its handler stays in sight.
+- A long task name is cut at its start everywhere it shows, as on Now, so
+  the handlers of one consumer no longer read the same. That is the Tasks
+  page's lists and its Overview, a task's page and its crumb, a trace's
+  heading, the call tree's task rows and the tasks it sent, a request's
+  enqueued tasks, the Task filter and ⌘K, in the console and in the panel.
+  A cut name starts where a whole one does, after a "…". In the call tree,
+  "enqueue" stays whole before it. The whole name shows on hover.
 - A task's workflow graph is compact: a box is one line, a dot for its
   state, its name and its time, as wide as names need. The run on screen is
   filled, not outlined. The graph starts at the page's left edge, under its
@@ -147,6 +154,11 @@
   the page.
 - The slowest and failing lists above a section's table no longer widen the
   page sideways when a name is long, as a task's often is: it is cut short.
+- A task, a job, a WebSocket or an RPC call in the panel's list reads as
+  its row in the console's lists does: its kind's badge, then its name. A
+  task's whole name was its badge, in capitals. A GraphQL operation has the
+  console's GQL badge too. A row with no status keeps its place, so its time
+  and queries stand under a request's.
 - A small share no longer reads 0%. One failed call in 389 showed "0%" in
   the error colour on the Database page: a share that is neither none nor
   all now reads "<1%" or ">99%", wherever the console and the panel show a

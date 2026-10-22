@@ -26,7 +26,18 @@ export { MailList } from "./MailList";
 export { Metrics } from "./Metrics";
 export { type NameValue, NameValues } from "./NameValues";
 export * from "./PropTable";
-export { AliasChip, AppChip, Empty, IssueChip, MethodBadge, RichText, RoutePath, StatusBadge } from "./primitives";
+export {
+  AliasChip,
+  AppChip,
+  Empty,
+  IssueChip,
+  KindBadge,
+  MethodBadge,
+  RichText,
+  RoutePath,
+  StatusBadge,
+  TaskName,
+} from "./primitives";
 export { RequestInfo } from "./RequestInfo";
 export { RuntimeIcon } from "./RuntimeIcon";
 export { SERVICE_KINDS, ServiceIcon, serviceWhere, systemName } from "./ServiceMap";

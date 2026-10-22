@@ -24,7 +24,7 @@ import { CALL_KINDS, DATASTORES, MESSAGING, RPC } from "./lib/systems";
 import { linkProps, type TraceLinks } from "./links";
 import { type NameValue, NameValues } from "./NameValues";
 import { PropTable } from "./PropTable";
-import { AliasChip, AppChip, IssueChip, TemplateChip } from "./primitives";
+import { AliasChip, AppChip, IssueChip, TaskName, TemplateChip } from "./primitives";
 import { isRequestDetail, RequestParts, requestParts } from "./RequestParts";
 import { SideResize, useSideWidth } from "./SideResize";
 import { SignalNotes } from "./SignalNotes";
@@ -491,7 +491,11 @@ function runView(node: Extract<Node, { type: "task" }>, trace: Trace): LinkedVie
     kind: node.kind === "call" ? "app" : "task",
     text: (
       <>
-        <span className="dt-map-text">{node.run.name}</span>
+        {node.kind === "task" ? (
+          <TaskName name={node.run.name} className="dt-map-text" />
+        ) : (
+          <span className="dt-map-text">{node.run.name}</span>
+        )}
         <TaskState state={node.run.task_state} />
         {node.kind === "call" ? <CallApp node={node} /> : null}
       </>
@@ -798,6 +802,24 @@ function clickSpan(ctx: RowContext, key: string, fold: boolean | undefined): voi
   ctx.onSelect(key);
 }
 
+const TASK_SPANS = new Set(["task", "task.enqueue"]);
+const ENQUEUE = "enqueue ";
+
+/** A span's name; a task's run, or its sending, named as a task is everywhere (the kind says which). */
+function SpanName({ span }: { span: Span }) {
+  if (span.kind === "task.enqueue" && span.name.startsWith(ENQUEUE)) {
+    // "enqueue " stays whole: only the task's name gives way.
+    return (
+      <span className="dt-map-text flex">
+        <span className="shrink-0 whitespace-pre">{ENQUEUE}</span>
+        <TaskName name={span.name.slice(ENQUEUE.length)} />
+      </span>
+    );
+  }
+  if (TASK_SPANS.has(span.kind)) return <TaskName name={span.name} className="dt-map-text" />;
+  return <span className="dt-map-text">{span.name}</span>;
+}
+
 /** A span: its kind, its name and what goes with it, its bar and its time; its rows under it, open or folded. */
 function SpanRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps<"span">) {
   const { span } = node;
@@ -818,7 +840,7 @@ function SpanRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps
         <span className="dt-map-name" style={indent}>
           <Caret open={fold} onToggle={() => ctx.onToggle(node.key)} />
           <span className="dt-map-kind">{spanKindLabel(span.kind, ctx.trace.attrs, parent?.kind)}</span>
-          <span className="dt-map-text">{span.name}</span>
+          <SpanName span={span} />
           <AliasChip value={aliasOf(span)} />
           <TemplateChip attrs={span.attrs} />
           <SignalNotes span={span} parent={parent} under={childSpans(node)} />

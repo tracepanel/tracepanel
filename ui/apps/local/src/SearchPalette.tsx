@@ -8,6 +8,7 @@ import {
   MethodBadge,
   plural,
   RoutePath,
+  TaskName,
   type TraceSummary,
 } from "@tracepanel/ui";
 import {
@@ -137,7 +138,11 @@ export function SearchPalette({
                       onSelect={() => close(() => openTo({ name: "trace", id: trace.id }))}
                     >
                       <MethodBadge method={badge} htmx={trace.htmx} />
-                      <span className="min-w-0 flex-1 truncate font-mono text-base">{name}</span>
+                      {trace.kind === "task" ? (
+                        <TaskName name={name} className="flex-1 text-base" />
+                      ) : (
+                        <span className="min-w-0 flex-1 truncate font-mono text-base">{name}</span>
+                      )}
                       <span className="text-sm text-muted-foreground tabular-nums">
                         {duration(trace.duration)} · {ago(trace.start)}
                       </span>
