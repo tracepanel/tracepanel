@@ -86,7 +86,7 @@
     },
     "system": {
       "type": "text",
-      "help": "Task queue system: celery, dramatiq, rq, django"
+      "help": "Task queue system: celery, dramatiq, rq, huey, django-q, django, channels"
     },
     "group": {
       "type": "text",

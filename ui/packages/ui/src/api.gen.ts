@@ -955,7 +955,7 @@ export interface components {
             };
         };
         Capabilities: {
-            /** @description An app sends task events (Celery, RQ, Dramatiq and Django Tasks, from the Python SDK): the Tasks page lists the tasks in flight (api/tasks/live). */
+            /** @description An app sends task events (Celery, RQ, Dramatiq, Huey, django-q2, Django Tasks and Channels workers, from the Python SDK): the Tasks page lists the tasks in flight (api/tasks/live). */
             live_tasks: boolean;
             /** @description The app runs EXPLAIN of a recorded query on its database (api/explain). */
             explain: boolean;
@@ -1022,7 +1022,7 @@ export interface components {
         KnownValues: {
             /** @description Celery task names. */
             task: string[];
-            /** @description What ran the tasks: celery, dramatiq, rq, django, spring, or a broker's listener (rabbitmq, kafka). */
+            /** @description What ran the tasks: celery, dramatiq, rq, huey, django-q, django, channels, spring, or a broker's listener (rabbitmq, kafka). */
             task_system: string[];
             /** @description Queues tasks ran from. */
             queue: string[];
@@ -1473,7 +1473,7 @@ export interface components {
         duration: number;
         /** @enum {unknown} */
         status: "ok" | "error";
-        /** @description Namespaced attributes (http.*, db.*, cache.*, code.*, user.*, task.*, signal.*, exception.*). task.* is shared by every task queue (task.system says which: celery, django, dramatiq, rq). Values are scalars or lists of scalars. */
+        /** @description Namespaced attributes (http.*, db.*, cache.*, code.*, user.*, task.*, signal.*, exception.*). task.* is shared by every task queue (task.system says which: celery, django, django-q, dramatiq, huey, rq, channels). Values are scalars or lists of scalars. */
         attrs: {
             /** @description On a signal span and on each of its receivers' spans: the signal's dotted path, e.g. "django.db.models.signals.post_save". The signal span's name is Django's own signal by its name ("post_save"), any other by this path. */
             "signal.name"?: string;
@@ -1703,7 +1703,7 @@ export interface components {
                 duration: number;
                 /** @enum {unknown} */
                 status: "ok" | "error";
-                /** @description Namespaced attributes (http.*, db.*, cache.*, code.*, user.*, task.*, signal.*, exception.*). task.* is shared by every task queue (task.system says which: celery, django, dramatiq, rq). Values are scalars or lists of scalars. */
+                /** @description Namespaced attributes (http.*, db.*, cache.*, code.*, user.*, task.*, signal.*, exception.*). task.* is shared by every task queue (task.system says which: celery, django, django-q, dramatiq, huey, rq, channels). Values are scalars or lists of scalars. */
                 attrs: {
                     /** @description On a signal span and on each of its receivers' spans: the signal's dotted path, e.g. "django.db.models.signals.post_save". The signal span's name is Django's own signal by its name ("post_save"), any other by this path. */
                     "signal.name"?: string;

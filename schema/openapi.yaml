@@ -1122,7 +1122,8 @@ components:
         live_tasks:
           type: boolean
           description: >-
-            An app sends task events (Celery, RQ, Dramatiq and Django Tasks, from the Python SDK): the Tasks page
+            An app sends task events (Celery, RQ, Dramatiq, Huey, django-q2, Django Tasks and Channels workers, from
+            the Python SDK): the Tasks page
             lists the tasks in flight (api/tasks/live).
         explain: { type: boolean, description: The app runs EXPLAIN of a recorded query on its database (api/explain). }
         profile:
@@ -1226,7 +1227,7 @@ components:
         task: { type: array, description: Celery task names., items: { type: string } }
         task_system:
           type: array
-          description: "What ran the tasks: celery, dramatiq, rq, django, spring, or a broker's listener (rabbitmq, kafka)."
+          description: "What ran the tasks: celery, dramatiq, rq, huey, django-q, django, channels, spring, or a broker's listener (rabbitmq, kafka)."
           items: { type: string }
         queue: { type: array, description: Queues tasks ran from., items: { type: string } }
         job: { type: array, description: "Job names: management commands and tracepanel.trace() blocks.", items: { type: string } }
