@@ -4,7 +4,7 @@ import { ago, duration } from "./format";
 import { DatabaseIcon } from "./icons";
 import { ISSUE_LABELS } from "./labels";
 import { pageParts } from "./lib/page";
-import { AppChip, IssueChip, MethodBadge, RoutePath, StatusBadge } from "./primitives";
+import { AppChip, IssueChip, KindBadge, MethodBadge, RoutePath, StatusBadge, TaskName } from "./primitives";
 import type { IssueKind, TraceSummary } from "./types";
 
 export interface TraceRow {
@@ -46,11 +46,7 @@ export function TraceList({ rows, selectedId, currentId, newIds, compact, servic
             onClick={() => onSelect(trace.id)}
           >
             <span className="dt-request-main">
-              {trace.kind === "page" ? (
-                <PageName name={trace.name} />
-              ) : (
-                <RequestName trace={trace} trigger={trigger} target={target} />
-              )}
+              <RowName trace={trace} trigger={trigger} target={target} />
               <RowApp trace={trace} shown={services} />
               {trace.id === currentId ? (
                 compact ? (
@@ -161,14 +157,43 @@ function RequestName({
   trigger?: string | undefined;
   target?: string | undefined;
 }) {
-  const method = trace.name.startsWith("GraphQL ") ? "GQL" : (trace.method ?? trace.name.split(" ")[0]);
+  const graphql = trace.name.startsWith("GraphQL ");
   return (
     <>
-      <MethodBadge method={method} htmx={trace.htmx} />
+      {/* A GraphQL operation's badge is its kind's, as in the console's lists. */}
+      {graphql ? (
+        <KindBadge kind="graphql" />
+      ) : (
+        <MethodBadge method={trace.method ?? trace.name.split(" ")[0]} htmx={trace.htmx} />
+      )}
       <span className="dt-request-path">
         {requestPath(trace)}
         {trigger ? <HtmxTrigger trigger={trigger} target={target} /> : null}
       </span>
+    </>
+  );
+}
+
+/** What a row is named by, as the console's lists name it: a request, a view or an action, else its kind and name. */
+function RowName({
+  trace,
+  trigger,
+  target,
+}: {
+  trace: TraceSummary;
+  trigger?: string | undefined;
+  target?: string | undefined;
+}) {
+  if (trace.kind === "page") return <PageName name={trace.name} />;
+  if (trace.kind === "http") return <RequestName trace={trace} trigger={trigger} target={target} />;
+  return (
+    <>
+      <KindBadge kind={trace.kind} />
+      {trace.kind === "task" ? (
+        <TaskName name={trace.name} className="dt-request-path" />
+      ) : (
+        <span className="dt-request-path">{trace.name.replace(/^WS /, "")}</span>
+      )}
     </>
   );
 }

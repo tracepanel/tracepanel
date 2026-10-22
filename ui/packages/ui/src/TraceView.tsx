@@ -40,7 +40,7 @@ import { pageParts } from "./lib/page";
 import { linkProps, type TraceLinks } from "./links";
 import { Metrics } from "./Metrics";
 import { ProfilePane } from "./ProfileView";
-import { MethodBadge, RoutePath, StatusBadge } from "./primitives";
+import { MethodBadge, RoutePath, StatusBadge, TaskName } from "./primitives";
 import { RequestInfo } from "./RequestInfo";
 import { type Explain, SqlList } from "./SqlList";
 import { type SystemCalls, systemCalls, systemOfIssue } from "./systemCalls";
@@ -81,6 +81,11 @@ const KIND_HEADINGS: Record<string, (name: string) => { badge: string; title: st
   websocket: (name) => ({ badge: "WS", title: name.replace(/^WS /, "") }),
   page: pageHeading,
 };
+
+/** The heading's title: a task's name cut where a task's name is everywhere. */
+function HeadingTitle({ kind, title }: { kind: string; title: string }) {
+  return kind === "task" ? <TaskName name={title} /> : title;
+}
 
 function heading(trace: Trace): { badge: string; title: string } {
   const attrs = trace.attrs;
@@ -517,7 +522,9 @@ export function TraceView({
           <div className="min-w-0 flex-1">
             <div className="dt-trace-title" hidden={compact}>
               <MethodBadge method={head.badge} htmx={htmxOf(trace)} />
-              <h2>{head.title}</h2>
+              <h2>
+                <HeadingTitle kind={trace.kind} title={head.title} />
+              </h2>
               <StatusBadge status={typeof status === "number" ? status : null} />
               <span className="dt-trace-time">{duration(trace.duration)}</span>
             </div>

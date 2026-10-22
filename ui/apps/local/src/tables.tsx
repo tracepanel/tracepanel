@@ -13,6 +13,7 @@ import {
   IssueChip,
   type IssueRow,
   type JobRow,
+  KindBadge,
   type LogColumn,
   LogRecord,
   type LogRow,
@@ -26,6 +27,7 @@ import {
   type Span,
   SqlCode,
   StatusBadge,
+  TaskName,
   type TaskRow,
   type TraceSummary,
   useAttributeColumns,
@@ -49,7 +51,7 @@ function TraceName({ trace }: { trace: TraceSummary }) {
   return (
     <span className="flex min-w-0 items-center gap-2.5">
       <SourceBadge kind={trace.kind} graphql={operation !== null} method={traceMethod(trace)} htmx={trace.htmx} />
-      <Mono className="truncate">{operation ?? sourceText(trace.kind, trace.path ?? null, trace.name)}</Mono>
+      <SourceText kind={trace.kind} text={operation ?? sourceText(trace.kind, trace.path ?? null, trace.name)} />
     </span>
   );
 }
@@ -1015,7 +1017,11 @@ function SourceCell({
     >
       <SourceBadge kind={kind} graphql={operation !== null} method={method} htmx={htmx} />
       {/* In a dense table, the row's own size: the badge sets the path apart, not a smaller type. */}
-      <Mono className={cn("truncate", !compact && "text-base")}>{operation ?? sourceText(kind, path, name)}</Mono>
+      <SourceText
+        kind={kind}
+        text={operation ?? sourceText(kind, path, name)}
+        className={cn(!compact && "text-base")}
+      />
     </span>
   );
 }
@@ -1036,21 +1042,16 @@ function SourceBadge({
   return kind === "http" ? <MethodBadge method={method} htmx={htmx} /> : <KindBadge kind={kind} />;
 }
 
+/** A source's text after its badge, one line: a task's name cut at its start, as everywhere a task is named. */
+function SourceText({ kind, text, className }: { kind: TraceSummary["kind"]; text: string; className?: string }) {
+  if (kind === "task") return <TaskName name={text} className={className} />;
+  return <Mono className={cn("truncate", className)}>{text}</Mono>;
+}
+
 /** A source's text: a request's path, a WebSocket's without its "WS ", anything else its name. */
 function sourceText(kind: TraceSummary["kind"], path: string | null, name: string): string {
   if (kind === "http") return path ?? name;
   return kind === "websocket" ? name.replace(/^WS /, "") : name;
-}
-
-export function KindBadge({ kind }: { kind: string }) {
-  return (
-    <Badge
-      variant="outline"
-      className="h-[1.375rem] rounded-md border-brand/30 bg-brand-soft px-1.5 font-mono text-2xs text-brand uppercase"
-    >
-      {{ command: "job", websocket: "ws", graphql: "gql" }[kind] ?? kind}
-    </Badge>
-  );
 }
 
 /** A name in a list's main column: one line, cut short with an ellipsis. */
@@ -1067,7 +1068,7 @@ function OutlineBadge({ children, mono = false }: { children: ReactNode; mono?: 
 
 function taskColumns(items: readonly TaskRow[]): DataColumn<TaskRow>[] {
   return [
-    { id: "task", label: "Task", required: true, cell: (item) => nameCell(item.task) },
+    { id: "task", label: "Task", required: true, cell: (item) => <TaskName name={item.task} /> },
     {
       id: "system",
       label: "System",

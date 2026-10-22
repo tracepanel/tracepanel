@@ -3,6 +3,7 @@ import { Badge } from "./components/ui/badge";
 import { ISSUE_LABELS } from "./labels";
 import { templatePlace } from "./lib/callFields";
 import { runtimeKind } from "./lib/runtime";
+import { cn } from "./lib/utils";
 import { RuntimeIcon } from "./RuntimeIcon";
 import type { IssueKind } from "./types";
 
@@ -122,6 +123,19 @@ export function Empty({ title, children, action }: { title: string; children?: R
   );
 }
 
+/** What a trace is where a request shows its method: a task, a job, a WebSocket, a GraphQL operation. One badge in
+ * the console's lists and the panel's. */
+export function KindBadge({ kind }: { kind: string }) {
+  return (
+    <Badge
+      variant="outline"
+      className="h-[1.375rem] rounded-md border-brand/30 bg-brand-soft px-1.5 font-mono text-2xs text-brand uppercase"
+    >
+      {{ command: "job", websocket: "ws", graphql: "gql" }[kind] ?? kind}
+    </Badge>
+  );
+}
+
 /**
  * The app that served something: its runtime's mark when known, and its name. The same chip names the app of a call's
  * trace in the call tree and of a request in a list that holds several apps.
@@ -132,6 +146,20 @@ export function AppChip({ name, runtime }: { name: string; runtime?: string | un
     <span className="dt-app-chip" title={runtime ? `${name} · ${runtime}` : name}>
       {kind ? <RuntimeIcon kind={kind} /> : null}
       {name}
+    </span>
+  );
+}
+
+/**
+ * A task's name, cut at its start when it doesn't fit: what tells tasks apart is at its end (the function, the
+ * consumer's handler), not the package they share. One look wherever a task is named (its lists, its page, a trace's
+ * heading, the call tree, search, the panel), whole on hover.
+ */
+export function TaskName({ name, className }: { name: string; className?: string | undefined }) {
+  return (
+    <span className={cn("block min-w-0 truncate text-left font-mono [direction:rtl]", className)} title={name}>
+      {/* Isolated: the dots and underscores keep their places, only the cut moves to the start. */}
+      <bdi>{name}</bdi>
     </span>
   );
 }

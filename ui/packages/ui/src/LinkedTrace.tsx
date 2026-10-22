@@ -3,7 +3,7 @@ import { Badge } from "./components/ui/badge";
 import { duration } from "./format";
 import { linkProps, type TraceLinks } from "./links";
 import type { PropRow } from "./PropTable";
-import { MethodBadge } from "./primitives";
+import { MethodBadge, TaskName } from "./primitives";
 import type { TraceSummary } from "./types";
 
 /** A task run's outcome, as its badge colours it. */
@@ -63,6 +63,12 @@ function Tally({ group: { first, count, failed } }: { group: Group }) {
   );
 }
 
+/** A linked trace's name: its path, else its name, a task's cut where a task's name is everywhere. */
+function LinkedName({ trace }: { trace: TraceSummary }) {
+  if (trace.kind === "task") return <TaskName name={trace.name} className="text-base" />;
+  return <span className="truncate font-mono text-base">{trace.path ?? trace.name}</span>;
+}
+
 /** A linked trace (or a group of them) on one line, a link to it where the host gives one; `note` after its name. */
 export function LinkedTrace({
   group,
@@ -77,7 +83,7 @@ export function LinkedTrace({
   const body = (
     <span className="flex min-w-0 items-center gap-2">
       <TraceBadge trace={trace} />
-      <span className="truncate font-mono text-base">{trace.path ?? trace.name}</span>
+      <LinkedName trace={trace} />
       {note}
       <Tally group={group} />
     </span>
@@ -124,7 +130,8 @@ export function tracesRow(
 ): PropRow[] {
   if (traces.length === 0) return [];
   const value = (
-    <span className="grid w-full gap-0.5">
+    // One column no wider than the value's: a long name is cut, it doesn't push the row past the panel's edge.
+    <span className="grid w-full grid-cols-[minmax(0,1fr)] gap-0.5">
       {grouped(traces).map((group) => (
         <LinkedTrace key={group.first.id} group={group} links={links} note={note?.(group.first)} />
       ))}

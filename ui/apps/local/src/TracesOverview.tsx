@@ -11,6 +11,7 @@ import {
   SearchError,
   Stat,
   StatGrid,
+  TaskName,
 } from "@tracepanel/ui";
 import { Badge } from "@tracepanel/ui/components/ui/badge";
 import { Card } from "@tracepanel/ui/components/ui/card";
@@ -267,6 +268,12 @@ function operationHref(item: OperationStats): string {
   return href({ name: "traces", q: withPeriod(`kind:${item.kind} name:"${item.name}"`, currentPeriod()) });
 }
 
+/** An operation's name after its kind: a task's cut where a task's name is everywhere. */
+function OperationName({ item }: { item: OperationStats }) {
+  if (item.kind === "task") return <TaskName name={item.name} className="flex-1" />;
+  return <span className="min-w-0 flex-1 truncate font-mono">{item.name}</span>;
+}
+
 function OperationList({
   title,
   empty,
@@ -313,7 +320,7 @@ function OperationList({
                   <Badge variant="outline" className="font-mono text-2xs uppercase">
                     {KIND_BADGES[item.kind] ?? item.kind}
                   </Badge>
-                  <span className="min-w-0 flex-1 truncate font-mono">{item.name}</span>
+                  <OperationName item={item} />
                 </>
               )}
               <span className="text-base whitespace-nowrap text-muted-foreground">

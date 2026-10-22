@@ -7,6 +7,7 @@ import {
   type LiveTasks,
   type LiveWorker,
   NO_LIVE_TASKS,
+  TaskName,
   type TraceSummary,
 } from "@tracepanel/ui";
 import { Badge } from "@tracepanel/ui/components/ui/badge";
@@ -152,9 +153,9 @@ function LastRun({ run }: { run: TraceSummary }) {
   const now = useClock();
   const failed = run.status === "error";
   return (
-    <a href={traceHref(run.id)} className={cn(FIGURE, "min-w-0 hover:[&_b]:underline")}>
+    <a href={traceHref(run.id)} className={cn(FIGURE, "min-w-0 hover:[&_bdi]:underline")}>
       <span className="whitespace-nowrap text-muted-foreground">last run</span>{" "}
-      <b className="truncate font-mono text-sm font-medium text-foreground">{run.name}</b>{" "}
+      <TaskName name={run.name} className="text-sm font-medium text-foreground" />{" "}
       {failed ? (
         <XIcon className="size-4 shrink-0 self-center text-error" aria-label="failed" />
       ) : (
@@ -256,7 +257,7 @@ const COLUMNS: DataColumn<Ticking>[] = [
     id: "task",
     label: "Task",
     required: true,
-    cell: ({ task }) => <TaskName name={task.name} />,
+    cell: ({ task }) => (task.name ? <TaskName name={task.name} /> : muted(null)),
   },
   { id: "state", label: "State", width: 7, cell: ({ task }) => <TaskState state={task.state} /> },
   {
@@ -314,19 +315,6 @@ function TickingRows({ live, cells }: { live: LiveTasks; cells: (item: Ticking) 
 /** Its arguments at a glance, whole on hover. */
 // A long value cut to one line, whole on hover: the table fits the page's width, as the console's other tables do.
 const CUT = "block truncate text-sm";
-
-/**
- * A task's name, cut at its start when it doesn't fit: what tells tasks apart is at its end (the function, the
- * consumer's handler), not the package they share. Whole on hover.
- */
-function TaskName({ name }: { name: string }) {
-  if (!name) return muted(null);
-  return (
-    <Mono className="block truncate text-left [direction:rtl]" title={name}>
-      <bdi>{name}</bdi>
-    </Mono>
-  );
-}
 
 /** Where a task is: the worker that runs it, or the queue it waits in. */
 function Where({ task }: { task: LiveTask }) {
