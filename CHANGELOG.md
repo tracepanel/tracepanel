@@ -58,6 +58,9 @@
 
 ### Changed
 
+- A task's workflow graph is compact: a box is one line, a dot for its
+  state, its name and its time, as wide as names need. The run on screen is
+  filled, not outlined.
 - No outline or ring around a focused control, in the console, the panel or
   the widget's pill: keyboard focus shows as a light tint over the control
   instead.
