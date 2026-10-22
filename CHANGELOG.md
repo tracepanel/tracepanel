@@ -58,6 +58,9 @@
 
 ### Changed
 
+- No outline or ring around a focused control, in the console, the panel or
+  the widget's pill: keyboard focus shows as a light tint over the control
+  instead.
 - Every list of names and values reads one way: a request's headers and
   attributes, a call's fields and all its attributes, a log record's fields,
   an app's settings, a template's context, an error's locals and an email's
@@ -78,6 +81,8 @@
 
 ### Fixed
 
+- A group page's Time button is its own size again, not stretched across
+  the page.
 - The slowest and failing lists above a section's table no longer widen the
   page sideways when a name is long, as a task's often is: it is cut short.
 

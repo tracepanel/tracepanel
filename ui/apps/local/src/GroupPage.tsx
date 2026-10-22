@@ -171,7 +171,10 @@ export function GroupPage({
             <ArrowRightIcon />
           </Button>
         </div>
-        <GroupPeriod section={section} groupKey={groupKey} period={period} />
+        {/* Its own size, at the start of the line: the header's grid would stretch it across the page. */}
+        <div className="flex">
+          <GroupPeriod section={section} groupKey={groupKey} period={period} />
+        </div>
       </header>
 
       <StatGrid label="Summary">
