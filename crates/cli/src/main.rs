@@ -2,7 +2,8 @@
 //! over a unix socket (TCP on Windows, or with `--listen tcp:HOST:PORT`), finds their issues, keeps them in the
 //! project's store and, with `--serve`, serves the console. OpenTelemetry exporters send it their spans over OTLP/HTTP
 //! (`--otlp`, 127.0.0.1:4318 by default, where they send them unless told otherwise). Its addresses go to `<dir>/agent.addr` and
-//! `<dir>/console.addr`, where the SDKs look for them. With `TRACEPANEL_API_KEY` set, it also sends the traces it keeps
+//! `<dir>/console.addr`, where the SDKs look for them. One agent serves a store: it holds `<dir>/agent.lock` while it
+//! runs, and another started on the same store exits at once with status 3 (`ALREADY_RUNS`). With `TRACEPANEL_API_KEY` set, it also sends the traces it keeps
 //! to Tracepanel Cloud (`tracepanel-sender`).
 
 #[cfg(all(target_arch = "arm", target_env = "musl"))]
@@ -43,6 +44,25 @@ enum Message {
     Batch(Batch),
     Stop,
 }
+
+/// The exit status of an agent started on a store another agent serves: the SDK that started it connects to that one.
+const ALREADY_RUNS: u8 = 3;
+
+/// The file an agent holds an exclusive lock on while it serves the store: the OS lets it go when the agent exits,
+/// however it exits.
+const LOCK_FILE: &str = "agent.lock";
+
+/// Another agent serves the store.
+#[derive(Debug)]
+struct AlreadyRuns(PathBuf);
+
+impl std::fmt::Display for AlreadyRuns {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "an agent already runs for {}", self.0.display())
+    }
+}
+
+impl std::error::Error for AlreadyRuns {}
 
 /// What the command line asks for.
 #[derive(Debug, PartialEq)]
@@ -165,7 +185,11 @@ async fn main() -> ExitCode {
             Ok(()) => ExitCode::SUCCESS,
             Err(error) => {
                 eprintln!("tracepanel-agent: {error}");
-                ExitCode::FAILURE
+                if error.is::<AlreadyRuns>() {
+                    ExitCode::from(ALREADY_RUNS)
+                } else {
+                    ExitCode::FAILURE
+                }
             }
         },
         Err(error) => {
@@ -187,17 +211,23 @@ async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
     let cloud = tracepanel_sender::Config::from_env(|name| std::env::var(name).ok())?;
     std::fs::create_dir_all(&dir)?;
     let dir = dir.canonicalize()?;
+    // Before the store is opened or the socket bound: agents started at the same moment (an app's workers, each
+    // starting one) would take each other's socket and address files, and one would be left with clients nobody sees.
+    let _lock = lock(&dir)?;
     let store_path = store_local::path_in(&dir);
-    let store = Store::open(&store_path)?;
     let addr_file = dir.join("agent.addr");
+    let console_file = dir.join("console.addr");
     let running = std::fs::read_to_string(&addr_file).unwrap_or_default();
     if tracepanel_protocol::answers(running.trim()) {
-        // Two agents on one store would take each other's address file when either exits.
-        return Err(format!("an agent already runs for {}", dir.display()).into());
+        // An agent from before the lock.
+        return Err(AlreadyRuns(dir).into());
     }
+    // The addresses of an agent that didn't exit cleanly (killed, a reboot): nobody answers there.
+    let _ = std::fs::remove_file(&addr_file);
+    let _ = std::fs::remove_file(&console_file);
+    let store = Store::open(&store_path)?;
     let listener = bind(&dir, listen.as_deref()).await?;
     let address = listener.address()?;
-    let console_file = dir.join("console.addr");
     let activity = Activity::default();
     activity.touch();
 
@@ -295,6 +325,30 @@ async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
         let _ = std::fs::remove_file(socket);
     }
     Ok(())
+}
+
+/// The store's lock, held until the agent exits; `AlreadyRuns` while another agent holds it. A file system without
+/// locks (some network ones) is said and gone without.
+fn lock(dir: &Path) -> Result<Option<std::fs::File>, Box<dyn std::error::Error>> {
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(dir.join(LOCK_FILE))?;
+    match file.try_lock() {
+        Ok(()) => Ok(Some(file)),
+        Err(std::fs::TryLockError::WouldBlock) => Err(AlreadyRuns(dir.to_path_buf()).into()),
+        Err(std::fs::TryLockError::Error(error))
+            if error.kind() == std::io::ErrorKind::Unsupported =>
+        {
+            eprintln!(
+                "tracepanel-agent: can't lock {}: {error}",
+                dir.join(LOCK_FILE).display()
+            );
+            Ok(None)
+        }
+        Err(std::fs::TryLockError::Error(error)) => Err(error.into()),
+    }
 }
 
 /// A short path in the temp directory, one per store directory: a unix socket's path is limited to ~100 bytes,
