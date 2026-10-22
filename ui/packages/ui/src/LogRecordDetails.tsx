@@ -5,16 +5,17 @@ import { ExceptionView } from "./ErrorView";
 import { localTime } from "./format";
 import { jsonDocument } from "./json";
 import { cn } from "./lib/utils";
+import { rawText } from "./lib/values";
 import { type NameValue, NameValues } from "./NameValues";
-import { PropTable } from "./PropTable";
 import { Segmented } from "./Segmented";
+import { CodeLines } from "./Tokens";
 import { parseTraceback } from "./traceback";
 import type { Attrs, Log } from "./types";
 
 // The statement is shown formatted above; its fingerprint would repeat it on one line.
 const HIDDEN = new Set(["db.statement", "db.fingerprint", "graphql.document"]);
 
-/** Every attribute, raw; under a heading when the call's fields in words come before them. */
+/** Every attribute, as it came; under a heading when the call's fields in words come before them. */
 export function AllAttributes({ attrs, titled }: { attrs: Attrs; titled: boolean }) {
   const shown = Object.entries(attrs).filter(([key, value]) => !HIDDEN.has(key) && value !== null && value !== "");
   if (shown.length === 0) return null;
@@ -25,9 +26,9 @@ export function AllAttributes({ attrs, titled }: { attrs: Attrs; titled: boolean
           All attributes <span className="tabular-nums">{shown.length}</span>
         </h3>
       ) : null}
-      <PropTable
-        rows={shown.map(([key, value]) => ({ label: key, value: String(value), copy: String(value), mono: true }))}
-      />
+      <div className="overflow-hidden rounded-lg border bg-card">
+        <NameValues rows={shown.map(([name, value]) => ({ name, value }))} />
+      </div>
     </section>
   );
 }
@@ -81,6 +82,17 @@ function TextBlock({
   );
 }
 
+/** A message that is a JSON document, indented and coloured: the bar above it copies the text as logged. */
+function JsonBlock({ json }: { json: string }) {
+  return (
+    <div className="rounded-md border bg-background">
+      <pre className="dt-syntax m-0 px-3 py-2 font-mono text-sm whitespace-pre-wrap [overflow-wrap:anywhere]">
+        <CodeLines text={json} language="javascript" />
+      </pre>
+    </div>
+  );
+}
+
 type View = "read" | "raw";
 
 /**
@@ -124,13 +136,13 @@ function ReadOrRaw({
   );
 }
 
-/** The message; a JSON object or array indented, the text as logged a click away. */
+/** The message; a JSON object or array indented and coloured, the text as logged a click away. */
 function MessageBlock({ text }: { text: string }) {
   const json = useMemo(() => jsonDocument(text), [text]);
   if (json === null) return <TextBlock text={text} label="Copy message" />;
   return (
     <ReadOrRaw label="Message" read="JSON" text={text}>
-      <TextBlock text={json} label="Copy message" copy={false} />
+      <JsonBlock json={json} />
     </ReadOrRaw>
   );
 }
@@ -162,11 +174,11 @@ export function LogRecord({
   context?: readonly NameValue[];
   actions?: ((name: string, value: string) => readonly ReactNode[]) | undefined;
 }) {
-  const own: [string, string][] = [
+  const own: [string, unknown][] = [
     ["logger", log.logger],
     ["level", log.level],
     ["time", localTime(log.time)],
-    ...Object.entries(logAttrs(log.attrs)).map(([key, value]): [string, string] => [key, show(value)]),
+    ...Object.entries(logAttrs(log.attrs)),
   ];
   return (
     <div className="grid gap-3.5">
@@ -175,16 +187,14 @@ export function LogRecord({
       {log.exception ? <ExceptionBlock text={log.exception} /> : null}
       <section aria-label="Fields" className="overflow-hidden rounded-md border bg-background">
         <NameValues
-          rows={[...context, ...own.map(([name, value]) => ({ name, value, actions: actions?.(name, value) ?? [] }))]}
+          rows={[
+            ...context,
+            ...own.map(([name, value]) => ({ name, value, actions: actions?.(name, rawText(value)) ?? [] })),
+          ]}
         />
       </section>
     </div>
   );
-}
-
-/** A value as text: a list or an object as JSON, as an attribute column shows it. */
-function show(value: unknown): string {
-  return typeof value === "string" ? value : JSON.stringify(value);
 }
 
 /** A record opened in a trace: in its Logs tab, and (`titled`) in the call tree's pane. */

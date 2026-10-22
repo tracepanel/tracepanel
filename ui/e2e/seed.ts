@@ -599,6 +599,19 @@ function bookList(): Doc {
     }),
     template("F", "includes/footer.html", 2_000, {}),
   );
+  // A record whose message is a JSON document and whose extra= fields are a JSON string and a list: each laid out
+  // where the record opens.
+  doc["logs"] = [
+    {
+      span_id: `${id}R`,
+      time: 2_500,
+      level: "info",
+      logger: "shop.views",
+      message: '{"event": "books listed", "count": 12}',
+      exception: null,
+      attrs: { "extra.filters": '{"genre": "fiction", "page": 2, "in_stock": true}', "extra.ids": [3, 5, 8] },
+    },
+  ];
   return doc;
 }
 

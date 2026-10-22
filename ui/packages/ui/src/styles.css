@@ -1012,33 +1012,6 @@ tr[data-new] {
 
 /* ---------- Request tab ---------- */
 
-.dt-props {
-  margin: 0;
-  padding: 0.375rem 1rem;
-}
-.dt-props div {
-  display: grid;
-  grid-template-columns: 5.5rem minmax(0, 1fr);
-  gap: 0.75rem;
-  align-items: baseline;
-  padding: 0.4375rem 0;
-  border-bottom: 1px solid var(--dt-border);
-}
-.dt-props div:last-child {
-  border-bottom: 0;
-}
-.dt-props dt {
-  color: var(--dt-text-3);
-  font-size: var(--dt-size-sm);
-}
-.dt-props dd {
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-.dt-props code {
-  font-size: var(--dt-size-sm);
-}
-
 .dt-disclosure {
   margin: 0 1rem 1rem;
   border: 1px solid var(--dt-border);
@@ -1161,27 +1134,6 @@ tr[data-new] {
   color: var(--dt-text-2);
   font-size: var(--dt-size-sm);
 }
-.dt-segmented {
-  display: inline-flex;
-  padding: 2px;
-  border-radius: var(--dt-radius-sm);
-  background: var(--dt-muted-bg);
-}
-.dt-segmented button {
-  padding: 0.1875rem 0.625rem;
-  border: 0;
-  border-radius: 0.25rem;
-  background: none;
-  color: var(--dt-text-2);
-  font: 500 var(--dt-size-sm) var(--dt-font);
-  cursor: pointer;
-}
-.dt-segmented button[aria-pressed="true"] {
-  background: var(--dt-bg);
-  color: var(--dt-text);
-  box-shadow: var(--dt-shadow);
-}
-
 .dt-sql-groups {
   margin: 0;
   padding: 0;
@@ -1452,35 +1404,35 @@ details[data-focused] > .dt-sql-group {
 .dt-source code {
   font: inherit;
 }
-.dt-source .token.keyword,
-.dt-source .token.boolean,
-.dt-source .token.important {
+:is(.dt-source, .dt-syntax) .token.keyword,
+:is(.dt-source, .dt-syntax) .token.boolean,
+:is(.dt-source, .dt-syntax) .token.important {
   color: var(--dt-syn-keyword);
 }
-.dt-source .token.string,
-.dt-source .token.char,
-.dt-source .token.triple-quoted-string,
-.dt-source .token.string-interpolation {
+:is(.dt-source, .dt-syntax) .token.string,
+:is(.dt-source, .dt-syntax) .token.char,
+:is(.dt-source, .dt-syntax) .token.triple-quoted-string,
+:is(.dt-source, .dt-syntax) .token.string-interpolation {
   color: var(--dt-syn-string);
 }
-.dt-source .token.interpolation {
+:is(.dt-source, .dt-syntax) .token.interpolation {
   color: var(--dt-ink-text);
 }
-.dt-source .token.number {
+:is(.dt-source, .dt-syntax) .token.number {
   color: var(--dt-syn-number);
 }
-.dt-source .token.comment {
+:is(.dt-source, .dt-syntax) .token.comment {
   color: var(--dt-syn-comment);
   font-style: italic;
 }
-.dt-source .token.function,
-.dt-source .token.class-name,
-.dt-source .token.builtin,
-.dt-source .token.decorator {
+:is(.dt-source, .dt-syntax) .token.function,
+:is(.dt-source, .dt-syntax) .token.class-name,
+:is(.dt-source, .dt-syntax) .token.builtin,
+:is(.dt-source, .dt-syntax) .token.decorator {
   color: var(--dt-syn-function);
 }
-.dt-source .token.operator,
-.dt-source .token.punctuation {
+:is(.dt-source, .dt-syntax) .token.operator,
+:is(.dt-source, .dt-syntax) .token.punctuation {
   color: var(--dt-syn-operator);
 }
 .dt-frame-nosource {
@@ -1488,31 +1440,6 @@ details[data-focused] > .dt-sql-group {
   padding: 0.5rem 0.75rem;
   color: var(--dt-text-3);
   font-size: var(--dt-size-sm);
-}
-/* One grid for every row: the names' column fits the longest name (up to 16rem), the values take the rest. */
-.dt-locals {
-  display: grid;
-  grid-template-columns: fit-content(16rem) minmax(0, 1fr);
-  column-gap: 1.25rem;
-  margin: 0;
-  padding: 0.375rem 0.75rem 0.625rem;
-  border-top: 1px solid var(--dt-border);
-  background: var(--dt-bg);
-}
-.dt-locals div {
-  display: grid;
-  grid-template-columns: subgrid;
-  grid-column: 1 / -1;
-  padding: 0.1875rem 0;
-}
-.dt-locals dt {
-  color: var(--dt-text-2);
-  font: 600 var(--dt-size-xs) var(--dt-mono);
-}
-.dt-locals dd {
-  margin: 0;
-  font: var(--dt-size-xs) var(--dt-mono);
-  overflow-wrap: anywhere;
 }
 .dt-chained {
   margin-top: 1.125rem;
@@ -2204,9 +2131,6 @@ details[data-focused] > .dt-sql-group {
   color: var(--dt-text-3);
   font-size: var(--dt-size-sm);
   font-variant-numeric: tabular-nums;
-}
-.dt-mail-props {
-  padding: 0.25rem 0.875rem;
 }
 .dt-mail-switch {
   margin: 0.625rem 0.875rem 0;

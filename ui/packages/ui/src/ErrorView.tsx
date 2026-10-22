@@ -3,6 +3,8 @@ import { languageOf, tokenizeLines } from "./highlight";
 import { ChevronRightIcon } from "./icons";
 import { keyed } from "./keys";
 import { linkProps, type TraceLinks } from "./links";
+import { NameValues } from "./NameValues";
+import { TokenLine } from "./Tokens";
 import type { ParsedException } from "./traceback";
 import type { ChainedError, Frame, Issue, TraceError } from "./types";
 
@@ -40,17 +42,7 @@ function Source({ frame }: { frame: Frame }) {
           <li key={number} data-current={number === frame.lineno ? "" : undefined}>
             <span className="dt-source-no">{number}</span>
             <code>
-              {line.length === 0
-                ? " "
-                : keyed(line, (token) => token.text).map(({ key, item: token }) =>
-                    token.type === "plain" ? (
-                      <span key={key}>{token.text}</span>
-                    ) : (
-                      <span key={key} className={`token ${token.type}`}>
-                        {token.text}
-                      </span>
-                    ),
-                  )}
+              <TokenLine tokens={line} />
             </code>
           </li>
         );
@@ -72,20 +64,14 @@ function PlainSource({ frame, start }: { frame: Frame; start: number }) {
   );
 }
 
+/** A frame's locals as every list of names and values shows them: a repr laid out and coloured, each one copies. */
 function Locals({ locals }: { locals: Record<string, string> }) {
-  const entries = Object.entries(locals);
-  if (entries.length === 0) return null;
+  const rows = Object.entries(locals).map(([name, value]) => ({ name, value }));
+  if (rows.length === 0) return null;
   return (
-    <dl className="dt-locals">
-      {entries.map(([name, value]) => (
-        <div key={name}>
-          <dt>{name}</dt>
-          <dd>
-            <code>{value}</code>
-          </dd>
-        </div>
-      ))}
-    </dl>
+    <section aria-label="Locals" className="border-t bg-background">
+      <NameValues rows={rows} />
+    </section>
   );
 }
 

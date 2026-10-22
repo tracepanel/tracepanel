@@ -111,7 +111,7 @@ test("a template's context shows in the call tree, long values folded; a templat
   await expect(context).toContainText("2 more names not recorded: over the limit of one template.");
   await expect(page.getByRole("region", { name: "All attributes" })).not.toContainText("template.context");
 
-  await context.getByRole("button", { name: /^Show all \d+ characters$/ }).click();
+  await context.getByRole("button", { name: "Show all 42 lines" }).click();
 
   await expect(context.getByRole("button", { name: "Show less" })).toHaveAttribute("aria-expanded", "true");
 

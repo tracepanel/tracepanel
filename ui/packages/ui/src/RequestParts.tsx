@@ -1,13 +1,15 @@
 import { type ReactNode, useState } from "react";
+import { AttributeGroups, TitledCard } from "./Attributes";
 import { ChevronDownIcon } from "./icons";
 import { indentedJson } from "./json";
 import { cn } from "./lib/utils";
 import { NameValues } from "./NameValues";
 import { Segmented } from "./Segmented";
+import { CodeLines } from "./Tokens";
 import type { Attrs } from "./types";
 
 // What the request carried and what its response said, as the app's SDK recorded them (this machine only), and every
-// other attribute: one card, one part at a time, as browser devtools show a request.
+// other attribute: one card, one part at a time, as browser devtools show a request; a part alone under its name.
 const PREFIXES = {
   headers: "http.request.header.",
   cookies: "http.request.cookie.",
@@ -21,11 +23,8 @@ export function isRequestDetail(key: string): boolean {
   return KEYS.has(key) || Object.values(PREFIXES).some((prefix) => key.startsWith(prefix));
 }
 
-type Pair = [name: string, value: string];
-
-function text(value: unknown): string {
-  return typeof value === "string" ? value : JSON.stringify(value);
-}
+/** A name and its value as it came: a list or a repr is laid out where it is shown. */
+type Pair = [name: string, value: unknown];
 
 /** A header as HTTP spells it: attribute keys take no dashes, so content-type was kept as content_type. */
 function dashed(key: string): string {
@@ -35,7 +34,7 @@ function dashed(key: string): string {
 function under(attrs: Attrs, prefix: string, name: (key: string) => string = (key) => key): Pair[] {
   return Object.entries(attrs)
     .filter(([key]) => key.startsWith(prefix))
-    .map(([key, value]): Pair => [name(key.slice(prefix.length)), text(value)])
+    .map(([key, value]): Pair => [name(key.slice(prefix.length)), value])
     .sort(([a], [b]) => a.localeCompare(b));
 }
 
@@ -50,25 +49,10 @@ function fromBrowser(name: string): boolean {
   );
 }
 
-/** A body as it reads best: JSON indented, anything else as it came. */
-function readable(body: string): string {
-  return indentedJson(body) ?? body;
-}
-
-/** The other attributes by namespace (`code.*`, `http.*`…), keys without it; keys with none last. */
-function grouped(attrs: Attrs): [string, Pair[]][] {
-  const groups = new Map<string, Pair[]>();
-  for (const [key, value] of Object.entries(attrs).sort(([a], [b]) => a.localeCompare(b))) {
-    const [name, rest] = namespaced(key);
-    groups.set(name, [...(groups.get(name) ?? []), [rest, text(value)]]);
-  }
-  return [...groups].sort(([a], [b]) => Number(a === "other") - Number(b === "other"));
-}
-
-/** A key's namespace and the rest of it; a key without one is in "other", whole. */
-function namespaced(key: string): [string, string] {
-  const dot = key.indexOf(".");
-  return dot === -1 ? ["other", key] : [key.slice(0, dot), key.slice(dot + 1)];
+/** A body as it reads best: JSON indented and coloured, anything else as it came. */
+function Readable({ body }: { body: string }) {
+  const json = indentedJson(body);
+  return json === null ? body : <CodeLines text={json} language="javascript" />;
 }
 
 /** A part shown in the card: its tab's name and count, and what it shows. */
@@ -77,8 +61,6 @@ export interface Part {
   label: string;
   count?: number | undefined;
   content: ReactNode;
-  /** Shown as it is, not in the card: content made of cards of its own. */
-  bare?: boolean;
 }
 
 function pairsPart(id: string, label: string, pairs: Pair[]): Part[] {
@@ -100,7 +82,6 @@ function headersPart(attrs: Attrs): Part[] {
 
 /** The request's parts, then the given ones (a GraphQL query), then every other attribute. */
 export function requestParts(attrs: Attrs, others: Attrs, extra: readonly Part[] = []): Part[] {
-  const groups = grouped(others);
   return [
     ...headersPart(attrs),
     ...pairsPart("query", "Query", queryPairs(attrs["url.query"])),
@@ -113,17 +94,26 @@ export function requestParts(attrs: Attrs, others: Attrs, extra: readonly Part[]
       id: "attributes",
       label: "Attributes",
       count: Object.keys(others).length,
-      content: <Groups groups={groups} />,
-      bare: true,
+      content: <AttributeGroups attrs={others} />,
     },
   ];
 }
 
-/** The parts as one card: a switch above it, the chosen part inside. The switch stays on its part across traces. */
+/**
+ * The parts as one card: a switch above it, the chosen part inside. The switch stays on its part across traces. A
+ * part alone (a task run's attributes) has no switch: its name and count head the card.
+ */
 export function RequestParts({ parts }: { parts: readonly Part[] }) {
   const [picked, setPicked] = useState<string | null>(null);
   const open = parts.find((part) => part.id === picked) ?? parts[0];
   if (!open) return null;
+  if (parts.length === 1) {
+    return (
+      <TitledCard label={open.label} count={open.count}>
+        {open.content}
+      </TitledCard>
+    );
+  }
   return (
     <section className="grid gap-2" aria-label="Request details">
       <Segmented
@@ -132,15 +122,9 @@ export function RequestParts({ parts }: { parts: readonly Part[] }) {
         value={open.id}
         onChange={setPicked}
       />
-      {open.bare ? (
-        <div role="tabpanel" aria-label={open.label}>
-          {open.content}
-        </div>
-      ) : (
-        <div className="overflow-hidden rounded-lg border bg-card" role="tabpanel" aria-label={open.label}>
-          {open.content}
-        </div>
-      )}
+      <div className="overflow-hidden rounded-lg border bg-card" role="tabpanel" aria-label={open.label}>
+        {open.content}
+      </div>
     </section>
   );
 }
@@ -180,28 +164,6 @@ function Pairs({ pairs }: { pairs: readonly Pair[] }) {
   return <NameValues rows={pairs.map(([name, value]) => ({ name, value }))} />;
 }
 
-/** A card per namespace, its name and count above it: groups apart at a glance, names lined up across them. */
-function Groups({ groups }: { groups: readonly [string, Pair[]][] }) {
-  if (!groups.length) {
-    return <p className="rounded-lg border bg-card px-3 py-2 text-xs text-muted-foreground">No other attributes.</p>;
-  }
-  return (
-    <div className="grid gap-4">
-      {groups.map(([name, pairs]) => (
-        <section key={name} className="grid gap-1.5" aria-label={name}>
-          <h4 className="flex items-baseline gap-1.5 px-1 text-[11px] font-semibold tracking-wider text-foreground/80 uppercase">
-            {name}
-            <span className="font-normal text-muted-foreground tabular-nums">{pairs.length}</span>
-          </h4>
-          <div className="overflow-hidden rounded-lg border bg-card">
-            <Pairs pairs={pairs} />
-          </div>
-        </section>
-      ))}
-    </div>
-  );
-}
-
 /** A form's fields as names and values; any other body as text. */
 function Body({ attrs }: { attrs: Attrs }) {
   const form = String(attrs["http.request.header.content_type"] ?? "").startsWith("application/x-www-form-urlencoded");
@@ -209,10 +171,12 @@ function Body({ attrs }: { attrs: Attrs }) {
 }
 
 function TextBody({ attrs }: { attrs: Attrs }) {
-  const body = text(attrs["http.request.body"]);
+  const body = String(attrs["http.request.body"]);
   return (
     <>
-      <pre className="m-0 max-h-96 overflow-auto p-3 font-mono text-xs whitespace-pre-wrap">{readable(body)}</pre>
+      <pre className="dt-syntax m-0 max-h-96 overflow-auto p-3 font-mono text-xs whitespace-pre-wrap">
+        <Readable body={body} />
+      </pre>
       {attrs["http.request.body.truncated"] === true ? (
         <p className="border-t px-3 py-1.5 text-xs text-muted-foreground">Cut at 16 KB.</p>
       ) : null}
