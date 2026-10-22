@@ -4,7 +4,7 @@ import { formatSql, placeholders, tokenizeSql } from "./sql";
 
 export interface SqlCodeProps {
   sql: string;
-  /** Database vendor for formatting rules: postgresql (default), sqlite, mysql. */
+  /** Database vendor for formatting rules: postgresql (default), sqlite, mysql, microsoft or mssql (SQL Server). */
   vendor?: string | undefined;
   /** Keep the statement as written instead of reformatting it. */
   raw?: boolean | undefined;
