@@ -29,11 +29,6 @@ export function tone(status: number | null, issues: number): Tone {
   return issues > 0 ? "warn" : "ok";
 }
 
-/** Share of `part` in `total` as a whole percent string. */
-export function percent(part: number, total: number): string {
-  return total > 0 ? `${Math.round((part / total) * 100)}%` : "0%";
-}
-
 /** A moment as a log line shows it, to the millisecond, in local time: 14:03:21.146. */
 function clock(us: number): string {
   const at = new Date(us / 1000);
