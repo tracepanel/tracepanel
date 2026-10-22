@@ -122,6 +122,12 @@
 
 ### Fixed
 
+- A trace's tabs never show cut. In the panel, docked at the bottom or on
+  the right, and in the console, the tabs that don't fit go into a More menu
+  at the row's end, with their counts, and a dot on it when one of them has
+  issues or errors. When that would leave less than half of them in the row,
+  the tabs but the open one show their icon and count only, their name in
+  the tooltip. The open tab always stays in the row.
 - A group page's Time button is its own size again, not stretched across
   the page.
 - The slowest and failing lists above a section's table no longer widen the
@@ -131,6 +137,14 @@
   all now reads "<1%" or ">99%", wherever the console and the panel show a
   percent (the tiles of every page, a cache's hit rate, the time breakdown,
   a profile).
+- SQL Server's queries get the issues other databases' get. A lookup by key
+  written with SQL Server's `[table].[id]` names, as Django's mssql backend
+  writes it, is one: a loop of them in library code is an N+1, and its hint
+  says `select_related()`, not `prefetch_related()`. IN lists of `@P1`,
+  `@name` and `:1` placeholders collapse, a span's table keeps its schema
+  (`SELECT dbo.orders`), and EXPLAIN knows those placeholders. The console
+  lays a SQL Server statement out in its own dialect and colours its
+  `[names]`, `TOP` and `@P1`.
 - A count of one reads as one: a task's group of one says "1 task" in its
   facts and its workflow graph, and an endpoint in the search "1 call".
 
