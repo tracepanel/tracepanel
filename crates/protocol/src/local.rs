@@ -1,13 +1,13 @@
 //! What stays on this machine when a trace leaves it: for Tracepanel Cloud, or in a snapshot shared without its
 //! values. Query parameters, mail bodies, who a user is beyond their id, what a request carried (its query string,
-//! headers, body, cookies and session) and its response's headers, a log record's own fields (`extra=`), the
+//! headers, body, cookies and session) and its response's headers and body, a log record's own fields (`extra=`), the
 //! local variables of an error's frames and the context a template was rendered with.
 
 use serde_json::{Map, Value};
 
 /// Attributes that stay on this machine: parameters, mail bodies, who a user is beyond their id, a request's query
-/// string and body.
-const LOCAL_ONLY: [&str; 8] = [
+/// string and body, and its response's body.
+const LOCAL_ONLY: [&str; 11] = [
     "db.params",
     "mail.body",
     "mail.html",
@@ -16,6 +16,9 @@ const LOCAL_ONLY: [&str; 8] = [
     "url.query",
     "http.request.body",
     "http.request.body.truncated",
+    "http.response.body",
+    "http.response.body.truncated",
+    "http.response.body.size",
 ];
 /// Attributes under these stay on this machine too: a log record's own fields (as `extra=` passed them), a request's
 /// headers, cookies and session, its response's headers, and a template's context (its names and their values).
@@ -96,6 +99,9 @@ mod tests {
                 "http.request.cookie.theme": "dark",
                 "session.cart": "[3]",
                 "http.response.header.content-type": "application/json",
+                "http.response.body": "{\"id\":7}",
+                "http.response.body.truncated": true,
+                "http.response.body.size": 8,
             },
         });
 

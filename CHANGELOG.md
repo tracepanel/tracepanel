@@ -12,6 +12,14 @@
   `select_related()` for a lookup by key, `prefetch_related()` for related
   rows, or for an ORM the agent doesn't know, loading them in the view. The
   line comes from `code.template_line`, which the Python SDK records.
+- A response's body beside its request's, as Django Silk shows them. A
+  request's parts are Headers, Query, Request body, Cookies, Session,
+  Response headers and Response body: JSON laid out and coloured as a task's
+  arguments are, a form as its fields, a body cut at the SDK's limit laid out
+  as far as it goes and marked with how much of it is shown, and one kept by
+  its size only (an image, a page) saying so. The same parts show in the
+  console, in the panel and on the call tree's request row. A response's body
+  stays on this machine, as a request's does.
 - An app's settings and versions, as a debug toolbar shows them. The panel
   has an App tab after Request: the settings of the app that served the
   request, a filter above them, secrets masked by the SDK as `********`, and

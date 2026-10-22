@@ -481,7 +481,46 @@ function signIn(): Doc {
     "session._auth_user_id": "7",
     "http.response.header.location": "/orders/",
     "http.response.header.set_cookie": "********",
+    "http.response.body.size": 0,
   });
+}
+
+/**
+ * A JSON API's POST as the Python SDK records its bodies: the request's whole, its secret masked; the response's cut
+ * at the SDK's limit, with its size; and a file upload, its file by name and size, answered with an image.
+ */
+function apiBodies(): Doc[] {
+  const rows = Array.from({ length: 40 }, (_, id) => ({ id, title: `Book ${id}`, tags: ["new"], stock: null }));
+  const answer = JSON.stringify({ order: 7, access_token: "********", items: rows });
+  const headers = (type: string) => ({
+    "http.request.header.content_type": type,
+    "http.response.header.content_type": "application/json",
+  });
+  return [
+    trace("http", "POST /api/orders/", {
+      ...SHOP,
+      "http.method": "POST",
+      "http.path": "/api/orders/",
+      "http.route": "/api/orders/",
+      "http.status_code": 201,
+      ...headers("application/json"),
+      "http.request.body": '{"book":3,"quantity":2,"card":{"number":"4242","cvc":"********"}}',
+      "http.response.body": answer.slice(0, 1024),
+      "http.response.body.truncated": true,
+      "http.response.body.size": answer.length,
+    }),
+    trace("http", "POST /api/covers/", {
+      ...SHOP,
+      "http.method": "POST",
+      "http.path": "/api/covers/",
+      "http.route": "/api/covers/",
+      "http.status_code": 200,
+      "http.request.header.content_type": "multipart/form-data; boundary=x",
+      "http.response.header.content_type": "image/png",
+      "http.request.body": "title=Dune&cover=<file dune.png, 48213 bytes>",
+      "http.response.body.size": 48213,
+    }),
+  ];
 }
 
 /** A request profiled by its sampler: most of its time in the ORM, under a function of the project's own. */
@@ -852,6 +891,7 @@ export default async function seed(): Promise<void> {
     ...messages(),
     report(),
     signIn(),
+    ...apiBodies(),
     profiled(),
     adminList(),
     bookList(),

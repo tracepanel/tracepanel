@@ -19,12 +19,23 @@ export function TokenLine({ tokens }: { tokens: readonly SourceToken[] }) {
 
 /**
  * Code coloured, a span a line: a value laid out (JSON, a Python repr) or a log message that is a JSON document. Past
- * the size worth colouring it is shown as it came; `lines` shows only the first ones (a folded value).
+ * the size worth colouring (`limit`: a body is read whole, so worth more) it is shown as it came; `lines` shows only the
+ * first ones (a folded value).
  */
-export function CodeLines({ text, language, lines }: { text: string; language: Language; lines?: number | undefined }) {
+export function CodeLines({
+  text,
+  language,
+  lines,
+  limit = STRUCTURE_LIMIT,
+}: {
+  text: string;
+  language: Language;
+  lines?: number | undefined;
+  limit?: number;
+}) {
   const tokens = useMemo(
-    () => (text.length > STRUCTURE_LIMIT ? null : tokenizeLines(text.split("\n"), language)),
-    [text, language],
+    () => (text.length > limit ? null : tokenizeLines(text.split("\n"), language)),
+    [text, language, limit],
   );
   if (tokens === null) return text;
   // A line break between lines, as text: the code copies and reads (textContent) as it is laid out.

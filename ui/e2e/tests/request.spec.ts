@@ -18,17 +18,18 @@ test("its parts switch one at a time; the attributes are a part, not a list unde
   await expect(parts.getByRole("tab")).toHaveText([
     /^Headers\s*7$/,
     /^Query\s*1$/,
-    /^Body$/,
+    /^Request body$/,
     /^Cookies\s*2$/,
     /^Session\s*1$/,
-    /^Response\s*2$/,
+    /^Response headers\s*2$/,
+    /^Response body$/,
     /^Attributes\s*\d+$/,
   ]);
   await expect(page.getByText("location")).toBeHidden();
 
-  await parts.getByRole("tab", { name: /^Response/ }).click();
+  await parts.getByRole("tab", { name: /^Response headers/ }).click();
 
-  await expect(page.getByRole("tabpanel", { name: "Response" })).toContainText("/orders/");
+  await expect(page.getByRole("tabpanel", { name: "Response headers" })).toContainText("/orders/");
   await expect(page.getByRole("region", { name: "http" })).toBeHidden();
 
   await parts.getByRole("tab", { name: /^Attributes/ }).click();
@@ -51,9 +52,15 @@ test("the headers the app chose come first; the browser's own fold under a line 
 });
 
 test("a form's body reads as its fields, its secrets masked", async ({ page }) => {
-  await page.getByRole("tab", { name: "Body" }).click();
-  const panel = page.getByRole("tabpanel", { name: "Body" });
+  await page.getByRole("tab", { name: "Request body" }).click();
+  const panel = page.getByRole("tabpanel", { name: "Request body" });
 
   await expect(panel.locator("dt")).toHaveText(["csrfmiddlewaretoken", "username", "password"]);
   await expect(panel.locator("dd")).toHaveText(["********", "ann", "********"]);
+});
+
+test("a redirect's empty body says so", async ({ page }) => {
+  await page.getByRole("tab", { name: "Response body" }).click();
+
+  await expect(page.getByRole("tabpanel", { name: "Response body" })).toHaveText("Empty.");
 });

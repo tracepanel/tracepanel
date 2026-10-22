@@ -1,7 +1,8 @@
 import { type ReactNode, useState } from "react";
 import { AttributeGroups } from "./Attributes";
+import { bytes } from "./format";
 import { ChevronDownIcon } from "./icons";
-import { indentedJson } from "./json";
+import { indentedJson, indentedPartialJson } from "./json";
 import { cn } from "./lib/utils";
 import { NameValues } from "./NameValues";
 import { Segmented } from "./Segmented";
@@ -16,7 +17,16 @@ const PREFIXES = {
   session: "session.",
   response: "http.response.header.",
 } as const;
-const KEYS = new Set(["url.query", "http.request.body", "http.request.body.truncated"]);
+const KEYS = new Set([
+  "url.query",
+  "http.request.body",
+  "http.request.body.truncated",
+  "http.response.body",
+  "http.response.body.truncated",
+  "http.response.body.size",
+]);
+/** A body is read whole (its limit is the SDK's, 64 KB by default): coloured up to this, past it as it came. */
+const BODY_COLOURED = 512 * 1024;
 
 /** Shown in the request's own parts: not again among the other attributes. */
 export function isRequestDetail(key: string): boolean {
@@ -49,10 +59,16 @@ function fromBrowser(name: string): boolean {
   );
 }
 
-/** A body as it reads best: JSON indented and coloured, anything else as it came. */
-function Readable({ body }: { body: string }) {
-  const json = indentedJson(body);
-  return json === null ? body : <CodeLines text={json} language="javascript" />;
+/** A body as it reads best: JSON indented and coloured (a cut one laid out as far as it goes), anything else as it came. */
+function Readable({ body, text }: { body: BodyOf; text: string }) {
+  const indented = laidOut(body, text);
+  return indented === null ? text : <CodeLines text={indented} language="javascript" limit={BODY_COLOURED} />;
+}
+
+/** A body's JSON indented; JSON cut short as far as it goes; null for anything else. */
+function laidOut(body: BodyOf, text: string): string | null {
+  const whole = indentedJson(text);
+  return whole === null && body.json && body.cut ? indentedPartialJson(text) : whole;
 }
 
 /** A part shown in the card: its tab's name and count, and what it shows. */
@@ -67,10 +83,42 @@ function pairsPart(id: string, label: string, pairs: Pair[]): Part[] {
   return pairs.length ? [{ id, label, count: pairs.length, content: <Pairs pairs={pairs} /> }] : [];
 }
 
-function bodyPart(attrs: Attrs): Part[] {
-  return typeof attrs["http.request.body"] === "string"
-    ? [{ id: "body", label: "Body", content: <Body attrs={attrs} /> }]
-    : [];
+/** A body as the SDK recorded it: its text (or none, kept by its size only), whether it was cut, its type. */
+interface BodyOf {
+  text: string | null;
+  cut: boolean;
+  /** Bytes, as the SDK counted them; 0 when it didn't (a request's body). */
+  size: number;
+  type: string;
+  json: boolean;
+}
+
+function bodyOf(attrs: Attrs, side: "request" | "response"): BodyOf | null {
+  const text = textOf(attrs[`http.${side}.body`]);
+  const size = attrs[`http.${side}.body.size`];
+  if (text === null && typeof size !== "number") return null;
+  const type = mediaType(attrs[`http.${side}.header.content_type`]);
+  return {
+    text,
+    cut: attrs[`http.${side}.body.truncated`] === true,
+    size: typeof size === "number" ? size : 0,
+    type,
+    json: /^application\/(.+\+)?json$/.test(type),
+  };
+}
+
+function textOf(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
+}
+
+/** A Content-Type without its parameters: application/json; charset=utf-8 -> application/json. */
+function mediaType(header: unknown): string {
+  const [type = ""] = String(header ?? "").split(";", 1);
+  return type.trim().toLowerCase();
+}
+
+function bodyPart(id: string, label: string, body: BodyOf | null): Part[] {
+  return body ? [{ id, label, content: <Body body={body} /> }] : [];
 }
 
 function headersPart(attrs: Attrs): Part[] {
@@ -85,10 +133,11 @@ export function requestParts(attrs: Attrs, others: Attrs, extra: readonly Part[]
   return [
     ...headersPart(attrs),
     ...pairsPart("query", "Query", queryPairs(attrs["url.query"])),
-    ...bodyPart(attrs),
+    ...bodyPart("body", "Request body", bodyOf(attrs, "request")),
     ...pairsPart("cookies", "Cookies", under(attrs, PREFIXES.cookies)),
     ...pairsPart("session", "Session", under(attrs, PREFIXES.session)),
-    ...pairsPart("response", "Response", under(attrs, PREFIXES.response, dashed)),
+    ...pairsPart("response", "Response headers", under(attrs, PREFIXES.response, dashed)),
+    ...bodyPart("response-body", "Response body", bodyOf(attrs, "response")),
     ...extra,
     {
       id: "attributes",
@@ -155,22 +204,39 @@ function Pairs({ pairs }: { pairs: readonly Pair[] }) {
   return <NameValues rows={pairs.map(([name, value]) => ({ name, value }))} />;
 }
 
-/** A form's fields as names and values; any other body as text. */
-function Body({ attrs }: { attrs: Attrs }) {
-  const form = String(attrs["http.request.header.content_type"] ?? "").startsWith("application/x-www-form-urlencoded");
-  return form ? <Pairs pairs={queryPairs(attrs["http.request.body"])} /> : <TextBody attrs={attrs} />;
-}
-
-function TextBody({ attrs }: { attrs: Attrs }) {
-  const body = String(attrs["http.request.body"]);
+/** A body's text, marked when it was cut; one kept by its size only says so. */
+function Body({ body }: { body: BodyOf }) {
+  if (body.text === null) return <BodyNote>{unkept(body.size, body.type)}</BodyNote>;
   return (
     <>
-      <pre className="dt-syntax m-0 max-h-96 overflow-auto p-3 font-mono text-xs whitespace-pre-wrap">
-        <Readable body={body} />
-      </pre>
-      {attrs["http.request.body.truncated"] === true ? (
-        <p className="border-t px-3 py-1.5 text-xs text-muted-foreground">Cut at 16 KB.</p>
-      ) : null}
+      <BodyText body={body} text={body.text} />
+      {body.cut ? <BodyNote>{cutAt(body.text, body.size)}</BodyNote> : null}
     </>
   );
+}
+
+/** A whole form's fields as names and values; any other body as text. */
+function BodyText({ body, text }: { body: BodyOf; text: string }) {
+  if (body.type === "application/x-www-form-urlencoded" && !body.cut) return <Pairs pairs={queryPairs(text)} />;
+  return (
+    <pre className="dt-syntax m-0 max-h-96 overflow-auto p-3 font-mono text-xs whitespace-pre-wrap">
+      <Readable body={body} text={text} />
+    </pre>
+  );
+}
+
+function BodyNote({ children }: { children: ReactNode }) {
+  return <p className="border-t px-3 py-1.5 text-xs text-muted-foreground first:border-t-0">{children}</p>;
+}
+
+/** What a cut body says of itself: how much of it is shown, of how much when the SDK knew. */
+function cutAt(text: string, size: number): string {
+  const shown = bytes(new TextEncoder().encode(text).length);
+  return size === 0 ? `Cut: only its first ${shown} were kept.` : `Cut: its first ${shown} of ${bytes(size)}.`;
+}
+
+/** Why a body has no text: its type isn't one kept (binary, a page), or it was compressed or too large to mask. */
+function unkept(size: number, type: string): string {
+  if (size === 0) return "Empty.";
+  return `${bytes(size)} of ${type || "content"}: kept by its size only. JSON, forms and text are kept, uncompressed.`;
 }
