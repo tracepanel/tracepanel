@@ -24,7 +24,8 @@
   --destructive: var(--dt-error);
   --border: var(--dt-border);
   --input: var(--dt-border-strong);
-  --ring: var(--dt-accent);
+  /* No focus rings: a focused control keeps its own border colour (see the console's index.css). */
+  --ring: var(--dt-border);
   --radius: 0.625rem;
   --sidebar: var(--dt-chrome);
   --sidebar-foreground: var(--dt-text-2);

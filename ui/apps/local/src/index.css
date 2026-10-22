@@ -51,3 +51,20 @@
       "liga" 0;
   }
 }
+
+/* No outline or ring around a focused control, anywhere: the user found them noisy. Keyboard focus still shows, as
+   a light tint over the control's own background (an overlay, so a filled button keeps its colour). Unlayered, so it
+   wins over every component's own focus classes. */
+:focus,
+:focus-visible {
+  outline: none !important;
+}
+:focus-visible {
+  box-shadow: none !important;
+}
+:focus-visible:not(input, textarea, select, [contenteditable]) {
+  background-image: linear-gradient(
+    color-mix(in oklab, currentColor 10%, transparent),
+    color-mix(in oklab, currentColor 10%, transparent)
+  );
+}
