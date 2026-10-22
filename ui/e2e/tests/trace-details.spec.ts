@@ -1,6 +1,7 @@
 // Inside a trace: a span's details, the tabs, Explore's ways out, and the snapshot a person can send.
 import { readFileSync } from "node:fs";
 import type { Page } from "@playwright/test";
+import { traceId } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
 
 /** The trace of a call to GET /api/posts: 14 queries, 13 of them the same author lookup. */
@@ -51,6 +52,34 @@ test("the Request tab lists the trace's attributes, the DB tab its queries group
 
   await expect(panel.getByRole("button", { name: "In order" })).toHaveAttribute("aria-pressed", "true");
   await expect(panel.getByText("SELECT author").first()).toBeVisible();
+});
+
+test("a query a template made says so, in the DB tab and in the call tree", async ({ page }) => {
+  await page.goto(`/#/t/${await traceId("GET /")}`);
+  await page.getByRole("tab", { name: /^DB/ }).click();
+  const panel = page.getByRole("tabpanel");
+  const authors = panel.getByRole("group").filter({ hasText: "SELECT auth_user" });
+
+  await expect(authors.locator("summary").getByTitle(/^From the template blog\/post_list\.html/)).toHaveText(
+    "template blog/post_list.html",
+  );
+  // The posts the view read are its own: no template.
+  await expect(
+    panel
+      .getByRole("group")
+      .filter({ hasText: "SELECT blog_post" })
+      .getByTitle(/^From the template/),
+  ).toHaveCount(0);
+
+  await authors.locator("summary").click();
+
+  await expect(authors.getByRole("listitem").first()).toContainText(
+    /template blog\/post_list\.html\s*rendered from\s*blog\/views\.py:28 in post_list/,
+  );
+
+  await page.getByRole("tab", { name: "Call tree" }).click();
+
+  await expect(page.getByRole("button", { name: /SELECT auth_user .*template blog\/post_list\.html/ })).toBeVisible();
 });
 
 test("Explore leads to the endpoint's calls, the issue and the logs around the trace", async ({ page }) => {

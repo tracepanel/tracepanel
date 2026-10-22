@@ -23,7 +23,7 @@ import { CALL_KINDS, DATASTORES, MESSAGING, RPC } from "./lib/systems";
 import { linkProps, type TraceLinks } from "./links";
 import { type NameValue, NameValues } from "./NameValues";
 import { PropTable } from "./PropTable";
-import { AliasChip, AppChip, IssueChip } from "./primitives";
+import { AliasChip, AppChip, IssueChip, TemplateChip } from "./primitives";
 import { isRequestDetail, RequestParts, requestParts } from "./RequestParts";
 import { SideResize, useSideWidth } from "./SideResize";
 import { SignalNotes } from "./SignalNotes";
@@ -707,7 +707,7 @@ function LeafRow({
   );
 }
 
-/** A group's kind, its call's template, its alias, how many and its issue. */
+/** A group's kind, its call's template, its alias, the page template that made it, how many and its issue. */
 function GroupName({ node, ctx }: { node: Extract<Node, { type: "group" }>; ctx: RowContext }) {
   const issue = node.spans.map((span) => ctx.issueBySpan.get(span.id)).find(Boolean);
   const first = node.spans[0];
@@ -716,6 +716,7 @@ function GroupName({ node, ctx }: { node: Extract<Node, { type: "group" }>; ctx:
       <span className="dt-map-kind">{spanKindLabel(first?.kind, ctx.trace.attrs)}</span>
       <span className="dt-map-text">{callTemplate(first)}</span>
       <AliasChip value={aliasOf(first)} />
+      {first ? <TemplateChip attrs={first.attrs} /> : null}
       <span className="dt-map-times">×{node.spans.length}</span>
       {issue ? <IssueChip kind={issue} /> : null}
     </>
@@ -818,6 +819,7 @@ function SpanRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps
           <span className="dt-map-kind">{spanKindLabel(span.kind, ctx.trace.attrs, parent?.kind)}</span>
           <span className="dt-map-text">{span.name}</span>
           <AliasChip value={aliasOf(span)} />
+          <TemplateChip attrs={span.attrs} />
           <SignalNotes span={span} parent={parent} under={childSpans(node)} />
           {issue ? <IssueChip kind={issue} /> : null}
         </span>

@@ -1604,6 +1604,12 @@ details[data-focused] > .dt-sql-group {
     grid-template-columns: minmax(0, 3fr) minmax(3rem, 1fr) 3.5rem;
   }
 }
+/* With the details beside them, a query's template goes: the row sits under its template's, and its details name it. */
+@container map-rows (max-width: 48rem) {
+  .dt-map-name .dt-from-template {
+    display: none;
+  }
+}
 /* Narrower still, the alias goes: the row's details and its title keep it, the call and its issue stay. */
 @container map-rows (max-width: 40rem) {
   .dt-map-name .dt-alias {
@@ -2088,6 +2094,29 @@ details[data-focused] > .dt-sql-group {
   color: var(--dt-alias-text);
   font: 600 var(--dt-size-2xs) / 1rem var(--dt-mono);
   vertical-align: 1px;
+}
+/* A query a template made as it rendered: the template and its line, quieter than the call; it gives way first. */
+.dt-from-template {
+  display: inline-block;
+  flex: 0 40 auto;
+  min-width: 0;
+  margin-left: 0.375rem;
+  padding: 0 0.375rem;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--dt-k-template) 40%, transparent);
+  border-radius: 0.25rem;
+  color: var(--dt-text-2);
+  font: var(--dt-size-2xs) / 1rem var(--dt-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: 1px;
+}
+.dt-from-template:first-child {
+  margin-left: 0;
+}
+.dt-from-template-label {
+  color: var(--dt-k-template);
+  font-weight: 600;
 }
 [data-category="mail"] {
   --dt-k: var(--dt-k-mail);
