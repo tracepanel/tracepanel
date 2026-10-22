@@ -2,7 +2,7 @@
 // it shows as JSON does: `{'attempts': 3}` as {"attempts": 3}, a tuple as an array, None as null. Anything else (an
 // object's repr, a cut value) is not a literal: undefined, and it shows as it came.
 
-type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
+export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 
 interface Reader {
   text: string;

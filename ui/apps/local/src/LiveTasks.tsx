@@ -256,7 +256,7 @@ const COLUMNS: DataColumn<Ticking>[] = [
     id: "task",
     label: "Task",
     required: true,
-    cell: ({ task }) => <Mono className="block truncate">{task.name || "—"}</Mono>,
+    cell: ({ task }) => <TaskName name={task.name} />,
   },
   { id: "state", label: "State", width: 7, cell: ({ task }) => <TaskState state={task.state} /> },
   {
@@ -270,14 +270,14 @@ const COLUMNS: DataColumn<Ticking>[] = [
     ),
   },
   // Where it is: the worker that runs it, or the queue it waits in.
-  { id: "where", label: "Where", width: 12, cell: ({ task }) => <Where task={task} /> },
+  { id: "where", label: "Where", width: 10, cell: ({ task }) => <Where task={task} /> },
   { id: "for", label: "For", width: 7, num: true, cell: ({ task, now }) => elapsed(now, stateSince(task)) },
   { id: "attempt", label: "Attempt", width: 6.5, num: true, cell: ({ task }) => task.retries + 1 },
   // What a glance needs: why the last attempt failed, else what it was given.
   {
     id: "details",
     label: "Details",
-    width: 16,
+    width: 13,
     cell: ({ task }) => (task.error ? <LastError error={task.error} /> : <Arguments task={task} />),
   },
 ];
@@ -313,7 +313,20 @@ function TickingRows({ live, cells }: { live: LiveTasks; cells: (item: Ticking) 
 
 /** Its arguments at a glance, whole on hover. */
 // A long value cut to one line, whole on hover: the table fits the page's width, as the console's other tables do.
-const CUT = "block max-w-[14rem] truncate text-sm";
+const CUT = "block truncate text-sm";
+
+/**
+ * A task's name, cut at its start when it doesn't fit: what tells tasks apart is at its end (the function, the
+ * consumer's handler), not the package they share. Whole on hover.
+ */
+function TaskName({ name }: { name: string }) {
+  if (!name) return muted(null);
+  return (
+    <Mono className="block truncate text-left [direction:rtl]" title={name}>
+      <bdi>{name}</bdi>
+    </Mono>
+  );
+}
 
 /** Where a task is: the worker that runs it, or the queue it waits in. */
 function Where({ task }: { task: LiveTask }) {
