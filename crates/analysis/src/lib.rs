@@ -21,9 +21,17 @@ const SPAN_IDS: usize = 50;
 const TITLE_LIMIT: usize = 200;
 
 static WHITESPACE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s+").unwrap());
-// A lookup by primary key: `WHERE table.id = ?`, or `WHERE id = ?` (a hand-written query); %s, ? or $1.
+/// A placeholder, as each driver writes it: %s and %(name)s (Python), ? and ?1 (JDBC, ODBC, SQLite), $1
+/// (PostgreSQL), @P1 and @name (SQL Server), :1 and :name (Oracle, SQLAlchemy).
+pub(crate) const PLACEHOLDER: &str = r"(?:%s|%\(\w+\)s|\?\d*|\$\d+|@\w+|:\w+)";
+/// A name, bare or quoted: "standard SQL", `MySQL`, [SQL Server].
+pub(crate) const NAME: &str = r#"(?:[`"\[]?\w+[`"\]]?)"#;
+// A lookup by primary key: `WHERE table.id = ?`, or `WHERE id = ?` (a hand-written query).
 static BY_PK: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(?i)WHERE (?:[`"]?\w+[`"]?\.)?[`"]?id[`"]? = (?:%s|\?|\$\d+)"#).unwrap()
+    Regex::new(&format!(
+        r#"(?i)WHERE (?:{NAME}\.)?[`"\[]?id[`"\]]? = {PLACEHOLDER}"#
+    ))
+    .unwrap()
 });
 static LINE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r":\d+ in ").unwrap());
 // The parts of a URL path or a cache key that name one item: a number, a UUID, a long hex digest.
@@ -951,6 +959,29 @@ mod tests {
     }
 
     #[test]
+    fn by_pk_matches_every_quoting_and_placeholder() {
+        // SQL Server as Django's mssql backend writes it, MySQL's backticks, then each driver's placeholder.
+        for statement in [
+            "SELECT TOP 21 [shop_customer].[id], [shop_customer].[user_id] FROM [shop_customer] \
+             WHERE [shop_customer].[id] = %s",
+            "SELECT [auth_user].[id] FROM [auth_user] WHERE [id] = %s",
+            "SELECT `auth_user`.`id` FROM `auth_user` WHERE `auth_user`.`id` = %s LIMIT 21",
+            "SELECT * FROM users WHERE users.id = %(id_1)s",
+            "SELECT * FROM users WHERE users.id = ?1",
+            "SELECT * FROM users WHERE users.id = @P1",
+            "SELECT * FROM users WHERE users.id = @id",
+            "SELECT * FROM users WHERE users.id = :1",
+            "SELECT * FROM users WHERE users.id = :id_1",
+        ] {
+            assert!(BY_PK.is_match(statement), "{statement}");
+        }
+
+        assert!(!BY_PK.is_match(
+            "SELECT [shop_order].[id] FROM [shop_order] WHERE [shop_order].[customer_id] = %s"
+        ));
+    }
+
+    #[test]
     fn a_document_gets_its_issues_and_keeps_the_rest_as_it_came() {
         let issue = Issue {
             fingerprint: "f".into(),
@@ -1281,6 +1312,70 @@ mod tests {
     }
 
     #[test]
+    fn a_loop_of_sql_server_lookups_in_library_code_is_the_view_s_n_plus_one() {
+        // A product page on SQL Server: a library's loop looks up each customer, then its user, by key (the
+        // statements as Django's mssql backend writes them). No project frame: the issue points at the view.
+        let customer = "SELECT TOP 21 [shop_customer].[id], [shop_customer].[user_id] FROM [shop_customer] \
+                        WHERE [shop_customer].[id] = %s";
+        let user = "SELECT TOP 21 [auth_user].[id], [auth_user].[username] FROM [auth_user] \
+                    WHERE [auth_user].[id] = %s";
+        let lookup = |statement: &str, name: &'static str, n: usize| {
+            let attrs = serde_json::json!({
+                "db.statement": statement, "db.fingerprint": statement, "db.params_hash": format!("p{n}"),
+                "db.client": "django", "db.vendor": "microsoft", "code.origin": null,
+                "code.caller": "reviews/widgets.py:40 in render",
+            });
+            ("sql", name, attrs, 1000)
+        };
+        let spans: Vec<_> = (0..7)
+            .flat_map(|n| {
+                [
+                    lookup(customer, "SELECT shop_customer", n),
+                    lookup(user, "SELECT auth_user", n),
+                ]
+            })
+            .collect();
+        let mut trace = request(&spans);
+        trace
+            .attrs
+            .insert("code.view".into(), "shop.views.product_detail".into());
+
+        let issues: Vec<_> = analyze(&trace, &Thresholds::default())
+            .into_iter()
+            .map(|issue| {
+                (
+                    issue.kind,
+                    issue.title,
+                    issue.culprit,
+                    issue.hint,
+                    issue.count,
+                )
+            })
+            .collect();
+
+        let culprit = Some("shop.views.product_detail (in library code)".to_owned());
+        assert_eq!(
+            issues,
+            [
+                (
+                    "n+1".to_owned(),
+                    "N+1: 7 similar queries · SELECT shop_customer".to_owned(),
+                    culprit.clone(),
+                    Some(SELECT_RELATED.to_owned()),
+                    7
+                ),
+                (
+                    "n+1".to_owned(),
+                    "N+1: 7 similar queries · SELECT auth_user".to_owned(),
+                    culprit,
+                    Some(SELECT_RELATED.to_owned()),
+                    7
+                ),
+            ]
+        );
+    }
+
+    #[test]
     fn a_select_without_a_limit_that_returned_many_rows() {
         let query = |statement: &str, rows: i64| {
             let attrs = serde_json::json!({
@@ -1297,6 +1392,13 @@ mod tests {
             // Bounded, few, or not a read: nothing.
             query("SELECT * FROM product LIMIT 50", 50),
             query("SELECT * FROM product LIMIT 5000", 5000),
+            // SQL Server's bounds, as Django's mssql backend writes them.
+            query("SELECT TOP 5000 [product].[id] FROM [product]", 5000),
+            query(
+                "SELECT [product].[id] FROM [product] ORDER BY [product].[id] ASC  OFFSET 20 ROWS \
+                 FETCH FIRST 5000 ROWS ONLY",
+                5000,
+            ),
             query("SELECT * FROM category", 12),
             query("UPDATE product SET price = price * 2", 25_000),
         ]);
