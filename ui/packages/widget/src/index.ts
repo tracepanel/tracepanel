@@ -1,8 +1,9 @@
 // Corner badge, fetch and XHR capture, slide-out panel (iframe inside Shadow DOM).
 
 import TOKENS from "virtual:tracepanel-tokens";
+import { plural } from "@tracepanel/ui/lib/plural";
 import { RUNTIME_PATHS, runtimeKind, runtimeName, traceRuntime } from "@tracepanel/ui/lib/runtime";
-import { CARD_STYLE, mountCard, plural } from "./card";
+import { CARD_STYLE, mountCard } from "./card";
 
 export interface TraceInfo {
   /** The trace's own name when it says more than the request line (a GraphQL operation). */

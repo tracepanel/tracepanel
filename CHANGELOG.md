@@ -132,6 +132,8 @@
   the page.
 - The slowest and failing lists above a section's table no longer widen the
   page sideways when a name is long, as a task's often is: it is cut short.
+- A count of one reads as one: a task's group of one says "1 task" in its
+  facts and its workflow graph, and an endpoint in the search "1 call".
 
 ## 0.4.1 (2026-10-21)
 
