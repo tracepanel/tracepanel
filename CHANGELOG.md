@@ -84,11 +84,11 @@
   and Text switch as a request's parts do.
 - An entry point opens on its calls: HTTP on All requests, Tasks on All
   runs, Pages on All events, and so on, from the menu, ⌘K or a group's way
-  back. Its switch reads "All runs | By task" on every one of them, the
-  groups second, at `view=overview`. A link that named a list still opens
-  it. Its heading is its name in the menu (HTTP, not HTTP endpoints), and
-  its Overview is folded over the calls and open over the groups, until
-  you fold or open it yourself: that choice stays, as before.
+  back. Its switch, a smaller one, reads "By task | All runs" on every one
+  of them, the groups at `view=overview`. A link that named a list still
+  opens it. Its heading is its name in the menu (HTTP, not HTTP
+  endpoints), and its Overview is folded over the calls and open over the
+  groups, until you fold or open it yourself: that choice stays, as before.
 
 ### Fixed
 

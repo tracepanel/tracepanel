@@ -103,7 +103,7 @@ test("Now: the tasks running, queued and retrying, the workers, and the tasks th
   );
   await expect(now.getByRole("list", { name: "Workers" }).getByText(`rq-${run}`)).toBeVisible();
   await expect(now.getByRole("list", { name: "Workers" }).getByText(`celery@box-${run}`)).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "List" }).getByRole("link")).toHaveText(["All runs", "By task"]);
+  await expect(page.getByRole("navigation", { name: "List" }).getByRole("link")).toHaveText(["By task", "All runs"]);
   await expect(now.getByRole("table")).toHaveCount(0);
 
   await now.getByRole("button", { expanded: false }).click();

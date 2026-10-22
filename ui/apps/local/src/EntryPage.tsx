@@ -137,8 +137,8 @@ function useLiveLink(section: EntrySection, q: string, live: boolean | undefined
   }, [live, section, q, setInterval]);
 }
 
-/** The lists of every entry point: every call (what it opens on), its groups. */
-const VIEWS: readonly EntryView[] = ["calls", "overview"];
+/** The lists of every entry point, in the switch's order: its groups, then every call (what it opens on). */
+const VIEWS: readonly EntryView[] = ["overview", "calls"];
 
 function viewLabel(section: EntrySection, view: EntryView): string {
   return view === "overview" ? `By ${GROUP_NOUN[section]}` : `All ${ENTRY[section].calls.toLowerCase()}`;
@@ -156,7 +156,7 @@ function viewQuery(section: EntrySection, from: EntryView, to: EntryView, q: str
   return carryQuery(q, searchKeys(spec, calls ? "traces" : section), calls);
 }
 
-/** The switch between an entry point's lists: All runs / By task. */
+/** The switch between an entry point's lists: By task / All runs. */
 function ListNav({
   section,
   view,
@@ -169,7 +169,7 @@ function ListNav({
   spec: SearchSpec | null;
 }) {
   return (
-    <nav className="mb-3 flex w-fit gap-1 rounded-lg border bg-card p-1" aria-label="List">
+    <nav className="mb-3 flex w-fit gap-0.5 rounded-lg border bg-card p-0.5" aria-label="List">
       {VIEWS.map((item) => (
         <a
           key={item}
@@ -180,7 +180,7 @@ function ListNav({
           })}
           aria-current={view === item ? "page" : undefined}
           className={cn(
-            "rounded-md px-3.5 py-1.5 text-md font-medium text-text-2 no-underline hover:bg-accent hover:text-foreground",
+            "rounded-md px-2.5 py-1 text-sm font-medium text-text-2 no-underline hover:bg-accent hover:text-foreground",
             view === item && "bg-brand-soft text-brand hover:bg-brand-soft hover:text-brand",
           )}
         >

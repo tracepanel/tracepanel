@@ -18,7 +18,7 @@ for (const entry of ENTRIES) {
 
     await expect(page).toHaveURL(new RegExp(`#/${entry.path}$`));
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(entry.link);
-    await expect(list.getByRole("link")).toHaveText([entry.all, entry.by]);
+    await expect(list.getByRole("link")).toHaveText([entry.by, entry.all]);
     await expect(list.getByRole("link", { name: entry.all })).toHaveAttribute("aria-current", "page");
     await expect(main.getByRole("columnheader", { name: "Trace" })).toBeVisible();
 
