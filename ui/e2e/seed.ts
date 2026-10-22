@@ -353,6 +353,9 @@ function limits(): Doc[] {
     "task.id": "reminder-1",
     "task.eta": -120_000_000,
     "task.priority": 5,
+    // A result longer than its line: laid out and coloured in the facts, not cut.
+    "task.args": "()",
+    "task.result": `{${Array.from({ length: 12 }, (_, n) => `'List ${n}': 100`).join(", ")}}`,
   });
   return [stopped, delayed];
 }

@@ -2,6 +2,7 @@
 // coloured, a long one folded, each copied as it came; a trace's attributes the same in its Request tab and on its
 // call tree's request row.
 import type { Locator, Page } from "@playwright/test";
+import { pythonLiteral } from "../../packages/ui/src/lib/pyliteral.ts";
 import { isRepr, prettyRepr, shapeOf } from "../../packages/ui/src/lib/values.ts";
 import { traceId } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
@@ -63,12 +64,15 @@ test("a long repr opens a group a line, an item a line; a short group stays on i
   ).toBe("  'a long item',");
 });
 
-test("a request with only its attributes has no switch: their name and count head the card", async ({ page }) => {
+test("a request with only its attributes has the same switch as any other, its one part Attributes", async ({
+  page,
+}) => {
   await openOrder(page, "request");
-  const attributes = page.getByRole("region", { name: "Attributes", exact: true });
+  const attributes = page.getByRole("tabpanel", { name: "Attributes" });
 
-  await expect(page.getByRole("tablist", { name: "Request details" })).toHaveCount(0);
-  await expect(attributes.getByRole("heading", { level: 3 })).toHaveText(/^Attributes\s*8$/);
+  await expect(page.getByRole("tablist", { name: "Request details" }).getByRole("tab")).toHaveText([
+    /^Attributes\s*8$/,
+  ]);
   await expect(attributes.getByRole("heading", { level: 4 })).toHaveText([
     /^code\s*1$/,
     /^http\s*4$/,
@@ -83,7 +87,7 @@ test("a list attribute reads one item a line, in the Request tab and on the call
 }) => {
   const items = ["pre_save shop.Order: 3", "pre_delete auth.Group: 1"];
   await openOrder(page, "request");
-  const request = page.getByRole("region", { name: "Attributes", exact: true });
+  const request = page.getByRole("tabpanel", { name: "Attributes" });
 
   await expect(
     value(request.getByRole("region", { name: "signal", exact: true }), "unreceived").getByRole("listitem"),
@@ -92,9 +96,8 @@ test("a list attribute reads one item a line, in the Request tab and on the call
 
   await page.getByRole("tab", { name: /^Call tree/ }).click();
   await page.locator(".dt-map-row").first().click();
-  const tree = page
-    .getByRole("complementary", { name: "Details" })
-    .getByRole("region", { name: "Attributes", exact: true });
+  // The request row shows the Request tab's parts, behind the same switch.
+  const tree = page.getByRole("complementary", { name: "Details" }).getByRole("tabpanel", { name: "Attributes" });
 
   await expect(
     value(tree.getByRole("region", { name: "signal", exact: true }), "unreceived").getByRole("listitem"),
@@ -159,4 +162,37 @@ test("an error's locals are a list of names and values: each one copies", async 
   await locals.getByRole("button", { name: "Copy request" }).click();
 
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("<WSGIRequest: GET '/error/'>");
+});
+
+test("a task's long result is laid out and coloured in its facts, whole, not cut to a line", async ({ page }) => {
+  await page.goto(`/#/t/${await traceId("shop.tasks.send_reminder")}?tab=request`);
+  const facts = page.getByRole("main");
+  // The facts' Result, not the same value again in the attributes below.
+  // Shown as the JSON the Python literal stands for.
+  const result = facts.locator("dd").filter({ hasText: '"List 0": 100' }).first();
+
+  await expect(result).toContainText('"List 4": 100');
+  await result.getByRole("button", { name: /^Show all/ }).click();
+
+  await expect(result).toContainText('"List 11": 100');
+  await expect(result.locator(".token.string").first()).toBeVisible();
+  expect(await result.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+});
+
+test("a task's arguments and result, Python literals, read as the JSON they stand for", () => {
+  expect(pythonLiteral("()")).toEqual([]);
+  expect(pythonLiteral("(42, 'a')")).toEqual([42, "a"]);
+  expect(pythonLiteral("{'attempts': 3, 'ok': True, 'none': None, 'f': -1.5}")).toEqual({
+    attempts: 3,
+    ok: true,
+    none: null,
+    f: -1.5,
+  });
+  expect(pythonLiteral("[{'to': 'ann@example.com'}, (1,)]")).toEqual([{ to: "ann@example.com" }, [1]]);
+  expect(pythonLiteral("'it\\'s'")).toBe("it's");
+
+  // Not a literal, whole: shown as it came.
+  expect(pythonLiteral("<User: ann>")).toBeUndefined();
+  expect(pythonLiteral("{'a': 1, 'b': ...")).toBeUndefined();
+  expect(pythonLiteral("datetime.date(2026, 10, 22)")).toBeUndefined();
 });

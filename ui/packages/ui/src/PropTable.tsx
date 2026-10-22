@@ -11,6 +11,8 @@ export interface PropRow {
   /** Plain text for the copy button; rows without it have none. */
   copy?: string | null | undefined;
   mono?: boolean;
+  /** A value that may be long (a task's arguments, its result): laid out whole across the row, wrapped, folded. */
+  wide?: boolean | undefined;
 }
 
 /** The two densities: the default, and `dense` for many short rows (a request's fields and headers). */

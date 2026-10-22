@@ -68,11 +68,15 @@
   shown as JSON or joined with commas before), JSON and a Python repr are
   laid out and coloured, a long value folds under "Show all", and each one
   copies as it came. A log message that is JSON is coloured as well.
-- The call tree's request row shows the trace's attributes as its Request
-  tab does, by namespace. A task run, or a request with no other part, has
-  no switch above its attributes: "Attributes 8" heads one card, its
-  namespaces as headings inside it. An error's locals copy, and an email's
-  HTML and Text switch as a request's parts do.
+- The call tree's request row shows what its Request tab shows: the same parts
+  behind the same switch, Headers to Attributes. Every trace has the switch, a
+  task run's with its one part, Attributes, and the attributes are one card with
+  their namespaces as headings inside it. A task's arguments, keyword arguments,
+  result and retry reason sit under its other facts, a line each in the same
+  columns, not cut short. Its arguments and result, Python literals as the SDK
+  writes them, show as the JSON they stand for, coloured: `{"attempts": 3}`, a
+  tuple as an array, None as null. An error's locals copy, and an email's HTML
+  and Text switch as a request's parts do.
 
 ### Fixed
 

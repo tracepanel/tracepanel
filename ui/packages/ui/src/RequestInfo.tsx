@@ -1,10 +1,12 @@
 import type { ReactNode } from "react";
+import { AttrValue } from "./AttrValue";
 import { Badge } from "./components/ui/badge";
 import { FactGrid } from "./FactGrid";
 import { duration } from "./format";
 import { GraphqlCode } from "./GraphqlCode";
 import { grouped, LinkedTrace, StateBadge, tracesRow } from "./LinkedTrace";
 import { handlerFullName, handlerWord } from "./lib/handler";
+import { shownValue } from "./lib/pyliteral";
 import { traceRuntime } from "./lib/runtime";
 import { unreceived } from "./lib/signals";
 import { linkProps, type TraceLinks } from "./links";
@@ -198,12 +200,18 @@ function taskRows(trace: Trace, related: Related | undefined, links: TraceLinks 
     ...taskTimingRows(trace),
     ...row("Triggered by", "task.trigger", false),
     ...(Number(attrs["task.retries"]) > 0 ? row("Attempt", "task.retries") : []),
-    ...row("Retry reason", "task.retry_reason"),
-    ...row("Arguments", "task.args"),
-    ...row("Keyword args", "task.kwargs"),
-    ...row("Result", "task.result"),
+    ...wideRow("Retry reason", "task.retry_reason", value("task.retry_reason")),
+    ...wideRow("Arguments", "task.args", value("task.args")),
+    ...wideRow("Keyword args", "task.kwargs", value("task.kwargs")),
+    ...wideRow("Result", "task.result", value("task.result")),
     ...workflowFacts(trace, related, links),
   ];
+}
+
+/** A task's value that may be long (its arguments, result, retry reason): laid out and coloured as attributes are. */
+function wideRow(label: string, key: string, shown: string | null | undefined): PropRow[] {
+  if (!shown) return [];
+  return [{ label, value: <AttrValue value={shownValue(key, shown)} />, copy: shown, mono: true, wide: true }];
 }
 
 export interface RequestInfoProps {
