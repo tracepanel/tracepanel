@@ -1,5 +1,5 @@
 import { type ReactNode, useState } from "react";
-import { AttributeGroups, TitledCard } from "./Attributes";
+import { AttributeGroups } from "./Attributes";
 import { ChevronDownIcon } from "./icons";
 import { indentedJson } from "./json";
 import { cn } from "./lib/utils";
@@ -99,21 +99,12 @@ export function requestParts(attrs: Attrs, others: Attrs, extra: readonly Part[]
   ];
 }
 
-/**
- * The parts as one card: a switch above it, the chosen part inside. The switch stays on its part across traces. A
- * part alone (a task run's attributes) has no switch: its name and count head the card.
- */
+/** The parts as one card: a switch above it, the chosen part inside. The switch stays on its part across traces. */
 export function RequestParts({ parts }: { parts: readonly Part[] }) {
   const [picked, setPicked] = useState<string | null>(null);
   const open = parts.find((part) => part.id === picked) ?? parts[0];
   if (!open) return null;
-  if (parts.length === 1) {
-    return (
-      <TitledCard label={open.label} count={open.count}>
-        {open.content}
-      </TitledCard>
-    );
-  }
+  // One look for every trace: the switch shows even with one part (a task run's Attributes), as a request's does.
   return (
     <section className="grid gap-2" aria-label="Request details">
       <Segmented

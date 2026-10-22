@@ -8,7 +8,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { TraceAttributes } from "./Attributes";
 import { duration, percent, since } from "./format";
 import { GraphqlCode } from "./GraphqlCode";
 import { ChevronRightIcon, CloseIcon } from "./icons";
@@ -25,6 +24,7 @@ import { linkProps, type TraceLinks } from "./links";
 import { type NameValue, NameValues } from "./NameValues";
 import { PropTable } from "./PropTable";
 import { AliasChip, AppChip, IssueChip } from "./primitives";
+import { isRequestDetail, RequestParts, requestParts } from "./RequestParts";
 import { SideResize, useSideWidth } from "./SideResize";
 import { SignalNotes } from "./SignalNotes";
 import { SqlCode } from "./SqlCode";
@@ -1117,10 +1117,14 @@ function CallDetails({ node: { span }, trace }: DetailsProps<"span">) {
   );
 }
 
-/** The trace's attributes on its request row: the GraphQL document is shown formatted above, not again on one line. */
+/**
+ * The trace's attributes on its request row, as its Request tab shows them: the same parts behind the same switch
+ * (Headers, Query, Body, Cookies, Session, Response, Attributes). The GraphQL document is shown formatted above.
+ */
 function RootAttributes({ attrs }: { attrs: Attrs }) {
   const { "graphql.document": _, ...rest } = attrs;
-  return <TraceAttributes attrs={rest} />;
+  const others = Object.fromEntries(Object.entries(rest).filter(([key]) => !isRequestDetail(key)));
+  return <RequestParts parts={requestParts(rest, others)} />;
 }
 
 /** A call's fields in words, in a card: the one look of every list of names and values. */
