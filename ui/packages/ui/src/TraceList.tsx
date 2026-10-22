@@ -4,7 +4,7 @@ import { ago, duration } from "./format";
 import { DatabaseIcon } from "./icons";
 import { ISSUE_LABELS } from "./labels";
 import { pageParts } from "./lib/page";
-import { AppChip, IssueChip, KindBadge, MethodBadge, RoutePath, StatusBadge, TaskName } from "./primitives";
+import { AppChip, IssueChip, KindBadge, MethodBadge, RoutePath, StatusSlot, TaskName } from "./primitives";
 import type { IssueKind, TraceSummary } from "./types";
 
 export interface TraceRow {
@@ -59,7 +59,8 @@ export function TraceList({ rows, selectedId, currentId, newIds, compact, servic
             </span>
             <span className="dt-request-meta">
               {/* A view or an action has no status of its own: an empty cell keeps the columns in place. */}
-              {trace.kind === "page" ? <span /> : <StatusBadge status={trace.http_status} />}
+              {/* No status of its own (a view, a task, a job): its slot kept, so the time lines up with a request's. */}
+              <StatusSlot status={trace.kind === "page" ? null : trace.http_status} />
               <span>{duration(trace.duration)}</span>
               {compact ? <CompactMeta trace={trace} /> : <FullMeta trace={trace} />}
             </span>

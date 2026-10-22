@@ -93,7 +93,8 @@
   page's lists and its Overview, a task's page and its crumb, a trace's
   heading, the call tree's task rows and the tasks it sent, a request's
   enqueued tasks, the Task filter and ⌘K, in the console and in the panel.
-  The whole name shows on hover.
+  A cut name starts where a whole one does, after a "…". In the call tree,
+  "enqueue" stays whole before it. The whole name shows on hover.
 - A task's workflow graph is compact: a box is one line, a dot for its
   state, its name and its time, as wide as names need. The run on screen is
   filled, not outlined. The graph starts at the page's left edge, under its
@@ -135,7 +136,8 @@
 - A task, a job, a WebSocket or an RPC call in the panel's list reads as
   its row in the console's lists does: its kind's badge, then its name. A
   task's whole name was its badge, in capitals. A GraphQL operation has the
-  console's GQL badge too.
+  console's GQL badge too. A row with no status keeps its place, so its time
+  and queries stand under a request's.
 - A count of one reads as one: a task's group of one says "1 task" in its
   facts and its workflow graph, and an endpoint in the search "1 call".
 

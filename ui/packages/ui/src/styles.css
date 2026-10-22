@@ -295,6 +295,13 @@ code,
   color: var(--dt-ok);
   background: var(--dt-ok-bg);
 }
+/* No status of its own: the badge's room, empty. */
+.dt-status-empty {
+  visibility: hidden;
+}
+.dt-status-empty::before {
+  content: "000";
+}
 .dt-status[data-tone="info"] {
   color: var(--dt-info);
   background: var(--dt-info-bg);

@@ -10,22 +10,43 @@ const [REGENERATE, PURGE, NOTIFY] = HANDLERS as [string, string, string];
 // Narrower than the other tests' window: the names are cut wherever they show, whatever the fonts of the machine.
 test.use({ viewport: { width: 1100, height: 900 } });
 
-/** Every place in `scope` that names `name`: whole on hover, cut at its start; `cut` when it doesn't fit there. */
+/** Where an element's text starts on the screen, and where its box does. */
+function edges(element: Element): { text: number; box: number } {
+  const range = document.createRange();
+  range.selectNodeContents(element);
+  return { text: range.getBoundingClientRect().left, box: element.getBoundingClientRect().left };
+}
+
+/**
+ * Every place in `scope` that names `name`: whole on hover, and its end in sight, after a "…" when cut; its text
+ * starts at its box's left edge, cut or not. `cut` when it must be cut there.
+ */
 async function shownByItsEnd(scope: Page | Locator | FrameLocator, name: string, cut = true): Promise<void> {
   const names = scope.getByTitle(name, { exact: true });
   await expect(names.first()).toBeVisible();
   for (const element of await names.all()) {
-    await expect(element).toHaveCSS("direction", "rtl");
-    await expect(element).toHaveText(name);
+    const text = (await element.textContent()) ?? "";
+    expect(text === name || (text.startsWith("…") && name.endsWith(text.slice(1)))).toBe(true);
+    const { text: left, box } = await element.evaluate(edges);
+    expect(Math.abs(left - box)).toBeLessThan(0.5);
   }
-  if (cut) expect(await names.first().evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+  if (cut) await expect(names.first()).toHaveText(/^…/);
+}
+
+/** The left edge of the text named `name` in `scope`. */
+async function textLeft(scope: Page | Locator | FrameLocator, name: string): Promise<number> {
+  return (await scope.getByTitle(name, { exact: true }).first().evaluate(edges)).text;
 }
 
 test("the Tasks page: By task, its Overview's lists and All runs", async ({ page }) => {
   await page.goto("/#/tasks?view=overview");
 
-  await shownByItsEnd(page.getByRole("table"), REGENERATE);
-  await shownByItsEnd(page.getByRole("table"), PURGE);
+  const table = page.getByRole("table");
+  await shownByItsEnd(table, REGENERATE);
+  await shownByItsEnd(table, PURGE);
+  // A cut name starts where a whole one does.
+  await shownByItsEnd(table, "shop.tasks.send_receipt", false);
+  expect(await textLeft(table, REGENERATE)).toBeCloseTo(await textLeft(table, "shop.tasks.send_receipt"), 0);
   // In the table, under Slowest and under Failing.
   await expect(page.getByTitle(NOTIFY, { exact: true })).toHaveCount(3);
   await shownByItsEnd(page, NOTIFY);
@@ -53,7 +74,10 @@ test("the request that sent them: the call tree and the tasks it enqueued", asyn
   const request = await traceId("POST /api/media/rebuild");
   await page.goto(`/#/t/${request}`);
 
-  await shownByItsEnd(page, `enqueue ${REGENERATE}`);
+  // Sending it: "enqueue " whole, then the task's name, cut.
+  const sent = page.getByRole("button", { name: /^task\.enqueue/i }).first();
+  await expect(sent).toContainText(/enqueue …/);
+  await shownByItsEnd(sent, REGENERATE);
   await shownByItsEnd(page, PURGE, false);
 
   await page.goto(`/#/t/${request}?tab=request`);
@@ -122,13 +146,23 @@ test("Now: the tasks in flight", async ({ page }) => {
   for (const name of HANDLERS) await shownByItsEnd(inFlight.getByRole("table"), name);
 });
 
-test("the panel's list: a task's run as the console lists it, its kind and its name", async ({ page }) => {
-  await openApp(page, { regenerate: { status: 200, trace: await traceId(REGENERATE), queries: 0, totalMs: 42 } });
+test("the panel's list: a task's run as the console lists it, its time in a request's column", async ({ page }) => {
+  await openApp(page, {
+    regenerate: { status: 200, trace: await traceId(REGENERATE), queries: 0, totalMs: 42 },
+    rebuild: { status: 202, trace: await traceId("POST /api/media/rebuild"), queries: 0, totalMs: 42 },
+  });
   await page.getByRole("button", { name: "Load regenerate" }).click();
+  await page.getByRole("button", { name: "Load rebuild" }).click();
   await pill(page).click();
   const list = panel(page).getByRole("region", { name: "Pages and requests in this browser tab" });
+  const task = list.getByRole("button").filter({ hasText: /^task/ });
+  const request = list.getByRole("button").filter({ hasText: "/api/media/rebuild" });
 
   // Its kind's badge, not its name as a method.
-  await expect(list.getByRole("button").first()).toContainText(`task${REGENERATE}`);
+  await expect(task).toContainText(/^task…/);
   await shownByItsEnd(list, REGENERATE);
+
+  // No status of its own, its time and queries still under a request's.
+  const time = async (row: Locator) => (await row.getByText("42 ms", { exact: true }).boundingBox())?.x;
+  expect(await time(task)).toBeCloseTo((await time(request)) ?? Number.NaN, 0);
 });

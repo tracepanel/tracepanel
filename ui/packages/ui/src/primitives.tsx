@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { type ReactNode, useLayoutEffect, useRef } from "react";
 import { Badge } from "./components/ui/badge";
 import { ISSUE_LABELS } from "./labels";
 import { templatePlace } from "./lib/callFields";
@@ -153,13 +153,59 @@ export function AppChip({ name, runtime }: { name: string; runtime?: string | un
 /**
  * A task's name, cut at its start when it doesn't fit: what tells tasks apart is at its end (the function, the
  * consumer's handler), not the package they share. One look wherever a task is named (its lists, its page, a trace's
- * heading, the call tree, search, the panel), whole on hover.
+ * heading, the call tree, search, the panel), whole on hover. Cut here, not by the browser: a name cut by an
+ * right-to-left box starts a little right of an uncut one, and a column of names must start at one edge.
  */
 export function TaskName({ name, className }: { name: string; className?: string | undefined }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    const fit = () => startCut(element, name);
+    fit();
+    // Its room changes with its own box or its row's, and once the fonts have loaded.
+    const observer = new ResizeObserver(fit);
+    observer.observe(element);
+    if (element.parentElement) observer.observe(element.parentElement);
+    document.fonts?.ready.then(fit);
+    return () => observer.disconnect();
+  }, [name]);
   return (
-    <span className={cn("block min-w-0 truncate text-left font-mono [direction:rtl]", className)} title={name}>
-      {/* Isolated: the dots and underscores keep their places, only the cut moves to the start. */}
-      <bdi>{name}</bdi>
-    </span>
+    <span
+      ref={ref}
+      className={cn("block min-w-0 overflow-hidden text-left font-mono whitespace-nowrap", className)}
+      title={name}
+    />
   );
+}
+
+/** `name` in `element`, or as much of its end as fits after a "…". Its text is this function's, not React's. */
+function startCut(element: HTMLElement, name: string): void {
+  // Not laid out (hidden, or not in the page yet): whole, until it has a width.
+  if (fits(element, name) || element.clientWidth === 0) return;
+  element.textContent = `…${name.slice(fewestDropped(element, name))}`;
+}
+
+/** Whether `text` fits in `element`'s width, left in it to show. */
+function fits(element: HTMLElement, text: string): boolean {
+  element.textContent = text;
+  return element.scrollWidth <= element.clientWidth;
+}
+
+/** The fewest characters dropped from the start of `name` that let the rest fit after a "…". */
+function fewestDropped(element: HTMLElement, name: string): number {
+  let low = 1;
+  let high = name.length;
+  while (low < high) {
+    const middle = (low + high) >> 1;
+    if (fits(element, `…${name.slice(middle)}`)) high = middle;
+    else low = middle + 1;
+  }
+  return low;
+}
+
+/** Where a status goes, kept when there is none (a task, a job, a view), so the columns after it line up. */
+export function StatusSlot({ status }: { status: number | null | undefined }) {
+  if (status === null || status === undefined) return <span className="dt-status dt-status-empty" aria-hidden="true" />;
+  return <StatusBadge status={status} />;
 }

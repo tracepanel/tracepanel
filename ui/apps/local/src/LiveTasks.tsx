@@ -153,7 +153,7 @@ function LastRun({ run }: { run: TraceSummary }) {
   const now = useClock();
   const failed = run.status === "error";
   return (
-    <a href={traceHref(run.id)} className={cn(FIGURE, "min-w-0 hover:[&_bdi]:underline")}>
+    <a href={traceHref(run.id)} className={cn(FIGURE, "min-w-0 hover:[&_[title]]:underline")}>
       <span className="whitespace-nowrap text-muted-foreground">last run</span>{" "}
       <TaskName name={run.name} className="text-sm font-medium text-foreground" />{" "}
       {failed ? (

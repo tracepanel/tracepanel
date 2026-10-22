@@ -802,9 +802,19 @@ function clickSpan(ctx: RowContext, key: string, fold: boolean | undefined): voi
 }
 
 const TASK_SPANS = new Set(["task", "task.enqueue"]);
+const ENQUEUE = "enqueue ";
 
 /** A span's name; a task's run, or its sending, named as a task is everywhere (the kind says which). */
 function SpanName({ span }: { span: Span }) {
+  if (span.kind === "task.enqueue" && span.name.startsWith(ENQUEUE)) {
+    // "enqueue " stays whole: only the task's name gives way.
+    return (
+      <span className="dt-map-text flex">
+        <span className="shrink-0 whitespace-pre">{ENQUEUE}</span>
+        <TaskName name={span.name.slice(ENQUEUE.length)} />
+      </span>
+    );
+  }
   if (TASK_SPANS.has(span.kind)) return <TaskName name={span.name} className="dt-map-text" />;
   return <span className="dt-map-text">{span.name}</span>;
 }
