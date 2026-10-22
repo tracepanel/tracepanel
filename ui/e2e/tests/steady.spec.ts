@@ -157,6 +157,32 @@ test("By task to All runs keeps the rows on screen, dimmed, until the runs come"
   expect(recorded.some((frame) => frame.seen["busy"])).toBe(true);
 });
 
+test("All runs to By task: the Overview opens with the tasks' rows, not before them", async ({ page }) => {
+  await record(page, {
+    open: "main [aria-label=Overview] button[aria-expanded=true]",
+    busy: "main [aria-busy=true] table",
+    list: "main table thead",
+  });
+  await page.goto("/#/tasks");
+  await expect(page.getByRole("main").getByRole("columnheader", { name: "Trace" })).toBeVisible();
+  await slow(page, "**/api/tasks*");
+  await page.evaluate(() => {
+    (window as unknown as { frames: Frame[] }).frames.length = 0;
+  });
+
+  await page.getByRole("navigation", { name: "List" }).getByRole("link", { name: "By task" }).click();
+  await expect(page.getByRole("main").getByRole("columnheader", { name: "Task", exact: true })).toBeVisible();
+  await expect(page.locator("main [aria-busy=true]")).toHaveCount(0);
+  const recorded = await frames(page);
+
+  // Folded over the runs, dimmed or not; open over the tasks only.
+  expect(recorded.some((frame) => frame.seen["open"])).toBe(true);
+  expect(recorded.filter((frame) => frame.seen["busy"]).every((frame) => frame.seen["open"] === null)).toBe(true);
+  for (const frame of recorded.filter((each) => each.seen["open"])) {
+    expect(frame.seen["list"]?.text).toMatch(/^task\b/i);
+  }
+});
+
 for (const path of ["#/logs", "#/tasks", "#/endpoints"]) {
   test(`${path}: Live is a choice of the one auto-refresh menu, not a switch beside it`, async ({ page }) => {
     await page.goto(`/${path}`);
@@ -217,7 +243,7 @@ test("a trace page's tiles look like the other pages' tiles, with no line under 
       padding: style.padding,
     };
   };
-  await page.goto("/#/endpoints");
+  await page.goto("/#/endpoints?view=overview");
   const stat = await page
     .getByRole("region", { name: "Overview" })
     .getByText("Requests", { exact: true })
@@ -231,7 +257,7 @@ test("a trace page's tiles look like the other pages' tiles, with no line under 
   expect(await metrics.locator(".dt-metric").first().evaluate(look)).toEqual(stat);
 });
 
-for (const path of ["#/endpoints", "#/logs"]) {
+for (const path of ["#/endpoints?view=overview", "#/logs"]) {
   test(`${path}: the Overview's bar is the same open or folded, its numbers in it both ways`, async ({ page }) => {
     await page.goto(`/${path}`);
     const bar = page.getByRole("region", { name: "Overview" }).getByRole("button", { name: /^Overview/ });

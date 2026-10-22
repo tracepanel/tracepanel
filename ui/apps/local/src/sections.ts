@@ -5,12 +5,11 @@ import { type CallsSection, type EntrySection, type Route, type Section, systemO
 /** What each entry point is: its label, the traces it covers, and how one of its groups is searched for. */
 export const ENTRY: Record<
   EntrySection,
-  { label: string; title: string; description: string; calls: string; scope: string; group: (key: string) => string }
+  { label: string; description: string; calls: string; scope: string; group: (key: string) => string }
 > = {
   endpoints: {
     label: "HTTP",
-    title: "HTTP endpoints",
-    description: "Traffic, latency and errors per URL pattern.",
+    description: "Requests to the app: traffic, latency and errors, each request or by URL pattern.",
     calls: "Requests",
     scope: "kind:http",
     group: (key) => {
@@ -20,15 +19,13 @@ export const ENTRY: Record<
   },
   graphql: {
     label: "GraphQL",
-    title: "GraphQL operations",
-    description: "Operations by name: traffic, latency, errors and queries per call.",
+    description: "Operations the app served: traffic, latency, errors and queries, each operation or by name.",
     calls: "Operations",
     scope: "operation:*",
     group: (key) => `operation:${quote(key)}`,
   },
   tasks: {
     label: "Tasks",
-    title: "Tasks",
     description:
       "Background work: task runs and the messages listeners take, with failures, retries and time in the queue.",
     calls: "Runs",
@@ -37,15 +34,14 @@ export const ENTRY: Record<
   },
   websockets: {
     label: "WebSockets",
-    title: "WebSocket consumers",
-    description: "Channels consumers: connections, messages, errors and handler time.",
+    description:
+      "Events of WebSocket consumers: connections, messages, errors and handler time, each event or by consumer.",
     calls: "Events",
     scope: "kind:websocket",
     group: (key) => `kind:websocket view:${quote(key)}`,
   },
   jobs: {
     label: "Jobs",
-    title: "Jobs",
     description: "Management commands and tracepanel.trace() blocks: scripts, cron jobs, consumers.",
     calls: "Runs",
     scope: "kind:command",
@@ -53,15 +49,13 @@ export const ENTRY: Record<
   },
   rpc: {
     label: "RPC",
-    title: "RPC",
-    description: "Calls the app served over gRPC and other RPC systems, by method.",
+    description: "Calls the app served over gRPC and other RPC systems, each call or by method.",
     calls: "Calls",
     scope: "kind:rpc",
     group: (key) => `kind:rpc name:${quote(key)}`,
   },
   pages: {
     label: "Pages",
-    title: "Pages",
     description:
       "Pages in the browser: each view (a load, a route change) and what users do on it (clicks, submits), with the " +
       "calls each makes to the API and its errors.",

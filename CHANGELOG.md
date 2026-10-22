@@ -81,7 +81,9 @@
   runs, Pages on All events, and so on, from the menu, ⌘K or a group's way
   back. Its switch reads "All runs | By task" on every one of them, the
   groups second, at `view=overview`. A link that named a list still opens
-  it.
+  it. Its heading is its name in the menu (HTTP, not HTTP endpoints), and
+  its Overview is folded over the calls and open over the groups, until
+  you fold or open it yourself: that choice stays, as before.
 
 ### Fixed
 
