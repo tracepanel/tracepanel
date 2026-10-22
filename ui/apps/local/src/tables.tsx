@@ -1163,8 +1163,8 @@ function graphqlColumns(items: readonly GraphqlRow[]): DataColumn<GraphqlRow>[] 
     {
       id: "type",
       label: "Type",
-      // The widest type, `subscription`, whole.
-      width: 9.5,
+      // The widest type, `subscription`, whole, with room for how fonts render on other systems.
+      width: 10.5,
       fixed: true,
       cell: (item) => (item.type ? <OutlineBadge mono={true}>{item.type}</OutlineBadge> : null),
     },

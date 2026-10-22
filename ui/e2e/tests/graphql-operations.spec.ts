@@ -52,6 +52,8 @@ for (const width of [1440, 1000]) {
     const types = table.locator("tbody tr td:first-child");
 
     await expect(types).toHaveText(["query", "mutation", "subscription", "query", ""]);
+    // Measured in the console's own mono font, not a fallback.
+    await page.evaluate(() => document.fonts.ready);
     // Not cut: the cell (it truncates) and the pill show all of their text.
     for (const cell of await types.all()) {
       const [own, pill] = await cell.evaluate((td) => {
