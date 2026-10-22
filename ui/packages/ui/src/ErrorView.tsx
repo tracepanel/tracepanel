@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { languageOf, tokenizeLines } from "./highlight";
 import { ChevronRightIcon } from "./icons";
 import { keyed } from "./keys";
+import { packagesLine } from "./lib/packages";
 import { linkProps, type TraceLinks } from "./links";
 import { NameValues } from "./NameValues";
 import { TokenLine } from "./Tokens";
@@ -110,6 +111,16 @@ function FrameView({ frame, open }: { frame: Frame; open: boolean }) {
   );
 }
 
+/** What a group of library frames is: its packages on one line, every module on hover. */
+function GroupNames({ frames }: { frames: readonly Frame[] }) {
+  const modules = frames.map((frame) => frame.module);
+  return (
+    <span className="dt-frame-group-names" title={modules.join("\n")}>
+      {packagesLine(modules)}
+    </span>
+  );
+}
+
 function Frames({ frames }: { frames: readonly Frame[] }) {
   // The deepest project frame is where it went wrong: open it.
   const crash = [...frames].reverse().find((frame) => frame.in_app) ?? frames.at(-1);
@@ -123,7 +134,7 @@ function Frames({ frames }: { frames: readonly Frame[] }) {
             <summary>
               <ChevronRightIcon />
               {group.frames.length} library frame{group.frames.length === 1 ? "" : "s"}
-              <span className="dt-frame-group-names">{group.frames.map((frame) => frame.module).join(" · ")}</span>
+              <GroupNames frames={group.frames} />
             </summary>
             {keyed(group.frames, frameKey).map(({ key: frameId, item: frame }) => (
               <FrameView key={frameId} frame={frame} open={frame === crash} />
