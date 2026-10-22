@@ -5,7 +5,7 @@ import { expect, test } from "../fixtures.ts";
 
 /** The trace of a call to GET /api/posts: 14 queries, 13 of them the same author lookup. */
 async function openPostsTrace(page: Page): Promise<void> {
-  await page.goto("/#/endpoints");
+  await page.goto("/#/endpoints?view=overview");
   await page
     .getByRole("main")
     .getByRole("link", { name: /^GET \/api\/posts / })

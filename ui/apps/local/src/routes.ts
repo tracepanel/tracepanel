@@ -12,15 +12,19 @@ export type CallsSection = `calls/${string}`;
 export type Section = EntrySection | "services" | CallsSection | "mails" | "logs" | "errors" | "issues" | "traces";
 const SECTIONS: Section[] = [...ENTRY_SECTIONS, "services", "mails", "logs", "errors", "issues", "traces"];
 
-/** An entry point's list: its groups, or every call. */
-export type EntryView = "overview" | "calls";
+/** An entry point's list: every call (what a page opens on), or its groups. */
+export type EntryView = "calls" | "overview";
 
-// What `view=` says: every call, or Live on (an old link to Tasks' Live).
-const VIEWS: Record<string, { view?: EntryView; live?: boolean }> = { calls: { view: "calls" }, live: { live: true } };
+// What `view=` says: every call, the groups, or Live on (an old link to Tasks' Live).
+const VIEWS: Record<string, { view?: EntryView; live?: boolean }> = {
+  calls: { view: "calls" },
+  overview: { view: "overview" },
+  live: { live: true },
+};
 
 /**
- * `#/<section>?q=…&view=calls` a section, `#/group/<section>/<key>` one group of an entry point (an endpoint, an
- * operation, a task, a consumer, a job), `#/t/<id>?from=…&tab=…` a trace: one page wherever it is opened from,
+ * `#/<section>?q=…` a section, every call (`&view=overview` its groups), `#/group/<section>/<key>` one group of
+ * an entry point (an endpoint, an operation, a task, a consumer, a job), `#/t/<id>?from=…&tab=…` a trace: one page wherever it is opened from,
  * with `from` (the hash it was opened from) for the way back, `#/app/<service>` an app's settings and versions. `view=live` (Tasks' Live was a list of its own once)
  * opens the section with Live on (`live`): it is read, never written.
  */
@@ -165,7 +169,8 @@ export function href(route: Route): string {
   }
   const params = new URLSearchParams();
   if (route.q) params.set("q", route.q);
-  if (route.view === "calls") params.set("view", "calls");
+  // Every call is what a section opens on; its groups are named.
+  if (route.view === "overview") params.set("view", "overview");
   // The row a list has open (a statement, a log record, an email): it is still open after Back.
   if (route.open) params.set("open", route.open);
   return `#/${route.name}${params.size ? `?${params}` : ""}`;

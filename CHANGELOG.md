@@ -70,6 +70,11 @@
   no switch above its attributes: "Attributes 8" heads one card, its
   namespaces as headings inside it. An error's locals copy, and an email's
   HTML and Text switch as a request's parts do.
+- An entry point opens on its calls: HTTP on All requests, Tasks on All
+  runs, Pages on All events, and so on, from the menu, ⌘K or a group's way
+  back. Its switch reads "All runs | By task" on every one of them, the
+  groups second, at `view=overview`. A link that named a list still opens
+  it.
 
 ### Fixed
 

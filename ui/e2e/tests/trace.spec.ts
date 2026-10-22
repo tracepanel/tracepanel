@@ -2,7 +2,7 @@
 import { expect, test } from "../fixtures.ts";
 
 test("an endpoint's N+1 shows in its trace, down to the repeated query", async ({ page }) => {
-  await page.goto("/#/endpoints");
+  await page.goto("/#/endpoints?view=overview");
   await page
     .getByRole("main")
     .getByRole("link", { name: /^GET \/api\/posts / })
@@ -29,7 +29,7 @@ test("an endpoint's N+1 shows in its trace, down to the repeated query", async (
 
 test("Show N queries on an issue scrolls to the group it opened", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 360 });
-  await page.goto("/#/endpoints");
+  await page.goto("/#/endpoints?view=overview");
   await page
     .getByRole("main")
     .getByRole("link", { name: /^GET \/api\/posts / })

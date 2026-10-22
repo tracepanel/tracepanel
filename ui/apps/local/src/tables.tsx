@@ -142,7 +142,7 @@ function GraphqlOperations({ item }: { item: EndpointRow }) {
       title="One URL, many GraphQL operations: see them one by one"
       onClick={(event) => {
         event.stopPropagation();
-        go({ name: "graphql", q: withPeriod(`route:${item.route}`, currentPeriod()) });
+        go({ name: "graphql", q: withPeriod(`route:${item.route}`, currentPeriod()), view: "overview" });
       }}
     >
       GraphQL · {item.graphql_operations} {item.graphql_operations === 1 ? "operation" : "operations"}

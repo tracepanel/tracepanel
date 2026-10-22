@@ -97,7 +97,14 @@ test("the menu shows no entry point it takes away once the counts come", async (
   expect([...shown].filter((word) => !final.includes(word))).toEqual([]);
 });
 
-for (const path of ["#/endpoints", "#/tasks", "#/pages", "#/jobs"]) {
+for (const path of [
+  "#/endpoints",
+  "#/tasks",
+  "#/pages",
+  "#/jobs",
+  "#/endpoints?view=overview",
+  "#/tasks?view=overview",
+]) {
   test(`${path}: the filters, the overview, the switch and the list show at once, in their places`, async ({
     page,
   }) => {
@@ -129,7 +136,7 @@ for (const path of ["#/endpoints", "#/tasks", "#/pages", "#/jobs"]) {
 }
 
 test("By task to All runs keeps the rows on screen, dimmed, until the runs come", async ({ page }) => {
-  await page.goto("/#/tasks");
+  await page.goto("/#/tasks?view=overview");
   await expect(page.getByRole("main").getByRole("table")).toBeVisible();
   await slow(page, "**/api/traces*");
   await record(page, { list: "main table", busy: "main [aria-busy=true] table" });

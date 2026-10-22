@@ -15,7 +15,7 @@ test("⌘K goes to a section", async ({ page }) => {
 });
 
 test("⌘K opens a trace by its id, and finds one by its path", async ({ page }) => {
-  await page.goto("/#/endpoints");
+  await page.goto("/#/endpoints?view=overview");
   await page
     .getByRole("main")
     .getByRole("link", { name: /^GET \/api\/report / })

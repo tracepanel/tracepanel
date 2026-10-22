@@ -132,12 +132,13 @@ function useLiveLink(section: EntrySection, q: string, live: boolean | undefined
   useEffect(() => {
     if (!live) return;
     setInterval(LIVE_MS);
-    go({ name: section, q }, true);
+    // Where it landed before every call was what a page opens on: the groups.
+    go({ name: section, q, view: "overview" }, true);
   }, [live, section, q, setInterval]);
 }
 
-/** The lists of every entry point: its groups, every call. */
-const VIEWS: readonly EntryView[] = ["overview", "calls"];
+/** The lists of every entry point: every call (what it opens on), its groups. */
+const VIEWS: readonly EntryView[] = ["calls", "overview"];
 
 function viewLabel(section: EntrySection, view: EntryView): string {
   return view === "overview" ? `By ${GROUP_NOUN[section]}` : `All ${ENTRY[section].calls.toLowerCase()}`;
@@ -155,7 +156,7 @@ function viewQuery(section: EntrySection, from: EntryView, to: EntryView, q: str
   return carryQuery(q, searchKeys(spec, calls ? "traces" : section), calls);
 }
 
-/** The switch between an entry point's lists: By task / All runs / Live. */
+/** The switch between an entry point's lists: All runs / By task. */
 function ListNav({
   section,
   view,
@@ -174,7 +175,7 @@ function ListNav({
           key={item}
           href={href({
             name: section,
-            view: item === "overview" ? undefined : item,
+            view: item === "calls" ? undefined : item,
             q: viewQuery(section, view, item, q, spec),
           })}
           aria-current={view === item ? "page" : undefined}
@@ -319,7 +320,7 @@ function EntrySearch({
   );
 }
 
-/** The list under the switch; By task ↔ All runs keeps the rows on screen, dimmed, until the other list's arrive. */
+/** The list under the switch; All runs ↔ By task keeps the rows on screen, dimmed, until the other list's arrive. */
 function EntryList({ section, q, view, data }: { section: EntrySection; q: string; view: EntryView; data: EntryData }) {
   return (
     <Held ready={settled(data.loaded)}>

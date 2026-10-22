@@ -21,7 +21,7 @@ async function open(page: Page, url: string) {
 test("a column dragged wider on HTTP stays wider after a reload, and the main column gives the room", async ({
   page,
 }) => {
-  await open(page, "/#/endpoints");
+  await open(page, "/#/endpoints?view=overview");
   const calls = header(page, "Calls");
   const before = await widthOf(calls);
   const endpoint = await widthOf(header(page, "Endpoint"));
@@ -48,7 +48,7 @@ test("a column dragged wider on HTTP stays wider after a reload, and the main co
 test("a column hidden from its header on Tasks comes back from the columns menu, and each stays so after a reload", async ({
   page,
 }) => {
-  await open(page, "/#/tasks");
+  await open(page, "/#/tasks?view=overview");
 
   await header(page, "Retried").hover();
   await header(page, "Retried").getByRole("button", { name: "Hide the Retried column" }).click();
@@ -74,9 +74,9 @@ test("a column hidden from its header on Tasks comes back from the columns menu,
 
 test("a list's main column can't be hidden: no button on its header, not in the menu", async ({ page }) => {
   const lists: [url: string, main: string][] = [
-    ["/#/endpoints", "Endpoint"],
-    ["/#/tasks", "Task"],
-    ["/#/endpoints?view=calls", "Trace"],
+    ["/#/endpoints?view=overview", "Endpoint"],
+    ["/#/tasks?view=overview", "Task"],
+    ["/#/endpoints", "Trace"],
     ["/#/calls/sql", "Name"],
   ];
   for (const [url, name] of lists) {
@@ -110,7 +110,7 @@ test("a column moves with the arrow keys on Database, and by a drag on All reque
 
   await expect(headers(page).nth(2)).toHaveAccessibleName("Calls");
 
-  await open(page, "/#/endpoints?view=calls");
+  await open(page, "/#/endpoints");
   await expect(headers(page).last()).not.toHaveAccessibleName("When");
 
   await header(page, "When").getByText("When").dragTo(header(page, "Status"));
@@ -123,7 +123,7 @@ test("a column moves with the arrow keys on Database, and by a drag on All reque
 });
 
 test("a reset in the menu brings a list's columns back as they were", async ({ page }) => {
-  await open(page, "/#/endpoints");
+  await open(page, "/#/endpoints?view=overview");
   await header(page, "Errors").hover();
   await header(page, "Errors").getByRole("button", { name: "Hide the Errors column" }).click();
   await expect(header(page, "Errors")).toHaveCount(0);
@@ -135,12 +135,12 @@ test("a reset in the menu brings a list's columns back as they were", async ({ p
 });
 
 test("each list keeps its own columns: hidden on HTTP, still shown on Tasks", async ({ page }) => {
-  await open(page, "/#/endpoints");
+  await open(page, "/#/endpoints?view=overview");
   await header(page, "Last").hover();
   await header(page, "Last").getByRole("button", { name: "Hide the Last column" }).click();
   await expect(header(page, "Last")).toHaveCount(0);
 
-  await open(page, "/#/tasks");
+  await open(page, "/#/tasks?view=overview");
 
   await expect(header(page, "Last")).toBeVisible();
 });
@@ -156,7 +156,7 @@ test("many wide columns fit the page: it never scrolls sideways, and the main co
       JSON.stringify({ widths: { system: 300, queues: 400, wait: 300 }, shown: {}, order: [] }),
     ),
   );
-  for (const url of ["/#/tasks", "/#/endpoints", "/#/calls/sql", "/#/services"]) {
+  for (const url of ["/#/tasks?view=overview", "/#/endpoints?view=overview", "/#/calls/sql", "/#/services"]) {
     await open(page, url);
     const scroller = page.locator("[data-scroll]");
 
@@ -172,7 +172,7 @@ test("many wide columns fit the page: it never scrolls sideways, and the main co
 });
 
 test("the columns don't move after the first paint: their widths are there with the first rows", async ({ page }) => {
-  await page.goto("/#/endpoints");
+  await page.goto("/#/endpoints?view=overview");
   const first = firstRow(page);
   await first.waitFor();
   const at = await header(page, "Calls").boundingBox();
@@ -214,7 +214,7 @@ test("every list's header and rows look as the logs table's do, the logs' rows c
   // The logs are a stream read many lines at once: rows of one line with little room around it.
   expect(logs.body.height).toBe(`${0.375 * rem}px`);
 
-  for (const url of ["/#/endpoints", "/#/tasks", "/#/calls/sql", "/#/endpoints?view=calls"]) {
+  for (const url of ["/#/endpoints?view=overview", "/#/tasks?view=overview", "/#/calls/sql", "/#/endpoints"]) {
     await open(page, url);
 
     expect(await looks(page)).toEqual({ ...logs, body: { ...logs.body, height: `${0.75 * rem}px` } });
@@ -222,7 +222,7 @@ test("every list's header and rows look as the logs table's do, the logs' rows c
 });
 
 test("a column of numbers is aligned at its end, its name with it", async ({ page }) => {
-  await open(page, "/#/endpoints");
+  await open(page, "/#/endpoints?view=overview");
 
   await expect(header(page, "Calls")).toHaveCSS("text-align", "right");
   await expect(firstRow(page).getByRole("cell").nth(1)).toHaveCSS("text-align", "right");
@@ -230,7 +230,7 @@ test("a column of numbers is aligned at its end, its name with it", async ({ pag
 });
 
 test("at 1440 px a list's main column has the room, and its short values are whole", async ({ page }) => {
-  await open(page, "/#/tasks");
+  await open(page, "/#/tasks?view=overview");
 
   expect(await widthOf(header(page, "Task"))).toBeGreaterThanOrEqual(320);
   // Times, counts and badges show in full: what a narrow page cuts first is the main column's name.
@@ -249,14 +249,14 @@ test("at 1440 px a list's main column has the room, and its short values are who
  * widest the console writes), a log record's moment.
  */
 const TIMES: [url: string, columns: string[], longest: string][] = [
-  ["/#/endpoints", ["p50", "p95"], "810 ms"],
-  ["/#/tasks", ["p95", "Queue wait p95"], "810 ms"],
-  ["/#/jobs", ["p95"], "810 ms"],
-  ["/#/pages", ["p95"], "810 ms"],
+  ["/#/endpoints?view=overview", ["p50", "p95"], "810 ms"],
+  ["/#/tasks?view=overview", ["p95", "Queue wait p95"], "810 ms"],
+  ["/#/jobs?view=overview", ["p95"], "810 ms"],
+  ["/#/pages?view=overview", ["p95"], "810 ms"],
   ["/#/services", ["Time", "Avg"], "810 ms"],
   ["/#/calls/sql", ["Total time", "Slowest"], "810 ms"],
   ["/#/calls/http", ["Total time", "Slowest"], "810 ms"],
-  ["/#/endpoints?view=calls", ["Duration"], "810 ms"],
+  ["/#/endpoints", ["Duration"], "810 ms"],
   ["/#/logs", ["Time"], "Oct 28 23:59:59.999"],
 ];
 
@@ -300,7 +300,7 @@ for (const width of [1440, 1280]) {
 }
 
 test("a narrow column's hover buttons sit beside its name, not over it, and the name stays put", async ({ page }) => {
-  await page.goto("/#/tasks");
+  await page.goto("/#/tasks?view=overview");
   for (const name of ["Runs", "System"]) {
     const head = page.getByRole("main").getByRole("columnheader", { name, exact: true });
     const text = head.locator("span.truncate");
