@@ -4,6 +4,14 @@
 
 ### Added
 
+- Queries a template made as it rendered say so. In the DB tab and the call
+  tree such a query has a chip with its template and line
+  (`template blog/list.html:4`), its "Called from" names the view's line it
+  was rendered from, and its details have a Template row. An N+1 a template
+  made opens its hint with the template and its line, then the fix:
+  `select_related()` for a lookup by key, `prefetch_related()` for related
+  rows, or for an ORM the agent doesn't know, loading them in the view. The
+  line comes from `code.template_line`, which the Python SDK records.
 - A response's body beside its request's, as Django Silk shows them. A
   request's parts are Headers, Query, Request body, Cookies, Session,
   Response headers and Response body: JSON laid out and coloured as a task's

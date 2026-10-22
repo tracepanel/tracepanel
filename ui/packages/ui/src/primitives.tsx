@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Badge } from "./components/ui/badge";
 import { ISSUE_LABELS } from "./labels";
+import { templatePlace } from "./lib/callFields";
 import { runtimeKind } from "./lib/runtime";
 import { RuntimeIcon } from "./RuntimeIcon";
 import type { IssueKind } from "./types";
@@ -56,6 +57,20 @@ export function AliasChip({ value }: { value: unknown }) {
   return (
     <span className="dt-alias" title={String(value)}>
       {String(value)}
+    </span>
+  );
+}
+
+/**
+ * A query a template made as it rendered (a lazy QuerySet in a {% for %}, a related object it read): the template and
+ * its line. One chip wherever queries are listed: the SQL tab, the call tree.
+ */
+export function TemplateChip({ attrs }: { attrs: Readonly<Record<string, unknown>> }) {
+  const place = templatePlace(attrs);
+  if (!place) return null;
+  return (
+    <span className="dt-from-template" title={`From the template ${place}: it ran as the template rendered`}>
+      <span className="dt-from-template-label">template</span> {place}
     </span>
   );
 }

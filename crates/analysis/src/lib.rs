@@ -67,14 +67,38 @@ const REDIRECT_HINT: &str = "The browser follows a redirect inside htmx's reques
 const FULL_PAGE_HINT: &str = "htmx swaps the response into its target element, so a whole page ends up nested in \
     this one. Render a fragment when the `HX-Request` header is set, or let the link load the page (`hx-boost`).";
 
-fn n_plus_one_hint(client: &str, by_pk: bool) -> &'static str {
+const N_PLUS_ONE_IN_TEMPLATE: &str = "Load the related rows in the view, with the parent rows (a join, or one \
+    batched query), and pass them to the template.";
+
+fn n_plus_one_hint(client: &str, by_pk: bool, in_template: bool) -> &'static str {
     match (client, by_pk) {
         ("django", true) => SELECT_RELATED,
         ("django", false) => PREFETCH_RELATED,
         ("sqlalchemy", true) => JOINEDLOAD,
         ("sqlalchemy", false) => SELECTINLOAD,
+        _ if in_template => N_PLUS_ONE_IN_TEMPLATE,
         _ => N_PLUS_ONE,
     }
+}
+
+/// The template that ran an N+1's queries as it rendered, if one did, with its line when the SDK knows it
+/// (`code.template_line`): what the hint opens with.
+fn template_lead(spans: &[&Span]) -> Option<String> {
+    let (template, _) = most_common(
+        spans
+            .iter()
+            .filter_map(|span| text(&span.attrs, "code.template")),
+    )?;
+    let line = most_common(spans.iter().filter_map(|span| {
+        (text(&span.attrs, "code.template").as_deref() == Some(template.as_str()))
+            .then(|| span.attrs.get("code.template_line").and_then(Value::as_i64))
+            .flatten()
+    }))
+    .map(|(line, _)| format!(" (line {line})"))
+    .unwrap_or_default();
+    Some(format!(
+        "The template `{template}` makes these queries as it renders{line}, one per row it shows. "
+    ))
 }
 
 /// What happens too early before COMMIT: (title, Django's fix, SQLAlchemy's fix).
@@ -301,9 +325,11 @@ fn sql_issues(trace: &Trace, thresholds: &Thresholds) -> Vec<Issue> {
         let first = spans[0];
         let key_culprit = culprit_key(culprit_text.as_deref());
         if actionable && (distinct >= threshold || looped) {
+            let lead = template_lead(spans);
             let hint = format!(
-                "{}{}",
-                n_plus_one_hint(&py_str(first.attrs.get("db.client")), by_pk),
+                "{}{}{}",
+                lead.as_deref().unwrap_or_default(),
+                n_plus_one_hint(&py_str(first.attrs.get("db.client")), by_pk, lead.is_some()),
                 if graphql { DATALOADER } else { "" }
             );
             issues.push(issue(
@@ -1062,6 +1088,76 @@ mod tests {
             .into_iter()
             .map(|issue| (issue.kind, issue.title, issue.count))
             .collect()
+    }
+
+    /// A query a template made as it rendered (line 4 of blog/list.html), for row `n`, through `client`.
+    fn rendered(
+        statement: &str,
+        client: &str,
+        n: usize,
+    ) -> (&'static str, &'static str, Value, i64) {
+        let attrs = serde_json::json!({
+            "db.statement": statement, "db.fingerprint": statement, "db.params_hash": format!("p{n}"),
+            "db.client": client, "code.origin": "blog/views.py:9 in post_list", "code.template": "blog/list.html",
+            "code.template_line": 4,
+        });
+        ("sql", "SELECT", attrs, 1000)
+    }
+
+    fn hints(spans: &[(&str, &str, Value, i64)]) -> Vec<(Option<String>, Option<String>)> {
+        analyze(&request(spans), &Thresholds::default())
+            .into_iter()
+            .map(|issue| (issue.culprit, issue.hint))
+            .collect()
+    }
+
+    #[test]
+    fn an_n_plus_one_a_template_makes_names_it_and_its_line() {
+        let author = r#"SELECT "author"."name" FROM "author" WHERE "author"."id" = %s LIMIT 21"#;
+        let tags = r#"SELECT "tag"."name" FROM "tag" WHERE "tag"."post_id" = %s"#;
+        let by_template = |statement: &str, client: &str| {
+            (0..3)
+                .map(|n| rendered(statement, client, n))
+                .collect::<Vec<_>>()
+        };
+        let lead = "The template `blog/list.html` makes these queries as it renders (line 4), one per row it shows. ";
+        let culprit =
+            Some("blog/list.html (rendered from blog/views.py:9 in post_list)".to_owned());
+
+        assert_eq!(
+            hints(&by_template(author, "django")),
+            [(culprit.clone(), Some(format!("{lead}{SELECT_RELATED}")))]
+        );
+        assert_eq!(
+            hints(&by_template(tags, "django")),
+            [(culprit.clone(), Some(format!("{lead}{PREFETCH_RELATED}")))]
+        );
+        assert_eq!(
+            hints(&by_template(author, "")),
+            [(culprit, Some(format!("{lead}{N_PLUS_ONE_IN_TEMPLATE}")))]
+        );
+
+        // Without its line, the template alone; made by a view's code, the hint as it was.
+        let mut unlined = by_template(author, "django");
+        for (_, _, attrs, _) in &mut unlined {
+            attrs["code.template_line"] = Value::Null;
+        }
+        let mut in_view = by_template(author, "django");
+        for (_, _, attrs, _) in &mut in_view {
+            attrs["code.template"] = Value::Null;
+        }
+
+        assert_eq!(
+            hints(&unlined)[0].1.as_deref(),
+            Some(
+                format!(
+                    "The template `blog/list.html` makes these queries as it renders, one per row it shows. \
+                     {SELECT_RELATED}"
+                )
+                .as_str()
+            )
+        );
+        assert_eq!(hints(&in_view)[0].1.as_deref(), Some(SELECT_RELATED));
     }
 
     #[test]

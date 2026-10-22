@@ -338,15 +338,15 @@ async fn a_trace_with_n_plus_one_in_a_few_lines() {
 issues (3):
   n+1  N+1: 50 similar queries · SELECT auth_user
       at blog/post_list.html (rendered from blog/views.py:28 in post_list)
-      fix: Load the related object in the same query: add `select_related()` for this ForeignKey to the queryset that produced these rows.
+      fix: The template `blog/post_list.html` makes these queries as it renders, one per row it shows. Load the related object in the same query: add `select_related()` for this ForeignKey to the queryset that produced these rows.
       fingerprint 3e55c87ed325564b
   n+1  N+1: 50 similar queries · SELECT blog_category
       at blog/post_list.html (rendered from blog/views.py:28 in post_list)
-      fix: Load the related object in the same query: add `select_related()` for this ForeignKey to the queryset that produced these rows.
+      fix: The template `blog/post_list.html` makes these queries as it renders, one per row it shows. Load the related object in the same query: add `select_related()` for this ForeignKey to the queryset that produced these rows.
       fingerprint cc5aafe33232b857
   n+1  N+1: 50 similar queries · SELECT blog_tag
       at blog/post_list.html (rendered from blog/views.py:28 in post_list)
-      fix: Load the related rows in one extra query: add `prefetch_related()` for this reverse or many-to-many relation to the queryset that produced these rows.
+      fix: The template `blog/post_list.html` makes these queries as it renders, one per row it shows. Load the related rows in one extra query: add `prefetch_related()` for this reverse or many-to-many relation to the queryset that produced these rows.
       fingerprint c9bf81e59a003513
 
 tree (issues, errors and the slow branches):
