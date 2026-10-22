@@ -58,6 +58,9 @@
 
 ### Changed
 
+- The Tasks page's Now shows a task's arguments as the JSON its trace shows,
+  `[42] {"to": "ann"}`, not as Python wrote them, and empty ones not at all.
+  A long task name is cut at its start, so its handler stays in sight.
 - A task's workflow graph is compact: a box is one line, a dot for its
   state, its name and its time, as wide as names need. The run on screen is
   filled, not outlined. The graph starts at the page's left edge, under its
