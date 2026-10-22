@@ -76,8 +76,9 @@ pub(crate) fn request(span: &Map<String, Value>, analyze: bool) -> Result<Reques
     })
 }
 
-/// Whether a statement takes parameters: `%s`, `%(name)s`, `?`, `:name` (not a `::` cast) or `$1`, outside its
-/// quoted strings and names and its comments.
+/// Whether a statement takes parameters: `%s`, `%(name)s`, `?`, `:name` or `:1` (not a `::` cast), `$1`, or `@P1`
+/// and `@name` (not SQL Server's `@@` functions), outside its quoted strings and names (`"`, `` ` ``, `[ ]`) and its
+/// comments.
 fn has_placeholders(statement: &str) -> bool {
     let chars: Vec<char> = statement.chars().collect();
     let mut at = 0;
@@ -85,6 +86,9 @@ fn has_placeholders(statement: &str) -> bool {
         let next = chars.get(at + 1).copied().unwrap_or_default();
         let skipped = match (char, next) {
             ('\'' | '"' | '`', _) => Some(closing(&chars, at + 1, &[char])),
+            ('[', _) if next.is_alphabetic() || next == '_' => {
+                Some(closing(&chars, at + 1, &[']']))
+            }
             ('-', '-') => Some(closing(&chars, at + 2, &['\n'])),
             ('/', '*') => Some(closing(&chars, at + 2, &['*', '/'])),
             _ => None,
@@ -100,7 +104,8 @@ fn has_placeholders(statement: &str) -> bool {
         let placeholder = match char {
             '%' => next == 's' || next == '(',
             '?' => true,
-            ':' => before != Some(':') && (next.is_ascii_alphabetic() || next == '_'),
+            ':' => before != Some(':') && (next.is_ascii_alphanumeric() || next == '_'),
+            '@' => before != Some('@') && (next.is_ascii_alphanumeric() || next == '_'),
             '$' => next.is_ascii_digit(),
             _ => false,
         };
@@ -254,6 +259,7 @@ mod tests {
             "SELECT name, type FROM sqlite_master WHERE type IN ('table', 'view') AND NOT name = 'sqlite_sequence'",
             "SELECT name FROM users WHERE name = ':name?' -- by %s",
             "SELECT id::text FROM users /* $1 */",
+            "SELECT TOP 21 [order?].[id] FROM [order?] WHERE [order?].[at] > '12:30' AND @@ROWCOUNT > 0",
         ] {
             let explained =
                 sql(statement, None).map(|request| request.body["explain"]["params"].clone());
@@ -270,6 +276,10 @@ mod tests {
             "SELECT * FROM users WHERE id = ?",
             "SELECT * FROM users WHERE id = :id",
             "SELECT * FROM users WHERE id = $1",
+            "SELECT TOP 21 [users].[id] FROM [users] WHERE [users].[id] = @P1",
+            "SELECT * FROM users WHERE id = @id",
+            "SELECT * FROM users WHERE id = :1",
+            "SELECT * FROM users WHERE tags = ARRAY[%s]",
         ] {
             assert_eq!(
                 sql(statement, None).err(),

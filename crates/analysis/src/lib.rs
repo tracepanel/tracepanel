@@ -21,9 +21,19 @@ const SPAN_IDS: usize = 50;
 const TITLE_LIMIT: usize = 200;
 
 static WHITESPACE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s+").unwrap());
-// A lookup by primary key: `WHERE table.id = ?`, or `WHERE id = ?` (a hand-written query); %s, ? or $1.
+/// A placeholder, as each driver writes it: %s and %(name)s (Python), ? and ?1 (JDBC, ODBC, SQLite), $1
+/// (PostgreSQL), @P1 and @name (SQL Server), :1 and :name (Oracle, SQLAlchemy). ASCII classes, not Unicode's `\w`:
+/// a placeholder is always ASCII, and the regexes compile several times faster.
+pub(crate) const PLACEHOLDER: &str =
+    r"(?:%s|%\([A-Za-z0-9_]+\)s|\?[0-9]*|\$[0-9]+|@[A-Za-z0-9_]+|:[A-Za-z0-9_]+)";
+/// A name, bare or quoted: "standard SQL", `MySQL`, [SQL Server].
+pub(crate) const NAME: &str = r#"(?:[`"\[]?\w+[`"\]]?)"#;
+// A lookup by primary key: `WHERE table.id = ?`, or `WHERE id = ?` (a hand-written query).
 static BY_PK: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(?i)WHERE (?:[`"]?\w+[`"]?\.)?[`"]?id[`"]? = (?:%s|\?|\$\d+)"#).unwrap()
+    Regex::new(&format!(
+        r#"(?i)WHERE (?:{NAME}\.)?[`"\[]?id[`"\]]? = {PLACEHOLDER}"#
+    ))
+    .unwrap()
 });
 static LINE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r":\d+ in ").unwrap());
 // The parts of a URL path or a cache key that name one item: a number, a UUID, a long hex digest.
@@ -43,8 +53,9 @@ const SELECTINLOAD: &str = "Load the related rows in one extra query: add `selec
     to the select() that produced these rows.";
 const N_PLUS_ONE: &str = "Load the related rows with the parent rows (a join, or one batched query) instead of one query per row.";
 const DUPLICATES: &str = "Run the query once and reuse the result, or cache it for the request.";
-const DATALOADER: &str = " In GraphQL, a resolver runs once per object: batch these lookups with a DataLoader \
-    (strawberry.dataloader), or prefetch in the parent resolver.";
+const IN_GRAPHQL: &str =
+    " In GraphQL, a resolver runs once per object: batch these lookups with a DataLoader";
+const PREFETCH_IN_PARENT: &str = ", or prefetch in the parent resolver.";
 const SLOW_SQL: &str = "Check the query plan (`EXPLAIN`) and add an index or narrow the query.";
 const HTTP_REPEATED: &str =
     "Fetch them in one batch request, or call once and reuse the result for the request.";
@@ -69,6 +80,21 @@ const FULL_PAGE_HINT: &str = "htmx swaps the response into its target element, s
 
 const N_PLUS_ONE_IN_TEMPLATE: &str = "Load the related rows in the view, with the parent rows (a join, or one \
     batched query), and pass them to the template.";
+
+/// What a GraphQL trace's N+1 hint adds: a DataLoader, the one of the server library the SDK names
+/// (`graphql.library`), none named for a library it doesn't.
+fn dataloader_hint(library: Option<&str>) -> String {
+    let loader = match library {
+        Some("strawberry") => " (`strawberry.dataloader`)",
+        // graphene-django's GraphQLView runs resolvers in sync code, where aiodataloader's (Graphene's docs) can't
+        // wait, and promise's DataLoader needs graphql-core 2.
+        Some("graphene") => {
+            " (graphql-sync-dataloaders' `SyncDataLoader` in graphene-django's sync view, aiodataloader in an async one)"
+        }
+        _ => "",
+    };
+    format!("{IN_GRAPHQL}{loader}{PREFETCH_IN_PARENT}")
+}
 
 fn n_plus_one_hint(client: &str, by_pk: bool, in_template: bool) -> &'static str {
     match (client, by_pk) {
@@ -280,7 +306,10 @@ fn sql_issues(trace: &Trace, thresholds: &Thresholds) -> Vec<Issue> {
         }
         groups.entry(key).or_default().push(span);
     }
-    let graphql = trace.attrs.contains_key("graphql.operation");
+    let dataloader = trace
+        .attrs
+        .contains_key("graphql.operation")
+        .then(|| dataloader_hint(text(&trace.attrs, "graphql.library").as_deref()));
     let threshold = thresholds.n_plus_one.max(0) as usize;
     for (alias, statement) in order {
         let spans = &groups[&(alias.clone(), statement.clone())];
@@ -330,7 +359,7 @@ fn sql_issues(trace: &Trace, thresholds: &Thresholds) -> Vec<Issue> {
                 "{}{}{}",
                 lead.as_deref().unwrap_or_default(),
                 n_plus_one_hint(&py_str(first.attrs.get("db.client")), by_pk, lead.is_some()),
-                if graphql { DATALOADER } else { "" }
+                dataloader.as_deref().unwrap_or_default()
             );
             issues.push(issue(
                 issue_key("n+1", &[Some(&key), key_culprit.as_deref()]),
@@ -951,6 +980,29 @@ mod tests {
     }
 
     #[test]
+    fn by_pk_matches_every_quoting_and_placeholder() {
+        // SQL Server as Django's mssql backend writes it, MySQL's backticks, then each driver's placeholder.
+        for statement in [
+            "SELECT TOP 21 [shop_customer].[id], [shop_customer].[user_id] FROM [shop_customer] \
+             WHERE [shop_customer].[id] = %s",
+            "SELECT [auth_user].[id] FROM [auth_user] WHERE [id] = %s",
+            "SELECT `auth_user`.`id` FROM `auth_user` WHERE `auth_user`.`id` = %s LIMIT 21",
+            "SELECT * FROM users WHERE users.id = %(id_1)s",
+            "SELECT * FROM users WHERE users.id = ?1",
+            "SELECT * FROM users WHERE users.id = @P1",
+            "SELECT * FROM users WHERE users.id = @id",
+            "SELECT * FROM users WHERE users.id = :1",
+            "SELECT * FROM users WHERE users.id = :id_1",
+        ] {
+            assert!(BY_PK.is_match(statement), "{statement}");
+        }
+
+        assert!(!BY_PK.is_match(
+            "SELECT [shop_order].[id] FROM [shop_order] WHERE [shop_order].[customer_id] = %s"
+        ));
+    }
+
+    #[test]
     fn a_document_gets_its_issues_and_keeps_the_rest_as_it_came() {
         let issue = Issue {
             fingerprint: "f".into(),
@@ -1161,6 +1213,63 @@ mod tests {
     }
 
     #[test]
+    fn a_graphql_n_plus_one_names_the_dataloader_of_its_library() {
+        let author = r#"SELECT "author"."name" FROM "author" WHERE "author"."id" = %s LIMIT 21"#;
+        let hint = |attrs: Value| {
+            let mut trace = request(
+                &(0..3)
+                    .map(|n| {
+                        let attrs = serde_json::json!({
+                            "db.statement": author, "db.fingerprint": author, "db.params_hash": format!("p{n}"),
+                            "db.client": "django", "code.origin": "blog/schema.py:30 in resolve_author",
+                        });
+                        ("sql", "SELECT", attrs, 1000)
+                    })
+                    .collect::<Vec<_>>(),
+            );
+            trace.attrs = serde_json::from_value(attrs).unwrap();
+            analyze(&trace, &Thresholds::default())[0]
+                .hint
+                .clone()
+                .unwrap()
+        };
+        let graphql = |library: Value| {
+            hint(
+                serde_json::json!({"graphql.operation": "query PostList", "graphql.library": library}),
+            )
+        };
+        let batch =
+            "In GraphQL, a resolver runs once per object: batch these lookups with a DataLoader";
+
+        assert_eq!(
+            graphql("strawberry".into()),
+            format!(
+                "{SELECT_RELATED} {batch} (`strawberry.dataloader`), or prefetch in the parent resolver."
+            )
+        );
+        assert_eq!(
+            graphql("graphene".into()),
+            format!(
+                "{SELECT_RELATED} {batch} (graphql-sync-dataloaders' `SyncDataLoader` in graphene-django's sync \
+                 view, aiodataloader in an async one), or prefetch in the parent resolver."
+            )
+        );
+
+        // A library the agent doesn't know, or an SDK that doesn't say: a DataLoader, none named.
+        let unnamed = format!("{SELECT_RELATED} {batch}, or prefetch in the parent resolver.");
+
+        assert_eq!(graphql("graphql-java".into()), unnamed);
+        assert_eq!(graphql(Value::Null), unnamed);
+        assert_eq!(
+            hint(serde_json::json!({"graphql.operation": "query PostList"})),
+            unnamed
+        );
+
+        // Not a GraphQL request: no DataLoader.
+        assert_eq!(hint(serde_json::json!({})), SELECT_RELATED);
+    }
+
+    #[test]
     fn templates_name_the_item_as_id() {
         assert_eq!(
             [
@@ -1281,6 +1390,70 @@ mod tests {
     }
 
     #[test]
+    fn a_loop_of_sql_server_lookups_in_library_code_is_the_view_s_n_plus_one() {
+        // A product page on SQL Server: a library's loop looks up each customer, then its user, by key (the
+        // statements as Django's mssql backend writes them). No project frame: the issue points at the view.
+        let customer = "SELECT TOP 21 [shop_customer].[id], [shop_customer].[user_id] FROM [shop_customer] \
+                        WHERE [shop_customer].[id] = %s";
+        let user = "SELECT TOP 21 [auth_user].[id], [auth_user].[username] FROM [auth_user] \
+                    WHERE [auth_user].[id] = %s";
+        let lookup = |statement: &str, name: &'static str, n: usize| {
+            let attrs = serde_json::json!({
+                "db.statement": statement, "db.fingerprint": statement, "db.params_hash": format!("p{n}"),
+                "db.client": "django", "db.vendor": "microsoft", "code.origin": null,
+                "code.caller": "reviews/widgets.py:40 in render",
+            });
+            ("sql", name, attrs, 1000)
+        };
+        let spans: Vec<_> = (0..7)
+            .flat_map(|n| {
+                [
+                    lookup(customer, "SELECT shop_customer", n),
+                    lookup(user, "SELECT auth_user", n),
+                ]
+            })
+            .collect();
+        let mut trace = request(&spans);
+        trace
+            .attrs
+            .insert("code.view".into(), "shop.views.product_detail".into());
+
+        let issues: Vec<_> = analyze(&trace, &Thresholds::default())
+            .into_iter()
+            .map(|issue| {
+                (
+                    issue.kind,
+                    issue.title,
+                    issue.culprit,
+                    issue.hint,
+                    issue.count,
+                )
+            })
+            .collect();
+
+        let culprit = Some("shop.views.product_detail (in library code)".to_owned());
+        assert_eq!(
+            issues,
+            [
+                (
+                    "n+1".to_owned(),
+                    "N+1: 7 similar queries · SELECT shop_customer".to_owned(),
+                    culprit.clone(),
+                    Some(SELECT_RELATED.to_owned()),
+                    7
+                ),
+                (
+                    "n+1".to_owned(),
+                    "N+1: 7 similar queries · SELECT auth_user".to_owned(),
+                    culprit,
+                    Some(SELECT_RELATED.to_owned()),
+                    7
+                ),
+            ]
+        );
+    }
+
+    #[test]
     fn a_select_without_a_limit_that_returned_many_rows() {
         let query = |statement: &str, rows: i64| {
             let attrs = serde_json::json!({
@@ -1297,6 +1470,13 @@ mod tests {
             // Bounded, few, or not a read: nothing.
             query("SELECT * FROM product LIMIT 50", 50),
             query("SELECT * FROM product LIMIT 5000", 5000),
+            // SQL Server's bounds, as Django's mssql backend writes them.
+            query("SELECT TOP 5000 [product].[id] FROM [product]", 5000),
+            query(
+                "SELECT [product].[id] FROM [product] ORDER BY [product].[id] ASC  OFFSET 20 ROWS \
+                 FETCH FIRST 5000 ROWS ONLY",
+                5000,
+            ),
             query("SELECT * FROM category", 12),
             query("UPDATE product SET price = price * 2", 25_000),
         ]);

@@ -34,9 +34,10 @@ are ULIDs.
   `error` and others), with a stable `fingerprint`. SDKs send traces without
   issues.
 - **Task event**: a step of a task in flight (`enqueued`, `started`,
-  `retried`, `finished`, and a worker's `heartbeat`), sent before the task's
-  trace exists. The agent keeps the tasks in flight in memory, not in the
-  store, and serves them at `GET /api/tasks/live`. `crates/protocol/src/live.rs`
+  `retried`, `finished`), a worker's `heartbeat` every 30 seconds, or its
+  `worker_stopped` as it stops cleanly, sent before the task's trace
+  exists. The agent keeps the tasks in flight in memory, not in the store,
+  and serves them at `GET /api/tasks/live`. `crates/protocol/src/live.rs`
   names the fields.
 - **App**: what an app says about itself once, in its hello (`app`): its
   settings, masked by its SDK, the versions of what it runs on, and what its

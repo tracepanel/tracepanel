@@ -138,5 +138,15 @@ async fn task_events_on_the_wire_are_listed_until_the_task_finishes() {
     // t1 waits in the queue the worker took t2 from: it is between two tasks, not idle.
     assert_eq!(live["workers"][0]["in_flight"], 1);
     assert_eq!(other["tasks"], json!([]));
+
+    // The worker stops cleanly and says so: it leaves at once.
+    send(
+        &mut app,
+        &json!({"tasks": [{"event": "worker_stopped", "system": "celery", "time": start + 3, "worker": "celery@box"}]}),
+    )
+    .await;
+    let live = live_when(&router, |live| live["workers"] == json!([])).await;
+
+    assert_eq!(live["tasks"][0]["id"], "t1");
     let _ = std::fs::remove_dir_all(&dir);
 }
