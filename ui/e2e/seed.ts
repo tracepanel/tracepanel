@@ -453,6 +453,44 @@ function examples(): Doc[] {
     .map((file) => JSON.parse(readFileSync(new URL(file, EXAMPLES), "utf8")) as Doc);
 }
 
+/**
+ * A request with every tab a trace can have in the panel's row: an N+1's SQL and its issues, HTTP calls, logs, and
+ * the shop app's settings. Made from two of the examples, under ids of its own.
+ */
+function everyTab(): Doc {
+  const read = (file: string) => readFileSync(new URL(file, EXAMPLES), "utf8");
+  const doc = JSON.parse(read("python-django-n-plus-one.json").replaceAll("01M4GPC1", "01M4TABS")) as Doc;
+  const spans = doc["spans"] as Doc[];
+  const root = spans[0] as Doc;
+  const calls = (JSON.parse(read("python-fastapi-http-slow.json")) as Doc)["spans"] as Doc[];
+  const start = Number(root["start"]);
+  const offset = start - Number((calls[0] as Doc)["start"]);
+  for (const call of calls.filter((span) => span["kind"] === "http.client"))
+    spans.push({
+      ...call,
+      id: String(call["id"]).replace(/^01M4/, "01M5"),
+      parent_id: root["id"],
+      start: Number(call["start"]) + offset,
+    });
+  // The request lasts until its last call answered.
+  const duration = Math.max(...spans.map((span) => Number(span["start"]) + Number(span["duration"]))) - start;
+  const name = "GET /account/orders/";
+  const attrs = {
+    ...(doc["attrs"] as Doc),
+    ...SHOP,
+    "http.path": "/account/orders/",
+    "http.route": "/account/orders/",
+  };
+  const head = { ...root, name, duration };
+  // Its own records: the example's are searched for in the Logs tests.
+  const logs = (doc["logs"] as Doc[]).map((record, index) => ({
+    ...record,
+    logger: "orders.views",
+    message: index === 0 ? "listing 3 orders for ann" : "orders served from the cache",
+  }));
+  return { ...doc, name, attrs, duration, logs, spans: spans.map((span) => (span === root ? head : span)) };
+}
+
 /** What /api/counts should say once every trace is stored: how many of each section's traces were sent. */
 function expectedCounts(docs: readonly Doc[]): Record<string, number> {
   const expected: Record<string, number> = {};
@@ -935,6 +973,7 @@ export default async function seed(): Promise<void> {
     ...chord(),
     ...dependencies(),
     ...limits(),
+    everyTab(),
   ];
   const first = Date.now() * 1000 - SPREAD_US * (docs.length + 1);
   const moved = docs.map((doc, index) => due(shift(doc, first + index * SPREAD_US - Number(doc["start"])) as Doc));

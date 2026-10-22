@@ -129,6 +129,12 @@
 
 ### Fixed
 
+- A trace's tabs never show cut. In the panel, docked at the bottom or on
+  the right, and in the console, the tabs that don't fit go into a More menu
+  at the row's end, with their counts, and a dot on it when one of them has
+  issues or errors. When that would leave less than half of them in the row,
+  the tabs but the open one show their icon and count only, their name in
+  the tooltip. The open tab always stays in the row.
 - A group page's Time button is its own size again, not stretched across
   the page.
 - The slowest and failing lists above a section's table no longer widen the
