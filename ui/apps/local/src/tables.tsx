@@ -1138,9 +1138,19 @@ export function TasksTable({ items }: { items: readonly TaskRow[] }) {
   );
 }
 
-/** A GraphQL operation's name, or "anonymous" when the client sent none. */
-function OperationName({ name }: { name: string | null | undefined }) {
-  if (name) return nameCell(name);
+/**
+ * A GraphQL operation's name, or "anonymous" when the client sent none. A row with no type ran no operation (a
+ * document that didn't parse): what the SDK named it instead (`syntax error`).
+ */
+function OperationName({ item }: { item: GraphqlRow }) {
+  if (item.name) return nameCell(item.name);
+  if (!item.type) {
+    return (
+      <span className="text-muted-foreground italic" title="No operation: the document didn't parse">
+        {item.operation}
+      </span>
+    );
+  }
   return (
     <span className="text-muted-foreground italic" title="The client sent no operationName">
       anonymous
@@ -1153,10 +1163,12 @@ function graphqlColumns(items: readonly GraphqlRow[]): DataColumn<GraphqlRow>[] 
     {
       id: "type",
       label: "Type",
-      width: 7,
-      cell: (item) => <OutlineBadge mono={true}>{item.type ?? "query"}</OutlineBadge>,
+      // The widest type, `subscription`, whole.
+      width: 9.5,
+      fixed: true,
+      cell: (item) => (item.type ? <OutlineBadge mono={true}>{item.type}</OutlineBadge> : null),
     },
-    { id: "operation", label: "Operation name", required: true, cell: (item) => <OperationName name={item.name} /> },
+    { id: "operation", label: "Operation name", required: true, cell: (item) => <OperationName item={item} /> },
     { id: "calls", label: "Calls", width: 5.25, num: true, cell: (item) => item.calls },
     {
       id: "errors",

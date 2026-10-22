@@ -122,6 +122,10 @@
 
 ### Fixed
 
+- The GraphQL page's By operation table shows an operation's type whole:
+  `mutation` and `subscription` were cut short. A row with no type, a
+  document that didn't parse, has no type pill and is named as the SDK names
+  it (`syntax error`), not `query` and `anonymous`.
 - A group page's Time button is its own size again, not stretched across
   the page.
 - The slowest and failing lists above a section's table no longer widen the
