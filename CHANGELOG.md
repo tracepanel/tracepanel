@@ -138,6 +138,11 @@
   the page.
 - The slowest and failing lists above a section's table no longer widen the
   page sideways when a name is long, as a task's often is: it is cut short.
+- A small share no longer reads 0%. One failed call in 389 showed "0%" in
+  the error colour on the Database page: a share that is neither none nor
+  all now reads "<1%" or ">99%", wherever the console and the panel show a
+  percent (the tiles of every page, a cache's hit rate, the time breakdown,
+  a profile).
 - SQL Server's queries get the issues other databases' get. A lookup by key
   written with SQL Server's `[table].[id]` names, as Django's mssql backend
   writes it, is one: a loop of them in library code is an N+1, and its hint
