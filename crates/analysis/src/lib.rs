@@ -22,8 +22,10 @@ const TITLE_LIMIT: usize = 200;
 
 static WHITESPACE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s+").unwrap());
 /// A placeholder, as each driver writes it: %s and %(name)s (Python), ? and ?1 (JDBC, ODBC, SQLite), $1
-/// (PostgreSQL), @P1 and @name (SQL Server), :1 and :name (Oracle, SQLAlchemy).
-pub(crate) const PLACEHOLDER: &str = r"(?:%s|%\(\w+\)s|\?\d*|\$\d+|@\w+|:\w+)";
+/// (PostgreSQL), @P1 and @name (SQL Server), :1 and :name (Oracle, SQLAlchemy). ASCII classes, not Unicode's `\w`:
+/// a placeholder is always ASCII, and the regexes compile several times faster.
+pub(crate) const PLACEHOLDER: &str =
+    r"(?:%s|%\([A-Za-z0-9_]+\)s|\?[0-9]*|\$[0-9]+|@[A-Za-z0-9_]+|:[A-Za-z0-9_]+)";
 /// A name, bare or quoted: "standard SQL", `MySQL`, [SQL Server].
 pub(crate) const NAME: &str = r#"(?:[`"\[]?\w+[`"\]]?)"#;
 // A lookup by primary key: `WHERE table.id = ?`, or `WHERE id = ?` (a hand-written query).
