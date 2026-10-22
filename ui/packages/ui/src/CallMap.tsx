@@ -1,6 +1,5 @@
 import {
   type CSSProperties,
-  Fragment,
   type KeyboardEvent,
   type ReactNode,
   type RefObject,
@@ -19,11 +18,13 @@ import { callFields } from "./lib/callFields";
 import { callTemplate, groupNoun } from "./lib/calls";
 import { spanKindLabel } from "./lib/handler";
 import { traceRuntime } from "./lib/runtime";
+import { isReceiver, raised } from "./lib/signals";
 import { CALL_KINDS, DATASTORES, MESSAGING, RPC } from "./lib/systems";
 import { linkProps, type TraceLinks } from "./links";
 import { type PropRow, PropTable } from "./PropTable";
 import { AliasChip, AppChip, IssueChip } from "./primitives";
 import { SideResize, useSideWidth } from "./SideResize";
+import { SignalNotes } from "./SignalNotes";
 import { SqlCode } from "./SqlCode";
 import { TemplateContext, withoutContext } from "./TemplateContext";
 import type { Attrs, IssueKind, Log, Related, Span, Trace, TraceError, TraceSummary } from "./types";
@@ -57,14 +58,23 @@ function startOf(node: Node): number {
 }
 
 /**
- * 3+ identical leaf queries, cache calls or HTTP calls (to one path template) under one parent collapse into a group
- * shown where the first one ran, even when they interleave (an N+1 in a template loop alternates between several
- * statements).
+ * 3+ identical leaf queries, cache calls, HTTP calls (to one path template) or signal sends (one signal, one sender)
+ * under one parent collapse into a group shown where the first one ran, even when they interleave (an N+1 in a
+ * template loop alternates between several statements).
  */
 const GROUP_MIN = 3;
 
 function isLeafCall(node: Node): node is Extract<Node, { type: "span" }> {
-  return node.type === "span" && CALL_KINDS.has(node.span.kind) && node.children.every(isBackendCall);
+  if (node.type !== "span") return false;
+  if (node.span.kind === "signal") return node.children.every(isQuietReceiver);
+  return CALL_KINDS.has(node.span.kind) && node.children.every(isBackendCall);
+}
+
+/** A receiver that ran and did nothing the tree shows: its send folds with its likes. One that failed stays a row. */
+function isQuietReceiver(node: Node): boolean {
+  return (
+    node.type === "span" && node.span.kind === "function" && node.span.status !== "error" && node.children.length === 0
+  );
 }
 
 /** A cache call's own Redis commands don't stop it from grouping with its likes: they are how it was served. */
@@ -249,19 +259,41 @@ function chipCounts(nodes: Node[], trace: Trace): Map<FilterId, number> {
 
 /**
  * With filters on: the rows that match, and the rows on the way to them ("path": shown dimmed, always open).
- * Everything else is hidden.
+ * Everything else is hidden. A signal's rows are what it did: its receivers, and theirs, match with it.
  */
 function markTree(nodes: Node[], active: ReadonlySet<FilterId>, marks = new Map<string, Mark>()): boolean {
   let any = false;
-  for (const node of nodes) {
-    const filter = FILTER_OF.get(kindOf(node));
-    const matches = filter !== undefined && active.has(filter);
-    const below = markTree(childrenOf(node), active, marks);
-    if (matches) marks.set(node.key, "match");
-    else if (below) marks.set(node.key, "path");
-    any = any || matches || below;
-  }
+  for (const node of nodes) any = markNode(node, active, marks) || any;
   return any;
+}
+
+/** One row and the rows under it; whether it shows. */
+function markNode(node: Node, active: ReadonlySet<FilterId>, marks: Map<string, Mark>): boolean {
+  const filter = matchOf(node, active);
+  const below = markTree(childrenOf(node), active, marks);
+  if (filter === "signal") markAll(childrenOf(node), marks);
+  const mark = markOf(filter !== null, below);
+  if (mark) marks.set(node.key, mark);
+  return mark !== undefined;
+}
+
+/** The active filter a row matches, if any. */
+function matchOf(node: Node, active: ReadonlySet<FilterId>): FilterId | null {
+  const filter = FILTER_OF.get(kindOf(node));
+  return filter !== undefined && active.has(filter) ? filter : null;
+}
+
+function markOf(matches: boolean, below: boolean): Mark | undefined {
+  if (matches) return "match";
+  return below ? "path" : undefined;
+}
+
+/** Every row under these, as matches. */
+function markAll(nodes: Node[], marks: Map<string, Mark>): void {
+  for (const node of nodes) {
+    marks.set(node.key, "match");
+    markAll(childrenOf(node), marks);
+  }
 }
 
 type Mark = "match" | "path";
@@ -283,6 +315,7 @@ const CATEGORY_FILTERS: Partial<Record<Category, FilterId>> = {
   messaging: "messaging",
   http: "http",
   mail: "mail",
+  signal: "signal",
 };
 
 interface FilterState {
@@ -346,7 +379,7 @@ function Share({
 
 /**
  * Where the time went, and what to show: one row. A category with rows in the tree (Database, Templates, Cache…)
- * is a filter chip too; the filters with no time of their own (Logs, Errors, Signals…) follow it as plain chips.
+ * is a filter chip too; the filters with no time of their own (Logs, Errors, Tasks…) follow it as plain chips.
  */
 function Breakdown({ trace, filters }: { trace: Trace; filters: FilterState }) {
   const parts = breakdown(trace);
@@ -564,142 +597,234 @@ function childrenOf(node: Node): Node[] {
   return node.type === "span" || node.type === "task" ? node.children : [];
 }
 
-function Rows({ nodes, depth, ctx }: { nodes: Node[]; depth: number; ctx: RowContext }) {
+/** Where a row is drawn: how deep, how far in, whether it is only on the way to a filtered row, under which span. */
+interface RowPlace {
+  ctx: RowContext;
+  indent: CSSProperties;
+  depth: number;
+  mark: Mark | undefined;
+  parent: Span | undefined;
+}
+
+type RowProps<T extends Node["type"]> = { node: Extract<Node, { type: T }>; place: RowPlace };
+
+function Rows({
+  nodes,
+  depth,
+  ctx,
+  parent,
+}: {
+  nodes: Node[];
+  depth: number;
+  ctx: RowContext;
+  parent?: Span | undefined;
+}) {
   return (
     <>
       {nodes.map((node) => {
         const mark = ctx.marks?.get(node.key);
         if (ctx.marks && !mark) return null;
-        const indent = { paddingLeft: `${12 + depth * 16}px` };
-        if (node.type === "log" || node.type === "error") {
-          const isError = node.type === "error";
-          const time = isError ? node.error.time : node.log.time;
-          const text = isError
-            ? `${node.error.type.replace(/^builtins\./, "")}: ${node.error.message}`
-            : node.log.message;
-          return (
-            <Fragment key={node.key}>
-              <button
-                type="button"
-                className="dt-map-row"
-                data-dim={mark === "path" ? "" : undefined}
-                data-kind={isError ? "error" : "log"}
-                data-level={isError ? "error" : node.log.level}
-                aria-current={ctx.selected === node.key ? "true" : undefined}
-                onClick={() => ctx.onSelect(node.key)}
-              >
-                <span className="dt-map-name" style={indent}>
-                  <span className="dt-map-caret" />
-                  <span className="dt-map-kind">{isError ? "error" : node.log.level}</span>
-                  <span className="dt-map-text">{text}</span>
-                </span>
-                <Bar trace={ctx.trace} start={time} length={0} point={true} />
-                <span className="dt-map-time" title={`Logged ${since(time, ctx.trace.start)}`}>
-                  +{duration(Math.max(time - ctx.trace.start, 0))}
-                </span>
-              </button>
-              <RowDetails id={node.key} ctx={ctx} />
-            </Fragment>
-          );
-        }
-        if (node.type === "task" || node.type === "waiting") {
-          return <LinkedRow key={node.key} node={node} ctx={ctx} indent={indent} depth={depth} dim={mark === "path"} />;
-        }
-        if (node.type === "group") {
-          const open = ctx.collapsed.has(`open:${node.key}`);
-          const issue = node.spans.map((span) => ctx.issueBySpan.get(span.id)).find(Boolean);
-          const first = node.spans[0];
-          const total = node.spans.reduce((sum, span) => sum + span.duration, 0);
-          return (
-            <div key={node.key} className="dt-map-group">
-              <button
-                type="button"
-                className="dt-map-row"
-                data-dim={mark === "path" ? "" : undefined}
-                data-kind={first?.kind}
-                aria-expanded={open}
-                aria-current={ctx.selected === node.key ? "true" : undefined}
-                onClick={() => {
-                  ctx.onSelect(node.key);
-                  ctx.onToggle(`open:${node.key}`);
-                }}
-                onKeyDown={foldKeys(open, () => ctx.onToggle(`open:${node.key}`))}
-              >
-                <span className="dt-map-name" style={indent}>
-                  <Caret open={open} onToggle={() => ctx.onToggle(`open:${node.key}`)} />
-                  <span className="dt-map-kind">{spanKindLabel(first?.kind, ctx.trace.attrs)}</span>
-                  <span className="dt-map-text">{callTemplate(first)}</span>
-                  <AliasChip value={first?.attrs["db.alias"] ?? first?.attrs["cache.alias"]} />
-                  <span className="dt-map-times">×{node.spans.length}</span>
-                  {issue ? <IssueChip kind={issue} /> : null}
-                </span>
-                <span className="dt-map-track" aria-hidden="true">
-                  {node.spans.map((span) => (
-                    <span
-                      key={span.id}
-                      className="dt-map-bar"
-                      data-tick=""
-                      style={{
-                        left: `${Math.min(Math.max(((span.start - ctx.trace.start) / Math.max(ctx.trace.duration, 1)) * 100, 0), 100)}%`,
-                      }}
-                    />
-                  ))}
-                </span>
-                <span className="dt-map-time">{duration(total)}</span>
-              </button>
-              <RowDetails id={node.key} ctx={ctx} />
-              {open ? (
-                <Rows
-                  nodes={node.spans.map((span) => ({ type: "span", key: span.id, span, children: [] }))}
-                  depth={depth + 1}
-                  ctx={{ ...ctx, marks: undefined }}
-                />
-              ) : null}
-            </div>
-          );
-        }
-        const { span } = node;
-        const hasChildren = node.children.length > 0;
-        const open = hasChildren && (mark === "path" || !ctx.collapsed.has(node.key));
-        const fold = foldOf(hasChildren, open);
-        const issue = ctx.issueBySpan.get(span.id);
-        return (
-          <div key={node.key}>
-            <button
-              type="button"
-              className="dt-map-row"
-              data-dim={mark === "path" ? "" : undefined}
-              data-kind={span.kind}
-              data-status={span.status}
-              aria-expanded={hasChildren ? open : undefined}
-              aria-current={ctx.selected === node.key ? "true" : undefined}
-              onClick={() => {
-                // First click selects the row (and opens it); a second click closes its details (and folds it).
-                if (ctx.selected !== node.key) {
-                  if (hasChildren && !open) ctx.onToggle(node.key);
-                } else if (hasChildren && open) {
-                  ctx.onToggle(node.key);
-                }
-                ctx.onSelect(node.key);
-              }}
-              onKeyDown={foldKeys(fold, () => ctx.onToggle(node.key))}
-            >
-              <span className="dt-map-name" style={indent}>
-                <Caret open={fold} onToggle={() => ctx.onToggle(node.key)} />
-                <span className="dt-map-kind">{spanKindLabel(span.kind, ctx.trace.attrs)}</span>
-                <span className="dt-map-text">{span.name}</span>
-                <AliasChip value={span.attrs["db.alias"] ?? span.attrs["cache.alias"]} />
-                {issue ? <IssueChip kind={issue} /> : null}
-              </span>
-              <Bar trace={ctx.trace} start={span.start} length={span.duration} />
-              <span className="dt-map-time">{duration(span.duration)}</span>
-            </button>
-            <RowDetails id={node.key} ctx={ctx} />
-            {open ? <Rows nodes={node.children} depth={depth + 1} ctx={ctx} /> : null}
-          </div>
-        );
+        const place = { ctx, indent: { paddingLeft: `${12 + depth * 16}px` }, depth, mark, parent };
+        return <Row key={node.key} node={node} place={place} />;
       })}
     </>
+  );
+}
+
+const ROWS: { [T in Node["type"]]: (props: RowProps<T>) => ReactNode } = {
+  span: SpanRow,
+  group: GroupRow,
+  log: LeafRow,
+  error: LeafRow,
+  task: PlacedLinkedRow,
+  waiting: PlacedLinkedRow,
+};
+
+function Row(props: RowProps<Node["type"]>) {
+  const Shown = ROWS[props.node.type] as (props: RowProps<Node["type"]>) => ReactNode;
+  return <Shown {...props} />;
+}
+
+/** A row's state as its button says it: dimmed on the way to a filtered row, current while selected. */
+function rowState(ctx: RowContext, key: string, mark: Mark | undefined) {
+  return {
+    "data-dim": mark === "path" ? "" : undefined,
+    "aria-current": ctx.selected === key ? ("true" as const) : undefined,
+  };
+}
+
+/** A call's database or cache alias, when it has one. */
+function aliasOf(span: Span | undefined): unknown {
+  return span?.attrs["db.alias"] ?? span?.attrs["cache.alias"];
+}
+
+function PlacedLinkedRow({ node, place: { ctx, indent, depth, mark } }: { node: Linked; place: RowPlace }) {
+  return <LinkedRow node={node} ctx={ctx} indent={indent} depth={depth} dim={mark === "path"} />;
+}
+
+/** How a log record or an error reads as a row: its kind, its level, when, what it says. */
+function leafView(node: Extract<Node, { type: "log" | "error" }>) {
+  if (node.type === "error") {
+    const text = `${node.error.type.replace(/^builtins\./, "")}: ${node.error.message}`;
+    return { kind: "error", level: "error", time: node.error.time, text };
+  }
+  return { kind: "log", level: node.log.level, time: node.log.time, text: node.log.message };
+}
+
+/** A log record or an error: a point on the timeline, at its time since the request started. */
+function LeafRow({
+  node,
+  place: { ctx, indent, mark },
+}: {
+  node: Extract<Node, { type: "log" | "error" }>;
+  place: RowPlace;
+}) {
+  const view = leafView(node);
+  return (
+    <>
+      <button
+        type="button"
+        className="dt-map-row"
+        {...rowState(ctx, node.key, mark)}
+        data-kind={view.kind}
+        data-level={view.level}
+        onClick={() => ctx.onSelect(node.key)}
+      >
+        <span className="dt-map-name" style={indent}>
+          <span className="dt-map-caret" />
+          <span className="dt-map-kind">{view.level}</span>
+          <span className="dt-map-text">{view.text}</span>
+        </span>
+        <Bar trace={ctx.trace} start={view.time} length={0} point={true} />
+        <span className="dt-map-time" title={`Logged ${since(view.time, ctx.trace.start)}`}>
+          +{duration(Math.max(view.time - ctx.trace.start, 0))}
+        </span>
+      </button>
+      <RowDetails id={node.key} ctx={ctx} />
+    </>
+  );
+}
+
+/** A group's kind, its call's template, its alias, how many and its issue. */
+function GroupName({ node, ctx }: { node: Extract<Node, { type: "group" }>; ctx: RowContext }) {
+  const issue = node.spans.map((span) => ctx.issueBySpan.get(span.id)).find(Boolean);
+  const first = node.spans[0];
+  return (
+    <>
+      <span className="dt-map-kind">{spanKindLabel(first?.kind, ctx.trace.attrs)}</span>
+      <span className="dt-map-text">{callTemplate(first)}</span>
+      <AliasChip value={aliasOf(first)} />
+      <span className="dt-map-times">×{node.spans.length}</span>
+      {issue ? <IssueChip kind={issue} /> : null}
+    </>
+  );
+}
+
+/** Repeats of one call folded into one row (×N), its calls as ticks on the timeline; open, each call a row. */
+function GroupRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps<"group">) {
+  const open = ctx.collapsed.has(`open:${node.key}`);
+  const total = node.spans.reduce((sum, span) => sum + span.duration, 0);
+  return (
+    <div className="dt-map-group">
+      <button
+        type="button"
+        className="dt-map-row"
+        {...rowState(ctx, node.key, mark)}
+        data-kind={node.spans[0]?.kind}
+        aria-expanded={open}
+        onClick={() => {
+          ctx.onSelect(node.key);
+          ctx.onToggle(`open:${node.key}`);
+        }}
+        onKeyDown={foldKeys(open, () => ctx.onToggle(`open:${node.key}`))}
+      >
+        <span className="dt-map-name" style={indent}>
+          <Caret open={open} onToggle={() => ctx.onToggle(`open:${node.key}`)} />
+          <GroupName node={node} ctx={ctx} />
+        </span>
+        <GroupTicks spans={node.spans} trace={ctx.trace} />
+        <span className="dt-map-time">{duration(total)}</span>
+      </button>
+      <RowDetails id={node.key} ctx={ctx} />
+      {open ? (
+        <Rows
+          nodes={node.spans.map((span) => ({ type: "span", key: span.id, span, children: [] }))}
+          depth={depth + 1}
+          ctx={{ ...ctx, marks: undefined }}
+          parent={parent}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/** Where each call of a group started, on the request's timeline. */
+function GroupTicks({ spans, trace }: { spans: readonly Span[]; trace: Trace }) {
+  return (
+    <span className="dt-map-track" aria-hidden="true">
+      {spans.map((span) => (
+        <span
+          key={span.id}
+          className="dt-map-bar"
+          data-tick=""
+          style={{
+            left: `${Math.min(Math.max(((span.start - trace.start) / Math.max(trace.duration, 1)) * 100, 0), 100)}%`,
+          }}
+        />
+      ))}
+    </span>
+  );
+}
+
+/** The spans right under a row: a signal's receivers among them. */
+function childSpans(node: Extract<Node, { type: "span" }>): Span[] {
+  return node.children.flatMap((child) => (child.type === "span" ? [child.span] : []));
+}
+
+/** A span's fold: none without rows under it; open unless folded, always on the way to a filtered row. */
+function spanFold(node: Extract<Node, { type: "span" }>, mark: Mark | undefined, ctx: RowContext): boolean | undefined {
+  const hasChildren = node.children.length > 0;
+  return foldOf(hasChildren, hasChildren && (mark === "path" || !ctx.collapsed.has(node.key)));
+}
+
+/** First click selects the row (and opens it); a second click closes its details (and folds it). */
+function clickSpan(ctx: RowContext, key: string, fold: boolean | undefined): void {
+  // Closed and not selected yet, or open and selected: the click folds it too.
+  if (fold === (ctx.selected === key)) ctx.onToggle(key);
+  ctx.onSelect(key);
+}
+
+/** A span: its kind, its name and what goes with it, its bar and its time; its rows under it, open or folded. */
+function SpanRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps<"span">) {
+  const { span } = node;
+  const fold = spanFold(node, mark, ctx);
+  const issue = ctx.issueBySpan.get(span.id);
+  return (
+    <div>
+      <button
+        type="button"
+        className="dt-map-row"
+        {...rowState(ctx, node.key, mark)}
+        data-kind={span.kind}
+        data-status={span.status}
+        aria-expanded={fold}
+        onClick={() => clickSpan(ctx, node.key, fold)}
+        onKeyDown={foldKeys(fold, () => ctx.onToggle(node.key))}
+      >
+        <span className="dt-map-name" style={indent}>
+          <Caret open={fold} onToggle={() => ctx.onToggle(node.key)} />
+          <span className="dt-map-kind">{spanKindLabel(span.kind, ctx.trace.attrs, parent?.kind)}</span>
+          <span className="dt-map-text">{span.name}</span>
+          <AliasChip value={aliasOf(span)} />
+          <SignalNotes span={span} parent={parent} under={childSpans(node)} />
+          {issue ? <IssueChip kind={issue} /> : null}
+        </span>
+        <Bar trace={ctx.trace} start={span.start} length={span.duration} />
+        <span className="dt-map-time">{duration(span.duration)}</span>
+      </button>
+      <RowDetails id={node.key} ctx={ctx} />
+      {fold ? <Rows nodes={node.children} depth={depth + 1} ctx={ctx} parent={span} /> : null}
+    </div>
   );
 }
 
@@ -918,11 +1043,23 @@ function GroupDetails({ node }: DetailsProps<"group">) {
   );
 }
 
-function SpanTitle({ span, trace }: { span: Span; trace: Trace }) {
+function SpanTitle({ span, trace, parent }: { span: Span; trace: Trace; parent: Span | undefined }) {
   const offset = duration(Math.max(span.start - trace.start, 0));
   return (
     <p className="dt-map-details-title">
-      {spanKindLabel(span.kind, trace.attrs)} · started at +{offset} · took {duration(span.duration)}
+      {spanKindLabel(span.kind, trace.attrs, parent?.kind)} · started at +{offset} · took {duration(span.duration)}
+    </p>
+  );
+}
+
+/** What a span raised (a signal's receiver, under send_robust(): the trace has no error of it), as an error reads. */
+function Raised({ attrs }: { attrs: Attrs }) {
+  const found = raised(attrs);
+  if (!found) return null;
+  return (
+    <p className="dt-error-message">
+      <b className="text-error">{found.type}</b>
+      {found.message ? `: ${found.message}` : null}
     </p>
   );
 }
@@ -930,12 +1067,14 @@ function SpanTitle({ span, trace }: { span: Span; trace: Trace }) {
 function SpanDetails({ node: { span }, trace }: DetailsProps<"span">) {
   // The root span stands for the whole request: its details are the trace's own attributes. A call's own fields come
   // in words first (its topic, its URL, where in the code); every attribute after them, raw.
+  const parent = trace.spans.find((each) => each.id === span.parent_id);
   const [attrs, summary] =
-    span.parent_id === null ? [{ ...trace.attrs, ...span.attrs }, []] : [span.attrs, summaryRows(span)];
+    span.parent_id === null ? [{ ...trace.attrs, ...span.attrs }, []] : [span.attrs, summaryRows(span, true, parent)];
   const document = attrs["graphql.document"];
   return (
     <div className="grid gap-3 p-4">
-      <SpanTitle span={span} trace={trace} />
+      <SpanTitle span={span} trace={trace} parent={parent} />
+      <Raised attrs={span.attrs} />
       <Statement span={span} attrs={attrs} />
       {typeof document === "string" ? <GraphqlCode document={document} /> : null}
       {summary.length ? <PropTable rows={summary} /> : null}
@@ -969,8 +1108,15 @@ function Details(props: DetailsProps<Node["type"]>) {
   return <Shown {...props} />;
 }
 
-function summaryRows(span: Span, origin = true): PropRow[] {
-  return callFields(span, origin).map(({ label, value }) => ({ label, value, copy: value, mono: true }));
+/** A call's fields as rows; a list (a signal's receivers) one item a line. */
+function summaryRows(span: Span, origin = true, parent?: Span | undefined): PropRow[] {
+  const kind = isReceiver(span, parent) ? "receiver" : span.kind;
+  return callFields({ kind, attrs: span.attrs }, origin).map(({ label, value }) => ({
+    label,
+    value: value.includes("\n") ? <span className="whitespace-pre-line">{value}</span> : value,
+    copy: value,
+    mono: true,
+  }));
 }
 
 /* ---------- side pane ---------- */

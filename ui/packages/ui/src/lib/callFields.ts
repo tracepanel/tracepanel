@@ -108,6 +108,52 @@ const BY_FAMILY = new Map<Family, readonly Field[]>([
 
 const CALLED_FROM: Field = ["Called from", ["code.origin"]];
 
+/** A list, one item a line: a signal's receivers. */
+function lines(value: unknown): string {
+  return Array.isArray(value) ? value.join("\n") : String(value);
+}
+
+/** A receiver's file and line: shop/receivers.py:12. */
+function withLine(value: unknown, attrs: Attrs): string {
+  const line = attrs["code.lineno"];
+  return typeof line === "number" ? `${value}:${line}` : String(value);
+}
+
+/** Library code that sent a signal, when no code of the project's did: marked as the library's. */
+function sentFrom(value: unknown, attrs: Attrs): string {
+  return attrs["code.origin"] ? String(value) : `${value} (library)`;
+}
+
+/**
+ * A signal's send and a receiver it ran: no system's call, fields of their own. Robust reads `signal.robust`, which
+ * only a robust send has: every send says it.
+ */
+const BY_KIND = new Map<string, readonly Field[]>([
+  [
+    "signal",
+    [
+      ["Signal", ["signal.name"]],
+      ["Sender", ["signal.sender"]],
+      [
+        "Robust",
+        ["signal.name"],
+        (_, attrs) => (attrs["signal.robust"] === true ? "yes: a receiver's error is caught" : "no"),
+      ],
+      ["Receivers", ["signal.receivers"], lines],
+    ],
+  ],
+  [
+    "receiver",
+    [
+      ["Function", ["code.function"]],
+      ["Defined at", ["code.filepath"], withLine],
+    ],
+  ],
+]);
+
+/** Where a call was made; a send made by no code of the project's names the library's line. */
+const ORIGINS = new Map<string, Field>([["signal", ["Called from", ["code.origin", "code.caller"], sentFrom]]]);
+
 function firstOf(attrs: Attrs, keys: readonly string[]): unknown {
   return keys.map((key) => attrs[key]).find((value) => value !== undefined && value !== null && value !== "");
 }
@@ -145,14 +191,21 @@ function kindOf(span: { kind: string }): string {
 }
 
 function fieldsOf(span: { kind: string; attrs: Attrs }): readonly Field[] {
+  return BY_KIND.get(span.kind) ?? systemFields(span);
+}
+
+function systemFields(span: { kind: string; attrs: Attrs }): readonly Field[] {
   const system = systemOfSpan({ kind: kindOf(span), attrs: span.attrs });
   const fields = [system?.kind, `family ${system?.family}`].map((key) => FIELDS.get(String(key))).find(Boolean);
   return fields ? fields(span.attrs) : [];
 }
 
-/** A call's fields in its system's words, then where in the app it was made; the ones it has, in this order. */
+/**
+ * A call's fields in its system's words, then where in the app it was made; the ones it has, in this order. A
+ * receiver's span is a function's: its kind here is `receiver`.
+ */
 export function callFields(span: { kind: string; attrs: Attrs }, origin = true): CallField[] {
-  const fields = origin ? [...fieldsOf(span), CALLED_FROM] : fieldsOf(span);
+  const fields = origin ? [...fieldsOf(span), ORIGINS.get(span.kind) ?? CALLED_FROM] : fieldsOf(span);
   return fields.flatMap(([label, keys, format = plain]) => {
     const value = firstOf(span.attrs, keys);
     return value === undefined ? [] : [{ label, value: format(value, span.attrs) }];

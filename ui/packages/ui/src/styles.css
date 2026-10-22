@@ -78,6 +78,7 @@
   --dt-k-messaging: #e879f9;
   --dt-k-log: #9a93bd;
   --dt-k-mail: #f472b6;
+  --dt-k-signal: #facc15;
 
   --dt-mark: rgb(140 147 166 / 0.32);
   --dt-db: #8b7bff;
@@ -199,6 +200,7 @@
   --dt-k-messaging: #a21caf;
   --dt-k-log: #8a84a6;
   --dt-k-mail: #db2777;
+  --dt-k-signal: #ca8a04;
 
   --dt-mark: rgb(95 100 112 / 0.28);
   --dt-db: #6d5ce7;
@@ -1595,6 +1597,9 @@ details[data-focused] > .dt-sql-group {
 [data-category="messaging"] {
   --dt-k: var(--dt-k-messaging);
 }
+[data-category="signal"] {
+  --dt-k: var(--dt-k-signal);
+}
 .dt-breakdown-bar span {
   background: var(--dt-k);
 }
@@ -1720,6 +1725,9 @@ details[data-focused] > .dt-sql-group {
 .dt-map-row[data-kind="log"] {
   --dt-k: var(--dt-k-log);
 }
+.dt-map-row[data-kind="signal"] {
+  --dt-k: var(--dt-k-signal);
+}
 .dt-map-row[data-level="warning"] {
   --dt-k: var(--dt-warn-strong);
 }
@@ -1787,6 +1795,26 @@ details[data-focused] > .dt-sql-group {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* What goes with a row's name, quieter: a signal's sender and receivers, a receiver's file and line. It gives way
+   long before the name does: the tooltip has it whole. */
+.dt-map-sub {
+  flex: 0 12 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dt-text-3);
+  font: var(--dt-size-xs) var(--dt-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dt-map-sub[data-count] {
+  flex: none;
+  font-family: var(--dt-font);
+}
+.dt-map-sub[data-error] {
+  flex-shrink: 2;
+  min-width: 3rem;
+  color: var(--dt-error);
 }
 .dt-map-times {
   flex: none;

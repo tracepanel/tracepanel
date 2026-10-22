@@ -2,12 +2,14 @@
 // draw from it.
 import type { Span, Trace } from "../types";
 import { handlerWord } from "./handler";
+import { isReceiver } from "./signals";
 import { DATASTORES, MESSAGING, RPC } from "./systems";
 
 export type Category =
   | "django"
   | "view"
   | "code"
+  | "signal"
   | "template"
   | "sql"
   | "redis"
@@ -21,6 +23,7 @@ const CATEGORY_LABELS: Record<Category, string> = {
   django: "Framework & middleware",
   view: "View code",
   code: "Your code",
+  signal: "Signals",
   template: "Templates",
   sql: "Database",
   redis: "Redis",
@@ -47,6 +50,7 @@ const BY_KIND: Record<string, Category> = {
   mail: "mail",
   template: "template",
   view: "view",
+  signal: "signal",
   // A task or command root is the user's own code; so are spans they add with tracepanel.span().
   function: "code",
   "task.run": "code",
@@ -60,12 +64,15 @@ function servedFor(span: Span, byId: ReadonlyMap<string, Span>): Span {
   return parent?.kind === "cache" ? parent : span;
 }
 
-function categoryOf(span: Span): Category | null {
-  const category = BY_KIND[span.kind];
-  if (category) return category;
-  // An API framework's own steps (Django Ninja's auth, input validation, response serialization).
-  if (span.parent_id === null || span.kind === "middleware" || span.kind === "framework") return "django";
-  return null;
+function categoryOf(span: Span, byId: ReadonlyMap<string, Span>): Category | null {
+  // A receiver is the signal's time: what sending it cost, the work it does (its queries aside) included.
+  if (isReceiver(span, byId.get(String(span.parent_id)))) return "signal";
+  return BY_KIND[span.kind] ?? frameworkOf(span);
+}
+
+/** The request's root, its middleware, and an API framework's own steps (Django Ninja's auth, validation). */
+function frameworkOf(span: Span): Category | null {
+  return span.parent_id === null || span.kind === "middleware" || span.kind === "framework" ? "django" : null;
 }
 
 /**
@@ -83,11 +90,11 @@ export function breakdown(trace: Trace): [Category, number][] {
     depths.set(span.id, value);
     return value;
   };
-  // A span without a category of its own (a transaction: the code inside atomic(), a signal…) is its owner's time.
+  // A span without a category of its own (a transaction: the code inside atomic()) is its owner's time.
   const owner = (span: Span): Category | null => {
     let current: Span | undefined = servedFor(span, byId);
     while (current) {
-      const category = current.kind === "transaction" ? null : categoryOf(current);
+      const category = current.kind === "transaction" ? null : categoryOf(current, byId);
       if (category) return category;
       current = current.parent_id ? byId.get(current.parent_id) : undefined;
     }

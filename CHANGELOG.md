@@ -18,6 +18,19 @@
   repr-ed, cut, secrets masked, a long one folded under "Show all". A
   template's context stays on this machine, as a request's headers do: a
   snapshot shared without its values leaves it out.
+- Django signals in the call tree. A send's row names its signal
+  (`post_save`, or a project signal's dotted path), its sender
+  (`auth.Group`), how many receivers it ran and, in red, how many of them
+  failed: under `send_robust()` the trace stays ok, so this is where a
+  failure shows. Each receiver is a row under it with its file and line, or
+  what it raised. Its details list the signal, the sender, whether it was
+  robust, the receivers and the line that sent it, and a receiver's its
+  function, where it is defined and its exception. The time its receivers
+  took is the breakdown's Signals share, a chip that shows the sends with
+  all they did. The same send repeated in a loop folds into one row, ×N.
+  The sends nobody received are a line among the request's facts, "Sent
+  with no receiver". `schema/trace.schema.json` documents the `signal.*`
+  and `exception.*` attributes.
 
 ## 0.4.1 (2026-10-21)
 

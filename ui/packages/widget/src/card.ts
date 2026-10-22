@@ -90,6 +90,7 @@ export const CARD_STYLE = `
   [data-category="datastore"] { --k: var(--dt-k-datastore); }
   [data-category="messaging"] { --k: var(--dt-k-messaging); }
   [data-category="mail"] { --k: var(--dt-k-mail); }
+  [data-category="signal"] { --k: var(--dt-k-signal); }
   .panel[data-open] ~ .card { display: none; }
   @media (prefers-reduced-motion: reduce) { .card { transition: none; } .card-skeleton { animation: none; } }
 `;
