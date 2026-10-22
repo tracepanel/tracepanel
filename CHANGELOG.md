@@ -68,8 +68,10 @@
 - The call tree's request row shows what its Request tab shows: the same
   parts behind the same switch, Headers to Attributes. Every trace has the
   switch, a task run's with its one part, Attributes, and the attributes are
-  one card with their namespaces as headings inside it. An error's locals
-  copy, and an email's HTML and Text switch as a request's parts do.
+  one card with their namespaces as headings inside it. A task's arguments,
+  keyword arguments, result and retry reason sit under its other facts, a
+  line each, laid out and coloured, not cut short. An error's locals copy,
+  and an email's HTML and Text switch as a request's parts do.
 
 ### Fixed
 

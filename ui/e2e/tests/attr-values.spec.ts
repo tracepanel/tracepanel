@@ -162,3 +162,17 @@ test("an error's locals are a list of names and values: each one copies", async 
 
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("<WSGIRequest: GET '/error/'>");
 });
+
+test("a task's long result is laid out and coloured in its facts, whole, not cut to a line", async ({ page }) => {
+  await page.goto(`/#/t/${await traceId("shop.tasks.send_reminder")}?tab=request`);
+  const facts = page.getByRole("main");
+  // The facts' Result, not the same value again in the attributes below.
+  const result = facts.locator("dd").filter({ hasText: "'List 0': 100" }).first();
+
+  await expect(result).toContainText("'List 4': 100");
+  await result.getByRole("button", { name: /^Show all/ }).click();
+
+  await expect(result).toContainText("'List 11': 100");
+  await expect(result.locator(".token.string").first()).toBeVisible();
+  expect(await result.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+});

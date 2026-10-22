@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { AttrValue } from "./AttrValue";
 import { Badge } from "./components/ui/badge";
 import { FactGrid } from "./FactGrid";
 import { duration } from "./format";
@@ -198,12 +199,17 @@ function taskRows(trace: Trace, related: Related | undefined, links: TraceLinks 
     ...taskTimingRows(trace),
     ...row("Triggered by", "task.trigger", false),
     ...(Number(attrs["task.retries"]) > 0 ? row("Attempt", "task.retries") : []),
-    ...row("Retry reason", "task.retry_reason"),
-    ...row("Arguments", "task.args"),
-    ...row("Keyword args", "task.kwargs"),
-    ...row("Result", "task.result"),
+    ...wideRow("Retry reason", value("task.retry_reason")),
+    ...wideRow("Arguments", value("task.args")),
+    ...wideRow("Keyword args", value("task.kwargs")),
+    ...wideRow("Result", value("task.result")),
     ...workflowFacts(trace, related, links),
   ];
+}
+
+/** A task's value that may be long (its arguments, result, retry reason): laid out and coloured as attributes are. */
+function wideRow(label: string, shown: string | null | undefined): PropRow[] {
+  return shown ? [{ label, value: <AttrValue value={shown} />, copy: shown, mono: true, wide: true }] : [];
 }
 
 export interface RequestInfoProps {
