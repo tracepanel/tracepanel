@@ -22,6 +22,7 @@ import {
   type MailRow,
   MethodBadge,
   type PageRow,
+  percent,
   RoutePath,
   type RpcRow,
   type Span,
@@ -433,11 +434,7 @@ const VIA_LABELS: Record<string, string> = { direct: "Direct", cache: "Cache", t
 function hitRate({ hits, misses }: CallRow): string {
   const found = hits ?? 0;
   const reads = found + (misses ?? 0);
-  return reads > 0 ? percentOf(found, reads) : "—";
-}
-
-function percentOf(part: number, whole: number): string {
-  return `${Math.round((part / whole) * 100)}%`;
+  return reads > 0 ? percent(found, reads) : "—";
 }
 
 /** The system a page of calls lists: its rows', or its family's name while it has none. */

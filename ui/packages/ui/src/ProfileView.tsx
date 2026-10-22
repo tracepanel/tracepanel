@@ -1,5 +1,6 @@
 import { type MouseEvent, useMemo, useRef, useState } from "react";
 import { duration } from "./format";
+import { percent } from "./lib/percent";
 import {
   allFrames,
   type Box,
@@ -215,7 +216,7 @@ function PackageLine({
         <span className="truncate font-mono" title={name}>
           {name}
         </span>
-        <span className="text-right text-muted-foreground tabular-nums">{Math.round((samples / total) * 100)}%</span>
+        <span className="text-right text-muted-foreground tabular-nums">{percent(samples, total)}</span>
         <span className="text-right tabular-nums">{time(samples)}</span>
       </button>
     </li>
@@ -300,7 +301,7 @@ function Tip({ hovered: { node, x, y }, total, time }: { hovered: Hovered; total
       <span className="font-mono font-medium [overflow-wrap:anywhere]">{frame.function}</span>
       <span className="font-mono text-muted-foreground [overflow-wrap:anywhere]">{where(frame)}</span>
       <span className="tabular-nums">
-        {time(node.total)} · {Math.round((node.total / total) * 100)}% · {time(node.self)} in itself
+        {time(node.total)} · {percent(node.total, total)} · {time(node.self)} in itself
       </span>
     </div>
   );

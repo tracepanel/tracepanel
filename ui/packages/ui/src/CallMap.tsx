@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { duration, percent, since } from "./format";
+import { duration, since } from "./format";
 import { GraphqlCode } from "./GraphqlCode";
 import { ChevronRightIcon, CloseIcon } from "./icons";
 import { keyed } from "./keys";
@@ -17,6 +17,7 @@ import { breakdown, type Category, categoryLabel } from "./lib/breakdown";
 import { callFields } from "./lib/callFields";
 import { callTemplate, groupNoun } from "./lib/calls";
 import { spanKindLabel } from "./lib/handler";
+import { percent, widthOf } from "./lib/percent";
 import { traceRuntime } from "./lib/runtime";
 import { isReceiver, raised } from "./lib/signals";
 import { CALL_KINDS, DATASTORES, MESSAGING, RPC } from "./lib/systems";
@@ -395,7 +396,7 @@ function Breakdown({ trace, filters }: { trace: Trace; filters: FilterState }) {
     <div className="dt-breakdown">
       <div className="dt-breakdown-bar" role="img" aria-label="Where the time went">
         {parts.map(([category, value]) => (
-          <span key={category} data-category={category} style={{ width: percent(value, total) }} />
+          <span key={category} data-category={category} style={{ width: widthOf(value, total) }} />
         ))}
       </div>
       <ul className="dt-breakdown-legend" aria-label="Where the time went, and what to show">

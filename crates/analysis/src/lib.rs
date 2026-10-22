@@ -53,8 +53,9 @@ const SELECTINLOAD: &str = "Load the related rows in one extra query: add `selec
     to the select() that produced these rows.";
 const N_PLUS_ONE: &str = "Load the related rows with the parent rows (a join, or one batched query) instead of one query per row.";
 const DUPLICATES: &str = "Run the query once and reuse the result, or cache it for the request.";
-const DATALOADER: &str = " In GraphQL, a resolver runs once per object: batch these lookups with a DataLoader \
-    (strawberry.dataloader), or prefetch in the parent resolver.";
+const IN_GRAPHQL: &str =
+    " In GraphQL, a resolver runs once per object: batch these lookups with a DataLoader";
+const PREFETCH_IN_PARENT: &str = ", or prefetch in the parent resolver.";
 const SLOW_SQL: &str = "Check the query plan (`EXPLAIN`) and add an index or narrow the query.";
 const HTTP_REPEATED: &str =
     "Fetch them in one batch request, or call once and reuse the result for the request.";
@@ -79,6 +80,21 @@ const FULL_PAGE_HINT: &str = "htmx swaps the response into its target element, s
 
 const N_PLUS_ONE_IN_TEMPLATE: &str = "Load the related rows in the view, with the parent rows (a join, or one \
     batched query), and pass them to the template.";
+
+/// What a GraphQL trace's N+1 hint adds: a DataLoader, the one of the server library the SDK names
+/// (`graphql.library`), none named for a library it doesn't.
+fn dataloader_hint(library: Option<&str>) -> String {
+    let loader = match library {
+        Some("strawberry") => " (`strawberry.dataloader`)",
+        // graphene-django's GraphQLView runs resolvers in sync code, where aiodataloader's (Graphene's docs) can't
+        // wait, and promise's DataLoader needs graphql-core 2.
+        Some("graphene") => {
+            " (graphql-sync-dataloaders' `SyncDataLoader` in graphene-django's sync view, aiodataloader in an async one)"
+        }
+        _ => "",
+    };
+    format!("{IN_GRAPHQL}{loader}{PREFETCH_IN_PARENT}")
+}
 
 fn n_plus_one_hint(client: &str, by_pk: bool, in_template: bool) -> &'static str {
     match (client, by_pk) {
@@ -290,7 +306,10 @@ fn sql_issues(trace: &Trace, thresholds: &Thresholds) -> Vec<Issue> {
         }
         groups.entry(key).or_default().push(span);
     }
-    let graphql = trace.attrs.contains_key("graphql.operation");
+    let dataloader = trace
+        .attrs
+        .contains_key("graphql.operation")
+        .then(|| dataloader_hint(text(&trace.attrs, "graphql.library").as_deref()));
     let threshold = thresholds.n_plus_one.max(0) as usize;
     for (alias, statement) in order {
         let spans = &groups[&(alias.clone(), statement.clone())];
@@ -340,7 +359,7 @@ fn sql_issues(trace: &Trace, thresholds: &Thresholds) -> Vec<Issue> {
                 "{}{}{}",
                 lead.as_deref().unwrap_or_default(),
                 n_plus_one_hint(&py_str(first.attrs.get("db.client")), by_pk, lead.is_some()),
-                if graphql { DATALOADER } else { "" }
+                dataloader.as_deref().unwrap_or_default()
             );
             issues.push(issue(
                 issue_key("n+1", &[Some(&key), key_culprit.as_deref()]),
@@ -1191,6 +1210,63 @@ mod tests {
             )
         );
         assert_eq!(hints(&in_view)[0].1.as_deref(), Some(SELECT_RELATED));
+    }
+
+    #[test]
+    fn a_graphql_n_plus_one_names_the_dataloader_of_its_library() {
+        let author = r#"SELECT "author"."name" FROM "author" WHERE "author"."id" = %s LIMIT 21"#;
+        let hint = |attrs: Value| {
+            let mut trace = request(
+                &(0..3)
+                    .map(|n| {
+                        let attrs = serde_json::json!({
+                            "db.statement": author, "db.fingerprint": author, "db.params_hash": format!("p{n}"),
+                            "db.client": "django", "code.origin": "blog/schema.py:30 in resolve_author",
+                        });
+                        ("sql", "SELECT", attrs, 1000)
+                    })
+                    .collect::<Vec<_>>(),
+            );
+            trace.attrs = serde_json::from_value(attrs).unwrap();
+            analyze(&trace, &Thresholds::default())[0]
+                .hint
+                .clone()
+                .unwrap()
+        };
+        let graphql = |library: Value| {
+            hint(
+                serde_json::json!({"graphql.operation": "query PostList", "graphql.library": library}),
+            )
+        };
+        let batch =
+            "In GraphQL, a resolver runs once per object: batch these lookups with a DataLoader";
+
+        assert_eq!(
+            graphql("strawberry".into()),
+            format!(
+                "{SELECT_RELATED} {batch} (`strawberry.dataloader`), or prefetch in the parent resolver."
+            )
+        );
+        assert_eq!(
+            graphql("graphene".into()),
+            format!(
+                "{SELECT_RELATED} {batch} (graphql-sync-dataloaders' `SyncDataLoader` in graphene-django's sync \
+                 view, aiodataloader in an async one), or prefetch in the parent resolver."
+            )
+        );
+
+        // A library the agent doesn't know, or an SDK that doesn't say: a DataLoader, none named.
+        let unnamed = format!("{SELECT_RELATED} {batch}, or prefetch in the parent resolver.");
+
+        assert_eq!(graphql("graphql-java".into()), unnamed);
+        assert_eq!(graphql(Value::Null), unnamed);
+        assert_eq!(
+            hint(serde_json::json!({"graphql.operation": "query PostList"})),
+            unnamed
+        );
+
+        // Not a GraphQL request: no DataLoader.
+        assert_eq!(hint(serde_json::json!({})), SELECT_RELATED);
     }
 
     #[test]

@@ -1,4 +1,5 @@
-import { duration, percent } from "./format";
+import { duration } from "./format";
+import { percent, widthOf } from "./lib/percent";
 import { type SystemCalls, systemCalls } from "./systemCalls";
 import type { Span, Trace } from "./types";
 
@@ -38,7 +39,7 @@ export function Metrics({ trace }: { trace: Trace }) {
         <span className="dt-metric-label">Duration</span>
         <span className="dt-metric-value">{duration(trace.duration)}</span>
         <span className="dt-split" role="img" aria-label={`Calls ${percent(called, total)} of the request`}>
-          <span className="dt-split-db" style={{ width: percent(Math.min(called, total), total) }} />
+          <span className="dt-split-db" style={{ width: widthOf(Math.min(called, total), total) }} />
         </span>
       </div>
       {systems.map((calls) => (
