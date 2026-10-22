@@ -9,6 +9,7 @@
 //! names of the conventions' attributes are read (`db.statement` and `db.query.text`, `http.method` and
 //! `http.request.method`…). Whatever else isn't recognized (a consumer's work, a server span) stays a `function`.
 
+use crate::{NAME, PLACEHOLDER};
 use regex::Regex;
 use serde_json::{Map, Value};
 use sha1::{Digest, Sha1};
@@ -19,10 +20,16 @@ use tracepanel_protocol::{Attrs, Received};
 pub const KIND: &str = "otel";
 
 static WHITESPACE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s+").unwrap());
-static IN_LIST: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?i)\bIN \((?:%s|\?|\$\d+)(?:, ?(?:%s|\?|\$\d+))*\)").unwrap());
-static TABLE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new("(?i)\\b(?:FROM|INTO|UPDATE|JOIN)\\s+[`\"\\[]?([\\w.]+)").unwrap());
+static IN_LIST: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(&format!(r"(?i)\bIN \({PLACEHOLDER}(?:, ?{PLACEHOLDER})*\)")).unwrap()
+});
+// The table a statement reads or writes, its schema too, each part bare or quoted (`[dbo].[orders]`).
+static TABLE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(&format!(
+        r"(?i)\b(?:FROM|INTO|UPDATE|JOIN)\s+((?:{NAME}\.)*{NAME})"
+    ))
+    .unwrap()
+});
 static COUNT: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)^\s*SELECT\s+COUNT\(").unwrap());
 // The query parameters whose values never get recorded, as the SDKs mask them.
 static SENSITIVE: LazyLock<Regex> = LazyLock::new(|| {
@@ -308,7 +315,7 @@ pub fn span_name(sql: &str) -> String {
         verb = "SELECT COUNT".into();
     }
     match TABLE.captures(sql) {
-        Some(table) => format!("{verb} {}", &table[1]),
+        Some(table) => format!("{verb} {}", table[1].replace(['`', '"', '[', ']'], "")),
         None => verb,
     }
 }

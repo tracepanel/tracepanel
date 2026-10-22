@@ -225,6 +225,49 @@ fn sql_names_and_in_lists() {
 }
 
 #[test]
+fn sql_server_names_and_placeholders() {
+    // go-mssqldb's @p1, tedious's @name, JDBC's ?: each IN list collapses, and the table keeps its schema.
+    for (statement, fingerprint) in [
+        (
+            "SELECT TOP 10 [o].[id] FROM [dbo].[orders] AS [o] WHERE [o].[customer_id] IN (@p1, @p2, @p3)",
+            "SELECT TOP 10 [o].[id] FROM [dbo].[orders] AS [o] WHERE [o].[customer_id] IN (...)",
+        ),
+        (
+            "SELECT [id] FROM [dbo].[orders] WHERE [customer_id] IN (@id0, @id1)",
+            "SELECT [id] FROM [dbo].[orders] WHERE [customer_id] IN (...)",
+        ),
+        (
+            "SELECT id FROM dbo.orders WHERE customer_id IN (?, ?)",
+            "SELECT id FROM dbo.orders WHERE customer_id IN (...)",
+        ),
+    ] {
+        let mapped = map(
+            "query",
+            &attrs(json!({"db.system": "mssql", "db.statement": statement})),
+        );
+
+        assert_eq!(
+            (mapped.name.as_str(), &mapped.attrs["db.fingerprint"]),
+            ("SELECT dbo.orders", &json!(fingerprint))
+        );
+    }
+
+    let oracle = map(
+        "query",
+        &attrs(json!({
+            "db.system": "oracle",
+            "db.statement": r#"SELECT "ID" FROM "SHOP"."ORDERS" WHERE "ID" IN (:1, :2)"#,
+        })),
+    );
+
+    assert_eq!(oracle.name, "SELECT SHOP.ORDERS");
+    assert_eq!(
+        oracle.attrs["db.fingerprint"],
+        r#"SELECT "ID" FROM "SHOP"."ORDERS" WHERE "ID" IN (...)"#
+    );
+}
+
+#[test]
 fn the_other_systems() {
     let one = |name: &str, value: Value| {
         let mapped = map(name, &attrs(value));
