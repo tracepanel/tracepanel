@@ -17,7 +17,7 @@ import {
   TriangleAlertIcon,
   ZapIcon,
 } from "lucide-react";
-import { type ComponentProps, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ComponentProps, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { AppDetails, appSaidAnything } from "./AppDetails";
 import { appWarnings, warningsTone } from "./AppWarnings";
 import { CallMap } from "./CallMap";
@@ -31,7 +31,7 @@ import {
 } from "./components/ui/dropdown-menu";
 import { ErrorView } from "./ErrorView";
 import { duration } from "./format";
-import { useCloseOnBlur } from "./hooks/useCloseOnBlur";
+import { useMenuOpen } from "./hooks/useCloseOnBlur";
 import { IssueList } from "./IssueList";
 import { LogList } from "./LogList";
 import { groupNoun } from "./lib/calls";
@@ -426,9 +426,7 @@ export function TraceView({
     </div>
   );
   // In the panel a click on the page doesn't reach the menu: it closes when the frame loses focus.
-  const [exploreOpen, setExploreOpen] = useState(false);
-  const closeExplore = useCallback(() => setExploreOpen(false), []);
-  useCloseOnBlur(exploreOpen, closeExplore);
+  const [exploreOpen, setExploreOpen] = useMenuOpen();
   const exploreMenu =
     explore.length > 0 ? (
       <DropdownMenu open={exploreOpen} onOpenChange={setExploreOpen}>
@@ -501,7 +499,6 @@ export function TraceView({
         <header className="dt-trace-strip">
           {tabsBar}
           {/* No status or duration here: the request list beside the trace shows them on the selected row. */}
-          <span className="flex-1" />
           {exploreMenu}
           {actions ? <div className="flex shrink-0 items-center gap-0.5">{actions}</div> : null}
         </header>
