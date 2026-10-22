@@ -7,6 +7,9 @@ import { HANDLERS } from "../seed.ts";
 
 const [REGENERATE, PURGE, NOTIFY] = HANDLERS as [string, string, string];
 
+// Narrower than the other tests' window: the names are cut wherever they show, whatever the fonts of the machine.
+test.use({ viewport: { width: 1100, height: 900 } });
+
 /** Every place in `scope` that names `name`: whole on hover, cut at its start; `cut` when it doesn't fit there. */
 async function shownByItsEnd(scope: Page | Locator | FrameLocator, name: string, cut = true): Promise<void> {
   const names = scope.getByTitle(name, { exact: true });
