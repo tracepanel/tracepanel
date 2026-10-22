@@ -63,12 +63,15 @@ test("a long repr opens a group a line, an item a line; a short group stays on i
   ).toBe("  'a long item',");
 });
 
-test("a request with only its attributes has no switch: their name and count head the card", async ({ page }) => {
+test("a request with only its attributes has the same switch as any other, its one part Attributes", async ({
+  page,
+}) => {
   await openOrder(page, "request");
-  const attributes = page.getByRole("region", { name: "Attributes", exact: true });
+  const attributes = page.getByRole("tabpanel", { name: "Attributes" });
 
-  await expect(page.getByRole("tablist", { name: "Request details" })).toHaveCount(0);
-  await expect(attributes.getByRole("heading", { level: 3 })).toHaveText(/^Attributes\s*8$/);
+  await expect(page.getByRole("tablist", { name: "Request details" }).getByRole("tab")).toHaveText([
+    /^Attributes\s*8$/,
+  ]);
   await expect(attributes.getByRole("heading", { level: 4 })).toHaveText([
     /^code\s*1$/,
     /^http\s*4$/,
@@ -83,7 +86,7 @@ test("a list attribute reads one item a line, in the Request tab and on the call
 }) => {
   const items = ["pre_save shop.Order: 3", "pre_delete auth.Group: 1"];
   await openOrder(page, "request");
-  const request = page.getByRole("region", { name: "Attributes", exact: true });
+  const request = page.getByRole("tabpanel", { name: "Attributes" });
 
   await expect(
     value(request.getByRole("region", { name: "signal", exact: true }), "unreceived").getByRole("listitem"),
@@ -92,9 +95,8 @@ test("a list attribute reads one item a line, in the Request tab and on the call
 
   await page.getByRole("tab", { name: /^Call tree/ }).click();
   await page.locator(".dt-map-row").first().click();
-  const tree = page
-    .getByRole("complementary", { name: "Details" })
-    .getByRole("region", { name: "Attributes", exact: true });
+  // The request row shows the Request tab's parts, behind the same switch.
+  const tree = page.getByRole("complementary", { name: "Details" }).getByRole("tabpanel", { name: "Attributes" });
 
   await expect(
     value(tree.getByRole("region", { name: "signal", exact: true }), "unreceived").getByRole("listitem"),
