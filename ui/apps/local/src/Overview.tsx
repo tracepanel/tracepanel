@@ -1,23 +1,30 @@
 // The Overview at the top of a page's list, one look wherever it is (an entry point's page, Logs): a heading that
-// folds it, its time range while open, its numbers on one line while folded. Folded or not, as this browser left it.
+// folds it, its time range while open, its numbers on one line while folded. Folded or not, as this browser left it, or as the page
+// opens it until then.
 import { ChevronRightIcon } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
 const STORAGE_KEY = "tracepanel:overview";
 
-function readOpen(): boolean {
+/** The reader's own choice, open or folded; null until they made one. */
+function readChoice(): boolean | null {
   try {
-    return localStorage.getItem(STORAGE_KEY) !== "closed";
+    const stored = localStorage.getItem(STORAGE_KEY);
+    return stored === null ? null : stored !== "closed";
   } catch {
-    return true;
+    return null;
   }
 }
 
-/** Whether the overviews are open, and what folds or opens them: one choice for every page's. */
-export function useOverviewOpen(): [boolean, () => void] {
-  const [open, setOpen] = useState(readOpen);
+/**
+ * Whether the overviews are open, and what folds or opens them: one choice for every page's. Until the reader makes
+ * it, `fallback` says: an entry point's is folded over all its calls, open over its groups.
+ */
+export function useOverviewOpen(fallback = true): [boolean, () => void] {
+  const [choice, setChoice] = useState(readChoice);
+  const open = choice ?? fallback;
   const toggle = () => {
-    setOpen(!open);
+    setChoice(!open);
     try {
       localStorage.setItem(STORAGE_KEY, open ? "closed" : "open");
     } catch {

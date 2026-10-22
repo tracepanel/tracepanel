@@ -103,7 +103,7 @@ test("Now: the tasks running, queued and retrying, the workers, and the tasks th
   );
   await expect(now.getByRole("list", { name: "Workers" }).getByText(`rq-${run}`)).toBeVisible();
   await expect(now.getByRole("list", { name: "Workers" }).getByText(`celery@box-${run}`)).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "List" }).getByRole("link")).toHaveText(["By task", "All runs"]);
+  await expect(page.getByRole("navigation", { name: "List" }).getByRole("link")).toHaveText(["All runs", "By task"]);
   await expect(now.getByRole("table")).toHaveCount(0);
 
   await now.getByRole("button", { expanded: false }).click();
@@ -192,6 +192,7 @@ test("Tasks is in the menu with a worker running before any task ended, and says
     await route.fulfill({ json: { ...counts, sections: { ...counts.sections, tasks: 0 }, live_tasks: true } });
   });
   await page.route(/\/api\/tasks(\?|$)/, (route) => empty(route, { tasks: [] }));
+  await page.route(/\/api\/traces(\?|$)/, (route) => empty(route, { traces: [], next: null }));
 
   await page.goto("/#/endpoints");
   await page.getByRole("complementary").getByRole("link", { name: "Tasks" }).click();
@@ -217,7 +218,7 @@ test("without task events or stored runs, Tasks is not in the menu", async ({ pa
 test("an old link to Tasks' Live opens Tasks with Live on", async ({ page }) => {
   await page.goto("/#/tasks?view=live");
 
-  await expect(page).toHaveURL(/#\/tasks$/);
+  await expect(page).toHaveURL(/#\/tasks\?view=overview$/);
   await expect(autoRefresh(page)).toHaveText(/^Live/);
   await expect(page.getByRole("navigation", { name: "List" }).getByRole("link", { name: "By task" })).toHaveAttribute(
     "aria-current",
@@ -226,7 +227,7 @@ test("an old link to Tasks' Live opens Tasks with Live on", async ({ page }) => 
 });
 
 test("with Live on, a run that just ended is highlighted in All runs", async ({ page }) => {
-  await page.goto("/#/tasks?view=calls");
+  await page.goto("/#/tasks");
   await chooseLive(page);
   const name = `shop.tasks.arrived_${unique().replace(/\W/g, "_")}`;
   const start = nowUs();

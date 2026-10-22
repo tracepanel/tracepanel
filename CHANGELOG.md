@@ -80,6 +80,13 @@
   writes them, show as the JSON they stand for, coloured: `{"attempts": 3}`, a
   tuple as an array, None as null. An error's locals copy, and an email's HTML
   and Text switch as a request's parts do.
+- An entry point opens on its calls: HTTP on All requests, Tasks on All
+  runs, Pages on All events, and so on, from the menu, ⌘K or a group's way
+  back. Its switch reads "All runs | By task" on every one of them, the
+  groups second, at `view=overview`. A link that named a list still opens
+  it. Its heading is its name in the menu (HTTP, not HTTP endpoints), and
+  its Overview is folded over the calls and open over the groups, until
+  you fold or open it yourself: that choice stays, as before.
 
 ### Fixed
 

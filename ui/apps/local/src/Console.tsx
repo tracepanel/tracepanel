@@ -159,11 +159,11 @@ export function Console({ route, source: everything }: { route: Route; source: D
   } else if (route.name !== "home" && isEntry(route.name)) {
     page = (
       <EntryPage
-        // The page stays across By … / All …: the overview keeps its charts, only the list below changes.
+        // The page stays across All … / By …: the overview keeps its charts, only the list below changes.
         key={route.name}
         section={route.name}
         q={route.q}
-        view={route.view ?? "overview"}
+        view={route.view ?? "calls"}
         live={route.live}
         source={source}
         spec={spec}

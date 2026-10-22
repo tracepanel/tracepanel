@@ -81,7 +81,7 @@ export function TracePage({
           shareable
           back={
             <a href={from ?? href({ name: "endpoints", q: "" })}>
-              {from ? `Back to ${back.at(-1)?.label ?? "the list"}` : "All HTTP endpoints"}
+              {from ? `Back to ${back.at(-1)?.label ?? "the list"}` : "All HTTP requests"}
             </a>
           }
         />

@@ -70,6 +70,8 @@ interface TracesOverviewProps {
   onRefine: (terms: Record<string, string>) => void;
   /** Called once its first answer came, whatever it was: a page shows it and what is under it together. */
   onSettled?: (() => void) | undefined;
+  /** Open until the reader folds it (the default), or folded until they open it. */
+  openByDefault?: boolean | undefined;
 }
 
 /**
@@ -114,11 +116,12 @@ export function TracesOverview({
   source,
   onRefine,
   onSettled,
+  openByDefault = true,
 }: TracesOverviewProps) {
   const query = [scope.filter, q].filter(Boolean).join(" ");
   const nouns = `${scope.noun}s`;
   const { overview, failed } = useOverview(source, query, scope.groupBy, onSettled);
-  const [open, toggle] = useOverviewOpen();
+  const [open, toggle] = useOverviewOpen(openByDefault);
 
   if (failed) {
     return (

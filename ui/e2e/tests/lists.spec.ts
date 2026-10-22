@@ -25,17 +25,17 @@ test("Database lists the statements, the slowest first, and finds one by its tex
 });
 
 test("Tasks lists a task, then every run of it", async ({ page }) => {
-  await page.goto("/#/tasks");
+  await page.goto("/#/tasks?view=overview");
   await expect(page.getByRole("main").getByRole("table").getByText("shop.tasks.send_receipt")).toBeVisible();
 
   await page.getByRole("navigation", { name: "List" }).getByRole("link", { name: "All runs" }).click();
 
-  await expect(page).toHaveURL(/view=calls/);
+  await expect(page).toHaveURL(/#\/tasks$/);
   await expect(page.getByRole("main").getByRole("table").getByText("shop.tasks.send_receipt").first()).toBeVisible();
 });
 
 test("a job opens its own page", async ({ page }) => {
-  await page.goto("/#/jobs");
+  await page.goto("/#/jobs?view=overview");
   await page
     .getByRole("main")
     .getByRole("table")
@@ -46,7 +46,7 @@ test("a job opens its own page", async ({ page }) => {
 });
 
 test("HTTP's every call lists the requests themselves", async ({ page }) => {
-  await page.goto("/#/endpoints?view=calls");
+  await page.goto("/#/endpoints");
 
   await expect(page.getByRole("main").getByRole("table").getByRole("link").first()).toBeVisible();
   await expect(page.getByRole("main").getByRole("table").getByText("/api/posts").first()).toBeVisible();
@@ -72,7 +72,7 @@ test("a query has no Explain where the console's backend can't run it: the agent
 });
 
 test("Tasks' System menu offers what ran this project's tasks, nothing it doesn't have", async ({ page }) => {
-  await page.goto("/#/tasks");
+  await page.goto("/#/tasks?view=overview");
   await page.getByRole("button", { name: "System", exact: true }).click();
 
   await expect(page.getByRole("option")).toHaveText(["Celery", "RabbitMQ", "RQ"]);

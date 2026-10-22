@@ -2,7 +2,7 @@
 import { expect, test } from "../fixtures.ts";
 
 test("a page lists its view, then its actions, a failed one counted", async ({ page }) => {
-  await page.goto("/#/pages");
+  await page.goto("/#/pages?view=overview");
   const rows = page.getByRole("main").getByRole("table").last().getByRole("link");
 
   await expect(rows).toHaveCount(3);

@@ -132,12 +132,13 @@ function useLiveLink(section: EntrySection, q: string, live: boolean | undefined
   useEffect(() => {
     if (!live) return;
     setInterval(LIVE_MS);
-    go({ name: section, q }, true);
+    // Where it landed before every call was what a page opens on: the groups.
+    go({ name: section, q, view: "overview" }, true);
   }, [live, section, q, setInterval]);
 }
 
-/** The lists of every entry point: its groups, every call. */
-const VIEWS: readonly EntryView[] = ["overview", "calls"];
+/** The lists of every entry point: every call (what it opens on), its groups. */
+const VIEWS: readonly EntryView[] = ["calls", "overview"];
 
 function viewLabel(section: EntrySection, view: EntryView): string {
   return view === "overview" ? `By ${GROUP_NOUN[section]}` : `All ${ENTRY[section].calls.toLowerCase()}`;
@@ -155,7 +156,7 @@ function viewQuery(section: EntrySection, from: EntryView, to: EntryView, q: str
   return carryQuery(q, searchKeys(spec, calls ? "traces" : section), calls);
 }
 
-/** The switch between an entry point's lists: By task / All runs / Live. */
+/** The switch between an entry point's lists: All runs / By task. */
 function ListNav({
   section,
   view,
@@ -174,7 +175,7 @@ function ListNav({
           key={item}
           href={href({
             name: section,
-            view: item === "overview" ? undefined : item,
+            view: item === "calls" ? undefined : item,
             q: viewQuery(section, view, item, q, spec),
           })}
           aria-current={view === item ? "page" : undefined}
@@ -204,7 +205,7 @@ export function EntryPage(props: EntryPageProps) {
   const answered = useLatch(settled(data.loaded) && now.settled);
   usePaintWhen(answered);
   const entry = ENTRY[section];
-  if (!(q || answered)) return <PageShell title={entry.title} description={entry.description} />;
+  if (!(q || answered)) return <PageShell title={entry.label} description={entry.description} />;
   if (nothingStored(q, data.loaded, now)) return <EntryEmpty section={section} />;
   return <EntryScreen {...props} data={data} now={now} />;
 }
@@ -229,7 +230,7 @@ function EntryEmpty({ section }: { section: EntrySection }) {
   return (
     <EmptyPage
       section={section}
-      title={entry.title}
+      title={entry.label}
       description={entry.description}
       empty={`No ${entry.label} traffic yet`}
     >
@@ -257,13 +258,15 @@ function EntryScreen({
   const [overviewSettled, settleOverview] = useState(false);
   // Now, the overview, the switch and the list show together, once all have answered: none pushes the others down.
   const ready = useLatch(overviewSettled && settled(data.loaded) && now.settled);
+  // The list on screen: the last one until the other's rows come, so the overview folds or opens with them.
+  const shown = useShown(view, settled(data.loaded));
   return (
     <main className="flex min-h-0 min-w-0 flex-col bg-background">
-      <PageHeader title={entry.title} description={entry.description} actions={<EntryActions reading={scrolled} />} />
+      <PageHeader title={entry.label} description={entry.description} actions={<EntryActions reading={scrolled} />} />
       <EntrySearch {...{ section, q, view, spec, known, refine }} loaded={data.loaded} onChange={setQuery} />
       <section
         className="min-h-0 flex-1 overflow-y-auto px-10 pb-10"
-        aria-label={entry.title}
+        aria-label={entry.label}
         data-scroll=""
         onScroll={(event) => setScrolled(event.currentTarget.scrollTop > 40)}
       >
@@ -277,6 +280,7 @@ function EntryScreen({
             source={source}
             onRefine={refine}
             onSettled={() => settleOverview(true)}
+            openByDefault={shown === "overview"}
           />
           <ListNav section={section} view={view} q={q} spec={spec} />
           <EntryList section={section} q={q} view={view} data={data} />
@@ -319,7 +323,7 @@ function EntrySearch({
   );
 }
 
-/** The list under the switch; By task ↔ All runs keeps the rows on screen, dimmed, until the other list's arrive. */
+/** The list under the switch; All runs ↔ By task keeps the rows on screen, dimmed, until the other list's arrive. */
 function EntryList({ section, q, view, data }: { section: EntrySection; q: string; view: EntryView; data: EntryData }) {
   return (
     <Held ready={settled(data.loaded)}>
@@ -351,6 +355,13 @@ function Dimmed({ held, children }: { held: ReactNode; children: ReactNode }) {
 }
 
 const NO_CALLS = { items: [], next: null };
+
+/** The view whose rows are on screen: the one asked for once its rows came, the last one until then. */
+function useShown(view: EntryView, ready: boolean): EntryView {
+  const [shown, setShown] = useState(view);
+  if (ready && shown !== view) setShown(view);
+  return ready ? view : shown;
+}
 
 /** The page's lists, loaded for the view on screen only: its groups, or its calls a page at a time. */
 function useEntryData(source: DataSource, section: EntrySection, view: EntryView, q: string) {
