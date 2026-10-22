@@ -134,6 +134,8 @@
   (`SELECT dbo.orders`), and EXPLAIN knows those placeholders. The console
   lays a SQL Server statement out in its own dialect and colours its
   `[names]`, `TOP` and `@P1`.
+- A count of one reads as one: a task's group of one says "1 task" in its
+  facts and its workflow graph, and an endpoint in the search "1 call".
 
 ## 0.4.1 (2026-10-21)
 
