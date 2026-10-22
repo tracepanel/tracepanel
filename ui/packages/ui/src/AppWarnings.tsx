@@ -1,4 +1,5 @@
 import { LogLevel } from "./LogTable";
+import { plural } from "./lib/plural";
 import { cn } from "./lib/utils";
 import type { App } from "./types";
 
@@ -18,8 +19,6 @@ export interface AppWarning {
 const RANK: Record<string, number> = { critical: 0, error: 1, warning: 2, info: 3, debug: 4 };
 const rank = (level: string) => RANK[level] ?? 4;
 
-const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`;
-
 /** The app's migrations not applied and its model changes without one, each app a warning. */
 function migrationWarnings(app: App): AppWarning[] {
   const migrations = app.migrations;
@@ -29,7 +28,7 @@ function migrationWarnings(app: App): AppWarning[] {
       key: `unapplied:${each.app}`,
       level: "warning",
       id: "migrations",
-      message: `${plural(each.names.length, "unapplied migration")}: ${each.names.join(", ")}`,
+      message: `${plural(each.names.length, "unapplied migration", "unapplied migrations")}: ${each.names.join(", ")}`,
       hint: "Run manage.py migrate to apply them: the app may not work until then.",
       object: each.app,
     })),
