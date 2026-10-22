@@ -13,6 +13,14 @@
   in its hello, and the agent serves them at `api/app?service=`. The Python
   SDK sends them from Django and Flask. For an app whose SDK doesn't, the
   page says so and the panel has no App tab.
+- An app's warnings on top of its App tab and its page: what its checks
+  found wrong with it, the most serious first. Each says its level in the
+  colour a log record's has, its id, what it is about, its message and its
+  hint. The Python SDK sends Django's system checks, the migrations not
+  applied yet and the model changes with no migration. The App tab counts
+  them, red with an error among them. An app with none shows nothing more.
+  The SDK says them in its hello, or in an `{"app": {...}}` frame once its
+  checks ran, and `api/app` serves them in `checks` and `migrations`.
 - A template's context in the call tree. A template's details list each
   name it was rendered with and its value, as the Python SDK recorded it:
   repr-ed, cut, secrets masked, a long one folded under "Show all". A
