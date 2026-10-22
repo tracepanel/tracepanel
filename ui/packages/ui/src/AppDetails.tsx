@@ -1,5 +1,6 @@
 import { SearchIcon } from "lucide-react";
 import { useState } from "react";
+import { AppWarnings, appWarnings } from "./AppWarnings";
 import { Input } from "./components/ui/input";
 import { stamp } from "./format";
 import { NameValues } from "./NameValues";
@@ -7,9 +8,10 @@ import { Empty } from "./primitives";
 import { Segmented } from "./Segmented";
 import type { App } from "./types";
 
-/** Whether the app said anything about itself: an SDK that doesn't (JavaScript, Java today) said neither. */
+/** Whether the app said anything about itself: an SDK that doesn't (JavaScript, Java today) said nothing. */
 export function appSaidAnything(app: App | null | undefined): app is App {
-  return Boolean(app && (app.settings || app.versions));
+  if (!app) return false;
+  return [app.settings, app.versions, app.checks, app.migrations].some(Boolean);
 }
 
 /** The settings whose name or value has `filter` in it, case aside. */
@@ -126,8 +128,8 @@ function Told({ app }: { app: App }) {
 }
 
 /**
- * An app's settings and versions, as it said them in its hello: the panel's App tab and the console's app page show
- * the same. An app that said nothing is said so plainly.
+ * An app's settings and versions, as it said them in its hello, and what its checks found wrong with it on top: the
+ * panel's App tab and the console's app page show the same. An app that said nothing is said so plainly.
  */
 export function AppDetails({ app }: { app: App | null }) {
   const agent = app?.agent;
@@ -142,6 +144,7 @@ export function AppDetails({ app }: { app: App | null }) {
   return (
     <div className="grid gap-3">
       <Told app={app} />
+      <AppWarnings warnings={appWarnings(app)} />
       <Parts app={app} />
     </div>
   );

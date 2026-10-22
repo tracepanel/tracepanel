@@ -1,5 +1,6 @@
 // An app's settings and versions, as its SDK said them in its hello: on its page in the console (from Services and a
-// trace's facts) and on the panel's App tab; a template's context in the call tree.
+// trace's facts) and on the panel's App tab, what its checks found wrong with it on top; a template's context in the
+// call tree.
 import { CONSOLE } from "../agent.ts";
 import { openApp, panel, pill, traceId } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
@@ -57,6 +58,54 @@ test("an app's page lists its settings, secrets masked, a filter narrowing them,
   await expect(versions.getByRole("definition").last()).toHaveText(await agentVersion());
 });
 
+test("an app's page lists what its checks found on top, the most serious first, each with its id and hint", async ({
+  page,
+}) => {
+  await page.goto("/#/app/shop");
+  const warnings = page.getByRole("region", { name: "Warnings" });
+  const rows = warnings.getByRole("listitem");
+
+  await expect(warnings.getByRole("heading", { name: "Warnings 4" })).toBeVisible();
+  await expect(rows).toHaveCount(4);
+  await expect(rows.nth(0)).toContainText(
+    "erroradmin.E410'django.contrib.sessions.middleware.SessionMiddleware' must be",
+  );
+  await expect(rows.nth(1)).toContainText("warningmodels.W042shop.OrderAuto-created primary key used");
+  await expect(rows.nth(1)).toContainText("Configure the DEFAULT_AUTO_FIELD setting");
+  await expect(rows.nth(2)).toHaveText(
+    "warningmigrationsshop2 unapplied migrations: 0007_order_gift, 0008_order_gift_noteRun manage.py migrate to apply them: the app may not work until then.",
+  );
+  await expect(rows.nth(3)).toHaveText(
+    "warningmigrationsshopModel changes with no migration: Add field note to orderRun manage.py makemigrations to write one.",
+  );
+  // Above the settings, which still show.
+  await expect(page.getByRole("tabpanel", { name: "Settings" })).toContainText("SECRET_KEY");
+});
+
+test("an app whose checks found nothing has no warnings, and its App tab no count", async ({ page }) => {
+  await page.route("**/api/app?*", async (route) => {
+    const app = await (await route.fetch()).json();
+    await route.fulfill({ json: { ...app, checks: [], migrations: { unapplied: [], changes: [] } } });
+  });
+  await page.goto("/#/app/shop");
+
+  await expect(page.getByRole("tabpanel", { name: "Settings" })).toContainText("SECRET_KEY");
+  await expect(page.getByRole("region", { name: "Warnings" })).toHaveCount(0);
+
+  const trace = await traceId("POST /accounts/login/");
+  await openApp(page, { login: { status: 302, trace, queries: 1, totalMs: 4 } });
+  await page.getByRole("button", { name: "Load login" }).click();
+  await pill(page).click();
+  const tabs = panel(page).getByRole("tablist", { name: "Trace details" });
+
+  await expect(tabs.getByRole("tab")).toHaveText([/^Request/, "Call tree", "App"]);
+
+  await tabs.getByRole("tab", { name: "App" }).click();
+
+  await expect(panel(page).getByRole("tabpanel", { name: "Settings" })).toContainText("SECRET_KEY");
+  await expect(panel(page).getByRole("region", { name: "Warnings" })).toHaveCount(0);
+});
+
 test("a request's facts name its app, a link to the app's page", async ({ page }) => {
   await page.goto(`/#/t/${await traceId("POST /accounts/login/")}?tab=request`);
   await page.getByRole("link", { name: "shop", exact: true }).click();
@@ -72,11 +121,14 @@ test("the panel's App tab shows the settings and versions of the app that served
   await pill(page).click();
   const tabs = panel(page).getByRole("tablist", { name: "Trace details" });
 
-  // App comes last: it is about the app, not this request. A request that logged nothing has no Logs tab.
-  await expect(tabs.getByRole("tab")).toHaveText([/^Request/, "Call tree", "App"]);
+  // App comes last: it is about the app, not this request. A request that logged nothing has no Logs tab. Its count is
+  // what the app's checks found, red with an error among them.
+  await expect(tabs.getByRole("tab")).toHaveText([/^Request/, "Call tree", "App4"]);
+  await expect(tabs.getByRole("tab", { name: "App" }).locator(".dt-tab-count")).toHaveAttribute("data-tone", "error");
 
   await tabs.getByRole("tab", { name: "App" }).click();
 
+  await expect(panel(page).getByRole("region", { name: "Warnings" }).getByRole("listitem")).toHaveCount(4);
   await expect(panel(page).getByRole("tabpanel", { name: "Settings" })).toContainText("SECRET_KEY********");
 
   await panel(page)
