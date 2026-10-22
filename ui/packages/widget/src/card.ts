@@ -1,6 +1,8 @@
 // The pill's hover card: the request at a glance (where its time went, what to fix first, what the page asked
 // for after it loaded) before opening the panel.
 import { breakdown, categoryLabel } from "@tracepanel/ui/lib/breakdown";
+import { percent } from "@tracepanel/ui/lib/percent";
+import { plural } from "@tracepanel/ui/lib/plural";
 import type { Issue, Trace } from "@tracepanel/ui/types";
 import type { TraceInfo } from "./index";
 
@@ -173,11 +175,6 @@ function ranked(issues: readonly Issue[]): Issue[] {
   return [...issues].sort((a, b) => Number(b.kind === "error") - Number(a.kind === "error"));
 }
 
-/** "1 issue", "3 issues". */
-export function plural(count: number, one: string, many: string): string {
-  return `${count} ${count === 1 ? one : many}`;
-}
-
 function failed(info: TraceInfo): boolean {
   return (info.status ?? 200) >= 500;
 }
@@ -211,12 +208,7 @@ function timeCell(info: TraceInfo): HTMLElement {
 function mostLine(label: string, category: string, value: number, total: number): HTMLElement {
   const line = element("p", "card-most");
   line.dataset["category"] = category;
-  line.append(
-    element("i"),
-    `Most time: ${label} `,
-    element("b", undefined, ms(value)),
-    ` · ${Math.round((value / total) * 100)}%`,
-  );
+  line.append(element("i"), `Most time: ${label} `, element("b", undefined, ms(value)), ` · ${percent(value, total)}`);
   return line;
 }
 

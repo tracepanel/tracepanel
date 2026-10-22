@@ -120,6 +120,12 @@
   endpoints), and its Overview is folded over the calls and open over the
   groups, until you fold or open it yourself: that choice stays, as before.
 
+- An N+1 in a GraphQL request names the DataLoader of its server library:
+  `strawberry.dataloader` for Strawberry, graphql-sync-dataloaders (sync)
+  or aiodataloader (async) for Graphene, and a DataLoader with no library
+  named for any other. It said Strawberry's on every GraphQL trace before.
+  The library comes from `graphql.library`, which the Python SDK records.
+
 ### Fixed
 
 - A worker that stopped leaves the Tasks page's Now within 90 seconds, not
@@ -127,10 +133,31 @@
   missed heartbeats drop a worker and the tasks it ran. A worker that stops
   cleanly says so in a `worker_stopped` task event and leaves at once, with
   any task still running on it.
+- A trace's tabs never show cut. In the panel, docked at the bottom or on
+  the right, and in the console, the tabs that don't fit go into a More menu
+  at the row's end, with their counts, and a dot on it when one of them has
+  issues or errors. When that would leave less than half of them in the row,
+  the tabs but the open one show their icon and count only, their name in
+  the tooltip. The open tab always stays in the row.
 - A group page's Time button is its own size again, not stretched across
   the page.
 - The slowest and failing lists above a section's table no longer widen the
   page sideways when a name is long, as a task's often is: it is cut short.
+- A small share no longer reads 0%. One failed call in 389 showed "0%" in
+  the error colour on the Database page: a share that is neither none nor
+  all now reads "<1%" or ">99%", wherever the console and the panel show a
+  percent (the tiles of every page, a cache's hit rate, the time breakdown,
+  a profile).
+- SQL Server's queries get the issues other databases' get. A lookup by key
+  written with SQL Server's `[table].[id]` names, as Django's mssql backend
+  writes it, is one: a loop of them in library code is an N+1, and its hint
+  says `select_related()`, not `prefetch_related()`. IN lists of `@P1`,
+  `@name` and `:1` placeholders collapse, a span's table keeps its schema
+  (`SELECT dbo.orders`), and EXPLAIN knows those placeholders. The console
+  lays a SQL Server statement out in its own dialect and colours its
+  `[names]`, `TOP` and `@P1`.
+- A count of one reads as one: a task's group of one says "1 task" in its
+  facts and its workflow graph, and an endpoint in the search "1 call".
 
 ## 0.4.1 (2026-10-21)
 
