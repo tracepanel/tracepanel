@@ -1,6 +1,7 @@
 // The pill's hover card: the request at a glance (where its time went, what to fix first, what the page asked
 // for after it loaded) before opening the panel.
 import { breakdown, categoryLabel } from "@tracepanel/ui/lib/breakdown";
+import { plural } from "@tracepanel/ui/lib/plural";
 import type { Issue, Trace } from "@tracepanel/ui/types";
 import type { TraceInfo } from "./index";
 
@@ -171,11 +172,6 @@ function fixLine(issue: Issue): HTMLElement | null {
 /** Errors first, then the rest as the agent ordered them. */
 function ranked(issues: readonly Issue[]): Issue[] {
   return [...issues].sort((a, b) => Number(b.kind === "error") - Number(a.kind === "error"));
-}
-
-/** "1 issue", "3 issues". */
-export function plural(count: number, one: string, many: string): string {
-  return `${count} ${count === 1 ? one : many}`;
 }
 
 function failed(info: TraceInfo): boolean {
