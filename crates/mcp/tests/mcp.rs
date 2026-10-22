@@ -604,7 +604,7 @@ async fn mistakes_come_back_for_the_model_to_correct() {
     assert_eq!(
         tool(&server, "find_traces", json!({"query": "colour:red"})).await,
         (
-            "Unknown filter 'colour'. Use one of: cache, call, db, duration, has, kind, method, name, operation, path, \
+            "Unknown filter 'colour'. Use one of: cache, call, db, duration, group, has, kind, method, name, operation, path, \
              peer, queries, queue, route, service, since, span, state, status, system, task, trace, until, user, view"
                 .to_owned(),
             true
@@ -706,5 +706,60 @@ async fn a_big_trace_is_cut_to_the_budget() {
         last.starts_with("… cut: ")
             && last.ends_with(" more characters (a narrower query or focus shows the rest)"),
         "{last}"
+    );
+}
+
+/// A task run, `0…0<letter>`, with these attributes.
+fn task_run(letter: char, start: i64, attrs: Value) -> Value {
+    let mut all = json!({"service.name": "shop", "task.system": "rq", "task.state": "SUCCESS"});
+    all.as_object_mut()
+        .unwrap()
+        .extend(attrs.as_object().unwrap().clone());
+    json!({
+        "id": format!("01M4W0RKF10W00000000000{letter}00"), "kind": "task", "name": format!("shop.jobs.{letter}"),
+        "start": start, "duration": 2000, "status": "ok", "attrs": all,
+        "spans": [{"id": "ROOT", "parent_id": null, "kind": "task.run", "name": format!("shop.jobs.{letter}"),
+                   "start": start, "duration": 2000, "status": "ok", "attrs": {}}],
+        "logs": [], "errors": [], "links": [], "issues": [],
+    })
+}
+
+#[tokio::test]
+async fn a_task_run_says_its_workflow() {
+    // C waited for A and B (RQ's depends_on), and runs in a group with D.
+    let docs = [
+        task_run('A', 1_000_000, json!({"task.id": "a"})),
+        task_run('B', 2_000_000, json!({"task.id": "b"})),
+        task_run(
+            'C',
+            3_000_000,
+            json!({"task.id": "c", "task.parent_id": "a", "task.root_id": "a", "task.depends_on": ["a", "b"],
+                   "task.group_id": "g"}),
+        ),
+        task_run(
+            'D',
+            4_000_000,
+            json!({"task.id": "d", "task.group_id": "g"}),
+        ),
+    ];
+    let server = Server::new(store("workflow", &docs), false);
+
+    let (text, error) = tool(
+        &server,
+        "get_trace",
+        json!({"id": "01M4W0RKF10W00000000000C00"}),
+    )
+    .await;
+
+    assert!(!error);
+    assert_eq!(
+        text.split_once("\n\nfollows:").map(|(_, rest)| rest),
+        Some(
+            "
+  01M4W0RKF10W00000000000A00  task shop.jobs.A (success) · 2.0 ms · <ago>
+  01M4W0RKF10W00000000000B00  task shop.jobs.B (success) · 2.0 ms · <ago>
+group g (2 tasks):
+  01M4W0RKF10W00000000000D00  task shop.jobs.D (success) · 2.0 ms · <ago>"
+        )
     );
 }

@@ -18,6 +18,7 @@ mod searches;
 mod services;
 mod stats;
 mod values;
+mod workflow;
 mod write;
 
 use read::*;
@@ -25,6 +26,7 @@ use searches::*;
 use services::*;
 use stats::*;
 use values::*;
+use workflow::*;
 use write::*;
 
 pub use read::{Page, ReadError, Reader};

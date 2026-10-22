@@ -3,13 +3,15 @@ import { Badge } from "./components/ui/badge";
 import { FactGrid } from "./FactGrid";
 import { duration } from "./format";
 import { GraphqlCode } from "./GraphqlCode";
+import { grouped, LinkedTrace, StateBadge, tracesRow } from "./LinkedTrace";
 import { handlerFullName, handlerWord } from "./lib/handler";
 import { traceRuntime } from "./lib/runtime";
 import { linkProps, type TraceLinks } from "./links";
 import { type PropRow, PropTable } from "./PropTable";
 import { MethodBadge, RoutePath, StatusBadge } from "./primitives";
 import { isRequestDetail, RequestParts, requestParts } from "./RequestParts";
-import type { Attrs, Related, Trace, TraceSummary } from "./types";
+import type { Attrs, Related, Trace } from "./types";
+import { taskTimingRows, workflowFacts, workflowPart } from "./Workflow";
 
 function text(value: unknown): string | null {
   return value === undefined || value === null || value === "" ? null : String(value);
@@ -153,13 +155,7 @@ function htmxRows(attrs: Attrs): PropRow[] {
   return rows;
 }
 
-const STATE_TONE: Record<string, string> = {
-  success: "border-ok/30 bg-ok-soft text-ok",
-  failure: "border-error/30 bg-error-soft text-error",
-  retry: "border-warn/30 bg-warn-soft text-warn",
-};
-
-function taskRows(trace: Trace): PropRow[] {
+function taskRows(trace: Trace, related: Related | undefined, links: TraceLinks | undefined): PropRow[] {
   const attrs = trace.attrs;
   const value = (key: string) => text(attrs[key]);
   const state = value("task.state");
@@ -170,18 +166,7 @@ function taskRows(trace: Trace): PropRow[] {
   };
   return [
     ...row("Task", "task.name"),
-    ...(state
-      ? [
-          {
-            label: "State",
-            value: (
-              <Badge variant="outline" className={STATE_TONE[state.toLowerCase()] ?? ""}>
-                {state.toLowerCase()}
-              </Badge>
-            ),
-          },
-        ]
-      : []),
+    ...(state ? [{ label: "State", value: <StateBadge state={state} /> }] : []),
     ...row("Task ID", "task.id"),
     ...row("Queue", "task.queue"),
     ...row("Worker", "task.worker"),
@@ -191,12 +176,14 @@ function taskRows(trace: Trace): PropRow[] {
         ? "eagerly, inside the caller"
         : `in a worker${typeof wait === "number" ? ` after ${duration(wait)} in the queue` : ""}`,
     },
+    ...taskTimingRows(trace),
     ...row("Triggered by", "task.trigger", false),
     ...(Number(attrs["task.retries"]) > 0 ? row("Attempt", "task.retries") : []),
     ...row("Retry reason", "task.retry_reason"),
     ...row("Arguments", "task.args"),
     ...row("Keyword args", "task.kwargs"),
     ...row("Result", "task.result"),
+    ...workflowFacts(trace, related, links),
   ];
 }
 
@@ -209,95 +196,19 @@ export interface RequestInfoProps {
   hero?: boolean | undefined;
 }
 
-/** Traces of the same kind and name as one: 36 deliveries to one listener, the first standing for them. */
-interface Group {
-  first: TraceSummary;
-  count: number;
-  failed: number;
-}
-
-function TraceBadge({ trace }: { trace: TraceSummary }) {
-  if (trace.kind === "http") return <MethodBadge method={trace.method} />;
-  return (
-    <Badge variant="outline" className="font-mono text-2xs uppercase">
-      {trace.kind}
-    </Badge>
-  );
-}
-
-/** How many it stands for and how many failed; one alone, whether it failed and how long it took. */
-function Tally({ group: { first, count, failed } }: { group: Group }) {
-  if (count > 1) {
-    return (
-      <>
-        <span className="shrink-0 text-sm text-muted-foreground tabular-nums">×{count}</span>
-        {failed > 0 ? <span className="text-sm text-error">{failed} failed</span> : null}
-      </>
-    );
-  }
-  return (
-    <>
-      {failed > 0 ? <span className="text-sm text-error">failed</span> : null}
-      <span className="ml-auto shrink-0 text-sm text-muted-foreground tabular-nums">{duration(first.duration)}</span>
-    </>
-  );
-}
-
-function LinkedTrace({ group, links }: { group: Group; links?: TraceLinks | undefined }) {
-  const trace = group.first;
-  const body = (
-    <span className="flex min-w-0 items-center gap-2">
-      <TraceBadge trace={trace} />
-      <span className="truncate font-mono text-base">{trace.path ?? trace.name}</span>
-      <Tally group={group} />
-    </span>
-  );
-  if (!links?.trace) return body;
-  return (
-    <a
-      className="block w-full rounded-md py-0.5 text-left hover:bg-accent"
-      {...linkProps(links, links.trace(trace.id))}
-    >
-      {body}
-    </a>
-  );
-}
-
-function groupKey(trace: TraceSummary): string {
-  return `${trace.kind} ${trace.path ?? trace.name}`;
-}
-
-/** Traces of the same kind and name as one row: 36 deliveries to one listener. */
-function grouped(traces: readonly TraceSummary[]): Group[] {
-  const groups = new Map<string, Group>();
-  for (const trace of traces) {
-    const group = groups.get(groupKey(trace)) ?? { first: trace, count: 0, failed: 0 };
-    group.count += 1;
-    group.failed += Number(trace.status === "error");
-    groups.set(groupKey(trace), group);
-  }
-  return [...groups.values()];
-}
-
-function relatedRows(related: Related | undefined, links: TraceLinks | undefined): PropRow[] {
+function relatedRows(related: Related | undefined, links: TraceLinks | undefined, taken: Set<string>): PropRow[] {
   if (!related) return [];
   const one = (label: string, trace: Related["enqueued_by"]): PropRow[] =>
-    trace ? grouped([trace]).map((group) => ({ label, value: <LinkedTrace group={group} links={links} /> })) : [];
-  const many = (single: string, plural: string, traces: Related["enqueued"]): PropRow[] =>
-    traces.length
-      ? [
-          {
-            label: traces.length === 1 ? single : `${plural} (${traces.length})`,
-            value: (
-              <span className="grid w-full gap-0.5">
-                {grouped(traces).map((group) => (
-                  <LinkedTrace key={group.first.id} group={group} links={links} />
-                ))}
-              </span>
-            ),
-          },
-        ]
+    trace && !taken.has(trace.id)
+      ? grouped([trace]).map((group) => ({ label, value: <LinkedTrace group={group} links={links} /> }))
       : [];
+  const many = (single: string, plural: string, all: Related["enqueued"]): PropRow[] =>
+    tracesRow(
+      single,
+      plural,
+      all.filter((trace) => !taken.has(trace.id)),
+      links,
+    );
   return [
     ...one("Enqueued by", related.enqueued_by),
     ...many("Enqueued task", "Enqueued tasks", related.enqueued),
@@ -380,10 +291,10 @@ function Hero({ trace }: { trace: Trace }) {
 }
 
 /** The request's or run's own fields: what ran (unless the hero shows it), how it went, who made it. */
-function ownRows(trace: Trace, hero: boolean, links: TraceLinks | undefined): PropRow[] {
+function ownRows(trace: Trace, hero: boolean, related: Related | undefined, links: TraceLinks | undefined): PropRow[] {
   const attrs = trace.attrs;
   return [
-    ...(trace.kind === "task" ? taskRows(trace) : []),
+    ...(trace.kind === "task" ? taskRows(trace, related, links) : []),
     ...(hero ? [] : whatRan(trace)),
     ...userRows(attrs),
     ...htmxRows(attrs),
@@ -416,11 +327,13 @@ export function RequestInfo({ trace, related, links, hero: wanted }: RequestInfo
   const others = Object.fromEntries(Object.entries(rest).filter(([key]) => !isRequestDetail(key)));
   const graphql = document ? [{ id: "graphql", label: "GraphQL", content: <GraphqlCode document={document} /> }] : [];
   // The traces it is linked to come after its own: what queued it, what it called, what it delivered to.
-  const linked = relatedRows(related, links);
+  // A task run's workflow lists the runs before and after it: the other rows leave those out.
+  const workflow = workflowPart(trace, related, links);
+  const linked = [...relatedRows(related, links, workflow.taken), ...workflow.rows];
   return (
     <div className="@container grid gap-5 p-4">
       {hero ? <Hero trace={trace} /> : null}
-      <FactGrid rows={ownRows(trace, hero, links)} />
+      <FactGrid rows={ownRows(trace, hero, related, links)} />
       {linked.length ? (
         <Part label="Related traces" title="Related traces">
           <PropTable dense rows={linked} />

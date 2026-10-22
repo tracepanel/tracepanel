@@ -126,6 +126,20 @@ pub(crate) fn trace_search() -> search::Schema {
             ("queue", search::text(QUEUE)),
             ("state", search::upper_text(STATE)),
             ("system", search::text(SYSTEM)),
+            // The runs of a task group's tasks (task.group_id): a Celery group or chord's header, an RQ Group, a
+            // Dramatiq group.
+            (
+                "group",
+                Box::new(|term| {
+                    Ok((
+                        format!(
+                            "id IN (SELECT w.trace_id FROM task_workflow w \
+                             WHERE w.role = 'group' AND w.value = ? AND {GROUP_MEMBER})"
+                        ),
+                        vec![Sql::Text(term.value.clone())],
+                    ))
+                }),
+            ),
             ("cache", contains("cache_aliases")),
         ],
         vec![],

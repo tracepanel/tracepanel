@@ -1372,6 +1372,38 @@ export interface components {
             via: {
                 [key: string]: string;
             };
+            /** @description For a task run in a workflow (it has task.parent_id, task.root_id, task.group_id, task.depends_on or task.callback, or another run names its task.id): the runs around it. Absent otherwise. */
+            workflow?: components["schemas"]["Workflow"];
+        };
+        /** @description A task run's workflow, by the task ids its runs record. A step sent from inside the run before it is linked already (enqueued_by and enqueued): it is not listed here again. */
+        Workflow: {
+            /** @description This run's task.id (a callback has none). */
+            task_id: string | null;
+            /** @description The latest stored run of each task this run names (task.parent_id, task.depends_on, task.root_id): its trace id, by task id. A task missing here has no run stored. */
+            runs: {
+                [key: string]: string;
+            };
+            /** @description The run of the workflow's first task (task.root_id), unless it is this run or listed already. */
+            root: components["schemas"]["TraceSummary"] | null;
+            /** @description The runs of the tasks this one follows (task.parent_id, task.depends_on), oldest first. */
+            follows: components["schemas"]["TraceSummary"][];
+            /** @description The runs that follow this one (its task.id is their parent or in their depends_on), oldest first. */
+            followed_by: components["schemas"]["TraceSummary"][];
+            /** @description The group it runs in (task.group_id). */
+            group: null | {
+                /** @description The group's id: `group:<id>` finds its tasks' runs. */
+                id: string;
+                /** @description How many tasks it has. */
+                tasks: number;
+                /** @description Whether this run is one of them: a run that follows one of them, as a chord's callback does, is not. */
+                member: boolean;
+                /** @description The latest run of each other task, in the order they first ran (at most 20). */
+                runs: components["schemas"]["TraceSummary"][];
+            };
+            /** @description Which of the runs it led to (enqueued, followed_by) are its callbacks: RQ's on_success, on_failure or on_stopped, by trace id. */
+            callbacks: {
+                [key: string]: string;
+            };
         };
         /** @description ULID. */
         id: string;

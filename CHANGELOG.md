@@ -18,6 +18,26 @@
   repr-ed, cut, secrets masked, a long one folded under "Show all". A
   template's context stays on this machine, as a request's headers do: a
   snapshot shared without its values leaves it out.
+- Task workflows. A task run's related traces have a Workflow part: the
+  workflow's first run, the step before it (the run that sent it, or a job it
+  waited for), the steps after it, its callbacks and its group's other tasks,
+  each with how it ended and how long it took. A long group lists its first
+  five, how many more, and a search for them all. The agent links runs by
+  the ids an SDK records: `task.parent_id`, `task.depends_on`,
+  `task.root_id` and `task.group_id`. `api/traces/{id}/related` has them in
+  `workflow` for a run in one, and the search takes `group:`. A step sent
+  from inside the run before it stays its `enqueued_by`, listed once.
+- A task's facts say when it was due (`task.eta`, as "Oct 21 15:45:20.345 ·
+  2 min late"), its priority, its time limit (`task.timeout`, and "stopped
+  by its time limit" when it failed on it) and its workflow: the task it
+  follows, what it waits for, its root and its group, each a link to its
+  run. A callback (`task.callback`, RQ's `on_success`, `on_failure` and
+  `on_stopped`) says whose: Callback of.
+
+### Fixed
+
+- The slowest and failing lists above a section's table no longer widen the
+  page sideways when a name is long, as a task's often is: it is cut short.
 
 ## 0.4.1 (2026-10-21)
 

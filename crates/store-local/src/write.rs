@@ -7,7 +7,7 @@ use super::*;
 pub const SCHEMA: &str = include_str!("../../../schema/store.sql");
 pub(crate) const FTS_SCHEMA: &str =
     "CREATE VIRTUAL TABLE IF NOT EXISTS logs_fts USING fts5(message, logger)";
-pub(crate) const TABLES: [&str; 14] = [
+pub(crate) const TABLES: [&str; 15] = [
     "meta",
     "traces",
     "issues",
@@ -21,6 +21,7 @@ pub(crate) const TABLES: [&str; 14] = [
     "peers",
     "task_enqueues",
     "task_runs",
+    "task_workflow",
     "w3c",
 ];
 pub(crate) const LEVELS: [(&str, i64); 5] = [
@@ -172,7 +173,7 @@ fn relink_issues(db: &Connection) -> rusqlite::Result<()> {
 
 /// The tables with rows per trace: a trace's statements, calls, logs, issues, peers and links. A new table with a
 /// trace_id column goes here too, or its rows outlive their traces (a test reads the schema for them).
-pub(crate) const PER_TRACE: [&str; 10] = [
+pub(crate) const PER_TRACE: [&str; 11] = [
     "logs",
     "calls",
     "spans",
@@ -182,6 +183,7 @@ pub(crate) const PER_TRACE: [&str; 10] = [
     "peers",
     "task_enqueues",
     "task_runs",
+    "task_workflow",
     "w3c",
 ];
 
@@ -406,6 +408,7 @@ pub(crate) fn write_trace(
         .execute(params![trace.id, link.kind, link.trace_id, link.span_id])?;
     }
     link_tasks(db, trace)?;
+    index_workflow(db, trace)?;
     link_calls(db, trace)?;
     for span in trace.spans.iter().filter(|span| span.kind == "mail") {
         let recipients: BTreeSet<String> = ["mail.to", "mail.cc"]
@@ -522,6 +525,46 @@ pub(crate) fn link_tasks(db: &Connection, trace: &Trace) -> rusqlite::Result<()>
     .execute(
         params![trace.id],
     )?;
+    Ok(())
+}
+
+/// A task run's place in its workflow (`task_workflow`): its task id, the tasks it follows (its parent, then what it
+/// depends on, each once), its root, its group and, for a callback, which one.
+pub(crate) fn index_workflow(db: &Connection, trace: &Trace) -> rusqlite::Result<()> {
+    if trace.kind != "task" {
+        return Ok(());
+    }
+    let attrs = &trace.attrs;
+    let one = |key: &str| {
+        truthy(attrs.get(key))
+            .then(|| py_str(&attrs[key]))
+            .into_iter()
+    };
+    let depends_on = match attrs.get("task.depends_on") {
+        Some(Value::Array(ids)) => ids
+            .iter()
+            .filter(|id| truthy(Some(id)))
+            .map(py_str)
+            .collect(),
+        _ => one("task.depends_on").collect::<Vec<_>>(),
+    };
+    let mut follows: Vec<String> = Vec::new();
+    for id in one("task.parent_id").chain(depends_on) {
+        if !follows.contains(&id) {
+            follows.push(id);
+        }
+    }
+    let rows = one("task.id")
+        .map(|id| ("id", id))
+        .chain(follows.into_iter().map(|id| ("follows", id)))
+        .chain(one("task.root_id").map(|id| ("root", id)))
+        .chain(one("task.group_id").map(|id| ("group", id)))
+        .chain(one("task.callback").map(|kind| ("callback", kind)));
+    let mut insert =
+        db.prepare_cached("INSERT INTO task_workflow (trace_id, role, value) VALUES (?1, ?2, ?3)")?;
+    for (role, value) in rows {
+        insert.execute(params![trace.id, role, value])?;
+    }
     Ok(())
 }
 

@@ -208,6 +208,7 @@ export function consoleLinks(prefix = "", newTab = false): TraceLinks {
     trace: (id) => `${prefix}${prefix ? href({ name: "trace", id }) : traceHref(id)}`,
     issue: (fingerprint, kind) => `${prefix}${href(issueRoute(fingerprint, kind))}`,
     call: (key) => `${prefix}${href({ name: "traces", q: `call:${key}` })}`,
+    search: (q) => `${prefix}${href({ name: "traces", q })}`,
     logs: (traceId) => `${prefix}${href({ name: "logs", q: `trace:${traceId}` })}`,
     app: (service) => `${prefix}${href({ name: "app", service })}`,
     newTab,
