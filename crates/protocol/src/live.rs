@@ -3,25 +3,28 @@
 //!
 //! An SDK sends a task's trace when the task ends; until then only these events say it exists. They come as a frame
 //! that is an object, `{"tasks": [event, ...]}`, on the connection the app sends its traces on (an agent from before
-//! ignores it). An event is small: `{"event": "enqueued" | "started" | "retried" | "finished" | "heartbeat",
-//! "system": "celery", "id": ..., "time": ...}` and what the event knows (see [`TaskEvent`]). Any task queue sends
-//! the same events: `system` says which one.
+//! ignores it). An event is small: `{"event": "enqueued" | "started" | "retried" | "finished" | "heartbeat" |
+//! "worker_stopped", "system": "celery", "id": ..., "time": ...}` and what the event knows (see [`TaskEvent`]). Any
+//! task queue sends the same events: `system` says which one.
 //!
 //! They are kept in memory, never in the store: a task in flight is now, and a restarted agent starts empty. An entry
-//! nobody spoke of for a while is dropped: a running task whose worker stopped sending heartbeats (killed, gone), a
-//! queued one no worker took.
+//! nobody spoke of for a while is dropped: a worker that stopped sending heartbeats (killed, gone) and the tasks it
+//! ran, after [`WORKER_STALE_US`], a queued one no worker took after [`WAITING_STALE_US`]. A worker that stops cleanly
+//! says so (`worker_stopped`) and leaves at once, with the tasks it still ran: they will not finish there.
 
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::{BTreeSet, HashMap};
 use std::sync::{Arc, Mutex, PoisonError};
 
-/// A running task not seen for this long is gone: its worker sends a heartbeat every 30 seconds while it runs.
-pub const RUNNING_STALE_US: i64 = 120_000_000;
+/// How often a worker process sends a heartbeat, with the tasks it runs: every SDK's workers (Python, JavaScript,
+/// Java) beat every 30 seconds, from their start on.
+pub const HEARTBEAT_US: i64 = 30_000_000;
+/// A worker not heard from for this long is gone (killed, or stopped without saying so), and so is a running task
+/// whose process sent no heartbeat with it: three heartbeats missed, so a late one doesn't drop a live worker.
+pub const WORKER_STALE_US: i64 = 3 * HEARTBEAT_US;
 /// A queued or retrying task not seen for this long is dropped: no worker takes from its queue, or it was lost.
 pub const WAITING_STALE_US: i64 = 3_600_000_000;
-/// A worker not heard from for this long leaves the list of workers.
-pub const WORKER_STALE_US: i64 = 3_600_000_000;
 /// A worker that ended a task this recently, with tasks of its queues still waiting, is still busy: between two
 /// tasks it takes the next one (RQ forks a process for each, Celery acknowledges and fetches), and a console that
 /// asks now and then would otherwise often find it idle while it works through a queue.
@@ -34,11 +37,12 @@ const MAX_TASKS: usize = 10_000;
 /// One event about a task, as the SDKs send it. Times are microseconds since the epoch.
 #[derive(Debug, Deserialize)]
 pub struct TaskEvent {
-    /// `enqueued`, `started`, `retried`, `finished`, or `heartbeat` (a worker alive, with the tasks it runs: `ids`).
+    /// `enqueued`, `started`, `retried`, `finished`, `heartbeat` (a worker alive, with the tasks it runs: `ids`), or
+    /// `worker_stopped` (a worker that stops cleanly: it leaves the workers at once).
     pub event: String,
     #[serde(default)]
     pub system: String,
-    /// The task's id; none for a heartbeat.
+    /// The task's id; none for a worker's events.
     #[serde(default)]
     pub id: String,
     #[serde(default)]
@@ -88,7 +92,7 @@ impl State {
 
     fn stale_after(self) -> i64 {
         match self {
-            Self::Running => RUNNING_STALE_US,
+            Self::Running => WORKER_STALE_US,
             Self::Queued | Self::Retrying => WAITING_STALE_US,
         }
     }
@@ -279,6 +283,7 @@ impl Inner {
         }
         match event.event.as_str() {
             "heartbeat" => self.heartbeat(&event, now),
+            "worker_stopped" => self.stopped(event.worker.as_deref()),
             "finished" => {
                 let ran_on = self.tasks.remove(&event.id).and_then(|task| task.worker);
                 self.ended(ran_on.or(event.worker), now);
@@ -300,6 +305,17 @@ impl Inner {
                 }
             }
         }
+    }
+
+    /// A worker stopped cleanly: it leaves, and so do the tasks still running on it (a cold shutdown, a task whose
+    /// end was not told). A retry or the queue's redelivery tells of them again.
+    fn stopped(&mut self, worker: Option<&str>) {
+        let Some(name) = worker else {
+            return;
+        };
+        self.workers.remove(name);
+        self.tasks
+            .retain(|_, task| task.state != State::Running || task.worker.as_deref() != Some(name));
     }
 
     /// A worker ended a task: it may take the next one from its queues at once (see [`BETWEEN_TASKS_US`]).
@@ -652,7 +668,7 @@ mod tests {
         assert!(live.any("", T0 + 1));
         assert!(live.any("shop", T0 + 1));
         assert!(!live.any("blog", T0 + 1));
-        // A worker not heard from for an hour is gone, and with it the app's live data.
+        // A worker not heard from for three heartbeats is gone, and with it the app's live data.
         assert!(!live.any("shop", T0 + WORKER_STALE_US));
     }
 
@@ -728,7 +744,7 @@ mod tests {
         live.take(
             events(json!([{"event": "heartbeat", "time": T0, "worker": "w", "ids": ["kept"]}])),
             "",
-            T0 + RUNNING_STALE_US / 2,
+            T0 + WORKER_STALE_US / 2,
         );
         let ids = |now| {
             tasks(&live, now)
@@ -739,12 +755,12 @@ mod tests {
                 .collect::<Vec<_>>()
         };
 
-        assert_eq!(ids(T0 + RUNNING_STALE_US), ["kept"]);
-        assert_eq!(ids(T0 + RUNNING_STALE_US * 2), Vec::<String>::new());
+        assert_eq!(ids(T0 + WORKER_STALE_US), ["kept"]);
+        assert_eq!(ids(T0 + WORKER_STALE_US * 2), Vec::<String>::new());
     }
 
     #[test]
-    fn a_queued_task_waits_longer_and_a_silent_worker_leaves() {
+    fn a_queued_task_outlives_a_silent_worker() {
         let live = LiveTasks::default();
         live.take(
             events(json!([
@@ -754,15 +770,119 @@ mod tests {
             "",
             T0,
         );
-        let later = T0 + RUNNING_STALE_US * 2;
+        let later = T0 + WORKER_STALE_US;
 
+        // No worker takes from its queue now, but one may come.
         assert_eq!(live.snapshot("", later)["tasks"][0]["state"], "queued");
-        assert_eq!(live.snapshot("", later)["workers"][0]["name"], "w");
+        assert_eq!(live.snapshot("", later)["workers"], json!([]));
 
-        let gone = T0 + WAITING_STALE_US.max(WORKER_STALE_US);
+        let gone = T0 + WAITING_STALE_US;
 
         assert_eq!(live.snapshot("", gone)["tasks"], json!([]));
-        assert_eq!(live.snapshot("", gone)["workers"], json!([]));
+    }
+
+    fn workers(live: &LiveTasks, now: i64) -> Vec<String> {
+        in_flight(live, now)
+            .into_iter()
+            .map(|(name, _)| name)
+            .collect()
+    }
+
+    #[test]
+    fn a_worker_that_beats_stays_and_one_that_stops_beating_leaves_after_three_heartbeats() {
+        let live = LiveTasks::default();
+        let beat = |worker: &str, now: i64| {
+            take(
+                &live,
+                now,
+                json!([{"event": "heartbeat", "system": "huey", "time": now, "worker": worker, "ids": []}]),
+            );
+        };
+        // An idle worker beats every 30 seconds for ten minutes; the other was killed after its first beat.
+        for at in (0..=20).map(|beats| T0 + beats * HEARTBEAT_US) {
+            beat("alive", at);
+        }
+        beat("killed", T0);
+        let last = T0 + 20 * HEARTBEAT_US;
+
+        assert_eq!(WORKER_STALE_US, 90_000_000);
+        assert_eq!(
+            workers(&live, T0 + WORKER_STALE_US - 1),
+            ["alive", "killed"]
+        );
+        assert_eq!(workers(&live, T0 + WORKER_STALE_US), ["alive"]);
+        assert_eq!(workers(&live, last + WORKER_STALE_US - 1), ["alive"]);
+        assert_eq!(workers(&live, last + WORKER_STALE_US), Vec::<String>::new());
+    }
+
+    #[test]
+    fn a_worker_that_stops_leaves_at_once_with_the_tasks_it_still_ran() {
+        let live = LiveTasks::default();
+        take(
+            &live,
+            T0,
+            json!([
+                {"event": "heartbeat", "system": "celery", "time": T0, "worker": "celery@a", "ids": []},
+                {"event": "heartbeat", "system": "celery", "time": T0, "worker": "celery@b", "ids": []},
+                {"event": "started", "system": "celery", "id": "cut", "name": "a", "time": T0, "worker": "celery@a"},
+                {"event": "started", "system": "celery", "id": "other", "name": "a", "time": T0, "worker": "celery@b"},
+                {"event": "retried", "system": "celery", "id": "again", "time": T0, "worker": "celery@a", "retries": 1},
+                {"event": "enqueued", "system": "celery", "id": "waits", "name": "a", "time": T0},
+            ]),
+        );
+        take(
+            &live,
+            T0 + 10,
+            json!([{"event": "worker_stopped", "system": "celery", "time": T0 + 10, "worker": "celery@a"}]),
+        );
+        let snapshot = live.snapshot("", T0 + 11);
+        let ids = snapshot["tasks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|task| {
+                (
+                    task["id"].as_str().unwrap(),
+                    task["state"].as_str().unwrap(),
+                )
+            })
+            .collect::<BTreeSet<_>>();
+
+        assert_eq!(workers(&live, T0 + 11), ["celery@b"]);
+        // Its retry waits for any worker, as a queued task does; the run it was cut off from won't end there.
+        assert_eq!(
+            ids,
+            BTreeSet::from([
+                ("again", "retrying"),
+                ("other", "running"),
+                ("waits", "queued")
+            ])
+        );
+
+        // Started again, under the same name: it is back.
+        take(
+            &live,
+            T0 + 20,
+            json!([{"event": "heartbeat", "system": "celery", "time": T0 + 20, "worker": "celery@a", "ids": []}]),
+        );
+
+        assert_eq!(workers(&live, T0 + 21), ["celery@a", "celery@b"]);
+    }
+
+    #[test]
+    fn a_goodbye_without_a_worker_changes_nothing() {
+        let live = LiveTasks::default();
+        take(
+            &live,
+            T0,
+            json!([
+                {"event": "heartbeat", "system": "rq", "time": T0, "worker": "w1", "ids": []},
+                {"event": "started", "system": "rq", "id": "j1", "name": "a", "time": T0, "worker": "w1"},
+                {"event": "worker_stopped", "system": "rq", "time": T0},
+            ]),
+        );
+
+        assert_eq!(in_flight(&live, T0 + 1), [("w1".to_owned(), 1)]);
     }
 
     #[test]

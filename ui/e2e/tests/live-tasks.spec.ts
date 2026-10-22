@@ -162,6 +162,45 @@ test("Now says idle with workers there, and lists them", async ({ page }) => {
   await expect(now.getByRole("button")).toHaveCount(0);
 });
 
+test("a worker that stops says so and leaves Now at once", async ({ page }) => {
+  const run = unique();
+  const name = `huey@box:${run}`;
+  const socket = await connect();
+  send(socket, [{ event: "heartbeat", system: "huey", id: "", time: nowUs(), worker: name, ids: [] }]);
+
+  await page.goto("/#/tasks");
+  await chooseLive(page);
+  const workers = page.getByRole("region", { name: "Now" }).getByRole("list", { name: "Workers" });
+
+  await expect(workers.getByText(name)).toBeVisible();
+
+  // A SIGTERM'd consumer: its goodbye, not an hour of an idle worker that is gone.
+  send(socket, [{ event: "worker_stopped", system: "huey", id: "", time: nowUs(), worker: name }]);
+
+  await expect(workers.getByText(name)).toHaveCount(0);
+  socket.destroy();
+});
+
+test("a worker silent for three heartbeats leaves Now without a reload", async ({ page }) => {
+  // The agent drops it after 90 seconds without a heartbeat: its next answer has no workers.
+  // biome-ignore lint/style/useNamingConvention: the wire format.
+  const worker = { name: "huey@box:42", system: "huey", service: "shop", last_seen: nowUs(), in_flight: 0 };
+  let workers = [worker];
+  await answer(page, { tasks: [] }, true);
+  await page.route("**/api/tasks/live*", (route) => route.fulfill({ json: { now: nowUs(), tasks: [], workers } }));
+
+  await page.goto("/#/tasks");
+  await chooseLive(page);
+  const now = page.getByRole("region", { name: "Now" });
+
+  await expect(now.getByRole("list", { name: "Workers" })).toHaveText("huey@box:42 idle");
+
+  workers = [];
+
+  await expect(now).toContainText("No worker connected");
+  await expect(now.getByRole("list", { name: "Workers" })).toHaveCount(0);
+});
+
 test("Now says no worker is connected when the app sends task events but none was seen", async ({ page }) => {
   await answer(page, { tasks: [], workers: [] }, true);
 
