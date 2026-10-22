@@ -15,6 +15,13 @@ export function ago(us: number, now: number = Date.now()): string {
   return new Date(us / 1000).toLocaleTimeString([], { hour12: false });
 }
 
+/** Bytes as a size reads: "812 B", "64 KB", "1.2 MB" (a KB of 1024 bytes, as a body's limit is set). */
+export function bytes(size: number): string {
+  if (size < 1024) return `${size} B`;
+  const [value, unit] = size < 1024 * 1024 ? [size / 1024, "KB"] : [size / (1024 * 1024), "MB"];
+  return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${unit}`;
+}
+
 export type Tone = "ok" | "warn" | "error";
 
 export function tone(status: number | null, issues: number): Tone {
