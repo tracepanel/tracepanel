@@ -284,7 +284,8 @@ function OperationList({
     <Card className="gap-2 px-4 py-3.5 shadow-none">
       <h3 className="text-md font-semibold">{title}</h3>
       {items.length === 0 ? <p className="text-sm text-muted-foreground">{empty}</p> : null}
-      <ul className="grid">
+      {/* One column no wider than the card: a long name is cut short, it doesn't widen the page. */}
+      <ul className="grid grid-cols-[minmax(0,1fr)]">
         {items.map((item) => (
           <li key={`${item.kind} ${item.name}`}>
             <a

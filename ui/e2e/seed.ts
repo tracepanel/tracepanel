@@ -224,6 +224,139 @@ function background(): Doc[] {
   return [task, job];
 }
 
+const WORKER = { "service.name": "shop", "service.role": "worker", "telemetry.sdk.language": "python" };
+
+/** A task run of `system`, sent from the span `from` of another trace when it was (an enqueued_by link). */
+function run(name: string, attrs: Doc, from?: { trace: Doc; span: string }, extra: Partial<Doc> = {}): Doc {
+  const links = from ? [{ kind: "enqueued_by", trace_id: from.trace["id"], span_id: from.span }] : [];
+  return trace("task", name, { ...WORKER, "task.state": "SUCCESS", ...attrs }, { links, ...extra });
+}
+
+/** The span of `doc` that sent the task `task` (task.enqueue): what a run's enqueued_by link points at. */
+function enqueue(doc: Doc, suffix: string, name: string, task: string): { trace: Doc; span: string } {
+  const span = `${doc["id"]}${suffix}`;
+  (doc["spans"] as Doc[]).push({
+    id: span,
+    parent_id: `${doc["id"]}R`,
+    kind: "task.enqueue",
+    name: `enqueue ${name}`,
+    start: 1_000,
+    duration: 300,
+    status: "ok",
+    attrs: { "task.id": task, "task.name": name },
+  });
+  return { trace: doc, span };
+}
+
+/** A request of the shop's that sent tasks. */
+function sender(method: string, path: string): Doc {
+  return trace("http", `${method} ${path}`, {
+    ...SHOP,
+    "http.method": method,
+    "http.path": path,
+    "http.route": path,
+    "http.status_code": 202,
+  });
+}
+
+/** A Celery chain of three: each step sent from inside the run before it, all with the first as their root. */
+function chain(): Doc[] {
+  const fetch = run("shop.tasks.fetch_feed", { "task.system": "celery", "task.id": "chain-1" });
+  const parse = run(
+    "shop.tasks.parse_feed",
+    { "task.system": "celery", "task.id": "chain-2", "task.parent_id": "chain-1", "task.root_id": "chain-1" },
+    enqueue(fetch, "E", "shop.tasks.parse_feed", "chain-2"),
+  );
+  const store = run(
+    "shop.tasks.store_feed",
+    { "task.system": "celery", "task.id": "chain-3", "task.parent_id": "chain-2", "task.root_id": "chain-1" },
+    enqueue(parse, "E", "shop.tasks.store_feed", "chain-3"),
+  );
+  return [fetch, parse, store];
+}
+
+/** A request's Celery group of three thumbnails (one failed), and the chord's callback, sent by the last. */
+function chord(): Doc[] {
+  const request = sender("POST", "/api/thumbnails");
+  const thumbnails = [1, 2, 3].map((n) =>
+    run(
+      "shop.tasks.make_thumbnail",
+      {
+        "task.system": "celery",
+        "task.id": `thumb-${n}`,
+        "task.group_id": "thumbs",
+        ...(n === 2 ? { "task.state": "FAILURE" } : {}),
+      },
+      enqueue(request, `E${n}`, "shop.tasks.make_thumbnail", `thumb-${n}`),
+      n === 2 ? { status: "error" } : {},
+    ),
+  );
+  const done = run(
+    "shop.tasks.thumbnails_done",
+    {
+      "task.system": "celery",
+      "task.id": "thumbs-done",
+      "task.parent_id": "thumb-3",
+      "task.root_id": "thumb-3",
+      "task.group_id": "thumbs",
+    },
+    enqueue(thumbnails[2] as Doc, "E", "shop.tasks.thumbnails_done", "thumbs-done"),
+  );
+  return [request, ...thumbnails, done];
+}
+
+/** A request's RQ jobs: one waits for the other (depends_on); the first's on_success callback runs as its own trace. */
+function dependencies(): Doc[] {
+  const request = sender("POST", "/api/images");
+  const resize = run(
+    "shop.jobs.resize_image",
+    { "task.system": "rq", "task.id": "job-resize" },
+    enqueue(request, "E1", "shop.jobs.resize_image", "job-resize"),
+  );
+  const publish = run(
+    "shop.jobs.publish_image",
+    {
+      "task.system": "rq",
+      "task.id": "job-publish",
+      "task.parent_id": "job-resize",
+      "task.root_id": "job-resize",
+      "task.depends_on": ["job-resize"],
+    },
+    enqueue(request, "E2", "shop.jobs.publish_image", "job-publish"),
+  );
+  const callback = run(
+    "shop.jobs.log_resized",
+    {
+      "task.system": "rq",
+      "task.callback": "on_success",
+      "task.parent_id": "job-resize",
+      "task.root_id": "job-resize",
+      "task.trigger": "task",
+    },
+    { trace: resize, span: `${resize["id"]}R` },
+  );
+  return [request, resize, callback, publish];
+}
+
+/** An RQ job its 30 s job_timeout stopped, and a Celery task that ran when due (its countdown) with a priority. */
+function limits(): Doc[] {
+  const stopped = run(
+    "shop.jobs.render_report",
+    { "task.system": "rq", "task.id": "job-report", "task.state": "FAILURE", "task.timeout": 30 },
+    undefined,
+    { status: "error", duration: 30_000_000 },
+  );
+  (stopped["spans"] as Doc[])[0] = { ...(stopped["spans"] as Doc[])[0], duration: 30_000_000, status: "error" };
+  // When it was due, 2 minutes before it started: an offset from its start, made a time once the seed has moved it.
+  const delayed = run("shop.tasks.send_reminder", {
+    "task.system": "celery",
+    "task.id": "reminder-1",
+    "task.eta": -120_000_000,
+    "task.priority": 5,
+  });
+  return [stopped, delayed];
+}
+
 /** A report on a replica with a long name: a long transaction and slow queries, each with its alias and issue chip. */
 function report(): Doc {
   const alias = "FANSIFTER_APP_REPORTING/QA";
@@ -639,6 +772,15 @@ const SHOP_APP = {
 
 // biome-ignore-end lint/style/useNamingConvention: traces as the SDKs send them; their field names are the wire format.
 
+/** A task's `task.eta`, seeded as an offset from its start, as the SDKs write it: an ISO 8601 time. */
+function due(doc: Doc): Doc {
+  const attrs = doc["attrs"] as Doc;
+  const offset = attrs["task.eta"];
+  if (typeof offset !== "number") return doc;
+  const eta = new Date((Number(doc["start"]) + offset) / 1000).toISOString();
+  return { ...doc, attrs: { ...attrs, "task.eta": eta } };
+}
+
 /** The shop app's hello on the agent's socket, as an SDK connects: the agent keeps what it said after it goes. */
 async function hello(): Promise<void> {
   const address = readFileSync(`${STORE}/agent.addr`, "utf8").trim();
@@ -673,9 +815,13 @@ export default async function seed(): Promise<void> {
     adminList(),
     bookList(),
     signals(),
+    ...chain(),
+    ...chord(),
+    ...dependencies(),
+    ...limits(),
   ];
   const first = Date.now() * 1000 - SPREAD_US * (docs.length + 1);
-  const moved = docs.map((doc, index) => shift(doc, first + index * SPREAD_US - Number(doc["start"])) as Doc);
+  const moved = docs.map((doc, index) => due(shift(doc, first + index * SPREAD_US - Number(doc["start"])) as Doc));
   // A trace from an app whose clock is two hours behind, and that went over the limits: the oldest of all, so no list
   // opens on it.
   moved.push(shift(late(), first - 2 * 3_600_000_000) as Doc);

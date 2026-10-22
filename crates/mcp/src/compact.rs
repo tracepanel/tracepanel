@@ -790,7 +790,42 @@ fn related_section(related: &Value, now: i64) -> Option<String> {
             );
         }
     }
+    out.extend(workflow_lines(&related["workflow"], now));
     (!out.is_empty()).then(|| out.join("\n"))
+}
+
+/// A task run's workflow: its root, the runs before and after it, its group's other tasks.
+fn workflow_lines(workflow: &Value, now: i64) -> Vec<String> {
+    let mut out = Vec::new();
+    if workflow["root"].is_object() {
+        out.push(format!(
+            "workflow root: {}",
+            trace_line(&workflow["root"], now)
+        ));
+    }
+    let group = &workflow["group"];
+    let label = format!(
+        "group {} ({})",
+        text(group, "id"),
+        count(int(group, "tasks"), "task", "tasks")
+    );
+    for (items, what) in [
+        (&workflow["follows"], "follows".to_owned()),
+        (&workflow["followed_by"], "followed by".to_owned()),
+        (&group["runs"], label),
+    ] {
+        let items = items.as_array().map_or(&[][..], Vec::as_slice);
+        if !items.is_empty() {
+            out.push(format!("{what}:"));
+            out.extend(
+                items
+                    .iter()
+                    .take(20)
+                    .map(|item| format!("  {}", trace_line(item, now))),
+            );
+        }
+    }
+    out
 }
 
 /// One trace, compact: the head, its issues, then what `focus` asks for, errors, loud logs and related traces.

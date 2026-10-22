@@ -975,7 +975,8 @@ impl Reader {
         rows.next()?.map(|row| row.get(0)).transpose()
     }
 
-    /// Traces linked to this one, by link kind: tasks (enqueued_by), WebSocket connections and layer messages.
+    /// Traces linked to this one, by link kind: tasks (enqueued_by), WebSocket connections and layer messages; and a
+    /// task run's workflow, by its task ids.
     pub fn related(&self, id: &str) -> rusqlite::Result<Value> {
         let db = self.connect()?;
         let mut statement =
@@ -1015,7 +1016,12 @@ impl Reader {
             found.sort_by_key(|item| item["start"].as_i64().unwrap_or_default());
             Ok(Value::Array(found))
         };
-        Ok(serde_json::json!({
+        let linked = Linked {
+            by: parents.get("enqueued_by").and_then(|ids| ids.first()),
+            enqueued: children.get("enqueued_by").map_or(&[][..], Vec::as_slice),
+        };
+        let workflow = self.workflow(&db, id, &linked)?;
+        let mut related = serde_json::json!({
             "enqueued_by": one("enqueued_by")?,
             "enqueued": many("enqueued_by")?,
             "connection": one("connection")?,
@@ -1025,7 +1031,12 @@ impl Reader {
             "called_by": one("called_by")?,
             "calls": many("called_by")?,
             "via": via,
-        }))
+        });
+        // Only a task run in a workflow has one.
+        if !workflow.is_null() {
+            related["workflow"] = workflow;
+        }
+        Ok(related)
     }
 
     /// Issue groups (and how many are errors) and traces per entry point: what the console's menu shows.
@@ -1241,6 +1252,18 @@ fn linked_ids(related: &Value) -> Vec<String> {
                 .filter_map(|item| item["id"].as_str().map(str::to_owned)),
         );
     }
+    // A task run's workflow: its root, the steps before and after it, its group's other tasks.
+    let workflow = &related["workflow"];
+    let steps = [
+        &workflow["follows"],
+        &workflow["followed_by"],
+        &workflow["group"]["runs"],
+    ];
+    ids.extend(
+        std::iter::once(&workflow["root"])
+            .chain(steps.into_iter().filter_map(Value::as_array).flatten())
+            .filter_map(|item| item["id"].as_str().map(str::to_owned)),
+    );
     ids
 }
 

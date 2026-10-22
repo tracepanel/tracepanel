@@ -1593,3 +1593,61 @@ components:
             (the task.enqueue, channel.send or outgoing call span), by trace id. The call tree shows a task under the
             span that enqueued it, and a call's trace under the call.
           additionalProperties: { type: string }
+        workflow:
+          $ref: "#/components/schemas/Workflow"
+          description: >-
+            For a task run in a workflow (it has task.parent_id, task.root_id, task.group_id, task.depends_on or
+            task.callback, or another run names its task.id): the runs around it. Absent otherwise.
+    Workflow:
+      type: object
+      description: >-
+        A task run's workflow, by the task ids its runs record. A step sent from inside the run before it is linked
+        already (enqueued_by and enqueued): it is not listed here again.
+      additionalProperties: false
+      required: [task_id, runs, root, follows, followed_by, group, callbacks]
+      properties:
+        task_id: { type: [string, "null"], description: "This run's task.id (a callback has none)." }
+        runs:
+          type: object
+          description: >-
+            The latest stored run of each task this run names (task.parent_id, task.depends_on, task.root_id): its
+            trace id, by task id. A task missing here has no run stored.
+          additionalProperties: { type: string }
+        root:
+          description: The run of the workflow's first task (task.root_id), unless it is this run or listed already.
+          oneOf:
+            - $ref: "#/components/schemas/TraceSummary"
+            - { type: "null" }
+        follows:
+          type: array
+          description: The runs of the tasks this one follows (task.parent_id, task.depends_on), oldest first.
+          items: { $ref: "#/components/schemas/TraceSummary" }
+        followed_by:
+          type: array
+          description: The runs that follow this one (its task.id is their parent or in their depends_on), oldest first.
+          items: { $ref: "#/components/schemas/TraceSummary" }
+        group:
+          description: The group it runs in (task.group_id).
+          oneOf:
+            - { type: "null" }
+            - type: object
+              additionalProperties: false
+              required: [id, tasks, member, runs]
+              properties:
+                id: { type: string, description: "The group's id: `group:<id>` finds its tasks' runs." }
+                tasks: { type: integer, description: "How many tasks it has." }
+                member:
+                  type: boolean
+                  description: >-
+                    Whether this run is one of them: a run that follows one of them, as a chord's callback does, is
+                    not.
+                runs:
+                  type: array
+                  description: The latest run of each other task, in the order they first ran (at most 20).
+                  items: { $ref: "#/components/schemas/TraceSummary" }
+        callbacks:
+          type: object
+          description: >-
+            Which of the runs it led to (enqueued, followed_by) are its callbacks: RQ's on_success, on_failure or
+            on_stopped, by trace id.
+          additionalProperties: { type: string }
