@@ -120,6 +120,12 @@
   endpoints), and its Overview is folded over the calls and open over the
   groups, until you fold or open it yourself: that choice stays, as before.
 
+- An N+1 in a GraphQL request names the DataLoader of its server library:
+  `strawberry.dataloader` for Strawberry, graphql-sync-dataloaders (sync)
+  or aiodataloader (async) for Graphene, and a DataLoader with no library
+  named for any other. It said Strawberry's on every GraphQL trace before.
+  The library comes from `graphql.library`, which the Python SDK records.
+
 ### Fixed
 
 - A group page's Time button is its own size again, not stretched across
