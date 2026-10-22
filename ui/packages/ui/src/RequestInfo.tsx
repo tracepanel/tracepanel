@@ -357,6 +357,16 @@ function WorkflowSection({ trace, related, links }: Omit<RequestInfoProps, "hero
   );
 }
 
+/**
+ * The related traces' rows: what queued it, what it called, what it delivered to, and its workflow's runs before and
+ * after it, unless the workflow's graph below draws them.
+ */
+function linkedRows(trace: Trace, related: Related | undefined, links: TraceLinks | undefined): PropRow[] {
+  const workflow = workflowPart(trace, related, links);
+  const drawn = Boolean(related?.workflow?.graph);
+  return [...relatedRows(related, links, workflow.taken), ...(drawn ? [] : workflow.rows)];
+}
+
 /** Overview of the traced request or task run: what ran, how it went, who caused it; every id copies. */
 export function RequestInfo({ trace, related, links, hero: wanted }: RequestInfoProps) {
   const hero = heroShown(trace, wanted);
@@ -367,8 +377,7 @@ export function RequestInfo({ trace, related, links, hero: wanted }: RequestInfo
   const graphql = document ? [{ id: "graphql", label: "GraphQL", content: <GraphqlCode document={document} /> }] : [];
   // The traces it is linked to come after its own: what queued it, what it called, what it delivered to.
   // A task run's workflow lists the runs before and after it: the other rows leave those out.
-  const workflow = workflowPart(trace, related, links);
-  const linked = [...relatedRows(related, links, workflow.taken), ...workflow.rows];
+  const linked = linkedRows(trace, related, links);
   return (
     <div className="@container grid gap-5 p-4">
       {hero ? <Hero trace={trace} /> : null}

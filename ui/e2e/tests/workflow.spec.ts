@@ -1,5 +1,5 @@
 // A task run's place in its workflow: its facts say what it follows, its root, its group, when it was due and its
-// time limit; its related traces list the runs before and after it, its callbacks and its group's other tasks.
+// time limit; its graph draws the runs before and after it, its callbacks and its group's other tasks.
 import type { Locator, Page } from "@playwright/test";
 import { traceId } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
@@ -19,68 +19,70 @@ function beside(list: Locator, label: string): Locator {
   return list.locator("dt", { hasText: new RegExp(`^${label}$`) }).locator("xpath=following-sibling::dd[1]");
 }
 
-test("a chain's last step says what it follows and its root, and lists them as its workflow", async ({ page }) => {
+test("a chain's last step says what it follows and its root; the graph is its workflow, not rows again", async ({
+  page,
+}) => {
   const { facts, related } = await open(page, "shop.tasks.store_feed");
 
   await expect(beside(facts, "Follows")).toHaveText("shop.tasks.parse_feed");
   await expect(beside(facts, "Root")).toHaveText("shop.tasks.fetch_feed");
-  await expect(related.getByText("Workflow", { exact: true })).toBeVisible();
-  await expect(beside(related, "Root")).toContainText("shop.tasks.fetch_feed");
-  await expect(beside(related, "Previous step")).toContainText("shop.tasks.parse_feed");
-  // The step that sent it is its previous step: not listed again as what enqueued it.
-  await expect(related.getByText("Enqueued by", { exact: true })).toHaveCount(0);
+  // Drawn below, the workflow is not listed again among the related traces.
+  await expect(related).toHaveCount(0);
+  await expect(box(page, "shop.tasks.fetch_feed")).toBeVisible();
+  await expect(box(page, "shop.tasks.parse_feed")).toBeVisible();
 
   await beside(facts, "Root").getByRole("link").click();
   await page.getByRole("tab", { name: /^Task/ }).click();
-  const first = page.getByRole("region", { name: "Related traces" });
-  await expect(beside(first, "Next step")).toContainText("shop.tasks.parse_feed");
-  await expect(beside(first, "Next step")).toContainText("success");
+
+  await expect(box(page, "shop.tasks.fetch_feed")).toHaveAttribute("aria-current", "true");
+  await expect(box(page, "shop.tasks.parse_feed")).toContainText("success");
 });
 
-test("a chord's callback follows the group's last task and lists the group, the failed one too", async ({ page }) => {
-  const { facts, related } = await open(page, "shop.tasks.thumbnails_done");
+test("a chord's callback follows the group's last task, its graph framing the group, the failed one too", async ({
+  page,
+}) => {
+  const { facts } = await open(page, "shop.tasks.thumbnails_done");
 
   await expect(beside(facts, "Follows")).toHaveText("shop.tasks.make_thumbnail");
   await expect(beside(facts, "Group")).toHaveText("3 tasks");
   await expect(beside(facts, "Group").getByRole("link")).toHaveAttribute("href", /group(%3A|:)thumbs/);
-  await expect(beside(related, "Previous step")).toContainText("shop.tasks.make_thumbnail");
-  const group = beside(related, "Group \\(3 tasks\\)");
-  await expect(group.getByRole("link")).toHaveCount(3);
-  await expect(group).toContainText("failure");
+  await expect(box(page, "shop.tasks.make_thumbnail")).toHaveCount(3);
+  await expect(graph(page)).toContainText("failure");
 
   await beside(facts, "Group").getByRole("link").click();
   await expect(page.getByText("3 shown")).toBeVisible();
 });
 
-test("a long group shows how many tasks it has, its first few, and a search for them all", async ({ page }) => {
+test("a long group draws its first few tasks and a search for them all", async ({ page }) => {
   await page.route("**/api/traces/*/related", async (route) => {
     const related = await (await route.fetch()).json();
-    if (related.workflow?.group) related.workflow.group.tasks = 300;
+    const nodes = related.workflow?.graph?.nodes ?? [];
+    const member = nodes.find((node: { group: string | null }) => node.group === "thumbs");
+    if (member) {
+      for (let n = 0; n < 297; n += 1) {
+        // biome-ignore lint/style/useNamingConvention: the wire format.
+        nodes.push({ ...member, task_id: `extra-${n}`, trace: { ...member.trace, id: `extra-${n}` } });
+      }
+    }
     await route.fulfill({ json: related });
   });
-  const { related } = await open(page, "shop.tasks.thumbnails_done");
-  const group = beside(related, "Group \\(300 tasks\\)");
+  await open(page, "shop.tasks.thumbnails_done");
 
-  await expect(group).toContainText("+297 more");
-  await expect(group.getByRole("link", { name: "All 300 tasks" })).toHaveAttribute("href", /group(%3A|:)thumbs/);
+  await expect(graph(page).getByText("Group · 300 tasks")).toBeVisible();
+  await expect(graph(page).getByRole("link", { name: /^\+295 more/ })).toHaveAttribute("href", /group(%3A|:)thumbs/);
 });
 
-test("a job that waited for another follows it, and that one lists it and its callback", async ({ page }) => {
+test("a job that waited for another follows it; the graph draws both and its callback", async ({ page }) => {
   const waited = await open(page, "shop.jobs.publish_image");
 
   await expect(beside(waited.facts, "Follows")).toHaveText("shop.jobs.resize_image");
   await expect(beside(waited.related, "Enqueued by")).toContainText("/api/images");
-  await expect(beside(waited.related, "Previous step")).toContainText("shop.jobs.resize_image");
-
-  const first = await open(page, "shop.jobs.resize_image");
-  await expect(beside(first.related, "Next step")).toContainText("shop.jobs.publish_image");
-  await expect(beside(first.related, "Callback")).toContainText("shop.jobs.log_resized");
-  await expect(beside(first.related, "Callback")).toContainText("on_success");
-  await expect(first.related.getByText("Enqueued task", { exact: true })).toHaveCount(0);
+  await expect(box(page, "shop.jobs.resize_image")).toBeVisible();
+  await expect(box(page, "shop.jobs.log_resized")).toContainText("on_success");
 
   const callback = await open(page, "shop.jobs.log_resized");
   await expect(beside(callback.facts, "Callback \\(on_success\\) of")).toHaveText("shop.jobs.resize_image");
-  await expect(beside(callback.related, "Callback of")).toContainText("shop.jobs.resize_image");
+  await expect(box(page, "shop.jobs.resize_image")).toBeVisible();
 });
 
 test("a run its time limit stopped says so", async ({ page }) => {

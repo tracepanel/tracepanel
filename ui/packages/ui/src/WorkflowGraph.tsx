@@ -188,8 +188,24 @@ function layout(graph: WorkflowGraphData): Plan {
     if ("top" in item) item.top += shift(item.column);
     else item.y += shift(item.column);
   }
-  const width = (lastColumn + 1) * (SLOT_W + COL_GAP) - COL_GAP;
+  const width = trimmed(drawing);
   return { width, height, cards: drawing.cards, frames: drawing.frames, lines: linesOf(edges, drawing.places) };
+}
+
+/**
+ * The drawing moved flush to its left edge, its width what it covers: a column keeps room for a group's frame on
+ * both sides, and without a frame there the first box would sit in from the heading above it. Returns the width.
+ */
+function trimmed(drawing: Drawing): number {
+  const lefts = [...drawing.cards.map((card) => card.x), ...drawing.frames.map((frame) => frame.x)];
+  const rights = [...drawing.cards.map((card) => card.x + NODE_W), ...drawing.frames.map((frame) => frame.x + SLOT_W)];
+  const left = Math.min(...lefts);
+  for (const item of [...drawing.cards, ...drawing.frames]) item.x -= left;
+  for (const place of drawing.places.values()) {
+    place.left -= left;
+    place.right -= left;
+  }
+  return Math.max(...rights) - left;
 }
 
 /** A curve from one box's right side to the next one's left side. */
