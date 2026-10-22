@@ -28,8 +28,8 @@ test("dragging over a group's calls looks at that stretch", async ({ page }) => 
 test("one call still gets a time axis: its calls chart spans a window, not a moment", async ({ page }) => {
   await page.goto(GROUP);
   const axis = page.getByRole("img", { name: "calls and errors over time" }).locator("text");
-  const labels = await axis.allTextContents();
-  const times = labels.filter((label) => /^\d{1,2}:\d{2}/.test(label));
+  // Read once the chart has drawn its axis.
+  const times = async () => new Set((await axis.allTextContents()).filter((label) => /^\d{1,2}:\d{2}/.test(label)));
 
-  expect(new Set(times).size).toBeGreaterThan(1);
+  await expect.poll(async () => (await times()).size).toBeGreaterThan(1);
 });

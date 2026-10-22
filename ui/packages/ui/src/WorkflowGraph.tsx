@@ -1,5 +1,6 @@
 import { useId, useMemo } from "react";
 import { duration } from "./format";
+import { plural } from "./lib/plural";
 import { linkProps, type TraceLinks } from "./links";
 import type { Related } from "./types";
 
@@ -401,7 +402,7 @@ function GroupFrame({ frame }: { frame: Frame }) {
       style={{ left: frame.x, top: frame.y, width: SLOT_W, height: frame.height }}
     >
       <span className="block px-2 pt-0.5 text-2xs font-semibold tracking-wide text-muted-foreground uppercase">
-        Group · {frame.tasks} tasks
+        Group · {plural(frame.tasks, "task", "tasks")}
       </span>
     </div>
   );

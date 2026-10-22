@@ -6,6 +6,7 @@ import {
   IssueIcon,
   type IssueRow,
   MethodBadge,
+  plural,
   RoutePath,
   TaskName,
   type TraceSummary,
@@ -166,7 +167,9 @@ export function SearchPalette({
                     <span className="min-w-0 flex-1 truncate font-mono text-base">
                       <RoutePath path={row.route} />
                     </span>
-                    <span className="text-sm text-muted-foreground tabular-nums">{row.calls} calls</span>
+                    <span className="text-sm text-muted-foreground tabular-nums">
+                      {plural(row.calls, "call", "calls")}
+                    </span>
                   </CommandItem>
                 ))}
               </CommandGroup>

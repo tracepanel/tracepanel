@@ -136,6 +136,8 @@
   its row in the console's lists does: its kind's badge, then its name. A
   task's whole name was its badge, in capitals. A GraphQL operation has the
   console's GQL badge too.
+- A count of one reads as one: a task's group of one says "1 task" in its
+  facts and its workflow graph, and an endpoint in the search "1 call".
 
 ## 0.4.1 (2026-10-21)
 
