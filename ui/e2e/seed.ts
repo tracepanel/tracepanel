@@ -806,7 +806,10 @@ function signals(): Doc {
   return doc;
 }
 
-/** What the Python SDK says about the app in its hello: Django's settings, masked, and the versions it runs on. */
+/**
+ * What the Python SDK says about the app in its hello: Django's settings, masked, the versions it runs on, and what
+ * its checks found (Django's system checks, the most serious first, and its migrations not applied or not made).
+ */
 const SHOP_APP = {
   settings: {
     DEBUG: "True",
@@ -823,6 +826,28 @@ const SHOP_APP = {
     { name: "psycopg", version: "3.2.10", kind: "package" },
     { name: "tracepanel", version: "0.4.2", kind: "package" },
   ],
+  checks: [
+    {
+      id: "admin.E410",
+      level: "error",
+      message:
+        "'django.contrib.sessions.middleware.SessionMiddleware' must be in MIDDLEWARE in order to use the admin application.",
+      hint: null,
+      object: null,
+    },
+    {
+      id: "models.W042",
+      level: "warning",
+      message:
+        "Auto-created primary key used when not defining a primary key type, by default 'django.db.models.AutoField'.",
+      hint: "Configure the DEFAULT_AUTO_FIELD setting or the ShopConfig.default_auto_field attribute to point to a subclass of AutoField, e.g. 'django.db.models.BigAutoField'.",
+      object: "shop.Order",
+    },
+  ],
+  migrations: {
+    unapplied: [{ app: "shop", names: ["0007_order_gift", "0008_order_gift_note"] }],
+    changes: [{ app: "shop", changes: ["Add field note to order"] }],
+  },
 };
 
 // biome-ignore-end lint/style/useNamingConvention: traces as the SDKs send them; their field names are the wire format.

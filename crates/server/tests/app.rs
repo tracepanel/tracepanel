@@ -1,4 +1,5 @@
-//! An app's settings and versions: told once in its hello, served per app at `api/app`, kept after the app goes.
+//! An app's settings and versions: told once in its hello, served per app at `api/app`, kept after the app goes. What
+//! its checks found: in a frame after the hello, once they ran.
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
@@ -74,6 +75,21 @@ async fn an_app_says_its_settings_and_versions_in_its_hello() {
         answer["connected"] == true
     })
     .await;
+    let checks = json!([{"id": "security.W004", "level": "warning",
+                         "message": "You have not set a value for the SECURE_HSTS_SECONDS setting.",
+                         "hint": null, "object": null}]);
+    let migrations = json!({"unapplied": [{"app": "shop", "names": ["0002_order_note"]}],
+                            "changes": [{"app": "shop", "changes": ["Add field gift to order"]}]});
+    let frame = json!({"app": {"checks": checks, "migrations": migrations}}).to_string();
+    app.get_mut()
+        .write_all(&(frame.len() as u32).to_be_bytes())
+        .await
+        .unwrap();
+    app.get_mut().write_all(frame.as_bytes()).await.unwrap();
+    let checked = until(&router, "/api/app?service=shop", |answer| {
+        answer["checks"].is_array()
+    })
+    .await;
     drop(app);
     let gone = until(&router, "/api/app?service=shop", |answer| {
         answer["connected"] == false
@@ -86,28 +102,35 @@ async fn an_app_says_its_settings_and_versions_in_its_hello() {
     assert_eq!(
         before,
         json!({"service": "shop", "agent": agent, "connected": false, "received": null, "settings": null,
-               "versions": null})
+               "versions": null, "checks": null, "migrations": null})
     );
 
     assert_eq!(
         told,
         json!({"service": "shop", "agent": agent, "connected": true, "received": told["received"],
-               "settings": settings, "versions": versions})
+               "settings": settings, "versions": versions, "checks": null, "migrations": null})
     );
     assert!(told["received"].as_i64().unwrap() > 0);
+
+    // The checks ran after the hello: their frame adds what they found.
+    assert_eq!(
+        checked,
+        json!({"service": "shop", "agent": agent, "connected": true, "received": checked["received"],
+               "settings": settings, "versions": versions, "checks": checks, "migrations": migrations})
+    );
 
     // The app went: what it said stays, for the console of an app that restarts or stopped.
     assert_eq!(
         gone,
-        json!({"service": "shop", "agent": agent, "connected": false, "received": told["received"],
-               "settings": settings, "versions": versions})
+        json!({"service": "shop", "agent": agent, "connected": false, "received": checked["received"],
+               "settings": settings, "versions": versions, "checks": checks, "migrations": migrations})
     );
 
     // An app whose SDK doesn't say (JavaScript, Java): nulls, and the agent's version.
     assert_eq!(
         other,
         json!({"service": "shop-web", "agent": agent, "connected": false, "received": null, "settings": null,
-               "versions": null})
+               "versions": null, "checks": null, "migrations": null})
     );
     let _ = std::fs::remove_dir_all(&dir);
 }

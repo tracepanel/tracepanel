@@ -4,8 +4,9 @@
 //! answered with `{"ok": true}` or `{"ok": false, "error": "..."}`. Then frames: a 4-byte big-endian length and a JSON
 //! array of traces (`schema/trace.schema.json`). The SDKs only record: the
 //! agent finds the issues, with the SDK's thresholds. A frame that is an object is not traces: an app's answer to a
-//! request sent to it, or task events (`{"tasks": [...]}`, see [`live`]). The hello may tell about the app itself
-//! (`app`: its settings and versions, see [`about`]).
+//! request sent to it, task events (`{"tasks": [...]}`, see [`live`]), or what the app's checks found once they ran
+//! (`{"app": {...}}`). The hello may tell about the app itself (`app`: its settings, versions and checks, see
+//! [`about`]).
 
 pub mod about;
 pub mod live;
@@ -417,7 +418,8 @@ struct Hello {
     /// What the app answers at its own console rather than down this connection (see `App::console`).
     #[serde(default)]
     console: Vec<String>,
-    /// The app about itself (`settings`, `versions`), once per connection: SDKs from before send none.
+    /// The app about itself (`settings`, `versions`, `checks`, `migrations`), once per connection: SDKs from before
+    /// send none.
     #[serde(default)]
     app: Option<Value>,
 }
@@ -602,11 +604,13 @@ async fn frames<R: AsyncRead + Unpin>(
         activity.touch();
         if frame.first() == Some(&b'{') {
             if let Ok(object) = serde_json::from_slice::<Value>(&frame) {
-                match live::LiveTasks::events(&object) {
-                    Some(events) => {
-                        activity.tasks.take(events, &hello.service, live::now_us());
-                    }
-                    None => activity.apps.answered(object),
+                if let Some(events) = live::LiveTasks::events(&object) {
+                    activity.tasks.take(events, &hello.service, live::now_us());
+                } else if let Some(app) = object.get("app").filter(|app| app.is_object()) {
+                    // What the app's checks found, after its hello.
+                    activity.about.checked(&hello.service, app, live::now_us());
+                } else {
+                    activity.apps.answered(object);
                 }
             }
             continue;

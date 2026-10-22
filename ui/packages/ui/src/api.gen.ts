@@ -497,7 +497,7 @@ export interface paths {
         };
         /**
          * What an app said about itself in its hello, and this agent's version.
-         * @description Per app, not per request: the app's settings (masked by its SDK before they leave the app) and the versions of what it runs on, as its latest hello said them (`app`). Kept in the agent's memory after the app goes, so an app that restarts or stopped still shows; an agent started anew knows them again at each app's next hello. An app whose SDK doesn't send them (JavaScript and Java today) has nulls.
+         * @description Per app, not per request: the app's settings (masked by its SDK before they leave the app), the versions of what it runs on, and what its checks found wrong with it (Django's system checks, its migrations not applied or not made), as its latest hello said them (`app`), the checks' once they ran. Kept in the agent's memory after the app goes, so an app that restarts or stopped still shows; an agent started anew knows them again at each app's next hello. An app whose SDK doesn't send them (JavaScript and Java today) has nulls.
          */
         get: operations["app"];
         put?: never;
@@ -980,6 +980,37 @@ export interface components {
             } | null;
             /** @description What the app runs on: the runtime first, then its framework, then the packages that matter (database drivers, task queues, the SDK). Null when the SDK sends none. */
             versions: components["schemas"]["AppVersion"][] | null;
+            /** @description What the framework's own checks report (Django's system checks, its deployment checks too when DEBUG is off; the silenced ones and those that query the database left out), the most serious first. Empty when they found nothing, null when the SDK doesn't run them or they haven't run yet. */
+            checks: components["schemas"]["AppCheck"][] | null;
+            /** @description The app's migrations not applied or not made; null when the SDK doesn't look or hasn't yet. */
+            migrations: components["schemas"]["AppMigrations"] | null;
+        };
+        AppCheck: {
+            /** @description The check message's id: "security.W004", "models.W042". */
+            id: string | null;
+            /** @enum {string} */
+            level: "debug" | "info" | "warning" | "error" | "critical";
+            message: string;
+            /** @description What to do about it */
+            hint: string | null;
+            /** @description What it is about: a model by its label ("shop.Order"), a field, a URL pattern. */
+            object: string | null;
+        };
+        AppMigrations: {
+            /** @description The migrations not applied to the default database yet, by app, in the order migrate applies them. Null when the SDK couldn't read them: no database configured, an in-memory one, or one that doesn't answer. */
+            unapplied: {
+                /** @description The app's label. */
+                app: string;
+                /** @description Each migration's name: "0002_order_note". */
+                names: string[];
+            }[] | null;
+            /** @description Model changes without a migration, by app, as makemigrations would write them; null when the SDK couldn't tell. */
+            changes: {
+                /** @description The app's label. */
+                app: string;
+                /** @description Each operation: "Add field note to order". */
+                changes: string[];
+            }[] | null;
         };
         AppVersion: {
             /** @description As the runtime or the package names itself: "Python", "Django", "psycopg". */

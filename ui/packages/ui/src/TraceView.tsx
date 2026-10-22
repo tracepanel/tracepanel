@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { type ComponentProps, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppDetails, appSaidAnything } from "./AppDetails";
+import { appWarnings, warningsTone } from "./AppWarnings";
 import { CallMap } from "./CallMap";
 import { CallsList } from "./CallsList";
 import { Button } from "./components/ui/button";
@@ -226,7 +227,11 @@ function callsTabs(calls: Partial<Record<CallsTabId, SystemCalls>>) {
 
 /** The App tab, when the app said anything about itself. */
 function appTab(app: App | null | undefined) {
-  return appSaidAnything(app) ? [{ id: "app" as const, label: "App", icon: <BoxIcon /> }] : [];
+  if (!appSaidAnything(app)) return [];
+  // What is wrong with the app, counted on its tab: none, no count.
+  const warnings = appWarnings(app);
+  const count = warnings.length ? { count: warnings.length, tone: warningsTone(warnings) } : {};
+  return [{ id: "app" as const, label: "App", icon: <BoxIcon />, ...count }];
 }
 
 /** The trace's tabs, in the order they show: each list's only when it has anything. */
