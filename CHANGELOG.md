@@ -381,6 +381,9 @@
   trace.
 - The pill's hover card stands on the pill: as wide as it (320 px at least)
   and with its edges on the pill's. Its left edge was 8 to 20 px off.
+- The sidebar's items read a little larger, 15 px in 34 px rows in both
+  themes (they were 14 px in dark and 13 px in light). Its group titles stay
+  small, and Problems stays pinned in view.
 
 ## 0.4.1 (2026-10-21)
 

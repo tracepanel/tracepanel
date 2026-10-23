@@ -359,9 +359,9 @@ function toneOf(section: Section): "error" | "warn" {
 function navClass(rail: boolean, current: boolean): string {
   return cn(
     "relative flex items-center rounded-lg font-medium whitespace-nowrap text-sidebar-foreground no-underline",
-    // The page's own text size, not larger: the list is a way around, the page is what's read.
-    // As a rail the same 32px rows as open: toggling moves nothing up or down, and a 1024px window shows them all.
-    rail ? "size-8 justify-center" : "h-8 gap-3 px-3.5 text-md light:text-base",
+    // 15px names in 34px rows, in both themes (the group titles stay small); as a rail the same rows: toggling moves
+    // nothing up or down.
+    rail ? "size-[2.125rem] justify-center" : "h-[2.125rem] gap-3 px-3.5 text-[1rem]",
     "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
     "focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none",
     current &&

@@ -126,3 +126,15 @@ test("a list loads in its own shape: the search, the filters and rows where they
   await expect(loading.locator(".dt-skeleton")).toHaveCount(11);
   await expect(page.getByRole("main").getByRole("heading", { name: "Database" })).toBeVisible();
 });
+
+for (const scheme of ["dark", "light"] as const) {
+  test(`the sidebar's items read at 15px in both themes, its group titles small (${scheme})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.goto("/#/endpoints");
+    const item = page.locator("aside nav").getByRole("link", { name: "HTTP", exact: true });
+
+    await expect(item).toHaveCSS("font-size", "15px");
+    await expect(page.locator("aside nav").getByText("Entry points")).not.toHaveCSS("font-size", "15px");
+    await expect(page.locator("aside nav").getByRole("link", { name: /^Issues/ })).toBeInViewport();
+  });
+}
