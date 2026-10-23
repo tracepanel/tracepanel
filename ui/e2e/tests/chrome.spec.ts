@@ -1,4 +1,6 @@
 // The console's frame: the period, the refresh, the theme, the sidebar, and a trace that isn't there.
+
+import { traceId } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
 
 test("the period goes into the search, and the list keeps it", async ({ page }) => {
@@ -74,4 +76,29 @@ test("a sidebar too long for the window fades at the edge it goes on past, and s
   await expect(issues).toBeInViewport();
 
   await expect.poll(() => nav.evaluate((element) => getComputedStyle(element).maskImage)).toContain("linear-gradient");
+});
+
+test("a trace, an issue, a group and an app open with their crumbs at one place, the page's full width", async ({
+  page,
+}) => {
+  const place = async () => {
+    const crumbs = page.getByRole("main").getByRole("navigation", { name: "Breadcrumb" });
+    await expect(crumbs).toBeVisible();
+    const box = await crumbs.boundingBox();
+    const main = await page.getByRole("main").locator("> *").first().boundingBox();
+    if (!(box && main)) throw new Error("no crumbs");
+    return [Math.round(box.x), Math.round(box.y), Math.round(main.x + main.width)];
+  };
+  await page.goto(`/#/t/${await traceId("GET /account/orders/")}`);
+  const trace = await place();
+  await page.goto("/#/issues");
+  await page.getByRole("main").locator("tbody tr").first().click();
+  const issue = await place();
+  await page.goto("/#/endpoints?view=overview");
+  await page.getByRole("main").locator("tbody tr").first().click();
+  const group = await place();
+  await page.goto("/#/app/shop");
+  const app = await place();
+
+  expect([issue, group, app]).toEqual([trace, trace, trace]);
 });

@@ -28,7 +28,7 @@ import { ENTRY } from "./sections";
 import { TimeRange } from "./TimeRange";
 import { TracesTable } from "./tables";
 import { rangeTerms } from "./time";
-import { Breadcrumbs, Loading, Meter, Mono, Tr } from "./ui";
+import { CrumbBar, Loading, Meter, Mono, Tr } from "./ui";
 
 type Group = TraceGroup | GraphqlDetail;
 
@@ -154,15 +154,13 @@ export function GroupPage({
     <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-9 px-10 pt-7 pb-16 *:min-w-0">
       {/* One column no wider than the page: a long error message or SQL wraps instead of widening it. */}
       <header className="grid gap-2">
-        <div className="flex items-center justify-between gap-3">
-          <Breadcrumbs
-            items={[
-              { label: entry.label, href: href({ name: section, q: period }) },
-              { label: crumb(section, groupKey) },
-            ]}
-          />
-          <RefreshControl />
-        </div>
+        <CrumbBar
+          items={[
+            { label: entry.label, href: href({ name: section, q: period }) },
+            { label: crumb(section, groupKey) },
+          ]}
+          actions={<RefreshControl />}
+        />
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="flex min-w-0 flex-1 items-center gap-3 font-mono text-2xl font-semibold">
             <Title section={section} groupKey={groupKey} />

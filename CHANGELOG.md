@@ -251,6 +251,10 @@
 - On the trace page the call tree, the Logs tab's table and the loading bar sit
   on the page's content edges, as the trace's head, tiles and tabs do. They
   stuck out 16 px on each side.
+- A trace, an issue, a group and an app open with one header: their crumbs at
+  one place, the same space above them and the page's full width. The crumbs sat
+  at three heights and an app's page was narrower. A headline's method or kind
+  is its own width, not a list's slot.
 
 ## 0.4.1 (2026-10-21)
 

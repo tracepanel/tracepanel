@@ -866,8 +866,8 @@ tr[data-new] {
 .dt-trace[data-variant="full"] .dt-trace-title {
   gap: 0.625rem;
 }
-/* A headline is no list: its method or kind is its own width, not a list's slot. */
-.dt-trace-title :is(.dt-method, .dt-kind) {
+/* A headline is no list: its method or kind is its own width, not a list's slot (a trace's, a group's). */
+:is(h1, h2, .dt-trace-title) :is(.dt-method, .dt-kind) {
   min-width: 0;
 }
 .dt-trace[data-variant="full"] .dt-trace-title h2 {

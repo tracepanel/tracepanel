@@ -185,7 +185,26 @@ export function LoadMore({ label, loading, onMore }: { label: string; loading: b
 }
 
 /** Where this page sits: section › item; earlier crumbs are links. */
-export function Breadcrumbs({ items }: { items: readonly { label: ReactNode; href?: string }[] }) {
+/**
+ * The top line of a page of one thing (a trace, an issue, a group, an app): its crumbs, and its own controls at the
+ * end. One height whatever the controls, so the crumbs sit at one place on every such page.
+ */
+export function CrumbBar({
+  items,
+  actions,
+}: {
+  items: readonly { label: ReactNode; href?: string }[];
+  actions?: ReactNode;
+}) {
+  return (
+    <div className="flex h-9 min-w-0 items-center justify-between gap-3">
+      <Breadcrumbs items={items} />
+      {actions}
+    </div>
+  );
+}
+
+function Breadcrumbs({ items }: { items: readonly { label: ReactNode; href?: string }[] }) {
   return (
     <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-md">
       {items.map((item, index) => (
