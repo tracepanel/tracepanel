@@ -1,27 +1,10 @@
 import type { ReactNode } from "react";
-import { Badge } from "./components/ui/badge";
 import { duration } from "./format";
-import { linkProps, type TraceLinks } from "./links";
+import { type TraceLinks, traceLinkProps } from "./links";
 import type { PropRow } from "./PropTable";
-import { MethodBadge, TaskName } from "./primitives";
+import { KindBadge, MethodBadge, StateBadge, TaskName } from "./primitives";
+import { RunChips } from "./RunChips";
 import type { TraceSummary } from "./types";
-
-/** A task run's outcome, as its badge colours it. */
-const STATE_TONE: Record<string, string> = {
-  success: "border-ok/30 bg-ok-soft text-ok",
-  failure: "border-error/30 bg-error-soft text-error",
-  retry: "border-warn/30 bg-warn-soft text-warn",
-};
-
-/** How a task run ended: success, failure, retry. */
-export function StateBadge({ state }: { state: string }) {
-  const shown = state.toLowerCase();
-  return (
-    <Badge variant="outline" className={STATE_TONE[shown] ?? ""}>
-      {shown}
-    </Badge>
-  );
-}
 
 /** Traces of the same kind and name as one: 36 deliveries to one listener, the first standing for them. */
 export interface Group {
@@ -30,13 +13,8 @@ export interface Group {
   failed: number;
 }
 
-function TraceBadge({ trace }: { trace: TraceSummary }) {
-  if (trace.kind === "http") return <MethodBadge method={trace.method} />;
-  return (
-    <Badge variant="outline" className="font-mono text-2xs uppercase">
-      {trace.kind}
-    </Badge>
-  );
+function LinkBadge({ trace }: { trace: TraceSummary }) {
+  return trace.kind === "http" ? <MethodBadge method={trace.method} /> : <KindBadge kind={trace.kind} />;
 }
 
 /** One alone: how a task run ended, or whether it failed. */
@@ -65,8 +43,8 @@ function Tally({ group: { first, count, failed } }: { group: Group }) {
 
 /** A linked trace's name: its path, else its name, a task's cut where a task's name is everywhere. */
 function LinkedName({ trace }: { trace: TraceSummary }) {
-  if (trace.kind === "task") return <TaskName name={trace.name} className="text-base" />;
-  return <span className="truncate font-mono text-base">{trace.path ?? trace.name}</span>;
+  if (trace.kind === "task") return <TaskName name={trace.name} className="text-xs" />;
+  return <span className="truncate font-mono text-xs">{trace.path ?? trace.name}</span>;
 }
 
 /** A linked trace (or a group of them) on one line, a link to it where the host gives one; `note` after its name. */
@@ -82,18 +60,16 @@ export function LinkedTrace({
   const trace = group.first;
   const body = (
     <span className="flex min-w-0 items-center gap-2">
-      <TraceBadge trace={trace} />
+      <LinkBadge trace={trace} />
       <LinkedName trace={trace} />
       {note}
+      {group.count === 1 ? <RunChips trace={trace} /> : null}
       <Tally group={group} />
     </span>
   );
   if (!links?.trace) return body;
   return (
-    <a
-      className="block w-full rounded-md py-0.5 text-left hover:bg-accent"
-      {...linkProps(links, links.trace(trace.id))}
-    >
+    <a className="block w-full rounded-md py-0.5 text-left hover:bg-accent" {...traceLinkProps(links, trace.id)}>
       {body}
     </a>
   );

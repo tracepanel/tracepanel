@@ -2,6 +2,8 @@
    light/dark switch (html[data-theme]) and the tracepanel palette stay the single source of truth. */
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+/* What only the light theme does (a control raised on white by a shadow where the dark one fills it). */
+@custom-variant light (&:where([data-theme="light"], [data-theme="light"] *));
 
 /* Component classes live in this package: let Tailwind find them wherever the app builds from. */
 @source "./";
@@ -27,13 +29,17 @@
   /* No focus rings: a focused control keeps its own border colour (see the console's index.css). */
   --ring: var(--dt-border);
   --radius: 0.625rem;
-  --sidebar: var(--dt-chrome);
+  --sidebar: var(--dt-sidebar, var(--dt-chrome));
   --sidebar-foreground: var(--dt-text-2);
   --sidebar-accent: var(--dt-hover);
   --sidebar-accent-foreground: var(--dt-text);
   --sidebar-border: var(--dt-border);
   --chart-1: var(--dt-chart-1);
   --chart-2: var(--dt-chart-2);
+}
+/* The light theme's corners a little squarer: hairline boxes on white, not soft cards. */
+:root[data-theme="light"] {
+  --radius: 0.5rem;
 }
 
 @theme inline {

@@ -79,6 +79,14 @@
   the runs from the one asked for, by the same ids, at most 100 of them, and
   sends them in `workflow.graph`: the nodes, the edges between them and
   whether it was cut. A snapshot carries every run the graph shows.
+- A request's tasks in the panel. A task's row in the call tree and under
+  Related traces names what its own trace found (N+1, Long transaction,
+  Error…) and its queries, as the lists do. In the panel a task opens in the
+  panel itself, with a way back to the request (Back, or Esc). The panel's
+  list nests the runs a request sent under it as the workers record them,
+  and a request whose tasks found something says so beside its own count,
+  in its row and on the pill: "3 issues in its tasks". The agent lists a
+  trace's runs (those it enqueued, and theirs) with `api/traces?ids=…&runs=1`.
 
 ### Changed
 
@@ -138,6 +146,29 @@
   or aiodataloader (async) for Graphene, and a DataLoader with no library
   named for any other. It said Strawberry's on every GraphQL trace before.
   The library comes from `graphql.library`, which the Python SDK records.
+- A trace's info tab reads as one page, in the console and in the panel: its
+  facts, Related traces, Workflow and Attributes share one heading style and one
+  row, a name in a muted column and a hairline under it, with no boxes or bands
+  of capitals. An attribute's namespace is a quiet heading over its rows. Only
+  ids, paths and code are in monospace, and a body or a document keeps its box.
+- One badge for a trace's kind and one for a task's state, wherever they show:
+  the lists, the call tree, Related traces, the panel, ⌘K and Now. TASK, JOB,
+  WS, RPC, GQL, PAGE and a request's method share a shape and a colour, a span's
+  kind in the call tree is a muted one of the same, and a failed run says
+  "failure" everywhere.
+- The call tree's details read as a trace's info tab does: a call's fields,
+  its attributes, a template's context and a linked run's facts in the same
+  rows under the same headings, with no boxes. A request in a workflow's graph
+  shows its method in the call tree's muted badge, and in Tasks a system and
+  a worker in Now are the same neutral tag, labels rather than buttons.
+- A crisp light theme: a white page and sidebar drawn with hairlines, no
+  shadows, near-black text and one grey for labels. Lists have denser rows, a
+  white header over a strong rule and smaller filter chips. A method or a
+  trace's kind is its colour in monospace and a status a dot before its code,
+  the same in lists, a trace's header, its related traces and the panel. Issue
+  chips and a call's kind keep a soft square fill. The current page in the
+  sidebar is a grey row, the open tab is underlined in near-black and page
+  titles are smaller. The dark theme is as it was.
 
 ### Fixed
 
@@ -196,6 +227,48 @@
   them when they fork together, no longer leave two running: the first holds
   `agent.lock` in the store's directory, the others exit at once with status
   3, and every process sends to that one, which the console shows live.
+- A list fits a narrow window. Below 1280 px the sidebar is a rail until the
+  reader opens it, a choice kept for narrow windows apart from wide ones. A
+  column of numbers, a status or a badge keeps its width, a list's minor columns
+  (Queries, Issues, First seen and the like) are left out while there is no room
+  for them and come back when there is, and a call's name is cut with an
+  ellipsis before its alias. At 1024 px every column was cut mid-word.
+- Nothing is cut mid-word at 1440 px. A request's issue chips show the ones that
+  fit and how many more, all of them named on hover. A call's alias and template
+  chips keep their size while the call's text beside them is cut, in the call
+  tree and the DB tab. The WebSockets table's headers are whole, and a dotted
+  attribute name such as `db.transaction.savepoint` wraps after a dot, not
+  inside a word.
+- The sidebar shows its Problems at 1440 × 900. Its items are 32 px tall with
+  tighter gaps, a list longer than the column fades at the edge it goes on past
+  and keeps the current page in view, and its footer reads "Local ·
+  .tracepanel/" on one line, starting where the items' icons do. Errors and
+  Issues fell below the fold with nothing to say so.
+- Names in a list start at one edge. A method or a trace's kind before a name
+  takes one slot, as wide as PATCH, in both themes, in the tables, the overview
+  lists, the Logs page's Source and ⌘K: a path after GQL started 14 px left of
+  one after PATCH.
+- On the trace page the call tree, the Logs tab's table and the loading bar sit
+  on the page's content edges, as the trace's head, tiles and tabs do. They
+  stuck out 16 px on each side.
+- A trace, an issue, a group and an app open with one header: their crumbs at
+  one place, the same space above them and the page's full width. The crumbs sat
+  at three heights and an app's page was narrower. A headline's method or kind
+  is its own width, not a list's slot.
+- A call's details in the call tree give its fields, Called from, a template's
+  context and all its attributes one column of names, so every value starts at
+  one edge. Each list sized its own, and their values started at different
+  places.
+- Columns share the room by what they hold. On Issues an issue's title has the
+  room and Endpoints is narrower, its title wrapping in two lines rather than
+  three. On Emails a request's path in Sent from shows whole. The Logs page's
+  Source column cuts every source at its start, as a task's name is, and never
+  leaves a dot after the ellipsis: "….Thumbnail" reads "…Thumbnail".
+- Names in a list start at one edge on Linux too. The slot a method or a
+  trace's kind takes is sized in the badge's own font, as wide as DELETE: it
+  fit PATCH by half a pixel on macOS and missed it on Linux. In a narrow call
+  tree an issue's chip is cut with an ellipsis rather than past the row's
+  name.
 
 ## 0.4.1 (2026-10-21)
 

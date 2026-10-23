@@ -1,5 +1,7 @@
+import { useContext } from "react";
 import { shownValue } from "./lib/pyliteral";
-import { NAME_VALUE_COLUMNS, NameValues } from "./NameValues";
+import { cn } from "./lib/utils";
+import { NAME_VALUE_COLUMNS, NameValues, RowsLookContext } from "./NameValues";
 import type { Attrs } from "./types";
 
 // A trace's attributes by namespace, one look wherever they show: the Request tab's Attributes and the call tree's
@@ -21,15 +23,36 @@ function grouped(attrs: Attrs): [string, { name: string; value: unknown }[]][] {
   return [...groups].sort(([a], [b]) => Number(a === "other") - Number(b === "other"));
 }
 
+// A namespace's sub-heading, in its own case as the page's sections are headed: a band across the card; on the page,
+// a quiet line.
+const HEADINGS = {
+  card: "border-b bg-muted/40 px-3 py-1 text-xs font-medium text-foreground",
+  plain: "border-b pt-4 pb-1.5 text-xs font-medium text-foreground",
+} as const;
+
 /** A card's rows under their namespaces: a sub-heading each, names lined up across them. */
 export function AttributeGroups({ attrs }: { attrs: Attrs }) {
+  const look = useContext(RowsLookContext);
   const groups = grouped(attrs);
-  if (!groups.length) return <p className="px-3 py-2 text-xs text-muted-foreground">No other attributes.</p>;
+  if (!groups.length) {
+    return (
+      <p className={cn("text-xs text-muted-foreground", look === "card" ? "px-3 py-2" : "py-2")}>
+        No other attributes.
+      </p>
+    );
+  }
   return (
     <div className={NAME_VALUE_COLUMNS}>
       {groups.map(([space, rows]) => (
-        <section key={space} className="col-span-3 grid grid-cols-subgrid border-t first:border-t-0" aria-label={space}>
-          <h4 className="col-span-3 flex items-baseline gap-1.5 border-b bg-muted/40 px-3 py-1 text-[11px] font-semibold tracking-wider text-foreground/80 uppercase">
+        <section
+          key={space}
+          className={cn(
+            "col-span-3 grid grid-cols-subgrid",
+            look === "card" ? "border-t first:border-t-0" : "first:[&>h4]:pt-1",
+          )}
+          aria-label={space}
+        >
+          <h4 className={cn("col-span-3 m-0 flex items-baseline gap-1.5", HEADINGS[look])}>
             {space}
             <span className="font-normal text-muted-foreground tabular-nums">{rows.length}</span>
           </h4>

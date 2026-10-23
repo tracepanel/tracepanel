@@ -1,7 +1,8 @@
 import { useId, useMemo } from "react";
 import { duration } from "./format";
 import { plural } from "./lib/plural";
-import { linkProps, type TraceLinks } from "./links";
+import { linkProps, type TraceLinks, traceLinkProps } from "./links";
+import { KindBadge } from "./primitives";
 import type { Related } from "./types";
 
 type WorkflowGraphData = NonNullable<NonNullable<Related["workflow"]>["graph"]>;
@@ -234,14 +235,13 @@ function stateOf(trace: GraphNode["trace"]): string {
   return trace.status === "error" ? "failure" : (trace.task_state ?? "").toLowerCase();
 }
 
-/** What starts the box: a request's method, else its state as a dot (in words for a screen reader). */
+/**
+ * What starts the box: a request's method in the muted badge the call tree names its calls with, else its state as a
+ * dot (in words for a screen reader).
+ */
 function Mark({ node }: { node: GraphNode }) {
   const trace = node.trace;
-  if (trace.kind === "http") {
-    return (
-      <span className="shrink-0 font-mono text-2xs font-semibold text-muted-foreground uppercase">{trace.method}</span>
-    );
-  }
+  if (trace.kind === "http") return <KindBadge kind={String(trace.method ?? "")} muted={true} className="shrink-0" />;
   return <StateDot state={stateOf(trace)} />;
 }
 
@@ -316,7 +316,7 @@ function titleOf(node: GraphNode): string {
 
 /** Where its trace opens, when the host links traces. */
 function traceLink(links: TraceLinks | undefined, node: GraphNode) {
-  return links?.trace ? linkProps(links, links.trace(node.trace.id)) : undefined;
+  return traceLinkProps(links, node.trace.id);
 }
 
 function RunBody({ node }: { node: GraphNode }) {

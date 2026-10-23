@@ -7,7 +7,7 @@ import { PeriodChip } from "./PeriodChip";
 import { consoleLinks, href, traceHref } from "./routes";
 import { TraceScreen } from "./TraceScreen";
 import { TracesTable } from "./tables";
-import { Breadcrumbs, Loading, Mono, Reveal } from "./ui";
+import { CrumbBar, Loading, Mono, Reveal } from "./ui";
 
 /** One issue, Sentry-style: what and where, how often, its latest occurrence, and every request it happened in. */
 export function IssuePage({
@@ -51,7 +51,7 @@ export function IssuePage({
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-9 px-10 pt-7 pb-16 *:min-w-0">
         {/* One column no wider than the page: a long error message or SQL wraps instead of widening it. */}
         <header className="grid grid-cols-[minmax(0,1fr)] gap-3 *:min-w-0">
-          <Breadcrumbs
+          <CrumbBar
             items={[
               error
                 ? { label: "Errors", href: href({ name: "errors", q: period }) }

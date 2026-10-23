@@ -43,10 +43,22 @@ export function StatusBadge({ status }: { status: number | null | undefined }) {
   );
 }
 
-export function IssueChip({ kind, count }: { kind: IssueKind; count?: number | undefined }) {
+/** An issue chip that gives way last in a row too narrow for it, cut with an ellipsis. */
+export const ISSUE_CHIP_SHRINKS = "min-w-0 shrink justify-start";
+
+export function IssueChip({
+  kind,
+  count,
+  className,
+}: {
+  kind: IssueKind;
+  count?: number | undefined;
+  /** `ISSUE_CHIP_SHRINKS` in a row too narrow for it: cut with an ellipsis, not past the row's edge. */
+  className?: string | undefined;
+}) {
   return (
-    <Badge variant={kind === "error" ? "error" : "warn"} size="compact" data-kind={kind}>
-      {ISSUE_LABELS[kind]}
+    <Badge variant={kind === "error" ? "error" : "warn"} size="compact" data-kind={kind} className={className}>
+      <span className="truncate">{ISSUE_LABELS[kind]}</span>
       {count !== undefined && count > 1 ? <span className="opacity-75">{count}</span> : null}
     </Badge>
   );
@@ -123,16 +135,92 @@ export function Empty({ title, children, action }: { title: string; children?: R
   );
 }
 
-/** What a trace is where a request shows its method: a task, a job, a WebSocket, a GraphQL operation. One badge in
- * the console's lists and the panel's. */
-export function KindBadge({ kind }: { kind: string }) {
+/** A section's heading wherever a trace's details are shown: its info tab and the call tree's pane. */
+export function SectionHeading({ children }: { children: ReactNode }) {
+  return <h3 className="m-0 text-sm font-medium text-foreground">{children}</h3>;
+}
+
+// A trace's kind in the word its badge shows: a job, a WebSocket, a GraphQL operation in short.
+const KIND_WORDS: Record<string, string> = { command: "job", websocket: "ws", graphql: "gql" };
+const KINDS = new Set(["task", "job", "ws", "gql", "rpc", "page"]);
+
+/**
+ * What a trace is where a request shows its method: a task, a job, a WebSocket, a GraphQL operation. One badge
+ * wherever a trace is named (lists, its header, related traces, the call tree, search, the panel), the method's own
+ * shape in the brand's colour. `muted`: what a call is in the call tree (a view, a query, a task enqueued), the same
+ * shape, quiet, so the traces it links to stand out among its calls.
+ */
+export function KindBadge({
+  kind,
+  muted = false,
+  className,
+}: {
+  kind: string;
+  muted?: boolean | undefined;
+  className?: string | undefined;
+}) {
+  // A call's kind is its own word (a span may be a "command"); a trace's in short.
+  const word = muted ? kind : shortKind(kind);
   return (
-    <Badge
-      variant="outline"
-      className="h-[1.375rem] rounded-md border-brand/30 bg-brand-soft px-1.5 font-mono text-2xs text-brand uppercase"
-    >
-      {{ command: "job", websocket: "ws", graphql: "gql" }[kind] ?? kind}
-    </Badge>
+    <span className={cn("dt-kind", className)} data-muted={muted ? "" : undefined}>
+      {word}
+    </span>
+  );
+}
+
+/**
+ * A label in a muted KindBadge's shape and colour, in its own case: a worker in Tasks' Now, with what it does. A label,
+ * not a button.
+ */
+export function NeutralTag({
+  children,
+  title,
+  className,
+}: {
+  children: ReactNode;
+  title?: string | undefined;
+  className?: string | undefined;
+}) {
+  return (
+    <span className={cn("dt-kind normal-case", className)} data-muted="" title={title}>
+      {children}
+    </span>
+  );
+}
+
+/** A trace's badge from its word: a method (GET, CLICK) as a method, a kind (TASK, JOB, WS, GQL) as a kind. */
+export function TraceBadge({ word, htmx }: { word: string | null | undefined; htmx?: "request" | "boosted" | null }) {
+  const kind = shortKind(String(word ?? ""));
+  return KINDS.has(kind) ? <KindBadge kind={kind} /> : <MethodBadge method={word} htmx={htmx} />;
+}
+
+/** A trace's kind in its badge's word: command -> job, TASK -> task. */
+function shortKind(kind: string): string {
+  const lower = kind.toLowerCase();
+  return KIND_WORDS[lower] ?? lower;
+}
+
+// A task's state in its tone: done, failed, retried; in flight (Tasks' Now) running or waiting in its queue.
+const STATE_TONES: Record<string, string> = {
+  success: "ok",
+  failure: "error",
+  retry: "warn",
+  retrying: "warn",
+  running: "brand",
+  queued: "neutral",
+  skipped: "info",
+};
+
+/**
+ * How a task run ended (success, failure, retry) or where one in flight is (running, queued): one badge wherever a
+ * task's state shows (lists, its header and facts, related traces, the call tree, Now), a request's status's shape.
+ */
+export function StateBadge({ state }: { state: string }) {
+  const shown = state.toLowerCase();
+  return (
+    <span className="dt-status" data-tone={STATE_TONES[shown] ?? "neutral"}>
+      {shown}
+    </span>
   );
 }
 
@@ -183,7 +271,14 @@ export function TaskName({ name, className }: { name: string; className?: string
 function startCut(element: HTMLElement, name: string): void {
   // Not laid out (hidden, or not in the page yet): whole, until it has a width.
   if (fits(element, name) || element.clientWidth === 0) return;
-  element.textContent = `…${name.slice(fewestDropped(element, name))}`;
+  element.textContent = `…${name.slice(afterSeparator(name, fewestDropped(element, name)))}`;
+}
+
+/** Where a cut name starts: past a dot right after the "…", so it never reads "….Thumbnail". */
+function afterSeparator(name: string, from: number): number {
+  let start = from;
+  while (start < name.length - 1 && name[start] === ".") start += 1;
+  return start;
 }
 
 /** Whether `text` fits in `element`'s width, left in it to show. */

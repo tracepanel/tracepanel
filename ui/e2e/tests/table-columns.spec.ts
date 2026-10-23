@@ -214,10 +214,11 @@ test("every list's header and rows look as the logs table's do, the logs' rows c
   // The logs are a stream read many lines at once: rows of one line with little room around it.
   expect(logs.body.height).toBe(`${0.375 * rem}px`);
 
+  // The records' rows: denser on white (the tests' theme), 0.75rem in the dark one.
   for (const url of ["/#/endpoints?view=overview", "/#/tasks?view=overview", "/#/calls/sql", "/#/endpoints"]) {
     await open(page, url);
 
-    expect(await looks(page)).toEqual({ ...logs, body: { ...logs.body, height: `${0.75 * rem}px` } });
+    expect(await looks(page)).toEqual({ ...logs, body: { ...logs.body, height: `${0.5 * rem}px` } });
   }
 });
 
@@ -322,3 +323,76 @@ test("a narrow column's hover buttons sit beside its name, not over it, and the 
     expect(button.x + button.width <= after.x || button.x >= after.x + after.width).toBe(true);
   }
 });
+
+test("at 1024 px the sidebar is a rail and the HTTP list cuts no header, badge or number", async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await open(page, "/#/endpoints");
+  const cut = (selector: string) =>
+    main(page)
+      .getByRole("table")
+      .first()
+      .locator(selector)
+      .evaluateAll((elements) =>
+        elements.filter((element) => element.scrollWidth > element.clientWidth).map((element) => element.textContent),
+      );
+
+  await expect(page.getByRole("button", { name: "Expand the sidebar" })).toBeVisible();
+
+  expect(await cut("th span.truncate")).toEqual([]);
+  expect(await cut(".dt-method, .dt-kind, .dt-status, [data-slot=badge]")).toEqual([]);
+  expect(await cut("td.text-right")).toEqual([]);
+});
+
+test("at 1024 px the sidebar the reader opened stays open, and a narrow list leaves its minor columns out", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await open(page, "/#/endpoints");
+  await page.getByRole("button", { name: "Expand the sidebar" }).click();
+  await open(page, "/#/endpoints");
+
+  await expect(page.getByRole("button", { name: "Collapse the sidebar" })).toBeVisible();
+  await expect(header(page, "Queries")).toHaveCount(0);
+  await expect(header(page, "Status")).toBeVisible();
+});
+
+test("a row's issue chips are whole: the ones that fit, then how many more, all of them named on hover", async ({
+  page,
+}) => {
+  await open(page, "/#/endpoints");
+  const issues = await header(page, "Issues").evaluate((head) => (head as HTMLTableCellElement).cellIndex);
+  const cells = await main(page)
+    .locator("tbody tr")
+    .evaluateAll(
+      (rows, index) =>
+        rows.flatMap((row) => {
+          const cell = (row as HTMLTableRowElement).cells[index];
+          const chips = Array.from(cell?.querySelectorAll("[data-slot=badge]:not([aria-hidden] *)") ?? []);
+          if (!cell || chips.length === 0) return [];
+          const right = cell.getBoundingClientRect().right - Number.parseFloat(getComputedStyle(cell).paddingRight);
+          return [chips.every((chip) => chip.getBoundingClientRect().right <= right + 0.5)];
+        }),
+      issues,
+    );
+
+  expect(cells.length).toBeGreaterThan(0);
+  expect(cells.every(Boolean)).toBe(true);
+});
+
+for (const scheme of ["dark", "light"] as const) {
+  test(`a list's names start at one edge whatever the method or kind before them (${scheme})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await open(page, "/#/endpoints");
+    const starts = await main(page)
+      .locator("tbody td:first-child > span > :is(.dt-method, .dt-kind):first-child")
+      .evaluateAll((badges) =>
+        badges.map((badge) => Math.round(badge.nextElementSibling?.getBoundingClientRect().left ?? 0)),
+      );
+    const words = await main(page)
+      .locator("tbody td:first-child > span > :is(.dt-method, .dt-kind):first-child")
+      .allTextContents();
+
+    expect(new Set(words).size).toBeGreaterThan(2);
+    expect(new Set(starts).size).toBe(1);
+  });
+}

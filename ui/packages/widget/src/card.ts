@@ -313,6 +313,29 @@ export function mountCard(root: ShadowRoot, badge: HTMLElement, source: CardSour
     return section;
   }
 
+  /** What its task runs found, apart from its own: a click opens its call tree, where they hang under it. */
+  function taskFindings(info: TraceInfo): HTMLElement[] {
+    const traceId = info.trace;
+    if (!(info.taskIssues && traceId)) return [];
+    const section = element("section", "card-section");
+    section.append(element("p", "card-caption", "In its tasks"));
+    const row = element("button", "card-row");
+    row.type = "button";
+    const label = plural(info.taskIssues, "issue", "issues");
+    row.append(
+      element("span", "card-kind", label),
+      element("span", "card-title", "found by the tasks it enqueued"),
+      element("span", "card-count"),
+    );
+    row.title = `${label} in its tasks\nClick to open its call tree in the panel`;
+    row.addEventListener("click", () => {
+      hide(true);
+      source.open(`#/t/${traceId}?tab=tree`);
+    });
+    section.append(row);
+    return [section];
+  }
+
   function otherRequests(later: readonly TraceInfo[]): HTMLElement | null {
     const page = source.page();
     if (later.length === 0) return null;
@@ -363,6 +386,7 @@ export function mountCard(root: ShadowRoot, badge: HTMLElement, source: CardSour
     else if (loading) card.append(element("div", "card-skeleton"), element("div", "card-skeleton"));
     const fixes = trace ? findings(info, trace) : null;
     if (fixes) card.append(fixes);
+    card.append(...taskFindings(info));
     const after = otherRequests(later);
     if (after) card.append(after);
   }

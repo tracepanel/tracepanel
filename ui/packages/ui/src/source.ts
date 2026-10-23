@@ -45,6 +45,12 @@ const EMPTY_OVERVIEW: TracesOverview = {
 };
 // biome-ignore-end lint/style/useNamingConvention: wire format.
 
+/** Traces by id, and the task runs each led to. */
+export interface TracesWithRuns {
+  traces: TraceSummary[];
+  runs: Record<string, TraceSummary[]>;
+}
+
 /** A search query the API rejected (unknown filter, bad value): `message` is meant for the user. */
 export class SearchError extends Error {}
 
@@ -54,6 +60,11 @@ export class SearchError extends Error {}
  */
 export interface DataSource {
   listTraces(query?: { ids?: readonly string[]; limit?: number }): Promise<TraceSummary[]>;
+  /**
+   * These traces, and the task runs each led to, by its id (those it enqueued, and theirs): the panel's list nests
+   * them under their request. Optional: without it the list has no runs.
+   */
+  listTracesWithRuns?: (ids: readonly string[]) => Promise<TracesWithRuns>;
   searchTraces(q: string, before?: number | null): Promise<Page<TraceSummary>>;
   getTrace(id: string): Promise<Trace | null>;
   searchLogs(q: string, before?: number | null): Promise<Page<LogRow>>;
@@ -197,6 +208,11 @@ export function httpSource(base: string | URL): DataSource {
     async listTraces(query = {}) {
       const params = { ids: query.ids?.length ? query.ids.join(",") : undefined, limit: query.limit };
       return (await getJson<{ traces: TraceSummary[] }>(url("traces", params)))?.traces ?? [];
+    },
+    async listTracesWithRuns(ids) {
+      const params = { ids: ids.join(","), limit: ids.length, runs: 1 };
+      const body = (await getJson<Partial<TracesWithRuns>>(url("traces", params))) ?? {};
+      return { traces: body.traces ?? [], runs: body.runs ?? {} };
     },
     async searchTraces(q, before) {
       const body = await getJson<{ traces: TraceSummary[]; next: number | null }>(url("traces", { q, before }));

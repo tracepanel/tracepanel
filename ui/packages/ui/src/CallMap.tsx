@@ -21,11 +21,21 @@ import { percent, widthOf } from "./lib/percent";
 import { traceRuntime } from "./lib/runtime";
 import { isReceiver, raised } from "./lib/signals";
 import { CALL_KINDS, DATASTORES, MESSAGING, RPC } from "./lib/systems";
-import { linkProps, type TraceLinks } from "./links";
-import { type NameValue, NameValues } from "./NameValues";
+import { type TraceLinks, traceLinkProps } from "./links";
+import { type NameValue, NameValues, RowsLookContext } from "./NameValues";
 import { PropTable } from "./PropTable";
-import { AliasChip, AppChip, IssueChip, TaskName, TemplateChip } from "./primitives";
+import {
+  AliasChip,
+  AppChip,
+  ISSUE_CHIP_SHRINKS,
+  IssueChip,
+  KindBadge,
+  StateBadge,
+  TaskName,
+  TemplateChip,
+} from "./primitives";
 import { isRequestDetail, RequestParts, requestParts } from "./RequestParts";
+import { RunChips } from "./RunChips";
 import { SideResize, useSideWidth } from "./SideResize";
 import { SignalNotes } from "./SignalNotes";
 import { SqlCode } from "./SqlCode";
@@ -498,6 +508,8 @@ function runView(node: Extract<Node, { type: "task" }>, trace: Trace): LinkedVie
         )}
         <TaskState state={node.run.task_state} />
         {node.kind === "call" ? <CallApp node={node} /> : null}
+        {/* What its own trace found, before it is opened. */}
+        <RunChips trace={node.run} />
       </>
     ),
     track: <Bar trace={trace} start={node.run.start} length={node.run.duration} />,
@@ -586,7 +598,7 @@ function LinkedButton({
     >
       <span className="dt-map-name" style={indent}>
         <Caret open={open} onToggle={() => ctx.onToggle(node.key)} />
-        <span className="dt-map-kind">{view.kind}</span>
+        <KindBadge kind={view.kind} muted={view.kind !== "task"} className="dt-map-kind" />
         {view.text}
       </span>
       {view.track}
@@ -699,7 +711,7 @@ function LeafRow({
       >
         <span className="dt-map-name" style={indent}>
           <span className="dt-map-caret" />
-          <span className="dt-map-kind">{view.level}</span>
+          <KindBadge kind={view.level} muted={true} className="dt-map-kind" />
           <span className="dt-map-text">{view.text}</span>
         </span>
         <Bar trace={ctx.trace} start={view.time} length={0} point={true} />
@@ -718,12 +730,12 @@ function GroupName({ node, ctx }: { node: Extract<Node, { type: "group" }>; ctx:
   const first = node.spans[0];
   return (
     <>
-      <span className="dt-map-kind">{spanKindLabel(first?.kind, ctx.trace.attrs)}</span>
+      <KindBadge kind={spanKindLabel(first?.kind, ctx.trace.attrs)} muted={true} className="dt-map-kind" />
       <span className="dt-map-text">{callTemplate(first)}</span>
       <AliasChip value={aliasOf(first)} />
       {first ? <TemplateChip attrs={first.attrs} /> : null}
       <span className="dt-map-times">×{node.spans.length}</span>
-      {issue ? <IssueChip kind={issue} /> : null}
+      {issue ? <IssueChip kind={issue} className={ISSUE_CHIP_SHRINKS} /> : null}
     </>
   );
 }
@@ -839,12 +851,16 @@ function SpanRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps
       >
         <span className="dt-map-name" style={indent}>
           <Caret open={fold} onToggle={() => ctx.onToggle(node.key)} />
-          <span className="dt-map-kind">{spanKindLabel(span.kind, ctx.trace.attrs, parent?.kind)}</span>
+          <KindBadge
+            kind={spanKindLabel(span.kind, ctx.trace.attrs, parent?.kind)}
+            muted={true}
+            className="dt-map-kind"
+          />
           <SpanName span={span} />
           <AliasChip value={aliasOf(span)} />
           <TemplateChip attrs={span.attrs} />
           <SignalNotes span={span} parent={parent} under={childSpans(node)} />
-          {issue ? <IssueChip kind={issue} /> : null}
+          {issue ? <IssueChip kind={issue} className={ISSUE_CHIP_SHRINKS} /> : null}
         </span>
         <Bar trace={ctx.trace} start={span.start} length={span.duration} />
         <span className="dt-map-time">{duration(span.duration)}</span>
@@ -893,12 +909,7 @@ function foldKeys(open: boolean | undefined, toggle: () => void): (event: Keyboa
 }
 
 function TaskState({ state }: { state: string | null }) {
-  if (!state) return null;
-  return (
-    <span className="dt-map-state" data-state={state.toLowerCase()}>
-      {state.toLowerCase()}
-    </span>
-  );
+  return state ? <StateBadge state={state} /> : null;
 }
 
 /* ---------- details of the selected row ---------- */
@@ -967,9 +978,9 @@ function OpenRun({
       </a>
     );
   }
-  const open = links?.trace;
+  const open = traceLinkProps(links, run.id);
   return open ? (
-    <a className="dt-map-open" {...linkProps(links, open(run.id))}>
+    <a className="dt-map-open" {...open}>
       {words.open}
     </a>
   ) : null;
@@ -995,7 +1006,7 @@ function RunDetails({
         {words.what} · started {duration(Math.max(run.start - trace.start, 0))} after this request · took{" "}
         {duration(run.duration)}
       </p>
-      <PropTable rows={runRows(run, words.label)} />
+      <PropTable dense rows={runRows(run, words.label)} />
       <OpenRun run={run} words={words} links={links} remote={remote} />
     </div>
   );
@@ -1007,7 +1018,7 @@ function WaitingDetails({ span }: { span: Span }) {
   return (
     <div className="grid gap-3 p-4">
       <p className="dt-map-details-title">task · enqueued, not run yet</p>
-      <PropTable rows={[{ label: "Task", value: name, copy: name, mono: true }]} />
+      <PropTable dense rows={[{ label: "Task", value: name, copy: name, mono: true }]} />
       <p className="text-sm text-muted-foreground">It shows up here once a worker has run it (is a worker running?).</p>
     </div>
   );
@@ -1144,20 +1155,21 @@ function CallDetails({ node: { span }, trace }: DetailsProps<"span">) {
 
 /**
  * The trace's attributes on its request row, as its Request tab shows them: the same parts behind the same switch
- * (Headers, Query, Body, Cookies, Session, Response, Attributes). The GraphQL document is shown formatted above.
+ * (Headers, Query, Body, Cookies, Session, Response, Attributes), in the same rows, no box. The GraphQL document is
+ * shown formatted above.
  */
 function RootAttributes({ attrs }: { attrs: Attrs }) {
   const { "graphql.document": _, ...rest } = attrs;
   const others = Object.fromEntries(Object.entries(rest).filter(([key]) => !isRequestDetail(key)));
-  return <RequestParts parts={requestParts(rest, others)} />;
+  return <RequestParts parts={requestParts(rest, others)} look="plain" />;
 }
 
-/** A call's fields in words, in a card: the one look of every list of names and values. */
+/** A call's fields in words, in the rows of a trace's info tab: no box around them. */
 function Fields({ rows }: { rows: readonly NameValue[] }) {
   return (
-    <div className="overflow-hidden rounded-lg border bg-card">
+    <RowsLookContext value="plain">
       <NameValues rows={rows} />
-    </div>
+    </RowsLookContext>
   );
 }
 

@@ -27,6 +27,8 @@ export interface TraceScreenProps {
   initialTab?: TraceViewProps["initialTab"];
   preferredTab?: TraceViewProps["preferredTab"];
   actions?: TraceViewProps["actions"];
+  /** In the panel, before the tabs: the way back to the trace this one was opened from. */
+  lead?: TraceViewProps["lead"];
   /** Where linked traces, issues, statements and logs lead. */
   links?: TraceViewProps["links"];
   /** A span to open in the call tree. */
@@ -94,6 +96,15 @@ function explainer(source: DataSource, traceId: string, explainable: boolean) {
   return explainable ? (span: string, analyze: boolean) => source.explain(traceId, span, analyze) : undefined;
 }
 
+/** The loading bar: on the page inset as the trace's head will be, across the panel. */
+function TraceLoading({ variant }: { variant: TraceScreenProps["variant"] }) {
+  return (
+    <div className={variant === "full" ? "app-loading mx-4" : "app-loading"} role="status">
+      <span className="sr-only">Loading</span>
+    </div>
+  );
+}
+
 /**
  * The trace, once loaded (null when it is gone), retried briefly while it may not be stored yet. The trace on screen
  * stays until the next one is loaded: following new requests swaps one for the other instead of blinking through an
@@ -144,6 +155,7 @@ export function TraceScreen({
   back,
   shareable,
   onLoaded,
+  ...shown
 }: TraceScreenProps) {
   const trace = useTrace(id, source, onLoaded);
   const related = useRelated(id, source);
@@ -151,13 +163,7 @@ export function TraceScreen({
   const app = useApp(source, serviceOf(trace, variant));
   // EXPLAIN only where the app behind the console runs it.
   const explainable = useCapability(source, "explain");
-  if (trace === undefined) {
-    return (
-      <div className="app-loading" role="status">
-        <span className="sr-only">Loading</span>
-      </div>
-    );
-  }
+  if (trace === undefined) return <TraceLoading variant={variant} />;
   if (trace === null) {
     return (
       <Empty title="Trace not found" action={back}>
@@ -176,6 +182,7 @@ export function TraceScreen({
       initialTab={initialTab}
       preferredTab={preferredTab}
       actions={withShare(trace, source, actions, shareable === true)}
+      {...shown}
       related={related(trace.id)}
       links={links}
       initialSpan={initialSpan}

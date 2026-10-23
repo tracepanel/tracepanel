@@ -165,6 +165,7 @@ function leading<R extends LogLike>(
       id: "logger",
       label: "Logger",
       width: 10.5,
+      drop: 2,
       cell: (log) => <span className="font-mono text-muted-foreground">{log.logger}</span>,
     },
   ];
@@ -615,10 +616,9 @@ export function LogTable<R extends LogLike>({
   const [mode, setMode] = useStored(`tracepanel:columns:${table}:time`, readTime);
   const [picked, setPicked] = useStored(`tracepanel:columns:${table}:attributes`, readKeys);
   const all = [...leading<R>(mode, start, highlight), ...extra, ...attributeColumns<R>(picked), ...trailing<R>()];
-  const columns = useColumns(table, all);
-  const shown = columns.shown;
   // The columns menu has a column of its own.
-  const { ref, widths } = useColumnWidths(columns, MENU_REM);
+  const { ref, columns, widths } = useColumnWidths(useColumns(table, all), MENU_REM);
+  const shown = columns.shown;
   const reset = () => {
     columns.reset();
     setMode("clock");

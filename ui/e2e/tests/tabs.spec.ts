@@ -111,3 +111,31 @@ test("a tab chosen from More opens, and takes a place in the row", async ({ page
   await expect(tablist.getByRole("tab", { name: /^App/ })).toHaveAttribute("aria-selected", "true");
   await expect(panel(page).getByRole("tabpanel", { name: "Settings" })).toContainText("SECRET_KEY");
 });
+
+test("on the trace page the call tree, the Logs tab's table and the loading bar sit on the tabs' edges", async ({
+  page,
+}) => {
+  const id = await traceId(TRACE);
+  const edges = async (locator: Locator) => {
+    const box = await locator.boundingBox();
+    if (!box) throw new Error(`${locator} isn't on the page`);
+    return [Math.round(box.x), Math.round(box.x + box.width)];
+  };
+  await page.goto(`/#/t/${id}?tab=calls`);
+  const tabs = await edges(page.locator(".dt-tabs").first());
+
+  expect(await edges(page.locator(".dt-map-head").first())).toEqual(tabs);
+
+  await page.getByRole("tab", { name: /^Logs/ }).click();
+
+  expect(await edges(page.locator("[role=tabpanel] table").first())).toEqual(tabs);
+
+  await page.route("**/api/traces/**", async (route) => {
+    await new Promise((done) => setTimeout(done, 1500));
+    await route.continue().catch(() => undefined);
+  });
+  await page.goto("/#/endpoints");
+  await page.goto(`/#/t/${id}`);
+
+  expect(await edges(page.locator(".app-loading"))).toEqual(tabs);
+});

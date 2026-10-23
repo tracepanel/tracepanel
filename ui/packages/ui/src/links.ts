@@ -1,3 +1,4 @@
+import type { MouseEvent } from "react";
 import type { IssueKind } from "./types";
 
 /**
@@ -19,6 +20,11 @@ export interface TraceLinks {
   app?: ((service: string) => string) | undefined;
   /** Open them in a new tab: the panel lives inside someone's page, the console does not. */
   newTab?: boolean | undefined;
+  /**
+   * Opens a linked trace where the reader is (the panel, with its way back): a plain click on a linked trace does
+   * this, and its address is still there for a new tab.
+   */
+  openTrace?: ((id: string) => void) | undefined;
 }
 
 /** The attributes an <a> to one of them takes. */
@@ -27,4 +33,25 @@ export function linkProps(
   href: string,
 ): { href: string; target?: string; rel?: string } {
   return links?.newTab ? { href, target: "_blank", rel: "noreferrer" } : { href };
+}
+
+/** A linked trace's <a>: its address, opened in place on a plain click where the host does that (`openTrace`). */
+export function traceLinkProps(
+  links: TraceLinks | undefined,
+  id: string,
+): { href: string; target?: string; rel?: string; onClick?: (event: MouseEvent) => void } | undefined {
+  if (!links?.trace) return undefined;
+  const props = linkProps(links, links.trace(id));
+  const open = links.openTrace;
+  if (!open) return props;
+  return {
+    ...props,
+    onClick: (event) => {
+      // ⌘, Ctrl, Shift or a middle click: a tab or a window of its own, as for any link.
+      const modified = [event.metaKey, event.ctrlKey, event.shiftKey, event.altKey].some(Boolean);
+      if (modified || event.button !== 0) return;
+      event.preventDefault();
+      open(id);
+    },
+  };
 }

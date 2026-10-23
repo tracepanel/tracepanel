@@ -1867,6 +1867,8 @@ export interface operations {
                 before?: components["parameters"]["before"];
                 /** @description Comma-separated trace ids; returns just those (the widget's tab history). */
                 ids?: string;
+                /** @description With `ids`, `1` adds `runs`, the task runs each of those traces led to. */
+                runs?: "1";
             };
             header?: never;
             path?: never;
@@ -1883,6 +1885,10 @@ export interface operations {
                     "application/json": {
                         traces: components["schemas"]["TraceSummary"][];
                         next: components["schemas"]["Cursor"];
+                        /** @description With `ids` and `runs=1`: the task runs each listed trace led to, by its id (those it enqueued, and those they enqueued in turn, up to 50), oldest first. A trace that led to none is left out. */
+                        runs?: {
+                            [key: string]: components["schemas"]["TraceSummary"][];
+                        };
                     };
                 };
             };

@@ -4,7 +4,7 @@ import { useEscapeTo } from "./keyboard";
 import { consoleLinks, ENTRY_SECTIONS, follow, go, href, parse, type Route } from "./routes";
 import { crumbsFor } from "./sections";
 import { TraceScreen } from "./TraceScreen";
-import { Breadcrumbs } from "./ui";
+import { CrumbBar } from "./ui";
 
 const TABS: TabId[] = ["request", "tree", "issues", "sql", "cache", "http", "logs", "error", "profile"];
 
@@ -37,7 +37,7 @@ function leadsTo(inSnapshot: boolean): { links: TraceLinks; explore?: (trace: Tr
 }
 
 /** The page's padding: the full page's, or a narrow screen's (a snapshot opened on a phone). */
-const PADDING = { full: "px-6 pt-5 pb-12", compact: "px-1 pt-3 pb-8" };
+const PADDING = { full: "px-6 pt-7 pb-12", compact: "px-1 pt-3 pb-8" };
 
 /**
  * A trace, the same page wherever it was opened from: the crumbs lead back there (`from`), the open tab is in the
@@ -73,7 +73,7 @@ export function TracePage({
       <div className={`w-full ${PADDING[variant]}`}>
         {/* A stored trace never changes: no refresh control here. */}
         <div className="px-4">
-          <Breadcrumbs
+          <CrumbBar
             items={[
               ...back,
               {

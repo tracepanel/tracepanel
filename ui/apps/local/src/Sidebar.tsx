@@ -43,7 +43,15 @@ import {
   WaypointsIcon,
   ZapIcon,
 } from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
+import {
+  type CSSProperties,
+  type ReactNode,
+  type RefObject,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { callsSection, type Section } from "./routes";
 import type { App } from "./scope";
 import { type ThemeChoice, useTheme } from "./theme";
@@ -174,12 +182,14 @@ export function Sidebar({
 }) {
   const visible = visibleSections(counts);
   const rail = collapsed && !drawer;
+  const nav = useRef<HTMLElement>(null);
+  const fade = useScrollFade(nav);
   return (
     <aside
       className={cn(
         "flex min-h-0 flex-col overflow-hidden bg-sidebar pt-6 pb-5",
         // The same gaps open and as a rail: toggling moves things sideways only, never up or down.
-        rail ? "items-center gap-7 px-3" : "gap-7 px-5",
+        rail ? "items-center gap-5 px-3" : "gap-5 px-5",
         drawer ? "h-full overflow-y-auto" : "border-r max-[980px]:hidden",
       )}
     >
@@ -189,15 +199,16 @@ export function Sidebar({
       {/* Only the list scrolls (an app that calls many systems): the logo, search and footer stay in place. It
           spans the sidebar's padding so the current page's mark at the edge isn't cut off. */}
       <nav
+        ref={nav}
+        onScroll={fade.update}
+        style={fade.style}
         className={cn(
-          "grid min-h-0 flex-1 content-start gap-5 overflow-y-auto overscroll-contain [scrollbar-width:thin]",
-          // A list longer than the column fades out at its foot rather than cutting an item in half.
-          "pb-6 [mask-image:linear-gradient(to_bottom,#000_calc(100%-2rem),transparent)]",
+          "grid min-h-0 flex-1 content-start gap-3 overflow-y-auto overscroll-contain pb-2 [scrollbar-width:thin]",
           rail ? "-mx-3 justify-items-center px-3" : "-mx-5 px-5",
         )}
       >
         {NAV_GROUPS.map((group, index) => (
-          <div key={group.items[0]?.section} className="grid gap-1">
+          <div key={group.items[0]?.section} className="grid gap-0.5">
             <GroupTitle title={group.title} rail={rail} divider={index > 0} />
             {itemsOf(group, counts)
               .filter((entry) => visible.has(entry.section))
@@ -208,6 +219,7 @@ export function Sidebar({
                   current={entry.section === section}
                   counts={counts}
                   rail={rail}
+                  items={visible.size}
                 />
               ))}
           </div>
@@ -216,6 +228,41 @@ export function Sidebar({
       <SidebarFooter rail={rail} onClear={onClear} />
     </aside>
   );
+}
+
+// A list that scrolls fades out at the edge it goes on past: its foot while there is more below, its head once scrolled.
+const FADE = "2.5rem";
+
+/** How far in an edge's fade reaches: a fade where the list goes on past it, none where it ends. */
+const reach = (faded: boolean) => (faded ? FADE : "0px");
+
+function fadeMask(above: boolean, below: boolean): CSSProperties {
+  return {
+    maskImage: `linear-gradient(to bottom, transparent, #000 ${reach(above)}, #000 calc(100% - ${reach(below)}), transparent)`,
+  };
+}
+
+/** The fade of a list that scrolls, kept current as it scrolls, resizes or its items change. */
+function useScrollFade(ref: RefObject<HTMLElement | null>) {
+  const [edges, setEdges] = useState({ above: false, below: false });
+  const update = () => {
+    const element = ref.current;
+    if (!element) return;
+    const above = element.scrollTop > 1;
+    const below = element.scrollTop + element.clientHeight < element.scrollHeight - 1;
+    setEdges((current) => (current.above === above && current.below === below ? current : { above, below }));
+  };
+  // After every render: the items may have changed.
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    for (const child of Array.from(element.children)) observer.observe(child);
+    return () => observer.disconnect();
+  });
+  return { update, style: fadeMask(edges.above, edges.below) };
 }
 
 /** The logo: the mark as a rail. Collapsing is the toggle on the sidebar's edge (SidebarToggle). */
@@ -312,11 +359,13 @@ function navClass(rail: boolean, current: boolean): string {
   return cn(
     "relative flex items-center rounded-lg font-medium whitespace-nowrap text-sidebar-foreground no-underline",
     // The page's own text size, not larger: the list is a way around, the page is what's read.
-    rail ? "size-11 justify-center" : "h-9 gap-3 px-3.5 text-md",
+    rail ? "size-11 justify-center" : "h-8 gap-3 px-3.5 text-md light:text-base",
     "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
     "focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none",
     current &&
       "bg-sidebar-accent font-semibold text-sidebar-accent-foreground before:absolute before:inset-y-1.5 before:-left-2.5 before:w-1 before:rounded-full before:bg-brand",
+    // On the white sidebar the current page is a grey row, no raised card.
+    current && "light:bg-[rgb(9_9_11/0.05)]",
   );
 }
 
@@ -324,18 +373,46 @@ interface NavLinkProps {
   entry: NavItem;
   current: boolean;
   counts: Counts | undefined;
+  /** How many items the list has: one more above the current page's may push it out of view. */
+  items: number;
 }
 
 function NavLink({ rail, ...props }: NavLinkProps & { rail: boolean }) {
   return rail ? <RailNavLink {...props} /> : <OpenNavLink {...props} />;
 }
 
+/** The current page's item scrolled into the list's view, clear of its fades, when the list is longer than the column. */
+function useShownWhenCurrent(current: boolean, items: number) {
+  const ref = useRef<HTMLAnchorElement>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new item above moves the current one: look again.
+  useEffect(() => {
+    const item = ref.current;
+    const list = item?.closest("nav");
+    if (!(current && item && list)) return;
+    const reveal = () => {
+      const room = 40;
+      const box = item.getBoundingClientRect();
+      const view = list.getBoundingClientRect();
+      if (box.bottom > view.bottom - room) list.scrollTop += box.bottom - view.bottom + room;
+      else if (box.top < view.top + room) list.scrollTop -= view.top + room - box.top;
+    };
+    reveal();
+    // The list gets shorter as what is above it loads (the app switcher), or the window does: look again then.
+    const observer = new ResizeObserver(reveal);
+    observer.observe(list);
+    return () => observer.disconnect();
+  }, [current, items]);
+  return ref;
+}
+
 /** As a rail: the icon, its count on the corner, the name in a tooltip. */
-function RailNavLink({ entry: { section, label, icon: Icon }, current, counts }: NavLinkProps) {
+function RailNavLink({ entry: { section, label, icon: Icon }, current, counts, items }: NavLinkProps) {
   const count = navCount(section, counts);
+  const ref = useShownWhenCurrent(current, items);
   return (
     <RailTip label={label} detail={count ? String(count) : undefined} tone={toneOf(section)}>
       <a
+        ref={ref}
         href={`#/${section}`}
         aria-current={current ? "page" : undefined}
         aria-label={[label, count].filter(Boolean).join(", ")}
@@ -348,9 +425,10 @@ function RailNavLink({ entry: { section, label, icon: Icon }, current, counts }:
   );
 }
 
-function OpenNavLink({ entry: { section, label, icon: Icon }, current, counts }: NavLinkProps) {
+function OpenNavLink({ entry: { section, label, icon: Icon }, current, counts, items }: NavLinkProps) {
+  const ref = useShownWhenCurrent(current, items);
   return (
-    <a href={`#/${section}`} aria-current={current ? "page" : undefined} className={navClass(false, current)}>
+    <a ref={ref} href={`#/${section}`} aria-current={current ? "page" : undefined} className={navClass(false, current)}>
       <Icon className={cn("size-[1.125rem] shrink-0", current && "text-brand")} />
       <OpenCount label={label} count={navCount(section, counts)} tone={toneOf(section)} />
     </a>
@@ -412,9 +490,10 @@ function SidebarFooter({ rail, onClear }: { rail: boolean; onClear?: (() => void
     );
   }
   return (
-    <footer className="mt-auto flex items-center justify-between gap-2 border-t pt-4 pl-2.5 text-sm text-muted-foreground">
-      <span>
-        Local · stored in <code className="font-mono">.tracepanel/</code>
+    // Its text starts where the items' icons do, on one line: the full sentence on hover.
+    <footer className="mt-auto flex items-center justify-between gap-2 border-t pt-4 pl-3.5 text-xs text-muted-foreground">
+      <span className="min-w-0 truncate" title="Local: the data is stored in .tracepanel/">
+        Local · <code className="font-mono">.tracepanel/</code>
       </span>
       <span className="flex items-center gap-1">
         {onClear ? (
@@ -663,31 +742,61 @@ export function SidebarHandle({ width, resize }: { width: number; resize: (width
 }
 
 const COLLAPSED_KEY = "tracepanel:sidebar-collapsed";
+/** Below this window width the sidebar is a rail until the reader opens it: its column would take the lists' room. */
+const NARROW = "(max-width: 1279.98px)";
+/** The reader's choice in a narrow window, kept apart from the wide one's: each width remembers its own. */
+const NARROW_KEY = "tracepanel:sidebar-collapsed-narrow";
 /** The rail: its items (2.75rem) between its sides (0.75rem each), and the border. */
 export const RAIL_WIDTH = "calc(4.25rem + 1px)";
 /** How long the column takes to open or close. */
 const COLLAPSE_MS = 200;
 
-/** Whether the sidebar is a rail of icons: remembered in this browser, ⌘B / Ctrl+B toggles it. */
+/** Whether the window matches `query`, kept current as it resizes. */
+function useMedia(query: string): boolean {
+  const [matches, setMatches] = useState(() => window.matchMedia(query).matches);
+  useEffect(() => {
+    const list = window.matchMedia(query);
+    const change = () => setMatches(list.matches);
+    change();
+    list.addEventListener("change", change);
+    return () => list.removeEventListener("change", change);
+  }, [query]);
+  return matches;
+}
+
+/** The choice stored under `key`: collapsed, open, or none made yet. */
+function storedChoice(key: string): boolean | undefined {
+  try {
+    const value = localStorage.getItem(key);
+    return value === null ? undefined : value === "1";
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Whether the sidebar is a rail of icons: open in a wide window and a rail in a narrow one until the reader says
+ * otherwise, each choice remembered in this browser; ⌘B / Ctrl+B toggles it.
+ */
 export function useSidebarCollapsed(): {
   collapsed: boolean;
   collapse: (collapsed: boolean) => void;
   /** True while the column changes width: only then does it animate, not while dragged. */
   moving: boolean;
 } {
-  const [collapsed, setCollapsed] = useState(() => {
-    try {
-      return localStorage.getItem(COLLAPSED_KEY) === "1";
-    } catch {
-      return false;
-    }
-  });
+  const narrow = useMedia(NARROW);
+  const key = narrow ? NARROW_KEY : COLLAPSED_KEY;
+  const [choices, setChoices] = useState(() => ({
+    [COLLAPSED_KEY]: storedChoice(COLLAPSED_KEY),
+    [NARROW_KEY]: storedChoice(NARROW_KEY),
+  }));
+  const collapsed = choices[key] ?? narrow;
   const [moving, setMoving] = useState(false);
   const collapse = (next: boolean) => {
     setMoving(true);
-    setCollapsed(next);
+    setChoices((current) => ({ ...current, [key]: next }));
     try {
-      localStorage.setItem(COLLAPSED_KEY, next ? "1" : "0");
+      localStorage.setItem(key, next ? "1" : "0");
     } catch {
       // Blocked storage: the choice lasts until reload.
     }
@@ -707,6 +816,6 @@ export function useSidebarCollapsed(): {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [collapsed]);
+  }, [collapsed, key]);
   return { collapsed, collapse, moving };
 }

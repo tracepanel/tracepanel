@@ -30,9 +30,10 @@ import type { ColumnSpec, Columns } from "./hooks/useColumns";
 
 /**
  * One header for every list, the logs' too: a header cell's height, type and padding. The table's own text is
- * `text-base`.
+ * `text-base`. On white, lower and lighter: small caps over a strong rule, the rows carry the weight.
  */
-const HEAD_CELL = "h-10 px-5 text-xs font-semibold tracking-wide text-muted-foreground uppercase first:pl-6";
+const HEAD_CELL =
+  "h-10 px-5 text-xs font-semibold tracking-wide text-muted-foreground uppercase first:pl-6 light:h-[2.125rem] light:text-2xs light:font-medium light:tracking-[0.06em]";
 
 /**
  * How tall a list's rows are: `default` for the lists of records a reader scans a row at a time, `compact` for a
@@ -40,9 +41,11 @@ const HEAD_CELL = "h-10 px-5 text-xs font-semibold tracking-wide text-muted-fore
  */
 export type Density = "default" | "compact";
 
+// On white every list's text is 13px (monospace a half step smaller, as it reads larger), the records' rows 36px.
+const LIGHT_TEXT = "light:text-sm light:[&_.font-mono]:text-[0.78125rem]";
 const BODY_CELLS = new Map<Density, string>([
-  ["default", "px-5 py-3 first:pl-6"],
-  ["compact", "px-5 py-1.5 first:pl-6"],
+  ["default", `px-5 py-3 first:pl-6 light:py-2 ${LIGHT_TEXT}`],
+  ["compact", `px-5 py-1.5 first:pl-6 ${LIGHT_TEXT}`],
 ]);
 
 /** A body cell's padding at the list's density: the same sides for every list, the height by density. */
@@ -212,28 +215,59 @@ function ResizeHandle({
   );
 }
 
-/**
- * Each shown column's width in px, as dragged or by default: scaled down together when the room left to the column
- * that takes the rest would fall under its minimum (a narrow panel, one column too many shown).
- */
-function fitWidths(columns: Columns, room: number, rem: number): Map<string, number> {
-  const wanted = columns.shown.flatMap((spec) =>
-    spec.width === undefined ? [] : [[spec, columns.widthOf(spec.id) ?? spec.width * rem] as const],
-  );
-  // Fixed columns keep their width; the others share what is left.
-  const sum = (fixed: boolean) =>
-    wanted.reduce((total, [spec, width]) => (Boolean(spec.fixed) === fixed ? total + width : total), 0);
-  const total = sum(false);
-  const left = room - sum(true) - MIN_REST;
-  const scale = room > 0 && total > left ? Math.max(left, 0) / total : 1;
-  return new Map(wanted.map(([spec, width]) => [spec.id, Math.floor(spec.fixed ? width : width * scale)]));
+/** A column's width in px: as dragged, or by default; the column that takes the rest at its minimum. */
+function wantedWidth(columns: Columns, spec: ColumnSpec, rem: number): number {
+  if (spec.width === undefined) return MIN_REST;
+  return columns.widthOf(spec.id) ?? spec.width * rem;
 }
 
 /**
- * The columns' widths in the room the table has, kept current as it resizes. `reserved` (rem) is what columns outside
- * the spec take, a menu's; `ref` goes on the table.
+ * Whether a column keeps its width when the table is narrow: a column of numbers or one value's width (a time, a
+ * badge), cut it would say less.
  */
-export function useColumnWidths(columns: Columns, reserved: number) {
+const keepsWidth = (spec: ColumnSpec) => Boolean(spec.fixed || spec.num);
+
+/**
+ * The shown columns that fit in `room`: while they don't, the ones that may be left out go, the highest `drop`
+ * first. Before the table is measured, all of them.
+ */
+function fitting<S extends ColumnSpec>(columns: Columns, shown: readonly S[], room: number, rem: number): S[] {
+  if (room <= 0) return [...shown];
+  const droppable = shown
+    .filter((spec) => spec.drop !== undefined && !columns.chosen(spec.id))
+    .sort((a, b) => (b.drop ?? 0) - (a.drop ?? 0));
+  let kept = [...shown];
+  const wanted = () => kept.reduce((total, spec) => total + wantedWidth(columns, spec, rem), 0);
+  for (const spec of droppable) {
+    if (wanted() <= room) break;
+    kept = kept.filter((each) => each !== spec);
+  }
+  return kept;
+}
+
+/**
+ * Each column's width in px, as dragged or by default: the ones that may be narrowed scaled down together when the
+ * room left to the column that takes the rest would fall under its minimum (a narrow panel, one column too many).
+ */
+function fitWidths(columns: Columns, shown: readonly ColumnSpec[], room: number, rem: number): Map<string, number> {
+  const wanted = shown.flatMap((spec) =>
+    spec.width === undefined ? [] : [[spec, wantedWidth(columns, spec, rem)] as const],
+  );
+  // Fixed columns keep their width; the others share what is left.
+  const sum = (fixed: boolean) =>
+    wanted.reduce((total, [spec, width]) => (keepsWidth(spec) === fixed ? total + width : total), 0);
+  const total = sum(false);
+  const left = room - sum(true) - MIN_REST;
+  const scale = room > 0 && total > left ? Math.max(left, 0) / total : 1;
+  return new Map(wanted.map(([spec, width]) => [spec.id, Math.floor(keepsWidth(spec) ? width : width * scale)]));
+}
+
+/**
+ * The columns as they fit in the room the table has, kept current as it resizes: `columns` with the ones left out
+ * for room gone from `shown`, and each one's width. `reserved` (rem) is what columns outside the spec take, a menu's;
+ * `ref` goes on the table.
+ */
+export function useColumnWidths<C extends Columns>(given: C, reserved: number) {
   const ref = useRef<HTMLTableElement>(null);
   const [room, setRoom] = useState({ width: 0, rem: 16 });
   useLayoutEffect(() => {
@@ -249,7 +283,9 @@ export function useColumnWidths(columns: Columns, reserved: number) {
     observer.observe(container);
     return () => observer.disconnect();
   }, []);
-  return { ref, widths: fitWidths(columns, room.width - reserved * room.rem, room.rem) };
+  const left = room.width - reserved * room.rem;
+  const columns: C = { ...given, shown: fitting(given, given.shown as C["shown"], left, room.rem) };
+  return { ref, columns, widths: fitWidths(columns, columns.shown, left, room.rem) };
 }
 
 /** A header cell's width: as dragged right now, or as set; none for the column that takes the rest. */
@@ -610,8 +646,8 @@ export function ColumnsHeader({
   children?: ReactNode;
 }) {
   return (
-    <TableHeader className="bg-muted">
-      <TableRow className="hover:bg-transparent">
+    <TableHeader className="bg-muted light:bg-card">
+      <TableRow className="hover:bg-transparent light:border-input">
         {columns.shown.map((spec, index) => (
           <ColumnHead
             key={spec.id}

@@ -10,7 +10,9 @@ import {
   type EndpointRow,
   ExplainView,
   type GraphqlRow,
+  ISSUE_LABELS,
   IssueChip,
+  type IssueKind,
   type IssueRow,
   type JobRow,
   KindBadge,
@@ -27,6 +29,7 @@ import {
   type RpcRow,
   type Span,
   SqlCode,
+  StateBadge,
   StatusBadge,
   TaskName,
   type TaskRow,
@@ -44,7 +47,7 @@ import { Fragment, type ReactNode, useEffect, useState } from "react";
 import { useCapability } from "./hooks";
 import { currentPeriod, endpointGroup, go, groupRoute, href, issueRoute, traceHref, withPeriod } from "./routes";
 import { graphqlOperation, taskSystem } from "./sections";
-import { Meter, Mono, Tr } from "./ui";
+import { FitChips, Meter, Mono, Tr } from "./ui";
 
 /** What a trace is: its method and path, a GraphQL operation, or its kind and name (a task, a job, a WebSocket). */
 function TraceName({ trace }: { trace: TraceSummary }) {
@@ -78,22 +81,26 @@ const TRACE_COLUMNS: DataColumn<TraceSummary>[] = [
       trace.task_state ? <TaskState state={trace.task_state} /> : <StatusBadge status={trace.http_status} />,
   },
   { id: "duration", label: "Duration", width: 6.75, num: true, cell: (trace) => duration(trace.duration) },
-  { id: "queries", label: "Queries", width: 6.25, num: true, cell: (trace) => trace.queries },
+  { id: "queries", label: "Queries", width: 6.25, num: true, drop: 2, cell: (trace) => trace.queries },
   {
     id: "issues",
     label: "Issues",
     width: 14,
-    cell: (trace) => (
-      // One line, as every row of a list: a narrow column cuts the last chips off, wider shows them.
-      <span className="flex gap-1">
-        {(trace.issue_kinds ?? []).map((kind) => (
-          <IssueChip key={kind} kind={kind} />
-        ))}
-      </span>
-    ),
+    drop: 1,
+    cell: (trace) => <IssueChips kinds={trace.issue_kinds ?? []} />,
   },
   { id: "when", label: "When", width: 6.5, num: true, className: MUTED, cell: (trace) => ago(trace.start) },
 ];
+
+/** A trace's issues on one line, as every row of a list: the ones that fit, "+N" for the others. */
+function IssueChips({ kinds }: { kinds: readonly IssueKind[] }) {
+  return (
+    <FitChips
+      chips={kinds.map((kind) => <IssueChip key={kind} kind={kind} />)}
+      names={kinds.map((kind) => ISSUE_LABELS[kind])}
+    />
+  );
+}
 
 const traceTone = (trace: TraceSummary) => (trace.status === "error" ? "error" : trace.issues > 0 ? "warn" : undefined);
 
@@ -160,6 +167,7 @@ function p95Column<T extends { p95: number }>(items: readonly T[], label = "p95"
     id: "p95",
     label,
     width: 8.5,
+    fixed: true,
     cell: (item) => (
       <Meter value={item.p95} max={slowest}>
         {duration(item.p95)}
@@ -170,7 +178,15 @@ function p95Column<T extends { p95: number }>(items: readonly T[], label = "p95"
 
 /** The Last column: when the list's item was last seen. */
 function lastColumn<T extends Pick<EndpointRow, "last_seen">>(): DataColumn<T> {
-  return { id: "last", label: "Last", width: 6.5, num: true, className: MUTED, cell: (item) => ago(item.last_seen) };
+  return {
+    id: "last",
+    label: "Last",
+    width: 6.5,
+    num: true,
+    drop: 2,
+    className: MUTED,
+    cell: (item) => ago(item.last_seen),
+  };
 }
 
 function endpointColumns(items: readonly EndpointRow[]): DataColumn<EndpointRow>[] {
@@ -188,14 +204,15 @@ function endpointColumns(items: readonly EndpointRow[]): DataColumn<EndpointRow>
       ),
     },
     { id: "calls", label: "Calls", width: 5.25, num: true, cell: (item) => item.calls },
-    { id: "p50", label: "p50", width: 6.5, num: true, cell: (item) => duration(item.p50) },
+    { id: "p50", label: "p50", width: 6.5, num: true, drop: 3, cell: (item) => duration(item.p50) },
     p95Column(items),
-    { id: "queries", label: "Queries / call", width: 9, num: true, cell: (item) => item.avg_queries },
+    { id: "queries", label: "Queries / call", width: 9, num: true, drop: 4, cell: (item) => item.avg_queries },
     {
       id: "issues",
       label: "With issues",
       width: 7.75,
       num: true,
+      drop: 1,
       className: (item) => warnCount(item.with_issues),
       cell: (item) => item.with_issues || "—",
     },
@@ -254,18 +271,21 @@ function callStatsColumns<T extends CallStats>(
       required: true,
       cell: (item) => (
         <span className="flex flex-col gap-0.5">
-          <Mono className="flex min-w-0 items-center gap-2 font-semibold">{name(item)}</Mono>
+          <Mono className="flex min-w-0 items-center gap-2 font-semibold [&_.dt-alias]:max-w-[50%] [&_.dt-alias]:truncate">
+            {name(item)}
+          </Mono>
           <Mono className="truncate text-base text-muted-foreground">{item.origin}</Mono>
         </span>
       ),
     },
     { id: "calls", label: "Calls", width: 5.25, num: true, cell: (item) => item.calls },
-    { id: "requests", label: "Requests", width: 6.75, num: true, cell: (item) => item.traces },
+    { id: "requests", label: "Requests", width: 6.75, num: true, drop: 2, cell: (item) => item.traces },
     {
       id: "repeated",
       label: "Max / request",
       width: 9,
       num: true,
+      drop: 3,
       cell: (item) => <RepeatedCount most={item.most_per_trace} />,
     },
     { id: "failed", label: "Failed", width: 5.5, num: true, cell: (item) => item.errors },
@@ -274,13 +294,14 @@ function callStatsColumns<T extends CallStats>(
       id: "total",
       label: "Total time",
       width: 8.5,
+      fixed: true,
       cell: (item) => (
         <Meter value={item.total} max={heaviest}>
           {duration(item.total)}
         </Meter>
       ),
     },
-    { id: "slowest", label: "Slowest", width: 6.5, num: true, cell: (item) => duration(item.slowest) },
+    { id: "slowest", label: "Slowest", width: 6.5, num: true, drop: 1, cell: (item) => duration(item.slowest) },
   ];
 }
 
@@ -394,12 +415,17 @@ function SqlDetails({ item, source }: { item: CallRow; source: DataSource }) {
   );
 }
 
+/** A name's text in a row of a flex box: cut with an ellipsis, so the chips beside it keep their size. */
+function Cut({ children }: { children: ReactNode }) {
+  return <span className="min-w-0 truncate">{children}</span>;
+}
+
 /** What a row is: its operation and template, where it went, and what kind of call it was (an HTTP method). */
 function OpName({ item }: { item: CallRow }) {
   if (item.family === "sql") {
     return (
       <>
-        {item.name}
+        <Cut>{item.name}</Cut>
         <AliasChip value={item.target} />
       </>
     );
@@ -408,14 +434,18 @@ function OpName({ item }: { item: CallRow }) {
     return (
       <>
         <MethodBadge method={item.op} />
-        {item.target}
-        {item.template}
+        <Cut>
+          {item.target}
+          {item.template}
+        </Cut>
       </>
     );
   }
   return (
     <>
-      {item.op} {item.template}
+      <Cut>
+        {item.op} {item.template}
+      </Cut>
       <AliasChip value={item.target} />
     </>
   );
@@ -503,6 +533,7 @@ const LOG_COLUMNS: LogColumn<LogRow>[] = [
     id: "source",
     label: "Source",
     width: 15.5,
+    drop: 1,
     cell: (log) => (
       <SourceCell
         kind={log.trace_kind}
@@ -520,6 +551,7 @@ const LOG_COLUMNS: LogColumn<LogRow>[] = [
     label: "App",
     width: 7.5,
     hidden: true,
+    drop: 3,
     cell: (log) => <span className="text-muted-foreground">{log.service}</span>,
   },
   {
@@ -527,6 +559,7 @@ const LOG_COLUMNS: LogColumn<LogRow>[] = [
     label: "Trace",
     width: 9.5,
     hidden: true,
+    drop: 3,
     cell: (log) => (
       <a className="font-mono text-muted-foreground hover:text-foreground" href={traceHref(log.trace_id, "logs")}>
         {log.trace_id}
@@ -703,9 +736,7 @@ function LoggedIn({ log }: { log: LogRow }) {
       {outward(log.spans).map(({ path: key, span }, index) => (
         <Fragment key={key}>
           {index > 0 ? <ChevronRightIcon className="size-3.5 text-muted-foreground" aria-hidden="true" /> : null}
-          <Badge variant="outline" className="font-mono text-2xs uppercase">
-            {span.system}
-          </Badge>
+          <KindBadge kind={span.system} muted={true} />
           <span className="max-w-80 truncate font-mono text-xs">{span.name}</span>
         </Fragment>
       ))}
@@ -817,7 +848,9 @@ function IssueTitle({ item }: { item: IssueRow }) {
       ) : (
         <span className="font-medium">{item.title}</span>
       )}
-      {item.culprit ? <Mono className="text-base text-muted-foreground">{item.culprit}</Mono> : null}
+      {item.culprit ? (
+        <Mono className="text-base text-muted-foreground [overflow-wrap:anywhere]">{item.culprit}</Mono>
+      ) : null}
     </span>
   );
 }
@@ -847,8 +880,15 @@ const ISSUE_COLUMNS: DataColumn<IssueRow>[] = [
     className: "whitespace-normal",
     cell: (item) => <IssueTitle item={item} />,
   },
-  { id: "type", label: "Type", width: 10, cell: (item) => <IssueChip kind={item.kind} /> },
-  { id: "endpoints", label: "Endpoints", width: 18, cell: (item) => <FirstOf values={item.endpoints} count={3} /> },
+  { id: "type", label: "Type", width: 10, fixed: true, drop: 2, cell: (item) => <IssueChip kind={item.kind} /> },
+  {
+    id: "endpoints",
+    label: "Endpoints",
+    // Room for a method and a usual path: the issue's own title is the row's reading, and takes the rest.
+    width: 13,
+    drop: 1,
+    cell: (item) => <FirstOf values={item.endpoints} count={3} />,
+  },
   {
     id: "events",
     label: "Events",
@@ -858,7 +898,15 @@ const ISSUE_COLUMNS: DataColumn<IssueRow>[] = [
     cell: (item) => item.occurrences,
   },
   { id: "last", label: "Last seen", width: 7, num: true, className: MUTED, cell: (item) => ago(item.last_seen) },
-  { id: "first", label: "First seen", width: 7.25, num: true, className: MUTED, cell: (item) => ago(item.first_seen) },
+  {
+    id: "first",
+    label: "First seen",
+    width: 7.25,
+    num: true,
+    drop: 3,
+    className: MUTED,
+    cell: (item) => ago(item.first_seen),
+  },
 ];
 
 export function IssuesTable({ items }: { items: readonly IssueRow[] }) {
@@ -886,17 +934,19 @@ const MAIL_COLUMNS: DataColumn<MailRow>[] = [
     required: true,
     cell: (mail) => <span className="block truncate font-medium">{mail.subject || "(no subject)"}</span>,
   },
-  { id: "to", label: "To", width: 12, cell: (mail) => <FirstOf values={mail.recipients} count={2} /> },
+  { id: "to", label: "To", width: 12, drop: 1, cell: (mail) => <FirstOf values={mail.recipients} count={2} /> },
   {
     id: "from",
     label: "From",
     width: 11,
+    drop: 2,
     cell: (mail) => <Mono className="text-base text-muted-foreground">{mail.sender ?? "—"}</Mono>,
   },
   {
     id: "source",
     label: "Sent from",
-    width: 18,
+    // A request's method and a long path whole: the subject takes the rest.
+    width: 22,
     cell: (mail) => (
       <SourceCell
         kind={mail.trace_kind}
@@ -1008,14 +1058,16 @@ function SourceCell({
       className={cn(
         "flex max-w-[21.25rem] min-w-0 items-center gap-2",
         compact &&
-          "gap-1.5 [&_.dt-method]:min-w-0 [&_.dt-method]:px-1 [&_.dt-method]:text-2xs [&_[data-slot=badge]]:h-4",
+          "gap-1.5 [&_.dt-method]:px-1 [&_.dt-method]:text-2xs [&_[data-slot=badge]]:h-4 light:[&_.dt-method]:px-0",
         className,
       )}
     >
       <SourceBadge kind={kind} graphql={operation !== null} method={method} htmx={htmx} />
-      {/* In a dense table, the row's own size: the badge sets the path apart, not a smaller type. */}
+      {/* In a dense table, the row's own size: the badge sets the path apart, not a smaller type. A column of
+          them is cut at one side, the start, as a task's name always is: every path too. */}
       <SourceText
         kind={kind}
+        startCut={compact}
         text={operation ?? sourceText(kind, path, name)}
         className={cn(!compact && "text-base")}
       />
@@ -1040,8 +1092,19 @@ function SourceBadge({
 }
 
 /** A source's text after its badge, one line: a task's name cut at its start, as everywhere a task is named. */
-function SourceText({ kind, text, className }: { kind: TraceSummary["kind"]; text: string; className?: string }) {
-  if (kind === "task") return <TaskName name={text} className={className} />;
+function SourceText({
+  kind,
+  text,
+  className,
+  startCut = false,
+}: {
+  kind: TraceSummary["kind"];
+  text: string;
+  className?: string | undefined;
+  /** Cut at the start whatever it is: a column of sources cut at one side. */
+  startCut?: boolean;
+}) {
+  if (kind === "task" || startCut) return <TaskName name={text} className={className} />;
   return <Mono className={cn("truncate", className)}>{text}</Mono>;
 }
 
@@ -1070,7 +1133,9 @@ function taskColumns(items: readonly TaskRow[]): DataColumn<TaskRow>[] {
       id: "system",
       label: "System",
       width: 7.5,
-      cell: (item) => <OutlineBadge>{taskSystem(item.system)}</OutlineBadge>,
+      fixed: true,
+      drop: 2,
+      cell: (item) => <KindBadge kind={taskSystem(item.system)} muted={true} />,
     },
     { id: "runs", label: "Runs", width: 5, num: true, cell: (item) => item.runs },
     {
@@ -1086,6 +1151,7 @@ function taskColumns(items: readonly TaskRow[]): DataColumn<TaskRow>[] {
       label: "Retried",
       width: 6,
       num: true,
+      drop: 1,
       className: (item) => warnCount(item.retries),
       cell: (item) => item.retries || "—",
     },
@@ -1095,6 +1161,7 @@ function taskColumns(items: readonly TaskRow[]): DataColumn<TaskRow>[] {
       label: "Queue wait p95",
       width: 9.25,
       num: true,
+      drop: 3,
       className: (item) => (item.wait_p95 === null ? MUTED : undefined),
       cell: (item) => (item.wait_p95 === null ? "eager" : duration(item.wait_p95)),
     },
@@ -1102,6 +1169,7 @@ function taskColumns(items: readonly TaskRow[]): DataColumn<TaskRow>[] {
       id: "queues",
       label: "Queues",
       width: 11.25,
+      drop: 4,
       // In the menu, not on screen: the Queue filter says them, and the task's name keeps the room.
       hidden: true,
       cell: (item) => (
@@ -1177,8 +1245,8 @@ function graphqlColumns(items: readonly GraphqlRow[]): DataColumn<GraphqlRow>[] 
       cell: (item) => item.errors || "—",
     },
     p95Column(items),
-    { id: "p50", label: "p50", width: 6.5, num: true, cell: (item) => duration(item.p50) },
-    { id: "queries", label: "Queries / call", width: 9, num: true, cell: (item) => item.avg_queries },
+    { id: "p50", label: "p50", width: 6.5, num: true, drop: 3, cell: (item) => duration(item.p50) },
+    { id: "queries", label: "Queries / call", width: 9, num: true, drop: 4, cell: (item) => item.avg_queries },
     lastColumn(),
   ];
 }
@@ -1233,7 +1301,7 @@ function namedColumns(head: [string, string, string, string], items: readonly Na
       cell: (item) => item.failures || "—",
     },
     p95Column(items),
-    { id: "average", label: head[3], width: 8.75, num: true, cell: (item) => item.average },
+    { id: "average", label: head[3], width: 8.75, num: true, drop: 3, cell: (item) => item.average },
     lastColumn(),
   ];
 }
@@ -1292,9 +1360,9 @@ function PageAction({ item }: { item: PageRow }) {
   if (!item.action) return <span className="text-muted-foreground">view</span>;
   return (
     <span className="block truncate">
-      <Badge variant="outline" className="mr-2 font-mono text-xs">
-        {item.trigger ?? "action"}
-      </Badge>
+      <span className="mr-2 inline-flex align-middle">
+        <MethodBadge method={item.trigger ?? "action"} />
+      </span>
       {item.action.replace(/^(click|submit) /, "")}
     </span>
   );
@@ -1321,13 +1389,14 @@ export function PagesTable({ items }: { items: readonly PageRow[] }) {
 function websocketColumns(items: readonly WebsocketRow[]): DataColumn<WebsocketRow>[] {
   return [
     { id: "consumer", label: "Consumer", required: true, cell: (item) => nameCell(item.consumer) },
-    { id: "connections", label: "Connections", width: 8, num: true, cell: (item) => item.connections },
-    { id: "received", label: "Received", width: 6.75, num: true, cell: (item) => item.received },
+    { id: "connections", label: "Connections", width: 9, num: true, cell: (item) => item.connections },
+    { id: "received", label: "Received", width: 7, num: true, drop: 3, cell: (item) => item.received },
     {
       id: "delivered",
       label: "From layer",
-      width: 7.25,
+      width: 8.25,
       num: true,
+      drop: 2,
       className: (item) => (item.delivered ? undefined : MUTED),
       cell: (item) => item.delivered || "—",
     },
@@ -1344,6 +1413,7 @@ function websocketColumns(items: readonly WebsocketRow[]): DataColumn<WebsocketR
       id: "paths",
       label: "Paths",
       width: 10,
+      drop: 4,
       cell: (item) => <Mono className="block truncate text-muted-foreground">{item.paths.join(", ")}</Mono>,
     },
     lastColumn(),
@@ -1368,22 +1438,7 @@ export function WebsocketsTable({ items }: { items: readonly WebsocketRow[] }) {
   );
 }
 
-const TASK_STATE: Record<string, [string, string]> = {
-  success: ["success", "border-ok/30 bg-ok-soft text-ok"],
-  failure: ["failed", "border-error/30 bg-error-soft text-error"],
-  retry: ["retry", "border-warn/30 bg-warn-soft text-warn"],
-  // A task in flight (Tasks' Now), before it has ended.
-  running: ["running", "border-brand/30 bg-brand-soft text-brand"],
-  queued: ["queued", "text-text-2"],
-  retrying: ["retrying", "border-warn/30 bg-warn-soft text-warn"],
-};
-
 /** How a task run ended, where requests show their status code; or where a task in flight is. */
 export function TaskState({ state }: { state: string }) {
-  const [label, tone] = TASK_STATE[state] ?? [state, ""];
-  return (
-    <Badge variant="outline" className={`h-[1.375rem] rounded-md px-1.5 font-mono text-2xs ${tone}`}>
-      {label}
-    </Badge>
-  );
+  return <StateBadge state={state} />;
 }

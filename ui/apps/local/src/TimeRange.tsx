@@ -1,8 +1,8 @@
 import { Button } from "@tracepanel/ui/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@tracepanel/ui/components/ui/popover";
-import { cn } from "@tracepanel/ui/lib/utils";
 import { CalendarClockIcon, ChevronDownIcon } from "lucide-react";
 import { useState } from "react";
+import { chipClass } from "./FilterMenu";
 import { isoWithOffset, parseAbsolute, shortTime, toLocalInput } from "./time";
 
 const PRESETS: [string, string][] = [
@@ -61,14 +61,7 @@ export function TimeRange({ since, until, onChange, verb = "Started", open, onOp
       }}
     >
       <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          className={cn(
-            "h-7 gap-1.5 bg-muted px-2.5 text-sm font-medium shadow-none",
-            summary && "border-brand/40 bg-brand-soft hover:bg-brand-soft",
-          )}
-        >
+        <Button variant="outline" size="sm" className={chipClass(Boolean(summary))}>
           <CalendarClockIcon className="text-muted-foreground" />
           {summary ? <span className="max-w-64 truncate font-semibold text-brand">{summary}</span> : "Time"}
           <ChevronDownIcon className="size-3.5 text-muted-foreground" />

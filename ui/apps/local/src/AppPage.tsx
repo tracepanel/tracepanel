@@ -5,7 +5,7 @@ import { href } from "./routes";
 import { NAV } from "./Sidebar";
 import { sectionLabel } from "./sections";
 import { appTarget, roleSection } from "./services";
-import { Breadcrumbs, Loading } from "./ui";
+import { CrumbBar, Loading } from "./ui";
 
 /** What the app said about itself (null when nothing, or an agent from before), and its roles on the service map. */
 function useAppPage(service: string, source: DataSource) {
@@ -79,7 +79,7 @@ function AppHeader({ service, roles }: { service: string; roles: readonly Servic
   const runtime = roles.find((role) => role.runtime)?.runtime ?? null;
   return (
     <header className="grid gap-3">
-      <Breadcrumbs items={[{ label: "Services", href: href({ name: "services", q: "" }) }, { label: service }]} />
+      <CrumbBar items={[{ label: "Services", href: href({ name: "services", q: "" }) }, { label: service }]} />
       <Title service={service} runtime={runtime} />
       {runtime ? <p className="text-sm text-muted-foreground">{runtime}</p> : null}
       <RoleLinks roles={roles} />
@@ -95,7 +95,7 @@ export function AppPage({ service, source }: { service: string; source: DataSour
   const { app, roles } = useAppPage(service, source);
   if (app === undefined) return <Loading />;
   return (
-    <div className="grid min-w-0 max-w-5xl grid-cols-[minmax(0,1fr)] gap-7 px-10 pt-7 pb-16 *:min-w-0">
+    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-7 px-10 pt-7 pb-16 *:min-w-0">
       <AppHeader service={service} roles={roles} />
       <AppDetails app={app} />
     </div>

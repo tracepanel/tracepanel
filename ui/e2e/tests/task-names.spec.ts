@@ -155,7 +155,11 @@ test("the panel's list: a task's run as the console lists it, its time in a requ
   await page.getByRole("button", { name: "Load rebuild" }).click();
   await pill(page).click();
   const list = panel(page).getByRole("region", { name: "Pages and requests in this browser tab" });
-  const task = list.getByRole("button").filter({ hasText: /^task/ });
+  // The run loaded on its own: the request's runs are nested under it, task rows too.
+  const task = list
+    .getByRole("button")
+    .filter({ hasText: /^task/ })
+    .filter({ hasText: /regenerate/ });
   const request = list.getByRole("button").filter({ hasText: "/api/media/rebuild" });
 
   // Its kind's badge, not its name as a method.

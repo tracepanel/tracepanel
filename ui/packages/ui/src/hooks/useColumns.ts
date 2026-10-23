@@ -14,6 +14,11 @@ export interface ColumnSpec {
   fixed?: boolean;
   /** A column of numbers: its name and its values at the end, its values in figures of one width. */
   num?: boolean;
+  /**
+   * Left out while the table is too narrow for every column, before any column is narrowed: the highest first. Back
+   * once there is room; a column the reader showed from the menu stays. None: never left out.
+   */
+  drop?: number;
 }
 
 /** What the reader changed: widths dragged (px), columns shown or hidden, by column id, and the columns' order. */
@@ -83,6 +88,8 @@ export function useColumns<S extends ColumnSpec>(table: string, given: readonly 
         ),
       }),
     isShown,
+    /** Whether the reader showed the column from the menu: it isn't left out for room. */
+    chosen: (id: string): boolean => prefs.shown[id] === true,
     /** The dragged width in px, if the reader dragged it. */
     widthOf: (id: string): number | undefined => prefs.widths[id],
     setWidth: (id: string, width: number) =>

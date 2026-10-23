@@ -2,7 +2,15 @@ import { Button } from "@tracepanel/ui/components/ui/button";
 import { TableRow } from "@tracepanel/ui/components/ui/table";
 import { cn } from "@tracepanel/ui/lib/utils";
 import { ChevronRightIcon } from "lucide-react";
-import { type ComponentProps, type ReactNode, type SyntheticEvent, useEffect, useRef } from "react";
+import {
+  type ComponentProps,
+  type ReactNode,
+  type SyntheticEvent,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { follow, openInNewTab } from "./routes";
 
 /* Console building blocks on top of shadcn/ui: table rows, meters, loading, page header. The lists themselves are
@@ -138,8 +146,12 @@ export function PageHeader({
 }) {
   return (
     <header className="flex min-w-0 items-center gap-4 px-10 pt-8">
-      <h1 className="shrink-0 text-3xl font-semibold tracking-tight">{title}</h1>
-      {description ? <p className="min-w-0 flex-1 truncate text-md text-muted-foreground">{description}</p> : null}
+      <h1 className="shrink-0 text-3xl font-semibold tracking-tight light:text-[1.375rem] light:tracking-[-0.025em]">
+        {title}
+      </h1>
+      {description ? (
+        <p className="min-w-0 flex-1 truncate text-md text-muted-foreground light:text-sm">{description}</p>
+      ) : null}
       {actions ? <div className="ml-auto">{actions}</div> : null}
     </header>
   );
@@ -173,7 +185,26 @@ export function LoadMore({ label, loading, onMore }: { label: string; loading: b
 }
 
 /** Where this page sits: section › item; earlier crumbs are links. */
-export function Breadcrumbs({ items }: { items: readonly { label: ReactNode; href?: string }[] }) {
+/**
+ * The top line of a page of one thing (a trace, an issue, a group, an app): its crumbs, and its own controls at the
+ * end. One height whatever the controls, so the crumbs sit at one place on every such page.
+ */
+export function CrumbBar({
+  items,
+  actions,
+}: {
+  items: readonly { label: ReactNode; href?: string }[];
+  actions?: ReactNode;
+}) {
+  return (
+    <div className="flex h-9 min-w-0 items-center justify-between gap-3">
+      <Breadcrumbs items={items} />
+      {actions}
+    </div>
+  );
+}
+
+function Breadcrumbs({ items }: { items: readonly { label: ReactNode; href?: string }[] }) {
   return (
     <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-md">
       {items.map((item, index) => (
@@ -198,5 +229,55 @@ export function Breadcrumbs({ items }: { items: readonly { label: ReactNode; hre
         </span>
       ))}
     </nav>
+  );
+}
+
+/** How many of the chips, `widths` px each, fit in `room` px with `gap` between them and a "+N" chip after them. */
+function chipsThatFit(widths: readonly number[], room: number, gap: number, more: number): number {
+  const all = widths.reduce((sum, width) => sum + width, 0) + gap * (widths.length - 1);
+  if (all <= room) return widths.length;
+  let used = more;
+  let count = 0;
+  for (const width of widths) {
+    if (used + gap + width > room) break;
+    used += gap + width;
+    count += 1;
+  }
+  return count;
+}
+
+/**
+ * Chips on one line, as many as fit and a "+N" for the rest, every one named on hover: a narrow column never cuts a
+ * chip in half. A copy of them all, hidden, is what gets measured.
+ */
+export function FitChips({ chips, names }: { chips: readonly ReactNode[]; names: readonly string[] }) {
+  const row = useRef<HTMLSpanElement>(null);
+  const ruler = useRef<HTMLSpanElement>(null);
+  const [shown, setShown] = useState(chips.length);
+  useLayoutEffect(() => {
+    const element = row.current;
+    const measured = ruler.current;
+    if (!(element && measured)) return;
+    const fit = () => {
+      const parts = Array.from(measured.children, (child) => (child as HTMLElement).offsetWidth);
+      const more = parts.pop() ?? 0;
+      const gap = Number.parseFloat(getComputedStyle(measured).columnGap) || 0;
+      setShown(element.clientWidth === 0 ? chips.length : chipsThatFit(parts, element.clientWidth, gap, more));
+    };
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [chips.length]);
+  const hidden = chips.length - shown;
+  return (
+    <span ref={row} className="relative flex min-w-0 gap-1" title={hidden > 0 ? names.join(", ") : undefined}>
+      {chips.slice(0, shown)}
+      {hidden > 0 ? <span className="shrink-0 text-xs leading-[1.125rem] text-muted-foreground">+{hidden}</span> : null}
+      <span ref={ruler} aria-hidden="true" className="pointer-events-none invisible absolute top-0 left-0 flex gap-1">
+        {chips}
+        <span className="text-xs leading-[1.125rem]">+{chips.length}</span>
+      </span>
+    </span>
   );
 }

@@ -338,6 +338,35 @@ function dependencies(): Doc[] {
   return [request, resize, callback, publish];
 }
 
+export const SALES_REPORT = "shop.tasks.build_sales_report";
+
+/**
+ * A request that sent a report's task, and the worker's run of it: the run has the N+1, the request's own trace is
+ * clean. The run is made from an example, under ids of its own, without the example's records: the Logs page's
+ * tests count those.
+ */
+function salesReport(): Doc[] {
+  const request = sender("POST", "/api/reports/sales");
+  const from = enqueue(request, "E", SALES_REPORT, "sales-report");
+  const example = readFileSync(new URL("python-django-n-plus-one.json", EXAMPLES), "utf8");
+  const doc = JSON.parse(example.replaceAll("01M4GPC1", "01M4RPTS")) as Doc;
+  const spans = doc["spans"] as Doc[];
+  const root = spans[0] as Doc;
+  const head = { ...root, kind: "task", name: SALES_REPORT };
+  const attrs = { ...WORKER, "task.system": "celery", "task.id": "sales-report", "task.state": "SUCCESS" };
+  const links = [{ kind: "enqueued_by", trace_id: request["id"], span_id: from.span }];
+  const task = {
+    ...doc,
+    kind: "task",
+    name: SALES_REPORT,
+    attrs,
+    links,
+    spans: spans.map((span) => (span === root ? head : span)),
+    logs: [],
+  };
+  return [request, task];
+}
+
 // A consumer's handlers: long names alike but for their ends, which is what tells them apart.
 export const CONSUMER = "chat.workers.media.consumers.ThumbnailConsumer";
 export const HANDLERS = ["thumbnails_regenerate", "thumbnails_purge", "thumbnails_notify"].map(
@@ -972,14 +1001,15 @@ export default async function seed(): Promise<void> {
     ...chain(),
     ...chord(),
     ...dependencies(),
+    ...salesReport(),
     ...limits(),
     everyTab(),
   ];
   const first = Date.now() * 1000 - SPREAD_US * (docs.length + 1);
   const moved = docs.map((doc, index) => due(shift(doc, first + index * SPREAD_US - Number(doc["start"])) as Doc));
-  // A trace from an app whose clock is two hours behind, and that went over the limits: the oldest of all, so no list
-  // opens on it.
-  moved.push(shift(late(), first - 2 * 3_600_000_000) as Doc);
+  // A trace from an app whose clock is two and a half hours behind, and that went over the limits: the oldest of all,
+  // so no list opens on it. Its time is from now, not from the first of the others: more traces seeded don't move it.
+  moved.push(shift(late(), Date.now() * 1000 - 9_000_000_000) as Doc);
   const response = await fetch(`${CONSOLE}api/ingest`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

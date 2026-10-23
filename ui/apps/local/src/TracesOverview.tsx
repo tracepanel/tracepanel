@@ -2,6 +2,7 @@ import {
   CallsChart,
   type DataSource,
   duration,
+  KindBadge,
   LatencyChart,
   MethodBadge,
   type OperationStats,
@@ -13,7 +14,6 @@ import {
   StatGrid,
   TaskName,
 } from "@tracepanel/ui";
-import { Badge } from "@tracepanel/ui/components/ui/badge";
 import { Card } from "@tracepanel/ui/components/ui/card";
 import { useEffect, useState } from "react";
 import { Figure, Measure, OverviewNumbers, OverviewRange, OverviewSection, useOverviewOpen } from "./Overview";
@@ -48,8 +48,6 @@ export const JOB_RUNS: OverviewScope = { filter: "kind:command", noun: "run", gr
 export const RPC_CALLS: OverviewScope = { filter: "kind:rpc", noun: "call", group: "methods" };
 // A page's views and the actions on it together: events.
 export const PAGE_VIEWS: OverviewScope = { filter: "kind:page", noun: "event", group: "pages" };
-
-const KIND_BADGES: Record<string, string> = { command: "job", websocket: "ws" };
 
 const KIND_LABEL: Record<string, string> = {
   http: "HTTP requests",
@@ -304,7 +302,7 @@ function OperationList({
             >
               {item.kind === "http" && item.name.startsWith("GraphQL ") ? (
                 <>
-                  <MethodBadge method="GQL" />
+                  <KindBadge kind="graphql" />
                   <span className="min-w-0 flex-1 truncate font-mono">{item.name.slice("GraphQL ".length)}</span>
                 </>
               ) : item.kind === "http" ? (
@@ -317,9 +315,7 @@ function OperationList({
                 </>
               ) : (
                 <>
-                  <Badge variant="outline" className="font-mono text-2xs uppercase">
-                    {KIND_BADGES[item.kind] ?? item.kind}
-                  </Badge>
+                  <KindBadge kind={item.kind} />
                   <OperationName item={item} />
                 </>
               )}

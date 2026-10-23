@@ -62,8 +62,7 @@ export function DataTable<T>({
   density?: Density | undefined;
   children: (rows: DataRows<T>) => ReactNode;
 }) {
-  const arranged = useColumns(table, columns);
-  const { ref, widths } = useColumnWidths(arranged, MENU_REM);
+  const { ref, columns: arranged, widths } = useColumnWidths(useColumns(table, columns), MENU_REM);
   const shown = arranged.shown;
   const rows: DataRows<T> = {
     cells: (item) => <Cells item={item} shown={shown} density={density} />,

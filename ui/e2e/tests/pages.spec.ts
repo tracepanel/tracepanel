@@ -8,7 +8,7 @@ test("a page lists its view, then its actions, a failed one counted", async ({ p
   await expect(rows).toHaveCount(3);
   await expect(rows.nth(0)).toContainText("view");
   await expect(rows.filter({ hasText: '"Delete"' })).toContainText("1");
-  await expect(rows.filter({ hasText: '"Save"' })).toContainText("click");
+  await expect(rows.filter({ hasText: '"Save"' })).toContainText("CLICK");
 });
 
 test("an action's trace is headed by what was done, on which page", async ({ page }) => {

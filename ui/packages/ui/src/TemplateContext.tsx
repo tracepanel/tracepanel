@@ -1,4 +1,5 @@
-import { NameValues } from "./NameValues";
+import { NameValues, RowsLookContext } from "./NameValues";
+import { SectionHeading } from "./primitives";
 import type { Attrs } from "./types";
 
 // What a template was rendered with, as the Python SDK records it: its names and their values (repr-ed, cut,
@@ -26,14 +27,14 @@ function rowsOf(attrs: Attrs): { name: string; value: string }[] | null {
 /** The rows, a long value folded, and how many names were left out. */
 function ContextRows({ rows, omitted }: { rows: { name: string; value: string }[]; omitted: number }) {
   return (
-    <div className="overflow-hidden rounded-lg border bg-card">
+    <RowsLookContext value="plain">
       <NameValues rows={rows} />
       {omitted > 0 ? (
-        <p className="border-t px-3 py-1.5 text-xs text-muted-foreground">
+        <p className="py-1.5 text-xs text-muted-foreground">
           {omitted} more {omitted === 1 ? "name" : "names"} not recorded: over the limit of one template.
         </p>
       ) : null}
-    </div>
+    </RowsLookContext>
   );
 }
 
@@ -53,9 +54,10 @@ export function TemplateContext({ attrs }: { attrs: Attrs }) {
   const rows = rowsOf(attrs);
   return (
     <section className="grid gap-2" aria-label="Template context">
-      <h3 className="text-sm font-medium text-muted-foreground">
-        Context {rows ? <span className="tabular-nums">{rows.length}</span> : null}
-      </h3>
+      <SectionHeading>
+        Context{" "}
+        {rows ? <span className="text-xs font-normal text-muted-foreground tabular-nums">{rows.length}</span> : null}
+      </SectionHeading>
       <ContextBody rows={rows} attrs={attrs} />
     </section>
   );

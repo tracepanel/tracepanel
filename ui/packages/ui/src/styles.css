@@ -19,6 +19,13 @@
   --dt-size-2xl: 1.5rem;
   --dt-size-3xl: 1.75rem;
   --dt-size-4xl: 1.875rem;
+  /* The column of names of a trace's facts, its related traces and its attributes: at least this wide, so their
+     values start on one line. */
+  --dt-fact-label: 9rem;
+  /* The slot a method or a trace's kind takes at a row's start: as wide as the widest word, DELETE, with its padding
+     and some room to spare, in the badge's own font (ch, where it's used): a fixed 3rem fit PATCH by half a pixel
+     on macOS and missed it on Linux, where the names after it started half a pixel apart. */
+  --dt-lead: calc(6.5ch + 0.625rem);
 
   --dt-ink: rgb(10 12 17 / 0.9);
   --dt-ink-2: #12151d;
@@ -141,55 +148,57 @@
   --dt-float-panel-shadow-bottom: 0 -24px 60px rgb(10 12 17 / 0.3);
 }
 
-/* Light theme: same identity on white and warm grey, darker inks so text and marks keep their contrast. */
+/* Light theme, crisp neutral: white everywhere, structure from hairlines rather than fills or shadows; near-black
+   text and one grey for labels; colour only where it means something (a status, an issue, the brand on the current
+   place). Status inks dark enough for AA on white and on their own soft tints. */
 :root[data-theme="light"] {
   color-scheme: light;
 
   --dt-ink: rgb(255 255 255 / 0.95);
-  --dt-ink-2: #f5f5f3;
-  --dt-ink-text: #16181d;
-  --dt-ink-muted: #5f6470;
+  --dt-ink-2: #f6f6f8;
+  --dt-ink-text: #18181b;
+  --dt-ink-muted: #63636e;
   --dt-lime: #b6e24a;
   --dt-lime-text: #1b2a05;
 
   --dt-page: #ffffff;
   --dt-bg: #ffffff;
-  --dt-paper: #f6f6f4;
-  --dt-subtle: #f8f8f6;
-  --dt-muted-bg: #efefec;
-  --dt-hover: rgb(22 24 29 / 0.045);
-  --dt-selected: rgb(124 79 240 / 0.08);
-  --dt-border: #e7e7e2;
-  --dt-border-strong: #d5d5ce;
+  --dt-paper: #fafafa;
+  --dt-subtle: #fafafa;
+  --dt-muted-bg: #f4f4f5;
+  --dt-hover: rgb(9 9 11 / 0.035);
+  --dt-selected: rgb(124 79 240 / 0.06);
+  --dt-border: #ebebed;
+  --dt-border-strong: #d4d4d8;
 
-  --dt-text: #16181d;
-  --dt-text-2: #3a3e47;
-  --dt-text-3: #5f6470;
+  --dt-text: #09090b;
+  --dt-text-2: #3f3f46;
+  --dt-text-3: #71717a;
 
-  --dt-accent: #6d3fe0;
+  --dt-accent: #6232d6;
   --dt-accent-strong: #7c4ff0;
-  --dt-accent-bg: rgb(124 79 240 / 0.09);
-  --dt-glow: 0 0 0 3px rgb(124 79 240 / 0.2);
+  --dt-accent-bg: rgb(124 79 240 / 0.07);
+  --dt-glow: 0 0 0 3px rgb(124 79 240 / 0.18);
 
-  --dt-ok: #3d7a0c;
-  --dt-ok-bg: rgb(98 160 20 / 0.11);
-  --dt-warn: #b45309;
+  --dt-ok: #0f6b2f;
+  --dt-ok-bg: rgb(22 163 74 / 0.09);
+  --dt-warn: #9a4a00;
   --dt-warn-strong: #b45309;
-  --dt-warn-bg: rgb(217 119 6 / 0.09);
-  --dt-warn-border: rgb(217 119 6 / 0.28);
-  --dt-error: #d0342c;
-  --dt-error-bg: rgb(220 52 44 / 0.07);
-  --dt-error-border: rgb(220 52 44 / 0.3);
-  --dt-info: #3456d6;
-  --dt-info-bg: rgb(52 86 214 / 0.08);
+  --dt-warn-bg: rgb(234 140 0 / 0.1);
+  --dt-warn-border: rgb(217 119 6 / 0.25);
+  --dt-error: #b42318;
+  --dt-error-bg: rgb(220 38 38 / 0.07);
+  --dt-error-border: rgb(220 38 38 / 0.25);
+  --dt-info: #2552d0;
+  --dt-info-bg: rgb(37 99 235 / 0.08);
 
-  --dt-get: #3456d6;
-  --dt-post: #3d7a0c;
-  --dt-put: #b45309;
-  --dt-delete: #d0342c;
+  --dt-get: #1d4ed8;
+  --dt-post: #0f6b2f;
+  --dt-put: #9a4a00;
+  --dt-delete: #b42318;
 
-  --dt-k-request: rgb(95 100 112 / 0.28);
-  --dt-k-django: rgb(95 100 112 / 0.28);
+  --dt-k-request: rgb(99 99 110 / 0.26);
+  --dt-k-django: rgb(99 99 110 / 0.26);
   --dt-k-view: #7c4ff0;
   --dt-k-template: #0d9488;
   --dt-k-sql: #3456d6;
@@ -202,47 +211,51 @@
   --dt-k-mail: #db2777;
   --dt-k-signal: #ca8a04;
 
-  --dt-mark: rgb(95 100 112 / 0.28);
+  --dt-mark: rgb(99 99 110 / 0.26);
   --dt-db: #6d5ce7;
-  --dt-shadow: 0 1px 2px rgb(22 24 29 / 0.05), 0 4px 14px rgb(22 24 29 / 0.04);
+  --dt-shadow: none;
+  --dt-radius: 0.5rem;
 
   --dt-surface: #ffffff;
-  --dt-chrome: #f7f7f5;
-  --dt-chrome-strong: #f0f0ed;
+  --dt-chrome: #fafafa;
+  --dt-chrome-strong: #efeff3;
+  /* The console's sidebar white like the page, its hairline the edge. */
+  --dt-sidebar: #ffffff;
   --dt-panel: #ffffff;
   --dt-popover: #ffffff;
-  --dt-popover-shadow: 0 16px 40px rgb(22 24 29 / 0.14), 0 0 0 1px rgb(22 24 29 / 0.05);
+  --dt-popover-shadow:
+    0 12px 32px -4px rgb(24 24 27 / 0.12), 0 2px 6px rgb(24 24 27 / 0.05), 0 0 0 1px rgb(24 24 27 / 0.06);
   --dt-card: #ffffff;
-  --dt-faint: #f6f6f4;
+  --dt-faint: #f4f4f5;
   --dt-field: #ffffff;
-  --dt-grid: rgb(22 24 29 / 0.07);
-  --dt-scrollbar: rgb(22 24 29 / 0.22);
+  --dt-grid: rgb(24 24 27 / 0.07);
+  --dt-scrollbar: rgb(24 24 27 / 0.2);
   --dt-backdrop: #ffffff;
 
   --dt-chart-1: #6d5ce7;
   --dt-chart-2: #0f8f83;
 
-  --dt-syn-keyword: #6d28d9;
-  --dt-syn-identifier: #1d1830;
-  --dt-syn-string: #3d7a0c;
-  --dt-syn-number: #b45309;
-  --dt-syn-comment: #8a84a6;
-  --dt-syn-operator: #6e6889;
-  --dt-syn-function: #3456d6;
-  --dt-syn-param-bg: rgb(217 119 6 / 0.12);
+  --dt-syn-keyword: #7230d9;
+  --dt-syn-identifier: #1f2328;
+  --dt-syn-string: #17703a;
+  --dt-syn-number: #a34a00;
+  --dt-syn-comment: #6e7781;
+  --dt-syn-operator: #57606a;
+  --dt-syn-function: #1f5bc6;
+  --dt-syn-param-bg: rgb(234 140 0 / 0.12);
   --dt-alias-text: #0f766e;
 
   --dt-float: #ffffff;
-  --dt-float-text: #16181d;
-  --dt-float-strong: #16181d;
-  --dt-float-muted: #6b7280;
-  --dt-float-border: #e2e2dc;
-  --dt-float-border-hover: #b9b9b1;
-  --dt-float-divider: #e2e2dc;
-  --dt-float-edge: #e2e2dc;
-  --dt-float-rule: #ecece7;
-  --dt-float-hover: #f5f5f2;
-  --dt-float-chip: #f0f0ed;
+  --dt-float-text: #18181b;
+  --dt-float-strong: #18181b;
+  --dt-float-muted: #63636e;
+  --dt-float-border: #e2e2e8;
+  --dt-float-border-hover: #b8b8c2;
+  --dt-float-divider: #e6e6eb;
+  --dt-float-edge: #e2e2e8;
+  --dt-float-rule: #ededf1;
+  --dt-float-hover: #f4f4f6;
+  --dt-float-chip: #f0f0f3;
   --dt-float-link-hover: #4c22b8;
   --dt-float-drop: 0 10px 28px rgb(22 24 29 / 0.12);
   --dt-float-shadow: 0 10px 28px rgb(22 24 29 / 0.12), 0 1px 3px rgb(22 24 29 / 0.08);
@@ -262,9 +275,11 @@ code,
 
 /* ---------- Primitives ---------- */
 
+/* A method and a trace's kind take one slot at a row's start, as wide as the widest (PATCH, TASK), in both themes:
+   the names after them start at one edge whatever the word (GQL, GET, POST, PATCH). */
 .dt-method {
   flex: none;
-  min-width: 2.375rem;
+  min-width: var(--dt-lead);
   padding: 1px 0.3125rem;
   border-radius: 0.25rem;
   font: 600 var(--dt-size-xs) / 1rem var(--dt-mono);
@@ -285,6 +300,45 @@ code,
 .dt-method[data-method="DELETE"] {
   color: var(--dt-delete);
   background: color-mix(in srgb, var(--dt-delete) 12%, transparent);
+}
+/* Light: a method is its colour in monospace, no box (and a trace's kind, below, the same): on white a tint behind
+   every row's first word made a column of boxes. Left-aligned in the same slot, so the paths after it line up. */
+:root[data-theme="light"] .dt-method {
+  padding-inline: 0;
+  background: none;
+  text-align: left;
+}
+
+/* A trace's kind (TASK, JOB, WS, GQL…): the method's shape in the brand's colour. Muted, a call's kind in the call
+   tree (VIEW, SQL, TASK.ENQUEUE): the same shape, quiet. */
+.dt-kind {
+  flex: none;
+  padding: 1px 0.3125rem;
+  border-radius: 0.25rem;
+  font: 600 var(--dt-size-xs) / 1rem var(--dt-mono);
+  letter-spacing: 0.02em;
+  text-align: center;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--dt-accent);
+  background: var(--dt-accent-bg);
+}
+.dt-kind:not([data-muted]) {
+  min-width: var(--dt-lead);
+}
+.dt-kind[data-muted] {
+  color: var(--dt-text-3);
+  background: var(--dt-hover);
+}
+:root[data-theme="light"] .dt-kind:not([data-muted]) {
+  padding-inline: 0;
+  background: none;
+  text-align: left;
+}
+/* Light: a call's kind, a label rather than the trace's own word, keeps a quiet square fill. */
+:root[data-theme="light"] .dt-kind[data-muted] {
+  border-radius: 0.1875rem;
+  background: var(--dt-faint);
 }
 
 .dt-status {
@@ -313,6 +367,38 @@ code,
 .dt-status[data-tone="error"] {
   color: var(--dt-error);
   background: var(--dt-error-bg);
+}
+.dt-status[data-tone="brand"] {
+  color: var(--dt-accent);
+  background: var(--dt-accent-bg);
+}
+.dt-status[data-tone="neutral"] {
+  color: var(--dt-text-2);
+  background: var(--dt-hover);
+}
+/* Light: a status (and a task's state) is a dot of its tone before the code, no box. */
+:root[data-theme="light"] .dt-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0;
+  background: none;
+  font-weight: 500;
+}
+:root[data-theme="light"] .dt-status::before {
+  content: "";
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 50%;
+  background: currentColor;
+}
+/* The empty slot as wide as a dot and a code. */
+:root[data-theme="light"] .dt-status-empty::before {
+  content: "000";
+  width: auto;
+  height: auto;
+  padding-left: 0.75rem;
+  background: none;
 }
 
 .dt-tag {
@@ -647,6 +733,69 @@ tr[data-new] {
 .dt-request-queries[data-zero] {
   color: var(--dt-text-3);
 }
+/* A linked trace's findings and queries, on the row that leads to it: they keep their size, its name gives way. */
+.dt-run-chips {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--dt-text-2);
+  font-size: var(--dt-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+.dt-run-chips .dt-request-queries {
+  margin-left: 0.125rem;
+}
+/* A request's task runs found something: their count apart from its own, an amber outline with the corner its runs
+   hang from. */
+.dt-run-issues {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.125rem;
+  height: 1.125rem;
+  padding: 0 0.375rem 0 0.3125rem;
+  border: 1px dashed color-mix(in srgb, var(--dt-warn) 60%, transparent);
+  border-radius: 999px;
+  color: var(--dt-warn);
+  font-size: var(--dt-size-xs);
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.dt-run-issues svg {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+/* A task run under the request it came from: one step deeper, its corner dashed (it ran later, in a worker). */
+.dt-request-row[data-depth="2"] {
+  padding-left: 3.5rem;
+}
+.dt-request-row[data-run]::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 1.625rem;
+  width: 0.5625rem;
+  height: 1.125rem;
+  border-bottom: 1px dashed var(--dt-border-strong);
+  border-left: 1px dashed var(--dt-border-strong);
+  border-bottom-left-radius: 0.25rem;
+}
+.dt-request-row[data-run][data-depth="2"]::after {
+  left: 2.5rem;
+}
+.dt-requests[data-compact] .dt-request-row[data-depth="2"] {
+  padding-left: 2.875rem;
+}
+.dt-requests[data-compact] .dt-request-row[data-run]::after {
+  left: 1rem;
+  width: 0.5rem;
+  height: 1rem;
+}
+.dt-requests[data-compact] .dt-request-row[data-run][data-depth="2"]::after {
+  left: 1.875rem;
+}
 /* ---------- Trace ---------- */
 
 .dt-trace-head {
@@ -718,6 +867,10 @@ tr[data-new] {
 /* The full trace page: the request as its headline. */
 .dt-trace[data-variant="full"] .dt-trace-title {
   gap: 0.625rem;
+}
+/* A headline is no list: its method or kind is its own width, not a list's slot (a trace's, a group's). */
+:is(h1, h2, .dt-trace-title) :is(.dt-method, .dt-kind) {
+  min-width: 0;
 }
 .dt-trace[data-variant="full"] .dt-trace-title h2 {
   font-size: var(--dt-size-2xl);
@@ -792,6 +945,9 @@ tr[data-new] {
   font-size: var(--dt-size-xl);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+}
+:root[data-theme="light"] .dt-metrics {
+  background: var(--dt-card);
 }
 .dt-metric-sub {
   color: var(--dt-text-2);
@@ -1000,6 +1156,10 @@ tr[data-new] {
 .dt-tab[aria-selected="true"] {
   border-bottom-color: var(--dt-accent);
   color: var(--dt-text);
+}
+/* Light: the open tab underlined in the text's near-black; the brand stays on its icon. */
+:root[data-theme="light"] .dt-tab[aria-selected="true"] {
+  border-bottom-color: var(--dt-text);
 }
 .dt-tab > svg {
   flex: none;
@@ -1602,6 +1762,15 @@ details[data-focused] > .dt-sql-group {
   background: var(--dt-k);
 }
 
+/* On the console's trace page the call tree and a trace's log table sit on the page's content edges, as its head,
+   tiles and tabs do; in the panel they span it. */
+.dt-trace[data-variant="full"] .dt-tabpanel > .dt-map > .dt-map-body {
+  margin-inline: 1rem;
+}
+.dt-trace[data-variant="full"] .dt-tabpanel > [data-slot="table-container"] {
+  padding-inline: 1rem;
+}
+
 .dt-map-head {
   display: flex;
   justify-content: space-between;
@@ -1614,6 +1783,13 @@ details[data-focused] > .dt-sql-group {
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+/* Light: a table's header, white over a strong rule (the console's tables have the same). */
+:root[data-theme="light"] .dt-map-head {
+  border-bottom-color: var(--dt-border-strong);
+  background: var(--dt-card);
+  font-weight: 500;
+  letter-spacing: 0.06em;
 }
 .dt-map-row {
   --dt-k: var(--dt-k-request);
@@ -1657,7 +1833,7 @@ details[data-focused] > .dt-sql-group {
     display: none;
   }
   .dt-map-name .dt-map-text {
-    min-width: 3rem;
+    min-width: 2.5rem;
   }
 }
 .dt-map-row[aria-current="true"] {
@@ -1744,27 +1920,27 @@ details[data-focused] > .dt-sql-group {
 .dt-map-row[aria-expanded="true"] .dt-map-caret .dt-icon {
   transform: rotate(90deg);
 }
-.dt-map-kind {
-  flex: none;
-  padding: 0 0.3125rem;
-  border-radius: 0.25rem;
-  background: color-mix(in srgb, var(--dt-k) 16%, transparent);
-  color: color-mix(in srgb, var(--dt-k) 75%, var(--dt-text));
-  font: 600 var(--dt-size-2xs) / 1rem var(--dt-mono);
-  text-transform: uppercase;
+/* A call's kind: the muted kind badge (.dt-kind); a log record's level in its tone when it needs a look. */
+.dt-map-row[data-level="warning"] .dt-map-kind,
+.dt-map-row[data-level="error"] .dt-map-kind,
+.dt-map-row[data-level="critical"] .dt-map-kind,
+.dt-map-row[data-kind="error"] .dt-map-kind {
+  color: var(--dt-k);
+  background: color-mix(in srgb, var(--dt-k) 14%, transparent);
 }
 .dt-map-text {
-  flex: 1 1 auto;
-  /* The call itself keeps room: a long alias gives way first. */
+  flex: 1 1000 auto;
+  /* The call's text is cut before the chips beside it, down to this. */
   min-width: min(4.5rem, 25%);
   overflow: hidden;
   font: var(--dt-size-sm) var(--dt-mono);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* An alias shrinks before the call's text and the issue chip; its full name is its title. */
+/* An alias keeps its size while the call's text gives way (it shrinks a thousand times faster); with the text at its
+   least, a long alias is cut too, its full name its title. */
 .dt-map-name .dt-alias {
-  flex: 0 4 auto;
+  flex: 0 1 auto;
   min-width: 1.75rem;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1904,21 +2080,6 @@ details[data-focused] > .dt-sql-group {
   color: var(--dt-text-3);
   font-style: italic;
 }
-.dt-map-state {
-  padding: 0 0.375rem;
-  border-radius: 0.3125rem;
-  background: var(--dt-hover);
-  color: var(--dt-text-2);
-  font-size: var(--dt-size-2xs);
-}
-.dt-map-state[data-state="success"] {
-  background: var(--dt-ok-bg);
-  color: var(--dt-ok);
-}
-.dt-map-state[data-state="failure"] {
-  background: var(--dt-error-bg);
-  color: var(--dt-error);
-}
 .dt-map-open {
   justify-self: start;
   padding: 0;
@@ -1945,6 +2106,11 @@ details[data-focused] > .dt-sql-group {
 }
 
 /* A narrow tree: the selected row's details open under it, in the row's tint. */
+/* A call's details are several lists of names and values (its fields, Called from, every attribute, a template's
+   context): one column of names for all of them, so every value starts at one edge. */
+:is(.dt-map-inline, .dt-map-side) {
+  --dt-name-col: min(15rem, 45%);
+}
 .dt-map-inline {
   border-bottom: 1px solid var(--dt-border);
   background: var(--dt-subtle);
@@ -2136,10 +2302,11 @@ details[data-focused] > .dt-sql-group {
   font: 600 var(--dt-size-2xs) / 1rem var(--dt-mono);
   vertical-align: 1px;
 }
-/* A query a template made as it rendered: the template and its line, quieter than the call; it gives way first. */
+/* A query a template made as it rendered: the template and its line, quieter than the call. It keeps its size while
+   the statement beside it is cut (which shrinks a thousand times faster), and is cut only past that. */
 .dt-from-template {
   display: inline-block;
-  flex: 0 40 auto;
+  flex: 0 1 auto;
   min-width: 0;
   margin-left: 0.375rem;
   padding: 0 0.375rem;

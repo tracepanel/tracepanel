@@ -220,10 +220,16 @@ async fn traces(State(reader): State<Shared>, Query(query): Params) -> Response 
         })
         .unwrap_or_default();
     let limit = limit(&query);
+    // The panel's list asks for the task runs its requests led to, to nest them under each.
+    let runs = query.get("runs").is_some_and(|runs| runs == "1");
     if !ids.is_empty() {
         return answer(
             read(&reader, move |reader| {
-                Ok(json!({"traces": reader.list_traces(&ids, limit)?, "next": null}))
+                let mut listing = json!({"traces": reader.list_traces(&ids, limit)?, "next": null});
+                if runs {
+                    listing["runs"] = reader.runs(&ids)?;
+                }
+                Ok(listing)
             })
             .await,
         );

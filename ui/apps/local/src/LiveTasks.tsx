@@ -3,14 +3,15 @@ import {
   type DataColumn,
   type DataSource,
   DataTable,
+  KindBadge,
   type LiveTask,
   type LiveTasks,
   type LiveWorker,
+  NeutralTag,
   NO_LIVE_TASKS,
   TaskName,
   type TraceSummary,
 } from "@tracepanel/ui";
-import { Badge } from "@tracepanel/ui/components/ui/badge";
 import { useStored } from "@tracepanel/ui/hooks/useStored";
 import { argumentsOf, byState, elapsed, LIVE_STATES, stateSince } from "@tracepanel/ui/lib/liveTasks";
 import { cn } from "@tracepanel/ui/lib/utils";
@@ -213,19 +214,18 @@ function Workers({ workers }: { workers: readonly LiveWorker[] }) {
     <ul className="m-0 ml-auto flex list-none flex-wrap items-center gap-1.5 p-0" aria-label="Workers">
       {workers.map((worker) => (
         <li key={worker.name}>
-          <Badge
-            variant="outline"
-            className="gap-1.5 bg-background text-xs font-normal"
+          <NeutralTag
+            className="inline-flex items-center gap-1.5 font-normal"
             // The app it serves, not a system: one app's worker runs @Async and Kafka alike, and its last task's
             // system would flip the label.
             title={worker.service}
           >
             <Light state={worker.in_flight ? "busy" : "ready"} />
-            <span className="font-mono">{worker.name}</span>{" "}
+            <span>{worker.name}</span>{" "}
             <span className={cn("tabular-nums", worker.in_flight ? "text-foreground" : "text-muted-foreground")}>
               {worker.in_flight ? `${worker.in_flight} running` : "idle"}
             </span>
-          </Badge>
+          </NeutralTag>
         </li>
       ))}
     </ul>
@@ -264,11 +264,7 @@ const COLUMNS: DataColumn<Ticking>[] = [
     id: "system",
     label: "System",
     width: 7.5,
-    cell: ({ task }) => (
-      <Badge variant="outline" className="text-xs">
-        {taskSystem(task.system)}
-      </Badge>
-    ),
+    cell: ({ task }) => <KindBadge kind={taskSystem(task.system)} muted={true} />,
   },
   // Where it is: the worker that runs it, or the queue it waits in.
   { id: "where", label: "Where", width: 10, cell: ({ task }) => <Where task={task} /> },

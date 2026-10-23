@@ -9,6 +9,8 @@ use std::collections::{HashSet, VecDeque};
 pub(crate) const GROUP_SHOWN: usize = 20;
 /// How many runs a workflow's graph takes in: a bigger workflow is cut there, and its graph says so.
 pub(crate) const GRAPH_RUNS: usize = 100;
+/// How many task runs a trace's listing names under it (`Reader::runs`): the panel's list nests them.
+pub(crate) const RUNS_SHOWN: usize = 50;
 
 /// A run's own workflow rows: role → values, in the order written.
 type Rows = HashMap<String, Vec<String>>;
@@ -99,6 +101,36 @@ pub(crate) struct Linked<'a> {
 
 impl Reader {
     /// The traces in this order, oldest first.
+    /// The task runs each of these traces led to: those it enqueued, and those they enqueued in turn (a chord's
+    /// callback, a job's on_success), oldest first, by trace id. A trace that led to none is left out.
+    pub fn runs(&self, ids: &[String]) -> rusqlite::Result<Value> {
+        let db = self.connect()?;
+        let mut statement = db.prepare_cached(
+            "SELECT trace_id FROM links WHERE linked_trace = ?1 AND kind = 'enqueued_by'",
+        )?;
+        let mut found = serde_json::Map::new();
+        for id in ids {
+            let mut seen: HashSet<String> = HashSet::from([id.clone()]);
+            let mut queue = VecDeque::from([id.clone()]);
+            let mut runs = Vec::new();
+            while let Some(next) = queue.pop_front() {
+                let enqueued: Vec<String> = statement
+                    .query_map([&next], |row| row.get(0))?
+                    .collect::<Result<_, _>>()?;
+                for run in enqueued {
+                    if runs.len() < RUNS_SHOWN && seen.insert(run.clone()) {
+                        runs.push(run.clone());
+                        queue.push_back(run);
+                    }
+                }
+            }
+            if !runs.is_empty() {
+                found.insert(id.clone(), self.summaries(&runs)?);
+            }
+        }
+        Ok(Value::Object(found))
+    }
+
     fn summaries(&self, ids: &[String]) -> rusqlite::Result<Value> {
         if ids.is_empty() {
             return Ok(Value::Array(Vec::new()));
@@ -558,6 +590,40 @@ mod tests {
 
         // A task in no workflow has none.
         assert_eq!(reader.related("X").unwrap().get("workflow"), None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_requests_runs_are_those_it_enqueued_and_theirs_oldest_first() {
+        let (reader, dir) = store(
+            "runs",
+            &[
+                request("R", 0),
+                run("A", 2, serde_json::json!({"task.id": "a"}), Some("R")),
+                run("B", 1, serde_json::json!({"task.id": "b"}), Some("R")),
+                run("C", 3, serde_json::json!({"task.id": "c"}), Some("A")),
+                request("Q", 4),
+                run("X", 5, serde_json::json!({"task.id": "x"}), None),
+            ],
+        );
+        let runs = reader
+            .runs(&["R".to_owned(), "A".to_owned(), "Q".to_owned()])
+            .unwrap();
+
+        // The request's own, then the one its task sent; a run's are its own. One that led to none is left out.
+        let shown: serde_json::Map<String, Value> = runs
+            .as_object()
+            .unwrap()
+            .iter()
+            .map(|(id, runs)| (id.clone(), ids(runs)))
+            .collect();
+        assert_eq!(
+            Value::Object(shown),
+            serde_json::json!({"R": ["B", "A", "C"], "A": ["C"]})
+        );
+
+        // Each as a listing names it.
+        assert_eq!(runs["A"][0]["name"], serde_json::json!("jobs.C"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

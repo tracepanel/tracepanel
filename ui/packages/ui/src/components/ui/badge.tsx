@@ -15,10 +15,11 @@ const badgeVariants = cva(
         outline: "border-border text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground",
         ghost: "[a&]:hover:bg-accent [a&]:hover:text-accent-foreground",
         link: "text-primary underline-offset-4 [a&]:hover:underline",
-        // Status tones, a soft fill: what needs a look, what failed, what went well.
-        warn: "bg-warn-soft text-warn",
-        error: "bg-error-soft text-error",
-        ok: "bg-ok-soft text-ok",
+        // Status tones, a soft fill: what needs a look, what failed, what went well. On white a quiet square tint,
+        // the one fill left in a row (a method or a status there is its colour alone).
+        warn: "bg-warn-soft text-warn light:rounded-[0.1875rem] light:font-medium",
+        error: "bg-error-soft text-error light:rounded-[0.1875rem] light:font-medium",
+        ok: "bg-ok-soft text-ok light:rounded-[0.1875rem] light:font-medium",
       },
       size: {
         default: "px-2 py-0.5",

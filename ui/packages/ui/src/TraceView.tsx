@@ -40,7 +40,7 @@ import { pageParts } from "./lib/page";
 import { linkProps, type TraceLinks } from "./links";
 import { Metrics } from "./Metrics";
 import { ProfilePane } from "./ProfileView";
-import { MethodBadge, RoutePath, StatusBadge, TaskName } from "./primitives";
+import { RoutePath, StateBadge, StatusBadge, TaskName, TraceBadge } from "./primitives";
 import { RequestInfo } from "./RequestInfo";
 import { type Explain, SqlList } from "./SqlList";
 import { type SystemCalls, systemCalls, systemOfIssue } from "./systemCalls";
@@ -290,28 +290,42 @@ function traceTabs({
   ];
 }
 
-// task.state is upper case (SUCCESS, FAILURE…): looked up lower-cased.
-const STATE_TONES: Record<string, string> = { success: "ok", failure: "error", retry: "warn", skipped: "info" };
-
-function TaskStateBadge({ state }: { state: string }) {
-  return (
-    <span className="dt-status" data-tone={STATE_TONES[state.toLowerCase()] ?? "info"}>
-      {state.toLowerCase()}
-    </span>
-  );
-}
-
 /** How it went, on the Request tab: its status, a task's state, or that it failed. */
 function outcomeOf(trace: Trace): ReactNode {
   const status = trace.attrs["http.status_code"];
   const state = trace.attrs["task.state"];
   if (typeof status === "number") return <StatusBadge status={status} />;
-  if (typeof state === "string") return <TaskStateBadge state={state} />;
+  if (typeof state === "string") return <StateBadge state={state} />;
   return trace.status === "error" ? (
     <span className="dt-status" data-tone="error">
       failed
     </span>
   ) : null;
+}
+
+/**
+ * The panel's one toolbar row: the way back to the trace this one was opened from, the tabs, Explore and the host's
+ * buttons. No status or duration here: the request list beside the trace shows them on the selected row.
+ */
+function StripHeader({
+  lead,
+  tabs,
+  explore,
+  actions,
+}: {
+  lead: ReactNode;
+  tabs: ReactNode;
+  explore: ReactNode;
+  actions: ReactNode;
+}) {
+  return (
+    <header className="dt-trace-strip">
+      {lead}
+      {tabs}
+      {explore}
+      {actions ? <div className="flex shrink-0 items-center gap-0.5">{actions}</div> : null}
+    </header>
+  );
 }
 
 export interface TraceViewProps {
@@ -327,6 +341,8 @@ export interface TraceViewProps {
   onTabChange?: ((tab: TabId) => void) | undefined;
   /** Extra header buttons from the host page (open full page, close), shown after Explore. */
   actions?: ReactNode;
+  /** In the panel, before the tabs: the way back to the trace this one was opened from. */
+  lead?: ReactNode;
   /** Traces linked to this one (Celery enqueues). */
   related?: Related | undefined;
   /** Where linked traces, issues, statements and logs lead; each missing leaves its links out. */
@@ -351,6 +367,7 @@ export function TraceView({
   initialTab,
   preferredTab,
   actions,
+  lead,
   related,
   links,
   initialSpan,
@@ -501,12 +518,7 @@ export function TraceView({
   if (compact) {
     return (
       <article className="dt-trace" data-variant="strip">
-        <header className="dt-trace-strip">
-          {tabsBar}
-          {/* No status or duration here: the request list beside the trace shows them on the selected row. */}
-          {exploreMenu}
-          {actions ? <div className="flex shrink-0 items-center gap-0.5">{actions}</div> : null}
-        </header>
+        <StripHeader lead={lead} tabs={tabsBar} explore={exploreMenu} actions={actions} />
         {panel}
       </article>
     );
@@ -518,7 +530,7 @@ export function TraceView({
         <div className="flex items-center gap-3">
           <div className="min-w-0 flex-1">
             <div className="dt-trace-title" hidden={compact}>
-              <MethodBadge method={head.badge} htmx={htmxOf(trace)} />
+              <TraceBadge word={head.badge} htmx={htmxOf(trace)} />
               <h2>
                 <HeadingTitle kind={trace.kind} title={head.title} />
               </h2>

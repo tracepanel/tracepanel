@@ -431,3 +431,30 @@ test("the Level menu offers WARNING and above: one filter, shown in the legend t
   await page.getByRole("option", { name: "error", exact: true }).click();
   await expect(page.getByRole("button", { name: "Edit level:warning,critical" })).toBeVisible();
 });
+
+test("the Logs page's Source column cuts every source at its start, never leaving a dot after the ellipsis", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1300, height: 800 });
+  await page.goto("/#/logs");
+  const source = await page
+    .getByRole("main")
+    .getByRole("columnheader", { name: "Source", exact: true })
+    .evaluate((head) => (head as HTMLTableCellElement).cellIndex);
+  await expect(page.getByRole("main").locator("tbody tr").first()).toBeVisible();
+  const texts = await page
+    .getByRole("main")
+    .locator("tbody tr")
+    .evaluateAll(
+      (rows, index) =>
+        rows.flatMap((row) => {
+          const text = (row as HTMLTableRowElement).cells[index]?.querySelector("[title]");
+          return text ? [{ shown: text.textContent ?? "", whole: text.getAttribute("title") ?? "" }] : [];
+        }),
+      source,
+    );
+  const cut = texts.filter(({ shown, whole }) => shown !== whole);
+
+  expect(texts.length).toBeGreaterThan(0);
+  expect(cut.every(({ shown }) => shown.startsWith("…") && !shown.startsWith("…."))).toBe(true);
+});

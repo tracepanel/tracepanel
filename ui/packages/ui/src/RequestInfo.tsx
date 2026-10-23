@@ -4,14 +4,14 @@ import { Badge } from "./components/ui/badge";
 import { FactGrid } from "./FactGrid";
 import { duration } from "./format";
 import { GraphqlCode } from "./GraphqlCode";
-import { grouped, LinkedTrace, StateBadge, tracesRow } from "./LinkedTrace";
+import { grouped, LinkedTrace, tracesRow } from "./LinkedTrace";
 import { handlerFullName, handlerWord } from "./lib/handler";
 import { shownValue } from "./lib/pyliteral";
 import { traceRuntime } from "./lib/runtime";
 import { unreceived } from "./lib/signals";
 import { linkProps, type TraceLinks } from "./links";
 import { type PropRow, PropTable } from "./PropTable";
-import { MethodBadge, RoutePath, StatusBadge } from "./primitives";
+import { MethodBadge, RoutePath, SectionHeading, StateBadge, StatusBadge } from "./primitives";
 import { isRequestDetail, RequestParts, requestParts } from "./RequestParts";
 import type { Attrs, Related, Trace } from "./types";
 import { taskTimingRows, workflowFacts, workflowPart } from "./Workflow";
@@ -67,6 +67,8 @@ function droppedRows(attrs: Attrs): PropRow[] {
     {
       label: "Not recorded",
       value: <span className="text-warn">{parts.join(" and ")}: over the limit of one trace</span>,
+      // A note, read whole: a line of its own.
+      wide: true,
     },
   ];
 }
@@ -121,7 +123,7 @@ function ClockNote({ off }: { off: number }) {
 
 function clockRows(trace: Trace): PropRow[] {
   const off = clockOff(trace);
-  return off === null ? [] : [{ label: "Clock", value: <ClockNote off={off} /> }];
+  return off === null ? [] : [{ label: "Clock", value: <ClockNote off={off} />, wide: true }];
 }
 
 /** The app that recorded it, a link to its page (its settings and versions) where there is one. */
@@ -344,7 +346,7 @@ function ownRows(trace: Trace, hero: boolean, related: Related | undefined, link
 function Part({ label, title, children }: { label: string; title: ReactNode; children: ReactNode }) {
   return (
     <section className="grid gap-2" aria-label={label}>
-      <h3 className="text-sm font-medium text-muted-foreground">{title}</h3>
+      <SectionHeading>{title}</SectionHeading>
       {children}
     </section>
   );
@@ -392,7 +394,7 @@ export function RequestInfo({ trace, related, links, hero: wanted }: RequestInfo
         </Part>
       ) : null}
       <WorkflowSection trace={trace} related={related} links={links} />
-      <RequestParts parts={requestParts(trace.attrs, others, graphql)} />
+      <RequestParts parts={requestParts(trace.attrs, others, graphql)} look="plain" />
     </div>
   );
 }

@@ -320,6 +320,44 @@ a {
   white-space: nowrap;
 }
 
+/* Before a linked trace's tabs: back to the trace it was opened from, named as the list names it. */
+.panel-back {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+  max-width: min(16rem, 30%);
+  height: 1.75rem;
+  margin-left: 0.25rem;
+  padding: 0 0.5rem 0 0.375rem;
+  border: 1px solid var(--dt-border);
+  border-radius: 0.5rem;
+  background: var(--dt-subtle);
+  color: var(--dt-text-2);
+  font: inherit;
+  cursor: pointer;
+}
+.panel-back:hover {
+  border-color: var(--dt-border-strong);
+  background: var(--dt-hover);
+  color: var(--dt-text);
+}
+.panel-back[data-bare] {
+  flex: none;
+  justify-content: center;
+  width: 1.75rem;
+  padding: 0;
+}
+.panel-back > svg {
+  flex: none;
+  width: 0.875rem;
+  height: 0.875rem;
+}
+.panel-back .switcher-path {
+  min-width: 3ch;
+}
+
 .switcher-count {
   display: inline-flex;
   flex: none;

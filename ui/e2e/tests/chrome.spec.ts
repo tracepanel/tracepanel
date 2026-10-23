@@ -1,4 +1,6 @@
 // The console's frame: the period, the refresh, the theme, the sidebar, and a trace that isn't there.
+
+import { traceId } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
 
 test("the period goes into the search, and the list keeps it", async ({ page }) => {
@@ -44,4 +46,59 @@ test("a trace that isn't stored says so", async ({ page }) => {
   await page.goto("/#/t/01ZZZZZZZZZZZZZZZZZZZZZZZZ");
 
   await expect(page.getByRole("main")).toContainText(/not found|no trace|isn't/i);
+});
+
+test("at 1440 × 900 the sidebar shows its Problems, its footer on one line where the items' icons start", async ({
+  page,
+}) => {
+  await page.goto("/#/endpoints");
+  const nav = page.locator("aside nav").first();
+  const issues = nav.getByRole("link", { name: /^Issues/ });
+  await expect(issues).toBeVisible();
+  const list = await nav.boundingBox();
+  const item = await issues.boundingBox();
+  const icon = await nav.locator("a svg").first().boundingBox();
+  const footer = await page.locator("aside footer span").first().boundingBox();
+  if (!(list && item && icon && footer)) throw new Error("no sidebar boxes");
+
+  expect(item.y + item.height).toBeLessThanOrEqual(list.y + list.height);
+  expect(footer.height).toBeLessThan(20);
+  expect(footer.x).toBeCloseTo(icon.x, 0);
+});
+
+test("a sidebar too long for the window fades at the edge it goes on past, and shows the current page", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 560 });
+  await page.goto("/#/issues");
+  const nav = page.locator("aside nav").first();
+  const issues = nav.getByRole("link", { name: /^Issues/ });
+  await expect(issues).toBeInViewport();
+
+  await expect.poll(() => nav.evaluate((element) => getComputedStyle(element).maskImage)).toContain("linear-gradient");
+});
+
+test("a trace, an issue, a group and an app open with their crumbs at one place, the page's full width", async ({
+  page,
+}) => {
+  const place = async () => {
+    const crumbs = page.getByRole("main").getByRole("navigation", { name: "Breadcrumb" });
+    await expect(crumbs).toBeVisible();
+    const box = await crumbs.boundingBox();
+    const main = await page.getByRole("main").locator("> *").first().boundingBox();
+    if (!(box && main)) throw new Error("no crumbs");
+    return [Math.round(box.x), Math.round(box.y), Math.round(main.x + main.width)];
+  };
+  await page.goto(`/#/t/${await traceId("GET /account/orders/")}`);
+  const trace = await place();
+  await page.goto("/#/issues");
+  await page.getByRole("main").locator("tbody tr").first().click();
+  const issue = await place();
+  await page.goto("/#/endpoints?view=overview");
+  await page.getByRole("main").locator("tbody tr").first().click();
+  const group = await place();
+  await page.goto("/#/app/shop");
+  const app = await place();
+
+  expect([issue, group, app]).toEqual([trace, trace, trace]);
 });

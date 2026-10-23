@@ -30,7 +30,9 @@ for (const width of [1440, 900]) {
       const chip = await box(row.locator('[data-slot="badge"]'));
       const track = await box(row.locator(".dt-map-track"));
 
-      expect(text.width).toBeGreaterThan(40);
+      // At least the 2.5rem (37.5 px) a narrow tree keeps of the call's text, a few characters: the chips beside it
+      // give way first. Linux's font rendering leaves it exactly there at 900 px, macOS's a few pixels more.
+      expect(text.width).toBeGreaterThanOrEqual(37);
       expect(chip.x + chip.width).toBeLessThanOrEqual(name.x + name.width + 0.5);
       expect(name.x + name.width).toBeLessThanOrEqual(track.x + 0.5);
     }
@@ -64,4 +66,23 @@ test("a row's fold opens and closes its rows without opening its details; the ar
 
   await expect(row).toHaveAttribute("aria-expanded", "true");
   await expect(details).toHaveCount(0);
+});
+
+test("a call's details give its fields and all its attributes one column of names: every value starts at one edge", async ({
+  page,
+}) => {
+  await page.goto(`/#/t/${await traceId("PATCH /campaigns/{id}/report")}?tab=calls`);
+  await page
+    .getByRole("button", { name: /^transaction/ })
+    .first()
+    .click();
+  await page.locator('.dt-map-row[data-kind="sql"]').first().click();
+  const values = page.locator(":is(.dt-map-side, .dt-map-inline) dd");
+  await expect(values.first()).toBeVisible();
+  const starts = await values.evaluateAll((cells) =>
+    cells.map((cell) => Math.round(cell.getBoundingClientRect().left)),
+  );
+
+  expect(starts.length).toBeGreaterThan(2);
+  expect(new Set(starts).size).toBe(1);
 });
