@@ -384,6 +384,11 @@
 - The sidebar's items read a little larger, 15 px in 34 px rows in both
   themes (they were 14 px in dark and 13 px in light). Its group titles stay
   small, and Problems stays pinned in view.
+- On the Services map a project's roles in one layer sit together in one
+  frame, one under another: the shop's worker, web and command were spread
+  with a gap and its frame overlapped the blog's. A call past a layer is
+  routed around the frames in between, and calls recorded under a role the
+  app doesn't list start at the app's box, not at an empty spot.
 
 ## 0.4.1 (2026-10-21)
 

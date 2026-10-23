@@ -90,3 +90,23 @@ test("a call's line leaves its box's right side and arrives at the middle of the
   // Side to side: one S curve (M … C …), not dagre's bends ending anywhere on a border.
   expect(paths.filter((d) => /^M [\d.-]+ [\d.-]+ C /.test(d)).length).toBeGreaterThan(paths.length / 2);
 });
+
+test("a project's frames never overlap: its roles in a layer sit together, one under another", async ({ page }) => {
+  await page.goto("/#/services");
+  const frames = page.getByRole("main").locator(".border-dashed");
+  await expect(frames.first()).toBeVisible();
+  const boxes = await frames.evaluateAll((elements) =>
+    elements.map((element) => {
+      const box = element.getBoundingClientRect();
+      return { left: box.left, right: box.right, top: box.top, bottom: box.bottom };
+    }),
+  );
+  const overlaps = boxes.flatMap((a, i) =>
+    boxes
+      .slice(i + 1)
+      .filter((b) => a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1),
+  );
+
+  expect(boxes.length).toBeGreaterThan(1);
+  expect(overlaps).toEqual([]);
+});

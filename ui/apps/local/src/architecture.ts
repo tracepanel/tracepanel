@@ -80,6 +80,18 @@ function appLinks(map: ServiceMap, hosts: readonly Host[]): { links: Link[]; see
 }
 
 /** The boxes and the calls between them: entries, the projects' roles, the servers, by host and port. */
+/**
+ * The box a call's role is drawn as: its own, else its app's box for traces with no role (calls recorded as "http"
+ * beside traces whose role is ""), else its app's only box. A role with no box was an empty node dagre drew lines
+ * from, nowhere near its app.
+ */
+function drawnRole(roles: readonly Box[], service: string, role: string): string {
+  const own = roleId(service, role);
+  const mine = roles.filter((box) => box.type === "role" && box.service === service).map((box) => box.id);
+  const only = mine.length === 1 ? mine : [];
+  return [own, roleId(service, ""), ...only].find((id) => mine.includes(id)) ?? own;
+}
+
 function graphOf(map: ServiceMap): { boxes: Box[]; links: Link[]; projects: string[] } {
   const hosts = byHost(map.services);
   const apps = appLinks(map, hosts);
@@ -110,7 +122,7 @@ function graphOf(map: ServiceMap): { boxes: Box[]; links: Link[]; projects: stri
       })),
     ...apps.links,
     ...hostEdges(map.edges, hosts).flatMap((edge) => {
-      const [role, server] = [roleId(edge.service, edge.role), hostId(edge.host)];
+      const [role, server] = [drawnRole(roles, edge.service, edge.role), hostId(edge.host)];
       if (apps.seen.has(`${role} ${server}`)) return [];
       // A worker takes its tasks from the broker: the arrow runs from the broker to it.
       const [from, to] = edge.direction === "in" ? [server, role] : [role, server];
@@ -128,8 +140,12 @@ function graphOf(map: ServiceMap): { boxes: Box[]; links: Link[]; projects: stri
 }
 
 /** The graph dagre lays out: a node per box, sized as drawn, the roles inside their project, an edge per call. */
-function dagreGraph(boxes: readonly Box[], links: readonly Link[]): Graph {
-  const graph = new Graph({ multigraph: false });
+function dagreGraph(
+  boxes: readonly Box[],
+  links: readonly Link[],
+  clusters: ReadonlyMap<string, string> = new Map(),
+): Graph {
+  const graph = new Graph({ multigraph: false, compound: clusters.size > 0 });
   graph.setGraph({
     rankdir: "LR",
     ranksep: 96,
@@ -139,8 +155,69 @@ function dagreGraph(boxes: readonly Box[], links: readonly Link[]): Graph {
   });
   graph.setDefaultEdgeLabel(() => ({}));
   for (const box of boxes) addBox(graph, box);
+  // A project's roles in one layer as one cluster: kept together, one under another, and lines routed around it.
+  for (const [id, cluster] of clusters) {
+    graph.setNode(cluster, {});
+    graph.setParent(id, cluster);
+  }
   for (const link of links) graph.setEdge(link.from, link.to, { weight: weightOf(link) });
   return graph;
+}
+
+/**
+ * Each role's cluster, its project's in its layer, from a first layout's layers: a web app and the worker it hands
+ * tasks to sit in different layers, the broker between them, so a cluster never covers a layer between its roles.
+ */
+function clustersOf(boxes: readonly Box[], graph: Graph): Map<string, string> {
+  const columns = [...new Set(boxes.map((box) => graph.node(box.id).x ?? 0))].sort((a, b) => a - b);
+  const clusters = new Map<string, string>();
+  for (const box of boxes) {
+    if (box.type !== "role") continue;
+    clusters.set(box.id, `cluster:${box.service}:${columns.indexOf(graph.node(box.id).x ?? 0)}`);
+  }
+  return clusters;
+}
+
+/** How far apart a project's roles in one frame sit: closer than the boxes of different frames. */
+const IN_FRAME_GAP = 8;
+
+/**
+ * A cluster's roles one right under another, from where dagre put its first: dagre keeps every box apart by the
+ * room a frame's name needs, which left a gap inside a project's frame.
+ */
+function packed(placed: readonly Placed<Box>[], clusters: ReadonlyMap<string, string>): Placed<Box>[] {
+  const moved = new Map<string, number>();
+  for (const boxes of membersOf(placed, clusters)) for (const [id, y] of stacked(boxes)) moved.set(id, y);
+  return placed.map((box) => ({ ...box, y: moved.get(box.item.id) ?? box.y }));
+}
+
+/** The boxes of each cluster. */
+function membersOf(placed: readonly Placed<Box>[], clusters: ReadonlyMap<string, string>): Placed<Box>[][] {
+  const members = new Map<string, Placed<Box>[]>();
+  for (const box of placed) {
+    const cluster = clusters.get(box.item.id) ?? "";
+    members.set(cluster, [...(members.get(cluster) ?? []), box]);
+  }
+  members.delete("");
+  return [...members.values()];
+}
+
+/** Where each box under a cluster's top one goes: right under the one above it. */
+function stacked(boxes: readonly Placed<Box>[]): [string, number][] {
+  const [head, ...rest] = [...boxes].sort((a, b) => a.y - b.y);
+  if (!head) return [];
+  let bottom = head.y + head.height / 2;
+  return rest.map((box) => {
+    const y = bottom + IN_FRAME_GAP + box.height / 2;
+    bottom = y + box.height / 2;
+    return [box.item.id, y];
+  });
+}
+
+/** The layer a box is in: its column, counted from the left. */
+function columnsOf(placed: readonly Placed<Box>[]): Map<string, number> {
+  const columns = [...new Set(placed.map((box) => box.x))].sort((a, b) => a - b);
+  return new Map(placed.map((box) => [box.item.id, columns.indexOf(box.x)]));
 }
 
 function addBox(graph: Graph, box: Box): void {
@@ -212,24 +289,57 @@ function sideToSide(from: Placed<Box> | undefined, to: Placed<Box> | undefined):
   return end.x > start.x ? [start, end] : null;
 }
 
-/** A call's line between two boxes: side to side where it can, else as dagre routed it. */
-function betweenBoxes(link: Link, byId: ReadonlyMap<string, Placed<Box>>, graph: Graph): Point[] {
-  return sideToSide(byId.get(link.from), byId.get(link.to)) ?? graph.edge(link.from, link.to)?.points ?? [];
+/**
+ * A call's line between two boxes: side to side to the next layer, through the gap between them; past a layer, as
+ * dagre routed it, around the boxes and frames in between.
+ */
+function betweenBoxes(
+  link: Link,
+  byId: ReadonlyMap<string, Placed<Box>>,
+  graph: Graph,
+  columns: ReadonlyMap<string, number>,
+): Point[] {
+  const [from, to] = [byId.get(link.from), byId.get(link.to)];
+  const side = isNext(columns, link) ? sideToSide(from, to) : null;
+  return side ?? onSides(routeOf(graph, link), from, to);
+}
+
+/** dagre's route of a call, around the boxes and clusters it passes. */
+function routeOf(graph: Graph, link: Link): Point[] {
+  return graph.edge(link.from, link.to)?.points ?? [];
+}
+
+/** Whether a call goes to the very next layer. */
+function isNext(columns: ReadonlyMap<string, number>, link: Link): boolean {
+  const [from, to] = [columns.get(link.from), columns.get(link.to)];
+  return from !== undefined && to !== undefined && to - from === 1;
+}
+
+/** dagre's route, its ends on the boxes' sides where they are now (a packed role moved up). */
+function onSides(points: readonly Point[], from: Placed<Box> | undefined, to: Placed<Box> | undefined): Point[] {
+  const ends = sideToSide(from, to);
+  return ends && points.length > 1 ? [ends[0] as Point, ...points.slice(1, -1), ends[1] as Point] : [...points];
 }
 
 /** Left to right in layers: what calls comes before what it calls, so a broker sits between a web app and its worker. */
 export function laidOut(map: ServiceMap): Diagram {
   const { boxes, links, projects } = graphOf(map);
-  const graph = dagreGraph(
-    boxes,
-    links.filter((link) => link.from !== link.to),
-  );
+  const calls = links.filter((link) => link.from !== link.to);
+  // Twice: the first finds each box's layer, the second keeps a project's roles in a layer together.
+  const first = dagreGraph(boxes, calls);
+  layout(first);
+  const clusters = clustersOf(boxes, first);
+  const graph = dagreGraph(boxes, calls, clusters);
   layout(graph);
   const size = graph.graph();
-  const placed = boxes.map((item) => placedIn(graph, item, item.id));
+  const placed = packed(
+    boxes.map((item) => placedIn(graph, item, item.id)),
+    clusters,
+  );
   const byId = new Map(placed.map((box) => [box.item.id, box]));
+  const columns = columnsOf(placed);
   const pointsOf = (link: Link): Point[] =>
-    link.from === link.to ? loopOn(byId.get(link.from)) : betweenBoxes(link, byId, graph);
+    link.from === link.to ? loopOn(byId.get(link.from)) : betweenBoxes(link, byId, graph, columns);
   return fitted({
     width: size.width ?? 0,
     height: size.height ?? 0,
