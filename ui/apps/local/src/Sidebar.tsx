@@ -33,6 +33,7 @@ import {
   MonitorIcon,
   MoonIcon,
   NetworkIcon,
+  RabbitIcon,
   RouteIcon,
   ScrollTextIcon,
   SearchIcon,
@@ -204,12 +205,15 @@ const FAMILY_ICONS: Record<Family, LucideIcon> = {
   http: ArrowUpRightIcon,
 };
 
+/** A system with an icon of its own, where its family's would make two items alike (Kafka and RabbitMQ). */
+const SYSTEM_ICONS: Partial<Record<string, LucideIcon>> = { rabbitmq: RabbitIcon };
+
 /** A Data item for each system the store has operations of, in the agent's order (families, then names). */
 function systemItems(counts: Counts | undefined): NavItem[] {
   return (counts?.sections.systems ?? []).map(({ system, family, label }) => ({
     section: callsSection(system),
     label: systemOfPage(system, family, label).label,
-    icon: FAMILY_ICONS[family],
+    icon: SYSTEM_ICONS[system] ?? FAMILY_ICONS[family],
   }));
 }
 

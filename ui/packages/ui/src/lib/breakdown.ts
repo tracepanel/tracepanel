@@ -35,8 +35,14 @@ const CATEGORY_LABELS: Record<Category, string> = {
 };
 
 /** A category as the trace's app says it: a Python app's view code is a handler's elsewhere (Spring, Express). */
-export function categoryLabel(category: Category, trace: Pick<Trace, "attrs">): string {
-  return category === "view" ? `${handlerWord(trace.attrs)} code` : CATEGORY_LABELS[category];
+export function categoryLabel(category: Category, trace: Pick<Trace, "attrs"> & { kind?: string }): string {
+  if (category === "view") return `${handlerWord(trace.attrs)} code`;
+  return category === "django" ? frameworkLabel(trace.kind) : CATEGORY_LABELS[category];
+}
+
+/** Middleware is a request's: a task's, a job's or a consumer's own time is its framework's. */
+function frameworkLabel(kind: string | undefined): string {
+  return (kind ?? "http") === "http" ? CATEGORY_LABELS.django : "Framework";
 }
 
 const BY_KIND: Record<string, Category> = {

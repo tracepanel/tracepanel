@@ -21,6 +21,7 @@ import {
 import { Button } from "@tracepanel/ui/components/ui/button";
 import { ArrowRightIcon, SearchXIcon } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
+import { LatencyTiles } from "./Overview";
 import { PeriodChip } from "./PeriodChip";
 import { RefreshControl, track, useRefresh } from "./refresh";
 import { type EntrySection, go, href, issueRoute, periodOf, traceHref, withPeriod } from "./routes";
@@ -202,10 +203,7 @@ export function GroupPage({
           sub={percent(s.slow, s.calls)}
           tone={s.slow ? "warn" : undefined}
         />
-        <Stat label="p50" value={duration(s.p50)} />
-        <Stat label="p95" value={duration(s.p95)} />
-        <Stat label="p99" value={duration(s.p99)} sub={`max ${duration(s.max)}`} />
-        <Stat label="Avg queries" value={String(s.avg_queries)} sub={`DB ${duration(s.avg_db_time)} avg`} />
+        <LatencyTiles summary={s} />
       </StatGrid>
 
       <div className="grid grid-cols-2 gap-4 max-[1100px]:grid-cols-1 [&>:first-child]:col-span-full">

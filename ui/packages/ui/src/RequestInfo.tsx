@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { AttrValue } from "./AttrValue";
 import { Badge } from "./components/ui/badge";
 import { FactGrid } from "./FactGrid";
-import { duration } from "./format";
+import { dayTime, duration } from "./format";
 import { GraphqlCode } from "./GraphqlCode";
 import { grouped, LinkedTrace, tracesRow } from "./LinkedTrace";
 import { handlerFullName, handlerWord } from "./lib/handler";
@@ -339,7 +339,7 @@ function ownRows(trace: Trace, hero: boolean, related: Related | undefined, link
     ...droppedRows(attrs),
     ...unreceivedRows(attrs),
     ...clockRows(trace),
-    { label: "Started", value: new Date(trace.start / 1000).toLocaleString() },
+    { label: "Started", value: dayTime(trace.start) },
     ...(hero ? [] : [{ label: "Duration", value: duration(trace.duration) }]),
     { label: "Trace ID", value: trace.id, copy: trace.id, mono: true },
   ];

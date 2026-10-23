@@ -162,13 +162,15 @@ function requestName(info: TraceInfo): { method: string; path: string } {
 }
 
 /**
- * The fix in a line: the code to add (the hint's `code`) and where (the culprit), else the hint or the culprit as
+ * The fix in a line: the code to add (the hint's last `code`) and where (the culprit), else the hint or the culprit as
  * they are. The full text is the row's tooltip.
  */
 function fixLine(issue: Issue): HTMLElement | null {
   const line = element("span", "card-hint");
-  const code = issue.hint?.match(/`([^`]+)`/)?.[1];
   const where = issue.culprit?.split(" (")[0];
+  // The fix is the hint's last code (`select_related()`); its first may be the place, the culprit's (a template).
+  const codes = [...(issue.hint ?? "").matchAll(/`([^`]+)`/g)].map((match) => match[1] ?? "");
+  const code = codes.reverse().find((text) => text !== where);
   if (code) {
     line.append("→ ", element("code", "card-code", code));
     if (where) line.append(` · ${where}`);

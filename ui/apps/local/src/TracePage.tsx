@@ -1,8 +1,9 @@
 import type { DataSource, ExploreItem, TabId, Trace, TraceLinks } from "@tracepanel/ui";
+import { useState } from "react";
 import { exploreFor } from "./explore";
 import { useEscapeTo } from "./keyboard";
-import { consoleLinks, ENTRY_SECTIONS, follow, go, href, parse, type Route } from "./routes";
-import { crumbsFor } from "./sections";
+import { consoleLinks, ENTRY_SECTIONS, type EntrySection, follow, go, href, parse, type Route } from "./routes";
+import { crumbsFor, ENTRY, entryOf } from "./sections";
 import { TraceScreen } from "./TraceScreen";
 import { CrumbBar } from "./ui";
 
@@ -40,6 +41,17 @@ function leadsTo(inSnapshot: boolean): { links: TraceLinks; explore?: (trace: Tr
 const PADDING = { full: "px-6 pt-7 pb-12", compact: "px-1 pt-3 pb-8" };
 
 /**
+ * The crumbs back to where a trace was opened from; opened directly (a link, the panel's Console), to its list, once
+ * its kind is known.
+ */
+function useBackCrumbs(from: string | undefined): [{ label: string; href?: string }[], (trace: Trace | null) => void] {
+  const [entry, setEntry] = useState<EntrySection | null>(null);
+  const onLoaded = (trace: Trace | null) => setEntry(trace ? entryOf(trace) : null);
+  if (from) return [crumbsFor(parse(from), from), onLoaded];
+  return [entry ? [{ label: ENTRY[entry].label, href: href({ name: entry, q: "" }) }] : [], onLoaded];
+}
+
+/**
  * A trace, the same page wherever it was opened from: the crumbs lead back there (`from`), the open tab is in the
  * URL (a link to its call tree stays a link to its call tree), Explore leads to its group, issues and nearby logs.
  */
@@ -64,7 +76,7 @@ export function TracePage({
   variant?: "full" | "compact" | undefined;
 }) {
   const leads = leadsTo(inSnapshot === true);
-  const back = from ? crumbsFor(parse(from), from) : [];
+  const [back, onLoaded] = useBackCrumbs(from);
   useEscapeTo(from, follow);
   const initialTab = tabOf(tab);
   return (
@@ -93,6 +105,7 @@ export function TracePage({
           links={leads.links}
           initialSpan={span}
           variant={variant}
+          onLoaded={onLoaded}
           shareable
           back={
             <a href={from ?? href({ name: "endpoints", q: "" })}>

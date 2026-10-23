@@ -6,7 +6,7 @@ export * from "./CopyButton";
 export { type DataColumn, type DataRows, DataTable } from "./DataTable";
 export { ErrorView } from "./ErrorView";
 export * from "./ExplainView";
-export { ago, duration, type Tone, tone } from "./format";
+export { ago, dayTime, duration, type Tone, tone } from "./format";
 export { Hint } from "./Hint";
 export { IssueGroupList } from "./IssueGroupList";
 export { IssueList } from "./IssueList";

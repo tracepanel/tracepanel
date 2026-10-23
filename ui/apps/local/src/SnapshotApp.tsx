@@ -1,4 +1,4 @@
-import { duration, Empty, type Snapshot, snapshotSource, type Trace } from "@tracepanel/ui";
+import { dayTime, duration, Empty, type Snapshot, snapshotSource, type Trace } from "@tracepanel/ui";
 import { TooltipProvider } from "@tracepanel/ui/components/ui/tooltip";
 import { useEffect, useMemo, useState } from "react";
 import { href, type Route, useRoute } from "./routes";
@@ -46,7 +46,7 @@ function headingless(variant: "full" | "compact", shown: Shown | null, snapshot:
 
 /** When and how the snapshot was made, and the way back to the shared trace from another. */
 function SnapshotBar({ snapshot, away, named }: { snapshot: Snapshot; away: boolean; named?: Trace | undefined }) {
-  const when = new Date(snapshot.created / 1000).toLocaleString();
+  const when = dayTime(snapshot.created);
   return (
     <div className="flex shrink-0 flex-wrap items-baseline gap-x-2 border-b bg-muted/40 px-6 py-2 text-sm max-[720px]:px-4">
       <TraceName trace={named} />

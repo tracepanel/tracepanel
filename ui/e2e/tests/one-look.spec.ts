@@ -184,3 +184,19 @@ test("an issue's long route wraps in its row, never cut", async ({ page }) => {
   await expect(route).toBeVisible();
   expect(await route.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
 });
+
+test("a trace opened directly leads back to its list, its lane is named as what it is, and it started on the 24-hour clock", async ({
+  page,
+}) => {
+  await page.goto(`/#/t/${await traceId("shop.tasks.parse_feed")}`);
+  const crumbs = page.getByRole("main").getByRole("navigation", { name: "Breadcrumb" });
+
+  await expect(crumbs.getByRole("link", { name: "Tasks" })).toBeVisible();
+  await expect(page.getByRole("figure", { name: "Timeline" })).toContainText("task");
+  await expect(page.getByRole("figure", { name: "Timeline" })).not.toContainText("request");
+
+  await page.getByRole("tablist").first().getByRole("tab", { name: /^Task/ }).click();
+
+  await expect(page.locator("dl").first()).toContainText(/[A-Z][a-z]{2} \d{1,2} \d{2}:\d{2}:\d{2}/);
+  await expect(page.locator("dl").first()).not.toContainText(/ (AM|PM)/);
+});

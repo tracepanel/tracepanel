@@ -43,7 +43,8 @@ export interface TraceScreenProps {
   /** A Share button, when the source can make a snapshot: the console's trace page. */
   shareable?: boolean | undefined;
   /** Called once the trace has loaded, or is known to be gone: a page around it shows with it. */
-  onLoaded?: (() => void) | undefined;
+  /** Called once the trace has loaded, with it (null when it isn't stored). */
+  onLoaded?: ((trace: Trace | null) => void) | undefined;
 }
 
 // What each app said, as last loaded: the next trace of the same app opens with its App tab at once (the panel
@@ -134,7 +135,7 @@ function TraceLoading({ variant }: { variant: TraceScreenProps["variant"] }) {
 function useTrace(
   id: string,
   source: DataSource,
-  onLoaded: (() => void) | undefined,
+  onLoaded: ((trace: Trace | null) => void) | undefined,
   variant: TraceScreenProps["variant"],
 ): Trace | null | undefined {
   const [trace, setTrace] = useState<Trace | null | undefined>(undefined);
@@ -144,7 +145,7 @@ function useTrace(
     let timer: number | undefined;
     const show = (result: Trace | null) => {
       setTrace(result);
-      onLoaded?.();
+      onLoaded?.(result);
     };
     const attempt = (left: number) => {
       source.getTrace(id).then(

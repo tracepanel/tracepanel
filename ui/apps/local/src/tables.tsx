@@ -1021,11 +1021,8 @@ export function IssuesTable({ items, source }: { items: readonly IssueRow[]; sou
     <DataTable table="issues" columns={issueColumns(entries)}>
       {({ cells }) =>
         items.map((item) => (
-          <Tr
-            key={item.fingerprint}
-            tone={item.kind === "error" ? "error" : "warn"}
-            href={href(issueRoute(item.fingerprint, item.kind))}
-          >
+          // No coloured edge: every row of these lists is an error or an issue, so an edge on all of them says nothing.
+          <Tr key={item.fingerprint} href={href(issueRoute(item.fingerprint, item.kind))}>
             {cells(item)}
           </Tr>
         ))

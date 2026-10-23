@@ -2,7 +2,7 @@ import { SearchIcon } from "lucide-react";
 import { useState } from "react";
 import { AppWarnings, appWarnings } from "./AppWarnings";
 import { Input } from "./components/ui/input";
-import { stamp } from "./format";
+import { dayTime } from "./format";
 import { NameValues } from "./NameValues";
 import { Empty } from "./primitives";
 import { Segmented } from "./Segmented";
@@ -122,7 +122,7 @@ function Told({ app }: { app: App }) {
   if (app.received === null) return null;
   return (
     <p className="text-xs text-muted-foreground">
-      {app.connected ? "Connected" : "Not connected"} · as the app said at {stamp(app.received)}
+      {app.connected ? "Connected" : "Not connected"} · as the app said at {dayTime(app.received)}
     </p>
   );
 }

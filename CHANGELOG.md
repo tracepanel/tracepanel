@@ -356,6 +356,17 @@
   in their row instead of being cut ("/campaigns/{id}/r…"). As a rail the
   sidebar's items are the 32 px rows they are open, so a 1024 px window
   shows more of them and toggling moves nothing up or down.
+- Smaller things read one way. A trace's start, an overview's range and an
+  app's last word say a moment as "Oct 23 15:13:40", on the 24-hour clock,
+  and a list's Last column goes from "5m ago" to "3h ago" to "Oct 21". A
+  trace's own lane is named as what it is (task, job, websocket, page), a
+  WebSocket's and a page's first tabs are WebSocket and Page, and a task's
+  breakdown says Framework, not Framework & middleware. A failed trace's own
+  lane is red in both themes. Rows of Errors and Issues have no coloured
+  edge, which every one of them had. The hover card's fix line names the
+  fix (`select_related()`), not the template twice. The panel's Console
+  button is filled in both themes. RabbitMQ has an icon of its own beside
+  Kafka's. A trace opened directly has a crumb back to its list.
 
 ## 0.4.1 (2026-10-21)
 

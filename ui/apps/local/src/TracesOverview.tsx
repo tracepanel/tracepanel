@@ -16,7 +16,15 @@ import {
 } from "@tracepanel/ui";
 import { Card } from "@tracepanel/ui/components/ui/card";
 import { useEffect, useState } from "react";
-import { Figure, Measure, OverviewNumbers, OverviewRange, OverviewSection, useOverviewOpen } from "./Overview";
+import {
+  Figure,
+  LatencyTiles,
+  Measure,
+  OverviewNumbers,
+  OverviewRange,
+  OverviewSection,
+  useOverviewOpen,
+} from "./Overview";
 import { track, useRefresh } from "./refresh";
 import { currentPeriod, endpointGroup, groupRoute, href, withPeriod } from "./routes";
 import { BY_NAME } from "./sections";
@@ -172,10 +180,7 @@ export function TracesOverview({
           tone={s.slow ? "warn" : undefined}
           onClick={s.slow ? () => onRefine({ duration: `>${overview.slow_threshold / 1000}ms` }) : undefined}
         />
-        <Stat label="p50" value={duration(s.p50)} />
-        <Stat label="p95" value={duration(s.p95)} />
-        <Stat label="p99" value={duration(s.p99)} sub={`max ${duration(s.max)}`} />
-        <Stat label="Avg queries" value={String(s.avg_queries)} sub={`DB ${duration(s.avg_db_time)} avg`} />
+        <LatencyTiles summary={s} />
       </StatGrid>
       {scope.filter === "" ? <KindChips kinds={overview.kinds} failures={true} onRefine={onRefine} /> : null}
       <div className="grid grid-cols-2 gap-4 max-[1100px]:grid-cols-1">
