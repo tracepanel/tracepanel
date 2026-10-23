@@ -322,6 +322,10 @@
   occurrences". Logs had a filled button at the top, Emails an outlined one
   at the left, a query a button and a text link. An email's card lines up
   with the row's edges, not 15 px inside them.
+- A trace that called nothing (a task, a WebSocket, a GraphQL operation, a
+  job, the latest occurrence of an error) no longer shows Duration as one
+  full-width tile with an empty bar: its header says how long it took, and
+  the lanes under it draw it.
 
 ## 0.4.1 (2026-10-21)
 

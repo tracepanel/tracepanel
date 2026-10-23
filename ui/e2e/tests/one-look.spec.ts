@@ -155,3 +155,10 @@ for (const [name, url] of [
     expect(row.x + row.width - (box.x + box.width)).toBeLessThan(2);
   });
 }
+
+test("a trace that called nothing has no lone Duration tile: its header says how long it took", async ({ page }) => {
+  await page.goto(`/#/t/${await traceId("shop.tasks.parse_feed")}`);
+
+  await expect(page.locator(".dt-trace-title, h1").first()).toContainText("42 ms");
+  await expect(page.locator(".dt-metrics")).toHaveCount(0);
+});
