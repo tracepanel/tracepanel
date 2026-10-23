@@ -25,7 +25,7 @@ import { ArrowRightIcon, SearchIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { endpointGroup, go, issueRoute, openTrace, type Route, TRACE_ID } from "./routes";
 import type { NavItem } from "./Sidebar";
-import { graphqlOperation } from "./sections";
+import { graphqlOperation, requestPath } from "./sections";
 
 const SHOWN = 8;
 // Endpoints and issues are a shortcut past the traces: a few of each.
@@ -38,7 +38,7 @@ const KIND_BADGES: Record<string, string> = { task: "TASK", command: "JOB", webs
 function label(trace: TraceSummary): { badge: string; name: string } {
   const operation = graphqlOperation(trace);
   if (operation) return { badge: "GQL", name: operation };
-  if (trace.kind === "http") return { badge: trace.method ?? "", name: trace.path ?? trace.name };
+  if (trace.kind === "http") return { badge: trace.method ?? "", name: requestPath(trace) };
   return { badge: KIND_BADGES[trace.kind] ?? trace.kind, name: trace.name.replace(/^WS /, "") };
 }
 

@@ -278,6 +278,9 @@
   is RPC calls now, and its issues say "RPC calls". A database or a broker
   that names no system reads Datastore or Broker, and any other system the
   agent doesn't know starts with a capital.
+- A request reads its method once. One with no path, from an SDK that sent
+  only its URL, read "POST POST /hooks/stripe" in the lists, the panel and
+  ⌘K: its name after the method is its path there now.
 
 ## 0.4.1 (2026-10-21)
 

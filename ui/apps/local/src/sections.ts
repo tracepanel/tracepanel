@@ -110,6 +110,16 @@ export function graphqlOperation(trace: Pick<TraceSummary, "kind" | "name">): st
   return trace.kind === "http" && trace.name.startsWith("GraphQL ") ? trace.name.slice("GraphQL ".length) : null;
 }
 
+/**
+ * What a request's line says after its method badge: its path, else its name without the method the badge says
+ * (`POST /hooks/stripe`, from an SDK that sent no path), so the method never reads twice.
+ */
+export function requestPath(trace: { name: string; path?: string | null | undefined }): string {
+  if (trace.path) return trace.path;
+  const [first = "", ...rest] = trace.name.split(" ");
+  return rest.length && /^[A-Z]+$/.test(first) ? rest.join(" ") : trace.name;
+}
+
 /** The kinds of trace grouped by their name, and the section that lists them. */
 export const BY_NAME: Partial<Record<string, EntrySection>> = {
   task: "tasks",

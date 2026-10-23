@@ -46,7 +46,7 @@ import { ArrowRightIcon, ChevronRightIcon, Columns3Icon, ListFilterIcon } from "
 import { Fragment, type ReactNode, useEffect, useState } from "react";
 import { useCapability } from "./hooks";
 import { currentPeriod, endpointGroup, go, groupRoute, href, issueRoute, traceHref, withPeriod } from "./routes";
-import { graphqlOperation, taskSystem } from "./sections";
+import { graphqlOperation, requestPath, taskSystem } from "./sections";
 import { FitChips, Meter, Mono, Tr } from "./ui";
 
 /** What a trace is: its method and path, a GraphQL operation, or its kind and name (a task, a job, a WebSocket). */
@@ -1110,7 +1110,7 @@ function SourceText({
 
 /** A source's text: a request's path, a WebSocket's without its "WS ", anything else its name. */
 function sourceText(kind: TraceSummary["kind"], path: string | null, name: string): string {
-  if (kind === "http") return path ?? name;
+  if (kind === "http") return requestPath({ name, path });
   return kind === "websocket" ? name.replace(/^WS /, "") : name;
 }
 
