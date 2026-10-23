@@ -82,6 +82,10 @@
 
 ### Changed
 
+- A trace opened from HTTP, Tasks, Jobs or another entry point's lists, or
+  from a group's page, opens on what it was: its Request or Task tab. One
+  opened from Traces, a search or ⌘K opens on its call tree. An error still
+  comes first, and a link naming its tab still opens that tab.
 - Tasks from Huey, django-q2 and Channels workers are named as their
   projects name them in a run's System column and filters: Huey, django-q2,
   Channels. The API schema lists them among the task systems.

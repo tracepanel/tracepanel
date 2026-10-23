@@ -1,7 +1,7 @@
 import type { DataSource, ExploreItem, TabId, Trace, TraceLinks } from "@tracepanel/ui";
 import { exploreFor } from "./explore";
 import { useEscapeTo } from "./keyboard";
-import { consoleLinks, follow, go, href, parse } from "./routes";
+import { consoleLinks, ENTRY_SECTIONS, follow, go, href, parse, type Route } from "./routes";
 import { crumbsFor } from "./sections";
 import { TraceScreen } from "./TraceScreen";
 import { Breadcrumbs } from "./ui";
@@ -11,6 +11,20 @@ const TABS: TabId[] = ["request", "tree", "issues", "sql", "cache", "http", "log
 /** The tab a link asks for (`?tab=issues`), if it is one. */
 export function tabOf(value: string | undefined): TabId | undefined {
   return TABS.find((item) => item === value);
+}
+
+/**
+ * The tab a trace opens on when its link names none: what it was, from an entry point's lists (HTTP, Tasks, Jobs…)
+ * or a group's page, where the reader picked a request or a run; its call tree from anywhere else (Traces, a search).
+ * An error still comes first: the trace view opens its Error tab before this one.
+ */
+export function openingTab(from: string | undefined): TabId | undefined {
+  if (!from) return undefined;
+  return fromEntryPoint(parse(from)) ? "request" : undefined;
+}
+
+function fromEntryPoint(route: Route): boolean {
+  return route.name === "group" || (ENTRY_SECTIONS as string[]).includes(route.name);
 }
 
 /**
@@ -73,6 +87,7 @@ export function TracePage({
           id={id}
           source={source}
           initialTab={initialTab}
+          preferredTab={openingTab(from)}
           onTabChange={(next) => go({ name: "trace", id, from, tab: next }, true)}
           explore={leads.explore}
           links={leads.links}
