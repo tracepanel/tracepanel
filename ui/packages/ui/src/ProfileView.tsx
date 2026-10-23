@@ -356,11 +356,11 @@ type FunctionRow = { frame: Frame; self: number; total: number };
 function Functions({ rows, palette, time }: { rows: readonly FunctionRow[]; palette: Palette; time: Time }) {
   const most = Math.max(1, ...rows.map((row) => row.self));
   return (
-    // One box with its header in it, as every table's: the columns' names in the header row's case and colour.
+    // One box with its header in it, as every table's: the head's band and hairline, its names' case and colour.
     <section className="overflow-hidden rounded-lg border bg-card" aria-label="Functions">
       <div
         className={cn(
-          "grid h-10 grid-cols-[minmax(0,1fr)_5rem_4.5rem] items-center gap-3 border-b bg-muted px-3 light:h-[2.125rem] light:border-input light:bg-card",
+          "grid h-10 grid-cols-[minmax(0,1fr)_5rem_4.5rem] items-center gap-3 bg-(--dt-table-head) px-3 shadow-[inset_0_-1px_0_var(--dt-table-head-rule)] light:h-[2.125rem]",
           HEAD_TEXT,
         )}
       >
