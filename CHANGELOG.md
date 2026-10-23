@@ -367,6 +367,9 @@
   fix (`select_related()`), not the template twice. The panel's Console
   button is filled in both themes. RabbitMQ has an icon of its own beside
   Kafka's. A trace opened directly has a crumb back to its list.
+- A latency chart with one point no longer puts p95 and p50 beside it, where
+  they crowded the dot: its legend names them. The Logs chart's legend reads
+  debug, info, warning and error, in the case every chart's legend has.
 
 ## 0.4.1 (2026-10-21)
 
