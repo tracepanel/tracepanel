@@ -22,6 +22,8 @@
   /* The column of names of a trace's facts, its related traces and its attributes: at least this wide, so their
      values start on one line. */
   --dt-fact-label: 9rem;
+  /* The slot a method or a trace's kind takes at a row's start: as wide as PATCH with its padding. */
+  --dt-lead: 3rem;
 
   --dt-ink: rgb(10 12 17 / 0.9);
   --dt-ink-2: #12151d;
@@ -271,9 +273,11 @@ code,
 
 /* ---------- Primitives ---------- */
 
+/* A method and a trace's kind take one slot at a row's start, as wide as the widest (PATCH, TASK), in both themes:
+   the names after them start at one edge whatever the word (GQL, GET, POST, PATCH). */
 .dt-method {
   flex: none;
-  min-width: 2.375rem;
+  min-width: var(--dt-lead);
   padding: 1px 0.3125rem;
   border-radius: 0.25rem;
   font: 600 var(--dt-size-xs) / 1rem var(--dt-mono);
@@ -296,9 +300,8 @@ code,
   background: color-mix(in srgb, var(--dt-delete) 12%, transparent);
 }
 /* Light: a method is its colour in monospace, no box (and a trace's kind, below, the same): on white a tint behind
-   every row's first word made a column of boxes. Left-aligned, as wide as PATCH, so the paths after it line up. */
+   every row's first word made a column of boxes. Left-aligned in the same slot, so the paths after it line up. */
 :root[data-theme="light"] .dt-method {
-  min-width: 2.75rem;
   padding-inline: 0;
   background: none;
   text-align: left;
@@ -318,12 +321,14 @@ code,
   color: var(--dt-accent);
   background: var(--dt-accent-bg);
 }
+.dt-kind:not([data-muted]) {
+  min-width: var(--dt-lead);
+}
 .dt-kind[data-muted] {
   color: var(--dt-text-3);
   background: var(--dt-hover);
 }
 :root[data-theme="light"] .dt-kind:not([data-muted]) {
-  min-width: 2.75rem;
   padding-inline: 0;
   background: none;
   text-align: left;
@@ -860,6 +865,10 @@ tr[data-new] {
 /* The full trace page: the request as its headline. */
 .dt-trace[data-variant="full"] .dt-trace-title {
   gap: 0.625rem;
+}
+/* A headline is no list: its method or kind is its own width, not a list's slot. */
+.dt-trace-title :is(.dt-method, .dt-kind) {
+  min-width: 0;
 }
 .dt-trace[data-variant="full"] .dt-trace-title h2 {
   font-size: var(--dt-size-2xl);

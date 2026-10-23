@@ -244,6 +244,10 @@
   and keeps the current page in view, and its footer reads "Local ·
   .tracepanel/" on one line, starting where the items' icons do. Errors and
   Issues fell below the fold with nothing to say so.
+- Names in a list start at one edge. A method or a trace's kind before a name
+  takes one slot, as wide as PATCH, in both themes, in the tables, the overview
+  lists, the Logs page's Source and ⌘K: a path after GQL started 14 px left of
+  one after PATCH.
 
 ## 0.4.1 (2026-10-21)
 

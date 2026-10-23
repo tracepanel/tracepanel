@@ -1054,7 +1054,7 @@ function SourceCell({
       className={cn(
         "flex max-w-[21.25rem] min-w-0 items-center gap-2",
         compact &&
-          "gap-1.5 [&_.dt-method]:min-w-0 [&_.dt-method]:px-1 [&_.dt-method]:text-2xs [&_[data-slot=badge]]:h-4 light:[&_.dt-kind]:min-w-0 light:[&_.dt-method]:px-0",
+          "gap-1.5 [&_.dt-method]:px-1 [&_.dt-method]:text-2xs [&_[data-slot=badge]]:h-4 light:[&_.dt-method]:px-0",
         className,
       )}
     >

@@ -378,3 +378,21 @@ test("a row's issue chips are whole: the ones that fit, then how many more, all 
   expect(cells.length).toBeGreaterThan(0);
   expect(cells.every(Boolean)).toBe(true);
 });
+
+for (const scheme of ["dark", "light"] as const) {
+  test(`a list's names start at one edge whatever the method or kind before them (${scheme})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await open(page, "/#/endpoints");
+    const starts = await main(page)
+      .locator("tbody td:first-child > span > :is(.dt-method, .dt-kind):first-child")
+      .evaluateAll((badges) =>
+        badges.map((badge) => Math.round(badge.nextElementSibling?.getBoundingClientRect().left ?? 0)),
+      );
+    const words = await main(page)
+      .locator("tbody td:first-child > span > :is(.dt-method, .dt-kind):first-child")
+      .allTextContents();
+
+    expect(new Set(words).size).toBeGreaterThan(2);
+    expect(new Set(starts).size).toBe(1);
+  });
+}
