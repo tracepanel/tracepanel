@@ -1,6 +1,6 @@
 import { ago, CallsChart, type DataSource, Empty, IssueChip, type IssueDetail, RichText } from "@tracepanel/ui";
 import { Card } from "@tracepanel/ui/components/ui/card";
-import { LightbulbIcon } from "lucide-react";
+import { LightbulbIcon, SearchXIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { exploreFor } from "./explore";
 import { PeriodChip } from "./PeriodChip";
@@ -38,7 +38,12 @@ export function IssuePage({
   if (issue === undefined) return <Loading />;
   if (issue === null) {
     return (
-      <Empty title="Issue not found" action={<a href={href({ name: "issues", q: "" })}>Back to issues</a>}>
+      <Empty
+        title="Issue not found"
+        action={<a href={href({ name: "issues", q: "" })}>Back to issues</a>}
+        icon={SearchXIcon}
+        page={true}
+      >
         It may have been dropped with old traces.
       </Empty>
     );

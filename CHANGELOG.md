@@ -286,6 +286,11 @@
   has the refresh icon beside its auto-refresh menu: they have the same icon
   button now. Issues' filters start with Time, as every page's do, not with
   Type.
+- Nothing to show looks one way everywhere. A trace, an issue or a group
+  that isn't stored and a search that matches nothing show what a section
+  with nothing stored yet shows: an icon in its tile, a title, what to do,
+  and the way back as a button, in the middle of the page. They were bare
+  centred text with a link that read as bold text.
 
 ## 0.4.1 (2026-10-21)
 

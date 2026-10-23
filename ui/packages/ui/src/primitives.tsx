@@ -1,4 +1,4 @@
-import { type ReactNode, useLayoutEffect, useRef } from "react";
+import { type ComponentType, type ReactNode, useLayoutEffect, useRef } from "react";
 import { Badge } from "./components/ui/badge";
 import { ISSUE_LABELS } from "./labels";
 import { templatePlace } from "./lib/callFields";
@@ -124,14 +124,41 @@ export function RichText({ text }: { text: string }) {
   );
 }
 
-/** Nothing to show; `action` is the way on, so an empty page is never a dead end. */
-export function Empty({ title, children, action }: { title: string; children?: ReactNode; action?: ReactNode }) {
+/**
+ * Nothing to show, one look everywhere: a section's first empty state, a search that matches nothing, a trace or an
+ * issue that isn't stored. `icon` in a tile above the title; `action` is the way on, a button, so an empty page is
+ * never a dead end; `page` takes the page's room, its state in the middle.
+ */
+export function Empty({
+  title,
+  children,
+  action,
+  icon: Icon,
+  page = false,
+}: {
+  title: string;
+  children?: ReactNode;
+  action?: ReactNode;
+  icon?: ComponentType<{ className?: string }> | undefined;
+  page?: boolean;
+}) {
   return (
-    <div className="dt-empty">
+    <div className="dt-empty" data-page={page ? "" : undefined}>
+      <EmptyIcon icon={Icon} />
       <p className="dt-empty-title">{title}</p>
       {children ? <p className="dt-empty-text">{children}</p> : null}
       {action ? <p className="dt-empty-action">{action}</p> : null}
     </div>
+  );
+}
+
+/** An empty state's icon in its tile, when it has one. */
+function EmptyIcon({ icon: Icon }: { icon: ComponentType<{ className?: string }> | undefined }) {
+  if (!Icon) return null;
+  return (
+    <span className="dt-empty-icon">
+      <Icon className="size-6" />
+    </span>
   );
 }
 

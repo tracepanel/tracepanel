@@ -9,6 +9,7 @@ import {
 } from "@tracepanel/ui";
 import { Button } from "@tracepanel/ui/components/ui/button";
 import type { Family } from "@tracepanel/ui/lib/systems";
+import { SearchXIcon } from "lucide-react";
 import { type ReactNode, useCallback, useState } from "react";
 import { SystemTiles, useCallsSummary } from "./CallsTiles";
 import { useLatch, usePaged, useSearch } from "./data";
@@ -399,7 +400,7 @@ const BODIES: Partial<Record<Section, (page: BodyContext) => ReactNode>> = {
       page.data.traces,
       "Load older",
       (items) => <TracesTable table="traces" items={items} selectedId={null} hrefFor={traceHref} />,
-      <Empty title="No traces match">
+      <Empty title="No traces match" icon={SearchXIcon}>
         Search names and paths, or filter: status&gt;=500, task:send_*, kind:command.
       </Empty>,
     ),

@@ -19,7 +19,7 @@ import {
   type TraceGroup,
 } from "@tracepanel/ui";
 import { Button } from "@tracepanel/ui/components/ui/button";
-import { ArrowRightIcon } from "lucide-react";
+import { ArrowRightIcon, SearchXIcon } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { PeriodChip } from "./PeriodChip";
 import { RefreshControl, track, useRefresh } from "./refresh";
@@ -141,6 +141,8 @@ export function GroupPage({
       <Empty
         title={`No calls of ${groupKey}`}
         action={<a href={href({ name: section, q: period })}>All {ENTRY[section].label}</a>}
+        icon={SearchXIcon}
+        page={true}
       >
         It has no stored traces yet.
       </Empty>
