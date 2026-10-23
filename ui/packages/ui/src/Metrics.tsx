@@ -33,6 +33,8 @@ export function Metrics({ trace }: { trace: Trace }) {
   const systems = systemCalls(trace);
   const called = systems.reduce((sum, each) => sum + each.total, 0);
   const total = Math.max(trace.duration, 1);
+  // Duration alone is a full-width tile with an empty bar: the header already says it, and the lanes below draw it.
+  if (systems.length === 0) return null;
   return (
     <div className="dt-metrics">
       <div className="dt-metric">

@@ -53,9 +53,13 @@ pub fn family(kind: &str) -> Option<&'static str> {
         .map(|(_, family)| *family)
 }
 
-/// How titles name a system: its known spelling, else its name as sent.
+/// How titles name a system: its known spelling; a family's generic kind (a system that didn't name itself) by the
+/// family; else its name as sent, capitalised.
 pub fn display_name(system: &str) -> String {
-    match system {
+    let name = match system {
+        otel::GENERIC_RPC => "RPC",
+        otel::GENERIC_DB => "Datastore",
+        otel::GENERIC_MESSAGING => "Broker",
         "sql" => "Database",
         "cache" => "Cache",
         "http" => "HTTP calls",
@@ -79,9 +83,14 @@ pub fn display_name(system: &str) -> String {
         "thrift" => "Thrift",
         "jsonrpc" => "JSON-RPC",
         "aws-api" => "AWS",
-        other => other,
-    }
-    .to_owned()
+        other => {
+            let mut chars = other.chars();
+            return chars.next().map_or_else(String::new, |first| {
+                first.to_uppercase().chain(chars).collect()
+            });
+        }
+    };
+    name.to_owned()
 }
 
 /// The system a span's operations are listed under (see the module's doc).
@@ -663,6 +672,16 @@ pub fn call_key(operation: &Operation) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_system_is_named_in_its_spelling_by_its_family_or_capitalised() {
+        let names = ["mongodb", "rpc", "db", "messaging", "hbase", ""].map(display_name);
+
+        assert_eq!(
+            names,
+            ["MongoDB", "RPC", "Datastore", "Broker", "Hbase", ""]
+        );
+    }
 
     #[test]
     fn a_query_s_key_is_16_hex_of_its_statement_and_alias() {

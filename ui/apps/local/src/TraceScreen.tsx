@@ -8,6 +8,7 @@ import {
   TraceView,
   type TraceViewProps,
 } from "@tracepanel/ui";
+import { SearchXIcon } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { useCapability } from "./hooks";
 import { track, useRefresh } from "./refresh";
@@ -166,7 +167,7 @@ export function TraceScreen({
   if (trace === undefined) return <TraceLoading variant={variant} />;
   if (trace === null) {
     return (
-      <Empty title="Trace not found" action={back}>
+      <Empty title="Trace not found" action={back} icon={SearchXIcon} page={true}>
         It is no longer in the local store: older traces are removed as new ones arrive, and the store starts fresh
         after a Tracepanel upgrade.
       </Empty>

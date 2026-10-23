@@ -1,7 +1,8 @@
+import { Button } from "./components/ui/button";
 import { IssueIcon } from "./icons";
-import { ISSUE_LABELS, issueTitle } from "./labels";
+import { issueTitle } from "./labels";
 import { linkProps, type TraceLinks } from "./links";
-import { RichText } from "./primitives";
+import { DetailsFooter, IssueChip, RichText } from "./primitives";
 import type { Issue } from "./types";
 
 export { ISSUE_LABELS } from "./labels";
@@ -26,26 +27,32 @@ export function IssueList({ issues, onShowSpans, spansNoun = queries, links }: I
             <IssueIcon kind={issue.kind} />
           </div>
           <div className="dt-issue-body">
-            <p className="dt-issue-kind">{ISSUE_LABELS[issue.kind]}</p>
-            <h3 className="dt-issue-title">{issueTitle(issue.title)}</h3>
+            {/* The kind in its chip, then the title without it: as the Issues list and the issue's page say it. */}
+            <h3 className="dt-issue-title">
+              <IssueChip kind={issue.kind} />
+              <span>{issueTitle(issue.title)}</span>
+            </h3>
             {issue.culprit ? <code className="dt-issue-where">{issue.culprit}</code> : null}
             {issue.hint ? (
               <p className="dt-issue-hint">
                 <RichText text={issue.hint} />
               </p>
             ) : null}
-            <p className="dt-issue-actions">
+            {/* The one footer of actions every finding and open row has. */}
+            <DetailsFooter
+              rule={false}
+              open={
+                links?.issue
+                  ? { label: "All occurrences", link: linkProps(links, links.issue(issue.fingerprint, issue.kind)) }
+                  : undefined
+              }
+            >
               {onShowSpans && issue.kind !== "error" && issue.span_ids.length > 0 ? (
-                <button type="button" className="dt-button dt-button-small" onClick={() => onShowSpans(issue.span_ids)}>
+                <Button variant="outline" size="sm" onClick={() => onShowSpans(issue.span_ids)}>
                   Show {issue.count} {spansNoun(issue)}
-                </button>
+                </Button>
               ) : null}
-              {links?.issue ? (
-                <a className="dt-issue-link" {...linkProps(links, links.issue(issue.fingerprint, issue.kind))}>
-                  All occurrences →
-                </a>
-              ) : null}
-            </p>
+            </DetailsFooter>
           </div>
         </article>
       ))}

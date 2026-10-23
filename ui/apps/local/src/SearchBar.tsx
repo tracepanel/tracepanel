@@ -228,6 +228,16 @@ const ROUTE: MultiFilter = {
 const METHOD: MultiFilter = { label: "Method", title: "Filter by method", key: "method", values: METHODS };
 const capital = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);
 
+/** A GraphQL call's operation type, by the start of its operation (`operation:query*`): the overview's Type, here. */
+const OPERATION_TYPE: QuickFilter = {
+  label: "Type",
+  title: "Filter by operation type",
+  options: ["query", "mutation", "subscription"].map((type) => ({
+    label: capital(type),
+    terms: [f("operation", ":", `${type}*`)],
+  })),
+};
+
 const STATUS: QuickFilter = {
   label: "Status",
   title: "Filter by status",
@@ -363,7 +373,9 @@ const QUICK: Record<Exclude<Section, CallsSection>, Control[]> = {
     },
   ],
   errors: [{ ...TIME, verb: "Last seen" }, ROUTE],
+  // Time first, as on every page; then the type of issue.
   issues: [
+    { ...TIME, verb: "Last seen" },
     {
       label: "Type",
       title: "Filter by type",
@@ -384,7 +396,6 @@ const QUICK: Record<Exclude<Section, CallsSection>, Control[]> = {
       format: (value) => ISSUE_LABELS[value] ?? value,
       display: (kind) => <IssueChip kind={kind as IssueKind} />,
     },
-    { ...TIME, verb: "Last seen" },
     ROUTE,
   ],
   endpoints: [{ ...TIME, verb: "Called" }, METHOD, ROUTE],
@@ -469,7 +480,7 @@ const QUICK: Record<Exclude<Section, CallsSection>, Control[]> = {
  */
 const CALLS: Record<EntrySection, Control[]> = {
   endpoints: QUICK.traces,
-  graphql: [{ ...TIME, verb: "Called" }, DURATION, ISSUE, CONTAINS],
+  graphql: [{ ...TIME, verb: "Called" }, OPERATION_TYPE, DURATION, ISSUE, CONTAINS],
   tasks: [{ ...TIME, verb: "Ran" }, TASK, STATE, QUEUE, DURATION, ISSUE],
   websockets: [{ ...TIME, verb: "Handled" }, DURATION, ISSUE, CONTAINS],
   jobs: [{ ...TIME, verb: "Ran" }, DURATION, ISSUE, CONTAINS],

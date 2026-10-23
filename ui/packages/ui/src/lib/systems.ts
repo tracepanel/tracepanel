@@ -191,6 +191,10 @@ const LABELS: Record<string, string> = {
   thrift: "Thrift",
   jsonrpc: "JSON-RPC",
   "aws-api": "AWS",
+  // A family's generic kind: a system that didn't name itself, as the agent names it.
+  rpc: "RPC",
+  db: "Datastore",
+  messaging: "Broker",
 };
 
 /** A system by its name in the agent's operations (`mongodb`, `neo4j`), the table's or one made for it. */
@@ -234,15 +238,24 @@ export function systemOfSpan(span: { kind: string; attrs: Record<string, unknown
   const family = GENERIC[span.kind];
   if (!family) return SYSTEM_OF.get(span.kind);
   const name = SYSTEM_ATTRS.map((key) => span.attrs[key]).find((value) => typeof value === "string");
-  return systemNamed(String(name), family);
+  // One that names no system is the family's generic kind, named as the agent names it ("RPC").
+  return systemNamed(typeof name === "string" ? name : span.kind, family);
 }
 
 /** The agent lists HTTP calls as system "http" (their span kind is `http.client`); every other system by its kind. */
 const PAGE_KINDS: Record<string, string> = { http: "http.client" };
 
+/**
+ * A page of a family's generic kind (a system that didn't name itself): named as its calls, as "HTTP calls" is,
+ * apart from the entry point of the same name (RPC).
+ */
+const GENERIC_PAGES: Record<string, string> = { rpc: "RPC calls", db: "Datastore calls", messaging: "Messages" };
+
 /** A system by the name the agent's operations give it (`sql`, `http`, `mongodb`, `neo4j`): its page. */
 export function systemOfPage(name: string, family: Family | undefined, label?: string): System {
-  return systemNamed(PAGE_KINDS[name] ?? name, family ?? "datastore", label);
+  const system = systemNamed(PAGE_KINDS[name] ?? name, family ?? "datastore", label);
+  const page = GENERIC_PAGES[name];
+  return page ? { ...system, label: page } : system;
 }
 
 /** The families in the order the console lists systems: the agent's counts order them the same way. */

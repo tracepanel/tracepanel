@@ -211,33 +211,23 @@ export function RefreshControl({ live = true, paused = false }: { live?: boolean
   const loading = useActivity();
   const title = useTitle(loading);
   const { now } = useRefresh();
-  if (!live) {
-    return (
-      <Button
-        variant="outline"
-        size="sm"
-        className="h-9 gap-1.5 px-3 shadow-none"
-        aria-label="Refresh now"
-        title={title}
-        onClick={now}
-      >
-        <RefreshIcon activity={loading} />
-        Refresh
-      </Button>
-    );
-  }
+  const button = (
+    <Button
+      variant="outline"
+      size="sm"
+      // On demand only, the button alone: the same square as beside the auto-refresh menu, no word of its own.
+      className={cn("h-9 shadow-none", live && "rounded-r-none border-r-0")}
+      aria-label="Refresh now"
+      title={title}
+      onClick={now}
+    >
+      <RefreshIcon activity={loading} />
+    </Button>
+  );
+  if (!live) return button;
   return (
     <div className="flex shrink-0 items-center">
-      <Button
-        variant="outline"
-        size="sm"
-        className="h-9 rounded-r-none border-r-0 shadow-none"
-        aria-label="Refresh now"
-        title={title}
-        onClick={now}
-      >
-        <RefreshIcon activity={loading} />
-      </Button>
+      {button}
       <AutoRefresh paused={paused} />
     </div>
   );

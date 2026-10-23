@@ -49,7 +49,7 @@ import { SearchPalette } from "./SearchPalette";
 import { ShareAction } from "./ShareDialog";
 import { NAV, ThemeToggle } from "./Sidebar";
 import { ScopeProvider } from "./scope";
-import { graphqlOperation } from "./sections";
+import { graphqlOperation, requestPath } from "./sections";
 import { tabOf } from "./TracePage";
 import { TraceScreen } from "./TraceScreen";
 import { SwitchUser } from "./UserSwitcher";
@@ -469,7 +469,7 @@ function RequestName({ trace }: { trace: TraceSummary }) {
   return (
     <>
       <TraceBadge word={operation ? "GQL" : trace.method} htmx={trace.htmx} />
-      <span className="switcher-path">{operation ?? trace.path ?? trace.name}</span>
+      <span className="switcher-path">{operation ?? requestPath(trace)}</span>
     </>
   );
 }

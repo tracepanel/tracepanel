@@ -103,6 +103,74 @@ const NAV_GROUPS: { title: string | null; items: NavItem[] }[] = [
 
 export const NAV: NavItem[] = NAV_GROUPS.flatMap((group) => group.items);
 
+/** The groups that scroll, and the last, Problems, kept in view below them. */
+const LISTED = NAV_GROUPS.slice(0, -1);
+const PROBLEMS = NAV_GROUPS[NAV_GROUPS.length - 1] as (typeof NAV_GROUPS)[number];
+
+/** Spans the sidebar's padding, so the current page's mark at the edge isn't cut off. */
+const edges = (rail: boolean) => (rail ? "-mx-3 justify-items-center px-3" : "-mx-5 px-5");
+
+/**
+ * Only the list scrolls (an app that calls many systems): the logo, search, Problems and footer stay in place.
+ * Problems sit right below the list, pinned above the footer once it scrolls: their red and amber counts are never
+ * below the fold.
+ */
+function SidebarNav({ rail, groupProps }: { rail: boolean; groupProps: Omit<NavGroupProps, "group" | "index"> }) {
+  const list = useRef<HTMLDivElement>(null);
+  const fade = useScrollFade(list);
+  return (
+    <nav className="flex min-h-0 flex-col gap-3">
+      <div
+        ref={list}
+        data-nav-list=""
+        onScroll={fade.update}
+        style={fade.style}
+        className={cn(
+          "grid min-h-0 shrink content-start gap-3 overflow-y-auto overscroll-contain [scrollbar-width:thin]",
+          edges(rail),
+        )}
+      >
+        {LISTED.map((group, index) => (
+          <NavGroup key={group.title} group={group} index={index} {...groupProps} />
+        ))}
+      </div>
+      <div className={cn("grid", edges(rail))}>
+        <NavGroup group={PROBLEMS} index={LISTED.length} {...groupProps} />
+      </div>
+    </nav>
+  );
+}
+
+/** A group of the sidebar: its title, then its items that have something to show. */
+interface NavGroupProps {
+  group: (typeof NAV_GROUPS)[number];
+  index: number;
+  section: Section | null;
+  counts: Counts | undefined;
+  rail: boolean;
+  visible: Set<Section>;
+}
+
+function NavGroup({ group, index, section, counts, rail, visible }: NavGroupProps) {
+  return (
+    <div className="grid gap-0.5">
+      <GroupTitle title={group.title} rail={rail} divider={index > 0} />
+      {itemsOf(group, counts)
+        .filter((entry) => visible.has(entry.section))
+        .map((entry) => (
+          <NavLink
+            key={entry.section}
+            entry={entry}
+            current={entry.section === section}
+            counts={counts}
+            rail={rail}
+            items={visible.size}
+          />
+        ))}
+    </div>
+  );
+}
+
 /**
  * The sections shown only once there is something in them; HTTP always (it is where a project starts). Emails too:
  * only some frameworks send them through what an SDK records (Django's mail).
@@ -182,8 +250,7 @@ export function Sidebar({
 }) {
   const visible = visibleSections(counts);
   const rail = collapsed && !drawer;
-  const nav = useRef<HTMLElement>(null);
-  const fade = useScrollFade(nav);
+  const groupProps = { section, counts, rail, visible };
   return (
     <aside
       className={cn(
@@ -196,35 +263,7 @@ export function Sidebar({
       <SidebarHead rail={rail} />
       {scope ? <AppSwitcher scope={scope} rail={rail} /> : null}
       <SearchButton rail={rail} onSearch={onSearch} />
-      {/* Only the list scrolls (an app that calls many systems): the logo, search and footer stay in place. It
-          spans the sidebar's padding so the current page's mark at the edge isn't cut off. */}
-      <nav
-        ref={nav}
-        onScroll={fade.update}
-        style={fade.style}
-        className={cn(
-          "grid min-h-0 flex-1 content-start gap-3 overflow-y-auto overscroll-contain pb-2 [scrollbar-width:thin]",
-          rail ? "-mx-3 justify-items-center px-3" : "-mx-5 px-5",
-        )}
-      >
-        {NAV_GROUPS.map((group, index) => (
-          <div key={group.items[0]?.section} className="grid gap-0.5">
-            <GroupTitle title={group.title} rail={rail} divider={index > 0} />
-            {itemsOf(group, counts)
-              .filter((entry) => visible.has(entry.section))
-              .map((entry) => (
-                <NavLink
-                  key={entry.section}
-                  entry={entry}
-                  current={entry.section === section}
-                  counts={counts}
-                  rail={rail}
-                  items={visible.size}
-                />
-              ))}
-          </div>
-        ))}
-      </nav>
+      <SidebarNav rail={rail} groupProps={groupProps} />
       <SidebarFooter rail={rail} onClear={onClear} />
     </aside>
   );
@@ -387,7 +426,7 @@ function useShownWhenCurrent(current: boolean, items: number) {
   // biome-ignore lint/correctness/useExhaustiveDependencies: a new item above moves the current one: look again.
   useEffect(() => {
     const item = ref.current;
-    const list = item?.closest("nav");
+    const list = item?.closest<HTMLElement>("[data-nav-list]");
     if (!(current && item && list)) return;
     const reveal = () => {
       const room = 40;

@@ -3,7 +3,6 @@ import {
   type DataColumn,
   type DataSource,
   DataTable,
-  KindBadge,
   type LiveTask,
   type LiveTasks,
   type LiveWorker,
@@ -264,7 +263,7 @@ const COLUMNS: DataColumn<Ticking>[] = [
     id: "system",
     label: "System",
     width: 7.5,
-    cell: ({ task }) => <KindBadge kind={taskSystem(task.system)} muted={true} />,
+    cell: ({ task }) => <NeutralTag>{taskSystem(task.system)}</NeutralTag>,
   },
   // Where it is: the worker that runs it, or the queue it waits in.
   { id: "where", label: "Where", width: 10, cell: ({ task }) => <Where task={task} /> },

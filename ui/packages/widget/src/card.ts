@@ -46,7 +46,17 @@ export const CARD_STYLE = `
   .card * { box-sizing: border-box; }
   .card-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .card-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 13px "Geist Mono Variable", "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace; }
-  .card-method { color: var(--dt-accent); }
+  /* A request's method as the console's lists show it (.dt-method): its colour in a tint in dark, the colour alone in
+     light. The pill's name and the card's head share it. */
+  .method {
+    display: inline-block; margin-right: 2px; padding: 1px 5px; border-radius: 4px;
+    font: 600 11.5px/16px "Geist Mono Variable", "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    letter-spacing: 0.02em; color: var(--dt-get); background: rgb(from var(--dt-get) r g b / 0.12);
+  }
+  .method[data-method="POST"] { color: var(--dt-post); background: rgb(from var(--dt-post) r g b / 0.12); }
+  .method:is([data-method="PUT"], [data-method="PATCH"]) { color: var(--dt-put); background: rgb(from var(--dt-put) r g b / 0.14); }
+  .method[data-method="DELETE"] { color: var(--dt-delete); background: rgb(from var(--dt-delete) r g b / 0.12); }
+  :host([data-theme="light"]) .method { padding-inline: 0; background: none; }
   .card-head .status { flex: none; margin-left: auto; }
   .card-time { flex: none; color: var(--dt-text-2); }
   .card-bar { display: flex; gap: 2px; height: 6px; margin: 12px 0 7px; }
@@ -179,6 +189,21 @@ function failed(info: TraceInfo): boolean {
   return (info.status ?? 200) >= 500;
 }
 
+const METHODS = new Set(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]);
+
+/** A request's name with its method in the console's badge ("GET /books"); a name without one (a GraphQL operation) as it is. */
+export function nameWithMethod(name: string): (HTMLElement | string)[] {
+  const [method = "", ...rest] = name.split(" ");
+  return METHODS.has(method) && rest.length ? [methodBadge(method), ` ${rest.join(" ")}`] : [name];
+}
+
+/** A request's method in the console's badge: the pill's name and the card's head. */
+function methodBadge(method: string): HTMLElement {
+  const badge = element("span", "method", method.toUpperCase());
+  badge.dataset["method"] = method.toUpperCase();
+  return badge;
+}
+
 /** As on the pill: a request's time is amber from 300 ms, red from a second. */
 function speedOf(total: number): "slow" | "very-slow" | undefined {
   if (total >= VERY_SLOW_MS) return "very-slow";
@@ -248,7 +273,7 @@ export function mountCard(root: ShadowRoot, badge: HTMLElement, source: CardSour
     const row = element("div", "card-head");
     const { method, path } = requestName(info);
     const name = element("span", "card-name");
-    name.append(element("span", "card-method", method), ` ${path}`);
+    name.append(...nameWithMethod(`${method} ${path}`));
     name.title = `${method} ${path}`;
     row.append(name);
     const chip = statusChip(info.status);

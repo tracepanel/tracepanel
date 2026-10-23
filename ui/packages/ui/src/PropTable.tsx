@@ -44,20 +44,18 @@ export function PropTable({ rows, dense = false }: { rows: readonly PropRow[]; d
             <dt className={`flex items-center border-b pr-4 text-muted-foreground ${size.cell}`}>{row.label}</dt>
             <dd
               // Wraps at spaces and slashes first, inside a word only when it must (a long id); a mono value at the
-              // size of the text beside it (mono glyphs run wider).
-              className={`m-0 flex min-w-0 items-center border-b [overflow-wrap:anywhere] ${size.cell} ${row.mono ? size.mono : ""}`}
+              // size of the text beside it (mono glyphs run wider). Its copy button follows it, as a fact's does.
+              className={`col-span-2 m-0 flex min-w-0 items-center gap-1 border-b [overflow-wrap:anywhere] ${size.cell} ${row.mono ? size.mono : ""}`}
             >
-              {row.value}
-            </dd>
-            <span className={`flex w-9 items-center justify-end border-b ${size.cell}`}>
+              <span className="min-w-0">{row.value}</span>
               {row.copy ? (
                 <CopyButton
                   text={row.copy}
                   label={`Copy ${row.label.toLowerCase()}`}
-                  className="size-7 opacity-0 transition-opacity group-hover/row:opacity-100 focus-visible:opacity-100"
+                  className="size-5 shrink-0 opacity-0 transition-opacity group-hover/row:opacity-100 focus-visible:opacity-100"
                 />
               ) : null}
-            </span>
+            </dd>
           </div>
         ),
       )}

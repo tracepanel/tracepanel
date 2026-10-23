@@ -170,11 +170,14 @@ function ExceptionBlock({ text }: { text: string }) {
 export function LogRecord({
   log,
   header,
+  footer,
   context = [],
   actions,
 }: {
   log: Log;
   header?: ReactNode;
+  /** Its actions under it (DetailsFooter). */
+  footer?: ReactNode;
   context?: readonly NameValue[];
   actions?: ((name: string, value: string) => readonly ReactNode[]) | undefined;
 }) {
@@ -197,6 +200,7 @@ export function LogRecord({
           ]}
         />
       </section>
+      {footer}
     </div>
   );
 }

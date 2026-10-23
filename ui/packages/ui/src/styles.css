@@ -445,24 +445,68 @@ code,
   text-align: center;
 }
 
+/* Nothing to show (Empty): a tile with the section's icon, a title, what to do, and the way on as a button. A page's
+   own (`data-page`) takes its room, in the middle, as a section with nothing stored yet does. */
 .dt-empty {
+  display: grid;
+  justify-items: center;
+  gap: 0.5rem;
   padding: 3rem 1.5rem;
   text-align: center;
 }
+.dt-empty[data-page] {
+  min-height: 60vh;
+  align-content: center;
+  padding-bottom: 6rem;
+}
+.dt-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  margin-bottom: 0.25rem;
+  border-radius: 0.875rem;
+  color: var(--dt-accent);
+  background: var(--dt-accent-bg);
+}
 .dt-empty-title {
-  margin: 0 0 0.25rem;
+  margin: 0;
+  font-size: var(--dt-size-lg);
   font-weight: 600;
 }
 .dt-empty-text {
+  max-width: 34rem;
   margin: 0;
   color: var(--dt-text-2);
 }
 .dt-empty-action {
-  margin: 0.75rem 0 0;
+  margin: 0.5rem 0 0;
 }
-.dt-empty-action a {
-  color: var(--dt-brand, currentColor);
+.dt-empty-action :is(a, button) {
+  display: inline-flex;
+  align-items: center;
+  height: 2rem;
+  padding: 0 0.75rem;
+  border: 1px solid var(--dt-border);
+  border-radius: 0.5rem;
+  color: var(--dt-text);
   font-weight: 500;
+  text-decoration: none;
+  background: var(--dt-field, transparent);
+}
+.dt-empty-action :is(a, button):hover {
+  border-color: var(--dt-border-strong);
+}
+
+.dt-details-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.dt-details-footer[data-rule] {
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--dt-border);
 }
 
 .dt-section-label {
@@ -1259,18 +1303,10 @@ tr[data-new] {
   gap: 0.375rem;
   min-width: 0;
 }
-.dt-issue-kind {
-  margin: 0;
-  color: var(--dt-warn);
-  font-size: var(--dt-size-xs);
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-.dt-issue-card[data-kind="error"] .dt-issue-kind {
-  color: var(--dt-error);
-}
 .dt-issue-title {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
   margin: 0;
   font-size: var(--dt-size-md);
   font-weight: 600;
@@ -1291,25 +1327,6 @@ tr[data-new] {
 .dt-issue-hint {
   margin: 0;
   color: var(--dt-text-2);
-}
-.dt-issue-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.75rem;
-  margin: 0;
-}
-.dt-issue-actions:empty {
-  display: none;
-}
-.dt-issue-link {
-  color: var(--dt-brand, currentColor);
-  font-size: var(--dt-size-sm);
-  font-weight: 500;
-  text-decoration: none;
-}
-.dt-issue-link:hover {
-  text-decoration: underline;
 }
 .dt-issue-hint code {
   padding: 0 0.25rem;

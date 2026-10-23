@@ -269,6 +269,63 @@
   fit PATCH by half a pixel on macOS and missed it on Linux. In a narrow call
   tree an issue's chip is cut with an ellipsis rather than past the row's
   name.
+- The sidebar keeps Errors and Issues in view. With many systems (Kafka,
+  RabbitMQ, HTTP calls, Logs, Emails) its list scrolls and the Problems group
+  stays below it, above the footer, with its red and amber counts: at
+  1440 × 800 they were below the fold again.
+- A system that doesn't name itself has a proper name. An RPC call with no
+  `rpc.system` was "rpc" in the sidebar beside the RPC entry point: its page
+  is RPC calls now, and its issues say "RPC calls". A database or a broker
+  that names no system reads Datastore or Broker, and any other system the
+  agent doesn't know starts with a capital.
+- A request reads its method once. One with no path, from an SDK that sent
+  only its URL, read "POST POST /hooks/stripe" in the lists, the panel and
+  ⌘K: its name after the method is its path there now.
+- Every page's header has one refresh control. Services and Database, which
+  refresh on demand only, had a "Refresh" text button where every other page
+  has the refresh icon beside its auto-refresh menu: they have the same icon
+  button now. Issues' filters start with Time, as every page's do, not with
+  Type.
+- Nothing to show looks one way everywhere. A trace, an issue or a group
+  that isn't stored and a search that matches nothing show what a section
+  with nothing stored yet shows: an icon in its tile, a title, what to do,
+  and the way back as a button, in the middle of the page. They were bare
+  centred text with a link that read as bold text.
+- One thing is drawn one way wherever it shows. A request's method is its
+  badge in Errors' and Issues' Endpoints, on an issue's page, in a trace's
+  HTTP calls tab and in the pill and its hover card, where it was plain text
+  or purple. An issue reads its kind in its chip, then its title without it
+  ("N+1" and "13 similar queries"), in the lists, on its page and in a
+  trace's Issues tab, which had small orange capitals. A page's action reads
+  CLICK "Delete" · /books in the lists, as in its header, and a failed one
+  says "failed" in Status. A task's error names its task where a request's
+  names its endpoint. A failed HTTP call has a failed row's red edge and its
+  status's badge. A job's first tab is Job, not Command. What ran a task, a
+  queue and a job's source are one quiet tag in their own case.
+- A copy button follows its value in every row of names and values: a
+  trace's attributes, a request's headers, query, cookies and session, a
+  call's details, an app's settings and versions, and related traces, as a
+  trace's facts already had it. It sat at the row's far end, a screen away
+  from a short value. An attribute's name no longer has a tooltip repeating
+  it: it wraps whole.
+- One switch for a choice of views. An entry point's By/All lists are the
+  pill switch a trace's parts, a profile and the Database tab have, the
+  chosen one raised on a muted track, where they were a bordered card with
+  the brand's colour. GraphQL's own type switch above the search is gone:
+  the Type filter does it, on its calls too. A trace's Workflow and Related
+  traces are named on the same pill track as its Attributes, not in bold
+  headings of another kind.
+- An open row's actions are one footer. A log record, an email and a query
+  opened in their lists, and a finding in a trace's Issues tab, end with
+  their own buttons, then the way to the trace at the right end as an
+  outlined button with its arrow: "Open request", "Latest query", "All
+  occurrences". Logs had a filled button at the top, Emails an outlined one
+  at the left, a query a button and a text link. An email's card lines up
+  with the row's edges, not 15 px inside them.
+- A trace that called nothing (a task, a WebSocket, a GraphQL operation, a
+  job, the latest occurrence of an error) no longer shows Duration as one
+  full-width tile with an empty bar: its header says how long it took, and
+  the lanes under it draw it.
 
 ## 0.4.1 (2026-10-21)
 

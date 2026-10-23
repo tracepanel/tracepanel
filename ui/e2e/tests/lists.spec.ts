@@ -56,7 +56,7 @@ test("an issue's page names the endpoint it was found in", async ({ page }) => {
   await page.goto("/#/issues");
   await page
     .getByRole("region", { name: "Issues" })
-    .getByRole("link", { name: /^N\+1: 13 similar queries/ })
+    .getByRole("link", { name: /^N\+1 13 similar queries/ })
     .click();
 
   await expect(page.getByRole("main")).toContainText("GET /api/posts");
