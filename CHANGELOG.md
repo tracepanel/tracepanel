@@ -239,6 +239,11 @@
   tree and the DB tab. The WebSockets table's headers are whole, and a dotted
   attribute name such as `db.transaction.savepoint` wraps after a dot, not
   inside a word.
+- The sidebar shows its Problems at 1440 × 900. Its items are 32 px tall with
+  tighter gaps, a list longer than the column fades at the edge it goes on past
+  and keeps the current page in view, and its footer reads "Local ·
+  .tracepanel/" on one line, starting where the items' icons do. Errors and
+  Issues fell below the fold with nothing to say so.
 
 ## 0.4.1 (2026-10-21)
 
