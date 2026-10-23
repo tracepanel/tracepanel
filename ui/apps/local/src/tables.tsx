@@ -79,11 +79,12 @@ const TRACE_COLUMNS: DataColumn<TraceSummary>[] = [
       trace.task_state ? <TaskState state={trace.task_state} /> : <StatusBadge status={trace.http_status} />,
   },
   { id: "duration", label: "Duration", width: 6.75, num: true, cell: (trace) => duration(trace.duration) },
-  { id: "queries", label: "Queries", width: 6.25, num: true, cell: (trace) => trace.queries },
+  { id: "queries", label: "Queries", width: 6.25, num: true, drop: 2, cell: (trace) => trace.queries },
   {
     id: "issues",
     label: "Issues",
     width: 14,
+    drop: 1,
     cell: (trace) => (
       // One line, as every row of a list: a narrow column cuts the last chips off, wider shows them.
       <span className="flex gap-1">
@@ -161,6 +162,7 @@ function p95Column<T extends { p95: number }>(items: readonly T[], label = "p95"
     id: "p95",
     label,
     width: 8.5,
+    fixed: true,
     cell: (item) => (
       <Meter value={item.p95} max={slowest}>
         {duration(item.p95)}
@@ -171,7 +173,15 @@ function p95Column<T extends { p95: number }>(items: readonly T[], label = "p95"
 
 /** The Last column: when the list's item was last seen. */
 function lastColumn<T extends Pick<EndpointRow, "last_seen">>(): DataColumn<T> {
-  return { id: "last", label: "Last", width: 6.5, num: true, className: MUTED, cell: (item) => ago(item.last_seen) };
+  return {
+    id: "last",
+    label: "Last",
+    width: 6.5,
+    num: true,
+    drop: 2,
+    className: MUTED,
+    cell: (item) => ago(item.last_seen),
+  };
 }
 
 function endpointColumns(items: readonly EndpointRow[]): DataColumn<EndpointRow>[] {
@@ -189,14 +199,15 @@ function endpointColumns(items: readonly EndpointRow[]): DataColumn<EndpointRow>
       ),
     },
     { id: "calls", label: "Calls", width: 5.25, num: true, cell: (item) => item.calls },
-    { id: "p50", label: "p50", width: 6.5, num: true, cell: (item) => duration(item.p50) },
+    { id: "p50", label: "p50", width: 6.5, num: true, drop: 3, cell: (item) => duration(item.p50) },
     p95Column(items),
-    { id: "queries", label: "Queries / call", width: 9, num: true, cell: (item) => item.avg_queries },
+    { id: "queries", label: "Queries / call", width: 9, num: true, drop: 4, cell: (item) => item.avg_queries },
     {
       id: "issues",
       label: "With issues",
       width: 7.75,
       num: true,
+      drop: 1,
       className: (item) => warnCount(item.with_issues),
       cell: (item) => item.with_issues || "—",
     },
@@ -255,18 +266,21 @@ function callStatsColumns<T extends CallStats>(
       required: true,
       cell: (item) => (
         <span className="flex flex-col gap-0.5">
-          <Mono className="flex min-w-0 items-center gap-2 font-semibold">{name(item)}</Mono>
+          <Mono className="flex min-w-0 items-center gap-2 font-semibold [&_.dt-alias]:max-w-[50%] [&_.dt-alias]:truncate">
+            {name(item)}
+          </Mono>
           <Mono className="truncate text-base text-muted-foreground">{item.origin}</Mono>
         </span>
       ),
     },
     { id: "calls", label: "Calls", width: 5.25, num: true, cell: (item) => item.calls },
-    { id: "requests", label: "Requests", width: 6.75, num: true, cell: (item) => item.traces },
+    { id: "requests", label: "Requests", width: 6.75, num: true, drop: 2, cell: (item) => item.traces },
     {
       id: "repeated",
       label: "Max / request",
       width: 9,
       num: true,
+      drop: 3,
       cell: (item) => <RepeatedCount most={item.most_per_trace} />,
     },
     { id: "failed", label: "Failed", width: 5.5, num: true, cell: (item) => item.errors },
@@ -275,13 +289,14 @@ function callStatsColumns<T extends CallStats>(
       id: "total",
       label: "Total time",
       width: 8.5,
+      fixed: true,
       cell: (item) => (
         <Meter value={item.total} max={heaviest}>
           {duration(item.total)}
         </Meter>
       ),
     },
-    { id: "slowest", label: "Slowest", width: 6.5, num: true, cell: (item) => duration(item.slowest) },
+    { id: "slowest", label: "Slowest", width: 6.5, num: true, drop: 1, cell: (item) => duration(item.slowest) },
   ];
 }
 
@@ -395,12 +410,17 @@ function SqlDetails({ item, source }: { item: CallRow; source: DataSource }) {
   );
 }
 
+/** A name's text in a row of a flex box: cut with an ellipsis, so the chips beside it keep their size. */
+function Cut({ children }: { children: ReactNode }) {
+  return <span className="min-w-0 truncate">{children}</span>;
+}
+
 /** What a row is: its operation and template, where it went, and what kind of call it was (an HTTP method). */
 function OpName({ item }: { item: CallRow }) {
   if (item.family === "sql") {
     return (
       <>
-        {item.name}
+        <Cut>{item.name}</Cut>
         <AliasChip value={item.target} />
       </>
     );
@@ -409,14 +429,18 @@ function OpName({ item }: { item: CallRow }) {
     return (
       <>
         <MethodBadge method={item.op} />
-        {item.target}
-        {item.template}
+        <Cut>
+          {item.target}
+          {item.template}
+        </Cut>
       </>
     );
   }
   return (
     <>
-      {item.op} {item.template}
+      <Cut>
+        {item.op} {item.template}
+      </Cut>
       <AliasChip value={item.target} />
     </>
   );
@@ -504,6 +528,7 @@ const LOG_COLUMNS: LogColumn<LogRow>[] = [
     id: "source",
     label: "Source",
     width: 15.5,
+    drop: 1,
     cell: (log) => (
       <SourceCell
         kind={log.trace_kind}
@@ -521,6 +546,7 @@ const LOG_COLUMNS: LogColumn<LogRow>[] = [
     label: "App",
     width: 7.5,
     hidden: true,
+    drop: 3,
     cell: (log) => <span className="text-muted-foreground">{log.service}</span>,
   },
   {
@@ -528,6 +554,7 @@ const LOG_COLUMNS: LogColumn<LogRow>[] = [
     label: "Trace",
     width: 9.5,
     hidden: true,
+    drop: 3,
     cell: (log) => (
       <a className="font-mono text-muted-foreground hover:text-foreground" href={traceHref(log.trace_id, "logs")}>
         {log.trace_id}
@@ -846,8 +873,14 @@ const ISSUE_COLUMNS: DataColumn<IssueRow>[] = [
     className: "whitespace-normal",
     cell: (item) => <IssueTitle item={item} />,
   },
-  { id: "type", label: "Type", width: 10, cell: (item) => <IssueChip kind={item.kind} /> },
-  { id: "endpoints", label: "Endpoints", width: 18, cell: (item) => <FirstOf values={item.endpoints} count={3} /> },
+  { id: "type", label: "Type", width: 10, fixed: true, drop: 2, cell: (item) => <IssueChip kind={item.kind} /> },
+  {
+    id: "endpoints",
+    label: "Endpoints",
+    width: 18,
+    drop: 1,
+    cell: (item) => <FirstOf values={item.endpoints} count={3} />,
+  },
   {
     id: "events",
     label: "Events",
@@ -857,7 +890,15 @@ const ISSUE_COLUMNS: DataColumn<IssueRow>[] = [
     cell: (item) => item.occurrences,
   },
   { id: "last", label: "Last seen", width: 7, num: true, className: MUTED, cell: (item) => ago(item.last_seen) },
-  { id: "first", label: "First seen", width: 7.25, num: true, className: MUTED, cell: (item) => ago(item.first_seen) },
+  {
+    id: "first",
+    label: "First seen",
+    width: 7.25,
+    num: true,
+    drop: 3,
+    className: MUTED,
+    cell: (item) => ago(item.first_seen),
+  },
 ];
 
 export function IssuesTable({ items }: { items: readonly IssueRow[] }) {
@@ -885,11 +926,12 @@ const MAIL_COLUMNS: DataColumn<MailRow>[] = [
     required: true,
     cell: (mail) => <span className="block truncate font-medium">{mail.subject || "(no subject)"}</span>,
   },
-  { id: "to", label: "To", width: 12, cell: (mail) => <FirstOf values={mail.recipients} count={2} /> },
+  { id: "to", label: "To", width: 12, drop: 1, cell: (mail) => <FirstOf values={mail.recipients} count={2} /> },
   {
     id: "from",
     label: "From",
     width: 11,
+    drop: 2,
     cell: (mail) => <Mono className="text-base text-muted-foreground">{mail.sender ?? "—"}</Mono>,
   },
   {
@@ -1069,6 +1111,8 @@ function taskColumns(items: readonly TaskRow[]): DataColumn<TaskRow>[] {
       id: "system",
       label: "System",
       width: 7.5,
+      fixed: true,
+      drop: 2,
       cell: (item) => <KindBadge kind={taskSystem(item.system)} muted={true} />,
     },
     { id: "runs", label: "Runs", width: 5, num: true, cell: (item) => item.runs },
@@ -1085,6 +1129,7 @@ function taskColumns(items: readonly TaskRow[]): DataColumn<TaskRow>[] {
       label: "Retried",
       width: 6,
       num: true,
+      drop: 1,
       className: (item) => warnCount(item.retries),
       cell: (item) => item.retries || "—",
     },
@@ -1094,6 +1139,7 @@ function taskColumns(items: readonly TaskRow[]): DataColumn<TaskRow>[] {
       label: "Queue wait p95",
       width: 9.25,
       num: true,
+      drop: 3,
       className: (item) => (item.wait_p95 === null ? MUTED : undefined),
       cell: (item) => (item.wait_p95 === null ? "eager" : duration(item.wait_p95)),
     },
@@ -1101,6 +1147,7 @@ function taskColumns(items: readonly TaskRow[]): DataColumn<TaskRow>[] {
       id: "queues",
       label: "Queues",
       width: 11.25,
+      drop: 4,
       // In the menu, not on screen: the Queue filter says them, and the task's name keeps the room.
       hidden: true,
       cell: (item) => (
@@ -1176,8 +1223,8 @@ function graphqlColumns(items: readonly GraphqlRow[]): DataColumn<GraphqlRow>[] 
       cell: (item) => item.errors || "—",
     },
     p95Column(items),
-    { id: "p50", label: "p50", width: 6.5, num: true, cell: (item) => duration(item.p50) },
-    { id: "queries", label: "Queries / call", width: 9, num: true, cell: (item) => item.avg_queries },
+    { id: "p50", label: "p50", width: 6.5, num: true, drop: 3, cell: (item) => duration(item.p50) },
+    { id: "queries", label: "Queries / call", width: 9, num: true, drop: 4, cell: (item) => item.avg_queries },
     lastColumn(),
   ];
 }
@@ -1232,7 +1279,7 @@ function namedColumns(head: [string, string, string, string], items: readonly Na
       cell: (item) => item.failures || "—",
     },
     p95Column(items),
-    { id: "average", label: head[3], width: 8.75, num: true, cell: (item) => item.average },
+    { id: "average", label: head[3], width: 8.75, num: true, drop: 3, cell: (item) => item.average },
     lastColumn(),
   ];
 }
@@ -1320,13 +1367,14 @@ export function PagesTable({ items }: { items: readonly PageRow[] }) {
 function websocketColumns(items: readonly WebsocketRow[]): DataColumn<WebsocketRow>[] {
   return [
     { id: "consumer", label: "Consumer", required: true, cell: (item) => nameCell(item.consumer) },
-    { id: "connections", label: "Connections", width: 8, num: true, cell: (item) => item.connections },
-    { id: "received", label: "Received", width: 6.75, num: true, cell: (item) => item.received },
+    { id: "connections", label: "Connections", width: 9, num: true, cell: (item) => item.connections },
+    { id: "received", label: "Received", width: 7, num: true, drop: 3, cell: (item) => item.received },
     {
       id: "delivered",
       label: "From layer",
-      width: 7.25,
+      width: 8.25,
       num: true,
+      drop: 2,
       className: (item) => (item.delivered ? undefined : MUTED),
       cell: (item) => item.delivered || "—",
     },
@@ -1343,6 +1391,7 @@ function websocketColumns(items: readonly WebsocketRow[]): DataColumn<WebsocketR
       id: "paths",
       label: "Paths",
       width: 10,
+      drop: 4,
       cell: (item) => <Mono className="block truncate text-muted-foreground">{item.paths.join(", ")}</Mono>,
     },
     lastColumn(),

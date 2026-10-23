@@ -323,3 +323,35 @@ test("a narrow column's hover buttons sit beside its name, not over it, and the 
     expect(button.x + button.width <= after.x || button.x >= after.x + after.width).toBe(true);
   }
 });
+
+test("at 1024 px the sidebar is a rail and the HTTP list cuts no header, badge or number", async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await open(page, "/#/endpoints");
+  const cut = (selector: string) =>
+    main(page)
+      .getByRole("table")
+      .first()
+      .locator(selector)
+      .evaluateAll((elements) =>
+        elements.filter((element) => element.scrollWidth > element.clientWidth).map((element) => element.textContent),
+      );
+
+  await expect(page.getByRole("button", { name: "Expand the sidebar" })).toBeVisible();
+
+  expect(await cut("th span.truncate")).toEqual([]);
+  expect(await cut(".dt-method, .dt-kind, .dt-status, [data-slot=badge]")).toEqual([]);
+  expect(await cut("td.text-right")).toEqual([]);
+});
+
+test("at 1024 px the sidebar the reader opened stays open, and a narrow list leaves its minor columns out", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await open(page, "/#/endpoints");
+  await page.getByRole("button", { name: "Expand the sidebar" }).click();
+  await open(page, "/#/endpoints");
+
+  await expect(page.getByRole("button", { name: "Collapse the sidebar" })).toBeVisible();
+  await expect(header(page, "Queries")).toHaveCount(0);
+  await expect(header(page, "Status")).toBeVisible();
+});

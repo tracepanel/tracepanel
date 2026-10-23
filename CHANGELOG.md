@@ -227,6 +227,12 @@
   them when they fork together, no longer leave two running: the first holds
   `agent.lock` in the store's directory, the others exit at once with status
   3, and every process sends to that one, which the console shows live.
+- A list fits a narrow window. Below 1280 px the sidebar is a rail until the
+  reader opens it, a choice kept for narrow windows apart from wide ones. A
+  column of numbers, a status or a badge keeps its width, a list's minor columns
+  (Queries, Issues, First seen and the like) are left out while there is no room
+  for them and come back when there is, and a call's name is cut with an
+  ellipsis before its alias. At 1024 px every column was cut mid-word.
 
 ## 0.4.1 (2026-10-21)
 

@@ -665,31 +665,61 @@ export function SidebarHandle({ width, resize }: { width: number; resize: (width
 }
 
 const COLLAPSED_KEY = "tracepanel:sidebar-collapsed";
+/** Below this window width the sidebar is a rail until the reader opens it: its column would take the lists' room. */
+const NARROW = "(max-width: 1279.98px)";
+/** The reader's choice in a narrow window, kept apart from the wide one's: each width remembers its own. */
+const NARROW_KEY = "tracepanel:sidebar-collapsed-narrow";
 /** The rail: its items (2.75rem) between its sides (0.75rem each), and the border. */
 export const RAIL_WIDTH = "calc(4.25rem + 1px)";
 /** How long the column takes to open or close. */
 const COLLAPSE_MS = 200;
 
-/** Whether the sidebar is a rail of icons: remembered in this browser, ⌘B / Ctrl+B toggles it. */
+/** Whether the window matches `query`, kept current as it resizes. */
+function useMedia(query: string): boolean {
+  const [matches, setMatches] = useState(() => window.matchMedia(query).matches);
+  useEffect(() => {
+    const list = window.matchMedia(query);
+    const change = () => setMatches(list.matches);
+    change();
+    list.addEventListener("change", change);
+    return () => list.removeEventListener("change", change);
+  }, [query]);
+  return matches;
+}
+
+/** The choice stored under `key`: collapsed, open, or none made yet. */
+function storedChoice(key: string): boolean | undefined {
+  try {
+    const value = localStorage.getItem(key);
+    return value === null ? undefined : value === "1";
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Whether the sidebar is a rail of icons: open in a wide window and a rail in a narrow one until the reader says
+ * otherwise, each choice remembered in this browser; ⌘B / Ctrl+B toggles it.
+ */
 export function useSidebarCollapsed(): {
   collapsed: boolean;
   collapse: (collapsed: boolean) => void;
   /** True while the column changes width: only then does it animate, not while dragged. */
   moving: boolean;
 } {
-  const [collapsed, setCollapsed] = useState(() => {
-    try {
-      return localStorage.getItem(COLLAPSED_KEY) === "1";
-    } catch {
-      return false;
-    }
-  });
+  const narrow = useMedia(NARROW);
+  const key = narrow ? NARROW_KEY : COLLAPSED_KEY;
+  const [choices, setChoices] = useState(() => ({
+    [COLLAPSED_KEY]: storedChoice(COLLAPSED_KEY),
+    [NARROW_KEY]: storedChoice(NARROW_KEY),
+  }));
+  const collapsed = choices[key] ?? narrow;
   const [moving, setMoving] = useState(false);
   const collapse = (next: boolean) => {
     setMoving(true);
-    setCollapsed(next);
+    setChoices((current) => ({ ...current, [key]: next }));
     try {
-      localStorage.setItem(COLLAPSED_KEY, next ? "1" : "0");
+      localStorage.setItem(key, next ? "1" : "0");
     } catch {
       // Blocked storage: the choice lasts until reload.
     }
@@ -709,6 +739,6 @@ export function useSidebarCollapsed(): {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [collapsed]);
+  }, [collapsed, key]);
   return { collapsed, collapse, moving };
 }
