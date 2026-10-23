@@ -132,7 +132,13 @@ test("a trace's parts without a switch are named on the same pill track as the o
   const workflow = page.getByRole("region", { name: "Workflow" }).getByRole("heading");
 
   await expect(workflow).toHaveText("Workflow");
-  await expect(workflow.locator("span").first()).toHaveClass(/rounded-lg/);
+  const track = await workflow.locator("span").first().boundingBox();
+  const attributes = await page.getByRole("tablist", { name: "Request details" }).boundingBox();
+  if (!(track && attributes)) throw new Error("no tracks");
+
+  // The same full-width muted track as Attributes', not a lone pill.
+  expect(Math.abs(track.width - attributes.width)).toBeLessThan(1);
+  expect(Math.abs(track.height - attributes.height)).toBeLessThan(1);
 });
 
 for (const [name, url] of [

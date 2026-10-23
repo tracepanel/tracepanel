@@ -313,8 +313,8 @@
   chosen one raised on a muted track, where they were a bordered card with
   the brand's colour. GraphQL's own type switch above the search is gone:
   the Type filter does it, on its calls too. A trace's Workflow and Related
-  traces are named on the same pill track as its Attributes, not in bold
-  headings of another kind.
+  traces are named on the same full-width pill track as its Attributes, in
+  the console and the panel, not in bold headings of another kind.
 - An open row's actions are one footer. A log record, an email and a query
   opened in their lists, and a finding in a trace's Issues tab, end with
   their own buttons, then the way to the trace at the right end as an
