@@ -1,10 +1,10 @@
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useContext, useState } from "react";
 import { AttributeGroups } from "./Attributes";
 import { bytes } from "./format";
 import { ChevronDownIcon } from "./icons";
 import { indentedJson, indentedPartialJson } from "./json";
 import { cn } from "./lib/utils";
-import { NameValues } from "./NameValues";
+import { NameValues, type RowsLook, RowsLookContext } from "./NameValues";
 import { Segmented } from "./Segmented";
 import { CodeLines } from "./Tokens";
 import type { Attrs } from "./types";
@@ -148,8 +148,18 @@ export function requestParts(attrs: Attrs, others: Attrs, extra: readonly Part[]
   ];
 }
 
-/** The parts as one card: a switch above it, the chosen part inside. The switch stays on its part across traces. */
-export function RequestParts({ parts }: { parts: readonly Part[] }) {
+// The switch and the panel under it, by where the parts are shown.
+const PART_LOOKS = {
+  card: { switch: "pills", panel: "overflow-hidden rounded-lg border bg-card" },
+  plain: { switch: "heading", panel: "" },
+} as const;
+
+/**
+ * The parts as one card: a switch above it, the chosen part inside. The switch stays on its part across traces.
+ * `plain`, on the page among the trace's facts: the switch a section's heading, the part's rows as the facts' rows,
+ * no card around them.
+ */
+export function RequestParts({ parts, look = "card" }: { parts: readonly Part[]; look?: RowsLook | undefined }) {
   const [picked, setPicked] = useState<string | null>(null);
   const open = parts.find((part) => part.id === picked) ?? parts[0];
   if (!open) return null;
@@ -161,9 +171,10 @@ export function RequestParts({ parts }: { parts: readonly Part[] }) {
         segments={parts.map(({ id, label, count }) => ({ id, label, count }))}
         value={open.id}
         onChange={setPicked}
+        look={PART_LOOKS[look].switch}
       />
-      <div className="overflow-hidden rounded-lg border bg-card" role="tabpanel" aria-label={open.label}>
-        {open.content}
+      <div className={PART_LOOKS[look].panel} role="tabpanel" aria-label={open.label}>
+        <RowsLookContext value={look}>{open.content}</RowsLookContext>
       </div>
     </section>
   );
@@ -182,14 +193,20 @@ function Headers({ pairs }: { pairs: readonly Pair[] }) {
   );
 }
 
+const BROWSER_ROW = { card: "border-t px-3 hover:bg-muted/40", plain: "py-2" } as const;
+
 /** The row that opens or folds the browser's own headers, when it sent any. */
 function BrowserHeaders({ count, open, onToggle }: { count: number; open: boolean; onToggle: () => void }) {
+  const row = BROWSER_ROW[useContext(RowsLookContext)];
   if (!count) return null;
   return (
     <button
       type="button"
       onClick={onToggle}
-      className="flex w-full items-center gap-1.5 border-t px-3 py-1.5 text-left text-xs text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+      className={cn(
+        "flex w-full items-center gap-1.5 py-1.5 text-left text-xs text-muted-foreground hover:text-foreground",
+        row,
+      )}
     >
       <span className={cn("flex transition-transform [&_svg]:size-3.5", open && "rotate-180")}>
         <ChevronDownIcon />
@@ -217,16 +234,26 @@ function Body({ body }: { body: BodyOf }) {
 
 /** A whole form's fields as names and values; any other body as text. */
 function BodyText({ body, text }: { body: BodyOf; text: string }) {
+  const card = useContext(RowsLookContext) === "card";
   if (body.type === "application/x-www-form-urlencoded" && !body.cut) return <Pairs pairs={queryPairs(text)} />;
   return (
-    <pre className="dt-syntax m-0 max-h-96 overflow-auto p-3 font-mono text-xs whitespace-pre-wrap">
+    <pre
+      className={cn(
+        "dt-syntax m-0 max-h-96 overflow-auto p-3 font-mono text-xs whitespace-pre-wrap",
+        // On the page a body is the one boxed thing: code, as code is shown everywhere.
+        !card && "rounded-lg border bg-card",
+      )}
+    >
       <Readable body={body} text={text} />
     </pre>
   );
 }
 
 function BodyNote({ children }: { children: ReactNode }) {
-  return <p className="border-t px-3 py-1.5 text-xs text-muted-foreground first:border-t-0">{children}</p>;
+  const card = useContext(RowsLookContext) === "card";
+  return (
+    <p className={cn("py-1.5 text-xs text-muted-foreground", card && "border-t px-3 first:border-t-0")}>{children}</p>
+  );
 }
 
 /** What a cut body says of itself: how much of it is shown, of how much when the SDK knew. */

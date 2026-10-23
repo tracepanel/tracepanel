@@ -15,6 +15,7 @@ import {
   Stat,
   StatGrid,
   TaskName,
+  TraceBadge,
   type TraceGroup,
 } from "@tracepanel/ui";
 import { Button } from "@tracepanel/ui/components/ui/button";
@@ -96,7 +97,7 @@ function Title({ section, groupKey }: { section: EntrySection; groupKey: string 
   const badge = { graphql: "GQL", tasks: "TASK", websockets: "WS", jobs: "JOB", rpc: "RPC", pages: "PAGE" }[section];
   return (
     <>
-      <MethodBadge method={badge} />
+      <TraceBadge word={badge} />
       {section === "tasks" ? <TaskName name={groupKey} /> : <span className="truncate">{groupKey}</span>}
     </>
   );

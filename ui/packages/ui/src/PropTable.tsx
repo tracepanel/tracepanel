@@ -18,15 +18,18 @@ export interface PropRow {
 /** The two densities: the default, and `dense` for many short rows (a request's fields and headers). */
 const SIZES = {
   normal: { table: "text-base", heading: "pt-4", cell: "min-h-10 py-1.5", mono: "font-mono text-sm" },
-  dense: { table: "text-sm", heading: "pt-3", cell: "min-h-8 py-1 border-border/60", mono: "font-mono text-xs" },
+  // As a trace's facts are (FactGrid): its related traces under them, in rows of the same make.
+  dense: { table: "text-sm", heading: "pt-3", cell: "min-h-9 py-1.5", mono: "font-mono text-xs" },
 } as const;
 
-/** Label / value rows with a copy button per value; the label column fits the longest label. `dense` packs many
- * short rows: lower rows, smaller text, lighter lines. */
+/** Label / value rows with a copy button per value; the label column fits the longest label. `dense`: the rows of
+ * a trace's facts, smaller text, the names' column at least as wide as theirs. */
 export function PropTable({ rows, dense = false }: { rows: readonly PropRow[]; dense?: boolean }) {
   const size = SIZES[dense ? "dense" : "normal"];
   return (
-    <dl className={`m-0 grid grid-cols-[minmax(110px,max-content)_minmax(0,1fr)_auto] ${size.table}`}>
+    <dl
+      className={`m-0 grid ${dense ? "grid-cols-[minmax(var(--dt-fact-label),max-content)_minmax(0,1fr)_auto]" : "grid-cols-[minmax(110px,max-content)_minmax(0,1fr)_auto]"} ${size.table}`}
+    >
       {rows.map((row) =>
         row.heading ? (
           <div
@@ -38,7 +41,7 @@ export function PropTable({ rows, dense = false }: { rows: readonly PropRow[]; d
           </div>
         ) : (
           <div key={row.id ?? row.label} className="group/row contents">
-            <dt className={`flex items-center border-b pr-5 text-muted-foreground ${size.cell}`}>{row.label}</dt>
+            <dt className={`flex items-center border-b pr-4 text-muted-foreground ${size.cell}`}>{row.label}</dt>
             <dd
               // Wraps at spaces and slashes first, inside a word only when it must (a long id); a mono value at the
               // size of the text beside it (mono glyphs run wider).

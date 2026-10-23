@@ -9,6 +9,7 @@ import {
   plural,
   RoutePath,
   TaskName,
+  TraceBadge,
   type TraceSummary,
 } from "@tracepanel/ui";
 import {
@@ -137,7 +138,7 @@ export function SearchPalette({
                       value={trace.id}
                       onSelect={() => close(() => openTo({ name: "trace", id: trace.id }))}
                     >
-                      <MethodBadge method={badge} htmx={trace.htmx} />
+                      <TraceBadge word={badge} htmx={trace.htmx} />
                       {trace.kind === "task" ? (
                         <TaskName name={name} className="flex-1 text-base" />
                       ) : (

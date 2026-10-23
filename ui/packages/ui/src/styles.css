@@ -19,6 +19,9 @@
   --dt-size-2xl: 1.5rem;
   --dt-size-3xl: 1.75rem;
   --dt-size-4xl: 1.875rem;
+  /* The column of names of a trace's facts, its related traces and its attributes: at least this wide, so their
+     values start on one line. */
+  --dt-fact-label: 9rem;
 
   --dt-ink: rgb(10 12 17 / 0.9);
   --dt-ink-2: #12151d;
@@ -287,6 +290,25 @@ code,
   background: color-mix(in srgb, var(--dt-delete) 12%, transparent);
 }
 
+/* A trace's kind (TASK, JOB, WS, GQL…): the method's shape in the brand's colour. Muted, a call's kind in the call
+   tree (VIEW, SQL, TASK.ENQUEUE): the same shape, quiet. */
+.dt-kind {
+  flex: none;
+  padding: 1px 0.3125rem;
+  border-radius: 0.25rem;
+  font: 600 var(--dt-size-xs) / 1rem var(--dt-mono);
+  letter-spacing: 0.02em;
+  text-align: center;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--dt-accent);
+  background: var(--dt-accent-bg);
+}
+.dt-kind[data-muted] {
+  color: var(--dt-text-3);
+  background: var(--dt-hover);
+}
+
 .dt-status {
   flex: none;
   padding: 1px 0.375rem;
@@ -313,6 +335,14 @@ code,
 .dt-status[data-tone="error"] {
   color: var(--dt-error);
   background: var(--dt-error-bg);
+}
+.dt-status[data-tone="brand"] {
+  color: var(--dt-accent);
+  background: var(--dt-accent-bg);
+}
+.dt-status[data-tone="neutral"] {
+  color: var(--dt-text-2);
+  background: var(--dt-hover);
 }
 
 .dt-tag {
@@ -1807,14 +1837,13 @@ details[data-focused] > .dt-sql-group {
 .dt-map-row[aria-expanded="true"] .dt-map-caret .dt-icon {
   transform: rotate(90deg);
 }
-.dt-map-kind {
-  flex: none;
-  padding: 0 0.3125rem;
-  border-radius: 0.25rem;
-  background: color-mix(in srgb, var(--dt-k) 16%, transparent);
-  color: color-mix(in srgb, var(--dt-k) 75%, var(--dt-text));
-  font: 600 var(--dt-size-2xs) / 1rem var(--dt-mono);
-  text-transform: uppercase;
+/* A call's kind: the muted kind badge (.dt-kind); a log record's level in its tone when it needs a look. */
+.dt-map-row[data-level="warning"] .dt-map-kind,
+.dt-map-row[data-level="error"] .dt-map-kind,
+.dt-map-row[data-level="critical"] .dt-map-kind,
+.dt-map-row[data-kind="error"] .dt-map-kind {
+  color: var(--dt-k);
+  background: color-mix(in srgb, var(--dt-k) 14%, transparent);
 }
 .dt-map-text {
   flex: 1 1 auto;
@@ -1966,21 +1995,6 @@ details[data-focused] > .dt-sql-group {
 .dt-map-waiting {
   color: var(--dt-text-3);
   font-style: italic;
-}
-.dt-map-state {
-  padding: 0 0.375rem;
-  border-radius: 0.3125rem;
-  background: var(--dt-hover);
-  color: var(--dt-text-2);
-  font-size: var(--dt-size-2xs);
-}
-.dt-map-state[data-state="success"] {
-  background: var(--dt-ok-bg);
-  color: var(--dt-ok);
-}
-.dt-map-state[data-state="failure"] {
-  background: var(--dt-error-bg);
-  color: var(--dt-error);
 }
 .dt-map-open {
   justify-self: start;

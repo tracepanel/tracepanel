@@ -35,8 +35,10 @@ export {
   MethodBadge,
   RichText,
   RoutePath,
+  StateBadge,
   StatusBadge,
   TaskName,
+  TraceBadge,
 } from "./primitives";
 export { RequestInfo } from "./RequestInfo";
 export { RunChips } from "./RunChips";

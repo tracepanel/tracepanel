@@ -15,10 +15,10 @@ import {
   KindBadge,
   LayersIcon,
   Logo,
-  MethodBadge,
   runIssues,
   type TabId,
   TaskName,
+  TraceBadge,
   type TraceLinks,
   TraceList,
   type TraceRow,
@@ -468,7 +468,7 @@ function RequestName({ trace }: { trace: TraceSummary }) {
   const operation = graphqlOperation(trace);
   return (
     <>
-      <MethodBadge method={operation ? "GQL" : trace.method} htmx={trace.htmx} />
+      <TraceBadge word={operation ? "GQL" : trace.method} htmx={trace.htmx} />
       <span className="switcher-path">{operation ?? trace.path ?? trace.name}</span>
     </>
   );

@@ -9,11 +9,14 @@ import type { PropRow } from "./PropTable";
  */
 export function FactGrid({ rows }: { rows: readonly PropRow[] }) {
   // Short facts first, two to a line where there is room; the wide ones after them, a line each, in the same columns.
-  const ordered = [...rows.filter((row) => !row.wide), ...rows.filter((row) => row.wide)];
+  const short = rows.filter((row) => !row.wide);
+  const ordered = [...short, ...rows.filter((row) => row.wide)];
+  // An odd one out of the short facts takes its line whole: no half line, no hairline that stops halfway.
+  const alone = short.length % 2 === 1 ? short.at(-1) : undefined;
   return (
-    <dl className="m-0 grid grid-cols-[max-content_minmax(0,1fr)] text-sm @2xl:grid-cols-[max-content_minmax(0,1fr)_max-content_minmax(0,1fr)]">
+    <dl className="m-0 grid grid-cols-[minmax(var(--dt-fact-label),max-content)_minmax(0,1fr)] text-sm @2xl:grid-cols-[minmax(var(--dt-fact-label),max-content)_minmax(0,1fr)_max-content_minmax(0,1fr)]">
       {ordered.map((row) => (
-        <Fact key={row.id ?? row.label} row={row} />
+        <Fact key={row.id ?? row.label} row={row} alone={row === alone} />
       ))}
     </dl>
   );
@@ -23,10 +26,11 @@ export function FactGrid({ rows }: { rows: readonly PropRow[] }) {
 // Its copy button follows the value, not the row's far end.
 const WIDE = { name: "col-start-1 items-start", cell: "items-start @2xl:col-span-3", value: "min-w-0" };
 const SHORT = { name: "items-center", cell: "items-center", value: "min-w-0 truncate" };
+const ALONE = { ...SHORT, name: "col-start-1 items-center", cell: "items-center @2xl:col-span-3" };
 
 /** One fact: its name, its value (whole and wrapped when wide, else cut to a line) and, on hover, its copy button. */
-function Fact({ row }: { row: PropRow }) {
-  const look = row.wide ? WIDE : SHORT;
+function Fact({ row, alone }: { row: PropRow; alone: boolean }) {
+  const look = row.wide ? WIDE : alone ? ALONE : SHORT;
   return (
     <div className="group/fact contents">
       <dt

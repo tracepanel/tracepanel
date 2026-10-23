@@ -40,7 +40,7 @@ import { pageParts } from "./lib/page";
 import { linkProps, type TraceLinks } from "./links";
 import { Metrics } from "./Metrics";
 import { ProfilePane } from "./ProfileView";
-import { MethodBadge, RoutePath, StatusBadge, TaskName } from "./primitives";
+import { RoutePath, StateBadge, StatusBadge, TaskName, TraceBadge } from "./primitives";
 import { RequestInfo } from "./RequestInfo";
 import { type Explain, SqlList } from "./SqlList";
 import { type SystemCalls, systemCalls, systemOfIssue } from "./systemCalls";
@@ -290,23 +290,12 @@ function traceTabs({
   ];
 }
 
-// task.state is upper case (SUCCESS, FAILURE…): looked up lower-cased.
-const STATE_TONES: Record<string, string> = { success: "ok", failure: "error", retry: "warn", skipped: "info" };
-
-function TaskStateBadge({ state }: { state: string }) {
-  return (
-    <span className="dt-status" data-tone={STATE_TONES[state.toLowerCase()] ?? "info"}>
-      {state.toLowerCase()}
-    </span>
-  );
-}
-
 /** How it went, on the Request tab: its status, a task's state, or that it failed. */
 function outcomeOf(trace: Trace): ReactNode {
   const status = trace.attrs["http.status_code"];
   const state = trace.attrs["task.state"];
   if (typeof status === "number") return <StatusBadge status={status} />;
-  if (typeof state === "string") return <TaskStateBadge state={state} />;
+  if (typeof state === "string") return <StateBadge state={state} />;
   return trace.status === "error" ? (
     <span className="dt-status" data-tone="error">
       failed
@@ -541,7 +530,7 @@ export function TraceView({
         <div className="flex items-center gap-3">
           <div className="min-w-0 flex-1">
             <div className="dt-trace-title" hidden={compact}>
-              <MethodBadge method={head.badge} htmx={htmxOf(trace)} />
+              <TraceBadge word={head.badge} htmx={htmxOf(trace)} />
               <h2>
                 <HeadingTitle kind={trace.kind} title={head.title} />
               </h2>

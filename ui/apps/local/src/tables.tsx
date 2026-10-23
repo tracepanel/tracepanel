@@ -27,6 +27,7 @@ import {
   type RpcRow,
   type Span,
   SqlCode,
+  StateBadge,
   StatusBadge,
   TaskName,
   type TaskRow,
@@ -703,9 +704,7 @@ function LoggedIn({ log }: { log: LogRow }) {
       {outward(log.spans).map(({ path: key, span }, index) => (
         <Fragment key={key}>
           {index > 0 ? <ChevronRightIcon className="size-3.5 text-muted-foreground" aria-hidden="true" /> : null}
-          <Badge variant="outline" className="font-mono text-2xs uppercase">
-            {span.system}
-          </Badge>
+          <KindBadge kind={span.system} muted={true} />
           <span className="max-w-80 truncate font-mono text-xs">{span.name}</span>
         </Fragment>
       ))}
@@ -1292,9 +1291,9 @@ function PageAction({ item }: { item: PageRow }) {
   if (!item.action) return <span className="text-muted-foreground">view</span>;
   return (
     <span className="block truncate">
-      <Badge variant="outline" className="mr-2 font-mono text-xs">
-        {item.trigger ?? "action"}
-      </Badge>
+      <span className="mr-2 inline-flex align-middle">
+        <MethodBadge method={item.trigger ?? "action"} />
+      </span>
       {item.action.replace(/^(click|submit) /, "")}
     </span>
   );
@@ -1368,22 +1367,7 @@ export function WebsocketsTable({ items }: { items: readonly WebsocketRow[] }) {
   );
 }
 
-const TASK_STATE: Record<string, [string, string]> = {
-  success: ["success", "border-ok/30 bg-ok-soft text-ok"],
-  failure: ["failed", "border-error/30 bg-error-soft text-error"],
-  retry: ["retry", "border-warn/30 bg-warn-soft text-warn"],
-  // A task in flight (Tasks' Now), before it has ended.
-  running: ["running", "border-brand/30 bg-brand-soft text-brand"],
-  queued: ["queued", "text-text-2"],
-  retrying: ["retrying", "border-warn/30 bg-warn-soft text-warn"],
-};
-
 /** How a task run ended, where requests show their status code; or where a task in flight is. */
 export function TaskState({ state }: { state: string }) {
-  const [label, tone] = TASK_STATE[state] ?? [state, ""];
-  return (
-    <Badge variant="outline" className={`h-[1.375rem] rounded-md px-1.5 font-mono text-2xs ${tone}`}>
-      {label}
-    </Badge>
-  );
+  return <StateBadge state={state} />;
 }

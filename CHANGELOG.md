@@ -146,6 +146,16 @@
   or aiodataloader (async) for Graphene, and a DataLoader with no library
   named for any other. It said Strawberry's on every GraphQL trace before.
   The library comes from `graphql.library`, which the Python SDK records.
+- A trace's info tab reads as one page, in the console and in the panel: its
+  facts, Related traces, Workflow and Attributes share one heading style and one
+  row, a name in a muted column and a hairline under it, with no boxes or bands
+  of capitals. An attribute's namespace is a quiet heading over its rows. Only
+  ids, paths and code are in monospace, and a body or a document keeps its box.
+- One badge for a trace's kind and one for a task's state, wherever they show:
+  the lists, the call tree, Related traces, the panel, ⌘K and Now. TASK, JOB,
+  WS, RPC, GQL, PAGE and a request's method share a shape and a colour, a span's
+  kind in the call tree is a muted one of the same, and a failed run says
+  "failure" everywhere.
 
 ### Fixed
 

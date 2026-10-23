@@ -24,7 +24,7 @@ import { CALL_KINDS, DATASTORES, MESSAGING, RPC } from "./lib/systems";
 import { type TraceLinks, traceLinkProps } from "./links";
 import { type NameValue, NameValues } from "./NameValues";
 import { PropTable } from "./PropTable";
-import { AliasChip, AppChip, IssueChip, TaskName, TemplateChip } from "./primitives";
+import { AliasChip, AppChip, IssueChip, KindBadge, StateBadge, TaskName, TemplateChip } from "./primitives";
 import { isRequestDetail, RequestParts, requestParts } from "./RequestParts";
 import { RunChips } from "./RunChips";
 import { SideResize, useSideWidth } from "./SideResize";
@@ -589,7 +589,7 @@ function LinkedButton({
     >
       <span className="dt-map-name" style={indent}>
         <Caret open={open} onToggle={() => ctx.onToggle(node.key)} />
-        <span className="dt-map-kind">{view.kind}</span>
+        <KindBadge kind={view.kind} muted={view.kind !== "task"} className="dt-map-kind" />
         {view.text}
       </span>
       {view.track}
@@ -702,7 +702,7 @@ function LeafRow({
       >
         <span className="dt-map-name" style={indent}>
           <span className="dt-map-caret" />
-          <span className="dt-map-kind">{view.level}</span>
+          <KindBadge kind={view.level} muted={true} className="dt-map-kind" />
           <span className="dt-map-text">{view.text}</span>
         </span>
         <Bar trace={ctx.trace} start={view.time} length={0} point={true} />
@@ -721,7 +721,7 @@ function GroupName({ node, ctx }: { node: Extract<Node, { type: "group" }>; ctx:
   const first = node.spans[0];
   return (
     <>
-      <span className="dt-map-kind">{spanKindLabel(first?.kind, ctx.trace.attrs)}</span>
+      <KindBadge kind={spanKindLabel(first?.kind, ctx.trace.attrs)} muted={true} className="dt-map-kind" />
       <span className="dt-map-text">{callTemplate(first)}</span>
       <AliasChip value={aliasOf(first)} />
       {first ? <TemplateChip attrs={first.attrs} /> : null}
@@ -842,7 +842,11 @@ function SpanRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps
       >
         <span className="dt-map-name" style={indent}>
           <Caret open={fold} onToggle={() => ctx.onToggle(node.key)} />
-          <span className="dt-map-kind">{spanKindLabel(span.kind, ctx.trace.attrs, parent?.kind)}</span>
+          <KindBadge
+            kind={spanKindLabel(span.kind, ctx.trace.attrs, parent?.kind)}
+            muted={true}
+            className="dt-map-kind"
+          />
           <SpanName span={span} />
           <AliasChip value={aliasOf(span)} />
           <TemplateChip attrs={span.attrs} />
@@ -896,12 +900,7 @@ function foldKeys(open: boolean | undefined, toggle: () => void): (event: Keyboa
 }
 
 function TaskState({ state }: { state: string | null }) {
-  if (!state) return null;
-  return (
-    <span className="dt-map-state" data-state={state.toLowerCase()}>
-      {state.toLowerCase()}
-    </span>
-  );
+  return state ? <StateBadge state={state} /> : null;
 }
 
 /* ---------- details of the selected row ---------- */
