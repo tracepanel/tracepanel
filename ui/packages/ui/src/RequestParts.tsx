@@ -148,16 +148,14 @@ export function requestParts(attrs: Attrs, others: Attrs, extra: readonly Part[]
   ];
 }
 
-// The switch and the panel under it, by where the parts are shown.
-const PART_LOOKS = {
-  card: { switch: "pills", panel: "overflow-hidden rounded-lg border bg-card" },
-  plain: { switch: "heading", panel: "" },
-} as const;
+// The panel under the switch, by where the parts are shown. The switch is the same pills in both: a switch made to
+// look like a section's heading read as plain text among the facts.
+const PART_PANELS = { card: "overflow-hidden rounded-lg border bg-card", plain: "" } as const;
 
 /**
  * The parts as one card: a switch above it, the chosen part inside. The switch stays on its part across traces.
- * `plain`, on the page among the trace's facts: the switch a section's heading, the part's rows as the facts' rows,
- * no card around them.
+ * `plain`, on the page among the trace's facts: the part's rows as the facts' rows, no card around them; the switch
+ * the same pills.
  */
 export function RequestParts({ parts, look = "card" }: { parts: readonly Part[]; look?: RowsLook | undefined }) {
   const [picked, setPicked] = useState<string | null>(null);
@@ -171,9 +169,8 @@ export function RequestParts({ parts, look = "card" }: { parts: readonly Part[];
         segments={parts.map(({ id, label, count }) => ({ id, label, count }))}
         value={open.id}
         onChange={setPicked}
-        look={PART_LOOKS[look].switch}
       />
-      <div className={PART_LOOKS[look].panel} role="tabpanel" aria-label={open.label}>
+      <div className={PART_PANELS[look]} role="tabpanel" aria-label={open.label}>
         <RowsLookContext value={look}>{open.content}</RowsLookContext>
       </div>
     </section>
