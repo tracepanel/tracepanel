@@ -308,6 +308,13 @@
   trace's facts already had it. It sat at the row's far end, a screen away
   from a short value. An attribute's name no longer has a tooltip repeating
   it: it wraps whole.
+- One switch for a choice of views. An entry point's By/All lists are the
+  pill switch a trace's parts, a profile and the Database tab have, the
+  chosen one raised on a muted track, where they were a bordered card with
+  the brand's colour. GraphQL's own type switch above the search is gone:
+  the Type filter does it, on its calls too. A trace's Workflow and Related
+  traces are named on the same pill track as its Attributes, not in bold
+  headings of another kind.
 
 ## 0.4.1 (2026-10-21)
 

@@ -113,3 +113,24 @@ test("a copy button follows its value, in an attribute's row as in a fact's; an 
   expect(await gap(fact)).toBeLessThanOrEqual(16);
   await expect(attribute.locator("xpath=ancestor::dd/preceding-sibling::dt[1]")).not.toHaveAttribute("title");
 });
+
+test("a choice of lists is the pill switch every pane has: the chosen one raised on a muted track", async ({
+  page,
+}) => {
+  await page.goto("/#/endpoints?view=overview");
+  const list = page.getByRole("navigation", { name: "List" });
+  const chosen = list.locator('[aria-current="page"]');
+  const other = list.locator("a:not([aria-current])");
+
+  await expect(chosen).toHaveCSS("box-shadow", /rgba?\(/);
+  await expect(other).toHaveCSS("box-shadow", "none");
+});
+
+test("a trace's parts without a switch are named on the same pill track as the ones with one", async ({ page }) => {
+  await page.goto(`/#/t/${await traceId("shop.tasks.parse_feed")}`);
+  await page.getByRole("tablist").first().getByRole("tab", { name: /^Task/ }).click();
+  const workflow = page.getByRole("region", { name: "Workflow" }).getByRole("heading");
+
+  await expect(workflow).toHaveText("Workflow");
+  await expect(workflow.locator("span").first()).toHaveClass(/rounded-lg/);
+});

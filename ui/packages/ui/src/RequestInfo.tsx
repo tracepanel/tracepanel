@@ -11,8 +11,9 @@ import { traceRuntime } from "./lib/runtime";
 import { unreceived } from "./lib/signals";
 import { linkProps, type TraceLinks } from "./links";
 import { type PropRow, PropTable } from "./PropTable";
-import { MethodBadge, RoutePath, SectionHeading, StateBadge, StatusBadge } from "./primitives";
+import { MethodBadge, RoutePath, StateBadge, StatusBadge } from "./primitives";
 import { isRequestDetail, RequestParts, requestParts } from "./RequestParts";
+import { SegmentLabel } from "./Segmented";
 import type { Attrs, Related, Trace } from "./types";
 import { taskTimingRows, workflowFacts, workflowPart } from "./Workflow";
 import { WorkflowGraph } from "./WorkflowGraph";
@@ -346,7 +347,10 @@ function ownRows(trace: Trace, hero: boolean, related: Related | undefined, link
 function Part({ label, title, children }: { label: string; title: ReactNode; children: ReactNode }) {
   return (
     <section className="grid gap-2" aria-label={label}>
-      <SectionHeading>{title}</SectionHeading>
+      {/* Its name on the pill track the parts with a switch have (Attributes, Headers): one system of parts. */}
+      <h3 className="m-0">
+        <SegmentLabel>{title}</SegmentLabel>
+      </h3>
       {children}
     </section>
   );

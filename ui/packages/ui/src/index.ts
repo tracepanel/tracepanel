@@ -44,6 +44,7 @@ export {
 export { RequestInfo } from "./RequestInfo";
 export { RunChips } from "./RunChips";
 export { RuntimeIcon } from "./RuntimeIcon";
+export { SEGMENT_TRACK, type Segment, Segmented, SegmentLabel, segmentClass } from "./Segmented";
 export { SERVICE_KINDS, ServiceIcon, serviceWhere, systemName } from "./ServiceMap";
 export { SqlCode } from "./SqlCode";
 export { SqlList } from "./SqlList";

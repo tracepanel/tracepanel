@@ -2,8 +2,10 @@ import {
   type DataSource,
   Empty,
   type KnownValues,
+  SEGMENT_TRACK,
   type SearchResource,
   type SearchSpec,
+  segmentClass,
   type TraceSummary,
 } from "@tracepanel/ui";
 import { cn } from "@tracepanel/ui/lib/utils";
@@ -49,8 +51,6 @@ const SCOPES: Record<EntrySection, OverviewScope> = {
   rpc: RPC_CALLS,
   pages: PAGE_VIEWS,
 };
-
-const GRAPHQL_TYPES = ["query", "mutation", "subscription"] as const;
 
 /** Replaces the terms of the given keys in a query, keeps the rest. */
 // A page of calls is cut by their start.
@@ -169,7 +169,8 @@ function ListNav({
   spec: SearchSpec | null;
 }) {
   return (
-    <nav className="mb-3 flex w-fit gap-0.5 rounded-lg border bg-card p-0.5" aria-label="List">
+    // The pill switch every pane has (Segmented): one look for a choice of views.
+    <nav className={cn(SEGMENT_TRACK, "mb-3 w-fit")} aria-label="List">
       {VIEWS.map((item) => (
         <a
           key={item}
@@ -179,10 +180,7 @@ function ListNav({
             q: viewQuery(section, view, item, q, spec),
           })}
           aria-current={view === item ? "page" : undefined}
-          className={cn(
-            "rounded-md px-2.5 py-1 text-sm font-medium text-text-2 no-underline hover:bg-accent hover:text-foreground",
-            view === item && "bg-brand-soft text-brand hover:bg-brand-soft hover:text-brand",
-          )}
+          className={segmentClass(view === item)}
         >
           {viewLabel(section, item)}
         </a>
@@ -263,7 +261,7 @@ function EntryScreen({
   return (
     <main className="flex min-h-0 min-w-0 flex-col bg-background">
       <PageHeader title={entry.label} description={entry.description} actions={<EntryActions reading={scrolled} />} />
-      <EntrySearch {...{ section, q, view, spec, known, refine }} loaded={data.loaded} onChange={setQuery} />
+      <EntrySearch {...{ section, q, view, spec, known }} loaded={data.loaded} onChange={setQuery} />
       <section
         className="min-h-0 flex-1 overflow-y-auto px-10 pb-10"
         aria-label={entry.label}
@@ -298,17 +296,14 @@ function EntrySearch({
   spec,
   known,
   loaded,
-  refine,
   onChange,
 }: Pick<EntryPageProps, "section" | "q" | "view" | "spec" | "known"> & {
   loaded: EntryData["loaded"];
-  refine: (terms: Record<string, string>) => void;
   onChange: (q: string, typed?: boolean) => void;
 }) {
   const calls = view === "calls";
   return (
     <>
-      {section === "graphql" ? <GraphqlTypes q={q} view={view} refine={refine} /> : null}
       <SearchBar
         section={calls ? "traces" : section}
         callsOf={calls ? section : undefined}
@@ -453,49 +448,4 @@ function GroupsList({
   q: string;
 }) {
   return rowsOr(groups, section, q, GROUP_TABLES[section]);
-}
-
-/** GraphQL's operation types above the search: `type:` on the overview, `operation:…*` on calls. */
-function GraphqlTypes({
-  q,
-  view,
-  refine,
-}: {
-  q: string;
-  view: EntryView;
-  refine: (terms: Record<string, string>) => void;
-}) {
-  const calls = view === "calls";
-  return (
-    <nav className="flex items-center gap-1 px-10 pt-4" aria-label="Operation type">
-      <TypeFilter
-        q={q}
-        calls={calls}
-        onChange={(type) => (calls ? refine({ operation: type ? `${type}*` : "" }) : refine({ type }))}
-      />
-    </nav>
-  );
-}
-
-/** All / Query / Mutation / Subscription for GraphQL operations: `type:` on the overview, `operation:…*` on calls. */
-function TypeFilter({ q, calls, onChange }: { q: string; calls: boolean; onChange: (type: string) => void }) {
-  const current = (calls ? /\boperation:(\w+)\*/ : /\btype:(\w+)/).exec(q)?.[1] ?? "";
-  return (
-    <fieldset className="ml-auto m-0 flex items-center gap-1 rounded-lg border p-0.5" aria-label="Operation type">
-      {["", ...GRAPHQL_TYPES].map((type) => (
-        <button
-          key={type || "all"}
-          type="button"
-          aria-pressed={current === type}
-          onClick={() => onChange(type)}
-          className={cn(
-            "rounded-md px-2.5 py-1 text-base text-muted-foreground capitalize hover:bg-accent",
-            current === type && "bg-brand-soft font-medium text-brand",
-          )}
-        >
-          {type || "All"}
-        </button>
-      ))}
-    </fieldset>
-  );
 }
