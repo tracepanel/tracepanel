@@ -16,10 +16,10 @@ export interface NameValue {
 }
 
 /**
- * The columns of names and values: names as wide as the longest up to 11rem (a longer one cut, whole on hover), values
- * the rest, the buttons last. Lists under headings (a trace's attributes by namespace) share them, names lined up.
+ * The columns of names and values: names as wide as the longest, up to 24rem or 40% of the width (a longer one
+ * wraps at any character, never cut), values the rest, the buttons last. Lists under headings (a trace's attributes by namespace) share them, names lined up.
  */
-export const NAME_VALUE_COLUMNS = "grid grid-cols-[fit-content(11rem)_minmax(0,1fr)_auto]";
+export const NAME_VALUE_COLUMNS = "grid grid-cols-[fit-content(min(24rem,40%))_minmax(0,1fr)_auto]";
 
 /**
  * Names and values in rows, packed: a column of names, values that wrap (laid out and coloured by AttrValue, a long
@@ -37,7 +37,7 @@ export function NameValues({ rows, nested = false }: { rows: readonly NameValue[
           key={key}
           className="group/pair col-span-3 grid grid-cols-subgrid border-t first:border-t-0 hover:bg-muted/40"
         >
-          <dt className="min-w-16 truncate py-1.5 pr-4 pl-3 text-muted-foreground" title={name}>
+          <dt className="min-w-16 py-1.5 pr-4 pl-3 text-muted-foreground [overflow-wrap:anywhere]" title={name}>
             {name}
           </dt>
           <dd className="m-0 min-w-0 py-1.5 [overflow-wrap:anywhere]">

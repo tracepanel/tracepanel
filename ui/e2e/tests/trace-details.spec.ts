@@ -14,6 +14,8 @@ async function openPostsTrace(page: Page): Promise<void> {
     .click();
   await page.getByRole("table").last().getByRole("link").first().click();
   await expect(page.getByRole("heading", { level: 2, name: "/api/posts" })).toBeVisible();
+  // From its endpoint's page it opens on its Request tab: the tests start in its call tree.
+  await page.getByRole("tab", { name: "Call tree" }).click();
 }
 
 test("a repeated query's details: its SQL, how many, and the line that runs it", async ({ page }) => {

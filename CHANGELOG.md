@@ -82,6 +82,12 @@
 
 ### Changed
 
+- A trace's facts look like its related traces under them: names in muted
+  text, not capitals, a hairline under each row, no grey box around them.
+- A trace opened from HTTP, Tasks, Jobs or another entry point's lists, or
+  from a group's page, opens on what it was: its Request or Task tab. One
+  opened from Traces, a search or ⌘K opens on its call tree. An error still
+  comes first, and a link naming its tab still opens that tab.
 - Tasks from Huey, django-q2 and Channels workers are named as their
   projects name them in a run's System column and filters: Huey, django-q2,
   Channels. The API schema lists them among the task systems.
@@ -135,6 +141,18 @@
 
 ### Fixed
 
+- Library frames are summed up by their packages, on one line: "10 library
+  frames · faststream ×9 · sqlalchemy", every module on hover and when opened.
+  The list of every module ran past the error's edge.
+- An attribute's name gets the room it needs, up to 24rem or 40% of the
+  width, and wraps past it: `messaging.rabbitmq.destination.routing_key` was
+  cut at 11rem while its value had the rest of the row.
+- A task's facts: the copy button of its arguments, keyword arguments and
+  result sits right after the value, not at the row's far end, and a result
+  of None reads as JSON's null, as the rest of the value does.
+- A trace a task or message is linked to in two ways is listed once in
+  Related traces, under the first name that fits: a request that enqueued
+  and sent a task through a broker, or enqueued it and delivered to it.
 - The GraphQL page's By operation table shows an operation's type whole:
   `mutation` and `subscription` were cut short. A row with no type, a
   document that didn't parse, has no type pill and is named as the SDK names
