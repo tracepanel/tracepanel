@@ -498,6 +498,17 @@ code,
   border-color: var(--dt-border-strong);
 }
 
+.dt-details-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.dt-details-footer[data-rule] {
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--dt-border);
+}
+
 .dt-section-label {
   margin: 1rem 0 0.5rem;
   font-size: var(--dt-size-xs);
@@ -1316,25 +1327,6 @@ tr[data-new] {
 .dt-issue-hint {
   margin: 0;
   color: var(--dt-text-2);
-}
-.dt-issue-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.75rem;
-  margin: 0;
-}
-.dt-issue-actions:empty {
-  display: none;
-}
-.dt-issue-link {
-  color: var(--dt-brand, currentColor);
-  font-size: var(--dt-size-sm);
-  font-weight: 500;
-  text-decoration: none;
-}
-.dt-issue-link:hover {
-  text-decoration: underline;
 }
 .dt-issue-hint code {
   padding: 0 0.25rem;

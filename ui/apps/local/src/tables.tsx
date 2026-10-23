@@ -6,6 +6,7 @@ import {
   type DataColumn,
   type DataSource,
   DataTable,
+  DetailsFooter,
   duration,
   type EndpointRow,
   ExplainView,
@@ -393,16 +394,13 @@ function CallStatsDetails({ open, span, children }: { open: boolean; span: numbe
 function RequestLinks({ q, traces, what, sample }: { q: string; traces: number; what: string; sample: string }) {
   const requests = traces === 1 ? "request" : "requests";
   return (
-    <p className="flex flex-wrap gap-2">
+    <DetailsFooter open={{ label: `Latest ${what}`, link: { href: traceHref(sample) } }}>
       <Button variant="outline" size="sm" asChild>
         <a href={href({ name: "traces", q })}>
           Show {traces} {requests} with this {what}
         </a>
       </Button>
-      <Button variant="ghost" size="sm" asChild>
-        <a href={traceHref(sample)}>Latest {what} →</a>
-      </Button>
-    </p>
+    </DetailsFooter>
   );
 }
 
@@ -716,17 +714,6 @@ function LogSources({ log, onFilter }: { log: LogRow; onFilter: (terms: Record<s
         </Button>
       ) : null}
       <InsideSources log={log} onFilter={onFilter} />
-      <span className="ml-auto flex items-center gap-1">
-        <CopyButton text={JSON.stringify(log, null, 2)} label="Copy the record as JSON" />
-        {/* The page's address opens this record: the URL keeps it. */}
-        <CopyButton text={window.location.href} label="Copy a link to the record" icon="link" />
-      </span>
-      <Button size="xs" asChild>
-        <a href={traceHref(log.trace_id, "logs")}>
-          Open {sourceOf(log)}
-          <ArrowRightIcon />
-        </a>
-      </Button>
     </div>
   );
 }
@@ -843,6 +830,13 @@ function LogDetails({ log, onFilter }: { log: LogRow; onFilter: (terms: Record<s
           <LogSources log={log} onFilter={onFilter} />
           <LoggedIn log={log} />
         </>
+      }
+      footer={
+        <DetailsFooter open={{ label: `Open ${sourceOf(log)}`, link: { href: traceHref(log.trace_id, "logs") } }}>
+          <CopyButton text={JSON.stringify(log, null, 2)} label="Copy the record as JSON" />
+          {/* The page's address opens this record: the URL keeps it. */}
+          <CopyButton text={window.location.href} label="Copy a link to the record" icon="link" />
+        </DetailsFooter>
       }
       context={context.map(([name, value, filter]) => ({ name, value, actions: [filterBy(name, value, filter)] }))}
       actions={(name, value) => [
@@ -1103,16 +1097,10 @@ function MailPreview({ mail, source }: { mail: MailRow; source: DataSource }) {
   if (span === null)
     return <p className="text-sm text-muted-foreground">The request that sent it is no longer stored.</p>;
   return (
-    <div className="grid gap-3">
+    // On the cell's edges, as every open row's details: the trace's Emails tab pads the list, a row's cell does here.
+    <div className="grid gap-3 [&_.dt-mails]:p-0">
       <MailList spans={[span]} />
-      <div>
-        <Button variant="outline" size="sm" asChild>
-          <a href={traceHref(mail.trace_id, "tree", mail.span_id)}>
-            Open request
-            <ArrowRightIcon />
-          </a>
-        </Button>
-      </div>
+      <DetailsFooter open={{ label: "Open request", link: { href: traceHref(mail.trace_id, "tree", mail.span_id) } }} />
     </div>
   );
 }

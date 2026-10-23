@@ -1,5 +1,7 @@
+import { ArrowRightIcon } from "lucide-react";
 import { type ComponentType, type ReactNode, useLayoutEffect, useRef } from "react";
 import { Badge } from "./components/ui/badge";
+import { Button } from "./components/ui/button";
 import { ISSUE_LABELS } from "./labels";
 import { templatePlace } from "./lib/callFields";
 import { runtimeKind } from "./lib/runtime";
@@ -159,6 +161,36 @@ function EmptyIcon({ icon: Icon }: { icon: ComponentType<{ className?: string }>
     <span className="dt-empty-icon">
       <Icon className="size-6" />
     </span>
+  );
+}
+
+/**
+ * The actions under an open row or a finding, one footer everywhere (a log record, an email, a query, an issue): its
+ * own buttons first, then the way to the trace it came from, an outlined button with its arrow at the right end.
+ */
+export function DetailsFooter({
+  children,
+  open,
+  rule = true,
+}: {
+  children?: ReactNode;
+  /** The trace's link: its words ("Open request") and the anchor's props. */
+  open?: { label: string; link: { href: string; target?: string; rel?: string } } | undefined;
+  /** A hairline above it, under a row's details; none inside a card. */
+  rule?: boolean;
+}) {
+  return (
+    <div className="dt-details-footer" data-rule={rule ? "" : undefined}>
+      {children}
+      {open ? (
+        <Button variant="outline" size="sm" className="ml-auto" asChild>
+          <a {...open.link}>
+            {open.label}
+            <ArrowRightIcon />
+          </a>
+        </Button>
+      ) : null}
+    </div>
   );
 }
 

@@ -29,6 +29,7 @@ export * from "./PropTable";
 export {
   AliasChip,
   AppChip,
+  DetailsFooter,
   Empty,
   IssueChip,
   KindBadge,

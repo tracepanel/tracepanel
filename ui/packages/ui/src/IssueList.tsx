@@ -1,7 +1,8 @@
+import { Button } from "./components/ui/button";
 import { IssueIcon } from "./icons";
 import { issueTitle } from "./labels";
 import { linkProps, type TraceLinks } from "./links";
-import { IssueChip, RichText } from "./primitives";
+import { DetailsFooter, IssueChip, RichText } from "./primitives";
 import type { Issue } from "./types";
 
 export { ISSUE_LABELS } from "./labels";
@@ -37,18 +38,21 @@ export function IssueList({ issues, onShowSpans, spansNoun = queries, links }: I
                 <RichText text={issue.hint} />
               </p>
             ) : null}
-            <p className="dt-issue-actions">
+            {/* The one footer of actions every finding and open row has. */}
+            <DetailsFooter
+              rule={false}
+              open={
+                links?.issue
+                  ? { label: "All occurrences", link: linkProps(links, links.issue(issue.fingerprint, issue.kind)) }
+                  : undefined
+              }
+            >
               {onShowSpans && issue.kind !== "error" && issue.span_ids.length > 0 ? (
-                <button type="button" className="dt-button dt-button-small" onClick={() => onShowSpans(issue.span_ids)}>
+                <Button variant="outline" size="sm" onClick={() => onShowSpans(issue.span_ids)}>
                   Show {issue.count} {spansNoun(issue)}
-                </button>
+                </Button>
               ) : null}
-              {links?.issue ? (
-                <a className="dt-issue-link" {...linkProps(links, links.issue(issue.fingerprint, issue.kind))}>
-                  All occurrences →
-                </a>
-              ) : null}
-            </p>
+            </DetailsFooter>
           </div>
         </article>
       ))}

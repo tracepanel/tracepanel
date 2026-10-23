@@ -134,3 +134,24 @@ test("a trace's parts without a switch are named on the same pill track as the o
   await expect(workflow).toHaveText("Workflow");
   await expect(workflow.locator("span").first()).toHaveClass(/rounded-lg/);
 });
+
+for (const [name, url] of [
+  ["a log record", "/#/logs"],
+  ["an email", "/#/mails"],
+  ["a query", "/#/calls/sql"],
+] as const) {
+  test(`${name} opened in its list ends with the one footer: its actions, then the way to its trace at the right`, async ({
+    page,
+  }) => {
+    await page.goto(url);
+    await page.getByRole("main").locator("tbody tr").first().click();
+    const footer = page.getByRole("main").locator(".dt-details-footer");
+    const open = footer.getByRole("link").last();
+
+    await expect(footer).toHaveCount(1);
+    await expect(open).toHaveText(/^(Open|Latest) /);
+    const [box, row] = [await open.boundingBox(), await footer.boundingBox()];
+    if (!(box && row)) throw new Error("no footer");
+    expect(row.x + row.width - (box.x + box.width)).toBeLessThan(2);
+  });
+}

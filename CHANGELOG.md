@@ -315,6 +315,13 @@
   the Type filter does it, on its calls too. A trace's Workflow and Related
   traces are named on the same pill track as its Attributes, not in bold
   headings of another kind.
+- An open row's actions are one footer. A log record, an email and a query
+  opened in their lists, and a finding in a trace's Issues tab, end with
+  their own buttons, then the way to the trace at the right end as an
+  outlined button with its arrow: "Open request", "Latest query", "All
+  occurrences". Logs had a filled button at the top, Emails an outlined one
+  at the left, a query a button and a text link. An email's card lines up
+  with the row's edges, not 15 px inside them.
 
 ## 0.4.1 (2026-10-21)
 

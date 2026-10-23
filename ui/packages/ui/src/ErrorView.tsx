@@ -5,6 +5,7 @@ import { keyed } from "./keys";
 import { packagesLine } from "./lib/packages";
 import { linkProps, type TraceLinks } from "./links";
 import { NameValues } from "./NameValues";
+import { DetailsFooter } from "./primitives";
 import { TokenLine } from "./Tokens";
 import type { ParsedException } from "./traceback";
 import type { ChainedError, Frame, Issue, TraceError } from "./types";
@@ -195,9 +196,11 @@ export function ExceptionView({ exception }: { exception: ParsedException }) {
 function IssueLink({ links, issue }: { links: TraceLinks | undefined; issue: Issue | undefined }) {
   if (!(links?.issue && issue)) return null;
   return (
-    <a className="dt-issue-link" {...linkProps(links, links.issue(issue.fingerprint, "error"))}>
-      Every time it happened →
-    </a>
+    // The way on as every finding's footer has it: an outlined button with its arrow.
+    <DetailsFooter
+      rule={false}
+      open={{ label: "Every time it happened", link: linkProps(links, links.issue(issue.fingerprint, "error")) }}
+    />
   );
 }
 
