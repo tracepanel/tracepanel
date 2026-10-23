@@ -346,6 +346,10 @@
   of a narrow window the list takes a quarter of the width, so the trace's
   tabs keep their names. Its App tab stays the panel's own: the console
   opens an app's page from the trace's facts.
+- On the Services map a call's line leaves its box's right side and arrives
+  at the middle of the other's left, an S through the gap between their
+  columns. Lines started inside a card, crossed the cards beside them and
+  landed on a database's bottom edge.
 
 ## 0.4.1 (2026-10-21)
 

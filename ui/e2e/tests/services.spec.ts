@@ -80,3 +80,13 @@ test("a web app's row opens its page, and the console narrows to that app", asyn
 
   await expect(page.getByRole("heading", { level: 1, name: "HTTP" })).toBeVisible();
 });
+
+test("a call's line leaves its box's right side and arrives at the middle of the other's left", async ({ page }) => {
+  await page.goto("/#/services");
+  const map = page.getByRole("main").locator("svg path[marker-end]");
+  await expect(map.first()).toBeVisible();
+  const paths = await map.evaluateAll((lines) => lines.map((line) => line.getAttribute("d") ?? ""));
+
+  // Side to side: one S curve (M … C …), not dagre's bends ending anywhere on a border.
+  expect(paths.filter((d) => /^M [\d.-]+ [\d.-]+ C /.test(d)).length).toBeGreaterThan(paths.length / 2);
+});

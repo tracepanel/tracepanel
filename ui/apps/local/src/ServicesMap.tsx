@@ -294,6 +294,11 @@ function pathOf(points: readonly Point[]): string {
   const [first, ...rest] = points;
   const last = rest.at(-1);
   if (!first || !last) return "";
+  // Side to side: an S from one box's right to the other's left, level where it leaves and where it arrives.
+  if (rest.length === 1) {
+    const bend = (last.x - first.x) / 2;
+    return `M ${first.x} ${first.y} C ${first.x + bend} ${first.y} ${last.x - bend} ${last.y} ${last.x} ${last.y}`;
+  }
   const bends = rest
     .slice(0, -1)
     .map((point, index) => `Q ${point.x} ${point.y} ${midpoint(point, rest[index + 1] ?? point)}`);

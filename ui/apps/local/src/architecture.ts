@@ -200,6 +200,23 @@ function loopOn(box: Placed<Box> | undefined): Point[] {
   ];
 }
 
+/**
+ * A call from a box to one in a later layer: from the middle of its right side to the middle of the other's left,
+ * through the gap between their columns. dagre's own points start and end anywhere on a box's border (an arrow on a
+ * database's bottom edge, a line out of a card's middle) and cross the cards beside them.
+ */
+function sideToSide(from: Placed<Box> | undefined, to: Placed<Box> | undefined): Point[] | null {
+  if (!(from && to)) return null;
+  const start = { x: from.x + from.width / 2, y: from.y };
+  const end = { x: to.x - to.width / 2, y: to.y };
+  return end.x > start.x ? [start, end] : null;
+}
+
+/** A call's line between two boxes: side to side where it can, else as dagre routed it. */
+function betweenBoxes(link: Link, byId: ReadonlyMap<string, Placed<Box>>, graph: Graph): Point[] {
+  return sideToSide(byId.get(link.from), byId.get(link.to)) ?? graph.edge(link.from, link.to)?.points ?? [];
+}
+
 /** Left to right in layers: what calls comes before what it calls, so a broker sits between a web app and its worker. */
 export function laidOut(map: ServiceMap): Diagram {
   const { boxes, links, projects } = graphOf(map);
@@ -212,7 +229,7 @@ export function laidOut(map: ServiceMap): Diagram {
   const placed = boxes.map((item) => placedIn(graph, item, item.id));
   const byId = new Map(placed.map((box) => [box.item.id, box]));
   const pointsOf = (link: Link): Point[] =>
-    link.from === link.to ? loopOn(byId.get(link.from)) : (graph.edge(link.from, link.to)?.points ?? []);
+    link.from === link.to ? loopOn(byId.get(link.from)) : betweenBoxes(link, byId, graph);
   return fitted({
     width: size.width ?? 0,
     height: size.height ?? 0,
