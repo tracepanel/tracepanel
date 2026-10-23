@@ -1229,22 +1229,25 @@ tr[data-new] {
   top: 0;
   bottom: 0;
   min-width: 1px;
-  border-inline: 1px solid color-mix(in srgb, var(--dt-accent) 55%, transparent);
-  background: color-mix(in srgb, var(--dt-accent) 12%, transparent);
+  border: 1px solid var(--dt-accent);
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--dt-accent) 5%, transparent);
   pointer-events: none;
 }
 /* Where it starts and ends, and how long: over the axis, from its start, or ending with it in the later half. */
+/* Small, on the page's background: the hairline's colour in its text, no block of colour. */
 .dt-range-label {
   position: absolute;
-  top: -0.0625rem;
+  top: -1px;
   left: -1px;
-  padding: 0 0.375rem;
-  border-radius: 0.25rem;
-  background: var(--dt-accent-strong);
-  color: #fff;
-  font-size: var(--dt-size-xs);
+  padding: 0 0.25rem;
+  border: 1px solid var(--dt-accent);
+  border-radius: 2px;
+  background: var(--dt-bg);
+  color: var(--dt-accent);
+  font-size: 0.6875rem;
   font-weight: 500;
-  line-height: 1rem;
+  line-height: 0.875rem;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -1912,8 +1915,9 @@ details[data-focused] > .dt-sql-group {
   background: var(--dt-hover);
   color: var(--dt-text);
 }
+/* Picked: a hairline in the brand's colour on its own background, no fill. */
 .dt-share[aria-pressed="true"] {
-  background: color-mix(in srgb, var(--dt-accent) 14%, transparent);
+  box-shadow: inset 0 0 0 1px var(--dt-accent);
   color: var(--dt-text);
 }
 .dt-share:focus-visible {
@@ -2255,7 +2259,6 @@ details[data-focused] > .dt-sql-group {
 }
 .dt-map-filter[aria-pressed="true"] {
   border-color: var(--dt-accent);
-  background: var(--dt-selected);
   color: var(--dt-text);
 }
 .dt-map-filter[aria-pressed="true"] .dt-map-filter-count {
