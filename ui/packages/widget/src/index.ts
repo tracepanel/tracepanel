@@ -238,7 +238,7 @@ const STYLE = `
   .issues { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; background: var(--tint-warn); color: var(--dt-warn); font-weight: 600; font-size: 12px; }
   .seg .issues svg { color: currentColor; }
   /* Its tasks' findings: the issues' amber as an outline, dashed like the corner its runs hang from in the panel. */
-  .task-issues { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border: 1px dashed rgb(from var(--dt-warn) r g b / 0.6); border-radius: 999px; color: var(--dt-warn); font-weight: 600; font-size: 12px; }
+  .task-issues { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; background: var(--tint-warn); color: var(--dt-warn); font-weight: 600; font-size: 12px; }
   .seg .task-issues svg { color: currentColor; }
   .issues[data-tone="error"] { background: var(--tint-error); color: var(--dt-error); }
   /* The page's count: a step back from the latest request's numbers; its failures stand out on their own. */
@@ -566,13 +566,18 @@ function addIssues(parent: HTMLElement, issues: number, tone: "warn" | "error"):
   segment(parent).append(pill);
 }
 
-/** Its tasks' findings, apart from its own: an amber outline with the corner its runs hang from in the panel. */
+/**
+ * Its tasks' findings, apart from its own: the same chip as its own issues, alert and all, saying where they are
+ * ("3 issues in tasks"), so it reads as issues at a glance.
+ */
 function addTaskIssues(parent: HTMLElement, issues: number | undefined): void {
   if (!issues) return;
   const pill = document.createElement("span");
   pill.className = "task-issues";
-  pill.innerHTML = ICONS.below;
-  pill.append(`${issues} in tasks`);
+  pill.innerHTML = ICONS.alert;
+  const noun = issues === 1 ? "issue" : "issues";
+  pill.append(`${issues} ${noun} in tasks`);
+  pill.title = `${issues} ${noun} in the tasks this request enqueued: open the panel to see them`;
   segment(parent).append(pill);
 }
 
