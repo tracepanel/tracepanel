@@ -44,15 +44,8 @@ import {
   WaypointsIcon,
   ZapIcon,
 } from "lucide-react";
-import {
-  type CSSProperties,
-  type ReactNode,
-  type RefObject,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
+import { useScrollFade } from "./fade";
 import { callsSection, type Section } from "./routes";
 import type { App } from "./scope";
 import { type ThemeChoice, useTheme } from "./theme";
@@ -122,7 +115,7 @@ function SidebarNav({ rail, groupProps }: { rail: boolean; groupProps: Omit<NavG
   return (
     <nav className="flex min-h-0 flex-col gap-3">
       <div
-        ref={list}
+        ref={fade.attach}
         data-nav-list=""
         onScroll={fade.update}
         style={fade.style}
@@ -271,41 +264,6 @@ export function Sidebar({
       <SidebarFooter rail={rail} onClear={onClear} />
     </aside>
   );
-}
-
-// A list that scrolls fades out at the edge it goes on past: its foot while there is more below, its head once scrolled.
-const FADE = "2.5rem";
-
-/** How far in an edge's fade reaches: a fade where the list goes on past it, none where it ends. */
-const reach = (faded: boolean) => (faded ? FADE : "0px");
-
-function fadeMask(above: boolean, below: boolean): CSSProperties {
-  return {
-    maskImage: `linear-gradient(to bottom, transparent, #000 ${reach(above)}, #000 calc(100% - ${reach(below)}), transparent)`,
-  };
-}
-
-/** The fade of a list that scrolls, kept current as it scrolls, resizes or its items change. */
-function useScrollFade(ref: RefObject<HTMLElement | null>) {
-  const [edges, setEdges] = useState({ above: false, below: false });
-  const update = () => {
-    const element = ref.current;
-    if (!element) return;
-    const above = element.scrollTop > 1;
-    const below = element.scrollTop + element.clientHeight < element.scrollHeight - 1;
-    setEdges((current) => (current.above === above && current.below === below ? current : { above, below }));
-  };
-  // After every render: the items may have changed.
-  useLayoutEffect(() => {
-    const element = ref.current;
-    if (!element) return;
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(element);
-    for (const child of Array.from(element.children)) observer.observe(child);
-    return () => observer.disconnect();
-  });
-  return { update, style: fadeMask(edges.above, edges.below) };
 }
 
 /** The logo: the mark as a rail. Collapsing is the toggle on the sidebar's edge (SidebarToggle). */

@@ -22,7 +22,8 @@ import {
 } from "@tracepanel/ui/components/ui/command";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@tracepanel/ui/components/ui/dialog";
 import { ArrowRightIcon, SearchIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useScrollFade } from "./fade";
 import { endpointGroup, go, issueRoute, openTrace, type Route, TRACE_ID } from "./routes";
 import type { NavItem } from "./Sidebar";
 import { graphqlOperation, requestPath } from "./sections";
@@ -62,6 +63,8 @@ export function SearchPalette({
   openRoute?: ((route: Route) => void) | undefined;
 }) {
   const [text, setText] = useState("");
+  const list = useRef<HTMLDivElement>(null);
+  const fade = useScrollFade(list);
   const [results, setResults] = useState<TraceSummary[]>([]);
   const [endpoints, setEndpoints] = useState<EndpointRow[]>([]);
   const [issues, setIssues] = useState<IssueRow[]>([]);
@@ -115,96 +118,100 @@ export function SearchPalette({
             onValueChange={setText}
             placeholder="Trace id, name, path, or a search: status>=500, task:send_*"
           />
-          <CommandList className="max-h-[26.25rem]">
-            <CommandEmpty>No traces match.</CommandEmpty>
-            {TRACE_ID.test(query.toUpperCase()) ? (
-              <CommandGroup heading="Trace">
-                <CommandItem
-                  value={`id-${query}`}
-                  onSelect={() => close(() => openTo({ name: "trace", id: query.toUpperCase() }))}
-                >
-                  <ArrowRightIcon />
-                  Open trace <span className="font-mono">{query}</span>
-                </CommandItem>
-              </CommandGroup>
-            ) : null}
-            {results.length > 0 ? (
-              <CommandGroup heading="Traces">
-                {results.map((trace) => {
-                  const { badge, name } = label(trace);
-                  return (
+          {/* Longer than its room, it fades at the edge it goes on past, as the sidebar does: never a hard cut. */}
+          {/* The mask on a box around the list: cmdk sets the list's own style (its height). */}
+          <div style={fade.style}>
+            <CommandList ref={fade.attach} onScroll={fade.update} className="max-h-[26.25rem]">
+              <CommandEmpty>No traces match.</CommandEmpty>
+              {TRACE_ID.test(query.toUpperCase()) ? (
+                <CommandGroup heading="Trace">
+                  <CommandItem
+                    value={`id-${query}`}
+                    onSelect={() => close(() => openTo({ name: "trace", id: query.toUpperCase() }))}
+                  >
+                    <ArrowRightIcon />
+                    Open trace <span className="font-mono">{query}</span>
+                  </CommandItem>
+                </CommandGroup>
+              ) : null}
+              {results.length > 0 ? (
+                <CommandGroup heading="Traces">
+                  {results.map((trace) => {
+                    const { badge, name } = label(trace);
+                    return (
+                      <CommandItem
+                        key={trace.id}
+                        value={trace.id}
+                        onSelect={() => close(() => openTo({ name: "trace", id: trace.id }))}
+                      >
+                        <TraceBadge word={badge} htmx={trace.htmx} />
+                        {trace.kind === "task" ? (
+                          <TaskName name={name} className="flex-1 text-base" />
+                        ) : (
+                          <span className="min-w-0 flex-1 truncate font-mono text-base">{name}</span>
+                        )}
+                        <span className="text-sm text-muted-foreground tabular-nums">
+                          {duration(trace.duration)} · {ago(trace.start)}
+                        </span>
+                      </CommandItem>
+                    );
+                  })}
+                  <CommandItem value="all" onSelect={() => close(() => openTo({ name: "traces", q: query }))}>
+                    <SearchIcon />
+                    Search all traces for <span className="font-mono">{query}</span>
+                  </CommandItem>
+                </CommandGroup>
+              ) : null}
+              {endpoints.length > 0 ? (
+                <CommandGroup heading="Endpoints">
+                  {endpoints.map((row) => (
                     <CommandItem
-                      key={trace.id}
-                      value={trace.id}
-                      onSelect={() => close(() => openTo({ name: "trace", id: trace.id }))}
+                      key={`${row.method} ${row.route}`}
+                      value={`endpoint-${row.method} ${row.route}`}
+                      onSelect={() => close(() => openTo(endpointGroup(row.method, row.route)))}
                     >
-                      <TraceBadge word={badge} htmx={trace.htmx} />
-                      {trace.kind === "task" ? (
-                        <TaskName name={name} className="flex-1 text-base" />
-                      ) : (
-                        <span className="min-w-0 flex-1 truncate font-mono text-base">{name}</span>
-                      )}
+                      <MethodBadge method={row.method} />
+                      <span className="min-w-0 flex-1 truncate font-mono text-base">
+                        <RoutePath path={row.route} />
+                      </span>
                       <span className="text-sm text-muted-foreground tabular-nums">
-                        {duration(trace.duration)} · {ago(trace.start)}
+                        {plural(row.calls, "call", "calls")}
                       </span>
                     </CommandItem>
-                  );
-                })}
-                <CommandItem value="all" onSelect={() => close(() => openTo({ name: "traces", q: query }))}>
-                  <SearchIcon />
-                  Search all traces for <span className="font-mono">{query}</span>
-                </CommandItem>
-              </CommandGroup>
-            ) : null}
-            {endpoints.length > 0 ? (
-              <CommandGroup heading="Endpoints">
-                {endpoints.map((row) => (
-                  <CommandItem
-                    key={`${row.method} ${row.route}`}
-                    value={`endpoint-${row.method} ${row.route}`}
-                    onSelect={() => close(() => openTo(endpointGroup(row.method, row.route)))}
-                  >
-                    <MethodBadge method={row.method} />
-                    <span className="min-w-0 flex-1 truncate font-mono text-base">
-                      <RoutePath path={row.route} />
-                    </span>
-                    <span className="text-sm text-muted-foreground tabular-nums">
-                      {plural(row.calls, "call", "calls")}
-                    </span>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            ) : null}
-            {issues.length > 0 ? (
-              <CommandGroup heading="Issues">
-                {issues.map((issue) => (
-                  <CommandItem
-                    key={issue.fingerprint}
-                    value={`issue-${issue.fingerprint}`}
-                    onSelect={() => close(() => openTo(issueRoute(issue.fingerprint, issue.kind)))}
-                  >
-                    <IssueIcon kind={issue.kind} />
-                    <span className="min-w-0 flex-1 truncate text-base">{issue.title}</span>
-                    <span className="text-sm text-muted-foreground tabular-nums">last {ago(issue.last_seen)}</span>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            ) : null}
-            {matching.length > 0 ? (
-              <CommandGroup heading="Go to">
-                {matching.map(({ section, label: name, icon: Icon }) => (
-                  <CommandItem
-                    key={section}
-                    value={`go-${section}`}
-                    onSelect={() => close(() => openTo({ name: section, q: "" }))}
-                  >
-                    <Icon />
-                    {name}
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            ) : null}
-          </CommandList>
+                  ))}
+                </CommandGroup>
+              ) : null}
+              {issues.length > 0 ? (
+                <CommandGroup heading="Issues">
+                  {issues.map((issue) => (
+                    <CommandItem
+                      key={issue.fingerprint}
+                      value={`issue-${issue.fingerprint}`}
+                      onSelect={() => close(() => openTo(issueRoute(issue.fingerprint, issue.kind)))}
+                    >
+                      <IssueIcon kind={issue.kind} />
+                      <span className="min-w-0 flex-1 truncate text-base">{issue.title}</span>
+                      <span className="text-sm text-muted-foreground tabular-nums">last {ago(issue.last_seen)}</span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              ) : null}
+              {matching.length > 0 ? (
+                <CommandGroup heading="Go to">
+                  {matching.map(({ section, label: name, icon: Icon }) => (
+                    <CommandItem
+                      key={section}
+                      value={`go-${section}`}
+                      onSelect={() => close(() => openTo({ name: section, q: "" }))}
+                    >
+                      <Icon />
+                      {name}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              ) : null}
+            </CommandList>
+          </div>
         </Command>
       </DialogContent>
     </Dialog>

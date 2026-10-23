@@ -373,6 +373,8 @@
 - A profile's Functions list has its column names inside its box, in the
   header row's case and colour every table has, not in sentence case above
   it.
+- ⌘K's Go to list, longer than the palette, fades at the edge it goes on
+  past, as the sidebar does: its last row was cut in half.
 
 ## 0.4.1 (2026-10-21)
 
