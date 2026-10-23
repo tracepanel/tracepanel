@@ -481,10 +481,10 @@ impl Reader {
         let rows = objects(
             &db,
             &format!(
-                "SELECT service, {PEER_ROLE} AS app_role, peer, kind, system, address, port, namespace, direction, \
+                "SELECT service, role, peer, kind, system, address, port, namespace, direction, \
                  GROUP_CONCAT(DISTINCT alias) AS aliases, COUNT(DISTINCT trace_id) AS traces, SUM(calls) AS calls, \
                  SUM(duration) AS total, SUM(errors) AS errors, MAX(start) AS last_seen \
-                 FROM peers WHERE {condition} GROUP BY service, app_role, peer, direction"
+                 FROM peers WHERE {condition} GROUP BY service, role, peer, direction"
             ),
             params,
         )?;
@@ -493,6 +493,8 @@ impl Reader {
         let mut aliases: HashMap<String, BTreeSet<String>> = HashMap::new();
         let mut totals: HashMap<String, [i64; 4]> = HashMap::new();
         let mut edges: Vec<Value> = Vec::new();
+        // Rows stored under a trace's kind ("http", with no role from its SDK) read as that kind's role ("web").
+        let mut mapped = false;
         for row in rows {
             let peer = row["peer"].as_str().unwrap_or("").to_owned();
             if !nodes.contains_key(&peer) {
@@ -515,9 +517,12 @@ impl Reader {
                 total[2] += int(&row, "errors");
             }
             total[3] = total[3].max(int(&row, "last_seen"));
+            let stored = row["role"].as_str().unwrap_or("");
+            let role = peer_role(stored);
+            mapped |= role != stored;
             edges.push(serde_json::json!({
                 "service": row["service"],
-                "role": row["app_role"],
+                "role": role,
                 "peer": peer,
                 "direction": row["direction"],
                 "traces": int(&row, "traces"),
@@ -525,6 +530,9 @@ impl Reader {
                 "total": int(&row, "total"),
                 "errors": int(&row, "errors"),
             }));
+        }
+        if mapped {
+            edges = merged_edges(edges);
         }
         let mut services: Vec<(String, i64, Value)> = order
             .into_iter()
@@ -608,32 +616,51 @@ impl Reader {
         let rows = objects(
             db,
             &format!(
-                // What runs the app, from its latest trace that says so: a role's traces with no SDK attributes
-                // (a role taken from their kind) don't blank it. One trace's fields, not each the largest: a largest
-                // string would mix versions across an upgrade ("4.9" over "4.10", Java "8.0" over "21.0").
-                "SELECT service, {role} AS role, COUNT(*) AS traces, \
+                // What runs the app, from its latest trace: MAX(start) is the one min/max aggregate, so SQLite takes
+                // the bare column, its attributes, from that row, read below once a group (not a JSON path a row). A
+                // largest string would mix versions across an upgrade ("4.9" over "4.10", Java "8.0" over "21.0") and
+                // take each part from another trace. By kind too: a trace whose SDK named no role is its kind's
+                // role, merged below.
+                "SELECT service, {SERVICE_ROLE} AS role, kind, COUNT(*) AS traces, \
                  SUM(status = 'error') AS errors, SUM(duration) AS total, MAX(start) AS last_seen, \
-                 (SELECT t.attrs FROM traces t WHERE t.service = traces.service AND {role_t} = {role} \
-                     AND json_extract(t.attrs, '$.\"telemetry.sdk.language\"') IS NOT NULL \
-                     ORDER BY t.start DESC LIMIT 1) AS runtime_attrs \
-                 FROM traces WHERE {condition} GROUP BY service, role ORDER BY service, role",
-                role = app_role("traces"),
-                role_t = app_role("t"),
+                 attrs AS latest \
+                 FROM traces WHERE {condition} GROUP BY service, role, kind"
             ),
             params,
         )?;
-        Ok(rows
+        let mut apps: std::collections::BTreeMap<(String, String), App> =
+            std::collections::BTreeMap::new();
+        for row in rows {
+            let text = |key: &str| row[key].as_str().map(str::to_owned);
+            let named = text("role").filter(|role| !role.is_empty());
+            let role =
+                named.unwrap_or_else(|| kind_role(row["kind"].as_str().unwrap_or("")).to_owned());
+            let app = apps
+                .entry((text("service").unwrap_or_default(), role))
+                .or_default();
+            app.traces += int(&row, "traces");
+            app.errors += int(&row, "errors");
+            app.total += int(&row, "total");
+            let runtime = runtime_of(row["latest"].as_str());
+            let last_seen = int(&row, "last_seen");
+            // What runs it: its latest trace's that says so.
+            if runtime.is_some() && last_seen >= app.runtime_seen {
+                app.runtime = runtime;
+                app.runtime_seen = last_seen;
+            }
+            app.last_seen = app.last_seen.max(last_seen);
+        }
+        Ok(apps
             .into_iter()
-            .map(|row| {
-                let text = |key: &str| row[key].as_str().map(str::to_owned);
+            .map(|((service, role), app)| {
                 serde_json::json!({
-                    "service": text("service").unwrap_or_default(),
-                    "role": text("role").unwrap_or_default(),
-                    "traces": int(&row, "traces"),
-                    "errors": int(&row, "errors"),
-                    "total": int(&row, "total"),
-                    "last_seen": int(&row, "last_seen"),
-                    "runtime": runtime_of(row["runtime_attrs"].as_str()),
+                    "service": service,
+                    "role": role,
+                    "traces": app.traces,
+                    "errors": app.errors,
+                    "total": app.total,
+                    "last_seen": app.last_seen,
+                    "runtime": app.runtime,
                 })
             })
             .collect())
@@ -1179,7 +1206,6 @@ fn short_version(language: &str, version: &str) -> String {
     version.split('.').take(2).collect::<Vec<_>>().join(".")
 }
 
-/// What runs an app, as the SDKs label it for the panel: "Python 3.12 · Django 6.0", "Go 1.27", "Java 21 · Spring
 /// What runs an app, from one of its traces' attributes: its language and version, its framework.
 fn runtime_of(attrs: Option<&str>) -> Option<String> {
     let attrs: serde_json::Map<String, Value> = attrs
@@ -1193,6 +1219,43 @@ fn runtime_of(attrs: Option<&str>) -> Option<String> {
     )
 }
 
+/// Edges of one app role, peer and direction as one: a role read from a trace's kind may be one its SDK named too.
+fn merged_edges(edges: Vec<Value>) -> Vec<Value> {
+    let mut at: HashMap<String, usize> = HashMap::new();
+    let mut merged: Vec<Value> = Vec::new();
+    for edge in edges {
+        let key = ["service", "role", "peer", "direction"]
+            .map(|field| edge[field].as_str().unwrap_or(""))
+            .join("\u{0}");
+        match at.get(&key) {
+            Some(&index) => {
+                for field in ["traces", "calls", "total", "errors"] {
+                    let sum = merged[index][field].as_i64().unwrap_or(0)
+                        + edge[field].as_i64().unwrap_or(0);
+                    merged[index][field] = Value::from(sum);
+                }
+            }
+            None => {
+                at.insert(key, merged.len());
+                merged.push(edge);
+            }
+        }
+    }
+    merged
+}
+
+/// One app role's numbers, summed over its traces' groups (a role the SDK named, one taken from the traces' kind).
+#[derive(Default)]
+struct App {
+    traces: i64,
+    errors: i64,
+    total: i64,
+    last_seen: i64,
+    runtime: Option<String>,
+    runtime_seen: i64,
+}
+
+/// What runs an app, as the SDKs label it for the panel: "Python 3.12 · Django 6.0", "Go 1.27", "Java 21 · Spring
 /// Boot 4.1". A Kotlin app names Kotlin's own version (tracepanel.language.version), not the JVM's.
 fn runtime_label(
     language: Option<String>,

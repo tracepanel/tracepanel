@@ -400,6 +400,9 @@
   disconnected box of the same app at the bottom of the map, with its calls
   drawn from it. What runs an app comes from its latest trace that says so,
   and an app whose SDK never says has a plain app's mark, not an empty tile.
+- The Services page reads its apps and calls as fast as before an app's
+  role-less traces became its roles: the roles are merged over the grouped
+  rows, and what runs each app is read once a group, not a JSON path a row.
 
 ## 0.4.1 (2026-10-21)
 
