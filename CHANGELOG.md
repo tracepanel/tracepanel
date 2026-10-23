@@ -281,6 +281,11 @@
 - A request reads its method once. One with no path, from an SDK that sent
   only its URL, read "POST POST /hooks/stripe" in the lists, the panel and
   ⌘K: its name after the method is its path there now.
+- Every page's header has one refresh control. Services and Database, which
+  refresh on demand only, had a "Refresh" text button where every other page
+  has the refresh icon beside its auto-refresh menu: they have the same icon
+  button now. Issues' filters start with Time, as every page's do, not with
+  Type.
 
 ## 0.4.1 (2026-10-21)
 

@@ -363,7 +363,9 @@ const QUICK: Record<Exclude<Section, CallsSection>, Control[]> = {
     },
   ],
   errors: [{ ...TIME, verb: "Last seen" }, ROUTE],
+  // Time first, as on every page; then the type of issue.
   issues: [
+    { ...TIME, verb: "Last seen" },
     {
       label: "Type",
       title: "Filter by type",
@@ -384,7 +386,6 @@ const QUICK: Record<Exclude<Section, CallsSection>, Control[]> = {
       format: (value) => ISSUE_LABELS[value] ?? value,
       display: (kind) => <IssueChip kind={kind as IssueKind} />,
     },
-    { ...TIME, verb: "Last seen" },
     ROUTE,
   ],
   endpoints: [{ ...TIME, verb: "Called" }, METHOD, ROUTE],
