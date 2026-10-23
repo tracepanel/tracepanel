@@ -317,6 +317,8 @@ function navClass(rail: boolean, current: boolean): string {
     "focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none",
     current &&
       "bg-sidebar-accent font-semibold text-sidebar-accent-foreground before:absolute before:inset-y-1.5 before:-left-2.5 before:w-1 before:rounded-full before:bg-brand",
+    // On the light sidebar the current page is a raised row, as a chosen tab is.
+    current && "light:bg-card light:shadow-[0_1px_2px_rgb(24_24_27/0.06),0_0_0_1px_rgb(24_24_27/0.06)]",
   );
 }
 

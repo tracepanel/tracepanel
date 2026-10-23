@@ -156,6 +156,10 @@
   WS, RPC, GQL, PAGE and a request's method share a shape and a colour, a span's
   kind in the call tree is a muted one of the same, and a failed run says
   "failure" everywhere.
+- A calmer light theme: an off-white page with white cards, one hairline border,
+  quiet shadows, a sidebar a step darker with the current page raised on it,
+  white filter chips, status colours that keep their contrast and softer colours
+  for code. The dark theme is as it was.
 
 ### Fixed
 
