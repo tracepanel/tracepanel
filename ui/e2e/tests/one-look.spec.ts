@@ -168,3 +168,19 @@ test("a trace that called nothing has no lone Duration tile: its header says how
   await expect(page.locator(".dt-trace-title, h1").first()).toContainText("42 ms");
   await expect(page.locator(".dt-metrics")).toHaveCount(0);
 });
+
+test("a group's summary has the tiles an entry point's Overview has, in the same order", async ({ page }) => {
+  await page.goto(`/#/group/endpoints/${encodeURIComponent("GET /api/posts")}`);
+  const summary = page.getByRole("region", { name: "Summary" });
+
+  await expect(summary.getByText(/^(Calls|Errors|Slow ≥ 500 ms|p50|p95|p99|Avg queries)$/)).toHaveCount(7);
+});
+
+test("an issue's long route wraps in its row, never cut", async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.goto("/#/issues");
+  const route = page.getByRole("main").locator("tbody").getByText("/campaigns/{id}/report").first();
+
+  await expect(route).toBeVisible();
+  expect(await route.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+});

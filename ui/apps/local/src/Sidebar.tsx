@@ -398,7 +398,8 @@ function navClass(rail: boolean, current: boolean): string {
   return cn(
     "relative flex items-center rounded-lg font-medium whitespace-nowrap text-sidebar-foreground no-underline",
     // The page's own text size, not larger: the list is a way around, the page is what's read.
-    rail ? "size-11 justify-center" : "h-8 gap-3 px-3.5 text-md light:text-base",
+    // As a rail the same 32px rows as open: toggling moves nothing up or down, and a 1024px window shows them all.
+    rail ? "size-8 justify-center" : "h-8 gap-3 px-3.5 text-md light:text-base",
     "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
     "focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none",
     current &&

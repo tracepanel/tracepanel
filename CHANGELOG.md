@@ -350,6 +350,12 @@
   at the middle of the other's left, an S through the gap between their
   columns. Lines started inside a card, crossed the cards beside them and
   landed on a database's bottom edge.
+- A group's page has the seven tiles an entry point's Overview has, in the
+  same order (Calls, Errors, Slow, p50, p95, p99, Avg queries): it had eight
+  of its own, p75 and p90 among them. An issue's long route and title wrap
+  in their row instead of being cut ("/campaigns/{id}/r…"). As a rail the
+  sidebar's items are the 32 px rows they are open, so a 1024 px window
+  shows more of them and toggling moves nothing up or down.
 
 ## 0.4.1 (2026-10-21)
 
