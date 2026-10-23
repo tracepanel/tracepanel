@@ -273,6 +273,11 @@
   RabbitMQ, HTTP calls, Logs, Emails) its list scrolls and the Problems group
   stays below it, above the footer, with its red and amber counts: at
   1440 × 800 they were below the fold again.
+- A system that doesn't name itself has a proper name. An RPC call with no
+  `rpc.system` was "rpc" in the sidebar beside the RPC entry point: its page
+  is RPC calls now, and its issues say "RPC calls". A database or a broker
+  that names no system reads Datastore or Broker, and any other system the
+  agent doesn't know starts with a capital.
 
 ## 0.4.1 (2026-10-21)
 
