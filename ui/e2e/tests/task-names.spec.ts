@@ -159,7 +159,8 @@ test("the panel's list: a task's run as the console lists it, its time in a requ
   const task = list
     .getByRole("button")
     .filter({ hasText: /^task/ })
-    .filter({ hasText: /regenerate/ });
+    // Cut at its start to the list's width (a quarter of a narrow panel's): its end is what shows.
+    .filter({ hasText: /generate/ });
   const request = list.getByRole("button").filter({ hasText: "/api/media/rebuild" });
 
   // Its kind's badge, not its name as a method.

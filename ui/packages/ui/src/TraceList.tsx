@@ -261,8 +261,9 @@ function CompactChips({
   below?: RunIssues | undefined;
 }) {
   const shown = (kinds ?? []).filter((kind) => kind !== "error");
-  // Findings of kinds not known yet (a row from the widget's summary, before its trace loads) count by their number.
-  const count = shown.length || issues;
+  // Its findings, as its Issues tab counts them (three N+1s are three), not their kinds; before its trace loads (a
+  // row from the widget's summary) the number is all there is.
+  const count = issues || shown.length;
   const mark = <RunIssuesMark issues={below} />;
   if (count === 0) return <span className="dt-request-chips">{mark}</span>;
   const names = shown.map((kind) => ISSUE_LABELS[kind]).join(", ");
