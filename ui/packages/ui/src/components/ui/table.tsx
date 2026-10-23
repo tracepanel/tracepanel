@@ -1,3 +1,4 @@
+import { useStuck } from "@tracepanel/ui/hooks/useStuck";
 import { cn } from "@tracepanel/ui/lib/utils";
 import type * as React from "react";
 
@@ -6,23 +7,30 @@ import type * as React from "react";
  * scrolling sideways (a scrolling container would hold the header in place itself), so such a table has to fit its
  * width: fixed column widths and one column that takes the rest.
  */
-function Table({
-  className,
-  stickyHeader = false,
-  ...props
-}: React.ComponentProps<"table"> & { stickyHeader?: boolean }) {
+function Table({ stickyHeader = false, ...props }: React.ComponentProps<"table"> & { stickyHeader?: boolean }) {
+  return stickyHeader ? <StickyTable {...props} /> : <PlainTable {...props} />;
+}
+
+function PlainTable({ className, ...props }: React.ComponentProps<"table">) {
   return (
-    <div
-      data-slot="table-container"
-      className={cn("relative w-full", stickyHeader ? "overflow-x-clip" : "overflow-x-auto")}
-    >
+    <div data-slot="table-container" className="relative w-full overflow-x-auto">
+      <table data-slot="table" className={cn("w-full caption-bottom text-sm", className)} {...props} />
+    </div>
+  );
+}
+
+/**
+ * A table whose header stays in view. While rows scroll under it, the container says so (`data-stuck`): the header
+ * then casts a soft shadow on them (styles.css).
+ */
+function StickyTable({ className, ...props }: React.ComponentProps<"table">) {
+  const { sentinel, stuck } = useStuck<HTMLDivElement>();
+  return (
+    <div data-slot="table-container" data-stuck={stuck || undefined} className="relative w-full overflow-x-clip">
+      <div ref={sentinel} aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-px" />
       <table
         data-slot="table"
-        className={cn(
-          "w-full caption-bottom text-sm",
-          stickyHeader && "[&>thead]:sticky [&>thead]:top-0 [&>thead]:z-10",
-          className,
-        )}
+        className={cn("w-full caption-bottom text-sm [&>thead]:sticky [&>thead]:top-0 [&>thead]:z-10", className)}
         {...props}
       />
     </div>

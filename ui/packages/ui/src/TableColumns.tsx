@@ -28,13 +28,13 @@ import { TableHead, TableHeader, TableRow } from "./components/ui/table";
 import { useMenuOpen } from "./hooks/useCloseOnBlur";
 import type { ColumnSpec, Columns } from "./hooks/useColumns";
 
-/**
- * One header for every list, the logs' too: a header cell's height, type and padding. The table's own text is
- * `text-base`. On white, lower and lighter: small caps over a strong rule, the rows carry the weight.
- */
 /** A column's name in a table's header, every table's and the lists drawn as one (a profile's functions). */
 export const HEAD_TEXT =
-  "text-xs font-semibold tracking-wide text-muted-foreground uppercase light:text-2xs light:font-medium light:tracking-[0.06em]";
+  "text-xs font-semibold tracking-wide text-(--dt-table-head-text) uppercase light:text-2xs light:font-medium light:tracking-[0.06em]";
+/**
+ * One header for every list, the logs' too: a header cell's height, type and padding. The table's own text is
+ * `text-base`. On white, lower and lighter type on a quiet band, the rows carry the weight.
+ */
 const HEAD_CELL = `h-10 px-5 first:pl-6 light:h-[2.125rem] ${HEAD_TEXT}`;
 
 /**
@@ -91,8 +91,17 @@ function widest(head: HTMLTableCellElement): number {
   return roomOf(head) - othersWidth(head) - MIN_REST;
 }
 
+/** What a header takes to show its name whole: its name's own width and the cell's sides. */
+function headFloor(head: HTMLTableCellElement): number {
+  const name = head.querySelector(".truncate");
+  if (!name) return MIN_WIDTH;
+  const style = getComputedStyle(head);
+  return Math.ceil(name.scrollWidth + Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight));
+}
+
+/** A width the column can take: never so narrow its header's name is cut, nor wider than the room leaves it. */
 function clamp(head: HTMLTableCellElement, width: number): number {
-  return Math.max(MIN_WIDTH, Math.min(width, widest(head)));
+  return Math.max(MIN_WIDTH, headFloor(head), Math.min(width, widest(head)));
 }
 
 /** Where a cell's text ends, truncated or not: an ellipsis only paints over text that is laid out in full. */
@@ -217,10 +226,49 @@ function ResizeHandle({
   );
 }
 
+/** How a table's header names are set, read from its header: the font, the letter spacing, a cell's two sides. */
+interface HeadType {
+  font: string;
+  spacing: number;
+  sides: number;
+}
+
+function headTypeOf(table: HTMLTableElement | null): HeadType | undefined {
+  const cell = table?.tHead?.rows[0]?.cells[0];
+  if (!cell) return undefined;
+  const style = getComputedStyle(cell);
+  return {
+    font: `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`,
+    spacing: Number.parseFloat(style.letterSpacing) || 0,
+    sides: Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight),
+  };
+}
+
+let measurer: CanvasRenderingContext2D | null | undefined;
+const nameWidths = new Map<string, number>();
+
+/** A header name's width in px, in capitals as the header shows it. */
+function nameWidth(label: string, type: HeadType): number {
+  const key = `${type.font}|${type.spacing}|${label}`;
+  const known = nameWidths.get(key);
+  if (known !== undefined) return known;
+  measurer ??= document.createElement("canvas").getContext("2d");
+  if (!measurer) return 0;
+  measurer.font = type.font;
+  const width = measurer.measureText(label.toUpperCase()).width + type.spacing * label.length;
+  nameWidths.set(key, width);
+  return width;
+}
+
+/** The narrowest a column gets on its own: its header's name whole. Before the header is measured, the minimum. */
+function floorOf(spec: ColumnSpec, type: HeadType | undefined): number {
+  return type ? Math.max(MIN_WIDTH, Math.ceil(nameWidth(spec.label, type) + type.sides) + 1) : MIN_WIDTH;
+}
+
 /** A column's width in px: as dragged, or by default; the column that takes the rest at its minimum. */
-function wantedWidth(columns: Columns, spec: ColumnSpec, rem: number): number {
-  if (spec.width === undefined) return MIN_REST;
-  return columns.widthOf(spec.id) ?? spec.width * rem;
+function wantedWidth(columns: Columns, spec: ColumnSpec, rem: number, type: HeadType | undefined): number {
+  const width = spec.width === undefined ? MIN_REST : (columns.widthOf(spec.id) ?? spec.width * rem);
+  return Math.max(width, floorOf(spec, type));
 }
 
 /**
@@ -233,13 +281,19 @@ const keepsWidth = (spec: ColumnSpec) => Boolean(spec.fixed || spec.num);
  * The shown columns that fit in `room`: while they don't, the ones that may be left out go, the highest `drop`
  * first. Before the table is measured, all of them.
  */
-function fitting<S extends ColumnSpec>(columns: Columns, shown: readonly S[], room: number, rem: number): S[] {
+function fitting<S extends ColumnSpec>(
+  columns: Columns,
+  shown: readonly S[],
+  room: number,
+  rem: number,
+  type: HeadType | undefined,
+): S[] {
   if (room <= 0) return [...shown];
   const droppable = shown
     .filter((spec) => spec.drop !== undefined && !columns.chosen(spec.id))
     .sort((a, b) => (b.drop ?? 0) - (a.drop ?? 0));
   let kept = [...shown];
-  const wanted = () => kept.reduce((total, spec) => total + wantedWidth(columns, spec, rem), 0);
+  const wanted = () => kept.reduce((total, spec) => total + wantedWidth(columns, spec, rem, type), 0);
   for (const spec of droppable) {
     if (wanted() <= room) break;
     kept = kept.filter((each) => each !== spec);
@@ -249,11 +303,18 @@ function fitting<S extends ColumnSpec>(columns: Columns, shown: readonly S[], ro
 
 /**
  * Each column's width in px, as dragged or by default: the ones that may be narrowed scaled down together when the
- * room left to the column that takes the rest would fall under its minimum (a narrow panel, one column too many).
+ * room left to the column that takes the rest would fall under its minimum (a narrow panel, one column too many);
+ * none narrower than its header's name.
  */
-function fitWidths(columns: Columns, shown: readonly ColumnSpec[], room: number, rem: number): Map<string, number> {
+function fitWidths(
+  columns: Columns,
+  shown: readonly ColumnSpec[],
+  room: number,
+  rem: number,
+  type: HeadType | undefined,
+): Map<string, number> {
   const wanted = shown.flatMap((spec) =>
-    spec.width === undefined ? [] : [[spec, wantedWidth(columns, spec, rem)] as const],
+    spec.width === undefined ? [] : [[spec, wantedWidth(columns, spec, rem, type)] as const],
   );
   // Fixed columns keep their width; the others share what is left.
   const sum = (fixed: boolean) =>
@@ -261,17 +322,22 @@ function fitWidths(columns: Columns, shown: readonly ColumnSpec[], room: number,
   const total = sum(false);
   const left = room - sum(true) - MIN_REST;
   const scale = room > 0 && total > left ? Math.max(left, 0) / total : 1;
-  return new Map(wanted.map(([spec, width]) => [spec.id, Math.floor(keepsWidth(spec) ? width : width * scale)]));
+  const fit = (spec: ColumnSpec, width: number) =>
+    keepsWidth(spec) ? width : Math.max(width * scale, floorOf(spec, type));
+  return new Map(wanted.map(([spec, width]) => [spec.id, Math.floor(fit(spec, width))]));
 }
 
 /**
  * The columns as they fit in the room the table has, kept current as it resizes: `columns` with the ones left out
  * for room gone from `shown`, and each one's width. `reserved` (rem) is what columns outside the spec take, a menu's;
- * `ref` goes on the table.
+ * `ref` goes on the table. Measured again as the theme or the fonts change what a header's name takes.
  */
 export function useColumnWidths<C extends Columns>(given: C, reserved: number) {
   const ref = useRef<HTMLTableElement>(null);
-  const [room, setRoom] = useState({ width: 0, rem: 16 });
+  const [room, setRoom] = useState<{ width: number; rem: number; type?: HeadType | undefined }>({
+    width: 0,
+    rem: 16,
+  });
   useLayoutEffect(() => {
     const container = ref.current?.parentElement;
     if (!container) return;
@@ -279,15 +345,24 @@ export function useColumnWidths<C extends Columns>(given: C, reserved: number) {
       setRoom({
         width: container.clientWidth,
         rem: Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16,
+        type: headTypeOf(ref.current),
       });
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(container);
-    return () => observer.disconnect();
+    const theme = new MutationObserver(measure);
+    theme.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "style", "class"] });
+    let live = true;
+    void document.fonts?.ready.then(() => live && measure());
+    return () => {
+      live = false;
+      observer.disconnect();
+      theme.disconnect();
+    };
   }, []);
   const left = room.width - reserved * room.rem;
-  const columns: C = { ...given, shown: fitting(given, given.shown as C["shown"], left, room.rem) };
-  return { ref, columns, widths: fitWidths(columns, columns.shown, left, room.rem) };
+  const columns: C = { ...given, shown: fitting(given, given.shown as C["shown"], left, room.rem, room.type) };
+  return { ref, columns, widths: fitWidths(columns, columns.shown, left, room.rem, room.type) };
 }
 
 /** A header cell's width: as dragged right now, or as set; none for the column that takes the rest. */
@@ -391,7 +466,7 @@ function headClass(side: Side, moves: boolean, over: boolean, className: string 
     side === "start" && "text-right",
     // A header that moves says so on hover: a step darker, a grip at its end, the grab cursor on its name. Opaque:
     // a sticky header's rows scroll under it.
-    moves && "hover:bg-[color-mix(in_oklab,var(--color-muted),var(--color-foreground)_4%)]",
+    moves && "hover:bg-[color-mix(in_oklab,var(--dt-table-head),var(--color-foreground)_4%)]",
     over && "bg-brand-soft",
     className,
   );
@@ -648,8 +723,10 @@ export function ColumnsHeader({
   children?: ReactNode;
 }) {
   return (
-    <TableHeader className="bg-muted light:bg-card">
-      <TableRow className="hover:bg-transparent light:border-input">
+    // A band a step off the rows, opaque (a sticky header's rows scroll under it), a hairline under each cell: a
+    // collapsed table's own borders stay behind with the rows a sticky header leaves.
+    <TableHeader className="bg-(--dt-table-head) [&_th]:shadow-[inset_0_-1px_0_var(--dt-table-head-rule)] [&_tr]:border-b-0">
+      <TableRow className="hover:bg-transparent">
         {columns.shown.map((spec, index) => (
           <ColumnHead
             key={spec.id}
@@ -664,7 +741,7 @@ export function ColumnsHeader({
             onRemove={onRemove(spec, columns)}
           />
         ))}
-        <TableHead className="w-9 px-1 text-right">
+        <TableHead className="relative w-9 px-1 text-right">
           <ColumnsMenu columns={columns} changed={changed} onReset={onReset}>
             {children}
           </ColumnsMenu>

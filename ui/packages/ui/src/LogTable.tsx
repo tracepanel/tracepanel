@@ -155,7 +155,8 @@ function leading<R extends LogLike>(
     {
       id: "time",
       label: "Time",
-      width: 12,
+      // The whole stamp, to the millisecond, at the larger dark text: Oct 23 07:44:12.345.
+      width: 13.5,
       fixed: true,
       cell: (log) => <LogTime time={log.time} mode={mode} start={start} />,
     },
