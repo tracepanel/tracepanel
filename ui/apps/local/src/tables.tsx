@@ -307,7 +307,15 @@ function callStatsColumns<T extends CallStats>(
       drop: 3,
       cell: (item) => <RepeatedCount most={item.most_per_trace} />,
     },
-    { id: "failed", label: "Failed", width: 5.5, num: true, cell: (item) => item.errors },
+    // A count of what went wrong, as every list's: red when there are some, a dash when none.
+    {
+      id: "failed",
+      label: "Failed",
+      width: 5.5,
+      num: true,
+      className: (item) => errorCount(item.errors),
+      cell: (item) => item.errors || "—",
+    },
     ...own,
     {
       id: "total",

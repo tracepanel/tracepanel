@@ -389,6 +389,9 @@
   with a gap and its frame overlapped the blog's. A call past a layer is
   routed around the frames in between, and calls recorded under a role the
   app doesn't list start at the app's box, not at an empty spot.
+- A system's operations list shows no failures as a dash and some in red,
+  as every list's Errors, Failed and With issues columns do: it was the only
+  one to say "0". Counts of what happened (calls, queries, runs) say 0.
 
 ## 0.4.1 (2026-10-21)
 
