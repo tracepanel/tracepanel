@@ -347,8 +347,9 @@ function ownRows(trace: Trace, hero: boolean, related: Related | undefined, link
 function Part({ label, title, children }: { label: string; title: ReactNode; children: ReactNode }) {
   return (
     <section className="grid gap-2" aria-label={label}>
-      {/* Its name on the pill track the parts with a switch have (Attributes, Headers): one system of parts. */}
-      <h3 className="m-0">
+      {/* Its name on the pill track the parts with a switch have (Attributes, Headers), the same full-width track:
+          one system of parts. */}
+      <h3 className="m-0 grid">
         <SegmentLabel>{title}</SegmentLabel>
       </h3>
       {children}
