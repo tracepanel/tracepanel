@@ -403,6 +403,10 @@
 - The Services page reads its apps and calls as fast as before an app's
   role-less traces became its roles: the roles are merged over the grouped
   rows, and what runs each app is read once a group, not a JSON path a row.
+- A trace with nothing to place beside its own lane (no queries, calls, logs
+  or errors) has no lanes: a single bar from 0 to its duration said what its
+  header says. With other lanes its own stays, their reference, on the
+  console's trace page and in the panel's Request tab.
 
 ## 0.4.1 (2026-10-21)
 

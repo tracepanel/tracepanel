@@ -1083,6 +1083,10 @@ tr[data-new] {
 .dt-panel-overview {
   display: grid;
 }
+/* A trace with no tiles and no lanes (it called nothing): no gap where they would be. */
+.dt-panel-overview:empty {
+  display: none;
+}
 .dt-panel-overview .dt-metrics {
   margin: 0;
 }

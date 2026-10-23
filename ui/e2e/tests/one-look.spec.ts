@@ -193,7 +193,8 @@ test("an issue's long route wraps in its row, never cut", async ({ page }) => {
 test("a trace opened directly leads back to its list, its lane is named as what it is, and it started on the 24-hour clock", async ({
   page,
 }) => {
-  await page.goto(`/#/t/${await traceId("shop.tasks.parse_feed")}`);
+  // A task that logged: its lanes are its own and its logs'.
+  await page.goto(`/#/t/${await traceId("shop.tasks.send_receipt")}`);
   const crumbs = page.getByRole("main").getByRole("navigation", { name: "Breadcrumb" });
 
   await expect(crumbs.getByRole("link", { name: "Tasks" })).toBeVisible();
@@ -221,4 +222,19 @@ test("a trace's facts start their second column's values at one x, whatever its 
   }
 
   expect(new Set(starts).size).toBe(1);
+});
+
+test("a trace with nothing but its own lane has no lanes; one with calls keeps its own as their reference", async ({
+  page,
+}) => {
+  await page.goto(`/#/t/${await traceId("shop.tasks.parse_feed")}`);
+  await expect(page.getByRole("tablist").first()).toBeVisible();
+
+  await expect(page.getByRole("figure", { name: "Timeline" })).toHaveCount(0);
+
+  await page.goto(`/#/t/${await traceId("GET /api/posts")}`);
+  const lanes = page.getByRole("figure", { name: "Timeline" });
+
+  await expect(lanes).toContainText("request");
+  await expect(lanes).toContainText("sql");
 });

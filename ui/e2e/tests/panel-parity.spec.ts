@@ -22,3 +22,17 @@ test("the panel's Request tab has the page's tiles and lanes, and its row counts
   await expect(issues).toContainText("3");
   await expect(row.locator('[data-slot="badge"]').last()).toHaveText("3");
 });
+
+test("in the panel too, a trace with nothing but its own lane has no lanes", async ({ page }) => {
+  await openApp(page, {
+    feed: { status: 200, trace: await traceId("shop.tasks.parse_feed"), queries: 0, totalMs: 42 },
+  });
+  await page.getByRole("button", { name: "Load feed" }).click();
+  await pill(page).click();
+  const frame = panel(page);
+  await frame.getByRole("tablist").first().getByRole("tab").first().click();
+
+  await expect(frame.getByRole("tabpanel").first()).toContainText("Task ID");
+  await expect(frame.getByRole("figure", { name: "Timeline" })).toHaveCount(0);
+  await expect(frame.locator(".dt-panel-overview")).toBeHidden();
+});

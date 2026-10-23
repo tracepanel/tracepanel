@@ -85,6 +85,10 @@ const LANE_WORDS: Record<string, string> = {
 };
 
 export function Timeline({ trace, onSelect }: { trace: Trace; onSelect?: (target: MarkTarget) => void }) {
+  const drawn = lanes(trace);
+  // The trace's own lane alone is one bar from 0 to its duration, which its header says: no lanes then. With others
+  // it stays, their reference.
+  if (drawn.length < 2) return null;
   const total = Math.max(trace.duration, 1);
   const position = (mark: Mark) => ({
     left: `${Math.min(Math.max(((mark.start - trace.start) / total) * 100, 0), 100)}%`,
@@ -99,7 +103,7 @@ export function Timeline({ trace, onSelect }: { trace: Trace; onSelect?: (target
           </span>
         ))}
       </div>
-      {lanes(trace).map((lane) => (
+      {drawn.map((lane) => (
         <div key={lane.label} className="dt-lane">
           <span className="dt-lane-label">
             {lane.label}
