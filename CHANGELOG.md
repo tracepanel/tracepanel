@@ -141,6 +141,9 @@
 - An attribute's name gets the room it needs, up to 24rem or 40% of the
   width, and wraps past it: `messaging.rabbitmq.destination.routing_key` was
   cut at 11rem while its value had the rest of the row.
+- A task's facts: the copy button of its arguments, keyword arguments and
+  result sits right after the value, not at the row's far end, and a result
+  of None reads as JSON's null, as the rest of the value does.
 - A trace a task or message is linked to in two ways, a request that both
   enqueued and sent it through a broker, is listed once in Related traces,
   as what enqueued it, not again as what sent it.

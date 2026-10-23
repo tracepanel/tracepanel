@@ -140,5 +140,7 @@ const TASK_LITERALS = new Set(["task.args", "task.kwargs", "task.result"]);
 /** An attribute's value to show: a task's arguments and result as the JSON they stand for, the rest as they came. */
 export function shownValue(key: string, value: unknown): unknown {
   if (!(TASK_LITERALS.has(key) && typeof value === "string")) return value;
-  return pythonLiteral(value) ?? value;
+  const parsed = pythonLiteral(value);
+  // None is null, a value of its own: only a text that isn't a literal stays as written.
+  return parsed === undefined ? value : parsed;
 }

@@ -20,7 +20,8 @@ export function FactGrid({ rows }: { rows: readonly PropRow[] }) {
 }
 
 // A wide fact starts its own line, under the first column of names, and takes the rest of it.
-const WIDE = { name: "col-start-1", cell: "items-start @2xl:col-span-3", value: "min-w-0 flex-1 py-0.5" };
+// Its copy button follows the value, not the row's far end.
+const WIDE = { name: "col-start-1", cell: "items-start @2xl:col-span-3", value: "min-w-0 py-0.5" };
 const SHORT = { name: "", cell: "items-center", value: "min-w-0 truncate" };
 
 /** One fact: its name, its value (whole and wrapped when wide, else cut to a line) and, on hover, its copy button. */
