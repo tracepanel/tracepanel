@@ -7,6 +7,8 @@ import type { PropRow } from "./PropTable";
  * them, a hairline under each row, no box around them; two to a line where there is room. A value copies from a
  * button shown on hover. Wide facts (a task's arguments, its result) follow, a line each, laid out whole.
  */
+// Both columns of names at least --dt-fact-label wide: the second column's values start at one x on every trace,
+// whatever its names ("Runtime", "Task ID").
 export function FactGrid({ rows }: { rows: readonly PropRow[] }) {
   // Short facts first, two to a line where there is room; the wide ones after them, a line each, in the same columns.
   const short = rows.filter((row) => !row.wide);
@@ -14,7 +16,7 @@ export function FactGrid({ rows }: { rows: readonly PropRow[] }) {
   // An odd one out of the short facts takes its line whole: no half line, no hairline that stops halfway.
   const alone = short.length % 2 === 1 ? short.at(-1) : undefined;
   return (
-    <dl className="m-0 grid grid-cols-[minmax(var(--dt-fact-label),max-content)_minmax(0,1fr)] text-sm @2xl:grid-cols-[minmax(var(--dt-fact-label),max-content)_minmax(0,1fr)_max-content_minmax(0,1fr)]">
+    <dl className="m-0 grid grid-cols-[minmax(var(--dt-fact-label),max-content)_minmax(0,1fr)] text-sm @2xl:grid-cols-[minmax(var(--dt-fact-label),max-content)_minmax(0,1fr)_minmax(var(--dt-fact-label),max-content)_minmax(0,1fr)]">
       {ordered.map((row) => (
         <Fact key={row.id ?? row.label} row={row} alone={row === alone} />
       ))}

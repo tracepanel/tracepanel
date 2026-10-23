@@ -375,6 +375,10 @@
   it.
 - ⌘K's Go to list, longer than the palette, fades at the edge it goes on
   past, as the sidebar does: its last row was cut in half.
+- A trace's facts start their second column's values at one x on every
+  trace: its column of names is at least as wide as the first's. With short
+  names ("Route", "Task ID") the values moved a few pixels from trace to
+  trace.
 
 ## 0.4.1 (2026-10-21)
 

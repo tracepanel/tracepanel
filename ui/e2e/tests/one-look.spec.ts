@@ -200,3 +200,20 @@ test("a trace opened directly leads back to its list, its lane is named as what 
   await expect(page.locator("dl").first()).toContainText(/[A-Z][a-z]{2} \d{1,2} \d{2}:\d{2}:\d{2}/);
   await expect(page.locator("dl").first()).not.toContainText(/ (AM|PM)/);
 });
+
+test("a trace's facts start their second column's values at one x, whatever its names", async ({ page }) => {
+  const starts: number[] = [];
+  for (const name of [
+    "GET /api/posts",
+    "shop.tasks.parse_feed",
+    "shop.tasks.send_receipt",
+    "manage.py rebuild_index",
+  ]) {
+    await page.goto(`/#/t/${await traceId(name)}`);
+    await page.getByRole("tablist").first().getByRole("tab").first().click();
+    const second = page.getByRole("main").locator("dl").first().locator("dd").nth(1);
+    starts.push(Math.round((await second.boundingBox())?.x ?? 0));
+  }
+
+  expect(new Set(starts).size).toBe(1);
+});
