@@ -340,7 +340,8 @@
   Logs page's did: a long HTTP or Tasks list no longer scrolls its column
   names away.
 - The panel shows what the console's trace page shows. Its Request tab has
-  the page's tiles and lanes under the request's line, the request's method
+  the page's lanes under the request's line (not its tiles: the tabs carry
+  the duration and the queries), the request's method
   is its own width there, a request's row in its list counts its findings as
   its Issues tab does (three N+1s read 3, not 1), and docked at the bottom
   of a narrow window the list takes a quarter of the width, so the trace's

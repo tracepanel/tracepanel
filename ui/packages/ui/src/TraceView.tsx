@@ -362,7 +362,7 @@ export interface TraceViewProps {
 
 /**
  * The Request tab: the trace's facts and parts. In the panel (`panel`) its request's line on top, and under it the
- * tiles and lanes the page has above its tabs: the panel shows what the page shows.
+ * lanes the page has above its tabs (not its tiles: the tabs carry their numbers).
  */
 function RequestPane({
   open,
@@ -380,7 +380,13 @@ function RequestPane({
   onSelect: (target: MarkTarget) => void;
 }) {
   if (!open) return null;
-  const overview = panel ? <div className="dt-panel-overview">{overviewOf(trace, onSelect)}</div> : null;
+  // The panel shows the lanes, not the tiles: its tabs already carry the duration and the queries, and big tiles
+  // took the narrow pane's room.
+  const overview = panel ? (
+    <div className="dt-panel-overview">
+      <Timeline trace={trace} onSelect={onSelect} />
+    </div>
+  ) : null;
   return <RequestInfo trace={trace} related={related} links={links} hero={panel} overview={overview} />;
 }
 
