@@ -161,10 +161,14 @@
   rows under the same headings, with no boxes. A request in a workflow's graph
   shows its method in the call tree's muted badge, and in Tasks a system and
   a worker in Now are the same neutral tag, labels rather than buttons.
-- A calmer light theme: an off-white page with white cards, one hairline border,
-  quiet shadows, a sidebar a step darker with the current page raised on it,
-  white filter chips and search fields, status colours that keep their contrast
-  and softer colours for code. The dark theme is as it was.
+- A crisp light theme: a white page and sidebar drawn with hairlines, no
+  shadows, near-black text and one grey for labels. Lists have denser rows, a
+  white header over a strong rule and smaller filter chips. A method or a
+  trace's kind is its colour in monospace and a status a dot before its code,
+  the same in lists, a trace's header, its related traces and the panel. Issue
+  chips and a call's kind keep a soft square fill. The current page in the
+  sidebar is a grey row, the open tab is underlined in near-black and page
+  titles are smaller. The dark theme is as it was.
 
 ### Fixed
 

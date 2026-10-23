@@ -230,6 +230,9 @@ const STYLE = `
   .status[data-tone="redirect"] { background: var(--tint-info); color: var(--dt-info); }
   .status[data-tone="client"] { background: var(--tint-warn); color: var(--dt-warn); }
   .status[data-tone="server"] { background: var(--tint-error); color: var(--dt-error); }
+  /* In the light theme a status is a dot of its tone before the code, as in the console's lists and the panel. */
+  :host([data-theme="light"]) .status { display: inline-flex; align-items: center; gap: 5px; padding: 0; background: none; font-weight: 500; }
+  :host([data-theme="light"]) .status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
   .seg[data-speed="slow"] b { color: var(--dt-warn); }
   .seg[data-speed="very-slow"] b { color: var(--dt-error); }
   .issues { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; background: var(--tint-warn); color: var(--dt-warn); font-weight: 600; font-size: 12px; }

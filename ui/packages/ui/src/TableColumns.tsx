@@ -30,9 +30,10 @@ import type { ColumnSpec, Columns } from "./hooks/useColumns";
 
 /**
  * One header for every list, the logs' too: a header cell's height, type and padding. The table's own text is
- * `text-base`.
+ * `text-base`. On white, lower and lighter: small caps over a strong rule, the rows carry the weight.
  */
-const HEAD_CELL = "h-10 px-5 text-xs font-semibold tracking-wide text-muted-foreground uppercase first:pl-6";
+const HEAD_CELL =
+  "h-10 px-5 text-xs font-semibold tracking-wide text-muted-foreground uppercase first:pl-6 light:h-[2.125rem] light:text-2xs light:font-medium light:tracking-[0.06em]";
 
 /**
  * How tall a list's rows are: `default` for the lists of records a reader scans a row at a time, `compact` for a
@@ -40,9 +41,11 @@ const HEAD_CELL = "h-10 px-5 text-xs font-semibold tracking-wide text-muted-fore
  */
 export type Density = "default" | "compact";
 
+// On white every list's text is 13px (monospace a half step smaller, as it reads larger), the records' rows 36px.
+const LIGHT_TEXT = "light:text-sm light:[&_.font-mono]:text-[0.78125rem]";
 const BODY_CELLS = new Map<Density, string>([
-  ["default", "px-5 py-3 first:pl-6"],
-  ["compact", "px-5 py-1.5 first:pl-6"],
+  ["default", `px-5 py-3 first:pl-6 light:py-2 ${LIGHT_TEXT}`],
+  ["compact", `px-5 py-1.5 first:pl-6 ${LIGHT_TEXT}`],
 ]);
 
 /** A body cell's padding at the list's density: the same sides for every list, the height by density. */
@@ -610,8 +613,8 @@ export function ColumnsHeader({
   children?: ReactNode;
 }) {
   return (
-    <TableHeader className="bg-muted">
-      <TableRow className="hover:bg-transparent">
+    <TableHeader className="bg-muted light:bg-card">
+      <TableRow className="hover:bg-transparent light:border-input">
         {columns.shown.map((spec, index) => (
           <ColumnHead
             key={spec.id}

@@ -214,10 +214,11 @@ test("every list's header and rows look as the logs table's do, the logs' rows c
   // The logs are a stream read many lines at once: rows of one line with little room around it.
   expect(logs.body.height).toBe(`${0.375 * rem}px`);
 
+  // The records' rows: denser on white (the tests' theme), 0.75rem in the dark one.
   for (const url of ["/#/endpoints?view=overview", "/#/tasks?view=overview", "/#/calls/sql", "/#/endpoints"]) {
     await open(page, url);
 
-    expect(await looks(page)).toEqual({ ...logs, body: { ...logs.body, height: `${0.75 * rem}px` } });
+    expect(await looks(page)).toEqual({ ...logs, body: { ...logs.body, height: `${0.5 * rem}px` } });
   }
 });
 

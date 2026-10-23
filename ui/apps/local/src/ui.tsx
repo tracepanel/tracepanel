@@ -138,8 +138,12 @@ export function PageHeader({
 }) {
   return (
     <header className="flex min-w-0 items-center gap-4 px-10 pt-8">
-      <h1 className="shrink-0 text-3xl font-semibold tracking-tight">{title}</h1>
-      {description ? <p className="min-w-0 flex-1 truncate text-md text-muted-foreground">{description}</p> : null}
+      <h1 className="shrink-0 text-3xl font-semibold tracking-tight light:text-[1.375rem] light:tracking-[-0.025em]">
+        {title}
+      </h1>
+      {description ? (
+        <p className="min-w-0 flex-1 truncate text-md text-muted-foreground light:text-sm">{description}</p>
+      ) : null}
       {actions ? <div className="ml-auto">{actions}</div> : null}
     </header>
   );

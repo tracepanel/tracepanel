@@ -43,11 +43,11 @@ export interface FilterMenuProps {
 const SEARCH_FROM = 7;
 const NONE = "\u0000";
 
-/** A filter's chip above a list (Time, Status, Route…), lit when it filters: one look for all of them. On white it
- * is raised by a shadow, as a button is; on the dark theme filled. */
+/** A filter's chip above a list (Time, Status, Route…), lit when it filters: one look for all of them. On the dark
+ * theme filled; on white a hairline box, smaller and lighter than the content it filters. */
 export function chipClass(active: boolean): string {
   return cn(
-    "h-7 gap-1.5 bg-muted px-2.5 text-sm font-medium shadow-none light:bg-card light:shadow-xs",
+    "h-7 gap-1.5 bg-muted px-2.5 text-sm font-medium shadow-none light:h-6.5 light:border-border light:bg-card light:text-xs light:text-text-2",
     active && "border-brand/40 bg-brand-soft hover:bg-brand-soft light:bg-brand-soft",
   );
 }

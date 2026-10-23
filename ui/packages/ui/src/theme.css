@@ -37,6 +37,10 @@
   --chart-1: var(--dt-chart-1);
   --chart-2: var(--dt-chart-2);
 }
+/* The light theme's corners a little squarer: hairline boxes on white, not soft cards. */
+:root[data-theme="light"] {
+  --radius: 0.5rem;
+}
 
 @theme inline {
   --font-sans: var(--dt-font);

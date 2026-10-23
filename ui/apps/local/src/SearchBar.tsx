@@ -991,7 +991,7 @@ export function SearchBar(props: SearchBarProps) {
       <div
         data-error={error ? "" : undefined}
         className={cn(
-          "flex min-h-10 flex-wrap items-center gap-2 rounded-lg border border-input bg-background py-1 pr-2 pl-3.5 light:bg-card light:shadow-xs",
+          "flex min-h-10 flex-wrap items-center gap-2 rounded-lg border border-input bg-background py-1 pr-2 pl-3.5 light:min-h-9 light:bg-card",
           "focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/30",
           "data-[error]:border-error",
         )}
@@ -1013,7 +1013,7 @@ export function SearchBar(props: SearchBarProps) {
           placeholder={placeholderFor(parsed.filters.length > 0, section, family, callsOf)}
           aria-label="Search"
           spellCheck={false}
-          className="h-9 min-w-40 flex-1 bg-transparent font-mono text-md outline-none placeholder:font-sans placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden"
+          className="h-9 min-w-40 flex-1 bg-transparent font-mono text-md outline-none light:h-8 light:text-sm placeholder:font-sans placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden"
           onFocus={box.list.focus}
           onBlur={box.list.blur}
           onChange={(event) => box.onType(event.target.value)}
