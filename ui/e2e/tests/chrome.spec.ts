@@ -105,3 +105,11 @@ test("a trace, an issue, a group and an app open with their crumbs at one place,
 
   expect([issue, group, app]).toEqual([trace, trace, trace]);
 });
+
+test("a trace that isn't stored says so within a second on the console's page", async ({ page }) => {
+  const start = Date.now();
+  await page.goto("/#/t/01M4GPC1BHG83SW8X460V23TM9");
+
+  await expect(page.getByRole("main").getByText("Trace not found")).toBeVisible();
+  expect(Date.now() - start).toBeLessThan(2500);
+});

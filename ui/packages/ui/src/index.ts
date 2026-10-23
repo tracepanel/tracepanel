@@ -37,6 +37,7 @@ export {
   NeutralTag,
   RichText,
   RoutePath,
+  Skeleton,
   StateBadge,
   StatusBadge,
   TaskName,

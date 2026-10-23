@@ -330,6 +330,10 @@
   secret setting) has no copy button anywhere: attributes, a request's
   cookies and session, an app's settings, a trace's facts, a call's details.
   It copied the asterisks.
+- A trace loads in its own shape: its name, its tabs and its first rows where
+  they will be, not a blank page under a progress line. A trace that isn't
+  stored says so after one more look on the console's page, within a second,
+  not four. The panel waits longer for a request it has only now seen.
 
 ## 0.4.1 (2026-10-21)
 
