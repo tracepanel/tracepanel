@@ -334,6 +334,8 @@
   they will be, not a blank page under a progress line. A trace that isn't
   stored says so after one more look on the console's page, within a second,
   not four. The panel waits longer for a request it has only now seen.
+- A list page loads in its own shape: the search, the filters and its first
+  rows where they will be, so nothing pops in under a bare progress line.
 
 ## 0.4.1 (2026-10-21)
 

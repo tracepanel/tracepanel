@@ -113,3 +113,16 @@ test("a trace that isn't stored says so within a second on the console's page", 
   await expect(page.getByRole("main").getByText("Trace not found")).toBeVisible();
   expect(Date.now() - start).toBeLessThan(2500);
 });
+
+test("a list loads in its own shape: the search, the filters and rows where they will be", async ({ page }) => {
+  await page.route("**/api/calls**", async (route) => {
+    await new Promise((done) => setTimeout(done, 1500));
+    await route.continue().catch(() => undefined);
+  });
+  await page.goto("/#/calls/sql");
+  const loading = page.getByRole("main").getByRole("status");
+
+  await expect(loading).toBeVisible();
+  await expect(loading.locator(".dt-skeleton")).toHaveCount(11);
+  await expect(page.getByRole("main").getByRole("heading", { name: "Database" })).toBeVisible();
+});
