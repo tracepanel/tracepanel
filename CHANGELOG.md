@@ -370,6 +370,9 @@
 - A latency chart with one point no longer puts p95 and p50 beside it, where
   they crowded the dot: its legend names them. The Logs chart's legend reads
   debug, info, warning and error, in the case every chart's legend has.
+- A profile's Functions list has its column names inside its box, in the
+  header row's case and colour every table has, not in sentence case above
+  it.
 
 ## 0.4.1 (2026-10-21)
 

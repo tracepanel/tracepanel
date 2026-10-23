@@ -32,8 +32,10 @@ import type { ColumnSpec, Columns } from "./hooks/useColumns";
  * One header for every list, the logs' too: a header cell's height, type and padding. The table's own text is
  * `text-base`. On white, lower and lighter: small caps over a strong rule, the rows carry the weight.
  */
-const HEAD_CELL =
-  "h-10 px-5 text-xs font-semibold tracking-wide text-muted-foreground uppercase first:pl-6 light:h-[2.125rem] light:text-2xs light:font-medium light:tracking-[0.06em]";
+/** A column's name in a table's header, every table's and the lists drawn as one (a profile's functions). */
+export const HEAD_TEXT =
+  "text-xs font-semibold tracking-wide text-muted-foreground uppercase light:text-2xs light:font-medium light:tracking-[0.06em]";
+const HEAD_CELL = `h-10 px-5 first:pl-6 light:h-[2.125rem] ${HEAD_TEXT}`;
 
 /**
  * How tall a list's rows are: `default` for the lists of records a reader scans a row at a time, `compact` for a
