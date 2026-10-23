@@ -82,6 +82,8 @@
 
 ### Changed
 
+- A trace's facts look like its related traces under them: names in muted
+  text, not capitals, a hairline under each row, no grey box around them.
 - A trace opened from HTTP, Tasks, Jobs or another entry point's lists, or
   from a group's page, opens on what it was: its Request or Task tab. One
   opened from Traces, a search or ⌘K opens on its call tree. An error still
@@ -148,9 +150,9 @@
 - A task's facts: the copy button of its arguments, keyword arguments and
   result sits right after the value, not at the row's far end, and a result
   of None reads as JSON's null, as the rest of the value does.
-- A trace a task or message is linked to in two ways, a request that both
-  enqueued and sent it through a broker, is listed once in Related traces,
-  as what enqueued it, not again as what sent it.
+- A trace a task or message is linked to in two ways is listed once in
+  Related traces, under the first name that fits: a request that enqueued
+  and sent a task through a broker, or enqueued it and delivered to it.
 - The GraphQL page's By operation table shows an operation's type whole:
   `mutation` and `subscription` were cut short. A row with no type, a
   document that didn't parse, has no type pill and is named as the SDK names
