@@ -1,7 +1,7 @@
 import { useId, useMemo } from "react";
 import { duration } from "./format";
 import { plural } from "./lib/plural";
-import { linkProps, type TraceLinks } from "./links";
+import { linkProps, type TraceLinks, traceLinkProps } from "./links";
 import type { Related } from "./types";
 
 type WorkflowGraphData = NonNullable<NonNullable<Related["workflow"]>["graph"]>;
@@ -316,7 +316,7 @@ function titleOf(node: GraphNode): string {
 
 /** Where its trace opens, when the host links traces. */
 function traceLink(links: TraceLinks | undefined, node: GraphNode) {
-  return links?.trace ? linkProps(links, links.trace(node.trace.id)) : undefined;
+  return traceLinkProps(links, node.trace.id);
 }
 
 function RunBody({ node }: { node: GraphNode }) {

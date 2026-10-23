@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
 import { Badge } from "./components/ui/badge";
 import { duration } from "./format";
-import { linkProps, type TraceLinks } from "./links";
+import { type TraceLinks, traceLinkProps } from "./links";
 import type { PropRow } from "./PropTable";
 import { MethodBadge, TaskName } from "./primitives";
+import { RunChips } from "./RunChips";
 import type { TraceSummary } from "./types";
 
 /** A task run's outcome, as its badge colours it. */
@@ -85,15 +86,13 @@ export function LinkedTrace({
       <TraceBadge trace={trace} />
       <LinkedName trace={trace} />
       {note}
+      {group.count === 1 ? <RunChips trace={trace} /> : null}
       <Tally group={group} />
     </span>
   );
   if (!links?.trace) return body;
   return (
-    <a
-      className="block w-full rounded-md py-0.5 text-left hover:bg-accent"
-      {...linkProps(links, links.trace(trace.id))}
-    >
+    <a className="block w-full rounded-md py-0.5 text-left hover:bg-accent" {...traceLinkProps(links, trace.id)}>
       {body}
     </a>
   );

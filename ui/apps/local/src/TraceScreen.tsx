@@ -27,6 +27,8 @@ export interface TraceScreenProps {
   initialTab?: TraceViewProps["initialTab"];
   preferredTab?: TraceViewProps["preferredTab"];
   actions?: TraceViewProps["actions"];
+  /** In the panel, before the tabs: the way back to the trace this one was opened from. */
+  lead?: TraceViewProps["lead"];
   /** Where linked traces, issues, statements and logs lead. */
   links?: TraceViewProps["links"];
   /** A span to open in the call tree. */
@@ -144,6 +146,7 @@ export function TraceScreen({
   back,
   shareable,
   onLoaded,
+  ...shown
 }: TraceScreenProps) {
   const trace = useTrace(id, source, onLoaded);
   const related = useRelated(id, source);
@@ -176,6 +179,7 @@ export function TraceScreen({
       initialTab={initialTab}
       preferredTab={preferredTab}
       actions={withShare(trace, source, actions, shareable === true)}
+      {...shown}
       related={related(trace.id)}
       links={links}
       initialSpan={initialSpan}

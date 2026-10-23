@@ -19,6 +19,8 @@ export interface TraceInfo {
   issues?: number | undefined;
   /** Issues not known when the response went out (the agent finds them): the widget asks the console. */
   issuesPending?: boolean | undefined;
+  /** Issues the task runs it led to found, apart from its own: asked from the console as the workers record them. */
+  taskIssues?: number | undefined;
   /** Sent by htmx: what triggered it and where the answer goes. */
   htmx?: HtmxInfo | undefined;
   /** The page's view or the action on it that made the call, as tracepanel-js records them in the browser. */
@@ -232,6 +234,9 @@ const STYLE = `
   .seg[data-speed="very-slow"] b { color: var(--dt-error); }
   .issues { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; background: var(--tint-warn); color: var(--dt-warn); font-weight: 600; font-size: 12px; }
   .seg .issues svg { color: currentColor; }
+  /* Its tasks' findings: the issues' amber as an outline, dashed like the corner its runs hang from in the panel. */
+  .task-issues { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border: 1px dashed rgb(from var(--dt-warn) r g b / 0.6); border-radius: 999px; color: var(--dt-warn); font-weight: 600; font-size: 12px; }
+  .seg .task-issues svg { color: currentColor; }
   .issues[data-tone="error"] { background: var(--tint-error); color: var(--dt-error); }
   /* The page's count: a step back from the latest request's numbers; its failures stand out on their own. */
   .page .unit { margin-left: -1px; }
@@ -292,6 +297,9 @@ const STYLE = `
 `;
 
 const PENDING = "pending";
+// Asking the console what the pill's request's task runs found: they run after it, in a worker, so the asks are
+// spread over the next seconds, while it is still the pill's.
+const RUN_ASKS_MS = [1000, 2000, 4000, 8000, 15000];
 // Asking the console for a request's issues: it may not have stored the request yet.
 const ISSUE_TRIES = 6;
 const ISSUE_RETRY_MS = 300;
@@ -467,14 +475,25 @@ function title(info: TraceInfo): string {
   return `${info.method ?? "GET"} ${path}`;
 }
 
-function line(info: TraceInfo): string {
-  const issues = info.issues ? ` · ${info.issues} issue${info.issues === 1 ? "" : "s"}` : "";
-  return `${title(info)} → ${info.status ?? "?"} · ${Math.round(info.totalMs ?? 0)} ms · ${info.queries ?? 0} q${issues}`;
+/** " · 2 issues in its tasks", or nothing when its tasks found none. */
+function tasksPart(info: TraceInfo): string {
+  return info.taskIssues ? ` · ${plural(info.taskIssues, "issue", "issues")} in its tasks` : "";
 }
 
+function line(info: TraceInfo): string {
+  const issues = info.issues ? ` · ${info.issues} issue${info.issues === 1 ? "" : "s"}` : "";
+  return `${title(info)} → ${info.status ?? "?"} · ${Math.round(info.totalMs ?? 0)} ms · ${info.queries ?? 0} q${issues}${tasksPart(info)}`;
+}
+
+/** Its own findings, or its tasks': either wants a look. */
+function wantsLook(info: TraceInfo): boolean {
+  return Boolean(info.issues || info.taskIssues);
+}
+
+/** A finding in its tasks wants a look too: the ring is amber, the request's own count stays its own. */
 function state(info: TraceInfo): "ok" | "warn" | "error" {
   if ((info.status ?? 200) >= 500) return "error";
-  return info.issues ? "warn" : "ok";
+  return wantsLook(info) ? "warn" : "ok";
 }
 
 const SEVERITY = { ok: 0, warn: 1, error: 2 } as const;
@@ -489,6 +508,9 @@ const ICONS = {
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>',
   alert:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 21h20L12 3Z"/><path d="M12 10v4M12 17.5h.01"/></svg>',
+  // The corner its task runs hang from in the panel's list.
+  below:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 10 5 5-5 5"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/></svg>',
 } as const;
 
 function segment(parent: HTMLElement): HTMLSpanElement {
@@ -538,6 +560,16 @@ function addIssues(parent: HTMLElement, issues: number, tone: "warn" | "error"):
   pill.dataset["tone"] = tone;
   pill.innerHTML = ICONS.alert;
   pill.append(`${issues} ${issues === 1 ? "issue" : "issues"}`);
+  segment(parent).append(pill);
+}
+
+/** Its tasks' findings, apart from its own: an amber outline with the corner its runs hang from in the panel. */
+function addTaskIssues(parent: HTMLElement, issues: number | undefined): void {
+  if (!issues) return;
+  const pill = document.createElement("span");
+  pill.className = "task-issues";
+  pill.innerHTML = ICONS.below;
+  pill.append(`${issues} in tasks`);
   segment(parent).append(pill);
 }
 
@@ -607,6 +639,7 @@ function addRequest(parent: HTMLElement, shown: TraceInfo, pulse: boolean): void
   addQueries(parent, shown.queries ?? 0);
   // Findings are amber whatever else happened: a failure says so in its status, and in the page's count.
   if (shown.issues) addIssues(parent, shown.issues, "warn");
+  addTaskIssues(parent, shown.taskIssues);
 }
 
 function addName(parent: HTMLElement, info: TraceInfo, pulse: boolean): void {
@@ -808,6 +841,16 @@ function settled(body: unknown, use: (body: unknown) => boolean): boolean {
 /** `duration` in microseconds: the root span's, as the panel shows it. */
 // biome-ignore lint/style/useNamingConvention: the API's field name.
 type ListedTrace = { id: string; issues?: number; issue_kinds?: string[]; duration?: number };
+
+/** What the task runs a listed trace led to found, together: their issues counted. */
+function runIssuesOf(body: unknown, id: string): number {
+  const runs = (body as { runs?: Record<string, ListedTrace[]> } | undefined)?.runs?.[id] ?? [];
+  return runs.reduce(sumIssues, 0);
+}
+
+function sumIssues(sum: number, run: ListedTrace): number {
+  return sum + (run.issues ?? 0);
+}
 
 /** One trace from a listing of traces by id, if the agent has stored it. */
 function listedTrace(body: unknown, id: string | undefined): ListedTrace | undefined {
@@ -1073,6 +1116,40 @@ export function mount(options: WidgetOptions = {}): Widget {
     sendTab();
   }
 
+  /**
+   * What the task runs a request led to found, asked over the next seconds while the pill shows it (the workers
+   * record them after the response): the pill and its card say so beside the request's own issues.
+   */
+  async function followRuns(info: TraceInfo): Promise<void> {
+    const ask = runsAsk(info.trace);
+    if (!ask) return;
+    for (const wait of RUN_ASKS_MS) {
+      await new Promise((resolve) => window.setTimeout(resolve, wait));
+      if (!(await askRuns(info, ask))) return;
+    }
+  }
+
+  /** What to ask the console for a request's runs: none without a console or a trace. */
+  function runsAsk(id: string | undefined): { id: string; url: URL } | null {
+    if (!panelUrl || !id) return null;
+    return { id, url: new URL(`api/traces?ids=${encodeURIComponent(id)}&runs=1`, panelUrl) };
+  }
+
+  /** One ask; false when asking again is no use: another request took the pill, or the console is unreachable. */
+  async function askRuns(info: TraceInfo, ask: { id: string; url: URL }): Promise<boolean> {
+    if (requests().at(-1) !== info) return false;
+    const body = await fetchJson(ask.url);
+    if (body === UNREACHABLE) return false;
+    showTaskIssues(info, runIssuesOf(body, ask.id));
+    return true;
+  }
+
+  function showTaskIssues(info: TraceInfo, found: number): void {
+    if (found === (info.taskIssues ?? 0)) return;
+    info.taskIssues = found;
+    render();
+  }
+
   /** The runtime of the app that answered a call, from its trace: for a page its server didn't label. */
   async function resolveRuntime(info: TraceInfo): Promise<void> {
     if (runtimeAsked || !info.trace) return;
@@ -1126,6 +1203,7 @@ export function mount(options: WidgetOptions = {}): Widget {
   function record(info: TraceInfo): void {
     void resolveIssues(info);
     void resolveRuntime(info);
+    void followRuns(info);
     if (info.htmx?.boosted) {
       navigate(info);
       return;
@@ -1251,7 +1329,10 @@ export function mount(options: WidgetOptions = {}): Widget {
   });
 
   render();
-  if (page) void resolveIssues(page);
+  if (page) {
+    void resolveIssues(page);
+    void followRuns(page);
+  }
   listen();
   // The browser recording's views and actions: those announced before the widget mounted, then each as it comes.
   followPages(recordPage);

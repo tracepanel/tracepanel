@@ -314,6 +314,31 @@ function outcomeOf(trace: Trace): ReactNode {
   ) : null;
 }
 
+/**
+ * The panel's one toolbar row: the way back to the trace this one was opened from, the tabs, Explore and the host's
+ * buttons. No status or duration here: the request list beside the trace shows them on the selected row.
+ */
+function StripHeader({
+  lead,
+  tabs,
+  explore,
+  actions,
+}: {
+  lead: ReactNode;
+  tabs: ReactNode;
+  explore: ReactNode;
+  actions: ReactNode;
+}) {
+  return (
+    <header className="dt-trace-strip">
+      {lead}
+      {tabs}
+      {explore}
+      {actions ? <div className="flex shrink-0 items-center gap-0.5">{actions}</div> : null}
+    </header>
+  );
+}
+
 export interface TraceViewProps {
   trace: Trace;
   /**
@@ -327,6 +352,8 @@ export interface TraceViewProps {
   onTabChange?: ((tab: TabId) => void) | undefined;
   /** Extra header buttons from the host page (open full page, close), shown after Explore. */
   actions?: ReactNode;
+  /** In the panel, before the tabs: the way back to the trace this one was opened from. */
+  lead?: ReactNode;
   /** Traces linked to this one (Celery enqueues). */
   related?: Related | undefined;
   /** Where linked traces, issues, statements and logs lead; each missing leaves its links out. */
@@ -351,6 +378,7 @@ export function TraceView({
   initialTab,
   preferredTab,
   actions,
+  lead,
   related,
   links,
   initialSpan,
@@ -501,12 +529,7 @@ export function TraceView({
   if (compact) {
     return (
       <article className="dt-trace" data-variant="strip">
-        <header className="dt-trace-strip">
-          {tabsBar}
-          {/* No status or duration here: the request list beside the trace shows them on the selected row. */}
-          {exploreMenu}
-          {actions ? <div className="flex shrink-0 items-center gap-0.5">{actions}</div> : null}
-        </header>
+        <StripHeader lead={lead} tabs={tabsBar} explore={exploreMenu} actions={actions} />
         {panel}
       </article>
     );

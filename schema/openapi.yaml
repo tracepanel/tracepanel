@@ -24,6 +24,10 @@ paths:
           in: query
           description: Comma-separated trace ids; returns just those (the widget's tab history).
           schema: { type: string }
+        - name: runs
+          in: query
+          description: With `ids`, `1` adds `runs`, the task runs each of those traces led to.
+          schema: { type: string, enum: ["1"] }
       responses:
         "200":
           description: One page of traces.
@@ -36,6 +40,12 @@ paths:
                 properties:
                   traces: { type: array, items: { $ref: "#/components/schemas/TraceSummary" } }
                   next: { $ref: "#/components/schemas/Cursor" }
+                  runs:
+                    type: object
+                    description: >-
+                      With `ids` and `runs=1`: the task runs each listed trace led to, by its id (those it enqueued,
+                      and those they enqueued in turn, up to 50), oldest first. A trace that led to none is left out.
+                    additionalProperties: { type: array, items: { $ref: "#/components/schemas/TraceSummary" } }
         "400": { $ref: "#/components/responses/BadSearch" }
   /traces/{id}:
     get:

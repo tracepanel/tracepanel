@@ -21,11 +21,12 @@ import { percent, widthOf } from "./lib/percent";
 import { traceRuntime } from "./lib/runtime";
 import { isReceiver, raised } from "./lib/signals";
 import { CALL_KINDS, DATASTORES, MESSAGING, RPC } from "./lib/systems";
-import { linkProps, type TraceLinks } from "./links";
+import { type TraceLinks, traceLinkProps } from "./links";
 import { type NameValue, NameValues } from "./NameValues";
 import { PropTable } from "./PropTable";
 import { AliasChip, AppChip, IssueChip, TaskName, TemplateChip } from "./primitives";
 import { isRequestDetail, RequestParts, requestParts } from "./RequestParts";
+import { RunChips } from "./RunChips";
 import { SideResize, useSideWidth } from "./SideResize";
 import { SignalNotes } from "./SignalNotes";
 import { SqlCode } from "./SqlCode";
@@ -498,6 +499,8 @@ function runView(node: Extract<Node, { type: "task" }>, trace: Trace): LinkedVie
         )}
         <TaskState state={node.run.task_state} />
         {node.kind === "call" ? <CallApp node={node} /> : null}
+        {/* What its own trace found, before it is opened. */}
+        <RunChips trace={node.run} />
       </>
     ),
     track: <Bar trace={trace} start={node.run.start} length={node.run.duration} />,
@@ -967,9 +970,9 @@ function OpenRun({
       </a>
     );
   }
-  const open = links?.trace;
+  const open = traceLinkProps(links, run.id);
   return open ? (
-    <a className="dt-map-open" {...linkProps(links, open(run.id))}>
+    <a className="dt-map-open" {...open}>
       {words.open}
     </a>
   ) : null;

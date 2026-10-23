@@ -647,6 +647,69 @@ tr[data-new] {
 .dt-request-queries[data-zero] {
   color: var(--dt-text-3);
 }
+/* A linked trace's findings and queries, on the row that leads to it: they keep their size, its name gives way. */
+.dt-run-chips {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--dt-text-2);
+  font-size: var(--dt-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+.dt-run-chips .dt-request-queries {
+  margin-left: 0.125rem;
+}
+/* A request's task runs found something: their count apart from its own, an amber outline with the corner its runs
+   hang from. */
+.dt-run-issues {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.125rem;
+  height: 1.125rem;
+  padding: 0 0.375rem 0 0.3125rem;
+  border: 1px dashed color-mix(in srgb, var(--dt-warn) 60%, transparent);
+  border-radius: 999px;
+  color: var(--dt-warn);
+  font-size: var(--dt-size-xs);
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.dt-run-issues svg {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+/* A task run under the request it came from: one step deeper, its corner dashed (it ran later, in a worker). */
+.dt-request-row[data-depth="2"] {
+  padding-left: 3.5rem;
+}
+.dt-request-row[data-run]::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 1.625rem;
+  width: 0.5625rem;
+  height: 1.125rem;
+  border-bottom: 1px dashed var(--dt-border-strong);
+  border-left: 1px dashed var(--dt-border-strong);
+  border-bottom-left-radius: 0.25rem;
+}
+.dt-request-row[data-run][data-depth="2"]::after {
+  left: 2.5rem;
+}
+.dt-requests[data-compact] .dt-request-row[data-depth="2"] {
+  padding-left: 2.875rem;
+}
+.dt-requests[data-compact] .dt-request-row[data-run]::after {
+  left: 1rem;
+  width: 0.5rem;
+  height: 1rem;
+}
+.dt-requests[data-compact] .dt-request-row[data-run][data-depth="2"]::after {
+  left: 1.875rem;
+}
 /* ---------- Trace ---------- */
 
 .dt-trace-head {

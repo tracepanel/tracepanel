@@ -79,6 +79,14 @@
   the runs from the one asked for, by the same ids, at most 100 of them, and
   sends them in `workflow.graph`: the nodes, the edges between them and
   whether it was cut. A snapshot carries every run the graph shows.
+- A request's tasks in the panel. A task's row in the call tree and under
+  Related traces names what its own trace found (N+1, Long transaction,
+  Error…) and its queries, as the lists do. In the panel a task opens in the
+  panel itself, with a way back to the request (Back, or Esc). The panel's
+  list nests the runs a request sent under it as the workers record them,
+  and a request whose tasks found something says so beside its own count,
+  in its row and on the pill: "3 issues in its tasks". The agent lists a
+  trace's runs (those it enqueued, and theirs) with `api/traces?ids=…&runs=1`.
 
 ### Changed
 

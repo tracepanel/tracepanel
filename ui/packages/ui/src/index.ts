@@ -21,7 +21,7 @@ export { isTyping } from "./lib/keys";
 export { percent } from "./lib/percent";
 export { plural } from "./lib/plural";
 export { type RuntimeKind, runtimeKind, runtimeName } from "./lib/runtime";
-export { linkProps, type TraceLinks } from "./links";
+export { linkProps, type TraceLinks, traceLinkProps } from "./links";
 export { MailList } from "./MailList";
 export { Metrics } from "./Metrics";
 export { type NameValue, NameValues } from "./NameValues";
@@ -39,15 +39,24 @@ export {
   TaskName,
 } from "./primitives";
 export { RequestInfo } from "./RequestInfo";
+export { RunChips } from "./RunChips";
 export { RuntimeIcon } from "./RuntimeIcon";
 export { SERVICE_KINDS, ServiceIcon, serviceWhere, systemName } from "./ServiceMap";
 export { SqlCode } from "./SqlCode";
 export { SqlList } from "./SqlList";
 export { readSnapshot, type Snapshot, snapshotFile, snapshotSource, withSnapshots } from "./snapshot";
-export { type DataSource, httpSource, NO_CAPABILITIES, NO_KNOWN, NO_LIVE_TASKS, SearchError } from "./source";
+export {
+  type DataSource,
+  httpSource,
+  NO_CAPABILITIES,
+  NO_KNOWN,
+  NO_LIVE_TASKS,
+  SearchError,
+  type TracesWithRuns,
+} from "./source";
 export { formatSql, tokenizeSql } from "./sql";
 export { type Tab, Tabs } from "./Tabs";
 export { Timeline } from "./Timeline";
-export { TraceList, type TraceRow } from "./TraceList";
+export { type RunIssues, runIssues, runIssuesLabel, TraceList, type TraceRow } from "./TraceList";
 export { type ExploreItem, type TabId, TraceView, type TraceViewProps } from "./TraceView";
 export type * from "./types";

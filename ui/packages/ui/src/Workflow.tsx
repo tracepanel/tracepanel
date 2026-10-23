@@ -1,7 +1,7 @@
 import { duration, localTime, stamp } from "./format";
 import { LinkedTrace, single, tracesRow } from "./LinkedTrace";
 import { plural } from "./lib/plural";
-import { linkProps, type TraceLinks } from "./links";
+import { linkProps, type TraceLinks, traceLinkProps } from "./links";
 import type { PropRow } from "./PropTable";
 import type { Attrs, Related, Trace, TraceSummary } from "./types";
 
@@ -97,9 +97,9 @@ function stepsOf(related: Related | undefined, links: TraceLinks | undefined): S
 }
 
 /** Where a run's trace opens, when the host links traces. */
-function traceLink(steps: Steps, traceId: string | undefined): { href: string } | null {
-  if (!(traceId && steps.links?.trace)) return null;
-  return linkProps(steps.links, steps.links.trace(traceId));
+function traceLink(steps: Steps, traceId: string | undefined): ReturnType<typeof traceLinkProps> | null {
+  if (!traceId) return null;
+  return traceLinkProps(steps.links, traceId) ?? null;
 }
 
 /** A task as its latest run is named, or by its id. */

@@ -1,4 +1,5 @@
 import {
+  ArrowLeftIcon,
   ChevronDownIcon,
   ClearIcon,
   CloseIcon,
@@ -11,10 +12,14 @@ import {
   httpSource,
   ISSUE_LABELS,
   type IssueKind,
+  KindBadge,
   LayersIcon,
   Logo,
   MethodBadge,
+  runIssues,
   type TabId,
+  TaskName,
+  type TraceLinks,
   TraceList,
   type TraceRow,
   type TraceSummary,
@@ -39,7 +44,7 @@ import { exploreFor } from "./explore";
 import { type EntrySummary, type TabEntry, type TabHistory, useNewIds, usePolling, useTabHistory } from "./hooks";
 import { ProfileToggle } from "./ProfileToggle";
 import { RefreshProvider } from "./refresh";
-import { consoleLinks, go, href, type Route, useRoute } from "./routes";
+import { consoleLinks, go, href, parse, type Route, useRoute } from "./routes";
 import { SearchPalette } from "./SearchPalette";
 import { ShareAction } from "./ShareDialog";
 import { NAV, ThemeToggle } from "./Sidebar";
@@ -280,6 +285,11 @@ function manyApps(rows: readonly TraceRow[]): boolean {
   return new Set(apps).size > 1;
 }
 
+/** Docked at the bottom, the tab's list reads oldest first, as in the Network tab; else newest first. */
+function inOrder(split: boolean, rows: readonly TraceRow[]): TraceRow[] {
+  return split ? chronological(rows) : [...rows];
+}
+
 /** Oldest page first, each followed by its requests: new requests land at the bottom, as in the Network tab. */
 function chronological(rows: readonly TraceRow[]): TraceRow[] {
   const pages: TraceRow[][] = [];
@@ -294,18 +304,68 @@ function isChildOf(history: TabHistory | null, row: TraceRow, pageId: string): b
   return history?.entries.some((entry) => entry.id === row.trace.id && entry.parent === pageId) ?? false;
 }
 
-/** The tab's rows, and which of them the agent has stored (the others are the widget's own, still on their way). */
-function useTabRows(history: TabHistory | null): { rows: TraceRow[]; stored: ReadonlySet<string> } {
-  const ids = history?.entries.map((entry) => entry.id) ?? [];
+/** The task runs each request led to, by its id. */
+type Runs = Readonly<Record<string, readonly TraceSummary[]>>;
+
+const NO_RUNS: Runs = {};
+
+/** The tab's traces as the agent has them, and the task runs each led to. */
+interface TabTraces {
+  traces: TraceSummary[];
+  runs: Runs;
+}
+
+const NO_TRACES: TabTraces = { traces: [], runs: NO_RUNS };
+
+/** The tab's traces as the agent has them, and the task runs each led to (none where the source can't say). */
+function loadTab(ids: readonly string[]): Promise<TabTraces> {
+  if (ids.length === 0) return Promise.resolve(NO_TRACES);
+  if (source.listTracesWithRuns) return source.listTracesWithRuns(ids);
+  return source.listTraces({ ids, limit: ids.length }).then((traces) => ({ traces, runs: NO_RUNS }));
+}
+
+/**
+ * The tab's rows, which of them the agent has stored (the others are the widget's own, still on their way), and the
+ * task runs each request led to, as the workers record them.
+ */
+function useTabRows(history: TabHistory | null): { rows: TraceRow[]; stored: ReadonlySet<string>; runs: Runs } {
+  const ids = idsOf(history);
   const key = ids.join(",");
   // biome-ignore lint/correctness/useExhaustiveDependencies: `key` identifies the id list.
-  const load = useCallback(
-    () => (ids.length ? source.listTraces({ ids, limit: ids.length }) : Promise.resolve([])),
-    [key],
-  );
-  const traces = usePolling(load);
-  const stored = useMemo(() => new Set((traces ?? []).map((trace) => trace.id)), [traces]);
-  return { rows: history ? arrange(history, traces ?? []) : [], stored };
+  const load = useCallback(() => loadTab(ids), [key]);
+  const { traces, runs } = usePolling(load) ?? NO_TRACES;
+  const stored = useMemo(() => new Set(traces.map((trace) => trace.id)), [traces]);
+  return { rows: history ? arrange(history, traces) : [], stored, runs };
+}
+
+function idsOf(history: TabHistory | null): string[] {
+  return history?.entries.map((entry) => entry.id) ?? [];
+}
+
+/**
+ * Each row followed by the task runs it led to, one step deeper, as they are recorded; a request whose runs found
+ * something says so beside its own findings. A run is listed once.
+ */
+function withRuns(rows: readonly TraceRow[], runs: Runs): TraceRow[] {
+  const listed = new Set(rows.map((row) => row.trace.id));
+  return rows.flatMap((row) => {
+    const own = unlisted(runs[row.trace.id], listed);
+    if (own.length === 0) return [row];
+    const depth = row.depth ? 2 : 1;
+    return [{ ...row, runIssues: runIssues(own) }, ...own.map((trace) => ({ trace, depth, run: true }) as const)];
+  });
+}
+
+/** The runs not listed yet, now listed. */
+function unlisted(runs: readonly TraceSummary[] = [], listed: Set<string>): TraceSummary[] {
+  const fresh = runs.filter((run) => !listed.has(run.id));
+  for (const run of fresh) listed.add(run.id);
+  return fresh;
+}
+
+/** The tab's requests, not the runs nested under them. */
+function requestsOf(rows: readonly TraceRow[]): TraceRow[] {
+  return rows.filter((row) => !row.run);
 }
 
 /**
@@ -397,6 +457,106 @@ function RequestCount({ count }: { count: number }) {
   );
 }
 
+/** A trace as the panel names it in one line: a request by its method and path, a task or a job by its kind and name. */
+function TraceName({ trace }: { trace: TraceSummary }) {
+  if (trace.kind === "http" || trace.kind === "page") return <RequestName trace={trace} />;
+  return <KindAndName trace={trace} />;
+}
+
+/** A request by its method (GQL for a GraphQL operation) and its path. */
+function RequestName({ trace }: { trace: TraceSummary }) {
+  const operation = graphqlOperation(trace);
+  return (
+    <>
+      <MethodBadge method={operation ? "GQL" : trace.method} htmx={trace.htmx} />
+      <span className="switcher-path">{operation ?? trace.path ?? trace.name}</span>
+    </>
+  );
+}
+
+/** A task, a job, a WebSocket event: its kind's badge and its name, a task's cut at its start. */
+function KindAndName({ trace }: { trace: TraceSummary }) {
+  return (
+    <>
+      <KindBadge kind={trace.kind} />
+      {trace.kind === "task" ? (
+        <TaskName name={trace.name} className="switcher-path" />
+      ) : (
+        <span className="switcher-path">{trace.name}</span>
+      )}
+    </>
+  );
+}
+
+/** A trace's summary: from the list's rows when it is one of them, else as the agent lists it. */
+function useNamed(id: string, rows: readonly TraceRow[]): TraceSummary | undefined {
+  const known = rows.find((row) => row.trace.id === id)?.trace;
+  const loaded = useSummary(known ? null : id);
+  return known ?? loaded;
+}
+
+/** A trace's summary, as the agent lists it: the panel names the trace a linked one was opened from. */
+function useSummary(id: string | null): TraceSummary | undefined {
+  const [found, setFound] = useState<TraceSummary>();
+  useEffect(() => {
+    if (id === null) return;
+    let current = true;
+    source.listTraces({ ids: [id], limit: 1 }).then(
+      ([trace]) => current && setFound(trace),
+      () => undefined,
+    );
+    return () => {
+      current = false;
+    };
+  }, [id]);
+  return found?.id === id ? found : undefined;
+}
+
+/**
+ * The way back to the trace a linked one (a task it enqueued) was opened from, named as the list names it, before
+ * the trace's tabs. Esc goes there too. `bare` (docked right, the tabs need the room): the arrow alone, the switcher
+ * beside the logo names the trace on screen.
+ */
+function BackTo({ route, rows, bare }: { route: TraceRoute | null; rows: readonly TraceRow[]; bare: boolean }) {
+  return route ? <BackButton route={route} rows={rows} bare={bare} /> : null;
+}
+
+function BackButton({ route, rows, bare }: { route: TraceRoute; rows: readonly TraceRow[]; bare: boolean }) {
+  const trace = useNamed(route.id, rows);
+  return (
+    <Hint title="Back" detail="To the trace this one was opened from." keys="Esc">
+      <button
+        type="button"
+        className="panel-back"
+        data-bare={bare || undefined}
+        aria-label="Back"
+        onClick={() => go(route)}
+      >
+        <ArrowLeftIcon />
+        {trace && !bare ? <TraceName trace={trace} /> : null}
+      </button>
+    </Hint>
+  );
+}
+
+type TraceRoute = Extract<Route, { name: "trace" }>;
+
+/** The trace a linked one was opened from in the panel, when it was. */
+function backOf(route: Route): TraceRoute | null {
+  if (route.name !== "trace" || !route.from) return null;
+  const from = parse(route.from);
+  return from.name === "trace" ? from : null;
+}
+
+/**
+ * Where a trace's parts lead from the panel: to the console in a new tab, but a linked trace (a task it enqueued)
+ * opens here, with the way back to this one.
+ */
+const PANEL_LINKS: TraceLinks = {
+  ...consoleLinks(base, true),
+  openTrace: (id) => go({ name: "trace", id, from: location.hash }),
+};
+
 function RequestSwitcher({
   rows,
   selectedId,
@@ -442,15 +602,8 @@ function RequestSwitcher({
         aria-expanded={open}
         onClick={() => setOpen(!open)}
       >
-        {selected ? (
-          <>
-            <MethodBadge method={graphqlOperation(selected) ? "GQL" : selected.method} htmx={selected.htmx} />
-            <span className="switcher-path">{graphqlOperation(selected) ?? selected.path ?? selected.name}</span>
-          </>
-        ) : (
-          <span className="switcher-path">Requests</span>
-        )}
-        <RequestCount count={rows.length} />
+        {selected ? <TraceName trace={selected} /> : <span className="switcher-path">Requests</span>}
+        <RequestCount count={requestsOf(rows).length} />
         <ChevronDownIcon />
       </button>
       {open ? (
@@ -609,9 +762,9 @@ function PageRequests({
   const fresh = useNewIds(rows.map((row) => row.trace.id));
   const list = useRef<HTMLElement>(null);
   const { unseen, jump } = useStickToBottom(list, rows.length, follow);
-  const ajax = rows.length - 1;
-  // Requests only: the browser's views and actions are rows too, with their requests under them.
-  const requests = rows.filter((row) => row.trace.kind !== "page").length;
+  // Requests only: the runs under them are rows too, and the browser's views and actions, with their requests.
+  const ajax = requestsOf(rows).length - 1;
+  const requests = requestsOf(rows).filter((row) => row.trace.kind !== "page").length;
   const count =
     scope === "tab"
       ? `· ${requests} ${requests === 1 ? "request" : "requests"}`
@@ -675,13 +828,18 @@ function Shown({ when, children }: { when: boolean; children: ReactNode }) {
 
 function PanelApp({ route }: { route: Route }) {
   const history = useTabHistory();
-  const { rows, stored } = useTabRows(history);
+  const { rows, stored, runs } = useTabRows(history);
+  const listed = withRuns(rows, runs);
   const currentId = history?.current ?? null;
   const pageRows = currentId
     ? rows.filter((row) => row.trace.id === currentId || isChildOf(history, row, currentId))
     : [];
   const selectedId =
     route.name === "trace" ? route.id : (currentId ?? rows.find((row) => row.depth === 0)?.trace.id ?? null);
+  // A linked trace opened from another one: the way back to it.
+  const back = backOf(route);
+  const backRef = useRef(back);
+  backRef.current = back;
 
   const dock = useDock();
   const splitRef = useRef<HTMLDivElement>(null);
@@ -704,7 +862,7 @@ function PanelApp({ route }: { route: Route }) {
     setFollow(value);
     writeFollow(value);
   };
-  const tabRows = split ? chronological(rows) : rows;
+  const tabRows = inOrder(split, rows);
   const followRows = split ? tabRows : pageRows;
   const latestChild = followRows.length > 1 ? followTarget(followRows, stored) : undefined;
   const followed = useRef(latestChild);
@@ -722,16 +880,19 @@ function PanelApp({ route }: { route: Route }) {
     followed.current = latestChild;
   }, [follow, latestChild, history]);
 
-  // Esc anywhere in the panel closes it, as on the page; a menu or list open in it takes the Esc first.
+  // Esc anywhere in the panel closes it, as on the page; a menu or list open in it takes the Esc first, and a linked
+  // trace goes back to the one it was opened from.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !event.defaultPrevented) tellWidget("tracepanel:close");
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      if (backRef.current) go(backRef.current);
+      else tellWidget("tracepanel:close");
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const selectedKind = rows.find((row) => row.trace.id === selectedId)?.trace.kind;
+  const selectedKind = listed.find((row) => row.trace.id === selectedId)?.trace.kind;
   const toolbarInTrace = split && selectedId !== null;
   const switchUser = <SwitchUser source={source} onSwitched={() => tellWidget("tracepanel:reload")} />;
   // One row of quiet icons: what is done to this trace or this panel; who you are sits with the list.
@@ -783,7 +944,7 @@ function PanelApp({ route }: { route: Route }) {
           <Logo className="shrink-0 gap-1.5 text-md [&_svg]:size-6" />
           {split ? null : (
             <RequestSwitcher
-              rows={rows}
+              rows={listed}
               selectedId={selectedId}
               currentId={history?.current ?? null}
               onClear={() => setClearing(true)}
@@ -794,7 +955,7 @@ function PanelApp({ route }: { route: Route }) {
       )}
       {!split && pageRows.length > 1 ? (
         <PageRequests
-          rows={pageRows}
+          rows={withRuns(pageRows, runs)}
           selectedId={selectedId}
           follow={follow}
           onFollow={onFollow}
@@ -819,7 +980,7 @@ function PanelApp({ route }: { route: Route }) {
           <PageRequests
             scope="tab"
             head={!toolbarInTrace}
-            rows={tabRows}
+            rows={inOrder(split, listed)}
             selectedId={selectedId}
             currentId={currentId}
             follow={follow}
@@ -845,7 +1006,8 @@ function PanelApp({ route }: { route: Route }) {
                 writeTab(next);
               }}
               actions={split ? panelActions : undefined}
-              links={consoleLinks(base, true)}
+              lead={<BackTo route={back} rows={listed} bare={!split} />}
+              links={PANEL_LINKS}
               explore={(trace) => exploreFor(trace, (route) => `${base}${href(route)}`)}
             />
           ) : history ? (
