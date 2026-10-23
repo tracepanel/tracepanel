@@ -33,6 +33,7 @@ export {
   IssueChip,
   KindBadge,
   MethodBadge,
+  NeutralTag,
   RichText,
   RoutePath,
   StateBadge,

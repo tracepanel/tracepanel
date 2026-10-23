@@ -156,6 +156,11 @@
   WS, RPC, GQL, PAGE and a request's method share a shape and a colour, a span's
   kind in the call tree is a muted one of the same, and a failed run says
   "failure" everywhere.
+- The call tree's details read as a trace's info tab does: a call's fields,
+  its attributes, a template's context and a linked run's facts in the same
+  rows under the same headings, with no boxes. A request in a workflow's graph
+  shows its method in the call tree's muted badge, and in Tasks a system and
+  a worker in Now are the same neutral tag, labels rather than buttons.
 - A calmer light theme: an off-white page with white cards, one hairline border,
   quiet shadows, a sidebar a step darker with the current page raised on it,
   white filter chips, status colours that keep their contrast and softer colours

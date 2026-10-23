@@ -6,7 +6,8 @@ import { localTime } from "./format";
 import { jsonDocument } from "./json";
 import { cn } from "./lib/utils";
 import { rawText } from "./lib/values";
-import { type NameValue, NameValues } from "./NameValues";
+import { type NameValue, NameValues, RowsLookContext } from "./NameValues";
+import { SectionHeading } from "./primitives";
 import { Segmented } from "./Segmented";
 import { CodeLines } from "./Tokens";
 import { parseTraceback } from "./traceback";
@@ -15,20 +16,23 @@ import type { Attrs, Log } from "./types";
 // The statement is shown formatted above; its fingerprint would repeat it on one line.
 const HIDDEN = new Set(["db.statement", "db.fingerprint", "graphql.document"]);
 
-/** Every attribute, as it came; under a heading when the call's fields in words come before them. */
+/**
+ * Every attribute, as it came, in the rows of a trace's info tab (no box); under a heading when the call's fields in
+ * words come before them.
+ */
 export function AllAttributes({ attrs, titled }: { attrs: Attrs; titled: boolean }) {
   const shown = Object.entries(attrs).filter(([key, value]) => !HIDDEN.has(key) && value !== null && value !== "");
   if (shown.length === 0) return null;
   return (
     <section className="grid gap-2" aria-label="All attributes">
       {titled ? (
-        <h3 className="text-sm font-medium text-muted-foreground">
-          All attributes <span className="tabular-nums">{shown.length}</span>
-        </h3>
+        <SectionHeading>
+          All attributes <span className="text-xs font-normal text-muted-foreground tabular-nums">{shown.length}</span>
+        </SectionHeading>
       ) : null}
-      <div className="overflow-hidden rounded-lg border bg-card">
+      <RowsLookContext value="plain">
         <NameValues rows={shown.map(([name, value]) => ({ name, value }))} />
-      </div>
+      </RowsLookContext>
     </section>
   );
 }

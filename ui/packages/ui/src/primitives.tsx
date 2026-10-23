@@ -123,6 +123,11 @@ export function Empty({ title, children, action }: { title: string; children?: R
   );
 }
 
+/** A section's heading wherever a trace's details are shown: its info tab and the call tree's pane. */
+export function SectionHeading({ children }: { children: ReactNode }) {
+  return <h3 className="m-0 text-sm font-medium text-foreground">{children}</h3>;
+}
+
 // A trace's kind in the word its badge shows: a job, a WebSocket, a GraphQL operation in short.
 const KIND_WORDS: Record<string, string> = { command: "job", websocket: "ws", graphql: "gql" };
 const KINDS = new Set(["task", "job", "ws", "gql", "rpc", "page"]);
@@ -147,6 +152,26 @@ export function KindBadge({
   return (
     <span className={cn("dt-kind", className)} data-muted={muted ? "" : undefined}>
       {word}
+    </span>
+  );
+}
+
+/**
+ * A label in a muted KindBadge's shape and colour, in its own case: a worker in Tasks' Now, with what it does. A label,
+ * not a button.
+ */
+export function NeutralTag({
+  children,
+  title,
+  className,
+}: {
+  children: ReactNode;
+  title?: string | undefined;
+  className?: string | undefined;
+}) {
+  return (
+    <span className={cn("dt-kind normal-case", className)} data-muted="" title={title}>
+      {children}
     </span>
   );
 }

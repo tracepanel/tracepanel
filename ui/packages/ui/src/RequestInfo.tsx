@@ -11,7 +11,7 @@ import { traceRuntime } from "./lib/runtime";
 import { unreceived } from "./lib/signals";
 import { linkProps, type TraceLinks } from "./links";
 import { type PropRow, PropTable } from "./PropTable";
-import { MethodBadge, RoutePath, StateBadge, StatusBadge } from "./primitives";
+import { MethodBadge, RoutePath, SectionHeading, StateBadge, StatusBadge } from "./primitives";
 import { isRequestDetail, RequestParts, requestParts } from "./RequestParts";
 import type { Attrs, Related, Trace } from "./types";
 import { taskTimingRows, workflowFacts, workflowPart } from "./Workflow";
@@ -346,7 +346,7 @@ function ownRows(trace: Trace, hero: boolean, related: Related | undefined, link
 function Part({ label, title, children }: { label: string; title: ReactNode; children: ReactNode }) {
   return (
     <section className="grid gap-2" aria-label={label}>
-      <h3 className="m-0 text-sm font-medium text-foreground">{title}</h3>
+      <SectionHeading>{title}</SectionHeading>
       {children}
     </section>
   );

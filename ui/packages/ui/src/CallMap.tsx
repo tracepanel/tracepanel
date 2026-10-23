@@ -22,7 +22,7 @@ import { traceRuntime } from "./lib/runtime";
 import { isReceiver, raised } from "./lib/signals";
 import { CALL_KINDS, DATASTORES, MESSAGING, RPC } from "./lib/systems";
 import { type TraceLinks, traceLinkProps } from "./links";
-import { type NameValue, NameValues } from "./NameValues";
+import { type NameValue, NameValues, RowsLookContext } from "./NameValues";
 import { PropTable } from "./PropTable";
 import { AliasChip, AppChip, IssueChip, KindBadge, StateBadge, TaskName, TemplateChip } from "./primitives";
 import { isRequestDetail, RequestParts, requestParts } from "./RequestParts";
@@ -997,7 +997,7 @@ function RunDetails({
         {words.what} · started {duration(Math.max(run.start - trace.start, 0))} after this request · took{" "}
         {duration(run.duration)}
       </p>
-      <PropTable rows={runRows(run, words.label)} />
+      <PropTable dense rows={runRows(run, words.label)} />
       <OpenRun run={run} words={words} links={links} remote={remote} />
     </div>
   );
@@ -1009,7 +1009,7 @@ function WaitingDetails({ span }: { span: Span }) {
   return (
     <div className="grid gap-3 p-4">
       <p className="dt-map-details-title">task · enqueued, not run yet</p>
-      <PropTable rows={[{ label: "Task", value: name, copy: name, mono: true }]} />
+      <PropTable dense rows={[{ label: "Task", value: name, copy: name, mono: true }]} />
       <p className="text-sm text-muted-foreground">It shows up here once a worker has run it (is a worker running?).</p>
     </div>
   );
@@ -1146,20 +1146,21 @@ function CallDetails({ node: { span }, trace }: DetailsProps<"span">) {
 
 /**
  * The trace's attributes on its request row, as its Request tab shows them: the same parts behind the same switch
- * (Headers, Query, Body, Cookies, Session, Response, Attributes). The GraphQL document is shown formatted above.
+ * (Headers, Query, Body, Cookies, Session, Response, Attributes), in the same rows, no box. The GraphQL document is
+ * shown formatted above.
  */
 function RootAttributes({ attrs }: { attrs: Attrs }) {
   const { "graphql.document": _, ...rest } = attrs;
   const others = Object.fromEntries(Object.entries(rest).filter(([key]) => !isRequestDetail(key)));
-  return <RequestParts parts={requestParts(rest, others)} />;
+  return <RequestParts parts={requestParts(rest, others)} look="plain" />;
 }
 
-/** A call's fields in words, in a card: the one look of every list of names and values. */
+/** A call's fields in words, in the rows of a trace's info tab: no box around them. */
 function Fields({ rows }: { rows: readonly NameValue[] }) {
   return (
-    <div className="overflow-hidden rounded-lg border bg-card">
+    <RowsLookContext value="plain">
       <NameValues rows={rows} />
-    </div>
+    </RowsLookContext>
   );
 }
 

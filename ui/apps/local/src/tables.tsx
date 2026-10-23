@@ -1069,7 +1069,7 @@ function taskColumns(items: readonly TaskRow[]): DataColumn<TaskRow>[] {
       id: "system",
       label: "System",
       width: 7.5,
-      cell: (item) => <OutlineBadge>{taskSystem(item.system)}</OutlineBadge>,
+      cell: (item) => <KindBadge kind={taskSystem(item.system)} muted={true} />,
     },
     { id: "runs", label: "Runs", width: 5, num: true, cell: (item) => item.runs },
     {
