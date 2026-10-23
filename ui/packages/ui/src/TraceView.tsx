@@ -37,6 +37,7 @@ import { LogList } from "./LogList";
 import { groupNoun } from "./lib/calls";
 import { isTyping } from "./lib/keys";
 import { pageParts } from "./lib/page";
+import type { Slice } from "./lib/slice";
 import { linkProps, type TraceLinks } from "./links";
 import { Metrics } from "./Metrics";
 import { ProfilePane } from "./ProfileView";
@@ -46,6 +47,7 @@ import { type Explain, SqlList } from "./SqlList";
 import { type SystemCalls, systemCalls, systemOfIssue } from "./systemCalls";
 import { Tabs } from "./Tabs";
 import { type MarkTarget, Timeline } from "./Timeline";
+import { SliceScope } from "./TimeSlice";
 import type { App, Issue, IssueKind, Related, Trace } from "./types";
 
 export type TabId = "request" | "app" | "tree" | "issues" | "sql" | "cache" | "http" | "logs" | "error" | "profile";
@@ -358,6 +360,10 @@ export interface TraceViewProps {
   onExplain?: Explain | undefined;
   /** The app that served it, as it said itself: an App tab after Request when it said anything (the panel). */
   app?: App | null | undefined;
+  /** The part of the time to pick in the call tree, as a link asks (kinds of calls, a stretch of time). */
+  initialSlice?: Slice | undefined;
+  /** Called when another part of the time is picked (the console keeps it in the URL). */
+  onSliceChange?: ((slice: Slice) => void) | undefined;
 }
 
 /**
@@ -414,6 +420,8 @@ export function TraceView({
   initialSpan,
   app,
   variant = "full",
+  // The part of the time picked: the lanes and the call tree share it (SliceScope).
+  ...held
 }: TraceViewProps) {
   const compact = variant === "compact" || variant === "strip";
   const findings = useMemo(() => findingsOf(trace), [trace]);
@@ -570,39 +578,43 @@ export function TraceView({
   // In the panel (either dock) the tabs carry the status and timings: one toolbar row, then the content.
   if (compact) {
     return (
-      <article className="dt-trace" data-variant="strip">
-        <StripHeader lead={lead} tabs={tabsBar} explore={exploreMenu} actions={actions} />
-        {panel}
-      </article>
+      <SliceScope initial={held.initialSlice} onChange={held.onSliceChange}>
+        <article className="dt-trace" data-variant="strip">
+          <StripHeader lead={lead} tabs={tabsBar} explore={exploreMenu} actions={actions} />
+          {panel}
+        </article>
+      </SliceScope>
     );
   }
 
   return (
-    <article className="dt-trace" data-variant={variant}>
-      <header className="dt-trace-head">
-        <div className="flex items-center gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="dt-trace-title" hidden={compact}>
-              <TraceBadge word={head.badge} htmx={htmxOf(trace)} />
-              <h2>
-                <HeadingTitle kind={trace.kind} title={head.title} />
-              </h2>
-              <StatusBadge status={typeof status === "number" ? status : null} />
-              <span className="dt-trace-time">{duration(trace.duration)}</span>
+    <SliceScope initial={held.initialSlice} onChange={held.onSliceChange}>
+      <article className="dt-trace" data-variant={variant}>
+        <header className="dt-trace-head">
+          <div className="flex items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="dt-trace-title" hidden={compact}>
+                <TraceBadge word={head.badge} htmx={htmxOf(trace)} />
+                <h2>
+                  <HeadingTitle kind={trace.kind} title={head.title} />
+                </h2>
+                <StatusBadge status={typeof status === "number" ? status : null} />
+                <span className="dt-trace-time">{duration(trace.duration)}</span>
+              </div>
+              {compact ? null : typeof route === "string" && route !== path ? (
+                <p className="dt-trace-route">
+                  route <RoutePath path={route} />
+                </p>
+              ) : null}
             </div>
-            {compact ? null : typeof route === "string" && route !== path ? (
-              <p className="dt-trace-route">
-                route <RoutePath path={route} />
-              </p>
-            ) : null}
+            {exploreMenu}
+            {actions ? <div className="flex shrink-0 items-center gap-0.5">{actions}</div> : null}
           </div>
-          {exploreMenu}
-          {actions ? <div className="flex shrink-0 items-center gap-0.5">{actions}</div> : null}
-        </div>
-      </header>
-      {compact ? null : overviewOf(trace, openAt)}
-      {tabsBar}
-      {panel}
-    </article>
+        </header>
+        {compact ? null : overviewOf(trace, openAt)}
+        {tabsBar}
+        {panel}
+      </article>
+    </SliceScope>
   );
 }

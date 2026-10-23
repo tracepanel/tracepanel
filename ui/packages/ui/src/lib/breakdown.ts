@@ -81,12 +81,44 @@ function frameworkOf(span: Span): Category | null {
   return span.parent_id === null || span.kind === "middleware" || span.kind === "framework" ? "django" : null;
 }
 
+/** A span without a category of its own (a transaction: the code inside atomic()) is its owner's time. */
+function ownerFinder(byId: ReadonlyMap<string, Span>): (span: Span) => Category | null {
+  return (span) => {
+    for (let current: Span | undefined = servedFor(span, byId); current; current = parentOf(current, byId)) {
+      const category = ownCategory(current, byId);
+      if (category) return category;
+    }
+    return null;
+  };
+}
+
+/** A span's own category: none for a transaction, whose code is its owner's. */
+function ownCategory(span: Span, byId: ReadonlyMap<string, Span>): Category | null {
+  return span.kind === "transaction" ? null : categoryOf(span, byId);
+}
+
+function parentOf(span: Span, byId: ReadonlyMap<string, Span>): Span | undefined {
+  return span.parent_id ? byId.get(span.parent_id) : undefined;
+}
+
+/** Each span's category, by its id: the share of the time it counts in. */
+export function spanCategories(trace: Trace): Map<string, Category> {
+  const owner = ownerFinder(new Map(trace.spans.map((span) => [span.id, span])));
+  return new Map(
+    trace.spans.flatMap((span): [string, Category][] => {
+      const category = owner(span);
+      return category ? [[span.id, category]] : [];
+    }),
+  );
+}
+
 /**
  * Where the wall-clock time went, per category. Each moment of the trace counts once, for the deepest span
  * running then: concurrent spans (async resolvers, asyncio.gather) can't add up to more than the trace took.
  */
 export function breakdown(trace: Trace): [Category, number][] {
   const byId = new Map(trace.spans.map((span) => [span.id, span]));
+  const owner = ownerFinder(byId);
   const depths = new Map<string, number>();
   const depth = (span: Span): number => {
     const known = depths.get(span.id);
@@ -95,16 +127,6 @@ export function breakdown(trace: Trace): [Category, number][] {
     const value = parent ? depth(parent) + 1 : 0;
     depths.set(span.id, value);
     return value;
-  };
-  // A span without a category of its own (a transaction: the code inside atomic()) is its owner's time.
-  const owner = (span: Span): Category | null => {
-    let current: Span | undefined = servedFor(span, byId);
-    while (current) {
-      const category = current.kind === "transaction" ? null : categoryOf(current, byId);
-      if (category) return category;
-      current = current.parent_id ? byId.get(current.parent_id) : undefined;
-    }
-    return null;
   };
   const spans = trace.spans.filter((span) => span.duration > 0);
   const edges = [...new Set(spans.flatMap((span) => [span.start, span.start + span.duration]))].sort((a, b) => a - b);

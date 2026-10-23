@@ -16,6 +16,8 @@ import {
   LayersIcon,
   Logo,
   runIssues,
+  type Slice,
+  sliceParams,
   type TabId,
   TaskName,
   TraceBadge,
@@ -850,6 +852,25 @@ function Shown({ when, children }: { when: boolean; children: ReactNode }) {
   return when ? children : null;
 }
 
+/** The trace on screen in the console, as the panel shows it (its tab, the part of its time picked), or its home. */
+function consoleHref(id: string | null, shown: Omit<Extract<Route, { name: "trace" }>, "name" | "id">): string {
+  return id ? href({ name: "trace", id, ...shown }) : "#/";
+}
+
+/**
+ * The part of the time picked in the trace on screen: kept while the trace is, for its screen to open with again,
+ * and the Console button opens the trace with it.
+ */
+function usePanelSlice(id: string | null) {
+  const [sliced, setSliced] = useState<{ id: string | null; slice: Slice } | null>(null);
+  const slice = sliced?.id === id ? sliced.slice : undefined;
+  return {
+    slice,
+    params: slice ? sliceParams(slice) : {},
+    onChange: (next: Slice) => setSliced({ id, slice: next }),
+  };
+}
+
 function PanelApp({ route }: { route: Route }) {
   const history = useTabHistory();
   const { rows, stored, runs } = useTabRows(history);
@@ -870,6 +891,7 @@ function PanelApp({ route }: { route: Route }) {
   const split = useSplit(dock);
   const [follow, setFollow] = useState(readFollow);
   const [tab, setTab] = useState(readTab);
+  const sliced = usePanelSlice(selectedId);
   const [clearing, setClearing] = useState(false);
   const [searching, setSearching] = useState(false);
   // ⌘K, as in the console: a trace opens here, anything else in the console, in a new tab.
@@ -930,7 +952,7 @@ function PanelApp({ route }: { route: Route }) {
         <a
           // Filled in both themes: the panel's one way out to the console, the same button dark or light.
           className="mr-1 inline-flex h-7 items-center gap-1.5 rounded-md bg-brand px-3 text-sm font-medium text-white shadow-sm shadow-brand/30 transition-[filter,box-shadow] hover:shadow-md hover:shadow-brand/40 hover:brightness-110 dark:shadow-none [&_svg]:size-3.5"
-          href={`${base}${selectedId ? href({ name: "trace", id: selectedId, tab, from: sectionFor(selectedKind) }) : "#/"}`}
+          href={`${base}${consoleHref(selectedId, { tab, from: sectionFor(selectedKind), ...sliced.params })}`}
           target="_blank"
           rel="noreferrer"
         >
@@ -1030,6 +1052,8 @@ function PanelApp({ route }: { route: Route }) {
                 setTab(next);
                 writeTab(next);
               }}
+              initialSlice={sliced.slice}
+              onSliceChange={sliced.onChange}
               actions={split ? panelActions : undefined}
               lead={<BackTo route={back} rows={listed} bare={!split} />}
               links={PANEL_LINKS}

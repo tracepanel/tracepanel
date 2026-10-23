@@ -4,6 +4,16 @@
 
 ### Added
 
+- Pick a part of a trace's time in its call tree, by kind or by range. The
+  bar over the tree says each share's time, its percent and how many calls
+  on hover. A click on a share, in the bar or its legend, keeps that kind's
+  calls in the tree (Database, Templates, View code...), with the rows on the
+  way to them dimmed and opened. A drag across the lanes, or across the
+  tree's bars, keeps the calls of that stretch of time and shows it as
+  `12.4 → 18.9 ms · 6.5 ms`. Both go into the page's URL (`part=` and
+  `range=`), so a link opens the tree with them. A click on the share again,
+  Show all, Esc or a double click lets them go. The panel does the same, and
+  its Console button opens the trace with what was picked.
 - Queries a template made as it rendered say so. In the DB tab and the call
   tree such a query has a chip with its template and line
   (`template blog/list.html:4`), its "Called from" names the view's line it

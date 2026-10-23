@@ -153,7 +153,17 @@ export function Console({ route, source: everything }: { route: Route; source: D
 
   let page = null;
   if (route.name === "trace")
-    page = <TracePage id={route.id} from={route.from} tab={route.tab} span={route.span} source={source} />;
+    page = (
+      <TracePage
+        id={route.id}
+        from={route.from}
+        tab={route.tab}
+        span={route.span}
+        part={route.part}
+        range={route.range}
+        source={source}
+      />
+    );
   else if (isDetail(route)) {
     page = <DetailPage route={route} source={source} everything={everything} />;
   } else if (route.name !== "home" && isEntry(route.name)) {

@@ -1174,6 +1174,56 @@ tr[data-new] {
 .dt-mark[data-point][data-tone="error"] {
   background: var(--dt-error);
 }
+/* Outside the picked stretch of time: still there, stepped back. */
+.dt-mark[data-out] {
+  opacity: 0.3;
+}
+
+/* ---------- a picked stretch of time ---------- */
+
+/* The lanes and the axis over them, a drag across them picking a stretch of the time. */
+.dt-timeline-body {
+  position: relative;
+  touch-action: pan-y;
+}
+.dt-timeline-body .dt-lane-track,
+.dt-timeline-axis {
+  cursor: crosshair;
+}
+/* Over the tracks' column, axis to last lane: where the range is drawn. */
+.dt-timeline-layer {
+  position: absolute;
+  inset: 0 0 0 4.5rem;
+  pointer-events: none;
+}
+.dt-range {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  min-width: 1px;
+  border-inline: 1px solid color-mix(in srgb, var(--dt-accent) 55%, transparent);
+  background: color-mix(in srgb, var(--dt-accent) 12%, transparent);
+  pointer-events: none;
+}
+/* Where it starts and ends, and how long: over the axis, from its start, or ending with it in the later half. */
+.dt-range-label {
+  position: absolute;
+  top: -0.0625rem;
+  left: -1px;
+  padding: 0 0.375rem;
+  border-radius: 0.25rem;
+  background: var(--dt-accent-strong);
+  color: #fff;
+  font-size: var(--dt-size-xs);
+  font-weight: 500;
+  line-height: 1rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.dt-range[data-end] .dt-range-label {
+  right: -1px;
+  left: auto;
+}
 
 .dt-tabs {
   backdrop-filter: var(--dt-blur);
@@ -1744,8 +1794,29 @@ details[data-focused] > .dt-sql-group {
   border-radius: 0.3125rem;
   background: var(--dt-muted-bg);
 }
-.dt-breakdown-bar span + span {
+/* Each share a button: its numbers on hover, its rows on a click. */
+.dt-breakdown-bar button {
+  height: 100%;
+  min-width: 2px;
+  padding: 0;
+  border: 0;
+  background: var(--dt-k);
+  cursor: pointer;
+  transition: opacity 120ms;
+}
+.dt-breakdown-bar button + button {
   box-shadow: inset 1px 0 var(--dt-bg);
+}
+.dt-breakdown-bar button:hover {
+  filter: brightness(1.12);
+}
+/* With a share picked, the others step back. */
+.dt-breakdown-bar button[data-faded] {
+  opacity: 0.3;
+}
+.dt-breakdown-bar button:focus-visible {
+  outline: none;
+  filter: brightness(1.25);
 }
 [data-category="django"] {
   --dt-k: var(--dt-k-django);
@@ -1778,9 +1849,6 @@ details[data-focused] > .dt-sql-group {
 [data-category="signal"] {
   --dt-k: var(--dt-k-signal);
 }
-.dt-breakdown-bar span {
-  background: var(--dt-k);
-}
 .dt-breakdown-legend {
   display: flex;
   flex-wrap: wrap;
@@ -1796,6 +1864,33 @@ details[data-focused] > .dt-sql-group {
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
+}
+/* A share in the legend: its text, no box until hovered; picked, a tint. Its swatch stays where the text starts. */
+.dt-share {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  height: 1.625rem;
+  margin-inline: -0.5rem;
+  padding: 0 0.5rem;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.dt-share:hover {
+  background: var(--dt-hover);
+  color: var(--dt-text);
+}
+.dt-share[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--dt-accent) 14%, transparent);
+  color: var(--dt-text);
+}
+.dt-share:focus-visible {
+  outline: none;
+  background: var(--dt-hover);
 }
 .dt-breakdown-legend b {
   color: var(--dt-text);
@@ -1822,9 +1917,12 @@ details[data-focused] > .dt-sql-group {
 }
 
 .dt-map-head {
-  display: flex;
-  justify-content: space-between;
-  padding: 0.375rem 1rem;
+  display: grid;
+  /* The rows' columns: the head's middle one is the bars' time, where a drag picks a stretch of it. */
+  grid-template-columns: minmax(0, 2fr) minmax(6.875rem, 1fr) 4rem;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.375rem 1rem 0.375rem 0;
   border-top: 1px solid var(--dt-border);
   border-bottom: 1px solid var(--dt-border);
   background: var(--dt-subtle);
@@ -1840,6 +1938,30 @@ details[data-focused] > .dt-sql-group {
   background: var(--dt-card);
   font-weight: 500;
   letter-spacing: 0.06em;
+}
+.dt-map-head > :first-child {
+  padding-left: 1rem;
+}
+.dt-map-head > :last-child {
+  text-align: right;
+}
+.dt-map-ruler {
+  align-self: stretch;
+  margin-block: -0.375rem;
+  cursor: crosshair;
+}
+.dt-map-timed {
+  position: relative;
+}
+.dt-map-timed .dt-map-track {
+  touch-action: pan-y;
+}
+/* Over the bars' column, head to last row; the label sits in the head. */
+.dt-map-range-layer {
+  position: absolute;
+  top: 0.25rem;
+  bottom: 0;
+  pointer-events: none;
 }
 .dt-map-row {
   --dt-k: var(--dt-k-request);
@@ -1863,11 +1985,12 @@ details[data-focused] > .dt-sql-group {
   background: var(--dt-hover);
 }
 /* The rows lay out by their own width, not the window's: the panel and the details beside them narrow it. */
-.dt-map-rows {
+.dt-map-timed {
   container: map-rows / inline-size;
 }
 @container map-rows (max-width: 44rem) {
-  .dt-map-row {
+  .dt-map-row,
+  .dt-map-head {
     grid-template-columns: minmax(0, 3fr) minmax(3rem, 1fr) 3.5rem;
   }
 }
@@ -2109,6 +2232,15 @@ details[data-focused] > .dt-sql-group {
 }
 .dt-map-filter[aria-pressed="true"] .dt-map-filter-count {
   color: var(--dt-text-2);
+}
+.dt-map-filter-x {
+  display: inline-flex;
+  margin-right: -0.125rem;
+  color: var(--dt-text-3);
+}
+.dt-map-filter-x svg {
+  width: 0.75rem;
+  height: 0.75rem;
 }
 .dt-map-filter-clear {
   padding: 0 0.375rem;

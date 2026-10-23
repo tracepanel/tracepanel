@@ -25,14 +25,23 @@ const VIEWS: Record<string, { view?: EntryView; live?: boolean }> = {
 /**
  * `#/<section>?q=…` a section, every call (`&view=overview` its groups), `#/group/<section>/<key>` one group of
  * an entry point (an endpoint, an operation, a task, a consumer, a job), `#/t/<id>?from=…&tab=…` a trace: one page wherever it is opened from,
- * with `from` (the hash it was opened from) for the way back, `#/app/<service>` an app's settings and versions. `view=live` (Tasks' Live was a list of its own once)
+ * with `from` (the hash it was opened from) for the way back and `part`/`range` the part of its time picked, `#/app/<service>` an app's settings and versions. `view=live` (Tasks' Live was a list of its own once)
  * opens the section with Live on (`live`): it is read, never written.
  */
 export type Route =
   | { name: "home" }
   | { name: Section; q: string; view?: EntryView | undefined; open?: string | undefined; live?: boolean | undefined }
   | { name: "group"; section: EntrySection; key: string; q?: string | undefined }
-  | { name: "trace"; id: string; from?: string | undefined; tab?: string | undefined; span?: string | undefined }
+  | {
+      name: "trace";
+      id: string;
+      from?: string | undefined;
+      tab?: string | undefined;
+      span?: string | undefined;
+      /** The part of the time picked in the call tree: kinds of calls (`sql view`), a stretch in ms (`12.4-18.9`). */
+      part?: string | undefined;
+      range?: string | undefined;
+    }
   | { name: "issue"; fingerprint: string; error?: boolean | undefined; q?: string | undefined }
   | { name: "app"; service: string };
 
@@ -114,6 +123,31 @@ function appOf(path: string): Route | null {
   return app?.[1] ? { name: "app", service: decodeURIComponent(app[1]) } : null;
 }
 
+// What a trace's address says besides its id: where it was opened from, its tab, its span, the part of its time.
+const TRACE_PARAMS = ["from", "tab", "span", "part", "range"] as const;
+
+/** `t/<id>?from=…&tab=…`: a trace's page. */
+function traceOf(path: string, params: URLSearchParams): Route | null {
+  // `traces/` is how the widget wrote it before; old links still open.
+  const trace = /^(?:t|traces)\/(.+)$/.exec(path);
+  if (!(trace?.[1] && TRACE_ID.test(trace[1]))) return null;
+  const given = TRACE_PARAMS.flatMap((key) => {
+    const value = params.get(key);
+    return value === null ? [] : [[key, value] as const];
+  });
+  return { name: "trace", id: trace[1], ...Object.fromEntries(given) };
+}
+
+/** A trace's address: its id, then what it says besides. */
+function traceAddress(route: Extract<Route, { name: "trace" }>): string {
+  const params = new URLSearchParams();
+  for (const key of TRACE_PARAMS) {
+    const value = route[key];
+    if (value) params.set(key, value);
+  }
+  return `#/t/${route.id}${params.size ? `?${params}` : ""}`;
+}
+
 export function parse(hash: string): Route {
   const raw = hash.replace(/^#\/?/, "");
   const [path = "", query = ""] = raw.split("?");
@@ -121,17 +155,8 @@ export function parse(hash: string): Route {
   const q = params.get("q") ?? "";
   const named = issueOf(path, params) ?? appOf(path);
   if (named) return named;
-  // `traces/` is how the widget wrote it before; old links still open.
-  const trace = /^(?:t|traces)\/(.+)$/.exec(path);
-  if (trace?.[1] && TRACE_ID.test(trace[1])) {
-    return {
-      name: "trace",
-      id: trace[1],
-      from: params.get("from") ?? undefined,
-      tab: params.get("tab") ?? undefined,
-      span: params.get("span") ?? undefined,
-    };
-  }
+  const trace = traceOf(path, params);
+  if (trace) return trace;
   const group = /^group\/([a-z]+)\/(.+)$/.exec(path);
   if (group?.[1] && group[2] && isEntry(group[1])) {
     return { name: "group", section: group[1], key: decodeURIComponent(group[2]), q: q || undefined };
@@ -153,14 +178,7 @@ function issueHref(route: Extract<Route, { name: "issue" }>): string {
 
 export function href(route: Route): string {
   if (route.name === "home") return "#/";
-  if (route.name === "trace") {
-    const params = new URLSearchParams();
-    if (route.from) params.set("from", route.from);
-    if (route.tab) params.set("tab", route.tab);
-    if (route.span) params.set("span", route.span);
-    const query = params.size ? `?${params}` : "";
-    return `#/t/${route.id}${query}`;
-  }
+  if (route.name === "trace") return traceAddress(route);
   if (route.name === "issue") return issueHref(route);
   if (route.name === "app") return `#/app/${encodeURIComponent(route.service)}`;
   if (route.name === "group") {

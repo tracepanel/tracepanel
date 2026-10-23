@@ -1,4 +1,12 @@
-import type { DataSource, ExploreItem, TabId, Trace, TraceLinks } from "@tracepanel/ui";
+import {
+  type DataSource,
+  type ExploreItem,
+  parseSlice,
+  sliceParams,
+  type TabId,
+  type Trace,
+  type TraceLinks,
+} from "@tracepanel/ui";
 import { useState } from "react";
 import { exploreFor } from "./explore";
 import { useEscapeTo } from "./keyboard";
@@ -37,6 +45,12 @@ function leadsTo(inSnapshot: boolean): { links: TraceLinks; explore?: (trace: Tr
   return { links: consoleLinks(), explore: (trace) => exploreFor(trace, href) };
 }
 
+/** The trace's address as it is now: a tab opened and a slice picked one after the other both stay in it. */
+function here(id: string): Extract<Route, { name: "trace" }> {
+  const route = parse(location.hash);
+  return route.name === "trace" ? route : { name: "trace", id };
+}
+
 /** The page's padding: the full page's, or a narrow screen's (a snapshot opened on a phone). */
 const PADDING = { full: "px-6 pt-7 pb-12", compact: "px-1 pt-3 pb-8" };
 
@@ -60,6 +74,8 @@ export function TracePage({
   from,
   tab,
   span,
+  part,
+  range,
   source,
   inSnapshot,
   variant = "full",
@@ -69,6 +85,9 @@ export function TracePage({
   tab?: string | undefined;
   /** A span to open in the call tree (from a log record). */
   span?: string | undefined;
+  /** The part of the time picked in the call tree: its kinds of calls and its stretch, as the URL says them. */
+  part?: string | undefined;
+  range?: string | undefined;
   source: DataSource;
   /** Opened from a snapshot file: it leads only to the file's other traces. */
   inSnapshot?: boolean | undefined;
@@ -100,7 +119,10 @@ export function TracePage({
           source={source}
           initialTab={initialTab}
           preferredTab={openingTab(from)}
-          onTabChange={(next) => go({ name: "trace", id, from, tab: next }, true)}
+          // The tab and the part of the time picked are the page's URL: a link to it opens them again.
+          onTabChange={(next) => go({ ...here(id), tab: next, span: undefined }, true)}
+          initialSlice={parseSlice(part, range)}
+          onSliceChange={(next) => go({ ...here(id), ...sliceParams(next) }, true)}
           explore={leads.explore}
           links={leads.links}
           initialSpan={span}

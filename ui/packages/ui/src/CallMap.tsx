@@ -1,5 +1,6 @@
 import {
   type CSSProperties,
+  type FocusEvent,
   type KeyboardEvent,
   type ReactNode,
   type RefObject,
@@ -8,18 +9,21 @@ import {
   useRef,
   useState,
 } from "react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./components/ui/tooltip";
 import { duration, since } from "./format";
 import { GraphqlCode } from "./GraphqlCode";
 import { ChevronRightIcon, CloseIcon } from "./icons";
 import { keyed } from "./keys";
 import { AllAttributes, LogRecordDetails } from "./LogRecordDetails";
-import { breakdown, type Category, categoryLabel } from "./lib/breakdown";
+import { breakdown, type Category, categoryLabel, spanCategories } from "./lib/breakdown";
 import { callFields } from "./lib/callFields";
 import { callTemplate, groupNoun } from "./lib/calls";
 import { spanKindLabel } from "./lib/handler";
 import { percent, widthOf } from "./lib/percent";
+import { plural } from "./lib/plural";
 import { traceRuntime } from "./lib/runtime";
 import { isReceiver, raised } from "./lib/signals";
+import { isWhole, overlaps, rangeLabel, type Slice, type TimeRange, togglePart, WHOLE } from "./lib/slice";
 import { CALL_KINDS, DATASTORES, MESSAGING, RPC } from "./lib/systems";
 import { type TraceLinks, traceLinkProps } from "./links";
 import { type NameValue, NameValues, RowsLookContext } from "./NameValues";
@@ -40,6 +44,7 @@ import { SideResize, useSideWidth } from "./SideResize";
 import { SignalNotes } from "./SignalNotes";
 import { SqlCode } from "./SqlCode";
 import { TemplateContext, withoutContext } from "./TemplateContext";
+import { RangeBand, useHeldSlice, useRangeDrag } from "./TimeSlice";
 import type { Attrs, IssueKind, Log, Related, Span, Trace, TraceError, TraceSummary } from "./types";
 
 /* ---------- tree ---------- */
@@ -270,30 +275,67 @@ function chipCounts(nodes: Node[], trace: Trace): Map<FilterId, number> {
   return counts;
 }
 
+/** What is picked, as the rows are matched against it: kinds of calls, a stretch of time, each span's category. */
+interface Picked {
+  parts: ReadonlySet<string>;
+  range: TimeRange | null;
+  /** When the trace started: the range is in microseconds since. */
+  start: number;
+  categories: ReadonlyMap<string, Category>;
+}
+
 /**
- * With filters on: the rows that match, and the rows on the way to them ("path": shown dimmed, always open).
+ * With a slice picked: the rows that match, and the rows on the way to them ("path": shown dimmed, always open).
  * Everything else is hidden. A signal's rows are what it did: its receivers, and theirs, match with it.
  */
-function markTree(nodes: Node[], active: ReadonlySet<FilterId>, marks = new Map<string, Mark>()): boolean {
+function markTree(nodes: Node[], picked: Picked, marks = new Map<string, Mark>()): boolean {
   let any = false;
-  for (const node of nodes) any = markNode(node, active, marks) || any;
+  for (const node of nodes) any = markNode(node, picked, marks) || any;
   return any;
 }
 
 /** One row and the rows under it; whether it shows. */
-function markNode(node: Node, active: ReadonlySet<FilterId>, marks: Map<string, Mark>): boolean {
-  const filter = matchOf(node, active);
-  const below = markTree(childrenOf(node), active, marks);
-  if (filter === "signal") markAll(childrenOf(node), marks);
-  const mark = markOf(filter !== null, below);
+function markNode(node: Node, picked: Picked, marks: Map<string, Mark>): boolean {
+  const matches = matchesPicked(node, picked);
+  const below = markTree(childrenOf(node), picked, marks);
+  if (matches && isPickedSignal(node, picked)) markAll(childrenOf(node), picked, marks);
+  const mark = markOf(matches, below);
   if (mark) marks.set(node.key, mark);
   return mark !== undefined;
 }
 
-/** The active filter a row matches, if any. */
-function matchOf(node: Node, active: ReadonlySet<FilterId>): FilterId | null {
-  const filter = FILTER_OF.get(kindOf(node));
-  return filter !== undefined && active.has(filter) ? filter : null;
+function matchesPicked(node: Node, picked: Picked): boolean {
+  return partOf(node, picked) && inRange(node, picked);
+}
+
+/** A signal's send while Signals is picked: what its receivers did is the signal's. */
+function isPickedSignal(node: Node, picked: Picked): boolean {
+  return picked.parts.has("signal") && kindOf(node) === "signal";
+}
+
+/** The spans a row stands for: its own, or a group's. */
+function spansOf(node: Node): readonly Span[] {
+  if (node.type === "span") return [node.span];
+  return node.type === "group" ? node.spans : [];
+}
+
+/** Whether a row is of a picked kind: a filter's, or the share of the time its spans count in. */
+function partOf(node: Node, picked: Picked): boolean {
+  if (picked.parts.size === 0) return true;
+  if (picked.parts.has(FILTER_OF.get(kindOf(node)) ?? "")) return true;
+  return spansOf(node).some((span) => picked.parts.has(picked.categories.get(span.id) ?? ""));
+}
+
+/** When a row ran, or happened: its start and how long, since the trace started. */
+function extentOf(node: Node, start: number): [number, number] {
+  if (node.type === "span") return [node.span.start - start, node.span.duration];
+  if (node.type === "group") return [node.start - start, node.end - node.start];
+  if (node.type === "task") return [node.run.start - start, node.run.duration];
+  return [startOf(node) - start, 0];
+}
+
+function inRange(node: Node, picked: Picked): boolean {
+  return picked.range === null || overlaps(picked.range, ...extentOf(node, picked.start));
 }
 
 function markOf(matches: boolean, below: boolean): Mark | undefined {
@@ -301,24 +343,17 @@ function markOf(matches: boolean, below: boolean): Mark | undefined {
   return below ? "path" : undefined;
 }
 
-/** Every row under these, as matches. */
-function markAll(nodes: Node[], marks: Map<string, Mark>): void {
+/** Every row under these that the range keeps, as matches. */
+function markAll(nodes: Node[], picked: Picked, marks: Map<string, Mark>): void {
   for (const node of nodes) {
-    marks.set(node.key, "match");
-    markAll(childrenOf(node), marks);
+    if (inRange(node, picked)) marks.set(node.key, "match");
+    markAll(childrenOf(node), picked, marks);
   }
 }
 
 type Mark = "match" | "path";
 
-function toggled(active: ReadonlySet<FilterId>, id: FilterId): ReadonlySet<FilterId> {
-  const next = new Set(active);
-  if (next.has(id)) next.delete(id);
-  else next.add(id);
-  return next;
-}
-
-/** The legend's entries that pick rows too: a category's spans are a filter's rows. */
+/** The share of the time a category is: a filter's id where it has one (Database is SQL), else its own. */
 const CATEGORY_FILTERS: Partial<Record<Category, FilterId>> = {
   template: "template",
   sql: "sql",
@@ -331,20 +366,24 @@ const CATEGORY_FILTERS: Partial<Record<Category, FilterId>> = {
   signal: "signal",
 };
 
-interface FilterState {
+function partOfCategory(category: Category): string {
+  return CATEGORY_FILTERS[category] ?? category;
+}
+
+interface SliceState {
   counts: ReadonlyMap<FilterId, number>;
-  active: ReadonlySet<FilterId>;
-  onChange: (next: ReadonlySet<FilterId>) => void;
+  slice: Slice;
+  onChange: (next: Slice) => void;
 }
 
 /** A chip that shows only its rows (and the rows on the way to them); pressed again, everything. */
-function FilterChip({ id, filters, children }: { id: FilterId; filters: FilterState; children: ReactNode }) {
+function FilterChip({ id, filters, children }: { id: FilterId; filters: SliceState; children: ReactNode }) {
   return (
     <button
       type="button"
       className="dt-map-filter"
-      aria-pressed={filters.active.has(id)}
-      onClick={() => filters.onChange(toggled(filters.active, id))}
+      aria-pressed={filters.slice.parts.includes(id)}
+      onClick={() => filters.onChange(togglePart(filters.slice, id))}
     >
       {children}
       <span className="dt-map-filter-count">{filters.counts.get(id)}</span>
@@ -352,38 +391,110 @@ function FilterChip({ id, filters, children }: { id: FilterId; filters: FilterSt
   );
 }
 
-/** A category of the time: its share, and a filter chip when the tree has its rows. */
-function Share({
-  category,
-  value,
-  total,
-  filters,
-  trace,
-}: {
+/** A share of the time, as the legend and the bar's tooltip say it. */
+interface ShareOf {
   category: Category;
   value: number;
   total: number;
-  filters: FilterState;
-  trace: Trace;
-}) {
-  const content = (
-    <>
-      <span className="dt-swatch" />
-      {categoryLabel(category, trace)}
-      <b>{duration(value)}</b>
-      <span className="dt-breakdown-share">{percent(value, total)}</span>
-    </>
-  );
-  const filter = CATEGORY_FILTERS[category];
+  /** How many spans count in it. */
+  calls: number;
+  label: string;
+}
+
+/** A category of the time: its share, picking its rows. */
+function Share({ share, filters }: { share: ShareOf; filters: SliceState }) {
+  const part = partOfCategory(share.category);
   return (
-    <li data-category={category}>
-      {filter && filters.counts.get(filter) ? (
-        <FilterChip id={filter} filters={filters}>
-          {content}
-        </FilterChip>
-      ) : (
-        content
-      )}
+    <li data-category={share.category}>
+      <button
+        type="button"
+        className="dt-share"
+        aria-pressed={filters.slice.parts.includes(part)}
+        onClick={() => filters.onChange(togglePart(filters.slice, part))}
+      >
+        <span className="dt-swatch" />
+        {share.label}
+        <b>{duration(share.value)}</b>
+        <span className="dt-breakdown-share">{percent(share.value, share.total)}</span>
+      </button>
+    </li>
+  );
+}
+
+/** A segment of the bar: its numbers on hover, its rows on a click. */
+function Segment({ share, filters }: { share: ShareOf; filters: SliceState }) {
+  const part = partOfCategory(share.category);
+  const picked = filters.slice.parts;
+  const numbers = `${duration(share.value)} · ${percent(share.value, share.total)} · ${plural(share.calls, "call", "calls")}`;
+  return (
+    <Tooltip delayDuration={0} disableHoverableContent={true}>
+      <TooltipTrigger asChild onFocus={keyboardOnly}>
+        <button
+          type="button"
+          data-category={share.category}
+          data-faded={picked.length > 0 && !picked.includes(part) ? "" : undefined}
+          style={{ width: widthOf(share.value, share.total) }}
+          aria-label={`${share.label} · ${numbers}`}
+          aria-pressed={picked.includes(part)}
+          onClick={() => filters.onChange(togglePart(filters.slice, part))}
+        />
+      </TooltipTrigger>
+      <TooltipContent
+        side="top"
+        sideOffset={8}
+        arrow={false}
+        className="flex items-center gap-2 rounded-lg border bg-popover px-3 py-2 text-sm whitespace-nowrap text-popover-foreground shadow-[var(--dt-popover-shadow)]"
+      >
+        <span className="dt-swatch" data-category={share.category} />
+        <span className="font-medium">{share.label}</span>
+        <span className="text-muted-foreground tabular-nums">{numbers}</span>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+/** Opened by focus only from the keyboard: a clicked segment keeps focus, and its numbers would stay over the next. */
+function keyboardOnly(event: FocusEvent<HTMLElement>): void {
+  if (!event.currentTarget.matches(":focus-visible")) event.preventDefault();
+}
+
+/** Each share of the time with its numbers: how long, of how much, how many spans. */
+function sharesOf(trace: Trace, categories: ReadonlyMap<string, Category>): ShareOf[] {
+  const parts = breakdown(trace);
+  const total = Math.max(
+    parts.reduce((sum, [, value]) => sum + value, 0),
+    1,
+  );
+  const calls = new Map<Category, number>();
+  for (const category of categories.values()) calls.set(category, (calls.get(category) ?? 0) + 1);
+  return parts.map(([category, value]) => ({
+    category,
+    value,
+    total,
+    calls: calls.get(category) ?? 0,
+    label: categoryLabel(category, trace),
+  }));
+}
+
+/** The picked range, said: a pressed chip that lets it go. */
+function RangeChip({ total, filters }: { total: number; filters: SliceState }) {
+  const range = filters.slice.range;
+  if (!range) return null;
+  return (
+    <li>
+      <button
+        type="button"
+        className="dt-map-filter"
+        aria-pressed={true}
+        aria-label={`Time ${rangeLabel(range, total)}`}
+        title="Show all of the time"
+        onClick={() => filters.onChange({ ...filters.slice, range: null })}
+      >
+        {rangeLabel(range, total)}
+        <span className="dt-map-filter-x">
+          <CloseIcon />
+        </span>
+      </button>
     </li>
   );
 }
@@ -391,27 +502,32 @@ function Share({
 /* ---------- time breakdown ---------- */
 
 /**
- * Where the time went, and what to show: one row. A category with rows in the tree (Database, Templates, Cache…)
- * is a filter chip too; the filters with no time of their own (Logs, Errors, Tasks…) follow it as plain chips.
+ * Where the time went, and what to show: one row. Each share (Database, Templates, View code…) picks its rows, from
+ * the bar or the legend; the filters with no time of their own (Logs, Errors, Tasks…) follow it as plain chips.
  */
-function Breakdown({ trace, filters }: { trace: Trace; filters: FilterState }) {
-  const parts = breakdown(trace);
-  const total = Math.max(
-    parts.reduce((sum, [, value]) => sum + value, 0),
-    1,
-  );
-  const claimed = new Set(parts.map(([category]) => CATEGORY_FILTERS[category]));
+function Breakdown({
+  trace,
+  filters,
+  categories,
+}: {
+  trace: Trace;
+  filters: SliceState;
+  categories: ReadonlyMap<string, Category>;
+}) {
+  const shares = sharesOf(trace, categories);
+  const claimed = new Set(shares.map((share) => partOfCategory(share.category)));
   const others = FILTERS.filter((filter) => !claimed.has(filter.id) && (filters.counts.get(filter.id) ?? 0) > 0);
   return (
     <div className="dt-breakdown">
-      <div className="dt-breakdown-bar" role="img" aria-label="Where the time went">
-        {parts.map(([category, value]) => (
-          <span key={category} data-category={category} style={{ width: widthOf(value, total) }} />
+      {/* biome-ignore lint/a11y/useSemanticElements: a group of toggle buttons, not a form's fieldset. */}
+      <div className="dt-breakdown-bar" role="group" aria-label="Where the time went">
+        {shares.map((share) => (
+          <Segment key={share.category} share={share} filters={filters} />
         ))}
       </div>
       <ul className="dt-breakdown-legend" aria-label="Where the time went, and what to show">
-        {parts.map(([category, value]) => (
-          <Share key={category} category={category} value={value} total={total} filters={filters} trace={trace} />
+        {shares.map((share) => (
+          <Share key={share.category} share={share} filters={filters} />
         ))}
         {others.map((filter) => (
           <li key={filter.id}>
@@ -420,13 +536,14 @@ function Breakdown({ trace, filters }: { trace: Trace; filters: FilterState }) {
             </FilterChip>
           </li>
         ))}
-        {filters.active.size > 0 ? (
+        <RangeChip total={Math.max(trace.duration, 1)} filters={filters} />
+        {isWhole(filters.slice) ? null : (
           <li>
-            <button type="button" className="dt-map-filter-clear" onClick={() => filters.onChange(new Set())}>
+            <button type="button" className="dt-map-filter-clear" onClick={() => filters.onChange(WHOLE)}>
               Show all
             </button>
           </li>
-        ) : null}
+        )}
       </ul>
     </div>
   );
@@ -1312,12 +1429,81 @@ function useToggleSet(): [ReadonlySet<string>, (key: string) => void] {
   return [keys, toggle];
 }
 
-/** The rows the active filters keep, or undefined while none is on. */
-function marksOf(tree: Node[], active: ReadonlySet<FilterId>): Map<string, Mark> | undefined {
-  if (active.size === 0) return undefined;
+/** The rows a slice keeps, or undefined while it is the whole trace. */
+function marksOf(tree: Node[], picked: Picked): Map<string, Mark> | undefined {
+  if (picked.parts.size === 0 && picked.range === null) return undefined;
   const found = new Map<string, Mark>();
-  markTree(tree, active, found);
+  markTree(tree, picked, found);
   return found;
+}
+
+/** Where the track column of the rows is, across the tree: the picked range is drawn over it, rows and head. */
+function useTrackColumn(
+  timed: RefObject<HTMLDivElement | null>,
+  ruler: RefObject<HTMLSpanElement | null>,
+): CSSProperties | undefined {
+  const [place, setPlace] = useState<CSSProperties | undefined>(undefined);
+  useEffect(() => {
+    const box = timed.current;
+    if (!box) return;
+    const observer = new ResizeObserver(() => {
+      const column = ruler.current?.getBoundingClientRect();
+      const outer = box.getBoundingClientRect();
+      if (column) setPlace({ left: column.left - outer.left, width: column.width });
+    });
+    observer.observe(box);
+    return () => observer.disconnect();
+  }, [timed, ruler]);
+  return place;
+}
+
+/**
+ * The head and the rows, over the trace's time: a drag across the bars' column (or the head over it) picks a
+ * stretch of it, a double click lets it go.
+ */
+function TimedRows({
+  trace,
+  range,
+  onRange,
+  children,
+}: {
+  trace: Trace;
+  range: TimeRange | null;
+  onRange: (range: TimeRange | null) => void;
+  children: ReactNode;
+}) {
+  const timed = useRef<HTMLDivElement>(null);
+  const ruler = useRef<HTMLSpanElement>(null);
+  const column = useTrackColumn(timed, ruler);
+  const total = Math.max(trace.duration, 1);
+  const drag = useRangeDrag(total, onRange);
+  const shown = drag.draft ?? range;
+  return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: a drag over the rows, which are buttons of their own.
+    <div
+      className="dt-map-timed"
+      ref={timed}
+      onPointerDown={(event) => {
+        const target = event.target as Element;
+        if (ruler.current && target.closest(".dt-map-track, .dt-map-ruler")) drag.start(event, ruler.current);
+      }}
+      onDoubleClick={(event) => {
+        if ((event.target as Element).closest(".dt-map-track, .dt-map-ruler")) onRange(null);
+      }}
+    >
+      <div className="dt-map-head">
+        <span>Call tree</span>
+        <span className="dt-map-ruler" ref={ruler} title="Drag to pick a stretch of the time" />
+        <span>Time</span>
+      </div>
+      {children}
+      {shown && column ? (
+        <div className="dt-map-range-layer" style={column}>
+          <RangeBand range={shown} total={total} />
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 /** This trace's issues by span, and those of the calls' traces opened under the calls. */
@@ -1330,6 +1516,10 @@ function withCallIssues(
     ...issueBySpan,
     ...issues.flatMap((issue) => issue.span_ids.map((id): [string, IssueKind] => [id, issue.kind])),
   ]);
+}
+
+function pickedOf(slice: Slice, trace: Trace, categories: ReadonlyMap<string, Category>): Picked {
+  return { parts: new Set(slice.parts), range: slice.range, start: trace.start, categories };
 }
 
 /** The request as a call tree: what ran inside what, in order, and how long each part took. */
@@ -1356,34 +1546,35 @@ export function CallMap({
   const rows = useScrolledToInitial(initialSpan);
   const [collapsed, toggle] = useToggleSet();
   const details = detailsOf(tree, selected, trace, links);
-  const [active, setActive] = useState<ReadonlySet<FilterId>>(new Set());
+  // The part of the time picked: the kinds of calls and the stretch of time the rows are kept for.
+  const { slice: current, change } = useHeldSlice();
   const counts = useMemo(() => chipCounts(tree, trace), [tree, trace]);
-  const marks = useMemo(() => marksOf(tree, active), [tree, active]);
+  const categories = useMemo(() => spanCategories(trace), [trace]);
+  const marks = useMemo(() => marksOf(tree, pickedOf(current, trace, categories)), [tree, current, trace, categories]);
+  const inline = side ? null : details;
 
   return (
     <div className="dt-map" ref={map}>
-      <Breakdown trace={trace} filters={{ counts, active, onChange: setActive }} />
+      <Breakdown trace={trace} filters={{ counts, slice: current, onChange: change }} categories={categories} />
       <MapBody details={side ? details : null} onClose={close}>
-        <div className="dt-map-head">
-          <span>Call tree</span>
-          <span>Time</span>
-        </div>
-        <div className="dt-map-rows" ref={rows}>
-          <Rows
-            nodes={tree}
-            depth={0}
-            ctx={{
-              trace,
-              issueBySpan: issues,
-              selected,
-              onSelect: select,
-              collapsed,
-              onToggle: toggle,
-              marks,
-              details: side ? null : details,
-            }}
-          />
-        </div>
+        <TimedRows trace={trace} range={current.range} onRange={(range) => change({ ...current, range })}>
+          <div className="dt-map-rows" ref={rows}>
+            <Rows
+              nodes={tree}
+              depth={0}
+              ctx={{
+                trace,
+                issueBySpan: issues,
+                selected,
+                onSelect: select,
+                collapsed,
+                onToggle: toggle,
+                marks,
+                details: inline,
+              }}
+            />
+          </div>
+        </TimedRows>
       </MapBody>
     </div>
   );
