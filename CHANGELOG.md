@@ -302,6 +302,12 @@
   names its endpoint. A failed HTTP call has a failed row's red edge and its
   status's badge. A job's first tab is Job, not Command. What ran a task, a
   queue and a job's source are one quiet tag in their own case.
+- A copy button follows its value in every row of names and values: a
+  trace's attributes, a request's headers, query, cookies and session, a
+  call's details, an app's settings and versions, and related traces, as a
+  trace's facts already had it. It sat at the row's far end, a screen away
+  from a short value. An attribute's name no longer has a tooltip repeating
+  it: it wraps whole.
 
 ## 0.4.1 (2026-10-21)
 

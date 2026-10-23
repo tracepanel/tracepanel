@@ -88,3 +88,28 @@ test("an issue that isn't stored says so as an empty section does: an icon, a ti
   await expect(empty.locator(".dt-empty-title")).toHaveText("Issue not found");
   await expect(empty.getByRole("link", { name: "Back to issues" })).toHaveCSS("border-top-style", "solid");
 });
+
+test("a copy button follows its value, in an attribute's row as in a fact's; an attribute's name has no tooltip", async ({
+  page,
+}) => {
+  await page.goto(`/#/t/${await traceId("GET /api/posts")}?tab=request`);
+  const main = page.getByRole("main");
+  // How far the button starts after the end of the value beside it.
+  const gap = (button: ReturnType<typeof main.getByRole>) =>
+    button.evaluate((element) => {
+      const value = element.closest("dd")?.firstElementChild;
+      if (!value) throw new Error("no value beside the button");
+      return element.getBoundingClientRect().left - value.getBoundingClientRect().right;
+    });
+  const attribute = main.getByRole("button", { name: "Copy status_code" });
+  const fact = main
+    .locator("dl")
+    .first()
+    .getByRole("button", { name: /^Copy / })
+    .first();
+
+  expect(await gap(attribute)).toBeLessThanOrEqual(16);
+  expect(await gap(attribute)).toBeGreaterThanOrEqual(0);
+  expect(await gap(fact)).toBeLessThanOrEqual(16);
+  await expect(attribute.locator("xpath=ancestor::dd/preceding-sibling::dt[1]")).not.toHaveAttribute("title");
+});
