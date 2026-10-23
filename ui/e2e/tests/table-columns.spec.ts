@@ -396,3 +396,17 @@ for (const scheme of ["dark", "light"] as const) {
     expect(new Set(starts).size).toBe(1);
   });
 }
+
+test("a long list's header stays in view as the list scrolls under it", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 600 });
+  await open(page, "/#/endpoints?view=overview");
+  const head = main(page).locator("thead").last();
+  const scroller = main(page).locator("[data-scroll]");
+  await scroller.evaluate((element) => element.scrollTo(0, element.scrollHeight));
+  const box = await head.boundingBox();
+  const view = await scroller.boundingBox();
+  if (!(box && view)) throw new Error("no header");
+
+  expect(box.y).toBeGreaterThanOrEqual(view.y - 0.5);
+  expect(box.y).toBeLessThan(view.y + 2);
+});

@@ -336,6 +336,9 @@
   not four. The panel waits longer for a request it has only now seen.
 - A list page loads in its own shape: the search, the filters and its first
   rows where they will be, so nothing pops in under a bare progress line.
+- Every list's header stays in view as its rows scroll under it, as the
+  Logs page's did: a long HTTP or Tasks list no longer scrolls its column
+  names away.
 
 ## 0.4.1 (2026-10-21)
 
