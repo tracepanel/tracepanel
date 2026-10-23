@@ -259,6 +259,11 @@
   context and all its attributes one column of names, so every value starts at
   one edge. Each list sized its own, and their values started at different
   places.
+- Columns share the room by what they hold. On Issues an issue's title has the
+  room and Endpoints is narrower, its title wrapping in two lines rather than
+  three. On Emails a request's path in Sent from shows whole. The Logs page's
+  Source column cuts every source at its start, as a task's name is, and never
+  leaves a dot after the ellipsis: "….Thumbnail" reads "…Thumbnail".
 
 ## 0.4.1 (2026-10-21)
 

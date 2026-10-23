@@ -259,7 +259,14 @@ export function TaskName({ name, className }: { name: string; className?: string
 function startCut(element: HTMLElement, name: string): void {
   // Not laid out (hidden, or not in the page yet): whole, until it has a width.
   if (fits(element, name) || element.clientWidth === 0) return;
-  element.textContent = `…${name.slice(fewestDropped(element, name))}`;
+  element.textContent = `…${name.slice(afterSeparator(name, fewestDropped(element, name)))}`;
+}
+
+/** Where a cut name starts: past a dot right after the "…", so it never reads "….Thumbnail". */
+function afterSeparator(name: string, from: number): number {
+  let start = from;
+  while (start < name.length - 1 && name[start] === ".") start += 1;
+  return start;
 }
 
 /** Whether `text` fits in `element`'s width, left in it to show. */

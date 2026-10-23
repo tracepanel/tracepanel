@@ -848,7 +848,9 @@ function IssueTitle({ item }: { item: IssueRow }) {
       ) : (
         <span className="font-medium">{item.title}</span>
       )}
-      {item.culprit ? <Mono className="text-base text-muted-foreground">{item.culprit}</Mono> : null}
+      {item.culprit ? (
+        <Mono className="text-base text-muted-foreground [overflow-wrap:anywhere]">{item.culprit}</Mono>
+      ) : null}
     </span>
   );
 }
@@ -882,7 +884,8 @@ const ISSUE_COLUMNS: DataColumn<IssueRow>[] = [
   {
     id: "endpoints",
     label: "Endpoints",
-    width: 18,
+    // Room for a method and a usual path: the issue's own title is the row's reading, and takes the rest.
+    width: 13,
     drop: 1,
     cell: (item) => <FirstOf values={item.endpoints} count={3} />,
   },
@@ -942,7 +945,8 @@ const MAIL_COLUMNS: DataColumn<MailRow>[] = [
   {
     id: "source",
     label: "Sent from",
-    width: 18,
+    // A request's method and a long path whole: the subject takes the rest.
+    width: 22,
     cell: (mail) => (
       <SourceCell
         kind={mail.trace_kind}
@@ -1059,9 +1063,11 @@ function SourceCell({
       )}
     >
       <SourceBadge kind={kind} graphql={operation !== null} method={method} htmx={htmx} />
-      {/* In a dense table, the row's own size: the badge sets the path apart, not a smaller type. */}
+      {/* In a dense table, the row's own size: the badge sets the path apart, not a smaller type. A column of
+          them is cut at one side, the start, as a task's name always is: every path too. */}
       <SourceText
         kind={kind}
+        startCut={compact}
         text={operation ?? sourceText(kind, path, name)}
         className={cn(!compact && "text-base")}
       />
@@ -1086,8 +1092,19 @@ function SourceBadge({
 }
 
 /** A source's text after its badge, one line: a task's name cut at its start, as everywhere a task is named. */
-function SourceText({ kind, text, className }: { kind: TraceSummary["kind"]; text: string; className?: string }) {
-  if (kind === "task") return <TaskName name={text} className={className} />;
+function SourceText({
+  kind,
+  text,
+  className,
+  startCut = false,
+}: {
+  kind: TraceSummary["kind"];
+  text: string;
+  className?: string | undefined;
+  /** Cut at the start whatever it is: a column of sources cut at one side. */
+  startCut?: boolean;
+}) {
+  if (kind === "task" || startCut) return <TaskName name={text} className={className} />;
   return <Mono className={cn("truncate", className)}>{text}</Mono>;
 }
 
