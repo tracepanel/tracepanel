@@ -326,6 +326,10 @@
   job, the latest occurrence of an error) no longer shows Duration as one
   full-width tile with an empty bar: its header says how long it took, and
   the lanes under it draw it.
+- A value the SDK masked (`********`: a password, a token, a session id, a
+  secret setting) has no copy button anywhere: attributes, a request's
+  cookies and session, an app's settings, a trace's facts, a call's details.
+  It copied the asterisks.
 
 ## 0.4.1 (2026-10-21)
 

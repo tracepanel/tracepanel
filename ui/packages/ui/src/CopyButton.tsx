@@ -2,21 +2,26 @@ import { cn } from "@tracepanel/ui/lib/utils";
 import { CheckIcon, CopyIcon, LinkIcon } from "lucide-react";
 import { useState } from "react";
 import { Button } from "./components/ui/button";
+import { isMasked } from "./lib/values";
 
 const ICONS = { copy: CopyIcon, link: LinkIcon };
 
-/** Copies `text` to the clipboard; the icon (`link` for an address) turns into a check for a moment. */
-export function CopyButton({
-  text,
-  label = "Copy",
-  className,
-  icon = "copy",
-}: {
+interface CopyButtonProps {
   text: string;
   label?: string;
   className?: string;
   icon?: "copy" | "link";
-}) {
+}
+
+/**
+ * Copies `text` to the clipboard; the icon (`link` for an address) turns into a check for a moment. A value the SDK
+ * masked (a password, a session id) has none, wherever it shows: there is nothing to copy but the asterisks.
+ */
+export function CopyButton(props: CopyButtonProps) {
+  return isMasked(props.text) ? null : <CopyAction {...props} />;
+}
+
+function CopyAction({ text, label = "Copy", className, icon = "copy" }: CopyButtonProps) {
   const [copied, setCopied] = useState(false);
   const said = copied ? "Copied" : label;
   const Icon = copied ? CheckIcon : ICONS[icon];
