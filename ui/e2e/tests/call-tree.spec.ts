@@ -30,7 +30,9 @@ for (const width of [1440, 900]) {
       const chip = await box(row.locator('[data-slot="badge"]'));
       const track = await box(row.locator(".dt-map-track"));
 
-      expect(text.width).toBeGreaterThan(40);
+      // At least the 2.5rem (37.5 px) a narrow tree keeps of the call's text, a few characters: the chips beside it
+      // give way first. Linux's font rendering leaves it exactly there at 900 px, macOS's a few pixels more.
+      expect(text.width).toBeGreaterThanOrEqual(37);
       expect(chip.x + chip.width).toBeLessThanOrEqual(name.x + name.width + 0.5);
       expect(name.x + name.width).toBeLessThanOrEqual(track.x + 0.5);
     }

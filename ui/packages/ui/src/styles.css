@@ -22,8 +22,10 @@
   /* The column of names of a trace's facts, its related traces and its attributes: at least this wide, so their
      values start on one line. */
   --dt-fact-label: 9rem;
-  /* The slot a method or a trace's kind takes at a row's start: as wide as PATCH with its padding. */
-  --dt-lead: 3rem;
+  /* The slot a method or a trace's kind takes at a row's start: as wide as the widest word, DELETE, with its padding
+     and some room to spare, in the badge's own font (ch, where it's used): a fixed 3rem fit PATCH by half a pixel
+     on macOS and missed it on Linux, where the names after it started half a pixel apart. */
+  --dt-lead: calc(6.5ch + 0.625rem);
 
   --dt-ink: rgb(10 12 17 / 0.9);
   --dt-ink-2: #12151d;

@@ -24,7 +24,16 @@ import { CALL_KINDS, DATASTORES, MESSAGING, RPC } from "./lib/systems";
 import { type TraceLinks, traceLinkProps } from "./links";
 import { type NameValue, NameValues, RowsLookContext } from "./NameValues";
 import { PropTable } from "./PropTable";
-import { AliasChip, AppChip, IssueChip, KindBadge, StateBadge, TaskName, TemplateChip } from "./primitives";
+import {
+  AliasChip,
+  AppChip,
+  ISSUE_CHIP_SHRINKS,
+  IssueChip,
+  KindBadge,
+  StateBadge,
+  TaskName,
+  TemplateChip,
+} from "./primitives";
 import { isRequestDetail, RequestParts, requestParts } from "./RequestParts";
 import { RunChips } from "./RunChips";
 import { SideResize, useSideWidth } from "./SideResize";
@@ -726,7 +735,7 @@ function GroupName({ node, ctx }: { node: Extract<Node, { type: "group" }>; ctx:
       <AliasChip value={aliasOf(first)} />
       {first ? <TemplateChip attrs={first.attrs} /> : null}
       <span className="dt-map-times">×{node.spans.length}</span>
-      {issue ? <IssueChip kind={issue} /> : null}
+      {issue ? <IssueChip kind={issue} className={ISSUE_CHIP_SHRINKS} /> : null}
     </>
   );
 }
@@ -851,7 +860,7 @@ function SpanRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps
           <AliasChip value={aliasOf(span)} />
           <TemplateChip attrs={span.attrs} />
           <SignalNotes span={span} parent={parent} under={childSpans(node)} />
-          {issue ? <IssueChip kind={issue} /> : null}
+          {issue ? <IssueChip kind={issue} className={ISSUE_CHIP_SHRINKS} /> : null}
         </span>
         <Bar trace={ctx.trace} start={span.start} length={span.duration} />
         <span className="dt-map-time">{duration(span.duration)}</span>

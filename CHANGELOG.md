@@ -264,6 +264,11 @@
   three. On Emails a request's path in Sent from shows whole. The Logs page's
   Source column cuts every source at its start, as a task's name is, and never
   leaves a dot after the ellipsis: "….Thumbnail" reads "…Thumbnail".
+- Names in a list start at one edge on Linux too. The slot a method or a
+  trace's kind takes is sized in the badge's own font, as wide as DELETE: it
+  fit PATCH by half a pixel on macOS and missed it on Linux. In a narrow call
+  tree an issue's chip is cut with an ellipsis rather than past the row's
+  name.
 
 ## 0.4.1 (2026-10-21)
 

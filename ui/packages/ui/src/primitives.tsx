@@ -43,10 +43,22 @@ export function StatusBadge({ status }: { status: number | null | undefined }) {
   );
 }
 
-export function IssueChip({ kind, count }: { kind: IssueKind; count?: number | undefined }) {
+/** An issue chip that gives way last in a row too narrow for it, cut with an ellipsis. */
+export const ISSUE_CHIP_SHRINKS = "min-w-0 shrink justify-start";
+
+export function IssueChip({
+  kind,
+  count,
+  className,
+}: {
+  kind: IssueKind;
+  count?: number | undefined;
+  /** `ISSUE_CHIP_SHRINKS` in a row too narrow for it: cut with an ellipsis, not past the row's edge. */
+  className?: string | undefined;
+}) {
   return (
-    <Badge variant={kind === "error" ? "error" : "warn"} size="compact" data-kind={kind}>
-      {ISSUE_LABELS[kind]}
+    <Badge variant={kind === "error" ? "error" : "warn"} size="compact" data-kind={kind} className={className}>
+      <span className="truncate">{ISSUE_LABELS[kind]}</span>
       {count !== undefined && count > 1 ? <span className="opacity-75">{count}</span> : null}
     </Badge>
   );
