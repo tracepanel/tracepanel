@@ -66,16 +66,19 @@ test("at 1440 × 900 the sidebar shows its Problems, its footer on one line wher
   expect(footer.x).toBeCloseTo(icon.x, 0);
 });
 
-test("a sidebar too long for the window fades at the edge it goes on past, and shows the current page", async ({
+test("a sidebar too long for the window fades at the edge it goes on past, its Problems kept in view", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 560 });
-  await page.goto("/#/issues");
-  const nav = page.locator("aside nav").first();
-  const issues = nav.getByRole("link", { name: /^Issues/ });
+  await page.goto("/#/endpoints");
+  const list = page.locator("aside [data-nav-list]");
+  const errors = page.locator("aside nav").getByRole("link", { name: /^Errors/ });
+  const issues = page.locator("aside nav").getByRole("link", { name: /^Issues/ });
+  await expect(errors).toBeInViewport();
   await expect(issues).toBeInViewport();
+  await expect(list.getByRole("link", { name: "HTTP", exact: true })).toBeInViewport();
 
-  await expect.poll(() => nav.evaluate((element) => getComputedStyle(element).maskImage)).toContain("linear-gradient");
+  await expect.poll(() => list.evaluate((element) => getComputedStyle(element).maskImage)).toContain("linear-gradient");
 });
 
 test("a trace, an issue, a group and an app open with their crumbs at one place, the page's full width", async ({

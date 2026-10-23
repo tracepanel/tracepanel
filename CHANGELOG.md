@@ -269,6 +269,10 @@
   fit PATCH by half a pixel on macOS and missed it on Linux. In a narrow call
   tree an issue's chip is cut with an ellipsis rather than past the row's
   name.
+- The sidebar keeps Errors and Issues in view. With many systems (Kafka,
+  RabbitMQ, HTTP calls, Logs, Emails) its list scrolls and the Problems group
+  stays below it, above the footer, with its red and amber counts: at
+  1440 × 800 they were below the fold again.
 
 ## 0.4.1 (2026-10-21)
 
