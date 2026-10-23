@@ -394,6 +394,12 @@
   one to say "0". Counts of what happened (calls, queries, runs) say 0.
 - A group's and an entry point's seven summary tiles sit in one row again:
   sharing their last four tiles had made them four columns over two rows.
+- An app's traces whose SDK named no `service.role` are one of its roles by
+  their kind (a request's its web, a task's its worker, a command its
+  command), on the Services map and in its table: they were a second,
+  disconnected box of the same app at the bottom of the map, with its calls
+  drawn from it. What runs an app comes from its latest trace that says so,
+  and an app whose SDK never says has a plain app's mark, not an empty tile.
 
 ## 0.4.1 (2026-10-21)
 

@@ -110,3 +110,19 @@ test("a project's frames never overlap: its roles in a layer sit together, one u
   expect(boxes.length).toBeGreaterThan(1);
   expect(overlaps).toEqual([]);
 });
+
+test("an app's traces with no role are its roles by their kind: one frame per app, every box marked and named", async ({
+  page,
+}) => {
+  await page.goto("/#/services");
+  const main = page.getByRole("main");
+  await expect(main.locator(".border-dashed").first()).toBeVisible();
+  const frames = await main.locator(".border-dashed > span").allTextContents();
+
+  // One frame per app and layer: the shop's role-less requests and tasks are its web's and its worker's.
+  expect(frames.filter((name) => name === "shop")).toHaveLength(1);
+  expect(frames.filter((name) => name === "blog")).toHaveLength(1);
+
+  const rows = main.locator("table tbody tr").filter({ hasText: "App" });
+  for (const row of await rows.all()) await expect(row.locator("td").first().locator("svg").first()).toBeVisible();
+});

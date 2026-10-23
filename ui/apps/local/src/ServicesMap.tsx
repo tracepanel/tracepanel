@@ -1,4 +1,4 @@
-import { duration, plural, RuntimeIcon, runtimeKind, ServiceIcon, type ServiceMap, systemName } from "@tracepanel/ui";
+import { duration, plural, ServiceIcon, type ServiceMap, systemName } from "@tracepanel/ui";
 import { cn } from "@tracepanel/ui/lib/utils";
 import {
   CheckIcon,
@@ -11,6 +11,7 @@ import {
   UsersIcon,
 } from "lucide-react";
 import { type CSSProperties, type ReactNode, useCallback, useMemo, useState } from "react";
+import { AppMark } from "./appMark";
 import { type Box, type Diagram, type Link, laidOut, mermaidOf, type Placed, type Point } from "./architecture";
 import { href, type Route } from "./routes";
 import { appTarget, type Host, hostUses, hostWhere, serviceTarget } from "./services";
@@ -231,13 +232,13 @@ function EntryBox({ placed, label }: { placed: Placed<Box>; label: string }) {
 function RoleBox({ placed, hovering }: { placed: Placed<Box>; hovering: Hovering }) {
   const box = placed.item;
   if (box.type !== "role") return null;
-  const kind = box.runtime ? runtimeKind(box.runtime) : null;
   return (
     <Card
       placed={placed}
       to={href(appTarget(box.app))}
-      icon={kind ? <RuntimeIcon kind={kind} /> : null}
-      name={box.app.role}
+      // A role it didn't name reads "app".
+      icon={<AppMark runtime={box.runtime} />}
+      name={box.app.role || "app"}
       detail={box.runtime}
       stats={`${plural(box.app.traces, "trace", "traces")} · ${duration(box.app.total)}${failures(box.app.errors)}`}
       failed={box.app.errors > 0}

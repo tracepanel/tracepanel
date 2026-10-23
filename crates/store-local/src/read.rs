@@ -481,10 +481,10 @@ impl Reader {
         let rows = objects(
             &db,
             &format!(
-                "SELECT service, role, peer, kind, system, address, port, namespace, direction, \
+                "SELECT service, {PEER_ROLE} AS app_role, peer, kind, system, address, port, namespace, direction, \
                  GROUP_CONCAT(DISTINCT alias) AS aliases, COUNT(DISTINCT trace_id) AS traces, SUM(calls) AS calls, \
                  SUM(duration) AS total, SUM(errors) AS errors, MAX(start) AS last_seen \
-                 FROM peers WHERE {condition} GROUP BY service, role, peer, direction"
+                 FROM peers WHERE {condition} GROUP BY service, app_role, peer, direction"
             ),
             params,
         )?;
@@ -517,7 +517,7 @@ impl Reader {
             total[3] = total[3].max(int(&row, "last_seen"));
             edges.push(serde_json::json!({
                 "service": row["service"],
-                "role": row["role"],
+                "role": row["app_role"],
                 "peer": peer,
                 "direction": row["direction"],
                 "traces": int(&row, "traces"),
@@ -568,7 +568,7 @@ impl Reader {
     /// search picks the calling traces.
     fn list_app_links(&self, db: &Connection, query: &str) -> Result<Vec<Value>, ReadError> {
         let (condition, params) = search::compile_where(query, &APP_SEARCH)?;
-        let role = |table: &str| SERVICE_ROLE.replace("attrs", &format!("{table}.attrs"));
+        let role = app_role;
         let rows = objects(
             db,
             &format!(
@@ -608,17 +608,17 @@ impl Reader {
         let rows = objects(
             db,
             &format!(
-                // What runs the app, from its latest trace: MAX(start) is the one min/max aggregate, so SQLite takes
-                // the bare columns from that row. A largest string would mix versions across an upgrade ("4.9" over
-                // "4.10", Java "8.0" over "21.0") and take each part from another trace.
-                "SELECT service, {SERVICE_ROLE} AS role, COUNT(*) AS traces, \
+                // What runs the app, from its latest trace that says so: a role's traces with no SDK attributes
+                // (a role taken from their kind) don't blank it. One trace's fields, not each the largest: a largest
+                // string would mix versions across an upgrade ("4.9" over "4.10", Java "8.0" over "21.0").
+                "SELECT service, {role} AS role, COUNT(*) AS traces, \
                  SUM(status = 'error') AS errors, SUM(duration) AS total, MAX(start) AS last_seen, \
-                 {LANGUAGE} AS language, \
-                 json_extract(attrs, '$.\"process.runtime.name\"') AS runtime_name, \
-                 COALESCE(json_extract(attrs, '$.\"tracepanel.language.version\"'), \
-                     json_extract(attrs, '$.\"process.runtime.version\"')) AS version, \
-                 json_extract(attrs, '$.\"tracepanel.framework\"') AS framework \
-                 FROM traces WHERE {condition} GROUP BY service, role ORDER BY service, role"
+                 (SELECT t.attrs FROM traces t WHERE t.service = traces.service AND {role_t} = {role} \
+                     AND json_extract(t.attrs, '$.\"telemetry.sdk.language\"') IS NOT NULL \
+                     ORDER BY t.start DESC LIMIT 1) AS runtime_attrs \
+                 FROM traces WHERE {condition} GROUP BY service, role ORDER BY service, role",
+                role = app_role("traces"),
+                role_t = app_role("t"),
             ),
             params,
         )?;
@@ -633,11 +633,7 @@ impl Reader {
                     "errors": int(&row, "errors"),
                     "total": int(&row, "total"),
                     "last_seen": int(&row, "last_seen"),
-                    "runtime": runtime_label(
-                        language_name(text("language"), text("runtime_name")),
-                        text("version"),
-                        text("framework"),
-                    ),
+                    "runtime": runtime_of(row["runtime_attrs"].as_str()),
                 })
             })
             .collect())
@@ -1184,6 +1180,19 @@ fn short_version(language: &str, version: &str) -> String {
 }
 
 /// What runs an app, as the SDKs label it for the panel: "Python 3.12 · Django 6.0", "Go 1.27", "Java 21 · Spring
+/// What runs an app, from one of its traces' attributes: its language and version, its framework.
+fn runtime_of(attrs: Option<&str>) -> Option<String> {
+    let attrs: serde_json::Map<String, Value> = attrs
+        .and_then(|text| serde_json::from_str(text).ok())
+        .unwrap_or_default();
+    let text = |key: &str| attrs.get(key).and_then(Value::as_str).map(str::to_owned);
+    runtime_label(
+        language_name(text("telemetry.sdk.language"), text("process.runtime.name")),
+        text("tracepanel.language.version").or_else(|| text("process.runtime.version")),
+        text("tracepanel.framework"),
+    )
+}
+
 /// Boot 4.1". A Kotlin app names Kotlin's own version (tracepanel.language.version), not the JVM's.
 fn runtime_label(
     language: Option<String>,

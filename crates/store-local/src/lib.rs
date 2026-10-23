@@ -561,6 +561,63 @@ mod tests {
     }
 
     #[test]
+    fn an_app_s_traces_with_no_role_are_its_roles_by_their_kind() {
+        let dir =
+            std::env::temp_dir().join(format!("tracepanel-store-roleless-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = path_in(&dir);
+        let mut store = Store::open(&path).unwrap();
+        let run = |id: &str, kind: &str, role: Option<&str>| {
+            let mut attrs = serde_json::json!({"service.name": "shop"});
+            if let Some(role) = role {
+                attrs["service.role"] = role.into();
+            }
+            let doc = serde_json::json!({
+                "id": id, "kind": kind, "name": "run", "start": 1_000, "duration": 10, "status": "ok",
+                "attrs": attrs, "spans": [], "logs": [], "errors": [], "links": [], "issues": [],
+            });
+            Received {
+                trace: serde_json::from_value(doc.clone()).unwrap(),
+                doc: doc.to_string(),
+            }
+        };
+        // A request whose SDK named its role, then a request, a task and a command whose SDK named none.
+        store
+            .write(&[
+                run("WEB", "http", Some("web")),
+                run("REQ", "http", None),
+                run("TASK", "task", None),
+                run("CMD", "command", None),
+            ])
+            .unwrap();
+        // A request with no role that called Redis: its calls are its web's.
+        store.write(&[cached_request()]).unwrap();
+        let services = Reader::new(&path).list_services("").unwrap();
+
+        assert_eq!(
+            services["apps"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|app| (app["role"].clone(), app["traces"].clone()))
+                .collect::<Vec<_>>(),
+            [
+                (Value::from("command"), Value::from(1)),
+                (Value::from("web"), Value::from(3)),
+                (Value::from("worker"), Value::from(1))
+            ]
+        );
+        assert!(
+            services["edges"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|edge| edge["role"] == "web")
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn a_trace_received_twice_counts_once() {
         let dir =
             std::env::temp_dir().join(format!("tracepanel-store-twice-{}", std::process::id()));

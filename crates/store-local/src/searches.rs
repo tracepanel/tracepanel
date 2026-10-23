@@ -419,6 +419,28 @@ pub(crate) fn service_search() -> search::Schema {
 }
 
 pub(crate) const SERVICE_ROLE: &str = "json_extract(attrs, '$.\"service.role\"')";
+
+/// The role a trace's kind says when its SDK named none: a request's app is its web, a task's its worker, a command
+/// its command, a page's its browser. An app's traces with no `service.role` are then one of its own roles, not a
+/// second app beside it.
+const KIND_ROLE: &str = "CASE kind WHEN 'task' THEN 'worker' WHEN 'command' THEN 'command' WHEN 'page' THEN 'browser' ELSE 'web' END";
+
+/// A trace's role in its app (in `table`'s columns): the one its SDK named, else its kind's.
+pub(crate) fn app_role(table: &str) -> String {
+    let column = |sql: &str| {
+        sql.replace("attrs", &format!("{table}.attrs"))
+            .replace("kind", &format!("{table}.kind"))
+    };
+    format!(
+        "COALESCE(NULLIF({}, ''), {})",
+        column(SERVICE_ROLE),
+        column(KIND_ROLE)
+    )
+}
+
+/// A peer row's role in its app: stored as the SDK's role or, with none, the trace's kind, read as that kind's role.
+pub(crate) const PEER_ROLE: &str = "CASE role WHEN 'http' THEN 'web' WHEN 'websocket' THEN 'web' WHEN 'rpc' THEN 'web' \
+     WHEN 'task' THEN 'worker' WHEN 'page' THEN 'browser' ELSE role END";
 pub(crate) const LANGUAGE: &str = "json_extract(attrs, '$.\"telemetry.sdk.language\"')";
 
 /// The services search, read against the traces: the app itself is a service too, of kind `app`, whose system is
