@@ -10,7 +10,9 @@ import {
   type EndpointRow,
   ExplainView,
   type GraphqlRow,
+  ISSUE_LABELS,
   IssueChip,
+  type IssueKind,
   type IssueRow,
   type JobRow,
   KindBadge,
@@ -45,7 +47,7 @@ import { Fragment, type ReactNode, useEffect, useState } from "react";
 import { useCapability } from "./hooks";
 import { currentPeriod, endpointGroup, go, groupRoute, href, issueRoute, traceHref, withPeriod } from "./routes";
 import { graphqlOperation, taskSystem } from "./sections";
-import { Meter, Mono, Tr } from "./ui";
+import { FitChips, Meter, Mono, Tr } from "./ui";
 
 /** What a trace is: its method and path, a GraphQL operation, or its kind and name (a task, a job, a WebSocket). */
 function TraceName({ trace }: { trace: TraceSummary }) {
@@ -85,17 +87,20 @@ const TRACE_COLUMNS: DataColumn<TraceSummary>[] = [
     label: "Issues",
     width: 14,
     drop: 1,
-    cell: (trace) => (
-      // One line, as every row of a list: a narrow column cuts the last chips off, wider shows them.
-      <span className="flex gap-1">
-        {(trace.issue_kinds ?? []).map((kind) => (
-          <IssueChip key={kind} kind={kind} />
-        ))}
-      </span>
-    ),
+    cell: (trace) => <IssueChips kinds={trace.issue_kinds ?? []} />,
   },
   { id: "when", label: "When", width: 6.5, num: true, className: MUTED, cell: (trace) => ago(trace.start) },
 ];
+
+/** A trace's issues on one line, as every row of a list: the ones that fit, "+N" for the others. */
+function IssueChips({ kinds }: { kinds: readonly IssueKind[] }) {
+  return (
+    <FitChips
+      chips={kinds.map((kind) => <IssueChip key={kind} kind={kind} />)}
+      names={kinds.map((kind) => ISSUE_LABELS[kind])}
+    />
+  );
+}
 
 const traceTone = (trace: TraceSummary) => (trace.status === "error" ? "error" : trace.issues > 0 ? "warn" : undefined);
 

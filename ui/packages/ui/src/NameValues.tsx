@@ -1,4 +1,4 @@
-import { createContext, type ReactNode, useContext } from "react";
+import { createContext, Fragment, type ReactNode, useContext } from "react";
 import { AttrValue } from "./AttrValue";
 import { CopyButton } from "./CopyButton";
 import { keyed } from "./keys";
@@ -46,6 +46,25 @@ const LOOKS = {
 } as const;
 
 /**
+ * A dotted name (`db.transaction.savepoint`) that wraps after its dots, not inside a word; a part longer than the
+ * line still wraps where it must.
+ */
+function DotBreaks({ name }: { name: string }) {
+  const parts = name.split(/(?<=\.)/);
+  return (
+    <>
+      {parts.map((part, index) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: the parts of one name never reorder.
+        <Fragment key={index}>
+          {index > 0 ? <wbr /> : null}
+          {part}
+        </Fragment>
+      ))}
+    </>
+  );
+}
+
+/**
  * Names and values in rows, packed: a column of names, values that wrap (laid out and coloured by AttrValue, a long
  * one folded), and on hover the row's buttons, each in a slot of its own so they line up from row to row; the copy
  * one copies the value as it came. The one look of every list of names and values: a request's headers and
@@ -60,7 +79,7 @@ export function NameValues({ rows, nested = false }: { rows: readonly NameValue[
       {keyed(rows, (row) => row.name).map(({ key, item: { name, value, actions = [] } }) => (
         <div key={key} className={cn("group/pair col-span-3 grid grid-cols-subgrid", look.row)}>
           <dt className={cn("text-muted-foreground [overflow-wrap:anywhere]", look.name)} title={name}>
-            {name}
+            <DotBreaks name={name} />
           </dt>
           <dd className={cn("m-0 min-w-0 [overflow-wrap:anywhere]", look.value)}>
             <AttrValue value={value} />

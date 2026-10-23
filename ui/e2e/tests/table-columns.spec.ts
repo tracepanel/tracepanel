@@ -355,3 +355,26 @@ test("at 1024 px the sidebar the reader opened stays open, and a narrow list lea
   await expect(header(page, "Queries")).toHaveCount(0);
   await expect(header(page, "Status")).toBeVisible();
 });
+
+test("a row's issue chips are whole: the ones that fit, then how many more, all of them named on hover", async ({
+  page,
+}) => {
+  await open(page, "/#/endpoints");
+  const issues = await header(page, "Issues").evaluate((head) => (head as HTMLTableCellElement).cellIndex);
+  const cells = await main(page)
+    .locator("tbody tr")
+    .evaluateAll(
+      (rows, index) =>
+        rows.flatMap((row) => {
+          const cell = (row as HTMLTableRowElement).cells[index];
+          const chips = Array.from(cell?.querySelectorAll("[data-slot=badge]:not([aria-hidden] *)") ?? []);
+          if (!cell || chips.length === 0) return [];
+          const right = cell.getBoundingClientRect().right - Number.parseFloat(getComputedStyle(cell).paddingRight);
+          return [chips.every((chip) => chip.getBoundingClientRect().right <= right + 0.5)];
+        }),
+      issues,
+    );
+
+  expect(cells.length).toBeGreaterThan(0);
+  expect(cells.every(Boolean)).toBe(true);
+});

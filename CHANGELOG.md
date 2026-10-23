@@ -233,6 +233,12 @@
   (Queries, Issues, First seen and the like) are left out while there is no room
   for them and come back when there is, and a call's name is cut with an
   ellipsis before its alias. At 1024 px every column was cut mid-word.
+- Nothing is cut mid-word at 1440 px. A request's issue chips show the ones that
+  fit and how many more, all of them named on hover. A call's alias and template
+  chips keep their size while the call's text beside them is cut, in the call
+  tree and the DB tab. The WebSockets table's headers are whole, and a dotted
+  attribute name such as `db.transaction.savepoint` wraps after a dot, not
+  inside a word.
 
 ## 0.4.1 (2026-10-21)
 

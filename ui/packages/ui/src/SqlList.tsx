@@ -105,7 +105,7 @@ function Row({
           <ChevronRightIcon className="size-4 text-muted-foreground transition-transform group-open/row:rotate-90" />
           <span className="text-right font-mono text-sm text-muted-foreground tabular-nums">{lead}</span>
           <span className="flex min-w-0 items-center gap-2 font-mono text-base">
-            <span className="truncate">{name}</span>
+            <span className="shrink-[1000] truncate">{name}</span>
             <AliasChip value={alias} />
             {from ? <TemplateChip attrs={from} /> : null}
           </span>
