@@ -410,3 +410,53 @@ test("a long list's header stays in view as the list scrolls under it", async ({
   expect(box.y).toBeGreaterThanOrEqual(view.y - 0.5);
   expect(box.y).toBeLessThan(view.y + 2);
 });
+
+test("a stuck header reads as one: an opaque band and a shadow on the rows under it, only while stuck", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 600 });
+  await open(page, "/#/endpoints");
+  const container = main(page).locator("[data-slot=table-container]").last();
+  const scroller = main(page).locator("[data-scroll]");
+
+  await expect(container).not.toHaveAttribute("data-stuck");
+
+  await scroller.evaluate((element) => element.scrollTo(0, element.scrollHeight));
+
+  await expect(container).toHaveAttribute("data-stuck", "true");
+  const band = await container.locator("thead").evaluate((head) => getComputedStyle(head).backgroundColor);
+  expect(band).toMatch(/^rgb\(/);
+
+  await scroller.evaluate((element) => element.scrollTo(0, 0));
+
+  await expect(container).not.toHaveAttribute("data-stuck");
+});
+
+for (const scheme of ["dark", "light"] as const) {
+  for (const width of [1440, 1024]) {
+    test(`no header's name is cut, nor a log's time (${scheme}, ${width})`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.setViewportSize({ width, height: 900 });
+      // The logs last: their times are read after.
+      for (const url of ["/#/endpoints", "/#/tasks?view=overview", "/#/calls/sql", "/#/issues", "/#/logs"]) {
+        await open(page, url);
+        const names = await main(page)
+          .locator("thead th .truncate")
+          .evaluateAll((spans) =>
+            spans.filter((span) => span.scrollWidth > span.clientWidth + 0.5).map((span) => span.textContent),
+          );
+
+        expect(names, url).toEqual([]);
+      }
+      const times = await main(page)
+        .locator("tbody td:has(time)")
+        .evaluateAll((cells) => ({
+          total: cells.length,
+          cut: cells.filter((cell) => cell.scrollWidth > cell.clientWidth).length,
+        }));
+
+      expect(times.total).toBeGreaterThan(0);
+      expect(times.cut).toBe(0);
+    });
+  }
+}

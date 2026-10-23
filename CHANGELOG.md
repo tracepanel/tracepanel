@@ -90,6 +90,13 @@
 
 ### Changed
 
+- Every table has a clear head in both themes: on white a quiet cool band
+  a step off the rows, its names a touch darker, a hairline under it, as the
+  dark theme's band. A header that stays in view as the list scrolls keeps
+  its band opaque and casts a soft shadow on the rows under it, only while
+  they scroll under it. A log's time shows whole, to the millisecond, and a
+  column's name is never cut: a column narrowed by a drag or a narrow page
+  stops at its name's width.
 - A trace's facts look like its related traces under them: names in muted
   text, not capitals, a hairline under each row, no grey box around them.
 - A trace opened from HTTP, Tasks, Jobs or another entry point's lists, or
