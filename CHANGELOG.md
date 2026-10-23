@@ -313,8 +313,8 @@
   chosen one raised on a muted track, where they were a bordered card with
   the brand's colour. GraphQL's own type switch above the search is gone:
   the Type filter does it, on its calls too. A trace's Workflow and Related
-  traces are named on the same pill track as its Attributes, not in bold
-  headings of another kind.
+  traces are named on the same full-width pill track as its Attributes, in
+  the console and the panel, not in bold headings of another kind.
 - An open row's actions are one footer. A log record, an email and a query
   opened in their lists, and a finding in a trace's Issues tab, end with
   their own buttons, then the way to the trace at the right end as an
@@ -326,6 +326,88 @@
   job, the latest occurrence of an error) no longer shows Duration as one
   full-width tile with an empty bar: its header says how long it took, and
   the lanes under it draw it.
+- A value the SDK masked (`********`: a password, a token, a session id, a
+  secret setting) has no copy button anywhere: attributes, a request's
+  cookies and session, an app's settings, a trace's facts, a call's details.
+  It copied the asterisks.
+- A trace loads in its own shape: its name, its tabs and its first rows where
+  they will be, not a blank page under a progress line. A trace that isn't
+  stored says so after one more look on the console's page, within a second,
+  not four. The panel waits longer for a request it has only now seen.
+- A list page loads in its own shape: the search, the filters and its first
+  rows where they will be, so nothing pops in under a bare progress line.
+- Every list's header stays in view as its rows scroll under it, as the
+  Logs page's did: a long HTTP or Tasks list no longer scrolls its column
+  names away.
+- The panel shows what the console's trace page shows. Its Request tab has
+  the page's lanes under the request's line (not its tiles: the tabs carry
+  the duration and the queries), the request's method
+  is its own width there, a request's row in its list counts its findings as
+  its Issues tab does (three N+1s read 3, not 1), and docked at the bottom
+  of a narrow window the list takes a quarter of the width, so the trace's
+  tabs keep their names. Its App tab stays the panel's own: the console
+  opens an app's page from the trace's facts.
+- On the Services map a call's line leaves its box's right side and arrives
+  at the middle of the other's left, an S through the gap between their
+  columns. Lines started inside a card, crossed the cards beside them and
+  landed on a database's bottom edge.
+- A group's page has the seven tiles an entry point's Overview has, in the
+  same order (Calls, Errors, Slow, p50, p95, p99, Avg queries): it had eight
+  of its own, p75 and p90 among them. An issue's long route and title wrap
+  in their row instead of being cut ("/campaigns/{id}/r…"). As a rail the
+  sidebar's items are the 32 px rows they are open, so a 1024 px window
+  shows more of them and toggling moves nothing up or down.
+- Smaller things read one way. A trace's start, an overview's range and an
+  app's last word say a moment as "Oct 23 15:13:40", on the 24-hour clock,
+  and a list's Last column goes from "5m ago" to "3h ago" to "Oct 21". A
+  trace's own lane is named as what it is (task, job, websocket, page), a
+  WebSocket's and a page's first tabs are WebSocket and Page, and a task's
+  breakdown says Framework, not Framework & middleware. A failed trace's own
+  lane is red in both themes. Rows of Errors and Issues have no coloured
+  edge, which every one of them had. The hover card's fix line names the
+  fix (`select_related()`), not the template twice. The panel's Console
+  button is filled in both themes. RabbitMQ has an icon of its own beside
+  Kafka's. A trace opened directly has a crumb back to its list.
+- A latency chart with one point no longer puts p95 and p50 beside it, where
+  they crowded the dot: its legend names them. The Logs chart's legend reads
+  debug, info, warning and error, in the case every chart's legend has.
+- A profile's Functions list has its column names inside its box, in the
+  header row's case and colour every table has, not in sentence case above
+  it.
+- ⌘K's Go to list, longer than the palette, fades at the edge it goes on
+  past, as the sidebar does: its last row was cut in half.
+- A trace's facts start their second column's values at one x on every
+  trace: its column of names is at least as wide as the first's. With short
+  names ("Route", "Task ID") the values moved a few pixels from trace to
+  trace.
+- The pill's hover card stands on the pill: as wide as it (320 px at least)
+  and with its edges on the pill's. Its left edge was 8 to 20 px off.
+- The sidebar's items read a little larger, 15 px in 34 px rows in both
+  themes (they were 14 px in dark and 13 px in light). Its group titles stay
+  small, and Problems stays pinned in view.
+- On the Services map a project's roles in one layer sit together in one
+  frame, one under another: the shop's worker, web and command were spread
+  with a gap and its frame overlapped the blog's. A call past a layer is
+  routed around the frames in between, and calls recorded under a role the
+  app doesn't list start at the app's box, not at an empty spot.
+- A system's operations list shows no failures as a dash and some in red,
+  as every list's Errors, Failed and With issues columns do: it was the only
+  one to say "0". Counts of what happened (calls, queries, runs) say 0.
+- A group's and an entry point's seven summary tiles sit in one row again:
+  sharing their last four tiles had made them four columns over two rows.
+- An app's traces whose SDK named no `service.role` are one of its roles by
+  their kind (a request's its web, a task's its worker, a command its
+  command), on the Services map and in its table: they were a second,
+  disconnected box of the same app at the bottom of the map, with its calls
+  drawn from it. What runs an app comes from its latest trace that says so,
+  and an app whose SDK never says has a plain app's mark, not an empty tile.
+- The Services page reads its apps and calls as fast as before an app's
+  role-less traces became its roles: the roles are merged over the grouped
+  rows, and what runs each app is read once a group, not a JSON path a row.
+- A trace with nothing to place beside its own lane (no queries, calls, logs
+  or errors) has no lanes: a single bar from 0 to its duration said what its
+  header says. With other lanes its own stays, their reference, on the
+  console's trace page and in the panel's Request tab.
 
 ## 0.4.1 (2026-10-21)
 

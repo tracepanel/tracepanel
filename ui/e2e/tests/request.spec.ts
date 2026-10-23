@@ -64,3 +64,13 @@ test("a redirect's empty body says so", async ({ page }) => {
 
   await expect(page.getByRole("tabpanel", { name: "Response body" })).toHaveText("Empty.");
 });
+
+test("a value the SDK masked has no copy button: there is nothing to copy but the asterisks", async ({ page }) => {
+  const parts = page.getByRole("tablist", { name: "Request details" });
+  await parts.getByRole("tab", { name: /^Cookies/ }).click();
+  const cookies = page.getByRole("tabpanel", { name: "Cookies" });
+
+  await expect(cookies).toContainText("********");
+  await expect(cookies.getByRole("button", { name: "Copy csrftoken" })).toHaveCount(0);
+  await expect(cookies.getByRole("button", { name: "Copy theme" })).toHaveCount(1);
+});

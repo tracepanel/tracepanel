@@ -158,6 +158,45 @@ function AxisX({
 
 /* ---------- latency over time: p50 and p95 on one axis ---------- */
 
+/** The p95 and p50 lines' names at their last point; p95 >= p50, so p95 sits above, at least one line apart. */
+function EndLabels({
+  x,
+  last,
+  y,
+  p50,
+  p95,
+}: {
+  x: number;
+  last: { p50: number | null; p95: number | null } | undefined;
+  y: (value: number) => number;
+  p50: boolean;
+  p95: boolean;
+}) {
+  if (!last) return null;
+  const { low, high } = labelRows(last, y, p50);
+  return (
+    <g className="[&_text]:fill-text-2 [&_text]:text-xs [&_text]:font-semibold">
+      <EndLabel shown={p95} x={x} y={high} name="p95" />
+      <EndLabel shown={p50} x={x} y={low} name="p50" />
+    </g>
+  );
+}
+
+/** Where the two names go: p50's at its line, p95's at its own, or a line above p50's when they would touch. */
+function labelRows(last: { p50: number | null; p95: number | null }, y: (value: number) => number, p50: boolean) {
+  const low = y(last.p50 ?? 0) + 4;
+  const high = y(last.p95 ?? 0) + 4;
+  return { low, high: p50 ? Math.min(high, low - 14) : high };
+}
+
+function EndLabel({ shown, x, y, name }: { shown: boolean; x: number; y: number; name: string }) {
+  return shown ? (
+    <text x={x} y={y}>
+      {name}
+    </text>
+  ) : null;
+}
+
 interface LegendItem {
   key: string;
   label: string;
@@ -326,24 +365,10 @@ export function LatencyChart({ series }: { series: Series }) {
                 ) : null}
               </g>
             ))}
-            {last ? (
-              <g className="[&_text]:fill-text-2 [&_text]:text-xs [&_text]:font-semibold">
-                {/* p95 >= p50, so p95 sits above; keep the labels at least one line apart. */}
-                {showP95 ? (
-                  <text
-                    x={x(lastIndex) + 8}
-                    y={showP50 ? Math.min(y(last.p95 ?? 0) + 4, y(last.p50 ?? 0) + 4 - 14) : y(last.p95 ?? 0) + 4}
-                  >
-                    p95
-                  </text>
-                ) : null}
-                {showP50 ? (
-                  <text x={x(lastIndex) + 8} y={y(last.p50 ?? 0) + 4}>
-                    p50
-                  </text>
-                ) : null}
-              </g>
-            ) : null}
+            {/* The lines' names at their ends, once they are lines: on one point the legend names its dots. */}
+            {points.length === 1 ? null : (
+              <EndLabels x={x(lastIndex) + 8} last={last} y={y} p50={showP50} p95={showP95} />
+            )}
           </svg>
         );
       }}
@@ -507,11 +532,11 @@ export function CallsChart({
 
 /** The levels from the bottom of a bar up, each in the color its records' dot has in the table. */
 const LOG_LEVELS: readonly (LegendItem & { levels: readonly string[] })[] = [
-  // Named as the table and the Level filter name them.
-  { key: "debug", label: "DEBUG", className: "bg-muted-foreground/50", levels: ["debug"] },
-  { key: "info", label: "INFO", className: "bg-info", levels: ["info"] },
-  { key: "warning", label: "WARNING", className: "bg-warn", levels: ["warning"] },
-  { key: "error", label: "ERROR", className: "bg-error", levels: ["error", "critical"] },
+  // In the case every chart's legend has (calls, errors, p50): the table's column says a record's level in capitals.
+  { key: "debug", label: "debug", className: "bg-muted-foreground/50", levels: ["debug"] },
+  { key: "info", label: "info", className: "bg-info", levels: ["info"] },
+  { key: "warning", label: "warning", className: "bg-warn", levels: ["warning"] },
+  { key: "error", label: "error", className: "bg-error", levels: ["error", "critical"] },
 ];
 
 /** The search's levels, and what picks others: the legend filters the list too, not the chart alone. */

@@ -22,6 +22,9 @@ interface Lane {
 
 function lanes(trace: Trace): Lane[] {
   const flagged = new Set(trace.issues.flatMap((issue) => issue.span_ids));
+  // A failed span is red; so is the trace's own when the trace failed (its error is an issue on it, not amber).
+  const failed = (span: Trace["spans"][number]) =>
+    span.status === "error" || (span.parent_id === null && trace.status === "error");
   const spans = (...kinds: readonly string[]): Mark[] =>
     trace.spans
       .filter((span) => kinds.includes(span.kind))
@@ -30,11 +33,11 @@ function lanes(trace: Trace): Lane[] {
         start: span.start,
         duration: span.duration,
         label: `${span.name} · ${duration(span.duration)}`,
-        tone: span.status === "error" ? "error" : flagged.has(span.id) ? "warn" : "neutral",
+        tone: failed(span) ? "error" : flagged.has(span.id) ? "warn" : "neutral",
         target: { tab: "tree", span: span.id },
       }));
   const result: Lane[] = [
-    { label: "request", marks: spans(trace.kind) },
+    { label: LANE_WORDS[trace.kind] ?? trace.kind, marks: spans(trace.kind) },
     { label: "sql", marks: spans("sql") },
     { label: "redis", marks: spans("redis") },
     { label: "cache", marks: spans("cache") },
@@ -71,7 +74,21 @@ function lanes(trace: Trace): Lane[] {
 const TICKS = [0, 0.25, 0.5, 0.75, 1];
 
 /** The trace's lanes over its time; a mark (an N+1 burst in amber, an error in red) opens what it is. */
+/** The trace's own lane, named as what it is: a request, a task, a job, a WebSocket, a page. */
+const LANE_WORDS: Record<string, string> = {
+  http: "request",
+  task: "task",
+  command: "job",
+  websocket: "websocket",
+  page: "page",
+  rpc: "call",
+};
+
 export function Timeline({ trace, onSelect }: { trace: Trace; onSelect?: (target: MarkTarget) => void }) {
+  const drawn = lanes(trace);
+  // The trace's own lane alone is one bar from 0 to its duration, which its header says: no lanes then. With others
+  // it stays, their reference.
+  if (drawn.length < 2) return null;
   const total = Math.max(trace.duration, 1);
   const position = (mark: Mark) => ({
     left: `${Math.min(Math.max(((mark.start - trace.start) / total) * 100, 0), 100)}%`,
@@ -86,7 +103,7 @@ export function Timeline({ trace, onSelect }: { trace: Trace; onSelect?: (target
           </span>
         ))}
       </div>
-      {lanes(trace).map((lane) => (
+      {drawn.map((lane) => (
         <div key={lane.label} className="dt-lane">
           <span className="dt-lane-label">
             {lane.label}

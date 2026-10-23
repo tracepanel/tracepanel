@@ -307,7 +307,15 @@ function callStatsColumns<T extends CallStats>(
       drop: 3,
       cell: (item) => <RepeatedCount most={item.most_per_trace} />,
     },
-    { id: "failed", label: "Failed", width: 5.5, num: true, cell: (item) => item.errors },
+    // A count of what went wrong, as every list's: red when there are some, a dash when none.
+    {
+      id: "failed",
+      label: "Failed",
+      width: 5.5,
+      num: true,
+      className: (item) => errorCount(item.errors),
+      cell: (item) => item.errors || "—",
+    },
     ...own,
     {
       id: "total",
@@ -864,7 +872,7 @@ function IssueTitle({ item }: { item: IssueRow }) {
       ) : (
         <span className="flex items-baseline gap-2">
           <IssueChip kind={item.kind} />
-          <span className="font-medium">{issueTitle(item.title)}</span>
+          <span className="min-w-0 font-medium [overflow-wrap:anywhere]">{issueTitle(item.title)}</span>
         </span>
       )}
       {item.culprit ? (
@@ -878,18 +886,42 @@ function IssueTitle({ item }: { item: IssueRow }) {
  * An endpoint ("GET /api/posts/{id}") as every list names a request: the method's badge, then its route. A name
  * without a method is the trace's own (a task's), with its kind's badge.
  */
-export function EndpointName({ endpoint, kind = "http" }: { endpoint: string; kind?: TraceSummary["kind"] }) {
+export function EndpointName({
+  endpoint,
+  kind = "http",
+  wrap = false,
+}: {
+  endpoint: string;
+  kind?: TraceSummary["kind"];
+  /** In a column of a row that wraps (an issue's): a long route wraps at its slashes, never cut. */
+  wrap?: boolean;
+}) {
+  const { method, path } = requestOf(endpoint, kind);
+  if (path !== null && wrap) return <WrappedEndpoint method={method} route={path} />;
+  return <SourceCell kind={kind} htmx={null} method={method} path={path} name={endpoint} className="max-w-none" />;
+}
+
+/** A request's method and route from its endpoint ("GET /api/posts"); null for a task's or a job's name. */
+function requestOf(endpoint: string, kind: TraceSummary["kind"]): { method: string | null; path: string | null } {
   const [method = "", ...route] = endpoint.split(" ");
-  const http = kind === "http" && route.length > 0;
+  return kind === "http" && route.length > 0 ? { method, path: route.join(" ") } : { method: null, path: null };
+}
+
+/** A request's method in its badge, then its route wrapped where it must, after a slash first. */
+function WrappedEndpoint({ method, route }: { method: string | null; route: string }) {
   return (
-    <SourceCell
-      kind={kind}
-      htmx={null}
-      method={http ? method : null}
-      path={http ? route.join(" ") : null}
-      name={endpoint}
-      className="max-w-none"
-    />
+    <span className="flex min-w-0 items-start gap-2">
+      <MethodBadge method={method} />{" "}
+      <Mono className="min-w-0 text-base [overflow-wrap:anywhere]">
+        {route.split(/(?<=\/)/).map((part, index) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: the parts of one route never reorder.
+          <Fragment key={index}>
+            {index > 0 ? <wbr /> : null}
+            {part}
+          </Fragment>
+        ))}
+      </Mono>
+    </span>
   );
 }
 
@@ -901,7 +933,7 @@ function IssuePlaces({ item, entries }: { item: IssueRow; entries: ReadonlyMap<s
   return (
     <span className="flex flex-col gap-0.5">
       {shown.map((endpoint) => (
-        <EndpointName key={endpoint} endpoint={endpoint} />
+        <EndpointName key={endpoint} endpoint={endpoint} wrap={true} />
       ))}
       {item.endpoints.length > shown.length ? (
         <span className="text-base text-muted-foreground">+{item.endpoints.length - shown.length} more</span>
@@ -964,8 +996,10 @@ function issueColumns(entries: ReadonlyMap<string, TraceSummary>): DataColumn<Is
       label: "Endpoints",
       // Room for a method's badge and a usual path, or a task's name: the issue's own title is the row's reading, and
       // takes the rest.
-      width: 15,
+      width: 17,
       drop: 1,
+      // A long route wraps, as the title beside it does: never cut.
+      className: "whitespace-normal",
       cell: (item) => <IssuePlaces item={item} entries={entries} />,
     },
     {
@@ -995,11 +1029,8 @@ export function IssuesTable({ items, source }: { items: readonly IssueRow[]; sou
     <DataTable table="issues" columns={issueColumns(entries)}>
       {({ cells }) =>
         items.map((item) => (
-          <Tr
-            key={item.fingerprint}
-            tone={item.kind === "error" ? "error" : "warn"}
-            href={href(issueRoute(item.fingerprint, item.kind))}
-          >
+          // No coloured edge: every row of these lists is an error or an issue, so an edge on all of them says nothing.
+          <Tr key={item.fingerprint} href={href(issueRoute(item.fingerprint, item.kind))}>
             {cells(item)}
           </Tr>
         ))

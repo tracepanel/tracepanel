@@ -45,7 +45,7 @@ import { RequestInfo } from "./RequestInfo";
 import { type Explain, SqlList } from "./SqlList";
 import { type SystemCalls, systemCalls, systemOfIssue } from "./systemCalls";
 import { Tabs } from "./Tabs";
-import { Timeline } from "./Timeline";
+import { type MarkTarget, Timeline } from "./Timeline";
 import type { App, Issue, IssueKind, Related, Trace } from "./types";
 
 export type TabId = "request" | "app" | "tree" | "issues" | "sql" | "cache" | "http" | "logs" | "error" | "profile";
@@ -219,7 +219,7 @@ const KIND_ICONS: Record<string, typeof GlobeIcon> = {
 };
 
 // A command is a job wherever the console names it: the sidebar, its badge (JOB) and its first tab.
-const KIND_LABELS: Record<string, string> = { task: "Task", command: "Job" };
+const KIND_LABELS: Record<string, string> = { task: "Task", command: "Job", websocket: "WebSocket", page: "Page" };
 
 /** A system's tab, when the request called it: how many calls, and how long they took together. */
 function callsTabs(calls: Partial<Record<CallsTabId, SystemCalls>>) {
@@ -360,6 +360,46 @@ export interface TraceViewProps {
   app?: App | null | undefined;
 }
 
+/**
+ * The Request tab: the trace's facts and parts. In the panel (`panel`) its request's line on top, and under it the
+ * lanes the page has above its tabs (not its tiles: the tabs carry their numbers).
+ */
+function RequestPane({
+  open,
+  trace,
+  related,
+  links,
+  panel,
+  onSelect,
+}: {
+  open: boolean;
+  trace: Trace;
+  related: Related | undefined;
+  links: TraceLinks | undefined;
+  panel: boolean;
+  onSelect: (target: MarkTarget) => void;
+}) {
+  if (!open) return null;
+  // The panel shows the lanes, not the tiles: its tabs already carry the duration and the queries, and big tiles
+  // took the narrow pane's room.
+  const overview = panel ? (
+    <div className="dt-panel-overview">
+      <Timeline trace={trace} onSelect={onSelect} />
+    </div>
+  ) : null;
+  return <RequestInfo trace={trace} related={related} links={links} hero={panel} overview={overview} />;
+}
+
+/** A trace at a glance above its tabs (the page) or under its request's line (the panel): its tiles and lanes. */
+function overviewOf(trace: Trace, onSelect: (target: MarkTarget) => void) {
+  return (
+    <>
+      <Metrics trace={trace} />
+      <Timeline trace={trace} onSelect={onSelect} />
+    </>
+  );
+}
+
 export function TraceView({
   trace,
   explore = [],
@@ -406,9 +446,21 @@ export function TraceView({
   const path = trace.attrs["http.path"];
   const route = trace.attrs["http.route"];
 
+  // A lane or a tile opens the tab with what it drew (the call tree at its span).
+  const openAt = (target: MarkTarget) => {
+    if (target.tab === "tree") setTreeSpan(target.span);
+    openTab(target.tab);
+  };
   const panel = (
     <div role="tabpanel" className="dt-tabpanel">
-      {active === "request" ? <RequestInfo trace={trace} related={related} links={links} hero={compact} /> : null}
+      <RequestPane
+        open={active === "request"}
+        trace={trace}
+        related={related}
+        links={links}
+        panel={compact}
+        onSelect={openAt}
+      />
       <AppPane open={active === "app"} app={app} />
       {active === "tree" ? (
         <CallMap trace={trace} issueBySpan={issueBySpan} related={related} links={links} initialSpan={treeSpan} />
@@ -548,16 +600,7 @@ export function TraceView({
           {actions ? <div className="flex shrink-0 items-center gap-0.5">{actions}</div> : null}
         </div>
       </header>
-      {compact ? null : <Metrics trace={trace} />}
-      {compact ? null : (
-        <Timeline
-          trace={trace}
-          onSelect={(target) => {
-            if (target.tab === "tree") setTreeSpan(target.span);
-            openTab(target.tab);
-          }}
-        />
-      )}
+      {compact ? null : overviewOf(trace, openAt)}
       {tabsBar}
       {panel}
     </article>

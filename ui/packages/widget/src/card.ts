@@ -162,13 +162,15 @@ function requestName(info: TraceInfo): { method: string; path: string } {
 }
 
 /**
- * The fix in a line: the code to add (the hint's `code`) and where (the culprit), else the hint or the culprit as
+ * The fix in a line: the code to add (the hint's last `code`) and where (the culprit), else the hint or the culprit as
  * they are. The full text is the row's tooltip.
  */
 function fixLine(issue: Issue): HTMLElement | null {
   const line = element("span", "card-hint");
-  const code = issue.hint?.match(/`([^`]+)`/)?.[1];
   const where = issue.culprit?.split(" (")[0];
+  // The fix is the hint's last code (`select_related()`); its first may be the place, the culprit's (a template).
+  const codes = [...(issue.hint ?? "").matchAll(/`([^`]+)`/g)].map((match) => match[1] ?? "");
+  const code = codes.reverse().find((text) => text !== where);
   if (code) {
     line.append("→ ", element("code", "card-code", code));
     if (where) line.append(` · ${where}`);
@@ -241,6 +243,16 @@ function mostLine(label: string, category: string, value: number, total: number)
 function worstFirst(requests: readonly TraceInfo[]): TraceInfo[] {
   const rank = (info: TraceInfo) => (failed(info) ? 2 : info.issues ? 1 : 0);
   return [...requests].sort((a, b) => rank(b) - rank(a) || (b.totalMs ?? 0) - (a.totalMs ?? 0));
+}
+
+/** The narrowest the card gets: its findings and bar need the room, a short pill ("Waiting") or not. */
+const MIN_CARD_WIDTH = 320;
+
+/** The card over the pill, its edges on the pill's: as wide as the pill and right where it is. */
+function alignWith(card: HTMLElement, badge: HTMLElement): void {
+  const box = badge.getBoundingClientRect();
+  card.style.right = `${Math.round(window.innerWidth - box.right)}px`;
+  card.style.width = `${Math.round(Math.max(box.width, MIN_CARD_WIDTH))}px`;
 }
 
 export function mountCard(root: ShadowRoot, badge: HTMLElement, source: CardSource): { hide: () => void } {
@@ -429,6 +441,7 @@ export function mountCard(root: ShadowRoot, badge: HTMLElement, source: CardSour
     if (!info) return;
     const id = info.trace;
     render(info, rest, null, Boolean(id && source.api));
+    alignWith(card, badge);
     card.toggleAttribute("data-open", true);
     if (!id) return;
     void load(id).then((trace) => {

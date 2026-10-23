@@ -120,6 +120,20 @@ export function requestPath(trace: { name: string; path?: string | null | undefi
   return rest.length && /^[A-Z]+$/.test(first) ? rest.join(" ") : trace.name;
 }
 
+/** The entry point a trace belongs to: its list, the crumb that leads back to it when it was opened directly. */
+export function entryOf(trace: Pick<TraceSummary, "kind" | "name">): EntrySection | null {
+  if (graphqlOperation(trace)) return "graphql";
+  const sections: Partial<Record<string, EntrySection>> = {
+    http: "endpoints",
+    task: "tasks",
+    command: "jobs",
+    websocket: "websockets",
+    rpc: "rpc",
+    page: "pages",
+  };
+  return sections[trace.kind] ?? null;
+}
+
 /** The kinds of trace grouped by their name, and the section that lists them. */
 export const BY_NAME: Partial<Record<string, EntrySection>> = {
   task: "tasks",

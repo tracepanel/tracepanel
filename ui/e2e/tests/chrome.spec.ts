@@ -105,3 +105,36 @@ test("a trace, an issue, a group and an app open with their crumbs at one place,
 
   expect([issue, group, app]).toEqual([trace, trace, trace]);
 });
+
+test("a trace that isn't stored says so within a second on the console's page", async ({ page }) => {
+  const start = Date.now();
+  await page.goto("/#/t/01M4GPC1BHG83SW8X460V23TM9");
+
+  await expect(page.getByRole("main").getByText("Trace not found")).toBeVisible();
+  expect(Date.now() - start).toBeLessThan(2500);
+});
+
+test("a list loads in its own shape: the search, the filters and rows where they will be", async ({ page }) => {
+  await page.route("**/api/calls**", async (route) => {
+    await new Promise((done) => setTimeout(done, 1500));
+    await route.continue().catch(() => undefined);
+  });
+  await page.goto("/#/calls/sql");
+  const loading = page.getByRole("main").getByRole("status");
+
+  await expect(loading).toBeVisible();
+  await expect(loading.locator(".dt-skeleton")).toHaveCount(11);
+  await expect(page.getByRole("main").getByRole("heading", { name: "Database" })).toBeVisible();
+});
+
+for (const scheme of ["dark", "light"] as const) {
+  test(`the sidebar's items read at 15px in both themes, its group titles small (${scheme})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.goto("/#/endpoints");
+    const item = page.locator("aside nav").getByRole("link", { name: "HTTP", exact: true });
+
+    await expect(item).toHaveCSS("font-size", "15px");
+    await expect(page.locator("aside nav").getByText("Entry points")).not.toHaveCSS("font-size", "15px");
+    await expect(page.locator("aside nav").getByRole("link", { name: /^Issues/ })).toBeInViewport();
+  });
+}

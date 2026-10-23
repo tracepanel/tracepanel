@@ -1,4 +1,4 @@
-import { duration, plural, RuntimeIcon, runtimeKind, ServiceIcon, type ServiceMap, systemName } from "@tracepanel/ui";
+import { duration, plural, ServiceIcon, type ServiceMap, systemName } from "@tracepanel/ui";
 import { cn } from "@tracepanel/ui/lib/utils";
 import {
   CheckIcon,
@@ -11,6 +11,7 @@ import {
   UsersIcon,
 } from "lucide-react";
 import { type CSSProperties, type ReactNode, useCallback, useMemo, useState } from "react";
+import { AppMark } from "./appMark";
 import { type Box, type Diagram, type Link, laidOut, mermaidOf, type Placed, type Point } from "./architecture";
 import { href, type Route } from "./routes";
 import { appTarget, type Host, hostUses, hostWhere, serviceTarget } from "./services";
@@ -231,13 +232,13 @@ function EntryBox({ placed, label }: { placed: Placed<Box>; label: string }) {
 function RoleBox({ placed, hovering }: { placed: Placed<Box>; hovering: Hovering }) {
   const box = placed.item;
   if (box.type !== "role") return null;
-  const kind = box.runtime ? runtimeKind(box.runtime) : null;
   return (
     <Card
       placed={placed}
       to={href(appTarget(box.app))}
-      icon={kind ? <RuntimeIcon kind={kind} /> : null}
-      name={box.app.role}
+      // A role it didn't name reads "app".
+      icon={<AppMark runtime={box.runtime} />}
+      name={box.app.role || "app"}
       detail={box.runtime}
       stats={`${plural(box.app.traces, "trace", "traces")} · ${duration(box.app.total)}${failures(box.app.errors)}`}
       failed={box.app.errors > 0}
@@ -294,6 +295,11 @@ function pathOf(points: readonly Point[]): string {
   const [first, ...rest] = points;
   const last = rest.at(-1);
   if (!first || !last) return "";
+  // Side to side: an S from one box's right to the other's left, level where it leaves and where it arrives.
+  if (rest.length === 1) {
+    const bend = (last.x - first.x) / 2;
+    return `M ${first.x} ${first.y} C ${first.x + bend} ${first.y} ${last.x - bend} ${last.y} ${last.x} ${last.y}`;
+  }
   const bends = rest
     .slice(0, -1)
     .map((point, index) => `Q ${point.x} ${point.y} ${midpoint(point, rest[index + 1] ?? point)}`);

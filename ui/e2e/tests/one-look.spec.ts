@@ -132,7 +132,13 @@ test("a trace's parts without a switch are named on the same pill track as the o
   const workflow = page.getByRole("region", { name: "Workflow" }).getByRole("heading");
 
   await expect(workflow).toHaveText("Workflow");
-  await expect(workflow.locator("span").first()).toHaveClass(/rounded-lg/);
+  const track = await workflow.locator("span").first().boundingBox();
+  const attributes = await page.getByRole("tablist", { name: "Request details" }).boundingBox();
+  if (!(track && attributes)) throw new Error("no tracks");
+
+  // The same full-width muted track as Attributes', not a lone pill.
+  expect(Math.abs(track.width - attributes.width)).toBeLessThan(1);
+  expect(Math.abs(track.height - attributes.height)).toBeLessThan(1);
 });
 
 for (const [name, url] of [
@@ -161,4 +167,74 @@ test("a trace that called nothing has no lone Duration tile: its header says how
 
   await expect(page.locator(".dt-trace-title, h1").first()).toContainText("42 ms");
   await expect(page.locator(".dt-metrics")).toHaveCount(0);
+});
+
+test("a group's summary has the tiles an entry point's Overview has, in the same order", async ({ page }) => {
+  await page.goto(`/#/group/endpoints/${encodeURIComponent("GET /api/posts")}`);
+  const summary = page.getByRole("region", { name: "Summary" });
+
+  await expect(summary.getByText(/^(Calls|Errors|Slow ≥ 500 ms|p50|p95|p99|Avg queries)$/)).toHaveCount(7);
+  // In one row at 1440 px, as the Overview's.
+  const tops = await summary
+    .locator(":scope > *")
+    .evaluateAll((tiles) => tiles.map((tile) => Math.round(tile.getBoundingClientRect().top)));
+  expect(new Set(tops).size).toBe(1);
+});
+
+test("an issue's long route wraps in its row, never cut", async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.goto("/#/issues");
+  const route = page.getByRole("main").locator("tbody").getByText("/campaigns/{id}/report").first();
+
+  await expect(route).toBeVisible();
+  expect(await route.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+});
+
+test("a trace opened directly leads back to its list, its lane is named as what it is, and it started on the 24-hour clock", async ({
+  page,
+}) => {
+  // A task that logged: its lanes are its own and its logs'.
+  await page.goto(`/#/t/${await traceId("shop.tasks.send_receipt")}`);
+  const crumbs = page.getByRole("main").getByRole("navigation", { name: "Breadcrumb" });
+
+  await expect(crumbs.getByRole("link", { name: "Tasks" })).toBeVisible();
+  await expect(page.getByRole("figure", { name: "Timeline" })).toContainText("task");
+  await expect(page.getByRole("figure", { name: "Timeline" })).not.toContainText("request");
+
+  await page.getByRole("tablist").first().getByRole("tab", { name: /^Task/ }).click();
+
+  await expect(page.locator("dl").first()).toContainText(/[A-Z][a-z]{2} \d{1,2} \d{2}:\d{2}:\d{2}/);
+  await expect(page.locator("dl").first()).not.toContainText(/ (AM|PM)/);
+});
+
+test("a trace's facts start their second column's values at one x, whatever its names", async ({ page }) => {
+  const starts: number[] = [];
+  for (const name of [
+    "GET /api/posts",
+    "shop.tasks.parse_feed",
+    "shop.tasks.send_receipt",
+    "manage.py rebuild_index",
+  ]) {
+    await page.goto(`/#/t/${await traceId(name)}`);
+    await page.getByRole("tablist").first().getByRole("tab").first().click();
+    const second = page.getByRole("main").locator("dl").first().locator("dd").nth(1);
+    starts.push(Math.round((await second.boundingBox())?.x ?? 0));
+  }
+
+  expect(new Set(starts).size).toBe(1);
+});
+
+test("a trace with nothing but its own lane has no lanes; one with calls keeps its own as their reference", async ({
+  page,
+}) => {
+  await page.goto(`/#/t/${await traceId("shop.tasks.parse_feed")}`);
+  await expect(page.getByRole("tablist").first()).toBeVisible();
+
+  await expect(page.getByRole("figure", { name: "Timeline" })).toHaveCount(0);
+
+  await page.goto(`/#/t/${await traceId("GET /api/posts")}`);
+  const lanes = page.getByRole("figure", { name: "Timeline" });
+
+  await expect(lanes).toContainText("request");
+  await expect(lanes).toContainText("sql");
 });

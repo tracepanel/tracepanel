@@ -50,13 +50,13 @@ function Cells<T>({ item, shown, density }: { item: T; shown: readonly DataColum
 export function DataTable<T>({
   table,
   columns,
-  stickyHeader = false,
+  stickyHeader = true,
   density = "default",
   children,
 }: {
   table: string;
   columns: readonly DataColumn<T>[];
-  /** Keeps the header in view while the page scrolls under it. */
+  /** Keeps the header in view while the page scrolls under it: every list's, unless one asks otherwise. */
   stickyHeader?: boolean | undefined;
   /** How tall the rows are: `compact` for a stream of records read many lines at once. */
   density?: Density | undefined;

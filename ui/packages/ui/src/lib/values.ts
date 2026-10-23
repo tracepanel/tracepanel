@@ -197,3 +197,14 @@ function trimmed(text: string, from: number, to: number): [number, number] {
   const start = from + slice.length - slice.trimStart().length;
   return [start, Math.max(start, to - (slice.length - slice.trimEnd().length))];
 }
+
+/** What every SDK writes in place of a secret it hid (a password, a token, a session id). */
+export const MASK = "********";
+
+/**
+ * A value an SDK masked: the mask alone, or its repr (`'********'`, a masked setting or local). Nothing to copy: it
+ * would copy the asterisks.
+ */
+export function isMasked(text: string): boolean {
+  return text.trim().replace(/^(['"])(.*)\1$/, "$2") === MASK;
+}

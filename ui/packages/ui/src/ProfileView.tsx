@@ -18,6 +18,7 @@ import {
 } from "./lib/profile";
 import { cn } from "./lib/utils";
 import { Segmented } from "./Segmented";
+import { HEAD_TEXT } from "./TableColumns";
 import type { Trace } from "./types";
 
 /** A package's color: a fill for boxes, a solid one for dots and bars. Your code is the brand's; the rest in order. */
@@ -355,13 +356,19 @@ type FunctionRow = { frame: Frame; self: number; total: number };
 function Functions({ rows, palette, time }: { rows: readonly FunctionRow[]; palette: Palette; time: Time }) {
   const most = Math.max(1, ...rows.map((row) => row.self));
   return (
-    <section className="grid gap-2" aria-label="Functions">
-      <div className="grid grid-cols-[minmax(0,1fr)_5rem_4.5rem] gap-3 px-3 text-xs text-muted-foreground">
+    // One box with its header in it, as every table's: the columns' names in the header row's case and colour.
+    <section className="overflow-hidden rounded-lg border bg-card" aria-label="Functions">
+      <div
+        className={cn(
+          "grid h-10 grid-cols-[minmax(0,1fr)_5rem_4.5rem] items-center gap-3 border-b bg-muted px-3 light:h-[2.125rem] light:border-input light:bg-card",
+          HEAD_TEXT,
+        )}
+      >
         <span>Function</span>
         <span className="text-right">Itself</span>
         <span className="text-right">In all</span>
       </div>
-      <ol className="m-0 list-none overflow-hidden rounded-lg border bg-card p-0">
+      <ol className="m-0 list-none p-0">
         {rows.map((row) => (
           <FunctionLine
             key={`${row.frame.file}:${row.frame.line}:${row.frame.function}`}

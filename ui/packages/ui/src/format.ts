@@ -7,12 +7,14 @@ export function duration(us: number): string {
   return `${(ms / 1000).toFixed(1)} s`;
 }
 
-/** Epoch microseconds to "12s ago", "3m ago", or a time of day. */
+/** Epoch microseconds to "12s ago", "3m ago", "5h ago", then its day ("Oct 21"): one way down a column. */
 export function ago(us: number, now: number = Date.now()): string {
   const seconds = Math.max(0, Math.round((now - us / 1000) / 1000));
   if (seconds < 60) return `${seconds}s ago`;
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-  return new Date(us / 1000).toLocaleTimeString([], { hour12: false });
+  if (seconds < 86_400) return `${Math.floor(seconds / 3600)}h ago`;
+  const at = new Date(us / 1000);
+  return `${MONTHS[at.getMonth()]} ${at.getDate()}`;
 }
 
 /** Bytes as a size reads: "812 B", "64 KB", "1.2 MB" (a KB of 1024 bytes, as a body's limit is set). */
@@ -45,6 +47,16 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 export function stamp(us: number): string {
   const at = new Date(us / 1000);
   return `${MONTHS[at.getMonth()]} ${String(at.getDate()).padStart(2, "0")} ${clock(us)}`;
+}
+
+/**
+ * A moment as the console says it outside a log's rows, its day and the 24-hour clock: Oct 23 15:13:40. A trace's
+ * start, an overview's range, an app's last word.
+ */
+export function dayTime(us: number): string {
+  const at = new Date(us / 1000);
+  const time = at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+  return `${MONTHS[at.getMonth()]} ${at.getDate()} ${time}`;
 }
 
 /** A moment in full, in local time, as its row shows it plus the date and the offset: 2026-10-20 15:27:31.008 +03:00. */

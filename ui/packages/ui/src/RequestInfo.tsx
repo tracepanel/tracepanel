@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { AttrValue } from "./AttrValue";
 import { Badge } from "./components/ui/badge";
 import { FactGrid } from "./FactGrid";
-import { duration } from "./format";
+import { dayTime, duration } from "./format";
 import { GraphqlCode } from "./GraphqlCode";
 import { grouped, LinkedTrace, tracesRow } from "./LinkedTrace";
 import { handlerFullName, handlerWord } from "./lib/handler";
@@ -224,6 +224,8 @@ export interface RequestInfoProps {
   links?: TraceLinks | undefined;
   /** The method, URL, status and time on top of the tab: where the trace's own header is hidden (the panel). */
   hero?: boolean | undefined;
+  /** Under the hero (the panel): the trace's tiles and lanes, which the console's page has above its tabs. */
+  overview?: ReactNode;
 }
 
 /**
@@ -310,7 +312,7 @@ function Hero({ trace }: { trace: Trace }) {
   const route = text(attrs["http.route"]);
   const status = attrs["http.status_code"];
   return (
-    <header className="grid gap-1.5">
+    <header className="dt-hero grid gap-1.5">
       <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
         <MethodBadge method={text(attrs["http.method"])} />
         <span className="min-w-0 font-mono text-base font-medium [overflow-wrap:anywhere]">
@@ -337,7 +339,7 @@ function ownRows(trace: Trace, hero: boolean, related: Related | undefined, link
     ...droppedRows(attrs),
     ...unreceivedRows(attrs),
     ...clockRows(trace),
-    { label: "Started", value: new Date(trace.start / 1000).toLocaleString() },
+    { label: "Started", value: dayTime(trace.start) },
     ...(hero ? [] : [{ label: "Duration", value: duration(trace.duration) }]),
     { label: "Trace ID", value: trace.id, copy: trace.id, mono: true },
   ];
@@ -347,8 +349,9 @@ function ownRows(trace: Trace, hero: boolean, related: Related | undefined, link
 function Part({ label, title, children }: { label: string; title: ReactNode; children: ReactNode }) {
   return (
     <section className="grid gap-2" aria-label={label}>
-      {/* Its name on the pill track the parts with a switch have (Attributes, Headers): one system of parts. */}
-      <h3 className="m-0">
+      {/* Its name on the pill track the parts with a switch have (Attributes, Headers), the same full-width track:
+          one system of parts. */}
+      <h3 className="m-0 grid">
         <SegmentLabel>{title}</SegmentLabel>
       </h3>
       {children}
@@ -378,7 +381,7 @@ function linkedRows(trace: Trace, related: Related | undefined, links: TraceLink
 }
 
 /** Overview of the traced request or task run: what ran, how it went, who caused it; every id copies. */
-export function RequestInfo({ trace, related, links, hero: wanted }: RequestInfoProps) {
+export function RequestInfo({ trace, related, links, hero: wanted, overview }: RequestInfoProps) {
   const hero = heroShown(trace, wanted);
   const document = text(trace.attrs["graphql.document"]);
   // The document is shown formatted in its own part: not again, on one line, among the attributes.
@@ -391,6 +394,7 @@ export function RequestInfo({ trace, related, links, hero: wanted }: RequestInfo
   return (
     <div className="@container grid gap-5 p-4">
       {hero ? <Hero trace={trace} /> : null}
+      {overview}
       <FactGrid rows={ownRows(trace, hero, related, links)} />
       {linked.length ? (
         <Part label="Related traces" title="Related traces">

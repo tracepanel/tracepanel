@@ -80,3 +80,49 @@ test("a web app's row opens its page, and the console narrows to that app", asyn
 
   await expect(page.getByRole("heading", { level: 1, name: "HTTP" })).toBeVisible();
 });
+
+test("a call's line leaves its box's right side and arrives at the middle of the other's left", async ({ page }) => {
+  await page.goto("/#/services");
+  const map = page.getByRole("main").locator("svg path[marker-end]");
+  await expect(map.first()).toBeVisible();
+  const paths = await map.evaluateAll((lines) => lines.map((line) => line.getAttribute("d") ?? ""));
+
+  // Side to side: one S curve (M … C …), not dagre's bends ending anywhere on a border.
+  expect(paths.filter((d) => /^M [\d.-]+ [\d.-]+ C /.test(d)).length).toBeGreaterThan(paths.length / 2);
+});
+
+test("a project's frames never overlap: its roles in a layer sit together, one under another", async ({ page }) => {
+  await page.goto("/#/services");
+  const frames = page.getByRole("main").locator(".border-dashed");
+  await expect(frames.first()).toBeVisible();
+  const boxes = await frames.evaluateAll((elements) =>
+    elements.map((element) => {
+      const box = element.getBoundingClientRect();
+      return { left: box.left, right: box.right, top: box.top, bottom: box.bottom };
+    }),
+  );
+  const overlaps = boxes.flatMap((a, i) =>
+    boxes
+      .slice(i + 1)
+      .filter((b) => a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1),
+  );
+
+  expect(boxes.length).toBeGreaterThan(1);
+  expect(overlaps).toEqual([]);
+});
+
+test("an app's traces with no role are its roles by their kind: one frame per app, every box marked and named", async ({
+  page,
+}) => {
+  await page.goto("/#/services");
+  const main = page.getByRole("main");
+  await expect(main.locator(".border-dashed").first()).toBeVisible();
+  const frames = await main.locator(".border-dashed > span").allTextContents();
+
+  // One frame per app and layer: the shop's role-less requests and tasks are its web's and its worker's.
+  expect(frames.filter((name) => name === "shop")).toHaveLength(1);
+  expect(frames.filter((name) => name === "blog")).toHaveLength(1);
+
+  const rows = main.locator("table tbody tr").filter({ hasText: "App" });
+  for (const row of await rows.all()) await expect(row.locator("td").first().locator("svg").first()).toBeVisible();
+});

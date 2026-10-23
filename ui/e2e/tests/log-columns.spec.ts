@@ -240,7 +240,7 @@ test("the records over time sit above the table, by level, and a drag across the
   await page.goto("/#/logs");
   const chart = page.getByRole("img", { name: "Log records over time, by level" });
   await expect(chart).toBeVisible();
-  await expect(page.getByRole("button", { name: "ERROR", exact: true, pressed: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "error", exact: true, pressed: true })).toBeVisible();
 
   const before = await rows(page).count();
   const box = await chart.boundingBox();
@@ -289,13 +289,13 @@ test("the chart's legend filters the list by level, as the Level filter does", a
   await page.goto("/#/logs");
   const legend = (name: string) => page.getByRole("button", { name, exact: true });
 
-  await legend("INFO").click();
-  await legend("DEBUG").click();
+  await legend("info").click();
+  await legend("debug").click();
 
   // What is left: warnings and errors, critical ones with them, as the Level menu's "WARNING and above" says them.
   await expect(page).toHaveURL(/level(%3E|>)(%3D|=)warning/);
-  await expect(legend("INFO")).toHaveAttribute("aria-pressed", "false");
-  await expect(legend("WARNING")).toHaveAttribute("aria-pressed", "true");
+  await expect(legend("info")).toHaveAttribute("aria-pressed", "false");
+  await expect(legend("warning")).toHaveAttribute("aria-pressed", "true");
   // The Level column, second: its text is the level as stored, shown in capitals.
   const levels = await region(page).locator("tr[data-record] td:nth-child(2)").allTextContents();
   expect(levels.length).toBeGreaterThan(0);
@@ -303,8 +303,8 @@ test("the chart's legend filters the list by level, as the Level filter does", a
     expect(["warning", "error", "critical"]).toContain(level);
   }
 
-  await legend("INFO").click();
-  await legend("DEBUG").click();
+  await legend("info").click();
+  await legend("debug").click();
 
   // Every level again: no filter left.
   await expect(page).not.toHaveURL(/level/);
@@ -423,9 +423,9 @@ test("the Level menu offers WARNING and above: one filter, shown in the legend t
   await expect(page.getByRole("button", { name: "Edit level>=warning" })).toBeVisible();
   await expect(page.getByRole("button", { name: /^Level · ≥ WARNING/ })).toBeVisible();
   const legend = (name: string) => page.getByRole("button", { name, exact: true });
-  await expect(legend("INFO")).toHaveAttribute("aria-pressed", "false");
-  await expect(legend("WARNING")).toHaveAttribute("aria-pressed", "true");
-  await expect(legend("ERROR")).toHaveAttribute("aria-pressed", "true");
+  await expect(legend("info")).toHaveAttribute("aria-pressed", "false");
+  await expect(legend("warning")).toHaveAttribute("aria-pressed", "true");
+  await expect(legend("error")).toHaveAttribute("aria-pressed", "true");
 
   // ERROR unchecked from there: the levels left, one by one. (A level's tag is in capitals by its style.)
   await page.getByRole("option", { name: "error", exact: true }).click();

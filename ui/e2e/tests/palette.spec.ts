@@ -47,3 +47,15 @@ test("/ puts the cursor in a list's search", async ({ page }) => {
 
   await expect(page.getByRole("searchbox", { name: "Search" })).toBeFocused();
 });
+
+test("a Go to list longer than the palette fades at its foot, never a hard cut", async ({ page }) => {
+  await page.goto("/#/endpoints");
+  await page.keyboard.press("ControlOrMeta+k");
+  const list = page.getByRole("dialog").locator("[cmdk-list]");
+  await expect(list).toBeVisible();
+
+  await expect
+    .poll(() => list.evaluate((element) => getComputedStyle(element.parentElement as HTMLElement).maskImage))
+    .toContain("linear-gradient");
+  expect(await list.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+});

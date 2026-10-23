@@ -3,8 +3,6 @@ import {
   type DataColumn,
   DataTable,
   duration,
-  RuntimeIcon,
-  runtimeKind,
   SERVICE_KINDS,
   ServiceIcon,
   type ServiceMap,
@@ -12,6 +10,7 @@ import {
 } from "@tracepanel/ui";
 import { Badge } from "@tracepanel/ui/components/ui/badge";
 import type { ReactNode } from "react";
+import { AppMark } from "./appMark";
 import { href } from "./routes";
 import { ServicesMap } from "./ServicesMap";
 import { byHost, byProject, type Host, hostEdges, hostUses, hostWhere, type Project, serviceTarget } from "./services";
@@ -50,10 +49,9 @@ interface Line {
 }
 
 function appLine(app: Project, most: number, onOpen: (() => void) | undefined): Line {
-  const kind = app.runtime ? runtimeKind(app.runtime) : null;
   return {
     key: `app:${app.service}`,
-    name: <Name icon={kind ? <RuntimeIcon kind={kind} /> : null} name={app.service} detail={app.runtime} />,
+    name: <Name icon={<AppMark runtime={app.runtime} />} name={app.service} detail={app.runtime} />,
     kind: "App",
     roles: app.roles.map((role) => role.role),
     calls: app.traces,

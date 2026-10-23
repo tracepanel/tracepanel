@@ -1,3 +1,4 @@
+import { dayTime, duration, Stat } from "@tracepanel/ui";
 // The Overview at the top of a page's list, one look wherever it is (an entry point's page, Logs): a heading that
 // folds it, its time range while open, its numbers on one line while folded. Folded or not, as this browser left it, or as the page
 // opens it until then.
@@ -34,16 +35,16 @@ export function useOverviewOpen(fallback = true): [boolean, () => void] {
   return [open, toggle];
 }
 
-/** The time an overview covers, on the 24-hour clock the console's tables and charts use: "20/10/2026, 14:05:00 – 15:05:00". */
+/**
+ * The time an overview covers, as the console says a moment: "Oct 23 14:05:00 – 15:05:00", the end's day only when it
+ * is another's, one moment alone when there is one.
+ */
 export function OverviewRange({ from, to }: { from: number; to: number }) {
-  const start = new Date(from / 1000);
-  const end = new Date(to / 1000);
-  // The end's date only when it is another day's: "20/10/2026, 09:29:34 – 21/10/2026, 13:26:06".
-  const sameDay = start.toDateString() === end.toDateString();
+  const sameDay = new Date(from / 1000).toDateString() === new Date(to / 1000).toDateString();
+  const end = sameDay ? dayTime(to).split(" ").at(-1) : dayTime(to);
   return (
     <span className="text-sm text-muted-foreground tabular-nums">
-      {start.toLocaleString([], { hour12: false })} –{" "}
-      {sameDay ? end.toLocaleTimeString([], { hour12: false }) : end.toLocaleString([], { hour12: false })}
+      {dayTime(from) === dayTime(to) ? dayTime(from) : `${dayTime(from)} – ${end}`}
     </span>
   );
 }
@@ -138,4 +139,26 @@ function OverviewHeading({
       <span className="ml-auto">{range}</span>
     </button>
   );
+}
+
+/**
+ * The summary's last four tiles, an entry point's Overview and a group's page alike: how long its calls take, and
+ * the queries each makes. An array, not a fragment: StatGrid counts its tiles to lay them out in one row.
+ */
+export function latencyTiles(s: {
+  p50: number;
+  p95: number;
+  p99: number;
+  max: number;
+  // biome-ignore lint/style/useNamingConvention: the agent's field names, as its summaries answer them.
+  avg_queries: number;
+  // biome-ignore lint/style/useNamingConvention: the agent's field names, as its summaries answer them.
+  avg_db_time: number;
+}): ReactNode[] {
+  return [
+    <Stat key="p50" label="p50" value={duration(s.p50)} />,
+    <Stat key="p95" label="p95" value={duration(s.p95)} />,
+    <Stat key="p99" label="p99" value={duration(s.p99)} sub={`max ${duration(s.max)}`} />,
+    <Stat key="queries" label="Avg queries" value={String(s.avg_queries)} sub={`DB ${duration(s.avg_db_time)} avg`} />,
+  ];
 }

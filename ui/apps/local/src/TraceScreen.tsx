@@ -4,10 +4,12 @@ import {
   Empty,
   type ExploreItem,
   type Related,
+  Skeleton,
   type Trace,
   TraceView,
   type TraceViewProps,
 } from "@tracepanel/ui";
+import { cn } from "@tracepanel/ui/lib/utils";
 import { SearchXIcon } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { useCapability } from "./hooks";
@@ -16,6 +18,8 @@ import { withShare } from "./ShareDialog";
 
 /** A just-finished request may not be stored yet (the SDK writes in the background): retry briefly. */
 const TRACE_RETRIES = 6;
+/** On the console's page, opened from a list or a link: a trace that isn't stored says so after one more look. */
+const PAGE_RETRIES = 1;
 const TRACE_RETRY_MS = 300;
 
 export interface TraceScreenProps {
@@ -39,7 +43,8 @@ export interface TraceScreenProps {
   /** A Share button, when the source can make a snapshot: the console's trace page. */
   shareable?: boolean | undefined;
   /** Called once the trace has loaded, or is known to be gone: a page around it shows with it. */
-  onLoaded?: (() => void) | undefined;
+  /** Called once the trace has loaded, with it (null when it isn't stored). */
+  onLoaded?: ((trace: Trace | null) => void) | undefined;
 }
 
 // What each app said, as last loaded: the next trace of the same app opens with its App tab at once (the panel
@@ -99,9 +104,25 @@ function explainer(source: DataSource, traceId: string, explainable: boolean) {
 
 /** The loading bar: on the page inset as the trace's head will be, across the panel. */
 function TraceLoading({ variant }: { variant: TraceScreenProps["variant"] }) {
+  // The trace's shape while it loads: its name, its tabs and the first rows where they will be, not a blank pane.
   return (
-    <div className={variant === "full" ? "app-loading mx-4" : "app-loading"} role="status">
+    <div className={cn("grid gap-5", variant === "full" ? "mx-4 pt-1" : "p-4")} role="status" aria-busy="true">
       <span className="sr-only">Loading</span>
+      <div className="flex items-center gap-3">
+        <Skeleton width="2.75rem" height="1.25rem" />
+        <Skeleton width="18rem" height="1.75rem" />
+        <Skeleton width="3rem" />
+      </div>
+      <div className="flex gap-6 border-b pb-2.5">
+        {["6rem", "5.5rem", "4.5rem"].map((width) => (
+          <Skeleton key={width} width={width} height="1.125rem" />
+        ))}
+      </div>
+      <div className="grid gap-3.5">
+        {["60%", "45%", "70%", "35%"].map((width) => (
+          <Skeleton key={width} width={width} />
+        ))}
+      </div>
     </div>
   );
 }
@@ -111,7 +132,12 @@ function TraceLoading({ variant }: { variant: TraceScreenProps["variant"] }) {
  * stays until the next one is loaded: following new requests swaps one for the other instead of blinking through an
  * empty pane.
  */
-function useTrace(id: string, source: DataSource, onLoaded: (() => void) | undefined): Trace | null | undefined {
+function useTrace(
+  id: string,
+  source: DataSource,
+  onLoaded: ((trace: Trace | null) => void) | undefined,
+  variant: TraceScreenProps["variant"],
+): Trace | null | undefined {
   const [trace, setTrace] = useState<Trace | null | undefined>(undefined);
   // biome-ignore lint/correctness/useExhaustiveDependencies: a new `onLoaded` is no new trace to load.
   useEffect(() => {
@@ -119,7 +145,7 @@ function useTrace(id: string, source: DataSource, onLoaded: (() => void) | undef
     let timer: number | undefined;
     const show = (result: Trace | null) => {
       setTrace(result);
-      onLoaded?.();
+      onLoaded?.(result);
     };
     const attempt = (left: number) => {
       source.getTrace(id).then(
@@ -133,12 +159,13 @@ function useTrace(id: string, source: DataSource, onLoaded: (() => void) | undef
         },
       );
     };
-    attempt(TRACE_RETRIES);
+    // The panel follows requests as they happen, before the agent may have stored them; the page doesn't.
+    attempt(variant === "full" ? PAGE_RETRIES : TRACE_RETRIES);
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [id, source]);
+  }, [id, source, variant]);
   return trace;
 }
 
@@ -158,7 +185,7 @@ export function TraceScreen({
   onLoaded,
   ...shown
 }: TraceScreenProps) {
-  const trace = useTrace(id, source, onLoaded);
+  const trace = useTrace(id, source, onLoaded, variant);
   const related = useRelated(id, source);
   // The panel (compact, or docked as a strip) has an App tab: the console's trace page doesn't.
   const app = useApp(source, serviceOf(trace, variant));

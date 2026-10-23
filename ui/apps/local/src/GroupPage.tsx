@@ -21,6 +21,7 @@ import {
 import { Button } from "@tracepanel/ui/components/ui/button";
 import { ArrowRightIcon, SearchXIcon } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
+import { latencyTiles } from "./Overview";
 import { PeriodChip } from "./PeriodChip";
 import { RefreshControl, track, useRefresh } from "./refresh";
 import { type EntrySection, go, href, issueRoute, periodOf, traceHref, withPeriod } from "./routes";
@@ -187,24 +188,22 @@ export function GroupPage({
         </div>
       </header>
 
+      {/* The tiles an entry point's Overview has, the same seven in the same order: one look for a summary. */}
       <StatGrid label="Summary">
-        <Stat
-          label="Calls"
-          value={String(s.calls)}
-          sub={`since ${new Date(s.first_seen / 1000).toLocaleTimeString([], { hour12: false })}`}
-        />
+        <Stat label="Calls" value={String(s.calls)} sub={`${s.with_issues} with issues`} />
         <Stat
           label="Errors"
           value={percent(s.errors, s.calls)}
           sub={`${s.errors} of ${s.calls}`}
           tone={s.errors > 0 ? "error" : undefined}
         />
-        <Stat label="p50" value={duration(s.p50)} />
-        <Stat label="p75" value={duration(s.p75)} />
-        <Stat label="p90" value={duration(s.p90)} />
-        <Stat label="p95" value={duration(s.p95)} tone={s.p95 > 500_000 ? "warn" : undefined} />
-        <Stat label="p99" value={duration(s.p99)} sub={`max ${duration(s.max)}`} />
-        <Stat label="Avg queries" value={String(s.avg_queries)} sub={`DB ${duration(s.avg_db_time)} avg`} />
+        <Stat
+          label="Slow ≥ 500 ms"
+          value={String(s.slow)}
+          sub={percent(s.slow, s.calls)}
+          tone={s.slow ? "warn" : undefined}
+        />
+        {latencyTiles(s)}
       </StatGrid>
 
       <div className="grid grid-cols-2 gap-4 max-[1100px]:grid-cols-1 [&>:first-child]:col-span-full">

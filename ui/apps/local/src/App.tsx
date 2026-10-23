@@ -87,17 +87,41 @@ function useDock(): Dock {
 
 const LIST_WIDTH_KEY = "tracepanel:list-width";
 // In rem, so the defaults follow the density; a dragged width is the reader's, in pixels.
-const LIST_WIDTH = () => Math.round(rem(22.5));
+// A narrow window gives the trace the room: its tabs keep their names where the list would take them (a quarter of
+// the width, down to 15rem).
+const LIST_WIDTH = () => Math.round(Math.min(rem(22.5), Math.max(rem(15), window.innerWidth * 0.26)));
 const MIN_LIST_WIDTH = () => Math.round(rem(13.75));
 const MIN_TRACE_WIDTH = () => Math.round(rem(22.5));
 
-function readListWidth(): number {
+/** The width the reader dragged the list to, kept in this browser; null where they never did. */
+function storedListWidth(): number | null {
   try {
     const value = Number(localStorage.getItem(LIST_WIDTH_KEY));
-    return value >= MIN_LIST_WIDTH() ? value : LIST_WIDTH();
+    return value >= MIN_LIST_WIDTH() ? value : null;
   } catch {
-    return LIST_WIDTH();
+    return null;
   }
+}
+
+/**
+ * The list's width: the reader's, else the default for the panel's width, followed as the panel opens and resizes
+ * (it may be narrow at first while it opens).
+ */
+function useListWidth(): [number, (width: number) => void] {
+  const [width, setWidth] = useState(() => storedListWidth() ?? LIST_WIDTH());
+  const [dragged, setDragged] = useState(() => storedListWidth() !== null);
+  useEffect(() => {
+    if (dragged) return;
+    const follow = () => setWidth(LIST_WIDTH());
+    follow();
+    window.addEventListener("resize", follow);
+    return () => window.removeEventListener("resize", follow);
+  }, [dragged]);
+  const drag = useCallback((next: number) => {
+    setDragged(true);
+    setWidth(next);
+  }, []);
+  return [width, drag];
 }
 
 function clampListWidth(value: number): number {
@@ -109,7 +133,7 @@ function clampListWidth(value: number): number {
  * While dragging the width goes straight to the CSS variable, so React does not render on every pointer move.
  */
 function SplitHandle({ container }: { container: RefObject<HTMLDivElement | null> }) {
-  const [width, setWidth] = useState(readListWidth);
+  const [width, setWidth] = useListWidth();
   const apply = useCallback(
     (value: number, save: boolean) => {
       const next = clampListWidth(value);
@@ -122,7 +146,7 @@ function SplitHandle({ container }: { container: RefObject<HTMLDivElement | null
         // Storage can be blocked: the width then lasts for this panel only.
       }
     },
-    [container],
+    [container, setWidth],
   );
   useEffect(() => apply(width, false), [apply, width]);
 
@@ -904,7 +928,8 @@ function PanelApp({ route }: { route: Route }) {
         detail="This request in the full console, in a new tab: every request, issue and query."
       >
         <a
-          className="mr-1 inline-flex h-7 items-center gap-1.5 rounded-md bg-brand px-3 text-sm font-medium text-white shadow-sm shadow-brand/30 transition-[filter,box-shadow] hover:shadow-md hover:shadow-brand/40 hover:brightness-110 dark:bg-brand/20 dark:text-foreground dark:shadow-none dark:ring-1 dark:ring-brand/45 dark:ring-inset dark:hover:bg-brand/30 dark:hover:brightness-100 [&_svg]:size-3.5"
+          // Filled in both themes: the panel's one way out to the console, the same button dark or light.
+          className="mr-1 inline-flex h-7 items-center gap-1.5 rounded-md bg-brand px-3 text-sm font-medium text-white shadow-sm shadow-brand/30 transition-[filter,box-shadow] hover:shadow-md hover:shadow-brand/40 hover:brightness-110 dark:shadow-none [&_svg]:size-3.5"
           href={`${base}${selectedId ? href({ name: "trace", id: selectedId, tab, from: sectionFor(selectedKind) }) : "#/"}`}
           target="_blank"
           rel="noreferrer"

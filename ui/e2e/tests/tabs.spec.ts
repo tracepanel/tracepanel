@@ -137,5 +137,6 @@ test("on the trace page the call tree, the Logs tab's table and the loading bar 
   await page.goto("/#/endpoints");
   await page.goto(`/#/t/${id}`);
 
-  expect(await edges(page.locator(".app-loading"))).toEqual(tabs);
+  // Its loading shape (its name, its tabs, its first rows) on the same edges.
+  expect(await edges(page.getByRole("main").getByRole("status"))).toEqual(tabs);
 });

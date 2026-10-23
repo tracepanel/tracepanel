@@ -194,6 +194,22 @@ export function DetailsFooter({
   );
 }
 
+/**
+ * Where something is still loading, its shape: a muted block the size of what comes (a title, a tab, a row), so the
+ * page has its layout at once and nothing moves when it arrives.
+ */
+export function Skeleton({
+  width,
+  height = "0.875rem",
+  className,
+}: {
+  width: string;
+  height?: string;
+  className?: string;
+}) {
+  return <span className={cn("dt-skeleton", className)} style={{ width, height }} aria-hidden="true" />;
+}
+
 /** A section's heading wherever a trace's details are shown: its info tab and the call tree's pane. */
 export function SectionHeading({ children }: { children: ReactNode }) {
   return <h3 className="m-0 text-sm font-medium text-foreground">{children}</h3>;
