@@ -1,7 +1,7 @@
 import { IssueIcon } from "./icons";
-import { ISSUE_LABELS, issueTitle } from "./labels";
+import { issueTitle } from "./labels";
 import { linkProps, type TraceLinks } from "./links";
-import { RichText } from "./primitives";
+import { IssueChip, RichText } from "./primitives";
 import type { Issue } from "./types";
 
 export { ISSUE_LABELS } from "./labels";
@@ -26,8 +26,11 @@ export function IssueList({ issues, onShowSpans, spansNoun = queries, links }: I
             <IssueIcon kind={issue.kind} />
           </div>
           <div className="dt-issue-body">
-            <p className="dt-issue-kind">{ISSUE_LABELS[issue.kind]}</p>
-            <h3 className="dt-issue-title">{issueTitle(issue.title)}</h3>
+            {/* The kind in its chip, then the title without it: as the Issues list and the issue's page say it. */}
+            <h3 className="dt-issue-title">
+              <IssueChip kind={issue.kind} />
+              <span>{issueTitle(issue.title)}</span>
+            </h3>
             {issue.culprit ? <code className="dt-issue-where">{issue.culprit}</code> : null}
             {issue.hint ? (
               <p className="dt-issue-hint">

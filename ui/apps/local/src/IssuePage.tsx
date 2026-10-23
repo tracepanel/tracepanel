@@ -1,4 +1,13 @@
-import { ago, CallsChart, type DataSource, Empty, IssueChip, type IssueDetail, RichText } from "@tracepanel/ui";
+import {
+  ago,
+  CallsChart,
+  type DataSource,
+  Empty,
+  IssueChip,
+  type IssueDetail,
+  issueTitle,
+  RichText,
+} from "@tracepanel/ui";
 import { Card } from "@tracepanel/ui/components/ui/card";
 import { LightbulbIcon, SearchXIcon } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -6,7 +15,7 @@ import { exploreFor } from "./explore";
 import { PeriodChip } from "./PeriodChip";
 import { consoleLinks, href, traceHref } from "./routes";
 import { TraceScreen } from "./TraceScreen";
-import { TracesTable } from "./tables";
+import { EndpointName, TracesTable } from "./tables";
 import { CrumbBar, Loading, Mono, Reveal } from "./ui";
 
 /** One issue, Sentry-style: what and where, how often, its latest occurrence, and every request it happened in. */
@@ -37,20 +46,10 @@ export function IssuePage({
 
   if (issue === undefined) return <Loading />;
   if (issue === null) {
-    return (
-      <Empty
-        title="Issue not found"
-        action={<a href={href({ name: "issues", q: "" })}>Back to issues</a>}
-        icon={SearchXIcon}
-        page={true}
-      >
-        It may have been dropped with old traces.
-      </Empty>
-    );
+    return <IssueMissing />;
   }
 
   const error = issue.kind === "error";
-  const [type, ...message] = issue.title.split(": ");
   return (
     <Reveal ready={occurrence}>
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-9 px-10 pt-7 pb-16 *:min-w-0">
@@ -61,7 +60,7 @@ export function IssuePage({
               error
                 ? { label: "Errors", href: href({ name: "errors", q: period }) }
                 : { label: "Issues", href: href({ name: "issues", q: period }) },
-              { label: issue.title },
+              { label: shownTitle(issue) },
             ]}
           />
           <div className="flex items-center gap-2.5">
@@ -72,20 +71,7 @@ export function IssuePage({
               {ago(issue.last_seen)}
             </span>
           </div>
-          {/* Long messages (a driver's, with every connection attempt) stop at three lines: the error below has it all. */}
-          <h1
-            className="line-clamp-3 text-2xl leading-snug font-semibold tracking-tight [overflow-wrap:anywhere]"
-            title={issue.title}
-          >
-            {error ? (
-              <>
-                <span className="text-error">{type}</span>
-                {message.length ? <span className="font-normal">: {message.join(": ")}</span> : null}
-              </>
-            ) : (
-              issue.title
-            )}
-          </h1>
+          <IssueHeading issue={issue} />
           {issue.culprit ? <Mono className="text-sm text-muted-foreground">{issue.culprit}</Mono> : null}
           {issue.hint ? (
             <Card className="flex-row items-start gap-3 border-brand/30 bg-brand-soft px-4 py-3 text-sm shadow-none">
@@ -107,23 +93,7 @@ export function IssuePage({
           }
         >
           <CallsChart series={issue.series} title="Events over time" noun="event" errors={error} />
-          {issue.endpoints.length ? (
-            <Card className="gap-2 px-4 py-3.5 shadow-none">
-              <h2 className="text-md font-semibold">Endpoints</h2>
-              <ul className="grid gap-0.5">
-                {issue.endpoints.map((endpoint) => (
-                  <li key={endpoint}>
-                    <a
-                      href={href({ name: "group", section: "endpoints", key: endpoint })}
-                      className="block w-full rounded-md px-1.5 py-1.5 text-left font-mono text-base hover:bg-accent"
-                    >
-                      {endpoint}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          ) : null}
+          <IssueEndpoints endpoints={issue.endpoints} />
         </div>
 
         <LatestOccurrence issue={issue} error={error} source={source} onLoaded={() => setOccurrence(true)} />
@@ -189,5 +159,67 @@ function RotatedOut({ occurrences, onShown }: { occurrences: number; onShown: ()
       The store keeps the newest traces: the requests of its {occurrences}{" "}
       {occurrences === 1 ? "occurrence" : "occurrences"} are gone. It shows here again the next time it happens.
     </Empty>
+  );
+}
+
+/** An issue no longer stored: the empty state every page has, the way back to the list. */
+function IssueMissing() {
+  return (
+    <Empty
+      title="Issue not found"
+      action={<a href={href({ name: "issues", q: "" })}>Back to issues</a>}
+      icon={SearchXIcon}
+      page={true}
+    >
+      It may have been dropped with old traces.
+    </Empty>
+  );
+}
+
+/** An issue's title as shown beside its kind's chip: an error's whole ("ZeroDivisionError: …"), another's without its kind. */
+function shownTitle(issue: IssueDetail): string {
+  return issue.kind === "error" ? issue.title : issueTitle(issue.title);
+}
+
+/** The page's headline: an error's type in red and its message, another issue's title after its chip. */
+function IssueHeading({ issue }: { issue: IssueDetail }) {
+  const [type, ...message] = issue.title.split(": ");
+  return (
+    // Long messages (a driver's, with every connection attempt) stop at three lines: the error below has it all.
+    <h1
+      className="line-clamp-3 text-2xl leading-snug font-semibold tracking-tight [overflow-wrap:anywhere]"
+      title={issue.title}
+    >
+      {issue.kind === "error" ? (
+        <>
+          <span className="text-error">{type}</span>
+          {message.length ? <span className="font-normal">: {message.join(": ")}</span> : null}
+        </>
+      ) : (
+        shownTitle(issue)
+      )}
+    </h1>
+  );
+}
+
+/** The endpoints an issue happened on, each as every list names a request, a link to its group. */
+function IssueEndpoints({ endpoints }: { endpoints: readonly string[] }) {
+  if (!endpoints.length) return null;
+  return (
+    <Card className="gap-2 px-4 py-3.5 shadow-none">
+      <h2 className="text-md font-semibold">Endpoints</h2>
+      <ul className="grid gap-0.5">
+        {endpoints.map((endpoint) => (
+          <li key={endpoint}>
+            <a
+              href={href({ name: "group", section: "endpoints", key: endpoint })}
+              className="flex w-full rounded-md px-1.5 py-1.5 text-left hover:bg-accent"
+            >
+              <EndpointName endpoint={endpoint} />
+            </a>
+          </li>
+        ))}
+      </ul>
+    </Card>
   );
 }

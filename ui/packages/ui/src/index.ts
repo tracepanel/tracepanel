@@ -15,7 +15,7 @@ export { LogList } from "./LogList";
 export * from "./Logo";
 export { LogRecord, logAttrs } from "./LogRecordDetails";
 export { type AttributeColumns, type LogColumn, LogLevel, LogTable, useAttributeColumns } from "./LogTable";
-export { ISSUE_LABELS } from "./labels";
+export { ISSUE_LABELS, issueTitle } from "./labels";
 export { queryFingerprint } from "./lib/fingerprint";
 export { isTyping } from "./lib/keys";
 export { percent } from "./lib/percent";

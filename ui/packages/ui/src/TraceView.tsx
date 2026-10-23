@@ -218,7 +218,8 @@ const KIND_ICONS: Record<string, typeof GlobeIcon> = {
   websocket: CableIcon,
 };
 
-const KIND_LABELS: Record<string, string> = { task: "Task", command: "Command" };
+// A command is a job wherever the console names it: the sidebar, its badge (JOB) and its first tab.
+const KIND_LABELS: Record<string, string> = { task: "Task", command: "Job" };
 
 /** A system's tab, when the request called it: how many calls, and how long they took together. */
 function callsTabs(calls: Partial<Record<CallsTabId, SystemCalls>>) {

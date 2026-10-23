@@ -447,7 +447,7 @@ function pageBody(page: BodyContext): ReactNode {
   if (page.system) return callsBody(page);
   return listBody(
     page.data.issues.data,
-    (items) => <IssuesTable items={items} />,
+    (items) => <IssuesTable items={items} source={page.source} />,
     <Empty title={`No ${page.section} match`}>Try a broader search.</Empty>,
   );
 }

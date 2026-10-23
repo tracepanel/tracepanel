@@ -291,6 +291,17 @@
   with nothing stored yet shows: an icon in its tile, a title, what to do,
   and the way back as a button, in the middle of the page. They were bare
   centred text with a link that read as bold text.
+- One thing is drawn one way wherever it shows. A request's method is its
+  badge in Errors' and Issues' Endpoints, on an issue's page, in a trace's
+  HTTP calls tab and in the pill and its hover card, where it was plain text
+  or purple. An issue reads its kind in its chip, then its title without it
+  ("N+1" and "13 similar queries"), in the lists, on its page and in a
+  trace's Issues tab, which had small orange capitals. A page's action reads
+  CLICK "Delete" · /books in the lists, as in its header, and a failed one
+  says "failed" in Status. A task's error names its task where a request's
+  names its endpoint. A failed HTTP call has a failed row's red edge and its
+  status's badge. A job's first tab is Job, not Command. What ran a task, a
+  queue and a job's source are one quiet tag in their own case.
 
 ## 0.4.1 (2026-10-21)
 

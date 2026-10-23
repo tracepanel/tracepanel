@@ -3,7 +3,7 @@
 import TOKENS from "virtual:tracepanel-tokens";
 import { plural } from "@tracepanel/ui/lib/plural";
 import { RUNTIME_PATHS, runtimeKind, runtimeName, traceRuntime } from "@tracepanel/ui/lib/runtime";
-import { CARD_STYLE, mountCard } from "./card";
+import { CARD_STYLE, mountCard, nameWithMethod } from "./card";
 
 export interface TraceInfo {
   /** The trace's own name when it says more than the request line (a GraphQL operation). */
@@ -648,7 +648,8 @@ function addRequest(parent: HTMLElement, shown: TraceInfo, pulse: boolean): void
 function addName(parent: HTMLElement, info: TraceInfo, pulse: boolean): void {
   const name = document.createElement("span");
   name.className = "name";
-  name.textContent = title(info);
+  // A request's method in its badge, as in the console's lists; a GraphQL operation by its name.
+  name.append(...nameWithMethod(title(info)));
   name.title = title(info);
   if (pulse) name.dataset["pulse"] = "";
   segment(parent).append(name);

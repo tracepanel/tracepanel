@@ -14,6 +14,7 @@ import {
   IssueChip,
   type IssueKind,
   type IssueRow,
+  issueTitle,
   type JobRow,
   KindBadge,
   type LogColumn,
@@ -23,6 +24,7 @@ import {
   MailList,
   type MailRow,
   MethodBadge,
+  NeutralTag,
   type PageRow,
   percent,
   RoutePath,
@@ -40,6 +42,7 @@ import {
 import { Badge } from "@tracepanel/ui/components/ui/badge";
 import { Button } from "@tracepanel/ui/components/ui/button";
 import { TableCell, TableRow } from "@tracepanel/ui/components/ui/table";
+import { pageParts } from "@tracepanel/ui/lib/page";
 import { systemOfPage } from "@tracepanel/ui/lib/systems";
 import { cn } from "@tracepanel/ui/lib/utils";
 import { ArrowRightIcon, ChevronRightIcon, Columns3Icon, ListFilterIcon } from "lucide-react";
@@ -54,7 +57,13 @@ function TraceName({ trace }: { trace: TraceSummary }) {
   const operation = graphqlOperation(trace);
   return (
     <span className="flex min-w-0 items-center gap-2.5">
-      <SourceBadge kind={trace.kind} graphql={operation !== null} method={traceMethod(trace)} htmx={trace.htmx} />
+      <SourceBadge
+        kind={trace.kind}
+        graphql={operation !== null}
+        method={traceMethod(trace)}
+        htmx={trace.htmx}
+        name={trace.name}
+      />
       <SourceText kind={trace.kind} text={operation ?? sourceText(trace.kind, trace.path ?? null, trace.name)} />
     </span>
   );
@@ -77,8 +86,7 @@ const TRACE_COLUMNS: DataColumn<TraceSummary>[] = [
     label: "Status",
     width: 6.5,
     num: true,
-    cell: (trace) =>
-      trace.task_state ? <TaskState state={trace.task_state} /> : <StatusBadge status={trace.http_status} />,
+    cell: (trace) => <TraceStatus trace={trace} />,
   },
   { id: "duration", label: "Duration", width: 6.75, num: true, cell: (trace) => duration(trace.duration) },
   { id: "queries", label: "Queries", width: 6.25, num: true, drop: 2, cell: (trace) => trace.queries },
@@ -91,6 +99,16 @@ const TRACE_COLUMNS: DataColumn<TraceSummary>[] = [
   },
   { id: "when", label: "When", width: 6.5, num: true, className: MUTED, cell: (trace) => ago(trace.start) },
 ];
+
+/**
+ * A trace's outcome: a task's state, a request's status, else (a page's action, a job) "failed" when it failed: a
+ * failed row's Status was empty beside its red edge.
+ */
+function TraceStatus({ trace }: { trace: TraceSummary }) {
+  if (trace.task_state) return <TaskState state={trace.task_state} />;
+  if (trace.http_status == null && trace.status === "error") return <StateBadge state="failed" />;
+  return <StatusBadge status={trace.http_status} />;
+}
 
 /** A trace's issues on one line, as every row of a list: the ones that fit, "+N" for the others. */
 function IssueChips({ kinds }: { kinds: readonly IssueKind[] }) {
@@ -835,7 +853,11 @@ function LogDetails({ log, onFilter }: { log: LogRow; onFilter: (terms: Record<s
   );
 }
 
-/** An issue's title: an error's type in red and its message, the place it was raised under it. */
+/**
+ * An issue's title: an error's type in red and its message; another issue's kind in its chip, then the title without
+ * it ("N+1" and "50 similar queries · …", as the trace's Issues tab and the issue's page say it). The place it was
+ * raised under it.
+ */
 function IssueTitle({ item }: { item: IssueRow }) {
   const [type, ...message] = item.title.split(": ");
   return (
@@ -846,13 +868,75 @@ function IssueTitle({ item }: { item: IssueRow }) {
           {message.length ? <span>: {message.join(": ")}</span> : null}
         </span>
       ) : (
-        <span className="font-medium">{item.title}</span>
+        <span className="flex items-baseline gap-2">
+          <IssueChip kind={item.kind} />
+          <span className="font-medium">{issueTitle(item.title)}</span>
+        </span>
       )}
       {item.culprit ? (
         <Mono className="text-base text-muted-foreground [overflow-wrap:anywhere]">{item.culprit}</Mono>
       ) : null}
     </span>
   );
+}
+
+/**
+ * An endpoint ("GET /api/posts/{id}") as every list names a request: the method's badge, then its route. A name
+ * without a method is the trace's own (a task's), with its kind's badge.
+ */
+export function EndpointName({ endpoint, kind = "http" }: { endpoint: string; kind?: TraceSummary["kind"] }) {
+  const [method = "", ...route] = endpoint.split(" ");
+  const http = kind === "http" && route.length > 0;
+  return (
+    <SourceCell
+      kind={kind}
+      htmx={null}
+      method={http ? method : null}
+      path={http ? route.join(" ") : null}
+      name={endpoint}
+      className="max-w-none"
+    />
+  );
+}
+
+/** Where an issue happened: its endpoints, one a line, or the task or job it happened in, how many more. */
+function IssuePlaces({ item, entries }: { item: IssueRow; entries: ReadonlyMap<string, TraceSummary> }) {
+  const entry = entries.get(item.last_trace_id);
+  if (!item.endpoints.length && entry) return <EndpointName endpoint={entry.name} kind={entry.kind} />;
+  const shown = item.endpoints.slice(0, 3);
+  return (
+    <span className="flex flex-col gap-0.5">
+      {shown.map((endpoint) => (
+        <EndpointName key={endpoint} endpoint={endpoint} />
+      ))}
+      {item.endpoints.length > shown.length ? (
+        <span className="text-base text-muted-foreground">+{item.endpoints.length - shown.length} more</span>
+      ) : null}
+    </span>
+  );
+}
+
+/**
+ * The task or job each issue without an endpoint happened in, by its latest trace: a task's error names its task
+ * where a request's names its endpoint.
+ */
+function useEntries(items: readonly IssueRow[], source: DataSource): ReadonlyMap<string, TraceSummary> {
+  const ids = items.filter((item) => !item.endpoints.length).map((item) => item.last_trace_id);
+  const key = ids.join(",");
+  const [entries, setEntries] = useState<ReadonlyMap<string, TraceSummary>>(new Map());
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the ids, by their key.
+  useEffect(() => {
+    if (!ids.length) return;
+    let current = true;
+    source.listTraces({ ids, limit: ids.length }).then(
+      (traces) => current && setEntries(new Map(traces.map((trace) => [trace.id, trace]))),
+      () => undefined,
+    );
+    return () => {
+      current = false;
+    };
+  }, [key, source]);
+  return entries;
 }
 
 /** Up to three of the values, one a line, and how many more there are. */
@@ -871,47 +955,50 @@ function FirstOf({ values, count }: { values: readonly string[]; count: number }
   );
 }
 
-const ISSUE_COLUMNS: DataColumn<IssueRow>[] = [
-  {
-    id: "issue",
-    label: "Issue",
-    required: true,
-    // The title wraps: it is the row's reading.
-    className: "whitespace-normal",
-    cell: (item) => <IssueTitle item={item} />,
-  },
-  { id: "type", label: "Type", width: 10, fixed: true, drop: 2, cell: (item) => <IssueChip kind={item.kind} /> },
-  {
-    id: "endpoints",
-    label: "Endpoints",
-    // Room for a method and a usual path: the issue's own title is the row's reading, and takes the rest.
-    width: 13,
-    drop: 1,
-    cell: (item) => <FirstOf values={item.endpoints} count={3} />,
-  },
-  {
-    id: "events",
-    label: "Events",
-    width: 5.75,
-    num: true,
-    className: "font-semibold",
-    cell: (item) => item.occurrences,
-  },
-  { id: "last", label: "Last seen", width: 7, num: true, className: MUTED, cell: (item) => ago(item.last_seen) },
-  {
-    id: "first",
-    label: "First seen",
-    width: 7.25,
-    num: true,
-    drop: 3,
-    className: MUTED,
-    cell: (item) => ago(item.first_seen),
-  },
-];
+function issueColumns(entries: ReadonlyMap<string, TraceSummary>): DataColumn<IssueRow>[] {
+  return [
+    {
+      id: "issue",
+      label: "Issue",
+      required: true,
+      // The title wraps: it is the row's reading.
+      className: "whitespace-normal",
+      cell: (item) => <IssueTitle item={item} />,
+    },
+    {
+      id: "endpoints",
+      label: "Endpoints",
+      // Room for a method's badge and a usual path, or a task's name: the issue's own title is the row's reading, and
+      // takes the rest.
+      width: 15,
+      drop: 1,
+      cell: (item) => <IssuePlaces item={item} entries={entries} />,
+    },
+    {
+      id: "events",
+      label: "Events",
+      width: 5.75,
+      num: true,
+      className: "font-semibold",
+      cell: (item) => item.occurrences,
+    },
+    { id: "last", label: "Last seen", width: 7, num: true, className: MUTED, cell: (item) => ago(item.last_seen) },
+    {
+      id: "first",
+      label: "First seen",
+      width: 7.25,
+      num: true,
+      drop: 3,
+      className: MUTED,
+      cell: (item) => ago(item.first_seen),
+    },
+  ];
+}
 
-export function IssuesTable({ items }: { items: readonly IssueRow[] }) {
+export function IssuesTable({ items, source }: { items: readonly IssueRow[]; source: DataSource }) {
+  const entries = useEntries(items, source);
   return (
-    <DataTable table="issues" columns={ISSUE_COLUMNS}>
+    <DataTable table="issues" columns={issueColumns(entries)}>
       {({ cells }) =>
         items.map((item) => (
           <Tr
@@ -1062,7 +1149,8 @@ function SourceCell({
         className,
       )}
     >
-      <SourceBadge kind={kind} graphql={operation !== null} method={method} htmx={htmx} />
+      <SourceBadge kind={kind} graphql={operation !== null} method={method} htmx={htmx} name={name} />
+      {/* Read and copied as "GET /books": the gap is the layout's, the space the text's. */}{" "}
       {/* In a dense table, the row's own size: the badge sets the path apart, not a smaller type. A column of
           them is cut at one side, the start, as a task's name always is: every path too. */}
       <SourceText
@@ -1081,13 +1169,17 @@ function SourceBadge({
   graphql,
   method,
   htmx,
+  name,
 }: {
   kind: TraceSummary["kind"];
   graphql: boolean;
   method: string | null;
   htmx: TraceSummary["htmx"];
+  name: string;
 }) {
   if (graphql) return <KindBadge kind="graphql" />;
+  // A page's view or action by what happened (VIEW, CLICK), as its trace's header and the panel say it.
+  if (kind === "page") return <MethodBadge method={pageParts(name).badge} />;
   return kind === "http" ? <MethodBadge method={method} htmx={htmx} /> : <KindBadge kind={kind} />;
 }
 
@@ -1111,19 +1203,25 @@ function SourceText({
 /** A source's text: a request's path, a WebSocket's without its "WS ", anything else its name. */
 function sourceText(kind: TraceSummary["kind"], path: string | null, name: string): string {
   if (kind === "http") return requestPath({ name, path });
+  if (kind === "page") return pageText(name);
   return kind === "websocket" ? name.replace(/^WS /, "") : name;
+}
+
+/** A page's view or action after its badge, as its header says it: `"Delete" · /books`. */
+function pageText(name: string): string {
+  const { label, page } = pageParts(name);
+  return page ? `${label} · ${page}` : label;
 }
 
 /** A name in a list's main column: one line, cut short with an ellipsis. */
 const nameCell = (name: string) => <Mono className="block truncate">{name}</Mono>;
 
-/** An outlined badge, its text in mono when it is a name (a queue, an operation's type). */
-function OutlineBadge({ children, mono = false }: { children: ReactNode; mono?: boolean }) {
-  return (
-    <Badge variant="outline" className={cn("text-xs", mono && "font-mono")}>
-      {children}
-    </Badge>
-  );
+/**
+ * A name beside a row's own (a queue, an operation's type, a job's source, what ran a task) in its own case, one quiet
+ * tag for all of them. The upper-case words are a trace's kind and a request's method; a state is a status's shape.
+ */
+function NameTag({ children }: { children: ReactNode }) {
+  return <NeutralTag>{children}</NeutralTag>;
 }
 
 function taskColumns(items: readonly TaskRow[]): DataColumn<TaskRow>[] {
@@ -1135,7 +1233,7 @@ function taskColumns(items: readonly TaskRow[]): DataColumn<TaskRow>[] {
       width: 7.5,
       fixed: true,
       drop: 2,
-      cell: (item) => <KindBadge kind={taskSystem(item.system)} muted={true} />,
+      cell: (item) => <NameTag>{taskSystem(item.system)}</NameTag>,
     },
     { id: "runs", label: "Runs", width: 5, num: true, cell: (item) => item.runs },
     {
@@ -1175,9 +1273,7 @@ function taskColumns(items: readonly TaskRow[]): DataColumn<TaskRow>[] {
       cell: (item) => (
         <span className="flex gap-1">
           {item.queues.map((queue) => (
-            <OutlineBadge key={queue} mono={true}>
-              {queue}
-            </OutlineBadge>
+            <NameTag key={queue}>{queue}</NameTag>
           ))}
         </span>
       ),
@@ -1232,7 +1328,7 @@ function graphqlColumns(items: readonly GraphqlRow[]): DataColumn<GraphqlRow>[] 
       // The widest type, `subscription`, whole, with room for how fonts render on other systems.
       width: 10.5,
       fixed: true,
-      cell: (item) => (item.type ? <OutlineBadge mono={true}>{item.type}</OutlineBadge> : null),
+      cell: (item) => (item.type ? <NameTag>{item.type}</NameTag> : null),
     },
     { id: "operation", label: "Operation name", required: true, cell: (item) => <OperationName item={item} /> },
     { id: "calls", label: "Calls", width: 5.25, num: true, cell: (item) => item.calls },
@@ -1282,9 +1378,9 @@ type NamedRow = Pick<JobRow, "failures" | "with_issues" | "p95" | "last_seen"> &
   average: number;
 };
 
-/** A named row's badge: a string as an outlined badge, a node (a page's action) as it is. */
+/** A named row's badge: a string as a name's tag, a node (a page's action) as it is. */
 function NamedBadge({ badge }: { badge: ReactNode }) {
-  return typeof badge === "string" ? <OutlineBadge mono={true}>{badge}</OutlineBadge> : badge;
+  return typeof badge === "string" ? <NameTag>{badge}</NameTag> : badge;
 }
 
 function namedColumns(head: [string, string, string, string], items: readonly NamedRow[]): DataColumn<NamedRow>[] {

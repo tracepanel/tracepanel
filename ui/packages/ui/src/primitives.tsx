@@ -231,6 +231,7 @@ function shortKind(kind: string): string {
 const STATE_TONES: Record<string, string> = {
   success: "ok",
   failure: "error",
+  failed: "error",
   retry: "warn",
   retrying: "warn",
   running: "brand",
