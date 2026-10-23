@@ -90,6 +90,9 @@
 
 ### Changed
 
+- The pill's chip for what a request's tasks found reads as issues: the same
+  amber chip with the alert icon as its own issues, and it says "3 issues in
+  tasks", not "3 in tasks" under a corner arrow.
 - Every table has a clear head in both themes: on white a quiet cool band
   a step off the rows, its names a touch darker, a hairline under it, as the
   dark theme's band. A header that stays in view as the list scrolls keeps
