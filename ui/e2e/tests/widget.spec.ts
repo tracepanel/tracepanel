@@ -354,3 +354,17 @@ test("the widget's sources hold no colour of their own: its palette is the token
     expect(source.match(/#[0-9a-f]{3,8}\b|rgba?\(\s*\d/gi), file).toBeNull();
   }
 });
+
+test("the pill's hover card stands on the pill: its left and right edges are the pill's", async ({ page }) => {
+  await openApp(page, { home: { status: 200, trace: await traceId("GET /"), queries: 151, totalMs: 28 } });
+  await page.getByRole("button", { name: "Load home" }).click();
+  await expect(pill(page)).toContainText("/app/api/home");
+  await pill(page).hover();
+  const card = page.getByRole("dialog", { name: "This request at a glance" });
+  await expect(card).toBeVisible();
+  const [box, under] = [await card.boundingBox(), await pill(page).boundingBox()];
+  if (!(box && under)) throw new Error("no card");
+
+  expect(Math.abs(box.x - under.x)).toBeLessThan(1.5);
+  expect(Math.abs(box.x + box.width - (under.x + under.width))).toBeLessThan(1.5);
+});

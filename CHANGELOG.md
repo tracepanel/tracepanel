@@ -379,6 +379,8 @@
   trace: its column of names is at least as wide as the first's. With short
   names ("Route", "Task ID") the values moved a few pixels from trace to
   trace.
+- The pill's hover card stands on the pill: as wide as it (320 px at least)
+  and with its edges on the pill's. Its left edge was 8 to 20 px off.
 
 ## 0.4.1 (2026-10-21)
 

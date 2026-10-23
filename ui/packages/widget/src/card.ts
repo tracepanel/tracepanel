@@ -245,6 +245,16 @@ function worstFirst(requests: readonly TraceInfo[]): TraceInfo[] {
   return [...requests].sort((a, b) => rank(b) - rank(a) || (b.totalMs ?? 0) - (a.totalMs ?? 0));
 }
 
+/** The narrowest the card gets: its findings and bar need the room, a short pill ("Waiting") or not. */
+const MIN_CARD_WIDTH = 320;
+
+/** The card over the pill, its edges on the pill's: as wide as the pill and right where it is. */
+function alignWith(card: HTMLElement, badge: HTMLElement): void {
+  const box = badge.getBoundingClientRect();
+  card.style.right = `${Math.round(window.innerWidth - box.right)}px`;
+  card.style.width = `${Math.round(Math.max(box.width, MIN_CARD_WIDTH))}px`;
+}
+
 export function mountCard(root: ShadowRoot, badge: HTMLElement, source: CardSource): { hide: () => void } {
   const card = element("div", "card");
   card.setAttribute("role", "dialog");
@@ -431,6 +441,7 @@ export function mountCard(root: ShadowRoot, badge: HTMLElement, source: CardSour
     if (!info) return;
     const id = info.trace;
     render(info, rest, null, Boolean(id && source.api));
+    alignWith(card, badge);
     card.toggleAttribute("data-open", true);
     if (!id) return;
     void load(id).then((trace) => {
