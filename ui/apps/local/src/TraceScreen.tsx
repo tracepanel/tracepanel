@@ -96,6 +96,15 @@ function explainer(source: DataSource, traceId: string, explainable: boolean) {
   return explainable ? (span: string, analyze: boolean) => source.explain(traceId, span, analyze) : undefined;
 }
 
+/** The loading bar: on the page inset as the trace's head will be, across the panel. */
+function TraceLoading({ variant }: { variant: TraceScreenProps["variant"] }) {
+  return (
+    <div className={variant === "full" ? "app-loading mx-4" : "app-loading"} role="status">
+      <span className="sr-only">Loading</span>
+    </div>
+  );
+}
+
 /**
  * The trace, once loaded (null when it is gone), retried briefly while it may not be stored yet. The trace on screen
  * stays until the next one is loaded: following new requests swaps one for the other instead of blinking through an
@@ -154,13 +163,7 @@ export function TraceScreen({
   const app = useApp(source, serviceOf(trace, variant));
   // EXPLAIN only where the app behind the console runs it.
   const explainable = useCapability(source, "explain");
-  if (trace === undefined) {
-    return (
-      <div className="app-loading" role="status">
-        <span className="sr-only">Loading</span>
-      </div>
-    );
-  }
+  if (trace === undefined) return <TraceLoading variant={variant} />;
   if (trace === null) {
     return (
       <Empty title="Trace not found" action={back}>

@@ -248,6 +248,9 @@
   takes one slot, as wide as PATCH, in both themes, in the tables, the overview
   lists, the Logs page's Source and ⌘K: a path after GQL started 14 px left of
   one after PATCH.
+- On the trace page the call tree, the Logs tab's table and the loading bar sit
+  on the page's content edges, as the trace's head, tiles and tabs do. They
+  stuck out 16 px on each side.
 
 ## 0.4.1 (2026-10-21)
 

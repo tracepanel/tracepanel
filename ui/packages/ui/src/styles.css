@@ -1760,6 +1760,15 @@ details[data-focused] > .dt-sql-group {
   background: var(--dt-k);
 }
 
+/* On the console's trace page the call tree and a trace's log table sit on the page's content edges, as its head,
+   tiles and tabs do; in the panel they span it. */
+.dt-trace[data-variant="full"] .dt-tabpanel > .dt-map > .dt-map-body {
+  margin-inline: 1rem;
+}
+.dt-trace[data-variant="full"] .dt-tabpanel > [data-slot="table-container"] {
+  padding-inline: 1rem;
+}
+
 .dt-map-head {
   display: flex;
   justify-content: space-between;
@@ -1822,7 +1831,7 @@ details[data-focused] > .dt-sql-group {
     display: none;
   }
   .dt-map-name .dt-map-text {
-    min-width: 3rem;
+    min-width: 2.5rem;
   }
 }
 .dt-map-row[aria-current="true"] {
