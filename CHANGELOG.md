@@ -255,6 +255,10 @@
   one place, the same space above them and the page's full width. The crumbs sat
   at three heights and an app's page was narrower. A headline's method or kind
   is its own width, not a list's slot.
+- A call's details in the call tree give its fields, Called from, a template's
+  context and all its attributes one column of names, so every value starts at
+  one edge. Each list sized its own, and their values started at different
+  places.
 
 ## 0.4.1 (2026-10-21)
 

@@ -17,9 +17,11 @@ export interface NameValue {
 
 /**
  * The columns of names and values: names as wide as the longest, up to 24rem or 40% of the width (a longer one
- * wraps at any character, never cut), values the rest, the buttons last. Lists under headings (a trace's attributes by namespace) share them, names lined up.
+ * wraps, never cut), values the rest, the buttons last. Lists under headings (a trace's attributes by namespace)
+ * share them, names lined up. Where several lists sit one under another (a call's details), `--dt-name-col` gives
+ * them all one column of names, so their values start at one edge.
  */
-export const NAME_VALUE_COLUMNS = "grid grid-cols-[fit-content(min(24rem,40%))_minmax(0,1fr)_auto]";
+export const NAME_VALUE_COLUMNS = "grid grid-cols-[var(--dt-name-col,fit-content(min(24rem,40%)))_minmax(0,1fr)_auto]";
 
 /**
  * Where a list of names and values sits: in a card of its own (`card`, a call's fields in the call tree), or on the

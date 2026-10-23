@@ -65,3 +65,22 @@ test("a row's fold opens and closes its rows without opening its details; the ar
   await expect(row).toHaveAttribute("aria-expanded", "true");
   await expect(details).toHaveCount(0);
 });
+
+test("a call's details give its fields and all its attributes one column of names: every value starts at one edge", async ({
+  page,
+}) => {
+  await page.goto(`/#/t/${await traceId("PATCH /campaigns/{id}/report")}?tab=calls`);
+  await page
+    .getByRole("button", { name: /^transaction/ })
+    .first()
+    .click();
+  await page.locator('.dt-map-row[data-kind="sql"]').first().click();
+  const values = page.locator(":is(.dt-map-side, .dt-map-inline) dd");
+  await expect(values.first()).toBeVisible();
+  const starts = await values.evaluateAll((cells) =>
+    cells.map((cell) => Math.round(cell.getBoundingClientRect().left)),
+  );
+
+  expect(starts.length).toBeGreaterThan(2);
+  expect(new Set(starts).size).toBe(1);
+});

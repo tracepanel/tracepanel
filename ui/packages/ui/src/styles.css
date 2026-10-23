@@ -2104,6 +2104,11 @@ details[data-focused] > .dt-sql-group {
 }
 
 /* A narrow tree: the selected row's details open under it, in the row's tint. */
+/* A call's details are several lists of names and values (its fields, Called from, every attribute, a template's
+   context): one column of names for all of them, so every value starts at one edge. */
+:is(.dt-map-inline, .dt-map-side) {
+  --dt-name-col: min(15rem, 45%);
+}
 .dt-map-inline {
   border-bottom: 1px solid var(--dt-border);
   background: var(--dt-subtle);
