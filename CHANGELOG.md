@@ -392,6 +392,8 @@
 - A system's operations list shows no failures as a dash and some in red,
   as every list's Errors, Failed and With issues columns do: it was the only
   one to say "0". Counts of what happened (calls, queries, runs) say 0.
+- A group's and an entry point's seven summary tiles sit in one row again:
+  sharing their last four tiles had made them four columns over two rows.
 
 ## 0.4.1 (2026-10-21)
 

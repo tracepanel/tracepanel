@@ -174,6 +174,11 @@ test("a group's summary has the tiles an entry point's Overview has, in the same
   const summary = page.getByRole("region", { name: "Summary" });
 
   await expect(summary.getByText(/^(Calls|Errors|Slow ≥ 500 ms|p50|p95|p99|Avg queries)$/)).toHaveCount(7);
+  // In one row at 1440 px, as the Overview's.
+  const tops = await summary
+    .locator(":scope > *")
+    .evaluateAll((tiles) => tiles.map((tile) => Math.round(tile.getBoundingClientRect().top)));
+  expect(new Set(tops).size).toBe(1);
 });
 
 test("an issue's long route wraps in its row, never cut", async ({ page }) => {

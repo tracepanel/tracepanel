@@ -143,20 +143,22 @@ function OverviewHeading({
 
 /**
  * The summary's last four tiles, an entry point's Overview and a group's page alike: how long its calls take, and
- * the queries each makes.
+ * the queries each makes. An array, not a fragment: StatGrid counts its tiles to lay them out in one row.
  */
-export function LatencyTiles({
-  summary: s,
-}: {
+export function latencyTiles(s: {
+  p50: number;
+  p95: number;
+  p99: number;
+  max: number;
   // biome-ignore lint/style/useNamingConvention: the agent's field names, as its summaries answer them.
-  summary: { p50: number; p95: number; p99: number; max: number; avg_queries: number; avg_db_time: number };
-}) {
-  return (
-    <>
-      <Stat label="p50" value={duration(s.p50)} />
-      <Stat label="p95" value={duration(s.p95)} />
-      <Stat label="p99" value={duration(s.p99)} sub={`max ${duration(s.max)}`} />
-      <Stat label="Avg queries" value={String(s.avg_queries)} sub={`DB ${duration(s.avg_db_time)} avg`} />
-    </>
-  );
+  avg_queries: number;
+  // biome-ignore lint/style/useNamingConvention: the agent's field names, as its summaries answer them.
+  avg_db_time: number;
+}): ReactNode[] {
+  return [
+    <Stat key="p50" label="p50" value={duration(s.p50)} />,
+    <Stat key="p95" label="p95" value={duration(s.p95)} />,
+    <Stat key="p99" label="p99" value={duration(s.p99)} sub={`max ${duration(s.max)}`} />,
+    <Stat key="queries" label="Avg queries" value={String(s.avg_queries)} sub={`DB ${duration(s.avg_db_time)} avg`} />,
+  ];
 }

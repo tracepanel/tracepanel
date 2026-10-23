@@ -18,7 +18,7 @@ import { Card } from "@tracepanel/ui/components/ui/card";
 import { useEffect, useState } from "react";
 import {
   Figure,
-  LatencyTiles,
+  latencyTiles,
   Measure,
   OverviewNumbers,
   OverviewRange,
@@ -180,7 +180,7 @@ export function TracesOverview({
           tone={s.slow ? "warn" : undefined}
           onClick={s.slow ? () => onRefine({ duration: `>${overview.slow_threshold / 1000}ms` }) : undefined}
         />
-        <LatencyTiles summary={s} />
+        {latencyTiles(s)}
       </StatGrid>
       {scope.filter === "" ? <KindChips kinds={overview.kinds} failures={true} onRefine={onRefine} /> : null}
       <div className="grid grid-cols-2 gap-4 max-[1100px]:grid-cols-1">
