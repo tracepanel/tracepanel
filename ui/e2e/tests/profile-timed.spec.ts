@@ -28,8 +28,8 @@ test("the Profile tab says how much it sampled, what it couldn't, and waiting as
     page.getByText("500 ms not sampled: other traces ran on the same thread, filled in from the samples around it"),
   ).toBeVisible();
   await expect(page.getByRole("region", { name: "Time by package" }).getByRole("button")).toHaveText([
-    /^waiting\s*94%\s*1\.5 s$/,
-    /^your code\s*6%\s*100 ms$/,
+    /^your code\s*100 ms\s*6%$/,
+    /^waiting\s*1\.5 s\s*94%$/,
   ]);
 });
 
@@ -47,9 +47,7 @@ test("the strip and its share's numbers split the code's own time; a click on th
     .getByRole("button", { name: /^Your code/ })
     .hover();
 
-  await expect(page.getByRole("tooltip", { name: /^Your code/ })).toContainText(
-    "of it 1.5 s waiting · 102 ms untraced",
-  );
+  await expect(page.getByRole("tooltip", { name: /^Your code/ })).toContainText("of it 1.5 s waiting");
 
   const middle = await centre(waiting);
   await page.mouse.move(...middle);
@@ -63,7 +61,7 @@ test("the strip and its share's numbers split the code's own time; a click on th
   await expect(page.getByRole("tab", { name: /^Profile/ })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByText("Profile of 120 ms – 1.6 s")).toBeVisible();
   await expect(page.getByRole("region", { name: "Time by package" }).getByRole("button")).toHaveText([
-    /^waiting\s*100%/,
+    /^waiting\s*[\d.]+ m?s\s*100%$/,
   ]);
   // The stretch is the Profile tab's own: the call tree keeps the whole time, a range there is a drag's only.
   await expect(page).not.toHaveURL(/[?&]range=/);

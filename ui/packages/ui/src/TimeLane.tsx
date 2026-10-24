@@ -92,11 +92,14 @@ function laneOf(trace: Trace): Lane {
   return { trace, drawn, totals };
 }
 
-/** Where a quiet span's time is said: over the longest of its pieces that waited, and of those that didn't, once. */
+/**
+ * Where a span's waiting is said: over the longest of its pieces that waited, once. Its code's own time without a
+ * wait is said by its colour alone: it is its share's.
+ */
 function saidAt(drawn: readonly Drawn[]): Drawn[] {
   const longest = new Map<string, Drawn>();
-  for (const each of drawn.filter((item) => item.quiet)) {
-    const key = `${each.stretch.span}:${each.waiting}`;
+  for (const each of drawn.filter((item) => item.waiting)) {
+    const key = String(each.stretch.span);
     const best = longest.get(key);
     if (!best || length(each.stretch) > length(best.stretch)) longest.set(key, each);
   }
@@ -107,11 +110,9 @@ function length(stretch: Stretch): number {
   return stretch.to - stretch.from;
 }
 
-/** "untraced · 1.6 s", "waiting · 1.5 s": a quiet span's own time, waited in or not, in its share's colour. */
+/** "waiting · 1.5 s": how long a span's code waited, in all. */
 function quietLabel(lane: Lane, each: Drawn): string {
-  const total = lane.totals.get(`${each.stretch.span}:${each.waiting}`) ?? 0;
-  const label = each.waiting ? "waiting" : "untraced";
-  return `${label} · ${duration(total)}`;
+  return `waiting · ${duration(lane.totals.get(`${each.stretch.span}:true`) ?? 0)}`;
 }
 
 /** What a piece of the lane says of itself: its span when quiet, its stretch, whether it waited. */
@@ -126,8 +127,8 @@ function pieceData(each: Drawn): Record<string, string | undefined> {
 }
 
 /**
- * The trace's own lane: where its time went, moment by moment, in its shares' colours (the legend's); a long
- * stretch where its code ran with no recorded calls hatched and said, split where the profile says it waited. A
+ * The trace's own lane: where its time went, moment by moment, one clear line in its shares' colours (the legend's);
+ * hatched only where a timed profile says its code waited, and said there ("waiting · 1.5 s"). A
  * share's stretch says its numbers on hover, and picks its rows on a click; a quiet one, with a profile, opens it.
  */
 export function TimeLane({ trace, word, parts }: { trace: Trace; word: string; parts: readonly string[] }) {

@@ -15,12 +15,10 @@
   Show all, Esc or a double click lets them go. The panel does the same, and
   its Console button opens the trace with what was picked.
 - A long stretch of a trace's own code with nothing it called traced reads
-  as code. On the time strip it is hatched in its share's colour and
-  labelled (`untraced · 1.6 s`), the legend counts it in its share (`Your
-  code 1.6 s 98% · of it 1.6 s untraced`), and in the call tree it is a row
-  of its own under the span, hatched where it fell, its time the same, named
-  by what ran: with a profile, its functions (`aggregate · render_csv`),
-  else `untraced code`. With a profile, the flame of the panel's Profile
+  as code. On the time strip it is its share's colour, and in the call tree
+  it is a row of its own under the span, its bars where it fell, named by
+  what ran: with a profile, its functions (`aggregate · render_csv`), else
+  `untraced code`. With a profile, the flame of the panel's Profile
   toggle after its name, and a click on the row, open the profile.
   `api/capabilities?service=` says whether an app profiles on request. A
   transaction's time says on hover how long it was open and how much of that
@@ -165,7 +163,14 @@
   template's row doesn't name the template again. A task's name cut to fit
   drops its module path first and keeps its last segment readable
   (`build_sales_report`), and in the panel's list a row with no status
-  takes that room too.
+  takes that room too. The strip's trace lane is one clear line, each
+  moment in its share's colour, hatched only where a timed profile says the
+  code waited. A lane of a store's calls (queries, Redis, cache,
+  datastores) shows only when one of them is flagged: the trace lane shows
+  them in colour. Messages, HTTP and RPC calls, logs and errors keep their
+  lanes. The Profile tab's time by package and the strip's legend are one
+  look: one bar, an inline legend (name, time, percent), largest first and
+  waiting last.
 - Library frames are summed up by their packages, on one line: "10 library
   frames · faststream ×9 · sqlalchemy", every module on hover and when opened.
   The list of every module ran past the error's edge.
