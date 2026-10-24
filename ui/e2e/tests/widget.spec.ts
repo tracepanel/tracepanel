@@ -1,5 +1,6 @@
 // The widget on an app's page: the pill's states, the panel it opens, and the tab's list.
 import { readFileSync } from "node:fs";
+import type { BrowserContext, Page } from "@playwright/test";
 import { CONSOLE } from "../agent.ts";
 import { type Call, OTHER_API, openApp, panel, pill, traceId } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
@@ -10,6 +11,18 @@ async function posts(): Promise<Call> {
 
 async function broken(): Promise<Call> {
   return { status: 500, trace: await traceId("GET /api/error"), queries: 0, totalMs: 11 };
+}
+
+/** The app profiles on request; `memory`: what the code allocated too. */
+async function profiles(page: Page, { memory }: { memory: boolean }): Promise<void> {
+  await page.route("**/api/capabilities", (route) =>
+    // biome-ignore lint/style/useNamingConvention: wire format.
+    route.fulfill({ json: { explain: false, users: false, profile: true, profile_memory: memory, request: true } }),
+  );
+}
+
+async function profileCookie(context: BrowserContext): Promise<string | undefined> {
+  return (await context.cookies()).find((cookie) => cookie.name === "tracepanel_profile")?.value;
 }
 
 test("the pill waits for the page's first request, then shows it, its framework learned from its trace", async ({
@@ -281,9 +294,7 @@ test("Profile sits with Follow new and Clear; on, it lights, sets the cookie tha
   page,
   context,
 }) => {
-  await page.route("**/api/capabilities", (route) =>
-    route.fulfill({ json: { explain: false, users: false, profile: true, request: true } }),
-  );
+  await profiles(page, { memory: false });
   await openApp(page, { posts: await posts() });
   await page.getByRole("button", { name: "Load posts" }).click();
   await pill(page).click();
@@ -294,16 +305,63 @@ test("Profile sits with Follow new and Clear; on, it lights, sets the cookie tha
     .last();
 
   await controls.getByRole("button", { name: "Profile new requests" }).click();
-  const on = panel(page).getByRole("button", { name: "Profiling is on" });
+  const on = panel(page).getByRole("button", { name: "Profiling time", exact: true });
 
   await expect(on).toHaveAttribute("aria-pressed", "true");
-  expect((await context.cookies()).find((cookie) => cookie.name === "tracepanel_profile")?.value).toBe("1");
+  expect(await profileCookie(context)).toBe("1");
 
   // After a click, a hint opens once the pointer comes back to its button.
   await panel(page).getByText("Follow new").hover();
   await on.hover();
 
   await expect(panel(page).getByRole("tooltip")).toContainText("Every request this browser makes is profiled");
+
+  // An app that doesn't profile memory: no choice of it, and no dot.
+  await expect(panel(page).getByRole("button", { name: "Profiling mode" })).toHaveCount(0);
+  await expect(panel(page).getByTestId("profile-memory-dot")).toHaveCount(0);
+});
+
+test("Profile's menu, when the app profiles memory, adds memory: a dot on the flame, the cookie says memory", async ({
+  page,
+  context,
+}) => {
+  await profiles(page, { memory: true });
+  await openApp(page, { posts: await posts() });
+  await page.getByRole("button", { name: "Load posts" }).click();
+  await pill(page).click();
+
+  await panel(page).getByRole("button", { name: "Profiling mode" }).click();
+  await panel(page)
+    .getByRole("menuitemradio", { name: /Time and memory/ })
+    .click();
+  const on = panel(page).getByRole("button", { name: "Profiling time and memory (slower)" });
+
+  await expect(on).toHaveAttribute("aria-pressed", "true");
+  await expect(on.getByTestId("profile-memory-dot")).toBeVisible();
+  expect(await profileCookie(context)).toBe("memory");
+
+  await panel(page).getByRole("button", { name: "Profiling mode" }).click();
+
+  await expect(panel(page).getByRole("menuitemradio", { name: /Time and memory/ })).toHaveAttribute(
+    "aria-checked",
+    "true",
+  );
+
+  await panel(page).getByRole("menuitemradio", { name: "Time", exact: true }).click();
+  const time = panel(page).getByRole("button", { name: "Profiling time", exact: true });
+
+  await expect(time).toHaveAttribute("aria-pressed", "true");
+  await expect(panel(page).getByTestId("profile-memory-dot")).toHaveCount(0);
+  expect(await profileCookie(context)).toBe("1");
+
+  // A click on the flame stops whichever it was.
+  await time.click();
+
+  await expect(panel(page).getByRole("button", { name: "Profile new requests" })).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
+  expect(await profileCookie(context)).toBeUndefined();
 });
 
 test("Console opens the request in the full console, and its hint says so", async ({ page }) => {

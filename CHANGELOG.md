@@ -4,6 +4,12 @@
 
 ### Added
 
+- The panel's Profile toggle can profile memory too. Its caret offers Off,
+  Time, or Time and memory (slower), and sets the `tracepanel_profile` cookie
+  to `1` or `memory`. A dot on the flame says memory is on. The choice is
+  there only when the app says `profile_memory`, a new field of
+  `api/capabilities` (false for an app that doesn't say it). A click on the
+  flame turns time on and any mode off, as before.
 - Profiles show memory and GC pauses. A profile can say what the trace's
   code allocated (`memory`: its peak, what it kept, where the memory was)
   and the garbage collector's runs (`gc`: how many, their pauses and when).

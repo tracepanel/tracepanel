@@ -142,6 +142,8 @@ export const NO_CAPABILITIES: Capabilities = {
   explain: false,
   users: false,
   profile: false,
+  // biome-ignore lint/style/useNamingConvention: wire format.
+  profile_memory: false,
   request: false,
   // biome-ignore lint/style/useNamingConvention: wire format.
   live_tasks: false,
