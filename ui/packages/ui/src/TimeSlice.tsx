@@ -9,7 +9,7 @@ import {
   useState,
 } from "react";
 import { isTyping } from "./lib/keys";
-import { cleared, isWhole, rangeLabel, rangeOf, type Slice, sliceKey, type TimeRange, WHOLE } from "./lib/slice";
+import { cleared, isWhole, rangeOf, type Slice, sliceKey, type TimeRange, WHOLE } from "./lib/slice";
 
 /** A move this short is a click, not a drag. */
 const DRAG_PX = 4;
@@ -70,25 +70,29 @@ function bandPlace(range: TimeRange, total: number): CSSProperties {
   return { left: `${(range[0] / span) * 100}%`, width: `${((range[1] - range[0]) / span) * 100}%` };
 }
 
-/** The picked stretch of time over a track: a tint across it and, on top, where it starts and ends and how long. */
-export function RangeBand({ range, total, label = true }: { range: TimeRange; total: number; label?: boolean }) {
+/**
+ * The picked stretch of time over a track: a hairline and a faint tint, no words. Where it starts and ends and how
+ * long is said once, by the legend's chip that lets it go.
+ */
+export function RangeBand({ range, total }: { range: TimeRange; total: number }) {
+  return <div className="dt-range" style={bandPlace(range, total)} aria-hidden="true" />;
+}
+
+/**
+ * Esc, not taken by anything open before (a menu, a dialog, a tooltip that holds a link: it closes first) nor typed
+ * into a field.
+ */
+function isFreeEscape(event: KeyboardEvent): boolean {
   return (
-    <div
-      className="dt-range"
-      style={bandPlace(range, total)}
-      // Its label reads from the band's start, or, in the later half, ends with it: never past the track's edge.
-      data-end={range[0] + range[1] > total ? "" : undefined}
-      aria-hidden="true"
-    >
-      {label ? <span className="dt-range-label">{rangeLabel(range, total)}</span> : null}
-    </div>
+    event.key === "Escape" &&
+    !event.defaultPrevented &&
+    !isTyping(event) &&
+    !document.querySelector(`[${ESCAPE_FIRST}]`)
   );
 }
 
-/** Esc, not taken by anything open before (a menu, a dialog) nor typed into a field. */
-function isFreeEscape(event: KeyboardEvent): boolean {
-  return event.key === "Escape" && !event.defaultPrevented && !isTyping(event);
-}
+/** Set on an open tooltip that closes on Esc before the slice is let go. */
+export const ESCAPE_FIRST = "data-escape-first";
 
 /**
  * The part of a trace's time picked to look at, from a link's (`initial`), told to the host as it changes (the

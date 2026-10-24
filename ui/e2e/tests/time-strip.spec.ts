@@ -39,7 +39,8 @@ test("the strip names its lanes by what their marks are and says a long stretch 
   const legend = page.getByRole("list", { name: /^Where the time went/ });
   await expect(lanes.locator(".dt-quiet-label")).toHaveText("untraced · 1.6 s");
   await expect(legend).toContainText("Database");
-  await expect(legend.locator(".dt-share-quiet")).toHaveText("of it 1.6 s untraced");
+  // Said once, on the strip: the legend has no word of it but on hover.
+  await expect(legend).not.toContainText("untraced");
 
   const middle = await centre(lanes.locator(".dt-quiet-said"));
   await page.mouse.move(...middle);
@@ -172,7 +173,7 @@ async function openSales(page: Page): Promise<FrameLocator> {
   return frame;
 }
 
-test("with no profile and an app that profiles, the code's own time says how; the panel's legend turns it on", async ({
+test("with no profile and an app that profiles, the code's own time says how; in the panel its tooltip turns it on", async ({
   page,
 }) => {
   await profiles(page, true);
@@ -184,8 +185,13 @@ test("with no profile and an app that profiles, the code's own time says how; th
   await expect(tip).toContainText("with the panel's 🔥 or an X-Tracepanel-Profile: 1 header");
 
   const frame = await openSales(page);
-  const turnOn = frame.getByRole("button", { name: "Turn on Profile to see what ran" });
 
+  // The legend offers no Profile: the code's own time does, on the strip and in the tree.
+  await expect(frame.getByRole("list", { name: /^Where the time went/ })).not.toContainText("Profile");
+
+  await page.mouse.move(...(await centre(frame.locator(".dt-quiet-said"))));
+  const turnOn = frame.getByRole("tooltip").getByRole("button", { name: "Turn on Profile to see what ran here" });
+  await page.mouse.move(...(await centre(turnOn)), { steps: 8 });
   await turnOn.click();
 
   await expect(frame.getByRole("button", { name: "Profile is on: run it again" })).toBeDisabled();
@@ -225,7 +231,9 @@ test("the tree's code row leads to the profile: its functions on hover, a click 
   await page.goto(`/#/t/${await traceId(HELD_REPORT)}?tab=tree`);
   const code = page.locator('.dt-map-row[data-kind="code"]');
 
-  await expect(code.locator(".dt-map-flame:not([data-off])")).toHaveAttribute("title", "Open the profile");
+  // What it does is the row's tooltip's to say: no title of the browser's beside it.
+  await expect(code.locator(".dt-map-flame:not([data-off])")).toBeVisible();
+  await expect(code.locator("[title]")).toHaveCount(0);
 
   await code.hover();
 
@@ -256,10 +264,8 @@ test("with no profile, the tree's code row says how to get one where the app pro
 
   await expect(code.locator(".dt-map-time")).toHaveText("42 ms");
   await expect(code.locator(".dt-map-text")).toHaveText("untraced code");
-  await expect(code.locator(".dt-map-flame[data-off]")).toHaveAttribute(
-    "title",
-    "Turn on Profile to see what ran here",
-  );
+  await expect(code.locator(".dt-map-flame[data-off]")).toBeVisible();
+  await expect(code.locator("[title]")).toHaveCount(0);
 
   await code.hover();
 
@@ -269,10 +275,10 @@ test("with no profile, the tree's code row says how to get one where the app pro
   await frame.locator('.dt-map-row[data-kind="code"] .dt-map-flame').click();
 
   await expect(frame.getByRole("button", { name: "Profiling is on" })).toHaveAttribute("aria-pressed", "true");
-  await expect(frame.locator('.dt-map-row[data-kind="code"] .dt-map-flame')).toHaveAttribute(
-    "title",
+  await expect(frame.locator('.dt-map-row[data-kind="code"] .dt-map-flame')).toHaveAccessibleName(
     "Profile is on: run it again",
   );
+  await expect(frame.locator('.dt-map-row[data-kind="code"] .dt-map-flame')).toBeDisabled();
 });
 
 test("an app that can't profile: the tree's code row is a plain row, nothing offered", async ({ page }) => {

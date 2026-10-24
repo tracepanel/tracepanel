@@ -17,20 +17,28 @@ function edges(element: Element): { text: number; box: number } {
   return { text: range.getBoundingClientRect().left, box: element.getBoundingClientRect().left };
 }
 
+/** Whether `text` is `name` cut as a task's name is: whole, its last segments after a "…", or its last alone. */
+function cutOf(name: string, text: string): boolean {
+  const tail = text.startsWith("…") ? text.slice(1) : text;
+  const segment = name.length - tail.length;
+  return text === name || (name.endsWith(tail) && segment > 0 && /[.:/\s·]/.test(name[segment - 1] ?? ""));
+}
+
 /**
- * Every place in `scope` that names `name`: whole on hover, and its end in sight, after a "…" when cut; its text
- * starts at its box's left edge, cut or not. `cut` when it must be cut there.
+ * Every place in `scope` that names `name`: whole on hover, and its end in sight, in whole segments after a "…" when
+ * cut (its last segment alone, cut at its end, where not even that fits); its text starts at its box's left edge, cut
+ * or not. `cut` when it must be cut there.
  */
 async function shownByItsEnd(scope: Page | Locator | FrameLocator, name: string, cut = true): Promise<void> {
   const names = scope.getByTitle(name, { exact: true });
   await expect(names.first()).toBeVisible();
   for (const element of await names.all()) {
     const text = (await element.textContent()) ?? "";
-    expect(text === name || (text.startsWith("…") && name.endsWith(text.slice(1)))).toBe(true);
+    expect(cutOf(name, text), text).toBe(true);
     const { text: left, box } = await element.evaluate(edges);
     expect(Math.abs(left - box)).toBeLessThan(0.5);
   }
-  if (cut) await expect(names.first()).toHaveText(/^…/);
+  if (cut) await expect(names.first()).not.toHaveText(name);
 }
 
 /** The left edge of the text named `name` in `scope`. */
@@ -159,12 +167,12 @@ test("the panel's list: a task's run as the console lists it, its time in a requ
   const task = list
     .getByRole("button")
     .filter({ hasText: /^task/ })
-    // Cut at its start to the list's width (a quarter of a narrow panel's): its end is what shows.
+    // Cut to the list's width (a quarter of a narrow panel's): its handler is what shows.
     .filter({ hasText: /generate/ });
   const request = list.getByRole("button").filter({ hasText: "/api/media/rebuild" });
 
   // Its kind's badge, not its name as a method.
-  await expect(task).toContainText(/^task…/);
+  await expect(task).toContainText(/^task…?thumbnails_regenerate/);
   await shownByItsEnd(list, REGENERATE);
 
   // No status of its own, its time and queries still under a request's.

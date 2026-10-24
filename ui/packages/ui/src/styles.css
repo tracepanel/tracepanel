@@ -766,6 +766,16 @@ tr[data-new] {
 .dt-requests[data-compact] .dt-request-path {
   min-width: 5ch;
 }
+/* Narrow, a row with no status of its own (a task, a job, a view): its name takes the status's room too. */
+.dt-requests[data-compact] .dt-request-row:has(> .dt-request-meta > .dt-status-empty) > .dt-request-main {
+  grid-column: 1 / 3;
+}
+.dt-requests[data-compact] .dt-request-row:has(> .dt-request-meta > .dt-status-empty) > .dt-request-meta {
+  grid-column: 3 / -1;
+}
+.dt-requests[data-compact] .dt-request-meta > .dt-status-empty {
+  display: none;
+}
 /* Narrow, the app's chip gives way first: the path is what the row is about. */
 .dt-requests[data-compact] .dt-request-main .dt-app-chip {
   flex: 0 4 auto;
@@ -1117,17 +1127,28 @@ tr[data-new] {
 .dt-stretch[data-waiting] {
   --dt-k: var(--dt-text-3);
 }
-/* How long, over its longest hatched stretch, when it fits. */
+/* How long, over its longest hatched stretch, when it fits; over the range picked, which never hides it. */
 .dt-quiet-said {
   position: absolute;
   top: 0;
   bottom: 0;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 0.1875rem;
+  background: none;
+  color: inherit;
+  font: inherit;
   container-type: inline-size;
   overflow: hidden;
   pointer-events: none;
+}
+.dt-quiet-said:focus-visible {
+  outline: 2px solid var(--dt-accent);
+  outline-offset: 1px;
 }
 /* The legend's word for it: of a share's time, how much ran with no recorded calls, its swatch hatched. */
 .dt-share-quiet {
@@ -1156,6 +1177,11 @@ tr[data-new] {
     display: none;
   }
 }
+/* The own lane's track, and its tooltip beside it, out of the drag's way. */
+.dt-lane-cell {
+  position: relative;
+  min-width: 0;
+}
 /* Under the lane: the strip heads its tab, there is no room above it in the panel. */
 .dt-lane-tip {
   position: absolute;
@@ -1163,6 +1189,11 @@ tr[data-new] {
   z-index: 20;
   transform: translateX(-50%);
   pointer-events: none;
+}
+/* One with a way on stays while the pointer travels into it. */
+.dt-lane-tip[data-hoverable] {
+  pointer-events: auto;
+  cursor: default;
 }
 .dt-lane-track {
   position: relative;
@@ -1233,36 +1264,19 @@ tr[data-new] {
   inset: 0 0 0 var(--dt-lane-label);
   pointer-events: none;
 }
+/* From the first lane down: the axis's labels stay clear of it. */
+.dt-timeline-layer .dt-range {
+  top: 1rem;
+}
 .dt-range {
   position: absolute;
   top: 0;
   bottom: 0;
   min-width: 1px;
-  border: 1px solid var(--dt-accent);
+  border: 1px solid color-mix(in srgb, var(--dt-accent) 70%, transparent);
   border-radius: 2px;
-  background: color-mix(in srgb, var(--dt-accent) 5%, transparent);
+  background: color-mix(in srgb, var(--dt-accent) 6%, transparent);
   pointer-events: none;
-}
-/* Where it starts and ends, and how long: over the axis, from its start, or ending with it in the later half. */
-/* Small, on the page's background: the hairline's colour in its text, no block of colour. */
-.dt-range-label {
-  position: absolute;
-  top: -1px;
-  left: -1px;
-  padding: 0 0.25rem;
-  border: 1px solid var(--dt-accent);
-  border-radius: 2px;
-  background: var(--dt-bg);
-  color: var(--dt-accent);
-  font-size: 0.6875rem;
-  font-weight: 500;
-  line-height: 0.875rem;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.dt-range[data-end] .dt-range-label {
-  right: -1px;
-  left: auto;
 }
 
 .dt-tabs {
@@ -2141,23 +2155,28 @@ details[data-focused] > .dt-sql-group {
   flex: none;
   font-family: var(--dt-font);
 }
-/* A way on, as a link reads: the panel's Profile turned on from the legend. */
-.dt-map-quiet-link {
+/* A tooltip's way on, as a link reads: the profile opened, or the panel's Profile turned on. */
+.dt-tip-action {
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
-  flex: none;
+  justify-self: start;
+  gap: 0.25rem;
   padding: 0;
   border: 0;
+  border-radius: 0.1875rem;
   background: none;
   color: var(--dt-accent);
-  font: var(--dt-size-sm) var(--dt-font);
+  font: var(--dt-size-xs) var(--dt-font);
   cursor: pointer;
 }
-.dt-map-quiet-link:hover:not(:disabled) {
+.dt-tip-action svg {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+.dt-tip-action:hover:not(:disabled) {
   text-decoration: underline;
 }
-.dt-map-quiet-link:disabled {
+.dt-tip-action:disabled {
   color: var(--dt-text-3);
   cursor: default;
 }
@@ -2224,6 +2243,9 @@ div.dt-map-row[data-kind="code"] {
 .dt-map-flame {
   display: inline-flex;
   flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
   color: var(--dt-text-3);
 }
 .dt-map-flame svg {
@@ -2236,9 +2258,14 @@ div.dt-map-row[data-kind="code"] {
 }
 .dt-map-flame[data-off] {
   opacity: 0.55;
+}
+button.dt-map-flame[data-off] {
   cursor: pointer;
 }
-.dt-map-flame[data-off]:hover {
+button.dt-map-flame[data-off]:disabled {
+  cursor: default;
+}
+button.dt-map-flame[data-off]:hover:not(:disabled) {
   opacity: 1;
   color: var(--dt-accent);
 }

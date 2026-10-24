@@ -15,7 +15,7 @@ import { ChevronRightIcon, CloseIcon } from "./icons";
 import { keyed } from "./keys";
 import { AllAttributes, LogRecordDetails } from "./LogRecordDetails";
 import { type Category, spanCategories } from "./lib/breakdown";
-import { callFields } from "./lib/callFields";
+import { callFields, templatePlace } from "./lib/callFields";
 import { callTemplate, groupNoun } from "./lib/calls";
 import { spanKindLabel } from "./lib/handler";
 import { widthOf } from "./lib/percent";
@@ -48,7 +48,7 @@ import { SideResize, useSideWidth } from "./SideResize";
 import { SignalNotes } from "./SignalNotes";
 import { SqlCode } from "./SqlCode";
 import { TemplateContext, withoutContext } from "./TemplateContext";
-import { RangeBand, useHeldSlice, useRangeDrag } from "./TimeSlice";
+import { ESCAPE_FIRST, RangeBand, useHeldSlice, useRangeDrag } from "./TimeSlice";
 import type { Attrs, IssueKind, Log, Related, Span, Trace, TraceError, TraceSummary } from "./types";
 
 /* ---------- tree ---------- */
@@ -273,9 +273,20 @@ function countFilters(nodes: Node[], counts = new Map<FilterId, number>()): Map<
  */
 export function chipCounts(nodes: Node[], trace: Trace): Map<FilterId, number> {
   const counts = countFilters(nodes);
-  const filters = trace.spans.map((span) => FILTER_OF.get(span.kind)).filter((filter) => filter !== undefined);
+  const root = trace.spans.find((span) => span.parent_id === null);
+  leaveOutOwn(counts, root);
+  const filters = trace.spans
+    .filter((span) => span !== root)
+    .map((span) => FILTER_OF.get(span.kind))
+    .filter((filter) => filter !== undefined);
   for (const filter of new Set(filters)) counts.set(filter, filters.filter((each) => each === filter).length);
   return counts;
+}
+
+/** The trace's own span isn't a call of it: a task's trace has no "Tasks 1" chip that picks only itself. */
+function leaveOutOwn(counts: Map<FilterId, number>, root: Span | undefined): void {
+  const own = root && FILTER_OF.get(root.kind);
+  if (own) counts.set(own, (counts.get(own) ?? 1) - 1);
 }
 
 /** What is picked, as the rows are matched against it: kinds of calls, a stretch of time, each span's category. */
@@ -693,8 +704,30 @@ function LeafRow({
   );
 }
 
+/**
+ * The template a call ran from, unless the row it hangs under is that template, named already (a line of it still
+ * says where).
+ */
+function FromTemplate({ span, parent }: { span: Span | undefined; parent: Span | undefined }) {
+  if (!span || saidAbove(span, parent)) return null;
+  return <TemplateChip attrs={span.attrs} />;
+}
+
+/** Whether the row a call hangs under is the template it ran from. */
+function saidAbove(span: Span, parent: Span | undefined): boolean {
+  return parent?.kind === "template" && parent.name === templatePlace(span.attrs);
+}
+
 /** A group's kind, its call's template, its alias, the page template that made it, how many and its issue. */
-function GroupName({ node, ctx }: { node: Extract<Node, { type: "group" }>; ctx: RowContext }) {
+function GroupName({
+  node,
+  ctx,
+  parent,
+}: {
+  node: Extract<Node, { type: "group" }>;
+  ctx: RowContext;
+  parent: Span | undefined;
+}) {
   const issue = node.spans.map((span) => ctx.issueBySpan.get(span.id)).find(Boolean);
   const first = node.spans[0];
   return (
@@ -702,7 +735,7 @@ function GroupName({ node, ctx }: { node: Extract<Node, { type: "group" }>; ctx:
       <KindBadge kind={spanKindLabel(first?.kind, ctx.trace.attrs)} muted={true} className="dt-map-kind" />
       <span className="dt-map-text">{callTemplate(first)}</span>
       <AliasChip value={aliasOf(first)} />
-      {first ? <TemplateChip attrs={first.attrs} /> : null}
+      <FromTemplate span={first} parent={parent} />
       <span className="dt-map-times">×{node.spans.length}</span>
       {issue ? <IssueChip kind={issue} className={ISSUE_CHIP_SHRINKS} /> : null}
     </>
@@ -729,7 +762,7 @@ function GroupRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProp
       >
         <span className="dt-map-name" style={indent}>
           <Caret open={open} onToggle={() => ctx.onToggle(`open:${node.key}`)} />
-          <GroupName node={node} ctx={ctx} />
+          <GroupName node={node} ctx={ctx} parent={parent} />
         </span>
         <GroupTicks spans={node.spans} trace={ctx.trace} />
         <span className="dt-map-time">{duration(total)}</span>
@@ -827,7 +860,7 @@ function SpanRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps
           />
           <SpanName span={span} />
           <AliasChip value={aliasBeside(span)} />
-          <TemplateChip attrs={span.attrs} />
+          <FromTemplate span={span} parent={parent} />
           <SignalNotes span={span} parent={parent} under={childSpans(node)} />
           <HiddenLogs count={ctx.hiddenLogs.get(span.id)} onShow={ctx.onShowLogs} />
           {issue ? <IssueChip kind={issue} className={ISSUE_CHIP_SHRINKS} /> : null}
@@ -959,7 +992,7 @@ function CodeRowParts({ span, ctx, depth, part }: { span: Span; ctx: RowContext;
       <span className="dt-map-name" style={{ paddingLeft: `${12 + depth * 16}px` }}>
         <span className="dt-map-caret" />
         <KindBadge kind={part.waiting ? "wait" : "code"} muted={true} className="dt-map-kind" />
-        <TaskName name={partName(part, ctx.trace)} className="dt-map-text" />
+        <TaskName name={partName(part, ctx.trace)} className="dt-map-text" title={false} />
         <RowFlame trace={ctx.trace} />
       </span>
       <CodeBars part={part} category={category} trace={ctx.trace} />
@@ -1000,7 +1033,8 @@ function CodePartRow({ span, ctx, depth, part }: { span: Span; ctx: RowContext; 
     </div>
   );
   const offered = Boolean(ctx.trace.profile) || profiling.available;
-  return <WithWhatRan trace={ctx.trace} offered={offered} row={row} part={part} />;
+  const onOpen = open ? () => open(partRange(part)) : undefined;
+  return <WithWhatRan trace={ctx.trace} offered={offered} row={row} part={part} onOpen={onOpen} />;
 }
 
 /** Whether a span has a code row: its code ran long with nothing recorded inside, and what is picked keeps it. */
@@ -1009,28 +1043,33 @@ function hasCodeRow(span: Span, ctx: RowContext): boolean {
   return quiet !== undefined && codeShown(quiet, ctx.categories.get(span.id) ?? "code", ctx);
 }
 
-/** A code row with what ran (or waited) in it on hover, when there is anything to say. */
+/**
+ * A code row with what ran (or waited) in it on hover, when there is anything to say. Its tooltip holds the way on
+ * (the profile, or Profile turned on): it stays open while the pointer travels into it, and Esc closes it first.
+ */
 function WithWhatRan({
   trace,
   offered,
   row,
   part,
+  onOpen,
 }: {
   trace: Trace;
   offered: boolean;
   row: ReactNode;
   part: CodePart;
+  onOpen: (() => void) | undefined;
 }) {
   if (!offered) return row;
   const range = partRange(part);
   return (
-    <Tooltip delayDuration={150} disableHoverableContent={true}>
+    <Tooltip delayDuration={150}>
       <TooltipTrigger asChild>{row}</TooltipTrigger>
-      <TooltipContent side="top" sideOffset={6} arrow={false} className={CODE_TIP_CLASS}>
+      <TooltipContent side="top" sideOffset={6} arrow={false} className={CODE_TIP_CLASS} {...{ [ESCAPE_FIRST]: "" }}>
         {part.waiting ? (
-          <WhatWaited trace={trace} range={range} waited={part.total} />
+          <WhatWaited trace={trace} range={range} waited={part.total} onOpen={onOpen} />
         ) : (
-          <WhatRan trace={trace} range={range} />
+          <WhatRan trace={trace} range={range} onOpen={onOpen} />
         )}
       </TooltipContent>
     </Tooltip>

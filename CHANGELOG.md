@@ -151,6 +151,20 @@
 
 ### Fixed
 
+- A call tree says each thing once. A range picked is said by the legend's
+  chip alone, its × lets it go, and its bands over the strip and the tree are
+  a hairline and a tint that cover no axis or lane label. Show all shows only
+  with two or more things picked. The legend no longer offers Profile (it
+  said "Profile is on: run it again" on a trace with a profile) nor repeats
+  the strip's waiting and untraced time, which its share says on hover. A
+  task's trace has no Tasks chip that picks only itself, a query under its
+  template's row doesn't name the template again, and a row with a tooltip
+  has no browser title under it. The tooltips of the code's own time, on the
+  strip and in the tree, stay open while the pointer moves into them, so
+  Open the profile (or, in the panel, Turn on Profile) is a click away, and
+  from the keyboard a Tab away. A task's name cut to fit drops its module
+  path first and keeps its last segment readable (`build_sales_report`), and
+  in the panel's list a row with no status takes that room too.
 - Library frames are summed up by their packages, on one line: "10 library
   frames · faststream ×9 · sqlalchemy", every module on hover and when opened.
   The list of every module ran past the error's edge.

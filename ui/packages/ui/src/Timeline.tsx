@@ -152,13 +152,7 @@ function MarkOn({
 }) {
   if (!onSelect) return <span {...look} title={mark.label} />;
   return (
-    <button
-      type="button"
-      {...look}
-      title={mark.target.tab === "tree" ? `${mark.label} · open in the call tree` : mark.label}
-      aria-label={mark.label}
-      onClick={() => onSelect(mark.target)}
-    />
+    <button type="button" {...look} title={mark.label} aria-label={mark.label} onClick={() => onSelect(mark.target)} />
   );
 }
 
@@ -267,7 +261,12 @@ function LanesBody({
           </span>
         ))}
       </div>
-      <TimeLane trace={trace} word={LANE_WORDS[trace.kind] ?? trace.kind} parts={slice.parts} />
+      <TimeLane
+        trace={trace}
+        word={LANE_WORDS[trace.kind] ?? trace.kind}
+        parts={slice.parts}
+        onQuiet={picking.onQuiet}
+      />
       {drawn.map((lane) => (
         <LaneRow key={lane.noun[1]} lane={lane} trace={trace} range={range} onSelect={onSelect} />
       ))}

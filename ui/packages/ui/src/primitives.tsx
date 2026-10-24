@@ -316,11 +316,22 @@ export function AppChip({ name, runtime }: { name: string; runtime?: string | un
 
 /**
  * A task's name, cut at its start when it doesn't fit: what tells tasks apart is at its end (the function, the
- * consumer's handler), not the package they share. One look wherever a task is named (its lists, its page, a trace's
- * heading, the call tree, search, the panel), whole on hover. Cut here, not by the browser: a name cut by an
- * right-to-left box starts a little right of an uncut one, and a column of names must start at one edge.
+ * consumer's handler), not the package they share. Whole segments go first ("…handlers.build_sales_report", then
+ * "…build_sales_report"); where not even its last one fits, that one is cut at its end, so what is left still reads
+ * as its name ("build_sales_re…"), never as a tail of it. One look wherever a task is named (its lists, its page, a
+ * trace's heading, the call tree, search, the panel), whole on hover unless a tooltip of its own says more (`title`
+ * false). Cut here, not by the browser: a name cut by an right-to-left box starts a little right of an uncut one, and
+ * a column of names must start at one edge.
  */
-export function TaskName({ name, className }: { name: string; className?: string | undefined }) {
+export function TaskName({
+  name,
+  className,
+  title = true,
+}: {
+  name: string;
+  className?: string | undefined;
+  title?: boolean;
+}) {
   const ref = useRef<HTMLSpanElement>(null);
   useLayoutEffect(() => {
     const element = ref.current;
@@ -337,42 +348,38 @@ export function TaskName({ name, className }: { name: string; className?: string
   return (
     <span
       ref={ref}
-      className={cn("block min-w-0 overflow-hidden text-left font-mono whitespace-nowrap", className)}
-      title={name}
+      className={cn("block min-w-0 overflow-hidden text-left font-mono text-ellipsis whitespace-nowrap", className)}
+      title={title ? name : undefined}
     />
   );
 }
 
-/** `name` in `element`, or as much of its end as fits after a "…". Its text is this function's, not React's. */
+/** `name` in `element`, or the most of its end that fits, in whole segments after a "…"; else its last, cut. */
 function startCut(element: HTMLElement, name: string): void {
   // Not laid out (hidden, or not in the page yet): whole, until it has a width.
   if (fits(element, name) || element.clientWidth === 0) return;
-  element.textContent = `…${name.slice(afterSeparator(name, fewestDropped(element, name)))}`;
+  const fitting = segmentStarts(name).some((start) => fits(element, `…${name.slice(start)}`));
+  // Not even the last segment: it, cut at its end by the browser's ellipsis.
+  if (!fitting) element.textContent = lastSegment(name);
 }
 
-/** Where a cut name starts: past a dot right after the "…", so it never reads "….Thumbnail". */
-function afterSeparator(name: string, from: number): number {
-  let start = from;
-  while (start < name.length - 1 && name[start] === ".") start += 1;
-  return start;
+/** "build_sales_report" of "app.handlers.build_sales_report". */
+function lastSegment(name: string): string {
+  return name.slice(segmentStarts(name).at(-1) ?? 0);
+}
+
+/** A segment after the first: past a module's dots, a path's slashes, a handler's colons, a space. */
+const SEGMENT = /(?<=[.:/\s·])[^.:/\s·]/g;
+
+/** Where each segment after the first starts, longest tail first: "a.b.c" → [2, 4]. */
+function segmentStarts(name: string): number[] {
+  return [...name.matchAll(SEGMENT)].map((match) => match.index);
 }
 
 /** Whether `text` fits in `element`'s width, left in it to show. */
 function fits(element: HTMLElement, text: string): boolean {
   element.textContent = text;
   return element.scrollWidth <= element.clientWidth;
-}
-
-/** The fewest characters dropped from the start of `name` that let the rest fit after a "…". */
-function fewestDropped(element: HTMLElement, name: string): number {
-  let low = 1;
-  let high = name.length;
-  while (low < high) {
-    const middle = (low + high) >> 1;
-    if (fits(element, `…${name.slice(middle)}`)) high = middle;
-    else low = middle + 1;
-  }
-  return low;
 }
 
 /** Where a status goes, kept when there is none (a task, a job, a view), so the columns after it line up. */

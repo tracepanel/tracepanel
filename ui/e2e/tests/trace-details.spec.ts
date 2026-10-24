@@ -56,7 +56,7 @@ test("the Request tab lists the trace's attributes, the DB tab its queries group
   await expect(panel.getByText("SELECT author").first()).toBeVisible();
 });
 
-test("a query a template made says so, in the DB tab and in the call tree", async ({ page }) => {
+test("a query a template made says so in the DB tab; in the call tree its template's row says it", async ({ page }) => {
   await page.goto(`/#/t/${await traceId("GET /")}`);
   await page.getByRole("tab", { name: /^DB/ }).click();
   const panel = page.getByRole("tabpanel");
@@ -81,7 +81,14 @@ test("a query a template made says so, in the DB tab and in the call tree", asyn
 
   await page.getByRole("tab", { name: "Call tree" }).click();
 
-  await expect(page.getByRole("button", { name: /SELECT auth_user .*template blog\/post_list\.html/ })).toBeVisible();
+  const query = page.locator(".dt-map-row").filter({ hasText: "SELECT auth_user" });
+
+  // It hangs under the template's own row: the template isn't said again beside it.
+  await expect(query).toBeVisible();
+  await expect(query.locator(".dt-from-template")).toHaveCount(0);
+  await expect(page.locator(".dt-map-row").filter({ hasText: "blog/post_list.html" }).first()).toContainText(
+    "template",
+  );
 });
 
 test("Explore leads to the endpoint's calls, the issue and the logs around the trace", async ({ page }) => {
