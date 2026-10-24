@@ -1,4 +1,11 @@
-import { type CSSProperties, type MouseEvent, type PointerEvent, type RefObject, useRef } from "react";
+import {
+  type CSSProperties,
+  type HTMLAttributes,
+  type MouseEvent,
+  type PointerEvent,
+  type RefObject,
+  useRef,
+} from "react";
 import { partOfCategory } from "./CallMap";
 import { duration } from "./format";
 import { keyed } from "./keys";
@@ -127,6 +134,31 @@ function outside(mark: Mark, trace: Trace, range: TimeRange | null): "" | undefi
   return range && !overlaps(range, mark.start - trace.start, mark.duration) ? "" : undefined;
 }
 
+/**
+ * A mark: a button that opens what it is where the lanes lead somewhere (over the call tree), else just its look and
+ * its name on hover.
+ */
+function MarkOn({
+  mark,
+  look,
+  onSelect,
+}: {
+  mark: Mark;
+  look: HTMLAttributes<HTMLElement> & Record<`data-${string}`, string | undefined>;
+  onSelect: ((target: MarkTarget) => void) | undefined;
+}) {
+  if (!onSelect) return <span {...look} title={mark.label} />;
+  return (
+    <button
+      type="button"
+      {...look}
+      title={mark.target.tab === "tree" ? `${mark.label} · open in the call tree` : mark.label}
+      aria-label={mark.label}
+      onClick={() => onSelect(mark.target)}
+    />
+  );
+}
+
 /** One lane: its name, how many marks, and the marks over the trace's time; those outside a picked range fade. */
 function LaneRow({
   lane,
@@ -151,17 +183,17 @@ function LaneRow({
           <span key={tick} className="dt-lane-grid" style={{ left: `${tick * 100}%` }} />
         ))}
         {lane.marks.map((mark) => (
-          <button
-            type="button"
+          <MarkOn
             key={mark.key}
-            className="dt-mark"
-            data-tone={mark.tone}
-            data-point={mark.duration === 0 ? "" : undefined}
-            data-out={outside(mark, trace, range)}
-            style={position(mark, trace, total)}
-            title={mark.target.tab === "tree" ? `${mark.label} · open in the call tree` : mark.label}
-            aria-label={mark.label}
-            onClick={() => onSelect?.(mark.target)}
+            mark={mark}
+            look={{
+              className: "dt-mark",
+              "data-tone": mark.tone,
+              "data-point": mark.duration === 0 ? "" : undefined,
+              "data-out": outside(mark, trace, range),
+              style: position(mark, trace, total),
+            }}
+            onSelect={onSelect}
           />
         ))}
       </div>
@@ -266,44 +298,57 @@ export function Timeline({ trace, onSelect }: { trace: Trace; onSelect?: ((targe
   const layer = useRef<HTMLDivElement>(null);
   const { slice, onRange, onShare } = useLanesSlice(onSelect);
   const drag = useRangeDrag(Math.max(trace.duration, 1), onRange);
+  // Its own lane alone is one bar from 0 to its duration, which the header says: no lanes then.
   if (drawn.length === 0) return null;
+  // Without `onSelect` the lanes only show: no click, no drag picks anything (beside another tab than the tree).
+  const picking = { ...(onSelect ? { onRange, onShare, start: drag.start } : PASSIVE), layer };
   return (
-    <figure className="dt-timeline" aria-label="Timeline">
+    <figure className="dt-timeline" aria-label="Timeline" data-passive={passive(onSelect)}>
       <LanesBody
         trace={trace}
         drawn={drawn}
         slice={{ ...slice, range: drag.draft ?? slice.range }}
-        picking={{ onRange, onShare, start: drag.start, layer }}
+        picking={picking}
         onSelect={onSelect}
       />
     </figure>
   );
 }
 
-/** A strip says something when the trace called anything, or its time went to more than one share. */
-function hasStrip(trace: Trace): boolean {
-  return lanes(trace).length > 0 || breakdown(trace).length > 1;
+function passive(onSelect: ((target: MarkTarget) => void) | undefined): "" | undefined {
+  return onSelect ? undefined : "";
+}
+
+const PASSIVE = { onRange: () => undefined, onShare: () => undefined, start: () => undefined };
+
+/** A strip says something when the trace called anything, or (with its legend) its time went to several shares. */
+function hasStrip(trace: Trace, legend: boolean): boolean {
+  return lanes(trace).length > 0 || (legend && breakdown(trace).length > 1);
 }
 
 /**
- * Where the trace's time went, in one place: its lanes over the time, and under them their legend, the shares of
- * the time and the call tree's filters. Above the tabs on the trace's page; in the panel, on its Request and Call
- * tree tabs.
+ * Where the trace's time went: its lanes over the time, and, with `legend` (over the call tree, in the panel), the
+ * shares of the time and the call tree's filters under them. Its lanes pick a part of the time only over the call
+ * tree (`tab`): beside another tab they only show, nothing on them leads away.
  */
 export function TimeStrip({
   trace,
   related,
   onSelect,
+  tab,
+  legend = false,
 }: {
   trace: Trace;
   related: Related | undefined;
-  onSelect?: ((target: MarkTarget) => void) | undefined;
+  onSelect: (target: MarkTarget) => void;
+  tab: string;
+  legend?: boolean;
 }) {
-  if (!hasStrip(trace)) return null;
+  if (!hasStrip(trace, legend)) return null;
   return (
     <section className="dt-strip" aria-label="Time">
-      <Timeline trace={trace} onSelect={onSelect} />
-      <TimeLegend trace={trace} related={related} onPick={() => onSelect?.({ tab: "tree" })} />
+      <Timeline trace={trace} onSelect={tab === "tree" ? onSelect : undefined} />
+      {legend ? <TimeLegend trace={trace} related={related} /> : null}
     </section>
   );
 }

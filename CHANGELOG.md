@@ -15,11 +15,12 @@
   Show all, Esc or a double click lets them go. The panel does the same, and
   its Console button opens the trace with what was picked.
 - A long stretch of a trace's own code with no recorded calls is said. On the
-  time strip it is hatched and labelled (`1.5 s · no recorded calls`). In the
-  call tree a span whose code ran long without calls has a row of its own
-  under them, `no recorded calls`, with its time and where it fell on the
-  timeline. A transaction says how long it was open and how much of that was
-  SQL (`open 1.6 s · SQL 29 ms`): the rest is code running while it is held.
+  time strip it is hatched and labelled (`1.6 s · no recorded calls`), its
+  tooltip says how to see what ran (its Profile tab, or turning Profile on),
+  and the legend counts it in its share (`Your code 1.6 s 99% · of it 1.6 s
+  no recorded calls`). A transaction's time says on hover how long it was
+  open and how much of that its SQL took, and a row whose name says its
+  database has no chip saying it again.
 - Queries a template made as it rendered say so. In the DB tab and the call
   tree such a query has a chip with its template and line
   (`template blog/list.html:4`), its "Called from" names the view's line it
@@ -107,12 +108,14 @@
 ### Changed
 
 - A trace's time is one strip above its tabs: its own lane in the colours of
-  where its time went, a lane per system it called named by what its marks
-  are (`139 queries`, `1 log record`), and the shares of the time and the
-  call tree's filters as its legend. It replaces the tiles, the lanes and the
-  bar over the call tree. In the panel it heads the Request and Call tree
-  tabs. What the trace called is one quiet line in its header after its
-  duration (`139 queries 29 ms · 3 unique`).
+  where its time went, and a lane per system it called named by what its
+  marks are (`139 queries`, `1 log record`). It replaces the tiles, the lanes
+  and the bar over the call tree. The shares of the time and the call tree's
+  filters are its legend, over the call tree. Beside another tab the lanes
+  only show: nothing on them leads away. In the panel the strip is on the
+  Request tab, and with its legend on the Call tree tab. What the trace
+  called is one quiet line in its header after its duration (`139 queries
+  29 ms · 3 unique`).
 - The pill says what a request's tasks ran into as its other numbers do:
   the Tasks icon, then a red "5 failed" chip and the amber "3 issues" one,
   the same chips as its own. Its ring turns red when one failed. Before,

@@ -6,6 +6,7 @@ import { CloseIcon } from "./icons";
 import { breakdown, type Category, categoryLabel, spanCategories } from "./lib/breakdown";
 import { percent } from "./lib/percent";
 import { plural } from "./lib/plural";
+import { quietSpans } from "./lib/quiet";
 import { isWhole, rangeLabel, type Slice, togglePart, WHOLE } from "./lib/slice";
 import { useHeldSlice } from "./TimeSlice";
 import type { Related, Trace } from "./types";
@@ -18,11 +19,20 @@ export interface ShareOf {
   /** How many spans count in it. */
   calls: number;
   label: string;
+  /** Of its time, how much its code ran with no recorded calls (the strip's hatched stretches), when it did. */
+  quiet: number;
 }
 
 /** "26 ms · 96% · 12 calls": how long, of the whole, how many spans. */
 function shareNumbers(share: ShareOf): string {
   return `${duration(share.value)} · ${percent(share.value, share.total)} · ${plural(share.calls, "call", "calls")}`;
+}
+
+/** Numbers added up by category. */
+function addUp(items: readonly [Category, number][]): Map<Category, number> {
+  const sums = new Map<Category, number>();
+  for (const [category, value] of items) sums.set(category, (sums.get(category) ?? 0) + value);
+  return sums;
 }
 
 /** Each share of the time with its numbers: how long, of how much, how many spans. */
@@ -32,14 +42,21 @@ export function sharesOf(trace: Trace): ShareOf[] {
     parts.reduce((sum, [, value]) => sum + value, 0),
     1,
   );
-  const calls = new Map<Category, number>();
-  for (const category of spanCategories(trace).values()) calls.set(category, (calls.get(category) ?? 0) + 1);
+  const categories = spanCategories(trace);
+  const calls = addUp([...categories.values()].map((category) => [category, 1]));
+  const quiet = addUp(
+    [...quietSpans(trace)].flatMap(([span, { total }]): [Category, number][] => {
+      const category = categories.get(span);
+      return category ? [[category, total]] : [];
+    }),
+  );
   return parts.map(([category, value]) => ({
     category,
     value,
     total,
     calls: calls.get(category) ?? 0,
     label: categoryLabel(category, trace),
+    quiet: quiet.get(category) ?? 0,
   }));
 }
 
@@ -84,6 +101,17 @@ export function ShareTip({ share }: { share: ShareOf }) {
 export const TIP_CLASS =
   "flex items-center gap-2 rounded-lg border bg-popover px-3 py-2 text-sm whitespace-nowrap text-popover-foreground shadow-[var(--dt-popover-shadow)]";
 
+/** Of a share's time, its code's own with no recorded calls: the strip's hatched part, read with its share. */
+function QuietPart({ share }: { share: ShareOf }) {
+  if (share.quiet === 0) return null;
+  return (
+    <span className="dt-share-quiet">
+      <span className="dt-swatch" data-quiet="" />
+      of it {duration(share.quiet)} no recorded calls
+    </span>
+  );
+}
+
 /** A category of the time: its colour, its share; its numbers on hover; a click picks its rows. */
 function Share({ share, filters }: { share: ShareOf; filters: SliceState }) {
   const part = partOfCategory(share.category);
@@ -101,6 +129,7 @@ function Share({ share, filters }: { share: ShareOf; filters: SliceState }) {
             {share.label}
             <b>{duration(share.value)}</b>
             <span className="dt-breakdown-share">{percent(share.value, share.total)}</span>
+            <QuietPart share={share} />
           </button>
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={8} arrow={false} className={TIP_CLASS}>
@@ -134,34 +163,17 @@ function RangeChip({ total, filters }: { total: number; filters: SliceState }) {
   );
 }
 
-/** Whether `next` picks more than `slice` did: a pick, not a let-go. */
-function picksMore(next: Slice, slice: Slice): boolean {
-  return next.parts.length > slice.parts.length;
-}
-
 /**
  * The time strip's legend, and what to show in the call tree: each share (Database, Templates, Your code…) in its
  * lane's colour picks its rows; the filters with no time of their own (Logs, Errors, Tasks…) follow as plain chips,
  * then the range picked. A pick opens the call tree (`onPick`).
  */
-export function TimeLegend({
-  trace,
-  related,
-  onPick,
-}: {
-  trace: Trace;
-  related: Related | undefined;
-  onPick?: (() => void) | undefined;
-}) {
+export function TimeLegend({ trace, related }: { trace: Trace; related: Related | undefined }) {
   const tree = useMemo(() => buildTree(trace, related), [trace, related]);
   const counts = useMemo(() => chipCounts(tree, trace), [tree, trace]);
   const shares = useMemo(() => sharesOf(trace), [trace]);
   const { slice, change } = useHeldSlice();
-  const onChange = (next: Slice) => {
-    change(next);
-    if (picksMore(next, slice)) onPick?.();
-  };
-  const filters = { counts, slice, onChange };
+  const filters = { counts, slice, onChange: change };
   const claimed = new Set(shares.map((share) => partOfCategory(share.category)));
   const others = FILTERS.filter((filter) => !claimed.has(filter.id) && (counts.get(filter.id) ?? 0) > 0);
   return (

@@ -46,6 +46,7 @@ import { RequestInfo } from "./RequestInfo";
 import { type Explain, SqlList } from "./SqlList";
 import { type SystemCalls, systemCalls, systemOfIssue } from "./systemCalls";
 import { Tabs } from "./Tabs";
+import { TimeLegend } from "./TimeLegend";
 import { type MarkTarget, TimeStrip } from "./Timeline";
 import { SliceScope } from "./TimeSlice";
 import type { App, Issue, IssueKind, Related, Trace } from "./types";
@@ -389,7 +390,7 @@ function RequestPane({
   // The panel's Request tab has the time strip the page has above its tabs: the panel shows what the page shows.
   const overview = panel ? (
     <div className="dt-panel-overview">
-      <TimeStrip trace={trace} related={related} onSelect={onSelect} />
+      <TimeStrip trace={trace} related={related} onSelect={onSelect} tab="request" />
     </div>
   ) : null;
   return <RequestInfo trace={trace} related={related} links={links} hero={panel} overview={overview} />;
@@ -403,7 +404,14 @@ function TreePane({
   ...tree
 }: ComponentProps<typeof CallMap> & { open: boolean; panel: boolean; onSelect: (target: MarkTarget) => void }) {
   if (!open) return null;
-  const head = panel ? <TimeStrip trace={tree.trace} related={tree.related} onSelect={onSelect} /> : null;
+  // In the panel the strip and its legend; on the page the strip is above the tabs, its legend here.
+  const head = panel ? (
+    <TimeStrip trace={tree.trace} related={tree.related} onSelect={onSelect} tab="tree" legend={true} />
+  ) : (
+    <div className="dt-tree-legend">
+      <TimeLegend trace={tree.trace} related={tree.related} />
+    </div>
+  );
   return <CallMap {...tree} head={head} />;
 }
 
@@ -620,7 +628,7 @@ export function TraceView({
             {actions ? <div className="flex shrink-0 items-center gap-0.5">{actions}</div> : null}
           </div>
         </header>
-        {compact ? null : <TimeStrip trace={trace} related={related} onSelect={openAt} />}
+        {compact ? null : <TimeStrip trace={trace} related={related} onSelect={openAt} tab={active} />}
         {tabsBar}
         {panel}
       </article>

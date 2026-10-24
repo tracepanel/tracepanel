@@ -154,6 +154,8 @@ export interface Stretch {
   to: number;
   category: Category;
   quiet: boolean;
+  /** The span running then, deepest. */
+  span: string;
 }
 
 /** A stretch after the last: the same as it, it makes it longer. */
@@ -164,7 +166,7 @@ function extend(list: Stretch[], next: Stretch): void {
 }
 
 function continues(last: Stretch, next: Stretch): boolean {
-  return last.to === next.from && last.category === next.category && last.quiet === next.quiet;
+  return last.to === next.from && last.span === next.span && last.quiet === next.quiet;
 }
 
 /**
@@ -183,7 +185,8 @@ export function stretches(trace: Trace): Stretch[] {
     const innermost = innermostAt(spans, from, to, depth);
     const category = innermost ? owner(innermost) : null;
     if (!(innermost && category)) return null;
-    return { from: from - trace.start, to: to - trace.start, category, quiet: callers.has(innermost.id) };
+    const quiet = callers.has(innermost.id);
+    return { from: from - trace.start, to: to - trace.start, category, quiet, span: innermost.id };
   };
   const list: Stretch[] = [];
   edges.slice(1).forEach((to, index) => {
@@ -191,21 +194,6 @@ export function stretches(trace: Trace): Stretch[] {
     if (next) extend(list, next);
   });
   return list;
-}
-
-/** A quiet stretch long enough to say: at least 5 ms, and a tenth of the trace. */
-const QUIET_MIN_US = 5_000;
-const QUIET_MIN_SHARE = 0.1;
-
-/** The quiet stretches worth marking: long ones, in a row of quiet ones taken as one. */
-export function quietStretches(list: readonly Stretch[], total: number): Stretch[] {
-  const runs: Stretch[] = [];
-  for (const each of list.filter((stretch) => stretch.quiet)) {
-    const last = runs.at(-1);
-    if (last?.to === each.from) last.to = each.to;
-    else runs.push({ ...each });
-  }
-  return runs.filter((run) => run.to - run.from >= Math.max(QUIET_MIN_US, total * QUIET_MIN_SHARE));
 }
 
 /** Where the wall-clock time went, per category: the stretches added up. */

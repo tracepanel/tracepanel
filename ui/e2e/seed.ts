@@ -391,7 +391,7 @@ function heldTransaction(): Doc {
       "db.statement": `SELECT * FROM "${table}" WHERE "id" = %s`,
       "db.fingerprint": `select-${table}`,
       "db.vendor": "sqlite",
-      "db.alias": "default",
+      "db.alias": "app.sqlite3",
     },
   });
   const items = Array.from({ length: 39 }, (_, index) => sql(index + 1, "order_item", 12_000 + index * 2_400, 180));
@@ -401,11 +401,11 @@ function heldTransaction(): Doc {
       id: `${id}T`,
       parent_id: root["id"],
       kind: "transaction",
-      name: "transaction default",
+      name: "transaction app.sqlite3",
       start: 2_000,
       duration: 1_590_000,
       status: "ok",
-      attrs: { "db.alias": "default" },
+      attrs: { "db.alias": "app.sqlite3" },
     },
     sql(0, "order", 5_000, 3_000),
     ...items,

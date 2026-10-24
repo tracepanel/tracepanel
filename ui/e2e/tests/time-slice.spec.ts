@@ -61,7 +61,7 @@ test("a share's stretch says its time, its part of the whole and how many calls 
 
   await segment(page, "template").hover();
 
-  await expect(page.getByRole("tooltip", { name: /^Templates/ })).toHaveText(/^Templates\s*\d+ ms · \d+% · 1 call$/);
+  await expect(page.getByRole("tooltip", { name: /^Templates/ })).toHaveText(/^Templates\s*\d+ ms · \d+% · 1 call/);
 });
 
 test("a share picked keeps its calls, dims the way to them and goes into the URL; again, or Esc, lets it go", async ({
@@ -108,12 +108,10 @@ test("a link with a share picked opens the tree with it", async ({ page }) => {
 test("a drag across the lanes keeps the calls of that stretch of time, says it and puts it in the URL", async ({
   page,
 }) => {
-  await openHome(page, "tab=request");
+  await openHome(page);
   const lanes = page.getByRole("figure", { name: "Timeline" }).locator(".dt-timeline-layer");
   await drag(page, lanes, 0.5, 2.4);
 
-  // The lanes' range is the call tree's to show: it opens on it.
-  await expect(page.getByRole("tab", { name: /^Call tree/ })).toHaveAttribute("aria-selected", "true");
   await expect(page).toHaveURL(/[?&]range=/);
   const [from, to] = rangeOf(page.url());
 
@@ -202,10 +200,8 @@ test("in the panel: the numbers on hover, a share and a stretch of time picked, 
   // Esc let the share go; the panel stayed open.
   await expect(frame.getByRole("tab", { name: /^Call tree/ })).toBeVisible();
 
-  await frame.getByRole("tab", { name: /^Request/ }).click();
   await drag(page, frame.locator(".dt-timeline-layer"), 0.5, 2.4);
 
-  await expect(frame.getByRole("tab", { name: /^Call tree/ })).toHaveAttribute("aria-selected", "true");
   await expect(frame.locator(".dt-map-range-layer .dt-range-label")).toHaveText(/^0\.\d → 2\.\d ms · 1\.\d ms$/);
   await expect(row(frame, "template", "blog/post_list.html")).toHaveCount(0);
   await expect(frame.getByRole("link", { name: /^Console/ })).toHaveAttribute("href", /[?&]range=0\.\d+-2\.\d+/);
@@ -213,4 +209,29 @@ test("in the panel: the numbers on hover, a share and a stretch of time picked, 
   await frame.getByRole("button", { name: "Show all", exact: true }).click();
 
   await expect(row(frame, "template", "blog/post_list.html")).toBeVisible();
+});
+
+test("beside another tab than the call tree the lanes only show: no legend, nothing on them leads away", async ({
+  page,
+}) => {
+  await openHome(page, "tab=request");
+  const lanes = page.getByRole("figure", { name: "Timeline" });
+
+  await expect(page.getByRole("list", { name: /^Where the time went/ })).toHaveCount(0);
+  await expect(lanes.getByRole("button")).toHaveCount(0);
+
+  await drag(page, lanes.locator(".dt-timeline-layer"), 0.5, 2.4);
+  await segment(page, "template").click();
+
+  await expect(page.getByRole("tab", { name: /^Request/ })).toHaveAttribute("aria-selected", "true");
+  await expect(page).not.toHaveURL(/range=|part=/);
+
+  await openApp(page, { home: { status: 200, trace: await traceId("GET /"), queries: 151, totalMs: 28 } });
+  await page.getByRole("button", { name: "Load home" }).click();
+  await pill(page).click();
+  const frame = panel(page);
+  await frame.getByRole("tab", { name: /^Request/ }).click();
+
+  await expect(frame.getByRole("figure", { name: "Timeline" })).toBeVisible();
+  await expect(frame.getByRole("list", { name: /^Where the time went/ })).toHaveCount(0);
 });

@@ -17,7 +17,6 @@ import { type Category, spanCategories } from "./lib/breakdown";
 import { callFields } from "./lib/callFields";
 import { callTemplate, groupNoun } from "./lib/calls";
 import { spanKindLabel } from "./lib/handler";
-import { widthOf } from "./lib/percent";
 import { traceRuntime } from "./lib/runtime";
 import { isReceiver, raised } from "./lib/signals";
 import { overlaps, type Slice, type TimeRange } from "./lib/slice";
@@ -380,10 +379,6 @@ interface RowContext {
   marks?: ReadonlyMap<string, Mark> | undefined;
   /** The selected row's details, opened right under that row; null while they show in the side pane. */
   details: ReactNode;
-  /** The spans whose own code ran long with no recorded calls, by id: a row under each says so. */
-  quiet: ReadonlyMap<string, Quiet>;
-  /** What is picked: a quiet row shows with a range it overlaps, never with kinds of calls. */
-  slice: Slice;
 }
 
 /** The selected row's details, under it: where the click was, not past the end of a long tree. */
@@ -611,6 +606,12 @@ function rowState(ctx: RowContext, key: string, mark: Mark | undefined) {
   };
 }
 
+/** A row's alias chip: none when its name already says it (`transaction app.sqlite3`). */
+function aliasBeside(span: Span): unknown {
+  const alias = aliasOf(span);
+  return typeof alias === "string" && span.name.includes(alias) ? undefined : alias;
+}
+
 /** A call's database or cache alias, when it has one. */
 function aliasOf(span: Span | undefined): unknown {
   return span?.attrs["db.alias"] ?? span?.attrs["cache.alias"];
@@ -796,108 +797,18 @@ function SpanRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps
             className="dt-map-kind"
           />
           <SpanName span={span} />
-          <AliasChip value={aliasOf(span)} />
+          <AliasChip value={aliasBeside(span)} />
           <TemplateChip attrs={span.attrs} />
           <SignalNotes span={span} parent={parent} under={childSpans(node)} />
-          <TransactionNote span={span} trace={ctx.trace} />
           {issue ? <IssueChip kind={issue} className={ISSUE_CHIP_SHRINKS} /> : null}
         </span>
         <Bar trace={ctx.trace} start={span.start} length={span.duration} />
-        <span className="dt-map-time">{duration(span.duration)}</span>
+        <span className="dt-map-time" title={timeTitle(span, ctx.trace)}>
+          {duration(span.duration)}
+        </span>
       </button>
       <RowDetails id={node.key} ctx={ctx} />
-      {fold ? (
-        <>
-          <Rows nodes={node.children} depth={depth + 1} ctx={ctx} parent={span} />
-          <QuietRow span={span} ctx={ctx} depth={depth + 1} />
-        </>
-      ) : null}
-    </div>
-  );
-}
-
-/* ---------- the code's own time ---------- */
-
-/** A span's own code that ran long with no recorded calls: when (its gaps), and how long in all. */
-interface Quiet {
-  gaps: [number, number][];
-  total: number;
-}
-
-/** Said under a span when its own code ran at least this long, and this share of it, with no recorded calls. */
-const QUIET_MIN_US = 5_000;
-const QUIET_MIN_SHARE = 0.2;
-
-/** Where a span ran with none of its calls running: from its start to its end, between and around them. */
-function gapsIn(span: Span, calls: readonly Span[]): [number, number][] {
-  const gaps: [number, number][] = [];
-  let at = span.start;
-  for (const call of [...calls].sort((a, b) => a.start - b.start)) {
-    if (call.start > at) gaps.push([at, call.start]);
-    at = Math.max(at, call.start + call.duration);
-  }
-  if (span.start + span.duration > at) gaps.push([at, span.start + span.duration]);
-  return gaps;
-}
-
-/** A span's quiet time, when it made calls but ran long without them. */
-function quietIn(span: Span, calls: readonly Span[]): Quiet | null {
-  if (calls.length === 0) return null;
-  const gaps = gapsIn(span, calls);
-  const total = gaps.reduce((sum, [from, to]) => sum + to - from, 0);
-  return total >= Math.max(QUIET_MIN_US, span.duration * QUIET_MIN_SHARE) ? { gaps, total } : null;
-}
-
-/** Each span of the tree whose own code ran long with no recorded calls, by its id. */
-function quietSpans(nodes: Node[], found = new Map<string, Quiet>()): Map<string, Quiet> {
-  for (const node of nodes) {
-    if (node.type !== "span") continue;
-    const quiet = quietIn(node.span, node.children.flatMap(spansOf));
-    if (quiet) found.set(node.key, quiet);
-    quietSpans(node.children, found);
-  }
-  return found;
-}
-
-/** A quiet row shows unless kinds of calls are picked, or a range it doesn't overlap. */
-function quietShown(quiet: Quiet, ctx: RowContext): boolean {
-  const { parts, range } = ctx.slice;
-  if (parts.length > 0) return false;
-  return range === null || quiet.gaps.some(([from, to]) => overlaps(range, from - ctx.trace.start, to - from));
-}
-
-/**
- * Under a span whose own code ran long with no recorded calls (a task's loop, a transaction held while the code
- * works): how long, and where on the timeline, hatched. Not a call: no details, no filter counts it.
- */
-function QuietRow({ span, ctx, depth }: { span: Span; ctx: RowContext; depth: number }) {
-  const quiet = ctx.quiet.get(span.id);
-  if (!(quiet && quietShown(quiet, ctx))) return null;
-  const total = Math.max(ctx.trace.duration, 1);
-  return (
-    <div
-      className="dt-map-row"
-      data-kind="quiet"
-      title="Its own code ran here, with nothing it called recorded: no query, no HTTP call, no traced function."
-    >
-      <span className="dt-map-name" style={{ paddingLeft: `${12 + depth * 16}px` }}>
-        <span className="dt-map-caret" />
-        <span className="dt-map-text">no recorded calls</span>
-      </span>
-      <span className="dt-map-track" aria-hidden="true">
-        {/* A gap too thin to see (a few µs between two queries) isn't drawn: it counts in the time all the same. */}
-        {quiet.gaps
-          .filter(([from, to]) => to - from >= total * 0.004)
-          .map(([from, to]) => (
-            <span
-              key={from}
-              className="dt-map-bar"
-              data-quiet=""
-              style={{ left: widthOf(from - ctx.trace.start, total), width: widthOf(to - from, total) }}
-            />
-          ))}
-      </span>
-      <span className="dt-map-time">{duration(quiet.total)}</span>
+      {fold ? <Rows nodes={node.children} depth={depth + 1} ctx={ctx} parent={span} /> : null}
     </div>
   );
 }
@@ -921,21 +832,13 @@ function sqlInside(transaction: Span, trace: Trace): number {
 }
 
 /**
- * A transaction says what its time is: how long it was open, and how much of it the SQL inside took. The rest is
- * the code running while the transaction is held, not the database.
+ * What a row's time is, on hover, where it isn't plain: a transaction's is how long it was open, of which the SQL
+ * inside took a part; the rest is code running while it is held, not the database.
  */
-function TransactionNote({ span, trace }: { span: Span; trace: Trace }) {
-  if (span.kind !== "transaction") return null;
+function timeTitle(span: Span, trace: Trace): string | undefined {
+  if (span.kind !== "transaction") return undefined;
   const sql = duration(sqlInside(span, trace));
-  return (
-    <span
-      className="dt-map-sub"
-      data-note=""
-      title={`Time the transaction was open; SQL inside took ${sql}, the rest is code running while it's held`}
-    >
-      open {duration(span.duration)} · SQL {sql}
-    </span>
-  );
+  return `Open ${duration(span.duration)}; SQL inside took ${sql}, the rest is code running while it's held`;
 }
 
 /**
@@ -1503,7 +1406,6 @@ export function CallMap({
   const { slice: current, change } = useHeldSlice();
   const categories = useMemo(() => spanCategories(trace), [trace]);
   const marks = useMemo(() => marksOf(tree, pickedOf(current, trace, categories)), [tree, current, trace, categories]);
-  const quiet = useMemo(() => quietSpans(tree), [tree]);
   const inline = side ? null : details;
 
   return (
@@ -1524,8 +1426,6 @@ export function CallMap({
                 onToggle: toggle,
                 marks,
                 details: inline,
-                quiet,
-                slice: current,
               }}
             />
           </div>
