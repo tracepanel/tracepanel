@@ -24,6 +24,10 @@ export function spanKindLabel(kind: string | undefined, attrs: Attrs, parentKind
 /** The kinds the call tree says in words of their own. */
 const KIND_WORDS = new Map<string, (attrs: Attrs) => string>([
   ["http", () => "request"],
+  // One name per thing: a task's run is a task, as its row says it where it was enqueued; a command is a job, as the
+  // console calls it.
+  ["task.run", () => "task"],
+  ["command", () => "job"],
   ["view", (attrs) => handlerWord(attrs).toLowerCase()],
 ]);
 

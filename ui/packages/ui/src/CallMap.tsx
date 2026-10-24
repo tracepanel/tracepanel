@@ -399,21 +399,33 @@ function RowDetails({ id, ctx }: { id: string; ctx: RowContext }) {
 }
 
 function Bar({ trace, start, length, point }: { trace: Trace; start: number; length: number; point?: boolean }) {
-  const total = Math.max(trace.duration, 1);
-  const left = Math.min(Math.max(((start - trace.start) / total) * 100, 0), 100);
+  const place = point ? pointPlace(trace, start) : barPlace(trace, start, length);
   return (
     <span className="dt-map-track" aria-hidden="true">
-      <span
-        className="dt-map-bar"
-        data-point={point ? "" : undefined}
-        // Clamped to the track: a task can run longer than the request that enqueued it.
-        style={{
-          left: `${left}%`,
-          width: point ? undefined : `${Math.min(Math.max((length / total) * 100, 0.4), 100 - left)}%`,
-        }}
-      />
+      <span className="dt-map-bar" data-point={point ? "" : undefined} data-past={place.past} style={place.style} />
     </span>
   );
+}
+
+/** Where a point sits on the request's timeline. */
+function pointPlace(trace: Trace, at: number): { style: CSSProperties; past: undefined } {
+  const left = Math.min(Math.max(((at - trace.start) / Math.max(trace.duration, 1)) * 100, 0), 100);
+  return { style: { left: `${left}%` }, past: undefined };
+}
+
+/** The least of the track a run that starts after the request ended still shows, at its right edge. */
+const PAST_MIN = 6;
+
+/**
+ * Where a bar sits on the request's timeline. One that runs past its end (a task runs longer than the request that
+ * enqueued it, or starts after it answered) runs to the right edge and fades out there (`past`).
+ */
+function barPlace(trace: Trace, start: number, length: number): { style: CSSProperties; past: "" | undefined } {
+  const total = Math.max(trace.duration, 1);
+  const left = Math.min(Math.max(((start - trace.start) / total) * 100, 0), 100 - PAST_MIN);
+  const past = start + length > trace.start + total;
+  const width = past ? 100 - left : Math.max((length / total) * 100, 0.4);
+  return { style: { left: `${left}%`, width: `${width}%` }, past: past ? "" : undefined };
 }
 
 /** A trace of its own under a span of this one: a task (or one waiting for a worker), or another app's trace. */
@@ -532,7 +544,7 @@ function LinkedButton({
     >
       <span className="dt-map-name" style={indent}>
         <Caret open={open} onToggle={() => ctx.onToggle(node.key)} />
-        <KindBadge kind={view.kind} muted={view.kind !== "task"} className="dt-map-kind" />
+        <KindBadge kind={view.kind} muted={true} className="dt-map-kind" />
         {view.text}
       </span>
       {view.track}

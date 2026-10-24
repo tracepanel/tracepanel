@@ -1843,7 +1843,6 @@ details[data-focused] > .dt-sql-group {
 [data-category="django"] {
   --dt-k: var(--dt-k-django);
 }
-[data-category="view"],
 [data-category="code"] {
   --dt-k: var(--dt-k-view);
 }
@@ -2180,6 +2179,11 @@ details[data-focused] > .dt-sql-group {
   min-width: 2px;
   border-radius: 2px;
   background: var(--dt-k);
+}
+/* Running past the request's end (a task it enqueued): to the right edge, fading out there. */
+.dt-map-bar[data-past] {
+  border-radius: 2px 0 0 2px;
+  mask-image: linear-gradient(to right, #000 max(40%, calc(100% - 2rem)), transparent);
 }
 .dt-map-bar[data-point],
 .dt-map-bar[data-tick] {

@@ -224,13 +224,12 @@ test("a trace's facts start their second column's values at one x, whatever its 
   expect(new Set(starts).size).toBe(1);
 });
 
-test("a trace with nothing but its own lane has no lanes; one with calls keeps its own as their reference", async ({
+test("every call tree has its time over it: its own lane alone, or with a lane per thing it called", async ({
   page,
 }) => {
-  await page.goto(`/#/t/${await traceId("shop.tasks.parse_feed")}`);
-  await expect(page.getByRole("tablist").first()).toBeVisible();
+  await page.goto(`/#/t/${await traceId("shop.tasks.parse_feed")}?tab=tree`);
 
-  await expect(page.getByRole("figure", { name: "Timeline" })).toHaveCount(0);
+  await expect(page.getByRole("figure", { name: "Timeline" }).locator(".dt-lane-label")).toHaveText(["task"]);
 
   await page.goto(`/#/t/${await traceId("GET /api/posts")}`);
   const lanes = page.getByRole("figure", { name: "Timeline" });

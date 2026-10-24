@@ -108,13 +108,19 @@
 ### Changed
 
 - A trace's time is one strip over its call tree, in the Call tree tab, on
-  the console's page and in the panel alike: its own lane in the colours of
-  where its time went, a lane per system it called named by what its marks
-  are (`139 queries`, `1 log record`), and the shares of the time and the
-  call tree's filters as its legend. It replaces the tiles, the lanes and the
-  bar over the call tree. The first tab (Request, Task, Job, Page) has the
+  the console's page and in the panel alike, for every kind of trace: its own
+  lane in the colours of where its time went (alone too, when it called
+  nothing), a lane per system it called named by what its marks are
+  (`139 queries`, `1 log record`), and the shares of the time and the call
+  tree's filters as its legend. It replaces the tiles, the lanes and the bar
+  over the call tree. The first tab (Request, Task, Job, Page) has the
   trace's facts only. What the trace called is one quiet line in the page's
   header after its duration (`139 queries 29 ms · 3 unique`).
+- The code's own time is "Your code" in every kind of trace, a request's view
+  or handler too. A call tree's rows look one way: a task a request enqueued
+  has the grey kind box of the other rows, and its bar where it ran, running
+  to the right edge and fading there when it outlasts the request. A task's
+  run is a "task" and a command a "job" wherever a row names them.
 - The pill says what a request's tasks ran into as its other numbers do:
   the Tasks icon, then a red "5 failed" chip and the amber "3 issues" one,
   the same chips as its own. Its ring turns red when one failed. Before,

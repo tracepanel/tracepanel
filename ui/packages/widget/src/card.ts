@@ -93,7 +93,7 @@ export const CARD_STYLE = `
   @keyframes card-shimmer { to { background-position: -200% 0; } }
   /* Where the time went, in the console's span colours. */
   [data-category="django"] { --k: var(--k-django); }
-  [data-category="view"], [data-category="code"] { --k: var(--dt-k-view); }
+  [data-category="code"] { --k: var(--dt-k-view); }
   [data-category="template"] { --k: var(--dt-k-template); }
   [data-category="sql"] { --k: var(--dt-k-sql); }
   [data-category="cache"] { --k: var(--dt-k-cache); }
@@ -231,7 +231,7 @@ function timeCell(info: TraceInfo): HTMLElement {
   return time;
 }
 
-/** "Most time: View code 4.6 ms · 78%" ("Handler code" outside Python): the bar's biggest part in words. */
+/** "Most time: Your code 4.6 ms · 78%": the bar's biggest part in words. */
 function mostLine(label: string, category: string, value: number, total: number): HTMLElement {
   const line = element("p", "card-most");
   line.dataset["category"] = category;

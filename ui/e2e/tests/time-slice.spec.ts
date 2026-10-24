@@ -83,16 +83,16 @@ test("a share picked keeps its calls, dims the way to them and goes into the URL
   await expect(page).not.toHaveURL(/part=/);
   await expect(row(page, "sql", "SELECT blog_post")).toBeVisible();
 
-  await share(page, "view").click();
+  await share(page, "code").click();
 
-  await expect(page).toHaveURL(/[?&]part=view(&|$)/);
+  await expect(page).toHaveURL(/[?&]part=code(&|$)/);
   await expect(row(page, "view", "blog.views.post_list")).not.toHaveAttribute("data-dim");
   await expect(row(page, "template", "blog/post_list.html")).toHaveCount(0);
 
   await page.keyboard.press("Escape");
 
   await expect(page).not.toHaveURL(/part=/);
-  await expect(share(page, "view")).toHaveAttribute("aria-pressed", "false");
+  await expect(share(page, "code")).toHaveAttribute("aria-pressed", "false");
   await expect(row(page, "template", "blog/post_list.html")).toBeVisible();
   // Esc let the share go: the page stayed.
   await expect(page).toHaveURL(/#\/t\//);

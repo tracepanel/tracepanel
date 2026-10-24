@@ -9,7 +9,7 @@ import {
 import { partOfCategory } from "./CallMap";
 import { duration } from "./format";
 import { keyed } from "./keys";
-import { breakdown, type Category } from "./lib/breakdown";
+import type { Category } from "./lib/breakdown";
 import { overlaps, type Slice, type TimeRange, togglePart } from "./lib/slice";
 import { DATASTORES, MESSAGING, RPC } from "./lib/systems";
 import { TimeLane } from "./TimeLane";
@@ -288,18 +288,16 @@ function useLanesSlice(onSelect: ((target: MarkTarget) => void) | undefined) {
 }
 
 /**
- * The trace's time: its own lane in its shares' colours, then a lane per system it called and its logs and errors,
- * a mark each (an N+1 burst in amber, an error in red) that opens what it is. A drag across the lanes picks a
- * stretch of the time; a click beside the marks, or a double click, lets it go. With nothing but its own lane (it
- * called nothing), no lanes: the header says how long it took.
+ * The trace's time: its own lane in its shares' colours, then a lane per system it called and its logs and errors
+ * (only those it has), a mark each (an N+1 burst in amber, an error in red) that opens what it is. A drag across the
+ * lanes picks a stretch of the time; a click beside the marks, or a double click, lets it go. Always there, its own
+ * lane alone too: every call tree is read over its time the same way.
  */
 export function Timeline({ trace, onSelect }: { trace: Trace; onSelect?: ((target: MarkTarget) => void) | undefined }) {
   const drawn = lanes(trace);
   const layer = useRef<HTMLDivElement>(null);
   const { slice, onRange, onShare } = useLanesSlice(onSelect);
   const drag = useRangeDrag(Math.max(trace.duration, 1), onRange);
-  // Its own lane alone is one bar from 0 to its duration, which the header says: no lanes then.
-  if (drawn.length === 0) return null;
   const picking = { onRange, onShare, start: drag.start, layer };
   return (
     <figure className="dt-timeline" aria-label="Timeline">
@@ -312,11 +310,6 @@ export function Timeline({ trace, onSelect }: { trace: Trace; onSelect?: ((targe
       />
     </figure>
   );
-}
-
-/** A strip says something when the trace called anything, or its time went to more than one share. */
-function hasStrip(trace: Trace): boolean {
-  return lanes(trace).length > 0 || breakdown(trace).length > 1;
 }
 
 /**
@@ -333,7 +326,6 @@ export function TimeStrip({
   related: Related | undefined;
   onSelect: (target: MarkTarget) => void;
 }) {
-  if (!hasStrip(trace)) return null;
   return (
     <section className="dt-strip" aria-label="Time">
       <Timeline trace={trace} onSelect={onSelect} />

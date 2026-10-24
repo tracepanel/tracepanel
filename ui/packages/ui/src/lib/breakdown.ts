@@ -1,13 +1,11 @@
 // Where a trace's time went, per category: plain data, no React; the console's call tree and the page widget both
 // draw from it.
 import type { Span, Trace } from "../types";
-import { handlerWord } from "./handler";
 import { isReceiver } from "./signals";
 import { DATASTORES, MESSAGING, RPC } from "./systems";
 
 export type Category =
   | "django"
-  | "view"
   | "code"
   | "signal"
   | "template"
@@ -21,7 +19,6 @@ export type Category =
 
 const CATEGORY_LABELS: Record<Category, string> = {
   django: "Framework & middleware",
-  view: "View code",
   code: "Your code",
   signal: "Signals",
   template: "Templates",
@@ -34,9 +31,11 @@ const CATEGORY_LABELS: Record<Category, string> = {
   mail: "Email",
 };
 
-/** A category as the trace's app says it: a Python app's view code is a handler's elsewhere (Spring, Express). */
+/**
+ * A category as the trace says it: the framework's time is a request's middleware too. The code's own time is "Your
+ * code" in every kind of trace: a view's or a handler's, a task's, a job's.
+ */
 export function categoryLabel(category: Category, trace: Pick<Trace, "attrs"> & { kind?: string }): string {
-  if (category === "view") return `${handlerWord(trace.attrs)} code`;
   return category === "django" ? frameworkLabel(trace.kind) : CATEGORY_LABELS[category];
 }
 
@@ -55,10 +54,12 @@ const BY_KIND: Record<string, Category> = {
   ...Object.fromEntries(MESSAGING.map((kind) => [kind, "messaging" as const])),
   mail: "mail",
   template: "template",
-  view: "view",
   signal: "signal",
-  // A task or command root is the user's own code; so are spans they add with tracepanel.span().
+  // The view or handler, a task's or a command's root are the user's own code; so are spans they add with
+  // tracepanel.span().
+  view: "code",
   function: "code",
+  task: "code",
   "task.run": "code",
   command: "code",
 };
