@@ -90,9 +90,10 @@
 
 ### Changed
 
-- The pill's chip for what a request's tasks found reads as issues: the same
-  amber chip with the alert icon as its own issues, and it says "3 issues in
-  tasks", not "3 in tasks" under a corner arrow.
+- The pill says what a request's tasks ran into as its other numbers do:
+  the Tasks icon, then a red "5 failed" chip and the amber "3 issues" one,
+  the same chips as its own. Its ring turns red when one failed. Before,
+  a failed task didn't show, and their issues read "3 in tasks".
 - Every table has a clear head in both themes: on white a quiet cool band
   a step off the rows, its names a touch darker, a hairline under it, as the
   dark theme's band. A header that stays in view as the list scrolls keeps

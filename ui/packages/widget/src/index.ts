@@ -21,6 +21,8 @@ export interface TraceInfo {
   issuesPending?: boolean | undefined;
   /** Issues the task runs it led to found, apart from its own: asked from the console as the workers record them. */
   taskIssues?: number | undefined;
+  /** How many of those task runs failed, asked with them. */
+  taskFailed?: number | undefined;
   /** Sent by htmx: what triggered it and where the answer goes. */
   htmx?: HtmxInfo | undefined;
   /** The page's view or the action on it that made the call, as tracepanel-js records them in the browser. */
@@ -237,9 +239,9 @@ const STYLE = `
   .seg[data-speed="very-slow"] b { color: var(--dt-error); }
   .issues { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; background: var(--tint-warn); color: var(--dt-warn); font-weight: 600; font-size: 12px; }
   .seg .issues svg { color: currentColor; }
-  /* Its tasks' findings: the issues' amber as an outline, dashed like the corner its runs hang from in the panel. */
-  .task-issues { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; background: var(--tint-warn); color: var(--dt-warn); font-weight: 600; font-size: 12px; }
-  .seg .task-issues svg { color: currentColor; }
+  /* Its tasks': the Tasks icon, then the same chips as its own failures and issues. */
+  .tasks { gap: 5px; }
+  .tasks .failed { margin-left: 0; }
   .issues[data-tone="error"] { background: var(--tint-error); color: var(--dt-error); }
   /* The page's count: a step back from the latest request's numbers; its failures stand out on their own. */
   .page .unit { margin-left: -1px; }
@@ -478,9 +480,13 @@ function title(info: TraceInfo): string {
   return `${info.method ?? "GET"} ${path}`;
 }
 
-/** " · 2 issues in its tasks", or nothing when its tasks found none. */
+/** " · 5 failed, 2 issues in its tasks", or nothing when its tasks all went well. */
 function tasksPart(info: TraceInfo): string {
-  return info.taskIssues ? ` · ${plural(info.taskIssues, "issue", "issues")} in its tasks` : "";
+  const parts = [
+    info.taskFailed ? `${info.taskFailed} failed` : "",
+    info.taskIssues ? plural(info.taskIssues, "issue", "issues") : "",
+  ].filter(Boolean);
+  return parts.length ? ` · ${parts.join(", ")} in its tasks` : "";
 }
 
 function line(info: TraceInfo): string {
@@ -495,8 +501,13 @@ function wantsLook(info: TraceInfo): boolean {
 
 /** A finding in its tasks wants a look too: the ring is amber, the request's own count stays its own. */
 function state(info: TraceInfo): "ok" | "warn" | "error" {
-  if ((info.status ?? 200) >= 500) return "error";
+  if (broke(info)) return "error";
   return wantsLook(info) ? "warn" : "ok";
+}
+
+/** It failed, or one of its tasks did. */
+function broke(info: TraceInfo): boolean {
+  return (info.status ?? 200) >= 500 || Boolean(info.taskFailed);
 }
 
 const SEVERITY = { ok: 0, warn: 1, error: 2 } as const;
@@ -505,6 +516,9 @@ const ICONS = {
   db: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>',
   clock:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+  // The sidebar's Tasks icon (lucide list-checks).
+  tasks:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 5h8M13 12h8M13 19h8M3 17l2 2 4-4M3 7l2 2 4-4"/></svg>',
   layers:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg>',
   failed:
@@ -567,18 +581,28 @@ function addIssues(parent: HTMLElement, issues: number, tone: "warn" | "error"):
 }
 
 /**
- * Its tasks' findings, apart from its own: the same chip as its own issues, alert and all, saying where they are
- * ("3 issues in tasks"), so it reads as issues at a glance.
+ * What its tasks ran into, apart from its own: the Tasks icon, as each segment has its own, then the chips its own
+ * failures and issues have, red ones first. The tooltip says whose they are.
  */
-function addTaskIssues(parent: HTMLElement, issues: number | undefined): void {
-  if (!issues) return;
-  const pill = document.createElement("span");
-  pill.className = "task-issues";
-  pill.innerHTML = ICONS.alert;
-  const noun = issues === 1 ? "issue" : "issues";
-  pill.append(`${issues} ${noun} in tasks`);
-  pill.title = `${issues} ${noun} in the tasks this request enqueued: open the panel to see them`;
-  segment(parent).append(pill);
+function addTaskIssues(parent: HTMLElement, info: TraceInfo): void {
+  const chips = [
+    info.taskFailed ? chip("failed", ICONS.failed, `${info.taskFailed} failed`) : null,
+    info.taskIssues ? chip("issues", ICONS.alert, plural(info.taskIssues, "issue", "issues")) : null,
+  ].filter((item) => item !== null);
+  if (!chips.length) return;
+  const seg = segment(parent);
+  seg.className = "seg tasks";
+  seg.innerHTML = ICONS.tasks;
+  seg.append(...chips);
+  seg.title = `${tasksPart(info).slice(3)}, the ones this request enqueued: open the panel to see them`;
+}
+
+function chip(className: string, icon: string, text: string): HTMLElement {
+  const element = document.createElement("span");
+  element.className = className;
+  element.innerHTML = icon;
+  element.append(text);
+  return element;
 }
 
 /**
@@ -647,7 +671,7 @@ function addRequest(parent: HTMLElement, shown: TraceInfo, pulse: boolean): void
   addQueries(parent, shown.queries ?? 0);
   // Findings are amber whatever else happened: a failure says so in its status, and in the page's count.
   if (shown.issues) addIssues(parent, shown.issues, "warn");
-  addTaskIssues(parent, shown.taskIssues);
+  addTaskIssues(parent, shown);
 }
 
 function addName(parent: HTMLElement, info: TraceInfo, pulse: boolean): void {
@@ -849,12 +873,13 @@ function settled(body: unknown, use: (body: unknown) => boolean): boolean {
 
 /** `duration` in microseconds: the root span's, as the panel shows it. */
 // biome-ignore lint/style/useNamingConvention: the API's field name.
-type ListedTrace = { id: string; issues?: number; issue_kinds?: string[]; duration?: number };
+type ListedTrace = { id: string; issues?: number; issue_kinds?: string[]; duration?: number; status?: string };
 
 /** What the task runs a listed trace led to found, together: their issues counted. */
-function runIssuesOf(body: unknown, id: string): number {
+/** What a request's task runs ran into: their findings, and how many of them failed. */
+function runsOf(body: unknown, id: string): { issues: number; failed: number } {
   const runs = (body as { runs?: Record<string, ListedTrace[]> } | undefined)?.runs?.[id] ?? [];
-  return runs.reduce(sumIssues, 0);
+  return { issues: runs.reduce(sumIssues, 0), failed: runs.filter((run) => run.status === "error").length };
 }
 
 function sumIssues(sum: number, run: ListedTrace): number {
@@ -1149,13 +1174,14 @@ export function mount(options: WidgetOptions = {}): Widget {
     if (requests().at(-1) !== info) return false;
     const body = await fetchJson(ask.url);
     if (body === UNREACHABLE) return false;
-    showTaskIssues(info, runIssuesOf(body, ask.id));
+    showTaskIssues(info, runsOf(body, ask.id));
     return true;
   }
 
-  function showTaskIssues(info: TraceInfo, found: number): void {
-    if (found === (info.taskIssues ?? 0)) return;
-    info.taskIssues = found;
+  function showTaskIssues(info: TraceInfo, found: { issues: number; failed: number }): void {
+    if (tasksPart(info) === tasksPart({ taskIssues: found.issues, taskFailed: found.failed })) return;
+    info.taskIssues = found.issues;
+    info.taskFailed = found.failed;
     render();
   }
 
