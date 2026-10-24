@@ -21,6 +21,7 @@ import { rangeLabel, type TimeRange } from "./lib/slice";
 import { cn } from "./lib/utils";
 import { timed, wallClock } from "./lib/waiting";
 import { Segmented } from "./Segmented";
+import { largestFirst, ShareBar, ShareFace } from "./Shares";
 import { HEAD_TEXT } from "./TableColumns";
 import { useHeldSlice } from "./TimeSlice";
 import type { Trace } from "./types";
@@ -221,7 +222,13 @@ function summed(packages: readonly Share[], palette: Palette): Share[] {
   return other ? [...named, { name: "other", samples: other }] : named;
 }
 
-/** Where the time went by package: one bar of shares, then each package on its line; a click lights its frames. */
+/** Waiting after every package, and the rest folded together before it. */
+function rankOf(share: Share): number {
+  if (share.name === WAITING) return 2;
+  return share.name === "other" ? 1 : 0;
+}
+
+/** Where the time went by package: one bar of shares, then the legend of them; a click lights its frames. */
 function Packages({
   shares,
   palette,
@@ -239,29 +246,29 @@ function Packages({
   onLight: (name: string) => void;
   onClear: () => void;
 }) {
+  const ordered = largestFirst(shares, (share) => share.samples, rankOf);
+  const parts = ordered.map(({ name, samples }) => ({
+    key: name,
+    size: samples,
+    className: toneOf(palette, name).dot,
+    title: `${name}: ${time(samples)}`,
+    faded: faded(lit, name),
+  }));
   return (
     <section className="grid gap-3" aria-label="Time by package">
-      <div className="flex h-3 gap-0.5 overflow-hidden rounded-full">
-        {shares.map(({ name, samples }) => (
-          <span
-            key={name}
-            title={`${name}: ${time(samples)}`}
-            className={cn("h-full transition-opacity", toneOf(palette, name).dot, faded(lit, name) && "opacity-30")}
-            style={{ width: `${(samples / total) * 100}%` }}
-          />
-        ))}
-      </div>
-      <ul className="m-0 grid max-w-4xl list-none gap-x-8 gap-y-0.5 p-0 @xl:grid-cols-2">
-        {shares.map((share) => (
-          <PackageLine
-            key={share.name}
-            share={share}
-            tone={toneOf(palette, share.name)}
-            total={total}
-            time={time}
-            lit={lit.has(share.name)}
-            onLight={() => onLight(share.name)}
-          />
+      <ShareBar parts={parts} total={total} />
+      <ul className="dt-breakdown-legend">
+        {ordered.map(({ name, samples }) => (
+          <li key={name}>
+            <button type="button" className="dt-share" aria-pressed={lit.has(name)} onClick={() => onLight(name)}>
+              <ShareFace
+                swatch={<span className={cn("dt-dot", toneOf(palette, name).dot)} />}
+                name={name}
+                value={time(samples)}
+                share={percent(samples, total)}
+              />
+            </button>
+          </li>
         ))}
       </ul>
       {lit.size ? (
@@ -270,43 +277,6 @@ function Packages({
         </button>
       ) : null}
     </section>
-  );
-}
-
-function PackageLine({
-  share: { name, samples },
-  tone,
-  total,
-  time,
-  lit,
-  onLight,
-}: {
-  share: Share;
-  tone: Tone;
-  total: number;
-  time: Time;
-  lit: boolean;
-  onLight: () => void;
-}) {
-  return (
-    <li>
-      <button
-        type="button"
-        aria-pressed={lit}
-        onClick={onLight}
-        className={cn(
-          "grid w-full grid-cols-[auto_minmax(0,1fr)_2.5rem_4rem] items-center gap-2.5 rounded-md px-2 py-1 text-left text-xs transition-colors",
-          lit ? "bg-accent" : "hover:bg-accent/60",
-        )}
-      >
-        <span className={cn("size-2.5 rounded-sm", tone.dot)} />
-        <span className="truncate font-mono" title={name}>
-          {name}
-        </span>
-        <span className="text-right text-muted-foreground tabular-nums">{percent(samples, total)}</span>
-        <span className="text-right tabular-nums">{time(samples)}</span>
-      </button>
-    </li>
   );
 }
 
