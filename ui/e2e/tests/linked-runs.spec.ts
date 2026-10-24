@@ -82,7 +82,7 @@ test("the panel's list nests the runs a request sent under it, and the request s
   // Its own count stays its own (none): the pill says what its tasks found apart from it.
   await expect(pill(page)).toHaveAccessibleName(/GET \/app\/api\/reports → 202 .* · 0 q · \d+ issues? in its tasks/);
   await expect(pill(page)).toHaveAttribute("data-verdict", "warn");
-  await expect(pill(page).locator(".task-issues")).toContainText(/\d+ in tasks/);
+  await expect(pill(page).locator(".task-issues")).toContainText(/\d+ issues? in tasks/);
   await expect(pill(page).locator(".issues")).toHaveCount(0);
 
   await pill(page).click();
