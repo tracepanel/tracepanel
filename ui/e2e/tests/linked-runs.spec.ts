@@ -82,8 +82,9 @@ test("the panel's list nests the runs a request sent under it, and the request s
   // Its own count stays its own (none): the pill says what its tasks found apart from it.
   await expect(pill(page)).toHaveAccessibleName(/GET \/app\/api\/reports → 202 .* · 0 q · \d+ issues? in its tasks/);
   await expect(pill(page)).toHaveAttribute("data-verdict", "warn");
-  await expect(pill(page).locator(".task-issues")).toContainText(/\d+ issues? in tasks/);
-  await expect(pill(page).locator(".issues")).toHaveCount(0);
+  await expect(pill(page).locator(".tasks")).toHaveText(/^\d+ issues?in tasks$/);
+  // Its own issues chip stays away: the one there is its tasks'.
+  await expect(pill(page).locator(".seg:not(.tasks) > .issues")).toHaveCount(0);
 
   await pill(page).click();
   const list = panel(page).getByRole("region", { name: "Pages and requests in this browser tab" });
@@ -102,4 +103,24 @@ test("the panel's list nests the runs a request sent under it, and the request s
 
   await expect(panel(page).getByRole("tab", { name: /^Issues/ })).toBeVisible();
   await expect(rows.nth(1).getByRole("button")).toHaveAttribute("aria-current", "true");
+});
+
+test("the pill says how many of a request's tasks failed, in red before their issues, and its ring turns red", async ({
+  page,
+}) => {
+  // Five runs that failed and three findings among them, as the console would list them.
+  const failed = Array.from({ length: 5 }, (_, index) => ({ id: `run-${index}`, status: "error", issues: 0 }));
+  await page.route(/api\/traces\?ids=.*&runs=1/, async (route) => {
+    const id = new URL(route.request().url()).searchParams.get("ids") ?? "";
+    await route.fulfill({
+      json: { traces: [], runs: { [id]: [...failed, { id: "run-ok", status: "ok", issues: 3 }] } },
+    });
+  });
+  await openApp(page, { reports: await report() });
+  await page.getByRole("button", { name: "Load reports" }).click();
+
+  await expect(pill(page).locator(".tasks")).toHaveText("5 failed3 issuesin tasks");
+  await expect(pill(page).locator(".tasks > span").first()).toHaveClass("failed");
+  await expect(pill(page)).toHaveAccessibleName(/ · 0 q · 5 failed, 3 issues in its tasks\./);
+  await expect(pill(page)).toHaveAttribute("data-verdict", "error");
 });

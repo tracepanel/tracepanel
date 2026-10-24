@@ -90,6 +90,9 @@
 
 ### Changed
 
+- The pill says when a request's tasks failed: a red "5 failed" chip before
+  their issues' amber one, then "in tasks", and its ring turns red. Before,
+  only their issues were counted.
 - The pill's chip for what a request's tasks found reads as issues: the same
   amber chip with the alert icon as its own issues, and it says "3 issues in
   tasks", not "3 in tasks" under a corner arrow.
