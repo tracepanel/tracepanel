@@ -17,9 +17,10 @@ import { type Category, spanCategories } from "./lib/breakdown";
 import { callFields } from "./lib/callFields";
 import { callTemplate, groupNoun } from "./lib/calls";
 import { spanKindLabel } from "./lib/handler";
+import { plural } from "./lib/plural";
 import { traceRuntime } from "./lib/runtime";
 import { isReceiver, raised } from "./lib/signals";
-import { overlaps, type Slice, type TimeRange } from "./lib/slice";
+import { isLoud, overlaps, type Slice, type TimeRange } from "./lib/slice";
 import { CALL_KINDS, DATASTORES, MESSAGING, RPC } from "./lib/systems";
 import { type TraceLinks, traceLinkProps } from "./links";
 import { type NameValue, NameValues, RowsLookContext } from "./NameValues";
@@ -235,7 +236,6 @@ export const FILTERS = [
   { id: "graphql", label: "GraphQL", kinds: ["graphql"] },
   { id: "channels", label: "Channels", kinds: ["channel.send", "websocket.send"] },
   { id: "function", label: "Functions", kinds: ["function"] },
-  { id: "log", label: "Logs", kinds: ["log"] },
   { id: "error", label: "Errors", kinds: ["error"] },
 ] as const;
 
@@ -379,6 +379,9 @@ interface RowContext {
   marks?: ReadonlyMap<string, Mark> | undefined;
   /** The selected row's details, opened right under that row; null while they show in the side pane. */
   details: ReactNode;
+  /** How many info and debug records each span has that don't show, by its id; and what shows them. */
+  hiddenLogs: ReadonlyMap<string, number>;
+  onShowLogs: () => void;
 }
 
 /** The selected row's details, under it: where the click was, not past the end of a long tree. */
@@ -812,6 +815,7 @@ function SpanRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps
           <AliasChip value={aliasBeside(span)} />
           <TemplateChip attrs={span.attrs} />
           <SignalNotes span={span} parent={parent} under={childSpans(node)} />
+          <HiddenLogs count={ctx.hiddenLogs.get(span.id)} onShow={ctx.onShowLogs} />
           {issue ? <IssueChip kind={issue} className={ISSUE_CHIP_SHRINKS} /> : null}
         </span>
         <Bar trace={ctx.trace} start={span.start} length={span.duration} />
@@ -1387,6 +1391,57 @@ function withCallIssues(
   ]);
 }
 
+/** A trace with only the log records that show: its warnings and worse, or every one of them (`all`). */
+export function withShownLogs(trace: Trace, all: boolean): Trace {
+  return all ? trace : { ...trace, logs: trace.logs.filter((log) => isLoud(log.level)) };
+}
+
+/** How many records don't show, by the span they were logged in (the root's for those logged outside any). */
+function hiddenLogsOf(trace: Trace): Map<string, number> {
+  const root = rootOf(trace);
+  const hidden = new Map<string, number>();
+  for (const log of trace.logs.filter((each) => !isLoud(each.level))) {
+    const span = log.span_id ?? root;
+    hidden.set(span, (hidden.get(span) ?? 0) + 1);
+  }
+  return hidden;
+}
+
+function rootOf(trace: Trace): string {
+  return trace.spans.find((span) => span.parent_id === null)?.id ?? "";
+}
+
+/** The tree with the records that show, and how many don't, by span: none hidden while every one shows. */
+function useShownLogs(trace: Trace, related: Related | undefined, all: boolean) {
+  const tree = useMemo(() => buildTree(withShownLogs(trace, all), related), [trace, related, all]);
+  const hidden = useMemo(() => (all ? new Map<string, number>() : hiddenLogsOf(trace)), [trace, all]);
+  return { tree, hidden };
+}
+
+/**
+ * A span's info and debug records, while only warnings and worse show: how many, quietly. A click shows every
+ * record (the legend's Logs chip turns on).
+ */
+function HiddenLogs({ count, onShow }: { count: number | undefined; onShow: () => void }) {
+  if (!count) return null;
+  return (
+    // biome-ignore lint/a11y/useSemanticElements: inside the row's button; a click here shows the records.
+    // biome-ignore lint/a11y/useKeyWithClickEvents: the legend's Logs chip is the keyboard's way.
+    <span
+      className="dt-map-sub dt-map-logs"
+      role="button"
+      tabIndex={-1}
+      title="Info and debug records here; a click shows every record"
+      onClick={(event) => {
+        event.stopPropagation();
+        onShow();
+      }}
+    >
+      {plural(count, "log", "logs")}
+    </span>
+  );
+}
+
 function pickedOf(slice: Slice, trace: Trace, categories: ReadonlyMap<string, Category>): Picked {
   return { parts: new Set(slice.parts), range: slice.range, start: trace.start, categories };
 }
@@ -1410,7 +1465,9 @@ export function CallMap({
   /** A span to open with its details, as a link to it asks (a log line's span). */
   initialSpan?: string | undefined;
 }) {
-  const tree = useMemo(() => buildTree(trace, related), [trace, related]);
+  // The part of the time picked: the kinds of calls and the stretch of time the rows are kept for.
+  const { slice: current, change } = useHeldSlice();
+  const { tree, hidden } = useShownLogs(trace, related, current.logs);
   const issues = useMemo(() => withCallIssues(issueBySpan, related), [issueBySpan, related]);
   const { selected, select, close } = useSelection(initialSpan);
   const map = useRef<HTMLDivElement>(null);
@@ -1418,8 +1475,6 @@ export function CallMap({
   const rows = useScrolledToInitial(initialSpan);
   const [collapsed, toggle] = useToggleSet();
   const details = detailsOf(tree, selected, trace, links);
-  // The part of the time picked: the kinds of calls and the stretch of time the rows are kept for.
-  const { slice: current, change } = useHeldSlice();
   const categories = useMemo(() => spanCategories(trace), [trace]);
   const marks = useMemo(() => marksOf(tree, pickedOf(current, trace, categories)), [tree, current, trace, categories]);
   const inline = side ? null : details;
@@ -1442,6 +1497,8 @@ export function CallMap({
                 onToggle: toggle,
                 marks,
                 details: inline,
+                hiddenLogs: hidden,
+                onShowLogs: () => change({ ...current, logs: true }),
               }}
             />
           </div>

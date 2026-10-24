@@ -184,6 +184,11 @@ test("a call's trace that came whole opens under the call: the other app's own r
 test("a record in the call tree shows where it was logged, its attributes", async ({ page }) => {
   await page.goto(`/#/traces?q=${encodeURIComponent("route:/api/books/announce")}`);
   await page.getByRole("main").getByRole("table").getByRole("link").first().click();
+  // An info record: the tree shows it once every record is asked for.
+  await page
+    .getByRole("list", { name: /^Where the time went/ })
+    .getByRole("button", { name: /^Logs/ })
+    .click();
   await page.getByText("Kafka producer started").first().click();
   const details = page.getByRole("complementary", { name: "Details" });
 
@@ -227,6 +232,10 @@ test("a record's attributes are in the same order on the Logs page and in its tr
 
   await page.goto(`/#/traces?q=${encodeURIComponent("route:/api/books/announce")}`);
   await page.getByRole("main").getByRole("table").getByRole("link").first().click();
+  await page
+    .getByRole("list", { name: /^Where the time went/ })
+    .getByRole("button", { name: /^Logs/ })
+    .click();
   await page.getByText("Kafka producer started").first().click();
   const inTrace = order(await page.getByRole("region", { name: "Fields" }).innerText());
 

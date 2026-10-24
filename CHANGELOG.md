@@ -116,6 +116,13 @@
   over the call tree. The first tab (Request, Task, Job, Page) has the
   trace's facts only. What the trace called is one quiet line in the page's
   header after its duration (`139 queries 29 ms · 3 unique`).
+- A call tree and its strip show a trace's warnings and worse, not every
+  record: its info and debug records stay out of the tree and the log lane,
+  a quiet note on the span they were logged in says how many (`3 logs`),
+  and the legend's Logs chip, or a click on the note, shows them all
+  (`logs=all` in the URL). The Logs tab and the Logs page show every record,
+  as before. A request with no view or handler recorded counts its own time
+  as "Your code": it can't be told from the framework's then.
 - The code's own time is "Your code" in every kind of trace, a request's view
   or handler too. A call tree's rows look one way: a task a request enqueued
   has the grey kind box of the other rows, and its bar where it ran, running

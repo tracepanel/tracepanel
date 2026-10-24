@@ -9,7 +9,7 @@ import {
   useState,
 } from "react";
 import { isTyping } from "./lib/keys";
-import { isWhole, rangeLabel, rangeOf, type Slice, sliceKey, type TimeRange, WHOLE } from "./lib/slice";
+import { cleared, isWhole, rangeLabel, rangeOf, type Slice, sliceKey, type TimeRange, WHOLE } from "./lib/slice";
 
 /** A move this short is a click, not a drag. */
 const DRAG_PX = 4;
@@ -114,7 +114,7 @@ function useSlice(initial: Slice | undefined, onChange: ((slice: Slice) => void)
     const onKey = (event: KeyboardEvent) => {
       if (!isFreeEscape(event) || isWhole(latest.current.slice)) return;
       event.preventDefault();
-      latest.current.change(WHOLE);
+      latest.current.change(cleared(latest.current.slice));
     };
     // Caught on the way down: the page's own Esc (back, close) listens on the way up.
     window.addEventListener("keydown", onKey, true);

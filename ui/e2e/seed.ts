@@ -411,17 +411,24 @@ function heldTransaction(): Doc {
     ...items,
     ...products,
   );
+  const record = (span: unknown, time: number, level: string, message: string): Doc => ({
+    // biome-ignore lint/style/useNamingConvention: a log record as the SDKs send it.
+    span_id: span,
+    time,
+    level,
+    logger: "shop.tasks",
+    message,
+    exception: null,
+    attrs: {},
+  });
+  // Its records as a busy task writes them: a batch at a time, a debug line, one warning, and how it ended.
   doc["logs"] = [
-    {
-      // biome-ignore lint/style/useNamingConvention: a log record as the SDKs send it.
-      span_id: root["id"],
-      time: 1_598_000,
-      level: "info",
-      logger: "shop.tasks",
-      message: "stock reconciled: 29 products",
-      exception: null,
-      attrs: {},
-    },
+    ...Array.from({ length: 8 }, (_, index) =>
+      record(`${id}T`, 300_000 + index * 150_000, "info", `batch ${index + 1} of 8 reconciled`),
+    ),
+    record(`${id}T`, 320_000, "debug", "cache warm: 29 products"),
+    record(`${id}T`, 900_000, "warning", "stock below threshold for 3 products"),
+    record(root["id"], 1_598_000, "info", "stock reconciled: 29 products"),
   ];
   return doc;
 }
@@ -1045,6 +1052,8 @@ async function hello(): Promise<void> {
 export default async function seed(): Promise<void> {
   await hello();
   const docs = [
+    // First, the oldest: its many records sit under the others on the Logs page.
+    heldTransaction(),
     ...examples(),
     ...handlers(),
     ...pages(),
@@ -1061,7 +1070,6 @@ export default async function seed(): Promise<void> {
     ...chord(),
     ...dependencies(),
     ...salesReport(),
-    heldTransaction(),
     ...limits(),
     everyTab(),
   ];

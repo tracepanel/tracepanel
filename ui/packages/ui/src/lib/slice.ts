@@ -5,16 +5,31 @@
 export type TimeRange = readonly [number, number];
 
 export interface Slice {
-  /** The kinds picked: a filter's id (sql, cache, template…) or a share of the time's own (django, view, code). */
+  /** The kinds picked: a filter's id (sql, cache, template…) or a share of the time's own (django, code). */
   parts: readonly string[];
   range: TimeRange | null;
+  /** Every log record shown, its info and debug ones too: by default only warnings and worse are. */
+  logs: boolean;
 }
 
-export const WHOLE: Slice = { parts: [], range: null };
+export const WHOLE: Slice = { parts: [], range: null, logs: false };
 
+/** Whether nothing is picked: no kinds, no range (which records show is how to look, not a pick). */
 export function isWhole(slice: Slice): boolean {
   return slice.parts.length === 0 && slice.range === null;
 }
+
+/** The slice with nothing picked, its records shown as they were. */
+export function cleared(slice: Slice): Slice {
+  return { ...WHOLE, logs: slice.logs };
+}
+
+/** A log record worth showing by default: a warning or worse. Info and debug ones show when asked for. */
+export function isLoud(level: string): boolean {
+  return LOUD.has(level.toLowerCase());
+}
+
+const LOUD = new Set(["warning", "warn", "error", "critical", "fatal"]);
 
 /** The slice with `part` picked, or no longer picked. */
 export function togglePart(slice: Slice, part: string): Slice {
@@ -49,9 +64,16 @@ export function rangeLabel(range: TimeRange, total: number): string {
 const PART = /^[a-z]+$/;
 const RANGE = /^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)$/;
 
-/** A slice from a link's `part` ("sql view") and `range` ("12.4-18.9", in ms); whatever isn't one is left out. */
-export function parseSlice(part: string | undefined, range: string | undefined): Slice {
-  return { parts: (part ?? "").split(/[\s+]+/).filter((each) => PART.test(each)), range: parseRange(range ?? "") };
+/**
+ * A slice from a link's `part` ("sql code"), `range` ("12.4-18.9", in ms) and `logs` ("all"); whatever isn't one is
+ * left out.
+ */
+export function parseSlice(part: string | undefined, range: string | undefined, logs?: string | undefined): Slice {
+  return {
+    parts: (part ?? "").split(/[\s+]+/).filter((each) => PART.test(each)),
+    range: parseRange(range ?? ""),
+    logs: logs === "all",
+  };
 }
 
 /** "12.4-18.9", in ms, as microseconds; null for anything else. */
@@ -63,17 +85,26 @@ function parseRange(range: string): TimeRange | null {
 }
 
 /** The `part` and `range` a link says the slice with; each undefined when it isn't picked. */
-export function sliceParams(slice: Slice): { part: string | undefined; range: string | undefined } {
-  const [from, to] = slice.range ?? [0, 0];
+export function sliceParams(slice: Slice): {
+  part: string | undefined;
+  range: string | undefined;
+  logs: string | undefined;
+} {
   return {
+    logs: slice.logs ? "all" : undefined,
     part: slice.parts.length ? slice.parts.join(" ") : undefined,
-    // Microseconds kept: a range in a fast trace is a fraction of a millisecond.
-    range: slice.range ? `${Number((from / 1000).toFixed(3))}-${Number((to / 1000).toFixed(3))}` : undefined,
+    range: rangeParam(slice.range),
   };
+}
+
+/** "12.4-18.9": a range in ms, microseconds kept (a range in a fast trace is a fraction of a millisecond). */
+function rangeParam(range: TimeRange | null): string | undefined {
+  if (!range) return undefined;
+  return `${Number((range[0] / 1000).toFixed(3))}-${Number((range[1] / 1000).toFixed(3))}`;
 }
 
 /** One string per slice: two slices are the same when their keys are. */
 export function sliceKey(slice: Slice): string {
-  const { part, range } = sliceParams(slice);
-  return `${part ?? ""}|${range ?? ""}`;
+  const { part, range, logs } = sliceParams(slice);
+  return `${part ?? ""}|${range ?? ""}|${logs ?? ""}`;
 }

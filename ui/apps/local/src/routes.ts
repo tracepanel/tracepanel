@@ -41,6 +41,8 @@ export type Route =
       /** The part of the time picked in the call tree: kinds of calls (`sql view`), a stretch in ms (`12.4-18.9`). */
       part?: string | undefined;
       range?: string | undefined;
+      /** `all`: every log record in the call tree, its info and debug ones too. */
+      logs?: string | undefined;
     }
   | { name: "issue"; fingerprint: string; error?: boolean | undefined; q?: string | undefined }
   | { name: "app"; service: string };
@@ -124,7 +126,7 @@ function appOf(path: string): Route | null {
 }
 
 // What a trace's address says besides its id: where it was opened from, its tab, its span, the part of its time.
-const TRACE_PARAMS = ["from", "tab", "span", "part", "range"] as const;
+const TRACE_PARAMS = ["from", "tab", "span", "part", "range", "logs"] as const;
 
 /** `t/<id>?from=…&tab=…`: a trace's page. */
 function traceOf(path: string, params: URLSearchParams): Route | null {

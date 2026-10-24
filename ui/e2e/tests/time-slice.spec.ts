@@ -135,7 +135,8 @@ test("a drag across the lanes keeps the calls of that stretch of time, says it a
 test("a drag across the tree's bars picks a stretch too; a click beside the marks or a double click lets it go", async ({
   page,
 }) => {
-  await openHome(page);
+  // Its two info records show: every record is asked for.
+  await openHome(page, "tab=tree&logs=all");
   const ruler = page.locator(".dt-map-ruler");
   await drag(page, ruler, 2.5, 2.9);
 

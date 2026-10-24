@@ -71,22 +71,29 @@ function servedFor(span: Span, byId: ReadonlyMap<string, Span>): Span {
   return parent?.kind === "cache" ? parent : span;
 }
 
-function categoryOf(span: Span, byId: ReadonlyMap<string, Span>): Category | null {
+function categoryOf(span: Span, byId: ReadonlyMap<string, Span>, handled: boolean): Category | null {
   // A receiver is the signal's time: what sending it cost, the work it does (its queries aside) included.
   if (isReceiver(span, byId.get(String(span.parent_id)))) return "signal";
-  return BY_KIND[span.kind] ?? frameworkOf(span);
+  return BY_KIND[span.kind] ?? frameworkOf(span, handled);
 }
 
-/** The request's root, its middleware, and an API framework's own steps (Django Ninja's auth, validation). */
-function frameworkOf(span: Span): Category | null {
-  return span.parent_id === null || span.kind === "middleware" || span.kind === "framework" ? "django" : null;
+/**
+ * The request's root, its middleware, and an API framework's own steps (Django Ninja's auth, validation). With no
+ * view or handler recorded (`handled`), the root's own time can't be told from the code's: it is the code's then.
+ */
+function frameworkOf(span: Span, handled: boolean): Category | null {
+  if (span.parent_id === null) return handled ? "django" : "code";
+  return FRAMEWORK_KINDS.has(span.kind) ? "django" : null;
 }
+
+const FRAMEWORK_KINDS = new Set(["middleware", "framework"]);
 
 /** A span without a category of its own (a transaction: the code inside atomic()) is its owner's time. */
 function ownerFinder(byId: ReadonlyMap<string, Span>): (span: Span) => Category | null {
+  const handled = [...byId.values()].some((span) => span.kind === "view");
   return (span) => {
     for (let current: Span | undefined = servedFor(span, byId); current; current = parentOf(current, byId)) {
-      const category = ownCategory(current, byId);
+      const category = ownCategory(current, byId, handled);
       if (category) return category;
     }
     return null;
@@ -94,8 +101,8 @@ function ownerFinder(byId: ReadonlyMap<string, Span>): (span: Span) => Category 
 }
 
 /** A span's own category: none for a transaction, whose code is its owner's. */
-function ownCategory(span: Span, byId: ReadonlyMap<string, Span>): Category | null {
-  return span.kind === "transaction" ? null : categoryOf(span, byId);
+function ownCategory(span: Span, byId: ReadonlyMap<string, Span>, handled: boolean): Category | null {
+  return span.kind === "transaction" ? null : categoryOf(span, byId, handled);
 }
 
 function parentOf(span: Span, byId: ReadonlyMap<string, Span>): Span | undefined {

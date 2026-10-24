@@ -161,6 +161,7 @@ export function Console({ route, source: everything }: { route: Route; source: D
         span={route.span}
         part={route.part}
         range={route.range}
+        logs={route.logs}
         source={source}
       />
     );

@@ -76,6 +76,7 @@ export function TracePage({
   span,
   part,
   range,
+  logs,
   source,
   inSnapshot,
   variant = "full",
@@ -88,6 +89,8 @@ export function TracePage({
   /** The part of the time picked in the call tree: its kinds of calls and its stretch, as the URL says them. */
   part?: string | undefined;
   range?: string | undefined;
+  /** `all` when every log record shows in the call tree. */
+  logs?: string | undefined;
   source: DataSource;
   /** Opened from a snapshot file: it leads only to the file's other traces. */
   inSnapshot?: boolean | undefined;
@@ -121,7 +124,7 @@ export function TracePage({
           preferredTab={openingTab(from)}
           // The tab and the part of the time picked are the page's URL: a link to it opens them again.
           onTabChange={(next) => go({ ...here(id), tab: next, span: undefined }, true)}
-          initialSlice={parseSlice(part, range)}
+          initialSlice={parseSlice(part, range, logs)}
           onSliceChange={(next) => go({ ...here(id), ...sliceParams(next) }, true)}
           explore={leads.explore}
           links={leads.links}

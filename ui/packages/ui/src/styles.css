@@ -2157,6 +2157,16 @@ details[data-focused] > .dt-sql-group {
   flex: none;
   font-family: var(--dt-font);
 }
+/* A span's info and debug records, while only warnings show: how many, a click away. */
+.dt-map-logs {
+  flex: none;
+  font-family: var(--dt-font);
+  cursor: pointer;
+}
+.dt-map-logs:hover {
+  color: var(--dt-text);
+  text-decoration: underline;
+}
 .dt-map-sub[data-error] {
   flex-shrink: 2;
   min-width: 3rem;

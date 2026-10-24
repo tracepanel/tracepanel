@@ -10,7 +10,7 @@ import { partOfCategory } from "./CallMap";
 import { duration } from "./format";
 import { keyed } from "./keys";
 import type { Category } from "./lib/breakdown";
-import { overlaps, type Slice, type TimeRange, togglePart } from "./lib/slice";
+import { isLoud, overlaps, type Slice, type TimeRange, togglePart } from "./lib/slice";
 import { DATASTORES, MESSAGING, RPC } from "./lib/systems";
 import { TimeLane } from "./TimeLane";
 import { TimeLegend } from "./TimeLegend";
@@ -80,9 +80,10 @@ function logTone(level: string): Mark["tone"] {
   return level === "warning" ? "warn" : "info";
 }
 
-/** The lanes of what happened at a point: log records, errors. */
-function pointLanes(trace: Trace): Lane[] {
-  const logs = keyed(trace.logs, (log) => `log:${log.time}:${log.message}`).map(({ key, item: log }) => ({
+/** The lanes of what happened at a point: log records (warnings and worse, unless every one shows), errors. */
+function pointLanes(trace: Trace, allLogs: boolean): Lane[] {
+  const shown = allLogs ? trace.logs : trace.logs.filter((log) => isLoud(log.level));
+  const logs = keyed(shown, (log) => `log:${log.time}:${log.message}`).map(({ key, item: log }) => ({
     key,
     start: log.time,
     duration: 0,
@@ -105,8 +106,8 @@ function pointLanes(trace: Trace): Lane[] {
 }
 
 /** The lanes under the trace's own: its calls, system by system, then its logs and errors; only those it has. */
-function lanes(trace: Trace): Lane[] {
-  return [...callLanes(trace), ...pointLanes(trace)].filter((lane) => lane.marks.length > 0);
+function lanes(trace: Trace, allLogs: boolean): Lane[] {
+  return [...callLanes(trace), ...pointLanes(trace, allLogs)].filter((lane) => lane.marks.length > 0);
 }
 
 const TICKS = [0, 0.25, 0.5, 0.75, 1];
@@ -294,9 +295,9 @@ function useLanesSlice(onSelect: ((target: MarkTarget) => void) | undefined) {
  * lane alone too: every call tree is read over its time the same way.
  */
 export function Timeline({ trace, onSelect }: { trace: Trace; onSelect?: ((target: MarkTarget) => void) | undefined }) {
-  const drawn = lanes(trace);
   const layer = useRef<HTMLDivElement>(null);
   const { slice, onRange, onShare } = useLanesSlice(onSelect);
+  const drawn = lanes(trace, slice.logs);
   const drag = useRangeDrag(Math.max(trace.duration, 1), onRange);
   const picking = { onRange, onShare, start: drag.start, layer };
   return (

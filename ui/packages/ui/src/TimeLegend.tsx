@@ -1,5 +1,5 @@
 import { type FocusEvent, type ReactNode, useMemo } from "react";
-import { buildTree, chipCounts, FILTERS, type FilterId, partOfCategory } from "./CallMap";
+import { buildTree, chipCounts, FILTERS, type FilterId, partOfCategory, withShownLogs } from "./CallMap";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./components/ui/tooltip";
 import { duration } from "./format";
 import { CloseIcon } from "./icons";
@@ -7,7 +7,7 @@ import { breakdown, type Category, categoryLabel, spanCategories } from "./lib/b
 import { percent } from "./lib/percent";
 import { plural } from "./lib/plural";
 import { quietSpans } from "./lib/quiet";
-import { isWhole, rangeLabel, type Slice, togglePart, WHOLE } from "./lib/slice";
+import { cleared, isLoud, isWhole, rangeLabel, type Slice, togglePart } from "./lib/slice";
 import { useHeldSlice } from "./TimeSlice";
 import type { Related, Trace } from "./types";
 
@@ -140,6 +140,28 @@ function Share({ share, filters }: { share: ShareOf; filters: SliceState }) {
   );
 }
 
+/**
+ * The trace's log records: by default only its warnings and worse show, in the tree and on the strip; pressed, every
+ * one of them. There only when it has info or debug records to show.
+ */
+function LogsChip({ trace, filters }: { trace: Trace; filters: SliceState }) {
+  if (trace.logs.every((log) => isLoud(log.level))) return null;
+  return (
+    <li>
+      <button
+        type="button"
+        className="dt-map-filter"
+        aria-pressed={filters.slice.logs}
+        title={filters.slice.logs ? "Show warnings and worse only" : "Show info and debug records too"}
+        onClick={() => filters.onChange({ ...filters.slice, logs: !filters.slice.logs })}
+      >
+        Logs
+        <span className="dt-map-filter-count">{trace.logs.length}</span>
+      </button>
+    </li>
+  );
+}
+
 /** The picked range, said: a pressed chip that lets it go. */
 function RangeChip({ total, filters }: { total: number; filters: SliceState }) {
   const range = filters.slice.range;
@@ -169,10 +191,10 @@ function RangeChip({ total, filters }: { total: number; filters: SliceState }) {
  * then the range picked. A pick opens the call tree (`onPick`).
  */
 export function TimeLegend({ trace, related }: { trace: Trace; related: Related | undefined }) {
-  const tree = useMemo(() => buildTree(trace, related), [trace, related]);
+  const { slice, change } = useHeldSlice();
+  const tree = useMemo(() => buildTree(withShownLogs(trace, slice.logs), related), [trace, related, slice.logs]);
   const counts = useMemo(() => chipCounts(tree, trace), [tree, trace]);
   const shares = useMemo(() => sharesOf(trace), [trace]);
-  const { slice, change } = useHeldSlice();
   const filters = { counts, slice, onChange: change };
   const claimed = new Set(shares.map((share) => partOfCategory(share.category)));
   const others = FILTERS.filter((filter) => !claimed.has(filter.id) && (counts.get(filter.id) ?? 0) > 0);
@@ -188,10 +210,11 @@ export function TimeLegend({ trace, related }: { trace: Trace; related: Related 
           </FilterChip>
         </li>
       ))}
+      <LogsChip trace={trace} filters={filters} />
       <RangeChip total={Math.max(trace.duration, 1)} filters={filters} />
       {isWhole(slice) ? null : (
         <li>
-          <button type="button" className="dt-map-filter-clear" onClick={() => change(WHOLE)}>
+          <button type="button" className="dt-map-filter-clear" onClick={() => change(cleared(slice))}>
             Show all
           </button>
         </li>

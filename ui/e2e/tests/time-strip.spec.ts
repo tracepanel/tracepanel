@@ -88,3 +88,52 @@ test("the strip is the Call tree tab's only, on the page and in the panel; the f
   await expect(frame.getByRole("tabpanel").first()).toContainText("Task ID");
   await expect(frame.getByRole("region", { name: "Time" })).toHaveCount(0);
 });
+
+test("only warnings and worse show by default; the Logs chip, or a row's note, shows every record", async ({
+  page,
+}) => {
+  await page.goto(`/#/t/${await traceId(HELD_REPORT)}?tab=tree`);
+  const legend = page.getByRole("list", { name: /^Where the time went/ });
+  const chip = legend.getByRole("button", { name: /^Logs/ });
+  const lanes = page.getByRole("figure", { name: "Timeline" });
+  const logs = page.locator('.dt-map-row[data-kind="log"]');
+
+  // Its warning shows, a lane and a row; its ten info and debug records don't, a note on the spans they were in.
+  await expect(logs).toHaveCount(1);
+  await expect(logs).toContainText("stock below threshold");
+  await expect(lanes.locator(".dt-lane-label")).toHaveText(["task", "139 queries", "1 log record"]);
+  await expect(chip).toHaveAttribute("aria-pressed", "false");
+  await expect(chip).toContainText("11");
+  await expect(row(page, "task", HELD_REPORT).locator(".dt-map-logs")).toHaveText("1 log");
+  await expect(row(page, "transaction", "transaction app.sqlite3").locator(".dt-map-logs")).toHaveText("9 logs");
+
+  await row(page, "transaction", "transaction app.sqlite3").locator(".dt-map-logs").click();
+
+  await expect(logs).toHaveCount(11);
+  await expect(chip).toHaveAttribute("aria-pressed", "true");
+  await expect(lanes.locator(".dt-lane-label")).toHaveText(["task", "139 queries", "11 log records"]);
+  await expect(page).toHaveURL(/[?&]logs=all/);
+  await expect(page.locator(".dt-map-logs")).toHaveCount(0);
+
+  await chip.click();
+
+  await expect(logs).toHaveCount(1);
+  await expect(page).not.toHaveURL(/logs=/);
+
+  // The Logs tab has every record, as it always had.
+  await page.getByRole("tab", { name: /^Logs/ }).click();
+
+  await expect(page.getByRole("tabpanel")).toContainText("stock reconciled");
+});
+
+test("a request with no view recorded: its own time is its code's", async ({ page }) => {
+  await page.goto(`/#/t/${await traceId("POST /api/reports/sales")}?tab=tree`);
+  const legend = page.getByRole("list", { name: /^Where the time went/ });
+
+  await expect(legend.locator('[data-category="code"]')).toContainText(/Your code\s*\d+ ms\s*100%/);
+  await expect(legend.locator('[data-category="django"]')).toHaveCount(0);
+
+  await page.goto(`/#/t/${await traceId("GET /account/orders/")}?tab=tree`);
+
+  await expect(legend.locator('[data-category="django"]')).toContainText("Framework & middleware");
+});
