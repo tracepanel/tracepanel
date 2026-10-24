@@ -1,5 +1,4 @@
-import { FlameIcon } from "lucide-react";
-import { type FocusEvent, type ReactNode, useMemo, useState } from "react";
+import { type FocusEvent, type ReactNode, useMemo } from "react";
 import { buildTree, chipCounts, FILTERS, type FilterId, partOfCategory, withShownLogs } from "./CallMap";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./components/ui/tooltip";
 import { duration } from "./format";
@@ -8,9 +7,8 @@ import { breakdown, type Category, categoryLabel, spanCategories } from "./lib/b
 import { percent } from "./lib/percent";
 import { plural } from "./lib/plural";
 import { type Quiet, quietSpans } from "./lib/quiet";
-import { cleared, isLoud, isWhole, rangeLabel, type Slice, togglePart } from "./lib/slice";
+import { cleared, isLoud, rangeLabel, type Slice, togglePart } from "./lib/slice";
 import { waitedIn } from "./lib/waiting";
-import { useProfilingOf } from "./Profiling";
 import { useHeldSlice } from "./TimeSlice";
 import type { Related, Trace } from "./types";
 
@@ -103,13 +101,19 @@ function keyboardOnly(event: FocusEvent<HTMLElement>): void {
   if (!event.currentTarget.matches(":focus-visible")) event.preventDefault();
 }
 
-/** The numbers of a share, over it: its name, how long, of the whole, how many calls. */
+/**
+ * The numbers of a share, over it: its name, how long, of the whole, how many calls, and of its time how much its
+ * code ran with nothing recorded (the strip's hatched stretches, said there too).
+ */
 export function ShareTip({ share }: { share: ShareOf }) {
   return (
     <>
       <span className="dt-swatch" data-category={share.category} />
       <span className="font-medium">{share.label}</span>
-      <span className="text-muted-foreground tabular-nums">{shareNumbers(share)}</span>
+      <span className="text-muted-foreground tabular-nums">
+        {shareNumbers(share)}
+        {share.quiet > 0 ? ` · of it ${quietWords(share)}` : ""}
+      </span>
     </>
   );
 }
@@ -118,7 +122,6 @@ export function ShareTip({ share }: { share: ShareOf }) {
 export const TIP_CLASS =
   "flex items-center gap-2 rounded-lg border bg-popover px-3 py-2 text-sm whitespace-nowrap text-popover-foreground shadow-[var(--dt-popover-shadow)]";
 
-/** Of a share's time, its code's own with no recorded calls: the strip's hatched part, read with its share. */
 /** "1.5 s waiting · 102 ms untraced": the code's own time, what it waited and what it computed, each there is. */
 function quietWords(share: ShareOf): string {
   const computed = share.quiet - share.waiting;
@@ -127,16 +130,6 @@ function quietWords(share: ShareOf): string {
     computed > 0 ? `${duration(computed)} untraced` : "",
   ];
   return words.filter(Boolean).join(" · ");
-}
-
-function QuietPart({ share }: { share: ShareOf }) {
-  if (share.quiet === 0) return null;
-  return (
-    <span className="dt-share-quiet">
-      <span className="dt-swatch" data-quiet="" />
-      of it {quietWords(share)}
-    </span>
-  );
 }
 
 /** A category of the time: its colour, its share; its numbers on hover; a click picks its rows. */
@@ -156,7 +149,6 @@ function Share({ share, filters }: { share: ShareOf; filters: SliceState }) {
             {share.label}
             <b>{duration(share.value)}</b>
             <span className="dt-breakdown-share">{percent(share.value, share.total)}</span>
-            <QuietPart share={share} />
           </button>
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={8} arrow={false} className={TIP_CLASS}>
@@ -165,43 +157,6 @@ function Share({ share, filters }: { share: ShareOf; filters: SliceState }) {
       </Tooltip>
     </li>
   );
-}
-
-/**
- * In the panel, after the shares, when the code ran with nothing recorded inside and the trace has no profile: its
- * Profile toggle, turned on from here (the same cookie, the toggle lights), for the next run to show what ran.
- */
-function TurnOnProfile({ trace, shares }: { trace: Trace; shares: readonly ShareOf[] }) {
-  const profiling = useProfilingOf(trace);
-  const [on, setOn] = useState(false);
-  const turnOn = offered(trace, shares, profiling);
-  if (!turnOn) return null;
-  return (
-    <li>
-      <button
-        type="button"
-        className="dt-map-quiet-link"
-        disabled={on}
-        onClick={() => {
-          turnOn();
-          setOn(true);
-        }}
-      >
-        <FlameIcon className="size-3.5" aria-hidden="true" />
-        {on ? "Profile is on: run it again" : "Turn on Profile to see what ran"}
-      </button>
-    </li>
-  );
-}
-
-/** How to turn Profile on, when it is offered: no profile yet, code ran with nothing recorded, an app that profiles. */
-function offered(
-  trace: Trace,
-  shares: readonly ShareOf[],
-  profiling: ReturnType<typeof useProfilingOf>,
-): (() => void) | undefined {
-  const quiet = shares.some((share) => share.quiet > 0);
-  return quiet && !trace.profile && profiling.available ? profiling.turnOn : undefined;
 }
 
 /**
@@ -227,7 +182,7 @@ function LogsChip({ trace, filters }: { trace: Trace; filters: SliceState }) {
 }
 
 /** The picked range, said: a pressed chip that lets it go. */
-function RangeChip({ total, filters }: { total: number; filters: SliceState }) {
+function RangeChip({ filters }: { filters: SliceState }) {
   const range = filters.slice.range;
   if (!range) return null;
   return (
@@ -236,17 +191,22 @@ function RangeChip({ total, filters }: { total: number; filters: SliceState }) {
         type="button"
         className="dt-map-filter"
         aria-pressed={true}
-        aria-label={`Time ${rangeLabel(range, total)}`}
-        title="Show all of the time"
+        aria-label={`Time ${rangeLabel(range)}`}
+        title="Only calls in this time range; × shows all"
         onClick={() => filters.onChange({ ...filters.slice, range: null })}
       >
-        {rangeLabel(range, total)}
+        Time {rangeLabel(range)}
         <span className="dt-map-filter-x">
           <CloseIcon />
         </span>
       </button>
     </li>
   );
+}
+
+/** How many things are picked: kinds and a range. One lets go by its own chip; "Show all" is for two or more. */
+function picks(slice: Slice): number {
+  return slice.parts.length + (slice.range ? 1 : 0);
 }
 
 /**
@@ -274,10 +234,9 @@ export function TimeLegend({ trace, related }: { trace: Trace; related: Related 
           </FilterChip>
         </li>
       ))}
-      <TurnOnProfile trace={trace} shares={shares} />
       <LogsChip trace={trace} filters={filters} />
-      <RangeChip total={Math.max(trace.duration, 1)} filters={filters} />
-      {isWhole(slice) ? null : (
+      <RangeChip filters={filters} />
+      {picks(slice) < 2 ? null : (
         <li>
           <button type="button" className="dt-map-filter-clear" onClick={() => change(cleared(slice))}>
             Show all

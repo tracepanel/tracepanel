@@ -766,6 +766,16 @@ tr[data-new] {
 .dt-requests[data-compact] .dt-request-path {
   min-width: 5ch;
 }
+/* Narrow, a row with no status of its own (a task, a job, a view): its name takes the status's room too. */
+.dt-requests[data-compact] .dt-request-row:has(> .dt-request-meta > .dt-status-empty) > .dt-request-main {
+  grid-column: 1 / 3;
+}
+.dt-requests[data-compact] .dt-request-row:has(> .dt-request-meta > .dt-status-empty) > .dt-request-meta {
+  grid-column: 3 / -1;
+}
+.dt-requests[data-compact] .dt-request-meta > .dt-status-empty {
+  display: none;
+}
 /* Narrow, the app's chip gives way first: the path is what the row is about. */
 .dt-requests[data-compact] .dt-request-main .dt-app-chip {
   flex: 0 4 auto;
@@ -1117,11 +1127,12 @@ tr[data-new] {
 .dt-stretch[data-waiting] {
   --dt-k: var(--dt-text-3);
 }
-/* How long, over its longest hatched stretch, when it fits. */
+/* How long, over its longest hatched stretch, when it fits; over the range picked, which never hides it. */
 .dt-quiet-said {
   position: absolute;
   top: 0;
   bottom: 0;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1164,6 +1175,7 @@ tr[data-new] {
   transform: translateX(-50%);
   pointer-events: none;
 }
+
 .dt-lane-track {
   position: relative;
   height: 0.75rem;
@@ -1233,36 +1245,19 @@ tr[data-new] {
   inset: 0 0 0 var(--dt-lane-label);
   pointer-events: none;
 }
+/* From the first lane down: the axis's labels stay clear of it. */
+.dt-timeline-layer .dt-range {
+  top: 1rem;
+}
 .dt-range {
   position: absolute;
   top: 0;
   bottom: 0;
   min-width: 1px;
-  border: 1px solid var(--dt-accent);
+  border: 1px solid color-mix(in srgb, var(--dt-accent) 70%, transparent);
   border-radius: 2px;
-  background: color-mix(in srgb, var(--dt-accent) 5%, transparent);
+  background: color-mix(in srgb, var(--dt-accent) 6%, transparent);
   pointer-events: none;
-}
-/* Where it starts and ends, and how long: over the axis, from its start, or ending with it in the later half. */
-/* Small, on the page's background: the hairline's colour in its text, no block of colour. */
-.dt-range-label {
-  position: absolute;
-  top: -1px;
-  left: -1px;
-  padding: 0 0.25rem;
-  border: 1px solid var(--dt-accent);
-  border-radius: 2px;
-  background: var(--dt-bg);
-  color: var(--dt-accent);
-  font-size: 0.6875rem;
-  font-weight: 500;
-  line-height: 0.875rem;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.dt-range[data-end] .dt-range-label {
-  right: -1px;
-  left: auto;
 }
 
 .dt-tabs {
@@ -2141,28 +2136,8 @@ details[data-focused] > .dt-sql-group {
   flex: none;
   font-family: var(--dt-font);
 }
-/* A way on, as a link reads: the panel's Profile turned on from the legend. */
-.dt-map-quiet-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  flex: none;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--dt-accent);
-  font: var(--dt-size-sm) var(--dt-font);
-  cursor: pointer;
-}
-.dt-map-quiet-link:hover:not(:disabled) {
-  text-decoration: underline;
-}
-.dt-map-quiet-link:disabled {
-  color: var(--dt-text-3);
-  cursor: default;
-}
 /* The code's own time with a profile to show what ran in it: a click opens it. */
-.dt-time-track .dt-stretch[data-quiet] {
+.dt-time-track[data-profiled] .dt-stretch[data-quiet] {
   cursor: pointer;
 }
 /* A span's info and debug records, while only warnings show: how many, a click away. */
@@ -2233,14 +2208,6 @@ div.dt-map-row[data-kind="code"] {
 /* A profile there: the toggle's orange (set on the icon), brighter on the row's hover. */
 .dt-map-row:hover .dt-map-flame[data-on] {
   filter: brightness(1.25) saturate(1.1);
-}
-.dt-map-flame[data-off] {
-  opacity: 0.55;
-  cursor: pointer;
-}
-.dt-map-flame[data-off]:hover {
-  opacity: 1;
-  color: var(--dt-accent);
 }
 .dt-map-bar[data-point],
 .dt-map-bar[data-tick] {

@@ -8,14 +8,13 @@ import {
   useRef,
   useState,
 } from "react";
-import { Tooltip, TooltipContent, TooltipTrigger } from "./components/ui/tooltip";
 import { duration, since } from "./format";
 import { GraphqlCode } from "./GraphqlCode";
 import { ChevronRightIcon, CloseIcon } from "./icons";
 import { keyed } from "./keys";
 import { AllAttributes, LogRecordDetails } from "./LogRecordDetails";
 import { type Category, spanCategories } from "./lib/breakdown";
-import { callFields } from "./lib/callFields";
+import { callFields, templatePlace } from "./lib/callFields";
 import { callTemplate, groupNoun } from "./lib/calls";
 import { spanKindLabel } from "./lib/handler";
 import { widthOf } from "./lib/percent";
@@ -26,11 +25,10 @@ import { traceRuntime } from "./lib/runtime";
 import { isReceiver, raised } from "./lib/signals";
 import { isLoud, overlaps, type Slice, type TimeRange } from "./lib/slice";
 import { CALL_KINDS, DATASTORES, MESSAGING, RPC } from "./lib/systems";
-import { type Piece, quietPieces, timed, waitName } from "./lib/waiting";
+import { type Piece, quietPieces, timed, waitName, waitPlace } from "./lib/waiting";
 import { type TraceLinks, traceLinkProps } from "./links";
 import { type NameValue, NameValues, RowsLookContext } from "./NameValues";
-import { profileOver, RowFlame, WhatRan, WhatWaited } from "./ProfileHint";
-import { useProfilingOf } from "./Profiling";
+import { profileOver, RowFlame } from "./ProfileHint";
 import { PropTable } from "./PropTable";
 import {
   AliasChip,
@@ -273,9 +271,20 @@ function countFilters(nodes: Node[], counts = new Map<FilterId, number>()): Map<
  */
 export function chipCounts(nodes: Node[], trace: Trace): Map<FilterId, number> {
   const counts = countFilters(nodes);
-  const filters = trace.spans.map((span) => FILTER_OF.get(span.kind)).filter((filter) => filter !== undefined);
+  const root = trace.spans.find((span) => span.parent_id === null);
+  leaveOutOwn(counts, root);
+  const filters = trace.spans
+    .filter((span) => span !== root)
+    .map((span) => FILTER_OF.get(span.kind))
+    .filter((filter) => filter !== undefined);
   for (const filter of new Set(filters)) counts.set(filter, filters.filter((each) => each === filter).length);
   return counts;
+}
+
+/** The trace's own span isn't a call of it: a task's trace has no "Tasks 1" chip that picks only itself. */
+function leaveOutOwn(counts: Map<FilterId, number>, root: Span | undefined): void {
+  const own = root && FILTER_OF.get(root.kind);
+  if (own) counts.set(own, (counts.get(own) ?? 1) - 1);
 }
 
 /** What is picked, as the rows are matched against it: kinds of calls, a stretch of time, each span's category. */
@@ -693,8 +702,30 @@ function LeafRow({
   );
 }
 
+/**
+ * The template a call ran from, unless the row it hangs under is that template, named already (a line of it still
+ * says where).
+ */
+function FromTemplate({ span, parent }: { span: Span | undefined; parent: Span | undefined }) {
+  if (!span || saidAbove(span, parent)) return null;
+  return <TemplateChip attrs={span.attrs} />;
+}
+
+/** Whether the row a call hangs under is the template it ran from. */
+function saidAbove(span: Span, parent: Span | undefined): boolean {
+  return parent?.kind === "template" && parent.name === templatePlace(span.attrs);
+}
+
 /** A group's kind, its call's template, its alias, the page template that made it, how many and its issue. */
-function GroupName({ node, ctx }: { node: Extract<Node, { type: "group" }>; ctx: RowContext }) {
+function GroupName({
+  node,
+  ctx,
+  parent,
+}: {
+  node: Extract<Node, { type: "group" }>;
+  ctx: RowContext;
+  parent: Span | undefined;
+}) {
   const issue = node.spans.map((span) => ctx.issueBySpan.get(span.id)).find(Boolean);
   const first = node.spans[0];
   return (
@@ -702,7 +733,7 @@ function GroupName({ node, ctx }: { node: Extract<Node, { type: "group" }>; ctx:
       <KindBadge kind={spanKindLabel(first?.kind, ctx.trace.attrs)} muted={true} className="dt-map-kind" />
       <span className="dt-map-text">{callTemplate(first)}</span>
       <AliasChip value={aliasOf(first)} />
-      {first ? <TemplateChip attrs={first.attrs} /> : null}
+      <FromTemplate span={first} parent={parent} />
       <span className="dt-map-times">×{node.spans.length}</span>
       {issue ? <IssueChip kind={issue} className={ISSUE_CHIP_SHRINKS} /> : null}
     </>
@@ -729,7 +760,7 @@ function GroupRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProp
       >
         <span className="dt-map-name" style={indent}>
           <Caret open={open} onToggle={() => ctx.onToggle(`open:${node.key}`)} />
-          <GroupName node={node} ctx={ctx} />
+          <GroupName node={node} ctx={ctx} parent={parent} />
         </span>
         <GroupTicks spans={node.spans} trace={ctx.trace} />
         <span className="dt-map-time">{duration(total)}</span>
@@ -827,7 +858,7 @@ function SpanRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps
           />
           <SpanName span={span} />
           <AliasChip value={aliasBeside(span)} />
-          <TemplateChip attrs={span.attrs} />
+          <FromTemplate span={span} parent={parent} />
           <SignalNotes span={span} parent={parent} under={childSpans(node)} />
           <HiddenLogs count={ctx.hiddenLogs.get(span.id)} onShow={ctx.onShowLogs} />
           {issue ? <IssueChip kind={issue} className={ISSUE_CHIP_SHRINKS} /> : null}
@@ -935,9 +966,16 @@ function CodeBars({ part, category, trace }: { part: CodePart; category: Categor
  * without one, untraced code, waiting where the profile can't say.
  */
 function partName(part: CodePart, trace: Trace): string {
-  const { profile } = profileOver(trace, partRange(part));
+  const profile = profileOver(trace, partRange(part));
   if (part.waiting) return waited(profile);
   return profile ? ranMost(profile) : "untraced code";
+}
+
+/** Where a wait row waited, said quietly after its name: "handlers.py:108", where the profile says. */
+function WaitPlace({ part, trace }: { part: CodePart; trace: Trace }) {
+  const profile = profileOver(trace, partRange(part));
+  const place = part.waiting && profile ? waitPlace(profile) : null;
+  return place ? <span className="dt-map-sub">{place}</span> : null;
 }
 
 /** "asyncio.sleep in send_digest": what the code waited on, or just waiting where the profile can't say. */
@@ -960,6 +998,7 @@ function CodeRowParts({ span, ctx, depth, part }: { span: Span; ctx: RowContext;
         <span className="dt-map-caret" />
         <KindBadge kind={part.waiting ? "wait" : "code"} muted={true} className="dt-map-kind" />
         <TaskName name={partName(part, ctx.trace)} className="dt-map-text" />
+        <WaitPlace part={part} trace={ctx.trace} />
         <RowFlame trace={ctx.trace} />
       </span>
       <CodeBars part={part} category={category} trace={ctx.trace} />
@@ -987,10 +1026,10 @@ function CodeRow({ span, ctx, depth }: { span: Span; ctx: RowContext; depth: num
 }
 
 function CodePartRow({ span, ctx, depth, part }: { span: Span; ctx: RowContext; depth: number; part: CodePart }) {
-  const profiling = useProfilingOf(ctx.trace);
   const inside = <CodeRowParts span={span} ctx={ctx} depth={depth} part={part} />;
   const open = ctx.onProfile;
-  const row = open ? (
+  // With a profile, a click opens it at that stretch; without, a plain row.
+  return open ? (
     <button type="button" className="dt-map-row" data-kind="code" onClick={() => open(partRange(part))}>
       {inside}
     </button>
@@ -999,8 +1038,6 @@ function CodePartRow({ span, ctx, depth, part }: { span: Span; ctx: RowContext; 
       {inside}
     </div>
   );
-  const offered = Boolean(ctx.trace.profile) || profiling.available;
-  return <WithWhatRan trace={ctx.trace} offered={offered} row={row} part={part} />;
 }
 
 /** Whether a span has a code row: its code ran long with nothing recorded inside, and what is picked keeps it. */
@@ -1008,37 +1045,6 @@ function hasCodeRow(span: Span, ctx: RowContext): boolean {
   const quiet = ctx.quiet.get(span.id);
   return quiet !== undefined && codeShown(quiet, ctx.categories.get(span.id) ?? "code", ctx);
 }
-
-/** A code row with what ran (or waited) in it on hover, when there is anything to say. */
-function WithWhatRan({
-  trace,
-  offered,
-  row,
-  part,
-}: {
-  trace: Trace;
-  offered: boolean;
-  row: ReactNode;
-  part: CodePart;
-}) {
-  if (!offered) return row;
-  const range = partRange(part);
-  return (
-    <Tooltip delayDuration={150} disableHoverableContent={true}>
-      <TooltipTrigger asChild>{row}</TooltipTrigger>
-      <TooltipContent side="top" sideOffset={6} arrow={false} className={CODE_TIP_CLASS}>
-        {part.waiting ? (
-          <WhatWaited trace={trace} range={range} waited={part.total} />
-        ) : (
-          <WhatRan trace={trace} range={range} />
-        )}
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
-const CODE_TIP_CLASS =
-  "grid w-72 gap-1.5 rounded-lg border bg-popover px-3 py-2 text-sm text-popover-foreground shadow-[var(--dt-popover-shadow)]";
 
 /**
  * The fold of a row with rows under it: a click on it opens or closes them only, without selecting the row and
@@ -1629,12 +1635,12 @@ function HiddenLogs({ count, onShow }: { count: number | undefined; onShow: () =
 function profileOpener(
   open: (() => void) | undefined,
   trace: Trace,
-  slice: Slice,
-  change: (slice: Slice) => void,
+  profileAt: (range: TimeRange | null) => void,
 ): ((range: TimeRange) => void) | undefined {
   if (!open) return undefined;
   return (range) => {
-    if (timed(trace.profile)) change({ ...slice, range });
+    // The Profile tab's own stretch: the call tree's range is a drag's only.
+    if (timed(trace.profile)) profileAt(range);
     open();
   };
 }
@@ -1673,7 +1679,7 @@ export function CallMap({
   initialSpan?: string | undefined;
 }) {
   // The part of the time picked: the kinds of calls and the stretch of time the rows are kept for.
-  const { slice: current, change } = useHeldSlice();
+  const { slice: current, change, profileAt } = useHeldSlice();
   const { tree, hidden } = useShownLogs(trace, related, current.logs);
   const issues = useMemo(() => withCallIssues(issueBySpan, related), [issueBySpan, related]);
   const { selected, select, close } = useSelection(initialSpan);
@@ -1708,7 +1714,7 @@ export function CallMap({
                 quiet,
                 categories,
                 slice: current,
-                onProfile: profileOpener(wiring.onProfile, trace, current, change),
+                onProfile: profileOpener(wiring.onProfile, trace, profileAt),
                 onShowLogs: () => change({ ...current, logs: true }),
               }}
             />

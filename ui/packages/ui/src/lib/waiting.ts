@@ -117,12 +117,10 @@ export function waitName(profile: Profile): string | null {
   return wait.own ? `${called(wait.leaf)} in ${wait.own.function}` : called(wait.leaf);
 }
 
-/** "await asyncio.sleep in build_sales_report · handlers.py:108": what the code waited on most, and where. */
-export function waitOf(profile: Profile): string | null {
-  const wait = longestWait(profile);
-  if (!wait) return null;
-  const what = `${wait.leaf.module?.startsWith("asyncio") ? "await " : ""}${called(wait.leaf)}`;
-  return wait.own ? `${what} in ${wait.own.function} · ${line(wait.own)}` : what;
+/** "handlers.py:108": where in your code it waited most, when a frame of yours did. */
+export function waitPlace(profile: Profile): string | null {
+  const own = longestWait(profile)?.own;
+  return own ? line(own) : null;
 }
 
 /** A stretch of a span's own code in pieces: waited in or computed in; one computed piece where the profile can't say. */

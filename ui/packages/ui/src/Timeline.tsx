@@ -152,13 +152,7 @@ function MarkOn({
 }) {
   if (!onSelect) return <span {...look} title={mark.label} />;
   return (
-    <button
-      type="button"
-      {...look}
-      title={mark.target.tab === "tree" ? `${mark.label} · open in the call tree` : mark.label}
-      aria-label={mark.label}
-      onClick={() => onSelect(mark.target)}
-    />
+    <button type="button" {...look} title={mark.label} aria-label={mark.label} onClick={() => onSelect(mark.target)} />
   );
 }
 
@@ -283,16 +277,17 @@ function LanesBody({
  * they pick is the call tree's to show, which opens with it.
  */
 function useLanesSlice(onSelect: ((target: MarkTarget) => void) | undefined, profile: Profile | undefined) {
-  const { slice, change } = useHeldSlice();
+  const { slice, change, profileAt } = useHeldSlice();
   const pick = (next: Slice, more: boolean) => {
     change(next);
     if (more) onSelect?.({ tab: "tree" });
   };
   return {
     slice,
-    // The profile at a stretch of the code's own time, where the profile says when its samples were taken.
+    // The profile at a stretch of the code's own time, where the profile says when its samples were taken: the
+    // Profile tab's own stretch, not a range of the call tree's.
     openProfile: (range: TimeRange | undefined) => {
-      if (range && timed(profile)) change({ ...slice, range });
+      if (range && timed(profile)) profileAt(range);
       onSelect?.({ tab: "profile" });
     },
     onRange: (range: TimeRange | null) => pick({ ...slice, range }, range !== null),

@@ -5,7 +5,6 @@ import { type Stretch, stretches } from "./lib/breakdown";
 import { quietSpans } from "./lib/quiet";
 import type { TimeRange } from "./lib/slice";
 import { quietPieces } from "./lib/waiting";
-import { WhatRan, WhatWaited } from "./ProfileHint";
 import { type ShareOf, ShareTip, sharesOf, TIP_CLASS } from "./TimeLegend";
 import type { Trace } from "./types";
 
@@ -19,12 +18,9 @@ function faded(stretch: Stretch, parts: readonly string[]): "" | undefined {
   return parts.length > 0 && !parts.includes(partOfCategory(stretch.category)) ? "" : undefined;
 }
 
-/** What the pointer is over: a share's stretch (a quiet piece of it says its span and its stretch), and where. */
+/** What the pointer is over: a share's stretch, and where. */
 interface Hover {
   category: string;
-  span: string | undefined;
-  range: TimeRange | undefined;
-  waiting: boolean;
   x: number;
 }
 
@@ -33,9 +29,6 @@ function hoverAt(event: PointerEvent<HTMLDivElement>): Hover | null {
   if (!over) return null;
   return {
     category: over.dataset["category"] ?? "",
-    span: over.dataset["quiet"],
-    range: rangeIn(over),
-    waiting: over.dataset["waiting"] !== undefined,
     x: event.clientX - event.currentTarget.getBoundingClientRect().left,
   };
 }
@@ -47,45 +40,19 @@ export function rangeIn(element: HTMLElement): TimeRange | undefined {
   return Number.isFinite(from) && to > from ? [from, to] : undefined;
 }
 
-/** Over the share under the pointer: its numbers; over its code's own time, what that time is and what ran in it. */
-function LaneTip({ hover, shares, lane }: { hover: Hover | null; shares: readonly ShareOf[]; lane: Lane }) {
+/**
+ * Over the share under the pointer: its numbers, its code's own time too. Its quiet stretches say nothing more: the
+ * call tree's code rows name what ran there, and with a profile a click opens it.
+ */
+function LaneTip({ hover, shares }: { hover: Hover | null; shares: readonly ShareOf[] }) {
   const share = shares.find((each) => each.category === hover?.category);
   if (!(hover && share)) return null;
-  if (hover.span) {
-    return (
-      <div role="tooltip" className={`dt-lane-tip ${QUIET_TIP_CLASS}`} style={{ left: hover.x }}>
-        <span className="flex items-center gap-2">
-          <ShareTip share={share} />
-        </span>
-        <QuietLines hover={hover} lane={lane} category={share.category} />
-      </div>
-    );
-  }
   return (
     <div role="tooltip" className={`dt-lane-tip ${TIP_CLASS}`} style={{ left: hover.x }}>
       <ShareTip share={share} />
     </div>
   );
 }
-
-/** A quiet piece's lines: waited in (what on, where), or computed in (its profile's functions, or how to get one). */
-function QuietLines({ hover, lane, category }: { hover: Hover; lane: Lane; category: string }) {
-  const totals = lane.totals.get(`${hover.span}:${hover.waiting}`) ?? 0;
-  if (hover.waiting && hover.range) return <WhatWaited trace={lane.trace} range={hover.range} waited={totals} />;
-  return (
-    <>
-      <span className="flex items-center gap-2">
-        <span className="dt-swatch" data-quiet="" data-category={category} />
-        <span>Of it {duration(totals)} untraced</span>
-      </span>
-      <WhatRan trace={lane.trace} range={hover.range} />
-    </>
-  );
-}
-
-/** The tooltip's look, a few lines: what a quiet stretch is, and where to see what ran in it. */
-const QUIET_TIP_CLASS =
-  "grid w-80 gap-1.5 rounded-lg border bg-popover px-3 py-2 text-sm text-popover-foreground shadow-[var(--dt-popover-shadow)]";
 
 /** Each stretch, and when it is a span's own time with no recorded calls, the span and whether it waited then. */
 interface Drawn {
@@ -161,7 +128,7 @@ function pieceData(each: Drawn): Record<string, string | undefined> {
 /**
  * The trace's own lane: where its time went, moment by moment, in its shares' colours (the legend's); a long
  * stretch where its code ran with no recorded calls hatched and said, split where the profile says it waited. A
- * share's stretch says its numbers on hover, and picks its rows on a click; a quiet one opens the profile.
+ * share's stretch says its numbers on hover, and picks its rows on a click; a quiet one, with a profile, opens it.
  */
 export function TimeLane({ trace, word, parts }: { trace: Trace; word: string; parts: readonly string[] }) {
   const total = Math.max(trace.duration, 1);
@@ -174,6 +141,7 @@ export function TimeLane({ trace, word, parts }: { trace: Trace; word: string; p
       {/* biome-ignore lint/a11y/noStaticElementInteractions: the numbers on hover; the legend's buttons have them too. */}
       <div
         className="dt-lane-track dt-time-track"
+        data-profiled={trace.profile ? "" : undefined}
         onPointerMove={(event) => setHover(hoverAt(event))}
         onPointerLeave={() => setHover(null)}
       >
@@ -192,7 +160,7 @@ export function TimeLane({ trace, word, parts }: { trace: Trace; word: string; p
             <span className="dt-quiet-label">{quietLabel(lane, each)}</span>
           </span>
         ))}
-        <LaneTip hover={hover} shares={shares} lane={lane} />
+        <LaneTip hover={hover} shares={shares} />
       </div>
     </div>
   );

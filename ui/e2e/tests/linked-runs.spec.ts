@@ -42,7 +42,7 @@ test("in the panel, a task opens in the panel itself, and Back or Esc returns to
   await page.getByRole("button", { name: "Load reports" }).click();
   await pill(page).click();
   const frame = panel(page);
-  await frame.getByRole("button", { name: TASK_ROW }).click();
+  await frame.locator(".dt-map-timed").getByRole("button", { name: TASK_ROW }).click();
   await frame.getByRole("link", { name: "Open the task's trace →" }).click();
   const back = frame.getByRole("button", { name: "Back" });
 
@@ -55,9 +55,9 @@ test("in the panel, a task opens in the panel itself, and Back or Esc returns to
   await back.click();
 
   await expect(back).toBeHidden();
-  await expect(frame.getByRole("button", { name: TASK_ROW })).toBeVisible();
+  await expect(frame.locator(".dt-map-timed").getByRole("button", { name: TASK_ROW })).toBeVisible();
 
-  await frame.getByRole("button", { name: TASK_ROW }).click();
+  await frame.locator(".dt-map-timed").getByRole("button", { name: TASK_ROW }).click();
   await frame.getByRole("link", { name: "Open the task's trace →" }).click();
   await expect(back).toBeVisible();
 
