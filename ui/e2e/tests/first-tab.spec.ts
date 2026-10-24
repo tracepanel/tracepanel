@@ -62,6 +62,9 @@ test("a request and the task it enqueued link each other with the call tree's ro
 
   await expect(by.getByRole("term")).toHaveText("Enqueued by");
   await expect(by.locator(".dt-kind[data-muted]")).toHaveText("request");
+  // As every request row says it: its method and path, its status.
+  await expect(by.getByRole("definition")).toContainText("POST /api/reports/sales");
+  await expect(by.locator(".dt-status")).toHaveText("202");
 });
 
 test("on the console's page the header is the head: the facts don't say its URL, status or duration again", async ({

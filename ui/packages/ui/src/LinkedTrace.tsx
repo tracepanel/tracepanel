@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { duration } from "./format";
 import { type TraceLinks, traceLinkProps } from "./links";
 import type { PropRow } from "./PropTable";
-import { KindBadge, StateBadge, TaskName } from "./primitives";
+import { KindBadge, StateBadge, StatusBadge, TaskName } from "./primitives";
 import { RunChips } from "./RunChips";
 import type { TraceSummary } from "./types";
 
@@ -20,8 +20,9 @@ function LinkBadge({ trace }: { trace: TraceSummary }) {
   return <KindBadge kind={LINK_KINDS[trace.kind] ?? trace.kind} muted={true} />;
 }
 
-/** One alone: how a task run ended, or whether it failed. */
+/** One alone: how it ended, as its own rows say it: a request's status, a task run's state, or that it failed. */
 function Outcome({ trace }: { trace: TraceSummary }) {
+  if (typeof trace.http_status === "number") return <StatusBadge status={trace.http_status} />;
   if (trace.task_state) return <StateBadge state={trace.task_state} />;
   return trace.status === "error" ? <span className="text-sm text-error">failed</span> : null;
 }
@@ -45,10 +46,19 @@ function Tally({ group: { first, count, failed } }: { group: Group }) {
   );
 }
 
-/** A linked trace's name, as the call tree's rows say theirs: its path, else its name, a task's cut at its start. */
+/**
+ * A linked trace's name, as the call tree's rows say theirs: a request's method and path, else its name, a task's
+ * cut at its start.
+ */
 function LinkedName({ trace }: { trace: TraceSummary }) {
   if (trace.kind === "task") return <TaskName name={trace.name} className="font-mono text-sm" />;
-  return <span className="truncate font-mono text-sm">{trace.path ?? trace.name}</span>;
+  return <span className="truncate font-mono text-sm">{requestName(trace) ?? trace.name}</span>;
+}
+
+/** "POST /api/reports/sales": a request's method and path, when it has a path. */
+function requestName(trace: TraceSummary): string | null {
+  if (!trace.path) return null;
+  return trace.method ? `${trace.method} ${trace.path}` : trace.path;
 }
 
 /** A linked trace (or a group of them) on one line, a link to it where the host gives one; `note` after its name. */
