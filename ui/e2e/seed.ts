@@ -816,6 +816,28 @@ function profiled(): Doc {
           { frames: [0, 1, 4], count: 30 },
           { frames: [0, 1], count: 10 },
         ],
+        // Where its memory was at its end (the SDK missed the peak's), with another trace running meanwhile.
+        memory: {
+          peak: 44_040_192,
+          net: 1_258_291,
+          allocated: 94_371_840,
+          sites: [
+            { frames: [0, 1, 2, 3], bytes: 31_457_280, count: 1_200 },
+            { frames: [0, 1, 4], bytes: 8_388_608, count: 300 },
+            { frames: [0, 1], bytes: 4_194_304, count: 40 },
+          ],
+          sites_at: "end",
+          shared: true,
+        },
+        gc: {
+          collections: 3,
+          pause_us: 12_000,
+          pauses: [
+            [5_000, 3_000, 0],
+            [15_000, 1_000, 0],
+            [30_000, 8_000, 2],
+          ],
+        },
       },
     },
   );

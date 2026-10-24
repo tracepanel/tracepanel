@@ -4,6 +4,17 @@
 
 ### Added
 
+- Profiles show memory and GC pauses. A profile can say what the trace's
+  code allocated (`memory`: its peak, what it kept, where the memory was)
+  and the garbage collector's runs (`gc`: how many, their pauses and when).
+  The schema and the agent take them, and a profile without them stays
+  valid. A profiled trace's header says them in one line
+  (`↑ 42 MB peak · GC 3× 12 ms`). The Profile tab switches between Time and
+  Memory: the trace's peak, what it kept and allocated in all, its memory by
+  package, a flame graph of bytes and the sites it was allocated at, with a
+  note where the sites are the end's rather than the peak's or other traces
+  ran in the process meanwhile. On the time strip the pauses are a GC share
+  of their own.
 - Pick a part of a trace's time in its call tree, by kind or by range. A
   share's stretch of the time strip, or its entry in the legend, says its
   time, its percent and how many calls on hover. A click on it keeps that

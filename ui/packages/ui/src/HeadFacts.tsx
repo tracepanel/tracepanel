@@ -1,7 +1,8 @@
 import { duration } from "./format";
+import { memoryFacts } from "./lib/memory";
 import { plural } from "./lib/plural";
 import { type SystemCalls, systemCalls } from "./systemCalls";
-import type { Span } from "./types";
+import type { Span, Trace } from "./types";
 
 /** What a system's calls add after their time: SQL's unique statements, a cache's hits. */
 const DETAILS: Record<string, (spans: Span[]) => string | null> = {
@@ -30,10 +31,11 @@ function said(calls: SystemCalls): string {
 
 /**
  * The trace's calls in its header, after how long it took: one quiet line, system by system ("· 139 queries 29 ms
- * · 3 unique"). Nothing for a trace that called nothing.
+ * · 3 unique"), then, profiled, its memory and the collector's pauses ("· ↑ 42 MB peak · GC 3× 12 ms"). Nothing for a
+ * trace that called nothing and wasn't profiled.
  */
-export function HeadFacts({ trace }: { trace: Parameters<typeof systemCalls>[0] }) {
-  const systems = systemCalls(trace);
-  if (systems.length === 0) return null;
-  return <span className="dt-trace-facts">{systems.map((calls) => `· ${said(calls)}`).join(" ")}</span>;
+export function HeadFacts({ trace }: { trace: Trace }) {
+  const facts = [...systemCalls(trace).map(said), ...memoryFacts(trace.profile)];
+  if (facts.length === 0) return null;
+  return <span className="dt-trace-facts">{facts.map((fact) => `· ${fact}`).join(" ")}</span>;
 }

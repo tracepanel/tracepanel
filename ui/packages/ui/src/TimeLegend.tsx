@@ -3,7 +3,8 @@ import { buildTree, chipCounts, FILTERS, type FilterId, partOfCategory, withShow
 import { Tooltip, TooltipContent, TooltipTrigger } from "./components/ui/tooltip";
 import { duration } from "./format";
 import { CloseIcon } from "./icons";
-import { breakdown, type Category, categoryLabel, spanCategories } from "./lib/breakdown";
+import { breakdown, type Category, categoryLabel, spanCategories, stretches } from "./lib/breakdown";
+import { cutByPauses, GC, gcPauses } from "./lib/memory";
 import { percent } from "./lib/percent";
 import { plural } from "./lib/plural";
 import { type Quiet, quietSpans } from "./lib/quiet";
@@ -13,26 +14,31 @@ import { largestFirst, ShareFace } from "./Shares";
 import { useHeldSlice } from "./TimeSlice";
 import type { Related, Trace } from "./types";
 
+/** What a share of the time is: a category of spans, or the collector's pauses. */
+export type ShareKind = Category | typeof GC;
+
 /** A share of the time, as the legend and the strip's tooltip say it. */
 export interface ShareOf {
-  category: Category;
+  category: ShareKind;
   value: number;
   total: number;
-  /** How many spans count in it. */
+  /** How many spans count in it; the collector's, how many times it ran. */
   calls: number;
   label: string;
   /** Of its time, how much its code waited (a sleep, a socket), where the profile says when its samples were taken. */
   waiting: number;
 }
 
-/** "26 ms · 96% · 12 calls": how long, of the whole, how many spans. */
+/** "26 ms · 96% · 12 calls": how long, of the whole, how many spans (the collector's runs). */
 function shareNumbers(share: ShareOf): string {
-  return `${duration(share.value)} · ${percent(share.value, share.total)} · ${plural(share.calls, "call", "calls")}`;
+  const counted =
+    share.category === GC ? plural(share.calls, "collection", "collections") : plural(share.calls, "call", "calls");
+  return `${duration(share.value)} · ${percent(share.value, share.total)} · ${counted}`;
 }
 
 /** Numbers added up by category. */
-function addUp(items: readonly [Category, number][]): Map<Category, number> {
-  const sums = new Map<Category, number>();
+function addUp<K>(items: readonly [K, number][]): Map<K, number> {
+  const sums = new Map<K, number>();
   for (const [category, value] of items) sums.set(category, (sums.get(category) ?? 0) + value);
   return sums;
 }
@@ -51,16 +57,48 @@ function byCategory(
   );
 }
 
+/**
+ * Where the wall-clock time went, per share: the stretches added up, the collector's pauses (a profile's) taken out
+ * of the shares they stopped and counted as their own.
+ */
+function timeParts(trace: Trace): [ShareKind, number][] {
+  const pauses = gcPauses(trace.profile, trace.duration);
+  if (pauses.length === 0) return breakdown(trace);
+  return [
+    ...addUp(
+      stretches(trace).flatMap(({ from, to, category }) =>
+        cutByPauses(from, to, pauses).map(({ range, gc }): [ShareKind, number] => [
+          gc ? GC : category,
+          range[1] - range[0],
+        ]),
+      ),
+    ),
+  ];
+}
+
+/** A share of spans' time: one that picks its rows. */
+type SpanShare = ShareOf & { category: Category };
+
+function ofSpans(share: ShareOf): share is SpanShare {
+  return share.category !== GC;
+}
+
+/** A share's name: its category's, or the collector's. */
+function shareLabel(category: ShareKind, trace: Trace): string {
+  return category === GC ? "GC" : categoryLabel(category, trace);
+}
+
 /** Each share of the time with its numbers: how long, of how much, how many spans; largest first. */
 export function sharesOf(trace: Trace): ShareOf[] {
-  const parts = breakdown(trace);
+  const parts = timeParts(trace);
   const total = Math.max(
     parts.reduce((sum, [, value]) => sum + value, 0),
     1,
   );
   const categories = spanCategories(trace);
-  const calls = addUp([...categories.values()].map((category) => [category, 1]));
-  const waiting = byCategory([...quietSpans(trace)], categories, ({ gaps }) =>
+  const calls = addUp<ShareKind>([...categories.values()].map((category) => [category, 1]));
+  calls.set(GC, trace.profile?.gc?.collections ?? 0);
+  const waiting: ReadonlyMap<ShareKind, number> = byCategory([...quietSpans(trace)], categories, ({ gaps }) =>
     waitedIn(trace.profile, gaps, trace.start),
   );
   const shares = parts.map(([category, value]) => ({
@@ -68,7 +106,7 @@ export function sharesOf(trace: Trace): ShareOf[] {
     value,
     total,
     calls: calls.get(category) ?? 0,
-    label: categoryLabel(category, trace),
+    label: shareLabel(category, trace),
     waiting: waiting.get(category) ?? 0,
   }));
   return largestFirst(
@@ -125,8 +163,31 @@ export function ShareTip({ share }: { share: ShareOf }) {
 export const TIP_CLASS =
   "flex items-center gap-2 rounded-lg border bg-popover px-3 py-2 text-sm whitespace-nowrap text-popover-foreground shadow-[var(--dt-popover-shadow)]";
 
+/** The collector's share: its colour, its numbers on hover; nothing to pick, the call tree has no rows of it. */
+function GcShare({ share }: { share: ShareOf }) {
+  return (
+    <li data-category={share.category}>
+      <Tooltip delayDuration={150} disableHoverableContent={true}>
+        <TooltipTrigger asChild>
+          <span className="dt-share" data-fixed="">
+            <ShareFace
+              swatch={<span className="dt-swatch" />}
+              name={share.label}
+              value={duration(share.value)}
+              share={percent(share.value, share.total)}
+            />
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top" sideOffset={8} arrow={false} className={TIP_CLASS}>
+          <ShareTip share={share} />
+        </TooltipContent>
+      </Tooltip>
+    </li>
+  );
+}
+
 /** A category of the time: its colour, its share; its numbers on hover; a click picks its rows. */
-function Share({ share, filters }: { share: ShareOf; filters: SliceState }) {
+function Share({ share, filters }: { share: SpanShare; filters: SliceState }) {
   const part = partOfCategory(share.category);
   return (
     <li data-category={share.category}>
@@ -215,13 +276,17 @@ export function TimeLegend({ trace, related }: { trace: Trace; related: Related 
   const counts = useMemo(() => chipCounts(tree, trace), [tree, trace]);
   const shares = useMemo(() => sharesOf(trace), [trace]);
   const filters = { counts, slice, onChange: change };
-  const claimed = new Set(shares.map((share) => partOfCategory(share.category)));
+  const claimed = new Set(shares.filter(ofSpans).map((share) => partOfCategory(share.category)));
   const others = FILTERS.filter((filter) => !claimed.has(filter.id) && (counts.get(filter.id) ?? 0) > 0);
   return (
     <ul className="dt-breakdown-legend" aria-label="Where the time went, and what to show">
-      {shares.map((share) => (
-        <Share key={share.category} share={share} filters={filters} />
-      ))}
+      {shares.map((share) =>
+        ofSpans(share) ? (
+          <Share key={share.category} share={share} filters={filters} />
+        ) : (
+          <GcShare key={share.category} share={share} />
+        ),
+      )}
       {others.map((filter) => (
         <li key={filter.id}>
           <FilterChip id={filter.id} filters={filters}>

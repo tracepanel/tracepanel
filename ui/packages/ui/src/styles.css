@@ -86,6 +86,7 @@
   --dt-k-log: #9a93bd;
   --dt-k-mail: #f472b6;
   --dt-k-signal: #facc15;
+  --dt-k-gc: #fb7185;
 
   --dt-mark: rgb(140 147 166 / 0.32);
   --dt-db: #8b7bff;
@@ -216,6 +217,7 @@
   --dt-k-log: #8a84a6;
   --dt-k-mail: #db2777;
   --dt-k-signal: #ca8a04;
+  --dt-k-gc: #e11d48;
 
   --dt-mark: rgb(99 99 110 / 0.26);
   --dt-db: #6d5ce7;
@@ -1850,6 +1852,10 @@ details[data-focused] > .dt-sql-group {
 [data-category="signal"] {
   --dt-k: var(--dt-k-signal);
 }
+/* The collector's pauses: a share of the strip's time with no rows of its own. */
+[data-category="gc"] {
+  --dt-k: var(--dt-k-gc);
+}
 .dt-breakdown-legend {
   display: flex;
   flex-wrap: wrap;
@@ -1890,6 +1896,14 @@ details[data-focused] > .dt-sql-group {
   background: var(--dt-accent-bg);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dt-accent) 45%, transparent);
   color: var(--dt-text);
+}
+/* A share with nothing to pick (the collector's): its numbers on hover only. */
+.dt-share[data-fixed] {
+  cursor: default;
+}
+.dt-share[data-fixed]:hover {
+  background: none;
+  color: inherit;
 }
 .dt-share:focus-visible {
   outline: none;

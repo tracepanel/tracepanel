@@ -17,11 +17,19 @@ export function ago(us: number, now: number = Date.now()): string {
   return `${MONTHS[at.getMonth()]} ${at.getDate()}`;
 }
 
-/** Bytes as a size reads: "812 B", "64 KB", "1.2 MB" (a KB of 1024 bytes, as a body's limit is set). */
+const UNITS = ["KB", "MB", "GB"] as const;
+
+/**
+ * Bytes as a size reads, wherever the console says one: "812 B", "64 KB", "1.2 MB", "2.1 GB" (a KB of 1024 bytes, as
+ * a body's limit is set); less than none, "−1.2 MB" (memory a trace freed).
+ */
 export function bytes(size: number): string {
-  if (size < 1024) return `${size} B`;
-  const [value, unit] = size < 1024 * 1024 ? [size / 1024, "KB"] : [size / (1024 * 1024), "MB"];
-  return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${unit}`;
+  if (size < 0) return `−${bytes(-size)}`;
+  if (size < 1024) return `${Math.round(size)} B`;
+  // The largest unit it is one or more of.
+  const unit = UNITS.filter((_, index) => size >= 1024 ** (index + 1)).length;
+  const value = size / 1024 ** unit;
+  return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${UNITS[unit - 1]}`;
 }
 
 export type Tone = "ok" | "warn" | "error";

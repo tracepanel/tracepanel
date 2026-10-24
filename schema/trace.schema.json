@@ -174,6 +174,80 @@
               }
             }
           }
+        },
+        "memory": {
+          "description": "What the trace's Python code allocated (tracemalloc): its peak and what it left, and where the memory was. Recorded with the profile when the SDK can.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["peak", "net"],
+          "properties": {
+            "peak": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "The most bytes allocated at once while the trace ran, above the level at its start."
+            },
+            "net": {
+              "type": "integer",
+              "description": "Bytes still allocated at the trace's end less those at its start: negative where it freed more than it kept."
+            },
+            "allocated": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Bytes allocated in all while the trace ran, freed or not, where the SDK can tell cheaply."
+            },
+            "sites": {
+              "type": "array",
+              "maxItems": 50,
+              "description": "Where the memory was at sites_at, largest first: each allocation's stack, outermost frame first, as indexes into frames.",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["frames", "bytes", "count"],
+                "properties": {
+                  "frames": { "type": "array", "items": { "type": "integer", "minimum": 0 } },
+                  "bytes": { "type": "integer", "minimum": 0 },
+                  "count": { "type": "integer", "minimum": 0, "description": "How many blocks were allocated there." }
+                }
+              }
+            },
+            "sites_at": {
+              "type": "string",
+              "enum": ["peak", "end"],
+              "description": "When sites is the picture of: at the peak, or at the trace's end."
+            },
+            "shared": {
+              "type": "boolean",
+              "description": "Other traces ran in the process meanwhile: tracemalloc counts the whole process, so the numbers include what they allocated."
+            }
+          }
+        },
+        "gc": {
+          "description": "The garbage collector's runs while the trace ran: how many, and how long the program stood still for them.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["collections", "pause_us"],
+          "properties": {
+            "collections": { "type": "integer", "minimum": 0 },
+            "pause_us": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Their pauses in all, in microseconds."
+            },
+            "pauses": {
+              "type": "array",
+              "description": "Each pause: [when, from the trace's start, and how long, in microseconds; the generation collected].",
+              "items": {
+                "type": "array",
+                "prefixItems": [
+                  { "type": "integer", "minimum": 0 },
+                  { "type": "integer", "minimum": 0 },
+                  { "type": "integer", "minimum": 0 }
+                ],
+                "minItems": 3,
+                "maxItems": 3
+              }
+            }
+          }
         }
       }
     },
