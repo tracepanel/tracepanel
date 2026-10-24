@@ -15,7 +15,6 @@ import {
   KindBadge,
   LayersIcon,
   Logo,
-  runIssues,
   type Slice,
   sliceParams,
   type TabId,
@@ -369,8 +368,8 @@ function idsOf(history: TabHistory | null): string[] {
 }
 
 /**
- * Each row followed by the task runs it led to, one step deeper, as they are recorded; a request whose runs found
- * something says so beside its own findings. A run is listed once.
+ * Each row followed by the task runs it led to, one step deeper, as they are recorded, each with its own findings: the
+ * request's row doesn't count them again. A run is listed once.
  */
 function withRuns(rows: readonly TraceRow[], runs: Runs): TraceRow[] {
   const listed = new Set(rows.map((row) => row.trace.id));
@@ -378,7 +377,7 @@ function withRuns(rows: readonly TraceRow[], runs: Runs): TraceRow[] {
     const own = unlisted(runs[row.trace.id], listed);
     if (own.length === 0) return [row];
     const depth = row.depth ? 2 : 1;
-    return [{ ...row, runIssues: runIssues(own) }, ...own.map((trace) => ({ trace, depth, run: true }) as const)];
+    return [row, ...own.map((trace) => ({ trace, depth, run: true }) as const)];
   });
 }
 

@@ -73,9 +73,7 @@ test("in the panel, a task opens in the panel itself, and Back or Esc returns to
   await expect(page.locator("iframe")).toBeHidden();
 });
 
-test("the panel's list nests the runs a request sent under it, and the request says its tasks found something", async ({
-  page,
-}) => {
+test("the panel's list nests the runs a request sent under it, each with its own findings", async ({ page }) => {
   await openApp(page, { reports: await report() });
   await page.getByRole("button", { name: "Load reports" }).click();
 
@@ -92,8 +90,10 @@ test("the panel's list nests the runs a request sent under it, and the request s
 
   await expect(rows).toHaveCount(2);
   await expect(rows.nth(0)).toContainText("/api/reports/sales");
-  await expect(rows.nth(0).getByRole("img", { name: /^\d+ issues? in its tasks: N\+1/ })).toBeVisible();
+  // Its runs are right under it with their own findings: the request's row doesn't count them again.
+  await expect(rows.nth(0).locator('[data-slot="badge"]')).toHaveCount(0);
   await expect(rows.nth(1).getByTitle(SALES_REPORT)).toBeVisible();
+  await expect(rows.nth(1).locator('[data-slot="badge"]').last()).toHaveText(/^\d+$/);
   await expect(rows.nth(1).getByRole("button")).toHaveAttribute("data-run", "");
 
   // The list counts requests, not the runs nested under them.

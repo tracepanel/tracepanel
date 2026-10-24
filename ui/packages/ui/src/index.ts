@@ -63,6 +63,6 @@ export {
 export { formatSql, tokenizeSql } from "./sql";
 export { type Tab, Tabs } from "./Tabs";
 export { Timeline } from "./Timeline";
-export { type RunIssues, runIssues, runIssuesLabel, TraceList, type TraceRow } from "./TraceList";
+export { TraceList, type TraceRow } from "./TraceList";
 export { type ExploreItem, type TabId, TraceView, type TraceViewProps } from "./TraceView";
 export type * from "./types";
