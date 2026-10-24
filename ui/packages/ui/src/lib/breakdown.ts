@@ -204,11 +204,12 @@ export function stretches(trace: Trace): Stretch[] {
   return list;
 }
 
-/** Where the wall-clock time went, per category: the stretches added up. */
+/** Where the wall-clock time went, per category: the stretches added up, largest first. */
 export function breakdown(trace: Trace): [Category, number][] {
   const totals = new Map<Category, number>();
   for (const { from, to, category } of stretches(trace)) totals.set(category, (totals.get(category) ?? 0) + to - from);
   return (Object.keys(CATEGORY_LABELS) as Category[])
     .map((category): [Category, number] => [category, totals.get(category) ?? 0])
-    .filter(([, value]) => value > 0);
+    .filter(([, value]) => value > 0)
+    .sort((a, b) => b[1] - a[1]);
 }

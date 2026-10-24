@@ -15,13 +15,13 @@
   Show all, Esc or a double click lets them go. The panel does the same, and
   its Console button opens the trace with what was picked.
 - A long stretch of a trace's own code with nothing it called traced reads
-  as code. On the time strip it is hatched in its share's colour and
-  labelled (`untraced · 1.6 s`), the legend counts it in its share (`Your
-  code 1.6 s 98% · of it 1.6 s untraced`), and in the call tree it is a row
-  of its own under the span, hatched where it fell, its time the same, named
-  by what ran: with a profile, its functions (`aggregate · render_csv`),
-  else `untraced code`. With a profile, the flame of the panel's Profile
-  toggle after its name, and a click on the row, open the profile.
+  as code. On the time strip it is its share's colour, the legend counts it
+  in its share (`Your code 1.6 s 98%`, `of it 1.6 s untraced` on hover), and
+  in the call tree it is a row of its own under the span, its bar where it
+  fell, its time the same, named by what ran: with a profile, its functions
+  (`aggregate · render_csv`), else `untraced code`. With a profile, the
+  flame of the panel's Profile toggle after its name, and a click on the
+  row, open the profile.
   `api/capabilities?service=` says whether an app profiles on request. A
   transaction's time says on hover how long it was open and how much of that
   its SQL took, and a row whose name says its database has no chip saying it
@@ -35,9 +35,9 @@
   and filled in from the samples around it. Waiting is a share of its own,
   hatched, and with a range picked it profiles that stretch.
   The time strip, its legend and the call tree split the code's own time
-  into what it waited in (`waiting · 1.5 s`, a `wait` row named by the wait:
-  `asyncio.sleep in send_digest`, its line on hover) and what it computed,
-  and a click opens the profile at that stretch.
+  into what it waited in (hatched, `Waiting` last in the legend, a `wait`
+  row named by the wait: `asyncio.sleep in send_digest`, its line on hover)
+  and what it computed, and a click opens the profile at that stretch.
 - A call tree and its strip show a trace's warnings and worse, not every
   record: its info and debug records stay out of the tree and the log lane,
   a quiet note on the span they were logged in says how many (`3 logs`),
@@ -149,6 +149,15 @@
   titles are smaller. The dark theme is as it was.
 
 ### Fixed
+
+- The Profile tab's packages and the time strip's legend are one look: a
+  bar of the shares, 2px apart, and inline items (`Database 7 ms 13%`),
+  largest first and waiting last, hatched only where the code waited. The
+  strip's own lane is one clear line in its shares' colours, with no hatched
+  or labelled untraced time. Lanes that only repeated it in grey are gone: a
+  database's, Redis', a cache's or a datastore's calls get a lane only when
+  one failed or has an issue. HTTP, RPC, messages and, new, tasks enqueued
+  keep theirs, as do log records and errors.
 
 - A call tree says each thing once. A range picked is said by the legend's
   chip alone (`Time 11 ms – 1.6 s`, × lets it go), and its bands over the

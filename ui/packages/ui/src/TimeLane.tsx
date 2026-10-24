@@ -1,11 +1,10 @@
-import { type CSSProperties, type PointerEvent, useMemo, useState } from "react";
+import { type CSSProperties, type PointerEvent, type ReactNode, useMemo, useState } from "react";
 import { partOfCategory } from "./CallMap";
-import { duration } from "./format";
 import { type Stretch, stretches } from "./lib/breakdown";
 import { quietSpans } from "./lib/quiet";
 import type { TimeRange } from "./lib/slice";
 import { quietPieces } from "./lib/waiting";
-import { type ShareOf, ShareTip, sharesOf, TIP_CLASS } from "./TimeLegend";
+import { type Shares, ShareTip, sharesOf, TIP_CLASS, WaitTip } from "./TimeLegend";
 import type { Trace } from "./types";
 
 /** Where a stretch sits on the lane, as CSS offsets. */
@@ -21,6 +20,7 @@ function faded(stretch: Stretch, parts: readonly string[]): "" | undefined {
 /** What the pointer is over: a share's stretch, and where. */
 interface Hover {
   category: string;
+  waiting: boolean;
   x: number;
 }
 
@@ -29,6 +29,7 @@ function hoverAt(event: PointerEvent<HTMLDivElement>): Hover | null {
   if (!over) return null;
   return {
     category: over.dataset["category"] ?? "",
+    waiting: over.dataset["waiting"] !== undefined,
     x: event.clientX - event.currentTarget.getBoundingClientRect().left,
   };
 }
@@ -41,98 +42,95 @@ export function rangeIn(element: HTMLElement): TimeRange | undefined {
 }
 
 /**
- * Over the share under the pointer: its numbers, its code's own time too. Its quiet stretches say nothing more: the
- * call tree's code rows name what ran there, and with a profile a click opens it.
+ * Over the share under the pointer: its numbers, its code's own time too; over a wait, the waiting's. Nothing more:
+ * the call tree's code rows name what ran there, and with a profile a click opens it.
  */
-function LaneTip({ hover, shares }: { hover: Hover | null; shares: readonly ShareOf[] }) {
-  const share = shares.find((each) => each.category === hover?.category);
-  if (!(hover && share)) return null;
+function LaneTip({ hover, shares }: { hover: Hover | null; shares: Shares }) {
+  const tip = hover ? tipOf(hover, shares) : null;
+  if (!(hover && tip)) return null;
   return (
     <div role="tooltip" className={`dt-lane-tip ${TIP_CLASS}`} style={{ left: hover.x }}>
-      <ShareTip share={share} />
+      {tip}
     </div>
   );
 }
 
-/** Each stretch, and when it is a span's own time with no recorded calls, the span and whether it waited then. */
-interface Drawn {
+function tipOf(hover: Hover, shares: Shares): ReactNode {
+  if (hover.waiting) return <WaitTip waiting={shares.waiting} total={shares.total} />;
+  const share = shares.shares.find((each) => each.category === hover.category);
+  return share ? <ShareTip share={share} /> : null;
+}
+
+/**
+ * A run of the lane in one look: its share's colour, or waiting; where it is a span's own time with no recorded calls
+ * (some of it), that span, for a click to open the profile at it.
+ */
+interface Run {
   stretch: Stretch;
-  quiet: boolean;
   waiting: boolean;
+  quiet: string | null;
+  /** Right after another run: a gap before it, as between a bar's shares. */
+  cut: boolean;
 }
 
-/** The lane: its pieces, and how long each quiet span's code waited and computed (`span:waiting`). */
-interface Lane {
-  trace: Trace;
-  drawn: Drawn[];
-  totals: Map<string, number>;
-}
-
-/** A quiet stretch in its pieces: waited in, computed in (one, computed, where the profile can't say). */
-function piecesOfStretch(trace: Trace, stretch: Stretch): Drawn[] {
+/** A stretch in its pieces: a quiet one's waited in and computed in (one, computed, where the profile can't say). */
+function piecesOfStretch(trace: Trace, stretch: Stretch, quiet: boolean): Omit<Run, "cut">[] {
+  if (!quiet) return [{ stretch, waiting: false, quiet: null }];
   return quietPieces(trace.profile, stretch.from, stretch.to).map((piece) => ({
     stretch: { ...stretch, from: piece.from, to: piece.to },
-    quiet: true,
     waiting: piece.waiting,
+    quiet: stretch.span,
   }));
 }
 
-function laneOf(trace: Trace): Lane {
-  const quiet = quietSpans(trace);
-  const drawn = stretches(trace).flatMap((stretch): Drawn[] =>
-    stretch.quiet && quiet.has(stretch.span)
-      ? piecesOfStretch(trace, stretch)
-      : [{ stretch, quiet: false, waiting: false }],
+/** Whether a piece goes on the run before it: right after it, in the same look. */
+function continues(last: Run, piece: Omit<Run, "cut">): boolean {
+  return (
+    last.stretch.to === piece.stretch.from &&
+    last.stretch.category === piece.stretch.category &&
+    last.waiting === piece.waiting
   );
-  const totals = new Map<string, number>();
-  for (const { stretch, waiting } of drawn.filter((each) => each.quiet)) {
-    const key = `${stretch.span}:${waiting}`;
-    totals.set(key, (totals.get(key) ?? 0) + length(stretch));
+}
+
+/** A piece after the last run: the same look makes it longer, another starts a run, after a gap where they touch. */
+function addPiece(runs: Run[], piece: Omit<Run, "cut">): void {
+  const last = runs.at(-1);
+  if (last && continues(last, piece)) {
+    last.stretch = { ...last.stretch, to: piece.stretch.to };
+    last.quiet ??= piece.quiet;
+  } else runs.push({ ...piece, stretch: { ...piece.stretch }, cut: last?.stretch.to === piece.stretch.from });
+}
+
+/** The lane's runs: moment by moment, a stretch of one look made one, however many spans ran in it. */
+function runsOf(trace: Trace): Run[] {
+  const quiet = quietSpans(trace);
+  const runs: Run[] = [];
+  for (const stretch of stretches(trace)) {
+    for (const piece of piecesOfStretch(trace, stretch, stretch.quiet && quiet.has(stretch.span)))
+      addPiece(runs, piece);
   }
-  return { trace, drawn, totals };
+  return runs;
 }
 
-/** Where a quiet span's time is said: over the longest of its pieces that waited, and of those that didn't, once. */
-function saidAt(drawn: readonly Drawn[]): Drawn[] {
-  const longest = new Map<string, Drawn>();
-  for (const each of drawn.filter((item) => item.quiet)) {
-    const key = `${each.stretch.span}:${each.waiting}`;
-    const best = longest.get(key);
-    if (!best || length(each.stretch) > length(best.stretch)) longest.set(key, each);
-  }
-  return [...longest.values()];
-}
-
-function length(stretch: Stretch): number {
-  return stretch.to - stretch.from;
-}
-
-/** "untraced · 1.6 s", "waiting · 1.5 s": a quiet span's own time, waited in or not, in its share's colour. */
-function quietLabel(lane: Lane, each: Drawn): string {
-  const total = lane.totals.get(`${each.stretch.span}:${each.waiting}`) ?? 0;
-  const label = each.waiting ? "waiting" : "untraced";
-  return `${label} · ${duration(total)}`;
-}
-
-/** What a piece of the lane says of itself: its span when quiet, its stretch, whether it waited. */
-function pieceData(each: Drawn): Record<string, string | undefined> {
-  if (!each.quiet) return {};
+/** What a run says of itself: its span when quiet, its stretch, whether it waited, whether a gap comes before it. */
+function runData(run: Run): Record<string, string | undefined> {
   return {
-    "data-quiet": each.stretch.span,
-    "data-from": String(each.stretch.from),
-    "data-to": String(each.stretch.to),
-    "data-waiting": each.waiting ? "" : undefined,
+    "data-waiting": run.waiting ? "" : undefined,
+    "data-cut": run.cut ? "" : undefined,
+    ...(run.quiet
+      ? { "data-quiet": run.quiet, "data-from": String(run.stretch.from), "data-to": String(run.stretch.to) }
+      : {}),
   };
 }
 
 /**
- * The trace's own lane: where its time went, moment by moment, in its shares' colours (the legend's); a long
- * stretch where its code ran with no recorded calls hatched and said, split where the profile says it waited. A
- * share's stretch says its numbers on hover, and picks its rows on a click; a quiet one, with a profile, opens it.
+ * The trace's own lane: where its time went, moment by moment, one line in its shares' colours (the legend's), its
+ * code's own time solid in its share's, a wait hatched where the profile says so. A share's stretch says its numbers
+ * on hover, and picks its rows on a click; the code's own time, with a profile, opens it.
  */
 export function TimeLane({ trace, word, parts }: { trace: Trace; word: string; parts: readonly string[] }) {
   const total = Math.max(trace.duration, 1);
-  const lane = useMemo(() => laneOf(trace), [trace]);
+  const runs = useMemo(() => runsOf(trace), [trace]);
   const shares = useMemo(() => sharesOf(trace), [trace]);
   const [hover, setHover] = useState<Hover | null>(null);
   return (
@@ -145,21 +143,18 @@ export function TimeLane({ trace, word, parts }: { trace: Trace; word: string; p
         onPointerMove={(event) => setHover(hoverAt(event))}
         onPointerLeave={() => setHover(null)}
       >
-        {lane.drawn.map((each) => (
-          <span
-            key={each.stretch.from}
-            className="dt-stretch"
-            data-category={each.stretch.category}
-            data-faded={faded(each.stretch, parts)}
-            {...pieceData(each)}
-            style={place(each.stretch, total)}
-          />
-        ))}
-        {saidAt(lane.drawn).map((each) => (
-          <span key={`said:${each.stretch.from}`} className="dt-quiet-said" style={place(each.stretch, total)}>
-            <span className="dt-quiet-label">{quietLabel(lane, each)}</span>
-          </span>
-        ))}
+        <div className="dt-bar" data-timed="">
+          {runs.map((run) => (
+            <span
+              key={run.stretch.from}
+              className="dt-stretch"
+              data-category={run.stretch.category}
+              data-faded={faded(run.stretch, parts)}
+              {...runData(run)}
+              style={place(run.stretch, total)}
+            />
+          ))}
+        </div>
         <LaneTip hover={hover} shares={shares} />
       </div>
     </div>

@@ -29,7 +29,9 @@ test("the panel's Request tab has no tiles and no lanes, its Call tree tab the s
   await expect(row.locator('[data-slot="badge"]').last()).toHaveText("3");
 });
 
-test("in the panel too, the first tab has no lanes and the call tree has its own lane, alone", async ({ page }) => {
+test("in the panel too, the first tab has no lanes and the call tree has its own lane and its tasks'", async ({
+  page,
+}) => {
   await openApp(page, {
     feed: { status: 200, trace: await traceId("shop.tasks.parse_feed"), queries: 0, totalMs: 42 },
   });
@@ -44,5 +46,8 @@ test("in the panel too, the first tab has no lanes and the call tree has its own
   await frame.getByRole("tab", { name: /^Call tree/ }).click();
 
   await expect(frame.locator(".dt-map-head")).toBeVisible();
-  await expect(frame.getByRole("figure", { name: "Timeline" }).locator(".dt-lane-label")).toHaveText(["task"]);
+  await expect(frame.getByRole("figure", { name: "Timeline" }).locator(".dt-lane-label")).toHaveText([
+    "task",
+    "1 task enqueued",
+  ]);
 });

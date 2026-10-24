@@ -39,15 +39,21 @@ interface Lane {
 /** What a lane's marks are, one and many: "1 query", "139 queries". */
 type Noun = readonly [string, string];
 
-/** A lane of calls: what they are called, and their kinds. */
-const CALL_LANES: readonly { noun: Noun; kinds: readonly string[] }[] = [
-  { noun: ["query", "queries"], kinds: ["sql"] },
-  { noun: ["Redis command", "Redis commands"], kinds: ["redis"] },
-  { noun: ["cache call", "cache calls"], kinds: ["cache"] },
-  { noun: ["datastore call", "datastore calls"], kinds: DATASTORES },
+/**
+ * A lane of calls: what they are called, and their kinds. The trace's own lane draws every call's time in its
+ * share's colour already: a lane of its own is for calls that reach out to another app (HTTP, RPC, a message, a task
+ * enqueued), whose marks lead on; a database's, a cache's or a datastore's calls get one only where one of them failed
+ * or has an issue (`onIssue`), which the trace's lane can't say.
+ */
+const CALL_LANES: readonly { noun: Noun; kinds: readonly string[]; onIssue?: true }[] = [
+  { noun: ["query", "queries"], kinds: ["sql"], onIssue: true },
+  { noun: ["Redis command", "Redis commands"], kinds: ["redis"], onIssue: true },
+  { noun: ["cache call", "cache calls"], kinds: ["cache"], onIssue: true },
+  { noun: ["datastore call", "datastore calls"], kinds: DATASTORES, onIssue: true },
   { noun: ["message", "messages"], kinds: MESSAGING },
   { noun: ["HTTP call", "HTTP calls"], kinds: ["http.client"] },
   { noun: ["RPC call", "RPC calls"], kinds: RPC },
+  { noun: ["task enqueued", "tasks enqueued"], kinds: ["task.enqueue"] },
 ];
 
 /** A span's tone on its lane: red when it failed (the trace's own too when the trace did), amber with an issue. */
@@ -60,21 +66,27 @@ function failed(span: Span, trace: Trace): boolean {
   return span.status === "error" || (span.parent_id === null && trace.status === "error");
 }
 
+/** Its calls' lanes: those that lead to another app, and the others where a call failed or has an issue. */
 function callLanes(trace: Trace): Lane[] {
   const flagged = new Set(trace.issues.flatMap((issue) => issue.span_ids));
-  return CALL_LANES.map(({ noun, kinds }) => ({
-    noun,
-    marks: trace.spans
-      .filter((span) => kinds.includes(span.kind))
-      .map((span) => ({
-        key: span.id,
-        start: span.start,
-        duration: span.duration,
-        label: `${span.name} · ${duration(span.duration)}`,
-        tone: toneOf(span, trace, flagged),
-        target: { tab: "tree", span: span.id } as const,
-      })),
-  }));
+  return CALL_LANES.flatMap(({ noun, kinds, onIssue }) => {
+    const marks = callMarks(trace, kinds, flagged);
+    return onIssue && marks.every((mark) => mark.tone === "neutral") ? [] : [{ noun, marks }];
+  });
+}
+
+/** A mark for each call of these kinds, its tone its own. */
+function callMarks(trace: Trace, kinds: readonly string[], flagged: ReadonlySet<string>): Mark[] {
+  return trace.spans
+    .filter((span) => kinds.includes(span.kind))
+    .map((span) => ({
+      key: span.id,
+      start: span.start,
+      duration: span.duration,
+      label: `${span.name} · ${duration(span.duration)}`,
+      tone: toneOf(span, trace, flagged),
+      target: { tab: "tree", span: span.id } as const,
+    }));
 }
 
 function logTone(level: string): Mark["tone"] {

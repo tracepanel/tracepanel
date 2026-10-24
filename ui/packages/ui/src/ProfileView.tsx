@@ -21,33 +21,59 @@ import { rangeLabel, type TimeRange } from "./lib/slice";
 import { cn } from "./lib/utils";
 import { timed, wallClock } from "./lib/waiting";
 import { Segmented } from "./Segmented";
+import { ordered, ShareBar, ShareButton, type ShareLook } from "./Shares";
 import { HEAD_TEXT } from "./TableColumns";
 import { useHeldSlice } from "./TimeSlice";
 import type { Trace } from "./types";
 
-/** A package's color: a fill for boxes, a solid one for dots and bars. Your code is the brand's; the rest in order. */
+/**
+ * A package's color: a fill for boxes and a solid one for dots, and the colour its share is drawn in (the bar's, the
+ * legend's). Your code is the strip's; the rest in order.
+ */
 interface Tone {
   fill: string;
   dot: string;
+  look: ShareLook;
 }
 
 const PALETTE: readonly Tone[] = [
-  { fill: "bg-sky-500/30 hover:bg-sky-500/50", dot: "bg-sky-500" },
-  { fill: "bg-emerald-500/30 hover:bg-emerald-500/50", dot: "bg-emerald-500" },
-  { fill: "bg-amber-500/30 hover:bg-amber-500/50", dot: "bg-amber-500" },
-  { fill: "bg-rose-500/30 hover:bg-rose-500/50", dot: "bg-rose-500" },
-  { fill: "bg-cyan-500/30 hover:bg-cyan-500/50", dot: "bg-cyan-500" },
-  { fill: "bg-orange-500/30 hover:bg-orange-500/50", dot: "bg-orange-500" },
+  { fill: "bg-sky-500/30 hover:bg-sky-500/50", dot: "bg-sky-500", look: { colour: "var(--color-sky-500)" } },
+  {
+    fill: "bg-emerald-500/30 hover:bg-emerald-500/50",
+    dot: "bg-emerald-500",
+    look: { colour: "var(--color-emerald-500)" },
+  },
+  { fill: "bg-amber-500/30 hover:bg-amber-500/50", dot: "bg-amber-500", look: { colour: "var(--color-amber-500)" } },
+  { fill: "bg-rose-500/30 hover:bg-rose-500/50", dot: "bg-rose-500", look: { colour: "var(--color-rose-500)" } },
+  { fill: "bg-cyan-500/30 hover:bg-cyan-500/50", dot: "bg-cyan-500", look: { colour: "var(--color-cyan-500)" } },
+  {
+    fill: "bg-orange-500/30 hover:bg-orange-500/50",
+    dot: "bg-orange-500",
+    look: { colour: "var(--color-orange-500)" },
+  },
 ];
-const YOURS: Tone = { fill: "bg-brand/40 hover:bg-brand/60", dot: "bg-brand" };
+// The strip's colour for your code, its share's there.
+const YOURS: Tone = {
+  fill: "bg-(--dt-k-view)/40 hover:bg-(--dt-k-view)/60",
+  dot: "bg-(--dt-k-view)",
+  look: { category: "code" },
+};
 // Waiting is no package's time: neutral, hatched, as the time strip draws it.
 const WAITS: Tone = {
   fill: "dt-hatched bg-muted-foreground/15 hover:bg-muted-foreground/25",
   dot: "dt-hatched bg-muted-foreground/50",
+  look: { waiting: true },
 };
-const REST: Tone = { fill: "bg-muted-foreground/20 hover:bg-muted-foreground/30", dot: "bg-muted-foreground/50" };
+const REST: Tone = {
+  fill: "bg-muted-foreground/20 hover:bg-muted-foreground/30",
+  dot: "bg-muted-foreground/50",
+  look: { colour: "color-mix(in srgb, var(--color-muted-foreground) 50%, transparent)" },
+};
 
 type Palette = Map<string, Tone>;
+
+/** The packages with no color of their own, as one share. */
+const OTHER = "other";
 type Share = { name: string; samples: number };
 
 /** Your code, then the packages that took most, one color each; the rest share one gray as "other". */
@@ -66,7 +92,7 @@ function toneOf(palette: Palette, name: string): Tone {
 
 /** A package as the legend names it: itself when it has a color, "other" when it is folded in with the rest. */
 function colored(palette: Palette, name: string): string {
-  return palette.has(name) ? name : "other";
+  return palette.has(name) ? name : OTHER;
 }
 
 /** Faded while some packages are lit and this one isn't. */
@@ -203,7 +229,7 @@ function ProfileView({ profile, head }: { profile: Profile; head: ReactNode }) {
         shares={summed(packages, palette)}
         palette={palette}
         total={profile.samples}
-        time={time}
+        time={(samples) => samples * profile.interval_us}
         lit={lit}
         onLight={(name) => setLit(toggled(lit, name))}
         onClear={() => setLit(new Set())}
@@ -214,14 +240,26 @@ function ProfileView({ profile, head }: { profile: Profile; head: ReactNode }) {
   );
 }
 
-/** The colored packages, then everything else as one "other". */
+/** The colored packages, then everything else as one "other": largest first, waiting last. */
 function summed(packages: readonly Share[], palette: Palette): Share[] {
   const named = packages.filter((item) => palette.has(item.name));
   const other = packages.filter((item) => !palette.has(item.name)).reduce((sum, item) => sum + item.samples, 0);
-  return other ? [...named, { name: "other", samples: other }] : named;
+  const shares = other ? [...named, { name: OTHER, samples: other }] : named;
+  return ordered(
+    shares,
+    (share) => share.samples,
+    (share) => share.name === WAITING,
+  );
 }
 
-/** Where the time went by package: one bar of shares, then each package on its line; a click lights its frames. */
+/** A share as the legend names it: a package by its name; your code, waiting and the rest as the strip says them. */
+const SHARE_NAMES: Record<string, string> = { [YOUR_CODE]: "Your code", [WAITING]: "Waiting", [OTHER]: "Other" };
+
+function shareName(name: string): string {
+  return SHARE_NAMES[name] ?? name;
+}
+
+/** Where the time went by package: one bar of shares, and their legend; a click lights a package's frames. */
 function Packages({
   shares,
   palette,
@@ -234,79 +272,43 @@ function Packages({
   shares: readonly Share[];
   palette: Palette;
   total: number;
-  time: Time;
+  time: (samples: number) => number;
   lit: ReadonlySet<string>;
   onLight: (name: string) => void;
   onClear: () => void;
 }) {
+  const parts = shares.map(({ name, samples }) => ({
+    key: name,
+    value: samples,
+    look: toneOf(palette, name).look,
+    title: `${shareName(name)}: ${duration(time(samples))}`,
+    faded: faded(lit, name),
+  }));
   return (
     <section className="grid gap-3" aria-label="Time by package">
-      <div className="flex h-3 gap-0.5 overflow-hidden rounded-full">
+      <ShareBar parts={parts} total={total} label="Time by package" />
+      <ul className="dt-breakdown-legend">
         {shares.map(({ name, samples }) => (
-          <span
-            key={name}
-            title={`${name}: ${time(samples)}`}
-            className={cn("h-full transition-opacity", toneOf(palette, name).dot, faded(lit, name) && "opacity-30")}
-            style={{ width: `${(samples / total) * 100}%` }}
-          />
+          <li key={name}>
+            <ShareButton
+              name={shareName(name)}
+              value={time(samples)}
+              total={time(total)}
+              look={toneOf(palette, name).look}
+              aria-pressed={lit.has(name)}
+              onClick={() => onLight(name)}
+            />
+          </li>
         ))}
-      </div>
-      <ul className="m-0 grid max-w-4xl list-none gap-x-8 gap-y-0.5 p-0 @xl:grid-cols-2">
-        {shares.map((share) => (
-          <PackageLine
-            key={share.name}
-            share={share}
-            tone={toneOf(palette, share.name)}
-            total={total}
-            time={time}
-            lit={lit.has(share.name)}
-            onLight={() => onLight(share.name)}
-          />
-        ))}
+        {lit.size ? (
+          <li>
+            <button type="button" className="dt-map-filter-clear" onClick={onClear}>
+              Show every package
+            </button>
+          </li>
+        ) : null}
       </ul>
-      {lit.size ? (
-        <button type="button" className="justify-self-start px-2 text-xs text-brand hover:underline" onClick={onClear}>
-          Show every package
-        </button>
-      ) : null}
     </section>
-  );
-}
-
-function PackageLine({
-  share: { name, samples },
-  tone,
-  total,
-  time,
-  lit,
-  onLight,
-}: {
-  share: Share;
-  tone: Tone;
-  total: number;
-  time: Time;
-  lit: boolean;
-  onLight: () => void;
-}) {
-  return (
-    <li>
-      <button
-        type="button"
-        aria-pressed={lit}
-        onClick={onLight}
-        className={cn(
-          "grid w-full grid-cols-[auto_minmax(0,1fr)_2.5rem_4rem] items-center gap-2.5 rounded-md px-2 py-1 text-left text-xs transition-colors",
-          lit ? "bg-accent" : "hover:bg-accent/60",
-        )}
-      >
-        <span className={cn("size-2.5 rounded-sm", tone.dot)} />
-        <span className="truncate font-mono" title={name}>
-          {name}
-        </span>
-        <span className="text-right text-muted-foreground tabular-nums">{percent(samples, total)}</span>
-        <span className="text-right tabular-nums">{time(samples)}</span>
-      </button>
-    </li>
   );
 }
 

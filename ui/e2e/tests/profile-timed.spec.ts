@@ -1,6 +1,6 @@
 // A profile that says when its stacks were seen, which frames waited and how much wasn't sampled: the Profile tab says
-// how much of the trace it sampled and why the rest wasn't, waiting is its own share; the time strip, its legend and
-// the call tree split the code's own time into waiting and computing, name the wait and open the profile at that
+// how much of the trace it sampled and why the rest wasn't, waiting is its own share, last; the time strip, its legend
+// and the call tree split the code's own time into waiting and computing, name the wait and open the profile at that
 // stretch. A profile from before (no buckets) is the whole trace's, said so.
 import type { Locator, Page } from "@playwright/test";
 import { openApp, panel, pill, traceId } from "../app.ts";
@@ -28,8 +28,8 @@ test("the Profile tab says how much it sampled, what it couldn't, and waiting as
     page.getByText("500 ms not sampled: other traces ran on the same thread, filled in from the samples around it"),
   ).toBeVisible();
   await expect(page.getByRole("region", { name: "Time by package" }).getByRole("button")).toHaveText([
-    /^waiting\s*94%\s*1\.5 s$/,
-    /^your code\s*6%\s*100 ms$/,
+    /^Your code\s*100 ms\s*6%$/,
+    /^Waiting\s*1\.5 s\s*94%$/,
   ]);
 });
 
@@ -37,25 +37,24 @@ test("the strip and its share's numbers split the code's own time; a click on th
   page,
 }) => {
   await page.goto(`/#/t/${await traceId(DIGEST)}?tab=tree`);
-  const waiting = page.locator(".dt-quiet-said").filter({ hasText: "waiting" });
+  const legend = page.getByRole("list", { name: /^Where the time went/ });
+  // One line: the wait hatched, no word over it; the legend says it, its own share, last.
+  const waiting = page.locator(".dt-time-track .dt-stretch[data-waiting]");
 
-  await expect(waiting).toHaveText("waiting · 1.5 s");
+  await expect(waiting).toHaveCount(1);
+  await expect(page.locator(".dt-time-track")).not.toContainText(/./);
+  await expect(legend.locator("li").filter({ hasText: /^Waiting/ })).toHaveText(/^Waiting\s*1\.5 s\s*\d+%$/);
+  await expect(legend.locator("li[data-waiting]")).toBeVisible();
 
-  // Said once on the strip; the legend says it only on hover.
-  await page
-    .getByRole("list", { name: /^Where the time went/ })
-    .getByRole("button", { name: /^Your code/ })
-    .hover();
+  await legend.getByRole("button", { name: /^Your code/ }).hover();
 
-  await expect(page.getByRole("tooltip", { name: /^Your code/ })).toContainText(
-    "of it 1.5 s waiting · 102 ms untraced",
-  );
+  await expect(page.getByRole("tooltip", { name: /^Your code/ })).toContainText("of it 102 ms untraced");
 
   const middle = await centre(waiting);
   await page.mouse.move(...middle);
 
-  // Its share's numbers only: the wait row in the tree names what it waited on and where.
-  await expect(page.locator(".dt-lane-tip")).toContainText("Your code");
+  // The waiting's numbers only: the wait row in the tree names what it waited on and where.
+  await expect(page.locator(".dt-lane-tip")).toContainText(/Waiting\s*1\.5 s/);
   await expect(page.getByRole("tooltip").filter({ hasText: /Open the profile|tasks\.py/ })).toHaveCount(0);
 
   await page.mouse.click(...middle);
@@ -63,7 +62,7 @@ test("the strip and its share's numbers split the code's own time; a click on th
   await expect(page.getByRole("tab", { name: /^Profile/ })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByText("Profile of 120 ms – 1.6 s")).toBeVisible();
   await expect(page.getByRole("region", { name: "Time by package" }).getByRole("button")).toHaveText([
-    /^waiting\s*100%/,
+    /^Waiting\s*[\d.]+ m?s\s*100%$/,
   ]);
   // The stretch is the Profile tab's own: the call tree keeps the whole time, a range there is a drag's only.
   await expect(page).not.toHaveURL(/[?&]range=/);

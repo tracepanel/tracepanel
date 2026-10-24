@@ -224,13 +224,15 @@ test("a trace's facts start their second column's values at one x, whatever its 
   expect(new Set(starts).size).toBe(1);
 });
 
-test("every call tree has its time over it: its own lane alone, or with a lane per thing it called", async ({
-  page,
-}) => {
+test("every call tree has its time over it: its own lane, and a lane per thing it reached out to", async ({ page }) => {
   await page.goto(`/#/t/${await traceId("shop.tasks.parse_feed")}?tab=tree`);
 
-  await expect(page.getByRole("figure", { name: "Timeline" }).locator(".dt-lane-label")).toHaveText(["task"]);
+  await expect(page.getByRole("figure", { name: "Timeline" }).locator(".dt-lane-label")).toHaveText([
+    "task",
+    "1 task enqueued",
+  ]);
 
+  // Its queries have a lane where they have an issue (its N+1), which its own lane's colour can't say.
   await page.goto(`/#/t/${await traceId("GET /api/posts")}`);
   const lanes = page.getByRole("figure", { name: "Timeline" });
 

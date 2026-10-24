@@ -1,6 +1,6 @@
-// A trace's time in one strip: its own lane in its shares' colours, a long stretch of its code with no recorded
-// calls hatched and said, a lane per system it called named by what its marks are, the legend under them. Its
-// header says what it called in one line, no tiles. In the call tree a span whose code ran long without calls says
+// A trace's time in one strip: its own lane, one line in its shares' colours, its code's own time solid in its
+// share's, a lane for what it reached out to (and for calls with an issue) named by what its marks are, the legend
+// under them. Its header says what it called in one line, no tiles. In the call tree a span whose code ran long without calls says
 // so in a row of its own, and a transaction says how long it was open and how much of that was SQL.
 import type { FrameLocator, Locator, Page } from "@playwright/test";
 import { openApp, panel, pill, traceId } from "../app.ts";
@@ -9,11 +9,19 @@ import { HELD_REPORT } from "../seed.ts";
 
 type Scope = Page | FrameLocator;
 
-/** The middle of what a locator finds, on the page. */
-async function centre(locator: Locator): Promise<[number, number]> {
-  const box = await locator.boundingBox();
+/** The middle of the widest of what a locator finds: the code's own time is a run between each of its calls. */
+async function widest(locator: Locator): Promise<[number, number]> {
+  const boxes = (await Promise.all((await locator.all()).map((each) => each.boundingBox()))).filter(
+    (box) => box !== null,
+  );
+  const box = boxes.sort((a, b) => b.width - a.width)[0];
   if (!box) throw new Error(`${locator} isn't on the page`);
   return [box.x + box.width / 2, box.y + box.height / 2];
+}
+
+/** The code's own time on the trace's lane. */
+function codeTime(scope: Scope | Locator): Locator {
+  return scope.locator(".dt-time-track .dt-stretch[data-quiet]");
 }
 
 function row(scope: Scope, kind: string, name: string | RegExp): Locator {
@@ -27,22 +35,24 @@ test("the header says what the trace called in one line, and no tiles", async ({
   await expect(page.locator(".dt-metrics, .dt-metric")).toHaveCount(0);
 });
 
-test("the strip names its lanes by what their marks are and says a long stretch with no recorded calls", async ({
+test("the strip names its lanes by what their marks are; the code's own time is its share's, said on hover", async ({
   page,
 }) => {
   await page.goto(`/#/t/${await traceId(HELD_REPORT)}?tab=tree`);
   const strip = page.getByRole("region", { name: "Time" });
   const lanes = strip.getByRole("figure", { name: "Timeline" });
 
-  await expect(lanes.locator(".dt-lane-label")).toHaveText(["task", "139 queries", "1 log record"]);
-  // One number for the code's own time, the same in the strip and its legend.
+  // Its queries are its lane's blue already, and none has an issue: no lane of their own.
+  await expect(lanes.locator(".dt-lane-label")).toHaveText(["task", "1 log record"]);
   const legend = page.getByRole("list", { name: /^Where the time went/ });
-  await expect(lanes.locator(".dt-quiet-label")).toHaveText("untraced · 1.6 s");
+  // One clear line: the code's own time solid in its share's colour, no hatching and no word over it.
+  await expect(codeTime(lanes).first()).toHaveAttribute("data-category", "code");
+  await expect(lanes.locator(".dt-time-track")).not.toContainText(/./);
   await expect(legend).toContainText("Database");
-  // Said once, on the strip: the legend has no word of it but on hover.
+  // The legend has no word of it but on hover.
   await expect(legend).not.toContainText("untraced");
 
-  const middle = await centre(lanes.locator(".dt-quiet-said"));
+  const middle = await widest(codeTime(lanes));
   await page.mouse.move(...middle);
 
   // Its share's numbers, its untraced time with them; nothing more: a click opens the profile.
@@ -96,7 +106,7 @@ test("the strip is the Call tree tab's only, on the page and in the panel; the f
   const frame = panel(page);
   await frame.getByRole("tab", { name: /^Call tree/ }).click();
 
-  await expect(frame.getByRole("region", { name: "Time" }).locator(".dt-quiet-label")).toHaveText("untraced · 1.6 s");
+  await expect(codeTime(frame.getByRole("region", { name: "Time" })).first()).toBeAttached();
 
   await frame.getByRole("tablist").first().getByRole("tab").first().click();
 
@@ -116,7 +126,7 @@ test("only warnings and worse show by default; the Logs chip, or a row's note, s
   // Its warning shows, a lane and a row; its ten info and debug records don't, a note on the spans they were in.
   await expect(logs).toHaveCount(1);
   await expect(logs).toContainText("stock below threshold");
-  await expect(lanes.locator(".dt-lane-label")).toHaveText(["task", "139 queries", "1 log record"]);
+  await expect(lanes.locator(".dt-lane-label")).toHaveText(["task", "1 log record"]);
   await expect(chip).toHaveAttribute("aria-pressed", "false");
   await expect(chip).toContainText("11");
   await expect(row(page, "task", HELD_REPORT).locator(".dt-map-logs")).toHaveText("1 log");
@@ -126,7 +136,7 @@ test("only warnings and worse show by default; the Logs chip, or a row's note, s
 
   await expect(logs).toHaveCount(11);
   await expect(chip).toHaveAttribute("aria-pressed", "true");
-  await expect(lanes.locator(".dt-lane-label")).toHaveText(["task", "139 queries", "11 log records"]);
+  await expect(lanes.locator(".dt-lane-label")).toHaveText(["task", "11 log records"]);
   await expect(page).toHaveURL(/[?&]logs=all/);
   await expect(page.locator(".dt-map-logs")).toHaveCount(0);
 
@@ -177,7 +187,7 @@ test("with no profile, even where the app profiles, the strip's code time is a p
 }) => {
   await profiles(page, true);
   await page.goto(`/#/t/${await traceId("POST /api/reports/sales")}?tab=tree`);
-  await page.mouse.move(...(await centre(page.locator(".dt-quiet-said"))));
+  await page.mouse.move(...(await widest(codeTime(page))));
   const tip = page.getByRole("tooltip").filter({ hasText: /untraced|Waiting/ });
 
   await expect(tip).toBeVisible();
@@ -189,7 +199,7 @@ test("with no profile, even where the app profiles, the strip's code time is a p
   await expect(frame.getByRole("list", { name: /^Where the time went/ })).not.toContainText("Profile");
   await expect(frame.locator(".dt-map-flame")).toHaveCount(0);
 
-  await page.mouse.move(...(await centre(frame.locator(".dt-quiet-said"))));
+  await page.mouse.move(...(await widest(codeTime(frame))));
   const panelTip = frame.getByRole("tooltip").filter({ hasText: /untraced|Waiting/ });
 
   await expect(panelTip).toBeVisible();
@@ -201,7 +211,7 @@ test("an app that can't profile is offered no Profile: no hint, no link, on the 
 }) => {
   await profiles(page, false);
   await page.goto(`/#/t/${await traceId("POST /api/reports/sales")}?tab=tree`);
-  await page.mouse.move(...(await centre(page.locator(".dt-quiet-said"))));
+  await page.mouse.move(...(await widest(codeTime(page))));
   const tip = page.getByRole("tooltip").filter({ hasText: /untraced|Waiting/ });
 
   await expect(tip).toBeVisible();
@@ -209,13 +219,13 @@ test("an app that can't profile is offered no Profile: no hint, no link, on the 
 
   const frame = await openSales(page);
 
-  await expect(frame.locator(".dt-quiet-said")).toBeVisible();
+  await expect(codeTime(frame)).not.toHaveCount(0);
   await expect(frame.getByRole("button", { name: /^Turn on Profile/ })).toHaveCount(0);
 });
 
 test("an app the agent doesn't know (not connected) is offered no Profile either", async ({ page }) => {
   await page.goto(`/#/t/${await traceId("POST /api/reports/sales")}?tab=tree`);
-  await page.mouse.move(...(await centre(page.locator(".dt-quiet-said"))));
+  await page.mouse.move(...(await widest(codeTime(page))));
   const tip = page.getByRole("tooltip").filter({ hasText: /untraced|Waiting/ });
 
   await expect(tip).toBeVisible();
@@ -257,7 +267,7 @@ test("with no profile, the tree's code row has no flame, and a click on it picks
   await expect(code.locator(".dt-map-flame")).toHaveCount(0);
 
   await code.click();
-  await page.mouse.click(...(await centre(page.locator(".dt-quiet-said"))));
+  await page.mouse.click(...(await widest(codeTime(page))));
 
   await expect(page).not.toHaveURL(/[?&]range=/);
   await expect(page.getByRole("button", { name: /^Time / })).toHaveCount(0);
