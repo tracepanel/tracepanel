@@ -1636,6 +1636,41 @@ export interface components {
                     number
                 ][];
             }[];
+            /** @description What the trace's Python code allocated (tracemalloc): its peak and what it left, and where the memory was. Recorded with the profile when the SDK can. */
+            memory?: {
+                /** @description The most bytes allocated at once while the trace ran, above the level at its start. */
+                peak: number;
+                /** @description Bytes still allocated at the trace's end less those at its start: negative where it freed more than it kept. */
+                net: number;
+                /** @description Bytes allocated in all while the trace ran, freed or not, where the SDK can tell cheaply. */
+                allocated?: number;
+                /** @description Where the memory was at sites_at, largest first: each allocation's stack, outermost frame first, as indexes into frames. */
+                sites?: {
+                    frames: number[];
+                    bytes: number;
+                    /** @description How many blocks were allocated there. */
+                    count: number;
+                }[];
+                /**
+                 * @description When sites is the picture of: at the peak, or at the trace's end.
+                 * @enum {string}
+                 */
+                sites_at?: "peak" | "end";
+                /** @description Other traces ran in the process meanwhile: tracemalloc counts the whole process, so the numbers include what they allocated. */
+                shared?: boolean;
+            };
+            /** @description The garbage collector's runs while the trace ran: how many, and how long the program stood still for them. */
+            gc?: {
+                collections: number;
+                /** @description Their pauses in all, in microseconds. */
+                pause_us: number;
+                /** @description Each pause: [when, from the trace's start, and how long, in microseconds; the generation collected]. */
+                pauses?: [
+                    number,
+                    number,
+                    number
+                ][];
+            };
         };
         /**
          * Trace
@@ -1698,6 +1733,41 @@ export interface components {
                             number
                         ][];
                     }[];
+                    /** @description What the trace's Python code allocated (tracemalloc): its peak and what it left, and where the memory was. Recorded with the profile when the SDK can. */
+                    memory?: {
+                        /** @description The most bytes allocated at once while the trace ran, above the level at its start. */
+                        peak: number;
+                        /** @description Bytes still allocated at the trace's end less those at its start: negative where it freed more than it kept. */
+                        net: number;
+                        /** @description Bytes allocated in all while the trace ran, freed or not, where the SDK can tell cheaply. */
+                        allocated?: number;
+                        /** @description Where the memory was at sites_at, largest first: each allocation's stack, outermost frame first, as indexes into frames. */
+                        sites?: {
+                            frames: number[];
+                            bytes: number;
+                            /** @description How many blocks were allocated there. */
+                            count: number;
+                        }[];
+                        /**
+                         * @description When sites is the picture of: at the peak, or at the trace's end.
+                         * @enum {string}
+                         */
+                        sites_at?: "peak" | "end";
+                        /** @description Other traces ran in the process meanwhile: tracemalloc counts the whole process, so the numbers include what they allocated. */
+                        shared?: boolean;
+                    };
+                    /** @description The garbage collector's runs while the trace ran: how many, and how long the program stood still for them. */
+                    gc?: {
+                        collections: number;
+                        /** @description Their pauses in all, in microseconds. */
+                        pause_us: number;
+                        /** @description Each pause: [when, from the trace's start, and how long, in microseconds; the generation collected]. */
+                        pauses?: [
+                            number,
+                            number,
+                            number
+                        ][];
+                    };
                 };
                 call: {
                     /** @description The span the call is. */

@@ -1,6 +1,6 @@
-//! A trace's profile, as the SDKs send it: the first form (stacks and their counts) and the one that says when each
-//! stack was seen, which samples waited and how many weren't taken. Both match the schema, are stored whole and come
-//! back from the console's API as they were sent.
+//! A trace's profile, as the SDKs send it: the first form (stacks and their counts), the one that says when each
+//! stack was seen, which samples waited and how many weren't taken, and one with its memory and the GC's pauses. All
+//! match the schema, are stored whole and come back from the console's API as they were sent.
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
@@ -60,13 +60,31 @@ fn timed() -> Value {
     })
 }
 
+/// The timed form with what the trace's code allocated, where, and the GC's pauses.
+fn with_memory() -> Value {
+    let mut profile = timed();
+    profile["memory"] = json!({
+        "peak": 44_040_192, "net": -1_024, "allocated": 90_000_000,
+        "sites": [{"frames": [0], "bytes": 30_000_000, "count": 1_200}],
+        "sites_at": "peak", "shared": false,
+    });
+    profile["gc"] = json!({"collections": 3, "pause_us": 12_000, "pauses": [[100_000, 4_000, 0], [900_000, 8_000, 2]]});
+    profile
+}
+
 #[test]
-fn both_forms_of_a_profile_match_the_schema_and_a_broken_one_does_not() {
+fn every_form_of_a_profile_match_the_schema_and_a_broken_one_does_not() {
     let validator = validator();
     let mut half_a_pair = timed();
     half_a_pair["stacks"][0]["at"] = json!([[0]]);
     let mut negative = timed();
     negative["dropped"] = json!(-1);
+    let mut only_peak = timed();
+    only_peak["memory"] = json!({"peak": 0, "net": 0});
+    let mut when_unknown = with_memory();
+    when_unknown["memory"]["sites_at"] = json!("start");
+    let mut short_pause = with_memory();
+    short_pause["gc"]["pauses"] = json!([[100_000, 4_000]]);
 
     assert_eq!(
         errors(
@@ -80,12 +98,32 @@ fn both_forms_of_a_profile_match_the_schema_and_a_broken_one_does_not() {
         Vec::<String>::new()
     );
 
+    assert_eq!(
+        errors(
+            &validator,
+            &task("01M4R1ER9RWER0QHV07BJDSZ74", with_memory())
+        ),
+        Vec::<String>::new()
+    );
+    assert_eq!(
+        errors(&validator, &task("01M4R1ER9RWER0QHV07BJDSZ75", only_peak)),
+        Vec::<String>::new()
+    );
+
     assert!(!errors(&validator, &task("01M4R1ER9RWER0QHV07BJDSZ72", half_a_pair)).is_empty());
     assert!(!errors(&validator, &task("01M4R1ER9RWER0QHV07BJDSZ73", negative)).is_empty());
+    assert!(
+        !errors(
+            &validator,
+            &task("01M4R1ER9RWER0QHV07BJDSZ76", when_unknown)
+        )
+        .is_empty()
+    );
+    assert!(!errors(&validator, &task("01M4R1ER9RWER0QHV07BJDSZ77", short_pause)).is_empty());
 }
 
 #[tokio::test]
-async fn a_timed_profile_comes_back_from_the_api_as_it_was_sent() {
+async fn a_timed_profile_and_its_memory_come_back_from_the_api_as_it_was_sent() {
     let validator = validator();
     let dir = std::env::temp_dir().join(format!("tracepanel-profile-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
@@ -96,6 +134,7 @@ async fn a_timed_profile_comes_back_from_the_api_as_it_was_sent() {
     let docs = [
         task("01M4R1ER9RWER0QHV07BJDSZ70", first_form()),
         task("01M4R1ER9RWER0QHV07BJDSZ71", timed()),
+        task("01M4R1ER9RWER0QHV07BJDSZ74", with_memory()),
     ];
     let batch = Batch {
         frame: serde_json::to_vec(&docs).unwrap(),
@@ -119,7 +158,9 @@ async fn a_timed_profile_comes_back_from_the_api_as_it_was_sent() {
 
     assert_eq!(answers[0]["profile"], first_form());
     assert_eq!(answers[1]["profile"], timed());
+    assert_eq!(answers[2]["profile"], with_memory());
 
     assert_eq!(errors(&validator, &answers[1]), Vec::<String>::new());
+    assert_eq!(errors(&validator, &answers[2]), Vec::<String>::new());
     let _ = std::fs::remove_dir_all(&dir);
 }

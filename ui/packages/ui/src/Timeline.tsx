@@ -10,6 +10,7 @@ import { partOfCategory } from "./CallMap";
 import { duration } from "./format";
 import { keyed } from "./keys";
 import type { Category } from "./lib/breakdown";
+import { GC } from "./lib/memory";
 import type { Profile } from "./lib/profile";
 import { isLoud, overlaps, type Slice, type TimeRange, togglePart } from "./lib/slice";
 import { DATASTORES, MESSAGING, RPC } from "./lib/systems";
@@ -235,10 +236,17 @@ function clickOnLanes(event: MouseEvent<HTMLDivElement>, picking: Picking): void
   else if (target.classList.contains("dt-lane-track")) picking.onRange(null);
 }
 
-/** A share's stretch picks its rows; its code's own time, with a profile to show what ran there, opens it. */
+/**
+ * A share's stretch picks its rows; its code's own time, with a profile to show what ran there, opens it. The
+ * collector's pauses have no rows to pick.
+ */
 function clickOnShare(share: HTMLElement, picking: Picking): void {
   if (share.dataset["quiet"] && picking.onQuiet) picking.onQuiet(rangeIn(share));
-  else picking.onShare(share.dataset["category"] ?? "");
+  else pickShare(share.dataset["category"] ?? "", picking);
+}
+
+function pickShare(category: string, picking: Picking): void {
+  if (category !== GC) picking.onShare(category);
 }
 
 /** The axis and the lanes, and over them the range picked (or being picked). */

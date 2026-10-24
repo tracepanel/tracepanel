@@ -1,5 +1,6 @@
 import { type MouseEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { duration } from "./format";
+import { bytes, duration } from "./format";
+import { type Memory, memoryProfile, type SitePlace, sitePlaces } from "./lib/memory";
 import { percent } from "./lib/percent";
 import {
   allFrames,
@@ -87,31 +88,128 @@ function where(frame: Frame): string {
 }
 
 const ROW = 20;
+
+/** The head of a list under the flame graph: one box with its header in it, as every table's. */
+const LIST_HEAD = cn(
+  "grid h-10 grid-cols-[minmax(0,1fr)_5rem_4.5rem] items-center gap-3 bg-(--dt-table-head) px-3 shadow-[inset_0_-1px_0_var(--dt-table-head-rule)] light:h-[2.125rem]",
+  HEAD_TEXT,
+);
 /** A box narrower than this keeps its color but drops its name. */
 const LABELLED = 0.035;
 
-type Time = (samples: number) => string;
+/** How much a box, a share or a row stands for, said: a time ("60 ms"), or bytes ("30 MB"). */
+type Measure = (amount: number) => string;
 
 const FRAMES = [
   { id: "own", label: "Your code" },
   { id: "all", label: "All frames" },
 ] as const;
 
-/** The Profile tab's content, when it is the tab open and the trace has a profile. */
+type Kind = "time" | "memory";
+
+const KINDS = [
+  { id: "time", label: "Time" },
+  { id: "memory", label: "Memory" },
+] as const;
+
+/** The Profile tab's content, when it is the tab open and the trace has a profile: its time, or its memory. */
 export function ProfilePane({ trace, open }: { trace: Trace; open: boolean }) {
   const range = useProfileRange(open);
+  const [kind, setKind] = useState<Kind>("time");
   // Kept while the profile and the range are: the flame graph's zoom belongs to the profile it was made in.
   const scope = useMemo(
     () => (trace.profile ? scopeOf(trace.profile, range, trace.duration) : null),
     [trace.profile, range, trace.duration],
   );
   if (!(open && trace.profile && scope)) return null;
+  return <ProfileOf trace={trace} profile={trace.profile} scope={scope} kind={kind} onKind={setKind} />;
+}
+
+/** The profile's time, or, where it measured its memory and that is the choice, its memory. */
+function ProfileOf({
+  trace,
+  profile,
+  scope,
+  kind,
+  onKind,
+}: {
+  trace: Trace;
+  profile: Profile;
+  scope: Scope;
+  kind: Kind;
+  onKind: (kind: Kind) => void;
+}) {
+  const memory = profile.memory;
+  // Only a profile that measured its memory has the choice.
+  const kinds = memory ? <Segmented label="Profile of" segments={KINDS} value={kind} onChange={onKind} /> : null;
+  if (memory && kind === "memory") return <MemoryPane profile={profile} memory={memory} kinds={kinds} />;
   return (
     <ProfileView
       key={scope.title}
       profile={scope.profile}
-      head={<ProfileHead whole={trace.profile} shown={scope.profile} trace={trace} scope={scope} />}
+      measure={(samples) => duration(samples * scope.profile.interval_us)}
+      noun="Time"
+      kinds={kinds}
+      head={<ProfileHead whole={profile} shown={scope.profile} trace={trace} scope={scope} />}
+      list={({ view, palette, measure }) => (
+        <Functions rows={functions(view).slice(0, 30)} palette={palette} time={measure} />
+      )}
     />
+  );
+}
+
+/** Where the trace's memory was: its allocation sites read as the time is, by package and as a flame of bytes. */
+function MemoryPane({ profile, memory, kinds }: { profile: Profile; memory: Memory; kinds: ReactNode }) {
+  const sites = useMemo(() => memoryProfile(profile, memory), [profile, memory]);
+  const head = <MemoryHead memory={memory} />;
+  if (sites.samples === 0) {
+    return (
+      <div className="grid gap-6 p-4">
+        <header className="flex flex-wrap items-end justify-between gap-3">
+          {head}
+          {kinds}
+        </header>
+        <p className="text-sm text-muted-foreground">No allocation sites were recorded.</p>
+      </div>
+    );
+  }
+  return (
+    <ProfileView
+      key="memory"
+      profile={sites}
+      measure={bytes}
+      noun="Memory"
+      kinds={kinds}
+      head={head}
+      list={({ palette }) => <Sites profile={profile} memory={memory} total={sites.samples} palette={palette} />}
+    />
+  );
+}
+
+/** "+1.2 MB": what a trace kept, its sign said. */
+function signed(size: number): string {
+  return size > 0 ? `+${bytes(size)}` : bytes(size);
+}
+
+/** What the trace allocated: its peak, what it kept and allocated in all, and what the numbers can't tell apart. */
+function MemoryHead({ memory }: { memory: Memory }) {
+  const kept = [`net ${signed(memory.net)}`];
+  if (memory.allocated !== undefined) kept.push(`${bytes(memory.allocated)} allocated in all`);
+  return (
+    <div className="grid gap-0.5">
+      <span className="text-xs text-muted-foreground">Memory of the whole trace</span>
+      <span className="text-2xl font-semibold tracking-tight tabular-nums">
+        {bytes(memory.peak)}
+        <span className="ml-2 text-sm font-normal text-muted-foreground">peak, above where it started</span>
+      </span>
+      <span className="text-xs text-muted-foreground tabular-nums">{kept.join(" · ")}</span>
+      {memory.sites_at === "end" ? (
+        <span className="text-xs text-muted-foreground">Where it was at the end of the trace, not its peak</span>
+      ) : null}
+      {memory.shared ? (
+        <span className="text-xs text-warn">Includes other traces that ran in the process meanwhile</span>
+      ) : null}
+    </div>
   );
 }
 
@@ -181,36 +279,64 @@ function ProfileHead({ whole, shown, trace, scope }: { whole: Profile; shown: Pr
   );
 }
 
-/** Where the trace's time went in code: by package, as a flame graph of your code or of every frame, by function. */
-function ProfileView({ profile, head }: { profile: Profile; head: ReactNode }) {
+/** What the list under the flame graph is drawn from: the frames shown, the packages' colours, how much is said. */
+interface Shown {
+  view: Profile;
+  palette: Palette;
+  measure: Measure;
+}
+
+/**
+ * Where the trace's time (or memory) went in code: by package, as a flame graph of your code or of every frame, then
+ * a list (the functions by their time, the sites by their bytes).
+ */
+function ProfileView({
+  profile,
+  head,
+  measure,
+  noun,
+  kinds,
+  list,
+}: {
+  profile: Profile;
+  head: ReactNode;
+  measure: Measure;
+  noun: string;
+  kinds: ReactNode;
+  list: (shown: Shown) => ReactNode;
+}) {
   const [own, setOwn] = useState(() => mostlyYours(profile));
   const [lit, setLit] = useState<ReadonlySet<string>>(new Set());
   const packages = useMemo(() => packageTimes(profile), [profile]);
   const palette = useMemo(() => colors(packages.map((item) => item.name)), [packages]);
   const view = useMemo(() => (own ? ownCode(profile) : allFrames(profile)), [profile, own]);
-  const time: Time = (samples) => duration(samples * profile.interval_us);
   return (
     <div className="@container grid gap-6 p-4">
       <header className="flex flex-wrap items-end justify-between gap-3">
         {head}
-        <Segmented
-          label="Frames shown"
-          segments={FRAMES}
-          value={own ? "own" : "all"}
-          onChange={(id) => setOwn(id === "own")}
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          {kinds}
+          <Segmented
+            label="Frames shown"
+            segments={FRAMES}
+            value={own ? "own" : "all"}
+            onChange={(id) => setOwn(id === "own")}
+          />
+        </div>
       </header>
       <Packages
+        noun={noun}
         shares={summed(packages, palette)}
         palette={palette}
         total={profile.samples}
-        time={time}
+        time={measure}
         lit={lit}
         onLight={(name) => setLit(toggled(lit, name))}
         onClear={() => setLit(new Set())}
       />
       {/* Keyed: a zoom belongs to the frames it was made in. */}
-      <Flame key={String(own)} profile={view} palette={palette} lit={lit} time={time} />
+      <Flame key={String(own)} profile={view} palette={palette} lit={lit} time={measure} />
+      {list({ view, palette, measure })}
     </div>
   );
 }
@@ -230,6 +356,7 @@ function rankOf(share: Share): number {
 
 /** Where the time went by package: one bar of shares, then the legend of them; a click lights its frames. */
 function Packages({
+  noun,
   shares,
   palette,
   total,
@@ -238,10 +365,11 @@ function Packages({
   onLight,
   onClear,
 }: {
+  noun: string;
   shares: readonly Share[];
   palette: Palette;
   total: number;
-  time: Time;
+  time: Measure;
   lit: ReadonlySet<string>;
   onLight: (name: string) => void;
   onClear: () => void;
@@ -255,7 +383,7 @@ function Packages({
     faded: faded(lit, name),
   }));
   return (
-    <section className="grid gap-3" aria-label="Time by package">
+    <section className="grid gap-3" aria-label={`${noun} by package`}>
       <ShareBar parts={parts} total={total} />
       <ul className="dt-breakdown-legend">
         {ordered.map(({ name, samples }) => (
@@ -286,7 +414,7 @@ interface Hovered {
   y: number;
 }
 
-/** A flame graph from the outermost call down (a click zooms in, a hover tells), and the functions by their time. */
+/** A flame graph from the outermost call down: a click zooms in, a hover tells. */
 function Flame({
   profile,
   palette,
@@ -296,10 +424,9 @@ function Flame({
   profile: Profile;
   palette: Palette;
   lit: ReadonlySet<string>;
-  time: Time;
+  time: Measure;
 }) {
   const root = useMemo(() => tree(profile), [profile]);
-  const rows = useMemo(() => functions(profile).slice(0, 30), [profile]);
   const [focus, setFocus] = useState<Node>(root);
   const boxes = useMemo(() => layout(focus), [focus]);
   const depth = Math.max(0, ...boxes.map((box) => box.depth)) + 1;
@@ -313,40 +440,37 @@ function Flame({
     setHover({ node, x: event.clientX - area.left, y: event.clientY - area.top + at.scrollTop });
   };
   return (
-    <div className="grid gap-6">
-      <section className="grid gap-2" aria-label="Flame graph">
-        <div className="flex h-5 items-center justify-between gap-3 text-xs text-muted-foreground">
-          <span>Calls, outermost on top. Click one to zoom in.</span>
-          {focus !== root ? (
-            <button type="button" className="text-brand hover:underline" onClick={() => setFocus(root)}>
-              Show all
-            </button>
-          ) : null}
+    <section className="grid gap-2" aria-label="Flame graph">
+      <div className="flex h-5 items-center justify-between gap-3 text-xs text-muted-foreground">
+        <span>Calls, outermost on top. Click one to zoom in.</span>
+        {focus !== root ? (
+          <button type="button" className="text-brand hover:underline" onClick={() => setFocus(root)}>
+            Show all
+          </button>
+        ) : null}
+      </div>
+      <div ref={card} className="relative max-h-[30rem] overflow-y-auto rounded-lg border bg-card p-1.5">
+        <div className="relative w-full" style={{ height: depth * (ROW + 2) }} role="img" aria-label="Flame graph">
+          {boxes.map((box) => (
+            <FlameBox
+              key={box.node.key}
+              box={box}
+              tone={toneOf(palette, box.node.frame ? packageOf(box.node.frame) : "")}
+              faded={box.node.frame !== null && faded(lit, colored(palette, packageOf(box.node.frame)))}
+              onZoom={() => setFocus(box.node)}
+              onHover={(event) => track(event, box.node)}
+              onLeave={() => setHover(null)}
+            />
+          ))}
         </div>
-        <div ref={card} className="relative max-h-[30rem] overflow-y-auto rounded-lg border bg-card p-1.5">
-          <div className="relative w-full" style={{ height: depth * (ROW + 2) }} role="img" aria-label="Flame graph">
-            {boxes.map((box) => (
-              <FlameBox
-                key={box.node.key}
-                box={box}
-                tone={toneOf(palette, box.node.frame ? packageOf(box.node.frame) : "")}
-                faded={box.node.frame !== null && faded(lit, colored(palette, packageOf(box.node.frame)))}
-                onZoom={() => setFocus(box.node)}
-                onHover={(event) => track(event, box.node)}
-                onLeave={() => setHover(null)}
-              />
-            ))}
-          </div>
-          {hover ? <Tip hovered={hover} total={root.total} time={time} /> : null}
-        </div>
-      </section>
-      <Functions rows={rows} palette={palette} time={time} />
-    </div>
+        {hover ? <Tip hovered={hover} total={root.total} time={time} /> : null}
+      </div>
+    </section>
   );
 }
 
 /** What the box under the pointer is: its function, where it is, whole, and its time. */
-function Tip({ hovered: { node, x, y }, total, time }: { hovered: Hovered; total: number; time: Time }) {
+function Tip({ hovered: { node, x, y }, total, time }: { hovered: Hovered; total: number; time: Measure }) {
   const frame = node.frame;
   if (!frame) return null;
   return (
@@ -409,17 +533,12 @@ function FlameBox({
 type FunctionRow = { frame: Frame; self: number; total: number };
 
 /** The functions by the time they ran themselves: each with where it is, whole, and a bar of its share. */
-function Functions({ rows, palette, time }: { rows: readonly FunctionRow[]; palette: Palette; time: Time }) {
+function Functions({ rows, palette, time }: { rows: readonly FunctionRow[]; palette: Palette; time: Measure }) {
   const most = Math.max(1, ...rows.map((row) => row.self));
   return (
     // One box with its header in it, as every table's: the head's band and hairline, its names' case and colour.
     <section className="overflow-hidden rounded-lg border bg-card" aria-label="Functions">
-      <div
-        className={cn(
-          "grid h-10 grid-cols-[minmax(0,1fr)_5rem_4.5rem] items-center gap-3 bg-(--dt-table-head) px-3 shadow-[inset_0_-1px_0_var(--dt-table-head-rule)] light:h-[2.125rem]",
-          HEAD_TEXT,
-        )}
-      >
+      <div className={LIST_HEAD}>
         <span>Function</span>
         <span className="text-right">Itself</span>
         <span className="text-right">In all</span>
@@ -448,7 +567,7 @@ function FunctionLine({
   row: FunctionRow;
   tone: Tone;
   most: number;
-  time: Time;
+  time: Measure;
 }) {
   return (
     <li className="grid grid-cols-[minmax(0,1fr)_5rem_4.5rem] items-center gap-3 border-t px-3 py-1.5 first:border-t-0 hover:bg-muted/40">
@@ -466,6 +585,79 @@ function FunctionLine({
         </span>
       </div>
       <span className="text-right text-xs text-muted-foreground tabular-nums">{time(total)}</span>
+    </li>
+  );
+}
+
+/** Where the memory was, largest first: the function that allocated, the line of yours that led there, its bytes. */
+function Sites({
+  profile,
+  memory,
+  total,
+  palette,
+}: {
+  profile: Profile;
+  memory: Memory;
+  total: number;
+  palette: Palette;
+}) {
+  const places = sitePlaces(profile, memory);
+  const most = Math.max(1, ...places.map(({ site }) => site.bytes));
+  return (
+    <section className="overflow-hidden rounded-lg border bg-card" aria-label="Allocation sites">
+      <div className={LIST_HEAD}>
+        <span>Allocated in</span>
+        <span className="text-right">Bytes</span>
+        <span className="text-right">Share</span>
+      </div>
+      <ol className="m-0 list-none p-0">
+        {places.map((place) => (
+          <SiteLine
+            key={`${place.site.frames.join(",")}:${place.site.bytes}:${place.site.count}`}
+            place={place}
+            palette={palette}
+            most={most}
+            total={total}
+          />
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+function SiteLine({
+  place: { site, allocated, own },
+  palette,
+  most,
+  total,
+}: {
+  place: SitePlace;
+  palette: Palette;
+  most: number;
+  total: number;
+}) {
+  const tone = toneOf(palette, packageOf(allocated));
+  return (
+    <li className="grid grid-cols-[minmax(0,1fr)_5rem_4.5rem] items-center gap-3 border-t px-3 py-1.5 first:border-t-0 hover:bg-muted/40">
+      <div className="flex min-w-0 items-start gap-2">
+        <span className={cn("mt-1 size-2 shrink-0 rounded-sm", tone.dot)} />
+        <div className="grid min-w-0 gap-0.5">
+          <span className="font-mono text-xs [overflow-wrap:anywhere]">{allocated.function}</span>
+          <span className="font-mono text-[11px] text-muted-foreground [overflow-wrap:anywhere]">{where(own)}</span>
+        </div>
+      </div>
+      <div className="grid gap-1">
+        <span className="text-right text-xs tabular-nums" title={`${site.count.toLocaleString()} blocks`}>
+          {bytes(site.bytes)}
+        </span>
+        <span className="h-1 overflow-hidden rounded-full bg-muted">
+          <span
+            className={cn("block h-full rounded-full", tone.dot)}
+            style={{ width: `${(site.bytes / most) * 100}%` }}
+          />
+        </span>
+      </div>
+      <span className="text-right text-xs text-muted-foreground tabular-nums">{percent(site.bytes, total)}</span>
     </li>
   );
 }

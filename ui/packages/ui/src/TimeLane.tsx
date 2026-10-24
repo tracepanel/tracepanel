@@ -2,6 +2,7 @@ import { type CSSProperties, type PointerEvent, useMemo, useState } from "react"
 import { partOfCategory } from "./CallMap";
 import { duration } from "./format";
 import { type Stretch, stretches } from "./lib/breakdown";
+import { cutByPauses, GC, gcPauses } from "./lib/memory";
 import { quietSpans } from "./lib/quiet";
 import type { TimeRange } from "./lib/slice";
 import { quietPieces } from "./lib/waiting";
@@ -13,9 +14,10 @@ function place(stretch: Stretch, total: number): CSSProperties {
   return { left: `${(stretch.from / total) * 100}%`, width: `${((stretch.to - stretch.from) / total) * 100}%` };
 }
 
-/** Set on a stretch whose share isn't picked while others are: it steps back. */
-function faded(stretch: Stretch, parts: readonly string[]): "" | undefined {
-  return parts.length > 0 && !parts.includes(partOfCategory(stretch.category)) ? "" : undefined;
+/** Set on a stretch whose share isn't picked while others are: it steps back (the collector's, never picked, too). */
+function faded(each: Drawn, parts: readonly string[]): "" | undefined {
+  if (parts.length === 0) return undefined;
+  return each.gc || !parts.includes(partOfCategory(each.stretch.category)) ? "" : undefined;
 }
 
 /** What the pointer is over: a share's stretch, and where. */
@@ -54,11 +56,15 @@ function LaneTip({ hover, shares }: { hover: Hover | null; shares: readonly Shar
   );
 }
 
-/** Each stretch, and when it is a span's own time with no recorded calls, the span and whether it waited then. */
+/**
+ * Each stretch, and when it is a span's own time with no recorded calls, the span and whether it waited then; or a
+ * pause of the collector's (`gc`), whatever ran around it.
+ */
 interface Drawn {
   stretch: Stretch;
   quiet: boolean;
   waiting: boolean;
+  gc: boolean;
 }
 
 /** The lane: its pieces, and how long each quiet span's code waited and computed (`span:waiting`). */
@@ -74,16 +80,29 @@ function piecesOfStretch(trace: Trace, stretch: Stretch): Drawn[] {
     stretch: { ...stretch, from: piece.from, to: piece.to },
     quiet: true,
     waiting: piece.waiting,
+    gc: false,
   }));
+}
+
+/** A piece of the lane with the collector's pauses cut out of it: those its own pieces, the GC share's. */
+function cutOut(each: Drawn, pauses: readonly TimeRange[]): Drawn[] {
+  return cutByPauses(each.stretch.from, each.stretch.to, pauses).map(({ range: [from, to], gc }) =>
+    gc
+      ? { stretch: { ...each.stretch, from, to }, quiet: false, waiting: false, gc }
+      : { ...each, stretch: { ...each.stretch, from, to } },
+  );
 }
 
 function laneOf(trace: Trace): Lane {
   const quiet = quietSpans(trace);
-  const drawn = stretches(trace).flatMap((stretch): Drawn[] =>
-    stretch.quiet && quiet.has(stretch.span)
-      ? piecesOfStretch(trace, stretch)
-      : [{ stretch, quiet: false, waiting: false }],
-  );
+  const pauses = gcPauses(trace.profile, trace.duration);
+  const drawn = stretches(trace)
+    .flatMap((stretch): Drawn[] =>
+      stretch.quiet && quiet.has(stretch.span)
+        ? piecesOfStretch(trace, stretch)
+        : [{ stretch, quiet: false, waiting: false, gc: false }],
+    )
+    .flatMap((each) => cutOut(each, pauses));
   const totals = new Map<string, number>();
   for (const { stretch, waiting } of drawn.filter((each) => each.quiet)) {
     const key = `${stretch.span}:${waiting}`;
@@ -127,8 +146,9 @@ function pieceData(each: Drawn): Record<string, string | undefined> {
 }
 
 /**
- * The trace's own lane: where its time went, moment by moment, one clear line in its shares' colours (the legend's);
- * hatched only where a timed profile says its code waited, and said there ("waiting · 1.5 s"). A
+ * The trace's own lane: where its time went, moment by moment, one clear line in its shares' colours (the legend's),
+ * the collector's pauses in theirs; hatched only where a timed profile says its code waited, and said there
+ * ("waiting · 1.5 s"). A
  * share's stretch says its numbers on hover, and picks its rows on a click; a quiet one, with a profile, opens it.
  */
 export function TimeLane({ trace, word, parts }: { trace: Trace; word: string; parts: readonly string[] }) {
@@ -150,8 +170,8 @@ export function TimeLane({ trace, word, parts }: { trace: Trace; word: string; p
           <span
             key={each.stretch.from}
             className="dt-stretch"
-            data-category={each.stretch.category}
-            data-faded={faded(each.stretch, parts)}
+            data-category={each.gc ? GC : each.stretch.category}
+            data-faded={faded(each, parts)}
             {...pieceData(each)}
             style={place(each.stretch, total)}
           />
