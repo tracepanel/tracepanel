@@ -82,7 +82,7 @@ test("the panel's list nests the runs a request sent under it, and the request s
   // Its own count stays its own (none): the pill says what its tasks found apart from it.
   await expect(pill(page)).toHaveAccessibleName(/GET \/app\/api\/reports → 202 .* · 0 q · \d+ issues? in its tasks/);
   await expect(pill(page)).toHaveAttribute("data-verdict", "warn");
-  await expect(pill(page).locator(".tasks")).toHaveText(/^\d+ issues?in tasks$/);
+  await expect(pill(page).locator(".tasks")).toHaveText(/^\d+ issues?$/);
   // Its own issues chip stays away: the one there is its tasks'.
   await expect(pill(page).locator(".seg:not(.tasks) > .issues")).toHaveCount(0);
 
@@ -119,8 +119,9 @@ test("the pill says how many of a request's tasks failed, in red before their is
   await openApp(page, { reports: await report() });
   await page.getByRole("button", { name: "Load reports" }).click();
 
-  await expect(pill(page).locator(".tasks")).toHaveText("5 failed3 issuesin tasks");
+  await expect(pill(page).locator(".tasks")).toHaveText("5 failed3 issues");
   await expect(pill(page).locator(".tasks > span").first()).toHaveClass("failed");
   await expect(pill(page)).toHaveAccessibleName(/ · 0 q · 5 failed, 3 issues in its tasks\./);
+  await expect(pill(page).locator(".tasks")).toHaveAttribute("title", /^5 failed, 3 issues in its tasks/);
   await expect(pill(page)).toHaveAttribute("data-verdict", "error");
 });

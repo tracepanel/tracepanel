@@ -239,10 +239,9 @@ const STYLE = `
   .seg[data-speed="very-slow"] b { color: var(--dt-error); }
   .issues { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; background: var(--tint-warn); color: var(--dt-warn); font-weight: 600; font-size: 12px; }
   .seg .issues svg { color: currentColor; }
-  /* Its tasks': the same chips as its own failures and issues, then where they are, as a unit is. */
+  /* Its tasks': the Tasks icon, then the same chips as its own failures and issues. */
   .tasks { gap: 5px; }
   .tasks .failed { margin-left: 0; }
-  .tasks .unit { margin-left: 1px; }
   .issues[data-tone="error"] { background: var(--tint-error); color: var(--dt-error); }
   /* The page's count: a step back from the latest request's numbers; its failures stand out on their own. */
   .page .unit { margin-left: -1px; }
@@ -517,6 +516,9 @@ const ICONS = {
   db: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>',
   clock:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+  // The sidebar's Tasks icon (lucide list-checks).
+  tasks:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 5h8M13 12h8M13 19h8M3 17l2 2 4-4M3 7l2 2 4-4"/></svg>',
   layers:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg>',
   failed:
@@ -579,8 +581,8 @@ function addIssues(parent: HTMLElement, issues: number, tone: "warn" | "error"):
 }
 
 /**
- * What its tasks ran into, apart from its own: the chips its own failures and issues have, red ones first, then where
- * they are ("✕ 5 failed  ⚠ 3 issues in tasks"), so each reads at a glance.
+ * What its tasks ran into, apart from its own: the Tasks icon, as each segment has its own, then the chips its own
+ * failures and issues have, red ones first. The tooltip says whose they are.
  */
 function addTaskIssues(parent: HTMLElement, info: TraceInfo): void {
   const chips = [
@@ -590,12 +592,9 @@ function addTaskIssues(parent: HTMLElement, info: TraceInfo): void {
   if (!chips.length) return;
   const seg = segment(parent);
   seg.className = "seg tasks";
+  seg.innerHTML = ICONS.tasks;
   seg.append(...chips);
-  const where = document.createElement("span");
-  where.className = "unit";
-  where.textContent = "in tasks";
-  seg.append(where);
-  seg.title = `${tasksPart(info).slice(3)}: the tasks this request enqueued; open the panel to see them`;
+  seg.title = `${tasksPart(info).slice(3)}, the ones this request enqueued: open the panel to see them`;
 }
 
 function chip(className: string, icon: string, text: string): HTMLElement {
