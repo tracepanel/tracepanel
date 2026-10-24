@@ -123,6 +123,13 @@
   (`logs=all` in the URL). The Logs tab and the Logs page show every record,
   as before. A request with no view or handler recorded counts its own time
   as "Your code": it can't be told from the framework's then.
+- A trace's first tab is one anatomy for every kind. In the panel it heads
+  with the trace's line as the page's header says it (its badge, name, how
+  it ended, its time) and what handled it under, quietly: a request's view
+  or handler, a task's queue and worker. Its facts follow in one order, its
+  kind's own first, then App, Runtime, Started and Trace ID, nothing its head
+  says again. A related trace is a row as the call tree draws a linked one:
+  a grey kind box, its name, its state and findings, its time.
 - The code's own time is "Your code" in every kind of trace, a request's view
   or handler too. A call tree's rows look one way: a task a request enqueued
   has the grey kind box of the other rows, and its bar where it ran, running

@@ -37,17 +37,17 @@ import { IssueList } from "./IssueList";
 import { LogList } from "./LogList";
 import { groupNoun } from "./lib/calls";
 import { isTyping } from "./lib/keys";
-import { pageParts } from "./lib/page";
 import type { Slice } from "./lib/slice";
 import { linkProps, type TraceLinks } from "./links";
 import { ProfilePane } from "./ProfileView";
-import { RoutePath, StateBadge, StatusBadge, TaskName, TraceBadge } from "./primitives";
+import { RoutePath, StatusBadge, TraceBadge } from "./primitives";
 import { RequestInfo } from "./RequestInfo";
 import { type Explain, SqlList } from "./SqlList";
 import { type SystemCalls, systemCalls, systemOfIssue } from "./systemCalls";
 import { Tabs } from "./Tabs";
 import { type MarkTarget, TimeStrip } from "./Timeline";
 import { SliceScope } from "./TimeSlice";
+import { HeadingTitle, heading, htmxOf, outcomeOf } from "./TraceHeading";
 import type { App, Issue, IssueKind, Related, Trace } from "./types";
 
 export type TabId = "request" | "app" | "tree" | "issues" | "sql" | "cache" | "http" | "logs" | "error" | "profile";
@@ -63,45 +63,6 @@ export interface ExploreItem {
 }
 
 const EXPLORE_ICONS = { group: ListIcon, issue: CircleAlertIcon, logs: ScrollTextIcon };
-
-/** The badge and title of a trace, by kind: a GraphQL request is its operation, not POST /graphql/. */
-function htmxOf(trace: Trace): "request" | "boosted" | null {
-  if (!trace.attrs["htmx.request"]) return null;
-  return trace.attrs["htmx.boosted"] ? "boosted" : "request";
-}
-
-/** A view or an action in the browser: VIEW /books, or CLICK "Save" · /books. */
-function pageHeading(name: string): { badge: string; title: string } {
-  const { badge, label, page } = pageParts(name);
-  return { badge, title: page ? `${label} · ${page}` : label };
-}
-
-/** The heading of a trace that isn't a request, by its kind. */
-const KIND_HEADINGS: Record<string, (name: string) => { badge: string; title: string }> = {
-  task: (name) => ({ badge: "TASK", title: name }),
-  command: (name) => ({ badge: "JOB", title: name }),
-  websocket: (name) => ({ badge: "WS", title: name.replace(/^WS /, "") }),
-  page: pageHeading,
-};
-
-/** The heading's title: a task's name cut where a task's name is everywhere. */
-function HeadingTitle({ kind, title }: { kind: string; title: string }) {
-  return kind === "task" ? <TaskName name={title} /> : title;
-}
-
-function heading(trace: Trace): { badge: string; title: string } {
-  const attrs = trace.attrs;
-  const operation = attrs["graphql.operation"];
-  if (typeof operation === "string") return { badge: "GQL", title: operation };
-  const byKind = KIND_HEADINGS[trace.kind];
-  if (byKind) return byKind(trace.name);
-  const method = attrs["http.method"];
-  const path = attrs["http.path"];
-  return {
-    badge: typeof method === "string" ? method : (trace.name.split(" ")[0] ?? ""),
-    title: typeof path === "string" ? path : trace.name,
-  };
-}
 
 /**
  * What could be better in the request (N+1, slow SQL, htmx…). Errors are kept with the issues for grouping, but a
@@ -291,19 +252,6 @@ function traceTabs({
     // Last: the app that served it, its settings and versions, when its SDK says them. About the app, not this request.
     ...appTab(app),
   ];
-}
-
-/** How it went, on the Request tab: its status, a task's state, or that it failed. */
-function outcomeOf(trace: Trace): ReactNode {
-  const status = trace.attrs["http.status_code"];
-  const state = trace.attrs["task.state"];
-  if (typeof status === "number") return <StatusBadge status={status} />;
-  if (typeof state === "string") return <StateBadge state={state} />;
-  return trace.status === "error" ? (
-    <span className="dt-status" data-tone="error">
-      failed
-    </span>
-  ) : null;
 }
 
 /**

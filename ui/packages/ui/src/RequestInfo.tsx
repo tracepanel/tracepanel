@@ -11,9 +11,10 @@ import { traceRuntime } from "./lib/runtime";
 import { unreceived } from "./lib/signals";
 import { linkProps, type TraceLinks } from "./links";
 import { type PropRow, PropTable } from "./PropTable";
-import { MethodBadge, RoutePath, StateBadge, StatusBadge } from "./primitives";
+import { RoutePath, TraceBadge } from "./primitives";
 import { isRequestDetail, RequestParts, requestParts } from "./RequestParts";
 import { SegmentLabel } from "./Segmented";
+import { HeadingTitle, heading, htmxOf, outcomeOf } from "./TraceHeading";
 import type { Attrs, Related, Trace } from "./types";
 import { taskTimingRows, workflowFacts, workflowPart } from "./Workflow";
 import { WorkflowGraph } from "./WorkflowGraph";
@@ -179,21 +180,21 @@ function htmxRows(attrs: Attrs): PropRow[] {
   return rows;
 }
 
-function taskRows(trace: Trace, related: Related | undefined, links: TraceLinks | undefined): PropRow[] {
+/**
+ * A task run's own facts. Its name and state are its head's (the page's header, the panel's head line), its queue
+ * and worker too where the head line says them (`hero`).
+ */
+function taskRows(trace: Trace, related: Related | undefined, links: TraceLinks | undefined, hero: boolean): PropRow[] {
   const attrs = trace.attrs;
   const value = (key: string) => text(attrs[key]);
-  const state = value("task.state");
   const wait = attrs["task.queue_wait"];
   const row = (label: string, key: string, mono = true): PropRow[] => {
     const shown = value(key);
     return shown ? [{ label, value: shown, copy: shown, mono }] : [];
   };
   return [
-    ...row("Task", "task.name"),
-    ...(state ? [{ label: "State", value: <StateBadge state={state} /> }] : []),
     ...row("Task ID", "task.id"),
-    ...row("Queue", "task.queue"),
-    ...row("Worker", "task.worker"),
+    ...(hero ? [] : [...row("Queue", "task.queue"), ...row("Worker", "task.worker")]),
     {
       label: "Ran",
       value: attrs["task.eager"]
@@ -222,7 +223,8 @@ export interface RequestInfoProps {
   /** Traces linked to this one (Celery): shown with links when given. */
   related?: Related | undefined;
   links?: TraceLinks | undefined;
-  /** The method, URL, status and time on top of the tab: where the trace's own header is hidden (the panel). */
+  /** The trace's head line on top of the tab (badge, name, outcome, time; what handled it): where the page's header
+   *  isn't there to say them (the panel). */
   hero?: boolean | undefined;
 }
 
@@ -270,76 +272,76 @@ function HandlerName({ trace, name }: { trace: Trace; name: string }) {
   );
 }
 
-/** What a request was, in the hero above its facts: its method, URL, status and time; its handler and route under. */
-function whatRan(trace: Trace): PropRow[] {
-  const attrs = trace.attrs;
-  const route = text(attrs["http.route"]);
-  const handler = text(attrs["code.view"]);
-  const status = attrs["http.status_code"];
-  return [
-    ...textRow("URL", text(attrs["http.path"])),
-    ...textRow("Route", route, <RoutePath path={route ?? ""} />),
-    ...textRow(handlerWord(attrs), handler, <HandlerName trace={trace} name={handler ?? ""} />),
-    ...(typeof status === "number" ? [{ label: "Status", value: <StatusBadge status={status} /> }] : []),
-  ];
-}
-
-/** Whether the tab heads with the request at a glance: asked for, and a request it is. */
-function heroShown(trace: Trace, wanted: boolean | undefined): boolean {
-  return wanted === true && isRequest(trace);
-}
-
-function isRequest(trace: Trace): boolean {
-  return trace.kind !== "task" && typeof trace.attrs["http.path"] === "string";
-}
-
-/** Under the URL: the view or handler that answered, and the route when it differs from the URL. */
-function HandlerAndRoute({ trace, route }: { trace: Trace; route: string | null }) {
+/** The view or handler that answered, as a fact where the head line doesn't say it (the console's page). */
+function handlerRows(trace: Trace): PropRow[] {
   const handler = text(trace.attrs["code.view"]);
-  return (
-    <div className="flex min-w-0 flex-wrap gap-x-4 gap-y-0.5 font-mono text-xs text-muted-foreground">
-      {handler ? <HandlerName trace={trace} name={handler} /> : null}
-      {route ? <RoutePath path={route} /> : null}
-    </div>
-  );
+  return textRow(handlerWord(trace.attrs), handler, <HandlerName trace={trace} name={handler ?? ""} />);
 }
 
-/** A request at a glance: method and URL large, how it ended and how long it took beside; its handler and route under. */
-function Hero({ trace }: { trace: Trace }) {
+/** A command's own line, when its SDK recorded one. */
+const COMMAND_LINE = ["process.command_line", "process.command_args", "command.line"];
+
+/**
+ * What handled it, under the head line, quietly: a request's view or handler (and its route when it isn't the URL),
+ * a task's queue and worker, a job's command line, a page's URL.
+ */
+function codeOf(trace: Trace): ReactNode[] {
   const attrs = trace.attrs;
+  const handler = text(attrs["code.view"]);
   const route = text(attrs["http.route"]);
-  const status = attrs["http.status_code"];
+  return [
+    handler ? <HandlerName key="handler" trace={trace} name={handler} /> : null,
+    route && route !== attrs["http.path"] ? <RoutePath key="route" path={route} /> : null,
+    ...["task.queue", "task.worker", "page.url", ...COMMAND_LINE].map((key) => {
+      const value = text(attrs[key]);
+      return value ? <span key={key}>{value}</span> : null;
+    }),
+  ].filter(Boolean);
+}
+
+/**
+ * Any trace at a glance, the same anatomy for every kind (the panel's first tab): its badge and name large, how it
+ * ended and how long it took beside, as the console's page header says them; what handled it under, quietly.
+ */
+function Hero({ trace }: { trace: Trace }) {
+  const head = heading(trace);
+  const code = codeOf(trace);
   return (
     <header className="dt-hero grid gap-1.5">
       <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-        <MethodBadge method={text(attrs["http.method"])} />
-        <span className="min-w-0 font-mono text-base font-medium [overflow-wrap:anywhere]">
-          {text(attrs["http.path"])}
+        <TraceBadge word={head.badge} htmx={htmxOf(trace)} />
+        <span className="flex min-w-0 font-mono text-base font-medium [overflow-wrap:anywhere]">
+          <HeadingTitle kind={trace.kind} title={head.title} />
         </span>
-        {typeof status === "number" ? <StatusBadge status={status} /> : null}
+        {outcomeOf(trace)}
         <span className="text-sm text-muted-foreground tabular-nums">{duration(trace.duration)}</span>
       </div>
-      <HandlerAndRoute trace={trace} route={route === attrs["http.path"] ? null : route} />
+      {code.length ? (
+        <div className="flex min-w-0 flex-wrap gap-x-4 gap-y-0.5 font-mono text-xs text-muted-foreground">{code}</div>
+      ) : null}
     </header>
   );
 }
 
-/** The request's or run's own fields: what ran (unless the hero shows it), how it went, who made it. */
+/**
+ * The trace's own facts, one order for every kind: its kind's own first (a task's id, its run; the console's
+ * request its handler), then who made it, then App, Runtime, Started and Trace ID, then what to know about the
+ * trace itself. What its head already says (its name, status or state, duration) isn't said again.
+ */
 function ownRows(trace: Trace, hero: boolean, related: Related | undefined, links: TraceLinks | undefined): PropRow[] {
   const attrs = trace.attrs;
   return [
-    ...(trace.kind === "task" ? taskRows(trace, related, links) : []),
-    ...(hero ? [] : whatRan(trace)),
+    ...(trace.kind === "task" ? taskRows(trace, related, links, hero) : []),
+    ...(hero ? [] : handlerRows(trace)),
     ...userRows(attrs),
     ...htmxRows(attrs),
     ...appRows(attrs, links),
     ...runtimeRows(attrs),
+    { label: "Started", value: dayTime(trace.start) },
+    { label: "Trace ID", value: trace.id, copy: trace.id, mono: true },
     ...droppedRows(attrs),
     ...unreceivedRows(attrs),
     ...clockRows(trace),
-    { label: "Started", value: dayTime(trace.start) },
-    ...(hero ? [] : [{ label: "Duration", value: duration(trace.duration) }]),
-    { label: "Trace ID", value: trace.id, copy: trace.id, mono: true },
   ];
 }
 
@@ -380,7 +382,7 @@ function linkedRows(trace: Trace, related: Related | undefined, links: TraceLink
 
 /** Overview of the traced request or task run: what ran, how it went, who caused it; every id copies. */
 export function RequestInfo({ trace, related, links, hero: wanted }: RequestInfoProps) {
-  const hero = heroShown(trace, wanted);
+  const hero = wanted === true;
   const document = text(trace.attrs["graphql.document"]);
   // The document is shown formatted in its own part: not again, on one line, among the attributes.
   const { "graphql.document": _, ...rest } = trace.attrs;
