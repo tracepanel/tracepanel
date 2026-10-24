@@ -62,18 +62,29 @@ test("a transaction's time says on hover how long it was open and its SQL; its n
   await expect(page.locator('.dt-map-row[data-kind="quiet"]')).toHaveCount(0);
 });
 
-test("in the panel the strip heads its Request and Call tree tabs, the same quiet row in the tree", async ({
+test("the strip is the Call tree tab's only, on the page and in the panel; the first tab has none", async ({
   page,
 }) => {
+  await page.goto(`/#/t/${await traceId(HELD_REPORT)}?tab=request`);
+
+  await expect(page.getByRole("region", { name: "Time" })).toHaveCount(0);
+
+  await page.getByRole("tab", { name: /^Call tree/ }).click();
+
+  await expect(page.getByRole("tabpanel").getByRole("region", { name: "Time" })).toBeVisible();
+
   await openApp(page, { held: { status: 200, trace: await traceId(HELD_REPORT), queries: 139, totalMs: 1600 } });
   await page.getByRole("button", { name: "Load held" }).click();
   await pill(page).click();
   const frame = panel(page);
   await frame.getByRole("tab", { name: /^Call tree/ }).click();
 
-  await expect(frame.getByRole("region", { name: "Time" }).locator(".dt-quiet-label")).toHaveText(/no recorded calls/);
+  await expect(frame.getByRole("region", { name: "Time" }).locator(".dt-quiet-label")).toHaveText(
+    "1.6 s · no recorded calls",
+  );
 
   await frame.getByRole("tablist").first().getByRole("tab").first().click();
 
-  await expect(frame.getByRole("region", { name: "Time" }).getByRole("figure", { name: "Timeline" })).toBeVisible();
+  await expect(frame.getByRole("tabpanel").first()).toContainText("Task ID");
+  await expect(frame.getByRole("region", { name: "Time" })).toHaveCount(0);
 });

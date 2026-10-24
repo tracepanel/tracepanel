@@ -224,8 +224,6 @@ export interface RequestInfoProps {
   links?: TraceLinks | undefined;
   /** The method, URL, status and time on top of the tab: where the trace's own header is hidden (the panel). */
   hero?: boolean | undefined;
-  /** Under the hero (the panel): the trace's tiles and lanes, which the console's page has above its tabs. */
-  overview?: ReactNode;
 }
 
 /**
@@ -381,7 +379,7 @@ function linkedRows(trace: Trace, related: Related | undefined, links: TraceLink
 }
 
 /** Overview of the traced request or task run: what ran, how it went, who caused it; every id copies. */
-export function RequestInfo({ trace, related, links, hero: wanted, overview }: RequestInfoProps) {
+export function RequestInfo({ trace, related, links, hero: wanted }: RequestInfoProps) {
   const hero = heroShown(trace, wanted);
   const document = text(trace.attrs["graphql.document"]);
   // The document is shown formatted in its own part: not again, on one line, among the attributes.
@@ -394,7 +392,6 @@ export function RequestInfo({ trace, related, links, hero: wanted, overview }: R
   return (
     <div className="@container grid gap-5 p-4">
       {hero ? <Hero trace={trace} /> : null}
-      {overview}
       <FactGrid rows={ownRows(trace, hero, related, links)} />
       {linked.length ? (
         <Part label="Related traces" title="Related traces">

@@ -1251,6 +1251,10 @@ function MapBody({ details, onClose, children }: { details: ReactNode; onClose: 
 /** The selected row; clicking it again closes its details. */
 function useSelection(initialSpan: string | undefined) {
   const [selected, setSelected] = useState<string | null>(initialSpan ?? null);
+  // Another span asked for while the tree is open (a mark on the lanes over it): that one is selected.
+  useEffect(() => {
+    if (initialSpan) setSelected(initialSpan);
+  }, [initialSpan]);
   const select = (key: string) => setSelected((current) => (current === key ? null : key));
   return { selected, select, close: () => setSelected(null) };
 }

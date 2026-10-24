@@ -210,28 +210,3 @@ test("in the panel: the numbers on hover, a share and a stretch of time picked, 
 
   await expect(row(frame, "template", "blog/post_list.html")).toBeVisible();
 });
-
-test("beside another tab than the call tree the lanes only show: no legend, nothing on them leads away", async ({
-  page,
-}) => {
-  await openHome(page, "tab=request");
-  const lanes = page.getByRole("figure", { name: "Timeline" });
-
-  await expect(page.getByRole("list", { name: /^Where the time went/ })).toHaveCount(0);
-  await expect(lanes.getByRole("button")).toHaveCount(0);
-
-  await drag(page, lanes.locator(".dt-timeline-layer"), 0.5, 2.4);
-  await segment(page, "template").click();
-
-  await expect(page.getByRole("tab", { name: /^Request/ })).toHaveAttribute("aria-selected", "true");
-  await expect(page).not.toHaveURL(/range=|part=/);
-
-  await openApp(page, { home: { status: 200, trace: await traceId("GET /"), queries: 151, totalMs: 28 } });
-  await page.getByRole("button", { name: "Load home" }).click();
-  await pill(page).click();
-  const frame = panel(page);
-  await frame.getByRole("tab", { name: /^Request/ }).click();
-
-  await expect(frame.getByRole("figure", { name: "Timeline" })).toBeVisible();
-  await expect(frame.getByRole("list", { name: /^Where the time went/ })).toHaveCount(0);
-});

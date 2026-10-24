@@ -46,7 +46,6 @@ import { RequestInfo } from "./RequestInfo";
 import { type Explain, SqlList } from "./SqlList";
 import { type SystemCalls, systemCalls, systemOfIssue } from "./systemCalls";
 import { Tabs } from "./Tabs";
-import { TimeLegend } from "./TimeLegend";
 import { type MarkTarget, TimeStrip } from "./Timeline";
 import { SliceScope } from "./TimeSlice";
 import type { App, Issue, IssueKind, Related, Trace } from "./types";
@@ -367,52 +366,35 @@ export interface TraceViewProps {
   onSliceChange?: ((slice: Slice) => void) | undefined;
 }
 
-/**
- * The Request tab: the trace's facts and parts. In the panel (`panel`) its request's line on top, and under it the
- * lanes the page has above its tabs (not its tiles: the tabs carry their numbers).
- */
+/** The Request tab: the trace's facts and parts; in the panel (`panel`) its request's line on top. */
 function RequestPane({
   open,
   trace,
   related,
   links,
   panel,
-  onSelect,
 }: {
   open: boolean;
   trace: Trace;
   related: Related | undefined;
   links: TraceLinks | undefined;
   panel: boolean;
-  onSelect: (target: MarkTarget) => void;
 }) {
   if (!open) return null;
-  // The panel's Request tab has the time strip the page has above its tabs: the panel shows what the page shows.
-  const overview = panel ? (
-    <div className="dt-panel-overview">
-      <TimeStrip trace={trace} related={related} onSelect={onSelect} tab="request" />
-    </div>
-  ) : null;
-  return <RequestInfo trace={trace} related={related} links={links} hero={panel} overview={overview} />;
+  return <RequestInfo trace={trace} related={related} links={links} hero={panel} />;
 }
 
-/** The Call tree tab; in the panel with the time strip over it, the page having it above its tabs. */
+/**
+ * The Call tree tab: the trace's time strip and its legend over the tree, one unit, the same on the page and in the
+ * panel. The trace's time is shown here only.
+ */
 function TreePane({
   open,
-  panel,
   onSelect,
   ...tree
-}: ComponentProps<typeof CallMap> & { open: boolean; panel: boolean; onSelect: (target: MarkTarget) => void }) {
+}: ComponentProps<typeof CallMap> & { open: boolean; onSelect: (target: MarkTarget) => void }) {
   if (!open) return null;
-  // In the panel the strip and its legend; on the page the strip is above the tabs, its legend here.
-  const head = panel ? (
-    <TimeStrip trace={tree.trace} related={tree.related} onSelect={onSelect} tab="tree" legend={true} />
-  ) : (
-    <div className="dt-tree-legend">
-      <TimeLegend trace={tree.trace} related={tree.related} />
-    </div>
-  );
-  return <CallMap {...tree} head={head} />;
+  return <CallMap {...tree} head={<TimeStrip trace={tree.trace} related={tree.related} onSelect={onSelect} />} />;
 }
 
 export function TraceView({
@@ -470,18 +452,10 @@ export function TraceView({
   };
   const panel = (
     <div role="tabpanel" className="dt-tabpanel">
-      <RequestPane
-        open={active === "request"}
-        trace={trace}
-        related={related}
-        links={links}
-        panel={compact}
-        onSelect={openAt}
-      />
+      <RequestPane open={active === "request"} trace={trace} related={related} links={links} panel={compact} />
       <AppPane open={active === "app"} app={app} />
       <TreePane
         open={active === "tree"}
-        panel={compact}
         onSelect={openAt}
         trace={trace}
         issueBySpan={issueBySpan}
@@ -628,7 +602,6 @@ export function TraceView({
             {actions ? <div className="flex shrink-0 items-center gap-0.5">{actions}</div> : null}
           </div>
         </header>
-        {compact ? null : <TimeStrip trace={trace} related={related} onSelect={openAt} tab={active} />}
         {tabsBar}
         {panel}
       </article>

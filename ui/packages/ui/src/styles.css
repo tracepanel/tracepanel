@@ -1048,21 +1048,6 @@ tr[data-new] {
 .dt-strip .dt-breakdown-legend {
   margin: 0;
 }
-/* On the trace's page, over the call tree: the strip's legend, on its own. */
-.dt-tree-legend {
-  padding: 0.75rem 1rem;
-}
-.dt-tree-legend .dt-breakdown-legend {
-  margin: 0;
-}
-/* Lanes that only show (beside another tab than the call tree): nothing on them to click or drag. */
-.dt-timeline[data-passive] :is(.dt-lane-track, .dt-timeline-axis, .dt-mark) {
-  cursor: default;
-}
-/* In the panel's Request tab, the strip on the tab's own edges. */
-.dt-panel-overview .dt-strip {
-  padding-inline: 0;
-}
 .dt-timeline-axis {
   position: relative;
   height: 1rem;

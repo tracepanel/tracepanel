@@ -300,10 +300,9 @@ export function Timeline({ trace, onSelect }: { trace: Trace; onSelect?: ((targe
   const drag = useRangeDrag(Math.max(trace.duration, 1), onRange);
   // Its own lane alone is one bar from 0 to its duration, which the header says: no lanes then.
   if (drawn.length === 0) return null;
-  // Without `onSelect` the lanes only show: no click, no drag picks anything (beside another tab than the tree).
-  const picking = { ...(onSelect ? { onRange, onShare, start: drag.start } : PASSIVE), layer };
+  const picking = { onRange, onShare, start: drag.start, layer };
   return (
-    <figure className="dt-timeline" aria-label="Timeline" data-passive={passive(onSelect)}>
+    <figure className="dt-timeline" aria-label="Timeline">
       <LanesBody
         trace={trace}
         drawn={drawn}
@@ -315,40 +314,30 @@ export function Timeline({ trace, onSelect }: { trace: Trace; onSelect?: ((targe
   );
 }
 
-function passive(onSelect: ((target: MarkTarget) => void) | undefined): "" | undefined {
-  return onSelect ? undefined : "";
-}
-
-const PASSIVE = { onRange: () => undefined, onShare: () => undefined, start: () => undefined };
-
-/** A strip says something when the trace called anything, or (with its legend) its time went to several shares. */
-function hasStrip(trace: Trace, legend: boolean): boolean {
-  return lanes(trace).length > 0 || (legend && breakdown(trace).length > 1);
+/** A strip says something when the trace called anything, or its time went to more than one share. */
+function hasStrip(trace: Trace): boolean {
+  return lanes(trace).length > 0 || breakdown(trace).length > 1;
 }
 
 /**
- * Where the trace's time went: its lanes over the time, and, with `legend` (over the call tree, in the panel), the
- * shares of the time and the call tree's filters under them. Its lanes pick a part of the time only over the call
- * tree (`tab`): beside another tab they only show, nothing on them leads away.
+ * Where the trace's time went, over its call tree: its lanes over the time, and under them their legend, the shares
+ * of the time and the call tree's filters. A click on a share's stretch or a mark, or a drag across the lanes, picks
+ * what the tree shows.
  */
 export function TimeStrip({
   trace,
   related,
   onSelect,
-  tab,
-  legend = false,
 }: {
   trace: Trace;
   related: Related | undefined;
   onSelect: (target: MarkTarget) => void;
-  tab: string;
-  legend?: boolean;
 }) {
-  if (!hasStrip(trace, legend)) return null;
+  if (!hasStrip(trace)) return null;
   return (
     <section className="dt-strip" aria-label="Time">
-      <Timeline trace={trace} onSelect={tab === "tree" ? onSelect : undefined} />
-      {legend ? <TimeLegend trace={trace} related={related} /> : null}
+      <Timeline trace={trace} onSelect={onSelect} />
+      <TimeLegend trace={trace} related={related} />
     </section>
   );
 }
