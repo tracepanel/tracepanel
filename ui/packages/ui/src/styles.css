@@ -974,6 +974,16 @@ tr[data-new] {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+/* What the trace called, after how long it took: one quiet line, as the tabs' numbers read. */
+.dt-trace-facts {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dt-text-3);
+  font-size: var(--dt-size-sm);
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .dt-trace-route {
   margin: 0.25rem 0 0 2.875rem;
@@ -1009,60 +1019,7 @@ tr[data-new] {
   white-space: nowrap;
 }
 
-.dt-metrics {
-  display: grid;
-  /* Duration and a tile per system the request called: as many as fit in a row, the rest wrap. */
-  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
-  margin: 0 1rem;
-  border: 1px solid var(--dt-border);
-  border-radius: var(--dt-radius);
-  background: var(--dt-subtle);
-  box-shadow: var(--dt-shadow);
-}
-.dt-metric {
-  display: grid;
-  gap: 2px;
-  padding: 0.625rem 0.75rem;
-}
-.dt-metric + .dt-metric {
-  border-left: 1px solid var(--dt-border);
-}
-.dt-metric-label {
-  color: var(--dt-text-3);
-  font-size: var(--dt-size-xs);
-  font-weight: 500;
-}
-.dt-metric-value {
-  font-size: var(--dt-size-xl);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-:root[data-theme="light"] .dt-metrics {
-  background: var(--dt-card);
-}
-.dt-metric-sub {
-  color: var(--dt-text-2);
-  font-size: var(--dt-size-xs);
-}
-/* On a console page, and in the panel's Request tab under its request's line, the metrics are the same tiles as
-   the summaries of the other pages (Stat): separate cards, larger numbers. */
-:is(.dt-trace[data-variant="full"], .dt-panel-overview) .dt-metrics {
-  gap: 0.625rem;
-  border: 0;
-  background: none;
-  /* The strip's shadow, with no strip: it would show under the cards and through the gaps between them. */
-  box-shadow: none;
-}
-:is(.dt-trace[data-variant="full"], .dt-panel-overview) .dt-metric {
-  align-content: start;
-  gap: 0.25rem;
-  padding: 0.75rem 1rem;
-  border: 1px solid var(--dt-border);
-  /* Stat's corners (rounded-xl). */
-  border-radius: calc(var(--radius) + 4px);
-  background: var(--dt-card);
-}
-/* The tabs in the page's column, as wide as the tiles above them: their rule ends where the content does, and the
+/* The tabs in the page's column, as wide as the strip above them: their rule ends where the content does, and the
    first tab starts at its edge. */
 .dt-trace[data-variant="full"] .dt-tabs {
   margin-right: 1rem;
@@ -1076,55 +1033,29 @@ tr[data-new] {
 .dt-trace[data-variant="full"] .dt-tab:first-child {
   padding-left: 0;
 }
-:is(.dt-trace[data-variant="full"], .dt-panel-overview) .dt-metric-label {
-  color: var(--dt-text-2);
-  font-size: var(--dt-size-sm);
-}
-:is(.dt-trace[data-variant="full"], .dt-panel-overview) .dt-metric-value {
-  /* Stat's number: the same size and spacing as the other pages' tiles. */
-  font-size: var(--dt-size-2xl);
-  line-height: 1.15;
-  letter-spacing: -0.02em;
-}
-:is(.dt-trace[data-variant="full"], .dt-panel-overview) .dt-metric-sub {
-  font-size: var(--dt-size-sm);
-}
-.dt-split {
-  display: block;
-  height: 0.25rem;
-  margin-top: 0.25rem;
-  overflow: hidden;
-  border-radius: 2px;
-  background: var(--dt-border-strong);
-}
-.dt-split-db {
-  display: block;
-  height: 100%;
-  background: var(--dt-db);
-}
 
+/* ---------- the time strip: lanes over the time, their legend under them ---------- */
+
+.dt-strip {
+  --dt-lane-label: 7.5rem;
+  display: grid;
+  gap: 0.625rem;
+  padding: 0.75rem 1rem 0.875rem;
+}
 .dt-timeline {
   margin: 0;
-  padding: 0.875rem 1rem 0.375rem;
 }
-/* In the panel's Request tab, the tiles and lanes on the tab's own edges. */
-.dt-panel-overview {
-  display: grid;
-}
-/* A trace with no tiles and no lanes (it called nothing): no gap where they would be. */
-.dt-panel-overview:empty {
-  display: none;
-}
-.dt-panel-overview .dt-metrics {
+.dt-strip .dt-breakdown-legend {
   margin: 0;
 }
-.dt-panel-overview .dt-timeline {
+/* In the panel's Request tab, the strip on the tab's own edges. */
+.dt-panel-overview .dt-strip {
   padding-inline: 0;
 }
 .dt-timeline-axis {
   position: relative;
   height: 1rem;
-  margin-left: 4.5rem;
+  margin-left: var(--dt-lane-label);
   color: var(--dt-text-3);
   font-size: var(--dt-size-xs);
   font-variant-numeric: tabular-nums;
@@ -1134,7 +1065,18 @@ tr[data-new] {
   transform: translateX(-50%);
   white-space: nowrap;
 }
-.dt-timeline-axis span:first-child {
+/* What the axis is: time, from the trace's start, in the label column before it. */
+.dt-timeline-axis .dt-timeline-unit {
+  right: 100%;
+  left: auto;
+  transform: none;
+  padding-right: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.625rem;
+  line-height: 1rem;
+}
+.dt-timeline-axis .dt-timeline-unit + span {
   transform: none;
 }
 .dt-timeline-axis span:last-child {
@@ -1142,18 +1084,89 @@ tr[data-new] {
 }
 .dt-lane {
   display: grid;
-  grid-template-columns: 4.5rem minmax(0, 1fr);
+  grid-template-columns: var(--dt-lane-label) minmax(0, 1fr);
   align-items: center;
   height: 1.375rem;
 }
 .dt-lane-label {
   display: flex;
   gap: 0.25rem;
+  overflow: hidden;
+  white-space: nowrap;
   color: var(--dt-text-2);
   font-size: var(--dt-size-xs);
 }
 .dt-lane-count {
-  color: var(--dt-text-3);
+  color: var(--dt-text);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+/* The trace's own lane: its time moment by moment, in the legend's colours; taller, its quiet stretches said. */
+.dt-lane[data-own] {
+  height: 1.75rem;
+}
+.dt-lane[data-own] .dt-lane-label {
+  color: var(--dt-text);
+  font-weight: 500;
+}
+.dt-time-track {
+  height: 1.125rem;
+  border-radius: 0.25rem;
+  cursor: crosshair;
+}
+.dt-stretch {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  min-width: 1px;
+  background: var(--dt-k);
+  transition: opacity 120ms;
+}
+.dt-stretch:first-child {
+  border-radius: 0.25rem 0 0 0.25rem;
+}
+.dt-stretch[data-faded] {
+  opacity: 0.25;
+}
+/* Its code on its own, nothing it called recorded: the share's colour hatched, how long said when it fits. */
+.dt-quiet {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  container-type: inline-size;
+  overflow: hidden;
+  background-color: var(--dt-bg);
+  background-image: repeating-linear-gradient(
+    -45deg,
+    color-mix(in srgb, var(--dt-k) 55%, transparent) 0 2px,
+    transparent 2px 6px
+  );
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dt-k) 45%, transparent);
+}
+.dt-quiet-label {
+  padding: 0 0.375rem;
+  border-radius: 0.1875rem;
+  background: var(--dt-bg);
+  color: var(--dt-text-2);
+  font-size: 0.6875rem;
+  line-height: 0.875rem;
+  white-space: nowrap;
+  pointer-events: none;
+}
+@container (max-width: 10rem) {
+  .dt-quiet-label {
+    display: none;
+  }
+}
+.dt-lane-tip {
+  position: absolute;
+  bottom: calc(100% + 0.5rem);
+  z-index: 20;
+  transform: translateX(-50%);
+  pointer-events: none;
 }
 .dt-lane-track {
   position: relative;
@@ -1221,7 +1234,7 @@ tr[data-new] {
 /* Over the tracks' column, axis to last lane: where the range is drawn. */
 .dt-timeline-layer {
   position: absolute;
-  inset: 0 0 0 4.5rem;
+  inset: 0 0 0 var(--dt-lane-label);
   pointer-events: none;
 }
 .dt-range {
@@ -1815,40 +1828,6 @@ details[data-focused] > .dt-sql-group {
 
 /* ---------- Call tree ---------- */
 
-.dt-breakdown {
-  padding: 0.875rem 1rem 0.625rem;
-}
-.dt-breakdown-bar {
-  display: flex;
-  height: 0.625rem;
-  overflow: hidden;
-  border-radius: 0.3125rem;
-  background: var(--dt-muted-bg);
-}
-/* Each share a button: its numbers on hover, its rows on a click. */
-.dt-breakdown-bar button {
-  height: 100%;
-  min-width: 2px;
-  padding: 0;
-  border: 0;
-  background: var(--dt-k);
-  cursor: pointer;
-  transition: opacity 120ms;
-}
-.dt-breakdown-bar button + button {
-  box-shadow: inset 1px 0 var(--dt-bg);
-}
-.dt-breakdown-bar button:hover {
-  filter: brightness(1.12);
-}
-/* With a share picked, the others step back. */
-.dt-breakdown-bar button[data-faded] {
-  opacity: 0.3;
-}
-.dt-breakdown-bar button:focus-visible {
-  outline: none;
-  filter: brightness(1.25);
-}
 [data-category="django"] {
   --dt-k: var(--dt-k-django);
 }
@@ -2167,6 +2146,10 @@ details[data-focused] > .dt-sql-group {
   flex: none;
   font-family: var(--dt-font);
 }
+/* A row's note in words (a transaction's open time and SQL): the text's font, giving way as the others do. */
+.dt-map-sub[data-note] {
+  font-family: var(--dt-font);
+}
 .dt-map-sub[data-error] {
   flex-shrink: 2;
   min-width: 3rem;
@@ -2189,6 +2172,24 @@ details[data-focused] > .dt-sql-group {
   min-width: 2px;
   border-radius: 2px;
   background: var(--dt-k);
+}
+/* The code's own time, no recorded calls: where, hatched in its row's grey; the row not a call, not clickable. */
+.dt-map-bar[data-quiet] {
+  background-color: transparent;
+  background-image: repeating-linear-gradient(
+    -45deg,
+    color-mix(in srgb, var(--dt-text-3) 55%, transparent) 0 2px,
+    transparent 2px 5px
+  );
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dt-text-3) 35%, transparent);
+}
+.dt-map-row[data-kind="quiet"] {
+  color: var(--dt-text-3);
+  font-style: italic;
+  cursor: default;
+}
+.dt-map-row[data-kind="quiet"]:hover {
+  background: none;
 }
 .dt-map-bar[data-point],
 .dt-map-bar[data-tick] {

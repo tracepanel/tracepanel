@@ -1,10 +1,14 @@
 import { type CSSProperties, type MouseEvent, type PointerEvent, type RefObject, useRef } from "react";
+import { partOfCategory } from "./CallMap";
 import { duration } from "./format";
 import { keyed } from "./keys";
-import { overlaps, type TimeRange } from "./lib/slice";
+import { breakdown, type Category } from "./lib/breakdown";
+import { overlaps, type Slice, type TimeRange, togglePart } from "./lib/slice";
 import { DATASTORES, MESSAGING, RPC } from "./lib/systems";
+import { TimeLane } from "./TimeLane";
+import { TimeLegend } from "./TimeLegend";
 import { RangeBand, useHeldSlice, useRangeDrag } from "./TimeSlice";
-import type { Trace } from "./types";
+import type { Related, Span, Trace } from "./types";
 
 /** Where a mark leads: the span in the call tree (or the tree itself), the logs, the error. */
 export type MarkTarget = { tab: "tree"; span?: string } | { tab: "logs" } | { tab: "error" };
@@ -19,59 +23,83 @@ interface Mark {
 }
 
 interface Lane {
-  label: string;
+  noun: Noun;
   marks: Mark[];
 }
 
-function lanes(trace: Trace): Lane[] {
+/** What a lane's marks are, one and many: "1 query", "139 queries". */
+type Noun = readonly [string, string];
+
+/** A lane of calls: what they are called, and their kinds. */
+const CALL_LANES: readonly { noun: Noun; kinds: readonly string[] }[] = [
+  { noun: ["query", "queries"], kinds: ["sql"] },
+  { noun: ["Redis command", "Redis commands"], kinds: ["redis"] },
+  { noun: ["cache call", "cache calls"], kinds: ["cache"] },
+  { noun: ["datastore call", "datastore calls"], kinds: DATASTORES },
+  { noun: ["message", "messages"], kinds: MESSAGING },
+  { noun: ["HTTP call", "HTTP calls"], kinds: ["http.client"] },
+  { noun: ["RPC call", "RPC calls"], kinds: RPC },
+];
+
+/** A span's tone on its lane: red when it failed (the trace's own too when the trace did), amber with an issue. */
+function toneOf(span: Span, trace: Trace, flagged: ReadonlySet<string>): Mark["tone"] {
+  if (failed(span, trace)) return "error";
+  return flagged.has(span.id) ? "warn" : "neutral";
+}
+
+function failed(span: Span, trace: Trace): boolean {
+  return span.status === "error" || (span.parent_id === null && trace.status === "error");
+}
+
+function callLanes(trace: Trace): Lane[] {
   const flagged = new Set(trace.issues.flatMap((issue) => issue.span_ids));
-  // A failed span is red; so is the trace's own when the trace failed (its error is an issue on it, not amber).
-  const failed = (span: Trace["spans"][number]) =>
-    span.status === "error" || (span.parent_id === null && trace.status === "error");
-  const spans = (...kinds: readonly string[]): Mark[] =>
-    trace.spans
+  return CALL_LANES.map(({ noun, kinds }) => ({
+    noun,
+    marks: trace.spans
       .filter((span) => kinds.includes(span.kind))
       .map((span) => ({
         key: span.id,
         start: span.start,
         duration: span.duration,
         label: `${span.name} · ${duration(span.duration)}`,
-        tone: failed(span) ? "error" : flagged.has(span.id) ? "warn" : "neutral",
-        target: { tab: "tree", span: span.id },
-      }));
-  const result: Lane[] = [
-    { label: LANE_WORDS[trace.kind] ?? trace.kind, marks: spans(trace.kind) },
-    { label: "sql", marks: spans("sql") },
-    { label: "redis", marks: spans("redis") },
-    { label: "cache", marks: spans("cache") },
-    { label: "datastores", marks: spans(...DATASTORES) },
-    { label: "messaging", marks: spans(...MESSAGING) },
-    { label: "http", marks: spans("http.client") },
-    { label: "rpc", marks: spans(...RPC) },
-    {
-      label: "logs",
-      marks: keyed(trace.logs, (log) => `log:${log.time}:${log.message}`).map(({ key, item: log }) => ({
-        key,
-        start: log.time,
-        duration: 0,
-        label: `${log.level}: ${log.message}`,
-        tone: log.level === "error" || log.level === "critical" ? "error" : log.level === "warning" ? "warn" : "info",
-        target: { tab: "logs" },
+        tone: toneOf(span, trace, flagged),
+        target: { tab: "tree", span: span.id } as const,
       })),
-    },
-    {
-      label: "errors",
-      marks: keyed(trace.errors, (error) => `error:${error.time}:${error.type}`).map(({ key, item: error }) => ({
-        key,
-        start: error.time,
-        duration: 0,
-        label: `${error.type}: ${error.message}`,
-        tone: "error",
-        target: { tab: "error" },
-      })),
-    },
+  }));
+}
+
+function logTone(level: string): Mark["tone"] {
+  if (level === "error" || level === "critical") return "error";
+  return level === "warning" ? "warn" : "info";
+}
+
+/** The lanes of what happened at a point: log records, errors. */
+function pointLanes(trace: Trace): Lane[] {
+  const logs = keyed(trace.logs, (log) => `log:${log.time}:${log.message}`).map(({ key, item: log }) => ({
+    key,
+    start: log.time,
+    duration: 0,
+    label: `${log.level}: ${log.message}`,
+    tone: logTone(log.level),
+    target: { tab: "logs" } as const,
+  }));
+  const errors = keyed(trace.errors, (error) => `error:${error.time}:${error.type}`).map(({ key, item: error }) => ({
+    key,
+    start: error.time,
+    duration: 0,
+    label: `${error.type}: ${error.message}`,
+    tone: "error" as const,
+    target: { tab: "error" } as const,
+  }));
+  return [
+    { noun: ["log record", "log records"], marks: logs },
+    { noun: ["error", "errors"], marks: errors },
   ];
-  return result.filter((lane) => lane.marks.length > 0);
+}
+
+/** The lanes under the trace's own: its calls, system by system, then its logs and errors; only those it has. */
+function lanes(trace: Trace): Lane[] {
+  return [...callLanes(trace), ...pointLanes(trace)].filter((lane) => lane.marks.length > 0);
 }
 
 const TICKS = [0, 0.25, 0.5, 0.75, 1];
@@ -115,8 +143,8 @@ function LaneRow({
   return (
     <div className="dt-lane">
       <span className="dt-lane-label">
-        {lane.label}
-        <span className="dt-lane-count">{lane.marks.length}</span>
+        <span className="dt-lane-count">{lane.marks.length}</span>{" "}
+        {lane.marks.length === 1 ? lane.noun[0] : lane.noun[1]}
       </span>
       <div className="dt-lane-track">
         {TICKS.slice(1, -1).map((tick) => (
@@ -144,6 +172,8 @@ function LaneRow({
 /** What picks a stretch of the time on the lanes: the drag, and where the range goes. */
 interface Picking {
   onRange: (range: TimeRange | null) => void;
+  /** A share's stretch clicked: its rows picked, or let go. */
+  onShare: (category: string) => void;
   start: (event: PointerEvent<HTMLDivElement>, track: Element) => void;
   layer: RefObject<HTMLDivElement | null>;
 }
@@ -154,25 +184,29 @@ function pressOnLanes(event: PointerEvent<HTMLDivElement>, picking: Picking): vo
   if (onTrack && picking.layer.current) picking.start(event, picking.layer.current);
 }
 
-/** A click on a lane beside its marks: the range goes. */
+/** A click on a share's stretch picks its rows; on a lane beside its marks, the range goes. */
 function clickOnLanes(event: MouseEvent<HTMLDivElement>, picking: Picking): void {
-  if ((event.target as Element).classList.contains("dt-lane-track")) picking.onRange(null);
+  const target = event.target as Element;
+  const share = target.closest<HTMLElement>(".dt-time-track [data-category]");
+  if (share) picking.onShare(share.dataset["category"] ?? "");
+  else if (target.classList.contains("dt-lane-track")) picking.onRange(null);
 }
 
 /** The axis and the lanes, and over them the range picked (or being picked). */
 function LanesBody({
   trace,
   drawn,
-  range,
+  slice,
   picking,
   onSelect,
 }: {
   trace: Trace;
   drawn: Lane[];
-  range: TimeRange | null;
+  slice: Slice;
   picking: Picking;
   onSelect: ((target: MarkTarget) => void) | undefined;
 }) {
+  const range = slice.range;
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: a drag over the marks, which are buttons of their own.
     // biome-ignore lint/a11y/useKeyWithClickEvents: from the keyboard, Esc lets the range go (useSlice).
@@ -183,14 +217,16 @@ function LanesBody({
       onDoubleClick={() => picking.onRange(null)}
     >
       <div className="dt-timeline-axis" aria-hidden="true">
+        <span className="dt-timeline-unit">time</span>
         {TICKS.map((tick) => (
           <span key={tick} style={{ left: `${tick * 100}%` }}>
             {tick === 0 ? "0" : duration(trace.duration * tick)}
           </span>
         ))}
       </div>
+      <TimeLane trace={trace} word={LANE_WORDS[trace.kind] ?? trace.kind} parts={slice.parts} />
       {drawn.map((lane) => (
-        <LaneRow key={lane.label} lane={lane} trace={trace} range={range} onSelect={onSelect} />
+        <LaneRow key={lane.noun[1]} lane={lane} trace={trace} range={range} onSelect={onSelect} />
       ))}
       <div className="dt-timeline-layer" ref={picking.layer}>
         {range ? <RangeBand range={range} total={Math.max(trace.duration, 1)} /> : null}
@@ -199,38 +235,75 @@ function LanesBody({
   );
 }
 
-/** The range of the trace's view around; one picked on the lanes is the call tree's to show, which opens with it. */
-function useLanesRange(onSelect: ((target: MarkTarget) => void) | undefined) {
+/**
+ * The slice of the trace's view around, as the lanes change it: a range dragged, a share's stretch clicked. What
+ * they pick is the call tree's to show, which opens with it.
+ */
+function useLanesSlice(onSelect: ((target: MarkTarget) => void) | undefined) {
   const { slice, change } = useHeldSlice();
-  const onRange = (range: TimeRange | null) => {
-    change({ ...slice, range });
-    if (range) onSelect?.({ tab: "tree" });
+  const pick = (next: Slice, more: boolean) => {
+    change(next);
+    if (more) onSelect?.({ tab: "tree" });
   };
-  return { range: slice.range, onRange };
+  return {
+    slice,
+    onRange: (range: TimeRange | null) => pick({ ...slice, range }, range !== null),
+    onShare: (category: string) => {
+      const next = togglePart(slice, partOfCategory(category as Category));
+      pick(next, next.parts.length > slice.parts.length);
+    },
+  };
 }
 
 /**
- * The trace's lanes over its time; a mark (an N+1 burst in amber, an error in red) opens what it is. A drag across
- * the lanes picks a stretch of the time (`onRange`); a click beside the marks, or a double click, lets it go.
+ * The trace's time: its own lane in its shares' colours, then a lane per system it called and its logs and errors,
+ * a mark each (an N+1 burst in amber, an error in red) that opens what it is. A drag across the lanes picks a
+ * stretch of the time; a click beside the marks, or a double click, lets it go. With nothing but its own lane (it
+ * called nothing), no lanes: the header says how long it took.
  */
-export function Timeline({ trace, onSelect }: { trace: Trace; onSelect?: (target: MarkTarget) => void }) {
+export function Timeline({ trace, onSelect }: { trace: Trace; onSelect?: ((target: MarkTarget) => void) | undefined }) {
   const drawn = lanes(trace);
   const layer = useRef<HTMLDivElement>(null);
-  const { range, onRange } = useLanesRange(onSelect);
+  const { slice, onRange, onShare } = useLanesSlice(onSelect);
   const drag = useRangeDrag(Math.max(trace.duration, 1), onRange);
-  // The trace's own lane alone is one bar from 0 to its duration, which its header says: no lanes then. With others
-  // it stays, their reference.
-  if (drawn.length < 2) return null;
-  const shown = drag.draft ?? range;
+  if (drawn.length === 0) return null;
   return (
     <figure className="dt-timeline" aria-label="Timeline">
       <LanesBody
         trace={trace}
         drawn={drawn}
-        range={shown}
-        picking={{ onRange, start: drag.start, layer }}
+        slice={{ ...slice, range: drag.draft ?? slice.range }}
+        picking={{ onRange, onShare, start: drag.start, layer }}
         onSelect={onSelect}
       />
     </figure>
+  );
+}
+
+/** A strip says something when the trace called anything, or its time went to more than one share. */
+function hasStrip(trace: Trace): boolean {
+  return lanes(trace).length > 0 || breakdown(trace).length > 1;
+}
+
+/**
+ * Where the trace's time went, in one place: its lanes over the time, and under them their legend, the shares of
+ * the time and the call tree's filters. Above the tabs on the trace's page; in the panel, on its Request and Call
+ * tree tabs.
+ */
+export function TimeStrip({
+  trace,
+  related,
+  onSelect,
+}: {
+  trace: Trace;
+  related: Related | undefined;
+  onSelect?: ((target: MarkTarget) => void) | undefined;
+}) {
+  if (!hasStrip(trace)) return null;
+  return (
+    <section className="dt-strip" aria-label="Time">
+      <Timeline trace={trace} onSelect={onSelect} />
+      <TimeLegend trace={trace} related={related} onPick={() => onSelect?.({ tab: "tree" })} />
+    </section>
   );
 }

@@ -31,6 +31,7 @@ import {
 } from "./components/ui/dropdown-menu";
 import { ErrorView } from "./ErrorView";
 import { duration } from "./format";
+import { HeadFacts } from "./HeadFacts";
 import { useMenuOpen } from "./hooks/useCloseOnBlur";
 import { IssueList } from "./IssueList";
 import { LogList } from "./LogList";
@@ -39,14 +40,13 @@ import { isTyping } from "./lib/keys";
 import { pageParts } from "./lib/page";
 import type { Slice } from "./lib/slice";
 import { linkProps, type TraceLinks } from "./links";
-import { Metrics } from "./Metrics";
 import { ProfilePane } from "./ProfileView";
 import { RoutePath, StateBadge, StatusBadge, TaskName, TraceBadge } from "./primitives";
 import { RequestInfo } from "./RequestInfo";
 import { type Explain, SqlList } from "./SqlList";
 import { type SystemCalls, systemCalls, systemOfIssue } from "./systemCalls";
 import { Tabs } from "./Tabs";
-import { type MarkTarget, Timeline } from "./Timeline";
+import { type MarkTarget, TimeStrip } from "./Timeline";
 import { SliceScope } from "./TimeSlice";
 import type { App, Issue, IssueKind, Related, Trace } from "./types";
 
@@ -386,24 +386,25 @@ function RequestPane({
   onSelect: (target: MarkTarget) => void;
 }) {
   if (!open) return null;
-  // The panel shows the lanes, not the tiles: its tabs already carry the duration and the queries, and big tiles
-  // took the narrow pane's room.
+  // The panel's Request tab has the time strip the page has above its tabs: the panel shows what the page shows.
   const overview = panel ? (
     <div className="dt-panel-overview">
-      <Timeline trace={trace} onSelect={onSelect} />
+      <TimeStrip trace={trace} related={related} onSelect={onSelect} />
     </div>
   ) : null;
   return <RequestInfo trace={trace} related={related} links={links} hero={panel} overview={overview} />;
 }
 
-/** A trace at a glance above its tabs (the page) or under its request's line (the panel): its tiles and lanes. */
-function overviewOf(trace: Trace, onSelect: (target: MarkTarget) => void) {
-  return (
-    <>
-      <Metrics trace={trace} />
-      <Timeline trace={trace} onSelect={onSelect} />
-    </>
-  );
+/** The Call tree tab; in the panel with the time strip over it, the page having it above its tabs. */
+function TreePane({
+  open,
+  panel,
+  onSelect,
+  ...tree
+}: ComponentProps<typeof CallMap> & { open: boolean; panel: boolean; onSelect: (target: MarkTarget) => void }) {
+  if (!open) return null;
+  const head = panel ? <TimeStrip trace={tree.trace} related={tree.related} onSelect={onSelect} /> : null;
+  return <CallMap {...tree} head={head} />;
 }
 
 export function TraceView({
@@ -470,9 +471,16 @@ export function TraceView({
         onSelect={openAt}
       />
       <AppPane open={active === "app"} app={app} />
-      {active === "tree" ? (
-        <CallMap trace={trace} issueBySpan={issueBySpan} related={related} links={links} initialSpan={treeSpan} />
-      ) : null}
+      <TreePane
+        open={active === "tree"}
+        panel={compact}
+        onSelect={openAt}
+        trace={trace}
+        issueBySpan={issueBySpan}
+        related={related}
+        links={links}
+        initialSpan={treeSpan}
+      />
       {active === "issues" ? (
         <IssueList
           issues={findings}
@@ -600,6 +608,7 @@ export function TraceView({
                 </h2>
                 <StatusBadge status={typeof status === "number" ? status : null} />
                 <span className="dt-trace-time">{duration(trace.duration)}</span>
+                <HeadFacts trace={trace} />
               </div>
               {compact ? null : typeof route === "string" && route !== path ? (
                 <p className="dt-trace-route">
@@ -611,7 +620,7 @@ export function TraceView({
             {actions ? <div className="flex shrink-0 items-center gap-0.5">{actions}</div> : null}
           </div>
         </header>
-        {compact ? null : overviewOf(trace, openAt)}
+        {compact ? null : <TimeStrip trace={trace} related={related} onSelect={openAt} />}
         {tabsBar}
         {panel}
       </article>

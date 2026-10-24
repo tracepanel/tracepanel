@@ -24,7 +24,6 @@ export { type RuntimeKind, runtimeKind, runtimeName } from "./lib/runtime";
 export { parseSlice, type Slice, sliceParams } from "./lib/slice";
 export { linkProps, type TraceLinks, traceLinkProps } from "./links";
 export { MailList } from "./MailList";
-export { Metrics } from "./Metrics";
 export { type NameValue, NameValues } from "./NameValues";
 export * from "./PropTable";
 export {

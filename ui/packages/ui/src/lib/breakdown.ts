@@ -112,42 +112,106 @@ export function spanCategories(trace: Trace): Map<string, Category> {
   );
 }
 
-/**
- * Where the wall-clock time went, per category. Each moment of the trace counts once, for the deepest span
- * running then: concurrent spans (async resolvers, asyncio.gather) can't add up to more than the trace took.
- */
-export function breakdown(trace: Trace): [Category, number][] {
-  const byId = new Map(trace.spans.map((span) => [span.id, span]));
-  const owner = ownerFinder(byId);
+/** How deep a span is in its trace: its root is 0. Remembered, a trace's spans are walked once. */
+function depthFinder(byId: ReadonlyMap<string, Span>): (span: Span) => number {
   const depths = new Map<string, number>();
   const depth = (span: Span): number => {
     const known = depths.get(span.id);
     if (known !== undefined) return known;
-    const parent = span.parent_id ? byId.get(span.parent_id) : undefined;
+    const parent = parentOf(span, byId);
     const value = parent ? depth(parent) + 1 : 0;
     depths.set(span.id, value);
     return value;
   };
+  return depth;
+}
+
+/** Whether `span` runs inside `best` rather than beside it: deeper, or as deep and started later. */
+function deeper(span: Span, best: Span | undefined, depth: (span: Span) => number): boolean {
+  if (!best) return true;
+  return depth(span) > depth(best) || (depth(span) === depth(best) && span.start > best.start);
+}
+
+function covers(span: Span, from: number, to: number): boolean {
+  return span.start <= from && span.start + span.duration >= to;
+}
+
+/** The deepest span running all the way from `from` to `to`. */
+function innermostAt(spans: readonly Span[], from: number, to: number, depth: (span: Span) => number) {
+  let innermost: Span | undefined;
+  for (const span of spans) {
+    if (covers(span, from, to) && deeper(span, innermost, depth)) innermost = span;
+  }
+  return innermost;
+}
+
+/**
+ * A stretch of the trace's time, in microseconds since it started: the category it went to, and whether it was
+ * quiet: spent in a span that made calls, but none then (its own code, between or after them).
+ */
+export interface Stretch {
+  from: number;
+  to: number;
+  category: Category;
+  quiet: boolean;
+}
+
+/** A stretch after the last: the same as it, it makes it longer. */
+function extend(list: Stretch[], next: Stretch): void {
+  const last = list.at(-1);
+  if (last && continues(last, next)) last.to = next.to;
+  else list.push(next);
+}
+
+function continues(last: Stretch, next: Stretch): boolean {
+  return last.to === next.from && last.category === next.category && last.quiet === next.quiet;
+}
+
+/**
+ * Where the wall-clock time went, moment by moment. Each moment of the trace counts once, for the deepest span
+ * running then: concurrent spans (async resolvers, asyncio.gather) can't add up to more than the trace took.
+ */
+export function stretches(trace: Trace): Stretch[] {
+  const byId = new Map(trace.spans.map((span) => [span.id, span]));
+  const owner = ownerFinder(byId);
+  const depth = depthFinder(byId);
+  const callers = new Set(trace.spans.map((span) => span.parent_id));
   const spans = trace.spans.filter((span) => span.duration > 0);
   const edges = [...new Set(spans.flatMap((span) => [span.start, span.start + span.duration]))].sort((a, b) => a - b);
-  const totals = new Map<Category, number>();
-  for (let index = 0; index + 1 < edges.length; index++) {
-    const from = edges[index] ?? 0;
-    const to = edges[index + 1] ?? from;
-    let innermost: Span | undefined;
-    for (const span of spans) {
-      if (span.start > from || span.start + span.duration < to) continue;
-      if (
-        !innermost ||
-        depth(span) > depth(innermost) ||
-        (depth(span) === depth(innermost) && span.start > innermost.start)
-      ) {
-        innermost = span;
-      }
-    }
+  // What ran from one edge to the next: the deepest span's category, and whether it was quiet.
+  const at = (from: number, to: number): Stretch | null => {
+    const innermost = innermostAt(spans, from, to, depth);
     const category = innermost ? owner(innermost) : null;
-    if (category) totals.set(category, (totals.get(category) ?? 0) + (to - from));
+    if (!(innermost && category)) return null;
+    return { from: from - trace.start, to: to - trace.start, category, quiet: callers.has(innermost.id) };
+  };
+  const list: Stretch[] = [];
+  edges.slice(1).forEach((to, index) => {
+    const next = at(edges[index] ?? to, to);
+    if (next) extend(list, next);
+  });
+  return list;
+}
+
+/** A quiet stretch long enough to say: at least 5 ms, and a tenth of the trace. */
+const QUIET_MIN_US = 5_000;
+const QUIET_MIN_SHARE = 0.1;
+
+/** The quiet stretches worth marking: long ones, in a row of quiet ones taken as one. */
+export function quietStretches(list: readonly Stretch[], total: number): Stretch[] {
+  const runs: Stretch[] = [];
+  for (const each of list.filter((stretch) => stretch.quiet)) {
+    const last = runs.at(-1);
+    if (last?.to === each.from) last.to = each.to;
+    else runs.push({ ...each });
   }
+  return runs.filter((run) => run.to - run.from >= Math.max(QUIET_MIN_US, total * QUIET_MIN_SHARE));
+}
+
+/** Where the wall-clock time went, per category: the stretches added up. */
+export function breakdown(trace: Trace): [Category, number][] {
+  const totals = new Map<Category, number>();
+  for (const { from, to, category } of stretches(trace)) totals.set(category, (totals.get(category) ?? 0) + to - from);
   return (Object.keys(CATEGORY_LABELS) as Category[])
     .map((category): [Category, number] => [category, totals.get(category) ?? 0])
     .filter(([, value]) => value > 0);

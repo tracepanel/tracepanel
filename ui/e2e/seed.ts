@@ -367,6 +367,65 @@ function salesReport(): Doc[] {
   return [request, task];
 }
 
+export const HELD_REPORT = "shop.tasks.reconcile_stock";
+
+/**
+ * A task that holds a transaction while its code works: its queries in the first 250 ms, then 1.3 s of its own
+ * code with nothing recorded, then a log record as it ends.
+ */
+function heldTransaction(): Doc {
+  const doc = run(HELD_REPORT, { "task.system": "celery", "task.id": "reconcile-stock" });
+  const id = String(doc["id"]);
+  const root = (doc["spans"] as Doc[])[0] as Doc;
+  root["duration"] = 1_600_000;
+  doc["duration"] = 1_600_000;
+  const sql = (index: number, table: string, start: number, duration: number): Doc => ({
+    id: `${id}Q${index}`,
+    parent_id: `${id}T`,
+    kind: "sql",
+    name: `SELECT ${table}`,
+    start,
+    duration,
+    status: "ok",
+    attrs: {
+      "db.statement": `SELECT * FROM "${table}" WHERE "id" = %s`,
+      "db.fingerprint": `select-${table}`,
+      "db.vendor": "sqlite",
+      "db.alias": "default",
+    },
+  });
+  const items = Array.from({ length: 39 }, (_, index) => sql(index + 1, "order_item", 12_000 + index * 2_400, 180));
+  const products = Array.from({ length: 99 }, (_, index) => sql(index + 40, "product", 110_000 + index * 1_400, 190));
+  (doc["spans"] as Doc[]).push(
+    {
+      id: `${id}T`,
+      parent_id: root["id"],
+      kind: "transaction",
+      name: "transaction default",
+      start: 2_000,
+      duration: 1_590_000,
+      status: "ok",
+      attrs: { "db.alias": "default" },
+    },
+    sql(0, "order", 5_000, 3_000),
+    ...items,
+    ...products,
+  );
+  doc["logs"] = [
+    {
+      // biome-ignore lint/style/useNamingConvention: a log record as the SDKs send it.
+      span_id: root["id"],
+      time: 1_598_000,
+      level: "info",
+      logger: "shop.tasks",
+      message: "stock reconciled: 29 products",
+      exception: null,
+      attrs: {},
+    },
+  ];
+  return doc;
+}
+
 // A consumer's handlers: long names alike but for their ends, which is what tells them apart.
 export const CONSUMER = "chat.workers.media.consumers.ThumbnailConsumer";
 export const HANDLERS = ["thumbnails_regenerate", "thumbnails_purge", "thumbnails_notify"].map(
@@ -1002,6 +1061,7 @@ export default async function seed(): Promise<void> {
     ...chord(),
     ...dependencies(),
     ...salesReport(),
+    heldTransaction(),
     ...limits(),
     everyTab(),
   ];

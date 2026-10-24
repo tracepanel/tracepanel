@@ -236,5 +236,5 @@ test("a trace with nothing but its own lane has no lanes; one with calls keeps i
   const lanes = page.getByRole("figure", { name: "Timeline" });
 
   await expect(lanes).toContainText("request");
-  await expect(lanes).toContainText("sql");
+  await expect(lanes).toContainText(/\d+ queries/);
 });

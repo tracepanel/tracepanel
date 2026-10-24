@@ -1,6 +1,5 @@
 import {
   type CSSProperties,
-  type FocusEvent,
   type KeyboardEvent,
   type ReactNode,
   type RefObject,
@@ -9,21 +8,19 @@ import {
   useRef,
   useState,
 } from "react";
-import { Tooltip, TooltipContent, TooltipTrigger } from "./components/ui/tooltip";
 import { duration, since } from "./format";
 import { GraphqlCode } from "./GraphqlCode";
 import { ChevronRightIcon, CloseIcon } from "./icons";
 import { keyed } from "./keys";
 import { AllAttributes, LogRecordDetails } from "./LogRecordDetails";
-import { breakdown, type Category, categoryLabel, spanCategories } from "./lib/breakdown";
+import { type Category, spanCategories } from "./lib/breakdown";
 import { callFields } from "./lib/callFields";
 import { callTemplate, groupNoun } from "./lib/calls";
 import { spanKindLabel } from "./lib/handler";
-import { percent, widthOf } from "./lib/percent";
-import { plural } from "./lib/plural";
+import { widthOf } from "./lib/percent";
 import { traceRuntime } from "./lib/runtime";
 import { isReceiver, raised } from "./lib/signals";
-import { isWhole, overlaps, rangeLabel, type Slice, type TimeRange, togglePart, WHOLE } from "./lib/slice";
+import { overlaps, type Slice, type TimeRange } from "./lib/slice";
 import { CALL_KINDS, DATASTORES, MESSAGING, RPC } from "./lib/systems";
 import { type TraceLinks, traceLinkProps } from "./links";
 import { type NameValue, NameValues, RowsLookContext } from "./NameValues";
@@ -199,7 +196,7 @@ function parentFinder(trace: Trace): (span: Span) => string | null {
   return (span) => (span.parent_id === null || ids.has(span.parent_id) ? span.parent_id : root);
 }
 
-function buildTree(trace: Trace, related: Related | undefined): Node[] {
+export function buildTree(trace: Trace, related: Related | undefined): Node[] {
   const children = new Map<string | null, Node[]>();
   const push = (parent: string | null, node: Node) => children.set(parent, [...(children.get(parent) ?? []), node]);
   const parentOf = parentFinder(trace);
@@ -223,7 +220,7 @@ function buildTree(trace: Trace, related: Related | undefined): Node[] {
 /* ---------- filters ---------- */
 
 /** What the filter chips above the tree pick, in their order; a chip shows only when the trace has such rows. */
-const FILTERS = [
+export const FILTERS = [
   { id: "sql", label: "SQL", kinds: ["sql"] },
   { id: "redis", label: "Redis", kinds: ["redis"] },
   { id: "cache", label: "Cache", kinds: ["cache"] },
@@ -243,7 +240,7 @@ const FILTERS = [
   { id: "error", label: "Errors", kinds: ["error"] },
 ] as const;
 
-type FilterId = (typeof FILTERS)[number]["id"];
+export type FilterId = (typeof FILTERS)[number]["id"];
 
 const FILTER_OF = new Map<string, FilterId>(FILTERS.flatMap((filter) => filter.kinds.map((kind) => [kind, filter.id])));
 
@@ -268,7 +265,7 @@ function countFilters(nodes: Node[], counts = new Map<FilterId, number>()): Map<
  * How many of each a chip filters: spans counted in the trace itself (a folded group hides its members' children:
  * a cache call's Redis commands), the rest (logs, tasks) as rows of the tree.
  */
-function chipCounts(nodes: Node[], trace: Trace): Map<FilterId, number> {
+export function chipCounts(nodes: Node[], trace: Trace): Map<FilterId, number> {
   const counts = countFilters(nodes);
   const filters = trace.spans.map((span) => FILTER_OF.get(span.kind)).filter((filter) => filter !== undefined);
   for (const filter of new Set(filters)) counts.set(filter, filters.filter((each) => each === filter).length);
@@ -366,187 +363,8 @@ const CATEGORY_FILTERS: Partial<Record<Category, FilterId>> = {
   signal: "signal",
 };
 
-function partOfCategory(category: Category): string {
+export function partOfCategory(category: Category): string {
   return CATEGORY_FILTERS[category] ?? category;
-}
-
-interface SliceState {
-  counts: ReadonlyMap<FilterId, number>;
-  slice: Slice;
-  onChange: (next: Slice) => void;
-}
-
-/** A chip that shows only its rows (and the rows on the way to them); pressed again, everything. */
-function FilterChip({ id, filters, children }: { id: FilterId; filters: SliceState; children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      className="dt-map-filter"
-      aria-pressed={filters.slice.parts.includes(id)}
-      onClick={() => filters.onChange(togglePart(filters.slice, id))}
-    >
-      {children}
-      <span className="dt-map-filter-count">{filters.counts.get(id)}</span>
-    </button>
-  );
-}
-
-/** A share of the time, as the legend and the bar's tooltip say it. */
-interface ShareOf {
-  category: Category;
-  value: number;
-  total: number;
-  /** How many spans count in it. */
-  calls: number;
-  label: string;
-}
-
-/** A category of the time: its share, picking its rows. */
-function Share({ share, filters }: { share: ShareOf; filters: SliceState }) {
-  const part = partOfCategory(share.category);
-  return (
-    <li data-category={share.category}>
-      <button
-        type="button"
-        className="dt-share"
-        aria-pressed={filters.slice.parts.includes(part)}
-        onClick={() => filters.onChange(togglePart(filters.slice, part))}
-      >
-        <span className="dt-swatch" />
-        {share.label}
-        <b>{duration(share.value)}</b>
-        <span className="dt-breakdown-share">{percent(share.value, share.total)}</span>
-      </button>
-    </li>
-  );
-}
-
-/** A segment of the bar: its numbers on hover, its rows on a click. */
-function Segment({ share, filters }: { share: ShareOf; filters: SliceState }) {
-  const part = partOfCategory(share.category);
-  const picked = filters.slice.parts;
-  const numbers = `${duration(share.value)} · ${percent(share.value, share.total)} · ${plural(share.calls, "call", "calls")}`;
-  return (
-    <Tooltip delayDuration={0} disableHoverableContent={true}>
-      <TooltipTrigger asChild onFocus={keyboardOnly}>
-        <button
-          type="button"
-          data-category={share.category}
-          data-faded={picked.length > 0 && !picked.includes(part) ? "" : undefined}
-          style={{ width: widthOf(share.value, share.total) }}
-          aria-label={`${share.label} · ${numbers}`}
-          aria-pressed={picked.includes(part)}
-          onClick={() => filters.onChange(togglePart(filters.slice, part))}
-        />
-      </TooltipTrigger>
-      <TooltipContent
-        side="top"
-        sideOffset={8}
-        arrow={false}
-        className="flex items-center gap-2 rounded-lg border bg-popover px-3 py-2 text-sm whitespace-nowrap text-popover-foreground shadow-[var(--dt-popover-shadow)]"
-      >
-        <span className="dt-swatch" data-category={share.category} />
-        <span className="font-medium">{share.label}</span>
-        <span className="text-muted-foreground tabular-nums">{numbers}</span>
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
-/** Opened by focus only from the keyboard: a clicked segment keeps focus, and its numbers would stay over the next. */
-function keyboardOnly(event: FocusEvent<HTMLElement>): void {
-  if (!event.currentTarget.matches(":focus-visible")) event.preventDefault();
-}
-
-/** Each share of the time with its numbers: how long, of how much, how many spans. */
-function sharesOf(trace: Trace, categories: ReadonlyMap<string, Category>): ShareOf[] {
-  const parts = breakdown(trace);
-  const total = Math.max(
-    parts.reduce((sum, [, value]) => sum + value, 0),
-    1,
-  );
-  const calls = new Map<Category, number>();
-  for (const category of categories.values()) calls.set(category, (calls.get(category) ?? 0) + 1);
-  return parts.map(([category, value]) => ({
-    category,
-    value,
-    total,
-    calls: calls.get(category) ?? 0,
-    label: categoryLabel(category, trace),
-  }));
-}
-
-/** The picked range, said: a pressed chip that lets it go. */
-function RangeChip({ total, filters }: { total: number; filters: SliceState }) {
-  const range = filters.slice.range;
-  if (!range) return null;
-  return (
-    <li>
-      <button
-        type="button"
-        className="dt-map-filter"
-        aria-pressed={true}
-        aria-label={`Time ${rangeLabel(range, total)}`}
-        title="Show all of the time"
-        onClick={() => filters.onChange({ ...filters.slice, range: null })}
-      >
-        {rangeLabel(range, total)}
-        <span className="dt-map-filter-x">
-          <CloseIcon />
-        </span>
-      </button>
-    </li>
-  );
-}
-
-/* ---------- time breakdown ---------- */
-
-/**
- * Where the time went, and what to show: one row. Each share (Database, Templates, View code…) picks its rows, from
- * the bar or the legend; the filters with no time of their own (Logs, Errors, Tasks…) follow it as plain chips.
- */
-function Breakdown({
-  trace,
-  filters,
-  categories,
-}: {
-  trace: Trace;
-  filters: SliceState;
-  categories: ReadonlyMap<string, Category>;
-}) {
-  const shares = sharesOf(trace, categories);
-  const claimed = new Set(shares.map((share) => partOfCategory(share.category)));
-  const others = FILTERS.filter((filter) => !claimed.has(filter.id) && (filters.counts.get(filter.id) ?? 0) > 0);
-  return (
-    <div className="dt-breakdown">
-      {/* biome-ignore lint/a11y/useSemanticElements: a group of toggle buttons, not a form's fieldset. */}
-      <div className="dt-breakdown-bar" role="group" aria-label="Where the time went">
-        {shares.map((share) => (
-          <Segment key={share.category} share={share} filters={filters} />
-        ))}
-      </div>
-      <ul className="dt-breakdown-legend" aria-label="Where the time went, and what to show">
-        {shares.map((share) => (
-          <Share key={share.category} share={share} filters={filters} />
-        ))}
-        {others.map((filter) => (
-          <li key={filter.id}>
-            <FilterChip id={filter.id} filters={filters}>
-              {filter.label}
-            </FilterChip>
-          </li>
-        ))}
-        <RangeChip total={Math.max(trace.duration, 1)} filters={filters} />
-        {isWhole(filters.slice) ? null : (
-          <li>
-            <button type="button" className="dt-map-filter-clear" onClick={() => filters.onChange(WHOLE)}>
-              Show all
-            </button>
-          </li>
-        )}
-      </ul>
-    </div>
-  );
 }
 
 /* ---------- rows ---------- */
@@ -562,6 +380,10 @@ interface RowContext {
   marks?: ReadonlyMap<string, Mark> | undefined;
   /** The selected row's details, opened right under that row; null while they show in the side pane. */
   details: ReactNode;
+  /** The spans whose own code ran long with no recorded calls, by id: a row under each says so. */
+  quiet: ReadonlyMap<string, Quiet>;
+  /** What is picked: a quiet row shows with a range it overlaps, never with kinds of calls. */
+  slice: Slice;
 }
 
 /** The selected row's details, under it: where the click was, not past the end of a long tree. */
@@ -977,14 +799,142 @@ function SpanRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps
           <AliasChip value={aliasOf(span)} />
           <TemplateChip attrs={span.attrs} />
           <SignalNotes span={span} parent={parent} under={childSpans(node)} />
+          <TransactionNote span={span} trace={ctx.trace} />
           {issue ? <IssueChip kind={issue} className={ISSUE_CHIP_SHRINKS} /> : null}
         </span>
         <Bar trace={ctx.trace} start={span.start} length={span.duration} />
         <span className="dt-map-time">{duration(span.duration)}</span>
       </button>
       <RowDetails id={node.key} ctx={ctx} />
-      {fold ? <Rows nodes={node.children} depth={depth + 1} ctx={ctx} parent={span} /> : null}
+      {fold ? (
+        <>
+          <Rows nodes={node.children} depth={depth + 1} ctx={ctx} parent={span} />
+          <QuietRow span={span} ctx={ctx} depth={depth + 1} />
+        </>
+      ) : null}
     </div>
+  );
+}
+
+/* ---------- the code's own time ---------- */
+
+/** A span's own code that ran long with no recorded calls: when (its gaps), and how long in all. */
+interface Quiet {
+  gaps: [number, number][];
+  total: number;
+}
+
+/** Said under a span when its own code ran at least this long, and this share of it, with no recorded calls. */
+const QUIET_MIN_US = 5_000;
+const QUIET_MIN_SHARE = 0.2;
+
+/** Where a span ran with none of its calls running: from its start to its end, between and around them. */
+function gapsIn(span: Span, calls: readonly Span[]): [number, number][] {
+  const gaps: [number, number][] = [];
+  let at = span.start;
+  for (const call of [...calls].sort((a, b) => a.start - b.start)) {
+    if (call.start > at) gaps.push([at, call.start]);
+    at = Math.max(at, call.start + call.duration);
+  }
+  if (span.start + span.duration > at) gaps.push([at, span.start + span.duration]);
+  return gaps;
+}
+
+/** A span's quiet time, when it made calls but ran long without them. */
+function quietIn(span: Span, calls: readonly Span[]): Quiet | null {
+  if (calls.length === 0) return null;
+  const gaps = gapsIn(span, calls);
+  const total = gaps.reduce((sum, [from, to]) => sum + to - from, 0);
+  return total >= Math.max(QUIET_MIN_US, span.duration * QUIET_MIN_SHARE) ? { gaps, total } : null;
+}
+
+/** Each span of the tree whose own code ran long with no recorded calls, by its id. */
+function quietSpans(nodes: Node[], found = new Map<string, Quiet>()): Map<string, Quiet> {
+  for (const node of nodes) {
+    if (node.type !== "span") continue;
+    const quiet = quietIn(node.span, node.children.flatMap(spansOf));
+    if (quiet) found.set(node.key, quiet);
+    quietSpans(node.children, found);
+  }
+  return found;
+}
+
+/** A quiet row shows unless kinds of calls are picked, or a range it doesn't overlap. */
+function quietShown(quiet: Quiet, ctx: RowContext): boolean {
+  const { parts, range } = ctx.slice;
+  if (parts.length > 0) return false;
+  return range === null || quiet.gaps.some(([from, to]) => overlaps(range, from - ctx.trace.start, to - from));
+}
+
+/**
+ * Under a span whose own code ran long with no recorded calls (a task's loop, a transaction held while the code
+ * works): how long, and where on the timeline, hatched. Not a call: no details, no filter counts it.
+ */
+function QuietRow({ span, ctx, depth }: { span: Span; ctx: RowContext; depth: number }) {
+  const quiet = ctx.quiet.get(span.id);
+  if (!(quiet && quietShown(quiet, ctx))) return null;
+  const total = Math.max(ctx.trace.duration, 1);
+  return (
+    <div
+      className="dt-map-row"
+      data-kind="quiet"
+      title="Its own code ran here, with nothing it called recorded: no query, no HTTP call, no traced function."
+    >
+      <span className="dt-map-name" style={{ paddingLeft: `${12 + depth * 16}px` }}>
+        <span className="dt-map-caret" />
+        <span className="dt-map-text">no recorded calls</span>
+      </span>
+      <span className="dt-map-track" aria-hidden="true">
+        {/* A gap too thin to see (a few µs between two queries) isn't drawn: it counts in the time all the same. */}
+        {quiet.gaps
+          .filter(([from, to]) => to - from >= total * 0.004)
+          .map(([from, to]) => (
+            <span
+              key={from}
+              className="dt-map-bar"
+              data-quiet=""
+              style={{ left: widthOf(from - ctx.trace.start, total), width: widthOf(to - from, total) }}
+            />
+          ))}
+      </span>
+      <span className="dt-map-time">{duration(quiet.total)}</span>
+    </div>
+  );
+}
+
+/** Whether a span runs inside another, however deep. */
+function insideOf(ancestor: Span, byId: ReadonlyMap<string, Span>): (span: Span) => boolean {
+  return (span) => {
+    for (let at = byId.get(String(span.parent_id)); at; at = byId.get(String(at.parent_id))) {
+      if (at.id === ancestor.id) return true;
+    }
+    return false;
+  };
+}
+
+/** The SQL a transaction ran: its queries' time, nested ones too. */
+function sqlInside(transaction: Span, trace: Trace): number {
+  const inside = insideOf(transaction, new Map(trace.spans.map((span) => [span.id, span])));
+  return trace.spans
+    .filter((span) => span.kind === "sql" && inside(span))
+    .reduce((sum, span) => sum + span.duration, 0);
+}
+
+/**
+ * A transaction says what its time is: how long it was open, and how much of it the SQL inside took. The rest is
+ * the code running while the transaction is held, not the database.
+ */
+function TransactionNote({ span, trace }: { span: Span; trace: Trace }) {
+  if (span.kind !== "transaction") return null;
+  const sql = duration(sqlInside(span, trace));
+  return (
+    <span
+      className="dt-map-sub"
+      data-note=""
+      title={`Time the transaction was open; SQL inside took ${sql}, the rest is code running while it's held`}
+    >
+      open {duration(span.duration)} · SQL {sql}
+    </span>
   );
 }
 
@@ -1529,9 +1479,12 @@ export function CallMap({
   related,
   links,
   initialSpan,
+  head,
 }: {
   trace: Trace;
   issueBySpan: ReadonlyMap<string, IssueKind>;
+  /** Above the tree, in the panel: the trace's time and its legend, which pick the rows. */
+  head?: ReactNode;
   /** Linked traces: tasks this trace enqueued appear under their enqueue span. */
   related?: Related | undefined;
   links?: TraceLinks | undefined;
@@ -1548,14 +1501,14 @@ export function CallMap({
   const details = detailsOf(tree, selected, trace, links);
   // The part of the time picked: the kinds of calls and the stretch of time the rows are kept for.
   const { slice: current, change } = useHeldSlice();
-  const counts = useMemo(() => chipCounts(tree, trace), [tree, trace]);
   const categories = useMemo(() => spanCategories(trace), [trace]);
   const marks = useMemo(() => marksOf(tree, pickedOf(current, trace, categories)), [tree, current, trace, categories]);
+  const quiet = useMemo(() => quietSpans(tree), [tree]);
   const inline = side ? null : details;
 
   return (
     <div className="dt-map" ref={map}>
-      <Breakdown trace={trace} filters={{ counts, slice: current, onChange: change }} categories={categories} />
+      {head}
       <MapBody details={side ? details : null} onClose={close}>
         <TimedRows trace={trace} range={current.range} onRange={(range) => change({ ...current, range })}>
           <div className="dt-map-rows" ref={rows}>
@@ -1571,6 +1524,8 @@ export function CallMap({
                 onToggle: toggle,
                 marks,
                 details: inline,
+                quiet,
+                slice: current,
               }}
             />
           </div>

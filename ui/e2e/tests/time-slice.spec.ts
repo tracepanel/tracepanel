@@ -1,5 +1,6 @@
-// A part of a trace's time, picked over its call tree: a share of the bar says its numbers on hover and keeps only
-// its rows on a click; a drag across the lanes or the tree's bars keeps the rows of that stretch of time. Both go
+// A part of a trace's time, picked over its call tree: a share's stretch of the trace's own lane says its numbers
+// on hover and keeps only its rows on a click; a drag across the lanes or the tree's bars keeps the rows of that
+// stretch of time. Both go
 // into the page's URL, and Esc, Show all or a double click let them go. The panel does the same, and its Console
 // button opens the trace with what was picked.
 import type { FrameLocator, Locator, Page } from "@playwright/test";
@@ -16,8 +17,9 @@ function row(scope: Scope, kind: string, name: string | RegExp): Locator {
   return scope.locator(`.dt-map-row[data-kind="${kind}"]`).filter({ hasText: name });
 }
 
+/** The first stretch of a share on the trace's own lane. */
 function segment(scope: Scope, category: string): Locator {
-  return scope.getByRole("group", { name: "Where the time went" }).locator(`[data-category="${category}"]`);
+  return scope.locator(`.dt-time-track .dt-stretch[data-category="${category}"]`).first();
 }
 
 function share(scope: Scope, category: string): Locator {
@@ -51,15 +53,15 @@ async function openHome(page: Page, query = "tab=tree"): Promise<void> {
   await page.goto(`/#/t/${await traceId("GET /")}?${query}`);
 }
 
-test("a share of the bar says its time, its part of the whole and how many calls on hover", async ({ page }) => {
+test("a share's stretch says its time, its part of the whole and how many calls on hover", async ({ page }) => {
   await openHome(page);
   await segment(page, "sql").hover();
 
   await expect(page.getByRole("tooltip", { name: /^Database/ })).toHaveText(/^Database\s*\d+ ms · \d+% · 151 calls$/);
 
-  await segment(page, "view").hover();
+  await segment(page, "template").hover();
 
-  await expect(page.getByRole("tooltip", { name: /^View code/ })).toHaveText(/^View code\s*\d+ ms · \d+% · 1 call$/);
+  await expect(page.getByRole("tooltip", { name: /^Templates/ })).toHaveText(/^Templates\s*\d+ ms · \d+% · 1 call$/);
 });
 
 test("a share picked keeps its calls, dims the way to them and goes into the URL; again, or Esc, lets it go", async ({
@@ -69,7 +71,6 @@ test("a share picked keeps its calls, dims the way to them and goes into the URL
   await segment(page, "template").click();
 
   await expect(page).toHaveURL(/[?&]part=template(&|$)/);
-  await expect(segment(page, "template")).toHaveAttribute("aria-pressed", "true");
   await expect(share(page, "template")).toHaveAttribute("aria-pressed", "true");
   await expect(segment(page, "sql")).toHaveAttribute("data-faded", "");
 
