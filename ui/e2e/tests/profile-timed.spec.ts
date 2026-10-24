@@ -33,7 +33,7 @@ test("the Profile tab says how much it sampled, what it couldn't, and waiting as
   ]);
 });
 
-test("the strip and its share's numbers split the code's own time; the wait is named, a click opens its profile", async ({
+test("the strip and its share's numbers split the code's own time; a click on the wait opens its profile", async ({
   page,
 }) => {
   await page.goto(`/#/t/${await traceId(DIGEST)}?tab=tree`);
@@ -54,9 +54,9 @@ test("the strip and its share's numbers split the code's own time; the wait is n
   const middle = await centre(waiting);
   await page.mouse.move(...middle);
 
-  await expect(page.getByRole("tooltip").filter({ hasText: "Waiting · 1.5 s" })).toContainText(
-    "await asyncio.sleep in send_digest · tasks.py:108",
-  );
+  // Its share's numbers only: the wait row in the tree names what it waited on and where.
+  await expect(page.locator(".dt-lane-tip")).toContainText("Your code");
+  await expect(page.getByRole("tooltip").filter({ hasText: /Open the profile|tasks\.py/ })).toHaveCount(0);
 
   await page.mouse.click(...middle);
 
@@ -80,6 +80,14 @@ test("the call tree has the wait and the code as rows of their own; the wait's o
   await page.goto(`/#/t/${await traceId(DIGEST)}?tab=tree`);
 
   await expect(codeRow(page, "wait").locator(".dt-map-text")).toHaveText("asyncio.sleep in send_digest");
+  // Where it waited, quietly after its name; no popup over the row.
+  await expect(codeRow(page, "wait").locator(".dt-map-sub")).toHaveText("tasks.py:108");
+  await expect(codeRow(page, "code").locator(".dt-map-sub")).toHaveCount(0);
+
+  await codeRow(page, "wait").hover();
+
+  await expect(page.getByRole("tooltip")).toHaveCount(0);
+
   await expect(codeRow(page, "code").locator(".dt-map-text")).toHaveText("render_digest");
   await expect(codeRow(page, "wait").locator(".dt-map-time")).toHaveText("1.5 s");
   await expect(codeRow(page, "code").locator(".dt-map-time")).toHaveText("102 ms");
@@ -105,64 +113,4 @@ test("a profile that doesn't say when its samples were taken is the whole trace'
   await expect(page.getByText("Profile of the whole trace")).toBeVisible();
   await expect(page.getByText("Its samples aren't timed: the range picked can't narrow it.")).toBeVisible();
   await expect(page.getByText(/not sampled/)).toHaveCount(0);
-});
-
-test("the strip's tooltip holds while the pointer travels into it: its Open the profile is a click away", async ({
-  page,
-}) => {
-  await page.goto(`/#/t/${await traceId(DIGEST)}?tab=tree`);
-  const waiting = page.locator(".dt-time-track .dt-stretch[data-waiting]").first();
-  await page.mouse.move(...(await centre(waiting)));
-  const tip = page.getByRole("tooltip").filter({ hasText: "Waiting · 1.5 s" });
-  const open = tip.getByRole("button", { name: "Open the profile" });
-  // Down into it, across the lane under the strip: it stays.
-  await page.mouse.move(...(await centre(open)), { steps: 8 });
-
-  await expect(tip).toBeVisible();
-
-  await open.click();
-
-  await expect(page.getByRole("tab", { name: /^Profile/ })).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByText("Profile of 120 ms – 1.6 s")).toBeVisible();
-});
-
-test("the strip's tooltip from the keyboard: Tab to the stretch opens it, Tab again reaches its link, Esc closes it", async ({
-  page,
-}) => {
-  await page.goto(`/#/t/${await traceId(DIGEST)}?tab=tree&range=100-400`);
-  const waiting = page.locator(".dt-quiet-said").filter({ hasText: "waiting" });
-  await waiting.focus();
-  await page.keyboard.press("Shift+Tab");
-  await page.keyboard.press("Tab");
-  const tip = page.getByRole("tooltip").filter({ hasText: "Waiting · 1.5 s" });
-
-  await expect(tip).toBeVisible();
-
-  await page.keyboard.press("Tab");
-
-  await expect(tip.getByRole("button", { name: "Open the profile" })).toBeFocused();
-
-  await page.keyboard.press("Escape");
-
-  await expect(tip).toHaveCount(0);
-  // The tooltip took Esc: the range picked stays.
-  await expect(page).toHaveURL(/[?&]range=100-400/);
-});
-
-test("the tree's code row's tooltip holds while the pointer travels into it; its link opens the profile", async ({
-  page,
-}) => {
-  await page.goto(`/#/t/${await traceId(DIGEST)}?tab=tree`);
-  await codeRow(page, "wait").hover();
-  const tip = page.getByRole("tooltip").filter({ hasText: "Waiting · 1.5 s" });
-  const open = tip.getByRole("button", { name: "Open the profile" });
-  await page.mouse.move(...(await centre(open)), { steps: 8 });
-
-  await expect(tip).toBeVisible();
-  // No title of the browser's under it: the tooltip says the row.
-  await expect(codeRow(page, "wait").locator("[title]")).toHaveCount(0);
-
-  await open.click();
-
-  await expect(page.getByText("Profile of 120 ms – 1.6 s")).toBeVisible();
 });

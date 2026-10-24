@@ -1136,19 +1136,9 @@ tr[data-new] {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0;
-  border: 0;
-  border-radius: 0.1875rem;
-  background: none;
-  color: inherit;
-  font: inherit;
   container-type: inline-size;
   overflow: hidden;
   pointer-events: none;
-}
-.dt-quiet-said:focus-visible {
-  outline: 2px solid var(--dt-accent);
-  outline-offset: 1px;
 }
 /* The legend's word for it: of a share's time, how much ran with no recorded calls, its swatch hatched. */
 .dt-share-quiet {
@@ -1177,11 +1167,6 @@ tr[data-new] {
     display: none;
   }
 }
-/* The own lane's track, and its tooltip beside it, out of the drag's way. */
-.dt-lane-cell {
-  position: relative;
-  min-width: 0;
-}
 /* Under the lane: the strip heads its tab, there is no room above it in the panel. */
 .dt-lane-tip {
   position: absolute;
@@ -1190,11 +1175,7 @@ tr[data-new] {
   transform: translateX(-50%);
   pointer-events: none;
 }
-/* One with a way on stays while the pointer travels into it. */
-.dt-lane-tip[data-hoverable] {
-  pointer-events: auto;
-  cursor: default;
-}
+
 .dt-lane-track {
   position: relative;
   height: 0.75rem;
@@ -2155,29 +2136,8 @@ details[data-focused] > .dt-sql-group {
   flex: none;
   font-family: var(--dt-font);
 }
-/* A tooltip's way on, as a link reads: the profile opened. */
-.dt-tip-action {
-  display: inline-flex;
-  align-items: center;
-  justify-self: start;
-  gap: 0.25rem;
-  padding: 0;
-  border: 0;
-  border-radius: 0.1875rem;
-  background: none;
-  color: var(--dt-accent);
-  font: var(--dt-size-xs) var(--dt-font);
-  cursor: pointer;
-}
-.dt-tip-action svg {
-  width: 0.75rem;
-  height: 0.75rem;
-}
-.dt-tip-action:hover {
-  text-decoration: underline;
-}
 /* The code's own time with a profile to show what ran in it: a click opens it. */
-.dt-time-track .dt-stretch[data-quiet] {
+.dt-time-track[data-profiled] .dt-stretch[data-quiet] {
   cursor: pointer;
 }
 /* A span's info and debug records, while only warnings show: how many, a click away. */

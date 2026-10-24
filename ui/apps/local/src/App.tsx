@@ -15,8 +15,6 @@ import {
   KindBadge,
   LayersIcon,
   Logo,
-  type Profiling,
-  ProfilingContext,
   type Slice,
   sliceParams,
   type TabId,
@@ -1084,26 +1082,19 @@ function PanelApp({ route }: { route: Route }) {
   );
 }
 
-/** Whether a trace's app profiles on request, as the agent hears it from that app. */
-const PROFILING: Profiling = {
-  profiles: (service) => source.capabilities(service).then((capabilities) => capabilities.profile),
-};
-
 export function App() {
   const route = useRoute();
   return (
-    <ProfilingContext value={PROFILING}>
-      <TooltipProvider delayDuration={300}>
-        <RefreshProvider>
-          {embedded ? (
-            <PanelApp route={route} />
-          ) : (
-            <ScopeProvider>
-              <Console route={route} source={source} />
-            </ScopeProvider>
-          )}
-        </RefreshProvider>
-      </TooltipProvider>
-    </ProfilingContext>
+    <TooltipProvider delayDuration={300}>
+      <RefreshProvider>
+        {embedded ? (
+          <PanelApp route={route} />
+        ) : (
+          <ScopeProvider>
+            <Console route={route} source={source} />
+          </ScopeProvider>
+        )}
+      </RefreshProvider>
+    </TooltipProvider>
   );
 }

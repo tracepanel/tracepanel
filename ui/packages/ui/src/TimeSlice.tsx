@@ -78,21 +78,10 @@ export function RangeBand({ range, total }: { range: TimeRange; total: number })
   return <div className="dt-range" style={bandPlace(range, total)} aria-hidden="true" />;
 }
 
-/**
- * Esc, not taken by anything open before (a menu, a dialog, a tooltip that holds a link: it closes first) nor typed
- * into a field.
- */
+/** Esc, not taken by anything open before (a menu, a dialog) nor typed into a field. */
 function isFreeEscape(event: KeyboardEvent): boolean {
-  return (
-    event.key === "Escape" &&
-    !event.defaultPrevented &&
-    !isTyping(event) &&
-    !document.querySelector(`[${ESCAPE_FIRST}]`)
-  );
+  return event.key === "Escape" && !event.defaultPrevented && !isTyping(event);
 }
-
-/** Set on an open tooltip that closes on Esc before the slice is let go. */
-export const ESCAPE_FIRST = "data-escape-first";
 
 /**
  * The part of a trace's time picked to look at, from a link's (`initial`), told to the host as it changes (the

@@ -20,13 +20,12 @@
   code 1.6 s 98% · of it 1.6 s untraced`), and in the call tree it is a row
   of its own under the span, hatched where it fell, its time the same, named
   by what ran: with a profile, its functions (`aggregate · render_csv`),
-  else `untraced code`. The flame of the panel's Profile toggle after its
-  name opens the profile, or, where the app profiles on request and the
-  trace has none, turns Profile on in the panel. Profile is offered only
-  where the trace's app profiles on request: `api/capabilities?service=`
-  says what an app does. A transaction's time says on hover how long it was
-  open and how much of that its SQL took, and a row whose name says its
-  database has no chip saying it again.
+  else `untraced code`. With a profile, the flame of the panel's Profile
+  toggle after its name, and a click on the row, open the profile.
+  `api/capabilities?service=` says whether an app profiles on request. A
+  transaction's time says on hover how long it was open and how much of that
+  its SQL took, and a row whose name says its database has no chip saying it
+  again.
 - A profile can say when each stack was seen (`bucket_us`, `stacks[].at`),
   which frames wait rather than compute (`frames[].waiting`, an await's
   `at_line`) and how many samples weren't taken because the trace's thread
@@ -157,18 +156,16 @@
   label. Only a drag picks a range there: a click on a code row or on the
   strip's code time opens the Profile tab at that stretch, the call tree
   keeps the whole time. Show all shows only with two or more things picked.
-  Profile is turned on in the panel's toolbar only: the trace offers no
-  button or flame for it, its strip's tooltip says so in one line where the
-  app can profile, and a flame shows only on a trace with a profile. The
-  legend no longer repeats the strip's waiting and untraced time, which its
-  share says on hover. A task's trace has no Tasks chip that picks only
-  itself, a query under its template's row doesn't name the template again,
-  and a row with a tooltip has no browser title under it. The tooltips of
-  the code's own time stay open while the pointer moves into them, so Open
-  the profile is a click away, and from the keyboard a Tab away. A task's
-  name cut to fit drops its module path first and keeps its last segment
-  readable (`build_sales_report`), and in the panel's list a row with no
-  status takes that room too.
+  Profile is turned on in the panel's toolbar only, and a trace without a
+  profile has no flame. The code's own time has no popup: a wait row says
+  where it waited after its name (`tasks.py:108`), and with a profile its
+  flame and a click open it. The legend no longer repeats the strip's
+  waiting and untraced time, which its share says on hover. A task's trace
+  has no Tasks chip that picks only itself, and a query under its
+  template's row doesn't name the template again. A task's name cut to fit
+  drops its module path first and keeps its last segment readable
+  (`build_sales_report`), and in the panel's list a row with no status
+  takes that room too.
 - Library frames are summed up by their packages, on one line: "10 library
   frames · faststream ×9 · sqlalchemy", every module on hover and when opened.
   The list of every module ran past the error's edge.

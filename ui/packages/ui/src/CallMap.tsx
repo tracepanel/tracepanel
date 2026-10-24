@@ -8,7 +8,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { Tooltip, TooltipContent, TooltipTrigger } from "./components/ui/tooltip";
 import { duration, since } from "./format";
 import { GraphqlCode } from "./GraphqlCode";
 import { ChevronRightIcon, CloseIcon } from "./icons";
@@ -26,10 +25,10 @@ import { traceRuntime } from "./lib/runtime";
 import { isReceiver, raised } from "./lib/signals";
 import { isLoud, overlaps, type Slice, type TimeRange } from "./lib/slice";
 import { CALL_KINDS, DATASTORES, MESSAGING, RPC } from "./lib/systems";
-import { type Piece, quietPieces, timed, waitName } from "./lib/waiting";
+import { type Piece, quietPieces, timed, waitName, waitPlace } from "./lib/waiting";
 import { type TraceLinks, traceLinkProps } from "./links";
 import { type NameValue, NameValues, RowsLookContext } from "./NameValues";
-import { profileOver, RowFlame, WhatRan, WhatWaited } from "./ProfileHint";
+import { profileOver, RowFlame } from "./ProfileHint";
 import { PropTable } from "./PropTable";
 import {
   AliasChip,
@@ -47,7 +46,7 @@ import { SideResize, useSideWidth } from "./SideResize";
 import { SignalNotes } from "./SignalNotes";
 import { SqlCode } from "./SqlCode";
 import { TemplateContext, withoutContext } from "./TemplateContext";
-import { ESCAPE_FIRST, RangeBand, useHeldSlice, useRangeDrag } from "./TimeSlice";
+import { RangeBand, useHeldSlice, useRangeDrag } from "./TimeSlice";
 import type { Attrs, IssueKind, Log, Related, Span, Trace, TraceError, TraceSummary } from "./types";
 
 /* ---------- tree ---------- */
@@ -967,9 +966,16 @@ function CodeBars({ part, category, trace }: { part: CodePart; category: Categor
  * without one, untraced code, waiting where the profile can't say.
  */
 function partName(part: CodePart, trace: Trace): string {
-  const { profile } = profileOver(trace, partRange(part));
+  const profile = profileOver(trace, partRange(part));
   if (part.waiting) return waited(profile);
   return profile ? ranMost(profile) : "untraced code";
+}
+
+/** Where a wait row waited, said quietly after its name: "handlers.py:108", where the profile says. */
+function WaitPlace({ part, trace }: { part: CodePart; trace: Trace }) {
+  const profile = profileOver(trace, partRange(part));
+  const place = part.waiting && profile ? waitPlace(profile) : null;
+  return place ? <span className="dt-map-sub">{place}</span> : null;
 }
 
 /** "asyncio.sleep in send_digest": what the code waited on, or just waiting where the profile can't say. */
@@ -991,7 +997,8 @@ function CodeRowParts({ span, ctx, depth, part }: { span: Span; ctx: RowContext;
       <span className="dt-map-name" style={{ paddingLeft: `${12 + depth * 16}px` }}>
         <span className="dt-map-caret" />
         <KindBadge kind={part.waiting ? "wait" : "code"} muted={true} className="dt-map-kind" />
-        <TaskName name={partName(part, ctx.trace)} className="dt-map-text" title={false} />
+        <TaskName name={partName(part, ctx.trace)} className="dt-map-text" />
+        <WaitPlace part={part} trace={ctx.trace} />
         <RowFlame trace={ctx.trace} />
       </span>
       <CodeBars part={part} category={category} trace={ctx.trace} />
@@ -1021,7 +1028,8 @@ function CodeRow({ span, ctx, depth }: { span: Span; ctx: RowContext; depth: num
 function CodePartRow({ span, ctx, depth, part }: { span: Span; ctx: RowContext; depth: number; part: CodePart }) {
   const inside = <CodeRowParts span={span} ctx={ctx} depth={depth} part={part} />;
   const open = ctx.onProfile;
-  const row = open ? (
+  // With a profile, a click opens it at that stretch; without, a plain row.
+  return open ? (
     <button type="button" className="dt-map-row" data-kind="code" onClick={() => open(partRange(part))}>
       {inside}
     </button>
@@ -1030,10 +1038,6 @@ function CodePartRow({ span, ctx, depth, part }: { span: Span; ctx: RowContext; 
       {inside}
     </div>
   );
-  // What ran there, on hover, where a profile says it.
-  const offered = Boolean(ctx.trace.profile);
-  const onOpen = open ? () => open(partRange(part)) : undefined;
-  return <WithWhatRan trace={ctx.trace} offered={offered} row={row} part={part} onOpen={onOpen} />;
 }
 
 /** Whether a span has a code row: its code ran long with nothing recorded inside, and what is picked keeps it. */
@@ -1041,42 +1045,6 @@ function hasCodeRow(span: Span, ctx: RowContext): boolean {
   const quiet = ctx.quiet.get(span.id);
   return quiet !== undefined && codeShown(quiet, ctx.categories.get(span.id) ?? "code", ctx);
 }
-
-/**
- * A code row with what ran (or waited) in it on hover, when there is anything to say. Its tooltip holds the way on
- * (the profile, or Profile turned on): it stays open while the pointer travels into it, and Esc closes it first.
- */
-function WithWhatRan({
-  trace,
-  offered,
-  row,
-  part,
-  onOpen,
-}: {
-  trace: Trace;
-  offered: boolean;
-  row: ReactNode;
-  part: CodePart;
-  onOpen: (() => void) | undefined;
-}) {
-  if (!offered) return row;
-  const range = partRange(part);
-  return (
-    <Tooltip delayDuration={150}>
-      <TooltipTrigger asChild>{row}</TooltipTrigger>
-      <TooltipContent side="top" sideOffset={6} arrow={false} className={CODE_TIP_CLASS} {...{ [ESCAPE_FIRST]: "" }}>
-        {part.waiting ? (
-          <WhatWaited trace={trace} range={range} waited={part.total} onOpen={onOpen} />
-        ) : (
-          <WhatRan trace={trace} range={range} onOpen={onOpen} />
-        )}
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
-const CODE_TIP_CLASS =
-  "grid w-72 gap-1.5 rounded-lg border bg-popover px-3 py-2 text-sm text-popover-foreground shadow-[var(--dt-popover-shadow)]";
 
 /**
  * The fold of a row with rows under it: a click on it opens or closes them only, without selecting the row and

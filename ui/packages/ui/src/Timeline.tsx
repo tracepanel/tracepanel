@@ -261,12 +261,7 @@ function LanesBody({
           </span>
         ))}
       </div>
-      <TimeLane
-        trace={trace}
-        word={LANE_WORDS[trace.kind] ?? trace.kind}
-        parts={slice.parts}
-        onQuiet={picking.onQuiet}
-      />
+      <TimeLane trace={trace} word={LANE_WORDS[trace.kind] ?? trace.kind} parts={slice.parts} />
       {drawn.map((lane) => (
         <LaneRow key={lane.noun[1]} lane={lane} trace={trace} range={range} onSelect={onSelect} />
       ))}
