@@ -37,7 +37,7 @@ test("the strip and its legend split the code's own time; the wait is named, and
 
   await expect(waiting).toHaveText("waiting · 1.5 s");
   await expect(page.getByRole("list", { name: /^Where the time went/ }).locator(".dt-share-quiet")).toHaveText(
-    "of it 1.5 s waiting · 102 ms unrecorded",
+    "of it 1.5 s waiting · 102 ms untraced",
   );
 
   const middle = await centre(waiting);
@@ -62,7 +62,8 @@ test("the call tree has the wait and the code as rows of their own; the wait's o
 }) => {
   await page.goto(`/#/t/${await traceId(DIGEST)}?tab=tree`);
 
-  await expect(codeRow(page, "wait").locator(".dt-map-text")).toHaveText("waiting");
+  await expect(codeRow(page, "wait").locator(".dt-map-text")).toHaveText("asyncio.sleep in send_digest");
+  await expect(codeRow(page, "code").locator(".dt-map-text")).toHaveText("render_digest");
   await expect(codeRow(page, "wait").locator(".dt-map-time")).toHaveText("1.5 s");
   await expect(codeRow(page, "code").locator(".dt-map-time")).toHaveText("102 ms");
 

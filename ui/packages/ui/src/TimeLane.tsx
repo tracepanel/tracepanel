@@ -1,7 +1,7 @@
 import { type CSSProperties, type PointerEvent, useMemo, useState } from "react";
 import { partOfCategory } from "./CallMap";
 import { duration } from "./format";
-import { categoryLabel, type Stretch, stretches } from "./lib/breakdown";
+import { type Stretch, stretches } from "./lib/breakdown";
 import { quietSpans } from "./lib/quiet";
 import type { TimeRange } from "./lib/slice";
 import { quietPieces } from "./lib/waiting";
@@ -76,7 +76,7 @@ function QuietLines({ hover, lane, category }: { hover: Hover; lane: Lane; categ
     <>
       <span className="flex items-center gap-2">
         <span className="dt-swatch" data-quiet="" data-category={category} />
-        <span>Of it {duration(totals)} with nothing recorded inside</span>
+        <span>Of it {duration(totals)} untraced</span>
       </span>
       <WhatRan trace={lane.trace} range={hover.range} />
     </>
@@ -140,10 +140,10 @@ function length(stretch: Stretch): number {
   return stretch.to - stretch.from;
 }
 
-/** "your code · 1.6 s", "waiting · 1.5 s": a quiet span's own time, as its share's or as waited. */
+/** "untraced · 1.6 s", "waiting · 1.5 s": a quiet span's own time, waited in or not, in its share's colour. */
 function quietLabel(lane: Lane, each: Drawn): string {
   const total = lane.totals.get(`${each.stretch.span}:${each.waiting}`) ?? 0;
-  const label = each.waiting ? "waiting" : categoryLabel(each.stretch.category, lane.trace).toLowerCase();
+  const label = each.waiting ? "waiting" : "untraced";
   return `${label} · ${duration(total)}`;
 }
 

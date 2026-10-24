@@ -1,3 +1,4 @@
+import { FlameIcon } from "lucide-react";
 import { type FocusEvent, type ReactNode, useMemo, useState } from "react";
 import { buildTree, chipCounts, FILTERS, type FilterId, partOfCategory, withShownLogs } from "./CallMap";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./components/ui/tooltip";
@@ -118,12 +119,12 @@ export const TIP_CLASS =
   "flex items-center gap-2 rounded-lg border bg-popover px-3 py-2 text-sm whitespace-nowrap text-popover-foreground shadow-[var(--dt-popover-shadow)]";
 
 /** Of a share's time, its code's own with no recorded calls: the strip's hatched part, read with its share. */
-/** "1.5 s waiting · 102 ms unrecorded": the code's own time, what it waited and what it computed, each there is. */
+/** "1.5 s waiting · 102 ms untraced": the code's own time, what it waited and what it computed, each there is. */
 function quietWords(share: ShareOf): string {
   const computed = share.quiet - share.waiting;
   const words = [
     share.waiting > 0 ? `${duration(share.waiting)} waiting` : "",
-    computed > 0 ? `${duration(computed)} unrecorded` : "",
+    computed > 0 ? `${duration(computed)} untraced` : "",
   ];
   return words.filter(Boolean).join(" · ");
 }
@@ -186,6 +187,7 @@ function TurnOnProfile({ trace, shares }: { trace: Trace; shares: readonly Share
           setOn(true);
         }}
       >
+        <FlameIcon className="size-3.5" aria-hidden="true" />
         {on ? "Profile is on: run it again" : "Turn on Profile to see what ran"}
       </button>
     </li>

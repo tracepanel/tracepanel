@@ -14,21 +14,22 @@ import { GraphqlCode } from "./GraphqlCode";
 import { ChevronRightIcon, CloseIcon } from "./icons";
 import { keyed } from "./keys";
 import { AllAttributes, LogRecordDetails } from "./LogRecordDetails";
-import { type Category, categoryLabel, spanCategories } from "./lib/breakdown";
+import { type Category, spanCategories } from "./lib/breakdown";
 import { callFields } from "./lib/callFields";
 import { callTemplate, groupNoun } from "./lib/calls";
 import { spanKindLabel } from "./lib/handler";
 import { widthOf } from "./lib/percent";
 import { plural } from "./lib/plural";
+import { ownHotspots, type Profile } from "./lib/profile";
 import { type Quiet, quietSpans } from "./lib/quiet";
 import { traceRuntime } from "./lib/runtime";
 import { isReceiver, raised } from "./lib/signals";
 import { isLoud, overlaps, type Slice, type TimeRange } from "./lib/slice";
 import { CALL_KINDS, DATASTORES, MESSAGING, RPC } from "./lib/systems";
-import { type Piece, quietPieces, timed } from "./lib/waiting";
+import { type Piece, quietPieces, timed, waitName } from "./lib/waiting";
 import { type TraceLinks, traceLinkProps } from "./links";
 import { type NameValue, NameValues, RowsLookContext } from "./NameValues";
-import { WhatRan, WhatWaited } from "./ProfileHint";
+import { profileOver, RowFlame, WhatRan, WhatWaited } from "./ProfileHint";
 import { useProfilingOf } from "./Profiling";
 import { PropTable } from "./PropTable";
 import {
@@ -929,37 +930,25 @@ function CodeBars({ part, category, trace }: { part: CodePart; category: Categor
   );
 }
 
-/** In the panel, where the app profiles on request and the trace has no profile: its Profile toggle, turned on. */
-function TurnOnProfileHere({ trace }: { trace: Trace }) {
-  const turnOn = turnOnFor(trace, useProfilingOf(trace));
-  const [on, setOn] = useState(false);
-  if (!turnOn) return null;
-  return (
-    // biome-ignore lint/a11y/useSemanticElements: inside the row; a click turns the panel's Profile on.
-    // biome-ignore lint/a11y/useKeyWithClickEvents: the legend's link is the keyboard's way.
-    <span
-      className="dt-map-sub dt-map-logs"
-      role="button"
-      tabIndex={-1}
-      onClick={(event) => {
-        event.stopPropagation();
-        turnOn();
-        setOn(true);
-      }}
-    >
-      {on ? "Profile is on: run it again" : "Turn on Profile"}
-    </span>
-  );
+/**
+ * What a code row is: with a profile, the functions of yours that ran most in that stretch (or what it waited on);
+ * without one, untraced code, waiting where the profile can't say.
+ */
+function partName(part: CodePart, trace: Trace): string {
+  const { profile } = profileOver(trace, partRange(part));
+  if (part.waiting) return waited(profile);
+  return profile ? ranMost(profile) : "untraced code";
 }
 
-/** The panel's way to turn Profile on, for a trace with none yet whose app profiles on request. */
-function turnOnFor(trace: Trace, profiling: ReturnType<typeof useProfilingOf>): (() => void) | undefined {
-  return trace.profile || !profiling.available ? undefined : profiling.turnOn;
+/** "asyncio.sleep in send_digest": what the code waited on, or just waiting where the profile can't say. */
+function waited(profile: Profile | undefined): string {
+  return (profile && waitName(profile)) || "waiting";
 }
 
-/** "waiting", or the share's name: "your code". */
-function partName(part: CodePart, category: Category, trace: Trace): string {
-  return part.waiting ? "waiting" : categoryLabel(category, trace).toLowerCase();
+/** "aggregate · render_csv": the two functions of yours that ran most, or untraced code where none of yours ran. */
+function ranMost(profile: Profile): string {
+  const names = ownHotspots(profile, 2).map((hotspot) => hotspot.name);
+  return names.join(" · ") || "untraced code";
 }
 
 /** A code row's own: a grey box ("code", or "wait"), its name, the way on to the profile, its bars and its time. */
@@ -970,9 +959,8 @@ function CodeRowParts({ span, ctx, depth, part }: { span: Span; ctx: RowContext;
       <span className="dt-map-name" style={{ paddingLeft: `${12 + depth * 16}px` }}>
         <span className="dt-map-caret" />
         <KindBadge kind={part.waiting ? "wait" : "code"} muted={true} className="dt-map-kind" />
-        <span className="dt-map-text">{partName(part, category, ctx.trace)}</span>
-        {ctx.onProfile ? <span className="dt-map-sub dt-map-open-profile">Profile →</span> : null}
-        <TurnOnProfileHere trace={ctx.trace} />
+        <TaskName name={partName(part, ctx.trace)} className="dt-map-text" />
+        <RowFlame trace={ctx.trace} />
       </span>
       <CodeBars part={part} category={category} trace={ctx.trace} />
       <span className="dt-map-time">{duration(part.total)}</span>

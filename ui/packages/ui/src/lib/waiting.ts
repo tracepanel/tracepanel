@@ -110,6 +110,13 @@ function longestWait(profile: Profile): { leaf: Frame; own: Frame | undefined } 
   return { leaf, own: frames.filter((frame) => frame?.in_app).at(-1) };
 }
 
+/** "asyncio.sleep in build_sales_report": what the code waited on most, in which function of yours. */
+export function waitName(profile: Profile): string | null {
+  const wait = longestWait(profile);
+  if (!wait) return null;
+  return wait.own ? `${called(wait.leaf)} in ${wait.own.function}` : called(wait.leaf);
+}
+
 /** "await asyncio.sleep in build_sales_report · handlers.py:108": what the code waited on most, and where. */
 export function waitOf(profile: Profile): string | null {
   const wait = longestWait(profile);

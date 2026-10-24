@@ -1,6 +1,8 @@
 // What ran in a trace's code where nothing it called was recorded: its profile's own functions (of that stretch when
 // the profile says when its samples were taken, of the whole trace otherwise), what it waited on, or how to get a
 // profile. The time strip's tooltip and the call tree's code rows say it alike.
+import { FlameIcon } from "lucide-react";
+import { useState } from "react";
 import { duration } from "./format";
 import { percent } from "./lib/percent";
 import { ownHotspots, type Profile } from "./lib/profile";
@@ -10,7 +12,10 @@ import { useProfilingOf } from "./Profiling";
 import type { Trace } from "./types";
 
 /** The profile of a stretch of the trace when it says when its samples were taken; the whole trace's otherwise. */
-function profileOver(trace: Trace, range: TimeRange | undefined): { profile: Profile | undefined; title: string } {
+export function profileOver(
+  trace: Trace,
+  range: TimeRange | undefined,
+): { profile: Profile | undefined; title: string } {
   const profile = trace.profile;
   if (range && timed(profile))
     return { profile: within(profile, range), title: `Profile of ${rangeLabel(range, trace.duration)}` };
@@ -28,12 +33,63 @@ export function WhatRan({ trace, range }: { trace: Trace; range?: TimeRange | un
   if (!profiling.available) return null;
   return (
     <span className="grid gap-0.5">
-      <span>Turn on Profile to see what ran here</span>
+      <span className="flex items-center gap-1.5">
+        <FlameIcon className="size-3.5 text-muted-foreground" aria-hidden="true" />
+        Turn on Profile to see what ran here
+      </span>
       <span className="text-xs text-muted-foreground">
         {profiling.turnOn
           ? "Profile is in the legend below"
           : "with the panel's 🔥 or an X-Tracepanel-Profile: 1 header"}
       </span>
+    </span>
+  );
+}
+
+/** The way to the profile, as the panel's toggle draws it: its flame. */
+function OpenProfile() {
+  return (
+    <span className="flex items-center gap-1 text-xs text-brand">
+      <FlameIcon className="size-3" aria-hidden="true" />
+      Open the profile
+    </span>
+  );
+}
+
+/**
+ * After a code row's name: the profile's flame (the row opens it), or, where the app profiles on request and the
+ * trace has none, the flame dimmed, turning the panel's Profile on; nothing where the app can't profile.
+ */
+export function RowFlame({ trace }: { trace: Trace }) {
+  const profiling = useProfilingOf(trace);
+  if (trace.profile) {
+    return (
+      <span className="dt-map-flame" title="Open the profile">
+        <FlameIcon aria-label="Open the profile" />
+      </span>
+    );
+  }
+  return profiling.available ? <FlameOff turnOn={profiling.turnOn} /> : null;
+}
+
+/** The flame dimmed: Profile is off for this trace's app; in the panel a click turns it on. */
+function FlameOff({ turnOn }: { turnOn: (() => void) | undefined }) {
+  const [on, setOn] = useState(false);
+  return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: inside the row; in the panel a click turns its Profile on.
+    // biome-ignore lint/a11y/useKeyWithClickEvents: the legend's link is the keyboard's way.
+    <span
+      className="dt-map-flame"
+      data-off=""
+      title={on ? "Profile is on: run it again" : "Turn on Profile to see what ran here"}
+      onClick={(event) => {
+        if (!turnOn) return;
+        event.stopPropagation();
+        turnOn();
+        setOn(true);
+      }}
+    >
+      <FlameIcon aria-label={on ? "Profile is on: run it again" : "Turn on Profile to see what ran here"} />
     </span>
   );
 }
@@ -51,7 +107,7 @@ function Hotspots({ profile, title }: { profile: Profile; title: string }) {
           </span>
         ))}
       </span>
-      <span className="text-xs text-brand">Open profile →</span>
+      <OpenProfile />
     </span>
   );
 }
@@ -64,7 +120,7 @@ export function WhatWaited({ trace, range, waited }: { trace: Trace; range: Time
     <span className="grid gap-1">
       <span className="font-medium">Waiting · {duration(waited)}</span>
       {what ? <span className="font-mono text-xs text-muted-foreground [overflow-wrap:anywhere]">{what}</span> : null}
-      <span className="text-xs text-brand">Open profile →</span>
+      <OpenProfile />
     </span>
   );
 }

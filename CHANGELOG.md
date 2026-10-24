@@ -14,18 +14,19 @@
   `range=`), so a link opens the tree with them. A click on the share again,
   Show all, Esc or a double click lets them go. The panel does the same, and
   its Console button opens the trace with what was picked.
-- A long stretch of a trace's own code with nothing recorded inside reads as
-  code. On the time strip it is hatched in its share's colour and labelled
-  (`your code · 1.5 s`), the legend counts it in its share (`Your code
-  1.6 s 98% · of it 1.5 s unrecorded`), and in the call tree it is a "code"
-  row of its own under the span, hatched where it fell, its time the same.
-  With a profile, both name the trace's own functions by share (`aggregate
-  69%`) and a click opens the Profile tab. Without one, they say how to get
-  one, and the panel turns Profile on, as its toggle does. Profile is
-  offered only where the trace's app profiles on request:
-  `api/capabilities?service=` says what an app does. A transaction's time
-  says on hover how long it was open and how much of that its SQL took, and
-  a row whose name says its database has no chip saying it again.
+- A long stretch of a trace's own code with nothing it called traced reads
+  as code. On the time strip it is hatched in its share's colour and
+  labelled (`untraced · 1.6 s`), the legend counts it in its share (`Your
+  code 1.6 s 98% · of it 1.6 s untraced`), and in the call tree it is a row
+  of its own under the span, hatched where it fell, its time the same, named
+  by what ran: with a profile, its functions (`aggregate · render_csv`),
+  else `untraced code`. The flame of the panel's Profile toggle after its
+  name opens the profile, or, where the app profiles on request and the
+  trace has none, turns Profile on in the panel. Profile is offered only
+  where the trace's app profiles on request: `api/capabilities?service=`
+  says what an app does. A transaction's time says on hover how long it was
+  open and how much of that its SQL took, and a row whose name says its
+  database has no chip saying it again.
 - A profile can say when each stack was seen (`bucket_us`, `stacks[].at`),
   which frames wait rather than compute (`frames[].waiting`, an await's
   `at_line`) and how many samples weren't taken because the trace's thread
@@ -34,9 +35,9 @@
   sampled of the trace's time and why the rest wasn't, shows waiting as a
   share of its own, hatched, and with a range picked profiles that stretch.
   The time strip, its legend and the call tree split the code's own time
-  into what it waited in (`waiting · 1.5 s`, the wait named: `await
-  asyncio.sleep in send_digest · tasks.py:108`) and what it computed, and a
-  click opens the profile at that stretch.
+  into what it waited in (`waiting · 1.5 s`, a `wait` row named by the wait:
+  `asyncio.sleep in send_digest`, its line on hover) and what it computed,
+  and a click opens the profile at that stretch.
 - A call tree and its strip show a trace's warnings and worse, not every
   record: its info and debug records stay out of the tree and the log lane,
   a quiet note on the span they were logged in says how many (`3 logs`),

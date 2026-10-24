@@ -2143,6 +2143,9 @@ details[data-focused] > .dt-sql-group {
 }
 /* A way on, as a link reads: the panel's Profile turned on from the legend. */
 .dt-map-quiet-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
   flex: none;
   padding: 0;
   border: 0;
@@ -2216,10 +2219,27 @@ details[data-focused] > .dt-sql-group {
 div.dt-map-row[data-kind="code"] {
   cursor: default;
 }
-.dt-map-open-profile {
+/* A code row's way to its profile: the panel toggle's flame, small and quiet; the brand's on the row's hover. Dimmed,
+   it turns Profile on. */
+.dt-map-flame {
+  display: inline-flex;
   flex: none;
+  color: var(--dt-text-3);
+}
+.dt-map-flame svg {
+  width: 0.8125rem;
+  height: 0.8125rem;
+}
+.dt-map-row:hover .dt-map-flame:not([data-off]) {
   color: var(--dt-accent);
-  font-family: var(--dt-font);
+}
+.dt-map-flame[data-off] {
+  opacity: 0.55;
+  cursor: pointer;
+}
+.dt-map-flame[data-off]:hover {
+  opacity: 1;
+  color: var(--dt-accent);
 }
 .dt-map-bar[data-point],
 .dt-map-bar[data-tick] {
