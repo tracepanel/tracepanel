@@ -137,3 +137,60 @@ export function waitedIn(profile: Profile | undefined, gaps: readonly [number, n
     .filter((piece) => piece.waiting)
     .reduce((sum, piece) => sum + piece.to - piece.from, 0);
 }
+
+/** The stacks seen in each bucket, by stack, and how often. */
+function seenIn(profile: Profile): Map<number, Map<number, number>> {
+  const buckets = new Map<number, Map<number, number>>();
+  profile.stacks.forEach((stack, index) => {
+    for (const [bucket, seen] of stack.at ?? []) add(buckets, bucket, index, seen);
+  });
+  return buckets;
+}
+
+function add(buckets: Map<number, Map<number, number>>, bucket: number, index: number, seen: number): void {
+  const here = buckets.get(bucket) ?? new Map<number, number>();
+  here.set(index, (here.get(index) ?? 0) + seen);
+  buckets.set(bucket, here);
+}
+
+/** A bucket's time shared among the stacks seen in it, in proportion: µs per stack. */
+function spread(seen: ReadonlyMap<number, number>, width: number, into: Map<number, number>): void {
+  const total = [...seen.values()].reduce((sum, count) => sum + count, 0);
+  for (const [index, count] of seen) into.set(index, (into.get(index) ?? 0) + (width * count) / total);
+}
+
+/** Each stack's share of the trace's own time, bucket by bucket (within `range`), carrying over unsampled buckets. */
+function bucketTimes(profile: Timed, duration: number, range: TimeRange | null): Map<number, number> {
+  const buckets = seenIn(profile);
+  const time = new Map<number, number>();
+  let before: Map<number, number> | undefined;
+  for (let bucket = 0; bucket * profile.bucket_us < duration; bucket++) {
+    before = buckets.get(bucket) ?? before;
+    const [from, to] = bucketSpan(profile, bucket);
+    if (counts(before, [from, to], range)) spread(before, Math.min(to, duration) - from, time);
+  }
+  return time;
+}
+
+/** Whether a bucket's time counts: it has stacks to share it (its own or the bucket's before), within the range. */
+function counts(
+  seen: Map<number, number> | undefined,
+  span: TimeRange,
+  range: TimeRange | null,
+): seen is Map<number, number> {
+  return seen !== undefined && (range === null || touches(span, range));
+}
+
+/**
+ * The profile in the trace's own time: each bucket's time shared among the stacks seen in it; a bucket with none
+ * (its thread ran other traces then) as the bucket before it, as the time strip takes it. Counted in samples of
+ * the profile's interval, so its time reads as the strip's; within `range` when one is given.
+ */
+export function wallClock(profile: Timed, duration: number, range: TimeRange | null): Profile {
+  const time = bucketTimes(profile, duration, range);
+  const stacks = profile.stacks.flatMap((stack, index): Stack[] => {
+    const us = time.get(index) ?? 0;
+    return us > 0 ? [{ ...stack, count: us / profile.interval_us }] : [];
+  });
+  return { ...profile, stacks, samples: stacks.reduce((sum, stack) => sum + stack.count, 0) };
+}

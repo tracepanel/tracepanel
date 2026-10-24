@@ -21,11 +21,15 @@ test("the Profile tab says how much it sampled, what it couldn't, and waiting as
   await page.goto(`/#/t/${await traceId(DIGEST)}?tab=profile`);
 
   await expect(page.getByText("Profile of the whole trace")).toBeVisible();
-  await expect(page.getByText("sampled of the trace's 1.6 s")).toBeVisible();
-  await expect(page.getByText("500 ms not sampled: other traces ran on the same thread")).toBeVisible();
+  // In the trace's own time, as the strip says it: the time not sampled filled in from the samples around it.
+  await expect(page.getByText("profiled of the trace's 1.6 s")).toBeVisible();
+  await expect(page.getByText("110 samples, one every 10 ms")).toBeVisible();
+  await expect(
+    page.getByText("500 ms not sampled: other traces ran on the same thread, filled in from the samples around it"),
+  ).toBeVisible();
   await expect(page.getByRole("region", { name: "Time by package" }).getByRole("button")).toHaveText([
-    /^waiting\s*91%\s*1\.0 s$/,
-    /^your code\s*9%\s*100 ms$/,
+    /^waiting\s*94%\s*1\.5 s$/,
+    /^your code\s*6%\s*100 ms$/,
   ]);
 });
 

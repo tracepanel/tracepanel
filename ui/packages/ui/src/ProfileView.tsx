@@ -19,7 +19,7 @@ import {
 } from "./lib/profile";
 import { rangeLabel, type TimeRange } from "./lib/slice";
 import { cn } from "./lib/utils";
-import { timed, within } from "./lib/waiting";
+import { timed, wallClock } from "./lib/waiting";
 import { Segmented } from "./Segmented";
 import { HEAD_TEXT } from "./TableColumns";
 import { useHeldSlice } from "./TimeSlice";
@@ -99,8 +99,12 @@ const FRAMES = [
 /** The Profile tab's content, when it is the tab open and the trace has a profile. */
 export function ProfilePane({ trace, open }: { trace: Trace; open: boolean }) {
   const { slice } = useHeldSlice();
-  if (!(open && trace.profile)) return null;
-  const scope = scopeOf(trace.profile, slice.range, trace.duration);
+  // Kept while the profile and the range are: the flame graph's zoom belongs to the profile it was made in.
+  const scope = useMemo(
+    () => (trace.profile ? scopeOf(trace.profile, slice.range, trace.duration) : null),
+    [trace.profile, slice.range, trace.duration],
+  );
+  if (!(open && trace.profile && scope)) return null;
   return (
     <ProfileView
       key={scope.title}
@@ -116,14 +120,34 @@ interface Scope {
   title: string;
   /** Why a stretch picked isn't what it shows: the profile doesn't say when. */
   note: string | null;
+  /** In the trace's own time (the profile says when its samples were taken), not in samples. */
+  timed: boolean;
 }
 
 function scopeOf(profile: Profile, range: TimeRange | null, total: number): Scope {
-  if (range && timed(profile)) {
-    return { profile: within(profile, range), title: `Profile of ${rangeLabel(range, total)}`, note: null };
+  // Timed, it reads in the trace's own time, as the time strip does; a range narrows it.
+  if (timed(profile)) {
+    const title = range ? `Profile of ${rangeLabel(range, total)}` : "Profile of the whole trace";
+    return { profile: wallClock(profile, total, range), title, note: null, timed: true };
   }
   const note = range ? "Its samples aren't timed: the range picked can't narrow it." : null;
-  return { profile, title: "Profile of the whole trace", note };
+  return { profile, title: "Profile of the whole trace", note, timed: false };
+}
+
+/** "110 samples, one every 10 ms": what the profile took. */
+function samplesLine(profile: Profile): string {
+  return `${profile.samples.toLocaleString()} samples, one every ${duration(profile.interval_us)}`;
+}
+
+/** The time it couldn't sample (its thread ran other traces), and, timed, that the samples around it fill it in. */
+function Dropped({ whole, timed: filled }: { whole: Profile; timed: boolean }) {
+  if (!whole.dropped) return null;
+  return (
+    <span className="text-xs text-warn">
+      {duration(whole.dropped * whole.interval_us)} not sampled: other traces ran on the same thread
+      {filled ? ", filled in from the samples around it" : ""}
+    </span>
+  );
 }
 
 /**
@@ -138,17 +162,11 @@ function ProfileHead({ whole, shown, trace, scope }: { whole: Profile; shown: Pr
       <span className="text-2xl font-semibold tracking-tight tabular-nums">
         {time(shown.samples)}
         <span className="ml-2 text-sm font-normal text-muted-foreground">
-          sampled of the trace's {duration(trace.duration)}
+          {scope.timed ? "profiled" : "sampled"} of the trace's {duration(trace.duration)}
         </span>
       </span>
-      {whole.dropped ? (
-        <span className="text-xs text-warn">
-          {time(whole.dropped)} not sampled: other traces ran on the same thread
-        </span>
-      ) : null}
-      <span className="text-xs text-muted-foreground">
-        {scope.note ?? `${shown.samples.toLocaleString()} samples, one every ${duration(whole.interval_us)}`}
-      </span>
+      <span className="text-xs text-muted-foreground">{scope.note ?? samplesLine(whole)}</span>
+      <Dropped whole={whole} timed={scope.timed} />
     </div>
   );
 }

@@ -31,9 +31,10 @@
   which frames wait rather than compute (`frames[].waiting`, an await's
   `at_line`) and how many samples weren't taken because the trace's thread
   ran other traces too (`dropped`). The schema and the agent take them, and
-  a profile without them stays valid. The Profile tab says how much it
-  sampled of the trace's time and why the rest wasn't, shows waiting as a
-  share of its own, hatched, and with a range picked profiles that stretch.
+  a profile without them stays valid. With them, the Profile tab reads in
+  the trace's own time, as the time strip does: what wasn't sampled is said
+  and filled in from the samples around it. Waiting is a share of its own,
+  hatched, and with a range picked it profiles that stretch.
   The time strip, its legend and the call tree split the code's own time
   into what it waited in (`waiting · 1.5 s`, a `wait` row named by the wait:
   `asyncio.sleep in send_digest`, its line on hover) and what it computed,
