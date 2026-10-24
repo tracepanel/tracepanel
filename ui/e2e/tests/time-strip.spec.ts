@@ -71,8 +71,12 @@ test("a transaction's time says on hover how long it was open and its SQL; its n
   for (const part of await transaction.locator("[data-slot='badge'], .dt-map-text").all()) {
     expect(await part.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
   }
-  // The code's own time is the strip's to say, not a row of the tree.
-  await expect(page.locator('.dt-map-row[data-kind="quiet"]')).toHaveCount(0);
+  // The code's own time is a row of its own too: a "code" row, its time the strip's.
+  const code = page.locator('.dt-map-row[data-kind="code"]');
+  await expect(code).toHaveCount(1);
+  await expect(code.locator(".dt-map-kind")).toHaveText("code");
+  await expect(code.locator(".dt-map-text")).toHaveText("your code");
+  await expect(code.locator(".dt-map-time")).toHaveText("1.6 s");
 });
 
 test("the strip is the Call tree tab's only, on the page and in the panel; the first tab has none", async ({
@@ -152,6 +156,7 @@ test("a request with no view recorded: its own time is its code's", async ({ pag
 /** The agent's answer for the trace's app: whether it profiles on request. */
 async function profiles(page: Page, yes: boolean): Promise<void> {
   await page.route("**/api/capabilities**", (route) =>
+    // biome-ignore lint/style/useNamingConvention: the API's wire format.
     route.fulfill({ json: { explain: false, users: false, profile: yes, request: true, live_tasks: false } }),
   );
 }
@@ -212,4 +217,69 @@ test("an app the agent doesn't know (not connected) is offered no Profile either
 
   await expect(tip).toBeVisible();
   await expect(tip).not.toContainText("Profile");
+});
+
+test("the tree's code row leads to the profile: its functions on hover, a click opens it, in the panel too", async ({
+  page,
+}) => {
+  await page.goto(`/#/t/${await traceId(HELD_REPORT)}?tab=tree`);
+  const code = page.locator('.dt-map-row[data-kind="code"]');
+
+  await expect(code).toContainText("Profile →");
+
+  await code.hover();
+
+  await expect(page.getByRole("tooltip").filter({ hasText: "Profile of the whole trace" })).toContainText(
+    /aggregate\s*69%/,
+  );
+
+  await code.click();
+
+  await expect(page.getByRole("tab", { name: /^Profile/ })).toHaveAttribute("aria-selected", "true");
+
+  await openApp(page, { one: { status: 200, trace: await traceId(HELD_REPORT), queries: 139, totalMs: 1600 } });
+  await page.getByRole("button", { name: "Load one" }).click();
+  await pill(page).click();
+  const frame = panel(page);
+  await frame.getByRole("tab", { name: /^Call tree/ }).click();
+  await frame.locator('.dt-map-row[data-kind="code"]').click();
+
+  await expect(frame.getByRole("tab", { name: /^Profile/ })).toHaveAttribute("aria-selected", "true");
+});
+
+test("with no profile, the tree's code row says how to get one where the app profiles; in the panel it turns it on", async ({
+  page,
+}) => {
+  await profiles(page, true);
+  await page.goto(`/#/t/${await traceId("POST /api/reports/sales")}?tab=tree`);
+  const code = page.locator('.dt-map-row[data-kind="code"]');
+
+  await expect(code.locator(".dt-map-time")).toHaveText("42 ms");
+  await expect(code).not.toContainText("Profile →");
+
+  await code.hover();
+
+  await expect(page.getByRole("tooltip").filter({ hasText: "Turn on Profile to see what ran here" })).toBeVisible();
+
+  const frame = await openSales(page);
+  await frame.locator('.dt-map-row[data-kind="code"]').getByText("Turn on Profile").click();
+
+  await expect(frame.getByRole("button", { name: "Profiling is on" })).toHaveAttribute("aria-pressed", "true");
+  await expect(frame.locator('.dt-map-row[data-kind="code"]')).toContainText("Profile is on: run it again");
+});
+
+test("an app that can't profile: the tree's code row is a plain row, nothing offered", async ({ page }) => {
+  await profiles(page, false);
+  await page.goto(`/#/t/${await traceId("POST /api/reports/sales")}?tab=tree`);
+  const code = page.locator('.dt-map-row[data-kind="code"]');
+
+  await expect(code).toHaveText(/your code\s*42 ms$/);
+
+  await code.hover();
+
+  await expect(page.getByRole("tooltip")).toHaveCount(0);
+
+  const frame = await openSales(page);
+
+  await expect(frame.locator('.dt-map-row[data-kind="code"]')).not.toContainText("Profile");
 });

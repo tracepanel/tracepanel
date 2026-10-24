@@ -2,10 +2,8 @@ import { type CSSProperties, type PointerEvent, useMemo, useState } from "react"
 import { partOfCategory } from "./CallMap";
 import { duration } from "./format";
 import { categoryLabel, type Stretch, stretches } from "./lib/breakdown";
-import { percent } from "./lib/percent";
-import { ownHotspots } from "./lib/profile";
 import { type Quiet, quietSpans } from "./lib/quiet";
-import { useProfilingOf } from "./Profiling";
+import { WhatRan } from "./ProfileHint";
 import { type ShareOf, ShareTip, sharesOf, TIP_CLASS } from "./TimeLegend";
 import type { Trace } from "./types";
 
@@ -64,45 +62,6 @@ function LaneTip({ hover, shares, trace }: { hover: Hover | null; shares: readon
 /** The tooltip's look, a few lines: what a quiet stretch is, and where to see what ran in it. */
 const QUIET_TIP_CLASS =
   "grid w-80 gap-1.5 rounded-lg border bg-popover px-3 py-2 text-sm text-popover-foreground shadow-[var(--dt-popover-shadow)]";
-
-/**
- * What ran in the code's own time: the trace's profile (the whole trace's: its samples aren't timed, so not this
- * stretch's alone), its own functions by where they were when sampled; without one, how to get one, where the app
- * profiles on request.
- */
-function WhatRan({ trace }: { trace: Trace }) {
-  const profiling = useProfilingOf(trace);
-  if (trace.profile) return <Hotspots profile={trace.profile} />;
-  if (!profiling.available) return null;
-  return (
-    <span className="grid gap-0.5">
-      <span>Turn on Profile to see what ran here</span>
-      <span className="text-xs text-muted-foreground">
-        {profiling.turnOn
-          ? "Profile is in the legend below"
-          : "with the panel's 🔥 or an X-Tracepanel-Profile: 1 header"}
-      </span>
-    </span>
-  );
-}
-
-/** The profile's own functions, each where your code was when sampled, the whole trace over; a click opens it. */
-function Hotspots({ profile }: { profile: NonNullable<Trace["profile"]> }) {
-  return (
-    <span className="grid gap-1">
-      <span className="font-medium">Profile of the whole trace</span>
-      <span className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-0.5">
-        {ownHotspots(profile).map(({ name, share }) => (
-          <span key={name} className="contents">
-            <span className="truncate font-mono text-xs">{name}</span>
-            <span className="text-right text-xs text-muted-foreground tabular-nums">{percent(share, 1)}</span>
-          </span>
-        ))}
-      </span>
-      <span className="text-xs text-brand">Open profile →</span>
-    </span>
-  );
-}
 
 /** "your code · 1.6 s": a span's own time, its share's, hatched, with nothing it called recorded inside. */
 function quietLabel(label: string, quiet: string): string {

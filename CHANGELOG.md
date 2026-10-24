@@ -16,14 +16,16 @@
   its Console button opens the trace with what was picked.
 - A long stretch of a trace's own code with nothing recorded inside reads as
   code. On the time strip it is hatched in its share's colour and labelled
-  (`your code · 1.5 s`), and the legend counts it in its share (`Your code
-  1.6 s 98% · of it 1.5 s unrecorded`). With a profile, its tooltip names
-  where your code was over the trace's profile (`aggregate 69% ·
-  render_csv 21%`) and a click opens the Profile tab. Without one, it says
-  how to get one, and in the panel the legend turns Profile on, as its
-  toggle does. A transaction's time says on hover how long it was open and
-  how much of that its SQL took, and a row whose name says its database has
-  no chip saying it again.
+  (`your code · 1.5 s`), the legend counts it in its share (`Your code
+  1.6 s 98% · of it 1.5 s unrecorded`), and in the call tree it is a "code"
+  row of its own under the span, hatched where it fell, its time the same.
+  With a profile, both name the trace's own functions by share (`aggregate
+  69%`) and a click opens the Profile tab. Without one, they say how to get
+  one, and the panel turns Profile on, as its toggle does. Profile is
+  offered only where the trace's app profiles on request:
+  `api/capabilities?service=` says what an app does. A transaction's time
+  says on hover how long it was open and how much of that its SQL took, and
+  a row whose name says its database has no chip saying it again.
 - A call tree and its strip show a trace's warnings and worse, not every
   record: its info and debug records stay out of the tree and the log lane,
   a quiet note on the span they were logged in says how many (`3 logs`),

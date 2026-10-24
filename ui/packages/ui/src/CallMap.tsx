@@ -8,22 +8,27 @@ import {
   useRef,
   useState,
 } from "react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./components/ui/tooltip";
 import { duration, since } from "./format";
 import { GraphqlCode } from "./GraphqlCode";
 import { ChevronRightIcon, CloseIcon } from "./icons";
 import { keyed } from "./keys";
 import { AllAttributes, LogRecordDetails } from "./LogRecordDetails";
-import { type Category, spanCategories } from "./lib/breakdown";
+import { type Category, categoryLabel, spanCategories } from "./lib/breakdown";
 import { callFields } from "./lib/callFields";
 import { callTemplate, groupNoun } from "./lib/calls";
 import { spanKindLabel } from "./lib/handler";
+import { widthOf } from "./lib/percent";
 import { plural } from "./lib/plural";
+import { type Quiet, quietSpans } from "./lib/quiet";
 import { traceRuntime } from "./lib/runtime";
 import { isReceiver, raised } from "./lib/signals";
 import { isLoud, overlaps, type Slice, type TimeRange } from "./lib/slice";
 import { CALL_KINDS, DATASTORES, MESSAGING, RPC } from "./lib/systems";
 import { type TraceLinks, traceLinkProps } from "./links";
 import { type NameValue, NameValues, RowsLookContext } from "./NameValues";
+import { WhatRan } from "./ProfileHint";
+import { useProfilingOf } from "./Profiling";
 import { PropTable } from "./PropTable";
 import {
   AliasChip,
@@ -382,6 +387,13 @@ interface RowContext {
   /** How many info and debug records each span has that don't show, by its id; and what shows them. */
   hiddenLogs: ReadonlyMap<string, number>;
   onShowLogs: () => void;
+  /** The spans whose own code ran long with nothing recorded inside (as the strip says them), and each span's share. */
+  quiet: ReadonlyMap<string, Quiet>;
+  categories: ReadonlyMap<string, Category>;
+  /** What is picked: a code row shows with its share picked, or a range it overlaps. */
+  slice: Slice;
+  /** Opens the trace's profile, when it has one: what ran in its code. */
+  onProfile: (() => void) | undefined;
 }
 
 /** The selected row's details, under it: where the click was, not past the end of a long tree. */
@@ -824,7 +836,12 @@ function SpanRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps
         </span>
       </button>
       <RowDetails id={node.key} ctx={ctx} />
-      {fold ? <Rows nodes={node.children} depth={depth + 1} ctx={ctx} parent={span} /> : null}
+      {fold ? (
+        <>
+          <Rows nodes={node.children} depth={depth + 1} ctx={ctx} parent={span} />
+          <CodeRow span={span} ctx={ctx} depth={depth + 1} />
+        </>
+      ) : null}
     </div>
   );
 }
@@ -856,6 +873,125 @@ function timeTitle(span: Span, trace: Trace): string | undefined {
   const sql = duration(sqlInside(span, trace));
   return `Open ${duration(span.duration)}; SQL inside took ${sql}, the rest is code running while it's held`;
 }
+
+/* ---------- the code's own time ---------- */
+
+/** A code row shows unless other shares are picked, or a range it doesn't overlap. */
+function codeShown(quiet: Quiet, category: Category, ctx: RowContext): boolean {
+  const { parts, range } = ctx.slice;
+  if (parts.length > 0 && !parts.includes(partOfCategory(category))) return false;
+  return range === null || quiet.gaps.some(([from, to]) => overlaps(range, from - ctx.trace.start, to - from));
+}
+
+/** Where its code ran with nothing recorded inside, hatched in its share's colour; gaps too thin to see left out. */
+function CodeBars({ quiet, category, trace }: { quiet: Quiet; category: Category; trace: Trace }) {
+  const total = Math.max(trace.duration, 1);
+  return (
+    <span className="dt-map-track" aria-hidden="true">
+      {quiet.gaps
+        .filter(([from, to]) => to - from >= total * 0.004)
+        .map(([from, to]) => (
+          <span
+            key={from}
+            className="dt-map-bar"
+            data-quiet=""
+            data-category={category}
+            style={{ left: widthOf(from - trace.start, total), width: widthOf(to - from, total) }}
+          />
+        ))}
+    </span>
+  );
+}
+
+/** In the panel, where the app profiles on request and the trace has no profile: its Profile toggle, turned on. */
+function TurnOnProfileHere({ trace }: { trace: Trace }) {
+  const turnOn = turnOnFor(trace, useProfilingOf(trace));
+  const [on, setOn] = useState(false);
+  if (!turnOn) return null;
+  return (
+    // biome-ignore lint/a11y/useSemanticElements: inside the row; a click turns the panel's Profile on.
+    // biome-ignore lint/a11y/useKeyWithClickEvents: the legend's link is the keyboard's way.
+    <span
+      className="dt-map-sub dt-map-logs"
+      role="button"
+      tabIndex={-1}
+      onClick={(event) => {
+        event.stopPropagation();
+        turnOn();
+        setOn(true);
+      }}
+    >
+      {on ? "Profile is on: run it again" : "Turn on Profile"}
+    </span>
+  );
+}
+
+/** The panel's way to turn Profile on, for a trace with none yet whose app profiles on request. */
+function turnOnFor(trace: Trace, profiling: ReturnType<typeof useProfilingOf>): (() => void) | undefined {
+  return trace.profile || !profiling.available ? undefined : profiling.turnOn;
+}
+
+/** The code row's own: a grey "code" box, its share's name, the way on to the profile, its bars and its time. */
+function CodeRowParts({ span, ctx, depth }: { span: Span; ctx: RowContext; depth: number }) {
+  const quiet = ctx.quiet.get(span.id) as Quiet;
+  const category = ctx.categories.get(span.id) ?? "code";
+  return (
+    <>
+      <span className="dt-map-name" style={{ paddingLeft: `${12 + depth * 16}px` }}>
+        <span className="dt-map-caret" />
+        <KindBadge kind="code" muted={true} className="dt-map-kind" />
+        <span className="dt-map-text">{categoryLabel(category, ctx.trace).toLowerCase()}</span>
+        {ctx.onProfile ? <span className="dt-map-sub dt-map-open-profile">Profile →</span> : null}
+        <TurnOnProfileHere trace={ctx.trace} />
+      </span>
+      <CodeBars quiet={quiet} category={category} trace={ctx.trace} />
+      <span className="dt-map-time">{duration(quiet.total)}</span>
+    </>
+  );
+}
+
+/**
+ * Under a span whose children leave much of its time uncovered (the strip's hatched stretches, the same time): its
+ * own code, a row of its own. With a profile, a click opens it and its functions show on hover; where the app
+ * profiles on request, how to get one. Not a span: no details, no filter counts it.
+ */
+function CodeRow({ span, ctx, depth }: { span: Span; ctx: RowContext; depth: number }) {
+  const profiling = useProfilingOf(ctx.trace);
+  if (!hasCodeRow(span, ctx)) return null;
+  const parts = <CodeRowParts span={span} ctx={ctx} depth={depth} />;
+  const row = ctx.onProfile ? (
+    <button type="button" className="dt-map-row" data-kind="code" onClick={ctx.onProfile}>
+      {parts}
+    </button>
+  ) : (
+    <div className="dt-map-row" data-kind="code">
+      {parts}
+    </div>
+  );
+  return <WithWhatRan trace={ctx.trace} offered={Boolean(ctx.trace.profile) || profiling.available} row={row} />;
+}
+
+/** Whether a span has a code row: its code ran long with nothing recorded inside, and what is picked keeps it. */
+function hasCodeRow(span: Span, ctx: RowContext): boolean {
+  const quiet = ctx.quiet.get(span.id);
+  return quiet !== undefined && codeShown(quiet, ctx.categories.get(span.id) ?? "code", ctx);
+}
+
+/** A code row with what ran in it on hover, when there is anything to say. */
+function WithWhatRan({ trace, offered, row }: { trace: Trace; offered: boolean; row: ReactNode }) {
+  if (!offered) return row;
+  return (
+    <Tooltip delayDuration={150} disableHoverableContent={true}>
+      <TooltipTrigger asChild>{row}</TooltipTrigger>
+      <TooltipContent side="top" sideOffset={6} arrow={false} className={CODE_TIP_CLASS}>
+        <WhatRan trace={trace} />
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+const CODE_TIP_CLASS =
+  "grid w-72 gap-1.5 rounded-lg border bg-popover px-3 py-2 text-sm text-popover-foreground shadow-[var(--dt-popover-shadow)]";
 
 /**
  * The fold of a row with rows under it: a click on it opens or closes them only, without selecting the row and
@@ -1442,6 +1578,13 @@ function HiddenLogs({ count, onShow }: { count: number | undefined; onShow: () =
   );
 }
 
+/** Each span's share of the time, and those whose own code ran long with nothing recorded inside. */
+function useSpansTime(trace: Trace) {
+  const categories = useMemo(() => spanCategories(trace), [trace]);
+  const quiet = useMemo(() => quietSpans(trace), [trace]);
+  return { categories, quiet };
+}
+
 function pickedOf(slice: Slice, trace: Trace, categories: ReadonlyMap<string, Category>): Picked {
   return { parts: new Set(slice.parts), range: slice.range, start: trace.start, categories };
 }
@@ -1454,11 +1597,14 @@ export function CallMap({
   links,
   initialSpan,
   head,
+  ...wiring
 }: {
   trace: Trace;
   issueBySpan: ReadonlyMap<string, IssueKind>;
   /** Above the tree, in the panel: the trace's time and its legend, which pick the rows. */
   head?: ReactNode;
+  /** Opens the trace's profile, when it has one: its code rows lead there. */
+  onProfile?: (() => void) | undefined;
   /** Linked traces: tasks this trace enqueued appear under their enqueue span. */
   related?: Related | undefined;
   links?: TraceLinks | undefined;
@@ -1475,7 +1621,7 @@ export function CallMap({
   const rows = useScrolledToInitial(initialSpan);
   const [collapsed, toggle] = useToggleSet();
   const details = detailsOf(tree, selected, trace, links);
-  const categories = useMemo(() => spanCategories(trace), [trace]);
+  const { categories, quiet } = useSpansTime(trace);
   const marks = useMemo(() => marksOf(tree, pickedOf(current, trace, categories)), [tree, current, trace, categories]);
   const inline = side ? null : details;
 
@@ -1498,6 +1644,10 @@ export function CallMap({
                 marks,
                 details: inline,
                 hiddenLogs: hidden,
+                quiet,
+                categories,
+                slice: current,
+                onProfile: wiring.onProfile,
                 onShowLogs: () => change({ ...current, logs: true }),
               }}
             />

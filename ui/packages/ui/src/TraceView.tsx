@@ -342,7 +342,14 @@ function TreePane({
   ...tree
 }: ComponentProps<typeof CallMap> & { open: boolean; onSelect: (target: MarkTarget) => void }) {
   if (!open) return null;
-  return <CallMap {...tree} head={<TimeStrip trace={tree.trace} related={tree.related} onSelect={onSelect} />} />;
+  const onProfile = tree.trace.profile ? () => onSelect({ tab: "profile" }) : undefined;
+  return (
+    <CallMap
+      {...tree}
+      head={<TimeStrip trace={tree.trace} related={tree.related} onSelect={onSelect} />}
+      onProfile={onProfile}
+    />
+  );
 }
 
 export function TraceView({
