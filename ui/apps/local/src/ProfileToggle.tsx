@@ -1,7 +1,7 @@
-import { type DataSource, Hint } from "@tracepanel/ui";
+import { type DataSource, Hint, ProfilingContext } from "@tracepanel/ui";
 import { cn } from "@tracepanel/ui/lib/utils";
 import { FlameIcon } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { useCapability } from "./hooks";
 
 // While it is set, the app profiles every request this browser makes; a session cookie, so closing the browser ends it.
@@ -13,6 +13,19 @@ function profiling(): boolean {
 
 function profile(on: boolean): void {
   document.cookie = on ? `${COOKIE}=1; Path=/; SameSite=Lax` : `${COOKIE}=; Max-Age=0; Path=/; SameSite=Lax`;
+  // The toggle shows it, wherever it was turned on from (the trace's time strip too).
+  window.dispatchEvent(new Event(CHANGED));
+}
+
+const CHANGED = "tracepanel:profiling";
+
+/**
+ * Around the panel's trace: whether its app profiles on request (it offers the toggle then), and the toggle turned on
+ * from where the trace's time says nothing recorded what ran.
+ */
+export function PanelProfiling({ source, children }: { source: DataSource; children: ReactNode }) {
+  const available = useCapability(source, "profile");
+  return <ProfilingContext value={{ available, turnOn: () => profile(true) }}>{children}</ProfilingContext>;
 }
 
 const HINTS = {
@@ -34,6 +47,11 @@ export function ProfileToggle({ source }: { source: DataSource }) {
 /** An icon among the panel's own (share, theme, dock), lit while profiling is on. */
 function ProfileButton() {
   const [on, setOn] = useState(profiling);
+  useEffect(() => {
+    const update = () => setOn(profiling());
+    window.addEventListener(CHANGED, update);
+    return () => window.removeEventListener(CHANGED, update);
+  }, []);
   const hint = HINTS[on ? "on" : "off"];
   return (
     <Hint title={hint.title} detail={hint.detail}>

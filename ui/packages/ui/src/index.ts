@@ -25,6 +25,7 @@ export { parseSlice, type Slice, sliceParams } from "./lib/slice";
 export { linkProps, type TraceLinks, traceLinkProps } from "./links";
 export { MailList } from "./MailList";
 export { type NameValue, NameValues } from "./NameValues";
+export { type Profiling, ProfilingContext } from "./Profiling";
 export * from "./PropTable";
 export {
   AliasChip,

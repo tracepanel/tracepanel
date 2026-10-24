@@ -182,3 +182,32 @@ export function layout(focus: Node): Box[] {
   place(focus, 0, 0);
   return boxes;
 }
+
+/** A function of the project's own and the share of the samples it was the innermost of them in. */
+export interface Hotspot {
+  name: string;
+  share: number;
+}
+
+/**
+ * Where the project's own code was, over the whole profile: each sample counts for the innermost function of yours
+ * in its stack (its own time and the libraries it called), the first `count` of them by share.
+ */
+export function ownHotspots(profile: Profile, count = 3): Hotspot[] {
+  const samples = new Map<string, number>();
+  for (const stack of profile.stacks) {
+    const own = innermostOwn(profile, stack);
+    if (own) samples.set(own, (samples.get(own) ?? 0) + stack.count);
+  }
+  return [...samples]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, count)
+    .map(([name, taken]) => ({ name, share: taken / Math.max(profile.samples, 1) }));
+}
+
+function innermostOwn(profile: Profile, stack: Stack): string | undefined {
+  return [...stack.frames]
+    .reverse()
+    .map((index) => profile.frames[index])
+    .find((frame) => frame?.in_app)?.function;
+}

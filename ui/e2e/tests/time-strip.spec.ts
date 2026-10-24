@@ -9,6 +9,13 @@ import { HELD_REPORT } from "../seed.ts";
 
 type Scope = Page | FrameLocator;
 
+/** The middle of what a locator finds, on the page. */
+async function centre(locator: Locator): Promise<[number, number]> {
+  const box = await locator.boundingBox();
+  if (!box) throw new Error(`${locator} isn't on the page`);
+  return [box.x + box.width / 2, box.y + box.height / 2];
+}
+
 function row(scope: Scope, kind: string, name: string | RegExp): Locator {
   return scope.locator(`.dt-map-row[data-kind="${kind}"]`).filter({ hasText: name });
 }
@@ -30,16 +37,22 @@ test("the strip names its lanes by what their marks are and says a long stretch 
   await expect(lanes.locator(".dt-lane-label")).toHaveText(["task", "139 queries", "1 log record"]);
   // One number for the code's own time, the same in the strip and its legend.
   const legend = page.getByRole("list", { name: /^Where the time went/ });
-  await expect(lanes.locator(".dt-quiet-label")).toHaveText("1.6 s · no recorded calls");
+  await expect(lanes.locator(".dt-quiet-label")).toHaveText("your code · 1.6 s");
   await expect(legend).toContainText("Database");
-  await expect(legend.locator(".dt-share-quiet")).toHaveText("of it 1.6 s no recorded calls");
+  await expect(legend.locator(".dt-share-quiet")).toHaveText("of it 1.6 s unrecorded");
 
-  const box = await lanes.locator(".dt-quiet-said").boundingBox();
-  await page.mouse.move((box?.x ?? 0) + (box?.width ?? 0) / 2, (box?.y ?? 0) + (box?.height ?? 0) / 2);
+  const middle = await centre(lanes.locator(".dt-quiet-said"));
+  await page.mouse.move(...middle);
 
-  await expect(page.getByRole("tooltip").filter({ hasText: "no recorded calls" })).toContainText(
-    "turn on Profile to see what ran",
-  );
+  // Its profile says where its own code was, over the whole trace; a click opens it.
+  const tip = page.getByRole("tooltip").filter({ hasText: "nothing recorded inside" });
+  await expect(tip).toContainText("Of it 1.6 s with nothing recorded inside");
+  await expect(tip).toContainText("over the whole trace's profile");
+  await expect(tip).toContainText("aggregate 69% · render_csv 21% · reconcile_stock 8%");
+
+  await page.mouse.click(...middle);
+
+  await expect(page.getByRole("tab", { name: /^Profile/ })).toHaveAttribute("aria-selected", "true");
 });
 
 test("a transaction's time says on hover how long it was open and its SQL; its name says its database once", async ({
@@ -79,9 +92,7 @@ test("the strip is the Call tree tab's only, on the page and in the panel; the f
   const frame = panel(page);
   await frame.getByRole("tab", { name: /^Call tree/ }).click();
 
-  await expect(frame.getByRole("region", { name: "Time" }).locator(".dt-quiet-label")).toHaveText(
-    "1.6 s · no recorded calls",
-  );
+  await expect(frame.getByRole("region", { name: "Time" }).locator(".dt-quiet-label")).toHaveText("your code · 1.6 s");
 
   await frame.getByRole("tablist").first().getByRole("tab").first().click();
 
@@ -136,4 +147,51 @@ test("a request with no view recorded: its own time is its code's", async ({ pag
   await page.goto(`/#/t/${await traceId("GET /account/orders/")}?tab=tree`);
 
   await expect(legend.locator('[data-category="django"]')).toContainText("Framework & middleware");
+});
+
+test("with no profile, the code's own time says how to get one; in the panel the legend turns its Profile on", async ({
+  page,
+}) => {
+  await page.goto(`/#/t/${await traceId("POST /api/reports/sales")}?tab=tree`);
+  const said = page.locator(".dt-quiet-said");
+  await page.mouse.move(...(await centre(said)));
+
+  await expect(page.getByRole("tooltip").filter({ hasText: "nothing recorded inside" })).toContainText(
+    "To see what ran here, turn on Profile and run it again: the panel's Profile toggle, or an X-Tracepanel-Profile: 1 header.",
+  );
+
+  // An app that profiles on request: the panel offers its toggle.
+  await page.route("**/api/capabilities", (route) =>
+    route.fulfill({ json: { explain: false, users: false, profile: true, request: true } }),
+  );
+  await openApp(page, {
+    one: { status: 202, trace: await traceId("POST /api/reports/sales"), queries: 0, totalMs: 42 },
+  });
+  await page.getByRole("button", { name: "Load one" }).click();
+  await pill(page).click();
+  const frame = panel(page);
+  await frame.getByRole("tab", { name: /^Call tree/ }).click();
+  const turnOn = frame.getByRole("button", { name: "Turn on Profile to see what ran" });
+
+  await turnOn.click();
+
+  await expect(frame.getByRole("button", { name: "Profile is on: run it again" })).toBeDisabled();
+  await expect(frame.getByRole("button", { name: "Profiling is on" })).toHaveAttribute("aria-pressed", "true");
+  expect((await page.context().cookies()).find((cookie) => cookie.name === "tracepanel_profile")?.value).toBe("1");
+});
+
+test("in the panel, an app that doesn't profile on request offers no Profile from the strip", async ({ page }) => {
+  await page.route("**/api/capabilities", (route) =>
+    route.fulfill({ json: { explain: false, users: false, profile: false, request: true } }),
+  );
+  await openApp(page, {
+    one: { status: 202, trace: await traceId("POST /api/reports/sales"), queries: 0, totalMs: 42 },
+  });
+  await page.getByRole("button", { name: "Load one" }).click();
+  await pill(page).click();
+  const frame = panel(page);
+  await frame.getByRole("tab", { name: /^Call tree/ }).click();
+
+  await expect(frame.locator(".dt-quiet-said")).toBeVisible();
+  await expect(frame.getByRole("button", { name: /^Turn on Profile/ })).toHaveCount(0);
 });

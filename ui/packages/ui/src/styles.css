@@ -1152,9 +1152,10 @@ tr[data-new] {
     display: none;
   }
 }
+/* Under the lane: the strip heads its tab, there is no room above it in the panel. */
 .dt-lane-tip {
   position: absolute;
-  bottom: calc(100% + 0.5rem);
+  top: calc(100% + 0.5rem);
   z-index: 20;
   transform: translateX(-50%);
   pointer-events: none;
@@ -2135,6 +2136,27 @@ details[data-focused] > .dt-sql-group {
 .dt-map-sub[data-count] {
   flex: none;
   font-family: var(--dt-font);
+}
+/* A way on, as a link reads: the panel's Profile turned on from the legend. */
+.dt-map-quiet-link {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dt-accent);
+  font: var(--dt-size-sm) var(--dt-font);
+  cursor: pointer;
+}
+.dt-map-quiet-link:hover:not(:disabled) {
+  text-decoration: underline;
+}
+.dt-map-quiet-link:disabled {
+  color: var(--dt-text-3);
+  cursor: default;
+}
+/* The code's own time with a profile to show what ran in it: a click opens it. */
+.dt-time-track .dt-stretch[data-quiet] {
+  cursor: pointer;
 }
 /* A span's info and debug records, while only warnings show: how many, a click away. */
 .dt-map-logs {

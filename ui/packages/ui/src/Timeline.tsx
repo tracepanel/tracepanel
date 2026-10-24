@@ -17,8 +17,8 @@ import { TimeLegend } from "./TimeLegend";
 import { RangeBand, useHeldSlice, useRangeDrag } from "./TimeSlice";
 import type { Related, Span, Trace } from "./types";
 
-/** Where a mark leads: the span in the call tree (or the tree itself), the logs, the error. */
-export type MarkTarget = { tab: "tree"; span?: string } | { tab: "logs" } | { tab: "error" };
+/** Where a mark leads: the span in the call tree (or the tree itself), the logs, the error, the profile. */
+export type MarkTarget = { tab: "tree"; span?: string } | { tab: "logs" } | { tab: "error" } | { tab: "profile" };
 
 interface Mark {
   key: string;
@@ -207,6 +207,8 @@ interface Picking {
   onRange: (range: TimeRange | null) => void;
   /** A share's stretch clicked: its rows picked, or let go. */
   onShare: (category: string) => void;
+  /** The code's own time clicked, when the trace has a profile: it opens, to show what ran. */
+  onQuiet: (() => void) | undefined;
   start: (event: PointerEvent<HTMLDivElement>, track: Element) => void;
   layer: RefObject<HTMLDivElement | null>;
 }
@@ -221,8 +223,14 @@ function pressOnLanes(event: PointerEvent<HTMLDivElement>, picking: Picking): vo
 function clickOnLanes(event: MouseEvent<HTMLDivElement>, picking: Picking): void {
   const target = event.target as Element;
   const share = target.closest<HTMLElement>(".dt-time-track [data-category]");
-  if (share) picking.onShare(share.dataset["category"] ?? "");
+  if (share) clickOnShare(share, picking);
   else if (target.classList.contains("dt-lane-track")) picking.onRange(null);
+}
+
+/** A share's stretch picks its rows; its code's own time, with a profile to show what ran there, opens it. */
+function clickOnShare(share: HTMLElement, picking: Picking): void {
+  if (share.dataset["quiet"] && picking.onQuiet) picking.onQuiet();
+  else picking.onShare(share.dataset["category"] ?? "");
 }
 
 /** The axis and the lanes, and over them the range picked (or being picked). */
@@ -299,7 +307,8 @@ export function Timeline({ trace, onSelect }: { trace: Trace; onSelect?: ((targe
   const { slice, onRange, onShare } = useLanesSlice(onSelect);
   const drawn = lanes(trace, slice.logs);
   const drag = useRangeDrag(Math.max(trace.duration, 1), onRange);
-  const picking = { onRange, onShare, start: drag.start, layer };
+  const onQuiet = trace.profile ? () => onSelect?.({ tab: "profile" }) : undefined;
+  const picking = { onRange, onShare, onQuiet, start: drag.start, layer };
   return (
     <figure className="dt-timeline" aria-label="Timeline">
       <LanesBody

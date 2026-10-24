@@ -1,4 +1,4 @@
-import { type FocusEvent, type ReactNode, useMemo } from "react";
+import { type FocusEvent, type ReactNode, useMemo, useState } from "react";
 import { buildTree, chipCounts, FILTERS, type FilterId, partOfCategory, withShownLogs } from "./CallMap";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./components/ui/tooltip";
 import { duration } from "./format";
@@ -8,6 +8,7 @@ import { percent } from "./lib/percent";
 import { plural } from "./lib/plural";
 import { quietSpans } from "./lib/quiet";
 import { cleared, isLoud, isWhole, rangeLabel, type Slice, togglePart } from "./lib/slice";
+import { type Profiling, useProfiling } from "./Profiling";
 import { useHeldSlice } from "./TimeSlice";
 import type { Related, Trace } from "./types";
 
@@ -107,7 +108,7 @@ function QuietPart({ share }: { share: ShareOf }) {
   return (
     <span className="dt-share-quiet">
       <span className="dt-swatch" data-quiet="" />
-      of it {duration(share.quiet)} no recorded calls
+      of it {duration(share.quiet)} unrecorded
     </span>
   );
 }
@@ -138,6 +139,38 @@ function Share({ share, filters }: { share: ShareOf; filters: SliceState }) {
       </Tooltip>
     </li>
   );
+}
+
+/**
+ * In the panel, after the shares, when the code ran with nothing recorded inside and the trace has no profile: its
+ * Profile toggle, turned on from here (the same cookie, the toggle lights), for the next run to show what ran.
+ */
+function TurnOnProfile({ trace, shares }: { trace: Trace; shares: readonly ShareOf[] }) {
+  const profiling = useProfiling();
+  const [on, setOn] = useState(false);
+  const turnOn = offered(trace, shares, profiling);
+  if (!turnOn) return null;
+  return (
+    <li>
+      <button
+        type="button"
+        className="dt-map-quiet-link"
+        disabled={on}
+        onClick={() => {
+          turnOn();
+          setOn(true);
+        }}
+      >
+        {on ? "Profile is on: run it again" : "Turn on Profile to see what ran"}
+      </button>
+    </li>
+  );
+}
+
+/** How to turn Profile on, when it is offered: no profile yet, code ran with nothing recorded, an app that profiles. */
+function offered(trace: Trace, shares: readonly ShareOf[], profiling: Profiling): (() => void) | undefined {
+  const quiet = shares.some((share) => share.quiet > 0);
+  return quiet && !trace.profile && profiling.available ? profiling.turnOn : undefined;
 }
 
 /**
@@ -210,6 +243,7 @@ export function TimeLegend({ trace, related }: { trace: Trace; related: Related 
           </FilterChip>
         </li>
       ))}
+      <TurnOnProfile trace={trace} shares={shares} />
       <LogsChip trace={trace} filters={filters} />
       <RangeChip total={Math.max(trace.duration, 1)} filters={filters} />
       {isWhole(slice) ? null : (

@@ -43,7 +43,7 @@ import { ClearDialog } from "./ClearDialog";
 import { Console } from "./Console";
 import { exploreFor } from "./explore";
 import { type EntrySummary, type TabEntry, type TabHistory, useNewIds, usePolling, useTabHistory } from "./hooks";
-import { ProfileToggle } from "./ProfileToggle";
+import { PanelProfiling, ProfileToggle } from "./ProfileToggle";
 import { RefreshProvider } from "./refresh";
 import { consoleLinks, go, href, parse, type Route, useRoute } from "./routes";
 import { SearchPalette } from "./SearchPalette";
@@ -1037,27 +1037,29 @@ function PanelApp({ route }: { route: Route }) {
         {split ? <SplitHandle container={splitRef} /> : null}
         <main className="panel-body">
           {selectedId ? (
-            <TraceScreen
-              // A link to another tab of the trace on screen opens that tab: a new screen, not a kept state. A new
-              // request keeps the screen: the trace on it stays until the next one is loaded, with no blank between.
-              key={route.name === "trace" ? (route.tab ?? "") : ""}
-              id={selectedId}
-              source={source}
-              variant={split ? "strip" : "compact"}
-              // A link to a tab (the pill's card opens a finding on Issues) wins over the last tab used.
-              initialTab={route.name === "trace" ? tabOf(route.tab) : undefined}
-              preferredTab={tab}
-              onTabChange={(next) => {
-                setTab(next);
-                writeTab(next);
-              }}
-              initialSlice={sliced.slice}
-              onSliceChange={sliced.onChange}
-              actions={split ? panelActions : undefined}
-              lead={<BackTo route={back} rows={listed} bare={!split} />}
-              links={PANEL_LINKS}
-              explore={(trace) => exploreFor(trace, (route) => `${base}${href(route)}`)}
-            />
+            <PanelProfiling source={source}>
+              <TraceScreen
+                // A link to another tab of the trace on screen opens that tab: a new screen, not a kept state. A new
+                // request keeps the screen: the trace on it stays until the next one is loaded, with no blank between.
+                key={route.name === "trace" ? (route.tab ?? "") : ""}
+                id={selectedId}
+                source={source}
+                variant={split ? "strip" : "compact"}
+                // A link to a tab (the pill's card opens a finding on Issues) wins over the last tab used.
+                initialTab={route.name === "trace" ? tabOf(route.tab) : undefined}
+                preferredTab={tab}
+                onTabChange={(next) => {
+                  setTab(next);
+                  writeTab(next);
+                }}
+                initialSlice={sliced.slice}
+                onSliceChange={sliced.onChange}
+                actions={split ? panelActions : undefined}
+                lead={<BackTo route={back} rows={listed} bare={!split} />}
+                links={PANEL_LINKS}
+                explore={(trace) => exploreFor(trace, (route) => `${base}${href(route)}`)}
+              />
+            </PanelProfiling>
           ) : history ? (
             <Empty title="No requests yet">Requests from this browser tab will appear here.</Empty>
           ) : (

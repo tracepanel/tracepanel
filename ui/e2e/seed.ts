@@ -421,6 +421,34 @@ function heldTransaction(): Doc {
     exception: null,
     attrs: {},
   });
+  // Profiled: what its own code was doing while nothing it called was recorded.
+  const frame = (fn: string, module: string, line: number, inApp: boolean) => ({
+    function: fn,
+    module,
+    file: `${module.replaceAll(".", "/")}.py`,
+    line,
+    // biome-ignore lint/style/useNamingConvention: a frame as the SDKs send it.
+    in_app: inApp,
+  });
+  doc["profile"] = {
+    // biome-ignore lint/style/useNamingConvention: a profile as the SDKs send it.
+    interval_us: 1_000,
+    samples: 1_600,
+    frames: [
+      frame("Task.__call__", "celery.app.task", 411, false),
+      frame("reconcile_stock", "shop.tasks", 40, true),
+      frame("aggregate", "shop.stock", 12, true),
+      frame("render_csv", "shop.stock", 58, true),
+      frame("execute", "django.db.backends.utils", 100, false),
+    ],
+    stacks: [
+      { frames: [0, 1, 2], count: 900 },
+      { frames: [0, 1, 3], count: 330 },
+      { frames: [0, 1, 2, 4], count: 200 },
+      { frames: [0, 1], count: 120 },
+      { frames: [0], count: 50 },
+    ],
+  };
   // Its records as a busy task writes them: a batch at a time, a debug line, one warning, and how it ended.
   doc["logs"] = [
     ...Array.from({ length: 8 }, (_, index) =>
