@@ -1,6 +1,8 @@
 // A part of a trace's time picked to look at: kinds of calls (a share of the time, a filter chip) and a stretch of
 // the timeline. Plain data, no React: the call tree draws from it, the console keeps it in its URL.
 
+import { duration } from "../format";
+
 /** A stretch of the trace's time, in microseconds since it started. */
 export type TimeRange = readonly [number, number];
 
@@ -50,15 +52,9 @@ export function overlaps(range: TimeRange, start: number, length: number): boole
   return start <= range[1] && start + Math.max(length, 0) >= range[0];
 }
 
-/** Milliseconds as a range says them: as fine as the trace is short, "12.4", "0.35", "1240". */
-function ms(us: number, total: number): string {
-  const digits = total < 10_000 ? 2 : total < 1_000_000 ? 1 : 0;
-  return String(Number((us / 1000).toFixed(digits)));
-}
-
-/** "12.4 → 18.9 ms · 6.5 ms": where the range starts and ends, and how long it is. */
-export function rangeLabel(range: TimeRange, total: number): string {
-  return `${ms(range[0], total)} → ${ms(range[1], total)} ms · ${ms(range[1] - range[0], total)} ms`;
+/** "11 ms – 1.6 s": where the range starts and ends, as the page says times. */
+export function rangeLabel(range: TimeRange): string {
+  return `${range[0] === 0 ? "0" : duration(range[0])} – ${duration(range[1])}`;
 }
 
 const PART = /^[a-z]+$/;

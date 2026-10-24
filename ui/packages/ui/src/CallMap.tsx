@@ -30,7 +30,6 @@ import { type Piece, quietPieces, timed, waitName } from "./lib/waiting";
 import { type TraceLinks, traceLinkProps } from "./links";
 import { type NameValue, NameValues, RowsLookContext } from "./NameValues";
 import { profileOver, RowFlame, WhatRan, WhatWaited } from "./ProfileHint";
-import { useProfilingOf } from "./Profiling";
 import { PropTable } from "./PropTable";
 import {
   AliasChip,
@@ -1020,7 +1019,6 @@ function CodeRow({ span, ctx, depth }: { span: Span; ctx: RowContext; depth: num
 }
 
 function CodePartRow({ span, ctx, depth, part }: { span: Span; ctx: RowContext; depth: number; part: CodePart }) {
-  const profiling = useProfilingOf(ctx.trace);
   const inside = <CodeRowParts span={span} ctx={ctx} depth={depth} part={part} />;
   const open = ctx.onProfile;
   const row = open ? (
@@ -1032,7 +1030,8 @@ function CodePartRow({ span, ctx, depth, part }: { span: Span; ctx: RowContext; 
       {inside}
     </div>
   );
-  const offered = Boolean(ctx.trace.profile) || profiling.available;
+  // What ran there, on hover, where a profile says it.
+  const offered = Boolean(ctx.trace.profile);
   const onOpen = open ? () => open(partRange(part)) : undefined;
   return <WithWhatRan trace={ctx.trace} offered={offered} row={row} part={part} onOpen={onOpen} />;
 }
@@ -1668,12 +1667,12 @@ function HiddenLogs({ count, onShow }: { count: number | undefined; onShow: () =
 function profileOpener(
   open: (() => void) | undefined,
   trace: Trace,
-  slice: Slice,
-  change: (slice: Slice) => void,
+  profileAt: (range: TimeRange | null) => void,
 ): ((range: TimeRange) => void) | undefined {
   if (!open) return undefined;
   return (range) => {
-    if (timed(trace.profile)) change({ ...slice, range });
+    // The Profile tab's own stretch: the call tree's range is a drag's only.
+    if (timed(trace.profile)) profileAt(range);
     open();
   };
 }
@@ -1712,7 +1711,7 @@ export function CallMap({
   initialSpan?: string | undefined;
 }) {
   // The part of the time picked: the kinds of calls and the stretch of time the rows are kept for.
-  const { slice: current, change } = useHeldSlice();
+  const { slice: current, change, profileAt } = useHeldSlice();
   const { tree, hidden } = useShownLogs(trace, related, current.logs);
   const issues = useMemo(() => withCallIssues(issueBySpan, related), [issueBySpan, related]);
   const { selected, select, close } = useSelection(initialSpan);
@@ -1747,7 +1746,7 @@ export function CallMap({
                 quiet,
                 categories,
                 slice: current,
-                onProfile: profileOpener(wiring.onProfile, trace, current, change),
+                onProfile: profileOpener(wiring.onProfile, trace, profileAt),
                 onShowLogs: () => change({ ...current, logs: true }),
               }}
             />

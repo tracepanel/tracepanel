@@ -45,7 +45,7 @@ import { ClearDialog } from "./ClearDialog";
 import { Console } from "./Console";
 import { exploreFor } from "./explore";
 import { type EntrySummary, type TabEntry, type TabHistory, useNewIds, usePolling, useTabHistory } from "./hooks";
-import { ProfileToggle, turnProfilingOn } from "./ProfileToggle";
+import { ProfileToggle } from "./ProfileToggle";
 import { RefreshProvider } from "./refresh";
 import { consoleLinks, go, href, parse, type Route, useRoute } from "./routes";
 import { SearchPalette } from "./SearchPalette";
@@ -1084,13 +1084,9 @@ function PanelApp({ route }: { route: Route }) {
   );
 }
 
-/**
- * Whether a trace's app profiles on request, as the agent hears it from that app; in the panel, its Profile toggle
- * turned on from the trace's time.
- */
+/** Whether a trace's app profiles on request, as the agent hears it from that app. */
 const PROFILING: Profiling = {
   profiles: (service) => source.capabilities(service).then((capabilities) => capabilities.profile),
-  turnOn: embedded ? turnProfilingOn : undefined,
 };
 
 export function App() {

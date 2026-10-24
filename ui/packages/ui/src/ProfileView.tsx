@@ -1,4 +1,4 @@
-import { type MouseEvent, type ReactNode, useMemo, useRef, useState } from "react";
+import { type MouseEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { duration } from "./format";
 import { percent } from "./lib/percent";
 import {
@@ -98,11 +98,11 @@ const FRAMES = [
 
 /** The Profile tab's content, when it is the tab open and the trace has a profile. */
 export function ProfilePane({ trace, open }: { trace: Trace; open: boolean }) {
-  const { slice } = useHeldSlice();
+  const range = useProfileRange(open);
   // Kept while the profile and the range are: the flame graph's zoom belongs to the profile it was made in.
   const scope = useMemo(
-    () => (trace.profile ? scopeOf(trace.profile, slice.range, trace.duration) : null),
-    [trace.profile, slice.range, trace.duration],
+    () => (trace.profile ? scopeOf(trace.profile, range, trace.duration) : null),
+    [trace.profile, range, trace.duration],
   );
   if (!(open && trace.profile && scope)) return null;
   return (
@@ -112,6 +112,15 @@ export function ProfilePane({ trace, open }: { trace: Trace; open: boolean }) {
       head={<ProfileHead whole={trace.profile} shown={scope.profile} trace={trace} scope={scope} />}
     />
   );
+}
+
+/** The stretch the tab was opened at (its own, gone once it closes), else the call tree's range. */
+function useProfileRange(open: boolean): TimeRange | null {
+  const { slice, stretch, profileAt } = useHeldSlice();
+  useEffect(() => {
+    if (!open) profileAt(null);
+  }, [open, profileAt]);
+  return stretch ?? slice.range;
 }
 
 /** What the tab profiles: a stretch picked (when the profile says when its stacks were seen), else the whole trace. */
@@ -127,7 +136,7 @@ interface Scope {
 function scopeOf(profile: Profile, range: TimeRange | null, total: number): Scope {
   // Timed, it reads in the trace's own time, as the time strip does; a range narrows it.
   if (timed(profile)) {
-    const title = range ? `Profile of ${rangeLabel(range, total)}` : "Profile of the whole trace";
+    const title = range ? `Profile of ${rangeLabel(range)}` : "Profile of the whole trace";
     return { profile: wallClock(profile, total, range), title, note: null, timed: true };
   }
   const note = range ? "Its samples aren't timed: the range picked can't narrow it." : null;

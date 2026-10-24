@@ -119,10 +119,10 @@ test("a drag across the lanes keeps the calls of that stretch of time, says it a
   expect(to).toBeCloseTo(2.4, 0);
 
   // Said once, by the legend's chip: the bands over the strip and the tree have no words.
-  await expect(page.getByRole("button", { name: /^Time 0\.\d → 2\.\d ms/ })).toHaveText(
-    /^0\.\d → 2\.\d ms · 1\.\d ms$/,
-  );
-  await expect(page.getByRole("button", { name: /^Time 0\.\d → 2\.\d ms/ })).toHaveAttribute("aria-pressed", "true");
+  const chip = page.getByRole("button", { name: /^Time 0\.\d ms – 2 ms$/ });
+  await expect(chip).toHaveText(/^Time 0\.\d ms – 2 ms$/);
+  await expect(chip).toHaveAttribute("title", "Only calls in this time range; × shows all");
+  await expect(chip).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator(".dt-range")).toHaveCount(2);
   await expect(page.locator(".dt-range")).toHaveText(["", ""]);
   // Nothing picked but the range: its chip's × lets it go, no Show all beside it.
@@ -211,8 +211,8 @@ test("in the panel: the numbers on hover, a share and a stretch of time picked, 
   await drag(page, frame.locator(".dt-timeline-layer"), 0.5, 2.4);
 
   await expect(frame.locator(".dt-map-range-layer .dt-range")).toBeVisible();
-  const chip = frame.getByRole("button", { name: /^Time 0\.\d → 2\.\d ms/ });
-  await expect(chip).toHaveText(/^0\.\d → 2\.\d ms · 1\.\d ms$/);
+  const chip = frame.getByRole("button", { name: /^Time 0\.\d ms – 2 ms$/ });
+  await expect(chip).toHaveText(/^Time 0\.\d ms – 2 ms$/);
   await expect(row(frame, "template", "blog/post_list.html")).toHaveCount(0);
   await expect(frame.getByRole("link", { name: /^Console/ })).toHaveAttribute("href", /[?&]range=0\.\d+-2\.\d+/);
 

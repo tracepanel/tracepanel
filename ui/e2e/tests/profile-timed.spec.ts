@@ -61,11 +61,17 @@ test("the strip and its share's numbers split the code's own time; the wait is n
   await page.mouse.click(...middle);
 
   await expect(page.getByRole("tab", { name: /^Profile/ })).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByText("Profile of 120 → 1600 ms · 1480 ms")).toBeVisible();
-  await expect(page).toHaveURL(/[?&]range=120-1600/);
+  await expect(page.getByText("Profile of 120 ms – 1.6 s")).toBeVisible();
   await expect(page.getByRole("region", { name: "Time by package" }).getByRole("button")).toHaveText([
     /^waiting\s*100%/,
   ]);
+  // The stretch is the Profile tab's own: the call tree keeps the whole time, a range there is a drag's only.
+  await expect(page).not.toHaveURL(/[?&]range=/);
+
+  await page.getByRole("tab", { name: /^Call tree/ }).click();
+
+  await expect(page.getByRole("button", { name: /^Time / })).toHaveCount(0);
+  await expect(page.locator(".dt-range")).toHaveCount(0);
 });
 
 test("the call tree has the wait and the code as rows of their own; the wait's opens the profile at it", async ({
@@ -80,7 +86,7 @@ test("the call tree has the wait and the code as rows of their own; the wait's o
 
   await codeRow(page, "wait").click();
 
-  await expect(page.getByText("Profile of 120 → 1600 ms · 1480 ms")).toBeVisible();
+  await expect(page.getByText("Profile of 120 ms – 1.6 s")).toBeVisible();
 
   await openApp(page, { one: { status: 200, trace: await traceId(DIGEST), queries: 1, totalMs: 1600 } });
   await page.getByRole("button", { name: "Load one" }).click();
@@ -90,7 +96,7 @@ test("the call tree has the wait and the code as rows of their own; the wait's o
   await frame.locator('.dt-map-row[data-kind="code"]').first().click();
 
   await expect(frame.getByRole("tab", { name: /^Profile/ })).toHaveAttribute("aria-selected", "true");
-  await expect(frame.getByText("Profile of 120 → 1600 ms · 1480 ms")).toBeVisible();
+  await expect(frame.getByText("Profile of 120 ms – 1.6 s")).toBeVisible();
 });
 
 test("a profile that doesn't say when its samples were taken is the whole trace's, said so", async ({ page }) => {
@@ -117,7 +123,7 @@ test("the strip's tooltip holds while the pointer travels into it: its Open the 
   await open.click();
 
   await expect(page.getByRole("tab", { name: /^Profile/ })).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByText("Profile of 120 → 1600 ms · 1480 ms")).toBeVisible();
+  await expect(page.getByText("Profile of 120 ms – 1.6 s")).toBeVisible();
 });
 
 test("the strip's tooltip from the keyboard: Tab to the stretch opens it, Tab again reaches its link, Esc closes it", async ({
@@ -158,5 +164,5 @@ test("the tree's code row's tooltip holds while the pointer travels into it; its
 
   await open.click();
 
-  await expect(page.getByText("Profile of 120 → 1600 ms · 1480 ms")).toBeVisible();
+  await expect(page.getByText("Profile of 120 ms – 1.6 s")).toBeVisible();
 });

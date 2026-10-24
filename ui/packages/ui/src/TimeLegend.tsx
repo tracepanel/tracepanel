@@ -182,7 +182,7 @@ function LogsChip({ trace, filters }: { trace: Trace; filters: SliceState }) {
 }
 
 /** The picked range, said: a pressed chip that lets it go. */
-function RangeChip({ total, filters }: { total: number; filters: SliceState }) {
+function RangeChip({ filters }: { filters: SliceState }) {
   const range = filters.slice.range;
   if (!range) return null;
   return (
@@ -191,10 +191,11 @@ function RangeChip({ total, filters }: { total: number; filters: SliceState }) {
         type="button"
         className="dt-map-filter"
         aria-pressed={true}
-        aria-label={`Time ${rangeLabel(range, total)}`}
+        aria-label={`Time ${rangeLabel(range)}`}
+        title="Only calls in this time range; × shows all"
         onClick={() => filters.onChange({ ...filters.slice, range: null })}
       >
-        {rangeLabel(range, total)}
+        Time {rangeLabel(range)}
         <span className="dt-map-filter-x">
           <CloseIcon />
         </span>
@@ -234,7 +235,7 @@ export function TimeLegend({ trace, related }: { trace: Trace; related: Related 
         </li>
       ))}
       <LogsChip trace={trace} filters={filters} />
-      <RangeChip total={Math.max(trace.duration, 1)} filters={filters} />
+      <RangeChip filters={filters} />
       {picks(slice) < 2 ? null : (
         <li>
           <button type="button" className="dt-map-filter-clear" onClick={() => change(cleared(slice))}>

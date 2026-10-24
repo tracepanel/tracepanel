@@ -97,9 +97,12 @@ export const ESCAPE_FIRST = "data-escape-first";
 /**
  * The part of a trace's time picked to look at, from a link's (`initial`), told to the host as it changes (the
  * console keeps it in the URL). Esc lets it go before anything else takes the key (going back, closing the panel).
+ * Apart from it, the stretch the Profile tab was opened at (a quiet stretch or a code row clicked): the Profile tab's
+ * own, never the call tree's range, which a drag alone picks.
  */
 function useSlice(initial: Slice | undefined, onChange: ((slice: Slice) => void) | undefined) {
   const [slice, setSlice] = useState(initial ?? WHOLE);
+  const [stretch, profileAt] = useState<TimeRange | null>(null);
   // Another link to the same trace (Back, a link with another part picked): the slice it says.
   const asked = useRef(initial ?? WHOLE);
   asked.current = initial ?? WHOLE;
@@ -112,25 +115,37 @@ function useSlice(initial: Slice | undefined, onChange: ((slice: Slice) => void)
     setSlice(next);
     onChange?.(next);
   };
-  const latest = useRef({ slice, change });
-  latest.current = { slice, change };
+  const latest = useRef({ slice, change, stretch });
+  latest.current = { slice, change, stretch };
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (!isFreeEscape(event) || isWhole(latest.current.slice)) return;
-      event.preventDefault();
-      latest.current.change(cleared(latest.current.slice));
+      if (isFreeEscape(event)) letGo(event, latest.current, profileAt);
     };
     // Caught on the way down: the page's own Esc (back, close) listens on the way up.
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
   }, []);
-  return { slice, change };
+  return { slice, change, stretch, profileAt };
 }
 
-/** The slice a trace's view holds, with the way to change it. */
+/** Esc: the Profile tab's stretch goes first, else what is picked; nothing to let go, the key is the page's. */
+function letGo(
+  event: KeyboardEvent,
+  { slice, change, stretch }: { slice: Slice; change: (slice: Slice) => void; stretch: TimeRange | null },
+  profileAt: (range: TimeRange | null) => void,
+): void {
+  if (stretch) profileAt(null);
+  else if (!isWhole(slice)) change(cleared(slice));
+  else return;
+  event.preventDefault();
+}
+
+/** The slice a trace's view holds, with the way to change it, and the Profile tab's own stretch. */
 interface Held {
   slice: Slice;
   change: (slice: Slice) => void;
+  stretch: TimeRange | null;
+  profileAt: (range: TimeRange | null) => void;
 }
 
 const SliceContext = createContext<Held | null>(null);
@@ -152,5 +167,6 @@ export function SliceScope({
 export function useHeldSlice(): Held {
   const held = useContext(SliceContext);
   const [slice, change] = useState(WHOLE);
-  return held ?? { slice, change };
+  const [stretch, profileAt] = useState<TimeRange | null>(null);
+  return held ?? { slice, change, stretch, profileAt };
 }

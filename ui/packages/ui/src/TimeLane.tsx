@@ -15,7 +15,6 @@ import { quietSpans } from "./lib/quiet";
 import type { TimeRange } from "./lib/slice";
 import { quietPieces } from "./lib/waiting";
 import { WhatRan, WhatWaited } from "./ProfileHint";
-import { useProfilingOf } from "./Profiling";
 import { type ShareOf, ShareTip, sharesOf, TIP_CLASS } from "./TimeLegend";
 import { ESCAPE_FIRST } from "./TimeSlice";
 import type { Trace } from "./types";
@@ -373,8 +372,7 @@ export function TimeLane({
   const total = Math.max(trace.duration, 1);
   const lane = useMemo(() => laneOf(trace), [trace]);
   const shares = useMemo(() => sharesOf(trace), [trace]);
-  const profiling = useProfilingOf(trace);
-  const actionable = Boolean(trace.profile && onQuiet) || profiling.available;
+  const actionable = Boolean(trace.profile && onQuiet);
   const { hover, show, tip } = useLaneHover(onQuiet, actionable);
   return (
     <div className="dt-lane" data-own="">

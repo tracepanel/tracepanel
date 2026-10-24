@@ -2,7 +2,6 @@
 // the profile says when its samples were taken, of the whole trace otherwise), what it waited on, or how to get a
 // profile. The time strip's tooltip and the call tree's code rows say it alike.
 import { FlameIcon } from "lucide-react";
-import { useState } from "react";
 import { duration } from "./format";
 import { percent } from "./lib/percent";
 import { ownHotspots, type Profile } from "./lib/profile";
@@ -17,8 +16,7 @@ export function profileOver(
   range: TimeRange | undefined,
 ): { profile: Profile | undefined; title: string } {
   const profile = trace.profile;
-  if (range && timed(profile))
-    return { profile: within(profile, range), title: `Profile of ${rangeLabel(range, trace.duration)}` };
+  if (range && timed(profile)) return { profile: within(profile, range), title: `Profile of ${rangeLabel(range)}` };
   return { profile, title: "Profile of the whole trace" };
 }
 
@@ -47,32 +45,11 @@ export function WhatRan({
 /** A profile there: the flame as the panel's Profile toggle draws it when on, orange. */
 const PROFILED = "text-orange-500 fill-orange-500/30";
 
-/** The traces whose Profile was turned on from here, this page's life: each says so until it is run again. */
-const turnedOn = new Set<string>();
-
-/** Profile turned on for this trace's app from here: whether it was, and how. */
-function useTurnOn(trace: Trace): { on: boolean; turnOn: (() => void) | undefined } {
-  const profiling = useProfilingOf(trace);
-  const [, redraw] = useState(0);
-  const turnOn = profiling.turnOn;
-  return {
-    on: turnedOn.has(trace.id),
-    turnOn: turnOn
-      ? () => {
-          turnOn();
-          turnedOn.add(trace.id);
-          redraw((count) => count + 1);
-        }
-      : undefined,
-  };
-}
-
-const TURN_ON = "Turn on Profile to see what ran here";
-const TURNED_ON = "Profile is on: run it again";
+const TURN_ON = "Turn on Profile in the panel to see what ran here";
 
 /**
- * The way on from a tooltip of the code's own time, its last line: the profile opened, with one; without, Profile
- * turned on (the panel), or how to (the console); nothing where the app can't profile.
+ * The last line of a tooltip of the code's own time: with a profile, the way to it; without, how to get one, where
+ * the app can profile. Profile is turned on in the panel's toolbar only, never from the trace.
  */
 function ProfileAction({ trace, onOpen }: { trace: Trace; onOpen: (() => void) | undefined }) {
   if (trace.profile) {
@@ -86,71 +63,20 @@ function ProfileAction({ trace, onOpen }: { trace: Trace; onOpen: (() => void) |
   return <TurnOnAction trace={trace} />;
 }
 
-/** No profile: Profile turned on from here (the panel), or how to turn it on (the console), where the app can. */
+/** No profile, where the app can profile: one quiet line on how to get one. Nothing to click here. */
 function TurnOnAction({ trace }: { trace: Trace }) {
   const profiling = useProfilingOf(trace);
-  const { on, turnOn } = useTurnOn(trace);
   if (!profiling.available) return null;
-  if (turnOn) {
-    return (
-      <button type="button" className="dt-tip-action" disabled={on} onClick={turnOn}>
-        <FlameIcon aria-hidden="true" />
-        {on ? TURNED_ON : TURN_ON}
-      </button>
-    );
-  }
-  return (
-    <span className="grid gap-0.5">
-      <span className="flex items-center gap-1.5">
-        <FlameIcon className="size-3.5 text-muted-foreground" aria-hidden="true" />
-        {TURN_ON}
-      </span>
-      <span className="text-xs text-muted-foreground">with the panel's 🔥 or an X-Tracepanel-Profile: 1 header</span>
-    </span>
-  );
+  return <span className="text-xs text-muted-foreground">{TURN_ON}</span>;
 }
 
-/**
- * After a code row's name: the profile's flame (the row opens it), or, where the app profiles on request and the
- * trace has none, the flame dimmed, a button in the panel that turns its Profile on. What each does is the row's
- * tooltip's to say: no title of their own.
- */
+/** After a code row's name, with a profile: its flame, orange as the panel's toggle when on (the row opens it). */
 export function RowFlame({ trace }: { trace: Trace }) {
-  const profiling = useProfilingOf(trace);
-  if (trace.profile) {
-    return (
-      <span className="dt-map-flame" data-on="">
-        <FlameIcon className={PROFILED} aria-hidden="true" />
-      </span>
-    );
-  }
-  if (!profiling.available) return null;
-  return profiling.turnOn ? (
-    <FlameOff trace={trace} />
-  ) : (
-    <span className="dt-map-flame" data-off="">
-      <FlameIcon aria-hidden="true" />
-    </span>
-  );
-}
-
-/** The flame dimmed, in the panel: a click turns its Profile on (the row is no button then: it opens nothing). */
-function FlameOff({ trace }: { trace: Trace }) {
-  const { on, turnOn } = useTurnOn(trace);
+  if (!trace.profile) return null;
   return (
-    <button
-      type="button"
-      className="dt-map-flame"
-      data-off=""
-      aria-label={on ? TURNED_ON : TURN_ON}
-      disabled={on}
-      onClick={(event) => {
-        event.stopPropagation();
-        turnOn?.();
-      }}
-    >
-      <FlameIcon aria-hidden="true" />
-    </button>
+    <span className="dt-map-flame" data-on="">
+      <FlameIcon className={PROFILED} aria-hidden="true" />
+    </span>
   );
 }
 

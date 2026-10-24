@@ -2155,7 +2155,7 @@ details[data-focused] > .dt-sql-group {
   flex: none;
   font-family: var(--dt-font);
 }
-/* A tooltip's way on, as a link reads: the profile opened, or the panel's Profile turned on. */
+/* A tooltip's way on, as a link reads: the profile opened. */
 .dt-tip-action {
   display: inline-flex;
   align-items: center;
@@ -2173,12 +2173,8 @@ details[data-focused] > .dt-sql-group {
   width: 0.75rem;
   height: 0.75rem;
 }
-.dt-tip-action:hover:not(:disabled) {
+.dt-tip-action:hover {
   text-decoration: underline;
-}
-.dt-tip-action:disabled {
-  color: var(--dt-text-3);
-  cursor: default;
 }
 /* The code's own time with a profile to show what ran in it: a click opens it. */
 .dt-time-track .dt-stretch[data-quiet] {
@@ -2243,9 +2239,6 @@ div.dt-map-row[data-kind="code"] {
 .dt-map-flame {
   display: inline-flex;
   flex: none;
-  padding: 0;
-  border: 0;
-  background: none;
   color: var(--dt-text-3);
 }
 .dt-map-flame svg {
@@ -2255,19 +2248,6 @@ div.dt-map-row[data-kind="code"] {
 /* A profile there: the toggle's orange (set on the icon), brighter on the row's hover. */
 .dt-map-row:hover .dt-map-flame[data-on] {
   filter: brightness(1.25) saturate(1.1);
-}
-.dt-map-flame[data-off] {
-  opacity: 0.55;
-}
-button.dt-map-flame[data-off] {
-  cursor: pointer;
-}
-button.dt-map-flame[data-off]:disabled {
-  cursor: default;
-}
-button.dt-map-flame[data-off]:hover:not(:disabled) {
-  opacity: 1;
-  color: var(--dt-accent);
 }
 .dt-map-bar[data-point],
 .dt-map-bar[data-tick] {

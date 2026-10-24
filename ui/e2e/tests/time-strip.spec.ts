@@ -173,7 +173,7 @@ async function openSales(page: Page): Promise<FrameLocator> {
   return frame;
 }
 
-test("with no profile and an app that profiles, the code's own time says how; in the panel its tooltip turns it on", async ({
+test("with no profile and an app that profiles, the strip's tooltip says how in one line; nothing turns it on", async ({
   page,
 }) => {
   await profiles(page, true);
@@ -181,22 +181,20 @@ test("with no profile and an app that profiles, the code's own time says how; in
   await page.mouse.move(...(await centre(page.locator(".dt-quiet-said"))));
   const tip = page.getByRole("tooltip").filter({ hasText: /untraced|Waiting/ });
 
-  await expect(tip).toContainText("Turn on Profile to see what ran here");
-  await expect(tip).toContainText("with the panel's 🔥 or an X-Tracepanel-Profile: 1 header");
+  await expect(tip).toContainText("Turn on Profile in the panel to see what ran here");
+  await expect(tip.getByRole("button")).toHaveCount(0);
 
   const frame = await openSales(page);
 
-  // The legend offers no Profile: the code's own time does, on the strip and in the tree.
+  // Profile is turned on in the panel's toolbar only: nothing on the trace does it.
   await expect(frame.getByRole("list", { name: /^Where the time went/ })).not.toContainText("Profile");
+  await expect(frame.locator(".dt-map-flame")).toHaveCount(0);
 
   await page.mouse.move(...(await centre(frame.locator(".dt-quiet-said"))));
-  const turnOn = frame.getByRole("tooltip").getByRole("button", { name: "Turn on Profile to see what ran here" });
-  await page.mouse.move(...(await centre(turnOn)), { steps: 8 });
-  await turnOn.click();
+  const panelTip = frame.getByRole("tooltip").filter({ hasText: /untraced|Waiting/ });
 
-  await expect(frame.getByRole("button", { name: "Profile is on: run it again" })).toBeDisabled();
-  await expect(frame.getByRole("button", { name: "Profiling is on" })).toHaveAttribute("aria-pressed", "true");
-  expect((await page.context().cookies()).find((cookie) => cookie.name === "tracepanel_profile")?.value).toBe("1");
+  await expect(panelTip).toContainText("Turn on Profile in the panel to see what ran here");
+  await expect(panelTip.getByRole("button")).toHaveCount(0);
 });
 
 test("an app that can't profile is offered no Profile: no hint, no link, on the page or in the panel", async ({
@@ -232,7 +230,7 @@ test("the tree's code row leads to the profile: its functions on hover, a click 
   const code = page.locator('.dt-map-row[data-kind="code"]');
 
   // What it does is the row's tooltip's to say: no title of the browser's beside it.
-  await expect(code.locator(".dt-map-flame:not([data-off])")).toBeVisible();
+  await expect(code.locator(".dt-map-flame")).toBeVisible();
   await expect(code.locator("[title]")).toHaveCount(0);
 
   await code.hover();
@@ -255,30 +253,22 @@ test("the tree's code row leads to the profile: its functions on hover, a click 
   await expect(frame.getByRole("tab", { name: /^Profile/ })).toHaveAttribute("aria-selected", "true");
 });
 
-test("with no profile, the tree's code row says how to get one where the app profiles; in the panel it turns it on", async ({
-  page,
-}) => {
+test("with no profile, the tree's code row has no flame, and a click on it picks no range", async ({ page }) => {
   await profiles(page, true);
   await page.goto(`/#/t/${await traceId("POST /api/reports/sales")}?tab=tree`);
   const code = page.locator('.dt-map-row[data-kind="code"]');
 
   await expect(code.locator(".dt-map-time")).toHaveText("42 ms");
   await expect(code.locator(".dt-map-text")).toHaveText("untraced code");
-  await expect(code.locator(".dt-map-flame[data-off]")).toBeVisible();
+  await expect(code.locator(".dt-map-flame")).toHaveCount(0);
   await expect(code.locator("[title]")).toHaveCount(0);
 
-  await code.hover();
+  await code.click();
+  await page.mouse.click(...(await centre(page.locator(".dt-quiet-said"))));
 
-  await expect(page.getByRole("tooltip").filter({ hasText: "Turn on Profile to see what ran here" })).toBeVisible();
-
-  const frame = await openSales(page);
-  await frame.locator('.dt-map-row[data-kind="code"] .dt-map-flame').click();
-
-  await expect(frame.getByRole("button", { name: "Profiling is on" })).toHaveAttribute("aria-pressed", "true");
-  await expect(frame.locator('.dt-map-row[data-kind="code"] .dt-map-flame')).toHaveAccessibleName(
-    "Profile is on: run it again",
-  );
-  await expect(frame.locator('.dt-map-row[data-kind="code"] .dt-map-flame')).toBeDisabled();
+  await expect(page).not.toHaveURL(/[?&]range=/);
+  await expect(page.getByRole("button", { name: /^Time / })).toHaveCount(0);
+  await expect(page.getByRole("tab", { name: "Call tree" })).toHaveAttribute("aria-selected", "true");
 });
 
 test("an app that can't profile: the tree's code row is a plain row, nothing offered", async ({ page }) => {

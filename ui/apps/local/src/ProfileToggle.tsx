@@ -13,16 +13,10 @@ function profiling(): boolean {
 
 function profile(on: boolean): void {
   document.cookie = on ? `${COOKIE}=1; Path=/; SameSite=Lax` : `${COOKIE}=; Max-Age=0; Path=/; SameSite=Lax`;
-  // The toggle shows it, wherever it was turned on from (the trace's time strip too).
   window.dispatchEvent(new Event(CHANGED));
 }
 
 const CHANGED = "tracepanel:profiling";
-
-/** Profiling on for this browser's next requests, as the toggle turns it on: from the trace's time strip. */
-export function turnProfilingOn(): void {
-  profile(true);
-}
 
 const HINTS = {
   off: {
