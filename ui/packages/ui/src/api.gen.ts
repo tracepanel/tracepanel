@@ -477,7 +477,7 @@ export interface paths {
         };
         /**
          * What the console's backend can do beyond the store.
-         * @description The agent answers it, and it alone, from what the connected apps said in their hello: what an app does down its connection or records in its traces (`capabilities`: `explain`, `profile`, `request`, `live_tasks`), and what it answers at its own console (`console`: `explain`, `users`). The latter are offered only to the console an app serves, which names the app in a `Tracepanel-Console` header: the agent's own console has nowhere to run them. The console shows a feature only where it works.
+         * @description The agent answers it, and it alone, from what the connected apps said in their hello: what an app does down its connection or records in its traces (`capabilities`: `explain`, `profile`, `request`, `live_tasks`), and what it answers at its own console (`console`: `explain`, `users`). The latter are offered only to the console an app serves, which names the app in a `Tracepanel-Console` header: the agent's own console has nowhere to run them. The console shows a feature only where it works. With `service`, what a connected app of that service says it does (a trace's page offers what its app does): false for an app not connected, or one that doesn't say.
          */
         get: operations["capabilities"];
         put?: never;
@@ -1607,6 +1607,10 @@ export interface components {
             interval_us: number;
             /** @description Samples taken while the trace ran. */
             samples: number;
+            /** @description Samples not taken for this trace because its thread was running other traces too (an event loop with concurrent traces): time the profile can't attribute. */
+            dropped?: number;
+            /** @description How wide a time bucket of stacks[].at is, in microseconds, counted from the trace's start. */
+            bucket_us?: number;
             /** @description The functions the stacks name, each once. */
             frames: {
                 function: string;
@@ -1617,11 +1621,20 @@ export interface components {
                 line: number;
                 /** @description The project's own code, not a library's or the runtime's. */
                 in_app: boolean;
+                /** @description Waiting, not computing: asyncio.sleep, an event loop's select, time.sleep, a socket's recv, a lock. A sample whose innermost frame waits counts as waiting. */
+                waiting?: boolean;
+                /** @description The line it was running when sampled (a coroutine's await), where `line` is where it is defined. */
+                at_line?: number;
             }[];
             /** @description Each stack seen, outermost frame first, as indexes into frames, and how many samples saw it. */
             stacks: {
                 frames: number[];
                 count: number;
+                /** @description When in the trace the stack was seen: [bucket, count] pairs, a bucket bucket_us wide from the trace's start; the counts add up to count. */
+                at?: [
+                    number,
+                    number
+                ][];
             }[];
         };
         /**
@@ -1656,6 +1669,10 @@ export interface components {
                     interval_us: number;
                     /** @description Samples taken while the trace ran. */
                     samples: number;
+                    /** @description Samples not taken for this trace because its thread was running other traces too (an event loop with concurrent traces): time the profile can't attribute. */
+                    dropped?: number;
+                    /** @description How wide a time bucket of stacks[].at is, in microseconds, counted from the trace's start. */
+                    bucket_us?: number;
                     /** @description The functions the stacks name, each once. */
                     frames: {
                         function: string;
@@ -1666,11 +1683,20 @@ export interface components {
                         line: number;
                         /** @description The project's own code, not a library's or the runtime's. */
                         in_app: boolean;
+                        /** @description Waiting, not computing: asyncio.sleep, an event loop's select, time.sleep, a socket's recv, a lock. A sample whose innermost frame waits counts as waiting. */
+                        waiting?: boolean;
+                        /** @description The line it was running when sampled (a coroutine's await), where `line` is where it is defined. */
+                        at_line?: number;
                     }[];
                     /** @description Each stack seen, outermost frame first, as indexes into frames, and how many samples saw it. */
                     stacks: {
                         frames: number[];
                         count: number;
+                        /** @description When in the trace the stack was seen: [bucket, count] pairs, a bucket bucket_us wide from the trace's start; the counts add up to count. */
+                        at?: [
+                            number,
+                            number
+                        ][];
                     }[];
                 };
                 call: {
@@ -2611,7 +2637,10 @@ export interface operations {
     };
     capabilities: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Only what the connected apps of this service (service.name) say they do. */
+                service?: string;
+            };
             header?: {
                 /** @description The service of the app whose console forwarded the request. */
                 "Tracepanel-Console"?: string;

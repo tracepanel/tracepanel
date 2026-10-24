@@ -16,5 +16,7 @@ test("an action's trace is headed by what was done, on which page", async ({ pag
   await page.getByRole("table").last().getByRole("link").first().click();
 
   await expect(page.getByRole("heading", { level: 2, name: '"Save" · /books' })).toBeVisible();
+  await page.getByRole("tab", { name: /^Call tree/ }).click();
+
   await expect(page.getByRole("button", { name: /GET 127\.0\.0\.1\/api\/books/ }).first()).toBeVisible();
 });

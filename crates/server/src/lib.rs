@@ -688,10 +688,19 @@ async fn served(
 const VIA_APP: &str = "tracepanel-console";
 
 /// What the console can offer beyond the store, as the connected apps said in their hello: the one place that answers
-/// it, whichever app or console asks.
-async fn capabilities(Extension(activity): Extension<Activity>, headers: HeaderMap) -> Response {
+/// it, whichever app or console asks. With `service`, what that app says it does: a trace's page offers a profile
+/// only when the app that recorded it profiles on request.
+async fn capabilities(
+    Extension(activity): Extension<Activity>,
+    headers: HeaderMap,
+    Query(query): Params,
+) -> Response {
     let via = headers.get(VIA_APP).and_then(|value| value.to_str().ok());
-    let offers = |capability| activity.apps.offers(capability, via);
+    let service = query.get("service").filter(|service| !service.is_empty());
+    let offers = |capability| match service {
+        Some(service) => activity.apps.says(capability, service),
+        None => activity.apps.offers(capability, via),
+    };
     json_response(
         StatusCode::OK,
         json!({

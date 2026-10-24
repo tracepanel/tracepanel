@@ -1,4 +1,4 @@
-import { type MouseEvent, useMemo, useRef, useState } from "react";
+import { type MouseEvent, type ReactNode, useMemo, useRef, useState } from "react";
 import { duration } from "./format";
 import { percent } from "./lib/percent";
 import {
@@ -14,11 +14,15 @@ import {
   packageOf,
   packageTimes,
   tree,
+  WAITING,
   YOUR_CODE,
 } from "./lib/profile";
+import { rangeLabel, type TimeRange } from "./lib/slice";
 import { cn } from "./lib/utils";
+import { timed, wallClock } from "./lib/waiting";
 import { Segmented } from "./Segmented";
 import { HEAD_TEXT } from "./TableColumns";
+import { useHeldSlice } from "./TimeSlice";
 import type { Trace } from "./types";
 
 /** A package's color: a fill for boxes, a solid one for dots and bars. Your code is the brand's; the rest in order. */
@@ -36,6 +40,11 @@ const PALETTE: readonly Tone[] = [
   { fill: "bg-orange-500/30 hover:bg-orange-500/50", dot: "bg-orange-500" },
 ];
 const YOURS: Tone = { fill: "bg-brand/40 hover:bg-brand/60", dot: "bg-brand" };
+// Waiting is no package's time: neutral, hatched, as the time strip draws it.
+const WAITS: Tone = {
+  fill: "dt-hatched bg-muted-foreground/15 hover:bg-muted-foreground/25",
+  dot: "dt-hatched bg-muted-foreground/50",
+};
 const REST: Tone = { fill: "bg-muted-foreground/20 hover:bg-muted-foreground/30", dot: "bg-muted-foreground/50" };
 
 type Palette = Map<string, Tone>;
@@ -43,8 +52,12 @@ type Share = { name: string; samples: number };
 
 /** Your code, then the packages that took most, one color each; the rest share one gray as "other". */
 function colors(names: readonly string[]): Palette {
-  const others = names.filter((name) => name !== YOUR_CODE).slice(0, PALETTE.length);
-  return new Map([[YOUR_CODE, YOURS], ...others.map((name, at): [string, Tone] => [name, PALETTE[at] ?? REST])]);
+  const others = names.filter((name) => name !== YOUR_CODE && name !== WAITING).slice(0, PALETTE.length);
+  return new Map([
+    [YOUR_CODE, YOURS],
+    [WAITING, WAITS],
+    ...others.map((name, at): [string, Tone] => [name, PALETTE[at] ?? REST]),
+  ]);
 }
 
 function toneOf(palette: Palette, name: string): Tone {
@@ -85,11 +98,81 @@ const FRAMES = [
 
 /** The Profile tab's content, when it is the tab open and the trace has a profile. */
 export function ProfilePane({ trace, open }: { trace: Trace; open: boolean }) {
-  return open && trace.profile ? <ProfileView profile={trace.profile} /> : null;
+  const { slice } = useHeldSlice();
+  // Kept while the profile and the range are: the flame graph's zoom belongs to the profile it was made in.
+  const scope = useMemo(
+    () => (trace.profile ? scopeOf(trace.profile, slice.range, trace.duration) : null),
+    [trace.profile, slice.range, trace.duration],
+  );
+  if (!(open && trace.profile && scope)) return null;
+  return (
+    <ProfileView
+      key={scope.title}
+      profile={scope.profile}
+      head={<ProfileHead whole={trace.profile} shown={scope.profile} trace={trace} scope={scope} />}
+    />
+  );
+}
+
+/** What the tab profiles: a stretch picked (when the profile says when its stacks were seen), else the whole trace. */
+interface Scope {
+  profile: Profile;
+  title: string;
+  /** Why a stretch picked isn't what it shows: the profile doesn't say when. */
+  note: string | null;
+  /** In the trace's own time (the profile says when its samples were taken), not in samples. */
+  timed: boolean;
+}
+
+function scopeOf(profile: Profile, range: TimeRange | null, total: number): Scope {
+  // Timed, it reads in the trace's own time, as the time strip does; a range narrows it.
+  if (timed(profile)) {
+    const title = range ? `Profile of ${rangeLabel(range, total)}` : "Profile of the whole trace";
+    return { profile: wallClock(profile, total, range), title, note: null, timed: true };
+  }
+  const note = range ? "Its samples aren't timed: the range picked can't narrow it." : null;
+  return { profile, title: "Profile of the whole trace", note, timed: false };
+}
+
+/** "110 samples, one every 10 ms": what the profile took. */
+function samplesLine(profile: Profile): string {
+  return `${profile.samples.toLocaleString()} samples, one every ${duration(profile.interval_us)}`;
+}
+
+/** The time it couldn't sample (its thread ran other traces), and, timed, that the samples around it fill it in. */
+function Dropped({ whole, timed: filled }: { whole: Profile; timed: boolean }) {
+  if (!whole.dropped) return null;
+  return (
+    <span className="text-xs text-warn">
+      {duration(whole.dropped * whole.interval_us)} not sampled: other traces ran on the same thread
+      {filled ? ", filled in from the samples around it" : ""}
+    </span>
+  );
+}
+
+/**
+ * What the profile covers: how long it sampled of the trace's time, and, where samples weren't taken (the trace's
+ * thread ran other traces too), how long and why.
+ */
+function ProfileHead({ whole, shown, trace, scope }: { whole: Profile; shown: Profile; trace: Trace; scope: Scope }) {
+  const time = (samples: number) => duration(samples * whole.interval_us);
+  return (
+    <div className="grid gap-0.5">
+      <span className="text-xs text-muted-foreground">{scope.title}</span>
+      <span className="text-2xl font-semibold tracking-tight tabular-nums">
+        {time(shown.samples)}
+        <span className="ml-2 text-sm font-normal text-muted-foreground">
+          {scope.timed ? "profiled" : "sampled"} of the trace's {duration(trace.duration)}
+        </span>
+      </span>
+      <span className="text-xs text-muted-foreground">{scope.note ?? samplesLine(whole)}</span>
+      <Dropped whole={whole} timed={scope.timed} />
+    </div>
+  );
 }
 
 /** Where the trace's time went in code: by package, as a flame graph of your code or of every frame, by function. */
-function ProfileView({ profile }: { profile: Profile }) {
+function ProfileView({ profile, head }: { profile: Profile; head: ReactNode }) {
   const [own, setOwn] = useState(() => mostlyYours(profile));
   const [lit, setLit] = useState<ReadonlySet<string>>(new Set());
   const packages = useMemo(() => packageTimes(profile), [profile]);
@@ -99,13 +182,7 @@ function ProfileView({ profile }: { profile: Profile }) {
   return (
     <div className="@container grid gap-6 p-4">
       <header className="flex flex-wrap items-end justify-between gap-3">
-        <div className="grid gap-0.5">
-          <span className="text-xs text-muted-foreground">Time in code</span>
-          <span className="text-2xl font-semibold tracking-tight tabular-nums">{time(profile.samples)}</span>
-          <span className="text-xs text-muted-foreground">
-            {profile.samples.toLocaleString()} samples, one every {duration(profile.interval_us)}
-          </span>
-        </div>
+        {head}
         <Segmented
           label="Frames shown"
           segments={FRAMES}

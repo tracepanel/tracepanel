@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { duration } from "./format";
 import { type TraceLinks, traceLinkProps } from "./links";
 import type { PropRow } from "./PropTable";
-import { KindBadge, MethodBadge, StateBadge, TaskName } from "./primitives";
+import { KindBadge, StateBadge, StatusBadge, TaskName } from "./primitives";
 import { RunChips } from "./RunChips";
 import type { TraceSummary } from "./types";
 
@@ -13,17 +13,21 @@ export interface Group {
   failed: number;
 }
 
+/** What a linked trace is, in the grey kind box the call tree's rows have: a request, a task, a job, a page. */
+const LINK_KINDS: Record<string, string> = { http: "request", command: "job" };
+
 function LinkBadge({ trace }: { trace: TraceSummary }) {
-  return trace.kind === "http" ? <MethodBadge method={trace.method} /> : <KindBadge kind={trace.kind} />;
+  return <KindBadge kind={LINK_KINDS[trace.kind] ?? trace.kind} muted={true} />;
 }
 
-/** One alone: how a task run ended, or whether it failed. */
+/** One alone: how it ended, as its own rows say it: a request's status, a task run's state, or that it failed. */
 function Outcome({ trace }: { trace: TraceSummary }) {
+  if (typeof trace.http_status === "number") return <StatusBadge status={trace.http_status} />;
   if (trace.task_state) return <StateBadge state={trace.task_state} />;
   return trace.status === "error" ? <span className="text-sm text-error">failed</span> : null;
 }
 
-/** How many it stands for and how many failed; one alone, how it ended and how long it took. */
+/** How many it stands for and how many failed; one alone, how it ended, what it found, and how long it took. */
 function Tally({ group: { first, count, failed } }: { group: Group }) {
   if (count > 1) {
     return (
@@ -36,15 +40,25 @@ function Tally({ group: { first, count, failed } }: { group: Group }) {
   return (
     <>
       <Outcome trace={first} />
-      <span className="ml-auto shrink-0 text-sm text-muted-foreground tabular-nums">{duration(first.duration)}</span>
+      <RunChips trace={first} />
+      <span className="ml-auto shrink-0 text-xs text-muted-foreground tabular-nums">{duration(first.duration)}</span>
     </>
   );
 }
 
-/** A linked trace's name: its path, else its name, a task's cut where a task's name is everywhere. */
+/**
+ * A linked trace's name, as the call tree's rows say theirs: a request's method and path, else its name, a task's
+ * cut at its start.
+ */
 function LinkedName({ trace }: { trace: TraceSummary }) {
-  if (trace.kind === "task") return <TaskName name={trace.name} className="text-xs" />;
-  return <span className="truncate font-mono text-xs">{trace.path ?? trace.name}</span>;
+  if (trace.kind === "task") return <TaskName name={trace.name} className="font-mono text-sm" />;
+  return <span className="truncate font-mono text-sm">{requestName(trace) ?? trace.name}</span>;
+}
+
+/** "POST /api/reports/sales": a request's method and path, when it has a path. */
+function requestName(trace: TraceSummary): string | null {
+  if (!trace.path) return null;
+  return trace.method ? `${trace.method} ${trace.path}` : trace.path;
 }
 
 /** A linked trace (or a group of them) on one line, a link to it where the host gives one; `note` after its name. */
@@ -63,7 +77,6 @@ export function LinkedTrace({
       <LinkBadge trace={trace} />
       <LinkedName trace={trace} />
       {note}
-      {group.count === 1 ? <RunChips trace={trace} /> : null}
       <Tally group={group} />
     </span>
   );

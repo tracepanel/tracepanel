@@ -31,21 +31,23 @@ import {
 } from "./components/ui/dropdown-menu";
 import { ErrorView } from "./ErrorView";
 import { duration } from "./format";
+import { HeadFacts } from "./HeadFacts";
 import { useMenuOpen } from "./hooks/useCloseOnBlur";
 import { IssueList } from "./IssueList";
 import { LogList } from "./LogList";
 import { groupNoun } from "./lib/calls";
 import { isTyping } from "./lib/keys";
-import { pageParts } from "./lib/page";
+import type { Slice } from "./lib/slice";
 import { linkProps, type TraceLinks } from "./links";
-import { Metrics } from "./Metrics";
 import { ProfilePane } from "./ProfileView";
-import { RoutePath, StateBadge, StatusBadge, TaskName, TraceBadge } from "./primitives";
+import { RoutePath, StatusBadge, TraceBadge } from "./primitives";
 import { RequestInfo } from "./RequestInfo";
 import { type Explain, SqlList } from "./SqlList";
 import { type SystemCalls, systemCalls, systemOfIssue } from "./systemCalls";
 import { Tabs } from "./Tabs";
-import { type MarkTarget, Timeline } from "./Timeline";
+import { type MarkTarget, TimeStrip } from "./Timeline";
+import { SliceScope } from "./TimeSlice";
+import { HeadingTitle, heading, htmxOf, outcomeOf } from "./TraceHeading";
 import type { App, Issue, IssueKind, Related, Trace } from "./types";
 
 export type TabId = "request" | "app" | "tree" | "issues" | "sql" | "cache" | "http" | "logs" | "error" | "profile";
@@ -61,45 +63,6 @@ export interface ExploreItem {
 }
 
 const EXPLORE_ICONS = { group: ListIcon, issue: CircleAlertIcon, logs: ScrollTextIcon };
-
-/** The badge and title of a trace, by kind: a GraphQL request is its operation, not POST /graphql/. */
-function htmxOf(trace: Trace): "request" | "boosted" | null {
-  if (!trace.attrs["htmx.request"]) return null;
-  return trace.attrs["htmx.boosted"] ? "boosted" : "request";
-}
-
-/** A view or an action in the browser: VIEW /books, or CLICK "Save" · /books. */
-function pageHeading(name: string): { badge: string; title: string } {
-  const { badge, label, page } = pageParts(name);
-  return { badge, title: page ? `${label} · ${page}` : label };
-}
-
-/** The heading of a trace that isn't a request, by its kind. */
-const KIND_HEADINGS: Record<string, (name: string) => { badge: string; title: string }> = {
-  task: (name) => ({ badge: "TASK", title: name }),
-  command: (name) => ({ badge: "JOB", title: name }),
-  websocket: (name) => ({ badge: "WS", title: name.replace(/^WS /, "") }),
-  page: pageHeading,
-};
-
-/** The heading's title: a task's name cut where a task's name is everywhere. */
-function HeadingTitle({ kind, title }: { kind: string; title: string }) {
-  return kind === "task" ? <TaskName name={title} /> : title;
-}
-
-function heading(trace: Trace): { badge: string; title: string } {
-  const attrs = trace.attrs;
-  const operation = attrs["graphql.operation"];
-  if (typeof operation === "string") return { badge: "GQL", title: operation };
-  const byKind = KIND_HEADINGS[trace.kind];
-  if (byKind) return byKind(trace.name);
-  const method = attrs["http.method"];
-  const path = attrs["http.path"];
-  return {
-    badge: typeof method === "string" ? method : (trace.name.split(" ")[0] ?? ""),
-    title: typeof path === "string" ? path : trace.name,
-  };
-}
 
 /**
  * What could be better in the request (N+1, slow SQL, htmx…). Errors are kept with the issues for grouping, but a
@@ -291,19 +254,6 @@ function traceTabs({
   ];
 }
 
-/** How it went, on the Request tab: its status, a task's state, or that it failed. */
-function outcomeOf(trace: Trace): ReactNode {
-  const status = trace.attrs["http.status_code"];
-  const state = trace.attrs["task.state"];
-  if (typeof status === "number") return <StatusBadge status={status} />;
-  if (typeof state === "string") return <StateBadge state={state} />;
-  return trace.status === "error" ? (
-    <span className="dt-status" data-tone="error">
-      failed
-    </span>
-  ) : null;
-}
-
 /**
  * The panel's one toolbar row: the way back to the trace this one was opened from, the tabs, Explore and the host's
  * buttons. No status or duration here: the request list beside the trace shows them on the selected row.
@@ -358,45 +308,47 @@ export interface TraceViewProps {
   onExplain?: Explain | undefined;
   /** The app that served it, as it said itself: an App tab after Request when it said anything (the panel). */
   app?: App | null | undefined;
+  /** The part of the time to pick in the call tree, as a link asks (kinds of calls, a stretch of time). */
+  initialSlice?: Slice | undefined;
+  /** Called when another part of the time is picked (the console keeps it in the URL). */
+  onSliceChange?: ((slice: Slice) => void) | undefined;
 }
 
-/**
- * The Request tab: the trace's facts and parts. In the panel (`panel`) its request's line on top, and under it the
- * lanes the page has above its tabs (not its tiles: the tabs carry their numbers).
- */
+/** The Request tab: the trace's facts and parts; in the panel (`panel`) its request's line on top. */
 function RequestPane({
   open,
   trace,
   related,
   links,
   panel,
-  onSelect,
 }: {
   open: boolean;
   trace: Trace;
   related: Related | undefined;
   links: TraceLinks | undefined;
   panel: boolean;
-  onSelect: (target: MarkTarget) => void;
 }) {
   if (!open) return null;
-  // The panel shows the lanes, not the tiles: its tabs already carry the duration and the queries, and big tiles
-  // took the narrow pane's room.
-  const overview = panel ? (
-    <div className="dt-panel-overview">
-      <Timeline trace={trace} onSelect={onSelect} />
-    </div>
-  ) : null;
-  return <RequestInfo trace={trace} related={related} links={links} hero={panel} overview={overview} />;
+  return <RequestInfo trace={trace} related={related} links={links} hero={panel} />;
 }
 
-/** A trace at a glance above its tabs (the page) or under its request's line (the panel): its tiles and lanes. */
-function overviewOf(trace: Trace, onSelect: (target: MarkTarget) => void) {
+/**
+ * The Call tree tab: the trace's time strip and its legend over the tree, one unit, the same on the page and in the
+ * panel. The trace's time is shown here only.
+ */
+function TreePane({
+  open,
+  onSelect,
+  ...tree
+}: ComponentProps<typeof CallMap> & { open: boolean; onSelect: (target: MarkTarget) => void }) {
+  if (!open) return null;
+  const onProfile = tree.trace.profile ? () => onSelect({ tab: "profile" }) : undefined;
   return (
-    <>
-      <Metrics trace={trace} />
-      <Timeline trace={trace} onSelect={onSelect} />
-    </>
+    <CallMap
+      {...tree}
+      head={<TimeStrip trace={tree.trace} related={tree.related} onSelect={onSelect} />}
+      onProfile={onProfile}
+    />
   );
 }
 
@@ -414,6 +366,8 @@ export function TraceView({
   initialSpan,
   app,
   variant = "full",
+  // The part of the time picked: the lanes and the call tree share it (SliceScope).
+  ...held
 }: TraceViewProps) {
   const compact = variant === "compact" || variant === "strip";
   const findings = useMemo(() => findingsOf(trace), [trace]);
@@ -453,18 +407,17 @@ export function TraceView({
   };
   const panel = (
     <div role="tabpanel" className="dt-tabpanel">
-      <RequestPane
-        open={active === "request"}
+      <RequestPane open={active === "request"} trace={trace} related={related} links={links} panel={compact} />
+      <AppPane open={active === "app"} app={app} />
+      <TreePane
+        open={active === "tree"}
+        onSelect={openAt}
         trace={trace}
+        issueBySpan={issueBySpan}
         related={related}
         links={links}
-        panel={compact}
-        onSelect={openAt}
+        initialSpan={treeSpan}
       />
-      <AppPane open={active === "app"} app={app} />
-      {active === "tree" ? (
-        <CallMap trace={trace} issueBySpan={issueBySpan} related={related} links={links} initialSpan={treeSpan} />
-      ) : null}
       {active === "issues" ? (
         <IssueList
           issues={findings}
@@ -570,39 +523,43 @@ export function TraceView({
   // In the panel (either dock) the tabs carry the status and timings: one toolbar row, then the content.
   if (compact) {
     return (
-      <article className="dt-trace" data-variant="strip">
-        <StripHeader lead={lead} tabs={tabsBar} explore={exploreMenu} actions={actions} />
-        {panel}
-      </article>
+      <SliceScope initial={held.initialSlice} onChange={held.onSliceChange}>
+        <article className="dt-trace" data-variant="strip">
+          <StripHeader lead={lead} tabs={tabsBar} explore={exploreMenu} actions={actions} />
+          {panel}
+        </article>
+      </SliceScope>
     );
   }
 
   return (
-    <article className="dt-trace" data-variant={variant}>
-      <header className="dt-trace-head">
-        <div className="flex items-center gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="dt-trace-title" hidden={compact}>
-              <TraceBadge word={head.badge} htmx={htmxOf(trace)} />
-              <h2>
-                <HeadingTitle kind={trace.kind} title={head.title} />
-              </h2>
-              <StatusBadge status={typeof status === "number" ? status : null} />
-              <span className="dt-trace-time">{duration(trace.duration)}</span>
+    <SliceScope initial={held.initialSlice} onChange={held.onSliceChange}>
+      <article className="dt-trace" data-variant={variant}>
+        <header className="dt-trace-head">
+          <div className="flex items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="dt-trace-title" hidden={compact}>
+                <TraceBadge word={head.badge} htmx={htmxOf(trace)} />
+                <h2>
+                  <HeadingTitle kind={trace.kind} title={head.title} />
+                </h2>
+                <StatusBadge status={typeof status === "number" ? status : null} />
+                <span className="dt-trace-time">{duration(trace.duration)}</span>
+                <HeadFacts trace={trace} />
+              </div>
+              {compact ? null : typeof route === "string" && route !== path ? (
+                <p className="dt-trace-route">
+                  route <RoutePath path={route} />
+                </p>
+              ) : null}
             </div>
-            {compact ? null : typeof route === "string" && route !== path ? (
-              <p className="dt-trace-route">
-                route <RoutePath path={route} />
-              </p>
-            ) : null}
+            {exploreMenu}
+            {actions ? <div className="flex shrink-0 items-center gap-0.5">{actions}</div> : null}
           </div>
-          {exploreMenu}
-          {actions ? <div className="flex shrink-0 items-center gap-0.5">{actions}</div> : null}
-        </div>
-      </header>
-      {compact ? null : overviewOf(trace, openAt)}
-      {tabsBar}
-      {panel}
-    </article>
+        </header>
+        {tabsBar}
+        {panel}
+      </article>
+    </SliceScope>
   );
 }

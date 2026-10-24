@@ -21,10 +21,11 @@ export { isTyping } from "./lib/keys";
 export { percent } from "./lib/percent";
 export { plural } from "./lib/plural";
 export { type RuntimeKind, runtimeKind, runtimeName } from "./lib/runtime";
+export { parseSlice, type Slice, sliceParams } from "./lib/slice";
 export { linkProps, type TraceLinks, traceLinkProps } from "./links";
 export { MailList } from "./MailList";
-export { Metrics } from "./Metrics";
 export { type NameValue, NameValues } from "./NameValues";
+export { type Profiling, ProfilingContext } from "./Profiling";
 export * from "./PropTable";
 export {
   AliasChip,
@@ -63,6 +64,6 @@ export {
 export { formatSql, tokenizeSql } from "./sql";
 export { type Tab, Tabs } from "./Tabs";
 export { Timeline } from "./Timeline";
-export { type RunIssues, runIssues, runIssuesLabel, TraceList, type TraceRow } from "./TraceList";
+export { TraceList, type TraceRow } from "./TraceList";
 export { type ExploreItem, type TabId, TraceView, type TraceViewProps } from "./TraceView";
 export type * from "./types";

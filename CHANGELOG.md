@@ -4,92 +4,60 @@
 
 ### Added
 
-- Queries a template made as it rendered say so. In the DB tab and the call
-  tree such a query has a chip with its template and line
-  (`template blog/list.html:4`), its "Called from" names the view's line it
-  was rendered from, and its details have a Template row. An N+1 a template
-  made opens its hint with the template and its line, then the fix:
-  `select_related()` for a lookup by key, `prefetch_related()` for related
-  rows, or for an ORM the agent doesn't know, loading them in the view. The
-  line comes from `code.template_line`, which the Python SDK records.
-- A response's body beside its request's, as Django Silk shows them. A
-  request's parts are Headers, Query, Request body, Cookies, Session,
-  Response headers and Response body: JSON laid out and coloured as a task's
-  arguments are, a form as its fields, a body cut at the SDK's limit laid out
-  as far as it goes and marked with how much of it is shown, and one kept by
-  its size only (an image, a page) saying so. The same parts show in the
-  console, in the panel and on the call tree's request row. A response's body
-  stays on this machine, as a request's does.
-- An app's settings and versions, as a debug toolbar shows them. The panel
-  has an App tab after Request: the settings of the app that served the
-  request, a filter above them, secrets masked by the SDK as `********`, and
-  the versions of what it runs on, the agent's too. On the Services page an
-  app's row opens its page with the same, and a link to its own work, and a
-  trace's facts name its app, a link to that page. The SDK says them once,
-  in its hello, and the agent serves them at `api/app?service=`. The Python
-  SDK sends them from Django and Flask. For an app whose SDK doesn't, the
-  page says so and the panel has no App tab.
-- An app's warnings on top of its App tab and its page: what its checks
-  found wrong with it, the most serious first. Each says its level in the
-  colour a log record's has, its id, what it is about, its message and its
-  hint. The Python SDK sends Django's system checks, the migrations not
-  applied yet and the model changes with no migration. The App tab counts
-  them, red with an error among them. An app with none shows nothing more.
-  The SDK says them in its hello, or in an `{"app": {...}}` frame once its
-  checks ran, and `api/app` serves them in `checks` and `migrations`.
-- A template's context in the call tree. A template's details list each
-  name it was rendered with and its value, as the Python SDK recorded it:
-  repr-ed, cut, secrets masked, a long one folded under "Show all". A
-  template's context stays on this machine, as a request's headers do: a
-  snapshot shared without its values leaves it out.
-- Django signals in the call tree. A send's row names its signal
-  (`post_save`, or a project signal's dotted path), its sender
-  (`auth.Group`), how many receivers it ran and, in red, how many of them
-  failed: under `send_robust()` the trace stays ok, so this is where a
-  failure shows. Each receiver is a row under it with its file and line, or
-  what it raised. Its details list the signal, the sender, whether it was
-  robust, the receivers and the line that sent it, and a receiver's its
-  function, where it is defined and its exception. The time its receivers
-  took is the breakdown's Signals share, a chip that shows the sends with
-  all they did. The same send repeated in a loop folds into one row, ×N.
-  The sends nobody received are a line among the request's facts, "Sent
-  with no receiver". `schema/trace.schema.json` documents the `signal.*`
-  and `exception.*` attributes.
-- Task workflows. A task run's related traces have a Workflow part: the
-  workflow's first run, the step before it (the run that sent it, or a job it
-  waited for), the steps after it, its callbacks and its group's other tasks,
-  each with how it ended and how long it took. A long group lists its first
-  five, how many more, and a search for them all. The agent links runs by
-  the ids an SDK records: `task.parent_id`, `task.depends_on`,
-  `task.root_id` and `task.group_id`. `api/traces/{id}/related` has them in
-  `workflow` for a run in one, and the search takes `group:`. A step sent
-  from inside the run before it stays its `enqueued_by`, listed once.
-- A task's facts say when it was due (`task.eta`, as "Oct 21 15:45:20.345 ·
-  2 min late"), its priority, its time limit (`task.timeout`, and "stopped
-  by its time limit" when it failed on it) and its workflow: the task it
-  follows, what it waits for, its root and its group, each a link to its
-  run. A callback (`task.callback`, RQ's `on_success`, `on_failure` and
-  `on_stopped`) says whose: Callback of.
-- A task workflow drawn whole. Below a run's related traces, the Workflow
-  part draws every run of its workflow, left to right as they ran: the
-  request that started it, each task's latest run with how it ended, how
-  long it took and how many runs it had, a group's tasks in a frame (its
-  first five, then a search for the rest), a callback on a dashed line. The
-  run on screen is marked, every other box opens its trace. The agent finds
-  the runs from the one asked for, by the same ids, at most 100 of them, and
-  sends them in `workflow.graph`: the nodes, the edges between them and
-  whether it was cut. A snapshot carries every run the graph shows.
-- A request's tasks in the panel. A task's row in the call tree and under
-  Related traces names what its own trace found (N+1, Long transaction,
-  Error…) and its queries, as the lists do. In the panel a task opens in the
-  panel itself, with a way back to the request (Back, or Esc). The panel's
-  list nests the runs a request sent under it as the workers record them,
-  and a request whose tasks found something says so beside its own count,
-  in its row and on the pill: "3 issues in its tasks". The agent lists a
-  trace's runs (those it enqueued, and theirs) with `api/traces?ids=…&runs=1`.
-
-### Changed
-
+- Pick a part of a trace's time in its call tree, by kind or by range. A
+  share's stretch of the time strip, or its entry in the legend, says its
+  time, its percent and how many calls on hover. A click on it keeps that
+  kind's calls in the tree (Database, Templates, View code...), with the rows
+  on the way to them dimmed and opened. A drag across the lanes, or across
+  the tree's bars, keeps the calls of that stretch of time and shows it as
+  `12.4 → 18.9 ms · 6.5 ms`. Both go into the page's URL (`part=` and
+  `range=`), so a link opens the tree with them. A click on the share again,
+  Show all, Esc or a double click lets them go. The panel does the same, and
+  its Console button opens the trace with what was picked.
+- A long stretch of a trace's own code with nothing it called traced reads
+  as code. On the time strip it is hatched in its share's colour and
+  labelled (`untraced · 1.6 s`), the legend counts it in its share (`Your
+  code 1.6 s 98% · of it 1.6 s untraced`), and in the call tree it is a row
+  of its own under the span, hatched where it fell, its time the same, named
+  by what ran: with a profile, its functions (`aggregate · render_csv`),
+  else `untraced code`. The flame of the panel's Profile toggle after its
+  name opens the profile, or, where the app profiles on request and the
+  trace has none, turns Profile on in the panel. Profile is offered only
+  where the trace's app profiles on request: `api/capabilities?service=`
+  says what an app does. A transaction's time says on hover how long it was
+  open and how much of that its SQL took, and a row whose name says its
+  database has no chip saying it again.
+- A profile can say when each stack was seen (`bucket_us`, `stacks[].at`),
+  which frames wait rather than compute (`frames[].waiting`, an await's
+  `at_line`) and how many samples weren't taken because the trace's thread
+  ran other traces too (`dropped`). The schema and the agent take them, and
+  a profile without them stays valid. With them, the Profile tab reads in
+  the trace's own time, as the time strip does: what wasn't sampled is said
+  and filled in from the samples around it. Waiting is a share of its own,
+  hatched, and with a range picked it profiles that stretch.
+  The time strip, its legend and the call tree split the code's own time
+  into what it waited in (`waiting · 1.5 s`, a `wait` row named by the wait:
+  `asyncio.sleep in send_digest`, its line on hover) and what it computed,
+  and a click opens the profile at that stretch.
+- A call tree and its strip show a trace's warnings and worse, not every
+  record: its info and debug records stay out of the tree and the log lane,
+  a quiet note on the span they were logged in says how many (`3 logs`),
+  and the legend's Logs chip, or a click on the note, shows them all
+  (`logs=all` in the URL). The Logs tab and the Logs page show every record,
+  as before. A request with no view or handler recorded counts its own time
+  as "Your code": it can't be told from the framework's then.
+- A trace's first tab is one anatomy for every kind. In the panel it heads
+  with the trace's line as the page's header says it (its badge, name, how
+  it ended, its time) and what handled it under, quietly: a request's view
+  or handler, a task's queue and worker. Its facts follow in one order, its
+  kind's own first, then App, Runtime, Started and Trace ID, nothing its head
+  says again. A related trace is a row as the call tree draws a linked one:
+  a grey kind box, its name, its state and findings, its time.
+- The code's own time is "Your code" in every kind of trace, a request's view
+  or handler too. A call tree's rows look one way: a task a request enqueued
+  has the grey kind box of the other rows, and its bar where it ran, running
+  to the right edge and fading there when it outlasts the request. A task's
+  run is a "task" and a command a "job" wherever a row names them.
 - The pill says what a request's tasks ran into as its other numbers do:
   the Tasks icon, then a red "5 failed" chip and the amber "3 issues" one,
   the same chips as its own. Its ring turns red when one failed. Before,

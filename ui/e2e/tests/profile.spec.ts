@@ -10,7 +10,7 @@ test.beforeEach(async ({ page }) => {
 test("the time in code, then each package's share", async ({ page }) => {
   const packages = page.getByRole("region", { name: "Time by package" });
 
-  await expect(page.getByText("Time in code")).toBeVisible();
+  await expect(page.getByText("sampled of the trace's", { exact: false })).toBeVisible();
   await expect(page.getByText("100 samples, one every 1 ms")).toBeVisible();
   await expect(packages.getByRole("button")).toHaveText([
     /^django\.db\s*60%\s*60 ms$/,

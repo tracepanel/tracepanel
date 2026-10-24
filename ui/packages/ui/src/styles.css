@@ -837,27 +837,6 @@ tr[data-new] {
 .dt-run-chips .dt-request-queries {
   margin-left: 0.125rem;
 }
-/* A request's task runs found something: their count apart from its own, an amber outline with the corner its runs
-   hang from. */
-.dt-run-issues {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 0.125rem;
-  height: 1.125rem;
-  padding: 0 0.375rem 0 0.3125rem;
-  border: 1px dashed color-mix(in srgb, var(--dt-warn) 60%, transparent);
-  border-radius: 999px;
-  color: var(--dt-warn);
-  font-size: var(--dt-size-xs);
-  font-weight: 600;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-}
-.dt-run-issues svg {
-  width: 0.75rem;
-  height: 0.75rem;
-}
 /* A task run under the request it came from: one step deeper, its corner dashed (it ran later, in a worker). */
 .dt-request-row[data-depth="2"] {
   padding-left: 3.5rem;
@@ -974,6 +953,16 @@ tr[data-new] {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+/* What the trace called, after how long it took: one quiet line, as the tabs' numbers read. */
+.dt-trace-facts {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dt-text-3);
+  font-size: var(--dt-size-sm);
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .dt-trace-route {
   margin: 0.25rem 0 0 2.875rem;
@@ -1009,60 +998,7 @@ tr[data-new] {
   white-space: nowrap;
 }
 
-.dt-metrics {
-  display: grid;
-  /* Duration and a tile per system the request called: as many as fit in a row, the rest wrap. */
-  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
-  margin: 0 1rem;
-  border: 1px solid var(--dt-border);
-  border-radius: var(--dt-radius);
-  background: var(--dt-subtle);
-  box-shadow: var(--dt-shadow);
-}
-.dt-metric {
-  display: grid;
-  gap: 2px;
-  padding: 0.625rem 0.75rem;
-}
-.dt-metric + .dt-metric {
-  border-left: 1px solid var(--dt-border);
-}
-.dt-metric-label {
-  color: var(--dt-text-3);
-  font-size: var(--dt-size-xs);
-  font-weight: 500;
-}
-.dt-metric-value {
-  font-size: var(--dt-size-xl);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-:root[data-theme="light"] .dt-metrics {
-  background: var(--dt-card);
-}
-.dt-metric-sub {
-  color: var(--dt-text-2);
-  font-size: var(--dt-size-xs);
-}
-/* On a console page, and in the panel's Request tab under its request's line, the metrics are the same tiles as
-   the summaries of the other pages (Stat): separate cards, larger numbers. */
-:is(.dt-trace[data-variant="full"], .dt-panel-overview) .dt-metrics {
-  gap: 0.625rem;
-  border: 0;
-  background: none;
-  /* The strip's shadow, with no strip: it would show under the cards and through the gaps between them. */
-  box-shadow: none;
-}
-:is(.dt-trace[data-variant="full"], .dt-panel-overview) .dt-metric {
-  align-content: start;
-  gap: 0.25rem;
-  padding: 0.75rem 1rem;
-  border: 1px solid var(--dt-border);
-  /* Stat's corners (rounded-xl). */
-  border-radius: calc(var(--radius) + 4px);
-  background: var(--dt-card);
-}
-/* The tabs in the page's column, as wide as the tiles above them: their rule ends where the content does, and the
+/* The tabs in the page's column, as wide as the strip above them: their rule ends where the content does, and the
    first tab starts at its edge. */
 .dt-trace[data-variant="full"] .dt-tabs {
   margin-right: 1rem;
@@ -1076,55 +1012,25 @@ tr[data-new] {
 .dt-trace[data-variant="full"] .dt-tab:first-child {
   padding-left: 0;
 }
-:is(.dt-trace[data-variant="full"], .dt-panel-overview) .dt-metric-label {
-  color: var(--dt-text-2);
-  font-size: var(--dt-size-sm);
-}
-:is(.dt-trace[data-variant="full"], .dt-panel-overview) .dt-metric-value {
-  /* Stat's number: the same size and spacing as the other pages' tiles. */
-  font-size: var(--dt-size-2xl);
-  line-height: 1.15;
-  letter-spacing: -0.02em;
-}
-:is(.dt-trace[data-variant="full"], .dt-panel-overview) .dt-metric-sub {
-  font-size: var(--dt-size-sm);
-}
-.dt-split {
-  display: block;
-  height: 0.25rem;
-  margin-top: 0.25rem;
-  overflow: hidden;
-  border-radius: 2px;
-  background: var(--dt-border-strong);
-}
-.dt-split-db {
-  display: block;
-  height: 100%;
-  background: var(--dt-db);
-}
 
+/* ---------- the time strip: lanes over the time, their legend under them ---------- */
+
+.dt-strip {
+  --dt-lane-label: 7.5rem;
+  display: grid;
+  gap: 0.625rem;
+  padding: 0.75rem 1rem 0.875rem;
+}
 .dt-timeline {
   margin: 0;
-  padding: 0.875rem 1rem 0.375rem;
 }
-/* In the panel's Request tab, the tiles and lanes on the tab's own edges. */
-.dt-panel-overview {
-  display: grid;
-}
-/* A trace with no tiles and no lanes (it called nothing): no gap where they would be. */
-.dt-panel-overview:empty {
-  display: none;
-}
-.dt-panel-overview .dt-metrics {
+.dt-strip .dt-breakdown-legend {
   margin: 0;
-}
-.dt-panel-overview .dt-timeline {
-  padding-inline: 0;
 }
 .dt-timeline-axis {
   position: relative;
   height: 1rem;
-  margin-left: 4.5rem;
+  margin-left: var(--dt-lane-label);
   color: var(--dt-text-3);
   font-size: var(--dt-size-xs);
   font-variant-numeric: tabular-nums;
@@ -1134,7 +1040,18 @@ tr[data-new] {
   transform: translateX(-50%);
   white-space: nowrap;
 }
-.dt-timeline-axis span:first-child {
+/* What the axis is: time, from the trace's start, in the label column before it. */
+.dt-timeline-axis .dt-timeline-unit {
+  right: 100%;
+  left: auto;
+  transform: none;
+  padding-right: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.625rem;
+  line-height: 1rem;
+}
+.dt-timeline-axis .dt-timeline-unit + span {
   transform: none;
 }
 .dt-timeline-axis span:last-child {
@@ -1142,18 +1059,110 @@ tr[data-new] {
 }
 .dt-lane {
   display: grid;
-  grid-template-columns: 4.5rem minmax(0, 1fr);
+  grid-template-columns: var(--dt-lane-label) minmax(0, 1fr);
   align-items: center;
   height: 1.375rem;
 }
 .dt-lane-label {
   display: flex;
   gap: 0.25rem;
+  overflow: hidden;
+  white-space: nowrap;
   color: var(--dt-text-2);
   font-size: var(--dt-size-xs);
 }
 .dt-lane-count {
+  color: var(--dt-text);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+/* The trace's own lane: its time moment by moment, in the legend's colours; taller, its quiet stretches said. */
+.dt-lane[data-own] {
+  height: 1.75rem;
+}
+.dt-lane[data-own] .dt-lane-label {
+  color: var(--dt-text);
+  font-weight: 500;
+}
+.dt-time-track {
+  height: 1.125rem;
+  border-radius: 0.25rem;
+  cursor: crosshair;
+}
+.dt-stretch {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  min-width: 1px;
+  background: var(--dt-k);
+  transition: opacity 120ms;
+}
+.dt-stretch:first-child {
+  border-radius: 0.25rem 0 0 0.25rem;
+}
+.dt-stretch[data-faded] {
+  opacity: 0.25;
+}
+/* Its code on its own, nothing it called recorded: the share's colour hatched. */
+.dt-stretch[data-quiet] {
+  border-radius: 0;
+  background-color: var(--dt-bg);
+  background-image: repeating-linear-gradient(
+    -45deg,
+    color-mix(in srgb, var(--dt-k) 60%, transparent) 0 2px,
+    transparent 2px 6px
+  );
+}
+/* Where the code waited (a sleep, a socket, the event loop), not computed: neutral, hatched. */
+.dt-stretch[data-waiting] {
+  --dt-k: var(--dt-text-3);
+}
+/* How long, over its longest hatched stretch, when it fits. */
+.dt-quiet-said {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  container-type: inline-size;
+  overflow: hidden;
+  pointer-events: none;
+}
+/* The legend's word for it: of a share's time, how much ran with no recorded calls, its swatch hatched. */
+.dt-share-quiet {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
   color: var(--dt-text-3);
+}
+.dt-swatch[data-quiet] {
+  background-color: var(--dt-bg);
+  background-image: repeating-linear-gradient(-45deg, var(--dt-k) 0 1.5px, transparent 1.5px 3.5px);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dt-k) 60%, transparent);
+}
+.dt-quiet-label {
+  padding: 0 0.375rem;
+  border-radius: 0.1875rem;
+  background: var(--dt-bg);
+  color: var(--dt-text-2);
+  font-size: 0.6875rem;
+  line-height: 0.875rem;
+  white-space: nowrap;
+  pointer-events: none;
+}
+@container (max-width: 10rem) {
+  .dt-quiet-label {
+    display: none;
+  }
+}
+/* Under the lane: the strip heads its tab, there is no room above it in the panel. */
+.dt-lane-tip {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  z-index: 20;
+  transform: translateX(-50%);
+  pointer-events: none;
 }
 .dt-lane-track {
   position: relative;
@@ -1201,6 +1210,59 @@ tr[data-new] {
 }
 .dt-mark[data-point][data-tone="error"] {
   background: var(--dt-error);
+}
+/* Outside the picked stretch of time: still there, stepped back. */
+.dt-mark[data-out] {
+  opacity: 0.3;
+}
+
+/* ---------- a picked stretch of time ---------- */
+
+/* The lanes and the axis over them, a drag across them picking a stretch of the time. */
+.dt-timeline-body {
+  position: relative;
+  touch-action: pan-y;
+}
+.dt-timeline-body .dt-lane-track,
+.dt-timeline-axis {
+  cursor: crosshair;
+}
+/* Over the tracks' column, axis to last lane: where the range is drawn. */
+.dt-timeline-layer {
+  position: absolute;
+  inset: 0 0 0 var(--dt-lane-label);
+  pointer-events: none;
+}
+.dt-range {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  min-width: 1px;
+  border: 1px solid var(--dt-accent);
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--dt-accent) 5%, transparent);
+  pointer-events: none;
+}
+/* Where it starts and ends, and how long: over the axis, from its start, or ending with it in the later half. */
+/* Small, on the page's background: the hairline's colour in its text, no block of colour. */
+.dt-range-label {
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  padding: 0 0.25rem;
+  border: 1px solid var(--dt-accent);
+  border-radius: 2px;
+  background: var(--dt-bg);
+  color: var(--dt-accent);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 0.875rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.dt-range[data-end] .dt-range-label {
+  right: -1px;
+  left: auto;
 }
 
 .dt-tabs {
@@ -1762,23 +1824,9 @@ details[data-focused] > .dt-sql-group {
 
 /* ---------- Call tree ---------- */
 
-.dt-breakdown {
-  padding: 0.875rem 1rem 0.625rem;
-}
-.dt-breakdown-bar {
-  display: flex;
-  height: 0.625rem;
-  overflow: hidden;
-  border-radius: 0.3125rem;
-  background: var(--dt-muted-bg);
-}
-.dt-breakdown-bar span + span {
-  box-shadow: inset 1px 0 var(--dt-bg);
-}
 [data-category="django"] {
   --dt-k: var(--dt-k-django);
 }
-[data-category="view"],
 [data-category="code"] {
   --dt-k: var(--dt-k-view);
 }
@@ -1806,9 +1854,6 @@ details[data-focused] > .dt-sql-group {
 [data-category="signal"] {
   --dt-k: var(--dt-k-signal);
 }
-.dt-breakdown-bar span {
-  background: var(--dt-k);
-}
 .dt-breakdown-legend {
   display: flex;
   flex-wrap: wrap;
@@ -1824,6 +1869,35 @@ details[data-focused] > .dt-sql-group {
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
+}
+/* A share in the legend: its text, no box until hovered; picked, a tint. Its swatch stays where the text starts. */
+.dt-share {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  height: 1.625rem;
+  margin-inline: -0.5rem;
+  padding: 0 0.5rem;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.dt-share:hover {
+  background: var(--dt-hover);
+  color: var(--dt-text);
+}
+/* Picked: an outlined pill, the brand's soft tint and a hairline of the same hue a step stronger. */
+.dt-share[aria-pressed="true"] {
+  background: var(--dt-accent-bg);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dt-accent) 45%, transparent);
+  color: var(--dt-text);
+}
+.dt-share:focus-visible {
+  outline: none;
+  background: var(--dt-hover);
 }
 .dt-breakdown-legend b {
   color: var(--dt-text);
@@ -1850,9 +1924,12 @@ details[data-focused] > .dt-sql-group {
 }
 
 .dt-map-head {
-  display: flex;
-  justify-content: space-between;
-  padding: 0.375rem 1rem;
+  display: grid;
+  /* The rows' columns: the head's middle one is the bars' time, where a drag picks a stretch of it. */
+  grid-template-columns: minmax(0, 2fr) minmax(6.875rem, 1fr) 4rem;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.375rem 1rem 0.375rem 0;
   border-top: 1px solid var(--dt-border);
   border-bottom: 1px solid var(--dt-border);
   background: var(--dt-subtle);
@@ -1868,6 +1945,30 @@ details[data-focused] > .dt-sql-group {
   background: var(--dt-card);
   font-weight: 500;
   letter-spacing: 0.06em;
+}
+.dt-map-head > :first-child {
+  padding-left: 1rem;
+}
+.dt-map-head > :last-child {
+  text-align: right;
+}
+.dt-map-ruler {
+  align-self: stretch;
+  margin-block: -0.375rem;
+  cursor: crosshair;
+}
+.dt-map-timed {
+  position: relative;
+}
+.dt-map-timed .dt-map-track {
+  touch-action: pan-y;
+}
+/* Over the bars' column, head to last row; the label sits in the head. */
+.dt-map-range-layer {
+  position: absolute;
+  top: 0.25rem;
+  bottom: 0;
+  pointer-events: none;
 }
 .dt-map-row {
   --dt-k: var(--dt-k-request);
@@ -1891,11 +1992,12 @@ details[data-focused] > .dt-sql-group {
   background: var(--dt-hover);
 }
 /* The rows lay out by their own width, not the window's: the panel and the details beside them narrow it. */
-.dt-map-rows {
+.dt-map-timed {
   container: map-rows / inline-size;
 }
 @container map-rows (max-width: 44rem) {
-  .dt-map-row {
+  .dt-map-row,
+  .dt-map-head {
     grid-template-columns: minmax(0, 3fr) minmax(3rem, 1fr) 3.5rem;
   }
 }
@@ -2039,6 +2141,40 @@ details[data-focused] > .dt-sql-group {
   flex: none;
   font-family: var(--dt-font);
 }
+/* A way on, as a link reads: the panel's Profile turned on from the legend. */
+.dt-map-quiet-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dt-accent);
+  font: var(--dt-size-sm) var(--dt-font);
+  cursor: pointer;
+}
+.dt-map-quiet-link:hover:not(:disabled) {
+  text-decoration: underline;
+}
+.dt-map-quiet-link:disabled {
+  color: var(--dt-text-3);
+  cursor: default;
+}
+/* The code's own time with a profile to show what ran in it: a click opens it. */
+.dt-time-track .dt-stretch[data-quiet] {
+  cursor: pointer;
+}
+/* A span's info and debug records, while only warnings show: how many, a click away. */
+.dt-map-logs {
+  flex: none;
+  font-family: var(--dt-font);
+  cursor: pointer;
+}
+.dt-map-logs:hover {
+  color: var(--dt-text);
+  text-decoration: underline;
+}
 .dt-map-sub[data-error] {
   flex-shrink: 2;
   min-width: 3rem;
@@ -2061,6 +2197,50 @@ details[data-focused] > .dt-sql-group {
   min-width: 2px;
   border-radius: 2px;
   background: var(--dt-k);
+}
+/* Running past the request's end (a task it enqueued): to the right edge, fading out there. */
+.dt-map-bar[data-past] {
+  border-radius: 2px 0 0 2px;
+  mask-image: linear-gradient(to right, #000 max(40%, calc(100% - 2rem)), transparent);
+}
+/* The code's own time with nothing recorded inside: its share's colour, hatched, as on the strip. */
+.dt-map-bar[data-quiet] {
+  background-color: transparent;
+  background-image: repeating-linear-gradient(
+    -45deg,
+    color-mix(in srgb, var(--dt-k) 70%, transparent) 0 2px,
+    transparent 2px 5px
+  );
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dt-k) 45%, transparent);
+}
+.dt-map-bar[data-quiet][data-waiting] {
+  --dt-k: var(--dt-text-3);
+}
+div.dt-map-row[data-kind="code"] {
+  cursor: default;
+}
+/* A code row's way to its profile: the panel toggle's flame, small and quiet; the brand's on the row's hover. Dimmed,
+   it turns Profile on. */
+.dt-map-flame {
+  display: inline-flex;
+  flex: none;
+  color: var(--dt-text-3);
+}
+.dt-map-flame svg {
+  width: 0.8125rem;
+  height: 0.8125rem;
+}
+/* A profile there: the toggle's orange (set on the icon), brighter on the row's hover. */
+.dt-map-row:hover .dt-map-flame[data-on] {
+  filter: brightness(1.25) saturate(1.1);
+}
+.dt-map-flame[data-off] {
+  opacity: 0.55;
+  cursor: pointer;
+}
+.dt-map-flame[data-off]:hover {
+  opacity: 1;
+  color: var(--dt-accent);
 }
 .dt-map-bar[data-point],
 .dt-map-bar[data-tick] {
@@ -2131,12 +2311,21 @@ details[data-focused] > .dt-sql-group {
   color: var(--dt-text);
 }
 .dt-map-filter[aria-pressed="true"] {
-  border-color: var(--dt-accent);
-  background: var(--dt-selected);
+  border-color: color-mix(in srgb, var(--dt-accent) 45%, transparent);
+  background: var(--dt-accent-bg);
   color: var(--dt-text);
 }
 .dt-map-filter[aria-pressed="true"] .dt-map-filter-count {
   color: var(--dt-text-2);
+}
+.dt-map-filter-x {
+  display: inline-flex;
+  margin-right: -0.125rem;
+  color: var(--dt-text-3);
+}
+.dt-map-filter-x svg {
+  width: 0.75rem;
+  height: 0.75rem;
 }
 .dt-map-filter-clear {
   padding: 0 0.375rem;
@@ -2468,4 +2657,13 @@ details[data-focused] > .dt-sql-group {
   font: var(--dt-size-sm) / 1.55 var(--dt-mono);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* Waiting, not computing (the Profile tab's "waiting"): hatched, as the time strip draws it. */
+.dt-hatched {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    color-mix(in srgb, var(--dt-text-3) 45%, transparent) 0 2px,
+    transparent 2px 5px
+  );
 }

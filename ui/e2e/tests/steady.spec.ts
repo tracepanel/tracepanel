@@ -1,7 +1,7 @@
 // Pages that load hold still: with a slow agent, nothing shown is taken away again and nothing shown moves. Each
 // test records what the page shows at every change of the DOM, then reads the recording.
 import type { Page } from "@playwright/test";
-import { autoRefresh, traceId } from "../app.ts";
+import { autoRefresh } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
 
 interface Frame {
@@ -231,30 +231,6 @@ test("an issue's requests don't move down when its latest occurrence loads", asy
   await page.waitForTimeout(800);
 
   expect(tops(await frames(page), "requests")).toHaveLength(1);
-});
-
-test("a trace page's tiles look like the other pages' tiles, with no line under them", async ({ page }) => {
-  const look = (element: Element) => {
-    const style = getComputedStyle(element);
-    return {
-      radius: style.borderRadius,
-      border: style.borderTopWidth,
-      background: style.backgroundColor,
-      padding: style.padding,
-    };
-  };
-  await page.goto("/#/endpoints?view=overview");
-  const stat = await page
-    .getByRole("region", { name: "Overview" })
-    .getByText("Requests", { exact: true })
-    .locator("..")
-    .evaluate(look);
-  await page.goto(`/#/t/${await traceId("PATCH /campaigns/{id}/report")}`);
-  const metrics = page.locator(".dt-metrics");
-  await expect(metrics).toBeVisible();
-
-  expect(await metrics.evaluate((element) => getComputedStyle(element).boxShadow)).toBe("none");
-  expect(await metrics.locator(".dt-metric").first().evaluate(look)).toEqual(stat);
 });
 
 for (const path of ["#/endpoints?view=overview", "#/logs"]) {

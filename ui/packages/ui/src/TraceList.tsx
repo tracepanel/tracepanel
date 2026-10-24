@@ -1,4 +1,4 @@
-import { CornerDownRightIcon, TriangleAlertIcon } from "lucide-react";
+import { TriangleAlertIcon } from "lucide-react";
 import { Badge } from "./components/ui/badge";
 import { ago, duration } from "./format";
 import { DatabaseIcon } from "./icons";
@@ -13,30 +13,9 @@ export interface TraceRow {
   depth?: 0 | 1 | 2 | undefined;
   /** A task run the row above it led to (it enqueued it, or one of its runs did): it ran later, in a worker. */
   run?: boolean | undefined;
-  /** On a request: what its task runs found, counted apart from its own. */
-  runIssues?: RunIssues | undefined;
   /** For an htmx request, the element that sent it ("Reload (fixed)") and where the answer went ("#rows-todo"). */
   trigger?: string | undefined;
   target?: string | undefined;
-}
-
-/** The findings of a request's task runs: how many, of which kinds. */
-export interface RunIssues {
-  count: number;
-  kinds: IssueKind[];
-}
-
-/** What a request's runs found, together: their findings counted and their kinds once each; none when clean. */
-export function runIssues(runs: readonly TraceSummary[]): RunIssues | undefined {
-  const count = runs.reduce((sum, run) => sum + run.issues, 0);
-  if (count === 0) return undefined;
-  return { count, kinds: [...new Set(runs.flatMap((run) => run.issue_kinds))] };
-}
-
-/** "2 issues in its tasks: N+1, Long transaction". */
-export function runIssuesLabel({ count, kinds }: RunIssues): string {
-  const names = kinds.map((kind) => ISSUE_LABELS[kind]).join(", ");
-  return `${count} ${count === 1 ? "issue" : "issues"} in its tasks${names ? `: ${names}` : ""}`;
 }
 
 export interface TraceListProps {
@@ -56,7 +35,7 @@ export interface TraceListProps {
 export function TraceList({ rows, selectedId, currentId, newIds, compact, services, onSelect }: TraceListProps) {
   return (
     <ul className="dt-requests" data-compact={compact ? "" : undefined}>
-      {rows.map(({ trace, depth = 0, trigger, target, run, runIssues: below }) => (
+      {rows.map(({ trace, depth = 0, trigger, target, run }) => (
         <li key={trace.id}>
           <button
             type="button"
@@ -86,7 +65,7 @@ export function TraceList({ rows, selectedId, currentId, newIds, compact, servic
               {/* No status of its own (a view, a task, a job): its slot kept, so the time lines up with a request's. */}
               <StatusSlot status={trace.kind === "page" ? null : trace.http_status} />
               <span>{duration(trace.duration)}</span>
-              {compact ? <CompactMeta trace={trace} below={below} /> : <FullMeta trace={trace} below={below} />}
+              {compact ? <CompactMeta trace={trace} /> : <FullMeta trace={trace} />}
             </span>
           </button>
         </li>
@@ -109,7 +88,7 @@ function RowApp({ trace, shown }: { trace: TraceSummary; shown: boolean | undefi
  * The narrow list's numbers after the time: the queries (the database icon says what they count, the tooltip spells
  * it out), then the first finding. A browser view or action runs no SQL itself: its requests, under it, do.
  */
-function CompactMeta({ trace, below }: { trace: TraceSummary; below: RunIssues | undefined }) {
+function CompactMeta({ trace }: { trace: TraceSummary }) {
   const queries =
     trace.kind === "page" ? (
       <span />
@@ -126,18 +105,17 @@ function CompactMeta({ trace, below }: { trace: TraceSummary; below: RunIssues |
   return (
     <>
       {queries}
-      <CompactChips kinds={trace.issue_kinds} issues={trace.issues} below={below} />
+      <CompactChips kinds={trace.issue_kinds} issues={trace.issues} />
     </>
   );
 }
 
 /** The wide list's numbers after the time: the queries, every finding, when it happened. */
-function FullMeta({ trace, below }: { trace: TraceSummary; below: RunIssues | undefined }) {
+function FullMeta({ trace }: { trace: TraceSummary }) {
   return (
     <>
       <span>{trace.kind === "page" ? "" : `${trace.queries} ${trace.queries === 1 ? "query" : "queries"}`}</span>
       <FullChips kinds={trace.issue_kinds} issues={trace.issues} />
-      <RunIssuesMark issues={below} />
       <span className="dt-request-time">{ago(trace.start)}</span>
     </>
   );
@@ -251,21 +229,12 @@ function PageName({ name }: { name: string }) {
  * The narrow list's findings: a mark and how many, in the first kind's colour, their names in its title. A label per
  * finding ("Before commit +3") took the row's room from its path.
  */
-function CompactChips({
-  kinds,
-  issues,
-  below,
-}: {
-  kinds: IssueKind[] | undefined;
-  issues: number;
-  below?: RunIssues | undefined;
-}) {
+function CompactChips({ kinds, issues }: { kinds: IssueKind[] | undefined; issues: number }) {
   const shown = (kinds ?? []).filter((kind) => kind !== "error");
   // Its findings, as its Issues tab counts them (three N+1s are three), not their kinds; before its trace loads (a
   // row from the widget's summary) the number is all there is.
   const count = issues || shown.length;
-  const mark = <RunIssuesMark issues={below} />;
-  if (count === 0) return <span className="dt-request-chips">{mark}</span>;
+  if (count === 0) return <span className="dt-request-chips" />;
   const names = shown.map((kind) => ISSUE_LABELS[kind]).join(", ");
   return (
     <span className="dt-request-chips">
@@ -278,23 +247,6 @@ function CompactChips({
         <TriangleAlertIcon aria-hidden="true" />
         {count}
       </Badge>
-      {mark}
-    </span>
-  );
-}
-
-/**
- * A request's task runs found something: a mark of its own, beside (never added to) the request's own findings, an
- * outline in their amber with the corner the runs hang from, so it reads "below, in its tasks". It counts as the
- * row's own mark does, by kind; the title has every finding.
- */
-function RunIssuesMark({ issues }: { issues: RunIssues | undefined }) {
-  if (!issues) return null;
-  const label = runIssuesLabel(issues);
-  return (
-    <span className="dt-run-issues" role="img" title={label} aria-label={label}>
-      <CornerDownRightIcon aria-hidden="true" />
-      {issues.kinds.length || issues.count}
     </span>
   );
 }

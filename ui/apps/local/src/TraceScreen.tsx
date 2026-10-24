@@ -38,6 +38,9 @@ export interface TraceScreenProps {
   links?: TraceViewProps["links"];
   /** A span to open in the call tree. */
   initialSpan?: string | undefined;
+  /** The part of the time picked in the call tree, and where it goes as it changes. */
+  initialSlice?: TraceViewProps["initialSlice"];
+  onSliceChange?: TraceViewProps["onSliceChange"];
   /** The way back when the trace is gone (the console's page); the panel has none to offer. */
   back?: ReactNode;
   /** A Share button, when the source can make a snapshot: the console's trace page. */

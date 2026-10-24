@@ -8,21 +8,29 @@ import {
   useRef,
   useState,
 } from "react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./components/ui/tooltip";
 import { duration, since } from "./format";
 import { GraphqlCode } from "./GraphqlCode";
 import { ChevronRightIcon, CloseIcon } from "./icons";
 import { keyed } from "./keys";
 import { AllAttributes, LogRecordDetails } from "./LogRecordDetails";
-import { breakdown, type Category, categoryLabel } from "./lib/breakdown";
+import { type Category, spanCategories } from "./lib/breakdown";
 import { callFields } from "./lib/callFields";
 import { callTemplate, groupNoun } from "./lib/calls";
 import { spanKindLabel } from "./lib/handler";
-import { percent, widthOf } from "./lib/percent";
+import { widthOf } from "./lib/percent";
+import { plural } from "./lib/plural";
+import { ownHotspots, type Profile } from "./lib/profile";
+import { type Quiet, quietSpans } from "./lib/quiet";
 import { traceRuntime } from "./lib/runtime";
 import { isReceiver, raised } from "./lib/signals";
+import { isLoud, overlaps, type Slice, type TimeRange } from "./lib/slice";
 import { CALL_KINDS, DATASTORES, MESSAGING, RPC } from "./lib/systems";
+import { type Piece, quietPieces, timed, waitName } from "./lib/waiting";
 import { type TraceLinks, traceLinkProps } from "./links";
 import { type NameValue, NameValues, RowsLookContext } from "./NameValues";
+import { profileOver, RowFlame, WhatRan, WhatWaited } from "./ProfileHint";
+import { useProfilingOf } from "./Profiling";
 import { PropTable } from "./PropTable";
 import {
   AliasChip,
@@ -40,6 +48,7 @@ import { SideResize, useSideWidth } from "./SideResize";
 import { SignalNotes } from "./SignalNotes";
 import { SqlCode } from "./SqlCode";
 import { TemplateContext, withoutContext } from "./TemplateContext";
+import { RangeBand, useHeldSlice, useRangeDrag } from "./TimeSlice";
 import type { Attrs, IssueKind, Log, Related, Span, Trace, TraceError, TraceSummary } from "./types";
 
 /* ---------- tree ---------- */
@@ -194,7 +203,7 @@ function parentFinder(trace: Trace): (span: Span) => string | null {
   return (span) => (span.parent_id === null || ids.has(span.parent_id) ? span.parent_id : root);
 }
 
-function buildTree(trace: Trace, related: Related | undefined): Node[] {
+export function buildTree(trace: Trace, related: Related | undefined): Node[] {
   const children = new Map<string | null, Node[]>();
   const push = (parent: string | null, node: Node) => children.set(parent, [...(children.get(parent) ?? []), node]);
   const parentOf = parentFinder(trace);
@@ -218,7 +227,7 @@ function buildTree(trace: Trace, related: Related | undefined): Node[] {
 /* ---------- filters ---------- */
 
 /** What the filter chips above the tree pick, in their order; a chip shows only when the trace has such rows. */
-const FILTERS = [
+export const FILTERS = [
   { id: "sql", label: "SQL", kinds: ["sql"] },
   { id: "redis", label: "Redis", kinds: ["redis"] },
   { id: "cache", label: "Cache", kinds: ["cache"] },
@@ -234,11 +243,10 @@ const FILTERS = [
   { id: "graphql", label: "GraphQL", kinds: ["graphql"] },
   { id: "channels", label: "Channels", kinds: ["channel.send", "websocket.send"] },
   { id: "function", label: "Functions", kinds: ["function"] },
-  { id: "log", label: "Logs", kinds: ["log"] },
   { id: "error", label: "Errors", kinds: ["error"] },
 ] as const;
 
-type FilterId = (typeof FILTERS)[number]["id"];
+export type FilterId = (typeof FILTERS)[number]["id"];
 
 const FILTER_OF = new Map<string, FilterId>(FILTERS.flatMap((filter) => filter.kinds.map((kind) => [kind, filter.id])));
 
@@ -263,37 +271,74 @@ function countFilters(nodes: Node[], counts = new Map<FilterId, number>()): Map<
  * How many of each a chip filters: spans counted in the trace itself (a folded group hides its members' children:
  * a cache call's Redis commands), the rest (logs, tasks) as rows of the tree.
  */
-function chipCounts(nodes: Node[], trace: Trace): Map<FilterId, number> {
+export function chipCounts(nodes: Node[], trace: Trace): Map<FilterId, number> {
   const counts = countFilters(nodes);
   const filters = trace.spans.map((span) => FILTER_OF.get(span.kind)).filter((filter) => filter !== undefined);
   for (const filter of new Set(filters)) counts.set(filter, filters.filter((each) => each === filter).length);
   return counts;
 }
 
+/** What is picked, as the rows are matched against it: kinds of calls, a stretch of time, each span's category. */
+interface Picked {
+  parts: ReadonlySet<string>;
+  range: TimeRange | null;
+  /** When the trace started: the range is in microseconds since. */
+  start: number;
+  categories: ReadonlyMap<string, Category>;
+}
+
 /**
- * With filters on: the rows that match, and the rows on the way to them ("path": shown dimmed, always open).
+ * With a slice picked: the rows that match, and the rows on the way to them ("path": shown dimmed, always open).
  * Everything else is hidden. A signal's rows are what it did: its receivers, and theirs, match with it.
  */
-function markTree(nodes: Node[], active: ReadonlySet<FilterId>, marks = new Map<string, Mark>()): boolean {
+function markTree(nodes: Node[], picked: Picked, marks = new Map<string, Mark>()): boolean {
   let any = false;
-  for (const node of nodes) any = markNode(node, active, marks) || any;
+  for (const node of nodes) any = markNode(node, picked, marks) || any;
   return any;
 }
 
 /** One row and the rows under it; whether it shows. */
-function markNode(node: Node, active: ReadonlySet<FilterId>, marks: Map<string, Mark>): boolean {
-  const filter = matchOf(node, active);
-  const below = markTree(childrenOf(node), active, marks);
-  if (filter === "signal") markAll(childrenOf(node), marks);
-  const mark = markOf(filter !== null, below);
+function markNode(node: Node, picked: Picked, marks: Map<string, Mark>): boolean {
+  const matches = matchesPicked(node, picked);
+  const below = markTree(childrenOf(node), picked, marks);
+  if (matches && isPickedSignal(node, picked)) markAll(childrenOf(node), picked, marks);
+  const mark = markOf(matches, below);
   if (mark) marks.set(node.key, mark);
   return mark !== undefined;
 }
 
-/** The active filter a row matches, if any. */
-function matchOf(node: Node, active: ReadonlySet<FilterId>): FilterId | null {
-  const filter = FILTER_OF.get(kindOf(node));
-  return filter !== undefined && active.has(filter) ? filter : null;
+function matchesPicked(node: Node, picked: Picked): boolean {
+  return partOf(node, picked) && inRange(node, picked);
+}
+
+/** A signal's send while Signals is picked: what its receivers did is the signal's. */
+function isPickedSignal(node: Node, picked: Picked): boolean {
+  return picked.parts.has("signal") && kindOf(node) === "signal";
+}
+
+/** The spans a row stands for: its own, or a group's. */
+function spansOf(node: Node): readonly Span[] {
+  if (node.type === "span") return [node.span];
+  return node.type === "group" ? node.spans : [];
+}
+
+/** Whether a row is of a picked kind: a filter's, or the share of the time its spans count in. */
+function partOf(node: Node, picked: Picked): boolean {
+  if (picked.parts.size === 0) return true;
+  if (picked.parts.has(FILTER_OF.get(kindOf(node)) ?? "")) return true;
+  return spansOf(node).some((span) => picked.parts.has(picked.categories.get(span.id) ?? ""));
+}
+
+/** When a row ran, or happened: its start and how long, since the trace started. */
+function extentOf(node: Node, start: number): [number, number] {
+  if (node.type === "span") return [node.span.start - start, node.span.duration];
+  if (node.type === "group") return [node.start - start, node.end - node.start];
+  if (node.type === "task") return [node.run.start - start, node.run.duration];
+  return [startOf(node) - start, 0];
+}
+
+function inRange(node: Node, picked: Picked): boolean {
+  return picked.range === null || overlaps(picked.range, ...extentOf(node, picked.start));
 }
 
 function markOf(matches: boolean, below: boolean): Mark | undefined {
@@ -301,24 +346,17 @@ function markOf(matches: boolean, below: boolean): Mark | undefined {
   return below ? "path" : undefined;
 }
 
-/** Every row under these, as matches. */
-function markAll(nodes: Node[], marks: Map<string, Mark>): void {
+/** Every row under these that the range keeps, as matches. */
+function markAll(nodes: Node[], picked: Picked, marks: Map<string, Mark>): void {
   for (const node of nodes) {
-    marks.set(node.key, "match");
-    markAll(childrenOf(node), marks);
+    if (inRange(node, picked)) marks.set(node.key, "match");
+    markAll(childrenOf(node), picked, marks);
   }
 }
 
 type Mark = "match" | "path";
 
-function toggled(active: ReadonlySet<FilterId>, id: FilterId): ReadonlySet<FilterId> {
-  const next = new Set(active);
-  if (next.has(id)) next.delete(id);
-  else next.add(id);
-  return next;
-}
-
-/** The legend's entries that pick rows too: a category's spans are a filter's rows. */
+/** The share of the time a category is: a filter's id where it has one (Database is SQL), else its own. */
 const CATEGORY_FILTERS: Partial<Record<Category, FilterId>> = {
   template: "template",
   sql: "sql",
@@ -331,105 +369,8 @@ const CATEGORY_FILTERS: Partial<Record<Category, FilterId>> = {
   signal: "signal",
 };
 
-interface FilterState {
-  counts: ReadonlyMap<FilterId, number>;
-  active: ReadonlySet<FilterId>;
-  onChange: (next: ReadonlySet<FilterId>) => void;
-}
-
-/** A chip that shows only its rows (and the rows on the way to them); pressed again, everything. */
-function FilterChip({ id, filters, children }: { id: FilterId; filters: FilterState; children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      className="dt-map-filter"
-      aria-pressed={filters.active.has(id)}
-      onClick={() => filters.onChange(toggled(filters.active, id))}
-    >
-      {children}
-      <span className="dt-map-filter-count">{filters.counts.get(id)}</span>
-    </button>
-  );
-}
-
-/** A category of the time: its share, and a filter chip when the tree has its rows. */
-function Share({
-  category,
-  value,
-  total,
-  filters,
-  trace,
-}: {
-  category: Category;
-  value: number;
-  total: number;
-  filters: FilterState;
-  trace: Trace;
-}) {
-  const content = (
-    <>
-      <span className="dt-swatch" />
-      {categoryLabel(category, trace)}
-      <b>{duration(value)}</b>
-      <span className="dt-breakdown-share">{percent(value, total)}</span>
-    </>
-  );
-  const filter = CATEGORY_FILTERS[category];
-  return (
-    <li data-category={category}>
-      {filter && filters.counts.get(filter) ? (
-        <FilterChip id={filter} filters={filters}>
-          {content}
-        </FilterChip>
-      ) : (
-        content
-      )}
-    </li>
-  );
-}
-
-/* ---------- time breakdown ---------- */
-
-/**
- * Where the time went, and what to show: one row. A category with rows in the tree (Database, Templates, Cache…)
- * is a filter chip too; the filters with no time of their own (Logs, Errors, Tasks…) follow it as plain chips.
- */
-function Breakdown({ trace, filters }: { trace: Trace; filters: FilterState }) {
-  const parts = breakdown(trace);
-  const total = Math.max(
-    parts.reduce((sum, [, value]) => sum + value, 0),
-    1,
-  );
-  const claimed = new Set(parts.map(([category]) => CATEGORY_FILTERS[category]));
-  const others = FILTERS.filter((filter) => !claimed.has(filter.id) && (filters.counts.get(filter.id) ?? 0) > 0);
-  return (
-    <div className="dt-breakdown">
-      <div className="dt-breakdown-bar" role="img" aria-label="Where the time went">
-        {parts.map(([category, value]) => (
-          <span key={category} data-category={category} style={{ width: widthOf(value, total) }} />
-        ))}
-      </div>
-      <ul className="dt-breakdown-legend" aria-label="Where the time went, and what to show">
-        {parts.map(([category, value]) => (
-          <Share key={category} category={category} value={value} total={total} filters={filters} trace={trace} />
-        ))}
-        {others.map((filter) => (
-          <li key={filter.id}>
-            <FilterChip id={filter.id} filters={filters}>
-              {filter.label}
-            </FilterChip>
-          </li>
-        ))}
-        {filters.active.size > 0 ? (
-          <li>
-            <button type="button" className="dt-map-filter-clear" onClick={() => filters.onChange(new Set())}>
-              Show all
-            </button>
-          </li>
-        ) : null}
-      </ul>
-    </div>
-  );
+export function partOfCategory(category: Category): string {
+  return CATEGORY_FILTERS[category] ?? category;
 }
 
 /* ---------- rows ---------- */
@@ -445,6 +386,16 @@ interface RowContext {
   marks?: ReadonlyMap<string, Mark> | undefined;
   /** The selected row's details, opened right under that row; null while they show in the side pane. */
   details: ReactNode;
+  /** How many info and debug records each span has that don't show, by its id; and what shows them. */
+  hiddenLogs: ReadonlyMap<string, number>;
+  onShowLogs: () => void;
+  /** The spans whose own code ran long with nothing recorded inside (as the strip says them), and each span's share. */
+  quiet: ReadonlyMap<string, Quiet>;
+  categories: ReadonlyMap<string, Category>;
+  /** What is picked: a code row shows with its share picked, or a range it overlaps. */
+  slice: Slice;
+  /** Opens the trace's profile, when it has one, at a stretch of it where the profile says when it was sampled. */
+  onProfile: ((range: TimeRange) => void) | undefined;
 }
 
 /** The selected row's details, under it: where the click was, not past the end of a long tree. */
@@ -465,21 +416,33 @@ function RowDetails({ id, ctx }: { id: string; ctx: RowContext }) {
 }
 
 function Bar({ trace, start, length, point }: { trace: Trace; start: number; length: number; point?: boolean }) {
-  const total = Math.max(trace.duration, 1);
-  const left = Math.min(Math.max(((start - trace.start) / total) * 100, 0), 100);
+  const place = point ? pointPlace(trace, start) : barPlace(trace, start, length);
   return (
     <span className="dt-map-track" aria-hidden="true">
-      <span
-        className="dt-map-bar"
-        data-point={point ? "" : undefined}
-        // Clamped to the track: a task can run longer than the request that enqueued it.
-        style={{
-          left: `${left}%`,
-          width: point ? undefined : `${Math.min(Math.max((length / total) * 100, 0.4), 100 - left)}%`,
-        }}
-      />
+      <span className="dt-map-bar" data-point={point ? "" : undefined} data-past={place.past} style={place.style} />
     </span>
   );
+}
+
+/** Where a point sits on the request's timeline. */
+function pointPlace(trace: Trace, at: number): { style: CSSProperties; past: undefined } {
+  const left = Math.min(Math.max(((at - trace.start) / Math.max(trace.duration, 1)) * 100, 0), 100);
+  return { style: { left: `${left}%` }, past: undefined };
+}
+
+/** The least of the track a run that starts after the request ended still shows, at its right edge. */
+const PAST_MIN = 6;
+
+/**
+ * Where a bar sits on the request's timeline. One that runs past its end (a task runs longer than the request that
+ * enqueued it, or starts after it answered) runs to the right edge and fades out there (`past`).
+ */
+function barPlace(trace: Trace, start: number, length: number): { style: CSSProperties; past: "" | undefined } {
+  const total = Math.max(trace.duration, 1);
+  const left = Math.min(Math.max(((start - trace.start) / total) * 100, 0), 100 - PAST_MIN);
+  const past = start + length > trace.start + total;
+  const width = past ? 100 - left : Math.max((length / total) * 100, 0.4);
+  return { style: { left: `${left}%`, width: `${width}%` }, past: past ? "" : undefined };
 }
 
 /** A trace of its own under a span of this one: a task (or one waiting for a worker), or another app's trace. */
@@ -598,7 +561,7 @@ function LinkedButton({
     >
       <span className="dt-map-name" style={indent}>
         <Caret open={open} onToggle={() => ctx.onToggle(node.key)} />
-        <KindBadge kind={view.kind} muted={view.kind !== "task"} className="dt-map-kind" />
+        <KindBadge kind={view.kind} muted={true} className="dt-map-kind" />
         {view.text}
       </span>
       {view.track}
@@ -670,6 +633,12 @@ function rowState(ctx: RowContext, key: string, mark: Mark | undefined) {
     "data-dim": mark === "path" ? "" : undefined,
     "aria-current": ctx.selected === key ? ("true" as const) : undefined,
   };
+}
+
+/** A row's alias chip: none when its name already says it (`transaction app.sqlite3`). */
+function aliasBeside(span: Span): unknown {
+  const alias = aliasOf(span);
+  return typeof alias === "string" && span.name.includes(alias) ? undefined : alias;
 }
 
 /** A call's database or cache alias, when it has one. */
@@ -857,19 +826,219 @@ function SpanRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps
             className="dt-map-kind"
           />
           <SpanName span={span} />
-          <AliasChip value={aliasOf(span)} />
+          <AliasChip value={aliasBeside(span)} />
           <TemplateChip attrs={span.attrs} />
           <SignalNotes span={span} parent={parent} under={childSpans(node)} />
+          <HiddenLogs count={ctx.hiddenLogs.get(span.id)} onShow={ctx.onShowLogs} />
           {issue ? <IssueChip kind={issue} className={ISSUE_CHIP_SHRINKS} /> : null}
         </span>
         <Bar trace={ctx.trace} start={span.start} length={span.duration} />
-        <span className="dt-map-time">{duration(span.duration)}</span>
+        <span className="dt-map-time" title={timeTitle(span, ctx.trace)}>
+          {duration(span.duration)}
+        </span>
       </button>
       <RowDetails id={node.key} ctx={ctx} />
-      {fold ? <Rows nodes={node.children} depth={depth + 1} ctx={ctx} parent={span} /> : null}
+      {fold ? (
+        <>
+          <Rows nodes={node.children} depth={depth + 1} ctx={ctx} parent={span} />
+          <CodeRow span={span} ctx={ctx} depth={depth + 1} />
+        </>
+      ) : null}
     </div>
   );
 }
+
+/** Whether a span runs inside another, however deep. */
+function insideOf(ancestor: Span, byId: ReadonlyMap<string, Span>): (span: Span) => boolean {
+  return (span) => {
+    for (let at = byId.get(String(span.parent_id)); at; at = byId.get(String(at.parent_id))) {
+      if (at.id === ancestor.id) return true;
+    }
+    return false;
+  };
+}
+
+/** The SQL a transaction ran: its queries' time, nested ones too. */
+function sqlInside(transaction: Span, trace: Trace): number {
+  const inside = insideOf(transaction, new Map(trace.spans.map((span) => [span.id, span])));
+  return trace.spans
+    .filter((span) => span.kind === "sql" && inside(span))
+    .reduce((sum, span) => sum + span.duration, 0);
+}
+
+/**
+ * What a row's time is, on hover, where it isn't plain: a transaction's is how long it was open, of which the SQL
+ * inside took a part; the rest is code running while it is held, not the database.
+ */
+function timeTitle(span: Span, trace: Trace): string | undefined {
+  if (span.kind !== "transaction") return undefined;
+  const sql = duration(sqlInside(span, trace));
+  return `Open ${duration(span.duration)}; SQL inside took ${sql}, the rest is code running while it's held`;
+}
+
+/* ---------- the code's own time ---------- */
+
+/** A code row shows unless other shares are picked, or a range it doesn't overlap. */
+function codeShown(quiet: Quiet, category: Category, ctx: RowContext): boolean {
+  const { parts, range } = ctx.slice;
+  if (parts.length > 0 && !parts.includes(partOfCategory(category))) return false;
+  return range === null || quiet.gaps.some(([from, to]) => overlaps(range, from - ctx.trace.start, to - from));
+}
+
+/** A code row's pieces of time: where it waited, or where it computed (µs since the trace started). */
+interface CodePart {
+  waiting: boolean;
+  pieces: Piece[];
+  total: number;
+}
+
+/** A span's own code in its parts: what it waited in and what it computed in, each when there is any. */
+function codeParts(quiet: Quiet, trace: Trace): CodePart[] {
+  const pieces = quiet.gaps.flatMap(([from, to]) => quietPieces(trace.profile, from - trace.start, to - trace.start));
+  return [true, false].flatMap((waiting): CodePart[] => {
+    const own = pieces.filter((piece) => piece.waiting === waiting);
+    const total = own.reduce((sum, piece) => sum + piece.to - piece.from, 0);
+    return total > 0 ? [{ waiting, pieces: own, total }] : [];
+  });
+}
+
+/** The stretch a part spans, from its first piece to its last. */
+function partRange(part: CodePart): TimeRange {
+  const first = part.pieces[0] as Piece;
+  const last = part.pieces.at(-1) as Piece;
+  return [first.from, last.to];
+}
+
+/** Where its code ran with nothing recorded inside, hatched in its share's colour; pieces too thin to see left out. */
+function CodeBars({ part, category, trace }: { part: CodePart; category: Category; trace: Trace }) {
+  const total = Math.max(trace.duration, 1);
+  return (
+    <span className="dt-map-track" aria-hidden="true">
+      {part.pieces
+        .filter((piece) => piece.to - piece.from >= total * 0.004)
+        .map((piece) => (
+          <span
+            key={piece.from}
+            className="dt-map-bar"
+            data-quiet=""
+            data-waiting={part.waiting ? "" : undefined}
+            data-category={category}
+            style={{ left: widthOf(piece.from, total), width: widthOf(piece.to - piece.from, total) }}
+          />
+        ))}
+    </span>
+  );
+}
+
+/**
+ * What a code row is: with a profile, the functions of yours that ran most in that stretch (or what it waited on);
+ * without one, untraced code, waiting where the profile can't say.
+ */
+function partName(part: CodePart, trace: Trace): string {
+  const { profile } = profileOver(trace, partRange(part));
+  if (part.waiting) return waited(profile);
+  return profile ? ranMost(profile) : "untraced code";
+}
+
+/** "asyncio.sleep in send_digest": what the code waited on, or just waiting where the profile can't say. */
+function waited(profile: Profile | undefined): string {
+  return (profile && waitName(profile)) || "waiting";
+}
+
+/** "aggregate · render_csv": the two functions of yours that ran most, or untraced code where none of yours ran. */
+function ranMost(profile: Profile): string {
+  const names = ownHotspots(profile, 2).map((hotspot) => hotspot.name);
+  return names.join(" · ") || "untraced code";
+}
+
+/** A code row's own: a grey box ("code", or "wait"), its name, the way on to the profile, its bars and its time. */
+function CodeRowParts({ span, ctx, depth, part }: { span: Span; ctx: RowContext; depth: number; part: CodePart }) {
+  const category = ctx.categories.get(span.id) ?? "code";
+  return (
+    <>
+      <span className="dt-map-name" style={{ paddingLeft: `${12 + depth * 16}px` }}>
+        <span className="dt-map-caret" />
+        <KindBadge kind={part.waiting ? "wait" : "code"} muted={true} className="dt-map-kind" />
+        <TaskName name={partName(part, ctx.trace)} className="dt-map-text" />
+        <RowFlame trace={ctx.trace} />
+      </span>
+      <CodeBars part={part} category={category} trace={ctx.trace} />
+      <span className="dt-map-time">{duration(part.total)}</span>
+    </>
+  );
+}
+
+/**
+ * Under a span whose children leave much of its time uncovered (the strip's hatched stretches, the same time): its
+ * own code, a row of its own, and where the profile says it waited, a "waiting" row before it. With a profile, a
+ * click opens it at that time and what ran shows on hover; where the app profiles on request, how to get one. Not a
+ * span: no details, no filter counts it.
+ */
+function CodeRow({ span, ctx, depth }: { span: Span; ctx: RowContext; depth: number }) {
+  if (!hasCodeRow(span, ctx)) return null;
+  const parts = codeParts(ctx.quiet.get(span.id) as Quiet, ctx.trace);
+  return (
+    <>
+      {parts.map((part) => (
+        <CodePartRow key={String(part.waiting)} span={span} ctx={ctx} depth={depth} part={part} />
+      ))}
+    </>
+  );
+}
+
+function CodePartRow({ span, ctx, depth, part }: { span: Span; ctx: RowContext; depth: number; part: CodePart }) {
+  const profiling = useProfilingOf(ctx.trace);
+  const inside = <CodeRowParts span={span} ctx={ctx} depth={depth} part={part} />;
+  const open = ctx.onProfile;
+  const row = open ? (
+    <button type="button" className="dt-map-row" data-kind="code" onClick={() => open(partRange(part))}>
+      {inside}
+    </button>
+  ) : (
+    <div className="dt-map-row" data-kind="code">
+      {inside}
+    </div>
+  );
+  const offered = Boolean(ctx.trace.profile) || profiling.available;
+  return <WithWhatRan trace={ctx.trace} offered={offered} row={row} part={part} />;
+}
+
+/** Whether a span has a code row: its code ran long with nothing recorded inside, and what is picked keeps it. */
+function hasCodeRow(span: Span, ctx: RowContext): boolean {
+  const quiet = ctx.quiet.get(span.id);
+  return quiet !== undefined && codeShown(quiet, ctx.categories.get(span.id) ?? "code", ctx);
+}
+
+/** A code row with what ran (or waited) in it on hover, when there is anything to say. */
+function WithWhatRan({
+  trace,
+  offered,
+  row,
+  part,
+}: {
+  trace: Trace;
+  offered: boolean;
+  row: ReactNode;
+  part: CodePart;
+}) {
+  if (!offered) return row;
+  const range = partRange(part);
+  return (
+    <Tooltip delayDuration={150} disableHoverableContent={true}>
+      <TooltipTrigger asChild>{row}</TooltipTrigger>
+      <TooltipContent side="top" sideOffset={6} arrow={false} className={CODE_TIP_CLASS}>
+        {part.waiting ? (
+          <WhatWaited trace={trace} range={range} waited={part.total} />
+        ) : (
+          <WhatRan trace={trace} range={range} />
+        )}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+const CODE_TIP_CLASS =
+  "grid w-72 gap-1.5 rounded-lg border bg-popover px-3 py-2 text-sm text-popover-foreground shadow-[var(--dt-popover-shadow)]";
 
 /**
  * The fold of a row with rows under it: a click on it opens or closes them only, without selecting the row and
@@ -1281,6 +1450,10 @@ function MapBody({ details, onClose, children }: { details: ReactNode; onClose: 
 /** The selected row; clicking it again closes its details. */
 function useSelection(initialSpan: string | undefined) {
   const [selected, setSelected] = useState<string | null>(initialSpan ?? null);
+  // Another span asked for while the tree is open (a mark on the lanes over it): that one is selected.
+  useEffect(() => {
+    if (initialSpan) setSelected(initialSpan);
+  }, [initialSpan]);
   const select = (key: string) => setSelected((current) => (current === key ? null : key));
   return { selected, select, close: () => setSelected(null) };
 }
@@ -1312,12 +1485,81 @@ function useToggleSet(): [ReadonlySet<string>, (key: string) => void] {
   return [keys, toggle];
 }
 
-/** The rows the active filters keep, or undefined while none is on. */
-function marksOf(tree: Node[], active: ReadonlySet<FilterId>): Map<string, Mark> | undefined {
-  if (active.size === 0) return undefined;
+/** The rows a slice keeps, or undefined while it is the whole trace. */
+function marksOf(tree: Node[], picked: Picked): Map<string, Mark> | undefined {
+  if (picked.parts.size === 0 && picked.range === null) return undefined;
   const found = new Map<string, Mark>();
-  markTree(tree, active, found);
+  markTree(tree, picked, found);
   return found;
+}
+
+/** Where the track column of the rows is, across the tree: the picked range is drawn over it, rows and head. */
+function useTrackColumn(
+  timed: RefObject<HTMLDivElement | null>,
+  ruler: RefObject<HTMLSpanElement | null>,
+): CSSProperties | undefined {
+  const [place, setPlace] = useState<CSSProperties | undefined>(undefined);
+  useEffect(() => {
+    const box = timed.current;
+    if (!box) return;
+    const observer = new ResizeObserver(() => {
+      const column = ruler.current?.getBoundingClientRect();
+      const outer = box.getBoundingClientRect();
+      if (column) setPlace({ left: column.left - outer.left, width: column.width });
+    });
+    observer.observe(box);
+    return () => observer.disconnect();
+  }, [timed, ruler]);
+  return place;
+}
+
+/**
+ * The head and the rows, over the trace's time: a drag across the bars' column (or the head over it) picks a
+ * stretch of it, a double click lets it go.
+ */
+function TimedRows({
+  trace,
+  range,
+  onRange,
+  children,
+}: {
+  trace: Trace;
+  range: TimeRange | null;
+  onRange: (range: TimeRange | null) => void;
+  children: ReactNode;
+}) {
+  const timed = useRef<HTMLDivElement>(null);
+  const ruler = useRef<HTMLSpanElement>(null);
+  const column = useTrackColumn(timed, ruler);
+  const total = Math.max(trace.duration, 1);
+  const drag = useRangeDrag(total, onRange);
+  const shown = drag.draft ?? range;
+  return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: a drag over the rows, which are buttons of their own.
+    <div
+      className="dt-map-timed"
+      ref={timed}
+      onPointerDown={(event) => {
+        const target = event.target as Element;
+        if (ruler.current && target.closest(".dt-map-track, .dt-map-ruler")) drag.start(event, ruler.current);
+      }}
+      onDoubleClick={(event) => {
+        if ((event.target as Element).closest(".dt-map-track, .dt-map-ruler")) onRange(null);
+      }}
+    >
+      <div className="dt-map-head">
+        <span>Call tree</span>
+        <span className="dt-map-ruler" ref={ruler} title="Drag to pick a stretch of the time" />
+        <span>Time</span>
+      </div>
+      {children}
+      {shown && column ? (
+        <div className="dt-map-range-layer" style={column}>
+          <RangeBand range={shown} total={total} />
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 /** This trace's issues by span, and those of the calls' traces opened under the calls. */
@@ -1332,6 +1574,82 @@ function withCallIssues(
   ]);
 }
 
+/** A trace with only the log records that show: its warnings and worse, or every one of them (`all`). */
+export function withShownLogs(trace: Trace, all: boolean): Trace {
+  return all ? trace : { ...trace, logs: trace.logs.filter((log) => isLoud(log.level)) };
+}
+
+/** How many records don't show, by the span they were logged in (the root's for those logged outside any). */
+function hiddenLogsOf(trace: Trace): Map<string, number> {
+  const root = rootOf(trace);
+  const hidden = new Map<string, number>();
+  for (const log of trace.logs.filter((each) => !isLoud(each.level))) {
+    const span = log.span_id ?? root;
+    hidden.set(span, (hidden.get(span) ?? 0) + 1);
+  }
+  return hidden;
+}
+
+function rootOf(trace: Trace): string {
+  return trace.spans.find((span) => span.parent_id === null)?.id ?? "";
+}
+
+/** The tree with the records that show, and how many don't, by span: none hidden while every one shows. */
+function useShownLogs(trace: Trace, related: Related | undefined, all: boolean) {
+  const tree = useMemo(() => buildTree(withShownLogs(trace, all), related), [trace, related, all]);
+  const hidden = useMemo(() => (all ? new Map<string, number>() : hiddenLogsOf(trace)), [trace, all]);
+  return { tree, hidden };
+}
+
+/**
+ * A span's info and debug records, while only warnings and worse show: how many, quietly. A click shows every
+ * record (the legend's Logs chip turns on).
+ */
+function HiddenLogs({ count, onShow }: { count: number | undefined; onShow: () => void }) {
+  if (!count) return null;
+  return (
+    // biome-ignore lint/a11y/useSemanticElements: inside the row's button; a click here shows the records.
+    // biome-ignore lint/a11y/useKeyWithClickEvents: the legend's Logs chip is the keyboard's way.
+    <span
+      className="dt-map-sub dt-map-logs"
+      role="button"
+      tabIndex={-1}
+      title="Info and debug records here; a click shows every record"
+      onClick={(event) => {
+        event.stopPropagation();
+        onShow();
+      }}
+    >
+      {plural(count, "log", "logs")}
+    </span>
+  );
+}
+
+/** The profile opened at a stretch of the trace (the range picked), where it says when its samples were taken. */
+function profileOpener(
+  open: (() => void) | undefined,
+  trace: Trace,
+  slice: Slice,
+  change: (slice: Slice) => void,
+): ((range: TimeRange) => void) | undefined {
+  if (!open) return undefined;
+  return (range) => {
+    if (timed(trace.profile)) change({ ...slice, range });
+    open();
+  };
+}
+
+/** Each span's share of the time, and those whose own code ran long with nothing recorded inside. */
+function useSpansTime(trace: Trace) {
+  const categories = useMemo(() => spanCategories(trace), [trace]);
+  const quiet = useMemo(() => quietSpans(trace), [trace]);
+  return { categories, quiet };
+}
+
+function pickedOf(slice: Slice, trace: Trace, categories: ReadonlyMap<string, Category>): Picked {
+  return { parts: new Set(slice.parts), range: slice.range, start: trace.start, categories };
+}
+
 /** The request as a call tree: what ran inside what, in order, and how long each part took. */
 export function CallMap({
   trace,
@@ -1339,16 +1657,24 @@ export function CallMap({
   related,
   links,
   initialSpan,
+  head,
+  ...wiring
 }: {
   trace: Trace;
   issueBySpan: ReadonlyMap<string, IssueKind>;
+  /** Above the tree, in the panel: the trace's time and its legend, which pick the rows. */
+  head?: ReactNode;
+  /** Opens the trace's profile, when it has one: its code rows lead there. */
+  onProfile?: (() => void) | undefined;
   /** Linked traces: tasks this trace enqueued appear under their enqueue span. */
   related?: Related | undefined;
   links?: TraceLinks | undefined;
   /** A span to open with its details, as a link to it asks (a log line's span). */
   initialSpan?: string | undefined;
 }) {
-  const tree = useMemo(() => buildTree(trace, related), [trace, related]);
+  // The part of the time picked: the kinds of calls and the stretch of time the rows are kept for.
+  const { slice: current, change } = useHeldSlice();
+  const { tree, hidden } = useShownLogs(trace, related, current.logs);
   const issues = useMemo(() => withCallIssues(issueBySpan, related), [issueBySpan, related]);
   const { selected, select, close } = useSelection(initialSpan);
   const map = useRef<HTMLDivElement>(null);
@@ -1356,34 +1682,38 @@ export function CallMap({
   const rows = useScrolledToInitial(initialSpan);
   const [collapsed, toggle] = useToggleSet();
   const details = detailsOf(tree, selected, trace, links);
-  const [active, setActive] = useState<ReadonlySet<FilterId>>(new Set());
-  const counts = useMemo(() => chipCounts(tree, trace), [tree, trace]);
-  const marks = useMemo(() => marksOf(tree, active), [tree, active]);
+  const { categories, quiet } = useSpansTime(trace);
+  const marks = useMemo(() => marksOf(tree, pickedOf(current, trace, categories)), [tree, current, trace, categories]);
+  const inline = side ? null : details;
 
   return (
     <div className="dt-map" ref={map}>
-      <Breakdown trace={trace} filters={{ counts, active, onChange: setActive }} />
+      {head}
       <MapBody details={side ? details : null} onClose={close}>
-        <div className="dt-map-head">
-          <span>Call tree</span>
-          <span>Time</span>
-        </div>
-        <div className="dt-map-rows" ref={rows}>
-          <Rows
-            nodes={tree}
-            depth={0}
-            ctx={{
-              trace,
-              issueBySpan: issues,
-              selected,
-              onSelect: select,
-              collapsed,
-              onToggle: toggle,
-              marks,
-              details: side ? null : details,
-            }}
-          />
-        </div>
+        <TimedRows trace={trace} range={current.range} onRange={(range) => change({ ...current, range })}>
+          <div className="dt-map-rows" ref={rows}>
+            <Rows
+              nodes={tree}
+              depth={0}
+              ctx={{
+                trace,
+                issueBySpan: issues,
+                selected,
+                onSelect: select,
+                collapsed,
+                onToggle: toggle,
+                marks,
+                details: inline,
+                hiddenLogs: hidden,
+                quiet,
+                categories,
+                slice: current,
+                onProfile: profileOpener(wiring.onProfile, trace, current, change),
+                onShowLogs: () => change({ ...current, logs: true }),
+              }}
+            />
+          </div>
+        </TimedRows>
       </MapBody>
     </div>
   );

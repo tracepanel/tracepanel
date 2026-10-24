@@ -367,6 +367,156 @@ function salesReport(): Doc[] {
   return [request, task];
 }
 
+export const HELD_REPORT = "shop.tasks.reconcile_stock";
+export const DIGEST = "shop.tasks.send_digest";
+
+/**
+ * An async task that awaits a sleep of 1.5 s after a query: its profile says when each stack was seen (10 ms
+ * buckets), which frame waited, and that 0.5 s wasn't sampled (its event loop ran other traces too).
+ */
+function asyncDigest(): Doc {
+  const doc = run(DIGEST, { "task.system": "celery", "task.id": "send-digest" });
+  const id = String(doc["id"]);
+  const root = (doc["spans"] as Doc[])[0] as Doc;
+  root["duration"] = 1_600_000;
+  doc["duration"] = 1_600_000;
+  (doc["spans"] as Doc[]).push({
+    id: `${id}Q`,
+    parent_id: root["id"],
+    kind: "sql",
+    name: "SELECT subscriber",
+    start: 2_000,
+    duration: 18_000,
+    status: "ok",
+    attrs: { "db.statement": 'SELECT * FROM "subscriber"', "db.vendor": "sqlite", "db.alias": "default" },
+  });
+  const frame = (fn: string, module: string, line: number, inApp: boolean, more: Doc = {}) => ({
+    function: fn,
+    module,
+    file: `${module.replaceAll(".", "/")}.py`,
+    line,
+    // biome-ignore lint/style/useNamingConvention: a frame as the SDKs send it.
+    in_app: inApp,
+    ...more,
+  });
+  doc["profile"] = {
+    // biome-ignore lint/style/useNamingConvention: a profile as the SDKs send it.
+    interval_us: 10_000,
+    samples: 110,
+    dropped: 50,
+    // biome-ignore lint/style/useNamingConvention: a profile as the SDKs send it.
+    bucket_us: 10_000,
+    frames: [
+      frame("Handle._run", "asyncio.events", 80, false),
+      // biome-ignore lint/style/useNamingConvention: a frame as the SDKs send it.
+      frame("send_digest", "shop.tasks", 100, true, { at_line: 108 }),
+      frame("sleep", "asyncio.tasks", 640, false, { waiting: true }),
+      frame("render_digest", "shop.digest", 12, true),
+    ],
+    stacks: [
+      { frames: [0, 1, 3], count: 10, at: Array.from({ length: 10 }, (_, index) => [2 + index, 1]) },
+      {
+        frames: [0, 1, 2],
+        count: 100,
+        at: Array.from({ length: 100 }, (_, index) => [12 + Math.floor(index * 1.48), 1]),
+      },
+    ],
+  };
+  return doc;
+}
+
+/**
+ * A task that holds a transaction while its code works: its queries in the first 250 ms, then 1.3 s of its own
+ * code with nothing recorded, then a log record as it ends.
+ */
+function heldTransaction(): Doc {
+  const doc = run(HELD_REPORT, { "task.system": "celery", "task.id": "reconcile-stock" });
+  const id = String(doc["id"]);
+  const root = (doc["spans"] as Doc[])[0] as Doc;
+  root["duration"] = 1_600_000;
+  doc["duration"] = 1_600_000;
+  const sql = (index: number, table: string, start: number, duration: number): Doc => ({
+    id: `${id}Q${index}`,
+    parent_id: `${id}T`,
+    kind: "sql",
+    name: `SELECT ${table}`,
+    start,
+    duration,
+    status: "ok",
+    attrs: {
+      "db.statement": `SELECT * FROM "${table}" WHERE "id" = %s`,
+      "db.fingerprint": `select-${table}`,
+      "db.vendor": "sqlite",
+      "db.alias": "app.sqlite3",
+    },
+  });
+  const items = Array.from({ length: 39 }, (_, index) => sql(index + 1, "order_item", 12_000 + index * 2_400, 180));
+  const products = Array.from({ length: 99 }, (_, index) => sql(index + 40, "product", 110_000 + index * 1_400, 190));
+  (doc["spans"] as Doc[]).push(
+    {
+      id: `${id}T`,
+      parent_id: root["id"],
+      kind: "transaction",
+      name: "transaction app.sqlite3",
+      start: 2_000,
+      duration: 1_590_000,
+      status: "ok",
+      attrs: { "db.alias": "app.sqlite3" },
+    },
+    sql(0, "order", 5_000, 3_000),
+    ...items,
+    ...products,
+  );
+  const record = (span: unknown, time: number, level: string, message: string): Doc => ({
+    // biome-ignore lint/style/useNamingConvention: a log record as the SDKs send it.
+    span_id: span,
+    time,
+    level,
+    logger: "shop.tasks",
+    message,
+    exception: null,
+    attrs: {},
+  });
+  // Profiled: what its own code was doing while nothing it called was recorded.
+  const frame = (fn: string, module: string, line: number, inApp: boolean) => ({
+    function: fn,
+    module,
+    file: `${module.replaceAll(".", "/")}.py`,
+    line,
+    // biome-ignore lint/style/useNamingConvention: a frame as the SDKs send it.
+    in_app: inApp,
+  });
+  doc["profile"] = {
+    // biome-ignore lint/style/useNamingConvention: a profile as the SDKs send it.
+    interval_us: 1_000,
+    samples: 1_600,
+    frames: [
+      frame("Task.__call__", "celery.app.task", 411, false),
+      frame("reconcile_stock", "shop.tasks", 40, true),
+      frame("aggregate", "shop.stock", 12, true),
+      frame("render_csv", "shop.stock", 58, true),
+      frame("execute", "django.db.backends.utils", 100, false),
+    ],
+    stacks: [
+      { frames: [0, 1, 2], count: 900 },
+      { frames: [0, 1, 3], count: 330 },
+      { frames: [0, 1, 2, 4], count: 200 },
+      { frames: [0, 1], count: 120 },
+      { frames: [0], count: 50 },
+    ],
+  };
+  // Its records as a busy task writes them: a batch at a time, a debug line, one warning, and how it ended.
+  doc["logs"] = [
+    ...Array.from({ length: 8 }, (_, index) =>
+      record(`${id}T`, 300_000 + index * 150_000, "info", `batch ${index + 1} of 8 reconciled`),
+    ),
+    record(`${id}T`, 320_000, "debug", "cache warm: 29 products"),
+    record(`${id}T`, 900_000, "warning", "stock below threshold for 3 products"),
+    record(root["id"], 1_598_000, "info", "stock reconciled: 29 products"),
+  ];
+  return doc;
+}
+
 // A consumer's handlers: long names alike but for their ends, which is what tells them apart.
 export const CONSUMER = "chat.workers.media.consumers.ThumbnailConsumer";
 export const HANDLERS = ["thumbnails_regenerate", "thumbnails_purge", "thumbnails_notify"].map(
@@ -986,6 +1136,9 @@ async function hello(): Promise<void> {
 export default async function seed(): Promise<void> {
   await hello();
   const docs = [
+    // First, the oldest: its many records sit under the others on the Logs page.
+    heldTransaction(),
+    asyncDigest(),
     ...examples(),
     ...handlers(),
     ...pages(),

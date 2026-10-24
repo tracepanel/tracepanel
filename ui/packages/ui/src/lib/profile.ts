@@ -4,7 +4,7 @@ import type { Trace } from "../types";
 
 export type Profile = NonNullable<Trace["profile"]>;
 export type Frame = Profile["frames"][number];
-type Stack = Profile["stacks"][number];
+export type Stack = Profile["stacks"][number];
 
 /** Under this share of samples in the project's own code, a profile opens on every frame: there is little of yours. */
 const OWN_ENOUGH = 0.1;
@@ -15,8 +15,12 @@ export const YOUR_CODE = "your code";
 
 /** What a frame belongs to: your code, or a library's package (django.db, django.template, requests, threading). */
 export function packageOf(frame: Frame): string {
+  if (frame.waiting) return WAITING;
   return frame.in_app ? YOUR_CODE : libraryOf(frame.module ?? frame.file.replace(/\.py$/, "").split("/").join("."));
 }
+
+/** Time a sample's innermost frame waited (a sleep, the event loop's select, a socket), not computing: its own share. */
+export const WAITING = "waiting";
 
 /** A dotted module's package: its first part; Django's first two, as it is many packages in one. */
 function libraryOf(module: string): string {
@@ -181,4 +185,33 @@ export function layout(focus: Node): Box[] {
   };
   place(focus, 0, 0);
   return boxes;
+}
+
+/** A function of the project's own and the share of the samples it was the innermost of them in. */
+export interface Hotspot {
+  name: string;
+  share: number;
+}
+
+/**
+ * Where the project's own code was, over the whole profile: each sample counts for the innermost function of yours
+ * in its stack (its own time and the libraries it called), the first `count` of them by share.
+ */
+export function ownHotspots(profile: Profile, count = 3): Hotspot[] {
+  const samples = new Map<string, number>();
+  for (const stack of profile.stacks) {
+    const own = innermostOwn(profile, stack);
+    if (own) samples.set(own, (samples.get(own) ?? 0) + stack.count);
+  }
+  return [...samples]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, count)
+    .map(([name, taken]) => ({ name, share: taken / Math.max(profile.samples, 1) }));
+}
+
+function innermostOwn(profile: Profile, stack: Stack): string | undefined {
+  return [...stack.frames]
+    .reverse()
+    .map((index) => profile.frames[index])
+    .find((frame) => frame?.in_app)?.function;
 }

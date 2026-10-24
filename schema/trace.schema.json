@@ -112,6 +112,16 @@
           "minimum": 0,
           "description": "Samples taken while the trace ran."
         },
+        "dropped": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Samples not taken for this trace because its thread was running other traces too (an event loop with concurrent traces): time the profile can't attribute."
+        },
+        "bucket_us": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "How wide a time bucket of stacks[].at is, in microseconds, counted from the trace's start."
+        },
         "frames": {
           "type": "array",
           "description": "The functions the stacks name, each once.",
@@ -127,7 +137,15 @@
                 "description": "As the project sees it: relative to its root for its own code."
               },
               "line": { "type": "integer", "description": "Where the function is defined." },
-              "in_app": { "type": "boolean", "description": "The project's own code, not a library's or the runtime's." }
+              "in_app": { "type": "boolean", "description": "The project's own code, not a library's or the runtime's." },
+              "waiting": {
+                "type": "boolean",
+                "description": "Waiting, not computing: asyncio.sleep, an event loop's select, time.sleep, a socket's recv, a lock. A sample whose innermost frame waits counts as waiting."
+              },
+              "at_line": {
+                "type": "integer",
+                "description": "The line it was running when sampled (a coroutine's await), where `line` is where it is defined."
+              }
             }
           }
         },
@@ -140,7 +158,20 @@
             "required": ["frames", "count"],
             "properties": {
               "frames": { "type": "array", "items": { "type": "integer", "minimum": 0 } },
-              "count": { "type": "integer", "minimum": 1 }
+              "count": { "type": "integer", "minimum": 1 },
+              "at": {
+                "type": "array",
+                "description": "When in the trace the stack was seen: [bucket, count] pairs, a bucket bucket_us wide from the trace's start; the counts add up to count.",
+                "items": {
+                  "type": "array",
+                  "prefixItems": [
+                    { "type": "integer", "minimum": 0 },
+                    { "type": "integer", "minimum": 1 }
+                  ],
+                  "minItems": 2,
+                  "maxItems": 2
+                }
+              }
             }
           }
         }

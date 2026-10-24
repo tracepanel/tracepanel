@@ -82,7 +82,8 @@ for (const { app, language, handler, fn, word } of APPS) {
     const row = page.locator('.dt-map-row[data-kind="view"]');
 
     await expect(row.locator(".dt-map-kind")).toHaveText(word.toLowerCase());
-    await expect(page.getByRole("list", { name: /^Where the time went/ })).toContainText(`${word} code`);
+    // Its time is the code's own, said one way in every app and kind of trace.
+    await expect(page.getByRole("list", { name: /^Where the time went/ })).toContainText("Your code");
   });
 }
 
