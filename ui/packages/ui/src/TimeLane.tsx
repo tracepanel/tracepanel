@@ -5,7 +5,7 @@ import { categoryLabel, type Stretch, stretches } from "./lib/breakdown";
 import { percent } from "./lib/percent";
 import { ownHotspots } from "./lib/profile";
 import { type Quiet, quietSpans } from "./lib/quiet";
-import { useProfiling } from "./Profiling";
+import { useProfilingOf } from "./Profiling";
 import { type ShareOf, ShareTip, sharesOf, TIP_CLASS } from "./TimeLegend";
 import type { Trace } from "./types";
 
@@ -66,32 +66,40 @@ const QUIET_TIP_CLASS =
   "grid w-80 gap-1.5 rounded-lg border bg-popover px-3 py-2 text-sm text-popover-foreground shadow-[var(--dt-popover-shadow)]";
 
 /**
- * What ran in the code's own time: the trace's profile, which samples it (the whole trace's: its samples aren't
- * timed, so not this stretch's alone), its own functions by where they were when sampled; without one, how to get
- * one, unless the app doesn't profile.
+ * What ran in the code's own time: the trace's profile (the whole trace's: its samples aren't timed, so not this
+ * stretch's alone), its own functions by where they were when sampled; without one, how to get one, where the app
+ * profiles on request.
  */
 function WhatRan({ trace }: { trace: Trace }) {
-  const profiling = useProfiling();
+  const profiling = useProfilingOf(trace);
   if (trace.profile) return <Hotspots profile={trace.profile} />;
   if (!profiling.available) return null;
   return (
-    <span className="text-muted-foreground">
-      To see what ran here, turn on Profile and run it again
-      {profiling.turnOn
-        ? " (Profile, in the legend below)."
-        : ": the panel's Profile toggle, or an X-Tracepanel-Profile: 1 header."}
+    <span className="grid gap-0.5">
+      <span>Turn on Profile to see what ran here</span>
+      <span className="text-xs text-muted-foreground">
+        {profiling.turnOn
+          ? "Profile is in the legend below"
+          : "with the panel's 🔥 or an X-Tracepanel-Profile: 1 header"}
+      </span>
     </span>
   );
 }
 
+/** The profile's own functions, each where your code was when sampled, the whole trace over; a click opens it. */
 function Hotspots({ profile }: { profile: NonNullable<Trace["profile"]> }) {
-  const hotspots = ownHotspots(profile);
   return (
-    <span className="text-muted-foreground">
-      {hotspots.length ? "Where your code was, over the whole trace's profile (its samples aren't timed): " : null}
-      {hotspots.map(({ name, share }) => `${name} ${percent(share, 1)}`).join(" · ")}
-      {hotspots.length ? ". " : null}
-      Click to open the profile.
+    <span className="grid gap-1">
+      <span className="font-medium">Profile of the whole trace</span>
+      <span className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-0.5">
+        {ownHotspots(profile).map(({ name, share }) => (
+          <span key={name} className="contents">
+            <span className="truncate font-mono text-xs">{name}</span>
+            <span className="text-right text-xs text-muted-foreground tabular-nums">{percent(share, 1)}</span>
+          </span>
+        ))}
+      </span>
+      <span className="text-xs text-brand">Open profile →</span>
     </span>
   );
 }

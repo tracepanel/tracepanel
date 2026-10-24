@@ -108,8 +108,11 @@ export interface DataSource {
   searchUsers(q: string): Promise<User[]>;
   /** Log this browser session in as another user (or out with null). */
   switchUser(id: string | null): Promise<User | null>;
-  /** What the backend adds to the store: EXPLAIN where the app serving the console runs it. */
-  capabilities(): Promise<Capabilities>;
+  /**
+   * What the backend adds to the store: EXPLAIN where the app serving the console runs it. With `service`, what the
+   * connected apps of that service say they do (none connected: nothing).
+   */
+  capabilities(service?: string): Promise<Capabilities>;
   /** What an app said about itself (its settings and versions); null where the agent doesn't serve it. Optional. */
   app?: (service: string) => Promise<App | null>;
   explain(traceId: string, spanId: string, analyze: boolean): Promise<ExplainPlan>;
@@ -245,8 +248,8 @@ export function httpSource(base: string | URL): DataSource {
     async tracesOverview(q = "", group = "operation") {
       return (await getJson<TracesOverview>(url("traces/overview", { q, group }))) ?? EMPTY_OVERVIEW;
     },
-    async capabilities() {
-      return (await getJson<Capabilities>(url("capabilities"))) ?? NO_CAPABILITIES;
+    async capabilities(service) {
+      return (await getJson<Capabilities>(url("capabilities", { service }))) ?? NO_CAPABILITIES;
     },
     // An agent from before answers 404: the same as an app that said nothing.
     app(service) {

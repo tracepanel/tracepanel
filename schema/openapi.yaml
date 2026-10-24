@@ -568,8 +568,14 @@ paths:
         its connection or records in its traces (`capabilities`: `explain`, `profile`, `request`, `live_tasks`), and what it answers
         at its own console (`console`: `explain`, `users`). The latter are offered only to the console an app serves,
         which names the app in a `Tracepanel-Console` header: the agent's own console has nowhere to run them. The
-        console shows a feature only where it works.
+        console shows a feature only where it works. With `service`, what a connected app of that service says it
+        does (a trace's page offers what its app does): false for an app not connected, or one that doesn't say.
       parameters:
+        - name: service
+          in: query
+          required: false
+          description: Only what the connected apps of this service (service.name) say they do.
+          schema: { type: string }
         - name: Tracepanel-Console
           in: header
           required: false

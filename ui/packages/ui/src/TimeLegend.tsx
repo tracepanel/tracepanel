@@ -8,7 +8,7 @@ import { percent } from "./lib/percent";
 import { plural } from "./lib/plural";
 import { quietSpans } from "./lib/quiet";
 import { cleared, isLoud, isWhole, rangeLabel, type Slice, togglePart } from "./lib/slice";
-import { type Profiling, useProfiling } from "./Profiling";
+import { useProfilingOf } from "./Profiling";
 import { useHeldSlice } from "./TimeSlice";
 import type { Related, Trace } from "./types";
 
@@ -146,7 +146,7 @@ function Share({ share, filters }: { share: ShareOf; filters: SliceState }) {
  * Profile toggle, turned on from here (the same cookie, the toggle lights), for the next run to show what ran.
  */
 function TurnOnProfile({ trace, shares }: { trace: Trace; shares: readonly ShareOf[] }) {
-  const profiling = useProfiling();
+  const profiling = useProfilingOf(trace);
   const [on, setOn] = useState(false);
   const turnOn = offered(trace, shares, profiling);
   if (!turnOn) return null;
@@ -168,7 +168,11 @@ function TurnOnProfile({ trace, shares }: { trace: Trace; shares: readonly Share
 }
 
 /** How to turn Profile on, when it is offered: no profile yet, code ran with nothing recorded, an app that profiles. */
-function offered(trace: Trace, shares: readonly ShareOf[], profiling: Profiling): (() => void) | undefined {
+function offered(
+  trace: Trace,
+  shares: readonly ShareOf[],
+  profiling: ReturnType<typeof useProfilingOf>,
+): (() => void) | undefined {
   const quiet = shares.some((share) => share.quiet > 0);
   return quiet && !trace.profile && profiling.available ? profiling.turnOn : undefined;
 }

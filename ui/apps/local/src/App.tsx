@@ -15,6 +15,8 @@ import {
   KindBadge,
   LayersIcon,
   Logo,
+  type Profiling,
+  ProfilingContext,
   type Slice,
   sliceParams,
   type TabId,
@@ -43,7 +45,7 @@ import { ClearDialog } from "./ClearDialog";
 import { Console } from "./Console";
 import { exploreFor } from "./explore";
 import { type EntrySummary, type TabEntry, type TabHistory, useNewIds, usePolling, useTabHistory } from "./hooks";
-import { PanelProfiling, ProfileToggle } from "./ProfileToggle";
+import { ProfileToggle, turnProfilingOn } from "./ProfileToggle";
 import { RefreshProvider } from "./refresh";
 import { consoleLinks, go, href, parse, type Route, useRoute } from "./routes";
 import { SearchPalette } from "./SearchPalette";
@@ -1037,29 +1039,27 @@ function PanelApp({ route }: { route: Route }) {
         {split ? <SplitHandle container={splitRef} /> : null}
         <main className="panel-body">
           {selectedId ? (
-            <PanelProfiling source={source}>
-              <TraceScreen
-                // A link to another tab of the trace on screen opens that tab: a new screen, not a kept state. A new
-                // request keeps the screen: the trace on it stays until the next one is loaded, with no blank between.
-                key={route.name === "trace" ? (route.tab ?? "") : ""}
-                id={selectedId}
-                source={source}
-                variant={split ? "strip" : "compact"}
-                // A link to a tab (the pill's card opens a finding on Issues) wins over the last tab used.
-                initialTab={route.name === "trace" ? tabOf(route.tab) : undefined}
-                preferredTab={tab}
-                onTabChange={(next) => {
-                  setTab(next);
-                  writeTab(next);
-                }}
-                initialSlice={sliced.slice}
-                onSliceChange={sliced.onChange}
-                actions={split ? panelActions : undefined}
-                lead={<BackTo route={back} rows={listed} bare={!split} />}
-                links={PANEL_LINKS}
-                explore={(trace) => exploreFor(trace, (route) => `${base}${href(route)}`)}
-              />
-            </PanelProfiling>
+            <TraceScreen
+              // A link to another tab of the trace on screen opens that tab: a new screen, not a kept state. A new
+              // request keeps the screen: the trace on it stays until the next one is loaded, with no blank between.
+              key={route.name === "trace" ? (route.tab ?? "") : ""}
+              id={selectedId}
+              source={source}
+              variant={split ? "strip" : "compact"}
+              // A link to a tab (the pill's card opens a finding on Issues) wins over the last tab used.
+              initialTab={route.name === "trace" ? tabOf(route.tab) : undefined}
+              preferredTab={tab}
+              onTabChange={(next) => {
+                setTab(next);
+                writeTab(next);
+              }}
+              initialSlice={sliced.slice}
+              onSliceChange={sliced.onChange}
+              actions={split ? panelActions : undefined}
+              lead={<BackTo route={back} rows={listed} bare={!split} />}
+              links={PANEL_LINKS}
+              explore={(trace) => exploreFor(trace, (route) => `${base}${href(route)}`)}
+            />
           ) : history ? (
             <Empty title="No requests yet">Requests from this browser tab will appear here.</Empty>
           ) : (
@@ -1084,19 +1084,30 @@ function PanelApp({ route }: { route: Route }) {
   );
 }
 
+/**
+ * Whether a trace's app profiles on request, as the agent hears it from that app; in the panel, its Profile toggle
+ * turned on from the trace's time.
+ */
+const PROFILING: Profiling = {
+  profiles: (service) => source.capabilities(service).then((capabilities) => capabilities.profile),
+  turnOn: embedded ? turnProfilingOn : undefined,
+};
+
 export function App() {
   const route = useRoute();
   return (
-    <TooltipProvider delayDuration={300}>
-      <RefreshProvider>
-        {embedded ? (
-          <PanelApp route={route} />
-        ) : (
-          <ScopeProvider>
-            <Console route={route} source={source} />
-          </ScopeProvider>
-        )}
-      </RefreshProvider>
-    </TooltipProvider>
+    <ProfilingContext value={PROFILING}>
+      <TooltipProvider delayDuration={300}>
+        <RefreshProvider>
+          {embedded ? (
+            <PanelApp route={route} />
+          ) : (
+            <ScopeProvider>
+              <Console route={route} source={source} />
+            </ScopeProvider>
+          )}
+        </RefreshProvider>
+      </TooltipProvider>
+    </ProfilingContext>
   );
 }

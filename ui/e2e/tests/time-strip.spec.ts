@@ -47,8 +47,8 @@ test("the strip names its lanes by what their marks are and says a long stretch 
   // Its profile says where its own code was, over the whole trace; a click opens it.
   const tip = page.getByRole("tooltip").filter({ hasText: "nothing recorded inside" });
   await expect(tip).toContainText("Of it 1.6 s with nothing recorded inside");
-  await expect(tip).toContainText("over the whole trace's profile");
-  await expect(tip).toContainText("aggregate 69% · render_csv 21% · reconcile_stock 8%");
+  await expect(tip).toContainText("Profile of the whole trace");
+  await expect(tip).toContainText(/aggregate\s*69%\s*render_csv\s*21%\s*reconcile_stock\s*8%\s*Open profile →/);
 
   await page.mouse.click(...middle);
 
@@ -149,21 +149,14 @@ test("a request with no view recorded: its own time is its code's", async ({ pag
   await expect(legend.locator('[data-category="django"]')).toContainText("Framework & middleware");
 });
 
-test("with no profile, the code's own time says how to get one; in the panel the legend turns its Profile on", async ({
-  page,
-}) => {
-  await page.goto(`/#/t/${await traceId("POST /api/reports/sales")}?tab=tree`);
-  const said = page.locator(".dt-quiet-said");
-  await page.mouse.move(...(await centre(said)));
-
-  await expect(page.getByRole("tooltip").filter({ hasText: "nothing recorded inside" })).toContainText(
-    "To see what ran here, turn on Profile and run it again: the panel's Profile toggle, or an X-Tracepanel-Profile: 1 header.",
+/** The agent's answer for the trace's app: whether it profiles on request. */
+async function profiles(page: Page, yes: boolean): Promise<void> {
+  await page.route("**/api/capabilities**", (route) =>
+    route.fulfill({ json: { explain: false, users: false, profile: yes, request: true, live_tasks: false } }),
   );
+}
 
-  // An app that profiles on request: the panel offers its toggle.
-  await page.route("**/api/capabilities", (route) =>
-    route.fulfill({ json: { explain: false, users: false, profile: true, request: true } }),
-  );
+async function openSales(page: Page): Promise<FrameLocator> {
   await openApp(page, {
     one: { status: 202, trace: await traceId("POST /api/reports/sales"), queries: 0, totalMs: 42 },
   });
@@ -171,6 +164,21 @@ test("with no profile, the code's own time says how to get one; in the panel the
   await pill(page).click();
   const frame = panel(page);
   await frame.getByRole("tab", { name: /^Call tree/ }).click();
+  return frame;
+}
+
+test("with no profile and an app that profiles, the code's own time says how; the panel's legend turns it on", async ({
+  page,
+}) => {
+  await profiles(page, true);
+  await page.goto(`/#/t/${await traceId("POST /api/reports/sales")}?tab=tree`);
+  await page.mouse.move(...(await centre(page.locator(".dt-quiet-said"))));
+  const tip = page.getByRole("tooltip").filter({ hasText: "nothing recorded inside" });
+
+  await expect(tip).toContainText("Turn on Profile to see what ran here");
+  await expect(tip).toContainText("with the panel's 🔥 or an X-Tracepanel-Profile: 1 header");
+
+  const frame = await openSales(page);
   const turnOn = frame.getByRole("button", { name: "Turn on Profile to see what ran" });
 
   await turnOn.click();
@@ -180,18 +188,28 @@ test("with no profile, the code's own time says how to get one; in the panel the
   expect((await page.context().cookies()).find((cookie) => cookie.name === "tracepanel_profile")?.value).toBe("1");
 });
 
-test("in the panel, an app that doesn't profile on request offers no Profile from the strip", async ({ page }) => {
-  await page.route("**/api/capabilities", (route) =>
-    route.fulfill({ json: { explain: false, users: false, profile: false, request: true } }),
-  );
-  await openApp(page, {
-    one: { status: 202, trace: await traceId("POST /api/reports/sales"), queries: 0, totalMs: 42 },
-  });
-  await page.getByRole("button", { name: "Load one" }).click();
-  await pill(page).click();
-  const frame = panel(page);
-  await frame.getByRole("tab", { name: /^Call tree/ }).click();
+test("an app that can't profile is offered no Profile: no hint, no link, on the page or in the panel", async ({
+  page,
+}) => {
+  await profiles(page, false);
+  await page.goto(`/#/t/${await traceId("POST /api/reports/sales")}?tab=tree`);
+  await page.mouse.move(...(await centre(page.locator(".dt-quiet-said"))));
+  const tip = page.getByRole("tooltip").filter({ hasText: "nothing recorded inside" });
+
+  await expect(tip).toBeVisible();
+  await expect(tip).not.toContainText("Profile");
+
+  const frame = await openSales(page);
 
   await expect(frame.locator(".dt-quiet-said")).toBeVisible();
   await expect(frame.getByRole("button", { name: /^Turn on Profile/ })).toHaveCount(0);
+});
+
+test("an app the agent doesn't know (not connected) is offered no Profile either", async ({ page }) => {
+  await page.goto(`/#/t/${await traceId("POST /api/reports/sales")}?tab=tree`);
+  await page.mouse.move(...(await centre(page.locator(".dt-quiet-said"))));
+  const tip = page.getByRole("tooltip").filter({ hasText: "nothing recorded inside" });
+
+  await expect(tip).toBeVisible();
+  await expect(tip).not.toContainText("Profile");
 });

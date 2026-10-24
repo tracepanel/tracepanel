@@ -1,7 +1,7 @@
-import { type DataSource, Hint, ProfilingContext } from "@tracepanel/ui";
+import { type DataSource, Hint } from "@tracepanel/ui";
 import { cn } from "@tracepanel/ui/lib/utils";
 import { FlameIcon } from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useCapability } from "./hooks";
 
 // While it is set, the app profiles every request this browser makes; a session cookie, so closing the browser ends it.
@@ -19,13 +19,9 @@ function profile(on: boolean): void {
 
 const CHANGED = "tracepanel:profiling";
 
-/**
- * Around the panel's trace: whether its app profiles on request (it offers the toggle then), and the toggle turned on
- * from where the trace's time says nothing recorded what ran.
- */
-export function PanelProfiling({ source, children }: { source: DataSource; children: ReactNode }) {
-  const available = useCapability(source, "profile");
-  return <ProfilingContext value={{ available, turnOn: () => profile(true) }}>{children}</ProfilingContext>;
+/** Profiling on for this browser's next requests, as the toggle turns it on: from the trace's time strip. */
+export function turnProfilingOn(): void {
+  profile(true);
 }
 
 const HINTS = {
