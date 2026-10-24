@@ -4,7 +4,7 @@ import type { Trace } from "../types";
 
 export type Profile = NonNullable<Trace["profile"]>;
 export type Frame = Profile["frames"][number];
-type Stack = Profile["stacks"][number];
+export type Stack = Profile["stacks"][number];
 
 /** Under this share of samples in the project's own code, a profile opens on every frame: there is little of yours. */
 const OWN_ENOUGH = 0.1;
@@ -15,8 +15,12 @@ export const YOUR_CODE = "your code";
 
 /** What a frame belongs to: your code, or a library's package (django.db, django.template, requests, threading). */
 export function packageOf(frame: Frame): string {
+  if (frame.waiting) return WAITING;
   return frame.in_app ? YOUR_CODE : libraryOf(frame.module ?? frame.file.replace(/\.py$/, "").split("/").join("."));
 }
+
+/** Time a sample's innermost frame waited (a sleep, the event loop's select, a socket), not computing: its own share. */
+export const WAITING = "waiting";
 
 /** A dotted module's package: its first part; Django's first two, as it is many packages in one. */
 function libraryOf(module: string): string {

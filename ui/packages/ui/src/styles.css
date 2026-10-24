@@ -1113,6 +1113,10 @@ tr[data-new] {
     transparent 2px 6px
   );
 }
+/* Where the code waited (a sleep, a socket, the event loop), not computed: neutral, hatched. */
+.dt-stretch[data-waiting] {
+  --dt-k: var(--dt-text-3);
+}
 /* How long, over its longest hatched stretch, when it fits. */
 .dt-quiet-said {
   position: absolute;
@@ -2206,6 +2210,9 @@ details[data-focused] > .dt-sql-group {
   );
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dt-k) 45%, transparent);
 }
+.dt-map-bar[data-quiet][data-waiting] {
+  --dt-k: var(--dt-text-3);
+}
 div.dt-map-row[data-kind="code"] {
   cursor: default;
 }
@@ -2629,4 +2636,13 @@ div.dt-map-row[data-kind="code"] {
   font: var(--dt-size-sm) / 1.55 var(--dt-mono);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* Waiting, not computing (the Profile tab's "waiting"): hatched, as the time strip draws it. */
+.dt-hatched {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    color-mix(in srgb, var(--dt-text-3) 45%, transparent) 0 2px,
+    transparent 2px 5px
+  );
 }

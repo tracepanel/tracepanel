@@ -368,6 +368,62 @@ function salesReport(): Doc[] {
 }
 
 export const HELD_REPORT = "shop.tasks.reconcile_stock";
+export const DIGEST = "shop.tasks.send_digest";
+
+/**
+ * An async task that awaits a sleep of 1.5 s after a query: its profile says when each stack was seen (10 ms
+ * buckets), which frame waited, and that 0.5 s wasn't sampled (its event loop ran other traces too).
+ */
+function asyncDigest(): Doc {
+  const doc = run(DIGEST, { "task.system": "celery", "task.id": "send-digest" });
+  const id = String(doc["id"]);
+  const root = (doc["spans"] as Doc[])[0] as Doc;
+  root["duration"] = 1_600_000;
+  doc["duration"] = 1_600_000;
+  (doc["spans"] as Doc[]).push({
+    id: `${id}Q`,
+    parent_id: root["id"],
+    kind: "sql",
+    name: "SELECT subscriber",
+    start: 2_000,
+    duration: 18_000,
+    status: "ok",
+    attrs: { "db.statement": 'SELECT * FROM "subscriber"', "db.vendor": "sqlite", "db.alias": "default" },
+  });
+  const frame = (fn: string, module: string, line: number, inApp: boolean, more: Doc = {}) => ({
+    function: fn,
+    module,
+    file: `${module.replaceAll(".", "/")}.py`,
+    line,
+    // biome-ignore lint/style/useNamingConvention: a frame as the SDKs send it.
+    in_app: inApp,
+    ...more,
+  });
+  doc["profile"] = {
+    // biome-ignore lint/style/useNamingConvention: a profile as the SDKs send it.
+    interval_us: 10_000,
+    samples: 110,
+    dropped: 50,
+    // biome-ignore lint/style/useNamingConvention: a profile as the SDKs send it.
+    bucket_us: 10_000,
+    frames: [
+      frame("Handle._run", "asyncio.events", 80, false),
+      // biome-ignore lint/style/useNamingConvention: a frame as the SDKs send it.
+      frame("send_digest", "shop.tasks", 100, true, { at_line: 108 }),
+      frame("sleep", "asyncio.tasks", 640, false, { waiting: true }),
+      frame("render_digest", "shop.digest", 12, true),
+    ],
+    stacks: [
+      { frames: [0, 1, 3], count: 10, at: Array.from({ length: 10 }, (_, index) => [2 + index, 1]) },
+      {
+        frames: [0, 1, 2],
+        count: 100,
+        at: Array.from({ length: 100 }, (_, index) => [12 + Math.floor(index * 1.48), 1]),
+      },
+    ],
+  };
+  return doc;
+}
 
 /**
  * A task that holds a transaction while its code works: its queries in the first 250 ms, then 1.3 s of its own
@@ -1082,6 +1138,7 @@ export default async function seed(): Promise<void> {
   const docs = [
     // First, the oldest: its many records sit under the others on the Logs page.
     heldTransaction(),
+    asyncDigest(),
     ...examples(),
     ...handlers(),
     ...pages(),

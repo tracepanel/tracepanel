@@ -1,18 +1,30 @@
-// What ran in a trace's code where nothing it called was recorded: its profile's own functions, or how to get a
-// profile. The time strip's tooltip and the call tree's code row say it alike.
+// What ran in a trace's code where nothing it called was recorded: its profile's own functions (of that stretch when
+// the profile says when its samples were taken, of the whole trace otherwise), what it waited on, or how to get a
+// profile. The time strip's tooltip and the call tree's code rows say it alike.
+import { duration } from "./format";
 import { percent } from "./lib/percent";
-import { ownHotspots } from "./lib/profile";
+import { ownHotspots, type Profile } from "./lib/profile";
+import { rangeLabel, type TimeRange } from "./lib/slice";
+import { timed, waitOf, within } from "./lib/waiting";
 import { useProfilingOf } from "./Profiling";
 import type { Trace } from "./types";
 
+/** The profile of a stretch of the trace when it says when its samples were taken; the whole trace's otherwise. */
+function profileOver(trace: Trace, range: TimeRange | undefined): { profile: Profile | undefined; title: string } {
+  const profile = trace.profile;
+  if (range && timed(profile))
+    return { profile: within(profile, range), title: `Profile of ${rangeLabel(range, trace.duration)}` };
+  return { profile, title: "Profile of the whole trace" };
+}
+
 /**
- * What ran in the code's own time: the trace's profile (the whole trace's: its samples aren't timed, so not this
- * stretch's alone), its own functions by where they were when sampled; without one, how to get one, where the app
- * profiles on request.
+ * What ran in the code's own time: the trace's profile, its own functions by where they were when sampled; without
+ * one, how to get one, where the app profiles on request.
  */
-export function WhatRan({ trace }: { trace: Trace }) {
+export function WhatRan({ trace, range }: { trace: Trace; range?: TimeRange | undefined }) {
   const profiling = useProfilingOf(trace);
-  if (trace.profile) return <Hotspots profile={trace.profile} />;
+  const over = profileOver(trace, range);
+  if (over.profile) return <Hotspots profile={over.profile} title={over.title} />;
   if (!profiling.available) return null;
   return (
     <span className="grid gap-0.5">
@@ -26,11 +38,11 @@ export function WhatRan({ trace }: { trace: Trace }) {
   );
 }
 
-/** The profile's own functions, each where your code was when sampled, the whole trace over; a click opens it. */
-function Hotspots({ profile }: { profile: NonNullable<Trace["profile"]> }) {
+/** The profile's own functions, each where your code was when sampled; a click opens it. */
+function Hotspots({ profile, title }: { profile: Profile; title: string }) {
   return (
     <span className="grid gap-1">
-      <span className="font-medium">Profile of the whole trace</span>
+      <span className="font-medium">{title}</span>
       <span className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-0.5">
         {ownHotspots(profile).map(({ name, share }) => (
           <span key={name} className="contents">
@@ -39,6 +51,19 @@ function Hotspots({ profile }: { profile: NonNullable<Trace["profile"]> }) {
           </span>
         ))}
       </span>
+      <span className="text-xs text-brand">Open profile →</span>
+    </span>
+  );
+}
+
+/** What a stretch the code waited in waited on, and where: "await asyncio.sleep in build_sales_report · handlers.py:108". */
+export function WhatWaited({ trace, range, waited }: { trace: Trace; range: TimeRange; waited: number }) {
+  const over = profileOver(trace, range);
+  const what = over.profile ? waitOf(over.profile) : null;
+  return (
+    <span className="grid gap-1">
+      <span className="font-medium">Waiting · {duration(waited)}</span>
+      {what ? <span className="font-mono text-xs text-muted-foreground [overflow-wrap:anywhere]">{what}</span> : null}
       <span className="text-xs text-brand">Open profile →</span>
     </span>
   );

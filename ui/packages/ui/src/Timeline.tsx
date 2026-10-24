@@ -10,9 +10,11 @@ import { partOfCategory } from "./CallMap";
 import { duration } from "./format";
 import { keyed } from "./keys";
 import type { Category } from "./lib/breakdown";
+import type { Profile } from "./lib/profile";
 import { isLoud, overlaps, type Slice, type TimeRange, togglePart } from "./lib/slice";
 import { DATASTORES, MESSAGING, RPC } from "./lib/systems";
-import { TimeLane } from "./TimeLane";
+import { timed } from "./lib/waiting";
+import { rangeIn, TimeLane } from "./TimeLane";
 import { TimeLegend } from "./TimeLegend";
 import { RangeBand, useHeldSlice, useRangeDrag } from "./TimeSlice";
 import type { Related, Span, Trace } from "./types";
@@ -208,7 +210,7 @@ interface Picking {
   /** A share's stretch clicked: its rows picked, or let go. */
   onShare: (category: string) => void;
   /** The code's own time clicked, when the trace has a profile: it opens, to show what ran. */
-  onQuiet: (() => void) | undefined;
+  onQuiet: ((range: TimeRange | undefined) => void) | undefined;
   start: (event: PointerEvent<HTMLDivElement>, track: Element) => void;
   layer: RefObject<HTMLDivElement | null>;
 }
@@ -229,7 +231,7 @@ function clickOnLanes(event: MouseEvent<HTMLDivElement>, picking: Picking): void
 
 /** A share's stretch picks its rows; its code's own time, with a profile to show what ran there, opens it. */
 function clickOnShare(share: HTMLElement, picking: Picking): void {
-  if (share.dataset["quiet"] && picking.onQuiet) picking.onQuiet();
+  if (share.dataset["quiet"] && picking.onQuiet) picking.onQuiet(rangeIn(share));
   else picking.onShare(share.dataset["category"] ?? "");
 }
 
@@ -280,7 +282,7 @@ function LanesBody({
  * The slice of the trace's view around, as the lanes change it: a range dragged, a share's stretch clicked. What
  * they pick is the call tree's to show, which opens with it.
  */
-function useLanesSlice(onSelect: ((target: MarkTarget) => void) | undefined) {
+function useLanesSlice(onSelect: ((target: MarkTarget) => void) | undefined, profile: Profile | undefined) {
   const { slice, change } = useHeldSlice();
   const pick = (next: Slice, more: boolean) => {
     change(next);
@@ -288,6 +290,11 @@ function useLanesSlice(onSelect: ((target: MarkTarget) => void) | undefined) {
   };
   return {
     slice,
+    // The profile at a stretch of the code's own time, where the profile says when its samples were taken.
+    openProfile: (range: TimeRange | undefined) => {
+      if (range && timed(profile)) change({ ...slice, range });
+      onSelect?.({ tab: "profile" });
+    },
     onRange: (range: TimeRange | null) => pick({ ...slice, range }, range !== null),
     onShare: (category: string) => {
       const next = togglePart(slice, partOfCategory(category as Category));
@@ -304,10 +311,10 @@ function useLanesSlice(onSelect: ((target: MarkTarget) => void) | undefined) {
  */
 export function Timeline({ trace, onSelect }: { trace: Trace; onSelect?: ((target: MarkTarget) => void) | undefined }) {
   const layer = useRef<HTMLDivElement>(null);
-  const { slice, onRange, onShare } = useLanesSlice(onSelect);
+  const { slice, onRange, onShare, openProfile } = useLanesSlice(onSelect, trace.profile);
   const drawn = lanes(trace, slice.logs);
   const drag = useRangeDrag(Math.max(trace.duration, 1), onRange);
-  const onQuiet = trace.profile ? () => onSelect?.({ tab: "profile" }) : undefined;
+  const onQuiet = trace.profile ? (range: TimeRange | undefined) => openProfile(range) : undefined;
   const picking = { onRange, onShare, onQuiet, start: drag.start, layer };
   return (
     <figure className="dt-timeline" aria-label="Timeline">

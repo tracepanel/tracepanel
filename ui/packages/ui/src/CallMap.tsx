@@ -25,9 +25,10 @@ import { traceRuntime } from "./lib/runtime";
 import { isReceiver, raised } from "./lib/signals";
 import { isLoud, overlaps, type Slice, type TimeRange } from "./lib/slice";
 import { CALL_KINDS, DATASTORES, MESSAGING, RPC } from "./lib/systems";
+import { type Piece, quietPieces, timed } from "./lib/waiting";
 import { type TraceLinks, traceLinkProps } from "./links";
 import { type NameValue, NameValues, RowsLookContext } from "./NameValues";
-import { WhatRan } from "./ProfileHint";
+import { WhatRan, WhatWaited } from "./ProfileHint";
 import { useProfilingOf } from "./Profiling";
 import { PropTable } from "./PropTable";
 import {
@@ -392,8 +393,8 @@ interface RowContext {
   categories: ReadonlyMap<string, Category>;
   /** What is picked: a code row shows with its share picked, or a range it overlaps. */
   slice: Slice;
-  /** Opens the trace's profile, when it has one: what ran in its code. */
-  onProfile: (() => void) | undefined;
+  /** Opens the trace's profile, when it has one, at a stretch of it where the profile says when it was sampled. */
+  onProfile: ((range: TimeRange) => void) | undefined;
 }
 
 /** The selected row's details, under it: where the click was, not past the end of a long tree. */
@@ -883,20 +884,45 @@ function codeShown(quiet: Quiet, category: Category, ctx: RowContext): boolean {
   return range === null || quiet.gaps.some(([from, to]) => overlaps(range, from - ctx.trace.start, to - from));
 }
 
-/** Where its code ran with nothing recorded inside, hatched in its share's colour; gaps too thin to see left out. */
-function CodeBars({ quiet, category, trace }: { quiet: Quiet; category: Category; trace: Trace }) {
+/** A code row's pieces of time: where it waited, or where it computed (µs since the trace started). */
+interface CodePart {
+  waiting: boolean;
+  pieces: Piece[];
+  total: number;
+}
+
+/** A span's own code in its parts: what it waited in and what it computed in, each when there is any. */
+function codeParts(quiet: Quiet, trace: Trace): CodePart[] {
+  const pieces = quiet.gaps.flatMap(([from, to]) => quietPieces(trace.profile, from - trace.start, to - trace.start));
+  return [true, false].flatMap((waiting): CodePart[] => {
+    const own = pieces.filter((piece) => piece.waiting === waiting);
+    const total = own.reduce((sum, piece) => sum + piece.to - piece.from, 0);
+    return total > 0 ? [{ waiting, pieces: own, total }] : [];
+  });
+}
+
+/** The stretch a part spans, from its first piece to its last. */
+function partRange(part: CodePart): TimeRange {
+  const first = part.pieces[0] as Piece;
+  const last = part.pieces.at(-1) as Piece;
+  return [first.from, last.to];
+}
+
+/** Where its code ran with nothing recorded inside, hatched in its share's colour; pieces too thin to see left out. */
+function CodeBars({ part, category, trace }: { part: CodePart; category: Category; trace: Trace }) {
   const total = Math.max(trace.duration, 1);
   return (
     <span className="dt-map-track" aria-hidden="true">
-      {quiet.gaps
-        .filter(([from, to]) => to - from >= total * 0.004)
-        .map(([from, to]) => (
+      {part.pieces
+        .filter((piece) => piece.to - piece.from >= total * 0.004)
+        .map((piece) => (
           <span
-            key={from}
+            key={piece.from}
             className="dt-map-bar"
             data-quiet=""
+            data-waiting={part.waiting ? "" : undefined}
             data-category={category}
-            style={{ left: widthOf(from - trace.start, total), width: widthOf(to - from, total) }}
+            style={{ left: widthOf(piece.from, total), width: widthOf(piece.to - piece.from, total) }}
           />
         ))}
     </span>
@@ -931,44 +957,62 @@ function turnOnFor(trace: Trace, profiling: ReturnType<typeof useProfilingOf>): 
   return trace.profile || !profiling.available ? undefined : profiling.turnOn;
 }
 
-/** The code row's own: a grey "code" box, its share's name, the way on to the profile, its bars and its time. */
-function CodeRowParts({ span, ctx, depth }: { span: Span; ctx: RowContext; depth: number }) {
-  const quiet = ctx.quiet.get(span.id) as Quiet;
+/** "waiting", or the share's name: "your code". */
+function partName(part: CodePart, category: Category, trace: Trace): string {
+  return part.waiting ? "waiting" : categoryLabel(category, trace).toLowerCase();
+}
+
+/** A code row's own: a grey box ("code", or "wait"), its name, the way on to the profile, its bars and its time. */
+function CodeRowParts({ span, ctx, depth, part }: { span: Span; ctx: RowContext; depth: number; part: CodePart }) {
   const category = ctx.categories.get(span.id) ?? "code";
   return (
     <>
       <span className="dt-map-name" style={{ paddingLeft: `${12 + depth * 16}px` }}>
         <span className="dt-map-caret" />
-        <KindBadge kind="code" muted={true} className="dt-map-kind" />
-        <span className="dt-map-text">{categoryLabel(category, ctx.trace).toLowerCase()}</span>
+        <KindBadge kind={part.waiting ? "wait" : "code"} muted={true} className="dt-map-kind" />
+        <span className="dt-map-text">{partName(part, category, ctx.trace)}</span>
         {ctx.onProfile ? <span className="dt-map-sub dt-map-open-profile">Profile →</span> : null}
         <TurnOnProfileHere trace={ctx.trace} />
       </span>
-      <CodeBars quiet={quiet} category={category} trace={ctx.trace} />
-      <span className="dt-map-time">{duration(quiet.total)}</span>
+      <CodeBars part={part} category={category} trace={ctx.trace} />
+      <span className="dt-map-time">{duration(part.total)}</span>
     </>
   );
 }
 
 /**
  * Under a span whose children leave much of its time uncovered (the strip's hatched stretches, the same time): its
- * own code, a row of its own. With a profile, a click opens it and its functions show on hover; where the app
- * profiles on request, how to get one. Not a span: no details, no filter counts it.
+ * own code, a row of its own, and where the profile says it waited, a "waiting" row before it. With a profile, a
+ * click opens it at that time and what ran shows on hover; where the app profiles on request, how to get one. Not a
+ * span: no details, no filter counts it.
  */
 function CodeRow({ span, ctx, depth }: { span: Span; ctx: RowContext; depth: number }) {
-  const profiling = useProfilingOf(ctx.trace);
   if (!hasCodeRow(span, ctx)) return null;
-  const parts = <CodeRowParts span={span} ctx={ctx} depth={depth} />;
-  const row = ctx.onProfile ? (
-    <button type="button" className="dt-map-row" data-kind="code" onClick={ctx.onProfile}>
-      {parts}
+  const parts = codeParts(ctx.quiet.get(span.id) as Quiet, ctx.trace);
+  return (
+    <>
+      {parts.map((part) => (
+        <CodePartRow key={String(part.waiting)} span={span} ctx={ctx} depth={depth} part={part} />
+      ))}
+    </>
+  );
+}
+
+function CodePartRow({ span, ctx, depth, part }: { span: Span; ctx: RowContext; depth: number; part: CodePart }) {
+  const profiling = useProfilingOf(ctx.trace);
+  const inside = <CodeRowParts span={span} ctx={ctx} depth={depth} part={part} />;
+  const open = ctx.onProfile;
+  const row = open ? (
+    <button type="button" className="dt-map-row" data-kind="code" onClick={() => open(partRange(part))}>
+      {inside}
     </button>
   ) : (
     <div className="dt-map-row" data-kind="code">
-      {parts}
+      {inside}
     </div>
   );
-  return <WithWhatRan trace={ctx.trace} offered={Boolean(ctx.trace.profile) || profiling.available} row={row} />;
+  const offered = Boolean(ctx.trace.profile) || profiling.available;
+  return <WithWhatRan trace={ctx.trace} offered={offered} row={row} part={part} />;
 }
 
 /** Whether a span has a code row: its code ran long with nothing recorded inside, and what is picked keeps it. */
@@ -977,14 +1021,29 @@ function hasCodeRow(span: Span, ctx: RowContext): boolean {
   return quiet !== undefined && codeShown(quiet, ctx.categories.get(span.id) ?? "code", ctx);
 }
 
-/** A code row with what ran in it on hover, when there is anything to say. */
-function WithWhatRan({ trace, offered, row }: { trace: Trace; offered: boolean; row: ReactNode }) {
+/** A code row with what ran (or waited) in it on hover, when there is anything to say. */
+function WithWhatRan({
+  trace,
+  offered,
+  row,
+  part,
+}: {
+  trace: Trace;
+  offered: boolean;
+  row: ReactNode;
+  part: CodePart;
+}) {
   if (!offered) return row;
+  const range = partRange(part);
   return (
     <Tooltip delayDuration={150} disableHoverableContent={true}>
       <TooltipTrigger asChild>{row}</TooltipTrigger>
       <TooltipContent side="top" sideOffset={6} arrow={false} className={CODE_TIP_CLASS}>
-        <WhatRan trace={trace} />
+        {part.waiting ? (
+          <WhatWaited trace={trace} range={range} waited={part.total} />
+        ) : (
+          <WhatRan trace={trace} range={range} />
+        )}
       </TooltipContent>
     </Tooltip>
   );
@@ -1578,6 +1637,20 @@ function HiddenLogs({ count, onShow }: { count: number | undefined; onShow: () =
   );
 }
 
+/** The profile opened at a stretch of the trace (the range picked), where it says when its samples were taken. */
+function profileOpener(
+  open: (() => void) | undefined,
+  trace: Trace,
+  slice: Slice,
+  change: (slice: Slice) => void,
+): ((range: TimeRange) => void) | undefined {
+  if (!open) return undefined;
+  return (range) => {
+    if (timed(trace.profile)) change({ ...slice, range });
+    open();
+  };
+}
+
 /** Each span's share of the time, and those whose own code ran long with nothing recorded inside. */
 function useSpansTime(trace: Trace) {
   const categories = useMemo(() => spanCategories(trace), [trace]);
@@ -1647,7 +1720,7 @@ export function CallMap({
                 quiet,
                 categories,
                 slice: current,
-                onProfile: wiring.onProfile,
+                onProfile: profileOpener(wiring.onProfile, trace, current, change),
                 onShowLogs: () => change({ ...current, logs: true }),
               }}
             />

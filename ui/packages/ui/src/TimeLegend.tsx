@@ -6,8 +6,9 @@ import { CloseIcon } from "./icons";
 import { breakdown, type Category, categoryLabel, spanCategories } from "./lib/breakdown";
 import { percent } from "./lib/percent";
 import { plural } from "./lib/plural";
-import { quietSpans } from "./lib/quiet";
+import { type Quiet, quietSpans } from "./lib/quiet";
 import { cleared, isLoud, isWhole, rangeLabel, type Slice, togglePart } from "./lib/slice";
+import { waitedIn } from "./lib/waiting";
 import { useProfilingOf } from "./Profiling";
 import { useHeldSlice } from "./TimeSlice";
 import type { Related, Trace } from "./types";
@@ -22,6 +23,8 @@ export interface ShareOf {
   label: string;
   /** Of its time, how much its code ran with no recorded calls (the strip's hatched stretches), when it did. */
   quiet: number;
+  /** Of that, how much it waited (a sleep, a socket), where the profile says when its samples were taken. */
+  waiting: number;
 }
 
 /** "26 ms · 96% · 12 calls": how long, of the whole, how many spans. */
@@ -36,6 +39,20 @@ function addUp(items: readonly [Category, number][]): Map<Category, number> {
   return sums;
 }
 
+/** Quiet spans' numbers added up by their share. */
+function byCategory(
+  spans: readonly [string, Quiet][],
+  categories: ReadonlyMap<string, Category>,
+  value: (quiet: Quiet) => number,
+): Map<Category, number> {
+  return addUp(
+    spans.flatMap(([span, quiet]): [Category, number][] => {
+      const category = categories.get(span);
+      return category ? [[category, value(quiet)]] : [];
+    }),
+  );
+}
+
 /** Each share of the time with its numbers: how long, of how much, how many spans. */
 export function sharesOf(trace: Trace): ShareOf[] {
   const parts = breakdown(trace);
@@ -45,12 +62,9 @@ export function sharesOf(trace: Trace): ShareOf[] {
   );
   const categories = spanCategories(trace);
   const calls = addUp([...categories.values()].map((category) => [category, 1]));
-  const quiet = addUp(
-    [...quietSpans(trace)].flatMap(([span, { total }]): [Category, number][] => {
-      const category = categories.get(span);
-      return category ? [[category, total]] : [];
-    }),
-  );
+  const spans = [...quietSpans(trace)];
+  const quiet = byCategory(spans, categories, ({ total }) => total);
+  const waiting = byCategory(spans, categories, ({ gaps }) => waitedIn(trace.profile, gaps, trace.start));
   return parts.map(([category, value]) => ({
     category,
     value,
@@ -58,6 +72,7 @@ export function sharesOf(trace: Trace): ShareOf[] {
     calls: calls.get(category) ?? 0,
     label: categoryLabel(category, trace),
     quiet: quiet.get(category) ?? 0,
+    waiting: waiting.get(category) ?? 0,
   }));
 }
 
@@ -103,12 +118,22 @@ export const TIP_CLASS =
   "flex items-center gap-2 rounded-lg border bg-popover px-3 py-2 text-sm whitespace-nowrap text-popover-foreground shadow-[var(--dt-popover-shadow)]";
 
 /** Of a share's time, its code's own with no recorded calls: the strip's hatched part, read with its share. */
+/** "1.5 s waiting · 102 ms unrecorded": the code's own time, what it waited and what it computed, each there is. */
+function quietWords(share: ShareOf): string {
+  const computed = share.quiet - share.waiting;
+  const words = [
+    share.waiting > 0 ? `${duration(share.waiting)} waiting` : "",
+    computed > 0 ? `${duration(computed)} unrecorded` : "",
+  ];
+  return words.filter(Boolean).join(" · ");
+}
+
 function QuietPart({ share }: { share: ShareOf }) {
   if (share.quiet === 0) return null;
   return (
     <span className="dt-share-quiet">
       <span className="dt-swatch" data-quiet="" />
-      of it {duration(share.quiet)} unrecorded
+      of it {quietWords(share)}
     </span>
   );
 }

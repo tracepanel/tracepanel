@@ -26,6 +26,17 @@
   `api/capabilities?service=` says what an app does. A transaction's time
   says on hover how long it was open and how much of that its SQL took, and
   a row whose name says its database has no chip saying it again.
+- A profile can say when each stack was seen (`bucket_us`, `stacks[].at`),
+  which frames wait rather than compute (`frames[].waiting`, an await's
+  `at_line`) and how many samples weren't taken because the trace's thread
+  ran other traces too (`dropped`). The schema and the agent take them, and
+  a profile without them stays valid. The Profile tab says how much it
+  sampled of the trace's time and why the rest wasn't, shows waiting as a
+  share of its own, hatched, and with a range picked profiles that stretch.
+  The time strip, its legend and the call tree split the code's own time
+  into what it waited in (`waiting · 1.5 s`, the wait named: `await
+  asyncio.sleep in send_digest · tasks.py:108`) and what it computed, and a
+  click opens the profile at that stretch.
 - A call tree and its strip show a trace's warnings and worse, not every
   record: its info and debug records stay out of the tree and the log lane,
   a quiet note on the span they were logged in says how many (`3 logs`),

@@ -1607,6 +1607,10 @@ export interface components {
             interval_us: number;
             /** @description Samples taken while the trace ran. */
             samples: number;
+            /** @description Samples not taken for this trace because its thread was running other traces too (an event loop with concurrent traces): time the profile can't attribute. */
+            dropped?: number;
+            /** @description How wide a time bucket of stacks[].at is, in microseconds, counted from the trace's start. */
+            bucket_us?: number;
             /** @description The functions the stacks name, each once. */
             frames: {
                 function: string;
@@ -1617,11 +1621,20 @@ export interface components {
                 line: number;
                 /** @description The project's own code, not a library's or the runtime's. */
                 in_app: boolean;
+                /** @description Waiting, not computing: asyncio.sleep, an event loop's select, time.sleep, a socket's recv, a lock. A sample whose innermost frame waits counts as waiting. */
+                waiting?: boolean;
+                /** @description The line it was running when sampled (a coroutine's await), where `line` is where it is defined. */
+                at_line?: number;
             }[];
             /** @description Each stack seen, outermost frame first, as indexes into frames, and how many samples saw it. */
             stacks: {
                 frames: number[];
                 count: number;
+                /** @description When in the trace the stack was seen: [bucket, count] pairs, a bucket bucket_us wide from the trace's start; the counts add up to count. */
+                at?: [
+                    number,
+                    number
+                ][];
             }[];
         };
         /**
@@ -1656,6 +1669,10 @@ export interface components {
                     interval_us: number;
                     /** @description Samples taken while the trace ran. */
                     samples: number;
+                    /** @description Samples not taken for this trace because its thread was running other traces too (an event loop with concurrent traces): time the profile can't attribute. */
+                    dropped?: number;
+                    /** @description How wide a time bucket of stacks[].at is, in microseconds, counted from the trace's start. */
+                    bucket_us?: number;
                     /** @description The functions the stacks name, each once. */
                     frames: {
                         function: string;
@@ -1666,11 +1683,20 @@ export interface components {
                         line: number;
                         /** @description The project's own code, not a library's or the runtime's. */
                         in_app: boolean;
+                        /** @description Waiting, not computing: asyncio.sleep, an event loop's select, time.sleep, a socket's recv, a lock. A sample whose innermost frame waits counts as waiting. */
+                        waiting?: boolean;
+                        /** @description The line it was running when sampled (a coroutine's await), where `line` is where it is defined. */
+                        at_line?: number;
                     }[];
                     /** @description Each stack seen, outermost frame first, as indexes into frames, and how many samples saw it. */
                     stacks: {
                         frames: number[];
                         count: number;
+                        /** @description When in the trace the stack was seen: [bucket, count] pairs, a bucket bucket_us wide from the trace's start; the counts add up to count. */
+                        at?: [
+                            number,
+                            number
+                        ][];
                     }[];
                 };
                 call: {
