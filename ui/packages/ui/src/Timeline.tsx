@@ -34,20 +34,26 @@ interface Mark {
 interface Lane {
   noun: Noun;
   marks: Mark[];
+  /** Shown with no mark that says anything more than the trace lane's colour. */
+  always: boolean;
 }
 
 /** What a lane's marks are, one and many: "1 query", "139 queries". */
 type Noun = readonly [string, string];
 
-/** A lane of calls: what they are called, and their kinds. */
-const CALL_LANES: readonly { noun: Noun; kinds: readonly string[] }[] = [
-  { noun: ["query", "queries"], kinds: ["sql"] },
-  { noun: ["Redis command", "Redis commands"], kinds: ["redis"] },
-  { noun: ["cache call", "cache calls"], kinds: ["cache"] },
-  { noun: ["datastore call", "datastore calls"], kinds: DATASTORES },
-  { noun: ["message", "messages"], kinds: MESSAGING },
-  { noun: ["HTTP call", "HTTP calls"], kinds: ["http.client"] },
-  { noun: ["RPC call", "RPC calls"], kinds: RPC },
+/**
+ * A lane of calls: what they are called, and their kinds. A store's calls are the trace lane's colour already: their
+ * lane shows only when one of them has something to say (an issue, an error). Messages (tasks sent), HTTP and RPC
+ * calls lead to other traces: theirs always shows.
+ */
+const CALL_LANES: readonly { noun: Noun; kinds: readonly string[]; always: boolean }[] = [
+  { noun: ["query", "queries"], kinds: ["sql"], always: false },
+  { noun: ["Redis command", "Redis commands"], kinds: ["redis"], always: false },
+  { noun: ["cache call", "cache calls"], kinds: ["cache"], always: false },
+  { noun: ["datastore call", "datastore calls"], kinds: DATASTORES, always: false },
+  { noun: ["message", "messages"], kinds: MESSAGING, always: true },
+  { noun: ["HTTP call", "HTTP calls"], kinds: ["http.client"], always: true },
+  { noun: ["RPC call", "RPC calls"], kinds: RPC, always: true },
 ];
 
 /** A span's tone on its lane: red when it failed (the trace's own too when the trace did), amber with an issue. */
@@ -62,8 +68,9 @@ function failed(span: Span, trace: Trace): boolean {
 
 function callLanes(trace: Trace): Lane[] {
   const flagged = new Set(trace.issues.flatMap((issue) => issue.span_ids));
-  return CALL_LANES.map(({ noun, kinds }) => ({
+  return CALL_LANES.map(({ noun, kinds, always }) => ({
     noun,
+    always,
     marks: trace.spans
       .filter((span) => kinds.includes(span.kind))
       .map((span) => ({
@@ -102,14 +109,19 @@ function pointLanes(trace: Trace, allLogs: boolean): Lane[] {
     target: { tab: "error" } as const,
   }));
   return [
-    { noun: ["log record", "log records"], marks: logs },
-    { noun: ["error", "errors"], marks: errors },
+    { noun: ["log record", "log records"], marks: logs, always: true },
+    { noun: ["error", "errors"], marks: errors, always: true },
   ];
 }
 
-/** The lanes under the trace's own: its calls, system by system, then its logs and errors; only those it has. */
+/** The lanes under the trace's own: its calls, system by system, then its logs and errors; those that say more. */
 function lanes(trace: Trace, allLogs: boolean): Lane[] {
-  return [...callLanes(trace), ...pointLanes(trace, allLogs)].filter((lane) => lane.marks.length > 0);
+  return [...callLanes(trace), ...pointLanes(trace, allLogs)].filter(saysMore);
+}
+
+/** A lane worth its line: marks, and, for a store's calls, one flagged (the rest the trace lane shows in colour). */
+function saysMore(lane: Lane): boolean {
+  return lane.marks.length > 0 && (lane.always || lane.marks.some((mark) => mark.tone !== "neutral"));
 }
 
 const TICKS = [0, 0.25, 0.5, 0.75, 1];

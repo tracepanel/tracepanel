@@ -9,6 +9,7 @@ import { plural } from "./lib/plural";
 import { type Quiet, quietSpans } from "./lib/quiet";
 import { cleared, isLoud, rangeLabel, type Slice, togglePart } from "./lib/slice";
 import { waitedIn } from "./lib/waiting";
+import { largestFirst, ShareFace } from "./Shares";
 import { useHeldSlice } from "./TimeSlice";
 import type { Related, Trace } from "./types";
 
@@ -20,9 +21,7 @@ export interface ShareOf {
   /** How many spans count in it. */
   calls: number;
   label: string;
-  /** Of its time, how much its code ran with no recorded calls (the strip's hatched stretches), when it did. */
-  quiet: number;
-  /** Of that, how much it waited (a sleep, a socket), where the profile says when its samples were taken. */
+  /** Of its time, how much its code waited (a sleep, a socket), where the profile says when its samples were taken. */
   waiting: number;
 }
 
@@ -52,7 +51,7 @@ function byCategory(
   );
 }
 
-/** Each share of the time with its numbers: how long, of how much, how many spans. */
+/** Each share of the time with its numbers: how long, of how much, how many spans; largest first. */
 export function sharesOf(trace: Trace): ShareOf[] {
   const parts = breakdown(trace);
   const total = Math.max(
@@ -61,18 +60,22 @@ export function sharesOf(trace: Trace): ShareOf[] {
   );
   const categories = spanCategories(trace);
   const calls = addUp([...categories.values()].map((category) => [category, 1]));
-  const spans = [...quietSpans(trace)];
-  const quiet = byCategory(spans, categories, ({ total }) => total);
-  const waiting = byCategory(spans, categories, ({ gaps }) => waitedIn(trace.profile, gaps, trace.start));
-  return parts.map(([category, value]) => ({
+  const waiting = byCategory([...quietSpans(trace)], categories, ({ gaps }) =>
+    waitedIn(trace.profile, gaps, trace.start),
+  );
+  const shares = parts.map(([category, value]) => ({
     category,
     value,
     total,
     calls: calls.get(category) ?? 0,
     label: categoryLabel(category, trace),
-    quiet: quiet.get(category) ?? 0,
     waiting: waiting.get(category) ?? 0,
   }));
+  return largestFirst(
+    shares,
+    (share) => share.value,
+    () => 0,
+  );
 }
 
 interface SliceState {
@@ -103,7 +106,7 @@ function keyboardOnly(event: FocusEvent<HTMLElement>): void {
 
 /**
  * The numbers of a share, over it: its name, how long, of the whole, how many calls, and of its time how much its
- * code ran with nothing recorded (the strip's hatched stretches, said there too).
+ * code waited (the strip's hatched stretches), where a profile says.
  */
 export function ShareTip({ share }: { share: ShareOf }) {
   return (
@@ -112,7 +115,7 @@ export function ShareTip({ share }: { share: ShareOf }) {
       <span className="font-medium">{share.label}</span>
       <span className="text-muted-foreground tabular-nums">
         {shareNumbers(share)}
-        {share.quiet > 0 ? ` · of it ${quietWords(share)}` : ""}
+        {share.waiting > 0 ? ` · of it ${duration(share.waiting)} waiting` : ""}
       </span>
     </>
   );
@@ -121,16 +124,6 @@ export function ShareTip({ share }: { share: ShareOf }) {
 /** The look of the strip's tooltips: the console's popover, one line. */
 export const TIP_CLASS =
   "flex items-center gap-2 rounded-lg border bg-popover px-3 py-2 text-sm whitespace-nowrap text-popover-foreground shadow-[var(--dt-popover-shadow)]";
-
-/** "1.5 s waiting · 102 ms untraced": the code's own time, what it waited and what it computed, each there is. */
-function quietWords(share: ShareOf): string {
-  const computed = share.quiet - share.waiting;
-  const words = [
-    share.waiting > 0 ? `${duration(share.waiting)} waiting` : "",
-    computed > 0 ? `${duration(computed)} untraced` : "",
-  ];
-  return words.filter(Boolean).join(" · ");
-}
 
 /** A category of the time: its colour, its share; its numbers on hover; a click picks its rows. */
 function Share({ share, filters }: { share: ShareOf; filters: SliceState }) {
@@ -145,10 +138,12 @@ function Share({ share, filters }: { share: ShareOf; filters: SliceState }) {
             aria-pressed={filters.slice.parts.includes(part)}
             onClick={() => filters.onChange(togglePart(filters.slice, part))}
           >
-            <span className="dt-swatch" />
-            {share.label}
-            <b>{duration(share.value)}</b>
-            <span className="dt-breakdown-share">{percent(share.value, share.total)}</span>
+            <ShareFace
+              swatch={<span className="dt-swatch" />}
+              name={share.label}
+              value={duration(share.value)}
+              share={percent(share.value, share.total)}
+            />
           </button>
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={8} arrow={false} className={TIP_CLASS}>
