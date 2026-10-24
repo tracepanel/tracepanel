@@ -46,11 +46,14 @@ export function WhatRan({ trace, range }: { trace: Trace; range?: TimeRange | un
   );
 }
 
+/** A profile there: the flame as the panel's Profile toggle draws it when on, orange. */
+const PROFILED = "text-orange-500 fill-orange-500/30";
+
 /** The way to the profile, as the panel's toggle draws it: its flame. */
 function OpenProfile() {
   return (
     <span className="flex items-center gap-1 text-xs text-brand">
-      <FlameIcon className="size-3" aria-hidden="true" />
+      <FlameIcon className={`size-3 ${PROFILED}`} aria-hidden="true" />
       Open the profile
     </span>
   );
@@ -64,8 +67,8 @@ export function RowFlame({ trace }: { trace: Trace }) {
   const profiling = useProfilingOf(trace);
   if (trace.profile) {
     return (
-      <span className="dt-map-flame" title="Open the profile">
-        <FlameIcon aria-label="Open the profile" />
+      <span className="dt-map-flame" data-on="" title="Open the profile">
+        <FlameIcon className={PROFILED} aria-label="Open the profile" />
       </span>
     );
   }

@@ -2230,8 +2230,9 @@ div.dt-map-row[data-kind="code"] {
   width: 0.8125rem;
   height: 0.8125rem;
 }
-.dt-map-row:hover .dt-map-flame:not([data-off]) {
-  color: var(--dt-accent);
+/* A profile there: the toggle's orange (set on the icon), brighter on the row's hover. */
+.dt-map-row:hover .dt-map-flame[data-on] {
+  filter: brightness(1.25) saturate(1.1);
 }
 .dt-map-flame[data-off] {
   opacity: 0.55;
