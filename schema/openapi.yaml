@@ -1135,7 +1135,7 @@ components:
     Capabilities:
       type: object
       additionalProperties: false
-      required: [explain, users, profile, request, live_tasks]
+      required: [explain, users, profile, profile_memory, request, live_tasks]
       properties:
         live_tasks:
           type: boolean
@@ -1149,6 +1149,12 @@ components:
           description: >-
             The app profiles a request when asked (the tracepanel_profile cookie or the X-Tracepanel-Profile header):
             the console offers to record the next one with a profile.
+        profile_memory:
+          type: boolean
+          description: >-
+            The app profiles what a request's code allocated too when asked for memory (`tracepanel_profile=memory`
+            or `X-Tracepanel-Profile: memory`, where `1` profiles the time only): the console offers that as well.
+            False for an app that doesn't say it.
         request:
           type: boolean
           description: The app records what its requests carry (query, headers, body, cookies, session).

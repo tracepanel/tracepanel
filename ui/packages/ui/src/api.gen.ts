@@ -961,6 +961,8 @@ export interface components {
             explain: boolean;
             /** @description The app profiles a request when asked (the tracepanel_profile cookie or the X-Tracepanel-Profile header): the console offers to record the next one with a profile. */
             profile: boolean;
+            /** @description The app profiles what a request's code allocated too when asked for memory (`tracepanel_profile=memory` or `X-Tracepanel-Profile: memory`, where `1` profiles the time only): the console offers that as well. False for an app that doesn't say it. */
+            profile_memory: boolean;
             /** @description The app records what its requests carry (query, headers, body, cookies, session). */
             request: boolean;
             /** @description The app can switch the user this browser is logged in as (api/users, api/users/me, api/users/switch). */

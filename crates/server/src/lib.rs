@@ -707,6 +707,7 @@ async fn capabilities(
             "explain": offers("explain"),
             "users": offers("users"),
             "profile": offers("profile"),
+            "profile_memory": offers("profile_memory"),
             "request": offers("request"),
             "live_tasks": offers("live_tasks"),
         })

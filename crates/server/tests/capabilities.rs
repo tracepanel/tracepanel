@@ -41,10 +41,11 @@ async fn an_apps_capabilities_are_its_own() {
         std::sync::Arc::new(|_| {}),
         activity.clone(),
     ));
-    // `shop` profiles on request; `billing` says nothing of it.
+    // `shop` profiles on request, memory too; `blog` the time only; `billing` says nothing of it.
     let mut apps = Vec::new();
     for (service, capabilities) in [
-        ("shop", json!(["profile", "request"])),
+        ("shop", json!(["profile", "profile_memory", "request"])),
+        ("blog", json!(["profile"])),
         ("billing", json!(["request"])),
     ] {
         let mut app = BufReader::new(TcpStream::connect(&address).await.unwrap());
@@ -58,7 +59,10 @@ async fn an_apps_capabilities_are_its_own() {
         apps.push(app);
     }
     for _ in 0..200 {
-        if activity.apps.says("request", "billing") && activity.apps.says("profile", "shop") {
+        if activity.apps.says("request", "billing")
+            && activity.apps.says("profile", "shop")
+            && activity.apps.says("profile", "blog")
+        {
             break;
         }
         tokio::time::sleep(Duration::from_millis(5)).await;
@@ -66,28 +70,34 @@ async fn an_apps_capabilities_are_its_own() {
 
     let (_, any) = get(&router, "/api/capabilities").await;
     let (status, shop) = get(&router, "/api/capabilities?service=shop").await;
+    let (_, blog) = get(&router, "/api/capabilities?service=blog").await;
     let (_, billing) = get(&router, "/api/capabilities?service=billing").await;
     let (_, gone) = get(&router, "/api/capabilities?service=orders").await;
 
     assert_eq!(
         any,
-        json!({"explain": false, "users": false, "profile": true, "request": true, "live_tasks": false})
+        json!({"explain": false, "users": false, "profile": true, "profile_memory": true, "request": true, "live_tasks": false})
     );
 
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         shop,
-        json!({"explain": false, "users": false, "profile": true, "request": true, "live_tasks": false})
+        json!({"explain": false, "users": false, "profile": true, "profile_memory": true, "request": true, "live_tasks": false})
+    );
+
+    assert_eq!(
+        blog,
+        json!({"explain": false, "users": false, "profile": true, "profile_memory": false, "request": false, "live_tasks": false})
     );
 
     assert_eq!(
         billing,
-        json!({"explain": false, "users": false, "profile": false, "request": true, "live_tasks": false})
+        json!({"explain": false, "users": false, "profile": false, "profile_memory": false, "request": true, "live_tasks": false})
     );
 
     assert_eq!(
         gone,
-        json!({"explain": false, "users": false, "profile": false, "request": false, "live_tasks": false})
+        json!({"explain": false, "users": false, "profile": false, "profile_memory": false, "request": false, "live_tasks": false})
     );
     drop(apps);
     let _ = std::fs::remove_dir_all(&dir);
