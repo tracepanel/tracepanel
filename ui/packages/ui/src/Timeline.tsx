@@ -52,6 +52,7 @@ const CALL_LANES: readonly { noun: Noun; kinds: readonly string[]; always: boole
   { noun: ["Redis command", "Redis commands"], kinds: ["redis"], always: false },
   { noun: ["cache call", "cache calls"], kinds: ["cache"], always: false },
   { noun: ["datastore call", "datastore calls"], kinds: DATASTORES, always: false },
+  { noun: ["storage call", "storage calls"], kinds: ["storage"], always: false },
   { noun: ["message", "messages"], kinds: MESSAGING, always: true },
   { noun: ["HTTP call", "HTTP calls"], kinds: ["http.client"], always: true },
   { noun: ["RPC call", "RPC calls"], kinds: RPC, always: true },

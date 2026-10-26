@@ -450,8 +450,8 @@ paths:
     get:
       operationId: listServices
       summary: >-
-        What the project's web, workers and commands talk to (databases, caches, mail, brokers, HTTP APIs) and how
-        much: the nodes and edges of a service map.
+        What the project's web, workers and commands talk to (databases, caches, file storages, mail, brokers, HTTP
+        APIs) and how much: the nodes and edges of a service map.
       parameters:
         - $ref: "#/components/parameters/q"
       responses:
@@ -885,12 +885,12 @@ components:
         system:
           type: string
           description: >-
-            What the console lists it under: sql, redis, cache, http, a known datastore, broker or RPC kind (mongodb,
-            kafka, grpc…), or the system's own name for any other (neo4j, nats, thrift).
-        family: { type: string, enum: [sql, redis, cache, datastore, messaging, rpc, http] }
-        target: { type: string, description: "Where it went: a database alias, an instance, a host, a topic, an RPC service." }
+            What the console lists it under: sql, redis, cache, http, storage, a known datastore, broker or RPC kind
+            (mongodb, kafka, grpc…), or the system's own name for any other (neo4j, nats, thrift).
+        family: { type: string, enum: [sql, redis, cache, datastore, messaging, rpc, http, storage] }
+        target: { type: string, description: "Where it went: a database alias, an instance, a host, a topic, an RPC service, a storage's alias." }
         op: { type: string, description: "The operation: SELECT, GET, get, POST, find, publish, an RPC method." }
-        template: { type: string, description: "What its repeats share: the SQL fingerprint, a key or path with ids as {id}, a collection." }
+        template: { type: string, description: "What its repeats share: the SQL fingerprint, a key or path with ids as {id}, a collection, a storage's directory (avatars/*)." }
         name: { type: string, description: The span's name. }
         calls: { type: integer }
         traces: { type: integer }
@@ -903,7 +903,7 @@ components:
         sample_trace: { type: string, description: The latest one's trace. }
         sample_span: { type: string, description: The latest one's span. }
         statement: { type: [string, "null"], description: "The operation in full: the SQL statement, the command with its key, the URL." }
-        vendor: { type: [string, "null"], description: "SQL: the database; a cache: its backend." }
+        vendor: { type: [string, "null"], description: "SQL: the database; a cache: its backend; a storage: its system (filesystem, s3)." }
         hits: { type: [integer, "null"], description: "A cache: gets that found their key." }
         misses: { type: [integer, "null"], description: "A cache: gets that didn't." }
         via: { type: [string, "null"], description: "Redis: direct (the app's call), cache or task (sent for one)." }
@@ -1131,7 +1131,7 @@ components:
                 properties:
                   system: { type: string }
                   label: { type: string, description: "Its name in the console: MongoDB, NATS, Google Pub/Sub, or the system's own." }
-                  family: { type: string, enum: [sql, redis, cache, datastore, messaging, rpc, http] }
+                  family: { type: string, enum: [sql, redis, cache, datastore, messaging, rpc, http, storage] }
     Capabilities:
       type: object
       additionalProperties: false
@@ -1140,7 +1140,7 @@ components:
         live_tasks:
           type: boolean
           description: >-
-            An app sends task events (Celery, RQ, Dramatiq, Huey, django-q2, Django Tasks and Channels workers, from
+            An app sends task events (Celery, RQ, Dramatiq, Huey, Taskiq, django-q2, Django Tasks and Channels workers, from
             the Python SDK): the Tasks page
             lists the tasks in flight (api/tasks/live).
         explain: { type: boolean, description: The app runs EXPLAIN of a recorded query on its database (api/explain). }
@@ -1251,7 +1251,7 @@ components:
         task: { type: array, description: Celery task names., items: { type: string } }
         task_system:
           type: array
-          description: "What ran the tasks: celery, dramatiq, rq, huey, django-q, django, channels, spring, or a broker's listener (rabbitmq, kafka)."
+          description: "What ran the tasks: celery, dramatiq, rq, huey, taskiq, django-q, django, channels, spring, or a broker's listener (rabbitmq, kafka)."
           items: { type: string }
         queue: { type: array, description: Queues tasks ran from., items: { type: string } }
         job: { type: array, description: "Job names: management commands and tracepanel.trace() blocks.", items: { type: string } }
@@ -1538,14 +1538,14 @@ components:
       required: [id, kind, system, address, port, namespace, aliases, calls, total, errors, last_seen]
       properties:
         id: { type: string, description: "kind:system/address:port/namespace, e.g. database:postgresql/db:5432/blog." }
-        kind: { type: string, enum: [database, cache, mail, queue, http] }
-        system: { type: string, description: "postgresql, sqlite, redis, locmem, smtp, console, rabbitmq…" }
+        kind: { type: string, enum: [database, cache, storage, mail, queue, http] }
+        system: { type: string, description: "postgresql, sqlite, redis, locmem, filesystem, s3, smtp, console, rabbitmq…" }
         address: { type: [string, "null"], description: Host name, IP or socket path. }
         port: { type: [integer, "null"] }
         namespace:
           type: [string, "null"]
-          description: Database name, Redis database number, or the alias of an in-process cache.
-        aliases: { type: array, items: { type: string }, description: Django aliases (DATABASES / CACHES) using it. }
+          description: Database name, Redis database number, the alias of an in-process cache, or a file storage's alias.
+        aliases: { type: array, items: { type: string }, description: Django aliases (DATABASES / CACHES / STORAGES) using it. }
         calls: { type: integer, description: Calls made to it (for a broker, tasks published). }
         total: { $ref: "#/components/schemas/Duration" }
         errors: { type: integer }

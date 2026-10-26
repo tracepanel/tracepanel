@@ -4,6 +4,24 @@
 
 ### Added
 
+- File storage calls are a span kind of their own, `storage`: each call a
+  Django storage makes to its backend (save, open, exists, url, listdir...),
+  on the local disk or S3. A `function` span with `storage.op`, as the Python
+  SDK sends them for now, becomes one when it arrives. The agent finds their
+  issues as it does other systems': the same call repeated in a loop is an
+  N+1 with a hint for what it asks (one listdir() instead of an exists() per
+  file, URLs not signed one by one), the same file asked twice a duplicate,
+  and on the local disk only many of them together count. In the call tree
+  they have their badge and colour, a Storage share of the time strip and
+  its lane, a chip, and details (Storage, Backend, Operation, Path, Bytes).
+  A loop's calls fold into one row by directory, `exists avatars/*`. The
+  trace's header counts them, `9 storage calls`, the console has a Storage
+  page of them, and the services map a node per storage (`Amazon S3`).
+- A `manage.py collectstatic` job's first tab says how many files it
+  copied, linked, left unmodified and post-processed, and each phase's time
+  with its files (Copy, Post-process, Clear).
+- Taskiq is listed among the task systems: `task.system` `taskiq` reads
+  Taskiq in the console.
 - The panel's Profile toggle can profile memory too, and shows its three
   ways at a glance: Off, Time and Time and memory (slower), side by side as
   icons, the chosen one lit. It sets the `tracepanel_profile` cookie to `1`

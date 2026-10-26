@@ -25,6 +25,7 @@ import {
   CircleAlertIcon,
   DatabaseIcon,
   DatabaseZapIcon,
+  HardDriveIcon,
   KeyRoundIcon,
   LayersIcon,
   ListChecksIcon,
@@ -187,7 +188,10 @@ function visibleSections(counts: Counts | undefined): Set<Section> {
   return new Set([...shown, ...systemItems(counts).map((item) => item.section)]);
 }
 
-/** A system's icon, by its family: the database, a key–value store, a cache, a datastore, a broker, RPC, HTTP. */
+/**
+ * A system's icon, by its family: the database, a key–value store, a cache, a datastore, a broker, RPC, HTTP, file
+ * storage.
+ */
 const FAMILY_ICONS: Record<Family, LucideIcon> = {
   sql: DatabaseIcon,
   redis: KeyRoundIcon,
@@ -196,6 +200,7 @@ const FAMILY_ICONS: Record<Family, LucideIcon> = {
   messaging: SendIcon,
   rpc: ArrowLeftRightIcon,
   http: ArrowUpRightIcon,
+  storage: HardDriveIcon,
 };
 
 /** A system with an icon of its own, where its family's would make two items alike (Kafka and RabbitMQ). */

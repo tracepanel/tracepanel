@@ -370,7 +370,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** What the project's web, workers and commands talk to (databases, caches, mail, brokers, HTTP APIs) and how much: the nodes and edges of a service map. */
+        /** What the project's web, workers and commands talk to (databases, caches, file storages, mail, brokers, HTTP APIs) and how much: the nodes and edges of a service map. */
         get: operations["listServices"];
         put?: never;
         post?: never;
@@ -749,15 +749,15 @@ export interface components {
         CallRow: {
             /** @description Call id (search traces with call:<key>; for SQL also query:<key>). */
             key: string;
-            /** @description What the console lists it under: sql, redis, cache, http, a known datastore, broker or RPC kind (mongodb, kafka, grpc…), or the system's own name for any other (neo4j, nats, thrift). */
+            /** @description What the console lists it under: sql, redis, cache, http, storage, a known datastore, broker or RPC kind (mongodb, kafka, grpc…), or the system's own name for any other (neo4j, nats, thrift). */
             system: string;
             /** @enum {string} */
-            family: "sql" | "redis" | "cache" | "datastore" | "messaging" | "rpc" | "http";
-            /** @description Where it went: a database alias, an instance, a host, a topic, an RPC service. */
+            family: "sql" | "redis" | "cache" | "datastore" | "messaging" | "rpc" | "http" | "storage";
+            /** @description Where it went: a database alias, an instance, a host, a topic, an RPC service, a storage's alias. */
             target: string;
             /** @description The operation: SELECT, GET, get, POST, find, publish, an RPC method. */
             op: string;
-            /** @description What its repeats share: the SQL fingerprint, a key or path with ids as {id}, a collection. */
+            /** @description What its repeats share: the SQL fingerprint, a key or path with ids as {id}, a collection, a storage's directory (avatars/*). */
             template: string;
             /** @description The span's name. */
             name: string;
@@ -778,7 +778,7 @@ export interface components {
             sample_span: string;
             /** @description The operation in full: the SQL statement, the command with its key, the URL. */
             statement: string | null;
-            /** @description SQL: the database; a cache: its backend. */
+            /** @description SQL: the database; a cache: its backend; a storage: its system (filesystem, s3). */
             vendor: string | null;
             /** @description A cache: gets that found their key. */
             hits: number | null;
@@ -950,12 +950,12 @@ export interface components {
                     /** @description Its name in the console: MongoDB, NATS, Google Pub/Sub, or the system's own. */
                     label: string;
                     /** @enum {string} */
-                    family: "sql" | "redis" | "cache" | "datastore" | "messaging" | "rpc" | "http";
+                    family: "sql" | "redis" | "cache" | "datastore" | "messaging" | "rpc" | "http" | "storage";
                 }[];
             };
         };
         Capabilities: {
-            /** @description An app sends task events (Celery, RQ, Dramatiq, Huey, django-q2, Django Tasks and Channels workers, from the Python SDK): the Tasks page lists the tasks in flight (api/tasks/live). */
+            /** @description An app sends task events (Celery, RQ, Dramatiq, Huey, Taskiq, django-q2, Django Tasks and Channels workers, from the Python SDK): the Tasks page lists the tasks in flight (api/tasks/live). */
             live_tasks: boolean;
             /** @description The app runs EXPLAIN of a recorded query on its database (api/explain). */
             explain: boolean;
@@ -1024,7 +1024,7 @@ export interface components {
         KnownValues: {
             /** @description Celery task names. */
             task: string[];
-            /** @description What ran the tasks: celery, dramatiq, rq, huey, django-q, django, channels, spring, or a broker's listener (rabbitmq, kafka). */
+            /** @description What ran the tasks: celery, dramatiq, rq, huey, taskiq, django-q, django, channels, spring, or a broker's listener (rabbitmq, kafka). */
             task_system: string[];
             /** @description Queues tasks ran from. */
             queue: string[];
@@ -1301,15 +1301,15 @@ export interface components {
             /** @description kind:system/address:port/namespace, e.g. database:postgresql/db:5432/blog. */
             id: string;
             /** @enum {string} */
-            kind: "database" | "cache" | "mail" | "queue" | "http";
-            /** @description postgresql, sqlite, redis, locmem, smtp, console, rabbitmq… */
+            kind: "database" | "cache" | "storage" | "mail" | "queue" | "http";
+            /** @description postgresql, sqlite, redis, locmem, filesystem, s3, smtp, console, rabbitmq… */
             system: string;
             /** @description Host name */
             address: string | null;
             port: number | null;
-            /** @description Database name, Redis database number, or the alias of an in-process cache. */
+            /** @description Database name, Redis database number, the alias of an in-process cache, or a file storage's alias. */
             namespace: string | null;
-            /** @description Django aliases (DATABASES / CACHES) using it. */
+            /** @description Django aliases (DATABASES / CACHES / STORAGES) using it. */
             aliases: string[];
             /** @description Calls made to it (for a broker */
             calls: number;
@@ -1475,7 +1475,7 @@ export interface components {
         duration: number;
         /** @enum {unknown} */
         status: "ok" | "error";
-        /** @description Namespaced attributes (http.*, db.*, cache.*, code.*, user.*, task.*, signal.*, exception.*). task.* is shared by every task queue (task.system says which: celery, django, django-q, dramatiq, huey, rq, channels). Values are scalars or lists of scalars. */
+        /** @description Namespaced attributes (http.*, db.*, cache.*, storage.*, code.*, user.*, task.*, signal.*, exception.*, collectstatic.*). task.* is shared by every task queue (task.system says which: celery, django, django-q, dramatiq, huey, rq, taskiq, channels). Values are scalars or lists of scalars. */
         attrs: {
             /** @description On a signal span and on each of its receivers' spans: the signal's dotted path, e.g. "django.db.models.signals.post_save". The signal span's name is Django's own signal by its name ("post_save"), any other by this path. */
             "signal.name"?: string;
@@ -1491,6 +1491,44 @@ export interface components {
             "exception.type"?: string;
             /** @description On a span that raised: the exception's message, cut at 1000 characters. */
             "exception.message"?: string;
+            /** @description On a storage span: the storage's name in Django's STORAGES ("default", "staticfiles"); null for one made elsewhere (a FileField's own). */
+            "storage.alias"?: string | null;
+            /** @description On a storage span: the storage's class, e.g. "storages.backends.s3.S3Storage". */
+            "storage.backend"?: string;
+            /** @description On a storage span: what holds the files, filesystem, memory, s3, gcs, azure, dropbox, sftp, ftp, libcloud, or the class's own name for any other. */
+            "storage.system"?: string;
+            /** @description On a storage span: the call, save, open, delete, exists, listdir, size, url, get_accessed_time, get_created_time or get_modified_time. An SDK that sends storage calls as function spans marks them with it: the agent makes them storage spans. */
+            "storage.op"?: string;
+            /** @description On a storage span: the file's or the directory's name in the storage, e.g. "avatars/1.png". */
+            "storage.path"?: string | null;
+            /** @description On a storage span: the bytes written (save) or read (open, size), when the file knows them. */
+            "storage.bytes"?: number;
+            /** @description On an exists span: what it answered. */
+            "storage.exists"?: boolean;
+            /** @description On a listdir span: the directories it listed. */
+            "storage.dirs"?: number;
+            /** @description On a listdir span: the files it listed. */
+            "storage.files"?: number;
+            /** @description On a save span: the name the storage chose, when it is not the one asked for (that one was taken). */
+            "storage.saved_as"?: string;
+            /** @description On a collectstatic command trace: the files copied. */
+            "collectstatic.copied"?: number;
+            /** @description On a collectstatic command trace: the files linked (--link). */
+            "collectstatic.linked"?: number;
+            /** @description On a collectstatic command trace: the files left as they were, unchanged since the last run. */
+            "collectstatic.unmodified"?: number;
+            /** @description On a collectstatic command trace: the files the storage post-processed (ManifestStaticFilesStorage hashing them). */
+            "collectstatic.post_processed"?: number;
+            /** @description On a function span of a collectstatic run: its phase, clear, copy or post-process. */
+            "collectstatic.phase"?: string;
+            /** @description On a collectstatic phase span: the files it handled; the slowest are spans under it. */
+            "collectstatic.files"?: number;
+            /** @description On a collectstatic phase span: the time its files took, in milliseconds. */
+            "collectstatic.files_ms"?: number;
+            /** @description On a collectstatic phase span: the storage calls made outside its files' spans. */
+            "collectstatic.storage_calls"?: number;
+            /** @description On the copy phase's span: the time outside its files', the finders listing them, in milliseconds. */
+            "collectstatic.find_ms"?: number;
         } & {
             [key: string]: (string | number | boolean | null) | (string | number | boolean | null)[];
         };
@@ -1528,7 +1566,7 @@ export interface components {
              * @description otel is an OpenTelemetry span as its instrumentation recorded it, with otel.span_kind and otel.scope among its attributes: the agent maps it to one of the other kinds before it stores the trace, so the console never returns one.
              * @enum {unknown}
              */
-            kind: "http" | "middleware" | "framework" | "view" | "template" | "sql" | "transaction" | "cache" | "redis" | "mail" | "signal" | "http.client" | "task.enqueue" | "task.run" | "command" | "function" | "event" | "websocket" | "websocket.send" | "channel.send" | "graphql" | "mongodb" | "elasticsearch" | "cassandra" | "dynamodb" | "memcached" | "kafka" | "rabbitmq" | "sqs" | "grpc" | "db" | "messaging" | "rpc" | "otel" | "page";
+            kind: "http" | "middleware" | "framework" | "view" | "template" | "sql" | "transaction" | "cache" | "storage" | "redis" | "mail" | "signal" | "http.client" | "task.enqueue" | "task.run" | "command" | "function" | "event" | "websocket" | "websocket.send" | "channel.send" | "graphql" | "mongodb" | "elasticsearch" | "cassandra" | "dynamodb" | "memcached" | "kafka" | "rabbitmq" | "sqs" | "grpc" | "db" | "messaging" | "rpc" | "otel" | "page";
             name: string;
             start: components["schemas"]["trace.schema"]["$defs"]["time"];
             duration: components["schemas"]["trace.schema"]["$defs"]["duration"];
@@ -1801,7 +1839,7 @@ export interface components {
                 duration: number;
                 /** @enum {unknown} */
                 status: "ok" | "error";
-                /** @description Namespaced attributes (http.*, db.*, cache.*, code.*, user.*, task.*, signal.*, exception.*). task.* is shared by every task queue (task.system says which: celery, django, django-q, dramatiq, huey, rq, channels). Values are scalars or lists of scalars. */
+                /** @description Namespaced attributes (http.*, db.*, cache.*, storage.*, code.*, user.*, task.*, signal.*, exception.*, collectstatic.*). task.* is shared by every task queue (task.system says which: celery, django, django-q, dramatiq, huey, rq, taskiq, channels). Values are scalars or lists of scalars. */
                 attrs: {
                     /** @description On a signal span and on each of its receivers' spans: the signal's dotted path, e.g. "django.db.models.signals.post_save". The signal span's name is Django's own signal by its name ("post_save"), any other by this path. */
                     "signal.name"?: string;
@@ -1817,6 +1855,44 @@ export interface components {
                     "exception.type"?: string;
                     /** @description On a span that raised: the exception's message, cut at 1000 characters. */
                     "exception.message"?: string;
+                    /** @description On a storage span: the storage's name in Django's STORAGES ("default", "staticfiles"); null for one made elsewhere (a FileField's own). */
+                    "storage.alias"?: string | null;
+                    /** @description On a storage span: the storage's class, e.g. "storages.backends.s3.S3Storage". */
+                    "storage.backend"?: string;
+                    /** @description On a storage span: what holds the files, filesystem, memory, s3, gcs, azure, dropbox, sftp, ftp, libcloud, or the class's own name for any other. */
+                    "storage.system"?: string;
+                    /** @description On a storage span: the call, save, open, delete, exists, listdir, size, url, get_accessed_time, get_created_time or get_modified_time. An SDK that sends storage calls as function spans marks them with it: the agent makes them storage spans. */
+                    "storage.op"?: string;
+                    /** @description On a storage span: the file's or the directory's name in the storage, e.g. "avatars/1.png". */
+                    "storage.path"?: string | null;
+                    /** @description On a storage span: the bytes written (save) or read (open, size), when the file knows them. */
+                    "storage.bytes"?: number;
+                    /** @description On an exists span: what it answered. */
+                    "storage.exists"?: boolean;
+                    /** @description On a listdir span: the directories it listed. */
+                    "storage.dirs"?: number;
+                    /** @description On a listdir span: the files it listed. */
+                    "storage.files"?: number;
+                    /** @description On a save span: the name the storage chose, when it is not the one asked for (that one was taken). */
+                    "storage.saved_as"?: string;
+                    /** @description On a collectstatic command trace: the files copied. */
+                    "collectstatic.copied"?: number;
+                    /** @description On a collectstatic command trace: the files linked (--link). */
+                    "collectstatic.linked"?: number;
+                    /** @description On a collectstatic command trace: the files left as they were, unchanged since the last run. */
+                    "collectstatic.unmodified"?: number;
+                    /** @description On a collectstatic command trace: the files the storage post-processed (ManifestStaticFilesStorage hashing them). */
+                    "collectstatic.post_processed"?: number;
+                    /** @description On a function span of a collectstatic run: its phase, clear, copy or post-process. */
+                    "collectstatic.phase"?: string;
+                    /** @description On a collectstatic phase span: the files it handled; the slowest are spans under it. */
+                    "collectstatic.files"?: number;
+                    /** @description On a collectstatic phase span: the time its files took, in milliseconds. */
+                    "collectstatic.files_ms"?: number;
+                    /** @description On a collectstatic phase span: the storage calls made outside its files' spans. */
+                    "collectstatic.storage_calls"?: number;
+                    /** @description On the copy phase's span: the time outside its files', the finders listing them, in milliseconds. */
+                    "collectstatic.find_ms"?: number;
                 } & {
                     [key: string]: (string | number | boolean | null) | (string | number | boolean | null)[];
                 };
@@ -1827,7 +1903,7 @@ export interface components {
                      * @description otel is an OpenTelemetry span as its instrumentation recorded it, with otel.span_kind and otel.scope among its attributes: the agent maps it to one of the other kinds before it stores the trace, so the console never returns one.
                      * @enum {unknown}
                      */
-                    kind: "http" | "middleware" | "framework" | "view" | "template" | "sql" | "transaction" | "cache" | "redis" | "mail" | "signal" | "http.client" | "task.enqueue" | "task.run" | "command" | "function" | "event" | "websocket" | "websocket.send" | "channel.send" | "graphql" | "mongodb" | "elasticsearch" | "cassandra" | "dynamodb" | "memcached" | "kafka" | "rabbitmq" | "sqs" | "grpc" | "db" | "messaging" | "rpc" | "otel" | "page";
+                    kind: "http" | "middleware" | "framework" | "view" | "template" | "sql" | "transaction" | "cache" | "storage" | "redis" | "mail" | "signal" | "http.client" | "task.enqueue" | "task.run" | "command" | "function" | "event" | "websocket" | "websocket.send" | "channel.send" | "graphql" | "mongodb" | "elasticsearch" | "cassandra" | "dynamodb" | "memcached" | "kafka" | "rabbitmq" | "sqs" | "grpc" | "db" | "messaging" | "rpc" | "otel" | "page";
                     name: string;
                     start: components["schemas"]["trace.schema"]["$defs"]["time"];
                     duration: components["schemas"]["trace.schema"]["$defs"]["duration"];

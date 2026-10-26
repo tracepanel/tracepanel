@@ -490,8 +490,9 @@ async fn lists_one_line_each() {
         tool(&server, "find_traces", json!({"query": "has:n+1"}))
             .await
             .0,
-        "traces (5, newest first):
+        "traces (6, newest first):
 01M4R1ER9RWER0QHV07BJDSZ7B  GET /api/feed → 200 · 13.3 ms · issues: n+1 · <ago>
+01M5GSTRG0K3VJ6TN8C2XWB4FR  GET /gallery/ → 200 · 48.0 ms · issues: duplicates, n+1 · <ago>
 01M4GPCSNDHYSFJGJK7FY7NGH5  GET /books → 200 · 2.0 ms · 21 SQL (0.9 ms) · issues: n+1 · <ago>
 01M4GPC5X4GTP7C29QTSE6VRAM  GET /async/ → 200 · 38.2 ms · 61 SQL (2.3 ms) · issues: n+1 · <ago>
 01M4GPC1BHG83SW8X460V23TM0  GET / → 200 · 27.6 ms · 151 SQL (3.2 ms) · issues: n+1 · <ago>

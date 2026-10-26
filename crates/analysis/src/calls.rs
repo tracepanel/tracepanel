@@ -6,7 +6,8 @@
 //!
 //! The span's kind gives the family. The console groups a page by the system:
 //! - `sql` for every SQL database (its vendor is the operation's `vendor`), `http` for outgoing HTTP calls, `cache` for
-//!   a cache library's operations (its backend in `vendor`);
+//!   a cache library's operations (its backend in `vendor`), `storage` for a file storage's calls (its system,
+//!   `filesystem` or `s3`, in `vendor`);
 //! - the kind for the other known kinds (`redis`, `mongodb`, `kafka`, `grpc`…);
 //! - the system's own name for the generic kinds (`db`, `messaging`, `rpc`), which the OpenTelemetry mapping gives to
 //!   any database, broker or RPC system without a kind of its own: `neo4j`, `nats`, `thrift`. A new system is listed
@@ -32,6 +33,7 @@ const KINDS: &[(&str, &str)] = &[
     ("grpc", "rpc"),
     (otel::GENERIC_RPC, "rpc"),
     ("http.client", "http"),
+    (storage::KIND, "storage"),
 ];
 
 /// The families in the order the console lists their systems.
@@ -43,6 +45,7 @@ pub const FAMILIES: &[&str] = &[
     "messaging",
     "rpc",
     "http",
+    "storage",
 ];
 
 /// The family of a span kind, or None for a span that isn't an operation.
@@ -62,6 +65,7 @@ pub fn display_name(system: &str) -> String {
         otel::GENERIC_MESSAGING => "Broker",
         "sql" => "Database",
         "cache" => "Cache",
+        "storage" => "Storage",
         "http" => "HTTP calls",
         "redis" => "Redis",
         "mongodb" => "MongoDB",
@@ -195,6 +199,14 @@ pub fn operation(trace: &Trace, span: &Span) -> Option<Operation> {
             let (method, host, path) = http_endpoint(span);
             operation.statement = text(attrs, "url.full");
             (operation.target, operation.op, operation.template) = (host, method, path);
+        }
+        "storage" => {
+            operation.target = storage::target(span);
+            operation.op = storage::op(span);
+            operation.statement = storage::path(span);
+            operation.template =
+                storage::path_template(&operation.op, operation.statement.as_deref());
+            operation.vendor = text(attrs, "storage.system");
         }
         "rpc" => {
             let service = or_default(attrs, "rpc.service", "");
@@ -401,6 +413,14 @@ fn rules(family: &str, system: &str) -> Option<Rules> {
             cheap: false,
             slow: None,
         },
+        // A storage on this machine is cheap too: `storage::local` says which, per call.
+        "storage" => Rules {
+            label: "storage calls".into(),
+            repeated_hint: storage::REPEATED,
+            duplicates_hint: Some(storage::DUPLICATES),
+            cheap: false,
+            slow: None,
+        },
         "rpc" => Rules {
             label: format!("{name} calls"),
             repeated_hint: RPC_REPEATED,
@@ -446,6 +466,7 @@ fn call_of<'a>(operation: &Operation, span: &'a Span) -> Call<'a> {
         "http.client" => http_call(span),
         "redis" => redis_call(span),
         "cache" => cache_call(span),
+        storage::KIND => storage_call(operation, span),
         _ => {
             let what = format!("{} {}", operation.op, operation.template)
                 .trim()
@@ -481,6 +502,26 @@ fn call_of<'a>(operation: &Operation, span: &'a Span) -> Call<'a> {
     }
 }
 
+/// A storage call: a loop's calls look in one directory (`exists avatars/*`); the same call asks for the same file.
+fn storage_call<'a>(operation: &Operation, span: &'a Span) -> Call<'a> {
+    let title = format!("{} {}", operation.op, operation.template)
+        .trim_end()
+        .to_owned();
+    let path = operation.statement.as_deref();
+    Call {
+        span,
+        group: format!("{} {title}", operation.target),
+        title,
+        exact: format!(
+            "{} {} {}",
+            operation.target,
+            operation.op,
+            path.unwrap_or_default()
+        ),
+        read: path.is_some() && storage::read(&operation.op),
+    }
+}
+
 /// An HTTP call recorded twice: a span under an `http.client` span for the same method and URL, as when two layers of
 /// instrumentation each record one request (Next.js's fetch and undici under it). The outer span is the call.
 fn nested_http_repeat(trace: &Trace, call: &Call<'_>) -> bool {
@@ -499,7 +540,15 @@ fn nested_http_repeat(trace: &Trace, call: &Call<'_>) -> bool {
 
 /// The engine's order:the families as the issues always came (HTTP, Redis, cache), then the others; inside a family,
 /// its systems as they first appear.
-const ENGINE_ORDER: &[&str] = &["http", "redis", "cache", "datastore", "rpc", "messaging"];
+const ENGINE_ORDER: &[&str] = &[
+    "http",
+    "redis",
+    "cache",
+    "datastore",
+    "rpc",
+    "messaging",
+    "storage",
+];
 
 /// Issues of every operation: SQL's (its own analysis: parameters, lookups by key, the ORM's hints), then every other
 /// system's, one engine with each family's rules.
@@ -559,8 +608,9 @@ fn group_issues(
     let label = &rules.label;
     let title = calls[0].title.as_str();
     let spans: Vec<&Span> = calls.iter().map(|call| call.span).collect();
-    // An in-memory store's repeats are an issue only when they cost something together.
-    if rules.cheap && !costly(&spans, thresholds.n_plus_one_min_ms) {
+    // An in-memory store's repeats, or a local storage's, are an issue only when they cost something together.
+    let cheap = rules.cheap || spans.iter().all(|span| storage::local(span));
+    if cheap && !costly(&spans, thresholds.n_plus_one_min_ms) {
         return issues;
     }
     // The span's kind keeps the fingerprints of the issues found before operations.
@@ -581,7 +631,11 @@ fn group_issues(
             "n+1",
             format!("N+1: {} similar {label} · {title}", spans.len()),
             Some(culprit_text.clone()),
-            Some(rules.repeated_hint),
+            Some(if spans[0].kind == storage::KIND {
+                storage::repeated_hint(spans[0])
+            } else {
+                rules.repeated_hint
+            }),
             spans.len(),
             spans.iter().map(|span| span.id.clone()).collect(),
         ));
