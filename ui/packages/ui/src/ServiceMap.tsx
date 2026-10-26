@@ -73,7 +73,9 @@ function namesOf(kind: ServiceNode["kind"]): Record<string, string> {
   return kind === "storage" ? STORAGES : SYSTEMS;
 }
 
-export function systemName(node: ServiceNode): string {
+export function systemName(node: Pick<ServiceNode, "kind" | "system" | "cloud">): string {
+  // An AWS service by AWS's name for it: Amazon S3, AWS Lambda.
+  if (node.cloud) return node.cloud.name;
   const name = namesOf(node.kind)[node.system] ?? node.system;
   // A mail backend named like a cache backend (locmem) reads better with its kind.
   return node.kind === "mail" && node.system !== "smtp" ? `${name} mail` : name;

@@ -1,6 +1,8 @@
 import type { Snapshot } from "./snapshot";
 import type {
   App,
+  AwsCall,
+  AwsOperation,
   CallRow,
   CallsSummary,
   Capabilities,
@@ -90,6 +92,10 @@ export interface DataSource {
   listPages(q: string): Promise<PageRow[]>;
   /** Any group of traces named by a search: what a group page shows. */
   summarizeTraces(q: string): Promise<TraceGroup | null>;
+  /** Calls to AWS's APIs by service and operation. */
+  listAws(q: string): Promise<AwsOperation[]>;
+  /** The latest calls to AWS of a search: one operation's (`aws:S3 op:GetObject`). */
+  listAwsCalls(q: string): Promise<AwsCall[]>;
   /** Databases, caches, mail, brokers and APIs the project talks to, and who calls them. */
   listServices(q: string): Promise<ServiceMap>;
   /** The trace that enqueued this one, and the traces it enqueued (Celery). */
@@ -153,7 +159,7 @@ export const NO_CAPABILITIES: Capabilities = {
 export const NO_COUNTS: Counts = {
   issues: 0,
   errors: 0,
-  sections: { http: 0, graphql: 0, tasks: 0, websockets: 0, jobs: 0, rpc: 0, pages: 0, mails: 0, systems: [] },
+  sections: { http: 0, graphql: 0, tasks: 0, websockets: 0, jobs: 0, rpc: 0, pages: 0, mails: 0, aws: 0, systems: [] },
   // biome-ignore lint/style/useNamingConvention: wire format.
   live_tasks: false,
 };
@@ -325,6 +331,12 @@ export function httpSource(base: string | URL): DataSource {
     },
     async listWebsockets(q = "") {
       return (await getJson<{ websockets: WebsocketRow[] }>(url("websockets", { q })))?.websockets ?? [];
+    },
+    async listAws(q = "") {
+      return (await getJson<{ operations: AwsOperation[] }>(url("aws", { q })))?.operations ?? [];
+    },
+    async listAwsCalls(q = "") {
+      return (await getJson<{ calls: AwsCall[] }>(url("aws/calls", { q, limit: "20" })))?.calls ?? [];
     },
     async listServices(q = "") {
       return (await getJson<ServiceMap>(url("services", { q }))) ?? { apps: [], links: [], services: [], edges: [] };

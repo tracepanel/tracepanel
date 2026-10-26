@@ -21,12 +21,19 @@ const WEB = new Set(["http", "https"]);
 
 /** Where to look next: the system's page (its operations to that database, cache or API), else the traces. */
 export function serviceTarget(node: ServiceNode): Route {
+  // An AWS service: its calls on the AWS page, which leads on to S3's on Storage, DynamoDB's, SQS's.
+  if (node.cloud) return { name: "aws", q: awsTerm(node.cloud.service) };
   const aliases = node.aliases.join(",");
   const page = pageOfService(node);
   if (page) return { name: callsSection(page), q: aliases ? `target:${aliases}` : "" };
   if (node.kind === "mail") return { name: "mails", q: "" };
   // A broker and an HTTP API: the traces that called it (a worker's tasks taking from the broker included).
   return { name: "traces", q: withPeriod(`peer:${node.id}`, currentPeriod()) };
+}
+
+/** The AWS page's search for one service: `aws:S3`, `aws:"Secrets Manager"`. */
+function awsTerm(service: string): string {
+  return /\s/.test(service) ? `aws:"${service}"` : `aws:${service}`;
 }
 
 // Where an app's own work is listed: requests for web, tasks for a worker, runs for a command, views for a browser.
@@ -98,8 +105,26 @@ export interface Host {
   last_seen: number;
 }
 
+/**
+ * An AWS service is one box however the app reaches it (S3 through a Django storage and directly, SQS as a broker
+ * and through its API), and each its own on one endpoint (LocalStack's serves them all): keyed by region and service.
+ */
 function hostKey(node: ServiceNode): string {
+  if (node.cloud) return `cloud:${node.cloud.provider}:${node.cloud.region ?? ""}:${node.cloud.service}`;
   return node.address ? `${node.address}:${node.port ?? ""}` : node.id;
+}
+
+/**
+ * The region of an AWS service that didn't say it (a broker on SQS a worker takes from): the only region the others
+ * were called in, so it sits with them.
+ */
+function inRegions(nodes: readonly ServiceNode[]): readonly ServiceNode[] {
+  const regions = new Set(nodes.flatMap((node) => (node.cloud?.region ? [node.cloud.region] : [])));
+  const [only] = regions;
+  if (regions.size !== 1 || only === undefined) return nodes;
+  return nodes.map((node) =>
+    node.cloud && !node.cloud.region ? { ...node, cloud: { ...node.cloud, region: only } } : node,
+  );
 }
 
 /**
@@ -132,14 +157,17 @@ function host(uses: readonly ServiceNode[]): Host {
   };
 }
 
-export function byHost(nodes: readonly ServiceNode[]): Host[] {
+export function byHost(all: readonly ServiceNode[]): Host[] {
   const hosts = new Map<string, ServiceNode[]>();
-  for (const node of nodes) hosts.set(hostKey(node), [...(hosts.get(hostKey(node)) ?? []), node]);
+  for (const node of inRegions(all)) hosts.set(hostKey(node), [...(hosts.get(hostKey(node)) ?? []), node]);
   return [...hosts.values()].map(host);
 }
 
 /** Where the host runs (no database number: its uses say which), or "in process". */
 export function hostWhere(host: Host): string {
+  // An AWS service: its endpoint (its region is its group's), else the storage's alias that reached it.
+  const { cloud, address, namespace } = host.primary;
+  if (cloud) return address ?? namespace ?? cloud.service;
   return host.primary.address ? serviceWhere({ ...host.primary, namespace: null }) : serviceWhere(host.primary);
 }
 
@@ -150,7 +178,7 @@ function nameOnHost(use: ServiceNode): string {
 
 /** How the app uses a host, when more than one way: "Database 0, 1 · Cache default". */
 export function hostUses(host: Host): string | null {
-  if (host.uses.length < 2) return null;
+  if (host.uses.length < 2 || host.primary.cloud) return null;
   const byKind = new Map<ServiceNode["kind"], string[]>();
   for (const use of host.uses) byKind.set(use.kind, [...(byKind.get(use.kind) ?? []), nameOnHost(use)]);
   return [...byKind]

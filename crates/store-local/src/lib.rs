@@ -12,6 +12,7 @@ use tracepanel_protocol::{Attrs, Received, Span, Trace};
 pub mod search;
 use search::{Compiler, SearchError, Term};
 
+mod aws;
 mod groups;
 mod read;
 mod searches;
@@ -781,7 +782,7 @@ mod tests {
         assert_eq!(
             counts["sections"],
             serde_json::json!({"http": 1, "graphql": 0, "tasks": 0, "websockets": 0, "jobs": 0, "rpc": 0, "pages": 0,
-                               "mails": 0,
+                               "mails": 0, "aws": 0,
                                "systems": [{"system": "redis", "family": "redis", "label": "Redis"},
                                            {"system": "cache", "family": "cache", "label": "Cache"}]})
         );
@@ -1011,6 +1012,167 @@ mod tests {
         assert_eq!(
             reader.known_values("").unwrap()["task_system"],
             serde_json::json!(["rabbitmq"])
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A request that calls AWS: a Django storage on S3 (its PutObject inside it), two HeadObjects of S3's API (the
+    /// second missing, after a retry), and a Lambda.
+    fn aws_request() -> Received {
+        let aws = |service: &str, method: &str, host: &str, extra: Value| {
+            let mut attrs = serde_json::json!({
+                "rpc.system": "aws-api", "rpc.service": service, "rpc.method": method, "cloud.region": "eu-west-1",
+                "server.address": format!("{host}.eu-west-1.amazonaws.com"), "server.port": 443,
+                "code.origin": "avatars/views.py:24 in upload",
+            });
+            attrs
+                .as_object_mut()
+                .unwrap()
+                .extend(extra.as_object().unwrap().clone());
+            attrs
+        };
+        let s3 = |path: &str| {
+            serde_json::json!({"storage.system": "s3", "storage.op": "HeadObject", "storage.path": path,
+                               "storage.backend": "botocore.client.S3"})
+        };
+        let doc = serde_json::json!({
+            "id": "AWS1", "kind": "http", "name": "POST /api/avatars/", "start": 1000, "duration": 100, "status": "ok",
+            "attrs": {"service.name": "shop"},
+            "spans": [
+                {"id": "R", "parent_id": null, "kind": "http", "name": "POST /api/avatars/", "start": 1000,
+                 "duration": 100, "status": "ok", "attrs": {}},
+                {"id": "SV", "parent_id": "R", "kind": "storage", "name": "storage save avatars/7.png", "start": 1001,
+                 "duration": 30, "status": "ok",
+                 "attrs": {"storage.alias": "default", "storage.system": "s3", "storage.op": "save",
+                           "storage.path": "avatars/7.png", "code.origin": "avatars/views.py:21 in upload"}},
+                {"id": "SVP", "parent_id": "SV", "kind": "function", "name": "S3 PutObject media/avatars/7.png",
+                 "start": 1002, "duration": 28, "status": "ok", "attrs": aws("S3", "PutObject", "s3", serde_json::json!({}))},
+                {"id": "H1", "parent_id": "R", "kind": "storage", "name": "S3 HeadObject media/a.png", "start": 1040,
+                 "duration": 10, "status": "ok", "attrs": aws("S3", "HeadObject", "s3", s3("media/a.png"))},
+                {"id": "H2", "parent_id": "R", "kind": "storage", "name": "S3 HeadObject media/b.png", "start": 1060,
+                 "duration": 20, "status": "error",
+                 "attrs": aws("S3", "HeadObject", "s3", {
+                     let mut attrs = s3("media/b.png");
+                     attrs["error.type"] = "NoSuchKey".into();
+                     attrs["aws.retry_attempts"] = 1.into();
+                     attrs
+                 })},
+                {"id": "L", "parent_id": "R", "kind": "rpc", "name": "Lambda Invoke", "start": 1080, "duration": 15,
+                 "status": "ok", "attrs": aws("Lambda", "Invoke", "lambda", serde_json::json!({}))},
+            ],
+            "logs": [], "errors": [], "links": [], "issues": [],
+        });
+        Received {
+            trace: serde_json::from_value(doc.clone()).unwrap(),
+            doc: doc.to_string(),
+        }
+    }
+
+    #[test]
+    fn calls_to_aws_are_listed_by_service_and_operation() {
+        let dir = std::env::temp_dir().join(format!("tracepanel-store-aws-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = path_in(&dir);
+        Store::open(&path).unwrap().write(&[aws_request()]).unwrap();
+        let reader = Reader::new(&path);
+        let head_key = reader.list_aws_calls("aws:S3 op:headobject", 50).unwrap();
+
+        assert_eq!(
+            reader.list_aws("", 50).unwrap(),
+            [
+                serde_json::json!({
+                    "aws_service": "S3", "name": "Amazon S3", "operation": "HeadObject", "regions": ["eu-west-1"],
+                    "system": "storage", "calls": 2, "traces": 1, "errors": 1,
+                    "error_codes": [{"code": "NoSuchKey", "calls": 1}], "retries": 1, "retried": 1, "p95": 20,
+                    "total": 30, "slowest": 20, "last_seen": 1060,
+                    "called_from": [{"service": "shop", "origin": "avatars/views.py:24 in upload", "calls": 2}],
+                    "sample_trace": "AWS1",
+                }),
+                // The storage's own call: no row on a system's page, it is the storage's.
+                serde_json::json!({
+                    "aws_service": "S3", "name": "Amazon S3", "operation": "PutObject", "regions": ["eu-west-1"],
+                    "system": null, "calls": 1, "traces": 1, "errors": 0, "error_codes": [], "retries": 0,
+                    "retried": 0, "p95": 28, "total": 28, "slowest": 28, "last_seen": 1002,
+                    "called_from": [{"service": "shop", "origin": "avatars/views.py:24 in upload", "calls": 1}],
+                    "sample_trace": "AWS1",
+                }),
+                serde_json::json!({
+                    "aws_service": "Lambda", "name": "AWS Lambda", "operation": "Invoke", "regions": ["eu-west-1"],
+                    "system": "aws-api", "calls": 1, "traces": 1, "errors": 0, "error_codes": [], "retries": 0,
+                    "retried": 0, "p95": 15, "total": 15, "slowest": 15, "last_seen": 1080,
+                    "called_from": [{"service": "shop", "origin": "avatars/views.py:24 in upload", "calls": 1}],
+                    "sample_trace": "AWS1",
+                }),
+            ]
+        );
+
+        assert_eq!(
+            head_key,
+            [
+                serde_json::json!({
+                    "trace_id": "AWS1", "span_id": "H2", "service": "shop", "aws_service": "S3",
+                    "operation": "HeadObject", "region": "eu-west-1", "name": "S3 HeadObject media/b.png",
+                    "failed": true, "error_type": "NoSuchKey", "retries": 1,
+                    "origin": "avatars/views.py:24 in upload", "start": 1060, "duration": 20,
+                }),
+                serde_json::json!({
+                    "trace_id": "AWS1", "span_id": "H1", "service": "shop", "aws_service": "S3",
+                    "operation": "HeadObject", "region": "eu-west-1", "name": "S3 HeadObject media/a.png",
+                    "failed": false, "error_type": null, "retries": 0,
+                    "origin": "avatars/views.py:24 in upload", "start": 1040, "duration": 10,
+                }),
+            ]
+        );
+        assert_eq!(
+            reader.list_aws_calls("error:NoSuchKey", 50).unwrap().len(),
+            1
+        );
+
+        assert_eq!(reader.counts(None).unwrap()["sections"]["aws"], 4);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn an_aws_service_is_a_node_in_its_region_and_a_storage_on_s3_is_s3() {
+        let dir =
+            std::env::temp_dir().join(format!("tracepanel-store-aws-map-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = path_in(&dir);
+        Store::open(&path).unwrap().write(&[aws_request()]).unwrap();
+        let services = Reader::new(&path).list_services("").unwrap();
+
+        assert_eq!(
+            services["services"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|node| (
+                    node["id"].clone(),
+                    node["calls"].clone(),
+                    node["cloud"].clone()
+                ))
+                .collect::<Vec<_>>(),
+            [
+                (
+                    Value::from("http:aws-api/lambda.eu-west-1.amazonaws.com:443/Lambda"),
+                    Value::from(1),
+                    serde_json::json!({"provider": "aws", "service": "Lambda", "name": "AWS Lambda",
+                                       "region": "eu-west-1"})
+                ),
+                // The Django storage, which made one PutObject, and S3's API called directly: both S3.
+                (
+                    Value::from("storage:s3/default"),
+                    Value::from(1),
+                    serde_json::json!({"provider": "aws", "service": "S3", "name": "Amazon S3",
+                                       "region": "eu-west-1"})
+                ),
+                (
+                    Value::from("storage:s3/s3.eu-west-1.amazonaws.com:443/S3"),
+                    Value::from(2),
+                    serde_json::json!({"provider": "aws", "service": "S3", "name": "Amazon S3",
+                                       "region": "eu-west-1"})
+                ),
+            ]
         );
         let _ = std::fs::remove_dir_all(&dir);
     }

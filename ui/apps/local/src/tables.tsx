@@ -76,7 +76,7 @@ function traceMethod(trace: TraceSummary): string | null {
 
 // A count that says something only when there is one: in its color then, a dash otherwise.
 const flagged = (tone: string) => (count: number) => (count ? `font-semibold ${tone}` : "text-muted-foreground");
-const errorCount = flagged("text-error");
+export const errorCount = flagged("text-error");
 const warnCount = flagged("text-warn");
 const MUTED = "text-muted-foreground";
 
@@ -180,7 +180,7 @@ function GraphqlOperations({ item }: { item: EndpointRow }) {
 }
 
 /** A p95 column: a bar against the slowest of the list, the time beside it. */
-function p95Column<T extends { p95: number }>(items: readonly T[], label = "p95"): DataColumn<T> {
+export function p95Column<T extends { p95: number }>(items: readonly T[], label = "p95"): DataColumn<T> {
   const slowest = Math.max(...items.map((item) => item.p95), 1);
   return {
     id: "p95",
@@ -196,7 +196,7 @@ function p95Column<T extends { p95: number }>(items: readonly T[], label = "p95"
 }
 
 /** The Last column: when the list's item was last seen. */
-function lastColumn<T extends Pick<EndpointRow, "last_seen">>(): DataColumn<T> {
+export function lastColumn<T extends Pick<EndpointRow, "last_seen">>(): DataColumn<T> {
   return {
     id: "last",
     label: "Last",
@@ -338,14 +338,10 @@ function callStatsColumns<T extends CallStats>(
  * system's columns apart.
  */
 function CallStatsTable<T extends CallStats>({
-  table,
   items,
-  keyOf,
   name,
   extra,
-  details,
-  open,
-  onOpen,
+  ...rest
 }: {
   table: string;
   items: readonly T[];
@@ -356,8 +352,32 @@ function CallStatsTable<T extends CallStats>({
   open: string | null;
   onOpen: (key: string | null) => void;
 }) {
+  return <OpeningTable items={items} columns={callStatsColumns(items, name, extra)} {...rest} />;
+}
+
+/**
+ * A table whose rows open in place, one at a time, to their details across it: the pages of calls' and AWS's. A row
+ * with failures is red at its edge.
+ */
+export function OpeningTable<T extends Pick<CallStats, "errors">>({
+  table,
+  items,
+  columns,
+  keyOf,
+  details,
+  open,
+  onOpen,
+}: {
+  table: string;
+  items: readonly T[];
+  columns: DataColumn<T>[];
+  keyOf: (item: T) => string;
+  details: (item: T) => ReactNode;
+  open: string | null;
+  onOpen: (key: string | null) => void;
+}) {
   return (
-    <DataTable table={table} columns={callStatsColumns(items, name, extra)}>
+    <DataTable table={table} columns={columns}>
       {({ cells, span }) =>
         items.map((item) => {
           const key = keyOf(item);
@@ -378,7 +398,7 @@ function CallStatsTable<T extends CallStats>({
   );
 }
 
-const toneOf = (item: CallStats) => (item.errors > 0 ? "error" : undefined);
+const toneOf = (item: Pick<CallStats, "errors">) => (item.errors > 0 ? "error" : undefined);
 
 /** A row that failed is red at its edge, one with issues amber. */
 function countTone(failures: number, issues: number): "error" | "warn" | undefined {

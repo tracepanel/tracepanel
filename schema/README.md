@@ -34,6 +34,18 @@ are ULIDs.
   `storage.system`, `storage.op` and `storage.path`. A `function` span with
   `storage.op`, as SDKs before the kind send them, is made a `storage` span
   when it arrives.
+  A call to S3's API (botocore's) is a `storage` span too, with
+  `storage.system` `s3`, the API's operation as `storage.op` (`GetObject`,
+  `HeadObject`, `ListObjectsV2`) and the bucket and key as `storage.path`.
+- **AWS call**: a call to an AWS API, whatever its span's kind (S3 a
+  `storage` span, DynamoDB `dynamodb`, SQS's SendMessage `sqs`, SNS's
+  Publish `messaging`, any other `rpc`), with `rpc.system` `aws-api`,
+  `rpc.service` (`S3`, `Lambda`), `rpc.method`, `cloud.region`,
+  `aws.request_id`, `aws.retry_attempts` and, when it failed, its code in
+  `error.type`. One whose parent is a `storage`, `cache` or `task.enqueue`
+  span was made for that call: its issues are the layer's, as a Redis
+  command's under a cache call are, and the services map draws the layer as
+  the AWS service it reached.
 - **Migration**: a migration a migrate command applied or unapplied, a
   `migration` span with `migration.app`, `migration.name`,
   `migration.direction` and `migration.fake`. Each operation it ran is a

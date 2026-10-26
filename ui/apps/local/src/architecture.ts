@@ -35,7 +35,7 @@ export interface Diagram {
   width: number;
   height: number;
   boxes: Placed<Box>[];
-  /** A frame per project around its roles, named after it. */
+  /** A frame per project around its roles, named after it; one per AWS region around its services ("AWS · eu-west-1"). */
   projects: Placed<string>[];
   links: { link: Link; points: Point[] }[];
 }
@@ -47,6 +47,24 @@ const FRAME = { side: 12, top: 22 };
 const roleId = (service: string, role: string) => `role:${service}/${role}`;
 const hostId = (key: string) => `host:${key}`;
 const projectId = (service: string) => `project:${service}`;
+
+/** A frame boxes are drawn in: a project's around its roles, an AWS region's around the services called there. */
+interface Group {
+  key: string;
+  label: string;
+}
+
+function groupOf(box: Box): Group | null {
+  if (box.type === "role") return { key: projectId(box.service), label: box.service };
+  return box.type === "host" ? regionOf(box.host) : null;
+}
+
+/** An AWS service's region: its frame, one around every service called there. */
+function regionOf(host: Host): Group | null {
+  const region = host.primary.cloud ? (host.primary.cloud.region ?? "") : null;
+  if (region === null) return null;
+  return { key: `cloud:${region}`, label: ["AWS", region].filter(Boolean).join(" · ") };
+}
 
 /** Where each role's work comes from, when the store says nothing more: requests from clients, commands from a shell. */
 // What starts each role's work. A web app a browser app calls is called, so its arrow comes from the browser's box.
@@ -92,7 +110,7 @@ function drawnRole(roles: readonly Box[], service: string, role: string): string
   return [own, roleId(service, ""), ...only].find((id) => mine.includes(id)) ?? own;
 }
 
-function graphOf(map: ServiceMap): { boxes: Box[]; links: Link[]; projects: string[] } {
+function graphOf(map: ServiceMap): { boxes: Box[]; links: Link[] } {
   const hosts = byHost(map.services);
   const apps = appLinks(map, hosts);
   // An app only other apps call has no clients of its own on the diagram.
@@ -135,7 +153,6 @@ function graphOf(map: ServiceMap): { boxes: Box[]; links: Link[]; projects: stri
   return {
     boxes: [...entries, ...roles, ...servers].filter((box) => box.type === "role" || linked.has(box.id)),
     links,
-    projects: projects.map((project) => project.service),
   };
 }
 
@@ -165,15 +182,17 @@ function dagreGraph(
 }
 
 /**
- * Each role's cluster, its project's in its layer, from a first layout's layers: a web app and the worker it hands
- * tasks to sit in different layers, the broker between them, so a cluster never covers a layer between its roles.
+ * Each framed box's cluster, its group's in its layer, from a first layout's layers: a web app and the worker it
+ * hands tasks to sit in different layers, the broker between them, so a cluster never covers a layer between its
+ * roles. An AWS region's services are a cluster too.
  */
 function clustersOf(boxes: readonly Box[], graph: Graph): Map<string, string> {
   const columns = [...new Set(boxes.map((box) => graph.node(box.id).x ?? 0))].sort((a, b) => a - b);
   const clusters = new Map<string, string>();
   for (const box of boxes) {
-    if (box.type !== "role") continue;
-    clusters.set(box.id, `cluster:${box.service}:${columns.indexOf(graph.node(box.id).x ?? 0)}`);
+    const group = groupOf(box);
+    if (!group) continue;
+    clusters.set(box.id, `cluster:${group.key}:${columns.indexOf(graph.node(box.id).x ?? 0)}`);
   }
   return clusters;
 }
@@ -236,27 +255,30 @@ function placedIn<T>(graph: Graph, item: T, id: string): Placed<T> {
 }
 
 /** A frame around boxes, with room above them for its name. */
-function around(service: string, boxes: readonly Placed<Box>[]): Placed<string> {
+function around(label: string, boxes: readonly Placed<Box>[]): Placed<string> {
   const left = Math.min(...boxes.map((box) => box.x - box.width / 2)) - FRAME.side;
   const right = Math.max(...boxes.map((box) => box.x + box.width / 2)) + FRAME.side;
   const top = Math.min(...boxes.map((box) => box.y - box.height / 2)) - FRAME.top;
   const bottom = Math.max(...boxes.map((box) => box.y + box.height / 2)) + FRAME.side;
-  return { item: service, x: (left + right) / 2, y: (top + bottom) / 2, width: right - left, height: bottom - top };
+  return { item: label, x: (left + right) / 2, y: (top + bottom) / 2, width: right - left, height: bottom - top };
 }
 
 /**
- * A project's frames: around its roles in each layer. A web app and the worker it hands tasks to sit in different
- * layers, the broker between them; one frame around both would cover the broker. (dagre's own clusters stretch over
- * whole layers and let calls run through them.)
+ * The frames: each group's (a project's, an AWS region's) around its boxes in each layer. A web app and the worker
+ * it hands tasks to sit in different layers, the broker between them; one frame around both would cover the broker.
+ * (dagre's own clusters stretch over whole layers and let calls run through them.)
  */
-function framesOf(service: string, boxes: readonly Placed<Box>[]): Placed<string>[] {
-  const roles = boxes.filter((box) => box.item.type === "role" && box.item.service === service);
-  return [...new Set(roles.map((box) => box.x))].map((x) =>
-    around(
-      service,
-      roles.filter((box) => box.x === x),
-    ),
-  );
+function framesOf(boxes: readonly Placed<Box>[]): Placed<string>[] {
+  const groups = new Map<string, { label: string; boxes: Placed<Box>[] }>();
+  for (const box of boxes) {
+    const group = groupOf(box.item);
+    if (!group) continue;
+    const at = `${group.key} ${box.x}`;
+    const entry = groups.get(at) ?? { label: group.label, boxes: [] };
+    entry.boxes.push(box);
+    groups.set(at, entry);
+  }
+  return [...groups.values()].map((group) => around(group.label, group.boxes));
 }
 
 /** How far a call to itself loops out of the box's right side, and how far apart it leaves and comes back. */
@@ -323,7 +345,7 @@ function onSides(points: readonly Point[], from: Placed<Box> | undefined, to: Pl
 
 /** Left to right in layers: what calls comes before what it calls, so a broker sits between a web app and its worker. */
 export function laidOut(map: ServiceMap): Diagram {
-  const { boxes, links, projects } = graphOf(map);
+  const { boxes, links } = graphOf(map);
   const calls = links.filter((link) => link.from !== link.to);
   // Twice: the first finds each box's layer, the second keeps a project's roles in a layer together.
   const first = dagreGraph(boxes, calls);
@@ -344,7 +366,7 @@ export function laidOut(map: ServiceMap): Diagram {
     width: size.width ?? 0,
     height: size.height ?? 0,
     boxes: placed,
-    projects: projects.flatMap((service) => framesOf(service, placed)),
+    projects: framesOf(placed),
     links: links.map((link) => ({ link, points: pointsOf(link) })),
   });
 }
@@ -414,16 +436,28 @@ function hostLine(host: Host, label: (host: Host) => string): string {
   return `  ${mermaidId(hostId(host.key))}${open}${quoted(label(host))}${close}`;
 }
 
-function projectLines(service: string, boxes: readonly Box[]): string[] {
-  const roles = boxes.flatMap((box) =>
-    box.type === "role" && box.service === service ? [`    ${mermaidId(box.id)}[${quoted(box.app.role)}]`] : [],
-  );
-  return [`  subgraph ${mermaidId(projectId(service))}[${quoted(service)}]`, ...roles, "  end"];
+/** A group's subgraph: a project's roles, an AWS region's services. */
+function groupLines(group: Group, boxes: readonly Box[], label: (host: Host) => string): string[] {
+  const inside = boxes.flatMap((box) => {
+    if (groupOf(box)?.key !== group.key) return [];
+    return [box.type === "role" ? `    ${mermaidId(box.id)}[${quoted(box.app.role)}]` : `  ${boxLine(box, label)}`];
+  });
+  return [`  subgraph ${mermaidId(group.key)}[${quoted(group.label)}]`, ...inside, "  end"];
 }
 
-function boxLine(box: Box, label: (host: Host) => string): string[] {
-  if (box.type === "entry") return [`  ${mermaidId(box.id)}([${quoted(box.label)}])`];
-  return box.type === "host" ? [hostLine(box.host, label)] : [];
+function boxLine(box: Box, label: (host: Host) => string): string {
+  if (box.type === "entry") return `  ${mermaidId(box.id)}([${quoted(box.label)}])`;
+  return box.type === "host" ? hostLine(box.host, label) : "";
+}
+
+/** Each group once, in the order its first box comes. */
+function groupsIn(boxes: readonly Box[]): Group[] {
+  const groups = new Map<string, Group>();
+  for (const box of boxes) {
+    const group = groupOf(box);
+    if (group && !groups.has(group.key)) groups.set(group.key, group);
+  }
+  return [...groups.values()];
 }
 
 function linkLine({ from, to, edge, app }: Link): string {
@@ -441,11 +475,11 @@ function linkLine({ from, to, edge, app }: Link): string {
  * calls on the arrows. GitHub, GitLab and most docs tools draw it.
  */
 export function mermaidOf(map: ServiceMap, label: (host: Host) => string): string {
-  const { boxes, links, projects } = graphOf(map);
+  const { boxes, links } = graphOf(map);
   const lines = [
     "flowchart LR",
-    ...projects.flatMap((service) => projectLines(service, boxes)),
-    ...boxes.flatMap((box) => boxLine(box, label)),
+    ...groupsIn(boxes).flatMap((group) => groupLines(group, boxes, label)),
+    ...boxes.filter((box) => box.type !== "role" && !groupOf(box)).map((box) => boxLine(box, label)),
     ...links.map(linkLine),
   ];
   return `${lines.join("\n")}\n`;
