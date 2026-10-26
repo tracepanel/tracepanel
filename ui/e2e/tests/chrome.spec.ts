@@ -1,6 +1,6 @@
 // The console's frame: the period, the refresh, the theme, the sidebar, and a trace that isn't there.
 
-import { traceId } from "../app.ts";
+import { chooseTheme, traceId } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
 
 test("the period goes into the search, and the list keeps it", async ({ page }) => {
@@ -40,6 +40,40 @@ test("the theme switches, and stays after a reload", async ({ page }) => {
 
   await expect(page.getByRole("button", { name: /^Theme: / })).toHaveAttribute("aria-label", chosen ?? "");
   expect(await theme()).toBe(applied);
+});
+
+test("with no theme chosen the console starts dark, even on a light system; Auto follows the system", async ({
+  page,
+}) => {
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.goto("/#/endpoints");
+  const theme = () => page.evaluate(() => document.documentElement.dataset["theme"] ?? "");
+  const toggle = page.getByRole("button", { name: /^Theme: / });
+
+  await expect(toggle).toHaveAttribute("aria-label", "Theme: Dark. Switch to Light");
+  expect(await theme()).toBe("dark");
+
+  await toggle.click();
+
+  await expect(toggle).toHaveAttribute("aria-label", "Theme: Light. Switch to Auto");
+  expect(await theme()).toBe("light");
+
+  await toggle.click();
+  await page.emulateMedia({ colorScheme: "dark" });
+
+  await expect(toggle).toHaveAttribute("aria-label", "Theme: Auto. Switch to Dark");
+  await expect.poll(theme).toBe("dark");
+});
+
+test("the first paint has the theme: the page's first script sets it before the console's code runs", async ({
+  page,
+}) => {
+  await chooseTheme(page, "light");
+  // The console's code never arrives: what is painted is the first script's.
+  await page.route("**/tracepanel.min.js*", (route) => route.abort());
+  await page.goto("/");
+
+  expect(await page.evaluate(() => document.documentElement.dataset["theme"])).toBe("light");
 });
 
 test("a trace that isn't stored says so", async ({ page }) => {
@@ -129,7 +163,7 @@ test("a list loads in its own shape: the search, the filters and rows where they
 
 for (const scheme of ["dark", "light"] as const) {
   test(`the sidebar's items read at 15px in both themes, its group titles small (${scheme})`, async ({ page }) => {
-    await page.emulateMedia({ colorScheme: scheme });
+    await chooseTheme(page, scheme);
     await page.goto("/#/endpoints");
     const item = page.locator("aside nav").getByRole("link", { name: "HTTP", exact: true });
 

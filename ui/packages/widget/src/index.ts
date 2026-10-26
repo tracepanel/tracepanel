@@ -131,16 +131,16 @@ export interface Widget {
 const THEME_KEY = "tracepanel:theme";
 const DARK = "(prefers-color-scheme: dark)";
 
-/** Follows the console's theme choice (same origin, so the same localStorage) or the OS when it is Auto. */
 /** The panel's theme choice ("light", "dark", "system"), kept in this page's storage for the badge. */
 function storeTheme(choice: string): void {
   try {
-    if (choice === "light" || choice === "dark") localStorage.setItem(THEME_KEY, choice);
-    else localStorage.removeItem(THEME_KEY);
+    if (choice === "light" || choice === "dark" || choice === "system") localStorage.setItem(THEME_KEY, choice);
   } catch {
-    // Blocked storage: the badge follows the OS.
+    // Blocked storage: the badge stays dark.
   }
 }
+
+/** Follows the console's theme choice (dark when there is none), or the OS when it is Auto. */
 
 function watchTheme(host: HTMLElement): () => void {
   const apply = () => {
@@ -148,10 +148,10 @@ function watchTheme(host: HTMLElement): () => void {
     try {
       choice = localStorage.getItem(THEME_KEY);
     } catch {
-      // Blocked storage: follow the OS.
+      // Blocked storage: dark.
     }
-    const dark = choice === "dark" || (choice !== "light" && window.matchMedia(DARK).matches);
-    host.dataset["theme"] = dark ? "dark" : "light";
+    const light = choice === "light" || (choice === "system" && !window.matchMedia(DARK).matches);
+    host.dataset["theme"] = light ? "light" : "dark";
   };
   apply();
   window.matchMedia(DARK).addEventListener("change", apply);
@@ -273,7 +273,7 @@ const STYLE = `
   :host([data-crowded]:not([data-dock="bottom"])) .panel[data-open] ~ .badge { width: 42px; padding: 0; justify-content: center; }
   :host([data-crowded]:not([data-dock="bottom"])) .panel[data-open] ~ .badge :is(.stats, .runtime) { display: none; }
   :host([data-crowded]:not([data-dock="bottom"])) .panel[data-open] ~ .badge .brand { padding: 0; }
-  /* The theme (the console's Auto / Light / Dark choice, shared through localStorage) is the :host's data-theme. */
+  /* The theme (the console's Dark / Light / Auto choice, shared through localStorage) is the :host's data-theme. */
   .panel iframe { width: 100%; height: 100%; border: 0; display: block; background: transparent; color-scheme: dark; }
   :host([data-theme="light"]) .panel iframe { color-scheme: light; }
   .panel[data-instant], .panel[data-instant] ~ .badge, .panel[data-resizing], .panel[data-resizing] ~ .badge { transition: none; }

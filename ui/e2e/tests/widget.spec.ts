@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import type { BrowserContext, Locator, Page } from "@playwright/test";
 import { CONSOLE } from "../agent.ts";
-import { type Call, OTHER_API, openApp, panel, pill, traceId } from "../app.ts";
+import { type Call, chooseTheme, OTHER_API, openApp, panel, pill, traceId } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
 
 async function posts(): Promise<Call> {
@@ -467,7 +467,7 @@ function token(name: string, theme: "dark" | "light"): string {
 
 for (const theme of ["dark", "light"] as const) {
   test(`the pill takes its colours from the design tokens, ${theme}`, async ({ page }) => {
-    await page.emulateMedia({ colorScheme: theme });
+    await chooseTheme(page, theme);
     await openApp(page, { posts: await posts() });
     await page.getByRole("button", { name: "Load posts" }).click();
     const status = pill(page).locator(".status");
@@ -478,6 +478,14 @@ for (const theme of ["dark", "light"] as const) {
     await expect(status).toHaveCSS("color", token("--dt-ok", theme));
   });
 }
+
+test("with no theme chosen the pill is dark, even on a light system", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "light" });
+  await openApp(page, { posts: await posts() });
+
+  await expect(page.locator("tracepanel-widget")).toHaveAttribute("data-theme", "dark");
+  await expect(pill(page)).toHaveCSS("background-color", token("--dt-float", "dark"));
+});
 
 test("the widget's sources hold no colour of their own: its palette is the tokens'", () => {
   for (const file of ["index.ts", "card.ts"]) {
