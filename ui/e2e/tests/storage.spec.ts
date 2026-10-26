@@ -85,7 +85,9 @@ test("Storage lists its calls by storage, operation and directory, with the back
   await expect(rows.filter({ hasText: "exists avatars/*" })).toContainText("s3");
   // collectstatic's on the disk, by the staticfiles storage.
   await expect(rows.filter({ hasText: "save css/*" })).toContainText("filesystem");
-  await expect(rows).toHaveCount(6);
+  // S3's API called directly (the AWS request's HeadObjects and GetObject) is listed with the storages' calls.
+  await expect(rows.filter({ hasText: "HeadObject media/thumbs/*" })).toContainText("s3");
+  await expect(rows).toHaveCount(9);
 });
 
 test("the service map has the storage, by its system's name", async ({ page }) => {

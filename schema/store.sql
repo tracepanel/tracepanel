@@ -1,6 +1,6 @@
 -- tracepanel's local store: one SQLite file per format version, written by the project's tracepanel-agent alone. The
 -- trace's doc is what was received; every other table is derived from it (crates/store-local/src/write.rs).
--- version: 23
+-- version: 24
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS traces (
     id TEXT PRIMARY KEY,
@@ -154,6 +154,9 @@ CREATE TABLE IF NOT EXISTS w3c (
 );
 CREATE INDEX IF NOT EXISTS w3c_span ON w3c (w3c_trace, w3c_span);
 CREATE INDEX IF NOT EXISTS w3c_trace ON w3c (trace_id);
+-- What each trace called, a row per server (`peer`, its id) and direction: the services map. A call to an AWS API
+-- names the service (`cloud_service`: S3, Lambda) and its region (`cloud_region`); so does a Django storage, cache or
+-- task queue whose call made one.
 CREATE TABLE IF NOT EXISTS peers (
     trace_id TEXT NOT NULL,
     start INTEGER NOT NULL,
@@ -166,6 +169,8 @@ CREATE TABLE IF NOT EXISTS peers (
     port INTEGER,
     namespace TEXT,
     alias TEXT,
+    cloud_service TEXT,
+    cloud_region TEXT,
     direction TEXT NOT NULL,
     calls INTEGER NOT NULL,
     duration INTEGER NOT NULL,
@@ -173,6 +178,29 @@ CREATE TABLE IF NOT EXISTS peers (
 );
 CREATE INDEX IF NOT EXISTS peers_trace ON peers (trace_id);
 CREATE INDEX IF NOT EXISTS peers_start ON peers (start DESC);
+-- Calls to AWS's APIs (`rpc.system` aws-api), one row per span whatever its kind (an S3 call is a storage call, a
+-- DynamoDB one a datastore's, one made for a Django storage a span inside its call): the AWS page, by service and
+-- operation. `aws_service` is the service as AWS's SDKs name it (S3, DynamoDB, Lambda), `operation` the API's
+-- (GetObject), `error_type` a failed call's code (NoSuchKey), `retries` how many times the SDK retried it, `system`
+-- and `key` its row on a system's page of operations (its `calls` row), NULL for a call made for another.
+CREATE TABLE IF NOT EXISTS aws_calls (
+    trace_id TEXT NOT NULL,
+    span_id TEXT NOT NULL,
+    aws_service TEXT NOT NULL,
+    operation TEXT NOT NULL,
+    region TEXT,
+    name TEXT NOT NULL,
+    error INTEGER NOT NULL,
+    error_type TEXT,
+    retries INTEGER NOT NULL,
+    system TEXT,
+    key TEXT,
+    start INTEGER NOT NULL,
+    duration INTEGER NOT NULL,
+    origin TEXT
+);
+CREATE INDEX IF NOT EXISTS aws_calls_trace ON aws_calls (trace_id);
+CREATE INDEX IF NOT EXISTS aws_calls_operation ON aws_calls (aws_service, operation);
 -- Task runs whose queue carries no headers (Django Tasks) are linked to their enqueue by task id.
 CREATE TABLE IF NOT EXISTS task_enqueues (task_id TEXT NOT NULL, trace_id TEXT NOT NULL, span_id TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS task_enqueues_task ON task_enqueues (task_id);

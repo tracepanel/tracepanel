@@ -213,6 +213,9 @@ const LABELS: Record<string, string> = {
   thrift: "Thrift",
   jsonrpc: "JSON-RPC",
   "aws-api": "AWS",
+  "aws.sns": "Amazon SNS",
+  // biome-ignore lint/style/useNamingConvention: the system's name as OpenTelemetry writes it.
+  aws_sns: "Amazon SNS",
   // A family's generic kind: a system that didn't name itself, as the agent names it.
   rpc: "RPC",
   db: "Datastore",

@@ -544,6 +544,7 @@ impl Reader {
             &db,
             &format!(
                 "SELECT service, role, peer, kind, system, address, port, namespace, direction, \
+                 MAX(cloud_service) AS cloud_service, MAX(cloud_region) AS cloud_region, \
                  GROUP_CONCAT(DISTINCT alias) AS aliases, COUNT(DISTINCT trace_id) AS traces, SUM(calls) AS calls, \
                  SUM(duration) AS total, SUM(errors) AS errors, MAX(start) AS last_seen \
                  FROM peers WHERE {condition} GROUP BY service, role, peer, direction"
@@ -562,6 +563,14 @@ impl Reader {
             if !nodes.contains_key(&peer) {
                 order.push(peer.clone());
                 nodes.insert(peer.clone(), row.clone());
+            }
+            // A layer's peer is on AWS when any of its calls reached AWS.
+            if let Some(node) = nodes.get_mut(&peer)
+                && node["cloud_service"].is_null()
+                && !row["cloud_service"].is_null()
+            {
+                node.insert("cloud_service".into(), row["cloud_service"].clone());
+                node.insert("cloud_region".into(), row["cloud_region"].clone());
             }
             if let Some(text) = row["aliases"].as_str().filter(|text| !text.is_empty()) {
                 aliases
@@ -607,6 +616,7 @@ impl Reader {
                     "address": row["address"],
                     "port": row["port"],
                     "namespace": row["namespace"],
+                    "cloud": cloud(row),
                     "id": peer,
                     "aliases": aliases[&peer].iter().collect::<Vec<_>>(),
                     "calls": total[0],
@@ -1178,6 +1188,12 @@ impl Reader {
             [service],
             |row| row.get(0),
         )?;
+        // Calls to AWS's APIs: the AWS page is shown once there are any.
+        let aws: i64 = db.query_row(
+            "SELECT count(*) FROM aws_calls WHERE ?1 IS NULL OR trace_id IN (SELECT id FROM traces WHERE service = ?1)",
+            [service],
+            |row| row.get(0),
+        )?;
         let count = |map: &HashMap<String, i64>, key: &str| map.get(key).copied().unwrap_or(0);
         let errors = count(&kinds, "error");
         Ok(serde_json::json!({
@@ -1193,6 +1209,7 @@ impl Reader {
                 "rpc": count(&traces, "rpc"),
                 "pages": count(&traces, "page"),
                 "mails": mails,
+                "aws": aws,
                 "systems": systems
                     .iter()
                     .map(|(system, family)| {
@@ -1206,6 +1223,19 @@ impl Reader {
             },
         }))
     }
+}
+
+/// The AWS service a server is, in its region, or null: `{"service": "S3", "name": "Amazon S3", "region": ...}`.
+fn cloud(row: &serde_json::Map<String, Value>) -> Value {
+    let Some(service) = row["cloud_service"].as_str() else {
+        return Value::Null;
+    };
+    serde_json::json!({
+        "provider": "aws",
+        "service": service,
+        "name": tracepanel_analysis::aws::service_name(service),
+        "region": row["cloud_region"],
+    })
 }
 
 /// One column of each system's operations, its distinct values for the console's filters: the targets (databases,

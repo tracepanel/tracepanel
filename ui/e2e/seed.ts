@@ -1157,6 +1157,153 @@ function collectstatic(): Doc {
   return doc;
 }
 
+export const AWS_REQUEST = "POST /api/avatars/";
+
+/**
+ * A request that calls AWS as botocore's integration records it: a Django storage on S3 (its PutObject a `function`
+ * span inside, as the SDK sends a call made for a storage), S3's API directly (a HeadObject per thumbnail, one
+ * missing, and a slow GetObject), a slow DynamoDB Scan the SDK retried, a message to SQS, one to SNS, a Lambda
+ * invoked and a secret read: each service its own box in the services map, all in one region.
+ */
+function awsCalls(): Doc {
+  const region = "eu-west-1";
+  const doc = trace(
+    "http",
+    AWS_REQUEST,
+    {
+      ...SHOP,
+      "http.method": "POST",
+      "http.path": "/api/avatars/",
+      "http.route": "/api/avatars/",
+      "http.status_code": 201,
+      "code.view": "avatars.views.upload",
+    },
+    { duration: 1_600_000 },
+  );
+  const id = String(doc["id"]);
+  const spans = doc["spans"] as Doc[];
+  (spans[0] as Doc)["duration"] = 1_600_000;
+  let at = 1_000;
+  const call = (
+    suffix: string,
+    kind: string,
+    name: string,
+    took: number,
+    attrs: Doc,
+    extra: Partial<Doc> = {},
+  ): Doc => {
+    const span = {
+      id: `${id}${suffix}`,
+      parent_id: `${id}R`,
+      kind,
+      name,
+      start: at,
+      duration: took,
+      status: "ok",
+      attrs: { "code.origin": "avatars/views.py:24 in upload", ...attrs },
+      ...extra,
+    };
+    at += took + 500;
+    return span;
+  };
+  const aws = (service: string, method: string, host: string, attrs: Doc = {}): Doc => ({
+    "rpc.system": "aws-api",
+    "rpc.service": service,
+    "rpc.method": method,
+    "cloud.region": region,
+    "server.address": `${host}.${region}.amazonaws.com`,
+    "server.port": 443,
+    "aws.request_id": `REQ${method.toUpperCase()}`,
+    ...attrs,
+  });
+  const s3 = (method: string, path: string, attrs: Doc = {}) =>
+    aws("S3", method, "s3", {
+      "storage.system": "s3",
+      "storage.op": method,
+      "storage.path": path,
+      "storage.backend": "botocore.client.S3",
+      "aws.s3.bucket": "media",
+      ...attrs,
+    });
+  const save = call("SV", "storage", "storage save avatars/7.png", 40_000, {
+    "storage.alias": "avatars",
+    "storage.backend": "storages.backends.s3.S3Storage",
+    "storage.system": "s3",
+    "storage.op": "save",
+    "storage.path": "avatars/7.png",
+  });
+  // The storage's own request, inside its call: the SDK keeps its AWS attributes and drops the storage's.
+  const put = {
+    ...save,
+    id: `${id}SVP`,
+    parent_id: save["id"],
+    kind: "function",
+    name: "S3 PutObject media/avatars/7.png",
+    start: Number(save["start"]) + 1_000,
+    duration: 36_000,
+    attrs: { ...aws("S3", "PutObject", "s3"), "code.origin": "avatars/views.py:21 in upload" },
+  };
+  spans.push(
+    save,
+    put,
+    ...[1, 2, 3].map((n) =>
+      call(
+        `H${n}`,
+        "storage",
+        `S3 HeadObject media/thumbs/${n}.png`,
+        25_000,
+        s3("HeadObject", `media/thumbs/${n}.png`, n === 3 ? { "error.type": "NoSuchKey" } : {}),
+        n === 3 ? { status: "error" } : {},
+      ),
+    ),
+    call("G", "storage", "S3 GetObject media/originals/7.tiff", 820_000, s3("GetObject", "media/originals/7.tiff")),
+    call(
+      "D",
+      "dynamodb",
+      "DynamoDB Scan users",
+      310_000,
+      aws("DynamoDB", "Scan", "dynamodb", {
+        "db.system": "dynamodb",
+        "db.operation": "Scan",
+        "db.collection.name": "users",
+        "db.statement": '{"TableName": "users", "FilterExpression": "plan = ?"}',
+        "aws.retry_attempts": 2,
+      }),
+    ),
+    call(
+      "Q",
+      "sqs",
+      "SQS SendMessage thumbnails",
+      12_000,
+      aws("SQS", "SendMessage", "sqs", {
+        "messaging.system": "aws_sqs",
+        "messaging.operation": "publish",
+        "messaging.destination.name": "thumbnails",
+      }),
+    ),
+    call(
+      "N",
+      "messaging",
+      "SNS Publish uploads",
+      9_000,
+      aws("SNS", "Publish", "sns", {
+        "messaging.system": "aws.sns",
+        "messaging.operation": "publish",
+        "messaging.destination.name": "uploads",
+      }),
+    ),
+    call("L", "rpc", "Lambda Invoke", 180_000, aws("Lambda", "Invoke", "lambda")),
+    call(
+      "K",
+      "rpc",
+      "Secrets Manager GetSecretValue",
+      8_000,
+      aws("Secrets Manager", "GetSecretValue", "secretsmanager"),
+    ),
+  );
+  return doc;
+}
+
 /**
  * `manage.py migrate` on PostgreSQL as the Python SDK records it, its migrations and operations still `function` spans
  * (the agent makes them `migration` and `migration.operation` spans): shop's 0007 applied, an AddIndex without
@@ -1427,6 +1574,7 @@ export default async function seed(): Promise<void> {
     bookList(),
     signals(),
     collectstatic(),
+    awsCalls(),
     assistant(),
     migrate(),
     ...chain(),

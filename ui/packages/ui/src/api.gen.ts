@@ -139,6 +139,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/aws": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Calls to AWS's APIs (rpc.system aws-api) by service and operation, the most time first: their errors by code, retries, and where the app makes them from. Every kind of span: S3 calls, DynamoDB requests, messages, the rest. */
+        get: operations["listAws"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/aws/calls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The latest calls to AWS matching a search (one operation's: aws:S3 op:GetObject), newest first. */
+        get: operations["listAwsCalls"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/calls": {
         parameters: {
             query?: never;
@@ -958,6 +992,8 @@ export interface components {
                 pages: number;
                 /** @description Emails sent: the console hides Emails without any. */
                 mails: number;
+                /** @description Calls to AWS's APIs: the console hides AWS without any. */
+                aws: number;
                 /** @description The systems with operations, by family then name: the console lists a page for each. */
                 systems: {
                     system: string;
@@ -1092,6 +1128,7 @@ export interface components {
             logs: components["schemas"]["SearchFields"];
             mails: components["schemas"]["SearchFields"];
             calls: components["schemas"]["SearchFields"];
+            aws: components["schemas"]["SearchFields"];
             endpoints: components["schemas"]["SearchFields"];
             issues: components["schemas"]["SearchFields"];
         };
@@ -1327,8 +1364,10 @@ export interface components {
             /** @description Host name */
             address: string | null;
             port: number | null;
-            /** @description Database name, Redis database number, the alias of an in-process cache, or a file storage's alias. */
+            /** @description Database name, Redis database number, the alias of an in-process cache, a file storage's alias, or an AWS service's id (an API of any other AWS service). */
             namespace: string | null;
+            /** @description The AWS service it is, in its region (a Django storage on S3 too), or null. */
+            cloud: null | components["schemas"]["CloudService"];
             /** @description Django aliases (DATABASES / CACHES / STORAGES) using it. */
             aliases: string[];
             /** @description Calls made to it (for a broker */
@@ -1336,6 +1375,70 @@ export interface components {
             total: components["schemas"]["Duration"];
             errors: number;
             last_seen: components["schemas"]["Time"];
+        };
+        CloudService: {
+            /** @enum {string} */
+            provider: "aws";
+            /** @description The service as AWS's SDKs name it: S3, DynamoDB, Lambda. */
+            service: string;
+            /** @description As AWS writes it: Amazon S3, AWS Lambda. */
+            name: string;
+            region: string | null;
+        };
+        AwsOperation: {
+            /** @description The service as AWS's SDKs name it: S3, DynamoDB, Lambda. */
+            aws_service: string;
+            /** @description As AWS writes it: Amazon S3. */
+            name: string;
+            /** @description GetObject, Query, Invoke. */
+            operation: string;
+            regions: string[];
+            /** @description The system page that lists these calls too (storage for S3, dynamodb, sqs, aws.sns; aws-api for any other service), null when they were made for a storage, a cache or a task queue. */
+            system: string | null;
+            calls: number;
+            traces: number;
+            errors: number;
+            /** @description The failed calls by error code, the most first. */
+            error_codes: {
+                /** @description NoSuchKey, ThrottlingException. */
+                code: string;
+                calls: number;
+            }[];
+            /** @description Retries the SDK made */
+            retries: number;
+            /** @description Calls the SDK retried. */
+            retried: number;
+            p95: components["schemas"]["Duration"];
+            total: components["schemas"]["Duration"];
+            slowest: components["schemas"]["Duration"];
+            last_seen: components["schemas"]["Time"];
+            /** @description Where the app makes them, the most calls first (five at most). */
+            called_from: {
+                /** @description The app (service.name). */
+                service: string;
+                /** @description The line of code: shop/views.py:12 in avatar. */
+                origin: string;
+                calls: number;
+            }[];
+            /** @description The latest call's trace. */
+            sample_trace: string;
+        };
+        AwsCall: {
+            trace_id: string;
+            span_id: string;
+            /** @description The app that made it. */
+            service: string | null;
+            aws_service: string;
+            operation: string;
+            region: string | null;
+            /** @description The span's name: S3 GetObject media/a.png. */
+            name: string;
+            failed: boolean;
+            error_type: string | null;
+            retries: number;
+            origin: string | null;
+            start: components["schemas"]["Time"];
+            duration: components["schemas"]["Duration"];
         };
         ServiceEdge: {
             service: string;
@@ -2396,6 +2499,60 @@ export interface operations {
                     "application/json": {
                         mails: components["schemas"]["MailRow"][];
                         next: components["schemas"]["Cursor"];
+                    };
+                };
+            };
+            400: components["responses"]["BadSearch"];
+        };
+    };
+    listAws: {
+        parameters: {
+            query?: {
+                /** @description Search query: free text plus key:value filters, e.g. route:/api/* status>=500 "timed out". */
+                q?: components["parameters"]["q"];
+                limit?: components["parameters"]["limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Operations. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        operations: components["schemas"]["AwsOperation"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadSearch"];
+        };
+    };
+    listAwsCalls: {
+        parameters: {
+            query?: {
+                /** @description Search query: free text plus key:value filters, e.g. route:/api/* status>=500 "timed out". */
+                q?: components["parameters"]["q"];
+                limit?: components["parameters"]["limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Calls. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        calls: components["schemas"]["AwsCall"][];
                     };
                 };
             };

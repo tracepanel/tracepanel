@@ -23,6 +23,7 @@ import {
   ChevronRightIcon,
   ChevronsUpDownIcon,
   CircleAlertIcon,
+  CloudIcon,
   DatabaseIcon,
   DatabaseZapIcon,
   HardDriveIcon,
@@ -83,6 +84,8 @@ const NAV_GROUPS: { title: string | null; items: NavItem[] }[] = [
     items: [
       { section: "services", label: "Services", icon: NetworkIcon },
       // Then a page per system the app calls (systemItems): the database, Redis, MongoDB, HTTP calls…
+      // AWS, every service of it on one page (its other calls have no system page of their own).
+      { section: "aws", label: "AWS", icon: CloudIcon },
       { section: "logs", label: "Logs", icon: ScrollTextIcon },
       { section: "mails", label: "Emails", icon: MailIcon },
     ],
@@ -171,7 +174,7 @@ function NavGroup({ group, index, section, counts, rail, visible }: NavGroupProp
  * The sections shown only once there is something in them; HTTP always (it is where a project starts). Emails too:
  * only some frameworks send them through what an SDK records (Django's mail).
  */
-const OPTIONAL = ["graphql", "tasks", "websockets", "jobs", "rpc", "pages", "mails"] as const;
+const OPTIONAL = ["graphql", "tasks", "websockets", "jobs", "rpc", "pages", "aws", "mails"] as const;
 
 /** What shows a section before it has traces: Tasks, with tasks in flight or an app that sends task events. */
 const LIVE: Partial<Record<Section, (counts: Counts) => boolean>> = { tasks: (counts) => counts.live_tasks };
@@ -208,9 +211,13 @@ const FAMILY_ICONS: Record<Family, LucideIcon> = {
 /** A system with an icon of its own, where its family's would make two items alike (Kafka and RabbitMQ). */
 const SYSTEM_ICONS: Partial<Record<string, LucideIcon>> = { rabbitmq: RabbitIcon };
 
+/** The systems whose calls a page of their own lists: AWS's API calls are on the AWS page. */
+const ON_THEIR_OWN_PAGE: ReadonlySet<string> = new Set(["aws-api"]);
+
 /** A Data item for each system the store has operations of, in the agent's order (families, then names). */
 function systemItems(counts: Counts | undefined): NavItem[] {
-  return (counts?.sections.systems ?? []).map(({ system, family, label }) => ({
+  const systems = (counts?.sections.systems ?? []).filter(({ system }) => !ON_THEIR_OWN_PAGE.has(system));
+  return systems.map(({ system, family, label }) => ({
     section: callsSection(system),
     label: systemOfPage(system, family, label).label,
     icon: SYSTEM_ICONS[system] ?? FAMILY_ICONS[family],

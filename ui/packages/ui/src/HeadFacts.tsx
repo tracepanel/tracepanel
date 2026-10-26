@@ -34,12 +34,25 @@ function said(calls: SystemCalls): string {
 }
 
 /**
+ * The trace with only the calls the app made itself: an LLM call's HTTP requests are the model's, as the time strip
+ * counts them, not HTTP calls of their own.
+ */
+function ownCalls(trace: Trace): Trace {
+  const llm = new Set(trace.spans.filter((span) => span.kind === "llm").map((span) => span.id));
+  if (llm.size === 0) return trace;
+  return {
+    ...trace,
+    spans: trace.spans.filter((span) => !(span.kind === "http.client" && llm.has(String(span.parent_id)))),
+  };
+}
+
+/**
  * The trace's calls in its header, after how long it took: one quiet line, system by system ("· 139 queries 29 ms
  * · 3 unique"), then, profiled, its memory and the collector's pauses ("· ↑ 42 MB peak · GC 3× 12 ms"). Nothing for a
  * trace that called nothing and wasn't profiled.
  */
 export function HeadFacts({ trace }: { trace: Trace }) {
-  const facts = [...systemCalls(trace).map(said), ...memoryFacts(trace.profile)];
+  const facts = [...systemCalls(ownCalls(trace)).map(said), ...memoryFacts(trace.profile)];
   if (facts.length === 0) return null;
   return <span className="dt-trace-facts">{facts.map((fact) => `· ${fact}`).join(" ")}</span>;
 }

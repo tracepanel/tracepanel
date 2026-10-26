@@ -184,6 +184,46 @@ paths:
                   mails: { type: array, items: { $ref: "#/components/schemas/MailRow" } }
                   next: { $ref: "#/components/schemas/Cursor" }
         "400": { $ref: "#/components/responses/BadSearch" }
+  /aws:
+    get:
+      operationId: listAws
+      summary: >-
+        Calls to AWS's APIs (rpc.system aws-api) by service and operation, the most time first: their errors by code,
+        retries, and where the app makes them from. Every kind of span: S3 calls, DynamoDB requests, messages, the rest.
+      parameters:
+        - $ref: "#/components/parameters/q"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: Operations.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [operations]
+                additionalProperties: false
+                properties:
+                  operations: { type: array, items: { $ref: "#/components/schemas/AwsOperation" } }
+        "400": { $ref: "#/components/responses/BadSearch" }
+  /aws/calls:
+    get:
+      operationId: listAwsCalls
+      summary: "The latest calls to AWS matching a search (one operation's: aws:S3 op:GetObject), newest first."
+      parameters:
+        - $ref: "#/components/parameters/q"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: Calls.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [calls]
+                additionalProperties: false
+                properties:
+                  calls: { type: array, items: { $ref: "#/components/schemas/AwsCall" } }
+        "400": { $ref: "#/components/responses/BadSearch" }
   /calls:
     get:
       operationId: listCalls
@@ -1124,7 +1164,7 @@ components:
           type: object
           description: Stored traces per entry point; the console hides entry points with none.
           additionalProperties: false
-          required: [http, graphql, tasks, websockets, jobs, rpc, pages, mails, systems]
+          required: [http, graphql, tasks, websockets, jobs, rpc, pages, mails, aws, systems]
           properties:
             http: { type: integer, description: HTTP requests that are not GraphQL operations. }
             graphql: { type: integer }
@@ -1134,6 +1174,7 @@ components:
             rpc: { type: integer, description: "RPC calls served: gRPC and other RPC systems' servers." }
             pages: { type: integer, description: "Pages viewed in a browser." }
             mails: { type: integer, description: "Emails sent: the console hides Emails without any." }
+            aws: { type: integer, description: "Calls to AWS's APIs: the console hides AWS without any." }
             systems:
               type: array
               description: >-
@@ -1309,7 +1350,7 @@ components:
     SearchSpec:
       type: object
       additionalProperties: false
-      required: [traces, logs, mails, calls, endpoints, tasks, services, websockets, graphql, jobs, rpc, pages, issues]
+      required: [traces, logs, mails, calls, aws, endpoints, tasks, services, websockets, graphql, jobs, rpc, pages, issues]
       properties:
         tasks: { $ref: "#/components/schemas/SearchFields" }
         services: { $ref: "#/components/schemas/SearchFields" }
@@ -1322,6 +1363,7 @@ components:
         logs: { $ref: "#/components/schemas/SearchFields" }
         mails: { $ref: "#/components/schemas/SearchFields" }
         calls: { $ref: "#/components/schemas/SearchFields" }
+        aws: { $ref: "#/components/schemas/SearchFields" }
         endpoints: { $ref: "#/components/schemas/SearchFields" }
         issues: { $ref: "#/components/schemas/SearchFields" }
     SearchFields:
@@ -1562,7 +1604,7 @@ components:
     ServiceNode:
       type: object
       additionalProperties: false
-      required: [id, kind, system, address, port, namespace, aliases, calls, total, errors, last_seen]
+      required: [id, kind, system, address, port, namespace, cloud, aliases, calls, total, errors, last_seen]
       properties:
         id: { type: string, description: "kind:system/address:port/namespace, e.g. database:postgresql/db:5432/blog." }
         kind: { type: string, enum: [database, cache, storage, mail, queue, http] }
@@ -1571,12 +1613,93 @@ components:
         port: { type: [integer, "null"] }
         namespace:
           type: [string, "null"]
-          description: Database name, Redis database number, the alias of an in-process cache, or a file storage's alias.
+          description: >-
+            Database name, Redis database number, the alias of an in-process cache, a file storage's alias, or an AWS
+            service's id (an API of any other AWS service).
+        cloud:
+          description: The AWS service it is, in its region (a Django storage on S3 too), or null.
+          oneOf:
+            - type: "null"
+            - $ref: "#/components/schemas/CloudService"
         aliases: { type: array, items: { type: string }, description: Django aliases (DATABASES / CACHES / STORAGES) using it. }
         calls: { type: integer, description: Calls made to it (for a broker, tasks published). }
         total: { $ref: "#/components/schemas/Duration" }
         errors: { type: integer }
         last_seen: { $ref: "#/components/schemas/Time" }
+    CloudService:
+      type: object
+      additionalProperties: false
+      required: [provider, service, name, region]
+      properties:
+        provider: { type: string, enum: [aws] }
+        service: { type: string, description: "The service as AWS's SDKs name it: S3, DynamoDB, Lambda." }
+        name: { type: string, description: "As AWS writes it: Amazon S3, AWS Lambda." }
+        region: { type: [string, "null"] }
+    AwsOperation:
+      type: object
+      additionalProperties: false
+      required: [aws_service, name, operation, regions, system, calls, traces, errors, error_codes, retries, retried,
+        p95, total, slowest, last_seen, called_from, sample_trace]
+      properties:
+        aws_service: { type: string, description: "The service as AWS's SDKs name it: S3, DynamoDB, Lambda." }
+        name: { type: string, description: "As AWS writes it: Amazon S3." }
+        operation: { type: string, description: "GetObject, Query, Invoke." }
+        regions: { type: array, items: { type: string } }
+        system:
+          type: [string, "null"]
+          description: >-
+            The system page that lists these calls too (storage for S3, dynamodb, sqs, aws.sns; aws-api for any other
+            service), null when they were made for a storage, a cache or a task queue.
+        calls: { type: integer }
+        traces: { type: integer }
+        errors: { type: integer }
+        error_codes:
+          type: array
+          description: The failed calls by error code, the most first.
+          items:
+            type: object
+            additionalProperties: false
+            required: [code, calls]
+            properties:
+              code: { type: string, description: "NoSuchKey, ThrottlingException." }
+              calls: { type: integer }
+        retries: { type: integer, description: Retries the SDK made, in all. }
+        retried: { type: integer, description: Calls the SDK retried. }
+        p95: { $ref: "#/components/schemas/Duration" }
+        total: { $ref: "#/components/schemas/Duration" }
+        slowest: { $ref: "#/components/schemas/Duration" }
+        last_seen: { $ref: "#/components/schemas/Time" }
+        called_from:
+          type: array
+          description: Where the app makes them, the most calls first (five at most).
+          items:
+            type: object
+            additionalProperties: false
+            required: [service, origin, calls]
+            properties:
+              service: { type: string, description: The app (service.name). }
+              origin: { type: string, description: "The line of code: shop/views.py:12 in avatar." }
+              calls: { type: integer }
+        sample_trace: { type: string, description: The latest call's trace. }
+    AwsCall:
+      type: object
+      additionalProperties: false
+      required: [trace_id, span_id, service, aws_service, operation, region, name, failed, error_type, retries, origin,
+        start, duration]
+      properties:
+        trace_id: { type: string }
+        span_id: { type: string }
+        service: { type: [string, "null"], description: The app that made it. }
+        aws_service: { type: string }
+        operation: { type: string }
+        region: { type: [string, "null"] }
+        name: { type: string, description: "The span's name: S3 GetObject media/a.png." }
+        failed: { type: boolean }
+        error_type: { type: [string, "null"] }
+        retries: { type: integer }
+        origin: { type: [string, "null"] }
+        start: { $ref: "#/components/schemas/Time" }
+        duration: { $ref: "#/components/schemas/Duration" }
     ServiceEdge:
       type: object
       additionalProperties: false

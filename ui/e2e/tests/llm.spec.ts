@@ -69,7 +69,7 @@ test("an LLM call's messages read as a conversation, the earlier turns folded", 
 test("the header counts the LLM calls with their tokens and cost, the strip has their share", async ({ page }) => {
   await openAssistant(page);
 
-  await expect(page.locator(".dt-trace-facts")).toContainText(/· 2 LLM calls [\d.]+ s · 2,816 tokens · ~\$0\.00298/);
+  await expect(page.locator(".dt-trace-facts")).toHaveText(/^· 2 LLM calls [\d.]+ s · 2,816 tokens · ~\$0\.00298$/);
   const legend = page.getByRole("list", { name: /^Where the time went/ });
   await expect(legend.locator('[data-category="llm"]')).toContainText("LLM");
   // The HTTP requests are the model's time: no External calls share.

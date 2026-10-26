@@ -70,6 +70,8 @@ const EMPTY: Omit<DataSource, "getTrace" | "related" | "explain"> = {
   getGraphqlOperation: nothing,
   listJobs: none,
   listRpcs: none,
+  listAws: none,
+  listAwsCalls: none,
   listPages: none,
   summarizeTraces: nothing,
   listServices: async () => ({ apps: [], links: [], services: [], edges: [] }),

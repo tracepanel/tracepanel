@@ -7,7 +7,7 @@ use super::*;
 pub const SCHEMA: &str = include_str!("../../../schema/store.sql");
 pub(crate) const FTS_SCHEMA: &str =
     "CREATE VIRTUAL TABLE IF NOT EXISTS logs_fts USING fts5(message, logger)";
-pub(crate) const TABLES: [&str; 15] = [
+pub(crate) const TABLES: [&str; 16] = [
     "meta",
     "traces",
     "issues",
@@ -23,6 +23,7 @@ pub(crate) const TABLES: [&str; 15] = [
     "task_runs",
     "task_workflow",
     "w3c",
+    "aws_calls",
 ];
 pub(crate) const LEVELS: [(&str, i64); 5] = [
     ("debug", 10),
@@ -171,9 +172,43 @@ fn relink_issues(db: &Connection) -> rusqlite::Result<()> {
     Ok(())
 }
 
+/// A call to an AWS API, as the AWS page lists it: its service, operation and region, its error's code and retries,
+/// and its row on a system's page (none for a call made for a storage, a cache or a task queue).
+fn write_aws_call(
+    db: &Connection,
+    trace: &Trace,
+    span: &Span,
+    operation: Option<&tracepanel_analysis::calls::Operation>,
+) -> rusqlite::Result<()> {
+    use tracepanel_analysis::aws;
+    let failed = span.status == "error";
+    let listed = operation.filter(|operation| operation.via.is_none());
+    db.prepare_cached(
+        "INSERT INTO aws_calls (trace_id, span_id, aws_service, operation, region, name, error, error_type, retries,
+         system, key, start, duration, origin) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+    )?
+    .execute(params![
+        trace.id,
+        span.id,
+        aws::service(span).unwrap_or_else(|| "AWS".into()),
+        aws::operation(span),
+        aws::region(span),
+        span.name,
+        failed,
+        aws::error_code(span).filter(|_| failed),
+        aws::retries(span),
+        listed.map(|operation| operation.system.clone()),
+        listed.map(call_key),
+        span.start,
+        span.duration,
+        sql(span.attrs.get("code.origin")),
+    ])?;
+    Ok(())
+}
+
 /// The tables with rows per trace: a trace's statements, calls, logs, issues, peers and links. A new table with a
 /// trace_id column goes here too, or its rows outlive their traces (a test reads the schema for them).
-pub(crate) const PER_TRACE: [&str; 11] = [
+pub(crate) const PER_TRACE: [&str; 12] = [
     "logs",
     "calls",
     "spans",
@@ -185,6 +220,7 @@ pub(crate) const PER_TRACE: [&str; 11] = [
     "task_runs",
     "task_workflow",
     "w3c",
+    "aws_calls",
 ];
 
 fn delete_rows<P: rusqlite::Params + Clone>(
@@ -336,7 +372,11 @@ pub(crate) fn write_trace(
         }
     }
     for span in &trace.spans {
-        let Some(operation) = tracepanel_analysis::calls::operation(trace, span) else {
+        let operation = tracepanel_analysis::calls::operation(trace, span);
+        if tracepanel_analysis::aws::is_call(span) {
+            write_aws_call(db, trace, span, operation.as_ref())?;
+        }
+        let Some(operation) = operation else {
             // Any other span by its name, for span:; a call has its row in calls, with its name too.
             if span.parent_id.is_some() {
                 db.prepare_cached(
@@ -382,7 +422,8 @@ pub(crate) fn write_trace(
     for ((peer, direction), usage) in dependencies(trace) {
         db.prepare_cached(
             "INSERT INTO peers (trace_id, start, service, role, peer, kind, system, address, port, namespace, alias,
-             direction, calls, duration, errors) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+             cloud_service, cloud_region, direction, calls, duration, errors)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
         )?
         .execute(
             params![
@@ -397,6 +438,8 @@ pub(crate) fn write_trace(
                 peer.port,
                 peer.namespace,
                 peer.alias,
+                peer.cloud_service,
+                peer.cloud_region,
                 direction,
                 usage.calls,
                 usage.duration,

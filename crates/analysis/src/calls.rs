@@ -83,7 +83,8 @@ pub fn display_name(system: &str) -> String {
         "influxdb" => "InfluxDB",
         "kafka" => "Kafka",
         "rabbitmq" => "RabbitMQ",
-        "sqs" => "Amazon SQS",
+        "sqs" | "aws_sqs" | "aws.sqs" => "Amazon SQS",
+        "aws.sns" | "aws_sns" | "sns" => "Amazon SNS",
         "nats" => "NATS",
         "pulsar" => "Pulsar",
         "google_pubsub" => "Google Pub/Sub",
@@ -137,7 +138,8 @@ pub struct Operation {
     pub vendor: Option<String>,
     /// SQL: the hash of the parameters.
     pub params_hash: Option<String>,
-    /// Redis: what sent the command (direct, cache, task).
+    /// Redis: what sent the command (direct, cache, task). A call to AWS made for a storage, a cache or a task queue:
+    /// which (storage, cache, task); None for the app's own.
     pub via: Option<&'static str>,
     /// A cache get: whether it found the key.
     pub hit: Option<bool>,
@@ -249,7 +251,19 @@ pub fn operation(trace: &Trace, span: &Span) -> Option<Operation> {
             operation.target = destination;
         }
     }
+    if aws::is_call(span) {
+        operation.via = aws::layer(&trace.spans, span).map(layer_via);
+    }
     Some(operation)
+}
+
+/// What a layer's kind is called as an operation's `via`: as Redis commands have it.
+fn layer_via(kind: &str) -> &'static str {
+    match kind {
+        "cache" => "cache",
+        "task.enqueue" => "task",
+        _ => "storage",
+    }
 }
 
 // ---------- the engine ----------
@@ -267,7 +281,8 @@ struct Rules {
     slow: Option<Slow>,
 }
 
-/// A family's slow-call issue: its kind, its title's prefix, its threshold and its hint.
+/// A family's slow-call issue: its kind, its title's prefix, its threshold and its hint (a system's own, for the
+/// slowest call, where `slow_for` has one).
 struct Slow {
     kind: &'static str,
     prefix: String,
@@ -431,13 +446,19 @@ fn rules(family: &str, system: &str) -> Option<Rules> {
             cheap: false,
             slow: None,
         },
-        // A storage on this machine is cheap too: `storage::local` says which, per call.
+        // A storage on this machine is cheap too: `storage::local` says which, per call, and never slow enough to
+        // matter. A storage over the network waits as an HTTP call does.
         "storage" => Rules {
             label: "storage calls".into(),
             repeated_hint: storage::REPEATED,
             duplicates_hint: Some(storage::DUPLICATES),
             cheap: false,
-            slow: None,
+            slow: Some(Slow {
+                kind: "slow-call",
+                prefix: "Slow storage call".into(),
+                threshold_ms: |thresholds| thresholds.slow_http_ms,
+                hint: storage::SLOW,
+            }),
         },
         // Calls one by one in a loop (`llm::one_by_one`), the same prompt twice; a model's time is its own.
         "llm" => Rules {
@@ -726,7 +747,11 @@ fn group_issues(
                 "duplicates",
                 format!("Duplicate {label}: {} identical · {title}", repeated.len()),
                 Some(culprit_text.clone()),
-                Some(duplicates_hint),
+                Some(if spans[0].kind == storage::KIND {
+                    storage::duplicates_hint(spans[0])
+                } else {
+                    duplicates_hint
+                }),
                 repeated.len(),
                 repeated.iter().map(|span| span.id.clone()).collect(),
             ));
@@ -737,28 +762,61 @@ fn group_issues(
         let slow: Vec<&Span> = spans
             .iter()
             .copied()
-            .filter(|span| span.duration >= threshold_us)
+            .filter(|span| span.duration >= threshold_us && !storage::local(span))
             .collect();
         if let Some(slowest) = slow.iter().max_by_key(|span| span.duration) {
-            let hint = (slowest.kind == "mongodb")
-                .then(|| mongodb_index(slowest))
-                .flatten();
+            let (prefix, hint) = slow_for(rule, slowest);
             issues.push(issue(
                 issue_key(rule.kind, &[Some(&key), key_culprit.as_deref()]),
                 rule.kind,
-                format!(
-                    "{}: {} ms · {title}",
-                    rule.prefix,
-                    milliseconds(slowest.duration)
-                ),
+                format!("{prefix}: {} ms · {title}", milliseconds(slowest.duration)),
                 culprit(&slow),
-                Some(hint.as_deref().unwrap_or(rule.hint)),
+                Some(&hint),
                 slow.len(),
                 slow.iter().map(|span| span.id.clone()).collect(),
             ));
         }
     }
     issues
+}
+
+/// A slow call's title prefix and hint, by its system where it has its own: the index a MongoDB filter needs, what
+/// makes a DynamoDB request slow, S3's own way; else the family's.
+fn slow_for(rule: &Slow, slowest: &Span) -> (String, String) {
+    let own = match slowest.kind.as_str() {
+        "mongodb" => mongodb_index(slowest).map(|hint| (rule.prefix.clone(), hint)),
+        "dynamodb" => Some((rule.prefix.clone(), dynamodb_slow(slowest))),
+        storage::KIND if aws::is_call(slowest) => {
+            Some(("Slow S3 call".to_owned(), storage::S3_SLOW.to_owned()))
+        }
+        _ => None,
+    };
+    own.unwrap_or_else(|| (rule.prefix.clone(), rule.hint.to_owned()))
+}
+
+/// For a slow DynamoDB request: a Scan reads the whole table, a FilterExpression filters after the read; else what
+/// makes a request on the key slow.
+fn dynamodb_slow(span: &Span) -> String {
+    let op = or_default(&span.attrs, "db.operation", "");
+    let table = text(&span.attrs, "db.collection.name")
+        .map_or_else(|| "the table".to_owned(), |table| format!("`{table}`"));
+    let filtered = text(&span.attrs, "db.statement")
+        .is_some_and(|statement| statement.contains("FilterExpression"));
+    if op == "Scan" {
+        format!(
+            "A Scan reads every item of {table}, and is billed for each: Query by the partition key instead, with a \
+             global secondary index (GSI) keyed on the attribute the scan filters by when it isn't the table's key."
+        )
+    } else if filtered {
+        "A FilterExpression drops items after DynamoDB has read them, and each read item is billed: put the attribute \
+         in the key condition instead, with a global secondary index (GSI) keyed on it, or narrow the key condition."
+            .to_owned()
+    } else {
+        "DynamoDB answers a request on its key in milliseconds: a slow one reads many items (narrow the key \
+         condition, set a `Limit` or a `ProjectionExpression`), reads large items, or waits on throttling (its \
+         retries say)."
+            .to_owned()
+    }
 }
 
 /// The first 16 hex of SHA-1: the ids the console's lists group by and link with.

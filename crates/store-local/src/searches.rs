@@ -40,7 +40,7 @@ pub(crate) fn contains(column: &'static str) -> Compiler {
 }
 
 /// Rows of a table that keeps its trace's id (`column`): those whose trace an app (service.name) recorded.
-fn of_service(column: &'static str) -> Compiler {
+pub(crate) fn of_service(column: &'static str) -> Compiler {
     let service = search::text("service");
     Box::new(move |term| {
         let (clause, params) = service(term)?;
@@ -271,7 +271,7 @@ fn inside(fields: &'static [&'static str]) -> Compiler {
 }
 
 /// `failed:true` (or `failed:false`): calls whose span failed, on every list of calls.
-fn failed(term: &Term) -> search::Clause {
+pub(crate) fn failed(term: &Term) -> search::Clause {
     if term.op != ":" {
         return Err(SearchError("failed supports only ':'".into()));
     }
@@ -283,7 +283,7 @@ fn failed(term: &Term) -> search::Clause {
 }
 
 /// `term` with its value in lower case: cache ops are spelled as the cache API names them (`get`, `set_many`).
-fn lower_text(column: &str) -> Compiler {
+pub(crate) fn lower_text(column: &str) -> Compiler {
     let inner = search::text(column);
     Box::new(move |term| {
         inner(&Term {

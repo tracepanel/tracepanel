@@ -1,4 +1,4 @@
-import type { DataSource } from "@tracepanel/ui";
+import type { Counts, DataSource } from "@tracepanel/ui";
 import { Button } from "@tracepanel/ui/components/ui/button";
 import { Checkbox } from "@tracepanel/ui/components/ui/checkbox";
 import {
@@ -18,6 +18,12 @@ import { useEffect, useId, useState } from "react";
  * store. In the console deleting the store is the only action, so the checkbox confirms it. Without
  * `source.clearStore` (a source that can't clear its store) there is no checkbox: the panel only clears its list.
  */
+/** The traces stored, per entry point summed: `aws` counts calls, not traces. */
+function tracesIn(counts: Counts): number {
+  const { aws: _calls, ...sections } = counts.sections;
+  return Object.values(sections).reduce<number>((sum, count) => sum + (typeof count === "number" ? count : 0), 0);
+}
+
 export function ClearDialog({
   mode,
   open,
@@ -46,15 +52,7 @@ export function ClearDialog({
     setTraces(null);
     let cancelled = false;
     source.counts().then(
-      // The traces per entry point; `calls` says whether any made HTTP calls, it counts no traces.
-      (counts) =>
-        !cancelled &&
-        setTraces(
-          Object.values(counts.sections).reduce<number>(
-            (sum, count) => sum + (typeof count === "number" ? count : 0),
-            0,
-          ),
-        ),
+      (counts) => !cancelled && setTraces(tracesIn(counts)),
       () => undefined,
     );
     return () => {
