@@ -189,6 +189,15 @@
   chips and a call's kind keep a soft square fill. The current page in the
   sidebar is a grey row, the open tab is underlined in near-black and page
   titles are smaller. The dark theme is as it was.
+- A trace's DB, Cache and HTTP calls tabs are tables like the console's
+  lists: a head (Query or Call, Time, Share), hairline rows and columns to
+  size and hide. Over the table a line says how many, how many unique and
+  their time (`4 queries · 4 unique · 11 ms`), with the Grouped and In order
+  switch at its end, as the Logs tab has its button there. A repeated query
+  says `×13` beside its name as in the call tree, one made once no count,
+  and the share of the time is a percent instead of a bar. In order lists
+  each query's start. An open row reads as the call tree's details: what it
+  is, the statement, its fields, the query plan and where it was called from.
 
 ### Fixed
 

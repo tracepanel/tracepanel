@@ -141,7 +141,7 @@ function SpanLists({
   sql: Omit<ComponentProps<typeof SqlList>, "spans">;
 }) {
   if (!isCallsTab(active)) return null;
-  return <SystemList system={active} calls={calls[active]} {...sql} />;
+  return <SystemList key={active} system={active} calls={calls[active]} {...sql} />;
 }
 
 /** One system's calls: SQL with its plans, the others grouped by what they repeat. */
@@ -154,7 +154,7 @@ function SystemList({
   return system === "sql" ? (
     <SqlList spans={spans} {...props} />
   ) : (
-    <CallsList spans={spans} issueBySpan={props.issueBySpan} focus={props.focus} />
+    <CallsList spans={spans} issueBySpan={props.issueBySpan} focus={props.focus} table={`trace-${system}`} />
   );
 }
 

@@ -39,6 +39,7 @@ import {
   StateBadge,
   TaskName,
   TemplateChip,
+  Times,
 } from "./primitives";
 import { isRequestDetail, RequestParts, requestParts } from "./RequestParts";
 import { RunChips } from "./RunChips";
@@ -741,7 +742,7 @@ function GroupName({
       <span className="dt-map-text">{callTemplate(first)}</span>
       <AliasChip value={aliasOf(first)} />
       <FromTemplate span={first} parent={parent} />
-      <span className="dt-map-times">×{node.spans.length}</span>
+      <Times count={node.spans.length} />
       {issue ? <IssueChip kind={issue} className={ISSUE_CHIP_SHRINKS} /> : null}
     </>
   );

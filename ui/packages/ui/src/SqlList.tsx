@@ -1,13 +1,17 @@
 import { cn } from "@tracepanel/ui/lib/utils";
-import { ChevronRightIcon } from "lucide-react";
 import { useMemo, useState } from "react";
+import { CallLine, CallLines, CallTable, DetailsTitle, timeColumns } from "./CallTable";
+import type { DataColumn } from "./DataTable";
 import { ExplainView } from "./ExplainView";
 import { duration } from "./format";
-import { focusMark, useScrollToFocus } from "./hooks/useScrollToFocus";
-import { templatePlace } from "./lib/callFields";
+import { ListBar } from "./ListBar";
+import { callFields, templatePlace } from "./lib/callFields";
 import { queryFingerprint } from "./lib/fingerprint";
+import { plural } from "./lib/plural";
 import { linkProps, type TraceLinks } from "./links";
-import { AliasChip, IssueChip, TemplateChip } from "./primitives";
+import { type NameValue, NameValues, RowsLookContext } from "./NameValues";
+import { AliasChip, IssueChip, SectionHeading, TemplateChip, Times } from "./primitives";
+import { type Segment, Segmented } from "./Segmented";
 import { SqlCode } from "./SqlCode";
 import type { ExplainPlan, IssueKind, Span } from "./types";
 
@@ -69,58 +73,6 @@ function groupSpans(spans: readonly Span[], issueBySpan: ReadonlyMap<string, Iss
   return [...groups.values()].sort((a, b) => b.total - a.total);
 }
 
-function Heading({ children }: { children: string }) {
-  return <h4 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">{children}</h4>;
-}
-
-/** One row: summary line, and when open the statement, its plan and where it was called from. */
-function Row({
-  lead,
-  name,
-  alias,
-  from,
-  issue,
-  share,
-  time,
-  open,
-  focused,
-  children,
-}: {
-  lead: string;
-  name: string;
-  alias: unknown;
-  /** The attributes of a query that a template made, for its chip. */
-  from: Span["attrs"] | undefined;
-  issue: IssueKind | undefined;
-  share: number;
-  time: number;
-  open: boolean;
-  focused: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <li {...focusMark(focused)} className={cn("border-b last:border-b-0", focused && "bg-brand-soft/40")}>
-      <details open={open} className="group/row">
-        <summary className="grid cursor-pointer list-none grid-cols-[14px_36px_minmax(0,1fr)_auto_88px_64px] items-center gap-2.5 px-3 py-1.5 hover:bg-accent [&::-webkit-details-marker]:hidden">
-          <ChevronRightIcon className="size-4 text-muted-foreground transition-transform group-open/row:rotate-90" />
-          <span className="text-right font-mono text-sm text-muted-foreground tabular-nums">{lead}</span>
-          <span className="flex min-w-0 items-center gap-2 font-mono text-base">
-            <span className="shrink-[1000] truncate">{name}</span>
-            <AliasChip value={alias} />
-            {from ? <TemplateChip attrs={from} /> : null}
-          </span>
-          {issue ? <IssueChip kind={issue} /> : <span />}
-          <span className="h-1.5 overflow-hidden rounded-full bg-muted-foreground/15" aria-hidden="true">
-            <span className="block h-full rounded-full bg-chart-1" style={{ width: `${Math.max(share * 100, 2)}%` }} />
-          </span>
-          <span className="text-right text-base tabular-nums">{duration(time)}</span>
-        </summary>
-        <div className="grid gap-4 border-t bg-muted/30 px-5 py-4">{children}</div>
-      </details>
-    </li>
-  );
-}
-
 /**
  * Where a query was made: the template that made it as it rendered, if one did, and in your code, or, for a query no code of yours made (Django's admin, a library), the library
  * code that asked for it, marked as such.
@@ -167,126 +119,226 @@ function LibraryCaller({ caller, className }: { caller: string; className?: stri
 
 /** Where each query of a group was made, one line each, with its time. */
 function CalledFromList({ spans, focus }: { spans: readonly Span[]; focus: ReadonlySet<string> | undefined }) {
+  const heading = spans.length === 1 ? "Called from" : `Called ${spans.length} times from`;
   return (
-    <section className="grid gap-2">
-      <Heading>{spans.length === 1 ? "Called from" : `Called ${spans.length} times from`}</Heading>
-      <ol className="m-0 grid list-none overflow-hidden rounded-md border bg-background p-0">
-        {spans.map((span, index) => (
-          <li
-            key={span.id}
-            className={cn(
-              "grid grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-3 border-b px-3 py-1.5 text-sm last:border-b-0",
-              focus?.has(span.id) && "bg-brand-soft",
-            )}
-          >
-            <span className="text-right text-muted-foreground tabular-nums">{index + 1}</span>
-            <CalledFrom span={span} className="truncate" />
-            <span className="tabular-nums">{duration(span.duration)}</span>
-          </li>
-        ))}
-      </ol>
-    </section>
+    <CallLines heading={<SectionHeading>{heading}</SectionHeading>}>
+      {spans.map((span, index) => (
+        <CallLine key={span.id} index={index} focused={focus?.has(span.id) ?? false} time={span.duration}>
+          <CalledFrom span={span} className="truncate" />
+        </CallLine>
+      ))}
+    </CallLines>
   );
 }
 
-export function SqlList({ spans, issueBySpan, focus, onExplain, links }: SqlListProps) {
-  const [mode, setMode] = useState<"grouped" | "timeline">("grouped");
-  const groups = useMemo(() => groupSpans(spans, issueBySpan), [spans, issueBySpan]);
-  const heaviestGroup = Math.max(...groups.map((group) => group.total), 1);
-  const slowestSpan = Math.max(...spans.map((span) => span.duration), 1);
-  const list = useScrollToFocus<HTMLUListElement>(focus);
+/** A query's fields in words, as the call tree's details list them: its database, engine, rows, server. */
+function QueryFields({ span }: { span: Span }) {
+  // The template it ran in is said where it was called from.
+  const rows: NameValue[] = callFields({ kind: "sql", attrs: span.attrs }, false)
+    .filter(({ label }) => label !== "Template")
+    .map(({ label, value }) => ({ name: label, value }));
+  if (rows.length === 0) return null;
+  return (
+    <RowsLookContext value="plain">
+      <NameValues rows={rows} />
+    </RowsLookContext>
+  );
+}
 
-  if (spans.length === 0)
-    return <p className="px-4 py-6 text-sm text-muted-foreground">No database queries in this request.</p>;
+const vendorOf = (span: Span) => String(span.attrs["db.vendor"] ?? "");
+
+/** A SELECT's plan, on demand, where the host can run EXPLAIN. */
+function Plan({ span, onExplain }: { span: Span; onExplain: Explain | undefined }) {
+  if (!onExplain || !isSelect(span)) return null;
+  return <ExplainView vendor={vendorOf(span)} load={(analyze) => onExplain(span.id, analyze)} />;
+}
+
+/** An open row: what it is, the statement, its fields, its plan on demand, where each of its queries was made. */
+function QueryDetails({
+  title,
+  spans,
+  focus,
+  onExplain,
+  links,
+}: {
+  title: string;
+  spans: readonly Span[];
+  focus: ReadonlySet<string> | undefined;
+  onExplain: Explain | undefined;
+  links: TraceLinks | undefined;
+}) {
+  const [first] = spans;
+  if (!first) return null;
+  return (
+    <>
+      <DetailsTitle>{title}</DetailsTitle>
+      <SqlCode sql={String(first.attrs["db.statement"] ?? first.name)} vendor={vendorOf(first)} />
+      <QueryFields span={first} />
+      <Plan span={first} onExplain={onExplain} />
+      <CalledFromList spans={spans} focus={focus} />
+      <AllRequests span={first} links={links} />
+    </>
+  );
+}
+
+/** A query's name in its row: the statement in short, how many times, its alias, the template that made it, its issue. */
+function QueryName({
+  name,
+  count,
+  alias,
+  from,
+  issue,
+}: {
+  name: string;
+  count: number;
+  alias: unknown;
+  from: Span["attrs"] | undefined;
+  issue: IssueKind | undefined;
+}) {
+  return (
+    <span className="flex min-w-0 items-center gap-2 font-mono">
+      <span className="shrink-[1000] truncate">{name}</span>
+      <Times count={count} />
+      <AliasChip value={alias} />
+      {from ? <TemplateChip attrs={from} /> : null}
+      {issue ? <IssueChip kind={issue} /> : null}
+    </span>
+  );
+}
+
+type Mode = "grouped" | "timeline";
+
+const MODES: readonly Segment<Mode>[] = [
+  { id: "grouped", label: "Grouped" },
+  { id: "timeline", label: "In order" },
+];
+
+function groupColumns(total: number): DataColumn<Group>[] {
+  return [
+    {
+      id: "query",
+      label: "Query",
+      required: true,
+      cell: (group) => (
+        <QueryName
+          name={group.name}
+          count={group.spans.length}
+          alias={group.spans[0]?.attrs["db.alias"]}
+          from={group.spans.find((span) => templatePlace(span.attrs))?.attrs}
+          issue={group.issue}
+        />
+      ),
+    },
+    ...timeColumns<Group>((group) => group.total, total),
+  ];
+}
+
+function orderColumns(start: number, total: number, issueBySpan: ReadonlyMap<string, IssueKind>): DataColumn<Placed>[] {
+  return [
+    {
+      id: "index",
+      label: "#",
+      width: 3.5,
+      fixed: true,
+      num: true,
+      className: "text-muted-foreground",
+      cell: (item) => item.index + 1,
+    },
+    {
+      id: "query",
+      label: "Query",
+      required: true,
+      cell: ({ span }) => (
+        <QueryName
+          name={span.name}
+          count={1}
+          alias={span.attrs["db.alias"]}
+          from={span.attrs}
+          issue={issueBySpan.get(span.id)}
+        />
+      ),
+    },
+    {
+      id: "start",
+      label: "Start",
+      width: 6.5,
+      num: true,
+      drop: 2,
+      className: "text-muted-foreground",
+      cell: ({ span }) => `+${duration(Math.max(span.start - start, 0))}`,
+    },
+    ...timeColumns<Placed>((item) => item.span.duration, total),
+  ];
+}
+
+/** A query in the order it ran: its place among them. */
+interface Placed {
+  span: Span;
+  index: number;
+}
+
+export function SqlList({ spans, issueBySpan, focus, onExplain, links }: SqlListProps) {
+  const [mode, setMode] = useState<Mode>("grouped");
+  const groups = useMemo(() => groupSpans(spans, issueBySpan), [spans, issueBySpan]);
+  const placed = useMemo(() => spans.map((span, index) => ({ span, index })), [spans]);
+  const total = spans.reduce((sum, span) => sum + span.duration, 0);
+  const start = Math.min(...spans.map((span) => span.start));
+
+  if (spans.length === 0) return <p className="dt-note">No database queries in this request.</p>;
 
   return (
-    <div className="grid gap-3 p-4">
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-sm text-muted-foreground">
-          {spans.length} {spans.length === 1 ? "query" : "queries"} · {groups.length} unique
-        </span>
-        <div className="inline-flex rounded-md border bg-muted p-0.5">
-          {(["grouped", "timeline"] as const).map((value) => (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={mode === value}
-              onClick={() => setMode(value)}
-              className="rounded-[0.3125rem] px-3 py-1 text-sm font-medium text-muted-foreground aria-pressed:bg-background aria-pressed:text-foreground aria-pressed:shadow-sm"
-            >
-              {value === "grouped" ? "Grouped" : "In order"}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <ul ref={list} className="m-0 list-none overflow-hidden rounded-lg border bg-card p-0">
-        {mode === "grouped"
-          ? groups.map((group) => {
-              const first = group.spans[0];
-              const focused = focus ? group.spans.some((span) => focus.has(span.id)) : false;
-              return (
-                <Row
-                  key={group.key}
-                  lead={`${group.spans.length}×`}
-                  name={group.name}
-                  alias={first?.attrs["db.alias"]}
-                  from={group.spans.find((span) => templatePlace(span.attrs))?.attrs}
-                  issue={group.issue}
-                  share={group.total / heaviestGroup}
-                  time={group.total}
-                  open={focused}
-                  focused={focused}
-                >
-                  <section className="grid gap-2">
-                    <Heading>Statement</Heading>
-                    <SqlCode sql={group.statement} vendor={String(first?.attrs["db.vendor"] ?? "")} />
-                  </section>
-                  {onExplain && first && isSelect(first) ? (
-                    <ExplainView
-                      vendor={String(first.attrs["db.vendor"] ?? "")}
-                      load={(analyze) => onExplain(first.id, analyze)}
-                    />
-                  ) : null}
-                  <CalledFromList spans={group.spans} focus={focus} />
-                  {first ? <AllRequests span={first} links={links} /> : null}
-                </Row>
-              );
-            })
-          : spans.map((span, index) => (
-              <Row
-                key={span.id}
-                lead={String(index + 1)}
-                name={span.name}
-                alias={span.attrs["db.alias"]}
-                from={span.attrs}
-                issue={issueBySpan.get(span.id)}
-                share={span.duration / slowestSpan}
-                time={span.duration}
-                open={false}
-                focused={focus?.has(span.id) ?? false}
-              >
-                <section className="grid gap-2">
-                  <Heading>Statement</Heading>
-                  <SqlCode
-                    sql={String(span.attrs["db.statement"] ?? span.name)}
-                    vendor={String(span.attrs["db.vendor"] ?? "")}
-                  />
-                </section>
-                {onExplain && isSelect(span) ? (
-                  <ExplainView
-                    vendor={String(span.attrs["db.vendor"] ?? "")}
-                    load={(analyze) => onExplain(span.id, analyze)}
-                  />
-                ) : null}
-                <section className="grid gap-1">
-                  <Heading>Called from</Heading>
-                  <CalledFrom span={span} className="text-sm" />
-                </section>
-                <AllRequests span={span} links={links} />
-              </Row>
-            ))}
-      </ul>
-    </div>
+    <>
+      <ListBar end={<Segmented label="Queries shown" segments={MODES} value={mode} onChange={setMode} />}>
+        {plural(spans.length, "query", "queries")} · {groups.length} unique · {duration(total)}
+      </ListBar>
+      {mode === "grouped" ? (
+        <CallTable
+          table="trace-sql"
+          columns={groupColumns(total)}
+          items={groups}
+          focus={focus}
+          row={{
+            key: (group) => group.key,
+            focused: (group) => (focus ? group.spans.some((span) => focus.has(span.id)) : false),
+            details: (group) => (
+              <QueryDetails
+                title={groupTitle(group)}
+                spans={group.spans}
+                focus={focus}
+                onExplain={onExplain}
+                links={links}
+              />
+            ),
+          }}
+        />
+      ) : (
+        <CallTable
+          table="trace-sql-order"
+          columns={orderColumns(start, total, issueBySpan)}
+          items={placed}
+          focus={focus}
+          openFocused={false}
+          row={{
+            key: (item) => item.span.id,
+            focused: (item) => focus?.has(item.span.id) ?? false,
+            details: ({ span }) => (
+              <QueryDetails
+                title={`query · started at +${duration(Math.max(span.start - start, 0))} · took ${duration(span.duration)}`}
+                spans={[span]}
+                focus={focus}
+                onExplain={onExplain}
+                links={links}
+              />
+            ),
+          }}
+        />
+      )}
+    </>
   );
+}
+
+/** An open group's first line, as the call tree's: "13 similar queries · 40 ms total". */
+function groupTitle(group: Group): string {
+  if (group.spans.length === 1) return `1 query · ${duration(group.total)}`;
+  return `${group.spans.length} similar queries · ${duration(group.total)} total`;
 }

@@ -45,7 +45,7 @@ test("Show N queries on an issue scrolls to the group it opened", async ({ page 
     .first()
     .click();
 
-  await expect(page.getByRole("tabpanel").locator("li[data-focused]").first()).toBeInViewport();
+  await expect(page.getByRole("tabpanel").locator("tr[data-focused]").first()).toBeInViewport();
 });
 
 test("an error leads to its endpoint, and its call's trace opens on the stack", async ({ page }) => {

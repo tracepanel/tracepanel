@@ -4,6 +4,7 @@ import { Badge } from "./components/ui/badge";
 import { Button } from "./components/ui/button";
 import { keyed } from "./keys";
 import { type PlanToken, tokenizePlan } from "./lib/plan";
+import { SectionHeading } from "./primitives";
 import type { ExplainPlan } from "./types";
 
 export interface ExplainViewProps {
@@ -37,7 +38,7 @@ export function ExplainView({ load, vendor }: ExplainViewProps) {
   return (
     <section className="grid gap-2">
       <div className="flex flex-wrap items-center gap-2.5">
-        <h4 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">Query plan</h4>
+        <SectionHeading>Query plan</SectionHeading>
         {/* Beside the heading, not at the far end: a wide row scrolls that end out of view. */}
         <div className="flex gap-2">
           <Button variant="outline" size="sm" className="h-7 shadow-none" disabled={loading} onClick={() => run(false)}>

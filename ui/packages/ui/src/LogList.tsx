@@ -2,6 +2,7 @@ import { ArrowRightIcon, ListTreeIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "./components/ui/button";
 import { keyed } from "./keys";
+import { ListBar } from "./ListBar";
 import { LogRecordDetails } from "./LogRecordDetails";
 import { LogTable } from "./LogTable";
 import { linkProps, type TraceLinks } from "./links";
@@ -10,19 +11,20 @@ import type { Log } from "./types";
 /** Over a trace's records: how many, and the way to the Logs page to filter and search them with every other. */
 function LogsBar({ count, traceId, links }: { count: number; traceId: string; links: TraceLinks | undefined }) {
   return (
-    <div className="flex items-center gap-3 px-4 py-2.5 text-base text-muted-foreground">
-      <span className="tabular-nums">
-        {count} {count === 1 ? "record" : "records"}
-      </span>
-      {links?.logs ? (
-        <Button variant="outline" size="xs" className="ml-auto" asChild>
-          <a {...linkProps(links, links.logs(traceId))}>
-            Open in Logs
-            <ArrowRightIcon />
-          </a>
-        </Button>
-      ) : null}
-    </div>
+    <ListBar
+      end={
+        links?.logs ? (
+          <Button variant="outline" size="xs" asChild>
+            <a {...linkProps(links, links.logs(traceId))}>
+              Open in Logs
+              <ArrowRightIcon />
+            </a>
+          </Button>
+        ) : null
+      }
+    >
+      {count} {count === 1 ? "record" : "records"}
+    </ListBar>
   );
 }
 
