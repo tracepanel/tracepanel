@@ -15,7 +15,7 @@ import { keyed } from "./keys";
 import { AllAttributes, LogRecordDetails } from "./LogRecordDetails";
 import { type Category, spanCategories } from "./lib/breakdown";
 import { callFields, templatePlace } from "./lib/callFields";
-import { callTemplate, groupNoun } from "./lib/calls";
+import { callTemplate, callText, groupNoun } from "./lib/calls";
 import { spanKindLabel } from "./lib/handler";
 import { widthOf } from "./lib/percent";
 import { plural } from "./lib/plural";
@@ -97,10 +97,15 @@ function isQuietReceiver(node: Node): boolean {
   );
 }
 
-/** A cache call's own Redis commands don't stop it from grouping with its likes: they are how it was served. */
+/**
+ * A cache call's own Redis commands, a storage call's own HTTP requests (S3), don't stop it from grouping with its
+ * likes: they are how it was served.
+ */
 function isBackendCall(node: Node): boolean {
-  return node.type === "span" && node.span.kind === "redis" && node.children.length === 0;
+  return node.type === "span" && BACKEND_KINDS.has(node.span.kind) && node.children.length === 0;
 }
+
+const BACKEND_KINDS = new Set(["redis", "http.client"]);
 
 function collapse(nodes: Node[]): Node[] {
   const byName = new Map<string, Span[]>();
@@ -233,6 +238,7 @@ export const FILTERS = [
   { id: "messaging", label: "Messaging", kinds: [...MESSAGING] },
   { id: "http", label: "HTTP calls", kinds: ["http.client"] },
   { id: "rpc", label: "RPC", kinds: [...RPC] },
+  { id: "storage", label: "Storage", kinds: ["storage"] },
   { id: "signal", label: "Signals", kinds: ["signal"] },
   { id: "template", label: "Templates", kinds: ["template"] },
   { id: "task", label: "Tasks", kinds: ["task.enqueue", "task"] },
@@ -374,6 +380,7 @@ const CATEGORY_FILTERS: Partial<Record<Category, FilterId>> = {
   datastore: "datastore",
   messaging: "messaging",
   http: "http",
+  storage: "storage",
   mail: "mail",
   signal: "signal",
 };
@@ -650,9 +657,9 @@ function aliasBeside(span: Span): unknown {
   return typeof alias === "string" && span.name.includes(alias) ? undefined : alias;
 }
 
-/** A call's database or cache alias, when it has one. */
+/** A call's database, cache or storage alias, when it has one. */
 function aliasOf(span: Span | undefined): unknown {
-  return span?.attrs["db.alias"] ?? span?.attrs["cache.alias"];
+  return span?.attrs["db.alias"] ?? span?.attrs["cache.alias"] ?? span?.attrs["storage.alias"];
 }
 
 function PlacedLinkedRow({ node, place: { ctx, indent, depth, mark } }: { node: Linked; place: RowPlace }) {
@@ -829,7 +836,7 @@ function SpanName({ span }: { span: Span }) {
     );
   }
   if (TASK_SPANS.has(span.kind)) return <TaskName name={span.name} className="dt-map-text" />;
-  return <span className="dt-map-text">{span.name}</span>;
+  return <span className="dt-map-text">{callText(span)}</span>;
 }
 
 /** A span: its kind, its name and what goes with it, its bar and its time; its rows under it, open or folded. */

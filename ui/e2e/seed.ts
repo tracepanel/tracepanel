@@ -1080,6 +1080,79 @@ function signals(): Doc {
 }
 
 /**
+ * `manage.py collectstatic` as the Python SDK records it, its storage calls still `function` spans with `storage.op`
+ * (the agent makes them `storage` spans): the counts on the trace, a span per phase with its files counted, the
+ * slowest file of each with its storage calls inside.
+ */
+function collectstatic(): Doc {
+  const doc = trace(
+    "command",
+    "manage.py collectstatic",
+    {
+      ...SHOP,
+      "service.role": "command",
+      "command.name": "collectstatic",
+      "collectstatic.copied": 12,
+      "collectstatic.linked": 0,
+      "collectstatic.unmodified": 400,
+      "collectstatic.post_processed": 15,
+    },
+    { duration: 900_000 },
+  );
+  const id = String(doc["id"]);
+  const spans = doc["spans"] as Doc[];
+  (spans[0] as Doc)["duration"] = 900_000;
+  const span = (suffix: string, parent: string, name: string, at: [number, number], attrs: Doc): Doc => ({
+    id: `${id}${suffix}`,
+    parent_id: `${id}${parent}`,
+    kind: "function",
+    name,
+    start: at[0],
+    duration: at[1],
+    status: "ok",
+    attrs,
+  });
+  const storage = (suffix: string, parent: string, op: string, path: string, at: [number, number]) =>
+    span(suffix, parent, `storage ${op} ${path}`, at, {
+      "storage.alias": "staticfiles",
+      "storage.backend": "django.contrib.staticfiles.storage.ManifestStaticFilesStorage",
+      "storage.system": "filesystem",
+      "storage.op": op,
+      "storage.path": path,
+      "code.origin": null,
+    });
+  spans.push(
+    span("C", "R", "collectstatic copy", [1_000, 500_000], {
+      "collectstatic.phase": "copy",
+      "collectstatic.files": 412,
+      "collectstatic.files_ms": 380,
+      "collectstatic.storage_calls": 0,
+      "collectstatic.find_ms": 120,
+    }),
+    span("C1", "C", "copy css/app.css", [2_000, 9_000], {
+      "collectstatic.file": "css/app.css",
+      "collectstatic.result": "copied",
+    }),
+    storage("C1E", "C1", "exists", "css/app.css", [2_100, 800]),
+    storage("C1S", "C1", "save", "css/app.css", [3_000, 7_000]),
+    span("P", "R", "collectstatic post-process", [502_000, 390_000], {
+      "collectstatic.phase": "post-process",
+      "collectstatic.files": 15,
+      "collectstatic.files_ms": 350,
+      "collectstatic.storage_calls": 2,
+    }),
+    span("P1", "P", "post-process css/app.css", [503_000, 40_000], {
+      "collectstatic.file": "css/app.css",
+      "collectstatic.processed_as": "css/app.4f1c2a.css",
+      "collectstatic.processed": true,
+    }),
+    storage("P1O", "P1", "open", "css/app.css", [503_500, 2_000]),
+    storage("P1S", "P1", "save", "css/app.4f1c2a.css", [520_000, 6_000]),
+  );
+  return doc;
+}
+
+/**
  * What the Python SDK says about the app in its hello: Django's settings, masked, the versions it runs on, and what
  * its checks found (Django's system checks, the most serious first, and its migrations not applied or not made).
  */
@@ -1173,6 +1246,7 @@ export default async function seed(): Promise<void> {
     adminList(),
     bookList(),
     signals(),
+    collectstatic(),
     ...chain(),
     ...chord(),
     ...dependencies(),

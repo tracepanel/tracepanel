@@ -5,6 +5,7 @@ import { FactGrid } from "./FactGrid";
 import { dayTime, duration } from "./format";
 import { GraphqlCode } from "./GraphqlCode";
 import { grouped, LinkedTrace, tracesRow } from "./LinkedTrace";
+import { collectstaticFacts } from "./lib/collectstatic";
 import { handlerFullName, handlerWord } from "./lib/handler";
 import { shownValue } from "./lib/pyliteral";
 import { traceRuntime } from "./lib/runtime";
@@ -332,6 +333,8 @@ function ownRows(trace: Trace, hero: boolean, related: Related | undefined, link
   const attrs = trace.attrs;
   return [
     ...(trace.kind === "task" ? taskRows(trace, related, links, hero) : []),
+    // A job's own: collectstatic's files and phases.
+    ...collectstaticFacts(trace),
     ...(hero ? [] : handlerRows(trace)),
     ...userRows(attrs),
     ...htmxRows(attrs),

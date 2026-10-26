@@ -48,9 +48,40 @@ function endpointTemplate(name: string): string {
   return slash < 0 ? name : `${method} ${target.slice(0, slash)}${pathTemplate(target.slice(slash))}`;
 }
 
+/**
+ * A call as its row says it, after its kind's badge: a storage call without the word its badge says
+ * (`exists avatars/1.png`), any other by its name.
+ */
+export function callText(span: Span): string {
+  return span.kind === "storage" ? span.name.replace(/^storage /, "") : span.name;
+}
+
+/**
+ * What a loop's storage calls share, as the agent groups them: the directory they look in, its ids as `{id}`
+ * (`exists avatars/*`, whatever each file is called); a listing's own directory.
+ */
+function storageTemplate(span: Span): string {
+  const op = String(span.attrs["storage.op"] ?? "");
+  return [op, placeOf(op, String(span.attrs["storage.path"] ?? ""))].filter(Boolean).join(" ");
+}
+
+/** Where a storage call looks: a listing's directory, a file's directory. */
+function placeOf(op: string, path: string): string {
+  const trimmed = path.replace(/\/+$/, "");
+  if (!trimmed) return "";
+  return op === "listdir" ? keyTemplate(trimmed) : directoryOf(trimmed);
+}
+
+/** The directory a file is in, as a loop's files share it: `avatars/*`, `*` at the top. */
+function directoryOf(path: string): string {
+  const slash = path.lastIndexOf("/");
+  return slash < 0 ? "*" : `${keyTemplate(path.slice(0, slash))}/*`;
+}
+
 const TEMPLATES: Record<string, (span: Span) => string> = {
   redis: (span) => keyTemplate(span.name),
   cache: (span) => keyTemplate(span.name),
+  storage: storageTemplate,
   "http.client": (span) => endpointTemplate(span.name),
   signal: sendTemplate,
 };

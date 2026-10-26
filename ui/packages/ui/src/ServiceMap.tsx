@@ -1,6 +1,7 @@
 import {
   DatabaseIcon,
   GlobeIcon,
+  HardDriveIcon,
   type LucideIcon,
   MailIcon,
   MemoryStickIcon,
@@ -45,16 +46,35 @@ const SYSTEMS: Record<string, string> = {
   https: "HTTPS",
 };
 
+/** File storages by their system: their own names, apart from a broker's of the same (memory, filesystem). */
+const STORAGES: Record<string, string> = {
+  filesystem: "Local disk",
+  memory: "In-memory storage",
+  s3: "Amazon S3",
+  gcs: "Google Cloud Storage",
+  azure: "Azure Blob Storage",
+  dropbox: "Dropbox",
+  sftp: "SFTP",
+  ftp: "FTP",
+  libcloud: "Apache Libcloud",
+};
+
 export const SERVICE_KINDS: Record<ServiceNode["kind"], string> = {
   database: "Database",
   cache: "Cache",
+  storage: "Storage",
   mail: "Mail",
   queue: "Broker",
   http: "HTTP API",
 };
 
+/** The names a kind's systems go by: a storage's its own. */
+function namesOf(kind: ServiceNode["kind"]): Record<string, string> {
+  return kind === "storage" ? STORAGES : SYSTEMS;
+}
+
 export function systemName(node: ServiceNode): string {
-  const name = SYSTEMS[node.system] ?? node.system;
+  const name = namesOf(node.kind)[node.system] ?? node.system;
   // A mail backend named like a cache backend (locmem) reads better with its kind.
   return node.kind === "mail" && node.system !== "smtp" ? `${name} mail` : name;
 }
@@ -83,6 +103,7 @@ const SYSTEM_PATHS: Record<string, string> = {
 const KIND_ICONS: Record<ServiceNode["kind"], LucideIcon> = {
   database: DatabaseIcon,
   cache: ZapIcon,
+  storage: HardDriveIcon,
   mail: MailIcon,
   queue: WorkflowIcon,
   http: GlobeIcon,

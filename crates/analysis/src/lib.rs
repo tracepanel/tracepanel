@@ -13,6 +13,7 @@ use tracepanel_protocol::{Attrs, Issue, Span, Thresholds, Trace};
 
 pub mod calls;
 pub mod otel;
+pub mod storage;
 mod waits;
 
 pub const FINGERPRINT_VERSION: i64 = 1;
@@ -907,10 +908,11 @@ fn htmx_issues(trace: &Trace) -> Vec<Issue> {
         .collect()
 }
 
-/// A received trace, made ready for the store: its OpenTelemetry spans mapped to tracepanel's kinds, then its
-/// issues found, in its rows and in its document, which the console shows.
+/// A received trace, made ready for the store: its OpenTelemetry spans mapped to tracepanel's kinds (an older SDK's
+/// storage calls too), then its issues found, in its rows and in its document, which the console shows.
 pub fn apply(received: &mut tracepanel_protocol::Received, thresholds: &Thresholds) {
     otel::normalize(received);
+    storage::normalize(received);
     let issues = analyze(&received.trace, thresholds);
     if issues.is_empty() {
         return;

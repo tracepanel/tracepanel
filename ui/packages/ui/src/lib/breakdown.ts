@@ -15,6 +15,7 @@ export type Category =
   | "datastore"
   | "messaging"
   | "http"
+  | "storage"
   | "mail";
 
 const CATEGORY_LABELS: Record<Category, string> = {
@@ -28,6 +29,7 @@ const CATEGORY_LABELS: Record<Category, string> = {
   datastore: "Datastores",
   messaging: "Messaging",
   http: "External calls",
+  storage: "Storage",
   mail: "Email",
 };
 
@@ -52,6 +54,7 @@ const BY_KIND: Record<string, Category> = {
   ...Object.fromEntries(RPC.map((kind) => [kind, "http" as const])),
   ...Object.fromEntries(DATASTORES.map((kind) => [kind, "datastore" as const])),
   ...Object.fromEntries(MESSAGING.map((kind) => [kind, "messaging" as const])),
+  storage: "storage",
   mail: "mail",
   template: "template",
   signal: "signal",

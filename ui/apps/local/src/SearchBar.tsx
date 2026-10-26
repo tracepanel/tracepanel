@@ -461,7 +461,7 @@ const QUICK: Record<Exclude<Section, CallsSection>, Control[]> = {
       label: "Kind",
       title: "Filter by kind",
       key: "kind",
-      values: ["app", "database", "cache", "mail", "queue", "http"],
+      values: ["app", "database", "cache", "storage", "mail", "queue", "http"],
       format: capital,
     },
     {
