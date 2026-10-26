@@ -1,6 +1,14 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 (2026-10-26)
+
+AWS, LLM calls, file storage and migrations in the console, memory and GC
+pauses in profiles, task workflows, Django signals, an app's settings and
+warnings, and a new look for the call tree, the lists and the light theme.
+
+The store's format is now version 24. The agent starts a new store file,
+`traces.v24.sqlite3`, and doesn't read the old one: the traces and issues an
+earlier agent recorded stay in that file, and you can delete it.
 
 ### Added
 
@@ -35,21 +43,6 @@
   Amazon SNS in titles. A call to AWS made for a storage, a cache or a task
   queue is the layer's issue, as Redis commands under a cache call are, so
   an SDK can send such calls with their own kind.
-- Migrations in the console. A migrate job's first tab says what it did
-  (`1 applied · 1 faked · 2 risky operations`) and lists each migration it
-  applied or unapplied with its operations, their rows, time and whether
-  they ran in a transaction, and the plan's migrations it didn't get to. An
-  operation that locks or rewrites a table, or has no reverse, has the
-  issue's chip and its reason. Migrations and operations are span kinds of
-  their own, `migration` and `migration.operation`, with a badge, a colour,
-  a filter and their details in the call tree: the Python SDK's `function`
-  spans with `migration.app` or `migration.operation` become them when they
-  arrive. A risky operation of a migration applied for real (not faked) is
-  an issue of the trace, `migration-risk`, its reason the title, the
-  migration and the operation where, with what to do instead. A migrate
-  job's trace keeps the app's unapplied migrations true: those it applied
-  go from the warning, those it unapplied come back, and the warning links
-  to it (`migrate` in `api/app`).
 - LLM calls are a span kind of their own, `llm`: each call an app makes to
   a model through OpenAI's or Anthropic's API, with OpenTelemetry's GenAI
   attributes. A `function` span with `gen_ai.operation.name`, as the Python
@@ -83,26 +76,26 @@
   A loop's calls fold into one row by directory, `exists avatars/*`. The
   trace's header counts them, `9 storage calls`, the console has a Storage
   page of them, and the services map a node per storage (`Amazon S3`).
+- Migrations in the console. A migrate job's first tab says what it did
+  (`1 applied · 1 faked · 2 risky operations`) and lists each migration it
+  applied or unapplied with its operations, their rows, time and whether
+  they ran in a transaction, and the plan's migrations it didn't get to. An
+  operation that locks or rewrites a table, or has no reverse, has the
+  issue's chip and its reason. Migrations and operations are span kinds of
+  their own, `migration` and `migration.operation`, with a badge, a colour,
+  a filter and their details in the call tree: the Python SDK's `function`
+  spans with `migration.app` or `migration.operation` become them when they
+  arrive. A risky operation of a migration applied for real (not faked) is
+  an issue of the trace, `migration-risk`, its reason the title, the
+  migration and the operation where, with what to do instead. A migrate
+  job's trace keeps the app's unapplied migrations true: those it applied
+  go from the warning, those it unapplied come back, and the warning links
+  to it (`migrate` in `api/app`).
 - A `manage.py collectstatic` job's first tab says how many files it
   copied, linked, left unmodified and post-processed, and each phase's time
   with its files (Copy, Post-process, Clear).
 - Taskiq is listed among the task systems: `task.system` `taskiq` reads
   Taskiq in the console.
-- The panel's Profile button can profile memory too. One flame the size of
-  the toolbar's other icons: muted while off, orange while profiling time,
-  with a dot at its corner for time and memory (slower). A click, Enter or
-  Space moves to the next and round, its hint says the mode and what a click
-  does, and a screen reader hears each change. It sets the
-  `tracepanel_profile` cookie to `1` or `memory`. Time and memory is there
-  only when the app says `profile_memory`, a new field of `api/capabilities`
-  (false for an app that doesn't say it). Else the button is Off and Time.
-- Set user in the panel is an outlined button of one size. A logged-in user
-  lights its icon with a dot, and their name is in its hint (`Acting as
-  alice · click to change`), so a long name no longer stretches the toolbar.
-  Docked at the bottom, the list's toolbar row keeps Follow new, Profile and
-  Clear in one tight group on the right. As the list narrows, the logo drops
-  its wordmark, then Follow new its name, then Set user its label, and the
-  row never wraps.
 - Profiles show memory and GC pauses. A profile can say what the trace's
   code allocated (`memory`: its peak, what it kept, where the memory was)
   and the garbage collector's runs (`gc`: how many, their pauses and when).
@@ -114,6 +107,26 @@
   note where the sites are the end's rather than the peak's or other traces
   ran in the process meanwhile. On the time strip the pauses are a GC share
   of their own.
+- The panel's Profile button can profile memory too. One flame the size of
+  the toolbar's other icons: muted while off, orange while profiling time,
+  with a dot at its corner for time and memory (slower). A click, Enter or
+  Space moves to the next and round, its hint says the mode and what a click
+  does, and a screen reader hears each change. It sets the
+  `tracepanel_profile` cookie to `1` or `memory`. Time and memory is there
+  only when the app says `profile_memory`, a new field of `api/capabilities`
+  (false for an app that doesn't say it). Else the button is Off and Time.
+- A profile can say when each stack was seen (`bucket_us`, `stacks[].at`),
+  which frames wait rather than compute (`frames[].waiting`, an await's
+  `at_line`) and how many samples weren't taken because the trace's thread
+  ran other traces too (`dropped`). The schema and the agent take them, and
+  a profile without them stays valid. With them, the Profile tab reads in
+  the trace's own time, as the time strip does: what wasn't sampled is said
+  and filled in from the samples around it. Waiting is a share of its own,
+  hatched, and with a range picked it profiles that stretch.
+  The time strip, its legend and the call tree split the code's own time
+  into what it waited in (`waiting · 1.5 s`, a `wait` row named by the wait:
+  `asyncio.sleep in send_digest`, its line on hover) and what it computed,
+  and a click opens the profile at that stretch.
 - Pick a part of a trace's time in its call tree, by kind or by range. A
   share's stretch of the time strip, or its entry in the legend, says its
   time, its percent and how many calls on hover. A click on it keeps that
@@ -134,151 +147,96 @@
   transaction's time says on hover how long it was open and how much of that
   its SQL took, and a row whose name says its database has no chip saying it
   again.
-- A profile can say when each stack was seen (`bucket_us`, `stacks[].at`),
-  which frames wait rather than compute (`frames[].waiting`, an await's
-  `at_line`) and how many samples weren't taken because the trace's thread
-  ran other traces too (`dropped`). The schema and the agent take them, and
-  a profile without them stays valid. With them, the Profile tab reads in
-  the trace's own time, as the time strip does: what wasn't sampled is said
-  and filled in from the samples around it. Waiting is a share of its own,
-  hatched, and with a range picked it profiles that stretch.
-  The time strip, its legend and the call tree split the code's own time
-  into what it waited in (`waiting · 1.5 s`, a `wait` row named by the wait:
-  `asyncio.sleep in send_digest`, its line on hover) and what it computed,
-  and a click opens the profile at that stretch.
-- A call tree and its strip show a trace's warnings and worse, not every
-  record: its info and debug records stay out of the tree and the log lane,
-  a quiet note on the span they were logged in says how many (`3 logs`),
-  and the legend's Logs chip, or a click on the note, shows them all
-  (`logs=all` in the URL). The Logs tab and the Logs page show every record,
-  as before. A request with no view or handler recorded counts its own time
-  as "Your code": it can't be told from the framework's then.
-- A trace's first tab is one anatomy for every kind. In the panel it heads
-  with the trace's line as the page's header says it (its badge, name, how
-  it ended, its time) and what handled it under, quietly: a request's view
-  or handler, a task's queue and worker. Its facts follow in one order, its
-  kind's own first, then App, Runtime, Started and Trace ID, nothing its head
-  says again. A related trace is a row as the call tree draws a linked one:
-  a grey kind box, its name, its state and findings, its time.
-- The code's own time is "Your code" in every kind of trace, a request's view
-  or handler too. A call tree's rows look one way: a task a request enqueued
-  has the grey kind box of the other rows, and its bar where it ran, running
-  to the right edge and fading there when it outlasts the request. A task's
-  run is a "task" and a command a "job" wherever a row names them.
-- The pill says what a request's tasks ran into as its other numbers do:
-  the Tasks icon, then a red "5 failed" chip and the amber "3 issues" one,
-  the same chips as its own. Its ring turns red when one failed. Before,
-  a failed task didn't show, and their issues read "3 in tasks".
-- Every table has a clear head in both themes: on white a quiet cool band
-  a step off the rows, its names a touch darker, a hairline under it, as the
-  dark theme's band. A header that stays in view as the list scrolls keeps
-  its band opaque and casts a soft shadow on the rows under it, only while
-  they scroll under it. A log's time shows whole, to the millisecond, and a
-  column's name is never cut: a column narrowed by a drag or a narrow page
-  stops at its name's width.
-- A trace's facts look like its related traces under them: names in muted
-  text, not capitals, a hairline under each row, no grey box around them.
-- A trace opened from HTTP, Tasks, Jobs or another entry point's lists, or
-  from a group's page, opens on what it was: its Request or Task tab. One
-  opened from Traces, a search or ⌘K opens on its call tree. An error still
-  comes first, and a link naming its tab still opens that tab.
-- Tasks from Huey, django-q2 and Channels workers are named as their
-  projects name them in a run's System column and filters: Huey, django-q2,
-  Channels. The API schema lists them among the task systems.
-- The Tasks page's Now shows a task's arguments as the JSON its trace shows,
-  `[42] {"to": "ann"}`, not as Python wrote them, and empty ones not at all.
-  A long task name is cut at its start, so its handler stays in sight.
-- A long task name is cut at its start everywhere it shows, as on Now, so
-  the handlers of one consumer no longer read the same. That is the Tasks
-  page's lists and its Overview, a task's page and its crumb, a trace's
-  heading, the call tree's task rows and the tasks it sent, a request's
-  enqueued tasks, the Task filter and ⌘K, in the console and in the panel.
-  A cut name starts where a whole one does, after a "…". In the call tree,
-  "enqueue" stays whole before it. The whole name shows on hover.
+- Task workflows. A task run's related traces have a Workflow part: the
+  workflow's first run, the step before it (the run that sent it, or a job it
+  waited for), the steps after it, its callbacks and its group's other tasks,
+  each with how it ended and how long it took. A long group lists its first
+  five, how many more, and a search for them all. The agent links runs by
+  the ids an SDK records: `task.parent_id`, `task.depends_on`,
+  `task.root_id` and `task.group_id`. `api/traces/{id}/related` has them in
+  `workflow` for a run in one, and the search takes `group:`. A step sent
+  from inside the run before it stays its `enqueued_by`, listed once.
+- A task's facts say when it was due (`task.eta`, as "Oct 21 15:45:20.345 ·
+  2 min late"), its priority, its time limit (`task.timeout`, and "stopped
+  by its time limit" when it failed on it) and its workflow: the task it
+  follows, what it waits for, its root and its group, each a link to its
+  run. A callback (`task.callback`, RQ's `on_success`, `on_failure` and
+  `on_stopped`) says whose: Callback of.
+- A task workflow drawn whole. Below a run's related traces, the Workflow
+  part draws every run of its workflow, left to right as they ran: the
+  request that started it, each task's latest run with how it ended, how
+  long it took and how many runs it had, a group's tasks in a frame (its
+  first five, then a search for the rest), a callback on a dashed line. The
+  run on screen is marked, every other box opens its trace. The agent finds
+  the runs from the one asked for, by the same ids, at most 100 of them, and
+  sends them in `workflow.graph`: the nodes, the edges between them and
+  whether it was cut. A snapshot carries every run the graph shows.
 - A task's workflow graph is compact: a box is one line, a dot for its
   state, its name and its time, as wide as names need. The run on screen is
   filled, not outlined. The graph starts at the page's left edge, under its
   heading, and its runs are no longer listed again as rows of the related
   traces above it.
-- No outline or ring around a focused control, in the console, the panel or
-  the widget's pill: keyboard focus shows as a light tint over the control
-  instead.
-- Every list of names and values reads one way: a request's headers and
-  attributes, a call's fields and all its attributes, a log record's fields,
-  an app's settings, a template's context, an error's locals and an email's
-  addresses. A list is one item a line (`signal.unreceived`, `db.params`,
-  shown as JSON or joined with commas before), JSON and a Python repr are
-  laid out and coloured, a long value folds under "Show all", and each one
-  copies as it came. A log message that is JSON is coloured as well.
-- The call tree's request row shows what its Request tab shows: the same parts
-  behind the same switch, Headers to Attributes. Every trace has the switch, a
-  task run's with its one part, Attributes, and the attributes are one card with
-  their namespaces as headings inside it. A task's arguments, keyword arguments,
-  result and retry reason sit under its other facts, a line each in the same
-  columns, not cut short. Its arguments and result, Python literals as the SDK
-  writes them, show as the JSON they stand for, coloured: `{"attempts": 3}`, a
-  tuple as an array, None as null. An error's locals copy, and an email's HTML
-  and Text switch as a request's parts do.
-- An entry point opens on its calls: HTTP on All requests, Tasks on All
-  runs, Pages on All events, and so on, from the menu, ⌘K or a group's way
-  back. Its switch, a smaller one, reads "By task | All runs" on every one
-  of them, the groups at `view=overview`. A link that named a list still
-  opens it. Its heading is its name in the menu (HTTP, not HTTP
-  endpoints), and its Overview is folded over the calls and open over the
-  groups, until you fold or open it yourself: that choice stays, as before.
-
-- An N+1 in a GraphQL request names the DataLoader of its server library:
-  `strawberry.dataloader` for Strawberry, graphql-sync-dataloaders (sync)
-  or aiodataloader (async) for Graphene, and a DataLoader with no library
-  named for any other. It said Strawberry's on every GraphQL trace before.
-  The library comes from `graphql.library`, which the Python SDK records.
-- A trace's info tab reads as one page, in the console and in the panel: its
-  facts, Related traces, Workflow and Attributes share one heading style and one
-  row, a name in a muted column and a hairline under it, with no boxes or bands
-  of capitals. An attribute's namespace is a quiet heading over its rows. Only
-  ids, paths and code are in monospace, and a body or a document keeps its box.
-- One badge for a trace's kind and one for a task's state, wherever they show:
-  the lists, the call tree, Related traces, the panel, ⌘K and Now. TASK, JOB,
-  WS, RPC, GQL, PAGE and a request's method share a shape and a colour, a span's
-  kind in the call tree is a muted one of the same, and a failed run says
-  "failure" everywhere.
-- The call tree's details read as a trace's info tab does: a call's fields,
-  its attributes, a template's context and a linked run's facts in the same
-  rows under the same headings, with no boxes. A request in a workflow's graph
-  shows its method in the call tree's muted badge, and in Tasks a system and
-  a worker in Now are the same neutral tag, labels rather than buttons.
-- A crisp light theme: a white page and sidebar drawn with hairlines, no
-  shadows, near-black text and one grey for labels. Lists have denser rows, a
-  white header over a strong rule and smaller filter chips. A method or a
-  trace's kind is its colour in monospace and a status a dot before its code,
-  the same in lists, a trace's header, its related traces and the panel. Issue
-  chips and a call's kind keep a soft square fill. The current page in the
-  sidebar is a grey row, the open tab is underlined in near-black and page
-  titles are smaller. The dark theme is as it was.
-- A trace's DB, Cache and HTTP calls tabs are tables like the console's
-  lists: a head (Query or Call, Time, Share), hairline rows and columns to
-  size and hide. Over the table a line says how many, how many unique and
-  their time (`4 queries · 4 unique · 11 ms`), with the Grouped and In order
-  switch at its end, as the Logs tab has its button there. A repeated query
-  says `×13` beside its name as in the call tree, one made once no count,
-  and the share of the time is a percent instead of a bar. In order lists
-  each query's start. An open row reads as the call tree's details: what it
-  is, the statement, its fields, the query plan and where it was called from.
-  A query opened in the call tree has the same Query plan.
-- The call tree has colour and rhythm. A row's kind badge is a soft fill of
-  its share's colour, the strip's and its legend's (SQL blue, your code
-  purple, templates green, the framework grey), and so is its bar, slimmer
-  and rounded. A wait is an outlined badge. Faint guides run down the
-  indent, the fold arrows step back, and the selected row is marked at its
-  edge. A query's verb and an HTTP call's method (in its colour) stand
-  apart from what they act on, and the framework's steps and library code
-  read quieter than yours. A call that took a fifth of the trace has its
-  time in amber, half of it in red. Rows are a little tighter.
-- A wait the app awaited through `sync_to_async` is named as the app wrote
-  it, `await sync_to_async(…) in product_feed`. A few ms of code beside a
-  long wait (or the reverse) is no longer a row of its own: under 5 ms, or
-  under a fifth of the span's own time and a twentieth of the trace's, it
-  folds into one row with the rest.
+- A request's tasks in the panel. A task's row in the call tree and under
+  Related traces names what its own trace found (N+1, Long transaction,
+  Error…) and its queries, as the lists do. In the panel a task opens in the
+  panel itself, with a way back to the request (Back, or Esc). The panel's
+  list nests the runs a request sent under it as the workers record them.
+  The pill says what a request's tasks ran into as its other numbers do: the
+  Tasks icon, then a red "5 failed" chip and the amber "3 issues" one, the
+  same chips as its own, and its ring turns red when one failed. The agent
+  lists a trace's runs (those it enqueued, and theirs) with
+  `api/traces?ids=…&runs=1`.
+- Django signals in the call tree. A send's row names its signal
+  (`post_save`, or a project signal's dotted path), its sender
+  (`auth.Group`), how many receivers it ran and, in red, how many of them
+  failed: under `send_robust()` the trace stays ok, so this is where a
+  failure shows. Each receiver is a row under it with its file and line, or
+  what it raised. Its details list the signal, the sender, whether it was
+  robust, the receivers and the line that sent it, and a receiver's its
+  function, where it is defined and its exception. The time its receivers
+  took is the breakdown's Signals share, a chip that shows the sends with
+  all they did. The same send repeated in a loop folds into one row, ×N.
+  The sends nobody received are a line among the request's facts, "Sent
+  with no receiver". `schema/trace.schema.json` documents the `signal.*`
+  and `exception.*` attributes.
+- Queries a template made as it rendered say so. In the DB tab and the call
+  tree such a query has a chip with its template and line
+  (`template blog/list.html:4`), its "Called from" names the view's line it
+  was rendered from, and its details have a Template row. An N+1 a template
+  made opens its hint with the template and its line, then the fix:
+  `select_related()` for a lookup by key, `prefetch_related()` for related
+  rows, or for an ORM the agent doesn't know, loading them in the view. The
+  line comes from `code.template_line`, which the Python SDK records.
+- A template's context in the call tree. A template's details list each
+  name it was rendered with and its value, as the Python SDK recorded it:
+  repr-ed, cut, secrets masked, a long one folded under "Show all". A
+  template's context stays on this machine, as a request's headers do: a
+  snapshot shared without its values leaves it out.
+- A response's body beside its request's, as Django Silk shows them. A
+  request's parts are Headers, Query, Request body, Cookies, Session,
+  Response headers and Response body: JSON laid out and coloured as a task's
+  arguments are, a form as its fields, a body cut at the SDK's limit laid out
+  as far as it goes and marked with how much of it is shown, and one kept by
+  its size only (an image, a page) saying so. The same parts show in the
+  console, in the panel and on the call tree's request row. A response's body
+  stays on this machine, as a request's does.
+- An app's settings and versions, as a debug toolbar shows them. The panel
+  has an App tab after Request: the settings of the app that served the
+  request, a filter above them, secrets masked by the SDK as `********`, and
+  the versions of what it runs on, the agent's too. On the Services page an
+  app's row opens its page with the same, and a link to its own work, and a
+  trace's facts name its app, a link to that page. The SDK says them once,
+  in its hello, and the agent serves them at `api/app?service=`. The Python
+  SDK sends them from Django and Flask. For an app whose SDK doesn't, the
+  page says so and the panel has no App tab.
+- An app's warnings on top of its App tab and its page: what its checks
+  found wrong with it, the most serious first. Each says its level in the
+  colour a log record's has, its id, what it is about, its message and its
+  hint. The Python SDK sends Django's system checks, the migrations not
+  applied yet and the model changes with no migration. The App tab counts
+  them, red with an error among them. An app with none shows nothing more.
+  The SDK says them in its hello, or in an `{"app": {...}}` frame once its
+  checks ran, and `api/app` serves them in `checks` and `migrations`.
 
 ### Changed
 
@@ -296,9 +254,148 @@
   colour, only for Go, Ruby on Rails and Node.js. Every other runtime shows
   the plain app icon and its name. NOTICE says that product names and logos
   are trademarks of their owners and that their use implies no endorsement.
+- A trace's time is one strip over its call tree, in the Call tree tab, on
+  the console's page and in the panel alike, for every kind of trace: its own
+  lane in the colours of where its time went, a lane per system it called
+  named by what its marks are (`139 queries`, `1 log record`), and the
+  shares of the time and the call tree's filters as its legend. It replaces
+  the tiles, the lanes and the bar over the call tree. On the console's page
+  the first tab (Request, Task, Job, Page) has the trace's facts only. What
+  the trace called is one quiet line in the page's header after its duration
+  (`139 queries 29 ms · 3 unique`).
+- A call tree and its strip show a trace's warnings and worse, not every
+  record: its info and debug records stay out of the tree and the log lane,
+  a quiet note on the span they were logged in says how many (`3 logs`),
+  and the legend's Logs chip, or a click on the note, shows them all
+  (`logs=all` in the URL). The Logs tab and the Logs page show every record,
+  as before. A request with no view or handler recorded counts its own time
+  as "Your code": it can't be told from the framework's then.
+- A wait the app awaited through `sync_to_async` is named as the app wrote
+  it, `await sync_to_async(…) in product_feed`. A few ms of code beside a
+  long wait (or the reverse) is no longer a row of its own: under 5 ms, or
+  under a fifth of the span's own time and a twentieth of the trace's, it
+  folds into one row with the rest.
+- The call tree has colour and rhythm. A row's kind badge is a soft fill of
+  its share's colour, the strip's and its legend's (SQL blue, your code
+  purple, templates green, the framework grey), and so is its bar, slimmer
+  and rounded. A wait is an outlined badge. Faint guides run down the
+  indent, the fold arrows step back, and the selected row is marked at its
+  edge. A query's verb and an HTTP call's method (in its colour) stand
+  apart from what they act on, and the framework's steps and library code
+  read quieter than yours. A call that took a fifth of the trace has its
+  time in amber, half of it in red. Rows are a little tighter.
+- The call tree's details read as a trace's info tab does: a call's fields,
+  its attributes, a template's context and a linked run's facts in the same
+  rows under the same headings, with no boxes. A request in a workflow's graph
+  shows its method in the call tree's muted badge, and in Tasks a system and
+  a worker in Now are the same neutral tag, labels rather than buttons.
+- The call tree's request row shows what its Request tab shows: the same parts
+  behind the same switch, Headers to Attributes. Every trace has the switch, a
+  task run's with its one part, Attributes, and the attributes are one card with
+  their namespaces as headings inside it. A task's arguments, keyword arguments,
+  result and retry reason sit under its other facts, a line each in the same
+  columns, not cut short. Its arguments and result, Python literals as the SDK
+  writes them, show as the JSON they stand for, coloured: `{"attempts": 3}`, a
+  tuple as an array, None as null. An error's locals copy, and an email's HTML
+  and Text switch as a request's parts do.
+- The code's own time is "Your code" in every kind of trace, a request's view
+  or handler too. A call tree's rows look one way: a task a request enqueued
+  has the grey kind box of the other rows, and its bar where it ran, running
+  to the right edge and fading there when it outlasts the request. A task's
+  run is a "task" and a command a "job" wherever a row names them.
+- A trace's first tab is one anatomy for every kind. In the panel it heads
+  with the trace's line as the page's header says it (its badge, name, how
+  it ended, its time) and what handled it under, quietly: a request's view
+  or handler, a task's queue and worker. Its facts follow in one order, its
+  kind's own first, then App, Runtime, Started and Trace ID, nothing its head
+  says again. A related trace is a row as the call tree draws a linked one:
+  a grey kind box, its name, its state and findings, its time.
+- A trace's info tab reads as one page, in the console and in the panel: its
+  facts, Related traces, Workflow and Attributes share one heading style and one
+  row, a name in a muted column and a hairline under it, with no boxes or bands
+  of capitals. An attribute's namespace is a quiet heading over its rows. Only
+  ids, paths and code are in monospace, and a body or a document keeps its box.
+- A trace's facts look like its related traces under them: names in muted
+  text, not capitals, a hairline under each row, no grey box around them.
+- A trace opened from HTTP, Tasks, Jobs or another entry point's lists, or
+  from a group's page, opens on what it was: its Request or Task tab. One
+  opened from Traces, a search or ⌘K opens on its call tree. An error still
+  comes first, and a link naming its tab still opens that tab.
+- A trace's DB, Cache and HTTP calls tabs are tables like the console's
+  lists: a head (Query or Call, Time, Share), hairline rows and columns to
+  size and hide. Over the table a line says how many, how many unique and
+  their time (`4 queries · 4 unique · 11 ms`), with the Grouped and In order
+  switch at its end, as the Logs tab has its button there. A repeated query
+  says `×13` beside its name as in the call tree, one made once no count,
+  and the share of the time is a percent instead of a bar. In order lists
+  each query's start. An open row reads as the call tree's details: what it
+  is, the statement, its fields, the query plan and where it was called from.
+  A query opened in the call tree has the same Query plan.
+- Every list of names and values reads one way: a request's headers and
+  attributes, a call's fields and all its attributes, a log record's fields,
+  an app's settings, a template's context, an error's locals and an email's
+  addresses. A list is one item a line (`signal.unreceived`, `db.params`,
+  shown as JSON or joined with commas before), JSON and a Python repr are
+  laid out and coloured, a long value folds under "Show all", and each one
+  copies as it came. A log message that is JSON is coloured as well.
+- One badge for a trace's kind and one for a task's state, wherever they show:
+  the lists, the call tree, Related traces, the panel, ⌘K and Now. TASK, JOB,
+  WS, RPC, GQL, PAGE and a request's method share a shape and a colour, a span's
+  kind in the call tree is a muted one of the same, and a failed run says
+  "failure" everywhere.
+- An entry point opens on its calls: HTTP on All requests, Tasks on All
+  runs, Pages on All events, and so on, from the menu, ⌘K or a group's way
+  back. Its switch, a smaller one, reads "By task | All runs" on every one
+  of them, the groups at `view=overview`. A link that named a list still
+  opens it. Its heading is its name in the menu (HTTP, not HTTP
+  endpoints), and its Overview is folded over the calls and open over the
+  groups, until you fold or open it yourself: that choice stays, as before.
+- Every table has a clear head in both themes: on white a quiet cool band
+  a step off the rows, its names a touch darker, a hairline under it, as the
+  dark theme's band. A header that stays in view as the list scrolls keeps
+  its band opaque and casts a soft shadow on the rows under it, only while
+  they scroll under it. A log's time shows whole, to the millisecond, and a
+  column's name is never cut: a column narrowed by a drag or a narrow page
+  stops at its name's width.
+- A crisp light theme: a white page and sidebar drawn with hairlines, no
+  shadows, near-black text and one grey for labels. Lists have denser rows, a
+  white header over a strong rule and smaller filter chips. A method or a
+  trace's kind is its colour in monospace and a status a dot before its code,
+  the same in lists, a trace's header, its related traces and the panel. Issue
+  chips and a call's kind keep a soft square fill. The current page in the
+  sidebar is a grey row, the open tab is underlined in near-black and page
+  titles are smaller. The dark theme is as it was.
+- No outline or ring around a focused control, in the console, the panel or
+  the widget's pill: keyboard focus shows as a light tint over the control
+  instead.
+- Set user in the panel is an outlined button of one size. A logged-in user
+  lights its icon with a dot, and their name is in its hint (`Acting as
+  alice · click to change`), so a long name no longer stretches the toolbar.
+  Docked at the bottom, the list's toolbar row keeps Follow new, Profile and
+  Clear in one tight group on the right. As the list narrows, the logo drops
+  its wordmark, then Follow new its name, then Set user its label, and the
+  row never wraps.
+- Tasks from Huey, django-q2 and Channels workers are named as their
+  projects name them in a run's System column and filters: Huey, django-q2,
+  Channels. The API schema lists them among the task systems.
+- The Tasks page's Now shows a task's arguments as the JSON its trace shows,
+  `[42] {"to": "ann"}`, not as Python wrote them, and empty ones not at all.
+  A long task name is cut at its start, so its handler stays in sight.
+- A long task name is cut at its start everywhere it shows, as on Now, so
+  the handlers of one consumer no longer read the same. That is the Tasks
+  page's lists and its Overview, a task's page and its crumb, a trace's
+  heading, the call tree's task rows and the tasks it sent, a request's
+  enqueued tasks, the Task filter and ⌘K, in the console and in the panel.
+  A cut name starts where a whole one does, after a "…". In the call tree,
+  "enqueue" stays whole before it. The whole name shows on hover.
 
 ### Fixed
 
+- An N+1 in a GraphQL request names the DataLoader of its server library:
+  `strawberry.dataloader` for Strawberry, graphql-sync-dataloaders (sync)
+  or aiodataloader (async) for Graphene, and a DataLoader with no library
+  named for any other. It said Strawberry's on every GraphQL trace before.
+  The library comes from `graphql.library`, which the Python SDK records.
 - A model call recorded by an OpenTelemetry GenAI instrumentation counts its
   prompt cache writes in its cost when it names them by the conventions'
   older `gen_ai.usage.cache_creation.input_tokens`. They are stored as

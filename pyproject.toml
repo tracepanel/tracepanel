@@ -1,6 +1,6 @@
 [project]
 name = "tracepanel-agent"
-version = "0.4.1"
+version = "0.5.0"
 description = "The Tracepanel agent: keeps your app's traces and logs, finds N+1 queries and other issues, serves the local console"
 # The page on the package index (README.md is the repository's).
 readme = "PYPI.md"
