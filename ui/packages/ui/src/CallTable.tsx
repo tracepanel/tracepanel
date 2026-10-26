@@ -5,10 +5,12 @@
 import { Fragment, type KeyboardEvent, type MouseEvent, type ReactNode, useState } from "react";
 import { TableCell, TableRow } from "./components/ui/table";
 import { type DataColumn, DataTable } from "./DataTable";
+import { ExplainView } from "./ExplainView";
 import { duration } from "./format";
 import { focusMark, useScrollToFocus } from "./hooks/useScrollToFocus";
 import { percent } from "./lib/percent";
 import { cn } from "./lib/utils";
+import type { ExplainPlan, Span } from "./types";
 
 // A failed call marks its row's edge red, as the console's lists mark theirs; one an issue points at is highlighted.
 const ROW = cn(
@@ -156,4 +158,18 @@ export function CallLines({ heading, children }: { heading: ReactNode; children:
       <ol className="m-0 grid list-none p-0">{children}</ol>
     </section>
   );
+}
+
+/** Runs EXPLAIN for one SQL span of the trace; without it, no query shows a plan. */
+export type Explain = (spanId: string, analyze: boolean) => Promise<ExplainPlan>;
+
+const isSelect = (span: Span) => /^\s*SELECT\b/i.test(String(span.attrs["db.statement"] ?? ""));
+
+/**
+ * A query's plan on demand, the same wherever a query's details open (a trace's DB tab, its call tree): a SELECT's,
+ * where the host can run EXPLAIN.
+ */
+export function QueryPlan({ span, onExplain }: { span: Span; onExplain: Explain | undefined }) {
+  if (!onExplain || span.kind !== "sql" || !isSelect(span)) return null;
+  return <ExplainView vendor={String(span.attrs["db.vendor"] ?? "")} load={(analyze) => onExplain(span.id, analyze)} />;
 }

@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { type Explain, QueryPlan } from "./CallTable";
 import { duration, since } from "./format";
 import { GraphqlCode } from "./GraphqlCode";
 import { ChevronRightIcon, CloseIcon } from "./icons";
@@ -1216,6 +1217,8 @@ type DetailsProps<T extends Node["type"]> = {
   node: Extract<Node, { type: T }>;
   trace: Trace;
   links?: TraceLinks | undefined;
+  /** EXPLAIN for a query of the trace shown, as its DB tab runs it; none for a linked trace's queries. */
+  onExplain?: Explain | undefined;
 };
 
 function LogDetails({ node }: DetailsProps<"log">) {
@@ -1239,7 +1242,7 @@ function Statement({ span, attrs }: { span: Span; attrs: Attrs }) {
   return <SqlCode sql={String(attrs["db.statement"] ?? span.name)} vendor={String(attrs["db.vendor"] ?? "")} />;
 }
 
-function GroupDetails({ node }: DetailsProps<"group">) {
+function GroupDetails({ node, onExplain }: DetailsProps<"group">) {
   const [first] = node.spans;
   const origins = new Set(node.spans.map((span) => String(span.attrs["code.origin"] ?? "")));
   return (
@@ -1252,6 +1255,7 @@ function GroupDetails({ node }: DetailsProps<"group">) {
         <>
           <Statement span={first} attrs={first.attrs} />
           <Fields rows={summaryRows(first, false)} />
+          <QueryPlan span={first} onExplain={onExplain} />
         </>
       ) : null}
       <p className="flex flex-wrap items-center gap-2 text-base text-muted-foreground [&_code]:rounded [&_code]:bg-muted [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-sm [&_code]:text-foreground">
@@ -1324,13 +1328,14 @@ function RootDetails({ node: { span }, trace }: DetailsProps<"span">) {
 }
 
 /** A call's own fields in words first (its topic, its URL, where in the code); every attribute after them. */
-function CallDetails({ node: { span }, trace }: DetailsProps<"span">) {
+function CallDetails({ node: { span }, trace, onExplain }: DetailsProps<"span">) {
   const parent = trace.spans.find((each) => each.id === span.parent_id);
   const summary = summaryRows(span, true, parent);
   return (
     <div className="grid gap-3 p-4">
       <SpanHead span={span} trace={trace} parent={parent} attrs={span.attrs} />
       {summary.length ? <Fields rows={summary} /> : null}
+      <QueryPlan span={span} onExplain={onExplain} />
       <SpanAttributes span={span} attrs={span.attrs} titled={summary.length > 0} />
     </div>
   );
@@ -1481,9 +1486,17 @@ function useScrolledToInitial(initialSpan: string | undefined): RefObject<HTMLDi
   return rows;
 }
 
-function detailsOf(tree: Node[], selected: string | null, trace: Trace, links: TraceLinks | undefined): ReactNode {
+function detailsOf(
+  tree: Node[],
+  selected: string | null,
+  trace: Trace,
+  hosts: { links: TraceLinks | undefined; onExplain: Explain | undefined },
+): ReactNode {
   const found = selected ? findNode(tree, selected, trace) : undefined;
-  return found ? <Details node={found.node} trace={found.trace} links={links} /> : null;
+  if (!found) return null;
+  // The host explains the trace's own queries: a linked trace's are its own.
+  const onExplain = found.trace === trace ? hosts.onExplain : undefined;
+  return <Details node={found.node} trace={found.trace} links={hosts.links} onExplain={onExplain} />;
 }
 
 /** Keys toggled in and out of a set: the folded rows, the opened groups. */
@@ -1680,6 +1693,8 @@ export function CallMap({
   head?: ReactNode;
   /** Opens the trace's profile, when it has one: its code rows lead there. */
   onProfile?: (() => void) | undefined;
+  /** EXPLAIN for a query of this trace: a SELECT's details then have its plan, as the DB tab's. */
+  onExplain?: Explain | undefined;
   /** Linked traces: tasks this trace enqueued appear under their enqueue span. */
   related?: Related | undefined;
   links?: TraceLinks | undefined;
@@ -1695,7 +1710,7 @@ export function CallMap({
   const side = useSidePane(map);
   const rows = useScrolledToInitial(initialSpan);
   const [collapsed, toggle] = useToggleSet();
-  const details = detailsOf(tree, selected, trace, links);
+  const details = detailsOf(tree, selected, trace, { links, onExplain: wiring.onExplain });
   const { categories, quiet } = useSpansTime(trace);
   const marks = useMemo(() => marksOf(tree, pickedOf(current, trace, categories)), [tree, current, trace, categories]);
   const inline = side ? null : details;

@@ -1,8 +1,7 @@
 import { cn } from "@tracepanel/ui/lib/utils";
 import { useMemo, useState } from "react";
-import { CallLine, CallLines, CallTable, DetailsTitle, timeColumns } from "./CallTable";
+import { CallLine, CallLines, CallTable, DetailsTitle, type Explain, QueryPlan, timeColumns } from "./CallTable";
 import type { DataColumn } from "./DataTable";
-import { ExplainView } from "./ExplainView";
 import { duration } from "./format";
 import { ListBar } from "./ListBar";
 import { callFields, templatePlace } from "./lib/callFields";
@@ -13,12 +12,7 @@ import { type NameValue, NameValues, RowsLookContext } from "./NameValues";
 import { AliasChip, IssueChip, SectionHeading, TemplateChip, Times } from "./primitives";
 import { type Segment, Segmented } from "./Segmented";
 import { SqlCode } from "./SqlCode";
-import type { ExplainPlan, IssueKind, Span } from "./types";
-
-/** Runs EXPLAIN for one SQL span; the Explain button is hidden without it. */
-export type Explain = (spanId: string, analyze: boolean) => Promise<ExplainPlan>;
-
-const isSelect = (span: Span | undefined) => /^\s*SELECT\b/i.test(String(span?.attrs["db.statement"] ?? ""));
+import type { IssueKind, Span } from "./types";
 
 export interface SqlListProps {
   spans: readonly Span[];
@@ -147,12 +141,6 @@ function QueryFields({ span }: { span: Span }) {
 
 const vendorOf = (span: Span) => String(span.attrs["db.vendor"] ?? "");
 
-/** A SELECT's plan, on demand, where the host can run EXPLAIN. */
-function Plan({ span, onExplain }: { span: Span; onExplain: Explain | undefined }) {
-  if (!onExplain || !isSelect(span)) return null;
-  return <ExplainView vendor={vendorOf(span)} load={(analyze) => onExplain(span.id, analyze)} />;
-}
-
 /** An open row: what it is, the statement, its fields, its plan on demand, where each of its queries was made. */
 function QueryDetails({
   title,
@@ -174,7 +162,7 @@ function QueryDetails({
       <DetailsTitle>{title}</DetailsTitle>
       <SqlCode sql={String(first.attrs["db.statement"] ?? first.name)} vendor={vendorOf(first)} />
       <QueryFields span={first} />
-      <Plan span={first} onExplain={onExplain} />
+      <QueryPlan span={first} onExplain={onExplain} />
       <CalledFromList spans={spans} focus={focus} />
       <AllRequests span={first} links={links} />
     </>
