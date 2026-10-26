@@ -1030,6 +1030,10 @@ export interface components {
             profile: boolean;
             /** @description The app profiles what a request's code allocated too when asked for memory (`tracepanel_profile=memory` or `X-Tracepanel-Profile: memory`, where `1` profiles the time only): the console offers that as well. False for an app that doesn't say it. */
             profile_memory: boolean;
+            /** @description The app's settings profile every request (`profile = true`), with no cookie or header: the console shows profiling as on and offers no way below it. False for an app that doesn't say it. */
+            profile_all: boolean;
+            /** @description The app's settings profile what every profiled request allocated too (`profile_memory = true`). False for an app that doesn't say it. */
+            profile_memory_all: boolean;
             /** @description The app records what its requests carry (query, headers, body, cookies, session). */
             request: boolean;
             /** @description The app can switch the user this browser is logged in as (api/users, api/users/me, api/users/switch). */

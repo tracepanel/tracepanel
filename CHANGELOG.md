@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- The panel's Profile button is lit when the app's settings profile every
+  request (`profile = true`), with no cookie, and shows the memory dot when
+  they profile memory too (`profile_memory = true`). Its hint names the
+  setting, and a click only adds memory on top, never goes below what the
+  settings profile. When both are set the button offers nothing and its
+  hint says to change the settings. `api/capabilities` answers
+  `profile_all` and `profile_memory_all` from the app's hello.
+
 ## 0.5.0 (2026-10-26)
 
 AWS, LLM calls, file storage and migrations in the console, memory and GC

@@ -733,6 +733,8 @@ async fn capabilities(
             "users": offers("users"),
             "profile": offers("profile"),
             "profile_memory": offers("profile_memory"),
+            "profile_all": offers("profile_all"),
+            "profile_memory_all": offers("profile_memory_all"),
             "request": offers("request"),
             "live_tasks": offers("live_tasks"),
         })

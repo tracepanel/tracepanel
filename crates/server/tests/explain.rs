@@ -57,7 +57,7 @@ async fn a_query_is_explained_by_the_app_that_recorded_it() {
         (status, before),
         (
             StatusCode::OK,
-            json!({"explain": false, "users": false, "profile": false, "profile_memory": false, "request": false, "live_tasks": false})
+            json!({"explain": false, "users": false, "profile": false, "profile_memory": false, "profile_all": false, "profile_memory_all": false, "request": false, "live_tasks": false})
         )
     );
 
@@ -132,7 +132,7 @@ async fn a_query_is_explained_by_the_app_that_recorded_it() {
     );
     assert_eq!(
         after,
-        json!({"explain": true, "users": false, "profile": false, "profile_memory": false, "request": false, "live_tasks": false})
+        json!({"explain": true, "users": false, "profile": false, "profile_memory": false, "profile_all": false, "profile_memory_all": false, "request": false, "live_tasks": false})
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
