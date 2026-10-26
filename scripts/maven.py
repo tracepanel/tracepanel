@@ -5,7 +5,9 @@
 
 One component, `dev.tracepanel:tracepanel-agent`, a POM with no jar of its own (packaging pom), and the binary of each
 platform beside it, under the platform's npm name as its classifier: `tracepanel-agent-0.3.8-darwin-arm64.exe`, as
-protoc is published. The Java SDK downloads the one it runs on, from Maven Central or a company's mirror of it.
+protoc is published. The Java SDK downloads the one it runs on, from Maven Central or a company's mirror of it. The
+licenses go beside them, as the wheels and npm packages carry them: `tracepanel-agent-0.3.8-license.txt`, `-notice.txt`
+and `-third-party-notices.txt` (each binary also prints them: `tracepanel-agent licenses`).
 
     uv run --no-project scripts/maven.py VERSION NPM_PACKAGES OUT
 
@@ -25,6 +27,8 @@ GROUP = "dev.tracepanel"
 ARTIFACT = "tracepanel-agent"
 PREFIX = "@tracepanel/agent-"
 PLATFORMS = 15
+# The files every npm package of the agent holds (scripts/npm.py), by their classifier here.
+LICENSES = {"LICENSE": "license", "NOTICE": "notice", "THIRD-PARTY-NOTICES": "third-party-notices"}
 
 POM = """\
 <?xml version="1.0" encoding="UTF-8"?>
@@ -37,7 +41,8 @@ POM = """\
   <packaging>pom</packaging>
   <name>Tracepanel agent</name>
   <description>The Tracepanel agent: it keeps the traces, finds the issues and serves the console. One executable per
-    platform, its classifier the platform: {classifiers}.</description>
+    platform, its classifier the platform: {classifiers}. Its licenses beside them, as txt: license, notice and
+    third-party-notices.</description>
   <url>https://tracepanel.dev</url>
   <inceptionYear>2026</inceptionYear>
   <licenses>
@@ -80,6 +85,22 @@ def binaries(packages: Path) -> dict[str, bytes]:
     return found
 
 
+def licenses(packages: Path) -> dict[str, bytes]:
+    """LICENSE, NOTICE and THIRD-PARTY-NOTICES, by their classifier: the same in every platform package, or no bundle."""
+    found: dict[str, bytes] = {}
+    for path in sorted(packages.glob("*.tgz")):
+        with tarfile.open(path) as tgz:
+            for name, classifier in LICENSES.items():
+                try:
+                    member = tgz.extractfile(f"package/{name}")
+                except KeyError:
+                    sys.exit(f"{path.name}: no {name}")
+                data = member.read()
+                if found.setdefault(classifier, data) != data:
+                    sys.exit(f"{path.name}: its {name} differs from another package's")
+    return found
+
+
 def write(path: Path, data: bytes) -> None:
     """The file, and the checksums the Central Portal asks for (md5 and sha1) and the stronger ones it takes."""
     path.write_bytes(data)
@@ -98,6 +119,9 @@ def main(version: str, packages: Path, out: Path) -> None:
     for platform, binary in sorted(found.items()):
         write(directory / f"{ARTIFACT}-{version}-{platform}.exe", binary)
         print(f"{platform}: {len(binary):,} bytes, sha512 {hashlib.sha512(binary).hexdigest()[:16]}…")
+    for classifier, text in sorted(licenses(packages).items()):
+        write(directory / f"{ARTIFACT}-{version}-{classifier}.txt", text)
+        print(f"{classifier}: {len(text):,} bytes")
 
 
 if __name__ == "__main__":

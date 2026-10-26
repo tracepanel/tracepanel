@@ -4,6 +4,15 @@
 
 ### Added
 
+- The agent carries its licenses wherever it goes. `tracepanel-agent
+  licenses` prints its license, its notice and the notices of everything it
+  is built from, and the console's sidebar has a Licenses link that opens
+  them (`/api/licenses`). The notices now also cover what the console's
+  bundle takes from its build tools (Tailwind CSS, tw-animate-css, Vite and
+  Rolldown), the shadcn/ui components copied into it, Rust's standard
+  library and the musl C library of the static Linux builds. On Maven
+  Central the license, the notice and the third-party notices are published
+  beside the binaries.
 - AWS has a page of its own in Data, shown once the app called AWS: every
   call by service and operation (S3 GetObject, DynamoDB Query, Lambda
   Invoke), with its p95, its failures by error code (`NoSuchKey 3`), the

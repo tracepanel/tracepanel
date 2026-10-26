@@ -29,6 +29,7 @@ static DROPPED: AtomicU64 = AtomicU64::new(0);
 const USAGE: &str = "usage: tracepanel-agent [--dir DIR] [--listen unix|tcp:HOST:PORT] [--serve HOST:PORT] \
                      [--otlp HOST:PORT|off] [--idle-exit SECONDS] [--record DIR] [--llm-prices FILE]
        tracepanel-agent mcp [--dir DIR] [--values]
+       tracepanel-agent licenses
   --dir        the project's store directory (default .tracepanel)
   --listen     where SDKs connect: a unix socket (default; not on Windows) or TCP, e.g. tcp:127.0.0.1:0
   --serve      also serve the console (UI and API), e.g. 127.0.0.1:8765 (port 0: any free one)
@@ -39,7 +40,9 @@ const USAGE: &str = "usage: tracepanel-agent [--dir DIR] [--listen unix|tcp:HOST
   --version    print the version
 
   mcp          an MCP server on stdin and stdout, for AI coding agents: reads the store, compact
-  --values     with mcp: show SQL parameters and local variables (secrets masked); off by default";
+  --values     with mcp: show SQL parameters and local variables (secrets masked); off by default
+
+  licenses     print the agent's license and the notices of the code it is built from";
 
 enum Message {
     Batch(Batch),
@@ -96,6 +99,8 @@ enum Command {
     },
     Help,
     Version,
+    /// Print the licenses and notices the binary carries.
+    Licenses,
 }
 
 fn parse(args: impl IntoIterator<Item = String>) -> Result<Command, String> {
@@ -117,6 +122,7 @@ fn parse(args: impl IntoIterator<Item = String>) -> Result<Command, String> {
             "mcp" => mcp = true,
             "--values" => values = true,
             "--version" | "-V" => return Ok(Command::Version),
+            "licenses" => return Ok(Command::Licenses),
             "--dir" => options.dir = PathBuf::from(value("a directory")?),
             "--serve" => options.serve = Some(value("HOST:PORT")?),
             "--record" => options.record = Some(PathBuf::from(value("a directory")?)),
@@ -177,6 +183,12 @@ async fn main() -> ExitCode {
         }
         Ok(Command::Version) => {
             println!("tracepanel-agent {}", env!("CARGO_PKG_VERSION"));
+            ExitCode::SUCCESS
+        }
+        Ok(Command::Licenses) => {
+            // Not print!: piped into head or a pager that quits early, it would panic on the closed pipe.
+            use std::io::Write;
+            let _ = std::io::stdout().write_all(tracepanel_server::LICENSES.as_bytes());
             ExitCode::SUCCESS
         }
         Ok(Command::Mcp { dir, values }) => {
@@ -641,6 +653,7 @@ mod tests {
         );
         assert_eq!(parse(args("--help")), Ok(Command::Help));
         assert_eq!(parse(args("-V")), Ok(Command::Version));
+        assert_eq!(parse(args("licenses")), Ok(Command::Licenses));
         // tracepanel's CLI puts --dir first.
         assert_eq!(
             parse(args("--dir .tp mcp --values")),

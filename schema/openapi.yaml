@@ -688,6 +688,16 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/SearchSpec" }
+  /licenses:
+    get:
+      operationId: licenses
+      summary: The agent's license and notice, then the licenses of the third-party code it is built from.
+      responses:
+        "200":
+          description: Plain text, as `tracepanel-agent licenses` prints it.
+          content:
+            text/plain:
+              schema: { type: string }
   /users:
     get:
       operationId: searchUsers
