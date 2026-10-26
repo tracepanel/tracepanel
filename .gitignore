@@ -11,3 +11,6 @@ ui-dist/*.map
 .lefthook-local.json
 .lefthook-local.jsonc
 .lefthook-local.toml
+
+# Swift Package Manager
+.build/

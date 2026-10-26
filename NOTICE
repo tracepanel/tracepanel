@@ -6,6 +6,8 @@ Licensed under the Functional Source License, Version 1.1, ALv2 Future License
 
 Third-party components and their licenses are listed in THIRD-PARTY-NOTICES.
 
-Django, FastAPI, Flask and the other names and logos the console shows to
-identify frameworks are trademarks of their owners. Tracepanel is not
-affiliated with them.
+Product names and logos are trademarks of their respective owners; their use
+here does not imply endorsement. Tracepanel is not affiliated with them. The
+console names frameworks, languages and services in text, and shows the Go,
+Ruby on Rails and Node.js marks unaltered, from Simple Icons (CC0-1.0), to say
+it supports them.

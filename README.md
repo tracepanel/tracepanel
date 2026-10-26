@@ -9,8 +9,8 @@ comes with its SQL queries, its calls to Redis, caches and other services, its
 log lines and errors. Tracepanel finds N+1 queries and calls, slow SQL, blocking
 calls in async code and more, and names the line of code to fix.
 
-The first SDK is for Python: Django, FastAPI and Flask. A service in another
-language shows through OpenTelemetry.
+Its SDKs are for Python, JavaScript and Java. A service in another language
+shows through OpenTelemetry.
 
 It runs while you develop. Nothing leaves your machine.
 
