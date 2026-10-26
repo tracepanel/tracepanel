@@ -759,7 +759,7 @@ components:
       minimum: 0
     IssueKind:
       type: string
-      enum: [n+1, duplicates, slow-sql, slow-http, slow-call, error, long-transaction, in-transaction, htmx, queue-wait, blocking-call, large-result]
+      enum: [n+1, duplicates, slow-sql, slow-http, slow-call, error, long-transaction, in-transaction, htmx, queue-wait, blocking-call, large-result, migration-risk]
     TraceSummary:
       type: object
       description: A trace without its document, as in lists.
@@ -1178,7 +1178,7 @@ components:
     App:
       type: object
       additionalProperties: false
-      required: [service, agent, connected, received, settings, versions, checks, migrations]
+      required: [service, agent, connected, received, settings, versions, checks, migrations, migrate]
       properties:
         service: { type: string }
         agent: { type: string, description: This agent's version. }
@@ -1209,7 +1209,20 @@ components:
           oneOf:
             - $ref: "#/components/schemas/AppMigrations"
             - type: "null"
-          description: The app's migrations not applied or not made; null when the SDK doesn't look or hasn't yet.
+          description: >-
+            The app's migrations not applied or not made; null when the SDK doesn't look or hasn't yet. A migrate
+            command's trace keeps them true: the migrations it applied go from `unapplied`, those it unapplied come
+            back.
+        migrate:
+          description: The latest migrate command the agent had a trace of from the app, which the warning links to.
+          oneOf:
+            - type: object
+              additionalProperties: false
+              required: [trace, received]
+              properties:
+                trace: { type: string, description: Its trace's id. }
+                received: { $ref: "#/components/schemas/Time" }
+            - type: "null"
     AppCheck:
       type: object
       additionalProperties: false

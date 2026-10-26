@@ -1,7 +1,7 @@
 import { type App, AppDetails, type DataSource, RuntimeIcon, runtimeKind, type ServiceApp } from "@tracepanel/ui";
 import { ActivityIcon, type LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
-import { href } from "./routes";
+import { consoleLinks, href } from "./routes";
 import { NAV } from "./Sidebar";
 import { sectionLabel } from "./sections";
 import { appTarget, roleSection } from "./services";
@@ -97,7 +97,7 @@ export function AppPage({ service, source }: { service: string; source: DataSour
   return (
     <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-7 px-10 pt-7 pb-16 *:min-w-0">
       <AppHeader service={service} roles={roles} />
-      <AppDetails app={app} />
+      <AppDetails app={app} links={consoleLinks()} />
     </div>
   );
 }

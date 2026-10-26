@@ -19,9 +19,10 @@ are ULIDs.
   (`kind`). A task is a trace of its own, with a `link` to the span that
   enqueued it.
 - **Span**: a unit of work inside a trace. `kind` is one of `http`, `sql`,
-  `cache`, `storage`, `llm`, `http.client`, `template`, `signal`,
-  `task.enqueue`, `task.run`, `command` and `function`. `attrs` are open and
-  namespaced: `http.route`, `db.fingerprint`, `cache.hit`, `code.origin`.
+  `cache`, `storage`, `llm`, `migration`, `migration.operation`,
+  `http.client`, `template`, `signal`, `task.enqueue`, `task.run`, `command`
+  and `function`. `attrs` are open and namespaced: `http.route`,
+  `db.fingerprint`, `cache.hit`, `code.origin`.
 - **Signal**: a send with receivers (a Django signal), a `signal` span with
   `signal.name`, `signal.sender` and `signal.receivers`. Each receiver is a
   `function` span under it. One that raised has status `error` and
@@ -33,6 +34,13 @@ are ULIDs.
   `storage.system`, `storage.op` and `storage.path`. A `function` span with
   `storage.op`, as SDKs before the kind send them, is made a `storage` span
   when it arrives.
+- **Migration**: a migration a migrate command applied or unapplied, a
+  `migration` span with `migration.app`, `migration.name`,
+  `migration.direction` and `migration.fake`. Each operation it ran is a
+  `migration.operation` span inside, with `migration.operation`,
+  `migration.rows` and `migration.risk` when it locks or rewrites a table. A
+  `function` span with `migration.app` or `migration.operation`, as SDKs
+  before the kinds send them, is made one when it arrives.
 - **LLM call**: a call to a model through a provider's API (OpenAI,
   Anthropic), an `llm` span with OpenTelemetry's GenAI attributes:
   `gen_ai.provider.name`, `gen_ai.operation.name`, the request and response

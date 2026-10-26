@@ -7,10 +7,12 @@ import { GraphqlCode } from "./GraphqlCode";
 import { grouped, LinkedTrace, tracesRow } from "./LinkedTrace";
 import { collectstaticFacts } from "./lib/collectstatic";
 import { handlerFullName, handlerWord } from "./lib/handler";
+import { migratePlan, planSummary } from "./lib/migrations";
 import { shownValue } from "./lib/pyliteral";
 import { traceRuntime } from "./lib/runtime";
 import { unreceived } from "./lib/signals";
 import { linkProps, type TraceLinks } from "./links";
+import { MigrationList, riskCount } from "./Migrations";
 import { type PropRow, PropTable } from "./PropTable";
 import { RoutePath, TraceBadge } from "./primitives";
 import { isRequestDetail, RequestParts, requestParts } from "./RequestParts";
@@ -333,8 +335,9 @@ function ownRows(trace: Trace, hero: boolean, related: Related | undefined, link
   const attrs = trace.attrs;
   return [
     ...(trace.kind === "task" ? taskRows(trace, related, links, hero) : []),
-    // A job's own: collectstatic's files and phases.
+    // A job's own: collectstatic's files and phases, migrate's migrations.
     ...collectstaticFacts(trace),
+    ...migrateRows(trace),
     ...(hero ? [] : handlerRows(trace)),
     ...userRows(attrs),
     ...htmxRows(attrs),
@@ -346,6 +349,24 @@ function ownRows(trace: Trace, hero: boolean, related: Related | undefined, link
     ...unreceivedRows(attrs),
     ...clockRows(trace),
   ];
+}
+
+/** "2 applied · 1 faked · 1 risky operation": what a migrate job did, at a glance. */
+function migrateRows(trace: Trace): PropRow[] {
+  const plan = migratePlan(trace);
+  if (!plan) return [];
+  return [{ label: "Migrations", value: [planSummary(plan), riskCount(plan)].filter(Boolean).join(" · ") }];
+}
+
+/** A migrate job's migrations, each with its operations, under its facts. */
+function MigrationsSection({ trace, links }: { trace: Trace; links: TraceLinks | undefined }) {
+  const plan = migratePlan(trace);
+  if (!(plan && (plan.migrations.length || plan.notRun.length))) return null;
+  return (
+    <Part label="Migrations" title="Migrations">
+      <MigrationList plan={plan} issues={trace.issues} links={links} />
+    </Part>
+  );
 }
 
 /** A titled part of the overview, when it has anything to show. */
@@ -398,6 +419,7 @@ export function RequestInfo({ trace, related, links, hero: wanted }: RequestInfo
     <div className="@container grid gap-5 p-4">
       {hero ? <Hero trace={trace} /> : null}
       <FactGrid rows={ownRows(trace, hero, related, links)} />
+      <MigrationsSection trace={trace} links={links} />
       {linked.length ? (
         <Part label="Related traces" title="Related traces">
           <PropTable dense rows={linked} />

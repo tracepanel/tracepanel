@@ -630,7 +630,7 @@ export interface components {
         /** @description Microseconds. */
         Duration: number;
         /** @enum {string} */
-        IssueKind: "n+1" | "duplicates" | "slow-sql" | "slow-http" | "slow-call" | "error" | "long-transaction" | "in-transaction" | "htmx" | "queue-wait" | "blocking-call" | "large-result";
+        IssueKind: "n+1" | "duplicates" | "slow-sql" | "slow-http" | "slow-call" | "error" | "long-transaction" | "in-transaction" | "htmx" | "queue-wait" | "blocking-call" | "large-result" | "migration-risk";
         /** @description A trace without its document, as in lists. */
         TraceSummary: {
             id: string;
@@ -998,8 +998,14 @@ export interface components {
             versions: components["schemas"]["AppVersion"][] | null;
             /** @description What the framework's own checks report (Django's system checks, its deployment checks too when DEBUG is off; the silenced ones and those that query the database left out), the most serious first. Empty when they found nothing, null when the SDK doesn't run them or they haven't run yet. */
             checks: components["schemas"]["AppCheck"][] | null;
-            /** @description The app's migrations not applied or not made; null when the SDK doesn't look or hasn't yet. */
+            /** @description The app's migrations not applied or not made; null when the SDK doesn't look or hasn't yet. A migrate command's trace keeps them true: the migrations it applied go from `unapplied`, those it unapplied come back. */
             migrations: components["schemas"]["AppMigrations"] | null;
+            /** @description The latest migrate command the agent had a trace of from the app, which the warning links to. */
+            migrate: {
+                /** @description Its trace's id. */
+                trace: string;
+                received: components["schemas"]["Time"];
+            } | null;
         };
         AppCheck: {
             /** @description The check message's id: "security.W004", "models.W042". */
@@ -1489,7 +1495,7 @@ export interface components {
         duration: number;
         /** @enum {unknown} */
         status: "ok" | "error";
-        /** @description Namespaced attributes (http.*, db.*, cache.*, storage.*, gen_ai.*, code.*, user.*, task.*, signal.*, exception.*, collectstatic.*). task.* is shared by every task queue (task.system says which: celery, django, django-q, dramatiq, huey, rq, taskiq, channels). Values are scalars or lists of scalars. */
+        /** @description Namespaced attributes (http.*, db.*, cache.*, storage.*, gen_ai.*, code.*, user.*, task.*, signal.*, exception.*, collectstatic.*, migration.*, migrate.*). task.* is shared by every task queue (task.system says which: celery, django, django-q, dramatiq, huey, rq, taskiq, channels). Values are scalars or lists of scalars. */
         attrs: {
             /** @description On a signal span and on each of its receivers' spans: the signal's dotted path, e.g. "django.db.models.signals.post_save". The signal span's name is Django's own signal by its name ("post_save"), any other by this path. */
             "signal.name"?: string;
@@ -1543,6 +1549,37 @@ export interface components {
             "collectstatic.storage_calls"?: number;
             /** @description On the copy phase's span: the time outside its files', the finders listing them, in milliseconds. */
             "collectstatic.find_ms"?: number;
+            /** @description On a migration span: the app's label, e.g. "shop". */
+            "migration.app"?: string;
+            /** @description On a migration span: the migration's name, e.g. "0012_add_sku". */
+            "migration.name"?: string;
+            /**
+             * @description On a migration span: forwards when migrate applied it, backwards when it unapplied it.
+             * @enum {unknown}
+             */
+            "migration.direction"?: "forwards" | "backwards";
+            /** @description On a migration span: whether it ran in a transaction (the migration's atomic and a database that can roll DDL back); on an operation span: whether the operation did. */
+            "migration.atomic"?: boolean;
+            /** @description On a migration span: whether it was faked (--fake, --fake-initial): recorded as applied, its operations not run. */
+            "migration.fake"?: boolean;
+            /** @description On a migration span: how many operations it has. */
+            "migration.operations"?: number;
+            /** @description On a migration operation span: the operation's class, e.g. "AddField", "RunPython". An SDK that sends operations as function spans marks them with it: the agent makes them migration.operation spans. */
+            "migration.operation"?: string;
+            /** @description On a migration operation span: what the operation says it does (its describe()). */
+            "migration.description"?: string | null;
+            /** @description On a migration operation span: the rows its INSERT, UPDATE and DELETE statements changed, when it ran any. */
+            "migration.rows"?: number;
+            /** @description On a migration operation span: why it locks or rewrites a table on the database it ran on, or can't be undone, a short reason. An applied migration's is an issue of the trace (migration-risk). */
+            "migration.risk"?: string;
+            /** @description On a migrate command trace: the plan's migrations, "app.name" each, in order, the first 100. */
+            "migrate.plan"?: string[];
+            /** @description On a migrate command trace: how many migrations the plan had. */
+            "migrate.planned"?: number;
+            /** @description On a migrate command trace: how many migrations it applied. */
+            "migrate.applied"?: number;
+            /** @description On a migrate command trace: how many migrations it unapplied. */
+            "migrate.unapplied"?: number;
             /** @description On an llm span: the provider the call went to, as OpenTelemetry's GenAI conventions name it: openai, anthropic, aws.bedrock, gcp.gemini… */
             "gen_ai.provider.name"?: string;
             /** @description On an llm span: the operation, chat, text_completion, generate_content or embeddings. An SDK that sends LLM calls as function spans marks them with it: the agent makes them llm spans (an agent's or a tool's span, invoke_agent or execute_tool, stays what it is). */
@@ -1614,7 +1651,7 @@ export interface components {
              * @description otel is an OpenTelemetry span as its instrumentation recorded it, with otel.span_kind and otel.scope among its attributes: the agent maps it to one of the other kinds before it stores the trace, so the console never returns one.
              * @enum {unknown}
              */
-            kind: "http" | "middleware" | "framework" | "view" | "template" | "sql" | "transaction" | "cache" | "storage" | "llm" | "redis" | "mail" | "signal" | "http.client" | "task.enqueue" | "task.run" | "command" | "function" | "event" | "websocket" | "websocket.send" | "channel.send" | "graphql" | "mongodb" | "elasticsearch" | "cassandra" | "dynamodb" | "memcached" | "kafka" | "rabbitmq" | "sqs" | "grpc" | "db" | "messaging" | "rpc" | "otel" | "page";
+            kind: "http" | "middleware" | "framework" | "view" | "template" | "sql" | "transaction" | "cache" | "storage" | "llm" | "migration" | "migration.operation" | "redis" | "mail" | "signal" | "http.client" | "task.enqueue" | "task.run" | "command" | "function" | "event" | "websocket" | "websocket.send" | "channel.send" | "graphql" | "mongodb" | "elasticsearch" | "cassandra" | "dynamodb" | "memcached" | "kafka" | "rabbitmq" | "sqs" | "grpc" | "db" | "messaging" | "rpc" | "otel" | "page";
             name: string;
             start: components["schemas"]["trace.schema"]["$defs"]["time"];
             duration: components["schemas"]["trace.schema"]["$defs"]["duration"];
@@ -1659,7 +1696,7 @@ export interface components {
             fingerprint: string;
             fingerprint_version: number;
             /** @enum {unknown} */
-            kind: "n+1" | "duplicates" | "slow-sql" | "slow-http" | "slow-call" | "error" | "long-transaction" | "in-transaction" | "htmx" | "queue-wait" | "blocking-call" | "large-result";
+            kind: "n+1" | "duplicates" | "slow-sql" | "slow-http" | "slow-call" | "error" | "long-transaction" | "in-transaction" | "htmx" | "queue-wait" | "blocking-call" | "large-result" | "migration-risk";
             title: string;
             /** @description Where in the project code it happens, e.g. "blog/views.py:21 in post_list". */
             culprit: string | null;
@@ -1887,7 +1924,7 @@ export interface components {
                 duration: number;
                 /** @enum {unknown} */
                 status: "ok" | "error";
-                /** @description Namespaced attributes (http.*, db.*, cache.*, storage.*, gen_ai.*, code.*, user.*, task.*, signal.*, exception.*, collectstatic.*). task.* is shared by every task queue (task.system says which: celery, django, django-q, dramatiq, huey, rq, taskiq, channels). Values are scalars or lists of scalars. */
+                /** @description Namespaced attributes (http.*, db.*, cache.*, storage.*, gen_ai.*, code.*, user.*, task.*, signal.*, exception.*, collectstatic.*, migration.*, migrate.*). task.* is shared by every task queue (task.system says which: celery, django, django-q, dramatiq, huey, rq, taskiq, channels). Values are scalars or lists of scalars. */
                 attrs: {
                     /** @description On a signal span and on each of its receivers' spans: the signal's dotted path, e.g. "django.db.models.signals.post_save". The signal span's name is Django's own signal by its name ("post_save"), any other by this path. */
                     "signal.name"?: string;
@@ -1941,6 +1978,37 @@ export interface components {
                     "collectstatic.storage_calls"?: number;
                     /** @description On the copy phase's span: the time outside its files', the finders listing them, in milliseconds. */
                     "collectstatic.find_ms"?: number;
+                    /** @description On a migration span: the app's label, e.g. "shop". */
+                    "migration.app"?: string;
+                    /** @description On a migration span: the migration's name, e.g. "0012_add_sku". */
+                    "migration.name"?: string;
+                    /**
+                     * @description On a migration span: forwards when migrate applied it, backwards when it unapplied it.
+                     * @enum {unknown}
+                     */
+                    "migration.direction"?: "forwards" | "backwards";
+                    /** @description On a migration span: whether it ran in a transaction (the migration's atomic and a database that can roll DDL back); on an operation span: whether the operation did. */
+                    "migration.atomic"?: boolean;
+                    /** @description On a migration span: whether it was faked (--fake, --fake-initial): recorded as applied, its operations not run. */
+                    "migration.fake"?: boolean;
+                    /** @description On a migration span: how many operations it has. */
+                    "migration.operations"?: number;
+                    /** @description On a migration operation span: the operation's class, e.g. "AddField", "RunPython". An SDK that sends operations as function spans marks them with it: the agent makes them migration.operation spans. */
+                    "migration.operation"?: string;
+                    /** @description On a migration operation span: what the operation says it does (its describe()). */
+                    "migration.description"?: string | null;
+                    /** @description On a migration operation span: the rows its INSERT, UPDATE and DELETE statements changed, when it ran any. */
+                    "migration.rows"?: number;
+                    /** @description On a migration operation span: why it locks or rewrites a table on the database it ran on, or can't be undone, a short reason. An applied migration's is an issue of the trace (migration-risk). */
+                    "migration.risk"?: string;
+                    /** @description On a migrate command trace: the plan's migrations, "app.name" each, in order, the first 100. */
+                    "migrate.plan"?: string[];
+                    /** @description On a migrate command trace: how many migrations the plan had. */
+                    "migrate.planned"?: number;
+                    /** @description On a migrate command trace: how many migrations it applied. */
+                    "migrate.applied"?: number;
+                    /** @description On a migrate command trace: how many migrations it unapplied. */
+                    "migrate.unapplied"?: number;
                     /** @description On an llm span: the provider the call went to, as OpenTelemetry's GenAI conventions name it: openai, anthropic, aws.bedrock, gcp.gemini… */
                     "gen_ai.provider.name"?: string;
                     /** @description On an llm span: the operation, chat, text_completion, generate_content or embeddings. An SDK that sends LLM calls as function spans marks them with it: the agent makes them llm spans (an agent's or a tool's span, invoke_agent or execute_tool, stays what it is). */
@@ -1985,7 +2053,7 @@ export interface components {
                      * @description otel is an OpenTelemetry span as its instrumentation recorded it, with otel.span_kind and otel.scope among its attributes: the agent maps it to one of the other kinds before it stores the trace, so the console never returns one.
                      * @enum {unknown}
                      */
-                    kind: "http" | "middleware" | "framework" | "view" | "template" | "sql" | "transaction" | "cache" | "storage" | "llm" | "redis" | "mail" | "signal" | "http.client" | "task.enqueue" | "task.run" | "command" | "function" | "event" | "websocket" | "websocket.send" | "channel.send" | "graphql" | "mongodb" | "elasticsearch" | "cassandra" | "dynamodb" | "memcached" | "kafka" | "rabbitmq" | "sqs" | "grpc" | "db" | "messaging" | "rpc" | "otel" | "page";
+                    kind: "http" | "middleware" | "framework" | "view" | "template" | "sql" | "transaction" | "cache" | "storage" | "llm" | "migration" | "migration.operation" | "redis" | "mail" | "signal" | "http.client" | "task.enqueue" | "task.run" | "command" | "function" | "event" | "websocket" | "websocket.send" | "channel.send" | "graphql" | "mongodb" | "elasticsearch" | "cassandra" | "dynamodb" | "memcached" | "kafka" | "rabbitmq" | "sqs" | "grpc" | "db" | "messaging" | "rpc" | "otel" | "page";
                     name: string;
                     start: components["schemas"]["trace.schema"]["$defs"]["time"];
                     duration: components["schemas"]["trace.schema"]["$defs"]["duration"];
@@ -2047,7 +2115,7 @@ export interface components {
                     fingerprint: string;
                     fingerprint_version: number;
                     /** @enum {unknown} */
-                    kind: "n+1" | "duplicates" | "slow-sql" | "slow-http" | "slow-call" | "error" | "long-transaction" | "in-transaction" | "htmx" | "queue-wait" | "blocking-call" | "large-result";
+                    kind: "n+1" | "duplicates" | "slow-sql" | "slow-http" | "slow-call" | "error" | "long-transaction" | "in-transaction" | "htmx" | "queue-wait" | "blocking-call" | "large-result" | "migration-risk";
                     title: string;
                     /** @description Where in the project code it happens, e.g. "blog/views.py:21 in post_list". */
                     culprit: string | null;

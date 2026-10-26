@@ -86,7 +86,8 @@
   --dt-k-log: #9a93bd;
   --dt-k-mail: #f472b6;
   --dt-k-storage: #d4a373;
-  --dt-k-llm: #a3e635;
+  --dt-k-llm: #7dd3fc;
+  --dt-k-migration: #bef264;
   --dt-k-signal: #facc15;
   --dt-k-gc: #fb7185;
 
@@ -219,7 +220,8 @@
   --dt-k-log: #8a84a6;
   --dt-k-mail: #db2777;
   --dt-k-storage: #9a5b2c;
-  --dt-k-llm: #65a30d;
+  --dt-k-llm: #0369a1;
+  --dt-k-migration: #4d7c0f;
   --dt-k-signal: #ca8a04;
   --dt-k-gc: #e11d48;
 
@@ -2586,6 +2588,11 @@ div.dt-map-row[data-kind="code"] {
 }
 .dt-map-row[data-kind="llm"] {
   --dt-k: var(--dt-k-llm);
+}
+/* migrate's migrations and their operations, one colour: a migration's own work. */
+.dt-map-row[data-kind="migration"],
+.dt-map-row[data-kind="migration.operation"] {
+  --dt-k: var(--dt-k-migration);
 }
 .dt-mails {
   display: grid;

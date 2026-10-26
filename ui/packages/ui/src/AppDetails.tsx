@@ -3,6 +3,7 @@ import { useState } from "react";
 import { AppWarnings, appWarnings } from "./AppWarnings";
 import { Input } from "./components/ui/input";
 import { dayTime } from "./format";
+import type { TraceLinks } from "./links";
 import { NameValues } from "./NameValues";
 import { Empty } from "./primitives";
 import { Segmented } from "./Segmented";
@@ -131,7 +132,7 @@ function Told({ app }: { app: App }) {
  * An app's settings and versions, as it said them in its hello, and what its checks found wrong with it on top: the
  * panel's App tab and the console's app page show the same. An app that said nothing is said so plainly.
  */
-export function AppDetails({ app }: { app: App | null }) {
+export function AppDetails({ app, links }: { app: App | null; links?: TraceLinks | undefined }) {
   const agent = app?.agent;
   if (!appSaidAnything(app)) {
     return (
@@ -144,7 +145,7 @@ export function AppDetails({ app }: { app: App | null }) {
   return (
     <div className="grid gap-3">
       <Told app={app} />
-      <AppWarnings warnings={appWarnings(app)} />
+      <AppWarnings warnings={appWarnings(app)} links={links} />
       <Parts app={app} />
     </div>
   );

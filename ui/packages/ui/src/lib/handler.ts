@@ -28,6 +28,8 @@ const KIND_WORDS = new Map<string, (attrs: Attrs) => string>([
   // console calls it.
   ["task.run", () => "task"],
   ["command", () => "job"],
+  // A migration's operation is an operation: the migration's row above says whose.
+  ["migration.operation", () => "operation"],
   ["view", (attrs) => handlerWord(attrs).toLowerCase()],
 ]);
 

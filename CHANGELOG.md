@@ -4,6 +4,21 @@
 
 ### Added
 
+- Migrations in the console. A migrate job's first tab says what it did
+  (`1 applied · 1 faked · 2 risky operations`) and lists each migration it
+  applied or unapplied with its operations, their rows, time and whether
+  they ran in a transaction, and the plan's migrations it didn't get to. An
+  operation that locks or rewrites a table, or has no reverse, has the
+  issue's chip and its reason. Migrations and operations are span kinds of
+  their own, `migration` and `migration.operation`, with a badge, a colour,
+  a filter and their details in the call tree: the Python SDK's `function`
+  spans with `migration.app` or `migration.operation` become them when they
+  arrive. A risky operation of a migration applied for real (not faked) is
+  an issue of the trace, `migration-risk`, its reason the title, the
+  migration and the operation where, with what to do instead. A migrate
+  job's trace keeps the app's unapplied migrations true: those it applied
+  go from the warning, those it unapplied come back, and the warning links
+  to it (`migrate` in `api/app`).
 - LLM calls are a span kind of their own, `llm`: each call an app makes to
   a model through OpenAI's or Anthropic's API, with OpenTelemetry's GenAI
   attributes. A `function` span with `gen_ai.operation.name`, as the Python

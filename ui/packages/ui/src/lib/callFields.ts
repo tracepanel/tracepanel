@@ -195,6 +195,11 @@ function sentFrom(value: unknown, attrs: Attrs): string {
  * A signal's send and a receiver it ran: no system's call, fields of their own. Robust reads `signal.robust`, which
  * only a robust send has: every send says it.
  */
+/** A flag as a field says it. */
+function yesNo(value: unknown): string {
+  return value === true ? "yes" : "no";
+}
+
 const BY_KIND = new Map<string, readonly Field[]>([
   [
     "signal",
@@ -214,6 +219,30 @@ const BY_KIND = new Map<string, readonly Field[]>([
     [
       ["Function", ["code.function"]],
       ["Defined at", ["code.filepath"], withLine],
+    ],
+  ],
+  [
+    "migration",
+    [
+      ["Migration", ["migration.name"], (name, attrs) => `${attrs["migration.app"] ?? ""}.${name}`],
+      [
+        "Direction",
+        ["migration.direction"],
+        (way) => (way === "backwards" ? "backwards: unapplied" : "forwards: applied"),
+      ],
+      ["Atomic", ["migration.atomic"], yesNo],
+      ["Fake", ["migration.fake"], yesNo],
+      ["Operations", ["migration.operations"]],
+    ],
+  ],
+  [
+    "migration.operation",
+    [
+      ["Operation", ["migration.operation"]],
+      ["Description", ["migration.description"]],
+      ["Atomic", ["migration.atomic"], yesNo],
+      ["Rows", ["migration.rows"], (rows) => Number(rows).toLocaleString()],
+      ["Risk", ["migration.risk"]],
     ],
   ],
 ]);

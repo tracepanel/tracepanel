@@ -552,9 +552,10 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send + 'static>(
     if refusal.is_some() {
         return Ok(());
     }
+    let said = live::now_us();
     activity
         .about
-        .hello(&hello.service, hello.app.as_ref(), live::now_us());
+        .hello(&hello.service, hello.app.as_ref(), said);
     // An app that can do something for the console takes requests down this connection, one frame each.
     let registered = (!(hello.capabilities.is_empty() && hello.console.is_empty())).then(|| {
         let (requests, mut queue) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
@@ -572,7 +573,7 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send + 'static>(
             requests,
         )
     });
-    let result = frames(&mut reader, &sink, activity, &hello).await;
+    let result = frames(&mut reader, &sink, activity, &hello, said).await;
     if let Some(connection) = registered {
         activity.apps.unregister(connection);
     }
@@ -587,6 +588,7 @@ async fn frames<R: AsyncRead + Unpin>(
     sink: &Sink,
     activity: &Activity,
     hello: &Hello,
+    said: i64,
 ) -> std::io::Result<()> {
     loop {
         let mut length = [0u8; 4];
@@ -608,7 +610,9 @@ async fn frames<R: AsyncRead + Unpin>(
                     activity.tasks.take(events, &hello.service, live::now_us());
                 } else if let Some(app) = object.get("app").filter(|app| app.is_object()) {
                     // What the app's checks found, after its hello.
-                    activity.about.checked(&hello.service, app, live::now_us());
+                    activity
+                        .about
+                        .checked(&hello.service, app, said, live::now_us());
                 } else {
                     activity.apps.answered(object);
                 }
