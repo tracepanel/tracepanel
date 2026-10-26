@@ -27,6 +27,18 @@ use tracepanel_store_local::{ReadError, Reader};
 #[exclude = "NOTICES"]
 struct Assets;
 
+/// What the agent's licenses ask to go with it, wherever the binary goes (a wheel, an npm package, Maven Central, a
+/// copy the Java SDK caches): its own license and notice, then the third parties' it is built from
+/// (THIRD-PARTY-NOTICES, written by scripts/notices.py). `tracepanel-agent licenses` prints it; the console's
+/// Licenses link opens `/api/licenses`.
+pub const LICENSES: &str = concat!(
+    include_str!("../../../LICENSE"),
+    "\n\n",
+    include_str!("../../../NOTICE"),
+    "\n\n",
+    include_str!("../../../THIRD-PARTY-NOTICES"),
+);
+
 const MAX_LIMIT: i64 = 500;
 
 type Shared = Arc<Reader>;
@@ -44,6 +56,7 @@ pub fn router(reader: Reader, activity: Activity) -> Router {
         .route("/api/explain", get(explain))
         .route("/api/w3c", get(served))
         .route("/api/search", get(search_spec))
+        .route("/api/licenses", get(licenses))
         .route("/api/logs", get(logs))
         .route("/api/logs/series", get(log_series))
         .route("/api/calls", get(calls))
@@ -801,6 +814,14 @@ async fn search_spec() -> Response {
         StatusCode::OK,
         tracepanel_store_local::search::SPEC.to_owned(),
     )
+}
+
+async fn licenses() -> Response {
+    (
+        [(header::CONTENT_TYPE, "text/plain; charset=utf-8")],
+        LICENSES,
+    )
+        .into_response()
 }
 
 async fn unknown(method: Method) -> Response {

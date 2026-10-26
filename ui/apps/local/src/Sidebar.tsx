@@ -37,6 +37,7 @@ import {
   NetworkIcon,
   RabbitIcon,
   RouteIcon,
+  ScaleIcon,
   ScrollTextIcon,
   SearchIcon,
   SendIcon,
@@ -548,6 +549,7 @@ function SidebarFooter({ rail, onClear }: { rail: boolean; onClear?: (() => void
             </button>
           </RailTip>
         ) : null}
+        <LicensesLink rail={true} />
         <ThemeToggle side="right" />
       </footer>
     );
@@ -570,10 +572,35 @@ function SidebarFooter({ rail, onClear }: { rail: boolean; onClear?: (() => void
             <Trash2Icon className="size-4" />
           </button>
         ) : null}
+        <LicensesLink rail={false} />
         <ThemeToggle />
       </span>
     </footer>
   );
+}
+
+/**
+ * The agent's license and the notices of everything it is built from, as `tracepanel-agent licenses` prints them: the
+ * agent's text, in a tab of its own. Relative, so it is the API of wherever the console is served (an app's
+ * /__tracepanel__/ too).
+ */
+function LicensesLink({ rail }: { rail: boolean }) {
+  const link = (
+    <a
+      href="api/licenses"
+      target="_blank"
+      rel="noopener"
+      aria-label="Licenses"
+      title={rail ? undefined : "Licenses"}
+      className={cn(
+        "grid place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground",
+        rail ? "size-9" : "size-8",
+      )}
+    >
+      <ScaleIcon className="size-4" />
+    </a>
+  );
+  return rail ? <RailTip label="Licenses">{link}</RailTip> : link;
 }
 
 export interface AppScope {

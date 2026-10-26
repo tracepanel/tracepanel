@@ -54,4 +54,8 @@ cache-keys = [
     { file = "crates/**/Cargo.toml" },
     { file = "schema/**" },
     { file = "ui-dist/**" },
+    # The licenses the binary embeds.
+    { file = "LICENSE" },
+    { file = "NOTICE" },
+    { file = "THIRD-PARTY-NOTICES" },
 ]

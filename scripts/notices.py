@@ -1,8 +1,11 @@
 """THIRD-PARTY-NOTICES: the licenses of the open source code inside the agent's binary, shipped in every wheel.
 
-Two parts: the Rust crates it is compiled from (cargo about, about.toml and about.hbs) and the npm packages the
-embedded console is built from (ui/'s production dependencies). Their licenses (MIT, Apache-2.0, BSD, OFL
-for the fonts…) ask for their texts to go with the program.
+Three parts: the Rust crates it is compiled from (cargo about, about.toml and about.hbs), what every Rust program
+links in (Rust's standard library, and musl's C library in the static Linux builds), and what the embedded console
+is built from: ui/'s production dependencies, the build tools whose output lands in the bundle (BUNDLED) and the
+shadcn/ui components copied into ui/ (VENDORED). Their licenses (MIT, Apache-2.0, BSD, OFL for the fonts…) ask
+for their texts to go with the program, which embeds this file too: `tracepanel-agent licenses` and the console's
+Licenses page show it.
 
     uv run scripts/notices.py            # write THIRD-PARTY-NOTICES
     uv run scripts/notices.py --check    # fail if it is out of date (CI)
@@ -15,12 +18,21 @@ written with the UI by scripts/ui.sh; `--ui` reads ui/ with its packages install
 import json
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "THIRD-PARTY-NOTICES"
 UI = ROOT / "ui"
 UI_NOTICES = ROOT / "ui-dist" / "NOTICES"
+LINKED = ROOT / "scripts" / "licenses"
+# devDependencies whose code is in the bundle all the same: Tailwind's CSS (preflight, utilities), tw-animate-css's
+# keyframes, and the runtime helpers Vite and Rolldown add (the modulepreload polyfill, the chunk loader).
+BUNDLED = ("tailwindcss", "tw-animate-css", "vite", "rolldown")
+# Source copied into ui/ rather than installed: its directory holds the license it came with.
+VENDORED = (("shadcn/ui components", UI / "packages" / "ui" / "src" / "components" / "ui", "MIT"),)
+# The musl the Rust toolchain ships for its *-linux-musl targets, which link it in statically.
+MUSL = "1.2.5"
 LICENSE_FILES = ("LICENSE", "LICENSE.md", "LICENSE.txt", "LICENCE", "LICENSE-MIT", "OFL.txt", "license", "license.md")
 RULE = "-" * 80
 # For a package that declares MIT but ships no license file: the license's text, with its author from package.json.
@@ -64,24 +76,32 @@ def license_text(package: Path, license_id: str) -> str | None:
     return None
 
 
-def ui() -> str:
+def listed(*flags: str) -> list[tuple[str, str, str, Path]]:
     listing = subprocess.run(  # noqa: S603 (pnpm, ui/)
         # -r: every workspace package's dependencies (pnpm 12 lists only the root's without it, and it has none).
-        ["pnpm", "licenses", "list", "--prod", "--json", "-r"],  # noqa: S607
+        ["pnpm", "licenses", "list", *flags, "--json", "-r"],  # noqa: S607
         cwd=UI,
         check=True,
         capture_output=True,
         text=True,
     ).stdout
-    packages = sorted(
+    return sorted(
         (package["name"], version, license_id, Path(path))
         for license_id, items in json.loads(listing).items()
         for package in items
         for version, path in zip(package["versions"], package["paths"], strict=False)
     )
-    if not packages:
+
+
+def ui() -> str:
+    production = listed("--prod")
+    if not production:
         # An empty listing is a pnpm change, not a console without dependencies: never ship no notices silently.
         sys.exit("pnpm licenses listed no packages in ui/")
+    bundled = [package for package in listed() if package[0] in BUNDLED]
+    if sorted({package[0] for package in bundled}) != sorted(BUNDLED):
+        sys.exit(f"not installed in ui/: {', '.join(sorted(set(BUNDLED) - {package[0] for package in bundled}))}")
+    packages = sorted(set(production) | set(bundled))
     parts = []
     missing = []
     for name, version, license_id, path in packages:
@@ -90,16 +110,42 @@ def ui() -> str:
             missing.append(f"{name} {version}")
             continue
         parts.append(f"{RULE}\n{name} {version} ({license_id})\n\n{text}\n")
+    for name, path, license_id in VENDORED:
+        text = license_text(path, license_id)
+        if text is None:
+            missing.append(name)
+            continue
+        parts.append(f"{RULE}\n{name} ({license_id}), copied into {path.relative_to(ROOT)}\n\n{text}\n")
     if missing:
         sys.exit(f"no license file in: {', '.join(missing)}")
     return "\n".join(parts).strip()
 
 
+def toolchain() -> str:
+    """The Rust release the agent is built with (rust-toolchain.toml): its standard library is in the binary."""
+    return tomllib.loads((ROOT / "rust-toolchain.toml").read_text())["toolchain"]["channel"]
+
+
+def linked() -> str:
+    rust = (LINKED / "rust-LICENSE-MIT").read_text().strip()
+    musl = (LINKED / "musl-COPYRIGHT").read_text().strip()
+    return (
+        f"{RULE}\nThe Rust standard library {toolchain()} (std, core, alloc and what they depend on)"
+        " (MIT OR Apache-2.0; under MIT here)\n\n"
+        "In every build. Its full notices, the crates it is built from included, are in the toolchain's\n"
+        "share/doc/rust/COPYRIGHT-library.html.\n\n"
+        f"{rust}\n\n"
+        f"{RULE}\nmusl {MUSL} (MIT)\n\nThe C library of the static Linux builds (the musllinux wheels, ARMv6), as the\n"
+        f"Rust toolchain ships it.\n\n{musl}\n"
+    )
+
+
 def notices() -> str:
     return (
         "tracepanel-agent includes open source software. Their licenses and notices follow: first the Rust crates the\n"
-        "program is compiled from, then the packages of the console it serves.\n\n"
+        "program is compiled from, then the libraries it links in, then what the console it serves is built from.\n\n"
         f"{'=' * 80}\nRust crates\n{'=' * 80}\n{rust()}\n\n"
+        f"{'=' * 80}\nLinked in\n{'=' * 80}\n{linked().strip()}\n\n"
         f"{'=' * 80}\nConsole (JavaScript, fonts)\n{'=' * 80}\n{UI_NOTICES.read_text().strip()}\n"
     )
 
