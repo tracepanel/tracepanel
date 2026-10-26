@@ -101,6 +101,7 @@ export const CARD_STYLE = `
   [data-category="redis"] { --k: var(--dt-k-redis); }
   [data-category="datastore"] { --k: var(--dt-k-datastore); }
   [data-category="messaging"] { --k: var(--dt-k-messaging); }
+  [data-category="storage"] { --k: var(--dt-k-storage); }
   [data-category="mail"] { --k: var(--dt-k-mail); }
   [data-category="signal"] { --k: var(--dt-k-signal); }
   .panel[data-open] ~ .card { display: none; }

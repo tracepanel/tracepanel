@@ -19,15 +19,20 @@ are ULIDs.
   (`kind`). A task is a trace of its own, with a `link` to the span that
   enqueued it.
 - **Span**: a unit of work inside a trace. `kind` is one of `http`, `sql`,
-  `cache`, `http.client`, `template`, `signal`, `task.enqueue`, `task.run`,
-  `command` and `function`. `attrs` are open and namespaced: `http.route`,
-  `db.fingerprint`, `cache.hit`, `code.origin`.
+  `cache`, `storage`, `http.client`, `template`, `signal`, `task.enqueue`,
+  `task.run`, `command` and `function`. `attrs` are open and namespaced:
+  `http.route`, `db.fingerprint`, `cache.hit`, `code.origin`.
 - **Signal**: a send with receivers (a Django signal), a `signal` span with
   `signal.name`, `signal.sender` and `signal.receivers`. Each receiver is a
   `function` span under it. One that raised has status `error` and
   `exception.type` / `exception.message`, while under `signal.robust` the
   trace stays ok. The sends nobody received make no span: the trace's
   `signal.unreceived` counts them.
+- **Storage call**: a call a file storage makes to its backend (Django's
+  `Storage`: the local disk, S3), a `storage` span with `storage.alias`,
+  `storage.system`, `storage.op` and `storage.path`. A `function` span with
+  `storage.op`, as SDKs before the kind send them, is made a `storage` span
+  when it arrives.
 - **Log**: a log record, bound to a span.
 - **Error**: an exception with its frames, bound to a span.
 - **Issue**: a problem the agent finds (`n+1`, `duplicates`, `slow-sql`,

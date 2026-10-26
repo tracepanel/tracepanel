@@ -200,6 +200,7 @@ const TASK_SYSTEMS: Record<string, string> = {
   dramatiq: "Dramatiq",
   rq: "RQ",
   huey: "Huey",
+  taskiq: "Taskiq",
   "django-q": "django-q2",
   django: "Django Tasks",
   channels: "Channels",

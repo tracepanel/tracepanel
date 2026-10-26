@@ -19,6 +19,7 @@ const NOUNS: Record<string, readonly [string, string]> = {
   sql: ["query", "queries"],
   redis: ["Redis command", "Redis commands"],
   cache: ["cache call", "cache calls"],
+  storage: ["storage call", "storage calls"],
   "http.client": ["HTTP call", "HTTP calls"],
 };
 

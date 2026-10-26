@@ -281,7 +281,7 @@ async fn the_agent_finds_the_issues_and_the_api_returns_them() {
             .map(|system| system["system"].as_str().unwrap().to_owned())
             .collect::<Vec<_>>()
     };
-    assert_eq!(systems(&counts), ["sql", "redis", "http"]);
+    assert_eq!(systems(&counts), ["sql", "redis", "http", "storage"]);
     let (_, other) = get(&router, "/api/counts?service=api").await;
     assert_eq!(systems(&other), ["sql"]);
     let _ = std::fs::remove_dir_all(&dir);
@@ -520,6 +520,165 @@ async fn any_system_is_listed_and_analyzed_by_its_family() {
     assert_eq!(found["traces"][0]["id"], "01M4ANYTRACE00000000000000");
     let (_, rpc) = get(&router, "/api/calls?q=family:rpc%20op:GET").await;
     assert_eq!(rpc["calls"][0]["system"], "thrift");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// File storage calls as an SDK before the `storage` kind sends them, `function` spans with `storage.op`: stored and
+/// served as `storage` spans, listed on their own page and in the service map, a loop of exists() on S3 an N+1 with
+/// the storage's hint, the same url() twice a duplicate. The same loop on the local disk costs nothing to speak of.
+#[tokio::test]
+async fn storage_calls_are_their_own_kind_listed_and_analyzed() {
+    let dir = std::env::temp_dir().join(format!("tracepanel-storage-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = tracepanel_store_local::path_in(&dir);
+    let mut store = Store::open(&path).unwrap();
+    let router = tracepanel_server::router(Reader::new(&path), Activity::default());
+
+    let call = |n: usize, system: &str, op: &str, path: &str, duration: i64| {
+        serde_json::json!({
+            "id": format!("01M5STRGSPAN{n:014}"), "parent_id": "01M5STRGR00T00000000000000", "kind": "function",
+            "name": format!("storage {op} {path}"), "start": 1_791_000_000_000_100_i64 + n as i64 * 10_000,
+            "duration": duration, "status": "ok",
+            "attrs": {
+                "storage.alias": if system == "s3" { "media" } else { "default" },
+                "storage.backend": if system == "s3" { "storages.backends.s3.S3Storage" }
+                    else { "django.core.files.storage.filesystem.FileSystemStorage" },
+                "storage.system": system, "storage.op": op, "storage.path": path,
+                "code.origin": "gallery/views.py:18 in gallery",
+            },
+        })
+    };
+    let mut spans = vec![serde_json::json!({
+        "id": "01M5STRGR00T00000000000000", "parent_id": null, "kind": "http", "name": "GET /gallery/",
+        "start": 1_791_000_000_000_000_i64, "duration": 200_000, "status": "ok", "attrs": {},
+    })];
+    for (n, name) in ["alice", "bob", "carol", "dave"].iter().enumerate() {
+        spans.push(call(
+            n,
+            "s3",
+            "exists",
+            &format!("avatars/{name}.png"),
+            4000,
+        ));
+        // The same on the disk: 4 calls of 20 µs, under the 5 ms that make repeats worth fixing.
+        spans.push(call(
+            10 + n,
+            "filesystem",
+            "exists",
+            &format!("thumbs/{name}.png"),
+            20,
+        ));
+    }
+    spans.push(call(20, "s3", "url", "banners/autumn.jpg", 1500));
+    spans.push(call(21, "s3", "url", "banners/autumn.jpg", 1500));
+    let doc = serde_json::json!({
+        "id": "01M5STRGTRACE0000000000000", "kind": "http", "name": "GET /gallery/", "start": 1_791_000_000_000_000_i64,
+        "duration": 200_000, "status": "ok",
+        "attrs": {"http.method": "GET", "http.route": "/gallery/", "http.status_code": 200, "service.name": "shop"},
+        "spans": spans, "logs": [], "errors": [], "links": [], "issues": [],
+    });
+    let batch = Batch {
+        frame: serde_json::to_vec(&vec![&doc]).unwrap(),
+        max_traces: Some(1000),
+        thresholds: Thresholds::default(),
+    };
+    let mut received = batch.decode().unwrap();
+    for trace in &mut received {
+        tracepanel_analysis::apply(trace, &batch.thresholds);
+    }
+    store.write(&received).unwrap();
+
+    let (_, trace) = get(&router, "/api/traces/01M5STRGTRACE0000000000000").await;
+    let errors: Vec<String> = validator()
+        .iter_errors(&trace)
+        .map(|error| error.to_string())
+        .collect();
+    assert!(errors.is_empty(), "as served: {errors:?}");
+    let spans = trace["spans"].as_array().unwrap();
+    assert!(spans[1..].iter().all(|span| span["kind"] == "storage"));
+
+    let issues: Vec<(&str, &str, &str)> = trace["issues"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|issue| {
+            (
+                issue["kind"].as_str().unwrap(),
+                issue["title"].as_str().unwrap(),
+                issue["hint"].as_str().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        issues,
+        [
+            (
+                "n+1",
+                "N+1: 4 similar storage calls · exists avatars/*",
+                "Each exists() asks the storage's backend (a request on S3): list the directory once with listdir() \
+                 and look the names up in it, or keep on the model whether the file is there."
+            ),
+            (
+                "duplicates",
+                "Duplicate storage calls: 2 identical · url banners/*",
+                "Ask the storage once and keep the answer for the request: each call goes to its backend again."
+            ),
+        ]
+    );
+
+    let (_, calls) = get(&router, "/api/calls?system=storage").await;
+    let rows: Vec<(&str, &str, &str, &str, &str, i64)> = calls["calls"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|row| {
+            (
+                row["family"].as_str().unwrap(),
+                row["target"].as_str().unwrap(),
+                row["op"].as_str().unwrap(),
+                row["template"].as_str().unwrap(),
+                row["vendor"].as_str().unwrap(),
+                row["calls"].as_i64().unwrap(),
+            )
+        })
+        .collect();
+    let mut rows = rows;
+    rows.sort_unstable();
+    assert_eq!(
+        rows,
+        [
+            ("storage", "default", "exists", "thumbs/*", "filesystem", 4),
+            ("storage", "media", "exists", "avatars/*", "s3", 4),
+            ("storage", "media", "url", "banners/*", "s3", 2),
+        ]
+    );
+    let (_, counts) = get(&router, "/api/counts").await;
+    assert_eq!(
+        counts["sections"]["systems"],
+        serde_json::json!([{"system": "storage", "family": "storage", "label": "Storage"}])
+    );
+    let (_, services) = get(&router, "/api/services").await;
+    let mut nodes: Vec<(&str, &str, &str)> = services["services"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|node| {
+            (
+                node["id"].as_str().unwrap(),
+                node["kind"].as_str().unwrap(),
+                node["system"].as_str().unwrap(),
+            )
+        })
+        .collect();
+    nodes.sort_unstable();
+    assert_eq!(
+        nodes,
+        [
+            ("storage:filesystem/default", "storage", "filesystem"),
+            ("storage:s3/media", "storage", "s3"),
+        ]
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 

@@ -3,7 +3,7 @@
 // page's filters, what a group of its calls is called — comes from here, so a new system is one row.
 
 /** Systems grouped where one color, lane or tile per system would be too many. */
-export type Family = "sql" | "redis" | "cache" | "datastore" | "messaging" | "rpc" | "http";
+export type Family = "sql" | "redis" | "cache" | "datastore" | "messaging" | "rpc" | "http" | "storage";
 
 export interface System {
   /** The span kind, and the `system` of its operations in the agent's API. */
@@ -156,6 +156,16 @@ export const SYSTEMS: readonly System[] = [
     ops: HTTP_METHODS,
     description: "The HTTP calls your app makes to other services: how often, how long they take, how often they fail.",
   },
+  {
+    kind: "storage",
+    family: "storage",
+    label: "Storage",
+    one: "storage call",
+    many: "storage calls",
+    target: "Storage",
+    ops: ["save", "open", "exists", "url", "listdir", "size", "delete"],
+    description: "Calls your file storages make, on the local disk or S3: which files, how often, how long they take.",
+  },
 ];
 
 export const SYSTEM_OF: ReadonlyMap<string, System> = new Map(SYSTEMS.map((system) => [system.kind, system]));
@@ -173,6 +183,7 @@ const FAMILY_DEFAULTS: Record<Family, Pick<System, "one" | "many" | "target" | "
   messaging: { one: "message", many: "messages", target: "Destination", ops: ["publish"] },
   rpc: { one: "call", many: "calls", target: "Service", ops: [] },
   http: { one: "HTTP call", many: "HTTP calls", target: "Host", ops: HTTP_METHODS },
+  storage: { one: "storage call", many: "storage calls", target: "Storage", ops: [] },
 };
 
 /**
@@ -259,7 +270,16 @@ export function systemOfPage(name: string, family: Family | undefined, label?: s
 }
 
 /** The families in the order the console lists systems: the agent's counts order them the same way. */
-export const FAMILY_ORDER: readonly Family[] = ["sql", "redis", "cache", "datastore", "messaging", "rpc", "http"];
+export const FAMILY_ORDER: readonly Family[] = [
+  "sql",
+  "redis",
+  "cache",
+  "datastore",
+  "messaging",
+  "rpc",
+  "http",
+  "storage",
+];
 
 /** The name of a system's page in the agent's operations. */
 export function pageOf(system: System): string {

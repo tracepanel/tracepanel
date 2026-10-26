@@ -1,5 +1,5 @@
-//! The service map: what each trace's spans called (databases and Redis, caches, mail, queues, HTTP), and the broker
-//! a task came from.
+//! The service map: what each trace's spans called (databases and Redis, caches, file storages, mail, queues, HTTP),
+//! and the broker a task came from.
 
 use super::*;
 
@@ -84,6 +84,16 @@ pub(crate) fn peer(span: &Span) -> Option<Peer> {
                 "cache",
                 text(attrs.get("cache.system")).unwrap_or_else(|| "cache".into()),
                 namespace,
+                Some(alias),
+            ))
+        }
+        // A file storage by its alias: the local disk, a bucket.
+        "storage" => {
+            let alias = tracepanel_analysis::storage::target(span);
+            Some(new(
+                "storage",
+                text(attrs.get("storage.system")).unwrap_or_else(|| "storage".into()),
+                Some(alias.clone()),
                 Some(alias),
             ))
         }

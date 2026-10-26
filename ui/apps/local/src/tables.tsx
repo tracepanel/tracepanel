@@ -475,10 +475,14 @@ function OpName({ item }: { item: CallRow }) {
   );
 }
 
-/** The column only some families have: Redis says who sent a command, a cache how often a read found its key. */
+/**
+ * The column only some families have: Redis says who sent a command, a cache how often a read found its key, a
+ * storage what holds its files.
+ */
 const EXTRA: Partial<Record<CallRow["family"], ExtraColumn<CallRow>>> = {
   redis: { head: "Via", cell: (item) => VIA_LABELS[item.via ?? ""] ?? item.via ?? "—" },
   cache: { head: "Hit rate", cell: hitRate },
+  storage: { head: "Backend", cell: (item) => item.vendor ?? "—" },
 };
 
 /** What sent a Redis command: the app itself, a cache, or a task queue publishing a task. */

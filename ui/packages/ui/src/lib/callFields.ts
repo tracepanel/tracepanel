@@ -1,6 +1,8 @@
 // A call's own fields, in its system's words: a Kafka publish's topic, partition and offset, a Redis command's key, a
 // gRPC call's service and method. The span's attributes say the same in OpenTelemetry's general terms
 // (messaging.destination.name): they are listed after, all of them, as recorded.
+import { bytes } from "../format";
+import { plural } from "./plural";
 import { type Family, systemOfSpan } from "./systems";
 
 type Attrs = Record<string, unknown>;
@@ -36,6 +38,17 @@ export function templatePlace(attrs: Readonly<Attrs>): string | null {
   if (typeof name !== "string" || !name) return null;
   const line = attrs["code.template_line"];
   return typeof line === "number" ? `${name}:${line}` : name;
+}
+
+/** A storage by its alias in STORAGES; one a FileField made has none, and is named by its class. */
+function storageName(value: unknown, attrs: Attrs): string {
+  return attrs["storage.alias"] ? String(value) : (String(value).split(".").at(-1) ?? String(value));
+}
+
+/** What a listing found: "2 directories, 14 files". */
+function listed(_: unknown, attrs: Attrs): string {
+  const dirs = plural(Number(attrs["storage.dirs"] ?? 0), "directory", "directories");
+  return `${dirs}, ${plural(Number(attrs["storage.files"] ?? 0), "file", "files")}`;
 }
 
 const BY_SYSTEM = new Map<string, readonly Field[]>([
@@ -97,6 +110,19 @@ const BY_SYSTEM = new Map<string, readonly Field[]>([
     ],
   ],
   ["sqs", [OPERATION, ["Queue", ["messaging.destination.name", "messaging.destination"]]]],
+  [
+    "storage",
+    [
+      ["Storage", ["storage.alias", "storage.backend"], storageName],
+      ["Backend", ["storage.system"]],
+      ["Operation", ["storage.op"]],
+      ["Path", ["storage.path"]],
+      ["Bytes", ["storage.bytes"], (value) => bytes(Number(value))],
+      ["Exists", ["storage.exists"], (exists) => (exists ? "yes" : "no")],
+      ["Listed", ["storage.files"], listed],
+      ["Saved as", ["storage.saved_as"]],
+    ],
+  ],
   ["grpc", [["Service", ["rpc.service"]], ["Method", ["rpc.method"]], ["Status", ["rpc.grpc.status_code"]], SERVER]],
   [
     "http.client",

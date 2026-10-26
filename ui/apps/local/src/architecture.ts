@@ -388,10 +388,14 @@ function fitted(diagram: Diagram): Diagram {
 
 /* ---------- Mermaid ---------- */
 
-/** Mermaid's shapes for a server: a cylinder for a database, a stadium for a cache, a queue's flag, an API's box. */
+/**
+ * Mermaid's shapes for a server: a cylinder for a database, a stadium for a cache, a framed box for a file storage, a
+ * queue's flag, an API's box.
+ */
 const SHAPES: Record<ServiceNode["kind"], [string, string]> = {
   database: ["[(", ")]"],
   cache: ["([", "])"],
+  storage: ["[[", "]]"],
   queue: [">", "]"],
   http: ["[", "]"],
   mail: ["[/", "/]"],

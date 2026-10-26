@@ -1,0 +1,210 @@
+{
+  "attrs": {
+    "code.view": "gallery.views.gallery",
+    "http.method": "GET",
+    "http.path": "/gallery/",
+    "http.route": "/gallery/",
+    "http.status_code": 200,
+    "process.runtime.name": "cpython",
+    "process.runtime.version": "3.13.1",
+    "service.name": "shop",
+    "service.role": "web",
+    "telemetry.sdk.language": "python",
+    "tracepanel.framework": "Django 5.2.18",
+    "user.id": null
+  },
+  "duration": 48000,
+  "errors": [],
+  "id": "01M5GSTRG0K3VJ6TN8C2XWB4FR",
+  "issues": [],
+  "kind": "http",
+  "links": [],
+  "logs": [],
+  "name": "GET /gallery/",
+  "spans": [
+    {
+      "attrs": {},
+      "duration": 48000,
+      "id": "01M5GSTRG0Y1A2B3C4D5E6F7G8",
+      "kind": "http",
+      "name": "GET /gallery/",
+      "parent_id": null,
+      "start": 1791561900000000,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.view": "gallery.views.gallery"
+      },
+      "duration": 47000,
+      "id": "01M5GSTRG0MV9W8X7Y6Z5A4B3C",
+      "kind": "view",
+      "name": "gallery.views.gallery",
+      "parent_id": "01M5GSTRG0Y1A2B3C4D5E6F7G8",
+      "start": 1791561900000500,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "gallery/views.py:18 in gallery",
+        "storage.alias": "default",
+        "storage.backend": "storages.backends.s3.S3Storage",
+        "storage.exists": true,
+        "storage.op": "exists",
+        "storage.path": "avatars/alice.png",
+        "storage.system": "s3"
+      },
+      "duration": 4200,
+      "id": "01M5GSTRGS0000000000000001",
+      "kind": "storage",
+      "name": "storage exists avatars/alice.png",
+      "parent_id": "01M5GSTRG0MV9W8X7Y6Z5A4B3C",
+      "start": 1791561900001000,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "gallery/views.py:18 in gallery",
+        "storage.alias": "default",
+        "storage.backend": "storages.backends.s3.S3Storage",
+        "storage.exists": true,
+        "storage.op": "exists",
+        "storage.path": "avatars/bob.png",
+        "storage.system": "s3"
+      },
+      "duration": 4200,
+      "id": "01M5GSTRGS0000000000000002",
+      "kind": "storage",
+      "name": "storage exists avatars/bob.png",
+      "parent_id": "01M5GSTRG0MV9W8X7Y6Z5A4B3C",
+      "start": 1791561900005500,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "gallery/views.py:18 in gallery",
+        "storage.alias": "default",
+        "storage.backend": "storages.backends.s3.S3Storage",
+        "storage.exists": true,
+        "storage.op": "exists",
+        "storage.path": "avatars/carol.png",
+        "storage.system": "s3"
+      },
+      "duration": 4200,
+      "id": "01M5GSTRGS0000000000000003",
+      "kind": "storage",
+      "name": "storage exists avatars/carol.png",
+      "parent_id": "01M5GSTRG0MV9W8X7Y6Z5A4B3C",
+      "start": 1791561900010000,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "gallery/views.py:18 in gallery",
+        "storage.alias": "default",
+        "storage.backend": "storages.backends.s3.S3Storage",
+        "storage.exists": true,
+        "storage.op": "exists",
+        "storage.path": "avatars/dave.png",
+        "storage.system": "s3"
+      },
+      "duration": 4200,
+      "id": "01M5GSTRGS0000000000000004",
+      "kind": "storage",
+      "name": "storage exists avatars/dave.png",
+      "parent_id": "01M5GSTRG0MV9W8X7Y6Z5A4B3C",
+      "start": 1791561900014500,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "gallery/views.py:18 in gallery",
+        "storage.alias": "default",
+        "storage.backend": "storages.backends.s3.S3Storage",
+        "storage.exists": false,
+        "storage.op": "exists",
+        "storage.path": "avatars/erin.png",
+        "storage.system": "s3"
+      },
+      "duration": 4200,
+      "id": "01M5GSTRGS0000000000000005",
+      "kind": "storage",
+      "name": "storage exists avatars/erin.png",
+      "parent_id": "01M5GSTRG0MV9W8X7Y6Z5A4B3C",
+      "start": 1791561900019000,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "gallery/views.py:18 in gallery",
+        "storage.alias": "default",
+        "storage.backend": "storages.backends.s3.S3Storage",
+        "storage.exists": true,
+        "storage.op": "exists",
+        "storage.path": "avatars/frank.png",
+        "storage.system": "s3"
+      },
+      "duration": 4200,
+      "id": "01M5GSTRGS0000000000000006",
+      "kind": "storage",
+      "name": "storage exists avatars/frank.png",
+      "parent_id": "01M5GSTRG0MV9W8X7Y6Z5A4B3C",
+      "start": 1791561900023500,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "gallery/views.py:24 in gallery",
+        "storage.alias": "default",
+        "storage.backend": "storages.backends.s3.S3Storage",
+        "storage.op": "url",
+        "storage.path": "banners/autumn.jpg",
+        "storage.system": "s3"
+      },
+      "duration": 1800,
+      "id": "01M5GSTRGS0000000000000007",
+      "kind": "storage",
+      "name": "storage url banners/autumn.jpg",
+      "parent_id": "01M5GSTRG0MV9W8X7Y6Z5A4B3C",
+      "start": 1791561900028000,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "gallery/views.py:24 in gallery",
+        "storage.alias": "default",
+        "storage.backend": "storages.backends.s3.S3Storage",
+        "storage.op": "url",
+        "storage.path": "banners/autumn.jpg",
+        "storage.system": "s3"
+      },
+      "duration": 1700,
+      "id": "01M5GSTRGS0000000000000008",
+      "kind": "storage",
+      "name": "storage url banners/autumn.jpg",
+      "parent_id": "01M5GSTRG0MV9W8X7Y6Z5A4B3C",
+      "start": 1791561900030000,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "gallery/views.py:31 in gallery",
+        "storage.alias": "default",
+        "storage.backend": "storages.backends.s3.S3Storage",
+        "storage.bytes": 2048,
+        "storage.op": "save",
+        "storage.path": "uploads/2026/10/visit.json",
+        "storage.system": "s3"
+      },
+      "duration": 5200,
+      "id": "01M5GSTRGS0000000000000009",
+      "kind": "storage",
+      "name": "storage save uploads/2026/10/visit.json",
+      "parent_id": "01M5GSTRG0MV9W8X7Y6Z5A4B3C",
+      "start": 1791561900032000,
+      "status": "ok"
+    }
+  ],
+  "start": 1791561900000000,
+  "status": "ok"
+}

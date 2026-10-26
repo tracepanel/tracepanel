@@ -3,7 +3,10 @@ import { SERVICE_KINDS, type ServiceApp, type ServiceEdge, type ServiceNode, ser
 import { SQL_VENDORS } from "@tracepanel/ui/lib/systems";
 import { callsSection, currentPeriod, type Route, type Section, withPeriod } from "./routes";
 
-/** The page of a service's operations: SQL for every SQL database, the cache's, HTTP calls, a datastore's own. */
+/**
+ * The page of a service's operations: SQL for every SQL database, the cache's, the storages', HTTP calls, a
+ * datastore's own.
+ */
 function pageOfService(node: ServiceNode): string | null {
   return PAGE_OF_KIND[node.kind]?.(node.system) ?? null;
 }
@@ -11,6 +14,7 @@ function pageOfService(node: ServiceNode): string | null {
 const PAGE_OF_KIND: Partial<Record<ServiceNode["kind"], (system: string) => string>> = {
   database: (system) => (SQL_VENDORS.has(system) ? "sql" : system),
   cache: () => "cache",
+  storage: () => "storage",
   http: (system) => (WEB.has(system) ? "http" : system),
 };
 const WEB = new Set(["http", "https"]);
