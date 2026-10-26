@@ -297,13 +297,18 @@ fn client(attrs: &Attrs) -> String {
 
 // ---------- LLM ----------
 
-/// The older conventions' names of the GenAI attributes, and the current ones.
+/// The older conventions' names of the GenAI attributes, and the current ones. The cache's writes were
+/// `cache_creation` until the GenAI conventions renamed them `cache_write`.
 const GEN_AI_RENAMED: &[(&str, &str)] = &[
     ("gen_ai.system", "gen_ai.provider.name"),
     ("gen_ai.usage.prompt_tokens", "gen_ai.usage.input_tokens"),
     (
         "gen_ai.usage.completion_tokens",
         "gen_ai.usage.output_tokens",
+    ),
+    (
+        "gen_ai.usage.cache_creation.input_tokens",
+        "gen_ai.usage.cache_write.input_tokens",
     ),
 ];
 

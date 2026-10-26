@@ -60,7 +60,10 @@ are ULIDs.
   messages. A `function` span with `gen_ai.operation.name` (chat,
   text_completion, generate_content, embeddings), as SDKs before the kind
   send them, is made an `llm` span when it arrives, and the agent adds its
-  estimated cost, `tracepanel.cost_usd`.
+  estimated cost, `tracepanel.cost_usd`. An OpenTelemetry span with the
+  conventions' older names (`gen_ai.system`, `gen_ai.usage.prompt_tokens`,
+  `gen_ai.usage.cache_creation.input_tokens`) is stored with the current
+  ones (`gen_ai.usage.cache_write.input_tokens` for the cache's writes).
 - **Log**: a log record, bound to a span.
 - **Error**: an exception with its frames, bound to a span.
 - **Issue**: a problem the agent finds (`n+1`, `duplicates`, `slow-sql`,

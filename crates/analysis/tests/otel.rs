@@ -435,7 +435,8 @@ fn a_query_keeps_how_many_rows_it_returned() {
 }
 
 /// Model calls as the GenAI instrumentations record them: an `llm` span with the `gen_ai.*` attributes in their
-/// current names, an older instrumentation's (`gen_ai.system`, prompt and completion tokens, no operation) too. An
+/// current names, an older instrumentation's (`gen_ai.system`, prompt and completion tokens, the cache's writes as
+/// `cache_creation`, no operation) too. An
 /// agent's or a tool's span is no model call.
 #[test]
 fn model_calls_are_llm_spans_in_the_current_names() {
@@ -454,6 +455,7 @@ fn model_calls_are_llm_spans_in_the_current_names() {
         &attrs(json!({
             "otel.span_kind": "client", "gen_ai.system": "anthropic", "gen_ai.request.model": "claude-sonnet-4-5",
             "gen_ai.usage.prompt_tokens": 30, "gen_ai.usage.completion_tokens": 7,
+            "gen_ai.usage.cache_read.input_tokens": 10, "gen_ai.usage.cache_creation.input_tokens": 5,
         })),
     );
     let tool = map(
@@ -483,7 +485,8 @@ fn model_calls_are_llm_spans_in_the_current_names() {
             attrs(json!({
                 "gen_ai.provider.name": "anthropic", "gen_ai.operation.name": "chat",
                 "gen_ai.request.model": "claude-sonnet-4-5", "gen_ai.usage.input_tokens": 30,
-                "gen_ai.usage.output_tokens": 7,
+                "gen_ai.usage.output_tokens": 7, "gen_ai.usage.cache_read.input_tokens": 10,
+                "gen_ai.usage.cache_write.input_tokens": 5,
             }))
         )
     );
