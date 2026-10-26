@@ -2,7 +2,7 @@
 
 import TOKENS from "virtual:tracepanel-tokens";
 import { plural } from "@tracepanel/ui/lib/plural";
-import { RUNTIME_PATHS, runtimeKind, runtimeName, traceRuntime } from "@tracepanel/ui/lib/runtime";
+import { APP_ICON_SVG, runtimeKind, runtimeMark, runtimeName, traceRuntime } from "@tracepanel/ui/lib/runtime";
 import { CARD_STYLE, mountCard, nameWithMethod } from "./card";
 
 export interface TraceInfo {
@@ -904,7 +904,10 @@ function stored(summary: EntrySummary, row: ListedTrace): EntrySummary {
   return { ...summary, issues: row.issues ?? 0, kinds: row.issue_kinds, duration: row.duration ?? summary.duration };
 }
 
-/** The mark and name of what served the page; an unknown runtime keeps its language's first word. */
+/**
+ * What served the page, as the console's RuntimeIcon draws it: its owner's mark where allowed, else the plain app icon,
+ * and its name. An unknown runtime keeps its language's first word.
+ */
 function showRuntime(element: HTMLElement, label: string | undefined): void {
   if (!label) return;
   const kind = runtimeKind(label);
@@ -912,12 +915,18 @@ function showRuntime(element: HTMLElement, label: string | undefined): void {
     element.textContent = label.split(" · ")[0]?.split(" ")[0] ?? "";
     return;
   }
+  const mark = runtimeMark(kind);
+  if (!mark) {
+    element.innerHTML = APP_ICON_SVG;
+    element.append(runtimeName(kind));
+    return;
+  }
   const svg = document.createElementNS(SVG, "svg");
   svg.setAttribute("viewBox", "0 0 24 24");
   svg.setAttribute("aria-hidden", "true");
   const path = document.createElementNS(SVG, "path");
-  path.setAttribute("d", RUNTIME_PATHS[kind]);
-  path.setAttribute("fill", "currentColor");
+  path.setAttribute("d", mark.path);
+  path.setAttribute("fill", mark.color ?? "currentColor");
   svg.append(path);
   element.append(svg, runtimeName(kind));
 }
@@ -942,10 +951,10 @@ export function mount(options: WidgetOptions = {}): Widget {
   const badge = query<HTMLButtonElement>(root, ".badge");
   const stats = query<HTMLElement>(root, ".stats");
   // What served the page, as the panel shows it (Django, FastAPI, Flask, Python, Go): which backend, at a glance.
-  const runtimeMark = query<HTMLElement>(root, ".runtime");
+  const runtimeChip = query<HTMLElement>(root, ".runtime");
   // A page its server didn't label (an SPA from a dev server): what answered this tab's first traced call.
   let runtime = learnedRuntime(options.runtime);
-  showRuntime(runtimeMark, runtime);
+  showRuntime(runtimeChip, runtime);
   // This page's latest view, from the browser recording: what the pill shows before the page's first request.
   let view: PageAnnouncement | null = null;
   let runtimeAsked = Boolean(runtime);
@@ -1192,7 +1201,7 @@ export function mount(options: WidgetOptions = {}): Widget {
     await askConsole(`api/traces/${encodeURIComponent(info.trace)}`, (body) => {
       runtime = traceRuntime((body as { attrs?: Record<string, unknown> }).attrs ?? {});
       learnRuntime(runtime);
-      showRuntime(runtimeMark, runtime);
+      showRuntime(runtimeChip, runtime);
       render();
       sendTab();
       return true;
