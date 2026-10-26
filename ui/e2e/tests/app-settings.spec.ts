@@ -72,8 +72,9 @@ test("an app's page lists what its checks found on top, the most serious first, 
   );
   await expect(rows.nth(1)).toContainText("warningmodels.W042shop.OrderAuto-created primary key used");
   await expect(rows.nth(1)).toContainText("Configure the DEFAULT_AUTO_FIELD setting");
+  // The hello said 0007 and 0008: the migrate job after it applied 0007.
   await expect(rows.nth(2)).toHaveText(
-    "warningmigrationsshop2 unapplied migrations: 0007_order_gift, 0008_order_gift_noteRun manage.py migrate to apply them: the app may not work until then.",
+    /^warningmigrationsshop1 unapplied migration: 0008_order_gift_noteRun manage\.py migrate to apply them: the app may not work until then\.As of the last migrate, /,
   );
   await expect(rows.nth(3)).toHaveText(
     "warningmigrationsshopModel changes with no migration: Add field note to orderRun manage.py makemigrations to write one.",

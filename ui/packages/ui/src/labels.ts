@@ -12,6 +12,7 @@ export const ISSUE_LABELS: Record<IssueKind, string> = {
   "queue-wait": "Queue wait",
   "blocking-call": "Blocking call",
   "large-result": "Large result",
+  "migration-risk": "Migration risk",
   error: "Error",
 };
 

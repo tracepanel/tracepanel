@@ -65,6 +65,21 @@ export function trace(kind: string, name: string, attrs: Doc, extra: Partial<Doc
   };
 }
 
+/** A span of the trace's: its id and its parent's the trace's with a suffix ("R" its root), its times `[start, duration]`. */
+function spanOf(doc: Doc) {
+  const id = String(doc["id"]);
+  return (suffix: string, parent: string, kind: string, name: string, at: [number, number], attrs: Doc): Doc => ({
+    id: `${id}${suffix}`,
+    parent_id: `${id}${parent}`,
+    kind,
+    name,
+    start: at[0],
+    duration: at[1],
+    status: "ok",
+    attrs,
+  });
+}
+
 const BROWSER = { "service.name": "shop-web", "service.role": "browser", "telemetry.sdk.language": "webjs" };
 
 /** A page's view, an action on it that called the API, and one whose call failed: the Pages section's rows. */
@@ -950,19 +965,9 @@ function signals(): Doc {
     },
     { duration: 60_000 },
   );
-  const id = String(doc["id"]);
   const spans = doc["spans"] as Doc[];
   (spans[0] as Doc)["duration"] = 60_000;
-  const span = (suffix: string, parent: string, kind: string, name: string, at: [number, number], attrs: Doc): Doc => ({
-    id: `${id}${suffix}`,
-    parent_id: `${id}${parent}`,
-    kind,
-    name,
-    start: at[0],
-    duration: at[1],
-    status: "ok",
-    attrs,
-  });
+  const span = spanOf(doc);
   const send = (suffix: string, name: string, at: [number, number], attrs: Doc) =>
     span(suffix, "V", "signal", name.startsWith("shop.") ? name : name.slice(name.lastIndexOf(".") + 1), at, {
       "signal.name": name,
@@ -1071,7 +1076,7 @@ function signals(): Doc {
       level: "error",
       logger: "django.dispatch",
       message: "Error calling notify_warehouse in Signal.send_robust() (warehouse offline)",
-      span_id: `${id}S`,
+      span_id: `${String(doc["id"])}S`,
       exception: null,
       attrs: {},
     },
@@ -1148,6 +1153,74 @@ function collectstatic(): Doc {
     }),
     storage("P1O", "P1", "open", "css/app.css", [503_500, 2_000]),
     storage("P1S", "P1", "save", "css/app.4f1c2a.css", [520_000, 6_000]),
+  );
+  return doc;
+}
+
+/**
+ * `manage.py migrate` on PostgreSQL as the Python SDK records it, its migrations and operations still `function` spans
+ * (the agent makes them `migration` and `migration.operation` spans): shop's 0007 applied, an AddIndex without
+ * CONCURRENTLY and a RunPython without its reverse in it, its SQL under them, and giftcards' first migration faked.
+ * It applies one of the two migrations the shop app's hello says are unapplied: the other stays on the warning.
+ */
+function migrate(): Doc {
+  const doc = trace(
+    "command",
+    "manage.py migrate",
+    {
+      ...SHOP,
+      "service.role": "command",
+      "command.name": "migrate",
+      "migrate.plan": ["shop.0007_order_gift", "giftcards.0001_initial"],
+      "migrate.planned": 2,
+      "migrate.applied": 2,
+      "migrate.unapplied": 0,
+    },
+    { duration: 300_000 },
+  );
+  const spans = doc["spans"] as Doc[];
+  (spans[0] as Doc)["duration"] = 300_000;
+  const span = spanOf(doc);
+  const migration = (suffix: string, app: string, name: string, at: [number, number], more: Doc) =>
+    span(suffix, "R", "function", `migrate ${app} ${name}`, at, {
+      "migration.app": app,
+      "migration.name": name,
+      "migration.direction": "forwards",
+      "migration.atomic": true,
+      ...more,
+    });
+  const operation = (suffix: string, name: string, at: [number, number], more: Doc) =>
+    span(suffix, "T", "function", name, at, {
+      "migration.operation": name.split(" ")[0],
+      "migration.atomic": true,
+      ...more,
+    });
+  const sql = (suffix: string, parent: string, statement: string, at: [number, number]) =>
+    span(suffix, parent, "sql", statement.split(" ").slice(0, 2).join(" "), at, {
+      "db.statement": statement,
+      "db.vendor": "postgresql",
+      "db.alias": "default",
+    });
+  spans.push(
+    migration("M", "shop", "0007_order_gift", [1_000, 250_000], { "migration.fake": false, "migration.operations": 3 }),
+    span("T", "M", "transaction", "atomic", [1_500, 249_000], { "db.alias": "default" }),
+    operation("A", "AddField Order.gift", [2_000, 20_000], { "migration.description": "Add field gift to order" }),
+    sql("AQ", "A", 'ALTER TABLE "shop_order" ADD COLUMN "gift" boolean DEFAULT false NOT NULL', [2_500, 18_000]),
+    operation("I", "AddIndex Order.shop_order_gift_idx", [23_000, 180_000], {
+      "migration.description": "Create index shop_order_gift_idx on field(s) gift of model order",
+      "migration.risk": "CREATE INDEX blocks writes to the table until it is built (AddIndexConcurrently doesn't)",
+    }),
+    sql("IQ", "I", 'CREATE INDEX "shop_order_gift_idx" ON "shop_order" ("gift")', [23_500, 179_000]),
+    operation("P", "RunPython backfill_gift", [204_000, 45_000], {
+      "migration.description": "Raw Python operation",
+      "migration.rows": 12,
+      "migration.risk": "RunPython with no reverse: the migration can't be unapplied",
+    }),
+    sql("PQ", "P", 'UPDATE "shop_order" SET "gift" = true WHERE "note" LIKE %s', [205_000, 40_000]),
+    migration("G", "giftcards", "0001_initial", [252_000, 2_000], {
+      "migration.fake": true,
+      "migration.operations": 1,
+    }),
   );
   return doc;
 }
@@ -1247,6 +1320,7 @@ export default async function seed(): Promise<void> {
     bookList(),
     signals(),
     collectstatic(),
+    migrate(),
     ...chain(),
     ...chord(),
     ...dependencies(),

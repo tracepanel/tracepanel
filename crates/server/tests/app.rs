@@ -102,13 +102,13 @@ async fn an_app_says_its_settings_and_versions_in_its_hello() {
     assert_eq!(
         before,
         json!({"service": "shop", "agent": agent, "connected": false, "received": null, "settings": null,
-               "versions": null, "checks": null, "migrations": null})
+               "versions": null, "checks": null, "migrations": null, "migrate": null})
     );
 
     assert_eq!(
         told,
         json!({"service": "shop", "agent": agent, "connected": true, "received": told["received"],
-               "settings": settings, "versions": versions, "checks": null, "migrations": null})
+               "settings": settings, "versions": versions, "checks": null, "migrations": null, "migrate": null})
     );
     assert!(told["received"].as_i64().unwrap() > 0);
 
@@ -116,21 +116,21 @@ async fn an_app_says_its_settings_and_versions_in_its_hello() {
     assert_eq!(
         checked,
         json!({"service": "shop", "agent": agent, "connected": true, "received": checked["received"],
-               "settings": settings, "versions": versions, "checks": checks, "migrations": migrations})
+               "settings": settings, "versions": versions, "checks": checks, "migrations": migrations, "migrate": null})
     );
 
     // The app went: what it said stays, for the console of an app that restarts or stopped.
     assert_eq!(
         gone,
         json!({"service": "shop", "agent": agent, "connected": false, "received": checked["received"],
-               "settings": settings, "versions": versions, "checks": checks, "migrations": migrations})
+               "settings": settings, "versions": versions, "checks": checks, "migrations": migrations, "migrate": null})
     );
 
     // An app whose SDK doesn't say (JavaScript, Java): nulls, and the agent's version.
     assert_eq!(
         other,
         json!({"service": "shop-web", "agent": agent, "connected": false, "received": null, "settings": null,
-               "versions": null, "checks": null, "migrations": null})
+               "versions": null, "checks": null, "migrations": null, "migrate": null})
     );
     let _ = std::fs::remove_dir_all(&dir);
 }

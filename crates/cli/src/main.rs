@@ -247,7 +247,10 @@ async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
         )?),
         None => None,
     };
-    let writer = std::thread::spawn(move || write(store, &frames, record.as_deref(), sender));
+    // A migrate command's trace makes its app's unapplied migrations what they are after it.
+    let about = activity.about.clone();
+    let writer =
+        std::thread::spawn(move || write(store, &frames, record.as_deref(), sender, &about));
     let sender = queue.clone();
     let sink = Arc::new(move |batch: Batch| enqueue(&sender, batch));
 
@@ -448,17 +451,18 @@ fn write(
     frames: &Receiver<Message>,
     record: Option<&Path>,
     sender: Option<Sender>,
+    about: &tracepanel_protocol::about::About,
 ) {
     let mut written: u64 = 0;
     while let Ok(message) = frames.recv() {
         let Message::Batch(batch) = message else {
             // Stop: drain what is queued, then exit.
             while let Ok(Message::Batch(batch)) = frames.try_recv() {
-                written += write_batch(&mut store, &batch, record, sender.as_ref());
+                written += write_batch(&mut store, &batch, record, sender.as_ref(), about);
             }
             break;
         };
-        written += write_batch(&mut store, &batch, record, sender.as_ref());
+        written += write_batch(&mut store, &batch, record, sender.as_ref(), about);
     }
     match DROPPED.load(Ordering::Relaxed) {
         0 => println!("tracepanel-agent: {written} traces written"),
@@ -478,6 +482,7 @@ fn write_batch(
     batch: &Batch,
     record: Option<&Path>,
     sender: Option<&Sender>,
+    about: &tracepanel_protocol::about::About,
 ) -> u64 {
     if let Some(max_traces) = batch.max_traces {
         store.max_traces = max_traces;
@@ -496,7 +501,13 @@ fn write_batch(
                     sender.offer(received.doc.clone());
                 }
             }
-            write_traces(store, &traces)
+            let written = write_traces(store, &traces);
+            // Once stored: the console links the app's migrations to the trace.
+            let now = tracepanel_protocol::live::now_us();
+            for received in &traces {
+                about.migrated(&received.trace, now);
+            }
+            written
         }
         Err(error) => {
             eprintln!("tracepanel-agent: undecodable frame: {error}");
