@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@tracepanel/ui/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@tracepanel/ui/components/ui/tooltip";
-import { type Family, systemOfPage } from "@tracepanel/ui/lib/systems";
+import { type Family, isAwsSystem, systemOfPage } from "@tracepanel/ui/lib/systems";
 import { cn, rem } from "@tracepanel/ui/lib/utils";
 import {
   AppWindowIcon,
@@ -57,6 +57,8 @@ export interface NavItem {
   section: Section;
   label: string;
   icon: LucideIcon;
+  /** The item it is listed under, shown only while that item or one of its own is open: AWS's services. */
+  under?: Section;
 }
 
 /**
@@ -80,11 +82,10 @@ const NAV_GROUPS: { title: string | null; items: NavItem[] }[] = [
   },
   {
     title: "Data",
-    // The map of what the app talks to first, then the queries, the most looked-at data; emails last.
+    // The map of what the app talks to first, then a page per system it calls (dataItems), logs and emails last.
     items: [
       { section: "services", label: "Services", icon: NetworkIcon },
-      // Then a page per system the app calls (systemItems): the database, Redis, MongoDB, HTTP calls…
-      // AWS, every service of it on one page (its other calls have no system page of their own).
+      // AWS, every service of it on one page, among the calls out (after HTTP calls, before the LLMs).
       { section: "aws", label: "AWS", icon: CloudIcon },
       { section: "logs", label: "Logs", icon: ScrollTextIcon },
       { section: "mails", label: "Emails", icon: MailIcon },
@@ -151,11 +152,13 @@ interface NavGroupProps {
 }
 
 function NavGroup({ group, index, section, counts, rail, visible }: NavGroupProps) {
+  const items = itemsOf(group, counts).filter((entry) => visible.has(entry.section));
+  const open = openParent(items, section);
   return (
     <div className="grid gap-0.5">
       <GroupTitle title={group.title} rail={rail} divider={index > 0} />
-      {itemsOf(group, counts)
-        .filter((entry) => visible.has(entry.section))
+      {items
+        .filter((entry) => !entry.under || entry.under === open)
         .map((entry) => (
           <NavLink
             key={entry.section}
@@ -168,6 +171,12 @@ function NavGroup({ group, index, section, counts, rail, visible }: NavGroupProp
         ))}
     </div>
   );
+}
+
+/** The item whose own items are shown: the current page, or the one the current page is listed under. */
+function openParent(items: readonly NavItem[], section: Section | null): Section | null {
+  if (items.some((item) => item.under === section)) return section;
+  return items.find((item) => item.section === section)?.under ?? null;
 }
 
 /**
@@ -214,14 +223,24 @@ const SYSTEM_ICONS: Partial<Record<string, LucideIcon>> = { rabbitmq: RabbitIcon
 /** The systems whose calls a page of their own lists: AWS's API calls are on the AWS page. */
 const ON_THEIR_OWN_PAGE: ReadonlySet<string> = new Set(["aws-api"]);
 
-/** A Data item for each system the store has operations of, in the agent's order (families, then names). */
-function systemItems(counts: Counts | undefined): NavItem[] {
+/** A system item, with its family: where in the Data group it goes. */
+interface SystemItem extends NavItem {
+  family: Family;
+}
+
+/**
+ * A Data item for each system the store has operations of, in the agent's order (families, then names). An AWS
+ * service's (DynamoDB, Amazon SQS) is listed under AWS while the AWS page is shown: that page lists its calls too and
+ * leads on to its own.
+ */
+function systemItems(counts: Counts | undefined): SystemItem[] {
   const systems = (counts?.sections.systems ?? []).filter(({ system }) => !ON_THEIR_OWN_PAGE.has(system));
-  return systems.map(({ system, family, label }) => ({
-    section: callsSection(system),
-    label: systemOfPage(system, family, label).label,
-    icon: SYSTEM_ICONS[system] ?? FAMILY_ICONS[family],
-  }));
+  const folded = counts !== undefined && hasData(counts, "aws");
+  return systems.map(({ system, family, label }) => {
+    const name = systemOfPage(system, family, label).label;
+    const item = { section: callsSection(system), label: name, icon: SYSTEM_ICONS[system] ?? FAMILY_ICONS[family] };
+    return folded && isAwsSystem(system, name) ? { ...item, family, under: "aws" as const } : { ...item, family };
+  });
 }
 
 /** Every page the console lists, in the sidebar's order: the search palette's "Go to". */
@@ -230,11 +249,30 @@ export function navItems(counts: Counts | undefined): NavItem[] {
   return NAV_GROUPS.flatMap((group) => itemsOf(group, counts)).filter((item) => visible.has(item.section));
 }
 
-/** A group's items, the Data group with the systems after Services. */
+/** A group's items, the Data group's with the systems the app calls in them (dataItems). */
 function itemsOf(group: (typeof NAV_GROUPS)[number], counts: Counts | undefined): NavItem[] {
-  if (group.title !== "Data") return group.items;
-  const [first, ...rest] = group.items;
-  return [...(first ? [first] : []), ...systemItems(counts), ...rest];
+  return group.title === "Data" ? dataItems(group.items, counts) : group.items;
+}
+
+/** The systems listed after AWS, in this order: the calls out to LLMs, then file storage. */
+const AFTER_AWS: readonly Family[] = ["llm", "storage"];
+
+/**
+ * The Data group: the services map; the databases and caches, the brokers; the calls out (RPC, HTTP, AWS with its
+ * services under it, LLMs); file storage; then logs and emails.
+ */
+function dataItems(items: readonly NavItem[], counts: Counts | undefined): NavItem[] {
+  const systems = systemItems(counts);
+  const own = (section: Section) => items.filter((item) => item.section === section);
+  const top = systems.filter((item) => !item.under);
+  return [
+    ...own("services"),
+    ...top.filter((item) => !AFTER_AWS.includes(item.family)),
+    ...own("aws"),
+    ...systems.filter((item) => item.under === "aws"),
+    ...AFTER_AWS.flatMap((family) => top.filter((item) => item.family === family)),
+    ...items.filter((item) => item.section !== "services" && item.section !== "aws"),
+  ];
 }
 
 export function Sidebar({
@@ -441,14 +479,23 @@ function RailNavLink({ entry: { section, label, icon: Icon }, current, counts, i
   );
 }
 
-function OpenNavLink({ entry: { section, label, icon: Icon }, current, counts, items }: NavLinkProps) {
+function OpenNavLink({ entry, current, counts, items }: NavLinkProps) {
+  const { section, label, icon: Icon } = entry;
   const ref = useShownWhenCurrent(current, items);
+  const nested = openNested(entry, current);
   return (
-    <a ref={ref} href={`#/${section}`} aria-current={current ? "page" : undefined} className={navClass(false, current)}>
-      <Icon className={cn("size-[1.125rem] shrink-0", current && "text-brand")} />
+    <a ref={ref} href={`#/${section}`} aria-current={current ? "page" : undefined} className={nested.row}>
+      <Icon className={nested.icon} />
       <OpenCount label={label} count={navCount(section, counts)} tone={toneOf(section)} />
     </a>
   );
+}
+
+/** An open item's row and icon: one under another starts below its name, indented, its icon smaller. */
+function openNested({ under }: NavItem, current: boolean): { row: string; icon: string } {
+  const mark = current && "text-brand";
+  if (!under) return { row: navClass(false, current), icon: cn("size-[1.125rem] shrink-0", mark) };
+  return { row: cn(navClass(false, current), "pl-[2.375rem]"), icon: cn("size-4 shrink-0", mark) };
 }
 
 /** As a rail: the count as a badge on the icon's corner. */

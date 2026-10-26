@@ -22,3 +22,11 @@ for (const section of SECTIONS) {
     if (section.row) await expect(page.getByRole("main").getByText(section.row).first()).toBeVisible();
   });
 }
+
+test("the Data group lists the stores, the brokers, the calls out, storage, then logs", async ({ page }) => {
+  await page.goto("/");
+  const names = await page.getByRole("navigation").getByRole("link").allTextContents();
+  const order = ["Services", "Database", "Redis", "Kafka", "HTTP calls", "AWS", "LLM", "Storage", "Logs"];
+
+  expect(names.filter((name) => order.includes(name))).toEqual(order);
+});
