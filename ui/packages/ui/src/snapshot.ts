@@ -202,6 +202,17 @@ style.textContent = css;
 document.head.append(style);
 await import(URL.createObjectURL(new Blob([js], { type: "text/javascript" })));`;
 
+/** The page's ground until the loader has unpacked the stylesheet: each theme's --dt-bg (styles.css), at zero
+ * specificity, so the stylesheet wins. */
+const GROUND = `:where(:root) { color-scheme: dark; background: #0a0c11; }
+:where(:root[data-theme="light"]) { color-scheme: light; background: #fff; }`;
+
+/** The console page's first script, which sets the theme before the first paint (dark unless light was chosen). */
+function themeScript(): string {
+  const code = document.getElementById("tracepanel-theme")?.textContent ?? "";
+  return code ? `<script>${code}</script>` : "";
+}
+
 function page(title: string, icon: string, packedParts: string): string {
   const link = icon ? `<link rel="icon" href="${escapeHtml(icon)}" />` : "";
   return `<!doctype html>
@@ -211,6 +222,8 @@ function page(title: string, icon: string, packedParts: string): string {
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>${escapeHtml(title)}</title>
     ${link}
+    ${themeScript()}
+    <style>${GROUND}</style>
     <script type="application/json" id="tracepanel-snapshot">${packedParts}</script>
     <script type="module">${LOADER}</script>
   </head>

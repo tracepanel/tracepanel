@@ -136,7 +136,10 @@ test("Share downloads one HTML file that shows the trace with no agent behind it
   // Offline: the file holds the console and the trace, nothing comes from the agent.
   const offline = await context.newPage();
   await offline.route("http://127.0.0.1/**", (route) => route.abort());
+  await offline.emulateMedia({ colorScheme: "light" });
   await offline.goto(`file://${file}`);
 
   await expect(offline.getByRole("heading", { level: 2, name: "/api/posts" })).toBeVisible();
+  // Dark, as the console starts, with no theme chosen and on a light system.
+  await expect(offline.locator("html")).toHaveAttribute("data-theme", "dark");
 });

@@ -713,12 +713,12 @@ function RailTip({
 }
 
 const THEMES: { value: ThemeChoice; label: string; icon: LucideIcon }[] = [
-  { value: "system", label: "Auto", icon: MonitorIcon },
-  { value: "light", label: "Light", icon: SunIcon },
   { value: "dark", label: "Dark", icon: MoonIcon },
+  { value: "light", label: "Light", icon: SunIcon },
+  { value: "system", label: "Auto", icon: MonitorIcon },
 ];
 
-/** One small button that cycles Auto → Light → Dark; `compact` for the panel's toolbar. */
+/** One small button that cycles Dark (the default) → Light → Auto; `compact` for the panel's toolbar. */
 export function ThemeToggle({ compact = false, side = "top" }: { compact?: boolean; side?: "top" | "right" }) {
   const [theme, setTheme] = useTheme();
   const index = Math.max(
