@@ -271,6 +271,16 @@
   under a fifth of the span's own time and a twentieth of the trace's, it
   folds into one row with the rest.
 
+### Changed
+
+- AWS's services are listed under AWS in the sidebar, not as items of their
+  own: DynamoDB, Amazon SNS, Amazon SQS and any other system named for AWS
+  show, indented, while the AWS page or one of theirs is open. Their pages
+  still open from the AWS page's rows, the services map, search and their
+  URLs, and without calls to AWS's API they stay items of their own. The
+  Data group now reads databases and caches, brokers, the calls out (HTTP
+  calls, AWS, LLM), Storage, then Logs.
+
 ### Fixed
 
 - Menus in the light theme are white, with a hairline border, a soft shadow

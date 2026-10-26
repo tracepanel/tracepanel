@@ -24,6 +24,42 @@ test("AWS lists every service's operations, with the failures by code and the re
   await expect(page.getByRole("navigation").getByRole("link", { name: /^AWS calls/ })).toHaveCount(0);
 });
 
+test("AWS's services are listed under AWS, shown while AWS or one of them is open", async ({ page }) => {
+  await page.goto("/#/");
+  const nav = page.getByRole("navigation");
+  const services = ["DynamoDB", "Amazon SNS", "Amazon SQS"];
+
+  await expect(nav.getByRole("link", { name: "AWS", exact: true })).toBeVisible();
+  for (const name of services) await expect(nav.getByRole("link", { name, exact: true })).toHaveCount(0);
+  // Kafka and RabbitMQ are no AWS services: they stay where they were.
+  await expect(nav.getByRole("link", { name: "Kafka", exact: true })).toBeVisible();
+
+  await nav.getByRole("link", { name: "AWS", exact: true }).click();
+
+  const links = nav.getByRole("link");
+  const names = await links.allTextContents();
+  const aws = names.indexOf("AWS");
+  expect(names.slice(aws, aws + 4)).toEqual(["AWS", ...services]);
+
+  await nav.getByRole("link", { name: "DynamoDB", exact: true }).click();
+
+  await expect(page).toHaveURL(/#\/calls\/dynamodb/);
+  await expect(page.getByRole("heading", { level: 1, name: "DynamoDB" })).toBeVisible();
+  await expect(nav.getByRole("link", { name: "DynamoDB", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(nav.getByRole("link", { name: "Amazon SQS", exact: true })).toBeVisible();
+});
+
+test("an AWS service's own page opens from search and from its URL", async ({ page }) => {
+  await page.goto("/#/calls/sqs");
+  await expect(page.getByRole("heading", { level: 1, name: "Amazon SQS" })).toBeVisible();
+
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.getByRole("dialog").getByRole("combobox").fill("Amazon SNS");
+  await page.getByRole("dialog").getByRole("option", { name: "Amazon SNS" }).click();
+
+  await expect(page.getByRole("heading", { level: 1, name: "Amazon SNS" })).toBeVisible();
+});
+
 test("an AWS row opens to where it is called from and its latest calls, and leads to its system's page", async ({
   page,
 }) => {

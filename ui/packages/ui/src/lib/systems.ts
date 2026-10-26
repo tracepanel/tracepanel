@@ -296,6 +296,13 @@ export const FAMILY_ORDER: readonly Family[] = [
   "llm",
 ];
 
+/** AWS's own services among the systems: DynamoDB, SQS, SNS, and any named for AWS ("aws_kinesis", "Amazon …"). */
+export function isAwsSystem(system: string, label: string): boolean {
+  return AWS_SYSTEMS.has(system) || /^aws[._-]/.test(system) || /^(Amazon|AWS) /.test(label);
+}
+
+const AWS_SYSTEMS: ReadonlySet<string> = new Set(["dynamodb", "sqs", "sns"]);
+
 /** The name of a system's page in the agent's operations. */
 export function pageOf(system: System): string {
   return system.kind === "http.client" ? "http" : system.kind;
