@@ -11,6 +11,7 @@ import { Button } from "@tracepanel/ui/components/ui/button";
 import type { Family } from "@tracepanel/ui/lib/systems";
 import { SearchXIcon } from "lucide-react";
 import { type ReactNode, useCallback, useState } from "react";
+import { AwsTable } from "./AwsTable";
 import { SystemTiles, useCallsSummary } from "./CallsTiles";
 import { useLatch, usePaged, useSearch } from "./data";
 import { EmptyPage, PageShell } from "./EmptyPage";
@@ -44,13 +45,17 @@ interface DataPageProps {
 }
 
 /** What the work touched (services, SQL, emails, logs), what went wrong (issues), and ⌘K's search results. */
-const SUMMARIES: ReadonlySet<string> = new Set(["services"]);
+const SUMMARIES: ReadonlySet<string> = new Set(["services", "aws"]);
 
 /** What each section says before anything is stored. Search results (traces) always keep their search bar. */
 const PRISTINE: Partial<Record<Exclude<DataSection, CallsSection>, { title: string; text: string }>> = {
   services: {
     title: "No services yet",
     text: "Databases, caches, mail servers and brokers appear here after the first call that uses them.",
+  },
+  aws: {
+    title: "No AWS calls yet",
+    text: "Calls your app makes to S3, DynamoDB, SQS, Lambda and the rest show up here.",
   },
   mails: { title: "No emails yet", text: "Emails your app sends show up here." },
   logs: { title: "No log records yet", text: "Records from requests, tasks and jobs show up here." },
@@ -329,9 +334,17 @@ function usePageData(section: Section, system: string | null, source: DataSource
     q,
     0,
   );
+  const aws = useSearch(
+    useCallback(
+      (query: string) => (section === "aws" ? source.listAws(query) : Promise.resolve([])),
+      [source, section],
+    ),
+    q,
+    0,
+  );
   const issues = useIssues(source, section, q);
   const summary = useCallsSummary(source, system, q);
-  return { traces, logs, logSeries, mails, services, stats, issues, summary };
+  return { traces, logs, logSeries, mails, services, stats, aws, issues, summary };
 }
 
 /** One list of issue groups, split in two: what failed (Errors), and what could be better (Issues). */
@@ -369,6 +382,7 @@ const LOADED: Partial<Record<Section, (data: PageData) => Loaded>> = {
   logs: (data) => paged(data.logs),
   mails: (data) => paged(data.mails),
   services: servicesLoaded,
+  aws: (data) => listed(data.aws),
   errors: (data) => listed(data.issues),
   issues: (data) => listed(data.issues),
 };
@@ -413,7 +427,16 @@ const BODIES: Partial<Record<Section, (page: BodyContext) => ReactNode>> = {
       <Empty title={page.q ? "No emails match" : "No emails yet"}>Emails your app sends show up here.</Empty>,
     ),
   services: servicesBody,
+  aws: awsBody,
 };
+
+function awsBody({ data, q, source, open, setOpen }: BodyContext): ReactNode {
+  return listBody(
+    data.aws.data,
+    (items) => <AwsTable items={items} q={q} source={source} open={open ?? null} onOpen={setOpen} />,
+    <Empty title="No AWS calls match">Try a broader search, or another filter.</Empty>,
+  );
+}
 
 function servicesBody({ data, q, setService }: BodyContext): ReactNode {
   const map = data.services.data;

@@ -48,6 +48,8 @@ pub fn router(reader: Reader, activity: Activity) -> Router {
         .route("/api/logs/series", get(log_series))
         .route("/api/calls", get(calls))
         .route("/api/calls/summary", get(calls_summary))
+        .route("/api/aws", get(aws))
+        .route("/api/aws/calls", get(aws_calls))
         .route("/api/mails", get(mails))
         .route("/api/values", get(values))
         .route("/api/issues", get(issues))
@@ -507,6 +509,16 @@ async fn jobs(State(reader): State<Shared>, Query(query): Params) -> Response {
 
 async fn rpcs(State(reader): State<Shared>, Query(query): Params) -> Response {
     listing(reader, query, "rpc", Reader::list_rpcs).await
+}
+
+/// Calls to AWS by service and operation: the AWS page.
+async fn aws(State(reader): State<Shared>, Query(query): Params) -> Response {
+    listing(reader, query, "operations", Reader::list_aws).await
+}
+
+/// The latest calls to AWS of a search (one operation's): an AWS page's open row.
+async fn aws_calls(State(reader): State<Shared>, Query(query): Params) -> Response {
+    listing(reader, query, "calls", Reader::list_aws_calls).await
 }
 
 async fn pages(State(reader): State<Shared>, Query(query): Params) -> Response {

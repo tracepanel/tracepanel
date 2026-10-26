@@ -48,6 +48,11 @@ export type Related = Schemas["Related"];
 export type ServiceApp = Schemas["ServiceApp"];
 export type ServiceNode = Schemas["ServiceNode"];
 export type ServiceEdge = Schemas["ServiceEdge"];
+/** The AWS service a server is, in its region. */
+export type CloudService = Schemas["CloudService"];
+/** Calls to AWS by service and operation (GET /aws), and one call (GET /aws/calls). */
+export type AwsOperation = Schemas["AwsOperation"];
+export type AwsCall = Schemas["AwsCall"];
 /** What the project's web, workers and commands call (GET /services). */
 export type AppLink = Schemas["AppLink"];
 export interface ServiceMap {

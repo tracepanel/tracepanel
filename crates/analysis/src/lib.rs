@@ -11,6 +11,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::LazyLock;
 use tracepanel_protocol::{Attrs, Issue, Span, Thresholds, Trace};
 
+pub mod aws;
 pub mod calls;
 pub mod otel;
 pub mod storage;
@@ -1910,6 +1911,207 @@ mod tests {
                 serde_json::json!({"db.system": "neo4j", "db.operation": "MATCH"})
             )
             .starts_with("Fetch the items in one query")
+        );
+    }
+
+    /// A call to S3's API as botocore's integration sends it: a `storage` span with the operation and the path.
+    fn s3(
+        operation: &'static str,
+        path: &str,
+        duration: i64,
+    ) -> (&'static str, &'static str, Value, i64) {
+        op(
+            "storage",
+            "S3",
+            serde_json::json!({"rpc.system": "aws-api", "rpc.service": "S3", "rpc.method": operation,
+                               "cloud.region": "eu-west-1", "storage.system": "s3", "storage.op": operation,
+                               "storage.backend": "botocore.client.S3", "storage.path": path}),
+            duration,
+        )
+    }
+
+    fn titles_and_hints(trace: &Trace) -> Vec<(String, String)> {
+        analyze(trace, &Thresholds::default())
+            .into_iter()
+            .map(|issue| (issue.title, issue.hint.unwrap_or_default()))
+            .collect()
+    }
+
+    #[test]
+    fn s3_s_reads_repeat_as_n_plus_one_and_duplicates_with_s3_s_hints() {
+        let heads = request(&[
+            s3("HeadObject", "media/users/1/a.png", 20_000),
+            s3("HeadObject", "media/users/2/a.png", 20_000),
+            s3("HeadObject", "media/users/3/a.png", 20_000),
+        ]);
+        let twice = request(&[
+            s3("GetObject", "media/report.csv", 20_000),
+            s3("GetObject", "media/report.csv", 20_000),
+            s3("PutObject", "media/out.csv", 20_000),
+            s3("PutObject", "media/out.csv", 20_000),
+        ]);
+        let deletes = request(&[
+            s3("DeleteObject", "media/tmp/1", 20_000),
+            s3("DeleteObject", "media/tmp/2", 20_000),
+            s3("DeleteObject", "media/tmp/3", 20_000),
+        ]);
+
+        let found = titles_and_hints(&heads);
+        assert_eq!(
+            found
+                .iter()
+                .map(|(title, _)| title.as_str())
+                .collect::<Vec<_>>(),
+            ["N+1: 3 similar storage calls · HeadObject media/users/{id}/*"]
+        );
+        assert!(found[0].1.contains("ListObjectsV2"), "{}", found[0].1);
+        assert!(!found[0].1.contains("django-storages"), "{}", found[0].1);
+
+        // The same GetObject twice is a duplicate; two PutObjects are two uploads.
+        let found = titles_and_hints(&twice);
+        assert_eq!(
+            found
+                .iter()
+                .map(|(title, _)| title.as_str())
+                .collect::<Vec<_>>(),
+            ["Duplicate storage calls: 2 identical · GetObject media/*"]
+        );
+        assert!(found[0].1.contains("request to S3 again"), "{}", found[0].1);
+
+        assert!(titles_and_hints(&deletes)[0].1.contains("DeleteObjects"));
+    }
+
+    #[test]
+    fn a_slow_s3_call_is_an_issue_and_a_slow_call_on_the_local_disk_is_not() {
+        let disk = op(
+            "storage",
+            "storage save a.png",
+            serde_json::json!({"storage.system": "filesystem", "storage.op": "save", "storage.path": "a.png"}),
+            900_000,
+        );
+
+        let found = titles_and_hints(&request(&[s3("GetObject", "media/big.zip", 900_000), disk]));
+        assert_eq!(
+            found
+                .iter()
+                .map(|(title, _)| title.as_str())
+                .collect::<Vec<_>>(),
+            ["Slow S3 call: 900 ms · GetObject media/*"]
+        );
+        assert!(found[0].1.contains("presigned URL"), "{}", found[0].1);
+    }
+
+    #[test]
+    fn a_call_to_aws_inside_a_storage_s_call_is_the_storage_s_issue() {
+        let mut trace = request(&[
+            op(
+                "storage",
+                "storage exists avatars/1.png",
+                serde_json::json!({"storage.system": "s3", "storage.op": "exists", "storage.path": "avatars/1.png"}),
+                20_000,
+            ),
+            s3("HeadObject", "media/avatars/1.png", 20_000),
+            op(
+                "storage",
+                "storage exists avatars/2.png",
+                serde_json::json!({"storage.system": "s3", "storage.op": "exists", "storage.path": "avatars/2.png"}),
+                20_000,
+            ),
+            s3("HeadObject", "media/avatars/2.png", 20_000),
+            op(
+                "storage",
+                "storage exists avatars/3.png",
+                serde_json::json!({"storage.system": "s3", "storage.op": "exists", "storage.path": "avatars/3.png"}),
+                20_000,
+            ),
+            s3("HeadObject", "media/avatars/3.png", 20_000),
+        ]);
+        for index in [1, 3, 5] {
+            trace.spans[index].parent_id = Some(trace.spans[index - 1].id.clone());
+        }
+
+        assert_eq!(
+            found(&trace),
+            [(
+                "n+1".to_owned(),
+                "N+1: 3 similar storage calls · exists avatars/*".to_owned(),
+                3
+            )]
+        );
+        assert_eq!(
+            trace
+                .spans
+                .iter()
+                .map(|span| calls::operation(&trace, span).and_then(|operation| operation.via))
+                .collect::<Vec<_>>(),
+            [
+                None,
+                Some("storage"),
+                None,
+                Some("storage"),
+                None,
+                Some("storage")
+            ]
+        );
+    }
+
+    #[test]
+    fn a_slow_dynamodb_scan_says_query_with_an_index() {
+        let scan = |operation: &'static str, statement: &str| {
+            op(
+                "dynamodb",
+                "DynamoDB Scan users",
+                serde_json::json!({"rpc.system": "aws-api", "rpc.service": "DynamoDB", "db.system": "dynamodb",
+                                   "db.operation": operation, "db.collection.name": "users",
+                                   "db.statement": statement}),
+                300_000,
+            )
+        };
+
+        let found = titles_and_hints(&request(&[scan("Scan", "{\"TableName\": \"users\"}")]));
+        assert_eq!(found[0].0, "Slow DynamoDB query: 300 ms · Scan users");
+        assert!(
+            found[0].1.starts_with("A Scan reads every item of `users`"),
+            "{}",
+            found[0].1
+        );
+        assert!(
+            found[0].1.contains("global secondary index (GSI)"),
+            "{}",
+            found[0].1
+        );
+        assert!(!found[0].1.contains("createIndex"), "{}", found[0].1);
+
+        let filtered = titles_and_hints(&request(&[scan(
+            "Query",
+            "{\"TableName\": \"users\", \"FilterExpression\": \"plan = ?\"}",
+        )]));
+        assert!(
+            filtered[0].1.starts_with("A FilterExpression"),
+            "{}",
+            filtered[0].1
+        );
+    }
+
+    #[test]
+    fn sns_is_named_as_aws_names_it() {
+        let publish = || {
+            op(
+                "messaging",
+                "SNS Publish alerts",
+                serde_json::json!({"messaging.system": "aws.sns", "messaging.operation": "publish",
+                                   "messaging.destination.name": "alerts"}),
+                1000,
+            )
+        };
+
+        assert_eq!(
+            found(&request(&[publish(), publish(), publish()])),
+            [(
+                "n+1".to_owned(),
+                "N+1: 3 similar Amazon SNS messages · publish alerts".to_owned(),
+                3
+            )]
         );
     }
 

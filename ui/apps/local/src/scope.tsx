@@ -74,6 +74,8 @@ export function scopedSource(source: DataSource, service: string): DataSource {
     listPages: (query) => source.listPages(q(query)),
     summarizeTraces: (query) => source.summarizeTraces(q(query)),
     listServices: (query) => source.listServices(q(query)),
+    listAws: (query) => source.listAws(q(query)),
+    listAwsCalls: (query) => source.listAwsCalls(q(query)),
     tracesOverview: (query, group) => source.tracesOverview(q(query), group),
     listIssues: (query) => source.listIssues(q(query ?? "")),
     getIssue: (fingerprint, query) => source.getIssue(fingerprint, q(query ?? "")),

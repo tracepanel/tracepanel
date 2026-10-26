@@ -1,7 +1,9 @@
 //! The service map: what each trace's spans called (databases and Redis, caches, file storages, mail, queues, HTTP),
-//! and the broker a task came from.
+//! and the broker a task came from. A call to AWS is its service's (Amazon S3, AWS Lambda) in its region, and a layer
+//! whose call made one (a Django storage on S3, a task queue on SQS) is that service: the call inside is the layer's.
 
 use super::*;
+use tracepanel_analysis::aws;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct Peer {
@@ -11,6 +13,9 @@ pub(crate) struct Peer {
     pub(crate) port: Option<i64>,
     pub(crate) namespace: Option<String>,
     pub(crate) alias: Option<String>,
+    /// AWS's name of the service it is (S3, Lambda) and its region.
+    pub(crate) cloud_service: Option<String>,
+    pub(crate) cloud_region: Option<String>,
 }
 
 impl Peer {
@@ -39,6 +44,26 @@ pub(crate) struct Usage {
 }
 
 pub(crate) fn peer(span: &Span) -> Option<Peer> {
+    let mut found = server(span)?;
+    if aws::is_call(span) {
+        found.cloud_service = aws::service(span);
+        found.cloud_region = aws::region(span);
+    } else if found.kind == "queue" {
+        found.cloud_service = broker_on_aws(&found.system);
+    }
+    Some(found)
+}
+
+/// A broker that is an AWS service, by its system (a Celery broker on SQS, OpenTelemetry's `aws_sqs`).
+fn broker_on_aws(system: &str) -> Option<String> {
+    match system {
+        "sqs" | "aws_sqs" | "aws.sqs" => Some("SQS".into()),
+        "sns" | "aws_sns" | "aws.sns" => Some("SNS".into()),
+        _ => None,
+    }
+}
+
+fn server(span: &Span) -> Option<Peer> {
     let attrs = &span.attrs;
     let address = text(attrs.get("server.address"));
     let port = port(attrs.get("server.port"));
@@ -49,8 +74,14 @@ pub(crate) fn peer(span: &Span) -> Option<Peer> {
         port,
         namespace,
         alias,
+        cloud_service: None,
+        cloud_region: None,
     };
     match span.kind.as_str() {
+        // Any AWS service's API: one endpoint (LocalStack's) serves them all, the service tells them apart.
+        "grpc" | "rpc" if aws::is_call(span) => {
+            Some(new("http", aws::SYSTEM.into(), aws::service(span), None))
+        }
         "sql" => {
             let system = text(attrs.get("db.system"))
                 .or_else(|| text(attrs.get("db.vendor")))
@@ -132,12 +163,37 @@ pub(crate) fn peer(span: &Span) -> Option<Peer> {
     }
 }
 
+/// The AWS service and region each layer's call reached (by the layer's span id): a call to AWS inside it.
+fn layers_on_aws(trace: &Trace) -> HashMap<&str, (Option<String>, Option<String>)> {
+    trace
+        .spans
+        .iter()
+        .filter(|span| aws::is_call(span) && aws::layer(&trace.spans, span).is_some())
+        .filter_map(|span| {
+            Some((
+                span.parent_id.as_deref()?,
+                (aws::service(span), aws::region(span)),
+            ))
+        })
+        .collect()
+}
+
 /// Calls per (peer, direction), in the order Python's dict keeps them.
 pub(crate) fn dependencies(trace: &Trace) -> Vec<((Peer, &'static str), Usage)> {
     let mut order: Vec<(Peer, &'static str)> = Vec::new();
     let mut usage: HashMap<(Peer, &'static str), Usage> = HashMap::new();
+    let on_aws = layers_on_aws(trace);
     for span in &trace.spans {
-        let Some(peer) = peer(span) else { continue };
+        // A call to AWS a layer made is the layer's call to that service.
+        if aws::is_call(span) && aws::layer(&trace.spans, span).is_some() {
+            continue;
+        }
+        let Some(mut peer) = peer(span) else { continue };
+        if let Some((service, region)) = on_aws.get(span.id.as_str())
+            && peer.cloud_service.is_none()
+        {
+            (peer.cloud_service, peer.cloud_region) = (service.clone(), region.clone());
+        }
         let key = (peer, "out");
         if !usage.contains_key(&key) {
             order.push(key.clone());
@@ -148,13 +204,16 @@ pub(crate) fn dependencies(trace: &Trace) -> Vec<((Peer, &'static str), Usage)> 
         item.errors += i64::from(span.status == "error");
     }
     if trace.kind == "task" && truthy(trace.attrs.get("messaging.system")) {
+        let system = py_str(&trace.attrs["messaging.system"]);
         let broker = Peer {
             kind: "queue",
-            system: py_str(&trace.attrs["messaging.system"]),
+            cloud_service: broker_on_aws(&system),
+            system,
             address: text(trace.attrs.get("server.address")),
             port: port(trace.attrs.get("server.port")),
             namespace: None,
             alias: None,
+            cloud_region: None,
         };
         let key = (broker, "in");
         if !usage.contains_key(&key) {

@@ -225,6 +225,40 @@
       "help": "Called before: until:5m"
     }
   },
+  "aws": {
+    "aws": {
+      "type": "text",
+      "help": "The AWS service, as AWS's SDKs name it: aws:S3, aws:DynamoDB, aws:Lambda"
+    },
+    "op": {
+      "type": "text",
+      "help": "The operation, any case: op:GetObject, op:Query, op:Invoke"
+    },
+    "region": {
+      "type": "text",
+      "help": "The region it was called in: region:eu-west-1"
+    },
+    "error": {
+      "type": "text",
+      "help": "A failed call's error code: error:NoSuchKey, error:ThrottlingException"
+    },
+    "failed": {
+      "type": "text",
+      "help": "Only calls that failed: failed:true"
+    },
+    "service": {
+      "type": "text",
+      "help": "The app that made it (service.name): service:shop"
+    },
+    "since": {
+      "type": "time",
+      "help": "Called at or after: since:15m"
+    },
+    "until": {
+      "type": "time",
+      "help": "Called before: until:5m"
+    }
+  },
   "mails": {
     "to": {
       "type": "text",

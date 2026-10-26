@@ -4,10 +4,14 @@
 //! (save, open, delete, exists, listdir, size, url, the times), the `path` and what the call answered (`bytes`,
 //! `exists`, `dirs` and `files` of a listing, `saved_as`).
 //!
+//! A call to S3's API (botocore's, `rpc.system` aws-api) is a `storage` span too, `storage.system` s3, its `op` the
+//! API's operation (GetObject, HeadObject, ListObjectsV2) and its path the bucket and key: its hints say S3's way, not
+//! a Django storage's.
+//!
 //! SDKs that predate the kind send each call as a `function` span with `storage.op`: it becomes a `storage` span here,
 //! before the issues are found and the trace is stored, so nothing downstream tells them apart.
 
-use super::{or_default, template, text};
+use super::{aws, or_default, template, text};
 use serde_json::Value;
 use tracepanel_protocol::{Received, Span};
 
@@ -30,6 +34,25 @@ const READS: &[&str] = &[
     "get_accessed_time",
     "get_created_time",
     "get_modified_time",
+    // S3's API.
+    "GetObject",
+    "HeadObject",
+    "ListObjects",
+    "ListObjectsV2",
+    "ListObjectVersions",
+    "GetObjectAcl",
+    "GetObjectTagging",
+    "GetObjectAttributes",
+    "HeadBucket",
+    "GetBucketLocation",
+];
+
+/// The operations that list a directory (a prefix): what a loop's listings share is the directory itself.
+const LISTINGS: &[&str] = &[
+    "listdir",
+    "ListObjects",
+    "ListObjectsV2",
+    "ListObjectVersions",
 ];
 
 fn legacy(kind: &str, attrs: Option<&Value>) -> bool {
@@ -92,7 +115,7 @@ pub fn path_template(op: &str, path: Option<&str>) -> String {
     else {
         return String::new();
     };
-    if op == "listdir" {
+    if LISTINGS.contains(&op) {
         return template(path);
     }
     path.rsplit_once('/')
@@ -119,9 +142,59 @@ pub const REPEATED: &str = "Each call is a round trip to the storage's backend (
                             one listdir() instead of a call per file, the sizes and URLs kept on the model when the \
                             file is saved, or move the work to a background task.";
 pub const DUPLICATES: &str = "Ask the storage once and keep the answer for the request: each call goes to its backend again.";
+const S3_DUPLICATES: &str = "Make the request once and keep its answer for the request (HeadObject's metadata, \
+                             GetObject's body, a listing): each call is a request to S3 again.";
+pub const SLOW: &str = "The request waits for the storage's backend: serve large files from their URL (a signed one \
+                        on a private bucket, or a CDN), save uploads in a background task, or keep what the request \
+                        needs (sizes, thumbnails) on the model.";
+pub const S3_SLOW: &str = "The request waits for S3, and a large object takes as long as its bytes: hand the browser a \
+                           presigned URL (`generate_presigned_url`) to download or upload it directly, stream it, or \
+                           move the transfer to a background task.";
 
-/// What to do about one operation repeated in a loop, by the operation.
+/// What to do about the same call made twice: S3's API, or a storage's.
+pub fn duplicates_hint(span: &Span) -> &'static str {
+    if aws::is_call(span) {
+        S3_DUPLICATES
+    } else {
+        DUPLICATES
+    }
+}
+
+/// What to do about one of S3's operations repeated in a loop, by the operation.
+fn s3_repeated_hint(op: &str) -> &'static str {
+    match op {
+        "HeadObject" | "GetObjectAttributes" | "GetObjectTagging" | "GetObjectAcl" => {
+            "Each call is a request to S3 about one object: list the prefix once with ListObjectsV2 (its answer has \
+             each key's size, ETag and time) and look the keys up in it, or keep what the loop needs on the model."
+        }
+        "GetObject" => {
+            "Each GetObject is a request to S3 that downloads an object: keep what the loop needs from the objects \
+             (their metadata, a thumbnail) in the database or a cache, hand the browser presigned URLs instead of the \
+             bytes, or do the work in a background task."
+        }
+        "ListObjects" | "ListObjectsV2" | "ListObjectVersions" => {
+            "List the prefix once with ListObjectsV2 (its paginator past 1,000 keys) and reuse the listing, instead of \
+             a listing per item."
+        }
+        "DeleteObject" => {
+            "Delete up to 1,000 keys in one DeleteObjects request instead of a DeleteObject per key."
+        }
+        "PutObject" | "CopyObject" | "UploadPart" => {
+            "Each call is a request to S3 that waits for the upload: send the objects concurrently (a thread pool, or \
+             s3transfer's upload_file), or move the uploads to a background task."
+        }
+        _ => {
+            "Each call is a request to S3: make fewer of them (one ListObjectsV2 instead of a call per key, \
+             DeleteObjects for many keys), or move the work to a background task."
+        }
+    }
+}
+
+/// What to do about one operation repeated in a loop, by the operation: S3's API, or a storage's.
 pub fn repeated_hint(span: &Span) -> &'static str {
+    if aws::is_call(span) {
+        return s3_repeated_hint(&op(span));
+    }
     match op(span).as_str() {
         "exists" => {
             "Each exists() asks the storage's backend (a request on S3): list the directory once with listdir() and \
@@ -157,12 +230,23 @@ mod tests {
             ("listdir", Some("avatars/")),
             ("listdir", Some("")),
             ("url", None),
+            ("HeadObject", Some("media/users/42/a.png")),
+            ("ListObjectsV2", Some("media/users/42/")),
         ]
         .map(|(op, path)| path_template(op, path));
 
         assert_eq!(
             templates,
-            ["avatars/*", "users/{id}/*", "*", "avatars", "", ""]
+            [
+                "avatars/*",
+                "users/{id}/*",
+                "*",
+                "avatars",
+                "",
+                "",
+                "media/users/{id}/*",
+                "media/users/{id}"
+            ]
         );
     }
 

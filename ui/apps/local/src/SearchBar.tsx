@@ -413,6 +413,7 @@ const QUICK: Record<Exclude<Section, CallsSection>, Control[]> = {
       format: taskSystem,
     },
   ],
+  aws: [{ ...TIME, verb: "Called" }, FAILED],
   mails: [{ ...TIME, verb: "Sent" }],
   pages: [
     { ...TIME, verb: "Viewed" },
@@ -585,6 +586,7 @@ const EXAMPLE: Record<Exclude<Section, CallsSection>, string> = {
   pages: "page:/books/*",
   websockets: "event:receive",
   graphql: "type:mutation",
+  aws: "aws:S3 op:GetObject",
   mails: "to:ann@example.com",
   logs: "level:error",
   errors: "ZeroDivisionError route:/api/*",

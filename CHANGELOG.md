@@ -4,6 +4,28 @@
 
 ### Added
 
+- AWS has a page of its own in Data, shown once the app called AWS: every
+  call by service and operation (S3 GetObject, DynamoDB Query, Lambda
+  Invoke), with its p95, its failures by error code (`NoSuchKey 3`), the
+  SDK's retries, the region and where in the code it is called from. A row
+  opens to the apps and lines that call it and its latest calls, each a way
+  to its trace, and S3's, DynamoDB's and SQS's rows lead to their Storage,
+  DynamoDB and Amazon SQS pages, which analyze them. Its search takes
+  `aws:`, `op:`, `region:`, `error:` and `failed:`. In the services map each
+  AWS service is a box of its own (Amazon S3, AWS Lambda), named as AWS
+  names it, all inside one `AWS · <region>` frame per region, as an app's
+  roles are framed. A Django storage on S3 or a task queue on SQS is that
+  service's box. The API's services have a `cloud` field with the service
+  and its region.
+- S3's own operations get S3's hints: a HeadObject per key says list the
+  prefix once with ListObjectsV2, a DeleteObject per key DeleteObjects, the
+  same GetObject twice is a duplicate. A slow storage call over the network
+  is an issue (`slow_http_ms`), a slow S3 call with a presigned URL hint. A
+  slow DynamoDB Scan says Query with a global secondary index, and a
+  FilterExpression to put the attribute in the key condition. SNS reads
+  Amazon SNS in titles. A call to AWS made for a storage, a cache or a task
+  queue is the layer's issue, as Redis commands under a cache call are, so
+  an SDK can send such calls with their own kind.
 - File storage calls are a span kind of their own, `storage`: each call a
   Django storage makes to its backend (save, open, exists, url, listdir...),
   on the local disk or S3. A `function` span with `storage.op`, as the Python

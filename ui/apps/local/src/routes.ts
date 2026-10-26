@@ -9,8 +9,17 @@ export const ENTRY_SECTIONS: EntrySection[] = ["endpoints", "graphql", "tasks", 
 export type CallsSection = `calls/${string}`;
 
 /** `traces` is search results (⌘K "search all"), not a menu item. */
-export type Section = EntrySection | "services" | CallsSection | "mails" | "logs" | "errors" | "issues" | "traces";
-const SECTIONS: Section[] = [...ENTRY_SECTIONS, "services", "mails", "logs", "errors", "issues", "traces"];
+export type Section =
+  | EntrySection
+  | "services"
+  | CallsSection
+  | "aws"
+  | "mails"
+  | "logs"
+  | "errors"
+  | "issues"
+  | "traces";
+const SECTIONS: Section[] = [...ENTRY_SECTIONS, "services", "aws", "mails", "logs", "errors", "issues", "traces"];
 
 /** An entry point's list: every call (what a page opens on), or its groups. */
 export type EntryView = "calls" | "overview";

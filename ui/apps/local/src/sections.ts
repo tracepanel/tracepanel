@@ -70,6 +70,12 @@ const DATA_LABELS: Record<Exclude<Section, EntrySection | CallsSection>, { label
     label: "Services",
     description: "Your app's web, workers and commands, and the databases, caches, mail servers and brokers they call.",
   },
+  aws: {
+    label: "AWS",
+    description:
+      "Every call your app makes to AWS, by service and operation: how long, which failed with which error, the " +
+      "retries, and where in the code.",
+  },
   mails: { label: "Emails", description: "Every email your app sent, with the request that sent it." },
   logs: { label: "Logs", description: "Log records from every request, task and job." },
   errors: {

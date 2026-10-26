@@ -275,7 +275,7 @@ function BoxView({ placed, hovering }: { placed: Placed<Box>; hovering: Hovering
   return <HostBox placed={placed} host={box.host} hovering={hovering} />;
 }
 
-/** A project's frame around its roles, its name on the top edge. */
+/** A project's frame around its roles, or an AWS region's around its services, its name on the top edge. */
 function ProjectFrame({ placed }: { placed: Placed<string> }) {
   return (
     <div style={at(placed)} className="absolute rounded-lg border border-dashed border-input bg-muted/30">
@@ -423,7 +423,7 @@ export function ServicesMap({ map }: { map: ServiceMap }) {
       <div ref={measured} className="overflow-x-auto px-4 pt-1 pb-4">
         <div className="relative mx-auto" style={{ width: diagram.width, height: diagram.height, zoom: zoom.zoom }}>
           {diagram.projects.map((placed) => (
-            <ProjectFrame key={placed.item} placed={placed} />
+            <ProjectFrame key={`${placed.item} ${placed.x}`} placed={placed} />
           ))}
           <Links diagram={diagram} hover={hover} />
           {diagram.boxes.map((placed) => (
