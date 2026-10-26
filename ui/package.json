@@ -16,10 +16,10 @@
     "postinstall": "lefthook install"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.15",
-    "fallow": "3.33.1",
+    "@biomejs/biome": "2.6.2",
+    "fallow": "3.35.0",
     "lefthook": "2.2.2",
     "typescript": "^7.0.2",
-    "vite": "^8.3.4"
+    "vite": "^8.3.5"
   }
 }
