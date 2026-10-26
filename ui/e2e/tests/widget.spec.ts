@@ -290,7 +290,7 @@ test("docked at the bottom, the panel leaves room to scroll to the page's end, e
   expect(end && top && end.y + end.height <= top.y).toBe(true);
 });
 
-test("Profile sits with Follow new and Clear; on, it lights, sets the cookie that profiles each request, and says so", async ({
+test("Profile sits with Follow new and Clear: Off or Time, when the app doesn't profile memory", async ({
   page,
   context,
 }) => {
@@ -303,25 +303,31 @@ test("Profile sits with Follow new and Clear; on, it lights, sets the cookie tha
     .filter({ has: panel(page).getByText("Follow new") })
     .filter({ has: panel(page).getByRole("button", { name: /^Clear/ }) })
     .last();
+  const modes = controls.getByRole("radiogroup", { name: "Profile new requests" });
 
-  await controls.getByRole("button", { name: "Profile new requests" }).click();
-  const on = panel(page).getByRole("button", { name: "Profiling time", exact: true });
+  await expect(modes.getByRole("radio")).toHaveCount(2);
+  await expect(modes.getByRole("radio", { name: "Profiling off" })).toHaveAttribute("aria-checked", "true");
+  expect(await profileCookie(context)).toBeUndefined();
 
-  await expect(on).toHaveAttribute("aria-pressed", "true");
+  await modes.getByRole("radio", { name: "Profile time" }).click();
+
+  await expect(modes.getByRole("radio", { name: "Profile time" })).toHaveAttribute("aria-checked", "true");
+  await expect(modes.getByRole("radio", { name: "Profiling off" })).toHaveAttribute("aria-checked", "false");
   expect(await profileCookie(context)).toBe("1");
 
   // After a click, a hint opens once the pointer comes back to its button.
   await panel(page).getByText("Follow new").hover();
-  await on.hover();
+  await modes.getByRole("radio", { name: "Profile time" }).hover();
 
-  await expect(panel(page).getByRole("tooltip")).toContainText("Every request this browser makes is profiled");
+  await expect(panel(page).getByRole("tooltip")).toContainText("Record where the time of each request");
 
-  // An app that doesn't profile memory: no choice of it, and no dot.
-  await expect(panel(page).getByRole("button", { name: "Profiling mode" })).toHaveCount(0);
-  await expect(panel(page).getByTestId("profile-memory-dot")).toHaveCount(0);
+  await modes.getByRole("radio", { name: "Profiling off" }).click();
+
+  await expect(modes.getByRole("radio", { name: "Profiling off" })).toHaveAttribute("aria-checked", "true");
+  expect(await profileCookie(context)).toBeUndefined();
 });
 
-test("Profile's menu, when the app profiles memory, adds memory: a dot on the flame, the cookie says memory", async ({
+test("Profile, when the app profiles memory, has a third way: the cookie says each, and arrows move it", async ({
   page,
   context,
 }) => {
@@ -329,39 +335,45 @@ test("Profile's menu, when the app profiles memory, adds memory: a dot on the fl
   await openApp(page, { posts: await posts() });
   await page.getByRole("button", { name: "Load posts" }).click();
   await pill(page).click();
+  const modes = panel(page).getByRole("radiogroup", { name: "Profile new requests" });
+  const off = modes.getByRole("radio", { name: "Profiling off" });
+  const time = modes.getByRole("radio", { name: "Profile time", exact: true });
+  const memory = modes.getByRole("radio", { name: "Profile time and memory (slower)" });
 
-  await panel(page).getByRole("button", { name: "Profiling mode" }).click();
-  await panel(page)
-    .getByRole("menuitemradio", { name: /Time and memory/ })
-    .click();
-  const on = panel(page).getByRole("button", { name: "Profiling time and memory (slower)" });
+  await expect(modes.getByRole("radio")).toHaveCount(3);
 
-  await expect(on).toHaveAttribute("aria-pressed", "true");
-  await expect(on.getByTestId("profile-memory-dot")).toBeVisible();
+  await memory.click();
+
+  await expect(memory).toHaveAttribute("aria-checked", "true");
   expect(await profileCookie(context)).toBe("memory");
 
-  await panel(page).getByRole("button", { name: "Profiling mode" }).click();
-
-  await expect(panel(page).getByRole("menuitemradio", { name: /Time and memory/ })).toHaveAttribute(
-    "aria-checked",
-    "true",
-  );
-
-  await panel(page).getByRole("menuitemradio", { name: "Time", exact: true }).click();
-  const time = panel(page).getByRole("button", { name: "Profiling time", exact: true });
-
-  await expect(time).toHaveAttribute("aria-pressed", "true");
-  await expect(panel(page).getByTestId("profile-memory-dot")).toHaveCount(0);
-  expect(await profileCookie(context)).toBe("1");
-
-  // A click on the flame stops whichever it was.
   await time.click();
 
-  await expect(panel(page).getByRole("button", { name: "Profile new requests" })).toHaveAttribute(
-    "aria-pressed",
-    "false",
-  );
+  await expect(time).toHaveAttribute("aria-checked", "true");
+  await expect(memory).toHaveAttribute("aria-checked", "false");
+  expect(await profileCookie(context)).toBe("1");
+
+  // A radio group: one stop for Tab (the chosen way), the arrows move along it and round.
+  await expect(time).toHaveAttribute("tabindex", "0");
+  await expect(off).toHaveAttribute("tabindex", "-1");
+
+  await time.focus();
+  await page.keyboard.press("ArrowRight");
+
+  await expect(memory).toBeFocused();
+  await expect(memory).toHaveAttribute("aria-checked", "true");
+  expect(await profileCookie(context)).toBe("memory");
+
+  await page.keyboard.press("ArrowRight");
+
+  await expect(off).toBeFocused();
+  await expect(off).toHaveAttribute("aria-checked", "true");
   expect(await profileCookie(context)).toBeUndefined();
+
+  await page.keyboard.press("ArrowLeft");
+
+  await expect(memory).toHaveAttribute("aria-checked", "true");
+  expect(await profileCookie(context)).toBe("memory");
 });
 
 test("Console opens the request in the full console, and its hint says so", async ({ page }) => {

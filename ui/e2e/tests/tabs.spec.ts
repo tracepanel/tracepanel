@@ -97,7 +97,7 @@ for (const width of WIDTHS) {
 }
 
 test("a tab chosen from More opens, and takes a place in the row", async ({ page }) => {
-  await page.setViewportSize({ width: 1024, height: 900 });
+  await page.setViewportSize({ width: 900, height: 900 });
   await openPanel(page, "bottom");
   const tablist = panel(page).getByRole("tablist", { name: "Trace details" });
   await expect(tablist.getByRole("tab", { name: "Call tree" })).toBeVisible();
@@ -110,6 +110,25 @@ test("a tab chosen from More opens, and takes a place in the row", async ({ page
 
   await expect(tablist.getByRole("tab", { name: /^App/ })).toHaveAttribute("aria-selected", "true");
   await expect(panel(page).getByRole("tabpanel", { name: "Settings" })).toContainText("SECRET_KEY");
+});
+
+test("in the panel's toolbar Explore is an icon, the first after Console, before the panel's own", async ({ page }) => {
+  await openPanel(page, "bottom");
+  const x = async (name: string) => (await panel(page).getByRole("button", { name, exact: true }).boundingBox())?.x;
+  const consoleLink = panel(page).getByRole("link", { name: /^Console/ });
+  const toConsole = (await consoleLink.boundingBox())?.x;
+  const explore = await x("Explore");
+
+  await expect(panel(page).getByRole("button", { name: "Explore", exact: true })).toHaveText("");
+  expect(toConsole !== undefined && explore !== undefined && toConsole < explore).toBe(true);
+  expect(explore !== undefined && explore < ((await x("Dock to right")) ?? 0)).toBe(true);
+
+  // Its menu, focused as it opens, keeps its own surface: no focus tint over it, its shadow kept.
+  await panel(page).getByRole("button", { name: "Explore", exact: true }).click();
+  const menu = panel(page).getByRole("menu", { name: "Explore" });
+
+  await expect(menu).toHaveCSS("background-image", "none");
+  await expect(menu).not.toHaveCSS("box-shadow", "none");
 });
 
 test("on the trace page the call tree, the Logs tab's table and the loading bar sit on the tabs' edges", async ({

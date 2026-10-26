@@ -4,12 +4,12 @@
 
 ### Added
 
-- The panel's Profile toggle can profile memory too. Its caret offers Off,
-  Time, or Time and memory (slower), and sets the `tracepanel_profile` cookie
-  to `1` or `memory`. A dot on the flame says memory is on. The choice is
-  there only when the app says `profile_memory`, a new field of
-  `api/capabilities` (false for an app that doesn't say it). A click on the
-  flame turns time on and any mode off, as before.
+- The panel's Profile toggle can profile memory too, and shows its three
+  ways at a glance: Off, Time and Time and memory (slower), side by side as
+  icons, the chosen one lit. It sets the `tracepanel_profile` cookie to `1`
+  or `memory`, and the arrow keys move along it. Time and memory is there
+  only when the app says `profile_memory`, a new field of `api/capabilities`
+  (false for an app that doesn't say it). Else the toggle is Off and Time.
 - Profiles show memory and GC pauses. A profile can say what the trace's
   code allocated (`memory`: its peak, what it kept, where the memory was)
   and the garbage collector's runs (`gc`: how many, their pauses and when).
@@ -165,6 +165,11 @@
 
 ### Fixed
 
+- Menus in the light theme are white, with a hairline border, a soft shadow
+  and the item under the pointer a faint grey. A menu took the focus as it
+  opened and was greyed over, its shadow gone. Explore is an icon now, its
+  name in the hint, and in the panel the first after Console, so the
+  toolbar has room for the tabs.
 - A call tree says each thing once. A range picked is said by the legend's
   chip alone (`Time 11 ms – 1.6 s`, × lets it go), and its bands over the
   strip and the tree are a hairline and a tint that cover no axis or lane

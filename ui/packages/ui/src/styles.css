@@ -934,12 +934,6 @@ tr[data-new] {
   background: none;
   backdrop-filter: none;
 }
-/* A narrow panel (docked right): Explore keeps its icon. */
-@media (max-width: 560px) {
-  .dt-explore-label {
-    display: none;
-  }
-}
 .dt-trace-strip .dt-tab {
   flex: none;
   margin-bottom: 0;

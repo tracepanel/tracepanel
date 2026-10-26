@@ -940,8 +940,9 @@ function PanelApp({ route }: { route: Route }) {
   const selectedKind = listed.find((row) => row.trace.id === selectedId)?.trace.kind;
   const toolbarInTrace = split && selectedId !== null;
   const switchUser = <SwitchUser source={source} onSwitched={() => tellWidget("tracepanel:reload")} />;
-  // One row of quiet icons: what is done to this trace or this panel; who you are sits with the list.
-  const panelActions = (
+  // One row of quiet icons: what is done to this trace or this panel; who you are sits with the list. Explore, when
+  // the trace's toolbar holds the row, is the first of the icons after Console.
+  const panelActions = (explore?: ReactNode) => (
     <>
       <Shown when={!toolbarInTrace}>{switchUser}</Shown>
       <Hint
@@ -959,6 +960,7 @@ function PanelApp({ route }: { route: Route }) {
           <ExternalIcon />
         </a>
       </Hint>
+      {explore}
       <ShareAction traceId={selectedId} source={source} compact={true} />
       <ThemeToggle compact={true} />
       <DockButton dock={dock} />
@@ -996,7 +998,7 @@ function PanelApp({ route }: { route: Route }) {
               onClear={() => setClearing(true)}
             />
           )}
-          <div className="bar-actions">{panelActions}</div>
+          <div className="bar-actions">{panelActions()}</div>
         </header>
       )}
       {!split && pageRows.length > 1 ? (

@@ -1,4 +1,12 @@
-import { type DataSource, type ExplainPlan, Hint, type Snapshot, snapshotFile, type Trace } from "@tracepanel/ui";
+import {
+  type DataSource,
+  type ExplainPlan,
+  Hint,
+  type Snapshot,
+  snapshotFile,
+  type Trace,
+  type TraceViewProps,
+} from "@tracepanel/ui";
 import { Button } from "@tracepanel/ui/components/ui/button";
 import { Checkbox } from "@tracepanel/ui/components/ui/checkbox";
 import {
@@ -10,7 +18,7 @@ import {
   DialogTitle,
 } from "@tracepanel/ui/components/ui/dialog";
 import { Share2Icon } from "lucide-react";
-import { type ReactNode, useEffect, useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 
 /** Slow queries whose plans go into a snapshot with values: EXPLAIN runs in the app, which the file can't reach. */
 const MAX_PLANS = 5;
@@ -196,12 +204,26 @@ export function ShareAction({
 }
 
 /** A trace's header actions, with Share first when the source makes snapshots. */
-export function withShare(trace: Trace, source: DataSource, actions: ReactNode, shareable: boolean): ReactNode {
+export function withShare(
+  trace: Trace,
+  source: DataSource,
+  actions: TraceViewProps["actions"],
+  shareable: boolean,
+): TraceViewProps["actions"] {
   if (!shareable || !source.snapshot) return actions;
-  return (
+  const share = <ShareAction traceId={trace.id} source={source} />;
+  if (typeof actions !== "function") {
+    return (
+      <>
+        {share}
+        {actions}
+      </>
+    );
+  }
+  return (explore) => (
     <>
-      <ShareAction traceId={trace.id} source={source} />
-      {actions}
+      {share}
+      {actions(explore)}
     </>
   );
 }
