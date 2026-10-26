@@ -544,7 +544,7 @@
         },
         "gen_ai.usage.cache_write.input_tokens": {
           "type": "integer",
-          "description": "On an llm span: the input's tokens written to the prompt cache."
+          "description": "On an llm span: the input's tokens written to the prompt cache. OpenTelemetry's older gen_ai.usage.cache_creation.input_tokens is stored under this name."
         },
         "gen_ai.usage.reasoning.output_tokens": {
           "type": "integer",

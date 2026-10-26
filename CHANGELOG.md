@@ -273,6 +273,11 @@
 
 ### Fixed
 
+- A model call recorded by an OpenTelemetry GenAI instrumentation counts its
+  prompt cache writes in its cost when it names them by the conventions'
+  older `gen_ai.usage.cache_creation.input_tokens`. They are stored as
+  `gen_ai.usage.cache_write.input_tokens`, the current name, and were left
+  out before.
 - Menus in the light theme are white, with a hairline border, a soft shadow
   and the item under the pointer a faint grey. A menu took the focus as it
   opened and was greyed over, its shadow gone. Explore is an icon now, its

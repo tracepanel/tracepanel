@@ -1699,7 +1699,7 @@ export interface components {
             "gen_ai.usage.output_tokens"?: number;
             /** @description On an llm span: the input's tokens the prompt cache served. */
             "gen_ai.usage.cache_read.input_tokens"?: number;
-            /** @description On an llm span: the input's tokens written to the prompt cache. */
+            /** @description On an llm span: the input's tokens written to the prompt cache. OpenTelemetry's older gen_ai.usage.cache_creation.input_tokens is stored under this name. */
             "gen_ai.usage.cache_write.input_tokens"?: number;
             /** @description On an llm span: the output's tokens the model spent reasoning. */
             "gen_ai.usage.reasoning.output_tokens"?: number;
@@ -2128,7 +2128,7 @@ export interface components {
                     "gen_ai.usage.output_tokens"?: number;
                     /** @description On an llm span: the input's tokens the prompt cache served. */
                     "gen_ai.usage.cache_read.input_tokens"?: number;
-                    /** @description On an llm span: the input's tokens written to the prompt cache. */
+                    /** @description On an llm span: the input's tokens written to the prompt cache. OpenTelemetry's older gen_ai.usage.cache_creation.input_tokens is stored under this name. */
                     "gen_ai.usage.cache_write.input_tokens"?: number;
                     /** @description On an llm span: the output's tokens the model spent reasoning. */
                     "gen_ai.usage.reasoning.output_tokens"?: number;
