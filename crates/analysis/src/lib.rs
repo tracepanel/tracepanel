@@ -12,6 +12,7 @@ use std::sync::LazyLock;
 use tracepanel_protocol::{Attrs, Issue, Span, Thresholds, Trace};
 
 pub mod calls;
+pub mod migrations;
 pub mod otel;
 pub mod storage;
 mod waits;
@@ -908,11 +909,58 @@ fn htmx_issues(trace: &Trace) -> Vec<Issue> {
         .collect()
 }
 
+/// An older SDK's `function` spans of a kind it didn't have yet made that kind, the one `rule` says from the span's
+/// attributes, in the trace's rows and in its document (what the console shows). A trace without any is left as it is.
+pub(crate) fn rekind(
+    received: &mut tracepanel_protocol::Received,
+    rule: fn(&Attrs) -> Option<&'static str>,
+) {
+    let found = |kind: &str, attrs: Option<&Attrs>| {
+        if kind == "function" {
+            attrs.and_then(rule)
+        } else {
+            None
+        }
+    };
+    if !received
+        .trace
+        .spans
+        .iter()
+        .any(|span| found(&span.kind, Some(&span.attrs)).is_some())
+    {
+        return;
+    }
+    let Ok(mut doc) = serde_json::from_str::<Value>(&received.doc) else {
+        return;
+    };
+    for span in doc
+        .get_mut("spans")
+        .and_then(Value::as_array_mut)
+        .into_iter()
+        .flatten()
+    {
+        let kind = found(
+            span["kind"].as_str().unwrap_or_default(),
+            span.get("attrs").and_then(Value::as_object),
+        );
+        if let Some(kind) = kind {
+            span["kind"] = Value::from(kind);
+        }
+    }
+    for span in &mut received.trace.spans {
+        if let Some(kind) = found(&span.kind, Some(&span.attrs)) {
+            span.kind = kind.into();
+        }
+    }
+    received.doc = doc.to_string();
+}
+
 /// A received trace, made ready for the store: its OpenTelemetry spans mapped to tracepanel's kinds (an older SDK's
-/// storage calls too), then its issues found, in its rows and in its document, which the console shows.
+/// storage calls and migrations too), then its issues found, in its rows and in its document, which the console shows.
 pub fn apply(received: &mut tracepanel_protocol::Received, thresholds: &Thresholds) {
     otel::normalize(received);
     storage::normalize(received);
+    migrations::normalize(received);
     let issues = analyze(&received.trace, thresholds);
     if issues.is_empty() {
         return;
@@ -940,6 +988,7 @@ pub fn analyze(trace: &Trace, thresholds: &Thresholds) -> Vec<Issue> {
     found.extend(large_result_issues(trace, thresholds));
     found.extend(waits::queue_issues(trace, thresholds));
     found.extend(waits::blocking_issues(trace));
+    found.extend(migrations::risk_issues(trace));
     // A stable sort, as Python's sorted().
     found.sort_by_key(|issue| -issue.count);
     let mut issues = error_issues(trace);

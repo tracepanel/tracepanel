@@ -682,6 +682,170 @@ async fn storage_calls_are_their_own_kind_listed_and_analyzed() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A migrate job as an SDK before the `migration` kinds sends it, its migrations and operations `function` spans:
+/// stored and served as `migration` and `migration.operation` spans, matching the schema. An operation with a risk is
+/// an issue of the trace, listed with the others, where its migration ran for real; a faked one's isn't, nor is an
+/// unapplied one's.
+#[tokio::test]
+async fn a_migrate_job_s_migrations_are_their_own_kinds_and_their_risks_issues() {
+    let dir = std::env::temp_dir().join(format!("tracepanel-migrate-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = tracepanel_store_local::path_in(&dir);
+    let mut store = Store::open(&path).unwrap();
+    let router = tracepanel_server::router(Reader::new(&path), Activity::default());
+
+    let at = |n: i64| 1_791_000_000_000_000_i64 + n * 1000;
+    let span = |id: &str, parent: &str, name: &str, n: i64, attrs: Value| {
+        serde_json::json!({
+            "id": format!("01M5M1GRAT{id:0>16}"), "parent_id": format!("01M5M1GRAT{parent:0>16}"),
+            "kind": "function", "name": name, "start": at(n), "duration": 1000, "status": "ok", "attrs": attrs,
+        })
+    };
+    let migration = |id: &str, name: &str, direction: &str, fake: bool, n: i64| {
+        let verb = if direction == "forwards" {
+            "migrate"
+        } else {
+            "unapply"
+        };
+        span(
+            id,
+            "R",
+            &format!("{verb} shop {name}"),
+            n,
+            serde_json::json!({
+                "migration.app": "shop", "migration.name": name, "migration.direction": direction,
+                "migration.atomic": true, "migration.fake": fake, "migration.operations": 1,
+            }),
+        )
+    };
+    let operation = |id: &str, parent: &str, name: &str, n: i64, risk: Option<&str>| {
+        let mut attrs = serde_json::json!({
+            "migration.operation": name.split(' ').next().unwrap(), "migration.description": name,
+            "migration.atomic": true,
+        });
+        if let Some(risk) = risk {
+            attrs["migration.risk"] = Value::from(risk);
+        }
+        span(id, parent, name, n, attrs)
+    };
+    let index =
+        "CREATE INDEX blocks writes to the table until it is built (AddIndexConcurrently doesn't)";
+    let irreversible = "RunPython with no reverse: the migration can't be unapplied";
+    let spans = vec![
+        serde_json::json!({
+            "id": "01M5M1GRAT000000000000000R", "parent_id": null, "kind": "command", "name": "migrate",
+            "start": at(0), "duration": 20_000, "status": "ok", "attrs": {},
+        }),
+        migration("M1", "0012_sku_index", "forwards", false, 1),
+        operation("P1", "M1", "AddIndex Product.sku_idx", 2, Some(index)),
+        migration("M2", "0013_backfill", "forwards", false, 4),
+        operation("P2", "M2", "RunPython backfill_sku", 5, Some(irreversible)),
+        migration("M3", "0001_initial", "forwards", true, 7),
+        migration("M4", "0011_price", "backwards", false, 8),
+        operation(
+            "P4",
+            "M4",
+            "AlterField Product.price",
+            9,
+            Some("ALTER COLUMN TYPE rewrites the table under an ACCESS EXCLUSIVE lock"),
+        ),
+    ];
+    let doc = serde_json::json!({
+        "id": "01M5M1GRATE000000000000000", "kind": "command", "name": "manage.py migrate", "start": at(0),
+        "duration": 20_000, "status": "ok",
+        "attrs": {"service.name": "shop", "service.role": "command", "command.name": "migrate",
+                  "migrate.plan": ["shop.0012_sku_index", "shop.0013_backfill"], "migrate.planned": 2,
+                  "migrate.applied": 3, "migrate.unapplied": 1},
+        "spans": spans, "logs": [], "errors": [], "links": [], "issues": [],
+    });
+    let errors: Vec<String> = validator()
+        .iter_errors(&doc)
+        .map(|error| error.to_string())
+        .collect();
+    assert!(errors.is_empty(), "as sent: {errors:?}");
+    let batch = Batch {
+        frame: serde_json::to_vec(&vec![&doc]).unwrap(),
+        max_traces: Some(1000),
+        thresholds: Thresholds::default(),
+    };
+    let mut received = batch.decode().unwrap();
+    for trace in &mut received {
+        tracepanel_analysis::apply(trace, &batch.thresholds);
+    }
+    store.write(&received).unwrap();
+
+    let (_, trace) = get(&router, "/api/traces/01M5M1GRATE000000000000000").await;
+    let errors: Vec<String> = validator()
+        .iter_errors(&trace)
+        .map(|error| error.to_string())
+        .collect();
+    assert!(errors.is_empty(), "as served: {errors:?}");
+    let kinds: Vec<&str> = trace["spans"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|span| span["kind"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        kinds,
+        [
+            "command",
+            "migration",
+            "migration.operation",
+            "migration",
+            "migration.operation",
+            "migration",
+            "migration",
+            "migration.operation",
+        ]
+    );
+
+    let issues: Vec<(&str, &str, &str, &Value)> = trace["issues"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|issue| {
+            (
+                issue["kind"].as_str().unwrap(),
+                issue["title"].as_str().unwrap(),
+                issue["culprit"].as_str().unwrap(),
+                &issue["span_ids"],
+            )
+        })
+        .collect();
+    assert_eq!(
+        issues,
+        [
+            (
+                "migration-risk",
+                index,
+                "shop.0012_sku_index · AddIndex Product.sku_idx",
+                &serde_json::json!(["01M5M1GRAT00000000000000P1"])
+            ),
+            (
+                "migration-risk",
+                irreversible,
+                "shop.0013_backfill · RunPython backfill_sku",
+                &serde_json::json!(["01M5M1GRAT00000000000000P2"])
+            ),
+        ]
+    );
+
+    let (_, found) = get(&router, "/api/traces?q=has:migration-risk").await;
+    assert_eq!(found["traces"].as_array().unwrap().len(), 1);
+    let (_, listed) = get(&router, "/api/issues").await;
+    let titles: Vec<&str> = listed["issues"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|issue| issue["title"].as_str().unwrap())
+        .collect();
+    assert_eq!(titles.len(), 2);
+    assert!(titles.contains(&index) && titles.contains(&irreversible));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 async fn get(router: &axum::Router, uri: &str) -> (StatusCode, Value) {
     let request = Request::get(uri).body(Body::empty()).unwrap();
     let response = router.clone().oneshot(request).await.unwrap();

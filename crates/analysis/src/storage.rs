@@ -7,8 +7,7 @@
 //! SDKs that predate the kind send each call as a `function` span with `storage.op`: it becomes a `storage` span here,
 //! before the issues are found and the trace is stored, so nothing downstream tells them apart.
 
-use super::{or_default, template, text};
-use serde_json::Value;
+use super::{or_default, rekind, template, text};
 use tracepanel_protocol::{Received, Span};
 
 /// The span kind of a storage call.
@@ -32,40 +31,10 @@ const READS: &[&str] = &[
     "get_modified_time",
 ];
 
-fn legacy(kind: &str, attrs: Option<&Value>) -> bool {
-    kind == "function" && attrs.and_then(|attrs| attrs.get(OP)).is_some()
-}
-
 /// Make an older SDK's storage calls `storage` spans, in the trace's rows and in its document (what the console
 /// shows). A trace without any is left as it is.
 pub fn normalize(received: &mut Received) {
-    if !received
-        .trace
-        .spans
-        .iter()
-        .any(|span| span.kind == "function" && span.attrs.contains_key(OP))
-    {
-        return;
-    }
-    let Ok(mut doc) = serde_json::from_str::<Value>(&received.doc) else {
-        return;
-    };
-    for span in doc
-        .get_mut("spans")
-        .and_then(Value::as_array_mut)
-        .into_iter()
-        .flatten()
-    {
-        if legacy(span["kind"].as_str().unwrap_or_default(), span.get("attrs")) {
-            span["kind"] = Value::from(KIND);
-        }
-    }
-    for span in &mut received.trace.spans {
-        if span.kind == "function" && span.attrs.contains_key(OP) {
-            span.kind = KIND.into();
-        }
-    }
-    received.doc = doc.to_string();
+    rekind(received, |attrs| attrs.contains_key(OP).then_some(KIND));
 }
 
 /// The storage a call went to: its alias in STORAGES, else its class (a FileField's own storage has no alias).
@@ -147,6 +116,7 @@ pub fn repeated_hint(span: &Span) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::Value;
 
     #[test]
     fn a_loop_s_calls_share_their_directory_and_a_listing_its_own() {
