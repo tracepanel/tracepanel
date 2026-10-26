@@ -198,6 +198,21 @@
   and the share of the time is a percent instead of a bar. In order lists
   each query's start. An open row reads as the call tree's details: what it
   is, the statement, its fields, the query plan and where it was called from.
+  A query opened in the call tree has the same Query plan.
+- The call tree has colour and rhythm. A row's kind badge is a soft fill of
+  its share's colour, the strip's and its legend's (SQL blue, your code
+  purple, templates green, the framework grey), and so is its bar, slimmer
+  and rounded. A wait is an outlined badge. Faint guides run down the
+  indent, the fold arrows step back, and the selected row is marked at its
+  edge. A query's verb and an HTTP call's method (in its colour) stand
+  apart from what they act on, and the framework's steps and library code
+  read quieter than yours. A call that took a fifth of the trace has its
+  time in amber, half of it in red. Rows are a little tighter.
+- A wait the app awaited through `sync_to_async` is named as the app wrote
+  it, `await sync_to_async(…) in product_feed`. A few ms of code beside a
+  long wait (or the reverse) is no longer a row of its own: under 5 ms, or
+  under a fifth of the span's own time and a twentieth of the trace's, it
+  folds into one row with the rest.
 
 ### Fixed
 
