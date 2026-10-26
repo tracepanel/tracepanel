@@ -1,7 +1,7 @@
-import { type DataSource, Hint, SEGMENT_TRACK } from "@tracepanel/ui";
+import { type DataSource, Hint } from "@tracepanel/ui";
 import { cn } from "@tracepanel/ui/lib/utils";
-import { CircleSmallIcon, FlameIcon, MemoryStickIcon } from "lucide-react";
-import { type KeyboardEvent, type MouseEvent, useEffect, useRef, useState } from "react";
+import { FlameIcon } from "lucide-react";
+import { type MouseEvent, useEffect, useState } from "react";
 import { useCapability } from "./hooks";
 
 // While it is set, the app profiles every request this browser makes; a session cookie, so closing the browser ends it.
@@ -30,26 +30,22 @@ function profile(mode: Mode): void {
 
 const CHANGED = "tracepanel:profiling";
 
-const HINTS: Record<Mode, { title: string; detail: string }> = {
-  off: { title: "Profiling off", detail: "The requests this browser makes run as they are." },
-  time: {
-    title: "Profile time",
-    detail: "Record where the time of each request this browser makes goes in code, until you turn it off.",
-  },
-  memory: {
-    title: "Profile time and memory (slower)",
-    detail: "As Profile time, with what each request's code allocated. The requests run slower meanwhile.",
-  },
+// What each mode is called, and what a click that moves to it does.
+const NAMES: Record<Mode, string> = {
+  off: "Profiling off",
+  time: "Profiling time",
+  memory: "Profiling time and memory",
 };
+const CLICKS: Record<Mode, string> = { off: "off", time: "profile time", memory: "also memory (slower)" };
 
 /**
  * Profiling on or off for this browser: a cookie on the app's own origin (the panel is on it) that the app sees on
- * each request. Shown only when a connected app profiles on request; the choice of memory too only when it can.
+ * each request. Shown only when a connected app profiles on request; memory too only when it can.
  */
 export function ProfileToggle({ source }: { source: DataSource }) {
   const time = useCapability(source, "profile");
   const memory = useCapability(source, "profile_memory");
-  return time ? <ProfileSwitch modes={memory ? ["off", "time", "memory"] : ["off", "time"]} /> : null;
+  return time ? <ProfileButton modes={memory ? ["off", "time", "memory"] : ["off", "time"]} /> : null;
 }
 
 /** The mode this browser profiles in, kept with the cookie wherever it is changed. */
@@ -63,101 +59,52 @@ function useProfiling(): [Mode, (mode: Mode) => void] {
   return [mode, profile];
 }
 
-// How far each key moves the choice along the switch, as in any radio group.
-const STEPS = new Map([
-  ["ArrowRight", 1],
-  ["ArrowDown", 1],
-  ["ArrowLeft", -1],
-  ["ArrowUp", -1],
-]);
-
-// The chosen mode's colour: orange while profiling is on, as the flame was.
-const LIT: Record<Mode, string> = { off: "text-foreground", time: "text-orange-500", memory: "text-orange-500" };
-
 /**
- * The modes side by side on the track every pill switch sits on (Segmented), as high as the toolbar's buttons: the
- * chosen one raised, lit orange while profiling is on. A radio group: Tab reaches the chosen one, arrows move.
+ * One icon among the toolbar's: the flame, muted while off, orange while profiling, with a dot at its corner while
+ * memory is profiled too. A click (or Enter, Space) moves to the next mode and round. Its name is the mode it is in,
+ * and a change is said aloud, as a screen reader doesn't read a focused button's new name by itself.
  */
-function ProfileSwitch({ modes }: { modes: readonly Mode[] }) {
+function ProfileButton({ modes }: { modes: readonly Mode[] }) {
   const [stored, choose] = useProfiling();
-  // A memory cookie left from an app that profiles memory: here, with no segment for it, it shows as time.
+  // A memory cookie left from an app that profiles memory: here, with no memory mode, it shows as time.
   const mode = modes.includes(stored) ? stored : "time";
-  const buttons = useRef(new Map<Mode, HTMLButtonElement>());
-  const onKeyDown = (event: KeyboardEvent) => {
-    const by = STEPS.get(event.key);
-    if (by === undefined) return;
-    event.preventDefault();
-    const next = modes[(modes.indexOf(mode) + by + modes.length) % modes.length] ?? mode;
-    choose(next);
-    buttons.current.get(next)?.focus();
-  };
+  const next = modes[(modes.indexOf(mode) + 1) % modes.length] ?? "off";
+  const [said, say] = useState("");
   return (
-    <div role="radiogroup" aria-label="Profile new requests" className={SEGMENT_TRACK} onKeyDown={onKeyDown}>
-      {modes.map((each) => (
-        <ModeButton
-          key={each}
-          mode={each}
-          checked={each === mode}
-          onChoose={choose}
-          ref={(button) => {
-            if (button) buttons.current.set(each, button);
-            else buttons.current.delete(each);
-          }}
-        />
-      ))}
-    </div>
-  );
-}
-
-/** One mode on the switch: its icon, its name and what it does in the hint. */
-function ModeButton({
-  mode,
-  checked,
-  onChoose,
-  ref,
-}: {
-  mode: Mode;
-  checked: boolean;
-  onChoose: (mode: Mode) => void;
-  ref: (button: HTMLButtonElement | null) => void;
-}) {
-  const hint = HINTS[mode];
-  return (
-    <Hint title={hint.title} detail={hint.detail}>
-      {/* biome-ignore lint/a11y/useSemanticElements: an icon on the track, not a native radio with its label. */}
-      <button
-        ref={ref}
-        type="button"
-        role="radio"
-        aria-checked={checked}
-        aria-label={hint.title}
-        tabIndex={checked ? 0 : -1}
-        className={cn(
-          "flex h-6.5 items-center gap-0.5 rounded-md px-1.5 transition-colors",
-          checked ? ["bg-background shadow-sm", LIT[mode]] : "text-muted-foreground hover:text-foreground",
-        )}
-        onClick={(event) => {
-          onChoose(mode);
-          blurAfterClick(event);
-        }}
-      >
-        <ModeIcon mode={mode} lit={checked} />
-      </button>
-    </Hint>
-  );
-}
-
-/** A dot for off; the flame for time, filled while it is on; the flame and a memory stick for both. */
-function ModeIcon({ mode, lit }: { mode: Mode; lit: boolean }) {
-  if (mode === "off") return <CircleSmallIcon className="size-3.5" />;
-  const flame = <FlameIcon className={cn("size-3.5", lit && "fill-orange-500/30")} />;
-  return mode === "memory" ? (
     <>
-      {flame}
-      <MemoryStickIcon className="size-3.5" />
+      <Hint title={`${NAMES[mode]} · click: ${CLICKS[next]}`}>
+        <button
+          type="button"
+          className={cn("icon-button relative", mode !== "off" && "text-orange-500 hover:text-orange-500")}
+          aria-label={NAMES[mode]}
+          onClick={(event) => {
+            choose(next);
+            say(NAMES[next]);
+            blurAfterClick(event);
+          }}
+        >
+          <Flame mode={mode} />
+        </button>
+      </Hint>
+      <span className="sr-only" aria-live="polite">
+        {said}
+      </span>
     </>
-  ) : (
-    flame
+  );
+}
+
+/** The flame, filled while profiling is on, with a dot at its corner while memory is too. */
+function Flame({ mode }: { mode: Mode }) {
+  return (
+    <>
+      <FlameIcon className={cn("size-4", mode !== "off" && "fill-orange-500/30")} />
+      {mode === "memory" ? (
+        <span
+          data-testid="profile-memory-dot"
+          className="absolute right-1 bottom-1 size-1.5 rounded-full bg-orange-500 ring-2 ring-background"
+        />
+      ) : null}
+    </>
   );
 }
 
