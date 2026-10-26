@@ -1,15 +1,7 @@
-import { type DataSource, Hint } from "@tracepanel/ui";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from "@tracepanel/ui/components/ui/dropdown-menu";
+import { type DataSource, Hint, SEGMENT_TRACK } from "@tracepanel/ui";
 import { cn } from "@tracepanel/ui/lib/utils";
-import { ChevronDownIcon, FlameIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { CircleSmallIcon, FlameIcon, MemoryStickIcon } from "lucide-react";
+import { type KeyboardEvent, type MouseEvent, useEffect, useRef, useState } from "react";
 import { useCapability } from "./hooks";
 
 // While it is set, the app profiles every request this browser makes; a session cookie, so closing the browser ends it.
@@ -39,14 +31,14 @@ function profile(mode: Mode): void {
 const CHANGED = "tracepanel:profiling";
 
 const HINTS: Record<Mode, { title: string; detail: string }> = {
-  off: {
-    title: "Profile new requests",
-    detail: "Record where the time of each request from now on goes in code, until you turn it off.",
+  off: { title: "Profiling off", detail: "The requests this browser makes run as they are." },
+  time: {
+    title: "Profile time",
+    detail: "Record where the time of each request this browser makes goes in code, until you turn it off.",
   },
-  time: { title: "Profiling time", detail: "Every request this browser makes is profiled. Click to stop." },
   memory: {
-    title: "Profiling time and memory (slower)",
-    detail: "Every request this browser makes is profiled, with what its code allocated. Click to stop.",
+    title: "Profile time and memory (slower)",
+    detail: "As Profile time, with what each request's code allocated. The requests run slower meanwhile.",
   },
 };
 
@@ -57,7 +49,7 @@ const HINTS: Record<Mode, { title: string; detail: string }> = {
 export function ProfileToggle({ source }: { source: DataSource }) {
   const time = useCapability(source, "profile");
   const memory = useCapability(source, "profile_memory");
-  return time ? <ProfileButton memory={memory} /> : null;
+  return time ? <ProfileSwitch modes={memory ? ["off", "time", "memory"] : ["off", "time"]} /> : null;
 }
 
 /** The mode this browser profiles in, kept with the cookie wherever it is changed. */
@@ -71,85 +63,105 @@ function useProfiling(): [Mode, (mode: Mode) => void] {
   return [mode, profile];
 }
 
-/** The flame, with the caret of its menu beside it when the app profiles memory too. */
-function ProfileButton({ memory }: { memory: boolean }) {
-  const [mode, choose] = useProfiling();
+// How far each key moves the choice along the switch, as in any radio group.
+const STEPS = new Map([
+  ["ArrowRight", 1],
+  ["ArrowDown", 1],
+  ["ArrowLeft", -1],
+  ["ArrowUp", -1],
+]);
+
+// The chosen mode's colour: orange while profiling is on, as the flame was.
+const LIT: Record<Mode, string> = { off: "text-foreground", time: "text-orange-500", memory: "text-orange-500" };
+
+/**
+ * The modes side by side on the track every pill switch sits on (Segmented), as high as the toolbar's buttons: the
+ * chosen one raised, lit orange while profiling is on. A radio group: Tab reaches the chosen one, arrows move.
+ */
+function ProfileSwitch({ modes }: { modes: readonly Mode[] }) {
+  const [stored, choose] = useProfiling();
+  // A memory cookie left from an app that profiles memory: here, with no segment for it, it shows as time.
+  const mode = modes.includes(stored) ? stored : "time";
+  const buttons = useRef(new Map<Mode, HTMLButtonElement>());
+  const onKeyDown = (event: KeyboardEvent) => {
+    const by = STEPS.get(event.key);
+    if (by === undefined) return;
+    event.preventDefault();
+    const next = modes[(modes.indexOf(mode) + by + modes.length) % modes.length] ?? mode;
+    choose(next);
+    buttons.current.get(next)?.focus();
+  };
   return (
-    <span className="flex items-center">
-      <FlameButton mode={mode} onChoose={choose} joined={memory} />
-      {memory ? <ProfileMenu mode={mode} onChoose={choose} /> : null}
-    </span>
+    <div role="radiogroup" aria-label="Profile new requests" className={SEGMENT_TRACK} onKeyDown={onKeyDown}>
+      {modes.map((each) => (
+        <ModeButton
+          key={each}
+          mode={each}
+          checked={each === mode}
+          onChoose={choose}
+          ref={(button) => {
+            if (button) buttons.current.set(each, button);
+            else buttons.current.delete(each);
+          }}
+        />
+      ))}
+    </div>
   );
 }
 
-/** An icon among the panel's own (share, theme, dock), lit while profiling is on; a click turns it on or off. */
-function FlameButton({ mode, onChoose, joined }: { mode: Mode; onChoose: (mode: Mode) => void; joined: boolean }) {
-  const on = mode !== "off";
+/** One mode on the switch: its icon, its name and what it does in the hint. */
+function ModeButton({
+  mode,
+  checked,
+  onChoose,
+  ref,
+}: {
+  mode: Mode;
+  checked: boolean;
+  onChoose: (mode: Mode) => void;
+  ref: (button: HTMLButtonElement | null) => void;
+}) {
   const hint = HINTS[mode];
   return (
     <Hint title={hint.title} detail={hint.detail}>
+      {/* biome-ignore lint/a11y/useSemanticElements: an icon on the track, not a native radio with its label. */}
       <button
+        ref={ref}
         type="button"
-        className={cn(
-          "icon-button relative",
-          on && "text-orange-500 hover:text-orange-500",
-          joined && "rounded-r-none",
-        )}
+        role="radio"
+        aria-checked={checked}
         aria-label={hint.title}
-        aria-pressed={on}
+        tabIndex={checked ? 0 : -1}
+        className={cn(
+          "flex h-6.5 items-center gap-0.5 rounded-md px-1.5 transition-colors",
+          checked ? ["bg-background shadow-sm", LIT[mode]] : "text-muted-foreground hover:text-foreground",
+        )}
         onClick={(event) => {
-          // A click starts time only, as without the menu; memory is the menu's, and any mode stops.
-          onChoose(on ? "off" : "time");
-          // A mouse click leaves no focus ring behind; the keyboard keeps it (detail is 0 for Enter and Space).
-          if (event.detail > 0) event.currentTarget.blur();
+          onChoose(mode);
+          blurAfterClick(event);
         }}
       >
-        <Flame mode={mode} />
+        <ModeIcon mode={mode} lit={checked} />
       </button>
     </Hint>
   );
 }
 
-/** The flame, filled while profiling is on, with a dot while memory is too. */
-function Flame({ mode }: { mode: Mode }) {
-  return (
+/** A dot for off; the flame for time, filled while it is on; the flame and a memory stick for both. */
+function ModeIcon({ mode, lit }: { mode: Mode; lit: boolean }) {
+  if (mode === "off") return <CircleSmallIcon className="size-3.5" />;
+  const flame = <FlameIcon className={cn("size-3.5", lit && "fill-orange-500/30")} />;
+  return mode === "memory" ? (
     <>
-      <FlameIcon className={cn("size-4", mode !== "off" && "fill-orange-500/30")} />
-      {mode === "memory" ? (
-        <span
-          data-testid="profile-memory-dot"
-          className="absolute right-1 bottom-1 size-1.5 rounded-full bg-orange-500 ring-2 ring-background"
-        />
-      ) : null}
+      {flame}
+      <MemoryStickIcon className="size-3.5" />
     </>
+  ) : (
+    flame
   );
 }
 
-/** The caret beside the flame: off, time, or time and memory. */
-function ProfileMenu({ mode, onChoose }: { mode: Mode; onChoose: (mode: Mode) => void }) {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className="icon-button w-4 rounded-l-none"
-          aria-label="Profiling mode"
-          title="Time, or time and memory"
-        >
-          <ChevronDownIcon className="size-3" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-60">
-        <DropdownMenuLabel>Profile new requests</DropdownMenuLabel>
-        <DropdownMenuRadioGroup value={mode} onValueChange={(value) => onChoose(value as Mode)}>
-          <DropdownMenuRadioItem value="off">Off</DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="time">Time</DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="memory">
-            Time and memory
-            <span className="ml-auto text-xs text-muted-foreground">slower</span>
-          </DropdownMenuRadioItem>
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
+/** A mouse click leaves no focus ring behind; the keyboard keeps it (detail is 0 for Enter and Space). */
+function blurAfterClick(event: MouseEvent<HTMLButtonElement>): void {
+  if (event.detail > 0) event.currentTarget.blur();
 }

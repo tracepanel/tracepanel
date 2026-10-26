@@ -3,7 +3,6 @@ import {
   BoxIcon,
   BugIcon,
   CableIcon,
-  ChevronDownIcon,
   CircleAlertIcon,
   CompassIcon,
   DatabaseIcon,
@@ -32,6 +31,7 @@ import {
 import { ErrorView } from "./ErrorView";
 import { duration } from "./format";
 import { HeadFacts } from "./HeadFacts";
+import { Hint } from "./Hint";
 import { useMenuOpen } from "./hooks/useCloseOnBlur";
 import { IssueList } from "./IssueList";
 import { LogList } from "./LogList";
@@ -279,6 +279,14 @@ function StripHeader({
   );
 }
 
+/** Explore on its own before the host's buttons, or wherever the host's function puts it among them. */
+function placeExplore(
+  explore: ReactNode,
+  actions: TraceViewProps["actions"],
+): { explore: ReactNode; actions: ReactNode } {
+  return typeof actions === "function" ? { explore: null, actions: actions(explore) } : { explore, actions };
+}
+
 export interface TraceViewProps {
   trace: Trace;
   /**
@@ -290,8 +298,11 @@ export interface TraceViewProps {
   explore?: readonly ExploreItem[] | undefined;
   /** Called when another tab opens (the console keeps it in the URL). */
   onTabChange?: ((tab: TabId) => void) | undefined;
-  /** Extra header buttons from the host page (open full page, close), shown after Explore. */
-  actions?: ReactNode;
+  /**
+   * Extra header buttons from the host page (open full page, close), shown after Explore; or a function of the
+   * Explore button that places it among them (the panel: after Console, with the other icons).
+   */
+  actions?: ReactNode | ((explore: ReactNode) => ReactNode);
   /** In the panel, before the tabs: the way back to the trace this one was opened from. */
   lead?: ReactNode;
   /** Traces linked to this one (Celery enqueues). */
@@ -458,18 +469,19 @@ export function TraceView({
   const exploreMenu =
     explore.length > 0 ? (
       <DropdownMenu open={exploreOpen} onOpenChange={setExploreOpen}>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 shrink-0 gap-1.5 px-2 text-sm font-normal shadow-none"
-            aria-label="Explore"
-          >
-            <CompassIcon />
-            <span className="dt-explore-label">Explore</span>
-            <ChevronDownIcon className="text-muted-foreground" />
-          </Button>
-        </DropdownMenuTrigger>
+        {/* An icon among the header's others (share, theme, dock): its name in the hint. */}
+        <Hint title="Explore" detail="This request's endpoint, its issues and the logs around it.">
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="size-7.5 shrink-0 text-muted-foreground shadow-none hover:text-foreground"
+              aria-label="Explore"
+            >
+              <CompassIcon />
+            </Button>
+          </DropdownMenuTrigger>
+        </Hint>
         <DropdownMenuContent align="start" className="w-80">
           {explore.map((item) => {
             const Icon = EXPLORE_ICONS[item.icon];
@@ -518,6 +530,7 @@ export function TraceView({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  const placed = placeExplore(exploreMenu, actions);
   const tabsBar = <Tabs label="Trace details" tabs={tabs} active={active} onChange={openTab} />;
 
   // In the panel (either dock) the tabs carry the status and timings: one toolbar row, then the content.
@@ -525,7 +538,7 @@ export function TraceView({
     return (
       <SliceScope initial={held.initialSlice} onChange={held.onSliceChange}>
         <article className="dt-trace" data-variant="strip">
-          <StripHeader lead={lead} tabs={tabsBar} explore={exploreMenu} actions={actions} />
+          <StripHeader lead={lead} tabs={tabsBar} explore={placed.explore} actions={placed.actions} />
           {panel}
         </article>
       </SliceScope>
@@ -553,8 +566,8 @@ export function TraceView({
                 </p>
               ) : null}
             </div>
-            {exploreMenu}
-            {actions ? <div className="flex shrink-0 items-center gap-0.5">{actions}</div> : null}
+            {placed.explore}
+            {placed.actions ? <div className="flex shrink-0 items-center gap-0.5">{placed.actions}</div> : null}
           </div>
         </header>
         {tabsBar}

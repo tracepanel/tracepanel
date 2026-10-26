@@ -59,10 +59,20 @@
 :focus-visible {
   outline: none !important;
 }
-:focus-visible {
+/* A menu or popover takes the focus when it opens: its surface keeps its shadow and colour, and its items show focus
+   with their own tint (the shared menu component's). */
+:focus-visible:not([role="menu"], [data-slot="popover-content"]) {
   box-shadow: none !important;
 }
-:focus-visible:not(input, textarea, select, [contenteditable]) {
+:focus-visible:not(
+  input,
+  textarea,
+  select,
+  [contenteditable],
+  [role="menu"],
+  [role^="menuitem"],
+  [data-slot="popover-content"]
+) {
   background-image: linear-gradient(
     color-mix(in oklab, currentColor 10%, transparent),
     color-mix(in oklab, currentColor 10%, transparent)
