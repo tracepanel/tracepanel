@@ -8,13 +8,16 @@ const DARK = "(prefers-color-scheme: dark)";
 function read(): ThemeChoice {
   try {
     const value = localStorage.getItem(KEY);
-    return value === "light" || value === "dark" ? value : "system";
+    return value === "light" || value === "system" ? value : "dark";
   } catch {
-    return "system";
+    return "dark";
   }
 }
 
-/** Sets html[data-theme] from the stored choice, or from the OS when the choice is "system". */
+/**
+ * Sets html[data-theme] from the stored choice (dark when there is none), or from the OS when the choice is "system".
+ * index.html's first script does the same before the first paint.
+ */
 export function applyTheme(choice: ThemeChoice = read()): void {
   const dark = choice === "dark" || (choice === "system" && window.matchMedia(DARK).matches);
   document.documentElement.dataset["theme"] = dark ? "dark" : "light";

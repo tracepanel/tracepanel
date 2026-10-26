@@ -19,6 +19,11 @@ export interface ServerPage extends Call {
   runtime: string;
 }
 
+/** A theme chosen with the console's theme button before the page loads: the console and the widget start dark. */
+export async function chooseTheme(page: Page, theme: "dark" | "light" | "system"): Promise<void> {
+  await page.addInitScript((chosen) => localStorage.setItem("tracepanel:theme", chosen), theme);
+}
+
 /** The id of a stored trace, by its name. */
 export async function traceId(name: string): Promise<string> {
   const body = (await (await fetch(`${CONSOLE}api/traces?limit=100`)).json()) as {

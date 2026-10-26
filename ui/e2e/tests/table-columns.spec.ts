@@ -1,6 +1,7 @@
 // Every list of the console has the logs table's columns: dragged wider, hidden from their header and brought back
 // from the columns menu, moved, kept per browser per list; the list's main column always stays. One look for all.
 import type { Locator, Page } from "@playwright/test";
+import { chooseTheme } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
 
 const main = (page: Page) => page.getByRole("main");
@@ -207,6 +208,7 @@ async function looks(page: Page) {
 }
 
 test("every list's header and rows look as the logs table's do, the logs' rows compact", async ({ page }) => {
+  await chooseTheme(page, "light");
   await open(page, "/#/logs");
   const logs = await looks(page);
   const rem = await page.evaluate(() => Number.parseFloat(getComputedStyle(document.documentElement).fontSize));
@@ -214,7 +216,7 @@ test("every list's header and rows look as the logs table's do, the logs' rows c
   // The logs are a stream read many lines at once: rows of one line with little room around it.
   expect(logs.body.height).toBe(`${0.375 * rem}px`);
 
-  // The records' rows: denser on white (the tests' theme), 0.75rem in the dark one.
+  // The records' rows: denser on white (the light theme, chosen above), 0.75rem in the dark one.
   for (const url of ["/#/endpoints?view=overview", "/#/tasks?view=overview", "/#/calls/sql", "/#/endpoints"]) {
     await open(page, url);
 
@@ -381,7 +383,7 @@ test("a row's issue chips are whole: the ones that fit, then how many more, all 
 
 for (const scheme of ["dark", "light"] as const) {
   test(`a list's names start at one edge whatever the method or kind before them (${scheme})`, async ({ page }) => {
-    await page.emulateMedia({ colorScheme: scheme });
+    await chooseTheme(page, scheme);
     await open(page, "/#/endpoints");
     const starts = await main(page)
       .locator("tbody td:first-child > span > :is(.dt-method, .dt-kind):first-child")
@@ -435,7 +437,7 @@ test("a stuck header reads as one: an opaque band and a shadow on the rows under
 for (const scheme of ["dark", "light"] as const) {
   for (const width of [1440, 1024]) {
     test(`no header's name is cut, nor a log's time (${scheme}, ${width})`, async ({ page }) => {
-      await page.emulateMedia({ colorScheme: scheme });
+      await chooseTheme(page, scheme);
       await page.setViewportSize({ width, height: 900 });
       // The logs last: their times are read after.
       for (const url of ["/#/endpoints", "/#/tasks?view=overview", "/#/calls/sql", "/#/issues", "/#/logs"]) {

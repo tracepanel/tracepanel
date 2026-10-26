@@ -1,7 +1,7 @@
 // A call tree's rows keep their parts apart: the call's own text shows beside a long database alias and an issue chip,
 // and nothing of the name runs into the bar or the time.
 import type { Locator } from "@playwright/test";
-import { traceId } from "../app.ts";
+import { chooseTheme, traceId } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
 
 async function box(locator: Locator) {
@@ -87,11 +87,11 @@ test("a call's details give its fields and all its attributes one column of name
   expect(new Set(starts).size).toBe(1);
 });
 
-for (const theme of ["dark", "light"]) {
+for (const theme of ["dark", "light"] as const) {
   test(`a row's kind, its bar and the strip's legend share one colour; a query's verb is set apart (${theme})`, async ({
     page,
   }) => {
-    await page.addInitScript((chosen) => localStorage.setItem("tracepanel:theme", chosen), theme);
+    await chooseTheme(page, theme);
     await page.goto(`/#/t/${await traceId("GET /")}?tab=tree`);
     const query = page.locator('.dt-map-row[data-category="sql"]').first();
     const colour = (locator: Locator, property: "color" | "backgroundColor") =>

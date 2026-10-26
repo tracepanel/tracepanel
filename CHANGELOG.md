@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- The console, the in-page panel, the pill and its card and a shared
+  snapshot file start dark, whatever the system's theme. The theme button
+  in the sidebar or the panel's toolbar switches to Light, then to Auto,
+  which follows the system. A theme you chose before stays.
+
 ## 0.5.0 (2026-10-26)
 
 AWS, LLM calls, file storage and migrations in the console, memory and GC
