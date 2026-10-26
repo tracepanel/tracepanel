@@ -433,3 +433,60 @@ fn a_query_keeps_how_many_rows_it_returned() {
         ("sql", &json!(25000))
     );
 }
+
+/// Model calls as the GenAI instrumentations record them: an `llm` span with the `gen_ai.*` attributes in their
+/// current names, an older instrumentation's (`gen_ai.system`, prompt and completion tokens, no operation) too. An
+/// agent's or a tool's span is no model call.
+#[test]
+fn model_calls_are_llm_spans_in_the_current_names() {
+    let current = map(
+        "chat gpt-4o-mini",
+        &attrs(json!({
+            "otel.span_kind": "client", "otel.scope": "opentelemetry.instrumentation.openai_v2",
+            "gen_ai.provider.name": "openai", "gen_ai.operation.name": "chat", "gen_ai.request.model": "gpt-4o-mini",
+            "gen_ai.response.model": "gpt-4o-mini-2024-07-18", "gen_ai.usage.input_tokens": 12,
+            "gen_ai.usage.output_tokens": 5, "server.address": "api.openai.com", "server.port": 443,
+            "http.request.method": "POST",
+        })),
+    );
+    let older = map(
+        "anthropic.chat",
+        &attrs(json!({
+            "otel.span_kind": "client", "gen_ai.system": "anthropic", "gen_ai.request.model": "claude-sonnet-4-5",
+            "gen_ai.usage.prompt_tokens": 30, "gen_ai.usage.completion_tokens": 7,
+        })),
+    );
+    let tool = map(
+        "execute_tool get_weather",
+        &attrs(json!({"otel.span_kind": "internal", "gen_ai.operation.name": "execute_tool"})),
+    );
+
+    assert_eq!(
+        current,
+        Mapped {
+            kind: "llm".into(),
+            name: "chat gpt-4o-mini".into(),
+            attrs: attrs(json!({
+                "otel.scope": "opentelemetry.instrumentation.openai_v2", "gen_ai.provider.name": "openai",
+                "gen_ai.operation.name": "chat", "gen_ai.request.model": "gpt-4o-mini",
+                "gen_ai.response.model": "gpt-4o-mini-2024-07-18", "gen_ai.usage.input_tokens": 12,
+                "gen_ai.usage.output_tokens": 5, "server.address": "api.openai.com", "server.port": 443,
+            })),
+            error: false,
+        }
+    );
+
+    assert_eq!(
+        (older.kind.as_str(), older.attrs),
+        (
+            "llm",
+            attrs(json!({
+                "gen_ai.provider.name": "anthropic", "gen_ai.operation.name": "chat",
+                "gen_ai.request.model": "claude-sonnet-4-5", "gen_ai.usage.input_tokens": 30,
+                "gen_ai.usage.output_tokens": 7,
+            }))
+        )
+    );
+
+    assert_eq!(tool.kind, "function");
+}

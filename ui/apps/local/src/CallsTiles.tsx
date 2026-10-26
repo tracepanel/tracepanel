@@ -1,4 +1,5 @@
 import { type CallsSummary, type DataSource, duration, percent, plural, Stat, StatGrid } from "@tracepanel/ui";
+import { money, tokens } from "@tracepanel/ui/lib/llm";
 import { type ReactNode, useCallback } from "react";
 import { useSearch } from "./data";
 
@@ -18,6 +19,31 @@ function hitRate(summary: CallsSummary): ReactNode {
   return <Stat label="Hit rate" value={percent(hits, gets)} sub={`${hits} of ${plural(gets, "get", "gets")}`} />;
 }
 
+/**
+ * An LLM's tokens, in and out, and what they cost, estimated (a dash for models without a price); nothing for other
+ * systems (null tokens).
+ */
+function llmTiles(summary: CallsSummary): ReactNode[] {
+  // An agent from before LLM calls answers without tokens.
+  if (typeof summary.tokens_in !== "number") return [];
+  const tokensOut = summary.tokens_out ?? 0;
+  // Tiles side by side, not in a fragment: the grid counts its children for its columns.
+  return [
+    <Stat
+      key="tokens"
+      label="Tokens"
+      value={tokens(summary.tokens_in + tokensOut)}
+      sub={`${tokens(summary.tokens_in)} in · ${tokens(tokensOut)} out`}
+    />,
+    <Stat
+      key="cost"
+      label="Cost"
+      value={summary.cost === null ? "—" : money(summary.cost)}
+      sub={summary.cost === null ? "no price for these models" : "estimate, at list prices"}
+    />,
+  ];
+}
+
 /** The calls that failed; with any, a click shows only them. */
 function Failed({ errors, calls, onFailed }: { errors: number; calls: number; onFailed: () => void }) {
   const failed = errors > 0;
@@ -34,7 +60,8 @@ function Failed({ errors, calls, onFailed }: { errors: number; calls: number; on
 
 /**
  * A system's calls at a glance, over all of them and with the page's filters: how many, their time, how many per
- * request (a high count is an N+1's sign), how many failed (a click shows them), and a cache's hit rate.
+ * request (a high count is an N+1's sign), how many failed (a click shows them), a cache's hit rate, an LLM's tokens
+ * and cost.
  */
 function CallsTiles({ summary, onFailed }: { summary: CallsSummary; onFailed: () => void }) {
   const { calls, traces, errors } = summary;
@@ -53,6 +80,7 @@ function CallsTiles({ summary, onFailed }: { summary: CallsSummary; onFailed: ()
       />
       <Failed errors={errors} calls={calls} onFailed={onFailed} />
       {hitRate(summary)}
+      {llmTiles(summary)}
     </StatGrid>
   );
 }

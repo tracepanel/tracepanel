@@ -19,10 +19,10 @@ are ULIDs.
   (`kind`). A task is a trace of its own, with a `link` to the span that
   enqueued it.
 - **Span**: a unit of work inside a trace. `kind` is one of `http`, `sql`,
-  `cache`, `storage`, `migration`, `migration.operation`, `http.client`,
-  `template`, `signal`, `task.enqueue`, `task.run`, `command` and
-  `function`. `attrs` are open and namespaced:
-  `http.route`, `db.fingerprint`, `cache.hit`, `code.origin`.
+  `cache`, `storage`, `llm`, `migration`, `migration.operation`,
+  `http.client`, `template`, `signal`, `task.enqueue`, `task.run`, `command`
+  and `function`. `attrs` are open and namespaced: `http.route`,
+  `db.fingerprint`, `cache.hit`, `code.origin`.
 - **Signal**: a send with receivers (a Django signal), a `signal` span with
   `signal.name`, `signal.sender` and `signal.receivers`. Each receiver is a
   `function` span under it. One that raised has status `error` and
@@ -53,6 +53,14 @@ are ULIDs.
   `migration.rows` and `migration.risk` when it locks or rewrites a table. A
   `function` span with `migration.app` or `migration.operation`, as SDKs
   before the kinds send them, is made one when it arrives.
+- **LLM call**: a call to a model through a provider's API (OpenAI,
+  Anthropic), an `llm` span with OpenTelemetry's GenAI attributes:
+  `gen_ai.provider.name`, `gen_ai.operation.name`, the request and response
+  model, `gen_ai.usage.*` tokens and, when the app captures them, the
+  messages. A `function` span with `gen_ai.operation.name` (chat,
+  text_completion, generate_content, embeddings), as SDKs before the kind
+  send them, is made an `llm` span when it arrives, and the agent adds its
+  estimated cost, `tracepanel.cost_usd`.
 - **Log**: a log record, bound to a span.
 - **Error**: an exception with its frames, bound to a span.
 - **Issue**: a problem the agent finds (`n+1`, `duplicates`, `slow-sql`,

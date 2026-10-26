@@ -13,6 +13,7 @@ import { duration, since } from "./format";
 import { GraphqlCode } from "./GraphqlCode";
 import { ChevronRightIcon, CloseIcon } from "./icons";
 import { keyed } from "./keys";
+import { LlmConversation, withoutMessages } from "./LlmConversation";
 import { AllAttributes, LogRecordDetails } from "./LogRecordDetails";
 import { type Category, spanCategories } from "./lib/breakdown";
 import { callFields, templatePlace } from "./lib/callFields";
@@ -242,6 +243,7 @@ export const FILTERS = [
   { id: "http", label: "HTTP calls", kinds: ["http.client"] },
   { id: "rpc", label: "RPC", kinds: [...RPC] },
   { id: "storage", label: "Storage", kinds: ["storage"] },
+  { id: "llm", label: "LLM", kinds: ["llm"] },
   { id: "migration", label: "Migrations", kinds: ["migration", "migration.operation"] },
   { id: "signal", label: "Signals", kinds: ["signal"] },
   { id: "template", label: "Templates", kinds: ["template"] },
@@ -385,6 +387,7 @@ const CATEGORY_FILTERS: Partial<Record<Category, FilterId>> = {
   messaging: "messaging",
   http: "http",
   storage: "storage",
+  llm: "llm",
   mail: "mail",
   signal: "signal",
 };
@@ -1468,13 +1471,15 @@ function Fields({ rows }: { rows: readonly NameValue[] }) {
   );
 }
 
-/** Every attribute of a span; a template's context first, as rows of its own. */
+/** Every attribute of a span; a template's context or an LLM call's conversation first, as rows of their own. */
 function SpanAttributes({ span, attrs, titled }: { span: Span; attrs: Attrs; titled: boolean }) {
   const template = span.kind === "template";
+  const llm = span.kind === "llm";
   return (
     <>
       {template ? <TemplateContext attrs={attrs} /> : null}
-      <AllAttributes attrs={withoutContext(attrs)} titled={titled || template} />
+      {llm ? <LlmConversation attrs={attrs} /> : null}
+      <AllAttributes attrs={withoutMessages(withoutContext(attrs))} titled={titled || template || llm} />
     </>
   );
 }

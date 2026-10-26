@@ -1,7 +1,8 @@
 // A call's own fields, in its system's words: a Kafka publish's topic, partition and offset, a Redis command's key, a
 // gRPC call's service and method. The span's attributes say the same in OpenTelemetry's general terms
 // (messaging.destination.name): they are listed after, all of them, as recorded.
-import { bytes } from "../format";
+import { bytes, duration } from "../format";
+import { COST, money, providerName, usageOf, usageText } from "./llm";
 import { plural } from "./plural";
 import { type Family, systemOfSpan } from "./systems";
 
@@ -50,6 +51,35 @@ function listed(_: unknown, attrs: Attrs): string {
   const dirs = plural(Number(attrs["storage.dirs"] ?? 0), "directory", "directories");
   return `${dirs}, ${plural(Number(attrs["storage.files"] ?? 0), "file", "files")}`;
 }
+
+/** The model asked for, and the one that answered when it is another (a dated snapshot): `gpt-5 → gpt-5-2025-08-07`. */
+function models(value: unknown, attrs: Attrs): string {
+  const answered = attrs["gen_ai.response.model"];
+  return typeof answered === "string" && answered !== value ? `${value} → ${answered}` : String(value);
+}
+
+/** "12 in · 5 out · 4 cached": the call's tokens. */
+function tokensOf(_: unknown, attrs: Attrs): string {
+  const usage = usageOf(attrs);
+  return usage ? usageText(usage) : "";
+}
+
+const LLM_FIELDS: readonly Field[] = [
+  ["Provider", ["gen_ai.provider.name", "gen_ai.system"], (value) => providerName(String(value))],
+  ["Model", ["gen_ai.request.model", "gen_ai.response.model"], models],
+  ["Operation", ["gen_ai.operation.name"]],
+  ["Tokens", ["gen_ai.usage.input_tokens", "gen_ai.usage.output_tokens"], tokensOf],
+  ["Cost", [COST], (value) => `${money(Number(value))} (estimate, at list price)`],
+  // Seconds, as the conventions have it.
+  ["Time to first token", ["gen_ai.response.time_to_first_chunk"], (value) => duration(Number(value) * 1e6)],
+  ["Finish reason", ["gen_ai.response.finish_reasons"]],
+  ["Tool calls", ["gen_ai.response.tool_calls"]],
+  ["Error", ["error.type"]],
+  ["Max tokens", ["gen_ai.request.max_tokens"]],
+  ["Temperature", ["gen_ai.request.temperature"]],
+  ["Reasoning", ["gen_ai.request.reasoning.level"]],
+  SERVER,
+];
 
 const BY_SYSTEM = new Map<string, readonly Field[]>([
   [
@@ -123,6 +153,7 @@ const BY_SYSTEM = new Map<string, readonly Field[]>([
       ["Saved as", ["storage.saved_as"]],
     ],
   ],
+  ["llm", LLM_FIELDS],
   ["grpc", [["Service", ["rpc.service"]], ["Method", ["rpc.method"]], ["Status", ["rpc.grpc.status_code"]], SERVER]],
   [
     "http.client",

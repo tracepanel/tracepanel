@@ -45,7 +45,7 @@ type Noun = readonly [string, string];
 /**
  * A lane of calls: what they are called, and their kinds. A store's calls are the trace lane's colour already: their
  * lane shows only when one of them has something to say (an issue, an error). Messages (tasks sent), HTTP and RPC
- * calls lead to other traces: theirs always shows.
+ * calls lead to other traces, and LLM calls are what the time went to: theirs always shows.
  */
 const CALL_LANES: readonly { noun: Noun; kinds: readonly string[]; always: boolean }[] = [
   { noun: ["query", "queries"], kinds: ["sql"], always: false },
@@ -53,6 +53,7 @@ const CALL_LANES: readonly { noun: Noun; kinds: readonly string[]; always: boole
   { noun: ["cache call", "cache calls"], kinds: ["cache"], always: false },
   { noun: ["datastore call", "datastore calls"], kinds: DATASTORES, always: false },
   { noun: ["storage call", "storage calls"], kinds: ["storage"], always: false },
+  { noun: ["LLM call", "LLM calls"], kinds: ["llm"], always: true },
   { noun: ["message", "messages"], kinds: MESSAGING, always: true },
   { noun: ["HTTP call", "HTTP calls"], kinds: ["http.client"], always: true },
   { noun: ["RPC call", "RPC calls"], kinds: RPC, always: true },

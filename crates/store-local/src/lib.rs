@@ -675,14 +675,15 @@ mod tests {
         assert_eq!(
             reader.calls_summary("system:redis").unwrap(),
             serde_json::json!({"calls": 4, "traces": 1, "most_per_trace": 4, "errors": 1, "total": 7, "p95": 2,
-                               "hits": null, "misses": null})
+                               "hits": null, "misses": null, "tokens_in": null, "tokens_out": null,
+                               "cost": null})
         );
 
         // A cache's hits and misses; the same filters as its list.
         assert_eq!(
             reader.calls_summary("system:cache").unwrap(),
             serde_json::json!({"calls": 3, "traces": 1, "most_per_trace": 3, "errors": 0, "total": 9, "p95": 3,
-                               "hits": 1, "misses": 2})
+                               "hits": 1, "misses": 2, "tokens_in": null, "tokens_out": null, "cost": null})
         );
         assert_eq!(
             reader.calls_summary("system:redis failed:true").unwrap()["calls"],
@@ -693,7 +694,8 @@ mod tests {
         assert_eq!(
             reader.calls_summary("system:mongodb").unwrap(),
             serde_json::json!({"calls": 0, "traces": 0, "most_per_trace": null, "errors": 0, "total": 0,
-                               "p95": null, "hits": null, "misses": null})
+                               "p95": null, "hits": null, "misses": null, "tokens_in": null, "tokens_out": null,
+                               "cost": null})
         );
         let _ = std::fs::remove_dir_all(&dir);
     }

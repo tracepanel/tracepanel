@@ -779,19 +779,25 @@ export interface components {
             hits: number | null;
             /** @description A cache's gets that missed; null for other systems. */
             misses: number | null;
+            /** @description LLM calls: the input's tokens; null for other systems. */
+            tokens_in: number | null;
+            /** @description LLM calls: the output's tokens; null for other systems. */
+            tokens_out: number | null;
+            /** @description LLM calls: what they cost in US dollars, estimated from their tokens and list prices; null for other systems or models without a price. */
+            cost: number | null;
         };
         CallRow: {
             /** @description Call id (search traces with call:<key>; for SQL also query:<key>). */
             key: string;
-            /** @description What the console lists it under: sql, redis, cache, http, storage, a known datastore, broker or RPC kind (mongodb, kafka, grpc…), or the system's own name for any other (neo4j, nats, thrift). */
+            /** @description What the console lists it under: sql, redis, cache, http, storage, llm, a known datastore, broker or RPC kind (mongodb, kafka, grpc…), or the system's own name for any other (neo4j, nats, thrift). */
             system: string;
             /** @enum {string} */
-            family: "sql" | "redis" | "cache" | "datastore" | "messaging" | "rpc" | "http" | "storage";
-            /** @description Where it went: a database alias, an instance, a host, a topic, an RPC service, a storage's alias. */
+            family: "sql" | "redis" | "cache" | "datastore" | "messaging" | "rpc" | "http" | "storage" | "llm";
+            /** @description Where it went: a database alias, an instance, a host, a topic, an RPC service, a storage's alias, an LLM's provider. */
             target: string;
             /** @description The operation: SELECT, GET, get, POST, find, publish, an RPC method. */
             op: string;
-            /** @description What its repeats share: the SQL fingerprint, a key or path with ids as {id}, a collection, a storage's directory (avatars/*). */
+            /** @description What its repeats share: the SQL fingerprint, a key or path with ids as {id}, a collection, a storage's directory (avatars/*), an LLM's model. */
             template: string;
             /** @description The span's name. */
             name: string;
@@ -812,7 +818,7 @@ export interface components {
             sample_span: string;
             /** @description The operation in full: the SQL statement, the command with its key, the URL. */
             statement: string | null;
-            /** @description SQL: the database; a cache: its backend; a storage: its system (filesystem, s3). */
+            /** @description SQL: the database; a cache: its backend; a storage: its system (filesystem, s3); an LLM: the model that answered. */
             vendor: string | null;
             /** @description A cache: gets that found their key. */
             hits: number | null;
@@ -820,6 +826,14 @@ export interface components {
             misses: number | null;
             /** @description Redis: direct (the app's call), cache or task (sent for one). */
             via: string | null;
+            /** @description An LLM: the input's tokens. */
+            tokens_in: number | null;
+            /** @description An LLM: the output's tokens. */
+            tokens_out: number | null;
+            /** @description An LLM: what the calls cost in US dollars, estimated; null without a price. */
+            cost: number | null;
+            /** @description An LLM: its calls' p95. */
+            p95: components["schemas"]["Duration"] | null;
         };
         ExplainPlan: {
             vendor: string;
@@ -986,7 +1000,7 @@ export interface components {
                     /** @description Its name in the console: MongoDB, NATS, Google Pub/Sub, or the system's own. */
                     label: string;
                     /** @enum {string} */
-                    family: "sql" | "redis" | "cache" | "datastore" | "messaging" | "rpc" | "http" | "storage";
+                    family: "sql" | "redis" | "cache" | "datastore" | "messaging" | "rpc" | "http" | "storage" | "llm";
                 }[];
             };
         };
@@ -1584,7 +1598,7 @@ export interface components {
         duration: number;
         /** @enum {unknown} */
         status: "ok" | "error";
-        /** @description Namespaced attributes (http.*, db.*, cache.*, storage.*, code.*, user.*, task.*, signal.*, exception.*, collectstatic.*, migration.*, migrate.*). task.* is shared by every task queue (task.system says which: celery, django, django-q, dramatiq, huey, rq, taskiq, channels). Values are scalars or lists of scalars. */
+        /** @description Namespaced attributes (http.*, db.*, cache.*, storage.*, gen_ai.*, code.*, user.*, task.*, signal.*, exception.*, collectstatic.*, migration.*, migrate.*). task.* is shared by every task queue (task.system says which: celery, django, django-q, dramatiq, huey, rq, taskiq, channels). Values are scalars or lists of scalars. */
         attrs: {
             /** @description On a signal span and on each of its receivers' spans: the signal's dotted path, e.g. "django.db.models.signals.post_save". The signal span's name is Django's own signal by its name ("post_save"), any other by this path. */
             "signal.name"?: string;
@@ -1669,6 +1683,40 @@ export interface components {
             "migrate.applied"?: number;
             /** @description On a migrate command trace: how many migrations it unapplied. */
             "migrate.unapplied"?: number;
+            /** @description On an llm span: the provider the call went to, as OpenTelemetry's GenAI conventions name it: openai, anthropic, aws.bedrock, gcp.gemini… */
+            "gen_ai.provider.name"?: string;
+            /** @description On an llm span: the operation, chat, text_completion, generate_content or embeddings. An SDK that sends LLM calls as function spans marks them with it: the agent makes them llm spans (an agent's or a tool's span, invoke_agent or execute_tool, stays what it is). */
+            "gen_ai.operation.name"?: string;
+            /** @description On an llm span: the model the app asked for, e.g. "gpt-5". */
+            "gen_ai.request.model"?: string;
+            /** @description On an llm span: the model that answered, often a dated snapshot of the one asked for, e.g. "gpt-5-2025-08-07". */
+            "gen_ai.response.model"?: string;
+            /** @description On an llm span: why the model stopped, one per choice: stop, length, tool_calls, end_turn, tool_use… */
+            "gen_ai.response.finish_reasons"?: string[];
+            /** @description On an llm span: the input's tokens, those the prompt cache served or stored included. */
+            "gen_ai.usage.input_tokens"?: number;
+            /** @description On an llm span: the output's tokens, reasoning ones included. */
+            "gen_ai.usage.output_tokens"?: number;
+            /** @description On an llm span: the input's tokens the prompt cache served. */
+            "gen_ai.usage.cache_read.input_tokens"?: number;
+            /** @description On an llm span: the input's tokens written to the prompt cache. */
+            "gen_ai.usage.cache_write.input_tokens"?: number;
+            /** @description On an llm span: the output's tokens the model spent reasoning. */
+            "gen_ai.usage.reasoning.output_tokens"?: number;
+            /** @description On a streamed llm span: the seconds until its first chunk came. */
+            "gen_ai.response.time_to_first_chunk"?: number;
+            /** @description On an llm span: the tools the model asked the app to call, by name, in order. */
+            "gen_ai.response.tool_calls"?: string[];
+            /** @description On an llm span: how many tool calls the model asked for. */
+            "gen_ai.response.tool_call_count"?: number;
+            /** @description On an llm span, when the app captures the messages: the messages sent, as the conventions' JSON ([{role, parts}]), masked and cut as a request's body is. */
+            "gen_ai.input.messages"?: string;
+            /** @description On an llm span, when the app captures the messages: the model's answer, as the conventions' JSON. */
+            "gen_ai.output.messages"?: string;
+            /** @description On an llm span, when the app captures the messages: the system instructions, as the conventions' JSON ([{type, content}]). */
+            "gen_ai.system_instructions"?: string;
+            /** @description On an llm span: what the call cost in US dollars, estimated by the agent from its tokens and its model's list price. Absent for a model without a price. */
+            "tracepanel.cost_usd"?: number;
         } & {
             [key: string]: (string | number | boolean | null) | (string | number | boolean | null)[];
         };
@@ -1706,7 +1754,7 @@ export interface components {
              * @description otel is an OpenTelemetry span as its instrumentation recorded it, with otel.span_kind and otel.scope among its attributes: the agent maps it to one of the other kinds before it stores the trace, so the console never returns one.
              * @enum {unknown}
              */
-            kind: "http" | "middleware" | "framework" | "view" | "template" | "sql" | "transaction" | "cache" | "storage" | "migration" | "migration.operation" | "redis" | "mail" | "signal" | "http.client" | "task.enqueue" | "task.run" | "command" | "function" | "event" | "websocket" | "websocket.send" | "channel.send" | "graphql" | "mongodb" | "elasticsearch" | "cassandra" | "dynamodb" | "memcached" | "kafka" | "rabbitmq" | "sqs" | "grpc" | "db" | "messaging" | "rpc" | "otel" | "page";
+            kind: "http" | "middleware" | "framework" | "view" | "template" | "sql" | "transaction" | "cache" | "storage" | "llm" | "migration" | "migration.operation" | "redis" | "mail" | "signal" | "http.client" | "task.enqueue" | "task.run" | "command" | "function" | "event" | "websocket" | "websocket.send" | "channel.send" | "graphql" | "mongodb" | "elasticsearch" | "cassandra" | "dynamodb" | "memcached" | "kafka" | "rabbitmq" | "sqs" | "grpc" | "db" | "messaging" | "rpc" | "otel" | "page";
             name: string;
             start: components["schemas"]["trace.schema"]["$defs"]["time"];
             duration: components["schemas"]["trace.schema"]["$defs"]["duration"];
@@ -1979,7 +2027,7 @@ export interface components {
                 duration: number;
                 /** @enum {unknown} */
                 status: "ok" | "error";
-                /** @description Namespaced attributes (http.*, db.*, cache.*, storage.*, code.*, user.*, task.*, signal.*, exception.*, collectstatic.*, migration.*, migrate.*). task.* is shared by every task queue (task.system says which: celery, django, django-q, dramatiq, huey, rq, taskiq, channels). Values are scalars or lists of scalars. */
+                /** @description Namespaced attributes (http.*, db.*, cache.*, storage.*, gen_ai.*, code.*, user.*, task.*, signal.*, exception.*, collectstatic.*, migration.*, migrate.*). task.* is shared by every task queue (task.system says which: celery, django, django-q, dramatiq, huey, rq, taskiq, channels). Values are scalars or lists of scalars. */
                 attrs: {
                     /** @description On a signal span and on each of its receivers' spans: the signal's dotted path, e.g. "django.db.models.signals.post_save". The signal span's name is Django's own signal by its name ("post_save"), any other by this path. */
                     "signal.name"?: string;
@@ -2064,6 +2112,40 @@ export interface components {
                     "migrate.applied"?: number;
                     /** @description On a migrate command trace: how many migrations it unapplied. */
                     "migrate.unapplied"?: number;
+                    /** @description On an llm span: the provider the call went to, as OpenTelemetry's GenAI conventions name it: openai, anthropic, aws.bedrock, gcp.gemini… */
+                    "gen_ai.provider.name"?: string;
+                    /** @description On an llm span: the operation, chat, text_completion, generate_content or embeddings. An SDK that sends LLM calls as function spans marks them with it: the agent makes them llm spans (an agent's or a tool's span, invoke_agent or execute_tool, stays what it is). */
+                    "gen_ai.operation.name"?: string;
+                    /** @description On an llm span: the model the app asked for, e.g. "gpt-5". */
+                    "gen_ai.request.model"?: string;
+                    /** @description On an llm span: the model that answered, often a dated snapshot of the one asked for, e.g. "gpt-5-2025-08-07". */
+                    "gen_ai.response.model"?: string;
+                    /** @description On an llm span: why the model stopped, one per choice: stop, length, tool_calls, end_turn, tool_use… */
+                    "gen_ai.response.finish_reasons"?: string[];
+                    /** @description On an llm span: the input's tokens, those the prompt cache served or stored included. */
+                    "gen_ai.usage.input_tokens"?: number;
+                    /** @description On an llm span: the output's tokens, reasoning ones included. */
+                    "gen_ai.usage.output_tokens"?: number;
+                    /** @description On an llm span: the input's tokens the prompt cache served. */
+                    "gen_ai.usage.cache_read.input_tokens"?: number;
+                    /** @description On an llm span: the input's tokens written to the prompt cache. */
+                    "gen_ai.usage.cache_write.input_tokens"?: number;
+                    /** @description On an llm span: the output's tokens the model spent reasoning. */
+                    "gen_ai.usage.reasoning.output_tokens"?: number;
+                    /** @description On a streamed llm span: the seconds until its first chunk came. */
+                    "gen_ai.response.time_to_first_chunk"?: number;
+                    /** @description On an llm span: the tools the model asked the app to call, by name, in order. */
+                    "gen_ai.response.tool_calls"?: string[];
+                    /** @description On an llm span: how many tool calls the model asked for. */
+                    "gen_ai.response.tool_call_count"?: number;
+                    /** @description On an llm span, when the app captures the messages: the messages sent, as the conventions' JSON ([{role, parts}]), masked and cut as a request's body is. */
+                    "gen_ai.input.messages"?: string;
+                    /** @description On an llm span, when the app captures the messages: the model's answer, as the conventions' JSON. */
+                    "gen_ai.output.messages"?: string;
+                    /** @description On an llm span, when the app captures the messages: the system instructions, as the conventions' JSON ([{type, content}]). */
+                    "gen_ai.system_instructions"?: string;
+                    /** @description On an llm span: what the call cost in US dollars, estimated by the agent from its tokens and its model's list price. Absent for a model without a price. */
+                    "tracepanel.cost_usd"?: number;
                 } & {
                     [key: string]: (string | number | boolean | null) | (string | number | boolean | null)[];
                 };
@@ -2074,7 +2156,7 @@ export interface components {
                      * @description otel is an OpenTelemetry span as its instrumentation recorded it, with otel.span_kind and otel.scope among its attributes: the agent maps it to one of the other kinds before it stores the trace, so the console never returns one.
                      * @enum {unknown}
                      */
-                    kind: "http" | "middleware" | "framework" | "view" | "template" | "sql" | "transaction" | "cache" | "storage" | "migration" | "migration.operation" | "redis" | "mail" | "signal" | "http.client" | "task.enqueue" | "task.run" | "command" | "function" | "event" | "websocket" | "websocket.send" | "channel.send" | "graphql" | "mongodb" | "elasticsearch" | "cassandra" | "dynamodb" | "memcached" | "kafka" | "rabbitmq" | "sqs" | "grpc" | "db" | "messaging" | "rpc" | "otel" | "page";
+                    kind: "http" | "middleware" | "framework" | "view" | "template" | "sql" | "transaction" | "cache" | "storage" | "llm" | "migration" | "migration.operation" | "redis" | "mail" | "signal" | "http.client" | "task.enqueue" | "task.run" | "command" | "function" | "event" | "websocket" | "websocket.send" | "channel.send" | "graphql" | "mongodb" | "elasticsearch" | "cassandra" | "dynamodb" | "memcached" | "kafka" | "rabbitmq" | "sqs" | "grpc" | "db" | "messaging" | "rpc" | "otel" | "page";
                     name: string;
                     start: components["schemas"]["trace.schema"]["$defs"]["time"];
                     duration: components["schemas"]["trace.schema"]["$defs"]["duration"];

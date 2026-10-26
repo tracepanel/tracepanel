@@ -122,8 +122,9 @@ const NAMING: &str = "system, family, target, op, template, name, statement, ven
 
 /// The calls matching `query` grouped by `key`, heaviest first: what names a group (`NAMING`), then the fields every
 /// group has: `calls`, `traces`, `errors`, `total`, `slowest`, `last_seen`, `most_per_trace` (the most in one trace),
-/// a cache's `hits` and `misses` (null for the others), `origin` (the most common line of code) and the latest call
-/// (`sample_trace`, `sample_span`), which the console opens.
+/// a cache's `hits` and `misses` (null for the others), an LLM call's `tokens_in`, `tokens_out`, estimated `cost` and
+/// `p95` (null for the others), `origin` (the most common line of code) and the latest call (`sample_trace`,
+/// `sample_span`), which the console opens.
 ///
 /// The numbers come from the `calls_group` index alone, per trace first and then per group (named: without
 /// statistics, SQLite would take `calls_system` for `system:` and read the table row by row); what names a group and
@@ -134,6 +135,7 @@ pub(crate) fn aggregate(
     limit: i64,
 ) -> Result<Vec<serde_json::Map<String, Value>>, ReadError> {
     let (condition, mut params) = search::compile_where(query, &CALLS_SEARCH)?;
+    let filters = params.clone();
     params.push(Sql::Integer(limit));
     let rows = objects(
         db,
@@ -202,7 +204,7 @@ pub(crate) fn aggregate(
             *best = (n, first, origin);
         }
     }
-    Ok(rows
+    let rows: Vec<serde_json::Map<String, Value>> = rows
         .into_iter()
         .map(|mut row| {
             let group = text_of(&row);
@@ -227,7 +229,67 @@ pub(crate) fn aggregate(
             );
             row
         })
-        .collect())
+        .collect();
+    with_llm_usage(db, &condition, filters, rows)
+}
+
+const LLM_FIELDS: [&str; 4] = ["tokens_in", "tokens_out", "cost", "p95"];
+
+/// An LLM call's group gets its tokens, its estimated cost (null when no call of it had a price) and its p95, with
+/// the list's filters; every other group nulls. LLM calls are few, and a page of them is about their time: their
+/// durations are read whole, which a page of SQL couldn't afford.
+fn with_llm_usage(
+    db: &Connection,
+    condition: &str,
+    filters: Vec<Sql>,
+    mut rows: Vec<serde_json::Map<String, Value>>,
+) -> Result<Vec<serde_json::Map<String, Value>>, ReadError> {
+    let keys: Vec<Sql> = rows
+        .iter()
+        .filter(|row| row.get("family").and_then(Value::as_str) == Some("llm"))
+        .map(|row| Sql::Text(row["key"].as_str().unwrap_or("").to_owned()))
+        .collect();
+    let mut found: HashMap<String, serde_json::Map<String, Value>> = HashMap::new();
+    if !keys.is_empty() {
+        let mut params = filters;
+        params.extend(keys.iter().cloned());
+        let marks = marks(keys.len());
+        for row in objects(
+            db,
+            &format!(
+                "SELECT key, SUM(tokens_in) AS tokens_in, SUM(tokens_out) AS tokens_out, ROUND(SUM(cost), 10) AS cost, \
+                 json_group_array(duration) AS durations FROM calls \
+                 WHERE ({condition}) AND key IN ({marks}) GROUP BY key"
+            ),
+            params,
+        )? {
+            let mut durations: Vec<i64> = row
+                .get("durations")
+                .and_then(Value::as_str)
+                .and_then(|text| serde_json::from_str(text).ok())
+                .unwrap_or_default();
+            durations.sort_unstable();
+            let mut usage = row.clone();
+            usage.remove("durations");
+            // Nearest rank, as a system's summary has it.
+            let p95 = (!durations.is_empty())
+                .then(|| durations[(durations.len() * 95).div_ceil(100) - 1]);
+            usage.insert("p95".into(), p95.map_or(Value::Null, Value::from));
+            found.insert(row["key"].as_str().unwrap_or("").to_owned(), usage);
+        }
+    }
+    for row in &mut rows {
+        let usage = found.remove(row["key"].as_str().unwrap_or(""));
+        for field in LLM_FIELDS {
+            let value = usage
+                .as_ref()
+                .and_then(|usage| usage.get(field))
+                .cloned()
+                .unwrap_or(Value::Null);
+            row.insert(field.into(), value);
+        }
+    }
+    Ok(rows)
 }
 
 pub(crate) fn objects_of(rows: Vec<serde_json::Map<String, Value>>) -> Vec<Value> {
@@ -821,8 +883,8 @@ impl Reader {
     }
 
     /// The calls matching `query` (one system's, with `system:` in it) at a glance: how many, in how many traces,
-    /// the most in one trace, how many failed, their total and p95 time, and a cache's hits and misses (null for
-    /// other systems). Over every call, not the top groups a list shows.
+    /// the most in one trace, how many failed, their total and p95 time, a cache's hits and misses, and an LLM's
+    /// tokens in and out and estimated cost (null for other systems). Over every call, not the top groups a list shows.
     pub fn calls_summary(&self, query: &str) -> Result<Value, ReadError> {
         let (condition, params) = search::compile_where(query, &CALLS_SEARCH)?;
         let db = self.connect()?;
@@ -832,7 +894,10 @@ impl Reader {
                 "SELECT COUNT(*) AS calls, COUNT(DISTINCT trace_id) AS traces, COALESCE(SUM(error), 0) AS errors, \
                  COALESCE(SUM(duration), 0) AS total, \
                  CASE WHEN MAX(family) = 'cache' THEN COALESCE(SUM(hit = 1), 0) END AS hits, \
-                 CASE WHEN MAX(family) = 'cache' THEN COALESCE(SUM(hit = 0), 0) END AS misses \
+                 CASE WHEN MAX(family) = 'cache' THEN COALESCE(SUM(hit = 0), 0) END AS misses, \
+                 CASE WHEN MAX(family) = 'llm' THEN COALESCE(SUM(tokens_in), 0) END AS tokens_in, \
+                 CASE WHEN MAX(family) = 'llm' THEN COALESCE(SUM(tokens_out), 0) END AS tokens_out, \
+                 CASE WHEN MAX(family) = 'llm' THEN ROUND(SUM(cost), 10) END AS cost \
                  FROM calls WHERE {condition}"
             ),
             params.clone(),

@@ -40,6 +40,7 @@ import {
   ScrollTextIcon,
   SearchIcon,
   SendIcon,
+  SparklesIcon,
   SunIcon,
   TerminalIcon,
   Trash2Icon,
@@ -193,7 +194,7 @@ function visibleSections(counts: Counts | undefined): Set<Section> {
 
 /**
  * A system's icon, by its family: the database, a key–value store, a cache, a datastore, a broker, RPC, HTTP, file
- * storage.
+ * storage, an LLM.
  */
 const FAMILY_ICONS: Record<Family, LucideIcon> = {
   sql: DatabaseIcon,
@@ -204,6 +205,7 @@ const FAMILY_ICONS: Record<Family, LucideIcon> = {
   rpc: ArrowLeftRightIcon,
   http: ArrowUpRightIcon,
   storage: HardDriveIcon,
+  llm: SparklesIcon,
 };
 
 /** A system with an icon of its own, where its family's would make two items alike (Kafka and RabbitMQ). */

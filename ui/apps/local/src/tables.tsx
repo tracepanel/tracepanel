@@ -43,6 +43,7 @@ import {
 import { Badge } from "@tracepanel/ui/components/ui/badge";
 import { Button } from "@tracepanel/ui/components/ui/button";
 import { TableCell, TableRow } from "@tracepanel/ui/components/ui/table";
+import { ESTIMATE, money, providerName, tokens } from "@tracepanel/ui/lib/llm";
 import { pageParts } from "@tracepanel/ui/lib/page";
 import { systemOfPage } from "@tracepanel/ui/lib/systems";
 import { cn } from "@tracepanel/ui/lib/utils";
@@ -277,12 +278,16 @@ interface ExtraColumn<T> {
 function callStatsColumns<T extends CallStats>(
   items: readonly T[],
   name: (item: T) => ReactNode,
-  extra: ExtraColumn<T> | undefined,
+  extra: readonly ExtraColumn<T>[],
 ): DataColumn<T>[] {
   const heaviest = Math.max(...items.map((item) => item.total), 1);
-  const own: DataColumn<T>[] = extra
-    ? [{ id: "extra", label: extra.head, width: 6.75, num: true, cell: extra.cell }]
-    : [];
+  const own: DataColumn<T>[] = extra.map((column, index) => ({
+    id: index ? `extra-${index}` : "extra",
+    label: column.head,
+    width: 6.75,
+    num: true,
+    cell: column.cell,
+  }));
   return [
     {
       id: "name",
@@ -347,12 +352,12 @@ function CallStatsTable<T extends CallStats>({
   items: readonly T[];
   keyOf: (item: T) => string;
   name: (item: T) => ReactNode;
-  extra?: ExtraColumn<T> | undefined;
+  extra?: readonly ExtraColumn<T>[] | undefined;
   details: (item: T) => ReactNode;
   open: string | null;
   onOpen: (key: string | null) => void;
 }) {
-  return <OpeningTable items={items} columns={callStatsColumns(items, name, extra)} {...rest} />;
+  return <OpeningTable items={items} columns={callStatsColumns(items, name, extra ?? [])} {...rest} />;
 }
 
 /**
@@ -474,6 +479,16 @@ function OpName({ item }: { item: CallRow }) {
       </>
     );
   }
+  if (item.family === "llm") {
+    return (
+      <>
+        <Cut>
+          {item.op} {item.template}
+        </Cut>
+        <AliasChip value={providerName(item.target)} />
+      </>
+    );
+  }
   if (item.family === "http") {
     return (
       <>
@@ -496,14 +511,30 @@ function OpName({ item }: { item: CallRow }) {
 }
 
 /**
- * The column only some families have: Redis says who sent a command, a cache how often a read found its key, a
- * storage what holds its files.
+ * The columns only some families have: Redis says who sent a command, a cache how often a read found its key, a
+ * storage what holds its files, an LLM its tokens, their estimated cost and its calls' p95.
  */
-const EXTRA: Partial<Record<CallRow["family"], ExtraColumn<CallRow>>> = {
-  redis: { head: "Via", cell: (item) => VIA_LABELS[item.via ?? ""] ?? item.via ?? "—" },
-  cache: { head: "Hit rate", cell: hitRate },
-  storage: { head: "Backend", cell: (item) => item.vendor ?? "—" },
+const EXTRA: Partial<Record<CallRow["family"], ExtraColumn<CallRow>[]>> = {
+  redis: [{ head: "Via", cell: (item) => VIA_LABELS[item.via ?? ""] ?? item.via ?? "—" }],
+  cache: [{ head: "Hit rate", cell: hitRate }],
+  storage: [{ head: "Backend", cell: (item) => item.vendor ?? "—" }],
+  llm: [
+    { head: "Tokens", cell: llmTokens },
+    { head: "Cost", cell: llmCost },
+    { head: "p95", cell: (item) => (item.p95 === null ? "—" : duration(item.p95)) },
+  ],
 };
+
+/** "1,234 / 56": an LLM's tokens in and out. */
+function llmTokens({ tokens_in, tokens_out }: CallRow): ReactNode {
+  if (tokens_in === null) return "—";
+  return <span title="Input and output tokens">{`${tokens(tokens_in)} / ${tokens(tokens_out ?? 0)}`}</span>;
+}
+
+/** "~$0.0123", an estimate and said so; a dash for a model without a price. */
+function llmCost({ cost }: CallRow): ReactNode {
+  return cost === null ? "—" : <span title={ESTIMATE}>{money(cost)}</span>;
+}
 
 /** What sent a Redis command: the app itself, a cache, or a task queue publishing a task. */
 const VIA_LABELS: Record<string, string> = { direct: "Direct", cache: "Cache", task: "Task queue" };

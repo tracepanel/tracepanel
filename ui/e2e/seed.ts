@@ -1373,6 +1373,113 @@ function migrate(): Doc {
 }
 
 /**
+ * An assistant's answer as the Python SDK records its Anthropic calls, still `function` spans with
+ * `gen_ai.operation.name` (the agent makes them `llm` spans and prices them), the messages captured: the model asks
+ * for a tool, the app runs it, and the next call, streamed, answers with the tool's result. Each call's HTTP request is
+ * inside it, slower than a slow HTTP call, and no issue.
+ */
+function assistant(): Doc {
+  const doc = trace(
+    "http",
+    "POST /assistant/",
+    { ...SHOP, "service.role": "web", "http.method": "POST", "http.route": "/assistant/", "http.status_code": 200 },
+    { duration: 2_400_000 },
+  );
+  const id = String(doc["id"]);
+  const spans = doc["spans"] as Doc[];
+  (spans[0] as Doc)["duration"] = 2_400_000;
+  const question = { role: "user", parts: [{ type: "text", content: "What's the weather in Oslo?" }] };
+  const asked = {
+    role: "assistant",
+    parts: [
+      { type: "text", content: "Let me look." },
+      { type: "tool_call", id: "toolu_1", name: "get_weather", arguments: { city: "Oslo", api_key: "********" } },
+    ],
+  };
+  const common = {
+    "gen_ai.provider.name": "anthropic",
+    "gen_ai.operation.name": "chat",
+    "gen_ai.request.model": "claude-sonnet-4-5",
+    "gen_ai.request.max_tokens": 1024,
+    "gen_ai.response.model": "claude-sonnet-4-5-20250929",
+    "server.address": "api.anthropic.com",
+    "server.port": 443,
+    "code.origin": "assistant/views.py:41 in answer",
+    "gen_ai.system_instructions": JSON.stringify([{ type: "text", content: "You are a weather assistant." }]),
+  };
+  const call = (suffix: string, at: [number, number], attrs: Doc): Doc[] => [
+    {
+      id: `${id}${suffix}`,
+      parent_id: `${id}R`,
+      kind: "function",
+      name: "chat claude-sonnet-4-5",
+      start: at[0],
+      duration: at[1],
+      status: "ok",
+      attrs: { ...common, ...attrs },
+    },
+    {
+      id: `${id}${suffix}H`,
+      parent_id: `${id}${suffix}`,
+      kind: "http.client",
+      name: "POST api.anthropic.com/v1/messages",
+      start: at[0] + 1_000,
+      duration: at[1] - 2_000,
+      status: "ok",
+      attrs: {
+        "http.request.method": "POST",
+        "url.full": "https://api.anthropic.com/v1/messages",
+        "http.response.status_code": 200,
+        "code.origin": "assistant/views.py:41 in answer",
+      },
+    },
+  ];
+  spans.push(
+    ...call("A", [10_000, 1_100_000], {
+      "gen_ai.response.finish_reasons": ["tool_use"],
+      "gen_ai.usage.input_tokens": 1_330,
+      "gen_ai.usage.output_tokens": 46,
+      "gen_ai.usage.cache_read.input_tokens": 1_200,
+      "gen_ai.response.tool_calls": ["get_weather"],
+      "gen_ai.response.tool_call_count": 1,
+      "gen_ai.input.messages": JSON.stringify([question]),
+      "gen_ai.output.messages": JSON.stringify([{ ...asked, finish_reason: "tool_use" }]),
+    }),
+    {
+      id: `${id}T`,
+      parent_id: `${id}R`,
+      kind: "function",
+      name: "get_weather",
+      start: 1_115_000,
+      duration: 80_000,
+      status: "ok",
+      attrs: { "code.origin": "assistant/tools.py:12 in get_weather" },
+    },
+    ...call("B", [1_200_000, 1_150_000], {
+      "gen_ai.request.stream": true,
+      "gen_ai.response.time_to_first_chunk": 0.412,
+      "gen_ai.response.finish_reasons": ["end_turn"],
+      "gen_ai.usage.input_tokens": 1_402,
+      "gen_ai.usage.output_tokens": 38,
+      "gen_ai.usage.cache_read.input_tokens": 1_200,
+      "gen_ai.input.messages": JSON.stringify([
+        question,
+        asked,
+        { role: "user", parts: [{ type: "tool_call_response", id: "toolu_1", response: { sky: "clear", c: 7 } }] },
+      ]),
+      "gen_ai.output.messages": JSON.stringify([
+        {
+          role: "assistant",
+          parts: [{ type: "text", content: "It's clear in Oslo, 7 °C." }],
+          finish_reason: "end_turn",
+        },
+      ]),
+    }),
+  );
+  return doc;
+}
+
+/**
  * What the Python SDK says about the app in its hello: Django's settings, masked, the versions it runs on, and what
  * its checks found (Django's system checks, the most serious first, and its migrations not applied or not made).
  */
@@ -1468,6 +1575,7 @@ export default async function seed(): Promise<void> {
     signals(),
     collectstatic(),
     awsCalls(),
+    assistant(),
     migrate(),
     ...chain(),
     ...chord(),

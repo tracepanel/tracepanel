@@ -321,7 +321,7 @@
     },
     "attrs": {
       "type": "object",
-      "description": "Namespaced attributes (http.*, db.*, cache.*, storage.*, code.*, user.*, task.*, signal.*, exception.*, collectstatic.*, migration.*, migrate.*). task.* is shared by every task queue (task.system says which: celery, django, django-q, dramatiq, huey, rq, taskiq, channels). Values are scalars or lists of scalars.",
+      "description": "Namespaced attributes (http.*, db.*, cache.*, storage.*, gen_ai.*, code.*, user.*, task.*, signal.*, exception.*, collectstatic.*, migration.*, migrate.*). task.* is shared by every task queue (task.system says which: celery, django, django-q, dramatiq, huey, rq, taskiq, channels). Values are scalars or lists of scalars.",
       "propertyNames": {
         "pattern": "^[a-z][a-z0-9_]*(\\.[a-z0-9_]+)+$"
       },
@@ -506,6 +506,80 @@
         "migrate.unapplied": {
           "type": "integer",
           "description": "On a migrate command trace: how many migrations it unapplied."
+        },
+        "gen_ai.provider.name": {
+          "type": "string",
+          "description": "On an llm span: the provider the call went to, as OpenTelemetry's GenAI conventions name it: openai, anthropic, aws.bedrock, gcp.gemini…"
+        },
+        "gen_ai.operation.name": {
+          "type": "string",
+          "description": "On an llm span: the operation, chat, text_completion, generate_content or embeddings. An SDK that sends LLM calls as function spans marks them with it: the agent makes them llm spans (an agent's or a tool's span, invoke_agent or execute_tool, stays what it is)."
+        },
+        "gen_ai.request.model": {
+          "type": "string",
+          "description": "On an llm span: the model the app asked for, e.g. \"gpt-5\"."
+        },
+        "gen_ai.response.model": {
+          "type": "string",
+          "description": "On an llm span: the model that answered, often a dated snapshot of the one asked for, e.g. \"gpt-5-2025-08-07\"."
+        },
+        "gen_ai.response.finish_reasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "On an llm span: why the model stopped, one per choice: stop, length, tool_calls, end_turn, tool_use…"
+        },
+        "gen_ai.usage.input_tokens": {
+          "type": "integer",
+          "description": "On an llm span: the input's tokens, those the prompt cache served or stored included."
+        },
+        "gen_ai.usage.output_tokens": {
+          "type": "integer",
+          "description": "On an llm span: the output's tokens, reasoning ones included."
+        },
+        "gen_ai.usage.cache_read.input_tokens": {
+          "type": "integer",
+          "description": "On an llm span: the input's tokens the prompt cache served."
+        },
+        "gen_ai.usage.cache_write.input_tokens": {
+          "type": "integer",
+          "description": "On an llm span: the input's tokens written to the prompt cache."
+        },
+        "gen_ai.usage.reasoning.output_tokens": {
+          "type": "integer",
+          "description": "On an llm span: the output's tokens the model spent reasoning."
+        },
+        "gen_ai.response.time_to_first_chunk": {
+          "type": "number",
+          "description": "On a streamed llm span: the seconds until its first chunk came."
+        },
+        "gen_ai.response.tool_calls": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "On an llm span: the tools the model asked the app to call, by name, in order."
+        },
+        "gen_ai.response.tool_call_count": {
+          "type": "integer",
+          "description": "On an llm span: how many tool calls the model asked for."
+        },
+        "gen_ai.input.messages": {
+          "type": "string",
+          "description": "On an llm span, when the app captures the messages: the messages sent, as the conventions' JSON ([{role, parts}]), masked and cut as a request's body is."
+        },
+        "gen_ai.output.messages": {
+          "type": "string",
+          "description": "On an llm span, when the app captures the messages: the model's answer, as the conventions' JSON."
+        },
+        "gen_ai.system_instructions": {
+          "type": "string",
+          "description": "On an llm span, when the app captures the messages: the system instructions, as the conventions' JSON ([{type, content}])."
+        },
+        "tracepanel.cost_usd": {
+          "type": "number",
+          "description": "On an llm span: what the call cost in US dollars, estimated by the agent from its tokens and its model's list price. Absent for a model without a price."
         }
       },
       "additionalProperties": {
@@ -571,6 +645,7 @@
             "transaction",
             "cache",
             "storage",
+            "llm",
             "migration",
             "migration.operation",
             "redis",

@@ -3,7 +3,7 @@
 // page's filters, what a group of its calls is called — comes from here, so a new system is one row.
 
 /** Systems grouped where one color, lane or tile per system would be too many. */
-export type Family = "sql" | "redis" | "cache" | "datastore" | "messaging" | "rpc" | "http" | "storage";
+export type Family = "sql" | "redis" | "cache" | "datastore" | "messaging" | "rpc" | "http" | "storage" | "llm";
 
 export interface System {
   /** The span kind, and the `system` of its operations in the agent's API. */
@@ -166,6 +166,16 @@ export const SYSTEMS: readonly System[] = [
     ops: ["save", "open", "exists", "url", "listdir", "size", "delete"],
     description: "Calls your file storages make, on the local disk or S3: which files, how often, how long they take.",
   },
+  {
+    kind: "llm",
+    family: "llm",
+    label: "LLM",
+    one: "LLM call",
+    many: "LLM calls",
+    target: "Provider",
+    ops: ["chat", "embeddings", "text_completion", "generate_content"],
+    description: "Calls your app makes to LLMs: which models, how often, how long they take, their tokens and cost.",
+  },
 ];
 
 export const SYSTEM_OF: ReadonlyMap<string, System> = new Map(SYSTEMS.map((system) => [system.kind, system]));
@@ -184,6 +194,7 @@ const FAMILY_DEFAULTS: Record<Family, Pick<System, "one" | "many" | "target" | "
   rpc: { one: "call", many: "calls", target: "Service", ops: [] },
   http: { one: "HTTP call", many: "HTTP calls", target: "Host", ops: HTTP_METHODS },
   storage: { one: "storage call", many: "storage calls", target: "Storage", ops: [] },
+  llm: { one: "LLM call", many: "LLM calls", target: "Provider", ops: [] },
 };
 
 /**
@@ -282,6 +293,7 @@ export const FAMILY_ORDER: readonly Family[] = [
   "rpc",
   "http",
   "storage",
+  "llm",
 ];
 
 /** The name of a system's page in the agent's operations. */
