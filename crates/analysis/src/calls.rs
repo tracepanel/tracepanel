@@ -7,7 +7,8 @@
 //! The span's kind gives the family. The console groups a page by the system:
 //! - `sql` for every SQL database (its vendor is the operation's `vendor`), `http` for outgoing HTTP calls, `cache` for
 //!   a cache library's operations (its backend in `vendor`), `storage` for a file storage's calls (its system,
-//!   `filesystem` or `s3`, in `vendor`);
+//!   `filesystem` or `s3`, in `vendor`), `llm` for calls to a model (its provider the target, its model the template,
+//!   the model that answered in `vendor`);
 //! - the kind for the other known kinds (`redis`, `mongodb`, `kafka`, `grpc`…);
 //! - the system's own name for the generic kinds (`db`, `messaging`, `rpc`), which the OpenTelemetry mapping gives to
 //!   any database, broker or RPC system without a kind of its own: `neo4j`, `nats`, `thrift`. A new system is listed
@@ -34,6 +35,7 @@ const KINDS: &[(&str, &str)] = &[
     (otel::GENERIC_RPC, "rpc"),
     ("http.client", "http"),
     (storage::KIND, "storage"),
+    (llm::KIND, "llm"),
 ];
 
 /// The families in the order the console lists their systems.
@@ -46,6 +48,7 @@ pub const FAMILIES: &[&str] = &[
     "rpc",
     "http",
     "storage",
+    "llm",
 ];
 
 /// The family of a span kind, or None for a span that isn't an operation.
@@ -66,6 +69,7 @@ pub fn display_name(system: &str) -> String {
         "sql" => "Database",
         "cache" => "Cache",
         "storage" => "Storage",
+        "llm" => "LLM",
         "http" => "HTTP calls",
         "redis" => "Redis",
         "mongodb" => "MongoDB",
@@ -137,6 +141,10 @@ pub struct Operation {
     pub via: Option<&'static str>,
     /// A cache get: whether it found the key.
     pub hit: Option<bool>,
+    /// An LLM call: the tokens it took in and gave out.
+    pub tokens: Option<(i64, i64)>,
+    /// An LLM call: what it cost, estimated (`llm::cost`).
+    pub cost: Option<f64>,
 }
 
 /// A statement's verb, as the console filters it (`op:select`): its first word, upper case.
@@ -165,6 +173,8 @@ pub fn operation(trace: &Trace, span: &Span) -> Option<Operation> {
         params_hash: None,
         via: None,
         hit: None,
+        tokens: None,
+        cost: None,
     };
     match family {
         "sql" => {
@@ -207,6 +217,14 @@ pub fn operation(trace: &Trace, span: &Span) -> Option<Operation> {
             operation.template =
                 storage::path_template(&operation.op, operation.statement.as_deref());
             operation.vendor = text(attrs, "storage.system");
+        }
+        "llm" => {
+            operation.target = llm::provider(span);
+            operation.op = llm::operation(span);
+            operation.template = llm::model(span);
+            operation.vendor = llm::response_model(span);
+            operation.tokens = llm::usage(attrs).map(|usage| (usage.input, usage.output));
+            operation.cost = attrs.get(llm::COST).and_then(Value::as_f64);
         }
         "rpc" => {
             let service = or_default(attrs, "rpc.service", "");
@@ -421,6 +439,14 @@ fn rules(family: &str, system: &str) -> Option<Rules> {
             cheap: false,
             slow: None,
         },
+        // Calls one by one in a loop (`llm::one_by_one`), the same prompt twice; a model's time is its own.
+        "llm" => Rules {
+            label: "LLM calls".into(),
+            repeated_hint: "",
+            duplicates_hint: Some(llm::DUPLICATES),
+            cheap: false,
+            slow: None,
+        },
         "rpc" => Rules {
             label: format!("{name} calls"),
             repeated_hint: RPC_REPEATED,
@@ -467,6 +493,7 @@ fn call_of<'a>(operation: &Operation, span: &'a Span) -> Call<'a> {
         "redis" => redis_call(span),
         "cache" => cache_call(span),
         storage::KIND => storage_call(operation, span),
+        llm::KIND => llm_call(operation, span),
         _ => {
             let what = format!("{} {}", operation.op, operation.template)
                 .trim()
@@ -522,6 +549,43 @@ fn storage_call<'a>(operation: &Operation, span: &'a Span) -> Call<'a> {
     }
 }
 
+/// An LLM call: a loop's calls ask one model for one operation; the same call sends the same prompt (known only when
+/// the app captures the messages: else each call is its own).
+fn llm_call<'a>(operation: &Operation, span: &'a Span) -> Call<'a> {
+    let title = format!("{} {}", operation.op, operation.template)
+        .trim_end()
+        .to_owned();
+    let prompt = llm::prompt(span);
+    Call {
+        span,
+        group: format!("{} {title}", operation.target),
+        title,
+        read: prompt.is_some(),
+        exact: prompt.unwrap_or_else(|| span.id.clone()),
+    }
+}
+
+/// An HTTP call made for an LLM call (its API's request, one per attempt): the LLM call's, not an issue of its own. A
+/// retry isn't a duplicate, and the model's time isn't a slow service.
+fn inside_llm_call(trace: &Trace, span: &Span) -> bool {
+    if span.kind != "http.client" {
+        return false;
+    }
+    let mut parent = span.parent_id.as_deref();
+    // A few levels up: an instrumentation may put a span of its own between them.
+    for _ in 0..4 {
+        let Some(found) = parent.and_then(|id| trace.spans.iter().find(|each| each.id == id))
+        else {
+            return false;
+        };
+        if found.kind == llm::KIND {
+            return true;
+        }
+        parent = found.parent_id.as_deref();
+    }
+    false
+}
+
 /// An HTTP call recorded twice: a span under an `http.client` span for the same method and URL, as when two layers of
 /// instrumentation each record one request (Next.js's fetch and undici under it). The outer span is the call.
 fn nested_http_repeat(trace: &Trace, call: &Call<'_>) -> bool {
@@ -548,6 +612,7 @@ const ENGINE_ORDER: &[&str] = &[
     "rpc",
     "messaging",
     "storage",
+    "llm",
 ];
 
 /// Issues of every operation: SQL's (its own analysis: parameters, lookups by key, the ORM's hints), then every other
@@ -559,6 +624,7 @@ pub(crate) fn operation_issues(trace: &Trace, thresholds: &Thresholds) -> Vec<Is
     let mut systems: Vec<(&'static str, String)> = Vec::new();
     let mut order: HashMap<(&'static str, String), Vec<String>> = HashMap::new();
     let mut groups: HashMap<(&'static str, String, String), Vec<Call<'_>>> = HashMap::new();
+    let has_llm = trace.spans.iter().any(|span| span.kind == llm::KIND);
     for span in &trace.spans {
         let Some(operation) = operation(trace, span) else {
             continue;
@@ -569,7 +635,7 @@ pub(crate) fn operation_issues(trace: &Trace, thresholds: &Thresholds) -> Vec<Is
             continue;
         }
         let call = call_of(&operation, span);
-        if nested_http_repeat(trace, &call) {
+        if nested_http_repeat(trace, &call) || (has_llm && inside_llm_call(trace, span)) {
             continue;
         }
         let system = (operation.family, operation.system.clone());
@@ -625,16 +691,18 @@ fn group_issues(
         .map(|call| call.exact.as_str())
         .collect::<std::collections::HashSet<_>>()
         .len();
-    if distinct >= threshold {
+    // An LLM call's repeats are a loop only one by one: at once they are batched, and an agent's turns can't be.
+    let looped = spans[0].kind != llm::KIND || llm::one_by_one(&spans);
+    if distinct >= threshold && looped {
         issues.push(issue(
             issue_key("n+1", &[Some(&key), key_culprit.as_deref()]),
             "n+1",
             format!("N+1: {} similar {label} · {title}", spans.len()),
             Some(culprit_text.clone()),
-            Some(if spans[0].kind == storage::KIND {
-                storage::repeated_hint(spans[0])
-            } else {
-                rules.repeated_hint
+            Some(match spans[0].kind.as_str() {
+                storage::KIND => storage::repeated_hint(spans[0]),
+                llm::KIND => llm::repeated_hint(spans[0]),
+                _ => rules.repeated_hint,
             }),
             spans.len(),
             spans.iter().map(|span| span.id.clone()).collect(),
@@ -758,6 +826,8 @@ mod tests {
             params_hash: None,
             via,
             hit: None,
+            tokens: None,
+            cost: None,
         };
         let key = call_key(&operation("http", "api.example.com", None));
         assert_eq!(key.len(), 16);

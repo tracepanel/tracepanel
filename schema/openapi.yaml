@@ -865,7 +865,7 @@ components:
     CallsSummary:
       type: object
       additionalProperties: false
-      required: [calls, traces, most_per_trace, errors, total, p95, hits, misses]
+      required: [calls, traces, most_per_trace, errors, total, p95, hits, misses, tokens_in, tokens_out, cost]
       properties:
         calls: { type: integer }
         traces: { type: integer, description: Traces with any of the calls. }
@@ -875,22 +875,30 @@ components:
         p95: { oneOf: [{ $ref: "#/components/schemas/Duration" }, { type: "null" }], description: Null with no calls. }
         hits: { type: [integer, "null"], description: "A cache's gets that hit; null for other systems." }
         misses: { type: [integer, "null"], description: "A cache's gets that missed; null for other systems." }
+        tokens_in: { type: [integer, "null"], description: "LLM calls: the input's tokens; null for other systems." }
+        tokens_out: { type: [integer, "null"], description: "LLM calls: the output's tokens; null for other systems." }
+        cost:
+          type: [number, "null"]
+          description: >-
+            LLM calls: what they cost in US dollars, estimated from their tokens and list prices; null for other systems
+            or models without a price.
     CallRow:
       type: object
       additionalProperties: false
       required: [key, system, family, target, op, template, name, calls, traces, errors, total, slowest, last_seen,
-        most_per_trace, origin, sample_trace, sample_span, statement, vendor, hits, misses, via]
+        most_per_trace, origin, sample_trace, sample_span, statement, vendor, hits, misses, via, tokens_in, tokens_out,
+        cost, p95]
       properties:
         key: { type: string, description: "Call id (search traces with call:<key>; for SQL also query:<key>)." }
         system:
           type: string
           description: >-
-            What the console lists it under: sql, redis, cache, http, storage, a known datastore, broker or RPC kind
+            What the console lists it under: sql, redis, cache, http, storage, llm, a known datastore, broker or RPC kind
             (mongodb, kafka, grpc…), or the system's own name for any other (neo4j, nats, thrift).
-        family: { type: string, enum: [sql, redis, cache, datastore, messaging, rpc, http, storage] }
-        target: { type: string, description: "Where it went: a database alias, an instance, a host, a topic, an RPC service, a storage's alias." }
+        family: { type: string, enum: [sql, redis, cache, datastore, messaging, rpc, http, storage, llm] }
+        target: { type: string, description: "Where it went: a database alias, an instance, a host, a topic, an RPC service, a storage's alias, an LLM's provider." }
         op: { type: string, description: "The operation: SELECT, GET, get, POST, find, publish, an RPC method." }
-        template: { type: string, description: "What its repeats share: the SQL fingerprint, a key or path with ids as {id}, a collection, a storage's directory (avatars/*)." }
+        template: { type: string, description: "What its repeats share: the SQL fingerprint, a key or path with ids as {id}, a collection, a storage's directory (avatars/*), an LLM's model." }
         name: { type: string, description: The span's name. }
         calls: { type: integer }
         traces: { type: integer }
@@ -903,10 +911,16 @@ components:
         sample_trace: { type: string, description: The latest one's trace. }
         sample_span: { type: string, description: The latest one's span. }
         statement: { type: [string, "null"], description: "The operation in full: the SQL statement, the command with its key, the URL." }
-        vendor: { type: [string, "null"], description: "SQL: the database; a cache: its backend; a storage: its system (filesystem, s3)." }
+        vendor:
+          type: [string, "null"]
+          description: "SQL: the database; a cache: its backend; a storage: its system (filesystem, s3); an LLM: the model that answered."
         hits: { type: [integer, "null"], description: "A cache: gets that found their key." }
         misses: { type: [integer, "null"], description: "A cache: gets that didn't." }
         via: { type: [string, "null"], description: "Redis: direct (the app's call), cache or task (sent for one)." }
+        tokens_in: { type: [integer, "null"], description: "An LLM: the input's tokens." }
+        tokens_out: { type: [integer, "null"], description: "An LLM: the output's tokens." }
+        cost: { type: [number, "null"], description: "An LLM: what the calls cost in US dollars, estimated; null without a price." }
+        p95: { oneOf: [{ $ref: "#/components/schemas/Duration" }, { type: "null" }], description: "An LLM: its calls' p95." }
     ExplainPlan:
       type: object
       additionalProperties: false
@@ -1131,7 +1145,7 @@ components:
                 properties:
                   system: { type: string }
                   label: { type: string, description: "Its name in the console: MongoDB, NATS, Google Pub/Sub, or the system's own." }
-                  family: { type: string, enum: [sql, redis, cache, datastore, messaging, rpc, http, storage] }
+                  family: { type: string, enum: [sql, redis, cache, datastore, messaging, rpc, http, storage, llm] }
     Capabilities:
       type: object
       additionalProperties: false

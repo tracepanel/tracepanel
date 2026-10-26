@@ -32,6 +32,11 @@ test("one failed statement in hundreds reads <1% on the Database page", async ({
         p95: 9_000,
         hits: null,
         misses: null,
+        // biome-ignore lint/style/useNamingConvention: wire format.
+        tokens_in: null,
+        // biome-ignore lint/style/useNamingConvention: wire format.
+        tokens_out: null,
+        cost: null,
       },
     }),
   );

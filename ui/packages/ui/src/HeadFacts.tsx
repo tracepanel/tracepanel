@@ -1,4 +1,5 @@
 import { duration } from "./format";
+import { llmFacts } from "./lib/llm";
 import { memoryFacts } from "./lib/memory";
 import { plural } from "./lib/plural";
 import { type SystemCalls, systemCalls } from "./systemCalls";
@@ -12,6 +13,7 @@ const DETAILS: Record<string, (spans: Span[]) => string | null> = {
     const hits = gets.filter((span) => span.attrs["cache.hit"] === true).length;
     return gets.length > 0 ? `${hits}/${gets.length} hits` : null;
   },
+  llm: llmFacts,
 };
 
 /** What a system's calls are called, one and many; a system not here, "<its name> calls". */
@@ -20,6 +22,7 @@ const NOUNS: Record<string, readonly [string, string]> = {
   redis: ["Redis command", "Redis commands"],
   cache: ["cache call", "cache calls"],
   storage: ["storage call", "storage calls"],
+  llm: ["LLM call", "LLM calls"],
   "http.client": ["HTTP call", "HTTP calls"],
 };
 

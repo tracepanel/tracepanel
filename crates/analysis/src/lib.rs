@@ -12,6 +12,7 @@ use std::sync::LazyLock;
 use tracepanel_protocol::{Attrs, Issue, Span, Thresholds, Trace};
 
 pub mod calls;
+pub mod llm;
 pub mod otel;
 pub mod storage;
 mod waits;
@@ -909,10 +910,11 @@ fn htmx_issues(trace: &Trace) -> Vec<Issue> {
 }
 
 /// A received trace, made ready for the store: its OpenTelemetry spans mapped to tracepanel's kinds (an older SDK's
-/// storage calls too), then its issues found, in its rows and in its document, which the console shows.
+/// storage and LLM calls too), its LLM calls priced, then its issues found, in its rows and in its document, which the console shows.
 pub fn apply(received: &mut tracepanel_protocol::Received, thresholds: &Thresholds) {
     otel::normalize(received);
     storage::normalize(received);
+    llm::normalize(received);
     let issues = analyze(&received.trace, thresholds);
     if issues.is_empty() {
         return;
@@ -1916,5 +1918,108 @@ mod tests {
     #[test]
     fn most_common_keeps_the_first_on_a_tie() {
         assert_eq!(most_common(["b", "a", "a", "b"]), Some(("b", 2)));
+    }
+
+    /// An LLM call: (operation, model, prompt, start, duration in µs, finish reason). A prompt is the captured
+    /// messages, or none.
+    type LlmCall<'a> = (&'a str, &'a str, Option<&'a str>, i64, i64, &'a str);
+
+    /// LLM calls, each with its HTTP request inside.
+    fn llm_calls(calls: &[LlmCall<'_>]) -> Trace {
+        let mut spans = vec![serde_json::json!({
+            "id": "root", "kind": "http", "name": "POST /ask", "start": 0, "duration": 10_000_000, "attrs": {},
+        })];
+        for (n, (operation, model, prompt, start, duration, finish)) in calls.iter().enumerate() {
+            let mut attrs = serde_json::json!({
+                "gen_ai.provider.name": "openai", "gen_ai.operation.name": operation, "gen_ai.request.model": model,
+                "gen_ai.response.finish_reasons": [finish], "code.origin": "app/views.py:30 in ask",
+            });
+            if let Some(prompt) = prompt {
+                attrs["gen_ai.input.messages"] = Value::from(*prompt);
+            }
+            spans.push(serde_json::json!({
+                "id": format!("c{n}"), "parent_id": "root", "kind": "llm", "name": format!("{operation} {model}"),
+                "start": start, "duration": duration, "attrs": attrs,
+            }));
+            // The API's request, slow as a model is: no slow HTTP call of the app's.
+            spans.push(serde_json::json!({
+                "id": format!("h{n}"), "parent_id": format!("c{n}"), "kind": "http.client",
+                "name": "POST api.openai.com/v1/chat/completions", "start": start, "duration": duration,
+                "attrs": {"http.request.method": "POST", "url.full": "https://api.openai.com/v1/chat/completions",
+                          "code.origin": "app/views.py:30 in ask"},
+            }));
+        }
+        serde_json::from_value(serde_json::json!({
+            "id": "t", "kind": "http", "name": "POST /ask", "start": 0, "spans": spans,
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn llm_calls_one_by_one_in_a_loop_are_an_n_plus_one_and_their_http_calls_no_issue() {
+        let summaries = llm_calls(&[
+            ("chat", "gpt-5", None, 0, 900_000, "stop"),
+            ("chat", "gpt-5", None, 900_000, 800_000, "stop"),
+            ("chat", "gpt-5", None, 1_700_000, 700_000, "stop"),
+            (
+                "embeddings",
+                "text-embedding-3-small",
+                None,
+                2_400_000,
+                1000,
+                "",
+            ),
+        ]);
+        let hints: Vec<Option<String>> = analyze(&summaries, &Thresholds::default())
+            .into_iter()
+            .map(|issue| issue.hint)
+            .collect();
+
+        assert_eq!(
+            found(&summaries),
+            [(
+                "n+1".to_owned(),
+                "N+1: 3 similar LLM calls · chat gpt-5".to_owned(),
+                3
+            )]
+        );
+        assert!(hints[0].as_deref().unwrap().contains("Batch API"));
+    }
+
+    #[test]
+    fn llm_calls_at_once_or_an_agent_s_turns_are_no_loop() {
+        let at_once = llm_calls(&[
+            ("chat", "gpt-5", None, 0, 900_000, "stop"),
+            ("chat", "gpt-5", None, 1000, 800_000, "stop"),
+            ("chat", "gpt-5", None, 2000, 700_000, "stop"),
+        ]);
+        let agent = llm_calls(&[
+            ("chat", "gpt-5", None, 0, 900_000, "tool_calls"),
+            ("chat", "gpt-5", None, 1_000_000, 800_000, "tool_calls"),
+            ("chat", "gpt-5", None, 2_000_000, 700_000, "stop"),
+        ]);
+
+        assert_eq!(found(&at_once), []);
+        assert_eq!(found(&agent), []);
+    }
+
+    #[test]
+    fn the_same_prompt_twice_is_a_duplicate_llm_call() {
+        let prompt = Some(r#"[{"role":"user","parts":[{"type":"text","content":"Hi"}]}]"#);
+        let other = Some(r#"[{"role":"user","parts":[{"type":"text","content":"Bye"}]}]"#);
+        let trace = llm_calls(&[
+            ("chat", "gpt-5", prompt, 0, 1000, "stop"),
+            ("chat", "gpt-5", other, 2000, 1000, "stop"),
+            ("chat", "gpt-5", prompt, 4000, 1000, "stop"),
+        ]);
+
+        assert_eq!(
+            found(&trace),
+            [(
+                "duplicates".to_owned(),
+                "Duplicate LLM calls: 2 identical · chat gpt-5".to_owned(),
+                2
+            )]
+        );
     }
 }

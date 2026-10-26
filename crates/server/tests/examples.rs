@@ -261,7 +261,11 @@ async fn the_agent_finds_the_issues_and_the_api_returns_them() {
 
     // What the filter menus offer.
     let (_, values) = get(&router, "/api/values").await;
-    assert_eq!(values["targets"]["http"], serde_json::json!(["127.0.0.1"]));
+    assert_eq!(
+        values["targets"]["http"],
+        serde_json::json!(["127.0.0.1", "api.openai.com"])
+    );
+    assert_eq!(values["targets"]["llm"], serde_json::json!(["openai"]));
     assert_eq!(values["targets"]["redis"], serde_json::json!(["redis"]));
 
     // The agent alone runs no EXPLAIN and switches no user: an app serving the console answers for itself.
@@ -281,7 +285,7 @@ async fn the_agent_finds_the_issues_and_the_api_returns_them() {
             .map(|system| system["system"].as_str().unwrap().to_owned())
             .collect::<Vec<_>>()
     };
-    assert_eq!(systems(&counts), ["sql", "redis", "http", "storage"]);
+    assert_eq!(systems(&counts), ["sql", "redis", "http", "storage", "llm"]);
     let (_, other) = get(&router, "/api/counts?service=api").await;
     assert_eq!(systems(&other), ["sql"]);
     let _ = std::fs::remove_dir_all(&dir);
@@ -678,6 +682,137 @@ async fn storage_calls_are_their_own_kind_listed_and_analyzed() {
             ("storage:filesystem/default", "storage", "filesystem"),
             ("storage:s3/media", "storage", "s3"),
         ]
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// LLM calls as the Python SDK sends them for now, `function` spans with `gen_ai.operation.name`: stored and served
+/// as `llm` spans with their cost, their HTTP requests no slow call of the app's, three summaries one by one an N+1.
+/// The LLM page lists them by provider, operation and model with their tokens, cost and p95, its tiles sum them.
+#[tokio::test]
+async fn llm_calls_are_their_own_kind_priced_listed_and_analyzed() {
+    let dir = std::env::temp_dir().join(format!("tracepanel-llm-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = tracepanel_store_local::path_in(&dir);
+    let mut store = Store::open(&path).unwrap();
+    let router = tracepanel_server::router(Reader::new(&path), Activity::default());
+    let doc: Value = serde_json::from_str(
+        &std::fs::read_to_string(schema_dir().join("examples/python-django-llm.json")).unwrap(),
+    )
+    .unwrap();
+    let batch = Batch {
+        frame: serde_json::to_vec(&vec![&doc]).unwrap(),
+        max_traces: Some(1000),
+        thresholds: Thresholds::default(),
+    };
+    let mut received = batch.decode().unwrap();
+    for trace in &mut received {
+        tracepanel_analysis::apply(trace, &batch.thresholds);
+    }
+    store.write(&received).unwrap();
+
+    let (_, trace) = get(&router, "/api/traces/01M5GCHAT0K3VJ6TN8C2XWB4FR").await;
+    let errors: Vec<String> = validator()
+        .iter_errors(&trace)
+        .map(|error| error.to_string())
+        .collect();
+    assert!(errors.is_empty(), "as served: {errors:?}");
+    let calls: Vec<(&str, &Value)> = trace["spans"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|span| span["name"] == "chat gpt-4o-mini")
+        .map(|span| {
+            (
+                span["kind"].as_str().unwrap(),
+                &span["attrs"]["tracepanel.cost_usd"],
+            )
+        })
+        .collect();
+    assert_eq!(
+        calls,
+        [
+            ("llm", &serde_json::json!(0.00000975)),
+            ("llm", &serde_json::json!(0.00001065)),
+            ("llm", &serde_json::json!(0.0000099))
+        ]
+    );
+
+    let issues: Vec<(&str, &str)> = trace["issues"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|issue| {
+            (
+                issue["kind"].as_str().unwrap(),
+                issue["title"].as_str().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        issues,
+        [("n+1", "N+1: 3 similar LLM calls · chat gpt-4o-mini")]
+    );
+
+    let (_, listed) = get(&router, "/api/calls?system=llm").await;
+    let row = &listed["calls"][0];
+    let fields = [
+        "family",
+        "target",
+        "op",
+        "template",
+        "vendor",
+        "calls",
+        "tokens_in",
+        "tokens_out",
+        "cost",
+        "p95",
+    ]
+    .map(|field| row[field].clone());
+    assert_eq!(
+        fields,
+        serde_json::json!([
+            "llm",
+            "openai",
+            "chat",
+            "gpt-4o-mini",
+            "gpt-4o-mini-2024-07-18",
+            3,
+            126,
+            19,
+            0.0000303,
+            170_000
+        ])
+        .as_array()
+        .unwrap()
+        .as_slice()
+    );
+    let (_, sql) = get(&router, "/api/calls?system=http").await;
+    assert_eq!(sql["calls"][0]["tokens_in"], Value::Null);
+
+    let (_, summary) = get(&router, "/api/calls/summary?system=llm").await;
+    assert_eq!(
+        [
+            &summary["calls"],
+            &summary["tokens_in"],
+            &summary["tokens_out"],
+            &summary["cost"]
+        ],
+        [
+            &serde_json::json!(3),
+            &serde_json::json!(126),
+            &serde_json::json!(19),
+            &serde_json::json!(0.0000303)
+        ]
+    );
+    let (_, counts) = get(&router, "/api/counts").await;
+    assert_eq!(
+        counts["sections"]["systems"],
+        serde_json::json!([
+            {"system": "http", "family": "http", "label": "HTTP calls"},
+            {"system": "llm", "family": "llm", "label": "LLM"}
+        ])
     );
     let _ = std::fs::remove_dir_all(&dir);
 }

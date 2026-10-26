@@ -1,6 +1,6 @@
 -- tracepanel's local store: one SQLite file per format version, written by the project's tracepanel-agent alone. The
 -- trace's doc is what was received; every other table is derived from it (crates/store-local/src/write.rs).
--- version: 22
+-- version: 23
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS traces (
     id TEXT PRIMARY KEY,
@@ -78,7 +78,9 @@ CREATE INDEX IF NOT EXISTS logs_trace ON logs (trace_id);
 -- search links with (`op:<key>`; for SQL the statement's fingerprint key, `query:<key>`). `target` is where it went (a
 -- database alias, an instance, a host, a topic), `op` the verb, `template` what its repeats share (a fingerprint, a key
 -- or path with its ids as {id}, a collection). `vendor` is SQL's database or a cache's backend, `params_hash` SQL's
--- parameters, `via` why a Redis command ran (direct, cache, task), `hit` a cache get's outcome.
+-- parameters, `via` why a Redis command ran (direct, cache, task), `hit` a cache get's outcome. An LLM call (`llm`: its
+-- provider the target, its operation the op, its model the template) has its tokens in and out and its estimated cost
+-- in US dollars, null for a model without a price.
 CREATE TABLE IF NOT EXISTS calls (
     trace_id TEXT NOT NULL,
     span_id TEXT NOT NULL,
@@ -97,7 +99,10 @@ CREATE TABLE IF NOT EXISTS calls (
     error INTEGER NOT NULL,
     start INTEGER NOT NULL,
     duration INTEGER NOT NULL,
-    origin TEXT
+    origin TEXT,
+    tokens_in INTEGER,
+    tokens_out INTEGER,
+    cost REAL
 );
 -- A list of calls groups them by key and counts them per trace, filtered by system, family, target or time: from this
 -- index alone, without reading the table. The latest call and the most common line of code come from it too.

@@ -55,5 +55,8 @@
   "python-django-storage.json": [
     "duplicates",
     "n+1"
+  ],
+  "python-django-llm.json": [
+    "n+1"
   ]
 }

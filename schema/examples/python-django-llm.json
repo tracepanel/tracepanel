@@ -1,0 +1,182 @@
+{
+  "attrs": {
+    "code.view": "notes.views.summaries",
+    "http.method": "POST",
+    "http.path": "/summaries/",
+    "http.route": "/summaries/",
+    "http.status_code": 200,
+    "process.runtime.name": "cpython",
+    "process.runtime.version": "3.13.1",
+    "service.name": "notes",
+    "service.role": "web",
+    "telemetry.sdk.language": "python",
+    "tracepanel.framework": "Django 5.2.18",
+    "user.id": null
+  },
+  "duration": 500000,
+  "errors": [],
+  "id": "01M5GCHAT0K3VJ6TN8C2XWB4FR",
+  "issues": [],
+  "kind": "http",
+  "links": [],
+  "logs": [],
+  "name": "POST /summaries/",
+  "spans": [
+    {
+      "attrs": {},
+      "duration": 500000,
+      "id": "01M5GCHATR0000000000000000",
+      "kind": "http",
+      "name": "POST /summaries/",
+      "parent_id": null,
+      "start": 1791565500000000,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.view": "notes.views.summaries"
+      },
+      "duration": 499000,
+      "id": "01M5GCHATV0000000000000000",
+      "kind": "view",
+      "name": "notes.views.summaries",
+      "parent_id": "01M5GCHATR0000000000000000",
+      "start": 1791565500000500,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "notes/views.py:24 in summaries",
+        "gen_ai.input.messages": "[{\"role\": \"user\", \"parts\": [{\"type\": \"text\", \"content\": \"Groceries: milk, eggs\"}]}]",
+        "gen_ai.operation.name": "chat",
+        "gen_ai.output.messages": "[{\"role\": \"assistant\", \"parts\": [{\"type\": \"text\", \"content\": \"Milk and eggs.\"}], \"finish_reason\": \"stop\"}]",
+        "gen_ai.provider.name": "openai",
+        "gen_ai.request.max_tokens": 100,
+        "gen_ai.request.model": "gpt-4o-mini",
+        "gen_ai.response.finish_reasons": [
+          "stop"
+        ],
+        "gen_ai.response.id": "chatcmpl-1",
+        "gen_ai.response.model": "gpt-4o-mini-2024-07-18",
+        "gen_ai.system_instructions": "[{\"type\": \"text\", \"content\": \"Summarize the note in a few words.\"}]",
+        "gen_ai.usage.input_tokens": 41,
+        "gen_ai.usage.output_tokens": 6,
+        "openai.api.type": "chat_completions",
+        "server.address": "api.openai.com",
+        "server.port": 443
+      },
+      "duration": 160000,
+      "id": "01M5GCHATC0000000000000001",
+      "kind": "function",
+      "name": "chat gpt-4o-mini",
+      "parent_id": "01M5GCHATV0000000000000000",
+      "start": 1791565500001000,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "notes/views.py:24 in summaries",
+        "http.request.method": "POST",
+        "http.response.status_code": 200,
+        "server.address": "api.openai.com",
+        "server.port": 443,
+        "url.full": "https://api.openai.com/v1/chat/completions"
+      },
+      "duration": 158000,
+      "id": "01M5GCHATH0000000000000001",
+      "kind": "http.client",
+      "name": "POST api.openai.com/v1/chat/completions",
+      "parent_id": "01M5GCHATC0000000000000001",
+      "start": 1791565500002000,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "notes/views.py:24 in summaries",
+        "gen_ai.operation.name": "chat",
+        "gen_ai.provider.name": "openai",
+        "gen_ai.request.max_tokens": 100,
+        "gen_ai.request.model": "gpt-4o-mini",
+        "gen_ai.response.finish_reasons": [
+          "stop"
+        ],
+        "gen_ai.response.id": "chatcmpl-2",
+        "gen_ai.response.model": "gpt-4o-mini-2024-07-18",
+        "gen_ai.usage.input_tokens": 43,
+        "gen_ai.usage.output_tokens": 7,
+        "openai.api.type": "chat_completions",
+        "server.address": "api.openai.com",
+        "server.port": 443
+      },
+      "duration": 170000,
+      "id": "01M5GCHATC0000000000000002",
+      "kind": "function",
+      "name": "chat gpt-4o-mini",
+      "parent_id": "01M5GCHATV0000000000000000",
+      "start": 1791565500161100,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "notes/views.py:24 in summaries",
+        "http.request.method": "POST",
+        "http.response.status_code": 200,
+        "server.address": "api.openai.com",
+        "server.port": 443,
+        "url.full": "https://api.openai.com/v1/chat/completions"
+      },
+      "duration": 168000,
+      "id": "01M5GCHATH0000000000000002",
+      "kind": "http.client",
+      "name": "POST api.openai.com/v1/chat/completions",
+      "parent_id": "01M5GCHATC0000000000000002",
+      "start": 1791565500162100,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "notes/views.py:24 in summaries",
+        "gen_ai.operation.name": "chat",
+        "gen_ai.provider.name": "openai",
+        "gen_ai.request.max_tokens": 100,
+        "gen_ai.request.model": "gpt-4o-mini",
+        "gen_ai.response.finish_reasons": [
+          "stop"
+        ],
+        "gen_ai.response.id": "chatcmpl-3",
+        "gen_ai.response.model": "gpt-4o-mini-2024-07-18",
+        "gen_ai.usage.input_tokens": 42,
+        "gen_ai.usage.output_tokens": 6,
+        "openai.api.type": "chat_completions",
+        "server.address": "api.openai.com",
+        "server.port": 443
+      },
+      "duration": 150000,
+      "id": "01M5GCHATC0000000000000003",
+      "kind": "function",
+      "name": "chat gpt-4o-mini",
+      "parent_id": "01M5GCHATV0000000000000000",
+      "start": 1791565500331200,
+      "status": "ok"
+    },
+    {
+      "attrs": {
+        "code.origin": "notes/views.py:24 in summaries",
+        "http.request.method": "POST",
+        "http.response.status_code": 200,
+        "server.address": "api.openai.com",
+        "server.port": 443,
+        "url.full": "https://api.openai.com/v1/chat/completions"
+      },
+      "duration": 148000,
+      "id": "01M5GCHATH0000000000000003",
+      "kind": "http.client",
+      "name": "POST api.openai.com/v1/chat/completions",
+      "parent_id": "01M5GCHATC0000000000000003",
+      "start": 1791565500332200,
+      "status": "ok"
+    }
+  ],
+  "start": 1791565500000000,
+  "status": "ok"
+}

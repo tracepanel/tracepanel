@@ -102,6 +102,7 @@ export const CARD_STYLE = `
   [data-category="datastore"] { --k: var(--dt-k-datastore); }
   [data-category="messaging"] { --k: var(--dt-k-messaging); }
   [data-category="storage"] { --k: var(--dt-k-storage); }
+  [data-category="llm"] { --k: var(--dt-k-llm); }
   [data-category="mail"] { --k: var(--dt-k-mail); }
   [data-category="signal"] { --k: var(--dt-k-signal); }
   .panel[data-open] ~ .card { display: none; }

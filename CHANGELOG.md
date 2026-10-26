@@ -4,6 +4,26 @@
 
 ### Added
 
+- LLM calls are a span kind of their own, `llm`: each call an app makes to
+  a model through OpenAI's or Anthropic's API, with OpenTelemetry's GenAI
+  attributes. A `function` span with `gen_ai.operation.name`, as the Python
+  SDK sends them for now, becomes one when it arrives, and so does a model
+  call an OpenTelemetry instrumentation records (`gen_ai.*`, the older names
+  too). The agent estimates each call's cost from its tokens and a dated
+  table of list prices (`tracepanel.cost_usd`): a model without a price has
+  none, and an `llm-prices.json` in the store's directory, or
+  `--llm-prices FILE`, overrides or adds models. A model's HTTP requests are
+  its own: no slow HTTP call, no duplicate for a retry. Calls made one by
+  one in a loop are an N+1 with a hint (one embeddings request for every
+  text, concurrent requests, the Batch API), but not calls made at once or
+  an agent's turns waiting on a tool, and the same prompt sent twice is a
+  duplicate. In the call tree they have their badge and colour, an LLM share
+  of the time strip and its lane, a chip, and details (Provider, Model asked
+  and answered, Tokens, Cost marked as an estimate, Time to first token,
+  Finish reason, Tool calls). Captured messages read as a conversation, a
+  turn each, the history folded. The trace's header says `2 LLM calls 2.3 s
+  · 2,816 tokens · ~$0.00298`, and the console has an LLM page of them by
+  provider, operation and model, with their tokens, cost and p95.
 - File storage calls are a span kind of their own, `storage`: each call a
   Django storage makes to its backend (save, open, exists, url, listdir...),
   on the local disk or S3. A `function` span with `storage.op`, as the Python

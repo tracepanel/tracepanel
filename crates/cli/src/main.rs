@@ -27,7 +27,7 @@ const QUEUE: usize = 1024;
 static DROPPED: AtomicU64 = AtomicU64::new(0);
 
 const USAGE: &str = "usage: tracepanel-agent [--dir DIR] [--listen unix|tcp:HOST:PORT] [--serve HOST:PORT] \
-                     [--otlp HOST:PORT|off] [--idle-exit SECONDS] [--record DIR]
+                     [--otlp HOST:PORT|off] [--idle-exit SECONDS] [--record DIR] [--llm-prices FILE]
        tracepanel-agent mcp [--dir DIR] [--values]
   --dir        the project's store directory (default .tracepanel)
   --listen     where SDKs connect: a unix socket (default; not on Windows) or TCP, e.g. tcp:127.0.0.1:0
@@ -35,6 +35,7 @@ const USAGE: &str = "usage: tracepanel-agent [--dir DIR] [--listen unix|tcp:HOST
   --otlp       take OpenTelemetry exporters' spans over OTLP/HTTP here (default 127.0.0.1:4318; off: don't)
   --idle-exit  exit after this many seconds unused (an agent an SDK started)
   --record     also save each trace as received, before analysis, to DIR/<id>.json (schema/examples)
+  --llm-prices the LLM prices to estimate costs with, over the built-in ones (default DIR/llm-prices.json, if any)
   --version    print the version
 
   mcp          an MCP server on stdin and stdout, for AI coding agents: reads the store, compact
@@ -74,7 +75,12 @@ struct Options {
     otlp: Option<String>,
     idle_exit: Option<i64>,
     record: Option<PathBuf>,
+    /// The LLM prices over the built-in ones; none: the store's `llm-prices.json`, when there is one.
+    llm_prices: Option<PathBuf>,
 }
+
+/// The file of LLM prices in the store's directory that overrides the built-in ones, when it is there.
+const LLM_PRICES: &str = "llm-prices.json";
 
 /// Where OpenTelemetry exporters send OTLP/HTTP unless told otherwise.
 const OTLP_DEFAULT: &str = "127.0.0.1:4318";
@@ -100,6 +106,7 @@ fn parse(args: impl IntoIterator<Item = String>) -> Result<Command, String> {
         otlp: Some(OTLP_DEFAULT.into()),
         idle_exit: None,
         record: None,
+        llm_prices: None,
     };
     let (mut mcp, mut values) = (false, false);
     let mut args = args.into_iter();
@@ -113,6 +120,7 @@ fn parse(args: impl IntoIterator<Item = String>) -> Result<Command, String> {
             "--dir" => options.dir = PathBuf::from(value("a directory")?),
             "--serve" => options.serve = Some(value("HOST:PORT")?),
             "--record" => options.record = Some(PathBuf::from(value("a directory")?)),
+            "--llm-prices" => options.llm_prices = Some(PathBuf::from(value("a file")?)),
             "--otlp" => {
                 let otlp = value("HOST:PORT or off")?;
                 options.otlp = (otlp != "off").then_some(otlp);
@@ -144,7 +152,8 @@ fn parse(args: impl IntoIterator<Item = String>) -> Result<Command, String> {
         let agent = options.listen.is_some()
             || options.serve.is_some()
             || options.idle_exit.is_some()
-            || options.record.is_some();
+            || options.record.is_some()
+            || options.llm_prices.is_some();
         if agent {
             return Err("mcp takes only --dir and --values".into());
         }
@@ -207,6 +216,7 @@ async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
         otlp,
         idle_exit,
         record,
+        llm_prices,
     } = options;
     let cloud = tracepanel_sender::Config::from_env(|name| std::env::var(name).ok())?;
     std::fs::create_dir_all(&dir)?;
@@ -214,6 +224,7 @@ async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
     // Before the store is opened or the socket bound: agents started at the same moment (an app's workers, each
     // starting one) would take each other's socket and address files, and one would be left with clients nobody sees.
     let _lock = lock(&dir)?;
+    prices(&dir, llm_prices.as_deref())?;
     let store_path = store_local::path_in(&dir);
     let addr_file = dir.join("agent.addr");
     let console_file = dir.join("console.addr");
@@ -545,6 +556,18 @@ async fn stopped() {
     let _ = tokio::signal::ctrl_c().await;
 }
 
+/// The LLM prices the costs are estimated with: the built-in ones, under the file asked for or the store's own.
+fn prices(dir: &Path, asked: Option<&Path>) -> Result<(), String> {
+    let path = asked.map_or_else(|| dir.join(LLM_PRICES), Path::to_owned);
+    let table = match std::fs::read_to_string(&path) {
+        Ok(table) => table,
+        Err(error) if asked.is_some() => return Err(format!("{}: {error}", path.display())),
+        Err(_) => return Ok(()),
+    };
+    tracepanel_analysis::llm::set_prices(&table)
+        .map_err(|error| format!("{}: {error}", path.display()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -566,6 +589,7 @@ mod tests {
                 otlp: Some("0.0.0.0:4318".into()),
                 idle_exit: Some(1800),
                 record: None,
+                llm_prices: None,
             }))
         );
         assert_eq!(
@@ -577,6 +601,7 @@ mod tests {
                 otlp: Some("127.0.0.1:4318".into()),
                 idle_exit: None,
                 record: None,
+                llm_prices: None,
             }))
         );
         assert_eq!(
@@ -588,6 +613,19 @@ mod tests {
                 otlp: None,
                 idle_exit: None,
                 record: None,
+                llm_prices: None,
+            }))
+        );
+        assert_eq!(
+            parse(args("--llm-prices prices.json")),
+            Ok(Command::Run(Options {
+                dir: PathBuf::from(".tracepanel"),
+                listen: None,
+                serve: None,
+                otlp: Some("127.0.0.1:4318".into()),
+                idle_exit: None,
+                record: None,
+                llm_prices: Some(PathBuf::from("prices.json")),
             }))
         );
         assert_eq!(parse(args("--help")), Ok(Command::Help));
@@ -639,5 +677,29 @@ mod tests {
             parse(args("--values")),
             Err("--values goes with mcp".into())
         );
+    }
+
+    #[test]
+    fn llm_prices_from_the_store_or_the_file_asked_for() {
+        let dir = std::env::temp_dir().join(format!("tracepanel-prices-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let missing = dir.join("missing.json");
+
+        // No file of the store's: the built-in prices.
+        assert_eq!(prices(&dir, None), Ok(()));
+        assert!(
+            prices(&dir, Some(&missing))
+                .unwrap_err()
+                .starts_with(&missing.display().to_string())
+        );
+
+        std::fs::write(dir.join(LLM_PRICES), "{").unwrap();
+        assert!(
+            prices(&dir, None)
+                .unwrap_err()
+                .contains("llm-prices.json: not JSON")
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

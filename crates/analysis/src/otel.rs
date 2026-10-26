@@ -7,7 +7,8 @@
 //! system without a kind of its own gets its family's (`db`, `messaging`, `rpc`), its name kept in `db.system`,
 //! `messaging.system` or `rpc.system`: listed and analyzed like the known ones (`ops`). Both the older and the current
 //! names of the conventions' attributes are read (`db.statement` and `db.query.text`, `http.method` and
-//! `http.request.method`…). Whatever else isn't recognized (a consumer's work, a server span) stays a `function`.
+//! `http.request.method`…). A call to a model (the GenAI conventions' `gen_ai.*`) is an `llm` span. Whatever else
+//! isn't recognized (a consumer's work, a server span) stays a `function`.
 
 use crate::{NAME, PLACEHOLDER};
 use regex::Regex;
@@ -154,6 +155,9 @@ fn map_in_place(span: &mut Value) {
 /// One OpenTelemetry span, by its name and attributes, as tracepanel's kind.
 pub fn map(name: &str, attrs: &Attrs) -> Mapped {
     let span_kind = text(attrs, &["otel.span_kind"]).unwrap_or_default();
+    if let Some(mapped) = llm(name, attrs) {
+        return mapped;
+    }
     if let Some(system) = db_system(attrs) {
         // A SQL span without a statement is the driver's own work (`pg.connect`): no query to show.
         if SQL_SYSTEMS.contains(&system.as_str())
@@ -289,6 +293,53 @@ fn client(attrs: &Attrs) -> String {
     } else {
         last.to_owned()
     }
+}
+
+// ---------- LLM ----------
+
+/// The older conventions' names of the GenAI attributes, and the current ones.
+const GEN_AI_RENAMED: &[(&str, &str)] = &[
+    ("gen_ai.system", "gen_ai.provider.name"),
+    ("gen_ai.usage.prompt_tokens", "gen_ai.usage.input_tokens"),
+    (
+        "gen_ai.usage.completion_tokens",
+        "gen_ai.usage.output_tokens",
+    ),
+];
+
+/// A call to a model, as the GenAI conventions record it (OpenAI's, Anthropic's, Bedrock's instrumentations…): an
+/// `llm` span with its `gen_ai.*` attributes, in their current names. An instrumentation on the older conventions
+/// names the provider in `gen_ai.system` and may name no operation: a call with a model is a chat. The agent's and
+/// the tools' spans (`invoke_agent`, `execute_tool`) are no model call.
+fn llm(name: &str, attrs: &Attrs) -> Option<Mapped> {
+    let named = text(attrs, &["gen_ai.operation.name"]);
+    let older = named.is_none()
+        && text(attrs, &["gen_ai.system"]).is_some()
+        && text(attrs, &["gen_ai.request.model"]).is_some();
+    if !older && !crate::llm::model_call(attrs) {
+        return None;
+    }
+    let mut out = common(attrs);
+    for (key, value) in attrs {
+        if key.starts_with("gen_ai.") {
+            out.insert(key.clone(), value.clone());
+        }
+    }
+    for (older, current) in GEN_AI_RENAMED {
+        if let Some(value) = out.remove(*older) {
+            out.entry(*current).or_insert(value);
+        }
+    }
+    if older {
+        out.insert("gen_ai.operation.name".into(), Value::from("chat"));
+    }
+    server(attrs, &mut out);
+    Some(Mapped {
+        kind: crate::llm::KIND.into(),
+        name: name.to_owned(),
+        attrs: out,
+        error: false,
+    })
 }
 
 // ---------- SQL ----------

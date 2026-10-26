@@ -348,8 +348,8 @@ pub(crate) fn write_trace(
         };
         db.prepare_cached(
             "INSERT INTO calls (trace_id, span_id, key, system, family, target, op, template, name, statement, vendor,
-             params_hash, via, hit, error, start, duration, origin)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
+             params_hash, via, hit, error, start, duration, origin, tokens_in, tokens_out, cost)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)",
         )?
         .execute(
             params![
@@ -371,6 +371,9 @@ pub(crate) fn write_trace(
                 span.start,
                 span.duration,
                 sql(span.attrs.get("code.origin")),
+                operation.tokens.map(|(input, _)| input),
+                operation.tokens.map(|(_, output)| output),
+                operation.cost,
             ],
         )?;
     }

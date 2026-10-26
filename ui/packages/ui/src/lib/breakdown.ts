@@ -16,6 +16,7 @@ export type Category =
   | "messaging"
   | "http"
   | "storage"
+  | "llm"
   | "mail";
 
 const CATEGORY_LABELS: Record<Category, string> = {
@@ -30,6 +31,7 @@ const CATEGORY_LABELS: Record<Category, string> = {
   messaging: "Messaging",
   http: "External calls",
   storage: "Storage",
+  llm: "LLM",
   mail: "Email",
 };
 
@@ -55,6 +57,7 @@ const BY_KIND: Record<string, Category> = {
   ...Object.fromEntries(DATASTORES.map((kind) => [kind, "datastore" as const])),
   ...Object.fromEntries(MESSAGING.map((kind) => [kind, "messaging" as const])),
   storage: "storage",
+  llm: "llm",
   mail: "mail",
   template: "template",
   signal: "signal",
@@ -67,11 +70,18 @@ const BY_KIND: Record<string, Category> = {
   command: "code",
 };
 
-/** A cache's Redis commands are the cache's time: what the app asked for, on whatever backend serves it. */
+/** The calls a backend makes for another: a cache's Redis commands, an LLM call's HTTP requests. */
+const SERVED_FOR: Record<string, string> = { redis: "cache", "http.client": "llm" };
+
+/**
+ * A cache's Redis commands are the cache's time, an LLM call's HTTP requests the model's: what the app asked for, on
+ * whatever serves it.
+ */
 function servedFor(span: Span, byId: ReadonlyMap<string, Span>): Span {
-  if (span.kind !== "redis") return span;
+  const owner = SERVED_FOR[span.kind];
+  if (!owner) return span;
   const parent = byId.get(String(span.parent_id));
-  return parent?.kind === "cache" ? parent : span;
+  return parent?.kind === owner ? parent : span;
 }
 
 function categoryOf(span: Span, byId: ReadonlyMap<string, Span>, handled: boolean): Category | null {
