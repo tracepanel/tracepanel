@@ -280,6 +280,13 @@
   URLs, and without calls to AWS's API they stay items of their own. The
   Data group now reads databases and caches, brokers, the calls out (HTTP
   calls, AWS, LLM), Storage, then Logs.
+- Third-party logos show only where their owners allow it. The services map
+  draws PostgreSQL, MySQL, SQLite, Redis and RabbitMQ with their kind's icon
+  and their name. A runtime (in the panel's pill, the app switcher, an app's
+  page and the app chips) shows its owner's mark, unaltered and in its own
+  colour, only for Go, Ruby on Rails and Node.js. Every other runtime shows
+  the plain app icon and its name. NOTICE says that product names and logos
+  are trademarks of their owners and that their use implies no endorsement.
 
 ### Fixed
 
