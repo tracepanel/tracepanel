@@ -432,7 +432,8 @@ function FollowToggle({ follow, onFollow }: { follow: boolean; onFollow: (value:
         }}
       />
       <span className="toggle-track" aria-hidden="true" />
-      Follow new
+      {/* In a narrow list's toolbar row, the switch alone: its name stays for screen readers and in the title. */}
+      <span className="@max-[21rem]/brand:sr-only">Follow new</span>
     </label>
   );
 }
@@ -453,16 +454,35 @@ function ListControls({
     <>
       <span className="list-count">{count}</span>
       <span className="ml-auto flex shrink-0 items-center gap-1">
-        <FollowToggle follow={follow} onFollow={onFollow} />
-        <ProfileToggle source={source} />
-        <ClearButton onClear={onClear} />
+        <ListToggles follow={follow} onFollow={onFollow} onClear={onClear} />
       </span>
     </>
   );
 }
 
+/** Follow new, Profile and Clear: one tight group wherever the list's controls sit. */
+function ListToggles({
+  follow,
+  onFollow,
+  onClear,
+  clearLabel,
+}: {
+  follow: boolean;
+  onFollow: (value: boolean) => void;
+  onClear: () => void;
+  clearLabel?: string | undefined;
+}) {
+  return (
+    <>
+      <FollowToggle follow={follow} onFollow={onFollow} />
+      <ProfileToggle source={source} />
+      <ClearButton onClear={onClear} label={clearLabel} />
+    </>
+  );
+}
+
 /** Clear, where the requests are listed, as in the browser's Network tab. */
-function ClearButton({ onClear, label = "Clear requests" }: { onClear: () => void; label?: string }) {
+function ClearButton({ onClear, label = "Clear requests" }: { onClear: () => void; label?: string | undefined }) {
   return (
     <Hint title={label} detail="Empties this tab's list. The requests stay in the console.">
       <button type="button" className="icon-button" aria-label={label} onClick={onClear}>
@@ -1013,14 +1033,18 @@ function PanelApp({ route }: { route: Route }) {
       <div className={split ? "panel-split" : "panel-main"} data-brand={toolbarInTrace ? "" : undefined} ref={splitRef}>
         {/* Over the list, level with the trace's tabs: one toolbar row across the dock, as in browser devtools. */}
         {toolbarInTrace ? (
-          <div className="panel-brand">
-            <Logo className="shrink-0 gap-1.5 text-md [&_svg]:size-5" />
+          // A container (`brand`): as the list narrows, the wordmark goes first, then Follow new's name, then the user's.
+          <div className="panel-brand @container/brand">
+            <Logo className="shrink-0 gap-1.5 text-md @max-[26rem]/brand:[&>span]:hidden [&_svg]:size-5" />
             {switchUser}
             {/* No count here: the rows are right below; Clear's tooltip says how many. */}
-            <span className="ml-auto flex shrink-0 items-center gap-2">
-              <FollowToggle follow={follow} onFollow={onFollow} />
-              <ProfileToggle source={source} />
-              <ClearButton onClear={() => setClearing(true)} label={`Clear ${requestCount}`} />
+            <span className="ml-auto flex shrink-0 items-center gap-1">
+              <ListToggles
+                follow={follow}
+                onFollow={onFollow}
+                onClear={() => setClearing(true)}
+                clearLabel={`Clear ${requestCount}`}
+              />
             </span>
           </div>
         ) : null}

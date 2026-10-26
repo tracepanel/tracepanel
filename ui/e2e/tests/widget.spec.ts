@@ -1,6 +1,6 @@
 // The widget on an app's page: the pill's states, the panel it opens, and the tab's list.
 import { readFileSync } from "node:fs";
-import type { BrowserContext, Page } from "@playwright/test";
+import type { BrowserContext, Locator, Page } from "@playwright/test";
 import { CONSOLE } from "../agent.ts";
 import { type Call, OTHER_API, openApp, panel, pill, traceId } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
@@ -19,6 +19,15 @@ async function profiles(page: Page, { memory }: { memory: boolean }): Promise<vo
     // biome-ignore lint/style/useNamingConvention: wire format.
     route.fulfill({ json: { explain: false, users: false, profile: true, profile_memory: memory, request: true } }),
   );
+}
+
+/** The hint `control` opens on hover: the pointer leaves first, as a hint opens again only once it comes back. */
+async function expectHint(page: Page, control: Locator, text: string): Promise<void> {
+  await expect(async () => {
+    await page.mouse.move(0, 0);
+    await control.hover();
+    await expect(panel(page).getByRole("tooltip")).toContainText(text, { timeout: 1000 });
+  }).toPass();
 }
 
 async function profileCookie(context: BrowserContext): Promise<string | undefined> {
@@ -290,7 +299,7 @@ test("docked at the bottom, the panel leaves room to scroll to the page's end, e
   expect(end && top && end.y + end.height <= top.y).toBe(true);
 });
 
-test("Profile sits with Follow new and Clear: Off or Time, when the app doesn't profile memory", async ({
+test("Profile sits with Follow new and Clear: one button, Off and Time, when the app doesn't profile memory", async ({
   page,
   context,
 }) => {
@@ -303,31 +312,30 @@ test("Profile sits with Follow new and Clear: Off or Time, when the app doesn't 
     .filter({ has: panel(page).getByText("Follow new") })
     .filter({ has: panel(page).getByRole("button", { name: /^Clear/ }) })
     .last();
-  const modes = controls.getByRole("radiogroup", { name: "Profile new requests" });
+  const button = controls.getByRole("button", { name: /^Profiling/ });
 
-  await expect(modes.getByRole("radio")).toHaveCount(2);
-  await expect(modes.getByRole("radio", { name: "Profiling off" })).toHaveAttribute("aria-checked", "true");
+  await expect(button).toHaveCount(1);
+  await expect(button).toHaveAccessibleName("Profiling off");
   expect(await profileCookie(context)).toBeUndefined();
 
-  await modes.getByRole("radio", { name: "Profile time" }).click();
+  // A hint says the mode and what a click does.
+  await expectHint(page, button, "Profiling off · click: profile time");
 
-  await expect(modes.getByRole("radio", { name: "Profile time" })).toHaveAttribute("aria-checked", "true");
-  await expect(modes.getByRole("radio", { name: "Profiling off" })).toHaveAttribute("aria-checked", "false");
+  await button.click();
+
+  await expect(button).toHaveAccessibleName("Profiling time");
+  await expect(button.getByTestId("profile-memory-dot")).toHaveCount(0);
   expect(await profileCookie(context)).toBe("1");
 
-  // After a click, a hint opens once the pointer comes back to its button.
-  await panel(page).getByText("Follow new").hover();
-  await modes.getByRole("radio", { name: "Profile time" }).hover();
+  await expectHint(page, button, "Profiling time · click: off");
 
-  await expect(panel(page).getByRole("tooltip")).toContainText("Record where the time of each request");
+  await button.click();
 
-  await modes.getByRole("radio", { name: "Profiling off" }).click();
-
-  await expect(modes.getByRole("radio", { name: "Profiling off" })).toHaveAttribute("aria-checked", "true");
+  await expect(button).toHaveAccessibleName("Profiling off");
   expect(await profileCookie(context)).toBeUndefined();
 });
 
-test("Profile, when the app profiles memory, has a third way: the cookie says each, and arrows move it", async ({
+test("Profile, when the app profiles memory, cycles Off, Time, Time and memory: the cookie says each, keys too", async ({
   page,
   context,
 }) => {
@@ -335,46 +343,100 @@ test("Profile, when the app profiles memory, has a third way: the cookie says ea
   await openApp(page, { posts: await posts() });
   await page.getByRole("button", { name: "Load posts" }).click();
   await pill(page).click();
-  const modes = panel(page).getByRole("radiogroup", { name: "Profile new requests" });
-  const off = modes.getByRole("radio", { name: "Profiling off" });
-  const time = modes.getByRole("radio", { name: "Profile time", exact: true });
-  const memory = modes.getByRole("radio", { name: "Profile time and memory (slower)" });
+  const button = panel(page).getByRole("button", { name: /^Profiling/ });
 
-  await expect(modes.getByRole("radio")).toHaveCount(3);
+  await expect(button).toHaveAccessibleName("Profiling off");
 
-  await memory.click();
+  await button.click();
 
-  await expect(memory).toHaveAttribute("aria-checked", "true");
-  expect(await profileCookie(context)).toBe("memory");
-
-  await time.click();
-
-  await expect(time).toHaveAttribute("aria-checked", "true");
-  await expect(memory).toHaveAttribute("aria-checked", "false");
+  await expect(button).toHaveAccessibleName("Profiling time");
   expect(await profileCookie(context)).toBe("1");
 
-  // A radio group: one stop for Tab (the chosen way), the arrows move along it and round.
-  await expect(time).toHaveAttribute("tabindex", "0");
-  await expect(off).toHaveAttribute("tabindex", "-1");
+  await expectHint(page, button, "Profiling time · click: also memory (slower)");
 
-  await time.focus();
-  await page.keyboard.press("ArrowRight");
+  await button.click();
 
-  await expect(memory).toBeFocused();
-  await expect(memory).toHaveAttribute("aria-checked", "true");
+  await expect(button).toHaveAccessibleName("Profiling time and memory");
+  await expect(button.getByTestId("profile-memory-dot")).toBeVisible();
   expect(await profileCookie(context)).toBe("memory");
 
-  await page.keyboard.press("ArrowRight");
+  await expectHint(page, button, "Profiling time and memory · click: off");
 
-  await expect(off).toBeFocused();
-  await expect(off).toHaveAttribute("aria-checked", "true");
+  await button.click();
+
+  await expect(button).toHaveAccessibleName("Profiling off");
   expect(await profileCookie(context)).toBeUndefined();
 
-  await page.keyboard.press("ArrowLeft");
+  // Enter and Space cycle it as a click does, the focus stays, and the change is said aloud.
+  await button.focus();
+  await page.keyboard.press("Enter");
 
-  await expect(memory).toHaveAttribute("aria-checked", "true");
+  await expect(button).toBeFocused();
+  await expect(button).toHaveAccessibleName("Profiling time");
+  expect(await profileCookie(context)).toBe("1");
+  await expect(panel(page).locator("[aria-live=polite]").filter({ hasText: "Profiling time" })).toHaveCount(1);
+
+  await page.keyboard.press("Space");
+
+  await expect(button).toBeFocused();
+  await expect(button).toHaveAccessibleName("Profiling time and memory");
   expect(await profileCookie(context)).toBe("memory");
 });
+
+for (const width of [220, 300, 360, 480]) {
+  test(`docked at the bottom with a list ${width} px wide, its toolbar row holds the user, Follow new, Profile and Clear in one line`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.addInitScript((stored) => localStorage.setItem("tracepanel:list-width", stored), String(width));
+    await page.route("**/api/capabilities", (route) =>
+      // biome-ignore lint/style/useNamingConvention: wire format.
+      route.fulfill({ json: { explain: false, users: true, profile: true, profile_memory: true, request: true } }),
+    );
+    await page.route("**/api/users/me", (route) =>
+      route.fulfill({
+        json: { user: { id: "7", username: "a-rather-long-username-for-a-toolbar", name: "", email: "" } },
+      }),
+    );
+    await openApp(page, { posts: await posts() });
+    await page.getByRole("button", { name: "Load posts" }).click();
+    await pill(page).click();
+    const row = panel(page).locator(".panel-brand");
+    const user = row.getByRole("button", { name: "Acting as a-rather-long-username-for-a-toolbar" });
+    const controls = [
+      user,
+      row.locator("label").filter({ hasText: "Follow new" }),
+      row.getByRole("button", { name: /^Profiling/ }),
+      row.getByRole("button", { name: /^Clear/ }),
+    ];
+
+    await expect(user).toBeVisible();
+    // The name is the hint's: the button stays its size.
+    await expect(user).not.toContainText("a-rather-long");
+    await expect(user.getByTestId("user-set-dot")).toBeVisible();
+
+    const box = await row.boundingBox();
+    const boxes = await Promise.all(controls.map((control) => control.boundingBox()));
+    const middles = boxes.map((each) => (each ? each.y + each.height / 2 : Number.NaN));
+
+    expect(box && boxes.every((each) => each && each.x >= box.x && each.x + each.width <= box.x + box.width)).toBe(
+      true,
+    );
+    // One line, side by side: centred alike (within a pixel or so), none over the one before.
+    expect(Math.max(...middles) - Math.min(...middles)).toBeLessThanOrEqual(2);
+    expect(
+      boxes.every((each, at) => {
+        const before = boxes[at - 1];
+        return (
+          at === 0 || (each !== null && before !== null && before !== undefined && before.x + before.width <= each.x)
+        );
+      }),
+    ).toBe(true);
+    expect(await row.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+
+    await expectHint(page, user, "Acting as a-rather-long-username-for-a-toolbar · click to change");
+  });
+}
 
 test("Console opens the request in the full console, and its hint says so", async ({ page }) => {
   const call = await posts();

@@ -22,12 +22,21 @@
   with its files (Copy, Post-process, Clear).
 - Taskiq is listed among the task systems: `task.system` `taskiq` reads
   Taskiq in the console.
-- The panel's Profile toggle can profile memory too, and shows its three
-  ways at a glance: Off, Time and Time and memory (slower), side by side as
-  icons, the chosen one lit. It sets the `tracepanel_profile` cookie to `1`
-  or `memory`, and the arrow keys move along it. Time and memory is there
+- The panel's Profile button can profile memory too. One flame the size of
+  the toolbar's other icons: muted while off, orange while profiling time,
+  with a dot at its corner for time and memory (slower). A click, Enter or
+  Space moves to the next and round, its hint says the mode and what a click
+  does, and a screen reader hears each change. It sets the
+  `tracepanel_profile` cookie to `1` or `memory`. Time and memory is there
   only when the app says `profile_memory`, a new field of `api/capabilities`
-  (false for an app that doesn't say it). Else the toggle is Off and Time.
+  (false for an app that doesn't say it). Else the button is Off and Time.
+- Set user in the panel is an outlined button of one size. A logged-in user
+  lights its icon with a dot, and their name is in its hint (`Acting as
+  alice · click to change`), so a long name no longer stretches the toolbar.
+  Docked at the bottom, the list's toolbar row keeps Follow new, Profile and
+  Clear in one tight group on the right. As the list narrows, the logo drops
+  its wordmark, then Follow new its name, then Set user its label, and the
+  row never wraps.
 - Profiles show memory and GC pauses. A profile can say what the trace's
   code allocated (`memory`: its peak, what it kept, where the memory was)
   and the garbage collector's runs (`gc`: how many, their pauses and when).

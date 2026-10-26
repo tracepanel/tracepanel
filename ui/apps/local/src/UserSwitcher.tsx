@@ -1,4 +1,4 @@
-import type { DataSource, User } from "@tracepanel/ui";
+import { type DataSource, Hint, type User } from "@tracepanel/ui";
 import { Button } from "@tracepanel/ui/components/ui/button";
 import {
   Command,
@@ -11,16 +11,16 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@tracepanel/ui/components/ui/popover";
 import { useCloseOnBlur } from "@tracepanel/ui/hooks/useCloseOnBlur";
 import { cn } from "@tracepanel/ui/lib/utils";
-import { ArrowLeftRightIcon, CheckIcon, LogOutIcon, UserRoundIcon } from "lucide-react";
+import { CheckIcon, LogOutIcon, UserRoundIcon } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useCapability } from "./hooks";
 
 /**
- * A narrow panel (docked right) shows its bar's actions as icons only: the outlined ones (the user, Console) then
- * look like the plain icon buttons beside them.
+ * A narrow panel (docked right) shows its bar's actions as icons only: the outlined user button then looks like the
+ * plain icon buttons beside it. So does a narrow list's toolbar row (the `brand` container) when docked at the bottom.
  */
 const NARROW_ICON =
-  "max-[560px]:w-[1.875rem] max-[560px]:border-transparent max-[560px]:bg-transparent max-[560px]:px-0 max-[560px]:hover:bg-[var(--dt-hover)]";
+  "max-[560px]:w-[1.875rem] max-[560px]:border-transparent max-[560px]:bg-transparent max-[560px]:px-0 max-[560px]:hover:bg-[var(--dt-hover)] @max-[17rem]/brand:w-[1.875rem] @max-[17rem]/brand:border-transparent @max-[17rem]/brand:bg-transparent @max-[17rem]/brand:px-0 @max-[17rem]/brand:[&>.bar-label]:hidden";
 
 function initials(user: User): string {
   const words = (user.name ?? user.username).split(/[\s._@-]+/).filter(Boolean);
@@ -50,6 +50,52 @@ function Role({ user }: { user: User }) {
 /** The switcher where the app behind the console offers one (Django); nothing elsewhere, and nobody asked. */
 export function SwitchUser(props: { source: DataSource; onSwitched: () => void }) {
   return useCapability(props.source, "users") ? <UserSwitcher {...props} /> : null;
+}
+
+// What the user button says: its name and hint, nobody logged in or someone.
+const NOBODY = {
+  label: "Set user",
+  title: "Set user",
+  detail: "Logs this browser in as any user, without a password. Development only.",
+};
+function acting(user: User): typeof NOBODY {
+  const label = `Acting as ${user.username}`;
+  return { label, title: `${label} · click to change`, detail: "Development only." };
+}
+
+/** The popover's button, one size whoever is logged in: a name would stretch the toolbar, so it is the hint's. */
+function UserTrigger({ current }: { current: User | null }) {
+  const says = current ? acting(current) : NOBODY;
+  return (
+    <Hint title={says.title} detail={says.detail}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          size="sm"
+          aria-label={says.label}
+          className={cn("h-7.5 shrink-0 gap-1.5 px-2 text-sm font-normal shadow-none", NARROW_ICON)}
+        >
+          <UserIcon set={current !== null} />
+          <span className="bar-label">Set user</span>
+        </Button>
+      </PopoverTrigger>
+    </Hint>
+  );
+}
+
+/** The user icon: muted with nobody logged in, lit with a dot at its corner while someone is. */
+function UserIcon({ set }: { set: boolean }) {
+  return (
+    <span className="relative grid place-items-center">
+      <UserRoundIcon className={set ? "text-brand" : "text-muted-foreground"} />
+      {set ? (
+        <span
+          data-testid="user-set-dot"
+          className="absolute -right-0.5 -bottom-0.5 size-1.5 rounded-full bg-brand ring-2 ring-background"
+        />
+      ) : null}
+    </span>
+  );
 }
 
 function UserSwitcher({ source, onSwitched }: { source: DataSource; onSwitched: () => void }) {
@@ -96,27 +142,7 @@ function UserSwitcher({ source, onSwitched }: { source: DataSource; onSwitched: 
         setOpen(next);
       }}
     >
-      <PopoverTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          className={cn("h-7 max-w-44 gap-1.5 px-2 text-sm font-normal shadow-none", NARROW_ICON)}
-          title={current ? "Change user (development only)" : "Set user (development only)"}
-        >
-          {current ? (
-            <>
-              <UserRoundIcon className="text-muted-foreground" />
-              <span className="bar-label truncate">{current.username}</span>
-              <ArrowLeftRightIcon className="bar-label text-muted-foreground" />
-            </>
-          ) : (
-            <>
-              <UserRoundIcon className="text-muted-foreground" />
-              <span className="bar-label">Set user</span>
-            </>
-          )}
-        </Button>
-      </PopoverTrigger>
+      <UserTrigger current={current} />
       <PopoverContent
         align="end"
         collisionPadding={8}
