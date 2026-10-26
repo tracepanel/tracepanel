@@ -12,11 +12,15 @@ export function groupNoun(span: Span | undefined, count = 2): string {
   return count === 1 ? nouns.one : nouns.many;
 }
 
-const SENDS = { one: "send", many: "sends" };
+/** What a kind's spans are called that isn't a system's calls: a signal's sends, a migration's operations. */
+const OWN_NOUNS: Record<string, { one: string; many: string }> = {
+  signal: { one: "send", many: "sends" },
+  "migration.operation": { one: "operation", many: "operations" },
+};
 
-/** A signal's sends, or a system's calls. */
+/** A signal's sends, a migration's operations, or a system's calls. */
 function nounsOf(span: Span | undefined): { one: string; many: string } {
-  return span?.kind === "signal" ? SENDS : systemNouns(span);
+  return (span && OWN_NOUNS[span.kind]) ?? systemNouns(span);
 }
 
 function systemNouns(span: Span | undefined): System {
@@ -48,12 +52,16 @@ function endpointTemplate(name: string): string {
   return slash < 0 ? name : `${method} ${target.slice(0, slash)}${pathTemplate(target.slice(slash))}`;
 }
 
+/** The word a kind's names start with that its badge says already: `storage exists…`, `migrate shop 0012…`. */
+const BADGE_WORDS: Record<string, RegExp> = { storage: /^storage /, migration: /^migrate / };
+
 /**
  * A call as its row says it, after its kind's badge: a storage call without the word its badge says
- * (`exists avatars/1.png`), any other by its name.
+ * (`exists avatars/1.png`), a migration applied too (`shop 0012_add_sku`, `unapply` kept), any other by its name.
  */
 export function callText(span: Span): string {
-  return span.kind === "storage" ? span.name.replace(/^storage /, "") : span.name;
+  const word = BADGE_WORDS[span.kind];
+  return word ? span.name.replace(word, "") : span.name;
 }
 
 /**

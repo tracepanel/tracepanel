@@ -1,6 +1,8 @@
+import { dayTime } from "./format";
 import { LogLevel } from "./LogTable";
 import { plural } from "./lib/plural";
 import { cn } from "./lib/utils";
+import { type TraceLinks, traceLinkProps } from "./links";
 import type { App } from "./types";
 
 /** One thing wrong with the app: a check that failed, an app's migrations not applied or not made. */
@@ -13,6 +15,8 @@ export interface AppWarning {
   hint: string | null;
   /** What it is about: a model, a field, an app. */
   object: string | null;
+  /** The trace it was last made true by: the latest migrate the agent had, for migrations not applied. */
+  since?: { trace: string; received: number } | undefined;
 }
 
 // The most serious first, as Django's `check` lists them; a level it doesn't know with the debug ones.
@@ -31,6 +35,7 @@ function migrationWarnings(app: App): AppWarning[] {
       message: `${plural(each.names.length, "unapplied migration", "unapplied migrations")}: ${each.names.join(", ")}`,
       hint: "Run manage.py migrate to apply them: the app may not work until then.",
       object: each.app,
+      since: app.migrate ?? undefined,
     })),
     ...(migrations.changes ?? []).map((each) => ({
       key: `changes:${each.app}`,
@@ -72,7 +77,7 @@ const ACCENT: Record<string, string> = {
   warning: "shadow-[inset_3px_0_0_var(--color-warn)]",
 };
 
-function WarningRow({ warning }: { warning: AppWarning }) {
+function WarningRow({ warning, links }: { warning: AppWarning; links: TraceLinks | undefined }) {
   return (
     <li className={cn("grid gap-1 border-t px-3 py-2 first:border-t-0", ACCENT[warning.level])}>
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -84,12 +89,37 @@ function WarningRow({ warning }: { warning: AppWarning }) {
       </div>
       <p className="text-sm [overflow-wrap:anywhere]">{warning.message}</p>
       {warning.hint ? <p className="text-xs text-muted-foreground [overflow-wrap:anywhere]">{warning.hint}</p> : null}
+      {warning.since ? <Since since={warning.since} links={links} /> : null}
     </li>
   );
 }
 
+/** The migrate the list is as of: its trace, where the host links traces. */
+function Since({ since, links }: { since: NonNullable<AppWarning["since"]>; links: TraceLinks | undefined }) {
+  const label = `As of the last migrate, ${dayTime(since.received)}`;
+  const link = traceLinkProps(links, since.trace);
+  return (
+    <p className="text-xs text-muted-foreground">
+      {link ? (
+        <a {...link} className="underline underline-offset-2 hover:text-foreground">
+          {label}
+        </a>
+      ) : (
+        label
+      )}
+    </p>
+  );
+}
+
 /** What is wrong with the app, above its settings: nothing at all when nothing is. */
-export function AppWarnings({ warnings }: { warnings: readonly AppWarning[] }) {
+export function AppWarnings({
+  warnings,
+  links,
+}: {
+  warnings: readonly AppWarning[];
+  /** Where the trace a warning is as of leads. */
+  links?: TraceLinks | undefined;
+}) {
   if (!warnings.length) return null;
   return (
     <section className="grid gap-2" aria-label="Warnings">
@@ -101,7 +131,7 @@ export function AppWarnings({ warnings }: { warnings: readonly AppWarning[] }) {
       </h2>
       <ul className="m-0 list-none overflow-hidden rounded-lg border bg-card p-0">
         {warnings.map((warning) => (
-          <WarningRow key={warning.key} warning={warning} />
+          <WarningRow key={warning.key} warning={warning} links={links} />
         ))}
       </ul>
     </section>

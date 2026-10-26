@@ -19,8 +19,9 @@ are ULIDs.
   (`kind`). A task is a trace of its own, with a `link` to the span that
   enqueued it.
 - **Span**: a unit of work inside a trace. `kind` is one of `http`, `sql`,
-  `cache`, `storage`, `http.client`, `template`, `signal`, `task.enqueue`,
-  `task.run`, `command` and `function`. `attrs` are open and namespaced:
+  `cache`, `storage`, `migration`, `migration.operation`, `http.client`,
+  `template`, `signal`, `task.enqueue`, `task.run`, `command` and
+  `function`. `attrs` are open and namespaced:
   `http.route`, `db.fingerprint`, `cache.hit`, `code.origin`.
 - **Signal**: a send with receivers (a Django signal), a `signal` span with
   `signal.name`, `signal.sender` and `signal.receivers`. Each receiver is a
@@ -45,6 +46,13 @@ are ULIDs.
   span was made for that call: its issues are the layer's, as a Redis
   command's under a cache call are, and the services map draws the layer as
   the AWS service it reached.
+- **Migration**: a migration a migrate command applied or unapplied, a
+  `migration` span with `migration.app`, `migration.name`,
+  `migration.direction` and `migration.fake`. Each operation it ran is a
+  `migration.operation` span inside, with `migration.operation`,
+  `migration.rows` and `migration.risk` when it locks or rewrites a table. A
+  `function` span with `migration.app` or `migration.operation`, as SDKs
+  before the kinds send them, is made one when it arrives.
 - **Log**: a log record, bound to a span.
 - **Error**: an exception with its frames, bound to a span.
 - **Issue**: a problem the agent finds (`n+1`, `duplicates`, `slow-sql`,

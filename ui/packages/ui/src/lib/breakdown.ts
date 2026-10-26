@@ -65,6 +65,9 @@ const BY_KIND: Record<string, Category> = {
   task: "code",
   "task.run": "code",
   command: "code",
+  // migrate's migrations and their operations: the schema editor's work and RunPython's code, their SQL aside.
+  migration: "code",
+  "migration.operation": "code",
 };
 
 /** A cache's Redis commands are the cache's time: what the app asked for, on whatever backend serves it. */

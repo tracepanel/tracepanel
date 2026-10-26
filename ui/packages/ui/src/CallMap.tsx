@@ -28,6 +28,7 @@ import { isLoud, overlaps, type Slice, type TimeRange } from "./lib/slice";
 import { CALL_KINDS, DATASTORES, MESSAGING, RPC } from "./lib/systems";
 import { type Piece, quietPieces, timed, waitName, waitPlace } from "./lib/waiting";
 import { type TraceLinks, traceLinkProps } from "./links";
+import { MigrationNotes } from "./Migrations";
 import { type NameValue, NameValues, RowsLookContext } from "./NameValues";
 import { profileOver, RowFlame } from "./ProfileHint";
 import { PropTable } from "./PropTable";
@@ -241,6 +242,7 @@ export const FILTERS = [
   { id: "http", label: "HTTP calls", kinds: ["http.client"] },
   { id: "rpc", label: "RPC", kinds: [...RPC] },
   { id: "storage", label: "Storage", kinds: ["storage"] },
+  { id: "migration", label: "Migrations", kinds: ["migration", "migration.operation"] },
   { id: "signal", label: "Signals", kinds: ["signal"] },
   { id: "template", label: "Templates", kinds: ["template"] },
   { id: "task", label: "Tasks", kinds: ["task.enqueue", "task"] },
@@ -927,6 +929,7 @@ function SpanRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps
           <AliasChip value={aliasBeside(span)} />
           <FromTemplate span={span} parent={parent} />
           <SignalNotes span={span} parent={parent} under={childSpans(node)} />
+          <MigrationNotes span={span} />
           <HiddenLogs count={ctx.hiddenLogs.get(span.id)} onShow={ctx.onShowLogs} />
           {issue ? <IssueChip kind={issue} className={ISSUE_CHIP_SHRINKS} /> : null}
         </span>

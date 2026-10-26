@@ -208,6 +208,7 @@ const ISSUE_LABELS: Record<string, string> = {
   "queue-wait": "Queue wait",
   "blocking-call": "Blocking call",
   "large-result": "Large result",
+  "migration-risk": "Migration risk",
   error: "Error",
 };
 
@@ -273,6 +274,7 @@ const ISSUE: QuickFilter = {
     { label: "Queue wait", terms: [f("has", ":", "queue-wait")] },
     { label: "Blocking call", terms: [f("has", ":", "blocking-call")] },
     { label: "Large result", terms: [f("has", ":", "large-result")] },
+    { label: "Migration risk", terms: [f("has", ":", "migration-risk")] },
     { label: "Error", terms: [f("has", ":", "error")] },
   ],
 };
@@ -392,6 +394,7 @@ const QUICK: Record<Exclude<Section, CallsSection>, Control[]> = {
         "queue-wait",
         "blocking-call",
         "large-result",
+        "migration-risk",
       ],
       format: (value) => ISSUE_LABELS[value] ?? value,
       display: (kind) => <IssueChip kind={kind as IssueKind} />,
@@ -512,6 +515,7 @@ const VALUES: Record<string, string[]> = {
     "queue-wait",
     "blocking-call",
     "large-result",
+    "migration-risk",
     "error",
     "issues",
     "logs",
@@ -536,6 +540,7 @@ const VALUES: Record<string, string[]> = {
     "queue-wait",
     "blocking-call",
     "large-result",
+    "migration-risk",
     "error",
   ],
   level: ["debug", "info", "warning", "error", "critical"],

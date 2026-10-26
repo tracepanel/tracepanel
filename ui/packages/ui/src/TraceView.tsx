@@ -122,11 +122,11 @@ function hasTab(trace: Trace, tab: TabId | undefined, app?: App | null): tab is 
 }
 
 /** The App tab's content: the app's settings and versions, when it said them. */
-function AppPane({ open, app }: { open: boolean; app: App | null | undefined }) {
+function AppPane({ open, app, links }: { open: boolean; app: App | null | undefined; links: TraceLinks | undefined }) {
   if (!open || !appSaidAnything(app)) return null;
   return (
     <div className="@container p-4">
-      <AppDetails app={app} />
+      <AppDetails app={app} links={links} />
     </div>
   );
 }
@@ -420,7 +420,7 @@ export function TraceView({
   const panel = (
     <div role="tabpanel" className="dt-tabpanel">
       <RequestPane open={active === "request"} trace={trace} related={related} links={links} panel={compact} />
-      <AppPane open={active === "app"} app={app} />
+      <AppPane open={active === "app"} app={app} links={links} />
       <TreePane
         open={active === "tree"}
         onSelect={openAt}
