@@ -13,12 +13,27 @@ async function broken(): Promise<Call> {
   return { status: 500, trace: await traceId("GET /api/error"), queries: 0, totalMs: 11 };
 }
 
-/** The app profiles on request; `memory`: what the code allocated too. */
-async function profiles(page: Page, { memory }: { memory: boolean }): Promise<void> {
-  await page.route("**/api/capabilities", (route) =>
+/**
+ * The app profiles on request; `memory`: what the code allocated too. `all`, `memoryAll`: its settings profile every
+ * request (`profile`), and memory with every profile (`profile_memory`).
+ */
+async function profiles(
+  page: Page,
+  { memory, all = false, memoryAll = false }: { memory: boolean; all?: boolean; memoryAll?: boolean },
+): Promise<void> {
+  const json = {
+    explain: false,
+    users: false,
+    profile: true,
     // biome-ignore lint/style/useNamingConvention: wire format.
-    route.fulfill({ json: { explain: false, users: false, profile: true, profile_memory: memory, request: true } }),
-  );
+    profile_memory: memory,
+    // biome-ignore lint/style/useNamingConvention: wire format.
+    profile_all: all,
+    // biome-ignore lint/style/useNamingConvention: wire format.
+    profile_memory_all: memoryAll,
+    request: true,
+  };
+  await page.route("**/api/capabilities", (route) => route.fulfill({ json }));
 }
 
 /** The hint `control` opens on hover: the pointer leaves first, as a hint opens again only once it comes back. */
@@ -381,6 +396,69 @@ test("Profile, when the app profiles memory, cycles Off, Time, Time and memory: 
   await expect(button).toBeFocused();
   await expect(button).toHaveAccessibleName("Profiling time and memory");
   expect(await profileCookie(context)).toBe("memory");
+});
+
+test("Profile, when the app's settings profile every request, is lit with no cookie and offers memory on top only", async ({
+  page,
+  context,
+}) => {
+  await profiles(page, { memory: true, all: true });
+  await openApp(page, { posts: await posts() });
+  await page.getByRole("button", { name: "Load posts" }).click();
+  await pill(page).click();
+  const button = panel(page).getByRole("button", { name: /^Profiling/ });
+
+  await expect(button).toHaveAccessibleName("Profiling time");
+  await expect(button).toHaveClass(/text-orange-500/);
+  await expect(button.getByTestId("profile-memory-dot")).toHaveCount(0);
+  expect(await profileCookie(context)).toBeUndefined();
+
+  await expectHint(page, button, "Profiling every request (the app's profile setting) · click: also memory (slower)");
+
+  await button.click();
+
+  await expect(button).toHaveAccessibleName("Profiling time and memory");
+  await expect(button.getByTestId("profile-memory-dot")).toBeVisible();
+  expect(await profileCookie(context)).toBe("memory");
+
+  await expectHint(page, button, "Profiling time and memory · click: time only, as the app's setting");
+
+  // Never off: back to what the settings profile, with no cookie.
+  await button.click();
+
+  await expect(button).toHaveAccessibleName("Profiling time");
+  await expect(button).toHaveClass(/text-orange-500/);
+  expect(await profileCookie(context)).toBeUndefined();
+});
+
+test("Profile, when the app's settings profile every request with memory, is lit with its dot and offers nothing", async ({
+  page,
+  context,
+}) => {
+  await profiles(page, { memory: true, all: true, memoryAll: true });
+  await openApp(page, { posts: await posts() });
+  await page.getByRole("button", { name: "Load posts" }).click();
+  await pill(page).click();
+  const button = panel(page).getByRole("button", { name: /^Profiling/ });
+
+  await expect(button).toHaveAccessibleName("Profiling time and memory");
+  await expect(button).toHaveAttribute("aria-disabled", "true");
+  await expect(button).toHaveClass(/text-orange-500/);
+  await expect(button.getByTestId("profile-memory-dot")).toBeVisible();
+
+  await expectHint(
+    page,
+    button,
+    "Profiling every request, time and memory (the app's profile and profile_memory settings)",
+  );
+  await expect(panel(page).getByRole("tooltip")).toContainText("To profile less, change the app's settings.");
+  await expect(panel(page).getByRole("tooltip")).not.toContainText("click:");
+
+  // Playwright waits for an aria-disabled button to be enabled: a person's click, forced.
+  await button.click({ force: true });
+
+  await expect(button).toHaveAccessibleName("Profiling time and memory");
+  expect(await profileCookie(context)).toBeUndefined();
 });
 
 for (const width of [220, 300, 360, 480]) {

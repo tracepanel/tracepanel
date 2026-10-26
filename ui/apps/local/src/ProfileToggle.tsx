@@ -2,7 +2,7 @@ import { type DataSource, Hint } from "@tracepanel/ui";
 import { cn } from "@tracepanel/ui/lib/utils";
 import { FlameIcon } from "lucide-react";
 import { type MouseEvent, useEffect, useState } from "react";
-import { useCapability } from "./hooks";
+import { useCapabilities } from "./hooks";
 
 // While it is set, the app profiles every request this browser makes; a session cookie, so closing the browser ends it.
 const COOKIE = "tracepanel_profile";
@@ -38,14 +38,37 @@ const NAMES: Record<Mode, string> = {
 };
 const CLICKS: Record<Mode, string> = { off: "off", time: "profile time", memory: "also memory (slower)" };
 
+// What the app's settings profile with no cookie (`profile`, `profile_memory`), said in place of the mode's name.
+const FORCED: Record<Exclude<Mode, "off">, string> = {
+  time: "Profiling every request (the app's profile setting)",
+  memory: "Profiling every request, time and memory (the app's profile and profile_memory settings)",
+};
+const BACK = "time only, as the app's setting";
+const SETTINGS = "To profile less, change the app's settings.";
+
+/** What this browser can choose: the cookie only adds to what the app's settings profile, never goes below it. */
+interface Choice {
+  modes: readonly Mode[];
+  floor: Mode;
+}
+
+function choiceOf(memory: boolean, all: boolean, memoryAll: boolean): Choice {
+  // Memory with every profile: a profiled request is never the time only.
+  const modes: Mode[] = memoryAll ? ["off", "memory"] : memory ? ["off", "time", "memory"] : ["off", "time"];
+  const floor: Mode = all ? (memoryAll ? "memory" : "time") : "off";
+  return { modes: modes.filter((mode) => mode === floor || modes.indexOf(mode) > modes.indexOf(floor)), floor };
+}
+
 /**
  * Profiling on or off for this browser: a cookie on the app's own origin (the panel is on it) that the app sees on
- * each request. Shown only when a connected app profiles on request; memory too only when it can.
+ * each request. Shown only when a connected app profiles on request; memory too only when it can. Lit with no cookie
+ * when the app's settings profile every request.
  */
 export function ProfileToggle({ source }: { source: DataSource }) {
-  const time = useCapability(source, "profile");
-  const memory = useCapability(source, "profile_memory");
-  return time ? <ProfileButton modes={memory ? ["off", "time", "memory"] : ["off", "time"]} /> : null;
+  const capabilities = useCapabilities(source);
+  if (!capabilities?.profile) return null;
+  const { profile_memory: memory, profile_all: all, profile_memory_all: memoryAll } = capabilities;
+  return <ProfileButton choice={choiceOf(memory, all, memoryAll)} />;
 }
 
 /** The mode this browser profiles in, kept with the cookie wherever it is changed. */
@@ -64,21 +87,28 @@ function useProfiling(): [Mode, (mode: Mode) => void] {
  * memory is profiled too. A click (or Enter, Space) moves to the next mode and round. Its name is the mode it is in,
  * and a change is said aloud, as a screen reader doesn't read a focused button's new name by itself.
  */
-function ProfileButton({ modes }: { modes: readonly Mode[] }) {
+function ProfileButton({ choice: { modes, floor } }: { choice: Choice }) {
   const [stored, choose] = useProfiling();
-  // A memory cookie left from an app that profiles memory: here, with no memory mode, it shows as time.
-  const mode = modes.includes(stored) ? stored : "time";
-  const next = modes[(modes.indexOf(mode) + 1) % modes.length] ?? "off";
+  const mode = shown(stored, modes, floor);
+  const next = modes[(modes.indexOf(mode) + 1) % modes.length] ?? floor;
   const [said, say] = useState("");
+  const fixed = modes.length < 2;
   return (
     <>
-      <Hint title={`${NAMES[mode]} · click: ${CLICKS[next]}`}>
+      <Hint {...hint(mode, fixed ? null : next, floor)}>
         <button
           type="button"
-          className={cn("icon-button relative", mode !== "off" && "text-orange-500 hover:text-orange-500")}
+          className={cn(
+            "icon-button relative",
+            mode !== "off" && "text-orange-500 hover:text-orange-500",
+            fixed && "cursor-default",
+          )}
           aria-label={NAMES[mode]}
+          aria-disabled={fixed || undefined}
           onClick={(event) => {
-            choose(next);
+            if (fixed) return;
+            // The app's settings profile the floor themselves: no cookie for it.
+            choose(next === floor ? "off" : next);
             say(NAMES[next]);
             blurAfterClick(event);
           }}
@@ -91,6 +121,23 @@ function ProfileButton({ modes }: { modes: readonly Mode[] }) {
       </span>
     </>
   );
+}
+
+/** What the hint says: the mode, or the app's setting that profiles it, and what a click does (`next`, if any). */
+function hint(mode: Mode, next: Mode | null, floor: Mode): { title: string; detail?: string } {
+  const forced = floor !== "off";
+  const name = forced && mode === floor ? FORCED[floor] : NAMES[mode];
+  if (!next) return { title: name, detail: SETTINGS };
+  return { title: `${name} · click: ${forced && next === floor ? BACK : CLICKS[next]}` };
+}
+
+/** The mode the button shows: the cookie's, raised to what the app's settings profile, and one this app offers. */
+function shown(stored: Mode, modes: readonly Mode[], floor: Mode): Mode {
+  if (stored === "off") return floor;
+  if (modes.includes(stored)) return stored;
+  // A memory cookie left from an app that profiles memory shows as time where there is no memory mode; a time one,
+  // where every profile has memory, as memory.
+  return modes.includes("time") ? "time" : "memory";
 }
 
 /** The flame, filled while profiling is on, with a dot at its corner while memory is too. */

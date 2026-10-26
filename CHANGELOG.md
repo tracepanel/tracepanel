@@ -4,6 +4,13 @@
 
 ### Changed
 
+- The panel's Profile button is lit when the app's settings profile every
+  request (`profile = true`), with no cookie, and shows the memory dot when
+  they profile memory too (`profile_memory = true`). Its hint names the
+  setting, and a click only adds memory on top, never goes below what the
+  settings profile. When both are set the button offers nothing and its
+  hint says to change the settings. `api/capabilities` answers
+  `profile_all` and `profile_memory_all` from the app's hello.
 - The console, the in-page panel, the pill and its card and a shared
   snapshot file start dark, whatever the system's theme. The theme button
   in the sidebar or the panel's toolbar switches to Light, then to Auto,

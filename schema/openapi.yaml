@@ -1200,7 +1200,7 @@ components:
     Capabilities:
       type: object
       additionalProperties: false
-      required: [explain, users, profile, profile_memory, request, live_tasks]
+      required: [explain, users, profile, profile_memory, profile_all, profile_memory_all, request, live_tasks]
       properties:
         live_tasks:
           type: boolean
@@ -1220,6 +1220,16 @@ components:
             The app profiles what a request's code allocated too when asked for memory (`tracepanel_profile=memory`
             or `X-Tracepanel-Profile: memory`, where `1` profiles the time only): the console offers that as well.
             False for an app that doesn't say it.
+        profile_all:
+          type: boolean
+          description: >-
+            The app's settings profile every request (`profile = true`), with no cookie or header: the console shows
+            profiling as on and offers no way below it. False for an app that doesn't say it.
+        profile_memory_all:
+          type: boolean
+          description: >-
+            The app's settings profile what every profiled request allocated too (`profile_memory = true`). False for
+            an app that doesn't say it.
         request:
           type: boolean
           description: The app records what its requests carry (query, headers, body, cookies, session).
