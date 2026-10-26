@@ -52,6 +52,7 @@ export function DataTable<T>({
   columns,
   stickyHeader = true,
   density = "default",
+  boxed = true,
   children,
 }: {
   table: string;
@@ -60,6 +61,8 @@ export function DataTable<T>({
   stickyHeader?: boolean | undefined;
   /** How tall the rows are: `compact` for a stream of records read many lines at once. */
   density?: Density | undefined;
+  /** In a box of its own, as the console's pages list; off where the list fills a pane (a trace's tabs). */
+  boxed?: boolean | undefined;
   children: (rows: DataRows<T>) => ReactNode;
 }) {
   const { ref, columns: arranged, widths } = useColumnWidths(useColumns(table, columns), MENU_REM);
@@ -70,7 +73,7 @@ export function DataTable<T>({
   };
   return (
     // Clipped, not hidden: a sticky header stays in view as the page scrolls.
-    <div className="overflow-clip rounded-lg border bg-card">
+    <div className={cn("overflow-clip", boxed && "rounded-lg border bg-card")}>
       <Table ref={ref} className="table-fixed text-base" stickyHeader={stickyHeader}>
         <ColumnsHeader columns={arranged} widths={widths} />
         <TableBody>{children(rows)}</TableBody>

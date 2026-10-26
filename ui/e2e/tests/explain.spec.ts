@@ -1,10 +1,11 @@
 // A query plan reads like the statement above it: the operation stands out, then its tables and indexes and the
 // numbers, and a full scan's operation is in the warning colour.
+import type { Page } from "@playwright/test";
 import { traceId } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
 
-test("a plan's lines are in colour: operations, names, numbers; a full scan's operation warns", async ({ page }) => {
-  // An app that runs EXPLAIN, as the agent answers once one is connected.
+/** An app that runs EXPLAIN, as the agent answers once one is connected, and the plan it gives. */
+async function explainable(page: Page): Promise<void> {
   await page.route("**/api/capabilities", (route) =>
     // biome-ignore lint/style/useNamingConvention: wire format.
     route.fulfill({ json: { explain: true, users: false, profile: false, request: false, live_tasks: false } }),
@@ -31,6 +32,10 @@ test("a plan's lines are in colour: operations, names, numbers; a full scan's op
       },
     }),
   );
+}
+
+test("a plan's lines are in colour: operations, names, numbers; a full scan's operation warns", async ({ page }) => {
+  await explainable(page);
   await page.goto(`/#/t/${await traceId("PATCH /campaigns/{id}/report")}?tab=sql`);
   await page.getByText("SELECT campaign_stats_1").first().click();
   await page.getByRole("button", { name: "Explain", exact: true }).click();
@@ -53,4 +58,17 @@ test("a plan's lines are in colour: operations, names, numbers; a full scan's op
     .locator(".dt-plan-op")
     .evaluate((op) => getComputedStyle(op).color);
   expect(warn).not.toBe(ok);
+});
+
+test("a query opened in the call tree has the DB tab's Query plan", async ({ page }) => {
+  await explainable(page);
+  await page.goto(`/#/t/${await traceId("PATCH /campaigns/{id}/report")}?tab=tree`);
+  await page.locator(".dt-map-row").filter({ hasText: "SELECT campaign_stats_1" }).first().click();
+  const details = page.getByRole("complementary", { name: "Details" });
+
+  await expect(details.getByRole("heading", { name: "Query plan" })).toBeVisible();
+
+  await details.getByRole("button", { name: "Explain", exact: true }).click();
+
+  await expect(details.locator(".dt-plan-line")).toHaveCount(3);
 });

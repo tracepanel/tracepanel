@@ -1,10 +1,11 @@
-import { cn } from "@tracepanel/ui/lib/utils";
-import { ChevronRightIcon } from "lucide-react";
 import { useMemo } from "react";
+import { CallLine, CallLines, CallTable, DetailsTitle, timeColumns } from "./CallTable";
+import type { DataColumn } from "./DataTable";
 import { duration } from "./format";
-import { focusMark, useScrollToFocus } from "./hooks/useScrollToFocus";
-import { callTemplate } from "./lib/calls";
-import { IssueChip, MethodBadge, StatusBadge } from "./primitives";
+import { ListBar } from "./ListBar";
+import { callTemplate, groupNoun } from "./lib/calls";
+import { plural } from "./lib/plural";
+import { IssueChip, MethodBadge, SectionHeading, StatusBadge, Times } from "./primitives";
 import type { IssueKind, Span } from "./types";
 
 export interface CallsListProps {
@@ -14,6 +15,8 @@ export interface CallsListProps {
   issueBySpan: ReadonlyMap<string, IssueKind>;
   /** Spans to highlight and expand, e.g. after "Show calls" on an issue. */
   focus?: ReadonlySet<string> | undefined;
+  /** Where the reader's columns are kept: one key per tab (`trace-cache`, `trace-http`). */
+  table?: string | undefined;
 }
 
 interface Group {
@@ -36,10 +39,10 @@ function failed(span: Span): boolean {
 /** What a group repeats: an HTTP call's method in its badge, as every list shows a request's, then the rest. */
 function Template({ template }: { template: string }) {
   const http = HTTP_METHOD.exec(template);
-  if (!http) return <span className="truncate font-mono text-base">{template}</span>;
+  if (!http) return <span className="shrink-[1000] truncate font-mono">{template}</span>;
   return (
-    <span className="flex min-w-0 items-center gap-2.5">
-      <MethodBadge method={http[1]} /> <span className="truncate font-mono text-base">{http[2]}</span>
+    <span className="flex min-w-0 shrink-[1000] items-center gap-2.5">
+      <MethodBadge method={http[1]} /> <span className="truncate font-mono">{http[2]}</span>
     </span>
   );
 }
@@ -87,93 +90,80 @@ function textsOf(span: Span): { url: string; origin: string; failure: string } {
 function Call({ span, index, focused }: { span: Span; index: number; focused: boolean }) {
   const { url, origin, failure } = textsOf(span);
   return (
-    <li
-      data-focused={focused ? "" : undefined}
-      className="grid grid-cols-[32px_48px_minmax(0,1fr)_auto] items-center gap-3 border-b px-3 py-1.5 text-sm last:border-b-0 data-focused:bg-brand-soft"
-    >
-      <span className="text-right text-muted-foreground tabular-nums">{index + 1}</span>
-      <span className="font-mono tabular-nums" title={failure}>
-        <Status span={span} />
+    <CallLine index={index} focused={focused} time={span.duration}>
+      <span className="grid min-w-0 grid-cols-[3rem_minmax(0,1fr)] items-center gap-3">
+        <span className="font-mono tabular-nums" title={failure}>
+          <Status span={span} />
+        </span>
+        <span className="grid min-w-0">
+          <code className="truncate font-mono">{url}</code>
+          <code className="truncate font-mono text-muted-foreground">{origin}</code>
+        </span>
       </span>
-      <span className="grid min-w-0">
-        <code className="truncate font-mono">{url}</code>
-        <code className="truncate font-mono text-muted-foreground">{origin}</code>
-      </span>
-      <span className="tabular-nums">{duration(span.duration)}</span>
-    </li>
+    </CallLine>
+  );
+}
+
+/** A group's name in its row: what its calls repeat, how many, its issue. */
+function GroupName({ group }: { group: Group }) {
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      <Template template={group.template} />
+      <Times count={group.spans.length} />
+      {group.issue ? <IssueChip kind={group.issue} /> : null}
+    </span>
+  );
+}
+
+function columns(total: number): DataColumn<Group>[] {
+  return [
+    { id: "call", label: "Call", required: true, cell: (group) => <GroupName group={group} /> },
+    ...timeColumns<Group>((group) => group.total, total),
+  ];
+}
+
+/** An open group: what it is, as the call tree's details say it, then each of its calls. */
+function GroupDetails({ group, focus }: { group: Group; focus: ReadonlySet<string> | undefined }) {
+  const [first] = group.spans;
+  const count = group.spans.length;
+  const title =
+    count === 1
+      ? `1 ${groupNoun(first, 1)} · ${duration(group.total)}`
+      : `${count} similar ${groupNoun(first)} · ${duration(group.total)} total`;
+  return (
+    <>
+      <DetailsTitle>{title}</DetailsTitle>
+      <CallLines heading={<SectionHeading>{count === 1 ? "Call" : `${count} calls`}</SectionHeading>}>
+        {group.spans.map((span, index) => (
+          <Call key={span.id} span={span} index={index} focused={focus?.has(span.id) ?? false} />
+        ))}
+      </CallLines>
+    </>
   );
 }
 
 /** One system's calls, grouped by what they repeat (an endpoint, a key pattern) like queries by statement. */
-export function CallsList({ spans, issueBySpan, focus }: CallsListProps) {
+export function CallsList({ spans, issueBySpan, focus, table = "trace-calls" }: CallsListProps) {
   const groups = useMemo(() => groupCalls(spans, issueBySpan), [spans, issueBySpan]);
-  const heaviest = Math.max(...groups.map((group) => group.total), 1);
-  const list = useScrollToFocus<HTMLUListElement>(focus);
-  if (spans.length === 0)
-    return <p className="px-4 py-6 text-sm text-muted-foreground">No calls of this kind in this request.</p>;
+  const total = spans.reduce((sum, span) => sum + span.duration, 0);
+  if (spans.length === 0) return <p className="dt-note">No calls of this kind in this request.</p>;
   return (
-    <div className="grid gap-3 p-4">
-      <span className="text-sm text-muted-foreground">
-        {spans.length} {spans.length === 1 ? "call" : "calls"} · {groups.length} unique
-      </span>
-      <ul ref={list} className="m-0 list-none overflow-hidden rounded-lg border bg-card p-0">
-        {groups.map((group) => (
-          <CallGroup key={group.template} group={group} heaviest={heaviest} focus={focus} />
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-/** One group of calls: how many, what they repeat, its issue, its share of the time; open, each call. */
-function CallGroup({
-  group,
-  heaviest,
-  focus,
-}: {
-  group: Group;
-  heaviest: number;
-  focus: ReadonlySet<string> | undefined;
-}) {
-  const focused = focus ? group.spans.some((span) => focus.has(span.id)) : false;
-  return (
-    <li
-      {...focusMark(focused)}
-      data-tone={group.failed ? "error" : undefined}
-      className={cn(
-        "border-b last:border-b-0 data-[tone=error]:shadow-[inset_3px_0_0_var(--color-error)]",
-        focused && "bg-brand-soft/40",
-      )}
-    >
-      <details open={focused} className="group/row">
-        <CallGroupSummary group={group} heaviest={heaviest} />
-        <div className="border-t bg-muted/30 px-5 py-4">
-          <ol className="m-0 grid list-none overflow-hidden rounded-md border bg-background p-0">
-            {group.spans.map((span, index) => (
-              <Call key={span.id} span={span} index={index} focused={focus?.has(span.id) ?? false} />
-            ))}
-          </ol>
-        </div>
-      </details>
-    </li>
-  );
-}
-
-/** A group's line: its fold, how many, what they repeat, its issue, its share of the time. */
-function CallGroupSummary({ group, heaviest }: { group: Group; heaviest: number }) {
-  return (
-    <summary className="grid cursor-pointer list-none grid-cols-[14px_36px_minmax(0,1fr)_auto_88px_64px] items-center gap-2.5 px-3 py-1.5 hover:bg-accent [&::-webkit-details-marker]:hidden">
-      <ChevronRightIcon className="size-4 text-muted-foreground transition-transform group-open/row:rotate-90" />
-      <span className="text-right font-mono text-sm text-muted-foreground tabular-nums">{group.spans.length}×</span>
-      <Template template={group.template} />
-      {group.issue ? <IssueChip kind={group.issue} /> : <span />}
-      <span className="h-1.5 overflow-hidden rounded-full bg-muted-foreground/15" aria-hidden="true">
-        <span
-          className="block h-full rounded-full bg-chart-1"
-          style={{ width: `${Math.max((group.total / heaviest) * 100, 2)}%` }}
-        />
-      </span>
-      <span className="text-right text-base tabular-nums">{duration(group.total)}</span>
-    </summary>
+    <>
+      <ListBar>
+        {plural(spans.length, "call", "calls")} · {groups.length} unique · {duration(total)}
+      </ListBar>
+      <CallTable
+        table={table}
+        columns={columns(total)}
+        items={groups}
+        focus={focus}
+        row={{
+          key: (group) => group.template,
+          failed: (group) => group.failed,
+          focused: (group) => (focus ? group.spans.some((span) => focus.has(span.id)) : false),
+          details: (group) => <GroupDetails group={group} focus={focus} />,
+        }}
+      />
+    </>
   );
 }

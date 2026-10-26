@@ -46,13 +46,23 @@ test("the Request tab lists the trace's attributes, the DB tab its queries group
 
   await page.getByRole("tab", { name: /^DB/ }).click();
 
-  await expect(panel).toContainText("14 queries · 2 unique");
-  await expect(panel.getByRole("group")).toHaveCount(2);
-  await expect(panel.getByRole("group").first()).toContainText(/13×\s*SELECT author/);
+  await expect(panel).toContainText(/14 queries · 2 unique · \d+(\.\d+)? ms/);
+  // A table as the console's: its head, a row per statement; a count beside the repeated one only.
+  await expect(panel.getByRole("columnheader")).toHaveText(["Query", "Time", "Share", ""]);
+  const queries = panel.locator("tr[aria-expanded]");
+  await expect(queries).toHaveCount(2);
+  await expect(queries.first()).toContainText(/SELECT author\s*×13/);
+  await expect(queries.nth(1).locator(".dt-map-times")).toHaveCount(0);
 
-  await panel.getByRole("button", { name: "In order" }).click();
+  await queries.first().click();
 
-  await expect(panel.getByRole("button", { name: "In order" })).toHaveAttribute("aria-pressed", "true");
+  await expect(panel).toContainText("13 similar queries");
+  await expect(panel.getByText("Called 13 times from")).toBeVisible();
+
+  await panel.getByRole("tab", { name: "In order" }).click();
+
+  await expect(panel.getByRole("tab", { name: "In order" })).toHaveAttribute("aria-selected", "true");
+  await expect(panel.locator("tr[aria-expanded]")).toHaveCount(14);
   await expect(panel.getByText("SELECT author").first()).toBeVisible();
 });
 
@@ -60,22 +70,18 @@ test("a query a template made says so in the DB tab; in the call tree its templa
   await page.goto(`/#/t/${await traceId("GET /")}`);
   await page.getByRole("tab", { name: /^DB/ }).click();
   const panel = page.getByRole("tabpanel");
-  const authors = panel.getByRole("group").filter({ hasText: "SELECT auth_user" });
+  const rows = panel.locator("tr[aria-expanded]");
+  const authors = rows.filter({ hasText: "SELECT auth_user" });
 
-  await expect(authors.locator("summary").getByTitle(/^From the template blog\/post_list\.html/)).toHaveText(
+  await expect(authors.getByTitle(/^From the template blog\/post_list\.html/)).toHaveText(
     "template blog/post_list.html",
   );
   // The posts the view read are its own: no template.
-  await expect(
-    panel
-      .getByRole("group")
-      .filter({ hasText: "SELECT blog_post" })
-      .getByTitle(/^From the template/),
-  ).toHaveCount(0);
+  await expect(rows.filter({ hasText: "SELECT blog_post" }).getByTitle(/^From the template/)).toHaveCount(0);
 
-  await authors.locator("summary").click();
+  await authors.click();
 
-  await expect(authors.getByRole("listitem").first()).toContainText(
+  await expect(panel.getByRole("listitem").first()).toContainText(
     /template blog\/post_list\.html\s*rendered from\s*blog\/views\.py:28 in post_list/,
   );
 

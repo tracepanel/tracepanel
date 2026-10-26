@@ -66,6 +66,15 @@ export function IssueChip({
   );
 }
 
+/**
+ * How many times a call repeated, beside its name wherever repeats fold into one row: the call tree, a trace's DB,
+ * Cache and HTTP calls tabs. Nothing for a call made once.
+ */
+export function Times({ count }: { count: number }) {
+  if (count <= 1) return null;
+  return <span className="dt-map-times">×{count}</span>;
+}
+
 /** Database or cache alias, shown only when it is not "default". */
 export function AliasChip({ value }: { value: unknown }) {
   if (value === undefined || value === null || value === "" || value === "default") return null;

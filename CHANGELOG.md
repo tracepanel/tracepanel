@@ -189,6 +189,30 @@
   chips and a call's kind keep a soft square fill. The current page in the
   sidebar is a grey row, the open tab is underlined in near-black and page
   titles are smaller. The dark theme is as it was.
+- A trace's DB, Cache and HTTP calls tabs are tables like the console's
+  lists: a head (Query or Call, Time, Share), hairline rows and columns to
+  size and hide. Over the table a line says how many, how many unique and
+  their time (`4 queries · 4 unique · 11 ms`), with the Grouped and In order
+  switch at its end, as the Logs tab has its button there. A repeated query
+  says `×13` beside its name as in the call tree, one made once no count,
+  and the share of the time is a percent instead of a bar. In order lists
+  each query's start. An open row reads as the call tree's details: what it
+  is, the statement, its fields, the query plan and where it was called from.
+  A query opened in the call tree has the same Query plan.
+- The call tree has colour and rhythm. A row's kind badge is a soft fill of
+  its share's colour, the strip's and its legend's (SQL blue, your code
+  purple, templates green, the framework grey), and so is its bar, slimmer
+  and rounded. A wait is an outlined badge. Faint guides run down the
+  indent, the fold arrows step back, and the selected row is marked at its
+  edge. A query's verb and an HTTP call's method (in its colour) stand
+  apart from what they act on, and the framework's steps and library code
+  read quieter than yours. A call that took a fifth of the trace has its
+  time in amber, half of it in red. Rows are a little tighter.
+- A wait the app awaited through `sync_to_async` is named as the app wrote
+  it, `await sync_to_async(…) in product_feed`. A few ms of code beside a
+  long wait (or the reverse) is no longer a row of its own: under 5 ms, or
+  under a fifth of the span's own time and a twentieth of the trace's, it
+  folds into one row with the rest.
 
 ### Fixed
 

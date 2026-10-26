@@ -21,6 +21,7 @@ import { AppDetails, appSaidAnything } from "./AppDetails";
 import { appWarnings, warningsTone } from "./AppWarnings";
 import { CallMap } from "./CallMap";
 import { CallsList } from "./CallsList";
+import type { Explain } from "./CallTable";
 import { Button } from "./components/ui/button";
 import {
   DropdownMenu,
@@ -42,7 +43,7 @@ import { linkProps, type TraceLinks } from "./links";
 import { ProfilePane } from "./ProfileView";
 import { RoutePath, StatusBadge, TraceBadge } from "./primitives";
 import { RequestInfo } from "./RequestInfo";
-import { type Explain, SqlList } from "./SqlList";
+import { SqlList } from "./SqlList";
 import { type SystemCalls, systemCalls, systemOfIssue } from "./systemCalls";
 import { Tabs } from "./Tabs";
 import { type MarkTarget, TimeStrip } from "./Timeline";
@@ -141,7 +142,7 @@ function SpanLists({
   sql: Omit<ComponentProps<typeof SqlList>, "spans">;
 }) {
   if (!isCallsTab(active)) return null;
-  return <SystemList system={active} calls={calls[active]} {...sql} />;
+  return <SystemList key={active} system={active} calls={calls[active]} {...sql} />;
 }
 
 /** One system's calls: SQL with its plans, the others grouped by what they repeat. */
@@ -154,7 +155,7 @@ function SystemList({
   return system === "sql" ? (
     <SqlList spans={spans} {...props} />
   ) : (
-    <CallsList spans={spans} issueBySpan={props.issueBySpan} focus={props.focus} />
+    <CallsList spans={spans} issueBySpan={props.issueBySpan} focus={props.focus} table={`trace-${system}`} />
   );
 }
 
@@ -428,6 +429,7 @@ export function TraceView({
         related={related}
         links={links}
         initialSpan={treeSpan}
+        onExplain={onExplain}
       />
       {active === "issues" ? (
         <IssueList

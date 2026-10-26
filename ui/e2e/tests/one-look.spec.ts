@@ -50,7 +50,7 @@ test("a page's action reads in the list as in its header, and its failure shows 
 
 test("a failed HTTP call has a failed row's red edge and its method's badge", async ({ page }) => {
   await page.goto(`/#/t/${await traceId('/books › click "Delete"')}?tab=http`);
-  const call = page.locator("li[data-tone]").filter({ hasText: "127.0.0.1/api/books" });
+  const call = page.locator("tr[data-tone]").filter({ hasText: "127.0.0.1/api/books" });
 
   await expect(call).toHaveAttribute("data-tone", "error");
   await expect(call.locator(".dt-method")).toHaveText("GET");

@@ -112,3 +112,48 @@ test("a profile that doesn't say when its samples were taken is the whole trace'
   await expect(page.getByText("Its samples aren't timed: the range picked can't narrow it.")).toBeVisible();
   await expect(page.getByText(/not sampled/)).toHaveCount(0);
 });
+
+/** What of a profile the tests change: its frames, its stacks and when each was seen. */
+interface WireProfile {
+  frames: Record<string, unknown>[];
+  stacks: { frames: number[]; at: [number, number][] }[];
+}
+
+/** The digest's trace as the agent gives it, its profile changed by `change`. */
+async function withProfile(page: Page, change: (profile: WireProfile) => void): Promise<string> {
+  const id = await traceId(DIGEST);
+  await page.route(`**/api/traces/${id}`, async (route) => {
+    const trace = await (await route.fetch()).json();
+    change(trace.profile);
+    await route.fulfill({ json: trace });
+  });
+  return id;
+}
+
+test("a wait the app awaited through sync_to_async is named as the app wrote it", async ({ page }) => {
+  const id = await withProfile(page, (profile) => {
+    profile.frames.push({
+      function: "SyncToAsync.__call__",
+      module: "asgiref.sync",
+      file: "asgiref/sync.py",
+      line: 400,
+    });
+    (profile.stacks[1] as WireProfile["stacks"][number]).frames = [0, 1, 4, 2];
+  });
+  await page.goto(`/#/t/${id}?tab=tree`);
+
+  await expect(codeRow(page, "wait").locator(".dt-map-text")).toHaveText("await sync_to_async(…) in send_digest");
+});
+
+test("a few ms of code beside a long wait is part of the wait: one row, all of the time", async ({ page }) => {
+  // Every sample waits, from the first query on: the code's own time before it is a couple of ms.
+  const id = await withProfile(page, (profile) => {
+    const wait = profile.stacks[1] as WireProfile["stacks"][number];
+    wait.at = Array.from({ length: 158 }, (_, index): [number, number] => [index + 2, 1]);
+    profile.stacks = [wait];
+  });
+  await page.goto(`/#/t/${id}?tab=tree`);
+
+  await expect(page.locator('.dt-map-row[data-kind="code"]')).toHaveCount(1);
+  await expect(codeRow(page, "wait").locator(".dt-map-time")).toHaveText(/^1\.\d+ s$/);
+});

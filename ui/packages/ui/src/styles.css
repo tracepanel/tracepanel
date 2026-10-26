@@ -2647,3 +2647,136 @@ div.dt-map-row[data-kind="code"] {
     transparent 2px 5px
   );
 }
+
+/* ---------- Call tree: colour and rhythm ---------- */
+
+/* A row's colour is its share's, as the time strip and its legend have it (the [data-category] map above): its kind's
+   badge, its bar. A share the row's own kind would colour otherwise (a cache's Redis commands) reads as the strip. */
+.dt-map-row[data-category="django"] {
+  --dt-k: var(--dt-k-django);
+  /* The framework's grey is a translucent fill: its badge's word in the quiet text colour. */
+  --dt-k-ink: var(--dt-text-3);
+}
+.dt-map-row[data-category="code"] {
+  --dt-k: var(--dt-k-view);
+}
+.dt-map-row[data-category="template"] {
+  --dt-k: var(--dt-k-template);
+}
+.dt-map-row[data-category="sql"] {
+  --dt-k: var(--dt-k-sql);
+}
+.dt-map-row[data-category="cache"] {
+  --dt-k: var(--dt-k-cache);
+}
+.dt-map-row[data-category="http"] {
+  --dt-k: var(--dt-k-http);
+}
+.dt-map-row[data-category="redis"] {
+  --dt-k: var(--dt-k-redis);
+}
+.dt-map-row[data-category="datastore"] {
+  --dt-k: var(--dt-k-datastore);
+}
+.dt-map-row[data-category="messaging"] {
+  --dt-k: var(--dt-k-messaging);
+}
+.dt-map-row[data-category="signal"] {
+  --dt-k: var(--dt-k-signal);
+}
+.dt-map-row[data-category="storage"] {
+  --dt-k: var(--dt-k-storage);
+}
+.dt-map-row[data-category="mail"] {
+  --dt-k: var(--dt-k-mail);
+}
+/* A failed call keeps the error's colour over its share's. */
+.dt-map-row[data-category][data-status="error"] {
+  --dt-k: var(--dt-error);
+  --dt-k-ink: var(--dt-error);
+}
+/* The kind's badge: a soft fill of its share's colour and the word in it, one size and case for every kind. */
+.dt-map-row[data-category] .dt-map-kind[data-muted] {
+  color: var(--dt-k-ink, var(--dt-k));
+  background: color-mix(in srgb, var(--dt-k) 14%, transparent);
+}
+.dt-map-row[data-category="django"] .dt-map-kind[data-muted] {
+  background: var(--dt-faint);
+}
+/* A wait is no share's work: outlined, empty, as the strip hatches it. */
+.dt-map-row .dt-map-kind.dt-map-wait[data-muted] {
+  padding-block: 0;
+  border: 1px dashed color-mix(in srgb, var(--dt-text-3) 60%, transparent);
+  color: var(--dt-text-3);
+  background: none;
+}
+
+/* Rhythm: a little tighter, a clear hover, the selected row marked at its edge too. */
+.dt-map-row {
+  min-height: 1.625rem;
+}
+.dt-map-row[aria-current="true"] {
+  box-shadow: inset 2px 0 0 var(--dt-accent);
+}
+.dt-map-row[aria-current="true"] .dt-map-text {
+  font-weight: 500;
+}
+/* What a row is under: a faint line down from each row above it, through the indent (indentOf sets the depth). */
+.dt-map-name {
+  background-image: repeating-linear-gradient(
+    to right,
+    transparent 0 6.5px,
+    color-mix(in srgb, var(--dt-border-strong) 70%, transparent) 6.5px 7.5px,
+    transparent 7.5px 16px
+  );
+  background-position: 12px 0;
+  background-repeat: no-repeat;
+  background-size: calc(var(--dt-depth, 0) * 16px) 100%;
+}
+/* The fold steps back until the row is pointed at. */
+.dt-map-caret {
+  color: color-mix(in srgb, var(--dt-text-3) 65%, transparent);
+}
+.dt-map-row:hover .dt-map-caret:not(:hover) {
+  color: var(--dt-text-3);
+}
+
+/* A call's text: its operation set apart, what it acts on regular; a method in its colour, as every list has it. */
+.dt-map-op {
+  font-weight: 600;
+}
+.dt-map-op[data-method] {
+  color: var(--dt-get);
+}
+.dt-map-op[data-method="POST"] {
+  color: var(--dt-post);
+}
+.dt-map-op:is([data-method="PUT"], [data-method="PATCH"]) {
+  color: var(--dt-put);
+}
+.dt-map-op[data-method="DELETE"] {
+  color: var(--dt-delete);
+}
+/* The framework's own steps and a library's code read quieter than yours. */
+.dt-map-row[data-category="django"]:not([data-root]) .dt-map-text,
+.dt-map-text.dt-map-lib {
+  color: var(--dt-text-3);
+}
+
+/* Bars: slimmer, rounded, in the share's colour; a call that took much of the trace says so in its time. */
+.dt-map-bar {
+  top: 3px;
+  bottom: 3px;
+  border-radius: 999px;
+}
+.dt-map-bar[data-past] {
+  border-radius: 999px 0 0 999px;
+}
+.dt-map-time[data-slow="warn"] {
+  color: var(--dt-warn-strong);
+  font-weight: 600;
+}
+.dt-map-time[data-slow="error"] {
+  color: var(--dt-error);
+  font-weight: 600;
+}

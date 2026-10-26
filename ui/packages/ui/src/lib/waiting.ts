@@ -100,21 +100,41 @@ function line(frame: Frame): string {
   return `${frame.file.split("/").at(-1)}:${frame.at_line ?? frame.line}`;
 }
 
-/** The stack that waited most, and the frame of yours that waited in it. */
-function longestWait(profile: Profile): { leaf: Frame; own: Frame | undefined } | null {
+/** The stack that waited most: its frames, outermost first, and the last frame of yours in it. */
+function longestWait(profile: Profile): { frames: Frame[]; leaf: Frame; own: Frame | undefined } | null {
   const stack = profile.stacks.filter((each) => waits(profile, each)).sort((a, b) => b.count - a.count)[0];
   if (!stack) return null;
-  const frames = stack.frames.map((index) => profile.frames[index]);
+  const frames = stack.frames.flatMap((index) => profile.frames[index] ?? []);
   const leaf = frames.at(-1);
   if (!leaf) return null;
-  return { leaf, own: frames.filter((frame) => frame?.in_app).at(-1) };
+  return { frames, leaf, own: frames.filter((frame) => frame.in_app).at(-1) };
 }
 
-/** "asyncio.sleep in build_sales_report": what the code waited on most, in which function of yours. */
-export function waitName(profile: Profile): string | null {
+/**
+ * What the app awaited, where its own code says it better than the frame that waited: a call into a thread
+ * (asgiref's SyncToAsync, as `sync_to_async()` wraps it) is the app's `await sync_to_async(…)`, whatever the
+ * thread then waited in.
+ */
+const AWAITED = new Map([
+  ["asgiref.SyncToAsync.__call__", "await sync_to_async(…)"],
+  ["asgiref.AsyncToSync.__call__", "async_to_sync(…)"],
+]);
+
+/** The call the app awaited, by AWAITED's words, after its own last frame: the outermost one known. */
+function awaited(frames: readonly Frame[], own: Frame | undefined): string | undefined {
+  const after = own ? frames.slice(frames.indexOf(own) + 1) : frames;
+  return after.map((frame) => AWAITED.get(called(frame))).find(Boolean);
+}
+
+/**
+ * "asyncio.sleep in build_sales_report": what the code waited on most, in which function of yours (`yours`), as the
+ * app awaited it where that is known: "await sync_to_async(…) in product_feed".
+ */
+export function waitName(profile: Profile): { name: string; yours: boolean } | null {
   const wait = longestWait(profile);
   if (!wait) return null;
-  return wait.own ? `${called(wait.leaf)} in ${wait.own.function}` : called(wait.leaf);
+  const what = awaited(wait.frames, wait.own) ?? called(wait.leaf);
+  return wait.own ? { name: `${what} in ${wait.own.function}`, yours: true } : { name: what, yours: false };
 }
 
 /** "handlers.py:108": where in your code it waited most, when a frame of yours did. */

@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { type Explain, QueryPlan } from "./CallTable";
 import { duration, since } from "./format";
 import { GraphqlCode } from "./GraphqlCode";
 import { ChevronRightIcon, CloseIcon } from "./icons";
@@ -39,6 +40,7 @@ import {
   StateBadge,
   TaskName,
   TemplateChip,
+  Times,
 } from "./primitives";
 import { isRequestDetail, RequestParts, requestParts } from "./RequestParts";
 import { RunChips } from "./RunChips";
@@ -622,10 +624,45 @@ function Rows({
       {nodes.map((node) => {
         const mark = ctx.marks?.get(node.key);
         if (ctx.marks && !mark) return null;
-        const place = { ctx, indent: { paddingLeft: `${12 + depth * 16}px` }, depth, mark, parent };
+        const place = { ctx, indent: indentOf(depth), depth, mark, parent };
         return <Row key={node.key} node={node} place={place} />;
       })}
     </>
+  );
+}
+
+/** How far in a row's name starts, and how many guides of the rows it hangs under it draws (styles.css). */
+function indentOf(depth: number): CSSProperties {
+  return { paddingLeft: `${12 + depth * 16}px`, "--dt-depth": depth } as CSSProperties;
+}
+
+/**
+ * How slow a call reads beside its time, as the trace's share it took: amber from a fifth, red from a half. The
+ * request's own code (its view, its framework) takes most of it by nature: only calls to a system say it.
+ */
+function slowness(time: number, trace: Trace, category: Category | undefined): "warn" | "error" | undefined {
+  if (category === undefined || OWN_TIME.has(category)) return undefined;
+  const share = time / Math.max(trace.duration, 1);
+  if (share >= 0.5) return "error";
+  return share >= 0.2 ? "warn" : undefined;
+}
+
+const OWN_TIME: ReadonlySet<Category> = new Set(["django", "code", "template", "signal"]);
+
+/** A row's time, tabular, in amber or red when the call took much of the trace. */
+function RowTime({
+  time,
+  slow,
+  title,
+}: {
+  time: number;
+  slow: "warn" | "error" | undefined;
+  title?: string | undefined;
+}) {
+  return (
+    <span className="dt-map-time" data-slow={slow} title={title}>
+      {duration(time)}
+    </span>
   );
 }
 
@@ -738,10 +775,10 @@ function GroupName({
   return (
     <>
       <KindBadge kind={spanKindLabel(first?.kind, ctx.trace.attrs)} muted={true} className="dt-map-kind" />
-      <span className="dt-map-text">{callTemplate(first)}</span>
+      <OpText text={callTemplate(first)} kind={first?.kind} />
       <AliasChip value={aliasOf(first)} />
       <FromTemplate span={first} parent={parent} />
-      <span className="dt-map-times">×{node.spans.length}</span>
+      <Times count={node.spans.length} />
       {issue ? <IssueChip kind={issue} className={ISSUE_CHIP_SHRINKS} /> : null}
     </>
   );
@@ -758,6 +795,7 @@ function GroupRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProp
         className="dt-map-row"
         {...rowState(ctx, node.key, mark)}
         data-kind={node.spans[0]?.kind}
+        data-category={ctx.categories.get(node.spans[0]?.id ?? "")}
         aria-expanded={open}
         onClick={() => {
           ctx.onSelect(node.key);
@@ -770,7 +808,7 @@ function GroupRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProp
           <GroupName node={node} ctx={ctx} parent={parent} />
         </span>
         <GroupTicks spans={node.spans} trace={ctx.trace} />
-        <span className="dt-map-time">{duration(total)}</span>
+        <RowTime time={total} slow={slowness(total, ctx.trace, ctx.categories.get(node.spans[0]?.id ?? ""))} />
       </button>
       <RowDetails id={node.key} ctx={ctx} />
       {open ? (
@@ -836,7 +874,27 @@ function SpanName({ span }: { span: Span }) {
     );
   }
   if (TASK_SPANS.has(span.kind)) return <TaskName name={span.name} className="dt-map-text" />;
-  return <span className="dt-map-text">{callText(span)}</span>;
+  return <OpText text={callText(span)} kind={span.kind} />;
+}
+
+// What a call does, then what to: SELECT shop_product, GET api.example.com/users, SET session:*.
+const OP = /^([A-Z][A-Z_]+)( .*)$/;
+
+/**
+ * A call's text, its operation set apart: a statement's verb or a command a little stronger than what it acts on,
+ * an HTTP call's method in its colour as every list shows one.
+ */
+function OpText({ text, kind }: { text: string; kind: string | undefined }) {
+  const op = OP.exec(text);
+  if (!op) return <span className="dt-map-text">{text}</span>;
+  return (
+    <span className="dt-map-text">
+      <span className="dt-map-op" data-method={kind === "http.client" ? op[1] : undefined}>
+        {op[1]}
+      </span>
+      {op[2]}
+    </span>
+  );
 }
 
 /** A span: its kind, its name and what goes with it, its bar and its time; its rows under it, open or folded. */
@@ -851,6 +909,8 @@ function SpanRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps
         className="dt-map-row"
         {...rowState(ctx, node.key, mark)}
         data-kind={span.kind}
+        data-category={ctx.categories.get(span.id)}
+        data-root={span.parent_id === null ? "" : undefined}
         data-status={span.status}
         aria-expanded={fold}
         onClick={() => clickSpan(ctx, node.key, fold)}
@@ -871,9 +931,11 @@ function SpanRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps
           {issue ? <IssueChip kind={issue} className={ISSUE_CHIP_SHRINKS} /> : null}
         </span>
         <Bar trace={ctx.trace} start={span.start} length={span.duration} />
-        <span className="dt-map-time" title={timeTitle(span, ctx.trace)}>
-          {duration(span.duration)}
-        </span>
+        <RowTime
+          time={span.duration}
+          slow={span.parent_id === null ? undefined : slowness(span.duration, ctx.trace, ctx.categories.get(span.id))}
+          title={timeTitle(span, ctx.trace)}
+        />
       </button>
       <RowDetails id={node.key} ctx={ctx} />
       {fold ? (
@@ -933,11 +995,32 @@ interface CodePart {
 /** A span's own code in its parts: what it waited in and what it computed in, each when there is any. */
 function codeParts(quiet: Quiet, trace: Trace): CodePart[] {
   const pieces = quiet.gaps.flatMap(([from, to]) => quietPieces(trace.profile, from - trace.start, to - trace.start));
-  return [true, false].flatMap((waiting): CodePart[] => {
+  const parts = [true, false].flatMap((waiting): CodePart[] => {
     const own = pieces.filter((piece) => piece.waiting === waiting);
     const total = own.reduce((sum, piece) => sum + piece.to - piece.from, 0);
     return total > 0 ? [{ waiting, pieces: own, total }] : [];
   });
+  return parts.every((part) => partShows(part, quiet, trace)) ? parts : [oneOf(parts, pieces, quiet)];
+}
+
+/** A wait or a stretch of code on a row of its own: as long as the code's own time is said at all, of the time. */
+const PART_MIN_US = 5_000;
+const PART_MIN_SHARE = 0.2;
+const PART_MIN_TRACE_SHARE = 0.05;
+
+/**
+ * Whether a part of a span's own time stands on its own: at least 5 ms, and a fifth of that time or a twentieth of
+ * the trace's. A few ms of framework glue beside a long wait is part of the wait, not a row of its own.
+ */
+function partShows(part: CodePart, quiet: Quiet, trace: Trace): boolean {
+  if (part.total < PART_MIN_US) return false;
+  return part.total >= quiet.total * PART_MIN_SHARE || part.total >= trace.duration * PART_MIN_TRACE_SHARE;
+}
+
+/** The parts as one row: what most of it was (waited or computed), all of its time, every piece on its bar. */
+function oneOf(parts: readonly CodePart[], pieces: Piece[], quiet: Quiet): CodePart {
+  const most = [...parts].sort((a, b) => b.total - a.total)[0];
+  return { waiting: most?.waiting ?? false, pieces, total: quiet.total };
 }
 
 /** The stretch a part spans, from its first piece to its last. */
@@ -959,7 +1042,7 @@ function CodeBars({ part, category, trace }: { part: CodePart; category: Categor
             key={piece.from}
             className="dt-map-bar"
             data-quiet=""
-            data-waiting={part.waiting ? "" : undefined}
+            data-waiting={piece.waiting ? "" : undefined}
             data-category={category}
             style={{ left: widthOf(piece.from, total), width: widthOf(piece.to - piece.from, total) }}
           />
@@ -972,11 +1055,14 @@ function CodeBars({ part, category, trace }: { part: CodePart; category: Categor
  * What a code row is: with a profile, the functions of yours that ran most in that stretch (or what it waited on);
  * without one, untraced code, waiting where the profile can't say.
  */
-function partName(part: CodePart, trace: Trace): string {
+function partName(part: CodePart, trace: Trace): { name: string; yours: boolean } {
   const profile = profileOver(trace, partRange(part));
   if (part.waiting) return waited(profile);
-  return profile ? ranMost(profile) : "untraced code";
+  const name = profile ? ranMost(profile) : UNTRACED;
+  return { name, yours: name !== UNTRACED };
 }
+
+const UNTRACED = "untraced code";
 
 /** Where a wait row waited, said quietly after its name: "handlers.py:108", where the profile says. */
 function WaitPlace({ part, trace }: { part: CodePart; trace: Trace }) {
@@ -985,26 +1071,35 @@ function WaitPlace({ part, trace }: { part: CodePart; trace: Trace }) {
   return place ? <span className="dt-map-sub">{place}</span> : null;
 }
 
-/** "asyncio.sleep in send_digest": what the code waited on, or just waiting where the profile can't say. */
-function waited(profile: Profile | undefined): string {
-  return (profile && waitName(profile)) || "waiting";
+/**
+ * "asyncio.sleep in send_digest": what the code waited on, or just waiting where the profile can't say; yours when
+ * a function of yours waited.
+ */
+function waited(profile: Profile | undefined): { name: string; yours: boolean } {
+  const wait = profile ? waitName(profile) : null;
+  return wait ?? { name: "waiting", yours: false };
 }
 
 /** "aggregate · render_csv": the two functions of yours that ran most, or untraced code where none of yours ran. */
 function ranMost(profile: Profile): string {
   const names = ownHotspots(profile, 2).map((hotspot) => hotspot.name);
-  return names.join(" · ") || "untraced code";
+  return names.join(" · ") || UNTRACED;
 }
 
 /** A code row's own: a grey box ("code", or "wait"), its name, the way on to the profile, its bars and its time. */
 function CodeRowParts({ span, ctx, depth, part }: { span: Span; ctx: RowContext; depth: number; part: CodePart }) {
   const category = ctx.categories.get(span.id) ?? "code";
+  const { name, yours } = partName(part, ctx.trace);
   return (
     <>
-      <span className="dt-map-name" style={{ paddingLeft: `${12 + depth * 16}px` }}>
+      <span className="dt-map-name" style={indentOf(depth)}>
         <span className="dt-map-caret" />
-        <KindBadge kind={part.waiting ? "wait" : "code"} muted={true} className="dt-map-kind" />
-        <TaskName name={partName(part, ctx.trace)} className="dt-map-text" />
+        <KindBadge
+          kind={part.waiting ? "wait" : "code"}
+          muted={true}
+          className={part.waiting ? "dt-map-kind dt-map-wait" : "dt-map-kind"}
+        />
+        <TaskName name={name} className={yours ? "dt-map-text" : "dt-map-text dt-map-lib"} />
         <WaitPlace part={part} trace={ctx.trace} />
         <RowFlame trace={ctx.trace} />
       </span>
@@ -1037,14 +1132,25 @@ function CodePartRow({ span, ctx, depth, part }: { span: Span; ctx: RowContext; 
   const open = ctx.onProfile;
   // With a profile, a click opens it at that stretch; without, a plain row.
   return open ? (
-    <button type="button" className="dt-map-row" data-kind="code" onClick={() => open(partRange(part))}>
+    <button
+      type="button"
+      className="dt-map-row"
+      data-kind="code"
+      data-category={codeCategory(span, ctx)}
+      onClick={() => open(partRange(part))}
+    >
       {inside}
     </button>
   ) : (
-    <div className="dt-map-row" data-kind="code">
+    <div className="dt-map-row" data-kind="code" data-category={codeCategory(span, ctx)}>
       {inside}
     </div>
   );
+}
+
+/** A code row's share: its span's, or your code's. */
+function codeCategory(span: Span, ctx: RowContext): Category {
+  return ctx.categories.get(span.id) ?? "code";
 }
 
 /** Whether a span has a code row: its code ran long with nothing recorded inside, and what is picked keeps it. */
@@ -1215,6 +1321,8 @@ type DetailsProps<T extends Node["type"]> = {
   node: Extract<Node, { type: T }>;
   trace: Trace;
   links?: TraceLinks | undefined;
+  /** EXPLAIN for a query of the trace shown, as its DB tab runs it; none for a linked trace's queries. */
+  onExplain?: Explain | undefined;
 };
 
 function LogDetails({ node }: DetailsProps<"log">) {
@@ -1238,7 +1346,7 @@ function Statement({ span, attrs }: { span: Span; attrs: Attrs }) {
   return <SqlCode sql={String(attrs["db.statement"] ?? span.name)} vendor={String(attrs["db.vendor"] ?? "")} />;
 }
 
-function GroupDetails({ node }: DetailsProps<"group">) {
+function GroupDetails({ node, onExplain }: DetailsProps<"group">) {
   const [first] = node.spans;
   const origins = new Set(node.spans.map((span) => String(span.attrs["code.origin"] ?? "")));
   return (
@@ -1251,6 +1359,7 @@ function GroupDetails({ node }: DetailsProps<"group">) {
         <>
           <Statement span={first} attrs={first.attrs} />
           <Fields rows={summaryRows(first, false)} />
+          <QueryPlan span={first} onExplain={onExplain} />
         </>
       ) : null}
       <p className="flex flex-wrap items-center gap-2 text-base text-muted-foreground [&_code]:rounded [&_code]:bg-muted [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-sm [&_code]:text-foreground">
@@ -1323,13 +1432,14 @@ function RootDetails({ node: { span }, trace }: DetailsProps<"span">) {
 }
 
 /** A call's own fields in words first (its topic, its URL, where in the code); every attribute after them. */
-function CallDetails({ node: { span }, trace }: DetailsProps<"span">) {
+function CallDetails({ node: { span }, trace, onExplain }: DetailsProps<"span">) {
   const parent = trace.spans.find((each) => each.id === span.parent_id);
   const summary = summaryRows(span, true, parent);
   return (
     <div className="grid gap-3 p-4">
       <SpanHead span={span} trace={trace} parent={parent} attrs={span.attrs} />
       {summary.length ? <Fields rows={summary} /> : null}
+      <QueryPlan span={span} onExplain={onExplain} />
       <SpanAttributes span={span} attrs={span.attrs} titled={summary.length > 0} />
     </div>
   );
@@ -1480,9 +1590,17 @@ function useScrolledToInitial(initialSpan: string | undefined): RefObject<HTMLDi
   return rows;
 }
 
-function detailsOf(tree: Node[], selected: string | null, trace: Trace, links: TraceLinks | undefined): ReactNode {
+function detailsOf(
+  tree: Node[],
+  selected: string | null,
+  trace: Trace,
+  hosts: { links: TraceLinks | undefined; onExplain: Explain | undefined },
+): ReactNode {
   const found = selected ? findNode(tree, selected, trace) : undefined;
-  return found ? <Details node={found.node} trace={found.trace} links={links} /> : null;
+  if (!found) return null;
+  // The host explains the trace's own queries: a linked trace's are its own.
+  const onExplain = found.trace === trace ? hosts.onExplain : undefined;
+  return <Details node={found.node} trace={found.trace} links={hosts.links} onExplain={onExplain} />;
 }
 
 /** Keys toggled in and out of a set: the folded rows, the opened groups. */
@@ -1679,6 +1797,8 @@ export function CallMap({
   head?: ReactNode;
   /** Opens the trace's profile, when it has one: its code rows lead there. */
   onProfile?: (() => void) | undefined;
+  /** EXPLAIN for a query of this trace: a SELECT's details then have its plan, as the DB tab's. */
+  onExplain?: Explain | undefined;
   /** Linked traces: tasks this trace enqueued appear under their enqueue span. */
   related?: Related | undefined;
   links?: TraceLinks | undefined;
@@ -1694,7 +1814,7 @@ export function CallMap({
   const side = useSidePane(map);
   const rows = useScrolledToInitial(initialSpan);
   const [collapsed, toggle] = useToggleSet();
-  const details = detailsOf(tree, selected, trace, links);
+  const details = detailsOf(tree, selected, trace, { links, onExplain: wiring.onExplain });
   const { categories, quiet } = useSpansTime(trace);
   const marks = useMemo(() => marksOf(tree, pickedOf(current, trace, categories)), [tree, current, trace, categories]);
   const inline = side ? null : details;

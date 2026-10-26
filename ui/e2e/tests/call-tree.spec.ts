@@ -86,3 +86,23 @@ test("a call's details give its fields and all its attributes one column of name
   expect(starts.length).toBeGreaterThan(2);
   expect(new Set(starts).size).toBe(1);
 });
+
+for (const theme of ["dark", "light"]) {
+  test(`a row's kind, its bar and the strip's legend share one colour; a query's verb is set apart (${theme})`, async ({
+    page,
+  }) => {
+    await page.addInitScript((chosen) => localStorage.setItem("tracepanel:theme", chosen), theme);
+    await page.goto(`/#/t/${await traceId("GET /")}?tab=tree`);
+    const query = page.locator('.dt-map-row[data-category="sql"]').first();
+    const colour = (locator: Locator, property: "color" | "backgroundColor") =>
+      locator.evaluate((element, name) => getComputedStyle(element)[name], property);
+    const legend = await colour(
+      page.locator('.dt-breakdown-legend [data-category="sql"] .dt-swatch'),
+      "backgroundColor",
+    );
+
+    expect(await colour(query.locator(".dt-map-kind"), "color")).toBe(legend);
+    expect(await colour(query.locator(".dt-map-bar"), "backgroundColor")).toBe(legend);
+    await expect(query.locator(".dt-map-op")).toHaveText("SELECT");
+  });
+}
