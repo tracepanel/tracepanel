@@ -6,12 +6,24 @@ import { cutByPauses, GC, gcPauses } from "./lib/memory";
 import { quietSpans } from "./lib/quiet";
 import type { TimeRange } from "./lib/slice";
 import { quietPieces } from "./lib/waiting";
+import { litKey } from "./lit";
 import { type ShareOf, ShareTip, sharesOf, TIP_CLASS } from "./TimeLegend";
 import type { Trace } from "./types";
 
 /** Where a stretch sits on the lane, as CSS offsets. */
 function place(stretch: Stretch, total: number): CSSProperties {
   return { left: `${(stretch.from / total) * 100}%`, width: `${((stretch.to - stretch.from) / total) * 100}%` };
+}
+
+/**
+ * A stretch at either end of the lane rounds that end: the lane doesn't clip its stretches, so a lit one's ring shows
+ * whole.
+ */
+function ends(stretch: Stretch, total: number): CSSProperties {
+  const [start, end] = [stretch.from <= 0, stretch.to >= total];
+  if (!(start || end)) return {};
+  const [left, right] = [start ? "var(--dt-bar-radius)" : "0", end ? "var(--dt-bar-radius)" : "0"];
+  return { borderRadius: `${left} ${right} ${right} ${left}` };
 }
 
 /** Set on a stretch whose share isn't picked while others are: it steps back (the collector's, never picked, too). */
@@ -172,8 +184,9 @@ export function TimeLane({ trace, word, parts }: { trace: Trace; word: string; p
             className="dt-stretch"
             data-category={each.gc ? GC : each.stretch.category}
             data-faded={faded(each, parts)}
+            {...litKey(each.gc ? GC : each.stretch.category)}
             {...pieceData(each)}
-            style={place(each.stretch, total)}
+            style={{ ...place(each.stretch, total), ...ends(each.stretch, total) }}
           />
         ))}
         {saidAt(lane.drawn).map((each) => (

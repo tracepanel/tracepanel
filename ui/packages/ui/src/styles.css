@@ -1098,9 +1098,10 @@ tr[data-new] {
 }
 /* One clear line, as every bar of shares is (.dt-share-bar): each moment in its share's colour. */
 .dt-time-track {
+  /* Not clipped: a lit stretch's ring shows whole; the stretches at its ends round them (TimeLane). */
+  --dt-bar-radius: 0.25rem;
   height: 0.875rem;
-  overflow: hidden;
-  border-radius: 0.25rem;
+  border-radius: var(--dt-bar-radius);
   cursor: crosshair;
 }
 .dt-stretch {
@@ -1128,13 +1129,46 @@ tr[data-new] {
   display: flex;
   gap: 2px;
   height: 0.875rem;
-  overflow: hidden;
-  border-radius: 0.25rem;
 }
 .dt-share-bar > span {
+  position: relative;
   height: 100%;
   transition: opacity 120ms;
 }
+/* Not clipped: a lit share's ring shows whole; the first and the last share round the bar's ends. */
+.dt-share-bar > span:first-child {
+  border-radius: 0.25rem 0 0 0.25rem;
+}
+.dt-share-bar > span:last-child {
+  border-radius: 0 0.25rem 0.25rem 0;
+}
+.dt-share-bar > span:only-child {
+  border-radius: 0.25rem;
+}
+
+/* Lit: a segment hovered, or every one of the legend item hovered (lit.ts), on every bar alike (the trace's lane, a
+   lane's calls, the Profile tab's packages): a ring in the segment's own colour, solid, a pixel off it, over its
+   neighbours. Its legend item looks hovered. */
+:is(.dt-stretch, .dt-mark, .dt-share-bar > span)[data-lit],
+.dt-mark:is(:hover, :focus-visible) {
+  z-index: 2;
+  outline: 1px solid var(--dt-lit, currentColor);
+  outline-offset: 1px;
+}
+/* A legend item hovered: the other segments step back. */
+[data-lighting] :is(.dt-stretch, .dt-mark, .dt-share-bar > span):not([data-lit]) {
+  opacity: 0.35;
+}
+.dt-stretch {
+  --dt-lit: rgb(from var(--dt-k) r g b / 1);
+}
+.dt-stretch[data-waiting] {
+  --dt-lit: var(--dt-text-3);
+}
+.dt-mark {
+  --dt-lit: rgb(from var(--dt-mark) r g b / 1);
+}
+
 /* A share's swatch where its colour is a class (the Profile tab's packages), the size of .dt-swatch. */
 .dt-dot {
   flex: none;
@@ -1203,27 +1237,27 @@ tr[data-new] {
   background: var(--dt-mark);
   cursor: pointer;
 }
-.dt-mark:hover,
-.dt-mark:focus-visible {
-  outline: 1px solid var(--dt-text-2);
-  outline-offset: 1px;
-}
 .dt-mark[data-tone="warn"] {
+  --dt-lit: var(--dt-warn-strong);
   background: var(--dt-warn-strong);
 }
 .dt-mark[data-tone="error"] {
+  --dt-lit: var(--dt-error);
   background: var(--dt-error);
 }
 .dt-mark[data-point] {
+  --dt-lit: var(--dt-info);
   top: -2px;
   bottom: -2px;
   width: 2px;
   background: var(--dt-info);
 }
 .dt-mark[data-point][data-tone="warn"] {
+  --dt-lit: var(--dt-warn-strong);
   background: var(--dt-warn-strong);
 }
 .dt-mark[data-point][data-tone="error"] {
+  --dt-lit: var(--dt-error);
   background: var(--dt-error);
 }
 /* Outside the picked stretch of time: still there, stepped back. */
@@ -1908,6 +1942,12 @@ details[data-focused] > .dt-sql-group {
 .dt-share:focus-visible {
   outline: none;
   background: var(--dt-hover);
+}
+/* Its segment hovered on the bar (lit.ts): as if hovered itself, the collector's too. */
+.dt-share[data-lit],
+.dt-share[data-fixed][data-lit] {
+  background: var(--dt-hover);
+  color: var(--dt-text);
 }
 .dt-breakdown-legend b {
   color: var(--dt-text);

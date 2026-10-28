@@ -10,6 +10,7 @@ import { plural } from "./lib/plural";
 import { type Quiet, quietSpans } from "./lib/quiet";
 import { cleared, isLoud, rangeLabel, type Slice, togglePart } from "./lib/slice";
 import { waitedIn } from "./lib/waiting";
+import { litKey } from "./lit";
 import { largestFirst, ShareFace } from "./Shares";
 import { useHeldSlice } from "./TimeSlice";
 import type { Related, Trace } from "./types";
@@ -169,7 +170,7 @@ function GcShare({ share }: { share: ShareOf }) {
     <li data-category={share.category}>
       <Tooltip delayDuration={150} disableHoverableContent={true}>
         <TooltipTrigger asChild>
-          <span className="dt-share" data-fixed="">
+          <span className="dt-share" data-fixed="" {...litKey(share.category, true)}>
             <ShareFace
               swatch={<span className="dt-swatch" />}
               name={share.label}
@@ -196,6 +197,7 @@ function Share({ share, filters }: { share: SpanShare; filters: SliceState }) {
           <button
             type="button"
             className="dt-share"
+            {...litKey(share.category, true)}
             aria-pressed={filters.slice.parts.includes(part)}
             onClick={() => filters.onChange(togglePart(filters.slice, part))}
           >

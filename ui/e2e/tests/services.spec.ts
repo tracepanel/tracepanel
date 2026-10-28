@@ -31,6 +31,50 @@ test("every line of the map is drawn whole, its bends inside the diagram", async
   expect(outside).toBe(0);
 });
 
+test("every line of the map starts and ends on a box, a call from a role the app has no box for too", async ({
+  page,
+}) => {
+  // Calls stored under a role no box is drawn for (traces whose role is "", beside the shop's three): from the
+  // shop's box, not from an empty node dagre placed out in space.
+  await page.route("**/api/services*", async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    const edge = body.edges.find((one: { service: string }) => one.service === "shop");
+    body.edges.push({ ...edge, role: "" });
+    body.links.push({
+      // biome-ignore-start lint/style/useNamingConvention: the API's fields.
+      service: "shop",
+      role: "",
+      to_service: "todo",
+      to_role: "web",
+      peer: null,
+      traces: 1,
+      total: 1,
+      errors: 0,
+      // biome-ignore-end lint/style/useNamingConvention: the API's fields.
+    });
+    await route.fulfill({ response, json: body });
+  });
+  await page.goto("/#/services");
+  const map = page.getByRole("region", { name: "Architecture" });
+  await expect(map.getByText("CLI · cron")).toBeVisible();
+
+  const loose = await map.locator("svg.absolute").evaluate((svg: SVGSVGElement) => {
+    const boxes = [...(svg.parentElement?.querySelectorAll<HTMLElement>(":scope > a, :scope > span") ?? [])];
+    const on = (point: DOMPoint) =>
+      boxes.some((box) => {
+        const [left, top] = [box.offsetLeft, box.offsetTop];
+        const [right, bottom] = [left + box.offsetWidth, top + box.offsetHeight];
+        return point.x >= left - 1 && point.x <= right + 1 && point.y >= top - 1 && point.y <= bottom + 1;
+      });
+    return [...svg.querySelectorAll<SVGPathElement>("g > path:first-child")]
+      .filter((path) => !(on(path.getPointAtLength(0)) && on(path.getPointAtLength(path.getTotalLength()))))
+      .map((path) => path.getAttribute("d"));
+  });
+
+  expect(loose).toEqual([]);
+});
+
 test("Mermaid copies the map as a flowchart, and zoom changes its scale", async ({ page }) => {
   await page.goto("/#/services");
   const map = page.getByRole("region", { name: "Architecture" });

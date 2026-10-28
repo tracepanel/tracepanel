@@ -70,51 +70,73 @@ function regionOf(host: Host): Group | null {
 // What starts each role's work. A web app a browser app calls is called, so its arrow comes from the browser's box.
 const ENTRIES: Record<string, string> = { web: "Clients", command: "CLI · cron", browser: "Users" };
 
-const roleOf = (service: string, role: string | null) => roleId(service, role ?? "web");
+/** The role a call's role is drawn as, by its app and its role: null when its app has no box on the diagram. */
+type RoleOf = (service: string, role: string | null) => string | null;
+
+/** One app's calls to another from the same box to the same box, as one line: their traces summed. */
+function merged<T extends AppLink>(links: readonly T[]): T[] {
+  const byEnds = new Map<string, T>();
+  for (const link of links) {
+    const ends = `${link.service}/${link.role} ${link.to_service}/${link.to_role}`;
+    const seen = byEnds.get(ends);
+    byEnds.set(
+      ends,
+      seen
+        ? {
+            ...seen,
+            traces: seen.traces + link.traces,
+            total: seen.total + link.total,
+            errors: seen.errors + link.errors,
+          }
+        : link,
+    );
+  }
+  return [...byEnds.values()];
+}
 
 /**
  * The calls one app made to another, role to role. The server the caller saw it as (an HTTP host) is that app: its
  * arrow to that server goes, and the server too when nothing else calls it.
  */
-function appLinks(map: ServiceMap, hosts: readonly Host[]): { links: Link[]; seen: Set<string> } {
-  const seen = new Set(
-    map.links.flatMap((link) => (link.peer ? [`${roleOf(link.service, link.role)} ${link.peer}`] : [])),
-  );
-  const links = map.links.map((app) => {
-    const [from, to] = [roleOf(app.service, app.role), roleOf(app.to_service, app.to_role)];
+function appLinks(map: ServiceMap, hosts: readonly Host[], roleOf: RoleOf): { links: Link[]; seen: Set<string> } {
+  const drawn = map.links.flatMap((app) => {
+    const [role, to] = [roleOf(app.service, app.role), roleOf(app.to_service, app.to_role)];
+    // biome-ignore lint/style/useNamingConvention: the API's field, as AppLink has it.
+    return role !== null && to !== null ? [{ ...app, role, to_role: to }] : [];
+  });
+  // Every call keeps its server: the busiest's is the line's.
+  const seen = new Set(drawn.flatMap((link) => (link.peer ? [`${roleId(link.service, link.role)} ${link.peer}`] : [])));
+  const links = merged(drawn).map((app) => {
+    const [from, to] = [roleId(app.service, app.role), roleId(app.to_service, app.to_role)];
     return { key: `${from} ${to}`, from, to, edge: null, app };
   });
   // A host is the app when any of its uses is what the caller saw.
   const hostSeen = new Set(
     hosts.flatMap((host) =>
-      map.links.flatMap((link) =>
-        host.uses.some((use) => seen.has(`${roleOf(link.service, link.role)} ${use.id}`))
-          ? [`${roleOf(link.service, link.role)} ${hostId(host.key)}`]
-          : [],
+      links.flatMap(({ from }) =>
+        host.uses.some((use) => seen.has(`${from} ${use.id}`)) ? [`${from} ${hostId(host.key)}`] : [],
       ),
     ),
   );
   return { links, seen: hostSeen };
 }
 
-/** The boxes and the calls between them: entries, the projects' roles, the servers, by host and port. */
 /**
- * The box a call's role is drawn as: its own, else its app's box for traces with no role (calls recorded as "http"
- * beside traces whose role is ""), else its app's only box. A role with no box was an empty node dagre drew lines
- * from, nowhere near its app.
+ * The role a call's role is drawn as: its own, else its app's box for traces with no role (calls recorded as "http"
+ * beside traces whose role is ""), else its app's busiest (the roles come busiest first; with one, its only); null
+ * for an app with no box at all. A role with no box was an empty node dagre placed on its own: its lines started and
+ * ended in empty space, nowhere near its app.
  */
-function drawnRole(roles: readonly Box[], service: string, role: string): string {
-  const own = roleId(service, role);
-  const mine = roles.filter((box) => box.type === "role" && box.service === service).map((box) => box.id);
-  const only = mine.length === 1 ? mine : [];
-  return [own, roleId(service, ""), ...only].find((id) => mine.includes(id)) ?? own;
+function drawnRole(roles: readonly Box[]): RoleOf {
+  return (service, role) => {
+    const mine = roles.flatMap((box) => (box.type === "role" && box.service === service ? [box.app.role] : []));
+    return [role ?? "web", "", mine[0]].find((name) => name !== undefined && mine.includes(name)) ?? null;
+  };
 }
 
+/** The boxes and the calls between them: entries, the projects' roles, the servers, by host and port. */
 function graphOf(map: ServiceMap): { boxes: Box[]; links: Link[] } {
   const hosts = byHost(map.services);
-  const apps = appLinks(map, hosts);
-  // An app only other apps call has no clients of its own on the diagram.
-  const called = new Set(apps.links.map((link) => link.to));
   const projects = byProject(map.apps);
   const roles: Box[] = projects.flatMap((project) =>
     project.roles.map((role) => ({
@@ -125,9 +147,18 @@ function graphOf(map: ServiceMap): { boxes: Box[]; links: Link[] } {
       app: role,
     })),
   );
+  const roleOf = drawnRole(roles);
+  const apps = appLinks(map, hosts, roleOf);
+  // An app only other apps call has no clients of its own on the diagram.
+  const called = new Set(apps.links.map((link) => link.to));
   const entries = [...new Set(map.apps.map((app) => app.role))]
     .filter((role) => ENTRIES[role])
     .map((role): Box => ({ type: "entry", id: `entry:${role}`, label: ENTRIES[role] ?? role }));
+  // Each call from the box it's drawn from, before they're summed by host: two roles drawn as one box are one line.
+  const edges = map.edges.flatMap((edge) => {
+    const role = roleOf(edge.service, edge.role);
+    return role === null ? [] : [{ ...edge, role }];
+  });
   const links: Link[] = [
     ...map.apps
       .filter((app) => ENTRIES[app.role] && !called.has(roleId(app.service, app.role)))
@@ -139,8 +170,8 @@ function graphOf(map: ServiceMap): { boxes: Box[]; links: Link[] } {
         app: null,
       })),
     ...apps.links,
-    ...hostEdges(map.edges, hosts).flatMap((edge) => {
-      const [role, server] = [drawnRole(roles, edge.service, edge.role), hostId(edge.host)];
+    ...hostEdges(edges, hosts).flatMap((edge) => {
+      const [role, server] = [roleId(edge.service, edge.role), hostId(edge.host)];
       if (apps.seen.has(`${role} ${server}`)) return [];
       // A worker takes its tasks from the broker: the arrow runs from the broker to it.
       const [from, to] = edge.direction === "in" ? [server, role] : [role, server];
@@ -150,10 +181,10 @@ function graphOf(map: ServiceMap): { boxes: Box[]; links: Link[] } {
   // A server or an entry with no arrow left (a host that was another app) isn't drawn.
   const linked = new Set(links.flatMap((link) => [link.from, link.to]));
   const servers = hosts.map((host): Box => ({ type: "host", id: hostId(host.key), host }));
-  return {
-    boxes: [...entries, ...roles, ...servers].filter((box) => box.type === "role" || linked.has(box.id)),
-    links,
-  };
+  const boxes = [...entries, ...roles, ...servers].filter((box) => box.type === "role" || linked.has(box.id));
+  // Only lines between boxes drawn: dagre makes an empty node of an end it doesn't know, out in empty space.
+  const drawn = new Set(boxes.map((box) => box.id));
+  return { boxes, links: links.filter((link) => drawn.has(link.from) && drawn.has(link.to)) };
 }
 
 /** The graph dagre lays out: a node per box, sized as drawn, the roles inside their project, an edge per call. */
