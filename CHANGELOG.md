@@ -33,6 +33,10 @@
   `chalk`) no longer show raw ANSI escape sequences: the agent stores their
   text, so search finds their words, and the console strips the escapes
   from records stored before.
+- The call tree's details pane always scrolls to its last line. Before the
+  view scrolled it up under the tabs, the pane ran past the panel's bottom
+  by the height of the tree's head, and its last attributes were out of
+  reach (its own scrolling never moves the view).
 
 ## 0.6.0 (2026-10-28)
 

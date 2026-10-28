@@ -102,3 +102,68 @@ test("docked right, a shorter window: the details pane scrolls to its end, the l
     })
     .toBe(true);
 });
+
+/**
+ * The details pane wheeled to its end, the view itself left where it is (the tree's head still above the pane): the
+ * last attribute's row is whole in the pane's box and in the panel's frame.
+ */
+async function lastAttributeInView(page: Page): Promise<boolean> {
+  const pane = panel(page).getByRole("complementary", { name: "Details" });
+  const box = await pane.boundingBox();
+  if (!box) throw new Error("no details pane");
+  await page.mouse.move(box.x + box.width / 2, box.y + 30);
+  await page.mouse.wheel(0, 5000);
+  const frame = page.frames().find((one) => one !== page.mainFrame());
+  if (!frame) throw new Error("no panel frame");
+  return frame.evaluate(() => {
+    const side = document.querySelector<HTMLElement>(".dt-map-side");
+    const rows = side?.querySelectorAll('[aria-label="All attributes"] dl > div');
+    const last = rows?.[rows.length - 1]?.getBoundingClientRect();
+    const shown = side?.getBoundingClientRect();
+    if (!(last && shown)) return false;
+    return last.top >= shown.top - 1 && last.bottom <= Math.min(shown.bottom, window.innerHeight) + 1;
+  });
+}
+
+test("a short panel: the details pane wheels to its last attribute, before and after a resize", async ({ page }) => {
+  await openDetails(page);
+  await dragTo(page, { y: 700 });
+  await expect.poll(async () => (await ends(page)).frame).toBe(300);
+  await panel(page)
+    .locator("main")
+    .evaluate((view) => {
+      view.scrollTop = 0;
+    });
+
+  await expect.poll(() => lastAttributeInView(page)).toBe(true);
+
+  await dragTo(page, { y: 450 });
+  await expect.poll(async () => (await ends(page)).frame).toBe(550);
+
+  await expect.poll(() => lastAttributeInView(page)).toBe(true);
+
+  await dragTo(page, { y: 750 });
+  await expect.poll(async () => (await ends(page)).frame).toBe(250);
+
+  await expect.poll(() => lastAttributeInView(page)).toBe(true);
+});
+
+test("docked right, the window made shorter: the details pane wheels to its last attribute", async ({ page }) => {
+  await openDetails(page);
+  await panel(page).getByRole("button", { name: "Dock to right" }).click();
+  await expect.poll(async () => (await page.locator("iframe").boundingBox())?.x).toBe(1000);
+  await dragTo(page, { x: 300 });
+  await expect(panel(page).getByRole("complementary", { name: "Details" })).toBeVisible();
+
+  await expect.poll(() => lastAttributeInView(page)).toBe(true);
+
+  await page.setViewportSize({ width: 1600, height: 450 });
+  await expect.poll(async () => (await ends(page)).frame).toBe(450);
+  await panel(page)
+    .locator("main")
+    .evaluate((view) => {
+      view.scrollTop = 0;
+    });
+
+  await expect.poll(() => lastAttributeInView(page)).toBe(true);
+});
