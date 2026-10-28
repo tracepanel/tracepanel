@@ -21,6 +21,7 @@ import {
 import { rangeLabel, type TimeRange } from "./lib/slice";
 import { cn } from "./lib/utils";
 import { timed, wallClock } from "./lib/waiting";
+import { litKey, litScope } from "./lit";
 import { Segmented } from "./Segmented";
 import { largestFirst, ShareBar, ShareFace } from "./Shares";
 import { HEAD_TEXT } from "./TableColumns";
@@ -31,23 +32,34 @@ import type { Trace } from "./types";
 interface Tone {
   fill: string;
   dot: string;
+  /** The bar's segment, lit: its ring in the dot's colour, solid. */
+  lit: string;
 }
 
 const PALETTE: readonly Tone[] = [
-  { fill: "bg-sky-500/30 hover:bg-sky-500/50", dot: "bg-sky-500" },
-  { fill: "bg-emerald-500/30 hover:bg-emerald-500/50", dot: "bg-emerald-500" },
-  { fill: "bg-amber-500/30 hover:bg-amber-500/50", dot: "bg-amber-500" },
-  { fill: "bg-rose-500/30 hover:bg-rose-500/50", dot: "bg-rose-500" },
-  { fill: "bg-cyan-500/30 hover:bg-cyan-500/50", dot: "bg-cyan-500" },
-  { fill: "bg-orange-500/30 hover:bg-orange-500/50", dot: "bg-orange-500" },
+  { fill: "bg-sky-500/30 hover:bg-sky-500/50", dot: "bg-sky-500", lit: "[--dt-lit:var(--color-sky-500)]" },
+  {
+    fill: "bg-emerald-500/30 hover:bg-emerald-500/50",
+    dot: "bg-emerald-500",
+    lit: "[--dt-lit:var(--color-emerald-500)]",
+  },
+  { fill: "bg-amber-500/30 hover:bg-amber-500/50", dot: "bg-amber-500", lit: "[--dt-lit:var(--color-amber-500)]" },
+  { fill: "bg-rose-500/30 hover:bg-rose-500/50", dot: "bg-rose-500", lit: "[--dt-lit:var(--color-rose-500)]" },
+  { fill: "bg-cyan-500/30 hover:bg-cyan-500/50", dot: "bg-cyan-500", lit: "[--dt-lit:var(--color-cyan-500)]" },
+  { fill: "bg-orange-500/30 hover:bg-orange-500/50", dot: "bg-orange-500", lit: "[--dt-lit:var(--color-orange-500)]" },
 ];
-const YOURS: Tone = { fill: "bg-brand/40 hover:bg-brand/60", dot: "bg-brand" };
+const YOURS: Tone = { fill: "bg-brand/40 hover:bg-brand/60", dot: "bg-brand", lit: "[--dt-lit:var(--color-brand)]" };
 // Waiting is no package's time: neutral, hatched, as the time strip draws it.
 const WAITS: Tone = {
   fill: "dt-hatched bg-muted-foreground/15 hover:bg-muted-foreground/25",
   dot: "dt-hatched bg-muted-foreground/50",
+  lit: "[--dt-lit:var(--color-muted-foreground)]",
 };
-const REST: Tone = { fill: "bg-muted-foreground/20 hover:bg-muted-foreground/30", dot: "bg-muted-foreground/50" };
+const REST: Tone = {
+  fill: "bg-muted-foreground/20 hover:bg-muted-foreground/30",
+  dot: "bg-muted-foreground/50",
+  lit: "[--dt-lit:var(--color-muted-foreground)]",
+};
 
 type Palette = Map<string, Tone>;
 type Share = { name: string; samples: number };
@@ -378,17 +390,24 @@ function Packages({
   const parts = ordered.map(({ name, samples }) => ({
     key: name,
     size: samples,
-    className: toneOf(palette, name).dot,
+    className: cn(toneOf(palette, name).dot, toneOf(palette, name).lit),
     title: `${name}: ${time(samples)}`,
     faded: faded(lit, name),
   }));
   return (
-    <section className="grid gap-3" aria-label={`${noun} by package`}>
+    // A segment hovered lights its legend item, and the legend item its segment.
+    <section className="grid gap-3" aria-label={`${noun} by package`} {...litScope}>
       <ShareBar parts={parts} total={total} />
       <ul className="dt-breakdown-legend">
         {ordered.map(({ name, samples }) => (
           <li key={name}>
-            <button type="button" className="dt-share" aria-pressed={lit.has(name)} onClick={() => onLight(name)}>
+            <button
+              type="button"
+              className="dt-share"
+              {...litKey(name, true)}
+              aria-pressed={lit.has(name)}
+              onClick={() => onLight(name)}
+            >
               <ShareFace
                 swatch={<span className={cn("dt-dot", toneOf(palette, name).dot)} />}
                 name={name}

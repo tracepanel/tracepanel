@@ -3,6 +3,7 @@
 // its percent muted; largest first, waiting last.
 import type { ReactNode } from "react";
 import { cn } from "./lib/utils";
+import { litKey } from "./lit";
 
 /** A share as the legend says it: its swatch, its name, how long, its percent. */
 export function ShareFace({
@@ -48,6 +49,7 @@ export function ShareBar({ parts, total }: { parts: readonly BarPart[]; total: n
         <span
           key={part.key}
           title={part.title}
+          {...litKey(part.key)}
           className={cn(part.className, part.faded && "opacity-30")}
           style={{ width: `${(part.size / Math.max(total, 1)) * 100}%` }}
         />

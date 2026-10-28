@@ -9,12 +9,13 @@ import {
 import { partOfCategory } from "./CallMap";
 import { duration } from "./format";
 import { keyed } from "./keys";
-import type { Category } from "./lib/breakdown";
+import { type Category, spanCategories } from "./lib/breakdown";
 import { GC } from "./lib/memory";
 import type { Profile } from "./lib/profile";
 import { isLoud, overlaps, type Slice, type TimeRange, togglePart } from "./lib/slice";
 import { DATASTORES, MESSAGING, RPC } from "./lib/systems";
 import { timed } from "./lib/waiting";
+import { litKey, litScope } from "./lit";
 import { rangeIn, TimeLane } from "./TimeLane";
 import { TimeLegend } from "./TimeLegend";
 import { RangeBand, useHeldSlice, useRangeDrag } from "./TimeSlice";
@@ -30,6 +31,8 @@ interface Mark {
   label: string;
   tone: "neutral" | "warn" | "error" | "info";
   target: MarkTarget;
+  /** A call's share of the time (its legend item's): hovering one lights the other. */
+  category?: string | undefined;
 }
 
 interface Lane {
@@ -71,6 +74,7 @@ function failed(span: Span, trace: Trace): boolean {
 
 function callLanes(trace: Trace): Lane[] {
   const flagged = new Set(trace.issues.flatMap((issue) => issue.span_ids));
+  const categories = spanCategories(trace);
   return CALL_LANES.map(({ noun, kinds, always }) => ({
     noun,
     always,
@@ -83,6 +87,7 @@ function callLanes(trace: Trace): Lane[] {
         label: `${span.name} · ${duration(span.duration)}`,
         tone: toneOf(span, trace, flagged),
         target: { tab: "tree", span: span.id } as const,
+        category: categories.get(span.id),
       })),
   }));
 }
@@ -203,6 +208,7 @@ function LaneRow({
               "data-tone": mark.tone,
               "data-point": mark.duration === 0 ? "" : undefined,
               "data-out": outside(mark, trace, range),
+              ...litKey(mark.category),
               style: position(mark, trace, total),
             }}
             onSelect={onSelect}
@@ -361,7 +367,8 @@ export function TimeStrip({
   onSelect: (target: MarkTarget) => void;
 }) {
   return (
-    <section className="dt-strip" aria-label="Time">
+    // A segment hovered on any lane lights its legend item, and the legend item every segment of it.
+    <section className="dt-strip" aria-label="Time" {...litScope}>
       <Timeline trace={trace} onSelect={onSelect} />
       <TimeLegend trace={trace} related={related} />
     </section>
