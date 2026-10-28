@@ -118,6 +118,58 @@ export function RoutePath({ path }: { path: string }) {
   );
 }
 
+/**
+ * A request's path in a row short of room: cut in its middle, never at its end. Its head gives way first
+ * ("/api/cat…/trail-runner-gtx"), its last segment stays whole, all of it in the tooltip. Under a run of one route
+ * (`shared`, that route), the part the run's paths share is quiet and what tells them apart stands out ("/authors" then
+ * "/7"); with no room, "…/7". Whatever follows the path (`children`, what sent an htmx request) gives way before it.
+ */
+export function TailPath({
+  path,
+  shared,
+  params,
+  title = path,
+  children,
+}: {
+  path: string;
+  shared?: string | null | undefined;
+  /** A route pattern: its parameters dimmed, as RoutePath has them. */
+  params?: boolean | undefined;
+  title?: string | undefined;
+  children?: ReactNode;
+}) {
+  const [head, tail] = splitPath(path, shared);
+  const text = (part: string) => (params ? <RoutePath path={part} /> : part);
+  return (
+    <span className="dt-request-path" data-split="" data-shared={shared ? "" : undefined} title={title}>
+      {head ? <span className="dt-path-head">{text(head)}</span> : null}
+      <span className="dt-path-tail">{text(tail)}</span>
+      {children}
+    </span>
+  );
+}
+
+/**
+ * A path's head and its tail: what follows the segments it shares with `shared` (a run's route: "/authors" and "/7"
+ * of "/authors/7" under "/authors/{author_id}"), else its last segment ("/trail-runner-gtx"), a trailing slash and a
+ * query string with it. A path of one segment is all tail.
+ */
+function splitPath(path: string, shared: string | null | undefined): [string, string] {
+  if (shared) {
+    const mine = path.split("/");
+    const theirs = shared.split("/");
+    let same = 0;
+    while (same < mine.length - 1 && mine[same] === theirs[same]) same += 1;
+    if (same > 1) return [mine.slice(0, same).join("/"), `/${mine.slice(same).join("/")}`];
+  }
+  const query = path.indexOf("?");
+  const cut = path
+    .slice(0, query === -1 ? path.length : query)
+    .replace(/\/+$/, "")
+    .lastIndexOf("/");
+  return cut > 0 ? [path.slice(0, cut), path.slice(cut)] : ["", path];
+}
+
 /** Renders `code` spans in hint text written with backticks. */
 export function RichText({ text }: { text: string }) {
   const parts = text.split(/(`[^`]+`)/g).filter(Boolean);
