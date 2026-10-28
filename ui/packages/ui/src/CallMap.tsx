@@ -1605,39 +1605,75 @@ function fitSidePane(map: HTMLElement): void {
 }
 
 /**
- * Whether the call tree is wide enough for the details pane beside it. The pane's height follows the view it scrolls
- * in, not the tree: a panel dragged taller or shorter changes the view alone, and a height fitted to the old one cut
- * the pane's end off (or stopped the line between tree and pane in mid-air).
+ * The pane's height: from where it is now to the view's bottom. It sticks under the tabs only once the view scrolled
+ * it there; before, the tree's head (the time strip, the filters) sits above it, and a pane as tall as the view under
+ * the tabs ran that far past the view's bottom. Its own scrolling stops at its edge (a wheel over it never scrolls the
+ * view), so its last rows were out of reach.
+ */
+function fitPane(pane: HTMLElement, map: HTMLElement): void {
+  const view = scrollParent(map);
+  const viewTop = view ? view.getBoundingClientRect().top + view.clientTop : 0;
+  const viewHeight = view?.clientHeight ?? window.innerHeight;
+  const at = Math.max(stickyTop(map), pane.getBoundingClientRect().top - viewTop);
+  pane.style.maxHeight = `${Math.max(0, viewHeight - at)}px`;
+}
+
+/** The view, the tree and the tabs over it, each when it resizes; the view (or the window) as it scrolls. */
+function watchView(map: HTMLElement, fit: () => void): () => void {
+  const observer = new ResizeObserver(fit);
+  observer.observe(map);
+  const view = scrollParent(map);
+  if (view) observer.observe(view);
+  const sticky = map.closest(".dt-trace")?.querySelector<HTMLElement>(".dt-trace-strip, .dt-tabs");
+  if (sticky) observer.observe(sticky);
+  let frame = 0;
+  const scrolled = () => {
+    cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(fit);
+  };
+  const scroller: HTMLElement | Window = view ?? window;
+  scroller.addEventListener("scroll", scrolled, { passive: true });
+  // With no scrolling parent the window is the view.
+  window.addEventListener("resize", fit);
+  return () => {
+    observer.disconnect();
+    cancelAnimationFrame(frame);
+    scroller.removeEventListener("scroll", scrolled);
+    window.removeEventListener("resize", fit);
+  };
+}
+
+/**
+ * Whether the call tree is wide enough for the details pane beside it. The tree's height follows the view it scrolls
+ * in: a panel dragged taller or shorter changes the view alone, and a height fitted to the old one stopped the line
+ * between tree and pane in mid-air.
  */
 function useSidePane(map: RefObject<HTMLDivElement | null>): boolean {
   const [side, setSide] = useState(false);
   useEffect(() => {
     const element = map.current;
     if (!element) return;
-    const fit = () => {
+    return watchView(element, () => {
       setSide(element.clientWidth >= SIDE_MIN_WIDTH);
       fitSidePane(element);
-    };
-    const observer = new ResizeObserver(fit);
-    observer.observe(element);
-    const view = scrollParent(element);
-    if (view) observer.observe(view);
-    const sticky = element.closest(".dt-trace")?.querySelector<HTMLElement>(".dt-trace-strip, .dt-tabs");
-    if (sticky) observer.observe(sticky);
-    // With no scrolling parent the window is the view.
-    window.addEventListener("resize", fit);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", fit);
-    };
+    });
   }, [map]);
   return side;
 }
 
 /** Beside the tree, like the devtools' Network panel: the tree keeps its shape, the details stay in view. */
 function SidePane({ children, onClose, resize }: { children: ReactNode; onClose: () => void; resize: ReactNode }) {
+  const pane = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const element = pane.current;
+    const map = element?.closest<HTMLElement>(".dt-map");
+    if (!(element && map)) return;
+    const fit = () => fitPane(element, map);
+    fit();
+    return watchView(map, fit);
+  }, []);
   return (
-    <aside className="dt-map-side" aria-label="Details">
+    <aside className="dt-map-side" aria-label="Details" ref={pane}>
       {resize}
       <button type="button" className="dt-map-side-close" aria-label="Close the details" onClick={onClose}>
         <CloseIcon />
