@@ -73,7 +73,10 @@ const ENTRIES: Record<string, string> = { web: "Clients", command: "CLI · cron"
 /** The role a call's role is drawn as, by its app and its role: null when its app has no box on the diagram. */
 type RoleOf = (service: string, role: string | null) => string | null;
 
-/** One app's calls to another from the same box to the same box, as one line: their traces summed. */
+/**
+ * One app's calls to another from the same box to the same box, as one line: their traces summed, the busier's
+ * median, the slower 95th percentile.
+ */
 function merged<T extends AppLink>(links: readonly T[]): T[] {
   const byEnds = new Map<string, T>();
   for (const link of links) {
@@ -87,6 +90,8 @@ function merged<T extends AppLink>(links: readonly T[]): T[] {
             traces: seen.traces + link.traces,
             total: seen.total + link.total,
             errors: seen.errors + link.errors,
+            p50: link.traces > seen.traces ? link.p50 : seen.p50,
+            p95: Math.max(seen.p95, link.p95),
           }
         : link,
     );
@@ -491,19 +496,14 @@ function groupsIn(boxes: readonly Box[]): Group[] {
   return [...groups.values()];
 }
 
-function linkLine({ from, to, edge, app }: Link): string {
-  const count = edge
-    ? `${edge.calls.toLocaleString("en-US")} calls`
-    : app
-      ? `${app.traces.toLocaleString("en-US")} traces`
-      : "";
-  const calls = count ? `|${quoted(count)}|` : "";
-  return `  ${mermaidId(from)} -->${calls} ${mermaidId(to)}`;
+/** An arrow: who calls what, no counts (the map has none on its lines either; they change with every request). */
+function linkLine({ from, to }: Link): string {
+  return `  ${mermaidId(from)} --> ${mermaidId(to)}`;
 }
 
 /**
- * The diagram as a Mermaid flowchart: a subgraph per project around its roles, the servers in Mermaid's shapes, the
- * calls on the arrows. GitHub, GitLab and most docs tools draw it.
+ * The diagram as a Mermaid flowchart: a subgraph per project around its roles, the servers in Mermaid's shapes, an
+ * arrow per call. GitHub, GitLab and most docs tools draw it.
  */
 export function mermaidOf(map: ServiceMap, label: (host: Host) => string): string {
   const { boxes, links } = graphOf(map);

@@ -513,7 +513,8 @@ mod tests {
         assert_eq!(
             services["links"],
             serde_json::json!([{"service": "shop", "role": "web", "to_service": "billing", "to_role": "web",
-                                "peer": "http:http/billing:8000", "traces": 1, "total": 10, "errors": 1}])
+                                "peer": "http:http/billing:8000", "traces": 1, "total": 10, "errors": 1,
+                                "p50": 10, "p95": 10}])
         );
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -562,6 +563,88 @@ mod tests {
                 Value::from(2),
                 Value::from("Java 21 · Spring Boot 4.10")
             )]
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn an_app_says_its_latency_and_how_many_issues_its_traces_raised() {
+        let dir =
+            std::env::temp_dir().join(format!("tracepanel-store-app-p95-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = path_in(&dir);
+        let mut store = Store::open(&path).unwrap();
+        let run = |id: &str, kind: &str, role: Option<&str>, duration: i64, issues: &[&str]| {
+            let mut attrs = serde_json::json!({"service.name": "shop"});
+            if let Some(role) = role {
+                attrs["service.role"] = role.into();
+            }
+            let issues: Vec<Value> = issues
+                .iter()
+                .map(|fingerprint| {
+                    serde_json::json!({"fingerprint": fingerprint, "fingerprint_version": 1, "kind": "n+1",
+                                       "title": fingerprint, "culprit": null, "hint": null})
+                })
+                .collect();
+            let doc = serde_json::json!({
+                "id": id, "kind": kind, "name": "run", "start": 1_000, "duration": duration, "status": "ok",
+                "attrs": attrs, "spans": [], "logs": [], "errors": [], "links": [], "issues": issues,
+            });
+            Received {
+                trace: serde_json::from_value(doc.clone()).unwrap(),
+                doc: doc.to_string(),
+            }
+        };
+        // Twenty requests, a role named and not: the slowest is the p95, one issue raised twice and another once.
+        let requests: Vec<Received> = (1..=20)
+            .map(|n| {
+                let issues: &[&str] = match n {
+                    1 => &["A", "B"],
+                    2 => &["A"],
+                    _ => &[],
+                };
+                run(
+                    &format!("R{n}"),
+                    "http",
+                    (n % 2 == 0).then_some("web"),
+                    n * 10,
+                    issues,
+                )
+            })
+            .collect();
+        store.write(&requests).unwrap();
+        store.write(&[run("T", "task", None, 7, &[])]).unwrap();
+        let services = Reader::new(&path).list_services("").unwrap();
+
+        assert_eq!(
+            services["apps"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|app| (
+                    app["role"].clone(),
+                    app["traces"].clone(),
+                    app["p50"].clone(),
+                    app["p95"].clone(),
+                    app["issues"].clone()
+                ))
+                .collect::<Vec<_>>(),
+            [
+                (
+                    Value::from("web"),
+                    Value::from(20),
+                    Value::from(110),
+                    Value::from(200),
+                    Value::from(2)
+                ),
+                (
+                    Value::from("worker"),
+                    Value::from(1),
+                    Value::from(7),
+                    Value::from(7),
+                    Value::from(0)
+                ),
+            ]
         );
         let _ = std::fs::remove_dir_all(&dir);
     }

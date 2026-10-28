@@ -109,7 +109,21 @@
   The Profile tab's apps are a table: profiled, waiting, the function
   most time went in. The line the lists had of their own is gone, and so
   is the app's chip in the middle of a sentence.
-
+- The service map's boxes say what each is: an icon, its name, and what
+  runs it or where. They carry no trace or call counts and no summed time.
+  A box with failures or issues says so in a small badge (`16 failed`,
+  ⚠ 2), and a line with failures has one on its middle. The numbers show
+  on hover: an app role's traces, p50, p95, error rate and issues, a
+  server's calls, average per call and error rate, and the same for the
+  calls a line stands for. The services API gives each app role its
+  `p50`, `p95` and `issues`, and each call between apps its `p50` and
+  `p95`. The Mermaid copy has no counts on its arrows.
+- The service map is a canvas: drag it or scroll with two fingers to move
+  around, pinch or ctrl+wheel to zoom at the pointer, the arrow keys to
+  pan, + and − to zoom, and a Fit button (or 0) for the whole map. A
+  short press on a box still opens it. It is at least 440 pixels tall
+  (less in a short window), as tall as the map up to the window, on a
+  dot grid that moves and scales with it, and shows in narrow windows too.
 - A list's paths are cut in the middle, not at the end: the last
   segment stays whole (`/api/cat…/trail-runner-gtx`), and the whole path
   is in the tooltip. In the panel's narrow list the numbers make room

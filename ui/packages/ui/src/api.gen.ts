@@ -1602,6 +1602,12 @@ export interface components {
             /** @description How many of them failed. */
             errors: number;
             total: components["schemas"]["Duration"];
+            /** @description Their median duration. */
+            p50: components["schemas"]["Duration"];
+            /** @description Their 95th percentile duration. */
+            p95: components["schemas"]["Duration"];
+            /** @description How many issues they raised. */
+            issues: number;
             last_seen: components["schemas"]["Time"];
             /** @description What runs it, as the SDKs label it: "Python 3.12 · Django 6.0", "Go 1.27". */
             runtime: string | null;
@@ -1724,6 +1730,10 @@ export interface components {
             total: components["schemas"]["Duration"];
             /** @description How many of them failed. */
             errors: number;
+            /** @description Their median duration. */
+            p50: components["schemas"]["Duration"];
+            /** @description Their 95th percentile duration. */
+            p95: components["schemas"]["Duration"];
         };
         Snapshot: {
             /** @description The snapshot's layout version. */
