@@ -20,6 +20,19 @@
   another service from a backend for frontend are the field's N+1 then.
   The DataLoader named for GraphQL Yoga and Apollo Server (the JS SDK) is
   the `dataloader` package.
+- The call tree opens a chain of calls across apps a level at a time: a
+  browser view's call to its BFF, the BFF's calls to each service, their
+  SQL. A service's trace opens by itself when it is one of a few calls, and
+  is a click away in a fan-out. An N+1 of calls to another service groups
+  as one row (×N), each call with its service's trace under it. The related
+  API brings up to 50 call traces whole (was 20).
+
+### Fixed
+
+- Log records from a coloured logger (GraphQL Yoga's, a Node app's
+  `chalk`) no longer show raw ANSI escape sequences: the agent stores their
+  text, so search finds their words, and the console strips the escapes
+  from records stored before.
 
 ## 0.6.0 (2026-10-28)
 
