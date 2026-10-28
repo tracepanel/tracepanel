@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- A new span kind, `sql.connect`: the time a driver took to open a
+  connection to the database (logging in to Snowflake, PostgreSQL's or
+  MySQL's handshake). It counts as the database's time in the breakdown and
+  shows with the SQL filter, so a request that opens a connection no longer
+  shows that time as its code's.
+
 ## 0.6.0 (2026-10-28)
 
 ### Added

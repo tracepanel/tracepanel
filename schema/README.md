@@ -23,6 +23,12 @@ are ULIDs.
   `http.client`, `template`, `signal`, `task.enqueue`, `task.run`, `command`
   and `function`. `attrs` are open and namespaced: `http.route`,
   `db.fingerprint`, `cache.hit`, `code.origin`.
+- **Connection**: opening a connection to a database, a `sql.connect` span
+  named `connect <db.system>` with `db.system`, `db.namespace`,
+  `server.address` and `db.client`, and `db.connection.pool` when a pool
+  opened it (`sqlalchemy`, `psycopg_pool`). What the driver does meanwhile
+  (a login over HTTPS, a TLS handshake) is inside it. Its time is the
+  database's.
 - **Signal**: a send with receivers (a Django signal), a `signal` span with
   `signal.name`, `signal.sender` and `signal.receivers`. Each receiver is a
   `function` span under it. One that raised has status `error` and

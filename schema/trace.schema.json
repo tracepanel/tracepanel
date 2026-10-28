@@ -642,6 +642,7 @@
             "view",
             "template",
             "sql",
+            "sql.connect",
             "transaction",
             "cache",
             "storage",

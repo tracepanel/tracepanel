@@ -50,6 +50,8 @@ function frameworkLabel(kind: string | undefined): string {
 
 const BY_KIND: Record<string, Category> = {
   sql: "sql",
+  // Opening a connection to the database (logging in, a TLS handshake): the database's time, not the code's.
+  "sql.connect": "sql",
   redis: "redis",
   cache: "cache",
   "http.client": "http",
