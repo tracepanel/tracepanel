@@ -2429,6 +2429,56 @@ mod tests {
     }
 
     #[test]
+    fn a_driver_s_http_requests_inside_its_statements_and_connection_are_no_issue_of_their_own() {
+        // Snowflake's connector: a login inside the connection, a request inside each statement, a loop of them.
+        let post = |id: &str, parent: &str, path: &str, start: i64| {
+            serde_json::json!({
+                "id": id, "parent_id": parent, "kind": "http.client", "name": format!("POST acme.snowflakecomputing.com{path}"),
+                "start": start, "duration": 40_000,
+                "attrs": {"http.request.method": "POST", "url.full": format!("https://acme.snowflakecomputing.com{path}"),
+                          "code.origin": "app/views.py:30 in report"},
+            })
+        };
+        let mut spans = vec![
+            serde_json::json!({"id": "root", "kind": "http", "name": "GET /report", "start": 0, "duration": 9_000_000,
+                               "attrs": {}}),
+            serde_json::json!({"id": "c", "parent_id": "root", "kind": "sql.connect", "name": "connect snowflake",
+                               "start": 0, "duration": 1_000_000,
+                               "attrs": {"db.system": "snowflake", "db.alias": "snowflake:ANALYTICS"}}),
+            post("login", "c", "/session/v1/login-request", 0),
+        ];
+        for n in 0..3_i64 {
+            spans.push(serde_json::json!({
+                "id": format!("q{n}"), "parent_id": "root", "kind": "sql", "name": "SELECT orders",
+                "start": 1_000_000 * (n + 1), "duration": 50_000,
+                "attrs": {"db.statement": "SELECT * FROM orders WHERE id = %s",
+                          "db.fingerprint": "SELECT * FROM orders WHERE id = %s", "db.params_hash": format!("p{n}"),
+                          "db.alias": "snowflake:ANALYTICS", "db.system": "snowflake",
+                          "code.origin": "app/views.py:30 in report"},
+            }));
+            spans.push(post(
+                &format!("h{n}"),
+                &format!("q{n}"),
+                &format!("/queries/v1/query-request?requestId=r{n}"),
+                1_000_000 * (n + 1),
+            ));
+        }
+        let trace: Trace = serde_json::from_value(serde_json::json!({
+            "id": "t", "kind": "http", "name": "GET /report", "start": 0, "spans": spans,
+        }))
+        .unwrap();
+
+        assert_eq!(
+            found(&trace)
+                .into_iter()
+                .map(|(kind, _, count)| (kind, count))
+                .collect::<Vec<_>>(),
+            [("n+1".to_owned(), 3)]
+        );
+        assert!(found(&trace)[0].1.contains("SELECT"));
+    }
+
+    #[test]
     fn llm_calls_one_by_one_in_a_loop_are_an_n_plus_one_and_their_http_calls_no_issue() {
         let summaries = llm_calls(&[
             ("chat", "gpt-5", None, 0, 900_000, "stop"),
