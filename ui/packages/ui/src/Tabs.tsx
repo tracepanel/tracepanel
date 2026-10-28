@@ -15,6 +15,8 @@ export interface Tab<T extends string> {
   tone?: "warn" | "error" | undefined;
   /** A muted note after the count: the time the SQL tab's queries took. */
   detail?: string | undefined;
+  /** The detail's tooltip: what the calls' times add up to, where the detail is their time on the clock. */
+  detailTitle?: string | undefined;
   /** Shown after the label instead of a count: the request's status, a task's outcome. */
   badge?: ReactNode;
   /** A small icon before the label. */
@@ -95,7 +97,11 @@ function TabBody<T extends string>({ tab }: { tab: Tab<T> }) {
       <span className="dt-tab-label">{tab.label}</span>
       <TabCount tab={tab} />
       {tab.badge ?? null}
-      {tab.detail ? <span className="dt-tab-detail">{tab.detail}</span> : null}
+      {tab.detail ? (
+        <span className="dt-tab-detail" title={tab.detailTitle}>
+          {tab.detail}
+        </span>
+      ) : null}
     </>
   );
 }

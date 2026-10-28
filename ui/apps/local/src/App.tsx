@@ -1,8 +1,11 @@
 import {
   ArrowLeftIcon,
+  type Chain,
+  type ChainApp,
   ChevronDownIcon,
   ClearIcon,
   CloseIcon,
+  chainApps,
   type DataSource,
   DockBottomIcon,
   DockRightIcon,
@@ -14,6 +17,7 @@ import {
   type IssueKind,
   KindBadge,
   LayersIcon,
+  type ListChains,
   Logo,
   type Slice,
   sliceParams,
@@ -377,6 +381,111 @@ function arrivingIn(rows: readonly TraceRow[], stored: ReadonlySet<string>, id: 
 
 function idsOf(history: TabHistory | null): string[] {
   return history?.entries.map((entry) => entry.id) ?? [];
+}
+
+/* ---------- The chain under a row ---------- */
+
+/** A row's chain is loaded again while it is this new: the traces of its calls may still be on their way. */
+const CHAIN_FRESH_MS = 20_000;
+const CHAIN_POLL_MS = 2_000;
+
+/** What tells a row's two loads of its chain apart: its traces and how much each holds, the chain's findings. */
+function chainKey(chain: Chain): string {
+  const traces = chain.traces.map((each) => `${each.id}:${each.trace?.spans.length ?? 0}`).join(",");
+  return `${traces}|${chain.issues.length}|${chain.capped}`;
+}
+
+/** What a row says that its chain may have changed with: its time, queries, findings. */
+function rowKey(trace: TraceSummary): string {
+  return `${trace.id}:${trace.duration}:${trace.queries}:${trace.issues}`;
+}
+
+/**
+ * The apps each row's trace called, by its id (none for a view or an action: its requests are rows of their own).
+ * Read from the trace's chain, as its call tree and tabs read it (`source.chain`): loaded once a row is stored, again
+ * when the row changes, and every two seconds while it is new (a service's trace can arrive after its caller's).
+ */
+function useRowChains(rows: readonly TraceRow[], stored: ReadonlySet<string>): ReadonlyMap<string, ChainApp[]> {
+  const [chains, setChains] = useState<ReadonlyMap<string, Chain>>(() => new Map());
+  const loaded = useRef(new Map<string, string>());
+  const wanted = rows.filter((row) => row.trace.kind !== "page" && stored.has(row.trace.id)).map((row) => row.trace);
+  const key = wanted.map(rowKey).join(",");
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `key` says which rows and what they hold.
+  useEffect(() => {
+    const load = source.chain;
+    if (!load) return;
+    let live = true;
+    const keep = (id: string, chain: Chain) =>
+      setChains((current) => {
+        const before = current.get(id);
+        return before && chainKey(before) === chainKey(chain) ? current : new Map(current).set(id, chain);
+      });
+    const tick = () => {
+      const now = Date.now();
+      for (const trace of wanted) {
+        const fresh = now - (trace.start + trace.duration) / 1000 < CHAIN_FRESH_MS;
+        if (loaded.current.get(trace.id) === rowKey(trace) && !fresh) continue;
+        loaded.current.set(trace.id, rowKey(trace));
+        load(trace.id).then(
+          (chain) => live && keep(trace.id, chain),
+          () => undefined,
+        );
+      }
+    };
+    tick();
+    const timer = window.setInterval(() => document.visibilityState === "visible" && tick(), CHAIN_POLL_MS);
+    return () => {
+      live = false;
+      window.clearInterval(timer);
+    };
+  }, [key]);
+  const listed = rows.map((row) => row.trace.id).join(",");
+  return useMemo(() => {
+    const rowsIn = new Set(listed.split(","));
+    const apps = new Map<string, ChainApp[]>();
+    for (const [id, chain] of chains) {
+      if (!rowsIn.has(id)) continue;
+      const under = chainApps(chain, id, rowsIn);
+      if (under.length > 0) apps.set(id, under);
+    }
+    return apps;
+  }, [chains, listed]);
+}
+
+const CHAIN_OPEN_KEY = "tracepanel:chain-open";
+
+/** The chain rows open in the list: kept for the browser tab's session, as the panel reloads with each page. */
+function useChainOpen(): [ReadonlySet<string>, (key: string) => void] {
+  const [open, setOpen] = useState<ReadonlySet<string>>(() => {
+    try {
+      const saved: unknown = JSON.parse(sessionStorage.getItem(CHAIN_OPEN_KEY) ?? "[]");
+      return new Set(Array.isArray(saved) ? saved.filter((each) => typeof each === "string") : []);
+    } catch {
+      return new Set();
+    }
+  });
+  const toggle = useCallback((key: string) => {
+    setOpen((current) => {
+      const next = new Set(current);
+      if (!next.delete(key)) next.add(key);
+      try {
+        sessionStorage.setItem(CHAIN_OPEN_KEY, JSON.stringify([...next]));
+      } catch {
+        // Storage can be blocked: the rows then stay open for this panel only.
+      }
+      return next;
+    });
+  }, []);
+  return [open, toggle];
+}
+
+/** The tabs that list a chain under an app: the one the panel last used when it is one of them. */
+const SCOPED_TABS = new Set<TabId>(["sql", "http", "issues", "logs", "profile"]);
+
+/** The tab an app's row opens its trace on: the last one used if it lists a chain, else DB, else Logs. */
+function underTab(app: ChainApp, last: TabId | undefined): TabId {
+  if (last && SCOPED_TABS.has(last)) return last;
+  return app.summary.queries > 0 ? "sql" : "logs";
 }
 
 /**
@@ -805,6 +914,7 @@ function PageRequests({
   follow,
   onFollow,
   onClear,
+  chains,
 }: {
   scope?: "page" | "tab";
   /** false where the dock's toolbar row carries the count and the controls. */
@@ -815,6 +925,8 @@ function PageRequests({
   follow: boolean;
   onFollow: (value: boolean) => void;
   onClear: () => void;
+  /** Under the rows that called other apps: those apps' traces. */
+  chains?: ListChains | undefined;
 }) {
   const fresh = useNewIds(rows.map((row) => row.trace.id));
   const list = useRef<HTMLElement>(null);
@@ -855,6 +967,7 @@ function PageRequests({
         selectedId={selectedId}
         currentId={currentId}
         newIds={fresh}
+        chains={chains}
         onSelect={(id) => go({ name: "trace", id })}
       />
       {unseen > 0 ? (
@@ -906,6 +1019,8 @@ function PanelApp({ route }: { route: Route }) {
   const history = useTabHistory();
   const { rows, stored, runs } = useTabRows(history);
   const listed = withRuns(rows, runs);
+  const rowChains = useRowChains(listed, stored);
+  const [chainOpen, toggleChain] = useChainOpen();
   const currentId = history?.current ?? null;
   const pageRows = currentId
     ? rows.filter((row) => row.trace.id === currentId || isChildOf(history, row, currentId))
@@ -938,6 +1053,12 @@ function PanelApp({ route }: { route: Route }) {
   const onFollow = (value: boolean) => {
     setFollow(value);
     writeFollow(value);
+  };
+  const chains: ListChains = {
+    apps: rowChains,
+    open: chainOpen,
+    onToggle: toggleChain,
+    onApp: (id, app) => go({ name: "trace", id, under: app.app, tab: underTab(app, tab) }),
   };
   const tabRows = inOrder(split, rows);
   const followRows = split ? tabRows : pageRows;
@@ -1037,6 +1158,7 @@ function PanelApp({ route }: { route: Route }) {
         <PageRequests
           rows={withRuns(pageRows, runs)}
           selectedId={selectedId}
+          chains={chains}
           follow={follow}
           onFollow={onFollow}
           onClear={() => setClearing(true)}
@@ -1067,6 +1189,7 @@ function PanelApp({ route }: { route: Route }) {
             rows={inOrder(split, listed)}
             selectedId={selectedId}
             currentId={currentId}
+            chains={chains}
             follow={follow}
             onFollow={onFollow}
             onClear={() => setClearing(true)}
@@ -1078,13 +1201,15 @@ function PanelApp({ route }: { route: Route }) {
             <TraceScreen
               // A link to another tab of the trace on screen opens that tab: a new screen, not a kept state. A new
               // request keeps the screen: the trace on it stays until the next one is loaded, with no blank between.
-              key={route.name === "trace" ? (route.tab ?? "") : ""}
+              // An app's row in the list opens the trace under that app: a new screen too.
+              key={route.name === "trace" ? `${route.tab ?? ""}|${route.under ?? ""}` : ""}
               id={selectedId}
               source={source}
               arriving={arrivingIn(rows, stored, selectedId)}
               variant={split ? "strip" : "compact"}
               // A link to a tab (the pill's card opens a finding on Issues) wins over the last tab used.
               initialTab={route.name === "trace" ? tabOf(route.tab) : undefined}
+              initialUnder={route.name === "trace" ? route.under : undefined}
               preferredTab={tab}
               onTabChange={(next) => {
                 setTab(next);

@@ -100,3 +100,19 @@ export function callTemplate(span: Span | undefined): string {
   if (span === undefined) return "";
   return TEMPLATES[span.kind]?.(span) ?? span.name;
 }
+
+/**
+ * The time calls cover on the clock, overlapping ones counted once: 36 calls run side by side take about one call's
+ * time, not 36. What a list, a tab or a scope says its calls took; what they add up to goes in its tooltip.
+ */
+export function onTheClock(spans: readonly Pick<Span, "start" | "duration">[]): number {
+  const ranges = spans.map((span) => [span.start, span.start + span.duration] as const).sort((a, b) => a[0] - b[0]);
+  let total = 0;
+  let reach = Number.NEGATIVE_INFINITY;
+  for (const [start, end] of ranges) {
+    if (end <= reach) continue;
+    total += end - Math.max(start, reach);
+    reach = end;
+  }
+  return total;
+}

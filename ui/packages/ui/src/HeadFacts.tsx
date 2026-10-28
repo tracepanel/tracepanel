@@ -1,4 +1,5 @@
 import { duration } from "./format";
+import { onTheClock } from "./lib/calls";
 import { llmFacts } from "./lib/llm";
 import { memoryFacts } from "./lib/memory";
 import { plural } from "./lib/plural";
@@ -26,11 +27,27 @@ const NOUNS: Record<string, readonly [string, string]> = {
   "http.client": ["HTTP call", "HTTP calls"],
 };
 
-/** "139 queries 29 ms · 3 unique": how many calls, their time, what the system adds. */
+function nouns(calls: SystemCalls): readonly [string, string] {
+  return NOUNS[calls.key] ?? [`${calls.label} call`, `${calls.label} calls`];
+}
+
+/**
+ * "139 queries 29 ms · 3 unique": how many calls, their time on the clock (calls side by side counted once), what
+ * the system adds.
+ */
 function said(calls: SystemCalls): string {
-  const [one, many] = NOUNS[calls.key] ?? [`${calls.label} call`, `${calls.label} calls`];
+  const [one, many] = nouns(calls);
   const detail = DETAILS[calls.key]?.(calls.spans);
-  return [`${plural(calls.spans.length, one, many)} ${duration(calls.total)}`, detail].filter(Boolean).join(" · ");
+  const time = duration(onTheClock(calls.spans));
+  return [`${plural(calls.spans.length, one, many)} ${time}`, detail].filter(Boolean).join(" · ");
+}
+
+/** What calls that ran side by side add up to, where that is more than their time on the clock: for the tooltip. */
+function totals(all: readonly SystemCalls[]): string | undefined {
+  const lines = all
+    .filter((calls) => calls.total > onTheClock(calls.spans))
+    .map((calls) => `${plural(calls.spans.length, ...nouns(calls))}: ${duration(calls.total)} total`);
+  return lines.length > 0 ? lines.join("\n") : undefined;
 }
 
 /**
@@ -52,7 +69,12 @@ function ownCalls(trace: Trace): Trace {
  * trace that called nothing and wasn't profiled.
  */
 export function HeadFacts({ trace }: { trace: Trace }) {
-  const facts = [...systemCalls(ownCalls(trace)).map(said), ...memoryFacts(trace.profile)];
+  const calls = systemCalls(ownCalls(trace));
+  const facts = [...calls.map(said), ...memoryFacts(trace.profile)];
   if (facts.length === 0) return null;
-  return <span className="dt-trace-facts">{facts.map((fact) => `· ${fact}`).join(" ")}</span>;
+  return (
+    <span className="dt-trace-facts" title={totals(calls)}>
+      {facts.map((fact) => `· ${fact}`).join(" ")}
+    </span>
+  );
 }

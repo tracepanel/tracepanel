@@ -69,6 +69,8 @@ export interface TraceScreenProps {
   links?: TraceViewProps["links"];
   /** A span to open in the call tree. */
   initialSpan?: string | undefined;
+  /** An app of the chain whose traces the tabs start under. */
+  initialUnder?: string | undefined;
   /** The part of the time picked in the call tree, and where it goes as it changes. */
   initialSlice?: TraceViewProps["initialSlice"];
   onSliceChange?: TraceViewProps["onSliceChange"];

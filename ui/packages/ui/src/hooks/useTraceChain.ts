@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { type Member, membersOf, type ScopedLog, type SpanScope, scopedLogs } from "../lib/scope";
 import type { Chain, ChainTrace, Related, ScopeIssue, Trace } from "../types";
 
@@ -67,13 +67,29 @@ export interface TraceScope {
 
 const NO_ISSUES: readonly ScopeIssue[] = [];
 
+/** What is under the trace of one app: its traces down the chain, whole (the panel's list opens a trace so). */
+function underApp(members: readonly Member[], app: string): SpanScope | null {
+  const targets = members.slice(1).filter((member) => member.app === app);
+  return targets.length > 0 ? { targets: targets.map((member) => member.id), label: app, only: false } : null;
+}
+
 export function useTraceScope(
   trace: Trace,
   related: Related | undefined,
   load: ((traceId: string) => Promise<Chain>) | undefined,
+  /** An app whose traces the scope starts as, once the chain has them ("Under library-api"). */
+  under?: string | undefined,
 ): TraceScope {
   const { members, issues } = useTraceChain(trace, related, load);
   const [scope, setScope] = useState<SpanScope | null>(null);
+  const asked = useRef(under);
+  useEffect(() => {
+    const app = asked.current;
+    const start = app ? underApp(members, app) : null;
+    if (!start) return;
+    asked.current = undefined;
+    setScope(start);
+  }, [members]);
   const logs = useMemo(() => scopedLogs(members, null), [members]);
   const scoped = useMemo(() => (scope ? scopedLogs(members, scope) : logs), [members, scope, logs]);
   return useMemo(
