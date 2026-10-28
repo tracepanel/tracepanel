@@ -202,10 +202,10 @@ const STYLE = `
   .badge {
     position: fixed; right: 16px; bottom: 16px; z-index: 2147483647;
     display: flex; align-items: center; gap: 0; max-width: calc(100vw - 32px);
-    height: 42px; padding: 0 6px 0 10px; border: 1px solid var(--dt-float-border); border-radius: 999px;
+    height: 40px; padding: 0 6px 0 9px; border: 1px solid var(--dt-float-border); border-radius: 999px;
     background: var(--dt-float); color: var(--dt-float-text);
     box-shadow: var(--dt-float-shadow);
-    font: 500 13px/1 "Geist Variable", "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    font: 500 12.5px/1 "Geist Variable", "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
     font-variant-numeric: tabular-nums; cursor: pointer;
     transition: right 180ms ease-out, box-shadow 180ms ease-out, border-color 120ms ease-out;
   }
@@ -219,22 +219,22 @@ const STYLE = `
   /* From the keyboard: the accent, thin, as everywhere in the UI (not the logo's lime, which read as a verdict). */
   .badge:focus-visible { outline: none; filter: brightness(1.25); }
   .brand { display: flex; align-items: center; padding-right: 8px; }
-  .brand svg { width: 22px; height: 22px; }
+  .brand svg { width: 21px; height: 21px; }
   .logo-1 { fill: var(--dt-accent-strong); }
   .logo-2 { fill: var(--dt-violet); }
   .logo-3 { fill: var(--dt-lime); }
-  .runtime { align-self: center; display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 4px 7px; border-radius: 999px; background: var(--dt-float-chip); color: var(--dt-text-2); font-size: 11px; font-weight: 600; letter-spacing: 0.01em; }
+  .runtime { align-self: center; display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 4px 7px; border-radius: 999px; background: var(--dt-float-chip); color: var(--dt-text-2); font-size: 10.5px; font-weight: 600; letter-spacing: 0.01em; }
   .brand .runtime svg { width: 12px; height: 12px; }
   .runtime:empty { display: none; }
   .stats { display: inline-flex; align-items: center; min-width: 0; height: 100%; }
-  .seg { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px; white-space: nowrap; }
+  .seg { display: inline-flex; align-items: center; gap: 5px; height: 21px; padding: 0 8.5px; white-space: nowrap; }
   .seg + .seg { border-left: 1px solid var(--dt-float-divider); }
-  .seg svg { width: 13px; height: 13px; color: var(--dt-text-3); flex: none; }
+  .seg svg { width: 12.5px; height: 12.5px; color: var(--dt-text-3); flex: none; }
   .seg b { color: var(--dt-float-strong); font-weight: 600; }
   .unit { color: var(--dt-text-3); }
   /* In the light theme every icon in the pill is grey, a finding's and a failure's too. */
   :host([data-theme="light"]) .seg svg { color: var(--dt-text-3); }
-  .status { padding: 3px 7px; border-radius: 999px; font: 600 11.5px "Geist Mono Variable", "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace; background: var(--tint-ok); color: var(--dt-ok); }
+  .status { padding: 3px 7px; border-radius: 999px; font: 600 11px "Geist Mono Variable", "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace; background: var(--tint-ok); color: var(--dt-ok); }
   .status[data-tone="redirect"] { background: var(--tint-info); color: var(--dt-info); }
   .status[data-tone="client"] { background: var(--tint-warn); color: var(--dt-warn); }
   .status[data-tone="server"] { background: var(--tint-error); color: var(--dt-error); }
@@ -243,7 +243,7 @@ const STYLE = `
   :host([data-theme="light"]) .status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
   .seg[data-speed="slow"] b { color: var(--dt-warn); }
   .seg[data-speed="very-slow"] b { color: var(--dt-error); }
-  .issues { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; background: var(--tint-warn); color: var(--dt-warn); font-weight: 600; font-size: 12px; }
+  .issues { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; background: var(--tint-warn); color: var(--dt-warn); font-weight: 600; font-size: 11.5px; }
   .seg .issues svg { color: currentColor; }
   /* Its tasks': the Tasks icon, then the same chips as its own failures and issues. */
   .tasks { gap: 5px; }
@@ -251,14 +251,14 @@ const STYLE = `
   .issues[data-tone="error"] { background: var(--tint-error); color: var(--dt-error); }
   /* The page's count: a step back from the latest request's numbers; its failures stand out on their own. */
   .page .unit { margin-left: -1px; }
-  .failed { display: inline-flex; align-items: center; gap: 4px; margin-left: 3px; padding: 3px 8px; border-radius: 999px; background: var(--tint-error); color: var(--dt-error); font-weight: 600; font-size: 12px; }
+  .failed { display: inline-flex; align-items: center; gap: 4px; margin-left: 3px; padding: 3px 8px; border-radius: 999px; background: var(--tint-error); color: var(--dt-error); font-weight: 600; font-size: 11.5px; }
   .seg .failed svg { width: 12px; height: 12px; color: currentColor; }
   .name {
     max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-radius: 6px;
-    font: 500 12.5px "Geist Mono Variable", "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace; color: var(--dt-float-strong);
+    font: 500 12px "Geist Mono Variable", "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace; color: var(--dt-float-strong);
   }
   .name[data-pulse] { animation: pulse 700ms ease-out; }
-  .idle { color: var(--dt-float-muted); font-size: 12.5px; white-space: nowrap; }
+  .idle { color: var(--dt-float-muted); font-size: 12px; white-space: nowrap; }
   @keyframes pulse {
     from { box-shadow: 0 0 0 0 rgb(from var(--dt-violet) r g b / 0.6); }
     to { box-shadow: 0 0 0 8px rgb(from var(--dt-violet) r g b / 0); }
@@ -276,7 +276,7 @@ const STYLE = `
   .panel[data-open] ~ .badge { right: calc(min(var(--tracepanel-width, 600px), 100vw) + 16px); }
   /* No room beside the panel (a narrow window): the panel shows the request, the badge folds to its logo,
      its ring still the verdict. */
-  :host([data-crowded]:not([data-dock="bottom"])) .panel[data-open] ~ .badge { width: 42px; padding: 0; justify-content: center; }
+  :host([data-crowded]:not([data-dock="bottom"])) .panel[data-open] ~ .badge { width: 40px; padding: 0; justify-content: center; }
   :host([data-crowded]:not([data-dock="bottom"])) .panel[data-open] ~ .badge :is(.stats, .runtime) { display: none; }
   :host([data-crowded]:not([data-dock="bottom"])) .panel[data-open] ~ .badge .brand { padding: 0; }
   /* The theme (the console's Dark / Light / Auto choice, shared through localStorage) is the :host's data-theme. */
@@ -284,11 +284,11 @@ const STYLE = `
   :host([data-theme="light"]) .panel iframe { color-scheme: light; }
   .panel[data-instant], .panel[data-instant] ~ .badge, .panel[data-resizing], .panel[data-resizing] ~ .badge { transition: none; }
   .panel[data-resizing] iframe { pointer-events: none; }
-  .resize { position: absolute; top: 0; bottom: 0; left: -4px; width: 8px; cursor: ew-resize; z-index: 1; }
-  /* As the console's sidebar: the whole edge lights up, faint on hover, full while dragging. */
-  .resize::after { content: ""; position: absolute; top: 0; bottom: 0; left: 3px; width: 2px; background: transparent; transition: background 120ms; }
-  .resize:hover::after { background: rgb(from var(--dt-violet) r g b / 0.5); }
-  .panel[data-resizing] .resize::after { background: var(--dt-violet); }
+  /* 10px to grab, centred on the panel's 1px edge. What shows is that edge, a step stronger under the pointer and
+     while dragging: never thicker, never the brand's colour (as the console's sidebar and split panes). */
+  .resize { position: absolute; top: 0; bottom: 0; left: -6px; width: 10px; cursor: ew-resize; z-index: 1; }
+  .resize::after { content: ""; position: absolute; top: 0; bottom: 0; left: 5px; width: 1px; background: transparent; transition: background 120ms; }
+  .resize:hover::after, .panel[data-resizing] .resize::after { background: var(--dt-divider-active); }
   /* Docked at the bottom, like browser devtools: full width, the height is dragged from the top edge. */
   :host([data-dock="bottom"]) .panel {
     top: auto; left: 0; width: 100vw; height: min(var(--tracepanel-height, 360px), 100vh);
@@ -299,8 +299,8 @@ const STYLE = `
   }
   :host([data-dock="bottom"]) .panel[data-open] { transform: none; transition: transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1), height 200ms ease-out; }
   :host([data-dock="bottom"]) .panel[data-open] ~ .badge { right: 16px; bottom: calc(min(var(--tracepanel-height, 360px), 100vh) + 12px); }
-  :host([data-dock="bottom"]) .resize { top: -4px; bottom: auto; left: 0; right: 0; width: auto; height: 8px; cursor: ns-resize; }
-  :host([data-dock="bottom"]) .resize::after { top: 3px; bottom: auto; left: 0; right: 0; width: auto; height: 2px; }
+  :host([data-dock="bottom"]) .resize { top: -6px; bottom: auto; left: 0; right: 0; width: auto; height: 10px; cursor: ns-resize; }
+  :host([data-dock="bottom"]) .resize::after { top: 5px; bottom: auto; left: 0; right: 0; width: auto; height: 1px; }
   /* While dragging, the size follows the pointer: no transition (these selectors outrank the dock rules). */
   :host .panel[data-resizing], :host .panel[data-resizing][data-open], :host .panel[data-resizing] ~ .badge,
   :host([data-dock="bottom"]) .panel[data-resizing][data-open] { transition: none; }

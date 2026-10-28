@@ -2,7 +2,7 @@
 // record, its details opened under it; columns the reader sizes and picks, kept per browser.
 
 import { useVirtualizer, type Virtualizer } from "@tanstack/react-virtual";
-import { cn } from "@tracepanel/ui/lib/utils";
+import { cn, rem } from "@tracepanel/ui/lib/utils";
 import {
   createContext,
   type KeyboardEvent,
@@ -399,8 +399,11 @@ function linesOf<R extends LogLike>(logs: readonly R[], keyOf: (log: R) => strin
   });
 }
 
-/** A line's height before it is measured: a record's one line, details' a guess. */
-const ESTIMATE: Record<Line<unknown>["kind"], number> = { record: 31, details: 320 };
+/**
+ * A line's height before it is measured, in rem (the rows follow the density): a record's one line, details' a
+ * guess. An estimate taller than the rows draws too few of them ahead of the focus as the arrows move it down.
+ */
+const ESTIMATE_REM: Record<Line<unknown>["kind"], number> = { record: 2.0625, details: 21.25 };
 
 /** What a line's row needs from the table: its columns, the opened record, and the place's details and button. */
 interface RowContext<R> {
@@ -540,7 +543,7 @@ function useLineWindow<R>(
   const virtualizer = useVirtualizer<HTMLElement, Element>({
     count: lines.length,
     getScrollElement: () => scroller,
-    estimateSize: useCallback((index: number) => ESTIMATE[lines[index]?.kind ?? "record"], [lines]),
+    estimateSize: useCallback((index: number) => rem(ESTIMATE_REM[lines[index]?.kind ?? "record"]), [lines]),
     getItemKey: useCallback((index: number) => lines[index]?.key ?? index, [lines]),
     overscan: 12,
     scrollMargin: margin,

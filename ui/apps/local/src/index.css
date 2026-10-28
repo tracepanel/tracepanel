@@ -27,10 +27,11 @@
 }
 
 /* The density: every size is in rem, so this one value scales the whole UI. A percentage keeps the reader's own
-   browser font size in the sum (15px at the usual 16px). Outside the layers, and on :root: the shared styles' html
-   size (@tracepanel/ui) would win over a layered rule. */
+   browser font size in the sum (14.25px at the usual 16px). Outside the layers, and on :root: the shared styles' html
+   size (@tracepanel/ui) would win over a layered rule. Never zoom or a transform scale for density: both blur the
+   text and move the hit areas off what is drawn. */
 :root {
-  font-size: 93.75%;
+  font-size: 89.0625%;
 }
 
 @layer base {

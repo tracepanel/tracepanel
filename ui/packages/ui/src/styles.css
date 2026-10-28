@@ -45,6 +45,9 @@
   --dt-selected: rgb(165 135 255 / 0.13);
   --dt-border: #1d212c;
   --dt-border-strong: #2a3040;
+  /* A resize edge under the pointer or in hand: the same hairline a step stronger, neutral (the brand is for what the
+     reader picked). */
+  --dt-divider-active: #4a5368;
   --dt-blur: none;
 
   --dt-text: #eceef3;
@@ -180,6 +183,7 @@
   --dt-selected: rgb(124 79 240 / 0.06);
   --dt-border: #ebebed;
   --dt-border-strong: #d4d4d8;
+  --dt-divider-active: #a1a1aa;
 
   --dt-text: #09090b;
   --dt-text-2: #3f3f46;
@@ -2473,22 +2477,24 @@ div.dt-map-row[data-kind="code"] {
   border-left: 1px solid var(--dt-border);
   background: var(--dt-bg);
 }
-/* The pane's left edge: drag it, or focus it and use the arrow keys. */
+/* The pane's left edge: drag it, or focus it and use the arrow keys. The pane scrolls, so it clips what pokes out:
+   the hit area is the 8px inside its border. What shows is the border itself, a step stronger under the pointer or
+   in hand, never thicker. */
 .dt-map-resize {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: -3px;
+  left: 0;
   z-index: 1;
-  width: 6px;
+  width: 8px;
   cursor: col-resize;
   touch-action: none;
 }
-.dt-map-resize:hover,
-.dt-map-resize:focus-visible,
-.dt-map-resize:active {
+.dt-map-resize:focus-visible {
   outline: none;
-  background: linear-gradient(to right, transparent 2px, var(--dt-brand) 2px, var(--dt-brand) 4px, transparent 4px);
+}
+.dt-map-side:has(> .dt-map-resize:is(:hover, :active, :focus-visible)) {
+  border-left-color: var(--dt-divider-active);
 }
 .dt-map-side-close {
   position: absolute;

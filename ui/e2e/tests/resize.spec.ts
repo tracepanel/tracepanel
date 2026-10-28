@@ -167,3 +167,65 @@ test("docked right, the window made shorter: the details pane wheels to its last
 
   await expect.poll(() => lastAttributeInView(page)).toBe(true);
 });
+
+/** What a resize edge draws (its `::after`, the line): how thick, and in which colour. */
+function line(element: Element, thickness: string): { thickness: number; colour: string } {
+  const style = getComputedStyle(element, "::after");
+  return { thickness: Number.parseFloat(style.getPropertyValue(thickness)), colour: style.backgroundColor };
+}
+
+test("in hand, every resize edge stays a thin neutral line, its hit area wider", async ({ page }) => {
+  await openDetails(page);
+  const frame = panel(page);
+  const neutral = await frame.locator("html").evaluate((html) => {
+    const probe = html.ownerDocument.createElement("i");
+    probe.style.color = "var(--dt-divider-active)";
+    html.ownerDocument.body.append(probe);
+    const colour = getComputedStyle(probe).color;
+    probe.remove();
+    return colour;
+  });
+
+  // The panel's edge, mid-drag.
+  const edge = page.locator(".resize");
+  const box = await edge.boundingBox();
+  if (!box) throw new Error("no resize edge on the panel");
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2, box.y - 40, { steps: 3 });
+  const panelEdge = { hit: box.height, ...(await edge.evaluate(line, "height")) };
+  await page.mouse.up();
+
+  // The list's edge in the panel, mid-drag.
+  const split = frame.locator(".split-handle");
+  const handle = await split.boundingBox();
+  if (!handle) throw new Error("no split handle in the panel");
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + 100);
+  await page.mouse.down();
+  await page.mouse.move(handle.x + handle.width / 2 + 40, handle.y + 100, { steps: 3 });
+  const listEdge = await split.evaluate(line, "width");
+  await page.mouse.up();
+
+  // The details pane's edge, mid-drag: what shows is the pane's own border.
+  const side = frame.locator(".dt-map-resize");
+  const sideBox = await side.boundingBox();
+  if (!sideBox) throw new Error("no details pane edge");
+  await page.mouse.move(sideBox.x + sideBox.width / 2, sideBox.y + 100);
+  await page.mouse.down();
+  await page.mouse.move(sideBox.x - 40, sideBox.y + 100, { steps: 3 });
+  const paneEdge = await side.evaluate((element) => {
+    const pane = getComputedStyle(element.parentElement as Element);
+    return {
+      thickness: Number.parseFloat(pane.borderLeftWidth),
+      colour: pane.borderLeftColor,
+      drawn: getComputedStyle(element).backgroundImage,
+    };
+  });
+  await page.mouse.up();
+
+  expect(panelEdge).toEqual({ hit: 10, thickness: 1, colour: neutral });
+
+  expect(listEdge).toEqual({ thickness: 1, colour: neutral });
+
+  expect(paneEdge).toEqual({ thickness: 1, colour: neutral, drawn: "none" });
+});

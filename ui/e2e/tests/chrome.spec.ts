@@ -162,13 +162,15 @@ test("a list loads in its own shape: the search, the filters and rows where they
 });
 
 for (const scheme of ["dark", "light"] as const) {
-  test(`the sidebar's items read at 15px in both themes, its group titles small (${scheme})`, async ({ page }) => {
+  test(`the sidebar's items read at 1rem (14.25px) in both themes, its group titles small (${scheme})`, async ({
+    page,
+  }) => {
     await chooseTheme(page, scheme);
     await page.goto("/#/endpoints");
     const item = page.locator("aside nav").getByRole("link", { name: "HTTP", exact: true });
 
-    await expect(item).toHaveCSS("font-size", "15px");
-    await expect(page.locator("aside nav").getByText("Entry points")).not.toHaveCSS("font-size", "15px");
+    await expect(item).toHaveCSS("font-size", "14.25px");
+    await expect(page.locator("aside nav").getByText("Entry points")).not.toHaveCSS("font-size", "14.25px");
     await expect(page.locator("aside nav").getByRole("link", { name: /^Issues/ })).toBeInViewport();
   });
 }

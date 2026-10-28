@@ -119,10 +119,14 @@ test("a long list draws only the rows in view, and scrolling still reaches its e
   await expect(rows.first()).toContainText(`record ${total}`);
   expect(await rows.count()).toBeLessThan(150);
 
-  // The arrows go on past the rows drawn: the window follows the focus down.
+  // The arrows go on past the rows drawn: the window follows the focus down, a row a press (each press waits for
+  // the one before, as a held key's repeat does: a busy runner can send them faster than a frame).
   await rows.first().focus();
-  for (let step = 0; step < 80; step += 1) await page.keyboard.press("ArrowDown");
-  await expect(page.locator("tr[data-record]:focus")).toContainText(`record ${total - 80}`);
+  const focused = page.locator("tr[data-record]:focus");
+  for (let step = 1; step <= 80; step += 1) {
+    await page.keyboard.press("ArrowDown");
+    await expect(focused).toContainText(`record ${total - step}`);
+  }
 });
 
 /** The stored records' first, to make others from: whatever the API answers for one, with these fields. */
