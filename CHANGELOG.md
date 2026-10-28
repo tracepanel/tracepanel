@@ -31,6 +31,22 @@
   memory's peak and sites, before and after. An AI coding agent can profile a
   request, fix the code and check the result without the console.
 
+### Changed
+
+- A query in a raw OpenTelemetry span is named by its table alone, without
+  its schema or quotes: `FROM "public"."category"` is `SELECT category`,
+  `` `shop`.`book` `` is `book`, `[dbo].[orders]` is `orders`, as the
+  JavaScript and Python SDKs name theirs.
+- The MCP server gives a time of a second or more in seconds, as the
+  console does: `7.9 s`, not `7910 ms`.
+
+### Fixed
+
+- A long source path in a call's details (a Java query's
+  `src/main/java/…/CatalogController.java:109 in card`) wraps instead of
+  making the details pane scroll sideways, in the console and the panel. A
+  long value or plan line wraps too. A statement scrolls in its own block.
+
 ## 0.5.1 (2026-10-26)
 
 ### Changed

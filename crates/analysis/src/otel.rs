@@ -10,7 +10,7 @@
 //! `http.request.method`…). A call to a model (the GenAI conventions' `gen_ai.*`) is an `llm` span. Whatever else
 //! isn't recognized (a consumer's work, a server span) stays a `function`.
 
-use crate::{NAME, PLACEHOLDER};
+use crate::PLACEHOLDER;
 use regex::Regex;
 use serde_json::{Map, Value};
 use sha1::{Digest, Sha1};
@@ -24,13 +24,16 @@ static WHITESPACE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s+").unwrap(
 static IN_LIST: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(&format!(r"(?i)\bIN \({PLACEHOLDER}(?:, ?{PLACEHOLDER})*\)")).unwrap()
 });
-// The table a statement reads or writes, its schema too, each part bare or quoted (`[dbo].[orders]`).
+// One part of a table's name, bare or quoted: "standard SQL", `MySQL`, [SQL Server].
+const PART: &str = r#"(?:"[^"]+"|`[^`]+`|\[[^\]]+\]|[\w$]+)"#;
+// The table a statement reads or writes, with its schema (Prisma's "public"."category", MySQL's `shop`.`book`).
 static TABLE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(&format!(
-        r"(?i)\b(?:FROM|INTO|UPDATE|JOIN)\s+((?:{NAME}\.)*{NAME})"
+        r"(?i)\b(?:FROM|INTO|UPDATE|JOIN)\s+({PART}(?:\s*\.\s*{PART})*)"
     ))
     .unwrap()
 });
+static PARTS: LazyLock<Regex> = LazyLock::new(|| Regex::new(PART).unwrap());
 static COUNT: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)^\s*SELECT\s+COUNT\(").unwrap());
 // The query parameters whose values never get recorded, as the SDKs mask them.
 static SENSITIVE: LazyLock<Regex> = LazyLock::new(|| {
@@ -361,7 +364,8 @@ pub fn fingerprint(sql: &str) -> String {
         .into_owned()
 }
 
-/// A query's span name: its verb and its table (`SELECT users`, `SELECT COUNT orders`).
+/// A query's span name: its verb and its table, its schema and quotes left out (`SELECT users`, `SELECT COUNT
+/// orders`): the same rule in every SDK.
 pub fn span_name(sql: &str) -> String {
     let mut verb = sql
         .split_whitespace()
@@ -370,8 +374,16 @@ pub fn span_name(sql: &str) -> String {
     if COUNT.is_match(sql) {
         verb = "SELECT COUNT".into();
     }
-    match TABLE.captures(sql) {
-        Some(table) => format!("{verb} {}", table[1].replace(['`', '"', '[', ']'], "")),
+    let table = TABLE.captures(sql).and_then(|found| {
+        let part = PARTS.find_iter(&found[1]).last()?.as_str();
+        let bare = part
+            .strip_prefix(['"', '`', '['])
+            .and_then(|inner| inner.strip_suffix(['"', '`', ']']))
+            .unwrap_or(part);
+        Some(bare.to_owned())
+    });
+    match table {
+        Some(table) => format!("{verb} {table}"),
         None => verb,
     }
 }

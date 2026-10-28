@@ -225,8 +225,46 @@ fn sql_names_and_in_lists() {
 }
 
 #[test]
+fn schema_qualified_tables_are_named_by_the_table() {
+    // The same cases as the SDKs' own tests: one rule everywhere.
+    let names: Vec<String> = [
+        r#"SELECT "public"."category"."id", "public"."category"."name" FROM "public"."category" WHERE 1=1"#,
+        r#"SELECT COUNT(*) AS "_count$_all" FROM (SELECT "public"."order"."id" FROM "public"."order" OFFSET $1) AS "sub""#,
+        r#"SELECT "t1"."id" FROM "public"."order_item" AS "t1" LEFT JOIN "public"."product" AS "t2" ON "t2"."id" = 1"#,
+        r#"INSERT INTO "public"."order" ("number") VALUES ($1) RETURNING "public"."order"."id""#,
+        r#"UPDATE "public"."product" SET "stock" = $1 WHERE "public"."product"."id" = $2"#,
+        r#"DELETE FROM "public"."cart_item" WHERE "public"."cart_item"."customer_id" = $1"#,
+        "SELECT `book`.`id` FROM `shop`.`book` JOIN `shop`.`author` ON `author`.`id` = `book`.`author_id`",
+        "UPDATE `shop` . `book` SET `price` = ?",
+        "SELECT [id] FROM [dbo].[orders]",
+        "SELECT * FROM shop.books",
+        r#"SELECT id FROM "Order Items""#,
+    ]
+    .into_iter()
+    .map(tracepanel_analysis::otel::span_name)
+    .collect();
+
+    assert_eq!(
+        names,
+        [
+            "SELECT category",
+            "SELECT COUNT order",
+            "SELECT order_item",
+            "INSERT order",
+            "UPDATE product",
+            "DELETE cart_item",
+            "SELECT book",
+            "UPDATE book",
+            "SELECT orders",
+            "SELECT books",
+            "SELECT Order Items",
+        ]
+    );
+}
+
+#[test]
 fn sql_server_names_and_placeholders() {
-    // go-mssqldb's @p1, tedious's @name, JDBC's ?: each IN list collapses, and the table keeps its schema.
+    // go-mssqldb's @p1, tedious's @name, JDBC's ?: each IN list collapses, and the table is named without its schema.
     for (statement, fingerprint) in [
         (
             "SELECT TOP 10 [o].[id] FROM [dbo].[orders] AS [o] WHERE [o].[customer_id] IN (@p1, @p2, @p3)",
@@ -248,7 +286,7 @@ fn sql_server_names_and_placeholders() {
 
         assert_eq!(
             (mapped.name.as_str(), &mapped.attrs["db.fingerprint"]),
-            ("SELECT dbo.orders", &json!(fingerprint))
+            ("SELECT orders", &json!(fingerprint))
         );
     }
 
@@ -260,7 +298,7 @@ fn sql_server_names_and_placeholders() {
         })),
     );
 
-    assert_eq!(oracle.name, "SELECT SHOP.ORDERS");
+    assert_eq!(oracle.name, "SELECT ORDERS");
     assert_eq!(
         oracle.attrs["db.fingerprint"],
         r#"SELECT "ID" FROM "SHOP"."ORDERS" WHERE "ID" IN (...)"#
