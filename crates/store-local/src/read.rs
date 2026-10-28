@@ -696,12 +696,14 @@ impl Reader {
                 // the bare column, its attributes, from that row, read below once a group (not a JSON path a row). A
                 // largest string would mix versions across an upgrade ("4.9" over "4.10", Java "8.0" over "21.0") and
                 // take each part from another trace. By kind too: a trace whose SDK named no role is its kind's
-                // role, merged below.
+                // role, merged below. The issues' fingerprints are looked up only for a trace that raised any
+                // (`issues` counts its findings, `errors` its errors): most traces raise none.
                 "SELECT service, {SERVICE_ROLE} AS role, kind, COUNT(*) AS traces, \
                  SUM(status = 'error') AS errors, SUM(duration) AS total, MAX(start) AS last_seen, \
                  attrs AS latest, GROUP_CONCAT(duration) AS durations, \
-                 GROUP_CONCAT((SELECT GROUP_CONCAT(fingerprint) FROM issue_traces WHERE trace_id = traces.id)) \
-                 AS issues \
+                 GROUP_CONCAT(DISTINCT CASE WHEN issues > 0 OR errors > 0 THEN \
+                 (SELECT GROUP_CONCAT(fingerprint) FROM issue_traces WHERE trace_id = traces.id) END) \
+                 AS fingerprints \
                  FROM traces WHERE {condition} GROUP BY service, role, kind"
             ),
             params,
@@ -720,7 +722,7 @@ impl Reader {
             app.errors += int(&row, "errors");
             app.total += int(&row, "total");
             app.durations.extend(numbers(&row, "durations"));
-            if let Some(issues) = row["issues"].as_str() {
+            if let Some(issues) = row["fingerprints"].as_str() {
                 app.issues.extend(
                     issues
                         .split(',')

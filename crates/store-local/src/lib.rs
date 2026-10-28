@@ -582,7 +582,7 @@ mod tests {
             let issues: Vec<Value> = issues
                 .iter()
                 .map(|fingerprint| {
-                    serde_json::json!({"fingerprint": fingerprint, "fingerprint_version": 1, "kind": "error",
+                    serde_json::json!({"fingerprint": fingerprint, "fingerprint_version": 1, "kind": "n+1",
                                        "title": fingerprint, "culprit": null, "hint": null})
                 })
                 .collect();
