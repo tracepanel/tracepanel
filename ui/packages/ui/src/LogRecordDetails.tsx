@@ -4,6 +4,7 @@ import { CopyButton } from "./CopyButton";
 import { ExceptionView } from "./ErrorView";
 import { localTime } from "./format";
 import { jsonDocument } from "./json";
+import { withoutAnsi } from "./lib/ansi";
 import { cn } from "./lib/utils";
 import { rawText } from "./lib/values";
 import { type NameValue, NameValues, RowsLookContext } from "./NameValues";
@@ -182,7 +183,7 @@ export function LogRecord({
   actions?: ((name: string, value: string) => readonly ReactNode[]) | undefined;
 }) {
   const own: [string, unknown][] = [
-    ["logger", log.logger],
+    ["logger", withoutAnsi(log.logger)],
     ["level", log.level],
     ["time", localTime(log.time)],
     ...Object.entries(logAttrs(log.attrs)),
@@ -190,8 +191,8 @@ export function LogRecord({
   return (
     <div className="grid gap-3.5">
       {header}
-      <MessageBlock text={log.message} />
-      {log.exception ? <ExceptionBlock text={log.exception} /> : null}
+      <MessageBlock text={withoutAnsi(log.message)} />
+      {log.exception ? <ExceptionBlock text={withoutAnsi(log.exception)} /> : null}
       <section aria-label="Fields" className="overflow-hidden rounded-md border bg-background">
         <NameValues
           rows={[
@@ -211,7 +212,7 @@ export function LogRecordDetails({ log, titled = false }: { log: Log; titled?: b
     <div className={cn("grid gap-3", titled ? "p-4" : "px-5 py-4")}>
       {titled ? (
         <p className="dt-map-details-title">
-          Log · {log.level} · {log.logger}
+          Log · {log.level} · {withoutAnsi(log.logger)}
         </p>
       ) : null}
       <LogRecord log={log} />

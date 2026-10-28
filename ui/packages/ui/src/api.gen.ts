@@ -1541,7 +1541,7 @@ export interface components {
                 /** @description The other project's folder name. */
                 project: string;
             }[];
-            /** @description The whole traces of calls and remote_calls (up to 20 of calls), by trace id: the call tree opens each under its call. */
+            /** @description The whole traces of calls and remote_calls (up to 50 of calls), by trace id: the call tree opens each under its call, and these traces' own links (their related) the calls they made in turn. */
             call_traces?: {
                 [key: string]: components["schemas"]["trace.schema"];
             };

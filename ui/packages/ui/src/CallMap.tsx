@@ -11,10 +11,12 @@ import {
 import { type Explain, QueryPlan } from "./CallTable";
 import { duration, since } from "./format";
 import { GraphqlCode } from "./GraphqlCode";
+import { useChain } from "./hooks/useChain";
 import { ChevronRightIcon, CloseIcon } from "./icons";
 import { keyed } from "./keys";
 import { LlmConversation, withoutMessages } from "./LlmConversation";
 import { AllAttributes, LogRecordDetails } from "./LogRecordDetails";
+import { withoutAnsi } from "./lib/ansi";
 import { type Category, spanCategories } from "./lib/breakdown";
 import { callFields, templatePlace } from "./lib/callFields";
 import { callTemplate, callText, groupNoun } from "./lib/calls";
@@ -57,11 +59,14 @@ import type { Attrs, IssueKind, Log, Related, Span, Trace, TraceError, TraceSumm
 
 type Node =
   | { type: "span"; key: string; span: Span; children: Node[] }
-  | { type: "group"; key: string; spans: Span[]; start: number; end: number }
+  // Repeats of one call; `members` are their rows, each with what is under it (the trace another app served for it).
+  | { type: "group"; key: string; spans: Span[]; members: SpanNode[]; start: number; end: number }
   | { type: "log"; key: string; log: Log }
   | { type: "error"; key: string; error: TraceError }
   // A trace of its own under a span of this one: a task it enqueued, run in a worker (or still waiting for one), or
   // the trace another app served for one of its calls (`kind: "call"`), with that trace's own rows when it came whole.
+  // A call's trace is `level` traces down the chain from this one (1: this trace's own call); `opened` is whether its
+  // rows show until its fold is clicked.
   | {
       type: "task";
       key: string;
@@ -70,8 +75,12 @@ type Node =
       remote?: Remote | undefined;
       whole?: Trace | undefined;
       children: Node[];
+      level: number;
+      opened: boolean;
     }
   | { type: "waiting"; key: string; span: Span; kind: "task" };
+
+type SpanNode = Extract<Node, { type: "span" }>;
 
 function startOf(node: Node): number {
   if (node.type === "span" || node.type === "waiting") return node.span.start;
@@ -88,10 +97,23 @@ function startOf(node: Node): number {
  */
 const GROUP_MIN = 3;
 
-function isLeafCall(node: Node): node is Extract<Node, { type: "span" }> {
+function isLeafCall(node: Node): node is SpanNode {
   if (node.type !== "span") return false;
   if (node.span.kind === "signal") return node.children.every(isQuietReceiver);
-  return CALL_KINDS.has(node.span.kind) && node.children.every(isBackendCall);
+  return CALL_KINDS.has(node.span.kind) && node.children.every((child) => isBackendCall(child) || isServed(child));
+}
+
+/**
+ * The trace another app served for a call: a call's repeats still group (an N+1 across apps), each with its own, as
+ * long as each has one: a call served with ones that weren't stays a row of its own.
+ */
+function isServed(node: Node): boolean {
+  return node.type === "task" && node.kind === "call";
+}
+
+/** What a leaf call groups by: its kind and template, and whether another app's trace is under it. */
+function groupName(node: SpanNode): string {
+  return `${node.span.kind}:${callTemplate(node.span)}:${node.children.some(isServed) ? "served" : ""}`;
 }
 
 /** A receiver that ran and did nothing the tree shows: its send folds with its likes. One that failed stays a row. */
@@ -112,28 +134,29 @@ function isBackendCall(node: Node): boolean {
 const BACKEND_KINDS = new Set(["redis", "http.client"]);
 
 function collapse(nodes: Node[]): Node[] {
-  const byName = new Map<string, Span[]>();
+  const byName = new Map<string, SpanNode[]>();
   for (const node of nodes) {
-    if (isLeafCall(node))
-      byName.set(`${node.span.kind}:${callTemplate(node.span)}`, [
-        ...(byName.get(`${node.span.kind}:${callTemplate(node.span)}`) ?? []),
-        node.span,
-      ]);
+    if (isLeafCall(node)) {
+      const name = groupName(node);
+      byName.set(name, [...(byName.get(name) ?? []), node]);
+    }
   }
   const result: Node[] = [];
   const emitted = new Set<string>();
   for (const node of nodes) {
     if (isLeafCall(node)) {
-      const name = `${node.span.kind}:${callTemplate(node.span)}`;
-      const spans = byName.get(name) ?? [];
-      if (spans.length >= GROUP_MIN) {
+      const name = groupName(node);
+      const members = byName.get(name) ?? [];
+      if (members.length >= GROUP_MIN) {
         if (!emitted.has(name)) {
           emitted.add(name);
+          const spans = members.map((member) => member.span);
           const last = spans.at(-1) ?? node.span;
           result.push({
             type: "group",
             key: `group:${node.span.id}`,
             spans,
+            members,
             start: node.span.start,
             end: last.start + last.duration,
           });
@@ -152,52 +175,95 @@ interface Remote {
   project: string;
 }
 
-/** A call's trace as a row of this tree, with that trace's own rows under it when it came whole. */
-function callNode(key: string, run: TraceSummary, related: Related, remote?: Remote): Node {
-  const whole = related.call_traces?.[run.id];
-  return { type: "task", key, run, kind: "call", remote, whole, children: whole ? servedRows(whole) : [] };
+/**
+ * Where a tree is in the chain of calls it opens: the trace on screen is `level` 0, the traces its calls reached 1,
+ * theirs 2. `relatedOf` gives the links of a call's trace once they are loaded (the next level then opens under its
+ * calls); `seen` the traces above, so a loop in the links can't open forever.
+ */
+interface Chain {
+  level: number;
+  relatedOf: (traceId: string) => Related | undefined;
+  seen: ReadonlySet<string>;
 }
 
-/** What the other app did for the call: its request's rows, the request itself being the call's row. */
-function servedRows(whole: Trace): Node[] {
-  return buildTree(whole, undefined).flatMap((node) =>
+const NO_CHAIN: Chain = { level: 0, relatedOf: () => undefined, seen: new Set() };
+
+/**
+ * The most traces down the chain the tree opens (the browser's view, the BFF, the service, ...): deeper calls are
+ * rows that open their trace.
+ */
+const CHAIN_LEVELS = 6;
+
+/**
+ * Below the first level a call's trace opens by itself only when it is one of a few: an N+1 of calls (36 to one
+ * service) stays folded, each a click away.
+ */
+const CHAIN_OPEN_MAX = 3;
+
+function callsOf(related: Related): number {
+  return related.calls.length + (related.remote_calls?.length ?? 0);
+}
+
+/** A call's trace as a row of this tree, with that trace's own rows under it when it came whole. */
+function callNode(key: string, run: TraceSummary, related: Related, chain: Chain, remote?: Remote): Node {
+  const whole = related.call_traces?.[run.id];
+  const level = chain.level + 1;
+  const children = whole && !chain.seen.has(whole.id) ? servedRows(whole, chain, Boolean(remote)) : [];
+  const opened = level === 1 || callsOf(related) <= CHAIN_OPEN_MAX;
+  return { type: "task", key, run, kind: "call", remote, whole, children, level, opened };
+}
+
+/**
+ * What the other app did for the call: its request's rows, the request itself being the call's row; under its own
+ * calls, the traces they reached in turn, once their links are loaded (another project's trace has none here).
+ */
+function servedRows(whole: Trace, chain: Chain, remote: boolean): Node[] {
+  const level = chain.level + 1;
+  const related = remote || level >= CHAIN_LEVELS ? undefined : chain.relatedOf(whole.id);
+  const next = { ...chain, level, seen: new Set([...chain.seen, whole.id]) };
+  return buildTree(whole, related, next).flatMap((node) =>
     node.type === "span" && node.span.parent_id === null ? node.children : [node],
   );
 }
 
 /** The traces other projects' agents have for this trace's calls, under the calls. */
-function remoteNodes(related: Related): [string, Node][] {
+function remoteNodes(related: Related, chain: Chain): [string, Node][] {
   return (related.remote_calls ?? []).map(({ span_id, trace, console, project }): [string, Node] => [
     span_id,
-    callNode(`remote:${trace.id}`, trace, related, { console, project }),
+    callNode(`remote:${trace.id}`, trace, related, chain, { console, project }),
   ]);
 }
 
 /** Each trace of its own under a span of this one, by that span's id. */
-function linked(runs: readonly TraceSummary[], related: Related, kind: "task" | "call"): [string, Node][] {
+function linked(
+  runs: readonly TraceSummary[],
+  related: Related,
+  kind: "task" | "call",
+  chain: Chain,
+): [string, Node][] {
   return runs.flatMap((run): [string, Node][] => {
     const span = related.via[run.id];
     if (!span) return [];
-    return [[span, kind === "call" ? callNode(`call:${run.id}`, run, related) : taskNode(run)]];
+    return [[span, kind === "call" ? callNode(`call:${run.id}`, run, related, chain) : taskNode(run, chain)]];
   });
 }
 
-function taskNode(run: TraceSummary): Node {
-  return { type: "task", key: `task:${run.id}`, run, kind: "task", children: [] };
+function taskNode(run: TraceSummary, chain: Chain): Node {
+  return { type: "task", key: `task:${run.id}`, run, kind: "task", children: [], level: chain.level + 1, opened: true };
 }
 
 /**
  * Tasks under the span that enqueued them (an enqueue with no run yet is waiting for a worker), and the traces other
  * apps served under the call that reached them.
  */
-function linkedNodes(trace: Trace, related: Related | undefined): [string, Node][] {
+function linkedNodes(trace: Trace, related: Related | undefined, chain: Chain): [string, Node][] {
   if (!related) return [];
-  const tasks = linked(related.enqueued, related, "task");
+  const tasks = linked(related.enqueued, related, "task", chain);
   const run = new Set(tasks.map(([span]) => span));
   const waiting = trace.spans
     .filter((span) => span.kind === "task.enqueue" && !run.has(span.id))
     .map((span): [string, Node] => [span.id, { type: "waiting", key: `waiting:${span.id}`, span, kind: "task" }]);
-  return [...tasks, ...linked(related.calls, related, "call"), ...remoteNodes(related), ...waiting];
+  return [...tasks, ...linked(related.calls, related, "call", chain), ...remoteNodes(related, chain), ...waiting];
 }
 
 /**
@@ -210,12 +276,12 @@ function parentFinder(trace: Trace): (span: Span) => string | null {
   return (span) => (span.parent_id === null || ids.has(span.parent_id) ? span.parent_id : root);
 }
 
-export function buildTree(trace: Trace, related: Related | undefined): Node[] {
+export function buildTree(trace: Trace, related: Related | undefined, chain: Chain = NO_CHAIN): Node[] {
   const children = new Map<string | null, Node[]>();
   const push = (parent: string | null, node: Node) => children.set(parent, [...(children.get(parent) ?? []), node]);
   const parentOf = parentFinder(trace);
   for (const span of trace.spans) push(parentOf(span), { type: "span", key: span.id, span, children: [] });
-  for (const [parent, node] of linkedNodes(trace, related)) push(parent, node);
+  for (const [parent, node] of linkedNodes(trace, related, chain)) push(parent, node);
   for (const { key, item } of keyed(trace.logs, (log) => `log:${log.time}:${log.message}`)) {
     push(item.span_id, { type: "log", key, log: item });
   }
@@ -419,6 +485,8 @@ interface RowContext {
   slice: Slice;
   /** Opens the trace's profile, when it has one, at a stretch of it where the profile says when it was sampled. */
   onProfile: ((range: TimeRange) => void) | undefined;
+  /** Loads the links of a call's trace opened in the tree: the calls it made in turn open under it. */
+  onChain: (traceId: string) => void;
 }
 
 /** The selected row's details, under it: where the click was, not past the end of a long tree. */
@@ -540,8 +608,11 @@ function LinkedRow({
   dim: boolean;
 }) {
   const children = childrenOf(node);
-  // Open from the start: what the other app did is why it is here.
-  const open = children.length > 0 ? dim || !ctx.collapsed.has(node.key) : undefined;
+  // Open from the start (what the other app did is why it is here), but for one of many deeper down the chain: a
+  // click on the fold turns it the other way.
+  const open =
+    children.length > 0 ? dim || (node.type === "waiting" || node.opened) !== ctx.collapsed.has(node.key) : undefined;
+  useChainLoad(node, open, ctx.onChain);
   return (
     <div>
       <LinkedButton node={node} ctx={ctx} indent={indent} dim={dim} open={open} />
@@ -549,6 +620,20 @@ function LinkedRow({
       {open ? <Rows nodes={children} depth={depth + 1} ctx={ctx} /> : null}
     </div>
   );
+}
+
+/** A call's trace whose own calls can open under it: this agent's, not too far down the chain. */
+function chainedTrace(node: Linked): string | undefined {
+  if (node.type !== "task" || node.remote || node.level >= CHAIN_LEVELS) return undefined;
+  return node.whole?.id;
+}
+
+/** While a call's trace is open, the links of its own calls load: the traces they reached open under them. */
+function useChainLoad(node: Linked, open: boolean | undefined, onChain: (traceId: string) => void): void {
+  const whole = chainedTrace(node);
+  useEffect(() => {
+    if (open && whole) onChain(whole);
+  }, [open, whole, onChain]);
 }
 
 /** The linked row itself; `open` is set when it has rows to fold: a first click selects it, a second folds it. */
@@ -714,7 +799,7 @@ function leafView(node: Extract<Node, { type: "log" | "error" }>) {
     const text = `${node.error.type.replace(/^builtins\./, "")}: ${node.error.message}`;
     return { kind: "error", level: "error", time: node.error.time, text };
   }
-  return { kind: "log", level: node.log.level, time: node.log.time, text: node.log.message };
+  return { kind: "log", level: node.log.level, time: node.log.time, text: withoutAnsi(node.log.message) };
 }
 
 /** A log record or an error: a point on the timeline, at its time since the request started. */
@@ -816,14 +901,7 @@ function GroupRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProp
         <RowTime time={total} slow={slowness(total, ctx.trace, ctx.categories.get(node.spans[0]?.id ?? ""))} />
       </button>
       <RowDetails id={node.key} ctx={ctx} />
-      {open ? (
-        <Rows
-          nodes={node.spans.map((span) => ({ type: "span", key: span.id, span, children: [] }))}
-          depth={depth + 1}
-          ctx={{ ...ctx, marks: undefined }}
-          parent={parent}
-        />
-      ) : null}
+      {open ? <Rows nodes={node.members} depth={depth + 1} ctx={{ ...ctx, marks: undefined }} parent={parent} /> : null}
     </div>
   );
 }
@@ -1221,14 +1299,8 @@ type Found = { node: Node; trace: Trace };
 
 function findIn(node: Node, key: string, trace: Trace): Found | undefined {
   if (node.key === key) return { node, trace };
-  if (node.type === "group") return groupSpan(node, key, trace);
+  if (node.type === "group") return findNode(node.members, key, trace);
   return findNode(childrenOf(node), key, ownerOf(node, trace));
-}
-
-/** One call of a group, as its own row. */
-function groupSpan(node: Extract<Node, { type: "group" }>, key: string, trace: Trace): Found | undefined {
-  const span = node.spans.find((item) => item.id === key);
-  return span ? { node: { type: "span", key: span.id, span, children: [] }, trace } : undefined;
 }
 
 /** The trace a row's children belong to: a call's own when it came whole. */
@@ -1715,12 +1787,15 @@ function TimedRows({
   );
 }
 
-/** This trace's issues by span, and those of the calls' traces opened under the calls. */
+/** This trace's issues by span, and those of the calls' traces opened under the calls, however far down the chain. */
 function withCallIssues(
   issueBySpan: ReadonlyMap<string, IssueKind>,
   related: Related | undefined,
+  chain: ReadonlyMap<string, Related>,
 ): ReadonlyMap<string, IssueKind> {
-  const issues = Object.values(related?.call_traces ?? {}).flatMap((trace) => trace.issues);
+  const issues = [related, ...chain.values()]
+    .flatMap((each) => Object.values(each?.call_traces ?? {}))
+    .flatMap((trace) => trace.issues);
   return new Map([
     ...issueBySpan,
     ...issues.flatMap((issue) => issue.span_ids.map((id): [string, IssueKind] => [id, issue.kind])),
@@ -1748,8 +1823,11 @@ function rootOf(trace: Trace): string {
 }
 
 /** The tree with the records that show, and how many don't, by span: none hidden while every one shows. */
-function useShownLogs(trace: Trace, related: Related | undefined, all: boolean) {
-  const tree = useMemo(() => buildTree(withShownLogs(trace, all), related), [trace, related, all]);
+function useShownLogs(trace: Trace, related: Related | undefined, all: boolean, loaded: ReadonlyMap<string, Related>) {
+  const tree = useMemo(() => {
+    const chain: Chain = { level: 0, relatedOf: (id) => loaded.get(id), seen: new Set([trace.id]) };
+    return buildTree(withShownLogs(trace, all), related, chain);
+  }, [trace, related, all, loaded]);
   const hidden = useMemo(() => (all ? new Map<string, number>() : hiddenLogsOf(trace)), [trace, all]);
   return { tree, hidden };
 }
@@ -1826,11 +1904,20 @@ export function CallMap({
   links?: TraceLinks | undefined;
   /** A span to open with its details, as a link to it asks (a log line's span). */
   initialSpan?: string | undefined;
+  /**
+   * Loads another trace's links: a call's trace opened in the tree then has the traces its own calls reached under
+   * them, down the chain (the browser's view, the BFF, each service). Without it the tree opens one level.
+   */
+  loadRelated?: ((traceId: string) => Promise<Related>) | undefined;
 }) {
   // The part of the time picked: the kinds of calls and the stretch of time the rows are kept for.
   const { slice: current, change, profileAt } = useHeldSlice();
-  const { tree, hidden } = useShownLogs(trace, related, current.logs);
-  const issues = useMemo(() => withCallIssues(issueBySpan, related), [issueBySpan, related]);
+  const chain = useChain(trace.id, wiring.loadRelated, related);
+  const { tree, hidden } = useShownLogs(trace, related, current.logs, chain.loaded);
+  const issues = useMemo(
+    () => withCallIssues(issueBySpan, related, chain.loaded),
+    [issueBySpan, related, chain.loaded],
+  );
   const { selected, select, close } = useSelection(initialSpan);
   const map = useRef<HTMLDivElement>(null);
   const side = useSidePane(map);
@@ -1865,6 +1952,7 @@ export function CallMap({
                 slice: current,
                 onProfile: profileOpener(wiring.onProfile, trace, profileAt),
                 onShowLogs: () => change({ ...current, logs: true }),
+                onChain: chain.want,
               }}
             />
           </div>

@@ -134,6 +134,18 @@ function useRelated(id: string, source: DataSource): (traceId: string) => Relate
   return (traceId) => (related?.id === traceId ? related.related : undefined);
 }
 
+const loaders = new WeakMap<DataSource, (traceId: string) => Promise<Related>>();
+
+/** Another trace's links, for the call tree to open the chain of calls: one function per source, so it keeps still. */
+function relatedLoader(source: DataSource): (traceId: string) => Promise<Related> {
+  let load = loaders.get(source);
+  if (!load) {
+    load = (traceId) => source.related(traceId);
+    loaders.set(source, load);
+  }
+  return load;
+}
+
 /** Its queries' EXPLAIN, where the app behind the console runs it. */
 function explainer(source: DataSource, traceId: string, explainable: boolean) {
   return explainable ? (span: string, analyze: boolean) => source.explain(traceId, span, analyze) : undefined;
@@ -343,6 +355,7 @@ export function TraceScreen({
       actions={withShare(trace, source, actions, shareable === true)}
       {...shown}
       related={related(trace.id)}
+      loadRelated={relatedLoader(source)}
       links={links}
       initialSpan={initialSpan}
       variant={variant}

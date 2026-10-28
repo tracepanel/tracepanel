@@ -9,6 +9,7 @@ import {
 import { partOfCategory } from "./CallMap";
 import { duration } from "./format";
 import { keyed } from "./keys";
+import { withoutAnsi } from "./lib/ansi";
 import { type Category, spanCategories } from "./lib/breakdown";
 import { GC } from "./lib/memory";
 import type { Profile } from "./lib/profile";
@@ -104,7 +105,7 @@ function pointLanes(trace: Trace, allLogs: boolean): Lane[] {
     key,
     start: log.time,
     duration: 0,
-    label: `${log.level}: ${log.message}`,
+    label: `${log.level}: ${withoutAnsi(log.message)}`,
     tone: logTone(log.level),
     target: { tab: "logs" } as const,
   }));

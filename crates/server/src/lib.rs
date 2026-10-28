@@ -323,7 +323,8 @@ async fn whole_traces(reader: &Shared, ids: Vec<String>) -> serde_json::Map<Stri
 }
 
 /// How many of a trace's calls come whole, for the call tree to open under the call: a fan-out beyond it shows rows.
-const CALL_TRACES_LIMIT: usize = 20;
+/// An N+1 of calls to another service (a GraphQL resolver's, one per item) opens whole up to here.
+const CALL_TRACES_LIMIT: usize = 50;
 
 /// A trace to share and what is linked to it (`Reader::snapshot`); `values=1` keeps what otherwise stays local.
 async fn snapshot(
