@@ -27,11 +27,12 @@ import {
   WAITING,
   YOUR_CODE,
 } from "./lib/profile";
+import { traceRuntime } from "./lib/runtime";
 import { rangeLabel, type TimeRange } from "./lib/slice";
 import { cn } from "./lib/utils";
 import { timed, wallClock } from "./lib/waiting";
 import { litKey, litScope } from "./lit";
-import { AppChip } from "./primitives";
+import { AppChip, AppMark } from "./primitives";
 import { CountChip, ScopeChip } from "./ScopeBar";
 import { Segmented } from "./Segmented";
 import { largestFirst, ShareBar, ShareFace } from "./Shares";
@@ -731,6 +732,7 @@ function ChainProfiles({ profiles, chain }: { profiles: readonly ScopedProfile[]
                   title={`Only ${app.app}'s profile`}
                   onPress={() => setPicked(picked === app.app ? null : app.app)}
                 >
+                  <AppMark runtime={appRuntime(app)} />
                   {app.app}
                 </CountChip>
               ))
@@ -738,7 +740,7 @@ function ChainProfiles({ profiles, chain }: { profiles: readonly ScopedProfile[]
         </ul>
         <ul className="dt-breakdown-legend" aria-label="What the profiles add up to">
           {shown.map((app) => (
-            <ProfileSums key={app.app} app={app.app} profile={views.get(app.app)?.profile} />
+            <ProfileSums key={app.app} app={app} profile={views.get(app.app)?.profile} />
           ))}
         </ul>
       </div>
@@ -749,6 +751,11 @@ function ChainProfiles({ profiles, chain }: { profiles: readonly ScopedProfile[]
       })}
     </>
   );
+}
+
+/** What an app runs on, from its first profiled trace: the mark on its chip. */
+function appRuntime(app: AppProfile): string | undefined {
+  return traceRuntime(app.traces[0]?.member.trace.attrs ?? {});
 }
 
 /** An app's profile in the scope: one trace's (its stretch), or its traces' merged. */
@@ -762,12 +769,12 @@ function appView(app: AppProfile): Scope {
 }
 
 /** An app's profiled time, of it waiting, and the function that ran most. */
-function ProfileSums({ app, profile }: { app: string; profile: Profile | undefined }) {
+function ProfileSums({ app, profile }: { app: AppProfile; profile: Profile | undefined }) {
   if (!profile) return null;
   const sums = profileSums(profile);
   return (
     <li className="dt-profile-sums">
-      <AppChip name={app} />
+      <AppChip name={app.app} runtime={appRuntime(app)} />
       <b>{duration(sums.time)}</b> profiled
       {sums.waiting > 0 ? (
         <>
@@ -798,7 +805,7 @@ function AppProfileSection({ app, view }: { app: AppProfile; view: Scope }) {
         head={
           <div className="grid gap-0.5">
             <span className="flex items-center gap-2 text-xs text-muted-foreground">
-              <AppChip name={app.app} />
+              <AppChip name={app.app} runtime={appRuntime(app)} />
               {view.title}
             </span>
             <span className="text-2xl font-semibold tracking-tight tabular-nums">

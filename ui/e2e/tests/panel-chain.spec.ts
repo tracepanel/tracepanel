@@ -1,4 +1,4 @@
-// Under a row of the panel's list whose trace called other apps: an app's row (folded), then its traces in the order
+// Under a row of the panel's list whose trace called other apps: an app's row (open), then its traces in the order
 // they started, as the call tree's chain has them, three or more of one route in a row in a run (open while the app
 // has at most 50). A trace's row opens it; the app's row opens the row's trace under that app.
 import type { Page } from "@playwright/test";
@@ -6,7 +6,7 @@ import { openApp, panel, pill } from "../app.ts";
 import { chain, chainTrace, type FanoutCall, fanout } from "../chain.ts";
 import { expect, test } from "../fixtures.ts";
 
-test("a row that called another app has that app's traces under it, folded, in order; each opens", async ({ page }) => {
+test("a row that called another app has that app's traces under it, open, in order; each opens", async ({ page }) => {
   await chain();
   await page.setViewportSize({ width: 1280, height: 900 });
   await openApp(page, { graphql: { status: 200, trace: chainTrace("bff"), queries: 0, totalMs: 8 } });
@@ -18,16 +18,12 @@ test("a row that called another app has that app's traces under it, folded, in o
   const traces = list.locator('.dt-request-row[data-chain="trace"]');
 
   await expect(app).toHaveCount(1);
-  await expect(app).toContainText("shop");
-  await expect(app).toContainText("3 traces");
+  // The app's chip with its mark; how many, as a run counts its traces.
+  await expect(app.locator(".dt-app-chip")).toHaveText("shop");
+  await expect(app.locator(".dt-app-chip .dt-icon")).toBeVisible();
+  await expect(app.locator(".dt-map-times")).toHaveText("×3");
+  await expect(app).toHaveAttribute("title", /^shop: 3 traces for/);
   await expect(app.locator(".dt-request-queries")).toHaveText("3");
-  await expect(app).toHaveAttribute("aria-expanded", "false");
-  await expect(run).toHaveCount(0);
-
-  // As in the call tree: → opens it.
-  await app.focus();
-  await page.keyboard.press("ArrowRight");
-
   await expect(app).toHaveAttribute("aria-expanded", "true");
   // Three of one route in a row: a run, open (few traces), each of them under it, by its own path.
   await expect(run).toHaveCount(1);
@@ -54,14 +50,42 @@ test("a row that called another app has that app's traces under it, folded, in o
   await expect(panel(page).getByRole("tab", { name: /^DB/ })).toHaveAttribute("aria-selected", "true");
   await expect(panel(page).getByText("3 queries · 1 unique")).toBeVisible();
 
-  // ← folds it again.
+  // As in the call tree: ← folds it, → opens it again.
   await app.focus();
   await page.keyboard.press("ArrowLeft");
 
+  await expect(app).toHaveAttribute("aria-expanded", "false");
   await expect(run).toHaveCount(0);
+
+  await page.keyboard.press("ArrowRight");
+
+  await expect(run).toHaveCount(1);
 });
 
-/** The panel's list, a BFF's request in it (`bff`), its app's row opened: its rows under it. */
+test("an app's row the user folded stays folded when the panel reloads", async ({ page }) => {
+  await chain();
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await openApp(page, { graphql: { status: 200, trace: chainTrace("bff"), queries: 0, totalMs: 8 } });
+  await page.getByRole("button", { name: "Load graphql" }).click();
+  await pill(page).click();
+  const list = panel(page).getByRole("region", { name: "Pages and requests in this browser tab" });
+  const app = list.locator('.dt-request-row[data-chain="app"]');
+  await app.locator('[data-toggle=""]').click();
+
+  await expect(app).toHaveAttribute("aria-expanded", "false");
+
+  await page.reload();
+  await page.getByRole("button", { name: "Load graphql" }).click();
+  // The panel may open by itself again (it keeps its state for the tab): opened once either way.
+  await expect(pill(page)).toBeVisible();
+  if (!(await list.isVisible())) await pill(page).click();
+
+  // The request's row again (and the new request's, the same trace): what was folded is still.
+  await expect(app.first()).toBeVisible({ timeout: 15_000 });
+  for (const row of await app.all()) await expect(row).toHaveAttribute("aria-expanded", "false");
+});
+
+/** The panel's list, a BFF's request in it (`bff`), its app's row (open): its rows under it. */
 async function listed(page: Page, bff: string) {
   await page.setViewportSize({ width: 1280, height: 900 });
   await openApp(page, { graphql: { status: 200, trace: bff, queries: 0, totalMs: 8 } });
@@ -70,7 +94,7 @@ async function listed(page: Page, bff: string) {
   const list = panel(page).getByRole("region", { name: "Pages and requests in this browser tab" });
   const app = list.locator('.dt-request-row[data-chain="app"]');
   await expect(app).toHaveCount(1);
-  await app.locator('[data-toggle=""]').click();
+  await expect(app).toHaveAttribute("aria-expanded", "true");
   return {
     list,
     app,
@@ -92,7 +116,7 @@ test("an app's 37 traces are all there, in order, the run of 36 open", async ({ 
   const { app, run, traces } = await listed(page, bff);
 
   await expect(app).toContainText("shop");
-  await expect(app).toContainText("37 traces");
+  await expect(app.locator(".dt-map-times")).toHaveText("×37");
   await expect(run).toHaveCount(1);
   await expect(run).toContainText("/authors/{author_id}");
   await expect(run).toContainText("×36");
@@ -148,7 +172,7 @@ test("an app's traces go by when they started on the caller's clock, across rout
     "/books",
   ]);
 
-  // The review's call: under it, folded, the app that served it.
+  // The review's call: under it, folded, the app that served it (its row open, its one trace under it).
   const review = traces.nth(3);
   await expect(review).toHaveAttribute("aria-expanded", "false");
   await review.focus();
@@ -156,7 +180,19 @@ test("an app's traces go by when they started on the caller's clock, across rout
 
   const deeper = list.locator('.dt-request-row[data-chain="app"]').nth(1);
   await expect(deeper).toContainText("shop");
-  await expect(deeper).toContainText("1 trace");
+  await expect(deeper).toHaveAttribute("title", /^shop: 1 trace for/);
+  await expect(deeper).toHaveAttribute("aria-expanded", "true");
+  await expect(traces.locator(".dt-request-path")).toHaveText([
+    "/books",
+    "/authors/1",
+    "/authors/2",
+    "/reviews/4",
+    "/stars",
+    "/authors/3",
+    "/authors/4",
+    "/authors/5",
+    "/books",
+  ]);
 });
 
 test("an app with more than 50 traces has its runs folded; open, the first 50, then all of them", async ({ page }) => {
@@ -176,7 +212,7 @@ test("an app with more than 50 traces has its runs folded; open, the first 50, t
   });
   const { app, run, traces, more } = await listed(page, bff);
 
-  await expect(app).toContainText("60 traces");
+  await expect(app.locator(".dt-map-times")).toHaveText("×60");
   await expect(run).toContainText("×60");
   await expect(run).toHaveAttribute("aria-expanded", "false");
   await expect(traces).toHaveCount(0);

@@ -5,17 +5,18 @@
 ### Added
 
 - The panel's list has, under a request that called other apps, a row
-  per app it called (`library-api · 37 traces`, their queries and
-  findings), folded. Open (its arrow, or → on the keyboard), each of the
-  app's traces in the order it started on the request's clock, a row of
-  its own: its method and path (`/authors/7`), the route in its tooltip.
+  per app it called (its chip, `×37`, their queries and findings), open
+  until folded (its arrow, or ← on the keyboard): each of the app's
+  traces in the order it started on the request's clock, a row of its
+  own: its method and path (`/authors/7`), the route in its tooltip.
   Each opens in turn to what it called. Three or more of one route in a
   row are a run (`GET /authors/{author_id} ×36`, their time on the
   clock), open while the app has up to 50 traces and folded beyond. A
   list longer than 50 rows shows the first 50 and `Show all`. A trace's
   row opens it beside the list. The app's row opens the request with its
-  tabs under that app (`Under library-api`). The rows stay open while
-  the browser tab does, and Follow new keeps to the list's own requests.
+  tabs under that app (`Under library-api`). The rows stay folded or
+  open as the user left them while the browser tab does, and Follow new
+  keeps to the list's own requests.
 - A new span kind, `sql.connect`: the time a driver took to open a
   connection to the database (logging in to Snowflake, PostgreSQL's or
   MySQL's handshake). It counts as the database's time in the breakdown and
@@ -135,6 +136,20 @@
 
 ### Fixed
 
+- A merged call's row in the call tree (`GET /authors/1 → library-api`)
+  no longer shows an empty chip or a query count's icon without its
+  number when the row is short of room: the app's name is cut first (a
+  few letters and its tooltip stay), then what the served trace found
+  goes whole, its query count first, and the path stays. A row's own
+  issue is cut to a few letters at the least, never to an empty pill.
+- An N+1 of calls is said once, on its group's row (`Book.author ×36`),
+  not again on each of the 36 calls when the group is open.
+- A group's details say where its calls ran from only when they all ran
+  from one place, never an empty `from`.
+- An app's chip has its mark everywhere it names the app: the app filters
+  over the trace's DB, HTTP calls, Issues, Logs and Profile tabs, the
+  lists, the Profile tab's apps. Where its runtime is not known, the
+  plain app icon.
 - A code row of the call tree is named by the profile's samples of its
   own time. A handler's code before its transaction and after the commit
   was named after the transaction's loop (`list_books · book_out` twice):

@@ -3,7 +3,7 @@
 // that narrows the list to it. One row on every tab that lists the chain (Logs; DB, HTTP calls and Issues next).
 
 import { ArrowUpRightIcon, DatabaseIcon, FlameIcon, ScrollTextIcon, TriangleAlertIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useMemo } from "react";
 import type { UnderSubject } from "./CallMap";
 import {
   DropdownMenu,
@@ -14,7 +14,8 @@ import {
 import { CloseIcon } from "./icons";
 import { callsOfTab } from "./lib/callTabs";
 import { scopedProfiles } from "./lib/chainProfile";
-import { type Member, type SpanScope, scopedIssues, scopedLogs, scopedSpans } from "./lib/scope";
+import { appRuntimes, appsOf, type Member, type SpanScope, scopedIssues, scopedLogs, scopedSpans } from "./lib/scope";
+import { AppMark } from "./primitives";
 import type { ScopeIssue } from "./types";
 
 /** What is under a row of the call tree, said: its menu has "Only this span"; × goes back to the whole chain. */
@@ -86,11 +87,14 @@ export function AppChips({
   counts,
   picked,
   onPick,
+  runtimes,
 }: {
   apps: readonly string[];
   counts: ReadonlyMap<string, number>;
   picked: string | null;
   onPick: (app: string | null) => void;
+  /** Each app's runtime label (lib/runtime traceRuntime): its mark on its chip, as the call tree's app chip has it. */
+  runtimes?: ReadonlyMap<string, string | undefined> | undefined;
 }) {
   // An app with none of the list (a scope under the BFF's step: the browser's) has no chip.
   const some = apps.filter((app) => (counts.get(app) ?? 0) > 0 || app === picked);
@@ -103,9 +107,18 @@ export function AppChips({
       title={picked === app ? "Every app" : `Only ${app}`}
       onPress={() => onPick(picked === app ? null : app)}
     >
+      <AppMark runtime={runtimes?.get(app)} />
       {app}
     </CountChip>
   ));
+}
+
+/** The chain's apps in order, and each one's runtime label: the chips AppChips draws. */
+export function useChainApps(members: readonly Member[]): {
+  apps: string[];
+  runtimes: ReadonlyMap<string, string | undefined>;
+} {
+  return useMemo(() => ({ apps: appsOf(members), runtimes: appRuntimes(members) }), [members]);
 }
 
 /** Counts by a key, most first (ties in their first order). */

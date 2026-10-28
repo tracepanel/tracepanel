@@ -9,10 +9,10 @@ import { LogRecordDetails } from "./LogRecordDetails";
 import { type LogColumn, LogLevel, LogTable } from "./LogTable";
 import { withoutAnsi } from "./lib/ansi";
 import { plural } from "./lib/plural";
-import { appsOf, type Member, type ScopedLog, type SpanScope, scopeWindow } from "./lib/scope";
+import { type Member, type ScopedLog, type SpanScope, scopeWindow } from "./lib/scope";
 import { linkProps, type TraceLinks } from "./links";
 import { AppChip } from "./primitives";
-import { AppChips, CountChip, countBy, ScopeChip } from "./ScopeBar";
+import { AppChips, CountChip, countBy, ScopeChip, useChainApps } from "./ScopeBar";
 import type { Trace } from "./types";
 
 /** Over a trace's records: how many, and the way to the Logs page to filter and search them with every other. */
@@ -193,6 +193,7 @@ function useRecordKeys(logs: readonly ScopedLog[]): ReadonlyMap<ScopedLog, strin
 function ScopeRow({
   logs,
   apps,
+  runtimes,
   scope,
   onScope,
   app,
@@ -200,6 +201,7 @@ function ScopeRow({
 }: {
   logs: readonly ScopedLog[];
   apps: readonly string[];
+  runtimes: ReadonlyMap<string, string | undefined> | undefined;
   scope: SpanScope | null;
   onScope: (scope: SpanScope | null) => void;
   app: string | null;
@@ -210,7 +212,7 @@ function ScopeRow({
   return (
     <ul className="dt-breakdown-legend" aria-label="Scope">
       <ScopeChip scope={scope} onChange={onScope} />
-      <AppChips apps={apps} counts={counts} picked={app} onPick={onApp} />
+      <AppChips apps={apps} runtimes={runtimes} counts={counts} picked={app} onPick={onApp} />
     </ul>
   );
 }
@@ -223,6 +225,7 @@ function ScopeRow({
 export function LogList({
   logs,
   apps,
+  runtimes,
   start,
   window,
   traceId,
@@ -236,6 +239,8 @@ export function LogList({
   logs: readonly ScopedLog[];
   /** The apps of the trace's chain: a chip each, when there are two or more. */
   apps: readonly string[];
+  /** Each app's runtime label: the mark on its chip. */
+  runtimes?: ReadonlyMap<string, string | undefined> | undefined;
   start: number;
   /** The time the scope covers. */
   window: [number, number];
@@ -260,6 +265,7 @@ export function LogList({
         <ScopeRow
           logs={logs}
           apps={apps}
+          runtimes={runtimes}
           scope={scope}
           onScope={onScope}
           app={picks.app}
@@ -367,7 +373,7 @@ export function LogsPane({
   links: TraceLinks | undefined;
   onShowRow: (row: string) => void;
 }) {
-  const apps = useMemo(() => appsOf(chain.members), [chain.members]);
+  const { apps, runtimes } = useChainApps(chain.members);
   if (!open) return null;
   const { scope } = chain;
   return (
@@ -375,6 +381,7 @@ export function LogsPane({
       key={scope ? `${scope.targets.join(",")}:${scope.only}` : "chain"}
       logs={chain.scoped}
       apps={apps}
+      runtimes={runtimes}
       start={trace.start}
       window={scopeWindow(chain.members, scope)}
       traceId={trace.id}

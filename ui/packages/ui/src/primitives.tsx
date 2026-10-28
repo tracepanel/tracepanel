@@ -1,4 +1,4 @@
-import { ArrowRightIcon } from "lucide-react";
+import { AppWindowIcon, ArrowRightIcon } from "lucide-react";
 import { type ComponentType, type ReactNode, useLayoutEffect, useRef } from "react";
 import { Badge } from "./components/ui/badge";
 import { Button } from "./components/ui/button";
@@ -45,8 +45,11 @@ export function StatusBadge({ status }: { status: number | null | undefined }) {
   );
 }
 
-/** An issue chip that gives way last in a row too narrow for it, cut with an ellipsis. */
-export const ISSUE_CHIP_SHRINKS = "min-w-0 shrink justify-start";
+/**
+ * A row's own issue chip where the row may be short of room: cut with an ellipsis down to a few letters ("Dupl…"),
+ * never to an empty pill.
+ */
+export const ISSUE_CHIP_SHRINKS = "min-w-[2.75rem] shrink justify-start";
 
 export function IssueChip({
   kind,
@@ -55,7 +58,7 @@ export function IssueChip({
 }: {
   kind: IssueKind;
   count?: number | undefined;
-  /** `ISSUE_CHIP_SHRINKS` in a row too narrow for it: cut with an ellipsis, not past the row's edge. */
+  /** `ISSUE_CHIP_SHRINKS` in a row too narrow for it. */
   className?: string | undefined;
 }) {
   return (
@@ -362,15 +365,23 @@ export function StateBadge({ state }: { state: string }) {
 }
 
 /**
+ * An app's mark wherever an app is named (its chip, its filter): its runtime's when known, else the plain app icon,
+ * so an app has a mark everywhere.
+ */
+export function AppMark({ runtime }: { runtime?: string | undefined }) {
+  const kind = runtime ? runtimeKind(runtime) : null;
+  return kind ? <RuntimeIcon kind={kind} /> : <AppWindowIcon className="dt-icon size-3.5" aria-hidden="true" />;
+}
+
+/**
  * The app that served something: its runtime's mark when known, and its name. The same chip names the app of a call's
  * trace in the call tree and of a request in a list that holds several apps.
  */
 export function AppChip({ name, runtime }: { name: string; runtime?: string | undefined }) {
-  const kind = runtime ? runtimeKind(runtime) : null;
   return (
     <span className="dt-app-chip" title={runtime ? `${name} · ${runtime}` : name}>
-      {kind ? <RuntimeIcon kind={kind} /> : null}
-      {name}
+      <AppMark runtime={runtime} />
+      <span className="dt-app-name">{name}</span>
     </span>
   );
 }
