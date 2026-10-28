@@ -2035,7 +2035,7 @@ details[data-focused] > .dt-sql-group {
 .dt-map-row[data-kind="template"] {
   --dt-k: var(--dt-k-template);
 }
-.dt-map-row[data-kind="sql"] {
+.dt-map-row:is([data-kind="sql"], [data-kind="sql.connect"]) {
   --dt-k: var(--dt-k-sql);
 }
 .dt-map-row[data-kind="cache"] {

@@ -235,7 +235,7 @@ export function buildTree(trace: Trace, related: Related | undefined): Node[] {
 
 /** What the filter chips above the tree pick, in their order; a chip shows only when the trace has such rows. */
 export const FILTERS = [
-  { id: "sql", label: "SQL", kinds: ["sql"] },
+  { id: "sql", label: "SQL", kinds: ["sql", "sql.connect"] },
   { id: "redis", label: "Redis", kinds: ["redis"] },
   { id: "cache", label: "Cache", kinds: ["cache"] },
   { id: "datastore", label: "Datastores", kinds: [...DATASTORES] },
