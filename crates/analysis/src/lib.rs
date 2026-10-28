@@ -82,8 +82,8 @@ const AGGREGATE_PER_ROW: &str = "Compute it for all the rows in one query, group
     in an `in` list), instead of one aggregate query per row.";
 const N_PLUS_ONE: &str = "Load the related rows with the parent rows (a join, or one batched query) instead of one query per row.";
 const DUPLICATES: &str = "Run the query once and reuse the result, or cache it for the request.";
-const IN_GRAPHQL: &str =
-    " In GraphQL, a resolver runs once per object: batch these lookups with a DataLoader";
+const IN_GRAPHQL: &str = " In GraphQL, ";
+const ONCE_PER_OBJECT: &str = " once per object: batch these lookups with a DataLoader";
 const PREFETCH_IN_PARENT: &str = ", or prefetch in the parent resolver.";
 const SLOW_SQL: &str = "Check the query plan (`EXPLAIN`) and add an index or narrow the query.";
 const HTTP_REPEATED: &str =
@@ -111,8 +111,8 @@ const N_PLUS_ONE_IN_TEMPLATE: &str = "Load the related rows in the view, with th
     batched query), and pass them to the template.";
 
 /// What a GraphQL trace's N+1 hint adds: a DataLoader, the one of the server library the SDK names
-/// (`graphql.library`), none named for a library it doesn't.
-fn dataloader_hint(library: Option<&str>) -> String {
+/// (`graphql.library`), none named for a library it doesn't; and the resolver that made the repeats, when one did.
+fn dataloader_hint(library: Option<&str>, field: Option<&str>) -> String {
     let loader = match library {
         Some("strawberry") => " (`strawberry.dataloader`)",
         // graphene-django's GraphQLView runs resolvers in sync code, where aiodataloader's (Graphene's docs) can't
@@ -120,9 +120,68 @@ fn dataloader_hint(library: Option<&str>) -> String {
         Some("graphene") => {
             " (graphql-sync-dataloaders' `SyncDataLoader` in graphene-django's sync view, aiodataloader in an async one)"
         }
+        // The JavaScript servers': the `dataloader` package, a loader made per request so its cache is the request's.
+        Some("graphql-yoga" | "apollo-server") => {
+            " (the `dataloader` package, one loader per request in the server's context)"
+        }
         _ => "",
     };
-    format!("{IN_GRAPHQL}{loader}{PREFETCH_IN_PARENT}")
+    let runs = field.map_or_else(
+        || "a resolver runs".to_owned(),
+        |field| format!("`{field}` runs"),
+    );
+    format!("{IN_GRAPHQL}{runs}{ONCE_PER_OBJECT}{loader}{PREFETCH_IN_PARENT}")
+}
+
+/// A GraphQL trace's resolvers: for each span, the field of the resolver it ran under (`graphql.field` on the SDK's
+/// resolver span), so an N+1's hint names the field that repeats it, across an HTTP call to another service too.
+pub(crate) struct Resolvers<'a> {
+    library: Option<String>,
+    fields: HashMap<&'a str, &'a str>,
+}
+
+impl<'a> Resolvers<'a> {
+    /// None for a trace that isn't a GraphQL operation's.
+    pub(crate) fn of(trace: &'a Trace) -> Option<Self> {
+        if !trace.attrs.contains_key("graphql.operation") {
+            return None;
+        }
+        let by_id: HashMap<&str, &Span> = trace
+            .spans
+            .iter()
+            .map(|span| (span.id.as_str(), span))
+            .collect();
+        let mut fields = HashMap::new();
+        for span in &trace.spans {
+            let mut parent = span.parent_id.as_deref();
+            // Bounded: a malformed trace's parents may loop.
+            for _ in 0..64 {
+                let Some(found) = parent.and_then(|id| by_id.get(id)) else {
+                    break;
+                };
+                if let Some(field) = found.attrs.get("graphql.field").and_then(Value::as_str) {
+                    fields.insert(span.id.as_str(), field);
+                    break;
+                }
+                parent = found.parent_id.as_deref();
+            }
+        }
+        Some(Self {
+            library: text(&trace.attrs, "graphql.library"),
+            fields,
+        })
+    }
+
+    /// What the hint of these repeats adds: the DataLoader, and the field whose resolver ran each of them, when it
+    /// is one field.
+    pub(crate) fn hint(&self, spans: &[&Span]) -> String {
+        let mut fields = spans
+            .iter()
+            .map(|span| self.fields.get(span.id.as_str()).copied());
+        let first = fields.next().flatten();
+        let field = first.filter(|first| fields.all(|field| field == Some(*first)));
+        dataloader_hint(self.library.as_deref(), field)
+    }
 }
 
 fn n_plus_one_hint(client: &str, statement: &str, by_pk: bool, in_template: bool) -> &'static str {
@@ -345,10 +404,7 @@ fn sql_issues(trace: &Trace, thresholds: &Thresholds) -> Vec<Issue> {
         }
         groups.entry(key).or_default().push(span);
     }
-    let dataloader = trace
-        .attrs
-        .contains_key("graphql.operation")
-        .then(|| dataloader_hint(text(&trace.attrs, "graphql.library").as_deref()));
+    let resolvers = Resolvers::of(trace);
     let threshold = thresholds.n_plus_one.max(0) as usize;
     for (alias, statement) in order {
         let spans = &groups[&(alias.clone(), statement.clone())];
@@ -403,7 +459,10 @@ fn sql_issues(trace: &Trace, thresholds: &Thresholds) -> Vec<Issue> {
                     by_pk,
                     lead.is_some()
                 ),
-                dataloader.as_deref().unwrap_or_default()
+                resolvers
+                    .as_ref()
+                    .map(|resolvers| resolvers.hint(spans))
+                    .unwrap_or_default()
             );
             issues.push(issue(
                 issue_key("n+1", &[Some(&key), key_culprit.as_deref()]),
@@ -1495,6 +1554,15 @@ mod tests {
             )
         );
 
+        // The JavaScript servers' plugins: the `dataloader` package.
+        let dataloader = format!(
+            "{SELECT_RELATED} {batch} (the `dataloader` package, one loader per request in the server's \
+             context), or prefetch in the parent resolver."
+        );
+
+        assert_eq!(graphql("graphql-yoga".into()), dataloader);
+        assert_eq!(graphql("apollo-server".into()), dataloader);
+
         // A library the agent doesn't know, or an SDK that doesn't say: a DataLoader, none named.
         let unnamed = format!("{SELECT_RELATED} {batch}, or prefetch in the parent resolver.");
 
@@ -1507,6 +1575,95 @@ mod tests {
 
         // Not a GraphQL request: no DataLoader.
         assert_eq!(hint(serde_json::json!({})), SELECT_RELATED);
+    }
+
+    /// A GraphQL trace: the operation's span, and under it a resolver span of `field` per item, each with the given
+    /// call under it.
+    fn resolved(
+        field: impl Fn(usize) -> &'static str,
+        call: impl Fn(usize) -> (&'static str, &'static str, Value, i64),
+    ) -> Trace {
+        let mut spans = vec![("graphql", "query Books", serde_json::json!({}), 9000)];
+        for n in 0..3 {
+            let name = field(n);
+            spans.push((
+                "function",
+                name,
+                serde_json::json!({"graphql.field": name, "graphql.path": format!("books.{n}.author")}),
+                2000,
+            ));
+            spans.push(call(n));
+        }
+        let mut trace = request(&spans);
+        for index in 1..trace.spans.len() {
+            // A resolver under the operation, its call under it.
+            let parent = if index % 2 == 1 { 0 } else { index - 1 };
+            trace.spans[index].parent_id = Some(trace.spans[parent].id.clone());
+        }
+        trace.attrs = serde_json::from_value(serde_json::json!({
+            "graphql.operation": "query Books", "graphql.library": "graphql-yoga",
+        }))
+        .unwrap();
+        trace
+    }
+
+    #[test]
+    fn a_graphql_n_plus_one_names_the_field_whose_resolver_repeats_it() {
+        let author = |n: usize| {
+            let attrs = serde_json::json!({
+                "http.request.method": "GET", "url.full": format!("http://127.0.0.1:8042/authors/{n}"),
+                "code.origin": "server.js:13 in service",
+            });
+            ("http.client", "GET 127.0.0.1/authors/{id}", attrs, 1000)
+        };
+        let hints = |trace: &Trace| {
+            analyze(trace, &Thresholds::default())
+                .into_iter()
+                .map(|issue| (issue.kind, issue.culprit, issue.hint))
+                .collect::<Vec<_>>()
+        };
+        let loader = "a DataLoader (the `dataloader` package, one loader per request in the server's context), \
+                      or prefetch in the parent resolver.";
+
+        // Calls to another service, one per book from `Book.author`: the field is named, the call's line kept.
+        assert_eq!(
+            hints(&resolved(|_| "Book.author", author)),
+            [(
+                "n+1".to_owned(),
+                Some("server.js:13 in service".to_owned()),
+                Some(format!(
+                    "{HTTP_REPEATED} In GraphQL, `Book.author` runs once per object: batch these lookups with \
+                     {loader}"
+                )),
+            )]
+        );
+
+        // Queries too.
+        let query = |n: usize| {
+            let statement = r#"SELECT "author"."name" FROM "author" WHERE "author"."id" = $1"#;
+            let attrs = serde_json::json!({
+                "db.statement": statement, "db.fingerprint": statement, "db.params_hash": format!("p{n}"),
+                "db.client": "pg", "code.origin": "server.js:20 in author",
+            });
+            ("sql", "SELECT author", attrs, 1000)
+        };
+
+        assert_eq!(
+            hints(&resolved(|_| "Book.author", query))[0].2,
+            Some(format!(
+                "{N_PLUS_ONE} In GraphQL, `Book.author` runs once per object: batch these lookups with {loader}"
+            ))
+        );
+
+        // Repeats from more than one field: a resolver, none named.
+        let fields = ["Book.author", "Book.author", "Review.author"];
+
+        assert_eq!(
+            hints(&resolved(|n| fields[n], author))[0].2,
+            Some(format!(
+                "{HTTP_REPEATED} In GraphQL, a resolver runs once per object: batch these lookups with {loader}"
+            ))
+        );
     }
 
     #[test]
