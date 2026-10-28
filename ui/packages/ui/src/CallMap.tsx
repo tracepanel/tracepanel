@@ -1532,18 +1532,32 @@ function fitSidePane(map: HTMLElement): void {
   map.style.setProperty("--dt-side-height", `${view - top}px`);
 }
 
-/** Whether the call tree is wide enough for the details pane beside it. */
+/**
+ * Whether the call tree is wide enough for the details pane beside it. The pane's height follows the view it scrolls
+ * in, not the tree: a panel dragged taller or shorter changes the view alone, and a height fitted to the old one cut
+ * the pane's end off (or stopped the line between tree and pane in mid-air).
+ */
 function useSidePane(map: RefObject<HTMLDivElement | null>): boolean {
   const [side, setSide] = useState(false);
   useEffect(() => {
     const element = map.current;
     if (!element) return;
-    const observer = new ResizeObserver(() => {
+    const fit = () => {
       setSide(element.clientWidth >= SIDE_MIN_WIDTH);
       fitSidePane(element);
-    });
+    };
+    const observer = new ResizeObserver(fit);
     observer.observe(element);
-    return () => observer.disconnect();
+    const view = scrollParent(element);
+    if (view) observer.observe(view);
+    const sticky = element.closest(".dt-trace")?.querySelector<HTMLElement>(".dt-trace-strip, .dt-tabs");
+    if (sticky) observer.observe(sticky);
+    // With no scrolling parent the window is the view.
+    window.addEventListener("resize", fit);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", fit);
+    };
   }, [map]);
   return side;
 }
