@@ -18,7 +18,7 @@ use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tracepanel_protocol::{Activity, Batch, Sink, Thresholds};
-use tracepanel_store_local::{ReadError, Reader};
+use tracepanel_store_local::{Chain, ReadError, Reader, Selection, log_summary};
 
 /// The console's UI, built from `ui/` into `ui-dist/` (`scripts/ui.sh`): what the browser loads, not the notices.
 #[derive(Embed)]
@@ -49,6 +49,8 @@ pub fn router(reader: Reader, activity: Activity) -> Router {
         .route("/api/traces", get(traces))
         .route("/api/traces/{id}", get(trace))
         .route("/api/traces/{id}/related", get(related))
+        .route("/api/traces/{id}/chain", get(chain))
+        .route("/api/traces/{id}/logs", get(trace_logs))
         .route("/api/snapshot/{id}", get(snapshot))
         .route("/api/counts", get(counts))
         .route("/api/capabilities", get(capabilities))
@@ -304,6 +306,110 @@ async fn related(State(reader): State<Shared>, Path(id): Path<String>) -> Respon
     related["remote_calls"] = Value::Array(remote);
     related["call_traces"] = Value::Object(whole);
     json_response(StatusCode::OK, related.to_string())
+}
+
+/// Other projects' traces for the calls of a trace that no trace here answered, as the chain takes them: (the call's
+/// span, the trace, the project). Blocking: asks the other agents on this machine.
+fn neighbours_served(reader: &Reader, id: &str) -> Vec<(String, Value, String)> {
+    let Some((_, console)) = IDENTITY.get() else {
+        return Vec::new();
+    };
+    let unanswered = reader.unanswered_calls(id).unwrap_or_default();
+    if unanswered.is_empty() {
+        return Vec::new();
+    }
+    let neighbours = neighbors::neighbours(console);
+    unanswered
+        .iter()
+        .filter_map(|(w3c_trace, w3c_span, span)| {
+            neighbours.iter().find_map(|neighbour| {
+                let mut found = neighbors::ask(neighbour, w3c_trace, w3c_span)?;
+                let doc = found.get_mut("detail").map(Value::take)?;
+                let project = found["project"].as_str().unwrap_or_default().to_owned();
+                Some((span.clone(), doc, project))
+            })
+        })
+        .collect()
+}
+
+/// The scope asked for: `scope=trace` the trace alone, else (`chain`, the default) with the traces down its calls;
+/// `span=` (a comma-separated list of span ids, or a trace's id) what is under those rows, `only=1` in them only.
+fn scope_of(query: &HashMap<String, String>) -> (bool, Selection) {
+    let whole = query.get("scope").map(String::as_str) != Some("trace");
+    let targets = query
+        .get("span")
+        .map(|spans| {
+            spans
+                .split(',')
+                .filter(|span| !span.is_empty())
+                .map(str::to_owned)
+                .collect()
+        })
+        .unwrap_or_default();
+    let only = matches!(query.get("only").map(String::as_str), Some("1" | "true"));
+    (whole, Selection { targets, only })
+}
+
+/// A trace's chain, as the scope asks for it; none when the trace isn't stored.
+async fn chain_of(reader: &Shared, id: String, whole: bool) -> Result<Option<Chain>, Failure> {
+    read(reader, move |reader| {
+        Ok(reader.chain(&id, whole, &|owner| neighbours_served(reader, owner))?)
+    })
+    .await
+}
+
+/// `api/traces/{id}/chain`: the trace and every trace down the chain of its calls, each on the trace's clock, with
+/// where it hangs (the trace above it and its span that called).
+async fn chain(State(reader): State<Shared>, Path(id): Path<String>) -> Response {
+    if !is_id(&id) {
+        return not_found();
+    }
+    match chain_of(&reader, id, true).await {
+        Ok(Some(chain)) => {
+            let scope = chain.select(&Selection::default());
+            let traces: Vec<Value> = scope
+                .traces()
+                .into_iter()
+                .zip(&chain.members)
+                .map(|(mut placed, member)| {
+                    placed["trace"] = member.doc.clone();
+                    placed
+                })
+                .collect();
+            answer(Ok(json!({"traces": traces, "capped": chain.capped})))
+        }
+        Ok(None) => not_found(),
+        Err(failure) => failure.into_response(),
+    }
+}
+
+/// `api/traces/{id}/logs?scope=&span=&only=`: the records of a scope in time order, each with its trace and app, and
+/// what they add up to.
+async fn trace_logs(
+    State(reader): State<Shared>,
+    Path(id): Path<String>,
+    Query(query): Params,
+) -> Response {
+    if !is_id(&id) {
+        return not_found();
+    }
+    let (whole, selection) = scope_of(&query);
+    match chain_of(&reader, id, whole).await {
+        Ok(Some(chain)) => {
+            let scope = chain.select(&selection);
+            let logs = scope.logs();
+            let summary = log_summary(&logs, scope.window);
+            answer(Ok(json!({
+                "logs": logs,
+                "summary": summary,
+                "traces": scope.traces(),
+                "window": {"start": scope.window.0, "end": scope.window.1},
+                "capped": chain.capped,
+            })))
+        }
+        Ok(None) => not_found(),
+        Err(failure) => failure.into_response(),
+    }
 }
 
 /// These traces whole, by id: the ones this store has.

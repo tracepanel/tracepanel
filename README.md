@@ -70,7 +70,9 @@ What else is in a trace:
 - Linked traces. A task links to the request that queued it, and a call to
   another app links to that app's trace, by the W3C trace context.
 - Logs from the language's usual loggers, each line on the request or task
-  that wrote it, with one search across them.
+  that wrote it, with one search across them. A trace's Logs tab lists its
+  whole chain of calls, each line with its app, or what is under one row of
+  the call tree, added up by level, app and logger.
 - Errors with their stack and the source of your frames, and in Python and
   Node their local variables.
 - `EXPLAIN` of a query, one click from the query.

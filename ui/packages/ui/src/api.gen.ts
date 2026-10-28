@@ -51,6 +51,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/traces/{id}/chain": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The trace and every trace down the chain of its calls (the traces other apps served for its calls, theirs in turn: up to 6 levels down, 60 traces, 50 calls of one trace), each moved onto the trace's clock.
+         * @description Each app times its spans by its own clock: a call's trace is moved to sit centred in the call that reached it (`shift`), as the call tree draws it. The console's trace tabs list and add up the chain from these.
+         */
+        get: operations["traceChain"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/traces/{id}/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The log records of a trace's scope in time order, each with its trace and app, and what they add up to: the whole chain of calls by default, the trace alone, or what is under some of its rows.
+         * @description A record is under a span when it was logged in it or in a span under it, or in a trace another app served for a call under it (and in theirs, down the chain). A record logged in no span (a browser's console) is under a span when its time is in the span's. With `only=1`, a span's own records: not those of a span or a trace under it.
+         */
+        get: operations["traceLogs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/snapshot/{id}": {
         parameters: {
             query?: never;
@@ -671,6 +711,87 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @description Where a trace hangs in its chain. */
+        ChainTrace: {
+            id: string;
+            /** @description Its service.name; another project's trace */
+            app: string;
+            name: string;
+            kind: string;
+            /** @description The trace whose call it served; null for the first. */
+            parent: string | null;
+            /** @description The span of `parent` whose call it served. */
+            via: string | null;
+            /** @description Traces down the chain from the first: 0 the first, 1 its calls'. */
+            level: number;
+            /** @description µs its times moved by to sit on the first trace's clock. */
+            shift: number;
+            /** @description The trace, its times moved by `shift` (`chain` only). */
+            trace?: components["schemas"]["trace.schema"];
+        };
+        Chain: {
+            traces: components["schemas"]["ChainTrace"][];
+            /** @description A limit left traces of the chain out. */
+            capped: boolean;
+        };
+        ScopeLog: {
+            span_id: string | null;
+            /** @description On the first trace's clock. */
+            time: components["schemas"]["Time"];
+            /** @enum {string} */
+            level: "debug" | "info" | "warning" | "error" | "critical";
+            logger: string;
+            message: string;
+            exception: string | null;
+            attrs: components["schemas"]["Attrs"];
+            trace_id: string;
+            app: string;
+        };
+        Counted: {
+            app?: string;
+            logger?: string;
+            count: number;
+        };
+        LogSummary: {
+            total: number;
+            /** @description Records by level. */
+            levels: {
+                [key: string]: number;
+            };
+            /** @description Records by app */
+            apps: components["schemas"]["Counted"][];
+            /** @description Records by logger, most first. */
+            loggers: components["schemas"]["Counted"][];
+            /** @description The first error or critical record. */
+            first_error: null | {
+                time: components["schemas"]["Time"];
+                level: string;
+                logger: string;
+                message: string;
+                app: string;
+                trace_id: string;
+                span_id: string | null;
+            };
+            /** @description Records by level in 24 equal slices of the scope's time. */
+            histogram: {
+                start: components["schemas"]["Time"];
+                end: components["schemas"]["Time"];
+                slices: {
+                    [key: string]: number;
+                }[];
+            };
+        };
+        TraceLogs: {
+            logs: components["schemas"]["ScopeLog"][];
+            summary: components["schemas"]["LogSummary"];
+            traces: components["schemas"]["ChainTrace"][];
+            /** @description The time the rows asked for cover (none asked for, the trace's), on its clock. */
+            window: {
+                start: components["schemas"]["Time"];
+                end: components["schemas"]["Time"];
+            };
+            capped: boolean;
+        };
         Error: {
             error: string;
         };
@@ -2291,6 +2412,12 @@ export interface components {
         };
     };
     parameters: {
+        /** @description `chain` (the default): the trace and the traces down its calls; `trace`: the trace alone. */
+        scope: "chain" | "trace";
+        /** @description What is under these rows only: comma-separated span ids of any trace in the scope (a group's spans), or a trace's id for the whole of that trace (a call's trace as a row). */
+        span: string;
+        /** @description `1`: with `span`, what is in those spans themselves, not in a span or a trace under them. */
+        only: "1";
         /** @description Only what this app (service.name) recorded; every app when left out. */
         service: string;
         /** @description Search query: free text plus key:value filters, e.g. route:/api/* status>=500 "timed out". */
@@ -2386,6 +2513,59 @@ export interface operations {
                     "application/json": components["schemas"]["Related"];
                 };
             };
+        };
+    };
+    traceChain: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The chain, the trace first, each trace after the one above it. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Chain"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    traceLogs: {
+        parameters: {
+            query?: {
+                /** @description `chain` (the default): the trace and the traces down its calls; `trace`: the trace alone. */
+                scope?: components["parameters"]["scope"];
+                /** @description What is under these rows only: comma-separated span ids of any trace in the scope (a group's spans), or a trace's id for the whole of that trace (a call's trace as a row). */
+                span?: components["parameters"]["span"];
+                /** @description `1`: with `span`, what is in those spans themselves, not in a span or a trace under them. */
+                only?: components["parameters"]["only"];
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The records (up to 5000) and their summary. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TraceLogs"];
+                };
+            };
+            404: components["responses"]["NotFound"];
         };
     };
     traceSnapshot: {

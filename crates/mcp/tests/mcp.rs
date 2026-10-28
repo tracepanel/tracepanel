@@ -1120,3 +1120,169 @@ No samples: the trace was over before the profiler saw its code (one sample ever
         )
     );
 }
+
+/// A ULID of the chain test's own: `n` padded.
+fn chain_id(n: u32) -> String {
+    format!("01M4C4A1N5{n:0>16}")
+}
+
+/// A BFF's request whose step calls a service twice; the service logs in its query, one of them an error.
+fn chain_docs(start: i64) -> Vec<Value> {
+    let span = |n: u32, parent: Option<u32>, kind: &str, name: &str, at: i64, w3c: Option<&str>| {
+        let mut attrs = json!({});
+        if let Some(w3c) = w3c {
+            attrs["w3c.span_id"] = json!(w3c);
+        }
+        json!({"id": chain_id(n), "parent_id": parent.map(chain_id), "kind": kind, "name": name, "start": start + at,
+               "duration": 100, "status": "ok", "attrs": attrs})
+    };
+    let log = |n: u32, at: i64, level: &str, logger: &str, message: &str| {
+        json!({"span_id": chain_id(n), "time": start + at, "level": level, "logger": logger, "message": message,
+               "exception": null, "attrs": {}})
+    };
+    let doc = |n: u32,
+               app: &str,
+               name: &str,
+               at: i64,
+               parent: Option<&str>,
+               spans: Vec<Value>,
+               logs: Vec<Value>| {
+        let mut attrs =
+            json!({"service.name": app, "w3c.trace_id": "4bf92f3577b34da6a3ce929d0e0e47c2"});
+        if let Some(parent) = parent {
+            attrs["w3c.parent_span_id"] = json!(parent);
+        }
+        json!({"id": chain_id(n), "kind": "http", "name": name, "start": start + at, "duration": 1000, "status": "ok",
+               "attrs": attrs, "spans": spans, "logs": logs, "errors": [], "links": [], "issues": []})
+    };
+    let mut bff_root = span(101, None, "http", "POST /graphql", 0, None);
+    bff_root["duration"] = json!(1000);
+    let mut step = span(102, Some(101), "function", "Book.author", 100, None);
+    step["duration"] = json!(600);
+    vec![
+        doc(
+            1,
+            "library-bff",
+            "POST /graphql",
+            0,
+            None,
+            vec![
+                bff_root,
+                step,
+                span(
+                    103,
+                    Some(102),
+                    "http.client",
+                    "GET /authors/1",
+                    200,
+                    Some("c000000000000001"),
+                ),
+                span(
+                    104,
+                    Some(102),
+                    "http.client",
+                    "GET /authors/2",
+                    500,
+                    Some("c000000000000002"),
+                ),
+            ],
+            vec![
+                log(101, 10, "info", "yoga", "query Books"),
+                log(102, 150, "warning", "resolvers", "slow author"),
+            ],
+        ),
+        doc(
+            2,
+            "library-api",
+            "GET /authors/1",
+            200,
+            Some("c000000000000001"),
+            vec![span(201, None, "http", "GET /authors/1", 200, None)],
+            vec![log(201, 220, "error", "app.db", "no author 1")],
+        ),
+        doc(
+            3,
+            "library-api",
+            "GET /authors/2",
+            500,
+            Some("c000000000000002"),
+            vec![span(301, None, "http", "GET /authors/2", 500, None)],
+            vec![log(301, 520, "info", "app.db", "author 2")],
+        ),
+    ]
+}
+
+#[tokio::test]
+async fn a_traces_logs_come_with_its_chains_and_get_trace_says_the_chain() {
+    let start = tracepanel_store_local::search::now_us() - 5_000_000;
+    let dir = store("chain", &chain_docs(start));
+    let server = Server::new(dir, false);
+    let bff = chain_id(1);
+
+    let (whole, _) = tool(&server, "search_logs", json!({"trace": bff})).await;
+    let (under, _) = tool(
+        &server,
+        "search_logs",
+        json!({"trace": bff, "span": chain_id(102), "only": true}),
+    )
+    .await;
+    let (alone, _) = tool(
+        &server,
+        "search_logs",
+        json!({"trace": bff, "chain": false}),
+    )
+    .await;
+    let (missing, failed) = tool(&server, "search_logs", json!({"trace": chain_id(9)})).await;
+    let (trace, _) = tool(&server, "get_trace", json!({"id": bff})).await;
+
+    assert_eq!(
+        whole,
+        format!(
+            "logs of {bff} and its chain (4 records in 3 traces):
+error 1 · warning 1 · info 2 · by app: library-api 2 · library-bff 2
+first error: +0.2 ms error library-api app.db: no author 1
++0.0 ms info library-bff yoga: query Books
++0.1 ms warning library-bff resolvers: slow author
++0.2 ms error library-api app.db: no author 1
++0.5 ms info library-api app.db: author 2"
+        )
+    );
+
+    assert_eq!(
+        under,
+        format!(
+            "logs of {bff} and its chain under {} (1 record in 3 traces):
+warning 1 · by app: library-bff 1
++0.1 ms warning library-bff resolvers: slow author",
+            chain_id(102)
+        )
+    );
+
+    assert_eq!(
+        alone,
+        format!(
+            "logs of {bff} (2 records in 1 trace):
+warning 1 · info 1 · by app: library-bff 2
++0.0 ms info library-bff yoga: query Books
++0.1 ms warning library-bff resolvers: slow author"
+        )
+    );
+
+    assert!(failed);
+    assert_eq!(
+        missing,
+        format!(
+            "No trace {}: find_traces lists the recent ones.",
+            chain_id(9)
+        )
+    );
+
+    assert!(
+        trace.contains(&format!(
+            "chain: 2 traces down its calls (library-api); logs → search_logs trace:{bff}
+their warnings and worse (1):
+  +0.2 ms error library-api app.db: no author 1"
+        )),
+        "{trace}"
+    );
+}

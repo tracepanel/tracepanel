@@ -15,6 +15,7 @@ use search::{Compiler, SearchError, Term};
 mod aws;
 mod groups;
 mod read;
+mod scope;
 mod searches;
 mod services;
 mod stats;
@@ -33,6 +34,10 @@ use write::*;
 pub use read::{Page, ReadError, Reader};
 /// The store's errors (SQLite's).
 pub use rusqlite::Error;
+pub use scope::{
+    CALL_TRACES, CHAIN_LEVELS, CHAIN_TRACES, Chain, Member, Remote, SCOPE_LOGS, Scope, Selection,
+    log_summary, no_remote,
+};
 pub use stats::{SLOW_REQUEST_US, stats};
 pub use tracepanel_analysis::calls::{call_key, query_fingerprint};
 pub use write::{DEFAULT_MAX_TRACES, SCHEMA, Store, path_in, version};

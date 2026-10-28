@@ -251,6 +251,38 @@ pub(crate) fn call_lines(row: &Value) -> String {
     )
 }
 
+/// A record of a trace's scope: when after the trace started, its level, app, logger and message.
+pub(crate) fn scope_log_line(log: &Value, start: i64) -> String {
+    format!(
+        "+{} {} {} {}: {}",
+        ms(int(log, "time") - start),
+        text(log, "level"),
+        text(log, "app"),
+        text(log, "logger"),
+        short(text(log, "message"), MESSAGE)
+    )
+}
+
+/// What a scope's records add up to: by level, worst first, then by app.
+pub(crate) fn scope_counts(summary: &Value) -> String {
+    let levels: Vec<String> = ["critical", "error", "warning", "info", "debug"]
+        .iter()
+        .filter_map(|level| {
+            summary["levels"]
+                .get(*level)
+                .and_then(Value::as_i64)
+                .map(|n| format!("{level} {n}"))
+        })
+        .collect();
+    let apps: Vec<String> = summary["apps"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|app| format!("{} {}", text(app, "app"), int(app, "count")))
+        .collect();
+    format!("{} · by app: {}", levels.join(" · "), apps.join(" · "))
+}
+
 pub(crate) fn log_line(row: &Value, now: i64) -> String {
     format!(
         "{} {} {}: {} · {} ({})",

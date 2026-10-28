@@ -33,6 +33,24 @@
   details, opens that trace at its Profile tab (in the panel in place, with
   the way back). The code rows inside it, its request's own code too, name
   what ran from that trace's profile, on the call's clock.
+- A trace's Logs tab lists the records of its whole chain of calls: its
+  own and those of every trace down its calls (up to six levels and 60
+  traces), in time order on its clock, each with its app. A chip per app
+  narrows the list. Selecting a row in the call tree (a span, a group such
+  as `Book.author ×36`, a service's trace) says how many records are under
+  it: those logged in it, in the spans under it and in the services' traces
+  its calls reached. A click opens the Logs tab on them, its chip ("Under
+  Book.author ×36") lets go back to the whole chain, and its menu narrows
+  to the span's own records. Over the list: counts by level and logger, how
+  the records lie over the time, and the first error, each a filter. A
+  record in no span (a browser's console) counts by its time.
+- `GET /api/traces/{id}/chain`: a trace and every trace down its chain of
+  calls, on its clock. `GET /api/traces/{id}/logs?scope=&span=&only=`: the
+  records of the chain, of the trace alone, or under some of its spans,
+  with what they add up to.
+- MCP: `search_logs` takes `trace` (with `span`, `only`, `chain`) for a
+  trace's records and its chain's, added up by level and app. `get_trace`
+  says the traces down its calls and their warnings and errors.
 
 ### Fixed
 

@@ -78,6 +78,53 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Related" }
+  /traces/{id}/chain:
+    get:
+      operationId: traceChain
+      summary: >-
+        The trace and every trace down the chain of its calls (the traces other apps served for its calls, theirs in
+        turn: up to 6 levels down, 60 traces, 50 calls of one trace), each moved onto the trace's clock.
+      description: >-
+        Each app times its spans by its own clock: a call's trace is moved to sit centred in the call that reached it
+        (`shift`), as the call tree draws it. The console's trace tabs list and add up the chain from these.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, pattern: "^[0-9A-Z]{26}$" }
+      responses:
+        "200":
+          description: The chain, the trace first, each trace after the one above it.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Chain" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /traces/{id}/logs:
+    get:
+      operationId: traceLogs
+      summary: >-
+        The log records of a trace's scope in time order, each with its trace and app, and what they add up to: the
+        whole chain of calls by default, the trace alone, or what is under some of its rows.
+      description: >-
+        A record is under a span when it was logged in it or in a span under it, or in a trace another app served for
+        a call under it (and in theirs, down the chain). A record logged in no span (a browser's console) is under a
+        span when its time is in the span's. With `only=1`, a span's own records: not those of a span or a trace
+        under it.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, pattern: "^[0-9A-Z]{26}$" }
+        - $ref: "#/components/parameters/scope"
+        - $ref: "#/components/parameters/span"
+        - $ref: "#/components/parameters/only"
+      responses:
+        "200":
+          description: The records (up to 5000) and their summary.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TraceLogs" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /snapshot/{id}:
     get:
       operationId: traceSnapshot
@@ -755,6 +802,23 @@ paths:
 
 components:
   parameters:
+    scope:
+      name: scope
+      in: query
+      description: "`chain` (the default): the trace and the traces down its calls; `trace`: the trace alone."
+      schema: { type: string, enum: [chain, trace], default: chain }
+    span:
+      name: span
+      in: query
+      description: >-
+        What is under these rows only: comma-separated span ids of any trace in the scope (a group's spans), or a
+        trace's id for the whole of that trace (a call's trace as a row).
+      schema: { type: string }
+    only:
+      name: only
+      in: query
+      description: "`1`: with `span`, what is in those spans themselves, not in a span or a trace under them."
+      schema: { type: string, enum: ["1"] }
     service:
       name: service
       in: query
@@ -791,6 +855,103 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
   schemas:
+    ChainTrace:
+      type: object
+      additionalProperties: false
+      required: [id, app, name, kind, parent, via, level, shift]
+      description: Where a trace hangs in its chain.
+      properties:
+        id: { type: string }
+        app: { type: string, description: Its service.name; another project's trace, that project's name. }
+        name: { type: string }
+        kind: { type: string }
+        parent: { type: [string, "null"], description: The trace whose call it served; null for the first. }
+        via: { type: [string, "null"], description: The span of `parent` whose call it served. }
+        level: { type: integer, description: "Traces down the chain from the first: 0 the first, 1 its calls'." }
+        shift: { type: integer, description: µs its times moved by to sit on the first trace's clock. }
+        trace: { $ref: "trace.schema.json", description: "The trace, its times moved by `shift` (`chain` only)." }
+    Chain:
+      type: object
+      additionalProperties: false
+      required: [traces, capped]
+      properties:
+        traces: { type: array, items: { $ref: "#/components/schemas/ChainTrace" } }
+        capped: { type: boolean, description: A limit left traces of the chain out. }
+    ScopeLog:
+      type: object
+      additionalProperties: false
+      required: [span_id, time, level, logger, message, exception, attrs, trace_id, app]
+      properties:
+        span_id: { type: [string, "null"] }
+        time: { $ref: "#/components/schemas/Time", description: On the first trace's clock. }
+        level: { type: string, enum: [debug, info, warning, error, critical] }
+        logger: { type: string }
+        message: { type: string }
+        exception: { type: [string, "null"] }
+        attrs: { $ref: "#/components/schemas/Attrs" }
+        trace_id: { type: string }
+        app: { type: string }
+    Counted:
+      type: object
+      additionalProperties: false
+      required: [count]
+      properties:
+        app: { type: string }
+        logger: { type: string }
+        count: { type: integer }
+    LogSummary:
+      type: object
+      additionalProperties: false
+      required: [total, levels, apps, loggers, first_error, histogram]
+      properties:
+        total: { type: integer }
+        levels: { type: object, additionalProperties: { type: integer }, description: Records by level. }
+        apps: { type: array, items: { $ref: "#/components/schemas/Counted" }, description: Records by app, most first. }
+        loggers:
+          type: array
+          items: { $ref: "#/components/schemas/Counted" }
+          description: Records by logger, most first.
+        first_error:
+          description: The first error or critical record.
+          oneOf:
+            - type: "null"
+            - type: object
+              additionalProperties: false
+              required: [time, level, logger, message, app, trace_id, span_id]
+              properties:
+                time: { $ref: "#/components/schemas/Time" }
+                level: { type: string }
+                logger: { type: string }
+                message: { type: string }
+                app: { type: string }
+                trace_id: { type: string }
+                span_id: { type: [string, "null"] }
+        histogram:
+          type: object
+          additionalProperties: false
+          required: [start, end, slices]
+          description: Records by level in 24 equal slices of the scope's time.
+          properties:
+            start: { $ref: "#/components/schemas/Time" }
+            end: { $ref: "#/components/schemas/Time" }
+            slices: { type: array, items: { type: object, additionalProperties: { type: integer } } }
+    TraceLogs:
+      type: object
+      additionalProperties: false
+      required: [logs, summary, traces, window, capped]
+      properties:
+        logs: { type: array, items: { $ref: "#/components/schemas/ScopeLog" } }
+        summary: { $ref: "#/components/schemas/LogSummary" }
+        traces: { type: array, items: { $ref: "#/components/schemas/ChainTrace" } }
+        window:
+          type: object
+          additionalProperties: false
+          required: [start, end]
+          description: The time the rows asked for cover (none asked for, the trace's), on its clock.
+          properties:
+            start: { $ref: "#/components/schemas/Time" }
+            end: { $ref: "#/components/schemas/Time" }
+        capped: { type: boolean }
     Error:
       type: object
       required: [error]
