@@ -1811,6 +1811,12 @@ details[data-focused] > .dt-sql-group {
   white-space: nowrap;
   vertical-align: 1px;
 }
+/* Its name, where the chip may give way (a merged call's row): cut with an ellipsis, whole on hover. */
+.dt-app-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .dt-app-chip .dt-icon {
   width: 0.6875rem;
   height: 0.6875rem;
@@ -2307,6 +2313,42 @@ details[data-focused] > .dt-sql-group {
   flex-shrink: 2;
   min-width: 3rem;
   color: var(--dt-error);
+}
+/* A row's chips: its issue, a call's trace's findings and queries. Short of room they go whole, the last first,
+   onto a line that doesn't show: never a chip cut to an empty pill, an icon without its number (the empty first
+   item lets the first chip go too). A row's own issue stays, cut to a few letters at the least (ISSUE_CHIP_SHRINKS).
+   They give way after the call's text and its app's name, before its path. */
+.dt-map-chips {
+  display: flex;
+  flex: 0 10 auto;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  align-items: center;
+  gap: 2rem 0.25rem;
+  min-width: 0;
+  height: 1.125rem;
+  overflow: hidden;
+}
+.dt-map-chips::before {
+  content: "";
+  height: 1.125rem;
+  margin-right: -0.25rem;
+}
+.dt-map-chips:empty {
+  display: none;
+}
+.dt-map-chips > .dt-run-chips {
+  display: contents;
+}
+.dt-map-chips .dt-run-chips [data-slot="badge"],
+.dt-map-chips .dt-request-queries {
+  flex: none;
+}
+.dt-map-chips:has(> [data-slot="badge"]:first-child) {
+  min-width: 2.75rem;
+}
+.dt-map-chips:has(> [data-slot="badge"]:first-child)::before {
+  display: none;
 }
 .dt-map-times {
   flex: none;
@@ -2944,17 +2986,17 @@ div.dt-map-row[data-kind="code"] {
 .dt-map-bar[data-call] {
   background: color-mix(in srgb, var(--dt-k) 32%, transparent);
 }
-/* Its path keeps its width (cut past half the name's); the served trace's name after the app takes what is left. */
+/* Its path keeps its width (cut past half the name's); the served trace's name after the app takes what is left.
+   Short of room, the app's name is cut first, then what the trace found goes (.dt-map-chips); the path stays. */
 .dt-map-text.dt-map-hop-path {
   flex: 0 0 auto;
-  max-width: 45%;
+  max-width: 50%;
 }
-/* Narrow, the app's name gives way before the path and what the trace found. */
 .dt-map-hop + .sr-only + .dt-app-chip {
-  flex: 0 4 auto;
-  min-width: 3rem;
+  flex: 0 1000 auto;
+  /* Cut, a few letters of the app still show: its name is the chip's title. */
+  min-width: 4rem;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 .dt-map-hop {
   flex: none;
@@ -2964,7 +3006,9 @@ div.dt-map-row[data-kind="code"] {
 .dt-map-hop + .sr-only + .dt-app-chip {
   margin-left: 0;
 }
+/* The served trace's name gives way before the app's: the app is what the row says first. */
 .dt-map-text.dt-map-hop-name {
+  flex-shrink: 100000;
   color: var(--dt-text-2);
 }
 .dt-map-text.dt-map-hop-name:empty {

@@ -10,10 +10,10 @@ import type { TraceScope } from "./hooks/useTraceChain";
 import { IssueList } from "./IssueList";
 import { onTheClock } from "./lib/calls";
 import { CALL_TABS, callsOfTab } from "./lib/callTabs";
-import { appsOf, type ScopedIssue, type ScopedSpan, scopedIssues, scopedSpans } from "./lib/scope";
+import { type ScopedIssue, type ScopedSpan, scopedIssues, scopedSpans } from "./lib/scope";
 import type { TraceLinks } from "./links";
 import { AppChip } from "./primitives";
-import { AppChips, CountChip, countBy, ScopeChip } from "./ScopeBar";
+import { AppChips, CountChip, countBy, ScopeChip, useChainApps } from "./ScopeBar";
 import { SqlList } from "./SqlList";
 import type { IssueKind, Span } from "./types";
 
@@ -105,7 +105,15 @@ function RepeatChips({
 }
 
 /** A list's calls at a glance: how many, their time, on the clock (overlaps once), the slowest. */
-function CallStats({ spans, noun }: { spans: readonly ScopedSpan[]; noun: [string, string] }) {
+function CallStats({
+  spans,
+  noun,
+  runtimes,
+}: {
+  spans: readonly ScopedSpan[];
+  noun: [string, string];
+  runtimes: ReadonlyMap<string, string | undefined>;
+}) {
   const total = spans.reduce((sum, span) => sum + span.duration, 0);
   const slowest = spans.reduce<ScopedSpan | undefined>(
     (worst, span) => (!worst || span.duration > worst.duration ? span : worst),
@@ -118,7 +126,8 @@ function CallStats({ spans, noun }: { spans: readonly ScopedSpan[]; noun: [strin
       {slowest ? (
         <>
           {" "}
-          · slowest <b>{duration(slowest.duration)}</b> <AppChip name={slowest.app} />
+          · slowest <b>{duration(slowest.duration)}</b>{" "}
+          <AppChip name={slowest.app} runtime={runtimes.get(slowest.app)} />
         </>
       ) : null}
     </li>
@@ -147,7 +156,7 @@ function CallsHeader({
   onPick: (picks: CallPicks) => void;
   noun: [string, string];
 }) {
-  const apps = useMemo(() => appsOf(chain.members), [chain.members]);
+  const { apps, runtimes } = useChainApps(chain.members);
   const appCounts = useMemo(() => countBy(spans, (span) => span.app), [spans]);
   // A trace with no traces down its calls, nothing under a row asked for: its list as it always was.
   if (chain.members.length < 2 && chain.scope === null) return null;
@@ -156,12 +165,18 @@ function CallsHeader({
       {chain.scope || apps.length > 1 ? (
         <ul className="dt-breakdown-legend" aria-label="Scope">
           <ScopeChip scope={chain.scope} onChange={chain.setScope} />
-          <AppChips apps={apps} counts={appCounts} picked={picks.app} onPick={(app) => onPick({ ...picks, app })} />
+          <AppChips
+            apps={apps}
+            runtimes={runtimes}
+            counts={appCounts}
+            picked={picks.app}
+            onPick={(app) => onPick({ ...picks, app })}
+          />
         </ul>
       ) : null}
       {inApp.length > 0 ? (
         <ul className="dt-breakdown-legend" aria-label="What the calls add up to">
-          <CallStats spans={shown} noun={noun} />
+          <CallStats spans={shown} noun={noun} runtimes={runtimes} />
           <PickChips
             counts={countBy(inApp, targetOf)}
             picked={picks.target}
@@ -263,11 +278,11 @@ function CallsOf({
 }
 
 /** What an issue is across the scope: its apps, and in how many traces how many times. */
-function IssueReach({ issue }: { issue: ScopedIssue }) {
+function IssueReach({ issue, runtimes }: { issue: ScopedIssue; runtimes: ReadonlyMap<string, string | undefined> }) {
   return (
     <span className="dt-issue-reach">
       {issue.apps.map((app) => (
-        <AppChip key={app} name={app} />
+        <AppChip key={app} name={app} runtime={runtimes.get(app)} />
       ))}
       <span className="text-muted-foreground">
         {issue.chain
@@ -295,7 +310,7 @@ export function ScopedIssues({
     () => scopedIssues(chain.members, chain.scope, chain.chainIssues).filter((issue) => issue.kind !== "error"),
     [chain.members, chain.scope, chain.chainIssues],
   );
-  const apps = useMemo(() => appsOf(chain.members), [chain.members]);
+  const { apps, runtimes } = useChainApps(chain.members);
   const [app, setApp] = useState<string | null>(null);
   const shown = issues.filter((issue) => app === null || issue.apps.includes(app));
   return (
@@ -306,6 +321,7 @@ export function ScopedIssues({
             <ScopeChip scope={chain.scope} onChange={chain.setScope} />
             <AppChips
               apps={apps}
+              runtimes={runtimes}
               counts={countBy(
                 issues.flatMap((issue) => issue.apps.map((each) => ({ app: each }))),
                 (each) => each.app,
@@ -321,7 +337,7 @@ export function ScopedIssues({
       ) : (
         <IssueList
           issues={shown}
-          reach={(issue) => <IssueReach issue={issue as ScopedIssue} />}
+          reach={(issue) => <IssueReach issue={issue as ScopedIssue} runtimes={runtimes} />}
           onShowSpans={(ids) => ids[0] && onShowRow(ids[0])}
           showLabel={() => "In the call tree"}
           links={links}

@@ -8,6 +8,7 @@ import type { ChainApp, ChainItem, ChainRun, ChainTraceRow } from "./lib/chainRo
 import { foldKeys } from "./lib/keys";
 import { pageParts } from "./lib/page";
 import { plural } from "./lib/plural";
+import { traceRuntime } from "./lib/runtime";
 import { RowFlame } from "./ProfileHint";
 import { AppChip, IssueChip, KindBadge, MethodBadge, StatusSlot, TailPath, TaskName, Times } from "./primitives";
 import type { IssueKind, TraceSummary } from "./types";
@@ -121,7 +122,7 @@ interface ChainRowsProps {
 }
 
 /**
- * The apps a row's trace called, a row each ("library-api · 37 traces"), folded; open, its traces in the order they
+ * The apps a row's trace called, a row each ("library-api ×37"), open; its traces in the order they
  * started, each open in turn to what it called. A trace's row opens it beside the list; an app's row opens the row's
  * trace with its tabs under that app.
  */
@@ -142,8 +143,16 @@ function ChainRows({ rowId, apps, level, chains, selectedId, onSelect }: ChainRo
 
 type ChainLevelProps = Omit<ChainRowsProps, "apps">;
 
+/** What an app runs on, from its first trace: the mark on its chip, as the call tree's has it. */
+function chainAppRuntime(app: ChainApp): string | undefined {
+  const [first] = app.items;
+  const trace = first?.type === "run" ? first.traces[0]?.trace : first?.trace;
+  return trace ? traceRuntime(trace.attrs) : undefined;
+}
+
 function ChainAppRows({ app, rowId, level, chains, selectedId, onSelect }: ChainLevelProps & { app: ChainApp }) {
-  const open = chains.open.has(app.key);
+  // Open until it is folded: the stored rows say what the user changed.
+  const open = !chains.open.has(app.key);
   const toggle = () => chains.onToggle(app.key);
   const traces = plural(app.ids.length, "trace", "traces");
   return (
@@ -161,11 +170,11 @@ function ChainAppRows({ app, rowId, level, chains, selectedId, onSelect }: Chain
       >
         <span className="dt-request-main">
           <ChainCaret onToggle={toggle} />
-          <AppChip name={app.app} />
-          <span className="dt-request-trigger">{traces}</span>
+          <AppChip name={app.app} runtime={chainAppRuntime(app)} />
         </span>
         <span className="dt-request-meta">
-          <StatusSlot status={null} />
+          {/* How many, as a run's row counts its traces: in the status column. */}
+          {app.ids.length > 1 ? <Times count={app.ids.length} /> : <StatusSlot status={null} />}
           <span title={`${traces} on the clock`}>{duration(app.summary.duration)}</span>
           <CompactMeta trace={app.summary} />
         </span>

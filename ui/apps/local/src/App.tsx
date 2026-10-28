@@ -452,7 +452,9 @@ function useRowChains(rows: readonly TraceRow[], stored: ReadonlySet<string>): R
   }, [chains, listed]);
 }
 
-const CHAIN_OPEN_KEY = "tracepanel:chain-open";
+// The rows the user folded or opened, each a change from where it starts (an app's row open, a run open while its
+// app has few traces); a new key, as the old one held the rows opened when an app's row started folded.
+const CHAIN_OPEN_KEY = "tracepanel:chain-toggled";
 
 /** The chain rows open in the list: kept for the browser tab's session, as the panel reloads with each page. */
 function useChainOpen(): [ReadonlySet<string>, (key: string) => void] {

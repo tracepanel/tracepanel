@@ -723,7 +723,9 @@ function runView(node: Extract<Node, { type: "task" }>, trace: Trace, within: Wi
         <TaskState state={node.run.task_state} />
         {node.kind === "call" ? <CallApp node={node} /> : null}
         {/* What its own trace found, before it is opened. */}
-        <RunChips trace={node.run} />
+        <RowChips>
+          <RunChips trace={node.run} />
+        </RowChips>
       </>
     ),
     track: <Bar trace={trace} start={node.run.start} length={node.run.duration} within={within} />,
@@ -1075,9 +1077,7 @@ function GroupName({
   ctx: RowContext;
   parent: Span | undefined;
 }) {
-  // A resolver's issue is the call it repeats, right under it (Book.author's GET /authors/{id}).
-  const spans = [...node.spans, ...node.members.flatMap(childSpans)];
-  const issue = spans.map((span) => ctx.issueBySpan.get(span.id)).find(Boolean);
+  const issue = groupIssue(node, ctx.issueBySpan);
   const first = node.spans[0];
   return (
     <>
@@ -1086,15 +1086,49 @@ function GroupName({
       <AliasChip value={aliasOf(first)} />
       <FromTemplate span={first} parent={parent} />
       <Times count={node.spans.length} />
-      {issue ? <IssueChip kind={issue} className={ISSUE_CHIP_SHRINKS} /> : null}
+      <RowChips>{issue ? <IssueChip kind={issue} className={ISSUE_CHIP_SHRINKS} /> : null}</RowChips>
     </>
   );
+}
+
+/** The calls a group's issue is on: its own, or a resolver's call it repeats, right under it (Book.author's GET /authors/{id}). */
+function groupSpans(node: Extract<Node, { type: "group" }>): Span[] {
+  return [...node.spans, ...node.members.flatMap(childSpans)];
+}
+
+function groupIssue(node: Extract<Node, { type: "group" }>, issueBySpan: ReadonlyMap<string, IssueKind>) {
+  return groupSpans(node)
+    .map((span) => issueBySpan.get(span.id))
+    .find(Boolean);
+}
+
+/**
+ * The issues an open group's calls show: not the group's own, which its row says once (an N+1 is the 36 calls
+ * together, not each of them); another one a call has on its own still shows on its row.
+ */
+function withoutGroupIssue(
+  node: Extract<Node, { type: "group" }>,
+  issueBySpan: ReadonlyMap<string, IssueKind>,
+): ReadonlyMap<string, IssueKind> {
+  const issue = groupIssue(node, issueBySpan);
+  if (!issue) return issueBySpan;
+  const said = new Set(groupSpans(node).map((span) => span.id));
+  return new Map([...issueBySpan].filter(([id, kind]) => !(said.has(id) && kind === issue)));
+}
+
+/**
+ * A row's chips after its name: its issue, then what a call's trace found. Short of room they go whole, the last
+ * first, onto a line that doesn't show (.dt-map-chips): never a chip cut down to an empty pill.
+ */
+function RowChips({ children }: { children: ReactNode }) {
+  return <span className="dt-map-chips">{children}</span>;
 }
 
 /** Repeats of one call folded into one row (×N), its calls as ticks on the timeline; open, each call a row. */
 function GroupRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps<"group">) {
   const open = ctx.collapsed.has(`open:${node.key}`);
   const wall = node.end - node.start;
+  const issueBySpan = useMemo(() => withoutGroupIssue(node, ctx.issueBySpan), [node, ctx.issueBySpan]);
   return (
     <div className="dt-map-group">
       <button
@@ -1122,7 +1156,9 @@ function GroupRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProp
         />
       </button>
       <RowDetails id={node.key} ctx={ctx} />
-      {open ? <Rows nodes={node.members} depth={depth + 1} ctx={{ ...ctx, marks: undefined }} parent={parent} /> : null}
+      {open ? (
+        <Rows nodes={node.members} depth={depth + 1} ctx={{ ...ctx, marks: undefined, issueBySpan }} parent={parent} />
+      ) : null}
     </div>
   );
 }
@@ -1227,7 +1263,7 @@ function OwnRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps<
           <SignalNotes span={span} parent={parent} under={childSpans(node)} />
           <MigrationNotes span={span} />
           <HiddenLogs count={ctx.hiddenLogs.get(span.id)} onShow={ctx.onShowLogs} />
-          {issue ? <IssueChip kind={issue} className={ISSUE_CHIP_SHRINKS} /> : null}
+          <RowChips>{issue ? <IssueChip kind={issue} className={ISSUE_CHIP_SHRINKS} /> : null}</RowChips>
         </span>
         <Bar trace={ctx.trace} start={span.start} length={span.duration} within={ctx.within} />
         <RowTime
@@ -1351,8 +1387,10 @@ function HopRow({ node, served, place }: { node: SpanNode; served: ServedRun; pl
           <ServedName text={text} name={served.run.name} />
           <FromTemplate span={span} parent={parent} />
           <HiddenLogs count={ctx.hiddenLogs.get(span.id)} onShow={ctx.onShowLogs} />
-          <HopIssue span={span} served={served} ctx={ctx} />
-          <RunChips trace={served.run} />
+          <RowChips>
+            <HopIssue span={span} served={served} ctx={ctx} />
+            <RunChips trace={served.run} />
+          </RowChips>
           <LinkedFlame node={served} ctx={ctx} />
         </span>
         <HopBar trace={ctx.trace} span={span} run={served.run} within={ctx.within} />
@@ -1865,7 +1903,9 @@ function Statement({ span, attrs }: { span: Span; attrs: Attrs }) {
 
 function GroupDetails({ node, onExplain }: DetailsProps<"group">) {
   const [first] = node.spans;
+  // Where they were called from, when they all were from one place; called from several, each call's row says its.
   const origins = new Set(node.spans.map((span) => String(span.attrs["code.origin"] ?? "")));
+  const [origin] = origins;
   return (
     <div className="grid gap-3 p-4">
       <p className="dt-map-details-title">
@@ -1880,12 +1920,11 @@ function GroupDetails({ node, onExplain }: DetailsProps<"group">) {
           <QueryPlan span={first} onExplain={onExplain} />
         </>
       ) : null}
-      <p className="flex flex-wrap items-center gap-2 text-base text-muted-foreground [&_code]:rounded [&_code]:bg-muted [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-sm [&_code]:text-foreground">
-        from{" "}
-        {[...origins].map((origin) => (
-          <code key={origin}>{origin}</code>
-        ))}
-      </p>
+      {origins.size === 1 && origin ? (
+        <p className="flex flex-wrap items-center gap-2 text-base text-muted-foreground" data-group-origin="">
+          from <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-sm text-foreground">{origin}</code>
+        </p>
+      ) : null}
     </div>
   );
 }

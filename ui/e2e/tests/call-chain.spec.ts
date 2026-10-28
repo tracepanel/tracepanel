@@ -179,6 +179,9 @@ async function answer(page: Page, links: Record<string, Doc>): Promise<void> {
   });
 }
 
+/** Where every Book.author resolver of the BFF runs from. */
+const RESOLVER = "src/schema.ts:42 in author";
+
 /** How far ahead of the BFF's clock the service's runs (µs): more than the way there and back takes. */
 const AHEAD = 5_000;
 
@@ -208,13 +211,15 @@ async function resolvers(page: Page): Promise<number> {
         attrs: {},
       },
     ];
+    // Its list row's findings: its one query.
+    doc["summary"] = { queries: 1 };
     return doc;
   });
   const bff = served(170, "library-bff", "POST /graphql", start, Number(call["duration"]), [
     ...authors.flatMap((_, n) => [
       {
         ...span("", `F${n}`, "function", "Book.author", start + 1_000 + n * 20, 3_200),
-        attrs: { "graphql.field": "Book.author", "graphql.path": `books.${n}.author` },
+        attrs: { "graphql.field": "Book.author", "graphql.path": `books.${n}.author`, "code.origin": RESOLVER },
       },
       {
         ...span("", `A${n}`, "http.client", `GET 127.0.0.1/authors/${n + 1}`, start + 1_050 + n * 20, 3_000),
@@ -223,6 +228,21 @@ async function resolvers(page: Page): Promise<number> {
       },
     ]),
   ]);
+  // The BFF's finding: the 36 calls together are one N+1.
+  bff["issues"] = [
+    {
+      fingerprint: "authors-n1",
+      // biome-ignore lint/style/useNamingConvention: the trace format.
+      fingerprint_version: 1,
+      kind: "n+1",
+      title: "N+1: 36 similar calls · GET 127.0.0.1/authors/{id}",
+      culprit: null,
+      hint: null,
+      count: AUTHORS,
+      // biome-ignore lint/style/useNamingConvention: the trace format.
+      span_ids: authors.map((_, n) => `${bff["id"]}A${n}`),
+    },
+  ];
   await answer(page, {
     [click.id]: linking([[`${click.id}C200`, bff]]),
     [String(bff["id"])]: linking(authors.map((doc, n): [string, Doc] => [`${bff["id"]}A${n}`, doc])),
@@ -521,4 +541,102 @@ test("a call no trace served is a row as before: its host, no app, nothing under
   await expect(call.locator(".dt-app-chip")).toHaveCount(0);
   await expect(call.locator(".dt-map-bar")).toHaveCount(1);
   await expect(call).not.toHaveAttribute("aria-expanded");
+});
+
+test("an N+1 of calls is said once, on its group's row: its calls don't each say it", async ({ page }) => {
+  await resolvers(page);
+  const group = page.getByRole("button", { name: /^function Book\.author/i }).first();
+
+  await expect(group.locator('[data-slot="badge"]')).toHaveText("N+1");
+
+  await group.locator(".dt-map-caret[data-toggle]").click();
+
+  const calls = page.getByRole("button", { name: /^http\.client GET \/authors\/\d+ served by/i });
+  await expect(calls).toHaveCount(AUTHORS);
+  await expect(page.locator('.dt-map-rows [data-slot="badge"]')).toHaveText(["N+1"]);
+});
+
+test("a group's details say where its calls ran from when they all did from one place", async ({ page }) => {
+  await resolvers(page);
+
+  await page
+    .getByRole("button", { name: /^function Book\.author/i })
+    .first()
+    .click();
+
+  const details = page.getByRole("complementary", { name: "Details" });
+  await expect(details.locator("[data-group-origin]")).toHaveText(`from ${RESOLVER}`);
+});
+
+test("a group's details without one place its calls ran from have no from", async ({ page }) => {
+  await chain(page);
+
+  await page.getByRole("button", { name: /^http\.client GET 127\.0\.0\.1\/authors\/\{id\}/i }).click();
+
+  const details = page.getByRole("complementary", { name: "Details" });
+  await expect(details).toContainText(`${AUTHORS} similar HTTP calls`);
+  await expect(details.locator("[data-group-origin]")).toHaveCount(0);
+  await expect(details.locator("code:empty")).toHaveCount(0);
+});
+
+/**
+ * Every chip of the call tree's rows that shows: whole, its text not cut (an app's name cut to a few letters at the
+ * least), never an empty pill or an icon without its number. Those short of room go whole, below their row's line.
+ */
+async function chipsShowTheirText(page: Page | ReturnType<typeof panel>) {
+  const chips = page.locator(
+    '.dt-map-rows :is([data-slot="badge"], .dt-app-chip, .dt-request-queries, .dt-alias, .dt-map-times)',
+  );
+  expect(await chips.count()).toBeGreaterThan(0);
+  const broken = await chips.evaluateAll((all) =>
+    all.flatMap((chip) => {
+      const text = (chip.textContent ?? "").trim() || chip.getAttribute("aria-label");
+      const box = chip.getBoundingClientRect();
+      const row = chip.closest(".dt-map-name")?.getBoundingClientRect();
+      const line = chip.closest(".dt-map-chips")?.getBoundingClientRect() ?? row;
+      if (!line || box.width === 0) return [];
+      // Gone below the line: not shown.
+      if (box.top >= line.bottom - 0.5) return [];
+      const whole = box.left >= line.left - 0.5 && box.right <= line.right + 0.5;
+      const label = chip.querySelector(".truncate, .dt-app-name") ?? chip;
+      const cut = label.scrollWidth > label.clientWidth + 1;
+      const readable = chip.matches(".dt-app-chip") ? label.clientWidth >= 14 : !cut;
+      return text && whole && readable ? [] : [`${chip.className}: "${text}" ${Math.round(box.width)}px`];
+    }),
+  );
+  expect(broken).toEqual([]);
+}
+
+test("no chip of the tree's rows is shown without its text, wide or narrow, in the console and the panel", async ({
+  page,
+}) => {
+  await resolvers(page);
+  const group = () => page.getByRole("button", { name: /^function Book\.author/i }).first();
+  await group().locator(".dt-map-caret[data-toggle]").click();
+  await hop(page, "GET /authors/1").click();
+
+  for (const width of [1440, 1100, 800]) {
+    await page.setViewportSize({ width, height: 900 });
+    await chipsShowTheirText(page);
+  }
+
+  const { click } = await links(page);
+  await page.goto(`/#/t/${click}?tab=calls`);
+  await hop(page, "GET /books").locator(".dt-map-caret[data-toggle]").click();
+  await page
+    .getByRole("button", { name: /^http\.client GET 127\.0\.0\.1\/authors\/\{id\}/i })
+    .locator(".dt-map-caret[data-toggle]")
+    .click();
+  await chipsShowTheirText(page);
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await openApp(page, { save: { status: 200, trace: click, queries: 0, totalMs: 40 } });
+  await page.getByRole("button", { name: "Load save" }).click();
+  await pill(page).click();
+  const frame = panel(page);
+  await frame.getByRole("tab", { name: /^Call tree/ }).click();
+  await hop(frame, "GET /books").locator(".dt-map-caret[data-toggle]").click();
+  await hop(frame, "GET /books").click();
+
+  await chipsShowTheirText(frame);
 });
