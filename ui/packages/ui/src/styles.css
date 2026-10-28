@@ -3107,27 +3107,48 @@ div.dt-map-row[data-kind="code"] {
   max-width: 28rem;
   min-width: 0;
 }
-/* Over a row's details in the call tree: what is under it, each count a way to its tab. */
+/* Under a row's details' title: what is under it, a chip each (the legend's chips, the tabs' icons) to its tab. */
 .dt-under-this {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem 0.625rem;
+}
+.dt-under-this-caption {
+  color: var(--dt-text-3);
+  font-size: var(--dt-size-xs);
+  font-weight: 500;
+}
+.dt-under-this-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
   margin: 0;
-  padding: 0.5rem 2.5rem 0.5rem 1rem;
-  border-bottom: 1px solid var(--dt-border);
-  font-size: var(--dt-size-sm);
-}
-.dt-under-this > span:first-child {
-  margin-right: 0.375rem;
-}
-.dt-under-this-link {
   padding: 0;
-  border: 0;
-  background: none;
-  color: var(--dt-accent);
-  font: inherit;
-  font-variant-numeric: tabular-nums;
-  cursor: pointer;
+  list-style: none;
 }
-.dt-under-this-link:hover {
-  text-decoration: underline;
+.dt-under-this .dt-map-filter {
+  font-size: var(--dt-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+.dt-under-this .dt-map-filter svg {
+  width: 0.875rem;
+  height: 0.875rem;
+  color: var(--dt-text-3);
+}
+.dt-under-this .dt-map-filter:is(:hover, :focus-visible) svg {
+  color: inherit;
+}
+.dt-under-this .dt-map-filter[data-tone="warn"] {
+  border-color: var(--dt-warn-border);
+  background: var(--dt-warn-bg);
+  color: var(--dt-warn-strong);
+}
+.dt-under-this .dt-map-filter[data-tone="warn"] svg {
+  color: inherit;
+}
+.dt-under-this .dt-map-filter[data-tone="warn"]:hover {
+  border-color: var(--dt-warn);
 }
 /* Over a tab whose own line (how many, grouped) follows: the scope's rows first. */
 .dt-scope-bar-calls {
