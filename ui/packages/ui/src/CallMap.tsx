@@ -180,7 +180,7 @@ interface Remote {
  * theirs 2. `relatedOf` gives the links of a call's trace once they are loaded (the next level then opens under its
  * calls); `seen` the traces above, so a loop in the links can't open forever.
  */
-export interface Chain {
+interface Chain {
   level: number;
   relatedOf: (traceId: string) => Related | undefined;
   seen: ReadonlySet<string>;
@@ -192,7 +192,7 @@ const NO_CHAIN: Chain = { level: 0, relatedOf: () => undefined, seen: new Set() 
  * The most traces down the chain the tree opens (the browser's view, the BFF, the service, ...): deeper calls are
  * rows that open their trace.
  */
-export const CHAIN_LEVELS = 6;
+const CHAIN_LEVELS = 6;
 
 /**
  * Below the first level a call's trace opens by itself only when it is one of a few: an N+1 of calls (36 to one
@@ -622,9 +622,15 @@ function LinkedRow({
   );
 }
 
+/** A call's trace whose own calls can open under it: this agent's, not too far down the chain. */
+function chainedTrace(node: Linked): string | undefined {
+  if (node.type !== "task" || node.remote || node.level >= CHAIN_LEVELS) return undefined;
+  return node.whole?.id;
+}
+
 /** While a call's trace is open, the links of its own calls load: the traces they reached open under them. */
 function useChainLoad(node: Linked, open: boolean | undefined, onChain: (traceId: string) => void): void {
-  const whole = node.type === "task" && !node.remote && node.level < CHAIN_LEVELS ? node.whole?.id : undefined;
+  const whole = chainedTrace(node);
   useEffect(() => {
     if (open && whole) onChain(whole);
   }, [open, whole, onChain]);

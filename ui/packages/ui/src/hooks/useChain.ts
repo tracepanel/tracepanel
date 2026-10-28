@@ -66,7 +66,7 @@ export function useChain(
     [fetchOne],
   );
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `reloadWith` is the tree's own links: a reload of them reloads these.
+  // The tree's own links reloaded: those of the traces opened in it reload with them.
   useEffect(() => {
     const { ids } = asked.current;
     for (const [traceId, askedWith] of ids) {
