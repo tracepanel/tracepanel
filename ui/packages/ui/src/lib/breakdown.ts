@@ -75,18 +75,24 @@ const BY_KIND: Record<string, Category> = {
   "migration.operation": "code",
 };
 
-/** The calls a backend makes for another: a cache's Redis commands, an LLM call's HTTP requests. */
-const SERVED_FOR: Record<string, string> = { redis: "cache", "http.client": "llm" };
+/**
+ * The calls a backend makes for another: a cache's Redis commands, an LLM call's HTTP requests, a database driver's
+ * over HTTP (Snowflake's login and its queries' requests).
+ */
+const SERVED_FOR: Record<string, readonly string[]> = {
+  redis: ["cache"],
+  "http.client": ["llm", "sql", "sql.connect"],
+};
 
 /**
- * A cache's Redis commands are the cache's time, an LLM call's HTTP requests the model's: what the app asked for, on
- * whatever serves it.
+ * A cache's Redis commands are the cache's time, an LLM call's HTTP requests the model's, a query's the database's:
+ * what the app asked for, on whatever serves it.
  */
 function servedFor(span: Span, byId: ReadonlyMap<string, Span>): Span {
-  const owner = SERVED_FOR[span.kind];
-  if (!owner) return span;
+  const owners = SERVED_FOR[span.kind];
+  if (!owners) return span;
   const parent = byId.get(String(span.parent_id));
-  return parent?.kind === owner ? parent : span;
+  return parent && owners.includes(parent.kind) ? parent : span;
 }
 
 function categoryOf(span: Span, byId: ReadonlyMap<string, Span>, handled: boolean): Category | null {

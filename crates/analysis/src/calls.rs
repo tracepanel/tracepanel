@@ -589,9 +589,13 @@ fn llm_call<'a>(operation: &Operation, span: &'a Span) -> Call<'a> {
     }
 }
 
-/// An HTTP call made for an LLM call (its API's request, one per attempt): the LLM call's, not an issue of its own. A
-/// retry isn't a duplicate, and the model's time isn't a slow service.
-fn inside_llm_call(trace: &Trace, span: &Span) -> bool {
+/// The calls whose HTTP requests are theirs: an LLM call's (its API's request, one per attempt), a database driver's
+/// over HTTP (Snowflake's login and each query's requests, inside its connection or its statement).
+const MADE_OVER_HTTP: &[&str] = &[llm::KIND, "sql", "sql.connect"];
+
+/// An HTTP call made for one of MADE_OVER_HTTP: that call's, not an issue of its own. A retry isn't a duplicate, the
+/// model's time isn't a slow service, and a query's requests repeat as its statement does, an issue of SQL's.
+fn made_for_another_call(trace: &Trace, span: &Span) -> bool {
     if span.kind != "http.client" {
         return false;
     }
@@ -602,7 +606,7 @@ fn inside_llm_call(trace: &Trace, span: &Span) -> bool {
         else {
             return false;
         };
-        if found.kind == llm::KIND {
+        if MADE_OVER_HTTP.contains(&found.kind.as_str()) {
             return true;
         }
         parent = found.parent_id.as_deref();
@@ -648,7 +652,10 @@ pub(crate) fn operation_issues(trace: &Trace, thresholds: &Thresholds) -> Vec<Is
     let mut systems: Vec<(&'static str, String)> = Vec::new();
     let mut order: HashMap<(&'static str, String), Vec<String>> = HashMap::new();
     let mut groups: HashMap<(&'static str, String, String), Vec<Call<'_>>> = HashMap::new();
-    let has_llm = trace.spans.iter().any(|span| span.kind == llm::KIND);
+    let over_http = trace
+        .spans
+        .iter()
+        .any(|span| MADE_OVER_HTTP.contains(&span.kind.as_str()));
     for span in &trace.spans {
         let Some(operation) = operation(trace, span) else {
             continue;
@@ -659,7 +666,7 @@ pub(crate) fn operation_issues(trace: &Trace, thresholds: &Thresholds) -> Vec<Is
             continue;
         }
         let call = call_of(&operation, span);
-        if nested_http_repeat(trace, &call) || (has_llm && inside_llm_call(trace, span)) {
+        if nested_http_repeat(trace, &call) || (over_http && made_for_another_call(trace, span)) {
             continue;
         }
         let system = (operation.family, operation.system.clone());

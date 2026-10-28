@@ -9,6 +9,10 @@
   MySQL's handshake). It counts as the database's time in the breakdown and
   shows with the SQL filter, so a request that opens a connection no longer
   shows that time as its code's.
+- A database driver's HTTP requests (Snowflake's login, each query's
+  request) are its statement's or its connection's: the database's time in
+  the breakdown, and no N+1 or duplicate HTTP calls of their own, as an LLM
+  call's requests are the model's.
 
 ## 0.6.0 (2026-10-28)
 
