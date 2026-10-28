@@ -2,9 +2,7 @@ import { useMemo } from "react";
 import { CallLine, CallLines, CallTable, DetailsTitle, timeColumns } from "./CallTable";
 import type { DataColumn } from "./DataTable";
 import { duration } from "./format";
-import { ListBar } from "./ListBar";
-import { callTemplate, groupNoun, onTheClock } from "./lib/calls";
-import { plural } from "./lib/plural";
+import { callTemplate, groupNoun } from "./lib/calls";
 import { IssueChip, MethodBadge, SectionHeading, StatusBadge, Times } from "./primitives";
 import type { IssueKind, Span } from "./types";
 
@@ -148,23 +146,17 @@ export function CallsList({ spans, issueBySpan, focus, table = "trace-calls" }: 
   const total = spans.reduce((sum, span) => sum + span.duration, 0);
   if (spans.length === 0) return <p className="dt-note">No calls of this kind in this request.</p>;
   return (
-    <>
-      <ListBar>
-        {plural(spans.length, "call", "calls")} · {groups.length} unique ·{" "}
-        <span title={`${duration(total)} total`}>{duration(onTheClock(spans))}</span>
-      </ListBar>
-      <CallTable
-        table={table}
-        columns={columns(total)}
-        items={groups}
-        focus={focus}
-        row={{
-          key: (group) => group.template,
-          failed: (group) => group.failed,
-          focused: (group) => (focus ? group.spans.some((span) => focus.has(span.id)) : false),
-          details: (group) => <GroupDetails group={group} focus={focus} />,
-        }}
-      />
-    </>
+    <CallTable
+      table={table}
+      columns={columns(total)}
+      items={groups}
+      focus={focus}
+      row={{
+        key: (group) => group.template,
+        failed: (group) => group.failed,
+        focused: (group) => (focus ? group.spans.some((span) => focus.has(span.id)) : false),
+        details: (group) => <GroupDetails group={group} focus={focus} />,
+      }}
+    />
   );
 }

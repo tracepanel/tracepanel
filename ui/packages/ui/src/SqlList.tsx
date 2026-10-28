@@ -1,17 +1,14 @@
 import { cn } from "@tracepanel/ui/lib/utils";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { CallLine, CallLines, CallTable, DetailsTitle, type Explain, QueryPlan, timeColumns } from "./CallTable";
 import type { DataColumn } from "./DataTable";
 import { duration } from "./format";
-import { ListBar } from "./ListBar";
 import { callFields, templatePlace } from "./lib/callFields";
-import { onTheClock } from "./lib/calls";
 import { queryFingerprint } from "./lib/fingerprint";
-import { plural } from "./lib/plural";
 import { linkProps, type TraceLinks } from "./links";
 import { type NameValue, NameValues, RowsLookContext } from "./NameValues";
 import { AliasChip, IssueChip, SectionHeading, TemplateChip, Times } from "./primitives";
-import { type Segment, Segmented } from "./Segmented";
+import type { Segment } from "./Segmented";
 import { SqlCode } from "./SqlCode";
 import type { IssueKind, Span } from "./types";
 
@@ -23,6 +20,8 @@ export interface SqlListProps {
   focus?: ReadonlySet<string> | undefined;
   onExplain?: Explain | undefined;
   links?: TraceLinks | undefined;
+  /** Grouped by statement, or each query in the order it ran: the switch at the end of the tab's summary line. */
+  mode: SqlMode;
 }
 
 /** "All requests with this query", where the host can list them. */
@@ -48,10 +47,15 @@ interface Group {
   issue: IssueKind | undefined;
 }
 
+/** What groups a query with its repeats: its statement's fingerprint. */
+export function sqlKey(span: Span): string {
+  return String(span.attrs["db.fingerprint"] ?? span.name);
+}
+
 function groupSpans(spans: readonly Span[], issueBySpan: ReadonlyMap<string, IssueKind>): Group[] {
   const groups = new Map<string, Group>();
   for (const span of spans) {
-    const key = String(span.attrs["db.fingerprint"] ?? span.name);
+    const key = sqlKey(span);
     const group = groups.get(key) ?? {
       key,
       name: span.name,
@@ -195,9 +199,9 @@ function QueryName({
   );
 }
 
-type Mode = "grouped" | "timeline";
+export type SqlMode = "grouped" | "timeline";
 
-const MODES: readonly Segment<Mode>[] = [
+export const SQL_MODES: readonly Segment<SqlMode>[] = [
   { id: "grouped", label: "Grouped" },
   { id: "timeline", label: "In order" },
 ];
@@ -266,8 +270,7 @@ interface Placed {
   index: number;
 }
 
-export function SqlList({ spans, issueBySpan, focus, onExplain, links }: SqlListProps) {
-  const [mode, setMode] = useState<Mode>("grouped");
+export function SqlList({ spans, issueBySpan, focus, onExplain, links, mode }: SqlListProps) {
   const groups = useMemo(() => groupSpans(spans, issueBySpan), [spans, issueBySpan]);
   const placed = useMemo(() => spans.map((span, index) => ({ span, index })), [spans]);
   const total = spans.reduce((sum, span) => sum + span.duration, 0);
@@ -277,10 +280,6 @@ export function SqlList({ spans, issueBySpan, focus, onExplain, links }: SqlList
 
   return (
     <>
-      <ListBar end={<Segmented label="Queries shown" segments={MODES} value={mode} onChange={setMode} />}>
-        {plural(spans.length, "query", "queries")} · {groups.length} unique ·{" "}
-        <span title={`${duration(total)} total`}>{duration(onTheClock(spans))}</span>
-      </ListBar>
       {mode === "grouped" ? (
         <CallTable
           table="trace-sql"

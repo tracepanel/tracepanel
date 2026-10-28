@@ -133,8 +133,9 @@ test("calls side by side: the tab, the list and the head say their time on the c
 
   await expect(tab.locator(".dt-tab-detail")).toHaveText("10 ms");
   await expect(tab.locator(".dt-tab-detail")).toHaveAttribute("title", "30 ms total");
-  await expect(page.getByText("3 calls · 1 unique · 10 ms")).toBeVisible();
-  await expect(page.getByText("3 calls · 1 unique ·").locator('[title="30 ms total"]')).toHaveText("10 ms");
+  const summary = page.locator(".dt-scope-summary-text");
+  await expect(summary).toHaveText(/^3 HTTP calls · 1 unique · 10 ms on the clock · slowest \d+ ms$/);
+  await expect(summary.locator('[title="30 ms total"]')).toHaveText("10 ms");
   await expect(page.locator(".dt-trace-facts")).toContainText("3 HTTP calls 10 ms");
   await expect(page.locator(".dt-trace-facts")).toHaveAttribute("title", "3 HTTP calls: 30 ms total");
 });

@@ -100,6 +100,16 @@
 
 ### Changed
 
+- The trace's DB, HTTP calls, Issues, Logs and Profile tabs open on one
+  header, in the console and the panel: the apps first (`All apps`, then
+  each app's chip with its mark and how many), then one line of what the
+  list adds up to (`37 HTTP calls · 2 unique · 116 ms on the clock ·
+  slowest 84 ms`, the sum on hover), then the chips that narrow it. An
+  N+1 there is its badge and its title in the UI's font, whole on hover.
+  The Profile tab's apps are a table: profiled, waiting, the function
+  most time went in. The line the lists had of their own is gone, and so
+  is the app's chip in the middle of a sentence.
+
 - A list's paths are cut in the middle, not at the end: the last
   segment stays whole (`/api/cat…/trail-runner-gtx`), and the whole path
   is in the tooltip. In the panel's narrow list the numbers make room

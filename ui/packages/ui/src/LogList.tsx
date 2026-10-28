@@ -4,7 +4,6 @@ import { Button } from "./components/ui/button";
 import { since } from "./format";
 import type { TraceScope } from "./hooks/useTraceChain";
 import { keyed } from "./keys";
-import { ListBar } from "./ListBar";
 import { LogRecordDetails } from "./LogRecordDetails";
 import { type LogColumn, LogLevel, LogTable } from "./LogTable";
 import { withoutAnsi } from "./lib/ansi";
@@ -12,37 +11,25 @@ import { plural } from "./lib/plural";
 import { type Member, type ScopedLog, type SpanScope, scopeWindow } from "./lib/scope";
 import { linkProps, type TraceLinks } from "./links";
 import { AppChip } from "./primitives";
-import { AppChips, CountChip, countBy, ScopeChip, useChainApps } from "./ScopeBar";
+import { CountChip, countBy, ScopeHeader, useChainApps } from "./ScopeBar";
 import type { Trace } from "./types";
 
-/** Over a trace's records: how many, and the way to the Logs page to filter and search them with every other. */
-function LogsBar({
-  count,
-  of,
-  traceId,
-  links,
-}: {
-  count: number;
-  of: number;
-  traceId: string;
-  links: TraceLinks | undefined;
-}) {
+/** The way to the Logs page, to filter and search the trace's records with every other. */
+function OpenInLogs({ traceId, links }: { traceId: string; links: TraceLinks | undefined }) {
+  if (!links?.logs) return null;
   return (
-    <ListBar
-      end={
-        links?.logs ? (
-          <Button variant="outline" size="xs" asChild>
-            <a {...linkProps(links, links.logs(traceId))}>
-              Open in Logs
-              <ArrowRightIcon />
-            </a>
-          </Button>
-        ) : null
-      }
-    >
-      {count === of ? plural(count, "record", "records") : `${count} of ${plural(of, "record", "records")}`}
-    </ListBar>
+    <Button variant="outline" size="xs" asChild>
+      <a {...linkProps(links, links.logs(traceId))}>
+        Open in Logs
+        <ArrowRightIcon />
+      </a>
+    </Button>
   );
+}
+
+/** "2 records", or "1 of 2 records" while a chip narrows them. */
+function recordCount(count: number, of: number): string {
+  return count === of ? plural(count, "record", "records") : `${count} of ${plural(of, "record", "records")}`;
 }
 
 /** What narrows the list beyond its scope: one app, one level, one logger. */
@@ -124,11 +111,12 @@ function LogAggregates({
   start: number;
   onOpenFirstError: (log: ScopedLog) => void;
 }) {
+  if (logs.length === 0) return null;
   const levels = countBy(logs, (log) => log.level);
   const loggers = [...countBy(logs, (log) => withoutAnsi(log.logger))].slice(0, 4);
   const firstError = logs.find((log) => log.level === "error" || log.level === "critical");
   return (
-    <ul className="dt-breakdown-legend dt-log-aggregates" aria-label="What the records add up to">
+    <>
       {LEVELS.filter((level) => levels.has(level)).map((level) => (
         <CountChip
           key={level}
@@ -154,17 +142,20 @@ function LogAggregates({
         : null}
       <LevelHistogram logs={logs} window={window} />
       <FirstError log={firstError} start={start} onOpen={() => firstError && onOpenFirstError(firstError)} />
-    </ul>
+    </>
   );
 }
 
-const APP_COLUMN: LogColumn<ScopedLog> = {
-  id: "app",
-  label: "App",
-  width: 9,
-  drop: 1,
-  cell: (log) => <AppChip name={log.app} />,
-};
+/** The app a record came from, its chip as everywhere else, with its mark. */
+function appColumn(runtimes: ReadonlyMap<string, string | undefined> | undefined): LogColumn<ScopedLog> {
+  return {
+    id: "app",
+    label: "App",
+    width: 11,
+    drop: 1,
+    cell: (log) => <AppChip name={log.app} runtime={runtimes?.get(log.app)} />,
+  };
+}
 
 function picked(logs: readonly ScopedLog[], picks: Picks): ScopedLog[] {
   return logs.filter(
@@ -186,34 +177,6 @@ function useRecordKeys(logs: readonly ScopedLog[]): ReadonlyMap<ScopedLog, strin
         ]),
       ),
     [logs],
-  );
-}
-
-/** The scope's chip and the apps', when there is a scope or more than one app. */
-function ScopeRow({
-  logs,
-  apps,
-  runtimes,
-  scope,
-  onScope,
-  app,
-  onApp,
-}: {
-  logs: readonly ScopedLog[];
-  apps: readonly string[];
-  runtimes: ReadonlyMap<string, string | undefined> | undefined;
-  scope: SpanScope | null;
-  onScope: (scope: SpanScope | null) => void;
-  app: string | null;
-  onApp: (app: string | null) => void;
-}) {
-  const counts = useMemo(() => countBy(logs, (log) => log.app), [logs]);
-  if (!scope && apps.length < 2) return null;
-  return (
-    <ul className="dt-breakdown-legend" aria-label="Scope">
-      <ScopeChip scope={scope} onChange={onScope} />
-      <AppChips apps={apps} runtimes={runtimes} counts={counts} picked={app} onPick={onApp} />
-    </ul>
   );
 }
 
@@ -258,38 +221,36 @@ export function LogList({
   const shown = useMemo(() => picked(inApp, picks), [inApp, picks]);
   const keys = useRecordKeys(logs);
   const several = apps.length > 1;
+  const appCounts = useMemo(() => countBy(logs, (log) => log.app), [logs]);
+  const openFirstError = (log: ScopedLog) => {
+    setPicks({ ...picks, level: null, logger: null });
+    setOpen(keys.get(log) ?? null);
+  };
   return (
     <>
-      <LogsBar count={shown.length} of={logs.length} traceId={traceId} links={links} />
-      <div className="dt-scope-bar">
-        <ScopeRow
-          logs={logs}
-          apps={apps}
-          runtimes={runtimes}
-          scope={scope}
-          onScope={onScope}
-          app={picks.app}
-          onApp={(app) => setPicks({ ...picks, app })}
-        />
-        {inApp.length > 0 ? (
+      <ScopeHeader
+        scope={scope}
+        onScope={onScope}
+        apps={{ apps, runtimes, counts: appCounts, picked: picks.app, onPick: (app) => setPicks({ ...picks, app }) }}
+        summary={recordCount(shown.length, logs.length)}
+        end={<OpenInLogs traceId={traceId} links={links} />}
+        filtersLabel="What the records add up to"
+        filters={
           <LogAggregates
             logs={inApp}
             picks={picks}
             onPick={setPicks}
             window={window}
             start={start}
-            onOpenFirstError={(log) => {
-              setPicks({ ...picks, level: null, logger: null });
-              setOpen(keys.get(log) ?? null);
-            }}
+            onOpenFirstError={openFirstError}
           />
-        ) : null}
-      </div>
+        }
+      />
       <Records
         logs={shown}
-        empty={scope ? "No log records under this." : "No log records in this request."}
+        empty={`No log records ${scope ? "under this" : "in this request"}.`}
         keys={keys}
-        withApp={several}
+        app={several ? appColumn(runtimes) : undefined}
         start={start}
         open={open}
         onOpen={setOpen}
@@ -304,7 +265,7 @@ function Records({
   logs,
   empty,
   keys,
-  withApp,
+  app,
   start,
   open,
   onOpen,
@@ -313,7 +274,8 @@ function Records({
   logs: readonly ScopedLog[];
   empty: string;
   keys: ReadonlyMap<ScopedLog, string>;
-  withApp: boolean;
+  /** The app's column, with records of more than one app. */
+  app: LogColumn<ScopedLog> | undefined;
   start: number;
   open: string | null;
   onOpen: (key: string | null) => void;
@@ -325,7 +287,7 @@ function Records({
       table="trace-logs"
       logs={logs}
       keyOf={(log) => keys.get(log) ?? ""}
-      columns={withApp ? [APP_COLUMN] : []}
+      columns={app ? [app] : []}
       start={start}
       open={open}
       onOpen={onOpen}

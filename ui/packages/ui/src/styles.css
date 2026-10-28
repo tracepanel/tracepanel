@@ -3092,15 +3092,106 @@ div.dt-map-row[data-kind="code"] {
 
 /* ---------- a trace's scope: its chain of calls, or what is under a row ---------- */
 
-/* Over a trace tab's list: the scope's chip and the apps', then what the list adds up to. */
-.dt-scope-bar {
+/* Over every list of a trace's tabs (ScopeHeader): the scope's and the apps' chips, one line of what the list adds
+   up to, the chips that narrow it. One rhythm on every tab, in the console and the panel. */
+.dt-scope-head {
   display: grid;
   gap: 0.5rem;
-  padding: 0 1rem 0.75rem;
+  padding: 0.75rem 1rem;
 }
-.dt-scope-bar .dt-breakdown-legend {
-  margin: 0;
+.dt-scope-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 0.375rem 0.5rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dt-scope-row:empty {
+  display: none;
+}
+.dt-scope-row li {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+.dt-scope-row .dt-map-filter {
+  max-width: 100%;
+  font-size: var(--dt-size-sm);
+}
+.dt-scope-row .dt-map-filter .dt-icon {
+  width: 0.875rem;
+  height: 0.875rem;
+  flex: none;
+}
+/* What the list adds up to, as the lists' own line said it: muted, its numbers aligned; what the tab offers at its
+   end (a view switch, a way to a page). */
+.dt-scope-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem 0.75rem;
+  min-height: 1.75rem;
+  color: var(--dt-text-2);
+  font-size: var(--dt-size-base);
+  font-variant-numeric: tabular-nums;
+}
+.dt-scope-summary-end {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+/* An issue as a filter: its badge, then what it is in the UI's font, cut where long (its title has it whole). */
+.dt-issue-pick-title {
+  min-width: 0;
+  max-width: 22rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A chain's profiles: what each app's adds up to, a row an app in aligned columns. */
+.dt-profile-sums-wrap {
+  padding: 0 1rem 0.75rem;
+  overflow-x: auto;
+}
+.dt-profile-sums {
+  border-collapse: collapse;
+  font-size: var(--dt-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+.dt-profile-sums th {
+  padding: 0 1.25rem 0.375rem 0;
+  color: var(--dt-text-3);
+  font-size: var(--dt-size-xs);
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+}
+.dt-profile-sums td {
+  padding: 0.25rem 1.25rem 0.25rem 0;
+  border-top: 1px solid var(--dt-border);
+  color: var(--dt-text);
+  white-space: nowrap;
+}
+.dt-profile-sums td:nth-child(2),
+.dt-profile-sums td:nth-child(3),
+.dt-profile-sums th:nth-child(2),
+.dt-profile-sums th:nth-child(3) {
+  text-align: right;
+}
+.dt-profile-sums .dt-app-chip {
+  margin-left: 0;
+}
+.dt-profile-sums code {
+  display: inline-block;
+  max-width: 22rem;
+  overflow: hidden;
+  font-family: var(--dt-mono);
+  text-overflow: ellipsis;
+  vertical-align: bottom;
 }
 .dt-scope-chip {
   border-color: color-mix(in srgb, var(--dt-accent) 45%, transparent);
@@ -3126,7 +3217,7 @@ div.dt-map-row[data-kind="code"] {
   color: var(--dt-text);
 }
 /* Records over the scope's time: a bar a slice, the colour of its worst record. */
-.dt-breakdown-legend li.dt-log-histogram {
+.dt-scope-row li.dt-log-histogram {
   height: 1.375rem;
   align-items: flex-end;
   gap: 1px;
@@ -3194,21 +3285,6 @@ div.dt-map-row[data-kind="code"] {
 .dt-under-this .dt-map-filter[data-tone="warn"]:hover {
   border-color: var(--dt-warn);
 }
-/* Over a tab whose own line (how many, grouped) follows: the scope's rows first. */
-.dt-scope-bar-calls {
-  padding-top: 0.75rem;
-}
-.dt-calls-stats {
-  margin-right: 0.25rem;
-  font-size: var(--dt-size-sm);
-}
-.dt-calls-repeat {
-  max-width: 18rem;
-  overflow: hidden;
-  font-family: var(--dt-mono);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 /* An issue across a chain: its apps, and how many traces have it. */
 .dt-issue-reach {
   display: flex;
@@ -3220,19 +3296,6 @@ div.dt-map-row[data-kind="code"] {
 }
 .dt-issue-reach .dt-app-chip {
   margin-left: 0;
-}
-/* A chain's profiles: what each app's adds up to, then each app's flame under its own line. */
-.dt-profile-sums {
-  font-size: var(--dt-size-sm);
-}
-.dt-profile-sums .dt-app-chip {
-  margin-left: 0;
-}
-.dt-profile-sums code {
-  max-width: 16rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .dt-app-profile + .dt-app-profile {
   border-top: 1px solid var(--dt-border);

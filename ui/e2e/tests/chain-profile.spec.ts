@@ -6,7 +6,7 @@ import { chain } from "../chain.ts";
 import { expect, test } from "../fixtures.ts";
 
 const scope = (page: Page) => page.getByRole("list", { name: "Scope" });
-const sums = (page: Page) => page.getByRole("list", { name: "What the profiles add up to" });
+const sums = (page: Page) => page.getByRole("table", { name: "What the profiles add up to" }).locator("tbody tr");
 /**
  * The chain with its BFF as an app of its own (`shop-bff`): the stored traces keep the seed's apps, so the console's
  * Services map stays as the other tests know it.
@@ -29,13 +29,13 @@ test("a browser's view with no profile of its own: the Profile tab has each app'
   await page.goto(`/#/t/${view}?tab=profile`);
 
   await expect(page.getByRole("tab", { name: /^Profile/ })).toHaveAttribute("aria-selected", "true");
-  await expect(scope(page).getByRole("button", { name: /^All apps 2$/ })).toHaveAttribute("aria-pressed", "true");
+  await expect(scope(page).getByRole("button", { name: /^All apps 4$/ })).toHaveAttribute("aria-pressed", "true");
   await expect(scope(page).getByRole("button", { name: /^shop-bff 1$/ })).toBeVisible();
   await expect(scope(page).getByRole("button", { name: /^shop 3$/ })).toBeVisible();
-  await expect(sums(page).getByRole("listitem")).toHaveText([
-    /shop-bff\s*8 ms profiled · 4 ms waiting · most in resolveAuthor/,
-    /shop\s*3 ms profiled · most in get_author/,
-  ]);
+  // A row an app, its numbers in columns: profiled, waiting, the function most time went in.
+  await expect(sums(page)).toHaveCount(2);
+  await expect(sums(page).nth(0).locator("td")).toHaveText(["shop-bff", "8 ms", "4 ms", "resolveAuthor"]);
+  await expect(sums(page).nth(1).locator("td")).toHaveText(["shop", "3 ms", "—", "get_author"]);
   await expect(section(page, "shop-bff")).toContainText("Profile of the whole trace");
   await expect(section(page, "shop")).toContainText("Profile of 3 traces");
   await expect(section(page, "shop")).not.toContainText("resolveAuthor");
