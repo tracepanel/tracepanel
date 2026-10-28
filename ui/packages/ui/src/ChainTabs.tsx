@@ -8,6 +8,7 @@ import type { Explain } from "./CallTable";
 import { duration } from "./format";
 import type { TraceScope } from "./hooks/useTraceChain";
 import { IssueList } from "./IssueList";
+import { onTheClock } from "./lib/calls";
 import { CALL_TABS, callsOfTab } from "./lib/callTabs";
 import { appsOf, type ScopedIssue, type ScopedSpan, scopedIssues, scopedSpans } from "./lib/scope";
 import type { TraceLinks } from "./links";
@@ -26,19 +27,6 @@ function tableOf(span: Span): string | undefined {
 function targetOf(span: Span): string {
   const target = span.attrs["db.alias"] ?? span.attrs["db.name"] ?? span.attrs["server.address"];
   return typeof target === "string" ? target : "";
-}
-
-/** The time calls cover on the clock: overlapping ones once. */
-function wallOf(spans: readonly Span[]): number {
-  const ranges = spans.map((span) => [span.start, span.start + span.duration] as const).sort((a, b) => a[0] - b[0]);
-  let total = 0;
-  let reach = Number.NEGATIVE_INFINITY;
-  for (const [start, end] of ranges) {
-    if (end <= reach) continue;
-    total += end - Math.max(start, reach);
-    reach = end;
-  }
-  return total;
 }
 
 /** What narrows a list of calls beyond its scope: an app, a target, a table, the spans of an issue. */
@@ -125,8 +113,8 @@ function CallStats({ spans, noun }: { spans: readonly ScopedSpan[]; noun: [strin
   );
   return (
     <li className="dt-calls-stats">
-      <b>{spans.length}</b> {spans.length === 1 ? noun[0] : noun[1]} · <b>{duration(total)}</b> ·{" "}
-      <b>{duration(wallOf(spans))}</b> on the clock
+      <b>{spans.length}</b> {spans.length === 1 ? noun[0] : noun[1]} ·{" "}
+      <b title={`${duration(total)} total`}>{duration(onTheClock(spans))}</b> on the clock
       {slowest ? (
         <>
           {" "}

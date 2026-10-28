@@ -37,7 +37,7 @@ import { useMenuOpen } from "./hooks/useCloseOnBlur";
 import { type TraceScope, useTraceScope } from "./hooks/useTraceChain";
 import { IssueList } from "./IssueList";
 import { LogsPane } from "./LogList";
-import { groupNoun } from "./lib/calls";
+import { groupNoun, onTheClock } from "./lib/calls";
 import { isTyping } from "./lib/keys";
 import { scopedIssues, scopedSpans } from "./lib/scope";
 import type { Slice } from "./lib/slice";
@@ -230,13 +230,18 @@ const KIND_ICONS: Record<string, typeof GlobeIcon> = {
 // A command is a job wherever the console names it: the sidebar, its badge (JOB) and its first tab.
 const KIND_LABELS: Record<string, string> = { task: "Task", command: "Job", websocket: "WebSocket", page: "Page" };
 
-/** A system's tab, when the request called it: how many calls, and how long they took together. */
+/**
+ * A system's tab, when the request called it: how many calls, and how long they took on the clock (calls side by
+ * side, as a chain's 36 calls to another app run, counted once); what they add up to in its tooltip.
+ */
 function callsTabs(calls: Partial<Record<CallsTabId, SystemCalls>>) {
   return CALLS_TABS.flatMap(({ id, label, icon: Icon }) => {
     const of = calls[id];
-    return of
-      ? [{ id, label, icon: <Icon />, count: of.spans.length, detail: of.total > 0 ? duration(of.total) : undefined }]
-      : [];
+    if (!of) return [];
+    const timed = of.total > 0;
+    const detail = timed ? duration(onTheClock(of.spans)) : undefined;
+    const detailTitle = timed ? `${duration(of.total)} total` : undefined;
+    return [{ id, label, icon: <Icon />, count: of.spans.length, detail, detailTitle }];
   });
 }
 
@@ -367,6 +372,8 @@ export interface TraceViewProps {
   links?: TraceLinks | undefined;
   /** A span to open in the call tree, as a link to it asks. */
   initialSpan?: string | undefined;
+  /** An app of the chain whose traces the tabs start under ("Under library-api"), as the panel's list asks. */
+  initialUnder?: string | undefined;
   /** Tab to open first; by default Error for a failed request, else the call tree. */
   initialTab?: TabId | undefined;
   /** The tab to open when this trace has it and no error to show first (the panel remembers the last one). */
@@ -537,6 +544,7 @@ export function TraceView({
   loadChain,
   links,
   initialSpan,
+  initialUnder,
   app,
   onTraceProfile,
   variant = "full",
@@ -562,7 +570,7 @@ export function TraceView({
   const [treeSpan, setTreeSpan] = useState(initialSpan);
 
   // The trace's chain of calls, and what of it the tabs list: all of it, or what is under a row of the call tree.
-  const chain = useTraceScope(trace, related, loadChain);
+  const chain = useTraceScope(trace, related, loadChain, initialUnder);
   const tabbed = useChainTabs(trace, chain, findings);
   const explain = useMemo(() => chainExplain(chain, onExplain, explainIn), [chain, onExplain, explainIn]);
 

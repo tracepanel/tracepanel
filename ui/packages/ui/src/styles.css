@@ -884,6 +884,38 @@ tr[data-new] {
 .dt-requests[data-compact] .dt-request-row[data-run][data-depth="2"]::after {
   left: 1.875rem;
 }
+/* Under a row, the traces other apps served for its calls: an app's row, then its traces by route, each a step deeper
+   (--dt-chain-level), a fold before the name as in the call tree. Quieter than the list's own rows. */
+.dt-request-row[data-chain] {
+  padding-left: calc(0.625rem + var(--dt-chain-level, 1) * 0.875rem);
+  background: color-mix(in srgb, var(--dt-subtle) 45%, transparent);
+}
+.dt-request-row[data-chain]:hover {
+  background: var(--dt-hover);
+}
+.dt-request-row[data-chain][aria-current="true"] {
+  background: var(--dt-selected);
+}
+.dt-requests[data-compact] .dt-request-row[data-chain] {
+  padding-left: calc(0.25rem + var(--dt-chain-level, 1) * 0.75rem);
+}
+.dt-request-row[data-chain] .dt-request-main {
+  gap: 0.375rem;
+}
+/* "37 traces" stays on one line; the app's chip gives way first. */
+.dt-request-row[data-chain] .dt-request-trigger {
+  flex: none;
+  white-space: nowrap;
+}
+.dt-request-row[data-chain] .dt-map-caret .dt-icon {
+  transition: transform 120ms ease;
+}
+.dt-request-row[data-chain][aria-expanded="true"] > .dt-request-main > .dt-map-caret .dt-icon {
+  transform: rotate(90deg);
+}
+.dt-request-row[data-chain] .dt-map-times {
+  color: var(--dt-text-2);
+}
 /* ---------- Trace ---------- */
 
 .dt-trace-head {

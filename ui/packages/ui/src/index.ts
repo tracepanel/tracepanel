@@ -16,6 +16,7 @@ export * from "./Logo";
 export { LogRecord, logAttrs } from "./LogRecordDetails";
 export { type AttributeColumns, type LogColumn, LogLevel, LogTable, useAttributeColumns } from "./LogTable";
 export { ISSUE_LABELS, issueTitle } from "./labels";
+export { type ChainApp, chainApps } from "./lib/chainRows";
 export { queryFingerprint } from "./lib/fingerprint";
 export { isTyping } from "./lib/keys";
 export { percent } from "./lib/percent";
@@ -63,6 +64,6 @@ export {
 export { formatSql, tokenizeSql } from "./sql";
 export { type Tab, Tabs } from "./Tabs";
 export { Timeline } from "./Timeline";
-export { TraceList, type TraceRow } from "./TraceList";
+export { type ListChains, TraceList, type TraceRow } from "./TraceList";
 export { type ExploreItem, type TabId, TraceView, type TraceViewProps } from "./TraceView";
 export type * from "./types";

@@ -5,6 +5,7 @@ import type { DataColumn } from "./DataTable";
 import { duration } from "./format";
 import { ListBar } from "./ListBar";
 import { callFields, templatePlace } from "./lib/callFields";
+import { onTheClock } from "./lib/calls";
 import { queryFingerprint } from "./lib/fingerprint";
 import { plural } from "./lib/plural";
 import { linkProps, type TraceLinks } from "./links";
@@ -277,7 +278,8 @@ export function SqlList({ spans, issueBySpan, focus, onExplain, links }: SqlList
   return (
     <>
       <ListBar end={<Segmented label="Queries shown" segments={MODES} value={mode} onChange={setMode} />}>
-        {plural(spans.length, "query", "queries")} · {groups.length} unique · {duration(total)}
+        {plural(spans.length, "query", "queries")} · {groups.length} unique ·{" "}
+        <span title={`${duration(total)} total`}>{duration(onTheClock(spans))}</span>
       </ListBar>
       {mode === "grouped" ? (
         <CallTable

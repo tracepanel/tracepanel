@@ -4,6 +4,14 @@
 
 ### Added
 
+- The panel's list has, under a request that called other apps, a row
+  per app it called (`library-api · 37 traces`, their queries and
+  findings), folded. Open (its arrow, or → on the keyboard), the app's
+  traces by route (`GET /authors/{author_id} ×36`, their time on the
+  clock), each open in turn to what it called. A trace's row opens it
+  beside the list. The app's row opens the request with its tabs under
+  that app (`Under library-api`). The rows stay open while the browser
+  tab does, and Follow new keeps to the list's own requests.
 - A new span kind, `sql.connect`: the time a driver took to open a
   connection to the database (logging in to Snowflake, PostgreSQL's or
   MySQL's handshake). It counts as the database's time in the breakdown and
@@ -84,6 +92,12 @@
 
 ### Changed
 
+- A trace's tabs and lists say the time of their calls on the clock, calls
+  that ran side by side counted once, as a group of the call tree says
+  it: the DB and HTTP calls tabs, the lists' headers (`36 queries · 1
+  unique · 312 ms`) and the trace's head. What the calls add up to is in
+  the tooltip (`1.1 s total`). A chain's 36 parallel calls to a service
+  no longer read as 19 s in a 1.8 s request.
 - In the call tree, an HTTP or RPC call and the trace another app served
   for it are one row: the call's method and path, the app that served it
   (and its trace's name where it says more, such as `GraphQL query
@@ -96,6 +110,11 @@
 
 ### Fixed
 
+- A code row of the call tree is named by the profile's samples of its
+  own time. A handler's code before its transaction and after the commit
+  was named after the transaction's loop (`list_books · book_out` twice):
+  a sample bucket (10 ms) holds both, and goes now to the row whose code
+  takes most of it.
 - Log records from a coloured logger (GraphQL Yoga's, a Node app's
   `chalk`) no longer show raw ANSI escape sequences: the agent stores their
   text, so search finds their words, and the console strips the escapes

@@ -3,7 +3,7 @@ import { CallLine, CallLines, CallTable, DetailsTitle, timeColumns } from "./Cal
 import type { DataColumn } from "./DataTable";
 import { duration } from "./format";
 import { ListBar } from "./ListBar";
-import { callTemplate, groupNoun } from "./lib/calls";
+import { callTemplate, groupNoun, onTheClock } from "./lib/calls";
 import { plural } from "./lib/plural";
 import { IssueChip, MethodBadge, SectionHeading, StatusBadge, Times } from "./primitives";
 import type { IssueKind, Span } from "./types";
@@ -150,7 +150,8 @@ export function CallsList({ spans, issueBySpan, focus, table = "trace-calls" }: 
   return (
     <>
       <ListBar>
-        {plural(spans.length, "call", "calls")} · {groups.length} unique · {duration(total)}
+        {plural(spans.length, "call", "calls")} · {groups.length} unique ·{" "}
+        <span title={`${duration(total)} total`}>{duration(onTheClock(spans))}</span>
       </ListBar>
       <CallTable
         table={table}

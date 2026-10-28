@@ -1,13 +1,4 @@
-import {
-  type CSSProperties,
-  type KeyboardEvent,
-  type ReactNode,
-  type RefObject,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { type CSSProperties, type ReactNode, type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import { type Explain, QueryPlan } from "./CallTable";
 import { duration, since } from "./format";
 import { GraphqlCode } from "./GraphqlCode";
@@ -21,6 +12,7 @@ import { type Category, spanCategories } from "./lib/breakdown";
 import { callFields, templatePlace } from "./lib/callFields";
 import { callTemplate, callText, groupNoun } from "./lib/calls";
 import { spanKindLabel } from "./lib/handler";
+import { foldKeys } from "./lib/keys";
 import { widthOf } from "./lib/percent";
 import { plural } from "./lib/plural";
 import { ownHotspots, type Profile } from "./lib/profile";
@@ -30,7 +22,16 @@ import { type SpanScope, shifted } from "./lib/scope";
 import { isReceiver, raised } from "./lib/signals";
 import { isLoud, overlaps, type Slice, type TimeRange } from "./lib/slice";
 import { CALL_KINDS, DATASTORES, MESSAGING, RPC } from "./lib/systems";
-import { type Piece, quietPieces, timed, waitName, waitPlace } from "./lib/waiting";
+import {
+  bucketOwners,
+  ownProfile,
+  type Piece,
+  quietPieces,
+  type Timed,
+  timed,
+  waitName,
+  waitPlace,
+} from "./lib/waiting";
 import { type TraceLinks, traceLinkProps } from "./links";
 import { MigrationNotes } from "./Migrations";
 import { type NameValue, NameValues, RowsLookContext } from "./NameValues";
@@ -1529,8 +1530,8 @@ function CodeBars({
  * What a code row is: with a profile, the functions of yours that ran most in that stretch (or what it waited on);
  * without one, untraced code, waiting where the profile can't say.
  */
-function partName(part: CodePart, trace: Trace): { name: string; yours: boolean } {
-  const profile = profileOver(trace, partRange(part));
+function partName(part: CodePart, code: CodeOwner, span: string): { name: string; yours: boolean } {
+  const profile = partProfile(part, code, span);
   if (part.waiting) return waited(profile);
   const name = profile ? ranMost(profile) : UNTRACED;
   return { name, yours: name !== UNTRACED };
@@ -1538,9 +1539,33 @@ function partName(part: CodePart, trace: Trace): { name: string; yours: boolean 
 
 const UNTRACED = "untraced code";
 
+const OWNERS = new WeakMap<CodeOwner, Map<number, string>>();
+
+/** Whose code row each bucket of the owner's profile is (see bucketOwners); one map per owner. */
+function ownersOf(code: CodeOwner, profile: Timed): Map<number, string> {
+  let owners = OWNERS.get(code);
+  if (!owners) {
+    const gaps = new Map([...code.quiet].map(([id, quiet]) => [id, quiet.gaps] as const));
+    owners = bucketOwners(profile, gaps, code.trace.start);
+    OWNERS.set(code, owners);
+  }
+  return owners;
+}
+
+/**
+ * The profile a code row is named by: of its own pieces' time only, not of the rows between them (a handler's code
+ * before its transaction and after the commit, not the transaction's), and of the buckets that are its code's more
+ * than another row's. The whole trace's where the profile doesn't say when.
+ */
+function partProfile(part: CodePart, code: CodeOwner, span: string): Profile | undefined {
+  const profile = code.trace.profile;
+  if (!timed(profile)) return profileOver(code.trace, partRange(part));
+  return ownProfile(profile, part.pieces, ownersOf(code, profile), span);
+}
+
 /** Where a wait row waited, said quietly after its name: "handlers.py:108", where the profile says. */
-function WaitPlace({ part, trace }: { part: CodePart; trace: Trace }) {
-  const profile = profileOver(trace, partRange(part));
+function WaitPlace({ part, code, span }: { part: CodePart; code: CodeOwner; span: string }) {
+  const profile = partProfile(part, code, span);
   const place = part.waiting && profile ? waitPlace(profile) : null;
   return place ? <span className="dt-map-sub">{place}</span> : null;
 }
@@ -1564,7 +1589,7 @@ function ranMost(profile: Profile): string {
 function CodeRowParts({ span, ctx, depth, part }: { span: Span; ctx: RowContext; depth: number; part: CodePart }) {
   const category = ctx.categories.get(span.id) ?? "code";
   const owner = ctx.code.trace;
-  const { name, yours } = partName(part, owner);
+  const { name, yours } = partName(part, ctx.code, span.id);
   return (
     <>
       <span className="dt-map-name" style={indentOf(depth)}>
@@ -1575,7 +1600,7 @@ function CodeRowParts({ span, ctx, depth, part }: { span: Span; ctx: RowContext;
           className={part.waiting ? "dt-map-kind dt-map-wait" : "dt-map-kind"}
         />
         <TaskName name={name} className={yours ? "dt-map-text" : "dt-map-text dt-map-lib"} />
-        <WaitPlace part={part} trace={owner} />
+        <WaitPlace part={part} code={ctx.code} span={span.id} />
         <RowFlame trace={owner} />
       </span>
       <CodeBars part={part} category={category} trace={ctx.trace} owner={owner} />
@@ -1659,16 +1684,6 @@ function Caret({ open, onToggle }: { open: boolean | undefined; onToggle: () => 
 /** A row's fold: open or closed, or none for a row with nothing under it. */
 function foldOf(hasChildren: boolean, open: boolean): boolean | undefined {
   return hasChildren ? open : undefined;
-}
-
-/** As in any tree: → opens a closed row's children, ← closes an open one's. */
-function foldKeys(open: boolean | undefined, toggle: () => void): (event: KeyboardEvent) => void {
-  const key = open ? "ArrowLeft" : "ArrowRight";
-  return (event) => {
-    if (open === undefined || event.key !== key) return;
-    event.preventDefault();
-    toggle();
-  };
 }
 
 function TaskState({ state }: { state: string | null }) {

@@ -52,6 +52,8 @@ export type Route =
       range?: string | undefined;
       /** `all`: every log record in the call tree, its info and debug ones too. */
       logs?: string | undefined;
+      /** An app of the trace's chain: its tabs list what that app's traces did ("Under library-api"). */
+      under?: string | undefined;
     }
   | { name: "issue"; fingerprint: string; error?: boolean | undefined; q?: string | undefined }
   | { name: "app"; service: string };
@@ -135,7 +137,7 @@ function appOf(path: string): Route | null {
 }
 
 // What a trace's address says besides its id: where it was opened from, its tab, its span, the part of its time.
-const TRACE_PARAMS = ["from", "tab", "span", "part", "range", "logs"] as const;
+const TRACE_PARAMS = ["from", "tab", "span", "part", "range", "logs", "under"] as const;
 
 /** `t/<id>?from=…&tab=…`: a trace's page. */
 function traceOf(path: string, params: URLSearchParams): Route | null {

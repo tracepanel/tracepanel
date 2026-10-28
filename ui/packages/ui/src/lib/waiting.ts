@@ -21,15 +21,67 @@ function touches(a: TimeRange, b: TimeRange): boolean {
   return a[0] < b[1] && b[0] < a[1];
 }
 
-/** The profile of a stretch of the trace: each stack counted in the buckets that touch it, those seen elsewhere out. */
-export function within(profile: Timed, range: TimeRange): Profile {
+/** The profile of the buckets `kept` takes: each stack counted in those, the others out. */
+function inBuckets(profile: Timed, kept: (bucket: number) => boolean): Profile {
   const stacks = profile.stacks.flatMap((stack): Stack[] => {
-    const count = (stack.at ?? [])
-      .filter(([bucket]) => touches(bucketSpan(profile, bucket), range))
-      .reduce((sum, [, seen]) => sum + seen, 0);
+    const count = (stack.at ?? []).filter(([bucket]) => kept(bucket)).reduce((sum, [, seen]) => sum + seen, 0);
     return count > 0 ? [{ ...stack, count }] : [];
   });
   return { ...profile, stacks, samples: stacks.reduce((sum, stack) => sum + stack.count, 0) };
+}
+
+/** The profile of a stretch of the trace: each stack counted in the buckets that touch it, those seen elsewhere out. */
+export function within(profile: Timed, range: TimeRange): Profile {
+  return inBuckets(profile, (bucket) => touches(bucketSpan(profile, bucket), range));
+}
+
+/**
+ * Whose code each bucket's samples are: of the spans whose own code has a row (their gaps, in the trace's clock),
+ * the one whose gaps take most of the bucket. A bucket (10 ms) can hold a transaction's last queries with the code
+ * between them and the handler's code after the commit: both rows would otherwise be named by all of its samples.
+ */
+export function bucketOwners(
+  profile: Timed,
+  gaps: ReadonlyMap<string, readonly (readonly [number, number])[]>,
+  start: number,
+): Map<number, string> {
+  const width = profile.bucket_us;
+  const taken = new Map<number, Map<string, number>>();
+  for (const [span, stretches] of gaps) {
+    for (const [from, to] of stretches) {
+      for (let bucket = Math.floor((from - start) / width); bucket * width < to - start; bucket++) {
+        const [left, right] = bucketSpan(profile, bucket);
+        const overlap = Math.min(right, to - start) - Math.max(left, from - start);
+        if (overlap <= 0) continue;
+        const here = taken.get(bucket) ?? new Map<string, number>();
+        here.set(span, (here.get(span) ?? 0) + overlap);
+        taken.set(bucket, here);
+      }
+    }
+  }
+  const owners = new Map<number, string>();
+  for (const [bucket, spans] of taken) {
+    const most = [...spans].sort((a, b) => b[1] - a[1])[0];
+    if (most) owners.set(bucket, most[0]);
+  }
+  return owners;
+}
+
+/**
+ * The profile of a span's own code in pieces (µs since the trace started): the buckets they touch whose code is the
+ * span's (`owners`); every bucket they touch where none is.
+ */
+export function ownProfile(
+  profile: Timed,
+  pieces: readonly Piece[],
+  owners: ReadonlyMap<number, string>,
+  span: string,
+): Profile {
+  const touched = (bucket: number) =>
+    pieces.some((piece) => touches(bucketSpan(profile, bucket), [piece.from, piece.to]));
+  const owned = (bucket: number) => touched(bucket) && owners.get(bucket) === span;
+  const any = profile.stacks.some((stack) => (stack.at ?? []).some(([bucket]) => owned(bucket)));
+  return inBuckets(profile, any ? owned : touched);
 }
 
 /** Whether a stack's innermost frame waits. */

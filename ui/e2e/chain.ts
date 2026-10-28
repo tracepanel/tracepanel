@@ -11,6 +11,9 @@ const W3C = "4bf92f3577b34da6a3ce929d0e0e47c1";
 const NUMBERS: Record<string, number> = { view: 1, bff: 2, api1: 11, api2: 12, api3: 13 };
 const id = (name: string) => `01M4C4A1N5${String(NUMBERS[name.toLowerCase()]).padStart(16, "0")}`;
 
+/** A trace of the chain by its role: the view, the BFF, a service's (`api1`…`api3`). */
+export const chainTrace = (name: "view" | "bff" | "api1" | "api2" | "api3") => id(name);
+
 function span(
   name: string,
   parent: string | null,
