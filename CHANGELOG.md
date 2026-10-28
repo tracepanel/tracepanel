@@ -17,7 +17,9 @@
   `hibernate.default_batch_fetch_size` for a collection, `.with()` or
   `load()` (or a join) for Exposed. The Java SDK names the ORM in
   `db.client`. A by-key lookup written without spaces around `=`, as
-  Hibernate writes it, now counts as one.
+  Hibernate writes it, now counts as one. A count or an average a
+  repository method reads per row gets one grouped query as its fix
+  instead.
 
 ## 0.5.1 (2026-10-26)
 

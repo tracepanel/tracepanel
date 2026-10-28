@@ -40,6 +40,9 @@ static BY_PK: LazyLock<Regex> = LazyLock::new(|| {
     ))
     .unwrap()
 });
+// An aggregate, not a relation's rows: what a repository method run per row reads (`countByOrder`).
+static AGGREGATE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)^SELECT (?:COUNT|AVG|SUM|MIN|MAX)\(").unwrap());
 static LINE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r":\d+ in ").unwrap());
 // The parts of a URL path or a cache key that name one item: a number, a UUID, a long hex digest.
 static UUID: LazyLock<Regex> = LazyLock::new(|| {
@@ -75,6 +78,8 @@ const HIBERNATE_BATCH_SIZE: &str = "Load the related collections in a few batche
     association or set `hibernate.default_batch_fetch_size` (or `join fetch` it in the query that produced these rows).";
 const EXPOSED_WITH: &str = "Load the referenced entities with the parent rows: add `.with()` for this reference to the \
     DAO query that produced these rows (`load()` for one entity), or join the table in a DSL query.";
+const AGGREGATE_PER_ROW: &str = "Compute it for all the rows in one query, grouped by the key (`group by` with the keys \
+    in an `in` list), instead of one aggregate query per row.";
 const N_PLUS_ONE: &str = "Load the related rows with the parent rows (a join, or one batched query) instead of one query per row.";
 const DUPLICATES: &str = "Run the query once and reuse the result, or cache it for the request.";
 const IN_GRAPHQL: &str =
@@ -120,8 +125,10 @@ fn dataloader_hint(library: Option<&str>) -> String {
     format!("{IN_GRAPHQL}{loader}{PREFETCH_IN_PARENT}")
 }
 
-fn n_plus_one_hint(client: &str, by_pk: bool, in_template: bool) -> &'static str {
+fn n_plus_one_hint(client: &str, statement: &str, by_pk: bool, in_template: bool) -> &'static str {
     match (client, by_pk) {
+        // The JVM ORMs' repository methods run per row: no association to fetch.
+        ("hibernate" | "exposed", _) if AGGREGATE.is_match(statement) => AGGREGATE_PER_ROW,
         ("django", true) => SELECT_RELATED,
         ("django", false) => PREFETCH_RELATED,
         ("sqlalchemy", true) => JOINEDLOAD,
@@ -390,7 +397,12 @@ fn sql_issues(trace: &Trace, thresholds: &Thresholds) -> Vec<Issue> {
             let hint = format!(
                 "{}{}{}",
                 lead.as_deref().unwrap_or_default(),
-                n_plus_one_hint(&py_str(first.attrs.get("db.client")), by_pk, lead.is_some()),
+                n_plus_one_hint(
+                    &py_str(first.attrs.get("db.client")),
+                    &statement,
+                    by_pk,
+                    lead.is_some()
+                ),
                 dataloader.as_deref().unwrap_or_default()
             );
             issues.push(issue(
@@ -1381,6 +1393,9 @@ mod tests {
             "SELECT AUTHORS.ID, AUTHORS.\"NAME\" FROM AUTHORS WHERE AUTHORS.ID = ?";
         let exposed_books =
             "SELECT BOOKS.ID, BOOKS.TITLE, BOOKS.AUTHOR FROM BOOKS WHERE BOOKS.AUTHOR = ?";
+        // A repository method per row: an average, a count.
+        let rating = "select avg(r1_0.rating) from review r1_0 where r1_0.product_id=?";
+        let items = "SELECT COUNT(ORDER_ITEM.ID) FROM ORDER_ITEM WHERE ORDER_ITEM.ORDER_ID = ?";
         let by_orm = |statement: &str, client: &str| {
             (0..3)
                 .map(|n| {
@@ -1409,6 +1424,21 @@ mod tests {
             [
                 vec![(culprit.clone(), Some(EXPOSED_WITH.to_owned()))],
                 vec![(culprit.clone(), Some(EXPOSED_WITH.to_owned()))],
+            ]
+        );
+
+        assert_eq!(
+            hinted([rating, items], "hibernate"),
+            [
+                vec![(culprit.clone(), Some(AGGREGATE_PER_ROW.to_owned()))],
+                vec![(culprit.clone(), Some(AGGREGATE_PER_ROW.to_owned()))],
+            ]
+        );
+        assert_eq!(
+            hinted([rating, items], "exposed"),
+            [
+                vec![(culprit.clone(), Some(AGGREGATE_PER_ROW.to_owned()))],
+                vec![(culprit.clone(), Some(AGGREGATE_PER_ROW.to_owned()))],
             ]
         );
 
