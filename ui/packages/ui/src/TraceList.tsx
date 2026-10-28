@@ -4,10 +4,11 @@ import { Badge } from "./components/ui/badge";
 import { ago, duration } from "./format";
 import { ChevronRightIcon, DatabaseIcon } from "./icons";
 import { ISSUE_LABELS } from "./labels";
-import type { ChainApp, ChainGroup } from "./lib/chainRows";
+import type { ChainApp, ChainItem, ChainRun, ChainTraceRow } from "./lib/chainRows";
 import { foldKeys } from "./lib/keys";
 import { pageParts } from "./lib/page";
 import { plural } from "./lib/plural";
+import { RowFlame } from "./ProfileHint";
 import { AppChip, IssueChip, KindBadge, MethodBadge, RoutePath, StatusSlot, TaskName, Times } from "./primitives";
 import type { IssueKind, TraceSummary } from "./types";
 
@@ -120,38 +121,29 @@ interface ChainRowsProps {
 }
 
 /**
- * The apps a row's trace called, a row each ("library-api · 37 traces"), folded; open, its traces by route (×36), each
- * open in turn to what it called. A trace's row opens it beside the list; an app's row opens the row's trace with
- * its tabs under that app.
+ * The apps a row's trace called, a row each ("library-api · 37 traces"), folded; open, its traces in the order they
+ * started, each open in turn to what it called. A trace's row opens it beside the list; an app's row opens the row's
+ * trace with its tabs under that app.
  */
 function ChainRows({ rowId, apps, level, chains, selectedId, onSelect }: ChainRowsProps) {
   if (!apps?.length) return null;
-  return apps.map((app) => {
-    const open = chains.open.has(app.key);
-    return (
-      <ChainAppRows
-        key={app.key}
-        app={app}
-        open={open}
-        rowId={rowId}
-        level={level}
-        chains={chains}
-        selectedId={selectedId}
-        onSelect={onSelect}
-      />
-    );
-  });
+  return apps.map((app) => (
+    <ChainAppRows
+      key={app.key}
+      app={app}
+      rowId={rowId}
+      level={level}
+      chains={chains}
+      selectedId={selectedId}
+      onSelect={onSelect}
+    />
+  ));
 }
 
-function ChainAppRows({
-  app,
-  open,
-  rowId,
-  level,
-  chains,
-  selectedId,
-  onSelect,
-}: Omit<ChainRowsProps, "apps"> & { app: ChainApp; open: boolean }) {
+type ChainLevelProps = Omit<ChainRowsProps, "apps">;
+
+function ChainAppRows({ app, rowId, level, chains, selectedId, onSelect }: ChainLevelProps & { app: ChainApp }) {
+  const open = chains.open.has(app.key);
   const toggle = () => chains.onToggle(app.key);
   const traces = plural(app.ids.length, "trace", "traces");
   return (
@@ -178,64 +170,149 @@ function ChainAppRows({
           <CompactMeta trace={app.summary} />
         </span>
       </button>
-      {open
-        ? app.groups.map((group) => (
-            <ChainGroupRows
-              key={group.key}
-              group={group}
-              rowId={rowId}
-              level={level + 1}
-              chains={chains}
-              selectedId={selectedId}
-              onSelect={onSelect}
-            />
-          ))
-        : null}
+      {open ? (
+        <ChainItems
+          listKey={app.key}
+          items={app.items}
+          rowId={rowId}
+          level={level + 1}
+          chains={chains}
+          selectedId={selectedId}
+          onSelect={onSelect}
+        />
+      ) : null}
     </>
   );
 }
 
-function ChainGroupRows({
-  group,
+/** Rows shown at once in one list under an app (its traces, or a run's): the rest behind "Show all". */
+const SHOWN_FIRST = 50;
+
+/** An app's traces (or a run's) in order: the first SHOWN_FIRST, then a row that shows them all. */
+function ChainItems({
+  listKey,
+  items,
   rowId,
   level,
   chains,
   selectedId,
   onSelect,
-}: Omit<ChainRowsProps, "apps"> & { group: ChainGroup }) {
-  const nested = group.apps.length > 0;
-  const open = nested && chains.open.has(group.key);
-  const toggle = () => chains.onToggle(group.key);
-  const count = group.ids.length;
-  const first = group.ids[0] as string;
+}: ChainLevelProps & { listKey: string; items: readonly ChainItem[] }) {
+  const allKey = `${listKey}/all`;
+  const all = items.length <= SHOWN_FIRST || chains.open.has(allKey);
+  const shown = all ? items : items.slice(0, SHOWN_FIRST);
+  const props = { rowId, level, chains, selectedId, onSelect };
+  return (
+    <>
+      {shown.map((item) =>
+        item.type === "run" ? (
+          <ChainRunRows key={item.key} run={item} {...props} />
+        ) : (
+          <ChainTraceRows key={item.key} row={item} {...props} />
+        ),
+      )}
+      {all ? null : (
+        <button
+          type="button"
+          className="dt-request-row"
+          data-chain="more"
+          style={{ "--dt-chain-level": level } as CSSProperties}
+          onClick={() => chains.onToggle(allKey)}
+        >
+          <span className="dt-request-main">
+            <span className="dt-map-caret" />
+            <span className="dt-request-trigger">Show all {items.length}</span>
+          </span>
+        </button>
+      )}
+    </>
+  );
+}
+
+/**
+ * Three or more traces of one route in a row: one row (×36, their time on the clock), open while the app has few
+ * traces, each of them under it in order. A click opens or folds it.
+ */
+function ChainRunRows({ run, rowId, level, chains, selectedId, onSelect }: ChainLevelProps & { run: ChainRun }) {
+  // Its fold kept as a change from where it starts (open or folded), so the stored rows say what the user did.
+  const open = chains.open.has(run.key) !== run.open;
+  const toggle = () => chains.onToggle(run.key);
+  const count = run.ids.length;
+  const time = duration(run.summary.duration);
+  const holdsSelected = !open && selectedId != null && run.ids.includes(selectedId);
   return (
     <>
       <button
         type="button"
         className="dt-request-row"
-        data-chain="group"
-        data-tone={toneOf(group.summary)}
+        data-chain="run"
+        data-tone={toneOf(run.summary)}
         style={{ "--dt-chain-level": level } as CSSProperties}
-        aria-current={selectedId != null && group.ids.includes(selectedId) ? "true" : undefined}
+        aria-current={holdsSelected ? "true" : undefined}
+        aria-expanded={open}
+        title={`${run.route} ×${count} in a row · ${time} on the clock, from the first's start to the last's end`}
+        onClick={toggle}
+        onKeyDown={foldKeys(open, toggle)}
+      >
+        <span className="dt-request-main">
+          <ChainCaret onToggle={toggle} />
+          <RowName trace={run.summary} />
+        </span>
+        <span className="dt-request-meta">
+          <Times count={count} />
+          <span>{time}</span>
+          <CompactMeta trace={run.summary} />
+        </span>
+      </button>
+      {open ? (
+        <ChainItems
+          listKey={run.key}
+          items={run.traces}
+          rowId={rowId}
+          level={level + 1}
+          chains={chains}
+          selectedId={selectedId}
+          onSelect={onSelect}
+        />
+      ) : null}
+    </>
+  );
+}
+
+/** One trace of an app: its method and path (its route in the tooltip), opened beside the list; what it called under it. */
+function ChainTraceRows({ row, rowId, level, chains, selectedId, onSelect }: ChainLevelProps & { row: ChainTraceRow }) {
+  const nested = row.apps.length > 0;
+  const open = nested && chains.open.has(row.key);
+  const toggle = () => chains.onToggle(row.key);
+  return (
+    <>
+      <button
+        type="button"
+        className="dt-request-row"
+        data-chain="trace"
+        data-tone={toneOf(row.summary)}
+        style={{ "--dt-chain-level": level } as CSSProperties}
+        aria-current={row.id === selectedId ? "true" : undefined}
         aria-expanded={nested ? open : undefined}
-        title={count > 1 ? `${count} traces, on the clock from the first's start to the last's end` : undefined}
-        onClick={() => onSelect(first)}
+        title={row.route}
+        onClick={() => onSelect(row.id)}
         onKeyDown={foldKeys(nested ? open : undefined, toggle)}
       >
         <span className="dt-request-main">
           {nested ? <ChainCaret onToggle={toggle} /> : <span className="dt-map-caret" />}
-          <RowName trace={group.summary} />
+          <RowName trace={row.summary} />
+          <RowFlame trace={row.trace} />
         </span>
         <span className="dt-request-meta">
-          {count > 1 ? <Times count={count} /> : <StatusSlot status={group.summary.http_status} />}
-          <span>{duration(group.summary.duration)}</span>
-          <CompactMeta trace={group.summary} />
+          <StatusSlot status={row.summary.http_status} />
+          <span>{duration(row.summary.duration)}</span>
+          <CompactMeta trace={row.summary} />
         </span>
       </button>
       {open ? (
         <ChainRows
           rowId={rowId}
-          apps={group.apps}
+          apps={row.apps}
           level={level + 1}
           chains={chains}
           selectedId={selectedId}

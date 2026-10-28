@@ -1,20 +1,38 @@
 // The traces other apps served for a list row's calls (theirs in turn), as rows under it: an app's traces in one
-// summary row, then by route (36 calls of GET /authors/{author_id} one row, ×36), then what those called, and so on
-// down the chain. Plain data, no React: built from the chain the call tree and the trace's tabs read
+// summary row ("library-api · 37 traces"), then each of them in the order they started on the caller's clock, what
+// each called under it, and so on down the chain. Three or more of one route in a row fold into a run (×36), open
+// while the app has few traces. Plain data, no React: built from the chain the call tree and the trace's tabs read
 // (`GET /traces/{id}/chain`), so the list says the same counts, under the same limits.
 
 import type { Chain, ChainTrace, IssueKind, Trace, TraceSummary } from "../types";
 import { onTheClock } from "./calls";
 
-/** Traces of one route of one app, called from the same traces: one row (×N), the first of them opened from it. */
-export interface ChainGroup {
+/** One trace of an app, a row of its own: its method and actual path, its route in the tooltip. */
+export interface ChainTraceRow {
+  type: "trace";
   key: string;
-  /** The first trace as a list row names it (its method and route), with the group's numbers. */
+  id: string;
+  trace: Trace;
   summary: TraceSummary;
-  ids: string[];
-  /** The apps those traces called in turn. */
+  /** Its route ("GET /authors/{author_id}"), its name where it has none. */
+  route: string;
+  /** The apps it called in turn. */
   apps: ChainApp[];
 }
+
+/** Consecutive traces of one route (three or more): one row (×N, their time on the clock), each of them under it. */
+export interface ChainRun {
+  type: "run";
+  key: string;
+  route: string;
+  summary: TraceSummary;
+  ids: string[];
+  traces: ChainTraceRow[];
+  /** Open until it is folded: while its app has at most RUN_OPEN_LIMIT traces. */
+  open: boolean;
+}
+
+export type ChainItem = ChainTraceRow | ChainRun;
 
 /** One app's traces at one place down the chain: the summary row ("library-api · 37 traces"). */
 export interface ChainApp {
@@ -23,8 +41,14 @@ export interface ChainApp {
   ids: string[];
   /** Their numbers added up (queries, findings), their time on the clock. */
   summary: TraceSummary;
-  groups: ChainGroup[];
+  /** Its traces in the order they started, runs of one route folded together. */
+  items: ChainItem[];
 }
+
+/** Traces of one route in a row that make a run. */
+export const RUN_MIN = 3;
+/** An app with up to this many traces has its runs open: all of them in order, at a glance. */
+export const RUN_OPEN_LIMIT = 50;
 
 type Served = ChainTrace & { trace: Trace };
 
@@ -54,7 +78,7 @@ function summaryOf(trace: Trace): TraceSummary {
     status: trace.status === "error" ? "error" : "ok",
     http_status: typeof status === "number" ? status : null,
     method: attr("http.method"),
-    path: attr("http.route") ?? attr("http.path"),
+    path: attr("http.path") ?? attr("http.route"),
     route: attr("http.route"),
     view: null,
     user_id: null,
@@ -117,29 +141,22 @@ function appsUnder(
 ): ChainApp[] {
   const below = [...parents].flatMap((id) => children.get(id) ?? []).filter((each) => !seen.has(each.id));
   for (const each of below) seen.add(each.id);
-  below.sort((a, b) => a.trace.start - b.trace.start);
+  below.sort((a, b) => a.trace.start - b.trace.start || a.id.localeCompare(b.id));
   const byApp = new Map<string, Served[]>();
   for (const each of below) byApp.set(each.app, [...(byApp.get(each.app) ?? []), each]);
   return [...byApp].map(([app, traces]) => {
     const key = `${path}/${app}`;
-    const byRoute = new Map<string, Served[]>();
-    for (const each of traces) {
-      const route = routeOf(each.trace);
-      byRoute.set(route, [...(byRoute.get(route) ?? []), each]);
-    }
-    const groups = [...byRoute].map(([route, members]): ChainGroup => {
-      const ids = members.map((each) => each.id);
-      const groupKey = `${key}/${route}`;
-      return {
-        key: groupKey,
-        summary: together(
-          members.map((each) => each.trace),
-          chainKinds,
-        ),
-        ids,
-        apps: appsUnder(new Set(ids), children, chainKinds, seen, groupKey),
-      };
-    });
+    const rows = traces.map(
+      (each): ChainTraceRow => ({
+        type: "trace",
+        key: `${key}/${each.id}`,
+        id: each.id,
+        trace: each.trace,
+        summary: together([each.trace], chainKinds),
+        route: routeOf(each.trace),
+        apps: appsUnder(new Set([each.id]), children, chainKinds, seen, `${key}/${each.id}`),
+      }),
+    );
     return {
       key,
       app,
@@ -148,9 +165,49 @@ function appsUnder(
         traces.map((each) => each.trace),
         chainKinds,
       ),
-      groups,
+      items: runsOf(rows, key, rows.length <= RUN_OPEN_LIMIT, chainKinds),
     };
   });
+}
+
+/** The rows in order, three or more of one route in a row folded into a run (keyed by its first trace). */
+function runsOf(
+  rows: readonly ChainTraceRow[],
+  key: string,
+  open: boolean,
+  chainKinds: ReadonlyMap<string, IssueKind[]>,
+): ChainItem[] {
+  const items: ChainItem[] = [];
+  let at = 0;
+  while (at < rows.length) {
+    const route = (rows[at] as ChainTraceRow).route;
+    let end = at + 1;
+    while (end < rows.length && (rows[end] as ChainTraceRow).route === route) end += 1;
+    const members = rows.slice(at, end);
+    if (members.length >= RUN_MIN) {
+      const first = members[0] as ChainTraceRow;
+      items.push({
+        type: "run",
+        key: `${key}/run/${first.id}`,
+        route,
+        // Named by the route, not the first one's path: the run is all of them.
+        summary: {
+          ...together(
+            members.map((each) => each.trace),
+            chainKinds,
+          ),
+          path: first.summary.route,
+        },
+        ids: members.map((each) => each.id),
+        traces: members,
+        open,
+      });
+    } else {
+      items.push(...members);
+    }
+    at = end;
+  }
+  return items;
 }
 
 /**

@@ -1,10 +1,12 @@
-// Under a row of the panel's list whose trace called other apps: an app's row (folded), then its traces by route,
-// as the call tree's chain has them. A trace's row opens it; the app's row opens the row's trace under that app.
+// Under a row of the panel's list whose trace called other apps: an app's row (folded), then its traces in the order
+// they started, as the call tree's chain has them, three or more of one route in a row in a run (open while the app
+// has at most 50). A trace's row opens it; the app's row opens the row's trace under that app.
+import type { Page } from "@playwright/test";
 import { openApp, panel, pill } from "../app.ts";
-import { chain, chainTrace } from "../chain.ts";
+import { chain, chainTrace, type FanoutCall, fanout } from "../chain.ts";
 import { expect, test } from "../fixtures.ts";
 
-test("a row that called another app has that app's traces under it, folded, by route; each opens", async ({ page }) => {
+test("a row that called another app has that app's traces under it, folded, in order; each opens", async ({ page }) => {
   await chain();
   await page.setViewportSize({ width: 1280, height: 900 });
   await openApp(page, { graphql: { status: 200, trace: chainTrace("bff"), queries: 0, totalMs: 8 } });
@@ -12,31 +14,37 @@ test("a row that called another app has that app's traces under it, folded, by r
   await pill(page).click();
   const list = panel(page).getByRole("region", { name: "Pages and requests in this browser tab" });
   const app = list.locator('.dt-request-row[data-chain="app"]');
-  const group = list.locator('.dt-request-row[data-chain="group"]');
+  const run = list.locator('.dt-request-row[data-chain="run"]');
+  const traces = list.locator('.dt-request-row[data-chain="trace"]');
 
   await expect(app).toHaveCount(1);
   await expect(app).toContainText("shop");
   await expect(app).toContainText("3 traces");
   await expect(app.locator(".dt-request-queries")).toHaveText("3");
   await expect(app).toHaveAttribute("aria-expanded", "false");
-  await expect(group).toHaveCount(0);
+  await expect(run).toHaveCount(0);
 
   // As in the call tree: → opens it.
   await app.focus();
   await page.keyboard.press("ArrowRight");
 
   await expect(app).toHaveAttribute("aria-expanded", "true");
-  await expect(group).toHaveCount(1);
-  await expect(group).toContainText("/authors/{id}");
-  await expect(group).toContainText("×3");
-  await expect(group.locator(".dt-request-queries")).toHaveText("3");
+  // Three of one route in a row: a run, open (few traces), each of them under it, by its own path.
+  await expect(run).toHaveCount(1);
+  await expect(run).toContainText("/authors/{id}");
+  await expect(run).toContainText("×3");
+  await expect(run.locator(".dt-request-queries")).toHaveText("3");
+  await expect(run).toHaveAttribute("aria-expanded", "true");
+  await expect(traces.locator(".dt-request-path")).toHaveText(["/authors/1", "/authors/2", "/authors/3"]);
+  await expect(traces.first()).toHaveAttribute("title", "GET /authors/{id}");
+  await expect(traces.first().locator(".dt-map-flame")).toBeVisible();
 
-  await group.click();
+  await traces.nth(1).click();
 
-  // The first of the three, beside the list; the group's row is the one selected, the rows stay open.
-  await expect(group).toHaveAttribute("aria-current", "true");
+  // That one, beside the list; its row is the one selected, the rows stay open.
+  await expect(traces.nth(1)).toHaveAttribute("aria-current", "true");
   await expect(panel(page).getByRole("tab", { name: /^Request/ })).toBeVisible();
-  await expect(panel(page).locator("body")).toContainText("GET /authors/1");
+  await expect(panel(page).locator("body")).toContainText("GET /authors/2");
   await expect(app).toHaveAttribute("aria-expanded", "true");
 
   await app.click();
@@ -50,5 +58,137 @@ test("a row that called another app has that app's traces under it, folded, by r
   await app.focus();
   await page.keyboard.press("ArrowLeft");
 
-  await expect(group).toHaveCount(0);
+  await expect(run).toHaveCount(0);
+});
+
+/** The panel's list, a BFF's request in it (`bff`), its app's row opened: its rows under it. */
+async function listed(page: Page, bff: string) {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await openApp(page, { graphql: { status: 200, trace: bff, queries: 0, totalMs: 8 } });
+  await page.getByRole("button", { name: "Load graphql" }).click();
+  await pill(page).click();
+  const list = panel(page).getByRole("region", { name: "Pages and requests in this browser tab" });
+  const app = list.locator('.dt-request-row[data-chain="app"]');
+  await expect(app).toHaveCount(1);
+  await app.locator('[data-toggle=""]').click();
+  return {
+    list,
+    app,
+    run: list.locator('.dt-request-row[data-chain="run"]'),
+    traces: list.locator('.dt-request-row[data-chain="trace"]'),
+    more: list.locator('.dt-request-row[data-chain="more"]'),
+  };
+}
+
+const authors = (count: number, from: number, at: number): FanoutCall[] =>
+  Array.from({ length: count }, (_, n) => ({
+    route: "/authors/{author_id}",
+    path: `/authors/${from + n}`,
+    at: at + n * 1_000,
+  }));
+
+test("an app's 37 traces are all there, in order, the run of 36 open", async ({ page }) => {
+  const { bff } = await fanout(1, [{ route: "/books", path: "/books", at: 0 }, ...authors(36, 1, 1_000)]);
+  const { app, run, traces } = await listed(page, bff);
+
+  await expect(app).toContainText("library-api");
+  await expect(app).toContainText("37 traces");
+  await expect(run).toHaveCount(1);
+  await expect(run).toContainText("/authors/{author_id}");
+  await expect(run).toContainText("×36");
+  await expect(run).toHaveAttribute("aria-expanded", "true");
+  await expect(traces).toHaveCount(37);
+  await expect(traces.locator(".dt-request-path")).toHaveText([
+    "/books",
+    ...Array.from({ length: 36 }, (_, n) => `/authors/${n + 1}`),
+  ]);
+
+  await traces.nth(7).click();
+
+  await expect(traces.nth(7)).toHaveAttribute("aria-current", "true");
+  await expect(panel(page).getByRole("tab", { name: /^Request/ })).toBeVisible();
+
+  // Folded, the run holds the one selected; the app's other row stays.
+  await run.click();
+
+  await expect(run).toHaveAttribute("aria-expanded", "false");
+  await expect(run).toHaveAttribute("aria-current", "true");
+  await expect(traces).toHaveCount(1);
+});
+
+test("an app's traces go by when they started on the caller's clock, across routes; what they called under them", async ({
+  page,
+}) => {
+  // Out of order here, sent in reverse: the list orders them by start.
+  const { bff } = await fanout(2, [
+    {
+      route: "/reviews/{id}",
+      path: "/reviews/4",
+      at: 3_000,
+      calls: { app: "ratings", route: "/stars", path: "/stars" },
+    },
+    { route: "/books", path: "/books", at: 0 },
+    { route: "/authors/{author_id}", path: "/authors/2", at: 2_000 },
+    { route: "/authors/{author_id}", path: "/authors/1", at: 1_000 },
+    ...authors(3, 3, 4_000),
+    { route: "/books", path: "/books", at: 9_000 },
+  ]);
+  const { list, run, traces } = await listed(page, bff);
+
+  // Two of a route in a row stay rows; three are a run.
+  await expect(run).toHaveCount(1);
+  await expect(traces.locator(".dt-request-path")).toHaveText([
+    "/books",
+    "/authors/1",
+    "/authors/2",
+    "/reviews/4",
+    "/authors/3",
+    "/authors/4",
+    "/authors/5",
+    "/books",
+  ]);
+
+  // The review's call: under it, folded, the app that served it.
+  const review = traces.nth(3);
+  await expect(review).toHaveAttribute("aria-expanded", "false");
+  await review.focus();
+  await page.keyboard.press("ArrowRight");
+
+  const deeper = list.locator('.dt-request-row[data-chain="app"]').nth(1);
+  await expect(deeper).toContainText("ratings");
+  await expect(deeper).toContainText("1 trace");
+});
+
+test("an app with more than 50 traces has its runs folded; open, the first 50, then all of them", async ({ page }) => {
+  // The agent brings 50 of one trace's calls; more come from elsewhere (the cloud's): ten more, after them.
+  const { bff } = await fanout(3, authors(50, 1, 0));
+  await page.route(`**/api/traces/${bff}/chain`, async (route) => {
+    const response = await route.fetch();
+    const chain = (await response.json()) as { traces: Record<string, unknown>[] };
+    const last = chain.traces.at(-1) as { id: string; trace: Record<string, unknown> };
+    const more = Array.from({ length: 10 }, (_, n) => {
+      const id = `${last.id.slice(0, -2)}9${n}`;
+      const start = (last.trace["start"] as number) + (n + 1) * 1_000;
+      const attrs = { ...(last.trace["attrs"] as object), "http.path": `/authors/${51 + n}` };
+      return { ...last, id, trace: { ...last.trace, id, start, attrs } };
+    });
+    await route.fulfill({ response, json: { ...chain, traces: [...chain.traces, ...more] } });
+  });
+  const { app, run, traces, more } = await listed(page, bff);
+
+  await expect(app).toContainText("60 traces");
+  await expect(run).toContainText("×60");
+  await expect(run).toHaveAttribute("aria-expanded", "false");
+  await expect(traces).toHaveCount(0);
+
+  await run.click();
+
+  await expect(traces).toHaveCount(50);
+  await expect(more).toHaveText("Show all 60");
+
+  await more.click();
+
+  await expect(traces).toHaveCount(60);
+  await expect(traces.last().locator(".dt-request-path")).toHaveText("/authors/60");
+  await expect(more).toHaveCount(0);
 });

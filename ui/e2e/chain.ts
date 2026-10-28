@@ -164,6 +164,7 @@ export async function chain(): Promise<string> {
     );
     // One route for the three: the BFF's step calls it once per book.
     (api["attrs"] as Doc)["http.route"] = "/authors/{id}";
+    (api["attrs"] as Doc)["http.path"] = `/authors/${n + 1}`;
     // Profiled too, its samples not timed: the service's own process, its own flame.
     // biome-ignore-start lint/style/useNamingConvention: the trace format.
     api["profile"] = {
@@ -185,4 +186,68 @@ export async function chain(): Promise<string> {
     .poll(async () => ((await (await fetch(`${CONSOLE}api/traces/${id("VIEW")}/chain`)).json()) as Doc)["traces"])
     .toHaveLength(5);
   return id("VIEW");
+}
+
+/** One call a fan-out's BFF makes: its route and actual path, when it starts (µs after the BFF's), what it calls. */
+export interface FanoutCall {
+  route: string;
+  path: string;
+  at: number;
+  /** Another app's trace this one's call served, in turn. */
+  calls?: { app: string; route: string; path: string } | undefined;
+}
+
+/**
+ * A BFF ("library-web") whose calls a service ("library-api") serves, one trace each, its clock 3 ms behind, sent in
+ * the reverse order: the list puts them in the order they started on the BFF's clock. `tag` keeps each test's traces
+ * apart (1…99). Returns the BFF's id.
+ */
+export async function fanout(tag: number, calls: readonly FanoutCall[]): Promise<{ bff: string }> {
+  const w3c = `5a${String(tag).padStart(30, "0")}`;
+  const fid = (n: number) => `01M4C4A1N6${String(tag * 10_000 + n).padStart(16, "0")}`;
+  const sid = (n: number) => `${String(tag).padStart(4, "0")}${String(n).padStart(12, "0")}`;
+  const start = Date.now() * 1000 - 7 * 3_600_000_000;
+  const behind = 3_000;
+  const end = Math.max(...calls.map((call) => call.at)) + 2_000;
+  const bff = trace("x", "POST /graphql", "library-web", start, end, null, [], []);
+  bff["id"] = fid(0);
+  (bff["attrs"] as Doc)["w3c.trace_id"] = w3c;
+  bff["spans"] = [
+    span("b0", null, "http", "POST /graphql", start, end),
+    ...calls.map((call, n) =>
+      span(`c${n}`, "b0", "http.client", `GET ${call.path}`, start + call.at, 900, { "w3c.span_id": sid(n + 1) }),
+    ),
+  ];
+  const served = calls.flatMap((call, n) => {
+    const at = start + call.at + 100 - behind;
+    const api = trace("x", `GET ${call.route}`, "library-api", at, 700, sid(n + 1), [], []);
+    api["id"] = fid(n + 1);
+    const attrs = api["attrs"] as Doc;
+    attrs["w3c.trace_id"] = w3c;
+    attrs["http.path"] = call.path;
+    api["spans"] = [
+      span(`a${n}`, null, "http", `GET ${call.route}`, at, 700),
+      span(`q${n}`, `a${n}`, "sql", "SELECT 1", at + 100, 200),
+      ...(call.calls
+        ? [span(`d${n}`, `a${n}`, "http.client", "GET", at + 400, 200, { "w3c.span_id": sid(5000 + n) })]
+        : []),
+    ];
+    if (!call.calls) return [api];
+    const deep = trace("x", `GET ${call.calls.route}`, call.calls.app, at + 450, 100, sid(5000 + n), [], []);
+    deep["id"] = fid(5000 + n);
+    (deep["attrs"] as Doc)["w3c.trace_id"] = w3c;
+    (deep["attrs"] as Doc)["http.path"] = call.calls.path;
+    deep["spans"] = [span(`e${n}`, null, "http", `GET ${call.calls.route}`, at + 450, 100)];
+    return [api, deep];
+  });
+  const response = await fetch(`${CONSOLE}api/ingest`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify([bff, ...served.reverse()]),
+  });
+  expect(response.status).toBe(202);
+  await expect
+    .poll(async () => ((await (await fetch(`${CONSOLE}api/traces/${fid(0)}/chain`)).json()) as Doc)["traces"])
+    .toHaveLength(1 + served.length);
+  return { bff: fid(0) };
 }
