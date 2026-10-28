@@ -2839,6 +2839,37 @@ div.dt-map-row[data-kind="code"] {
 .dt-map-bar[data-past] {
   border-radius: 999px 0 0 999px;
 }
+/* A call merged with the trace served for it: the call's whole time pale (the way there and back, a queue), the
+   server's part solid inside it. */
+.dt-map-bar[data-call] {
+  background: color-mix(in srgb, var(--dt-k) 32%, transparent);
+}
+/* Its path keeps its width (cut past half the name's); the served trace's name after the app takes what is left. */
+.dt-map-text.dt-map-hop-path {
+  flex: 0 0 auto;
+  max-width: 45%;
+}
+/* Narrow, the app's name gives way before the path and what the trace found. */
+.dt-map-hop + .sr-only + .dt-app-chip {
+  flex: 0 4 auto;
+  min-width: 3rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dt-map-hop {
+  flex: none;
+  color: var(--dt-text-3);
+  font-size: var(--dt-size-sm);
+}
+.dt-map-hop + .sr-only + .dt-app-chip {
+  margin-left: 0;
+}
+.dt-map-text.dt-map-hop-name {
+  color: var(--dt-text-2);
+}
+.dt-map-text.dt-map-hop-name:empty {
+  min-width: 0;
+}
 .dt-map-time[data-slow="warn"] {
   color: var(--dt-warn-strong);
   font-weight: 600;

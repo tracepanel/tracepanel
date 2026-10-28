@@ -139,6 +139,12 @@ async function chain(page: Page): Promise<{ click: string; bff: string }> {
   return { click: click.id, bff: String(bff["id"]) };
 }
 
+/** The row of a call merged with the trace it served, by its method and path. */
+function hop(scope: Page | ReturnType<typeof panel>, call: string) {
+  const text = call.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
+  return scope.getByRole("button", { name: new RegExp(`^http\\.client ${text} served by`, "i") });
+}
+
 function codeRows(scope: Page | ReturnType<typeof panel>) {
   return scope.locator('.dt-map-row[data-kind="code"]');
 }
@@ -148,8 +154,8 @@ test("a call's trace with a profile has the flame; its code rows say what ran fr
 }) => {
   const { click } = await chain(page);
   await page.goto(`/#/t/${click}?tab=tree`);
-  const bff = page.getByRole("button", { name: /^app POST \/graphql/ });
-  const service = page.getByRole("button", { name: /^app GET \/books/ });
+  const bff = hop(page, "GET /api/books");
+  const service = hop(page, "GET /books");
 
   await expect(bff).toHaveAttribute("aria-expanded", "true");
   await expect(bff.locator(".dt-map-flame[data-on]")).toBeVisible();
@@ -171,10 +177,7 @@ test("the flame on a call's trace opens that trace at its Profile tab, the way b
   const { click, bff } = await chain(page);
   await page.goto(`/#/t/${click}?tab=tree`);
 
-  await page
-    .getByRole("button", { name: /^app POST \/graphql/ })
-    .locator(".dt-map-flame")
-    .click();
+  await hop(page, "GET /api/books").locator(".dt-map-flame").click();
 
   await expect(page).toHaveURL(new RegExp(`#/t/${bff}\\?.*tab=profile`));
   await expect(page.getByRole("tab", { name: /^Profile/ })).toHaveAttribute("aria-selected", "true");
@@ -193,7 +196,7 @@ test("a code row of a call's trace, and its details' link, open that trace's pro
   await expect(page).toHaveURL(new RegExp(`#/t/${bff}\\?.*tab=profile`));
 
   await page.goto(`/#/t/${click}?tab=tree`);
-  await page.getByRole("button", { name: /^app POST \/graphql/ }).click();
+  await hop(page, "GET /api/books").click();
   const details = page.getByRole("complementary", { name: "Details" });
   await details.getByRole("button", { name: "Open its profile →" }).click();
 
@@ -211,10 +214,7 @@ test("in the panel, the flame opens the call's trace at its Profile tab in place
   await frame.getByRole("tab", { name: /^Call tree/ }).click();
   await expect(codeRows(frame).filter({ hasText: "resolve_books" })).toHaveCount(1);
 
-  await frame
-    .getByRole("button", { name: /^app POST \/graphql/ })
-    .locator(".dt-map-flame")
-    .click();
+  await hop(frame, "GET /api/books").locator(".dt-map-flame").click();
 
   await expect(frame.getByRole("tab", { name: /^Profile/ })).toHaveAttribute("aria-selected", "true");
   await expect(frame.getByText("Profile of the whole trace")).toBeVisible();

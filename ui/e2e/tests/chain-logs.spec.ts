@@ -68,10 +68,14 @@ test("a service's trace in the tree: under it, its own records; a record leads b
   await page.goto(`/#/t/${view}?tab=calls`);
   const step = page.getByRole("button", { name: /^function Book\.author/i }).first();
   await step.locator(".dt-map-caret[data-toggle]").click();
-  await page.getByRole("button", { name: /^app GET \/authors\/2\b/ }).click();
+  // The call and the service's trace it reached, one row: what is under it is the service's.
+  await page.getByRole("button", { name: /^http\.client GET \/authors\/2 served by shop/i }).click();
+  const details = page.getByRole("complementary", { name: "Details" });
+  await expect(details.getByRole("region", { name: "Call" })).toBeVisible();
+  await expect(details.getByRole("region", { name: "Served by shop" })).toBeVisible();
   await page.locator(".dt-under-this").getByRole("button", { name: "1 log" }).click();
 
-  await expect(page.locator(".dt-scope-chip")).toContainText("Under shop");
+  await expect(page.locator(".dt-scope-chip")).toContainText("Under GET /authors/2 → shop");
   await expect(records(page)).toHaveCount(1);
   await expect(records(page).first()).toContainText("no author 2");
 
