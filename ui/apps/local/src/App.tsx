@@ -1129,7 +1129,7 @@ export function App() {
         {embedded ? (
           <PanelApp route={route} />
         ) : (
-          <ScopeProvider>
+          <ScopeProvider source={source}>
             <Console route={route} source={source} />
           </ScopeProvider>
         )}

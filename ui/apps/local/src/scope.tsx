@@ -1,19 +1,31 @@
-import type { DataSource, ServiceApp } from "@tracepanel/ui";
-import { createContext, type ReactNode, useCallback, useContext, useMemo, useState } from "react";
+import type { Counts, DataSource, ServiceApp } from "@tracepanel/ui";
+import { createContext, type ReactNode, useCallback, useContext, useMemo, useRef, useState } from "react";
 import { useSearch } from "./data";
 
 /**
  * Which app the console shows, when several send to one agent (service.name): one choice for every page, kept in
  * this browser. "" is all of them. The searches stay as typed; the source adds `service:` to each.
+ *
+ * Another app chosen, the console switches once its counts are in (`pending` until then): the menu, the switcher and
+ * the pages change together, the menu with the new app's sections, never the last app's for a moment.
  */
 interface Scope {
   service: string;
   setService: (service: string) => void;
+  /** The app being switched to, while its counts load. */
+  pending: string | null;
+  /** The counts the switch loaded, for the app it switched to: the menu's until the console's own load answers. */
+  switched: { service: string; counts: Counts | undefined } | null;
 }
 
 const KEY = "tracepanel:service";
 
-const ScopeContext = createContext<Scope>({ service: "", setService: () => undefined });
+const ScopeContext = createContext<Scope>({
+  service: "",
+  setService: () => undefined,
+  pending: null,
+  switched: null,
+});
 
 function read(): string {
   try {
@@ -23,21 +35,41 @@ function read(): string {
   }
 }
 
-export function ScopeProvider({ children }: { children: ReactNode }) {
+function store(service: string): void {
+  try {
+    localStorage.setItem(KEY, service);
+  } catch {
+    // Blocked storage: the choice lasts until reload.
+  }
+}
+
+export function ScopeProvider({ source, children }: { source: DataSource; children: ReactNode }) {
   const [service, setServiceState] = useState(read);
-  const value = useMemo<Scope>(
-    () => ({
-      service,
-      setService: (next) => {
-        try {
-          localStorage.setItem(KEY, next);
-        } catch {
-          // Blocked storage: the choice lasts until reload.
-        }
+  const [pending, setPending] = useState<string | null>(null);
+  const [switched, setSwitched] = useState<Scope["switched"]>(null);
+  // Only the last choice switches: one made quickly after another doesn't end on the earlier one's answer.
+  const latest = useRef(0);
+  const setService = useCallback(
+    (next: string) => {
+      const id = ++latest.current;
+      setPending(next);
+      const commit = (counts: Counts | undefined) => {
+        if (id !== latest.current) return;
+        store(next);
+        setSwitched({ service: next, counts });
         setServiceState(next);
-      },
-    }),
-    [service],
+        setPending(null);
+      };
+      // Counts that failed: the console switches anyway, and its menu loads as on a first visit.
+      scopedSource(source, next)
+        .counts()
+        .then(commit, () => commit(undefined));
+    },
+    [source],
+  );
+  const value = useMemo<Scope>(
+    () => ({ service, setService, pending, switched }),
+    [service, setService, pending, switched],
   );
   return <ScopeContext.Provider value={value}>{children}</ScopeContext.Provider>;
 }
