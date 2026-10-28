@@ -1,8 +1,16 @@
 import { useMemo } from "react";
-import { CallLine, CallLines, CallTable, DetailsTitle, timeColumns } from "./CallTable";
+import {
+  CallLine,
+  CallLines,
+  CallTable,
+  DetailsTitle,
+  groupTitle,
+  type RowTime,
+  rowTime,
+  timeColumns,
+} from "./CallTable";
 import type { DataColumn } from "./DataTable";
-import { duration } from "./format";
-import { callTemplate, groupNoun } from "./lib/calls";
+import { callTemplate, groupNoun, onTheClock } from "./lib/calls";
 import { IssueChip, MethodBadge, SectionHeading, StatusBadge, Times } from "./primitives";
 import type { IssueKind, Span } from "./types";
 
@@ -20,7 +28,8 @@ export interface CallsListProps {
 interface Group {
   template: string;
   spans: Span[];
-  total: number;
+  /** Its calls' time: on the clock, added up; set once the calls are grouped. */
+  time: RowTime;
   issue: IssueKind | undefined;
   /** One of its calls failed: the row has the red edge a failed request's has in a list. */
   failed: boolean;
@@ -48,21 +57,22 @@ function Template({ template }: { template: string }) {
 /** A group with one more of its calls: its time, its issue, whether one failed. */
 function withCall(group: Group, span: Span, issue: IssueKind | undefined): Group {
   group.spans.push(span);
-  group.total += span.duration;
   group.issue ??= issue;
   group.failed ||= failed(span);
   return group;
 }
 
-/** The calls by what they are a repeat of (`GET api.example.com/users/{id}`), the heaviest first. */
+/** The calls by what they are a repeat of (`GET api.example.com/users/{id}`), the longest on the clock first. */
 function groupCalls(spans: readonly Span[], issueBySpan: ReadonlyMap<string, IssueKind>): Group[] {
   const groups = new Map<string, Group>();
   for (const span of spans) {
     const template = callTemplate(span);
-    const group = groups.get(template) ?? { template, spans: [], total: 0, issue: undefined, failed: false };
+    const group = groups.get(template) ?? { template, spans: [], time: rowTime([]), issue: undefined, failed: false };
     groups.set(template, withCall(group, span, issueBySpan.get(span.id)));
   }
-  return [...groups.values()].sort((a, b) => b.total - a.total);
+  // Each row's time on the clock, as the table shows it and sorts by.
+  for (const group of groups.values()) group.time = rowTime(group.spans);
+  return [...groups.values()].sort((a, b) => b.time.clock - a.time.clock);
 }
 
 /** One call's outcome: its HTTP status as every list shows one, else whether it failed. */
@@ -113,21 +123,23 @@ function GroupName({ group }: { group: Group }) {
   );
 }
 
-function columns(total: number): DataColumn<Group>[] {
+function columns(scope: number, noun: readonly [string, string]): DataColumn<Group>[] {
   return [
     { id: "call", label: "Call", required: true, cell: (group) => <GroupName group={group} /> },
-    ...timeColumns<Group>((group) => group.total, total),
+    ...timeColumns<Group>((group) => group.time, scope, noun),
   ];
+}
+
+/** What the system's calls are called, one and many: "HTTP call", "HTTP calls". */
+function nounOf(span: Span | undefined): [string, string] {
+  return [groupNoun(span, 1), groupNoun(span)];
 }
 
 /** An open group: what it is, as the call tree's details say it, then each of its calls. */
 function GroupDetails({ group, focus }: { group: Group; focus: ReadonlySet<string> | undefined }) {
   const [first] = group.spans;
   const count = group.spans.length;
-  const title =
-    count === 1
-      ? `1 ${groupNoun(first, 1)} · ${duration(group.total)}`
-      : `${count} similar ${groupNoun(first)} · ${duration(group.total)} total`;
+  const title = groupTitle(group.time, nounOf(first), groupNoun(first));
   return (
     <>
       <DetailsTitle>{title}</DetailsTitle>
@@ -143,12 +155,12 @@ function GroupDetails({ group, focus }: { group: Group; focus: ReadonlySet<strin
 /** One system's calls, grouped by what they repeat (an endpoint, a key pattern) like queries by statement. */
 export function CallsList({ spans, issueBySpan, focus, table = "trace-calls" }: CallsListProps) {
   const groups = useMemo(() => groupCalls(spans, issueBySpan), [spans, issueBySpan]);
-  const total = spans.reduce((sum, span) => sum + span.duration, 0);
+  const scope = useMemo(() => onTheClock(spans), [spans]);
   if (spans.length === 0) return <p className="dt-note">No calls of this kind in this request.</p>;
   return (
     <CallTable
       table={table}
-      columns={columns(total)}
+      columns={columns(scope, nounOf(spans[0]))}
       items={groups}
       focus={focus}
       row={{

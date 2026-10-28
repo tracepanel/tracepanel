@@ -48,7 +48,7 @@ function gridOf(handle: HTMLElement): DOMRect | undefined {
 }
 
 function paneWidth(handle: HTMLElement): number {
-  return handle.parentElement?.clientWidth ?? MIN_SIDE;
+  return handle.closest(".dt-map-body")?.querySelector(".dt-map-side")?.clientWidth ?? MIN_SIDE;
 }
 
 /** The width after an arrow key: from the dragged width, or the pane's default one. */
@@ -57,8 +57,8 @@ function nudged(handle: HTMLElement, width: number | undefined, step: number): n
 }
 
 /**
- * The pane's left edge, to drag (or move with the arrow keys) for a wider or narrower pane; a double click goes back
- * to the default width.
+ * The line between the tree and the pane, its whole height, to drag (or move with the arrow keys) for a wider or
+ * narrower pane; a double click goes back to the default width.
  */
 export function SideResize({
   width,

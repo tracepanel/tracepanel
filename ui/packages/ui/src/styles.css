@@ -784,6 +784,13 @@ tr[data-new] {
   grid-template-columns: minmax(0, 1fr) repeat(4, auto);
   column-gap: 0.875rem;
   container: dt-list / inline-size;
+  /* The narrow list's method and kind slot fits the words it mostly holds (GQL, GET, POST, VIEW, TASK, CLICK) and no
+     more: the names after them line up a small gap away, the path keeps the room. A longer word (DELETE) widens its
+     own badge. In dark the badge is a box, its padding on top; in light the word alone. */
+  --dt-lead: calc(5ch + 0.625rem);
+}
+:root[data-theme="light"] .dt-requests[data-compact] {
+  --dt-lead: 5ch;
 }
 .dt-requests[data-compact] > li {
   display: grid;
@@ -964,9 +971,8 @@ tr[data-new] {
   .dt-requests[data-compact] .dt-request-meta {
     column-gap: 0.375rem;
   }
-  /* A chain's rows: a step in is half a rem, a method's badge just its word (they are mostly one method). */
+  /* A chain's rows: a step in is half a rem; their badges keep the list's slot, so the names line up at each depth. */
   .dt-requests[data-compact] .dt-request-row[data-chain] {
-    --dt-lead: 0;
     padding-left: calc(0.25rem + var(--dt-chain-level, 1) * 0.5rem);
   }
   .dt-requests[data-compact] .dt-request-row[data-chain] .dt-request-main {
@@ -1794,22 +1800,29 @@ details[data-focused] > .dt-sql-group {
   border-top: 1px solid var(--dt-border);
   background: var(--dt-subtle);
 }
-/* Another project's trace: which project, beside its name. */
-/* The app that served a call, as the pill names the page's: its runtime's mark and its name. */
-/* The app that served a call: its runtime's mark and its name, the size and shape of the row's other chips. */
+/* An app, wherever one is named (AppChip): a round chip, its runtime's mark and its name, the size of a trace's
+   filters (which are the same chip as buttons, .dt-map-filter); compact in dense rows. */
 .dt-app-chip {
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 0.25rem;
-  margin-left: 0.375rem;
-  padding: 0 0.375rem;
-  border: 1px solid color-mix(in srgb, var(--dt-accent) 40%, transparent);
-  border-radius: 0.25rem;
-  color: var(--dt-accent);
-  font: 600 var(--dt-size-2xs) / 1rem var(--dt-mono);
+  gap: 0.375rem;
+  max-width: 100%;
+  height: 1.625rem;
+  padding: 0 0.625rem;
+  border: 1px solid var(--dt-border);
+  border-radius: 999px;
+  color: var(--dt-text-2);
+  font: 500 var(--dt-size-xs) / 1 var(--dt-font);
   white-space: nowrap;
-  vertical-align: 1px;
+  vertical-align: middle;
+}
+.dt-app-chip[data-size="compact"] {
+  gap: 0.25rem;
+  height: 1.125rem;
+  margin-left: 0.375rem;
+  padding: 0 0.4375rem;
+  font-size: var(--dt-size-2xs);
 }
 /* Its name, where the chip may give way (a merged call's row): cut with an ellipsis, whole on hover. */
 .dt-app-name {
@@ -1818,6 +1831,11 @@ details[data-focused] > .dt-sql-group {
   text-overflow: ellipsis;
 }
 .dt-app-chip .dt-icon {
+  flex: none;
+  width: 0.875rem;
+  height: 0.875rem;
+}
+.dt-app-chip[data-size="compact"] .dt-icon {
   width: 0.6875rem;
   height: 0.6875rem;
 }
@@ -2562,14 +2580,16 @@ div.dt-map-row[data-kind="code"] {
 .dt-map-tree {
   min-width: 0;
 }
-/* The line between the tree and the details runs the taller one's height: the tree's edge and the pane's
-   overlap, so a short pane beside a long tree (or the other way round) still has its divider. */
+/* The line between the tree and the details is the tree's edge: the tree stretches to the grid's height (the view's
+   at least, the pane's if taller), so the line runs down it however few the rows or short the pane. */
 .dt-map-body[data-side] .dt-map-tree {
   align-self: stretch;
   border-right: 1px solid var(--dt-border);
 }
-.dt-map-body[data-side] .dt-map-side {
-  margin-left: -1px;
+/* In the pane's cell, with the edge to drag over its left side. */
+.dt-map-body[data-side] > .dt-map-side {
+  grid-row: 1;
+  grid-column: 2;
 }
 .dt-map-side {
   position: sticky;
@@ -2578,27 +2598,28 @@ div.dt-map-row[data-kind="code"] {
   overflow-y: auto;
   overscroll-behavior: contain;
   border-top: 1px solid var(--dt-border);
-  border-left: 1px solid var(--dt-border);
   background: var(--dt-bg);
 }
-/* The pane's left edge: drag it, or focus it and use the arrow keys. The pane scrolls, so it clips what pokes out:
-   the hit area is the 8px inside its border. What shows is the border itself, a step stronger under the pointer or
-   in hand, never thicker. */
+/* The line to drag (or focus and move with the arrow keys): a hit area of 9px centred on it, the grid's whole height
+   in the pane's cell, over the tree's edge and the pane's. What shows is the line itself, a step stronger under the
+   pointer or in hand, never thicker. */
 .dt-map-resize {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 1;
-  width: 8px;
+  position: relative;
+  z-index: 2;
+  grid-row: 1;
+  grid-column: 2;
+  align-self: stretch;
+  justify-self: start;
+  width: 9px;
+  margin-left: -5px;
   cursor: col-resize;
   touch-action: none;
 }
 .dt-map-resize:focus-visible {
   outline: none;
 }
-.dt-map-side:has(> .dt-map-resize:is(:hover, :active, :focus-visible)) {
-  border-left-color: var(--dt-divider-active);
+.dt-map-body:has(> .dt-map-resize:is(:hover, :active, :focus-visible)) > .dt-map-tree {
+  border-right-color: var(--dt-divider-active);
 }
 .dt-map-side-close {
   position: absolute;

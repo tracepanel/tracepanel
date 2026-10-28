@@ -752,7 +752,7 @@ function clockNote(node: Extract<Node, { type: "task" }>): string | undefined {
 /** Which app served a call: its runtime's mark, and its project (another agent's) or its service (this one's). */
 function CallApp({ node }: { node: Extract<Node, { type: "task" }> }) {
   const name = appName(node);
-  return name ? <AppChip name={name} runtime={traceRuntime(node.whole?.attrs ?? {})} /> : null;
+  return name ? <AppChip name={name} runtime={traceRuntime(node.whole?.attrs ?? {})} compact /> : null;
 }
 
 function appName(node: Extract<Node, { type: "task" }>): string | undefined {
@@ -2062,7 +2062,7 @@ function ServedHeading({ served }: { served: ServedRun }) {
   const app = appName(served);
   return (
     <SectionHeading>
-      Served by{app ? <AppChip name={app} runtime={traceRuntime(served.whole?.attrs ?? {})} /> : " another app"}
+      Served by{app ? <AppChip name={app} runtime={traceRuntime(served.whole?.attrs ?? {})} compact /> : " another app"}
     </SectionHeading>
   );
 }
@@ -2220,7 +2220,7 @@ function useSidePane(map: RefObject<HTMLDivElement | null>): boolean {
 }
 
 /** Beside the tree, like the devtools' Network panel: the tree keeps its shape, the details stay in view. */
-function SidePane({ children, onClose, resize }: { children: ReactNode; onClose: () => void; resize: ReactNode }) {
+function SidePane({ children, onClose }: { children: ReactNode; onClose: () => void }) {
   const pane = useRef<HTMLElement>(null);
   useEffect(() => {
     const element = pane.current;
@@ -2232,7 +2232,6 @@ function SidePane({ children, onClose, resize }: { children: ReactNode; onClose:
   }, []);
   return (
     <aside className="dt-map-side" aria-label="Details" ref={pane}>
-      {resize}
       <button type="button" className="dt-map-side-close" aria-label="Close the details" onClick={onClose}>
         <CloseIcon />
       </button>
@@ -2241,16 +2240,20 @@ function SidePane({ children, onClose, resize }: { children: ReactNode; onClose:
   );
 }
 
-/** The tree, and its details beside it while it is wide enough. */
+/**
+ * The tree, and its details beside it while it is wide enough. The edge between them is the grid's own (SideResize),
+ * as tall as the tree and the pane together however far either reaches or scrolls: the whole line drags.
+ */
 function MapBody({ details, onClose, children }: { details: ReactNode; onClose: () => void; children: ReactNode }) {
   const { width, setWidth, style } = useSideWidth();
   return (
     <div className="dt-map-body" data-side={details ? "" : undefined} style={details ? style : undefined}>
       <div className="dt-map-tree">{children}</div>
       {details ? (
-        <SidePane onClose={onClose} resize={<SideResize width={width} onWidth={setWidth} />}>
-          {details}
-        </SidePane>
+        <>
+          <SideResize width={width} onWidth={setWidth} />
+          <SidePane onClose={onClose}>{details}</SidePane>
+        </>
       ) : null}
     </div>
   );

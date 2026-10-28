@@ -1,9 +1,21 @@
 import { cn } from "@tracepanel/ui/lib/utils";
 import { useMemo } from "react";
-import { CallLine, CallLines, CallTable, DetailsTitle, type Explain, QueryPlan, timeColumns } from "./CallTable";
+import {
+  CallLine,
+  CallLines,
+  CallTable,
+  DetailsTitle,
+  type Explain,
+  groupTitle,
+  QueryPlan,
+  type RowTime,
+  rowTime,
+  timeColumns,
+} from "./CallTable";
 import type { DataColumn } from "./DataTable";
 import { duration } from "./format";
 import { callFields, templatePlace } from "./lib/callFields";
+import { onTheClock } from "./lib/calls";
 import { queryFingerprint } from "./lib/fingerprint";
 import { linkProps, type TraceLinks } from "./links";
 import { type NameValue, NameValues, RowsLookContext } from "./NameValues";
@@ -43,9 +55,12 @@ interface Group {
   name: string;
   statement: string;
   spans: Span[];
-  total: number;
+  /** Its queries' time: on the clock, added up; set once the queries are grouped. */
+  time: RowTime;
   issue: IssueKind | undefined;
 }
+
+const QUERY: readonly [string, string] = ["query", "queries"];
 
 /** What groups a query with its repeats: its statement's fingerprint. */
 export function sqlKey(span: Span): string {
@@ -61,15 +76,16 @@ function groupSpans(spans: readonly Span[], issueBySpan: ReadonlyMap<string, Iss
       name: span.name,
       statement: String(span.attrs["db.statement"] ?? span.name),
       spans: [],
-      total: 0,
+      time: rowTime([]),
       issue: undefined,
     };
     group.spans.push(span);
-    group.total += span.duration;
     group.issue ??= issueBySpan.get(span.id);
     groups.set(key, group);
   }
-  return [...groups.values()].sort((a, b) => b.total - a.total);
+  // Each row's time on the clock, as the table shows it and sorts by.
+  for (const group of groups.values()) group.time = rowTime(group.spans);
+  return [...groups.values()].sort((a, b) => b.time.clock - a.time.clock);
 }
 
 /**
@@ -206,7 +222,7 @@ export const SQL_MODES: readonly Segment<SqlMode>[] = [
   { id: "timeline", label: "In order" },
 ];
 
-function groupColumns(total: number): DataColumn<Group>[] {
+function groupColumns(scope: number): DataColumn<Group>[] {
   return [
     {
       id: "query",
@@ -222,11 +238,11 @@ function groupColumns(total: number): DataColumn<Group>[] {
         />
       ),
     },
-    ...timeColumns<Group>((group) => group.total, total),
+    ...timeColumns<Group>((group) => group.time, scope, QUERY),
   ];
 }
 
-function orderColumns(start: number, total: number, issueBySpan: ReadonlyMap<string, IssueKind>): DataColumn<Placed>[] {
+function orderColumns(start: number, scope: number, issueBySpan: ReadonlyMap<string, IssueKind>): DataColumn<Placed>[] {
   return [
     {
       id: "index",
@@ -260,7 +276,7 @@ function orderColumns(start: number, total: number, issueBySpan: ReadonlyMap<str
       className: "text-muted-foreground",
       cell: ({ span }) => `+${duration(Math.max(span.start - start, 0))}`,
     },
-    ...timeColumns<Placed>((item) => item.span.duration, total),
+    ...timeColumns<Placed>((item) => rowTime([item.span]), scope, QUERY),
   ];
 }
 
@@ -273,7 +289,7 @@ interface Placed {
 export function SqlList({ spans, issueBySpan, focus, onExplain, links, mode }: SqlListProps) {
   const groups = useMemo(() => groupSpans(spans, issueBySpan), [spans, issueBySpan]);
   const placed = useMemo(() => spans.map((span, index) => ({ span, index })), [spans]);
-  const total = spans.reduce((sum, span) => sum + span.duration, 0);
+  const scope = useMemo(() => onTheClock(spans), [spans]);
   const start = Math.min(...spans.map((span) => span.start));
 
   if (spans.length === 0) return <p className="dt-note">No database queries in this request.</p>;
@@ -283,7 +299,7 @@ export function SqlList({ spans, issueBySpan, focus, onExplain, links, mode }: S
       {mode === "grouped" ? (
         <CallTable
           table="trace-sql"
-          columns={groupColumns(total)}
+          columns={groupColumns(scope)}
           items={groups}
           focus={focus}
           row={{
@@ -291,7 +307,7 @@ export function SqlList({ spans, issueBySpan, focus, onExplain, links, mode }: S
             focused: (group) => (focus ? group.spans.some((span) => focus.has(span.id)) : false),
             details: (group) => (
               <QueryDetails
-                title={groupTitle(group)}
+                title={groupTitle(group.time, QUERY, "queries")}
                 spans={group.spans}
                 focus={focus}
                 onExplain={onExplain}
@@ -303,7 +319,7 @@ export function SqlList({ spans, issueBySpan, focus, onExplain, links, mode }: S
       ) : (
         <CallTable
           table="trace-sql-order"
-          columns={orderColumns(start, total, issueBySpan)}
+          columns={orderColumns(start, scope, issueBySpan)}
           items={placed}
           focus={focus}
           openFocused={false}
@@ -324,10 +340,4 @@ export function SqlList({ spans, issueBySpan, focus, onExplain, links, mode }: S
       )}
     </>
   );
-}
-
-/** An open group's first line, as the call tree's: "13 similar queries · 40 ms total". */
-function groupTitle(group: Group): string {
-  if (group.spans.length === 1) return `1 query · ${duration(group.total)}`;
-  return `${group.spans.length} similar queries · ${duration(group.total)} total`;
 }

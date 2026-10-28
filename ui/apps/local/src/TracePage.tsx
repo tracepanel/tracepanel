@@ -104,7 +104,7 @@ export function TracePage({
   return (
     <main className="min-h-0 min-w-0 overflow-y-auto bg-background" data-scroll="">
       {/* The trace's own header is inset 16px: the page pads 16px less so the crumbs line up with it. */}
-      <div className={`w-full ${PADDING[variant]}`}>
+      <div className={`dt-trace-page w-full ${PADDING[variant]}`}>
         {/* A stored trace never changes: no refresh control here. */}
         <div className="px-4">
           <CrumbBar

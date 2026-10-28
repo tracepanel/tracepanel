@@ -8,7 +8,9 @@ import { type DataColumn, DataTable } from "./DataTable";
 import { ExplainView } from "./ExplainView";
 import { duration } from "./format";
 import { focusMark, useScrollToFocus } from "./hooks/useScrollToFocus";
+import { onTheClock } from "./lib/calls";
 import { percent } from "./lib/percent";
+import { plural } from "./lib/plural";
 import { cn } from "./lib/utils";
 import type { ExplainPlan, Span } from "./types";
 
@@ -103,10 +105,55 @@ export function CallTable<T>({
   );
 }
 
-/** The columns every such table ends with: how long, and its share of the system's time in the request. */
-export function timeColumns<T>(time: (item: T) => number, total: number): DataColumn<T>[] {
+/**
+ * A row's time, as every time of calls is said since the header's: on the clock (calls that ran side by side counted
+ * once), what they add up to, how many.
+ */
+export interface RowTime {
+  clock: number;
+  total: number;
+  count: number;
+}
+
+/** A row's calls' time: on the clock, added up, how many. */
+export function rowTime(spans: readonly Pick<Span, "start" | "duration">[]): RowTime {
+  return {
+    clock: onTheClock(spans),
+    total: spans.reduce((sum, span) => sum + span.duration, 0),
+    count: spans.length,
+  };
+}
+
+/** What a row's time says on hover: what its calls add up to, when there are several. */
+function timeTitle(time: RowTime, noun: readonly [string, string]): string | undefined {
+  if (time.count < 2) return undefined;
+  return `${duration(time.total)} total, ${plural(time.count, ...noun)}`;
+}
+
+/**
+ * The columns every such table ends with. Time: the row's time on the clock, as the header says the scope's (calls
+ * side by side once), what they add up to on hover. Share: that time's share of the scope's time on the clock
+ * (`scope`), the header's number; rows that ran side by side each count their own, so the shares can add up to more
+ * than 100%, as two people's hours in one meeting do.
+ */
+export function timeColumns<T>(
+  time: (item: T) => RowTime,
+  scope: number,
+  noun: readonly [string, string] = ["call", "calls"],
+): DataColumn<T>[] {
   return [
-    { id: "time", label: "Time", width: 6.5, fixed: true, num: true, cell: (item) => duration(time(item)) },
+    {
+      id: "time",
+      label: "Time",
+      width: 6.5,
+      fixed: true,
+      num: true,
+      cell: (item) => (
+        <span className="dt-row-time" title={timeTitle(time(item), noun)}>
+          {duration(time(item).clock)}
+        </span>
+      ),
+    },
     {
       id: "share",
       label: "Share",
@@ -114,9 +161,21 @@ export function timeColumns<T>(time: (item: T) => number, total: number): DataCo
       num: true,
       drop: 1,
       className: "text-muted-foreground",
-      cell: (item) => percent(time(item), total),
+      cell: (item) => (
+        <span title={`Of the ${duration(scope)} on the clock; rows that ran side by side each count theirs`}>
+          {percent(time(item).clock, scope)}
+        </span>
+      ),
     },
   ];
+}
+
+/** An open group's first line, as the call tree's: "36 similar calls · 490 ms on the clock · 12.7 s total". */
+export function groupTitle(time: RowTime, noun: readonly [string, string], similar: string): string {
+  if (time.count === 1) return `1 ${noun[0]} · ${duration(time.total)}`;
+  const head = `${time.count} similar ${similar}`;
+  if (time.clock >= time.total) return `${head} · ${duration(time.total)} total`;
+  return `${head} · ${duration(time.clock)} on the clock · ${duration(time.total)} total`;
 }
 
 /** What an open row's details start with, as the call tree's do: what it is, how many, how long. */

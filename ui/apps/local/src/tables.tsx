@@ -1,5 +1,6 @@
 import {
   AliasChip,
+  AppChip,
   ago,
   type CallRow,
   CopyButton,
@@ -631,7 +632,7 @@ const LOG_COLUMNS: LogColumn<LogRow>[] = [
     width: 7.5,
     hidden: true,
     drop: 3,
-    cell: (log) => <span className="text-muted-foreground">{log.service}</span>,
+    cell: (log) => <AppChip name={log.service} compact />,
   },
   {
     id: "trace",

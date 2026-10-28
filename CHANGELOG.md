@@ -163,6 +163,16 @@
   sidebar's) stay a 1px neutral line while hovered or dragged, a step
   stronger than the border, instead of a thick violet one. The area to
   grab is wider.
+- An app is named by one chip everywhere: a round chip with its mark and
+  its name in the UI's font, the same as the app filters over a trace's
+  tabs (which are that chip as a button). The call tree, the lists, the
+  Profile tab's table and headings, the Logs tab's and the Logs page's
+  App column and an issue's apps had a square monospace badge. In dense
+  rows the chip is smaller, never another look.
+- The panel's list gives a method or a kind (`GET`, `GQL`, `VIEW`) a slot
+  that fits five letters, not seven: the name or path follows a small
+  gap after it, lined up at each depth, and keeps the room. The rows
+  under a request line up their names too at the default width.
 - The panel's Console button is the solid primary violet in both themes,
   as tall as the icons beside it: its white text was on a light lavender
   in the dark theme and read as blurred. Primary buttons darken on hover
@@ -170,6 +180,18 @@
 
 ### Fixed
 
+- The DB and HTTP calls tabs' Time column says a row's time on the
+  clock, as the header over it does: `GET /authors/{id} ×36` that ran
+  side by side reads 490 ms, not 12.7 s under a header of 673 ms. What
+  the calls add up to is in its tooltip (`12.7 s total, 36 calls`), and
+  the rows go by the time shown. Share is that time's share of the
+  header's time on the clock. Rows that ran side by side each count
+  theirs, so the shares can add up to more than 100%.
+- The line between the call tree and its details runs the whole height
+  of the tree and drags anywhere along it: it could be grabbed only as
+  far down as the details reached, and on the console's trace page it
+  stopped short of the view's bottom by the page's padding. The arrow
+  keys move it when focused, and its width is kept as before.
 - A merged call's row in the call tree (`GET /authors/1 → library-api`)
   no longer shows an empty chip or a query count's icon without its
   number when the row is short of room: the app's name is cut first (a
