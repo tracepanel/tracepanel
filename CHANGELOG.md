@@ -11,6 +11,13 @@
   `populate()` for Mongoose. The JS SDK names the ORM in `db.client`, as the
   Python SDK names Django and SQLAlchemy. Other queries keep the general
   hint.
+- An N+1 from a Java or Kotlin app that reads through Hibernate (JPA,
+  Spring Data JPA) or Exposed gets that ORM's fix: `join fetch` or
+  `@EntityGraph` for an entity loaded by its key, `@BatchSize` or
+  `hibernate.default_batch_fetch_size` for a collection, `.with()` or
+  `load()` (or a join) for Exposed. The Java SDK names the ORM in
+  `db.client`. A by-key lookup written without spaces around `=`, as
+  Hibernate writes it, now counts as one.
 
 ## 0.5.1 (2026-10-26)
 

@@ -32,10 +32,11 @@ pub(crate) const PLACEHOLDER: &str =
     r"(?:%s|%\([A-Za-z0-9_]+\)s|\?[0-9]*|\$[0-9]+|@[A-Za-z0-9_]+|:[A-Za-z0-9_]+)";
 /// A name, bare or quoted: "standard SQL", `MySQL`, [SQL Server].
 pub(crate) const NAME: &str = r#"(?:[`"\[]?\w+[`"\]]?)"#;
-// A lookup by primary key: `WHERE table.id = ?`, or `WHERE id = ?` (a hand-written query).
+// A lookup by primary key: `WHERE table.id = ?`, or `WHERE id = ?` (a hand-written query), or Hibernate's
+// `where a1_0.id=?`, written without the spaces.
 static BY_PK: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(&format!(
-        r#"(?i)WHERE (?:{NAME}\.)?[`"\[]?id[`"\]]? = {PLACEHOLDER}"#
+        r#"(?i)WHERE (?:{NAME}\.)?[`"\[]?id[`"\]]? ?= ?{PLACEHOLDER}"#
     ))
     .unwrap()
 });
@@ -66,6 +67,14 @@ const SEQUELIZE_INCLUDE: &str = "Load the associated rows with the parent rows: 
     the finder that produced these rows.";
 const KNEX_JOIN: &str = "Load the related rows with the parent rows: `join()` the table in the query that produced \
     these rows, or read them in one query with `whereIn()` on the collected keys.";
+// The JVM's ORMs the Java SDK names in `db.client`, from the frames that made the query.
+const HIBERNATE_JOIN_FETCH: &str = "Load the related entity in the same query: `join fetch` this association in the \
+    query that produced these rows, or name it in `@EntityGraph(attributePaths = ...)` on the Spring Data repository \
+    method.";
+const HIBERNATE_BATCH_SIZE: &str = "Load the related collections in a few batched queries: put `@BatchSize` on this \
+    association or set `hibernate.default_batch_fetch_size` (or `join fetch` it in the query that produced these rows).";
+const EXPOSED_WITH: &str = "Load the referenced entities with the parent rows: add `.with()` for this reference to the \
+    DAO query that produced these rows (`load()` for one entity), or join the table in a DSL query.";
 const N_PLUS_ONE: &str = "Load the related rows with the parent rows (a join, or one batched query) instead of one query per row.";
 const DUPLICATES: &str = "Run the query once and reuse the result, or cache it for the request.";
 const IN_GRAPHQL: &str =
@@ -122,6 +131,9 @@ fn n_plus_one_hint(client: &str, by_pk: bool, in_template: bool) -> &'static str
         ("typeorm", _) => TYPEORM_RELATIONS,
         ("sequelize", _) => SEQUELIZE_INCLUDE,
         ("knex", _) => KNEX_JOIN,
+        ("hibernate", true) => HIBERNATE_JOIN_FETCH,
+        ("hibernate", false) => HIBERNATE_BATCH_SIZE,
+        ("exposed", _) => EXPOSED_WITH,
         _ if in_template => N_PLUS_ONE_IN_TEMPLATE,
         _ => N_PLUS_ONE,
     }
@@ -1047,7 +1059,9 @@ mod tests {
         assert!(BY_PK.is_match("SELECT name FROM authors WHERE id = ?"));
         assert!(BY_PK.is_match(r#"SELECT * FROM "auth_user" WHERE "auth_user"."id" = %s"#));
         assert!(BY_PK.is_match("SELECT * FROM users WHERE id = $1"));
+        assert!(BY_PK.is_match("select a1_0.id,a1_0.name from authors a1_0 where a1_0.id=?"));
         assert!(!BY_PK.is_match("SELECT * FROM users WHERE author_id = ?"));
+        assert!(!BY_PK.is_match("select b1_0.id from books b1_0 where b1_0.author_id=?"));
     }
 
     #[test]
@@ -1349,6 +1363,58 @@ mod tests {
         );
         assert_eq!(
             hinted("kysely"),
+            [
+                vec![(culprit.clone(), Some(N_PLUS_ONE.to_owned()))],
+                vec![(culprit, Some(N_PLUS_ONE.to_owned()))],
+            ]
+        );
+    }
+
+    #[test]
+    fn an_n_plus_one_through_a_jvm_orm_gets_its_hint() {
+        // What a Java or Kotlin app's code reads through its ORM, a query per row: the Java SDK names the ORM in
+        // db.client. Hibernate writes its SQL without spaces around `=`; Exposed with them.
+        let author = "select a1_0.id,a1_0.name from authors a1_0 where a1_0.id=?";
+        let books =
+            "select b1_0.author_id,b1_0.id,b1_0.title from books b1_0 where b1_0.author_id=?";
+        let exposed_author =
+            "SELECT AUTHORS.ID, AUTHORS.\"NAME\" FROM AUTHORS WHERE AUTHORS.ID = ?";
+        let exposed_books =
+            "SELECT BOOKS.ID, BOOKS.TITLE, BOOKS.AUTHOR FROM BOOKS WHERE BOOKS.AUTHOR = ?";
+        let by_orm = |statement: &str, client: &str| {
+            (0..3)
+                .map(|n| {
+                    let attrs = serde_json::json!({
+                        "db.statement": statement, "db.fingerprint": statement, "db.params_hash": format!("p{n}"),
+                        "db.client": client, "code.origin": "src/main/java/com/shop/BookService.java:42 in list",
+                    });
+                    ("sql", "SELECT", attrs, 1000)
+                })
+                .collect::<Vec<_>>()
+        };
+        let culprit = Some("src/main/java/com/shop/BookService.java:42 in list".to_owned());
+        let hinted = |statements: [&str; 2], client: &str| {
+            statements.map(|statement| hints(&by_orm(statement, client)))
+        };
+
+        assert_eq!(
+            hinted([author, books], "hibernate"),
+            [
+                vec![(culprit.clone(), Some(HIBERNATE_JOIN_FETCH.to_owned()))],
+                vec![(culprit.clone(), Some(HIBERNATE_BATCH_SIZE.to_owned()))],
+            ]
+        );
+        assert_eq!(
+            hinted([exposed_author, exposed_books], "exposed"),
+            [
+                vec![(culprit.clone(), Some(EXPOSED_WITH.to_owned()))],
+                vec![(culprit.clone(), Some(EXPOSED_WITH.to_owned()))],
+            ]
+        );
+
+        // JDBC alone (jOOQ, JdbcTemplate, MyBatis, plain JDBC): the generic hint.
+        assert_eq!(
+            hinted([author, books], "jdbc"),
             [
                 vec![(culprit.clone(), Some(N_PLUS_ONE.to_owned()))],
                 vec![(culprit, Some(N_PLUS_ONE.to_owned()))],
