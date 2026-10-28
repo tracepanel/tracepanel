@@ -66,18 +66,21 @@
   (`SELECT author` ×36 in 36 traces). Over each list: how many, their time
   and their time on the clock (overlapping calls once), the slowest, a chip
   per app, database, host and table, and the N+1 and repeats among them,
-  each a filter. "Under this" in a call tree row's details counts its
-  queries, HTTP calls, records and issues, each opening its tab on the row
-  with the same chip as the Logs tab's. EXPLAIN works on another app's
-  query of the chain too.
+  each a filter. A call tree row's details, under their title, have a
+  chip for each kind of thing inside the row ("Inside this span": `1
+  issue`, `5 queries`, `3 HTTP calls`, `2 logs`, `Profile`), with its
+  tab's icon, in the tabs' order, the issues in their amber. Each opens
+  its tab on the row with the same chip as the Logs tab's. A row with
+  nothing under it has none. EXPLAIN works on another app's query of the
+  chain too.
 - A trace's Profile tab over its chain of calls: each profiled app's own
   profile, never one flame across apps (an app's several traces merged, the
   service's 36 calls as one), one under another in the order the apps ran,
   with a chip per app to show one alone. Over them, what each app's adds up
-  to: its time, of it waiting, the function that ran most. "Under this"
-  counts the profiles under a row: a span's opens its own trace's profile at
-  the span's time (where the samples are timed) and the profiles of the
-  traces its calls reached, per app.
+  to: its time, of it waiting, the function that ran most. A row's
+  "Inside this span" chips count its profiles: a span's opens its own
+  trace's profile at the span's time (where the samples are timed) and the
+  profiles of the traces its calls reached, per app.
 - An N+1 across apps: when each of one span's calls to another app (a
   resolver's 36 `GET /authors/{id}`) runs the same query in that app, the
   chain has one issue on the caller's calls, naming the field and the query,
