@@ -608,6 +608,8 @@ export interface AppScope {
   /** "" is every app. */
   service: string;
   onService: (service: string) => void;
+  /** The app being switched to, while its counts load: the switcher says it is busy, the console stays as it is. */
+  pending?: string | null | undefined;
 }
 
 /** Which app the console shows: every one, or one of them. A rail shows the chosen app's mark. */
@@ -618,13 +620,21 @@ function AppSwitcher({ scope, rail }: { scope: AppScope; rail: boolean }) {
     return kind ? <RuntimeIcon kind={kind} /> : <LayersIcon />;
   };
   const label = chosen ? chosen.service : "All apps";
+  const busy = scope.pending != null;
+  // Switching: dimmed only if it takes a while (the delay), so a quick switch shows nothing in between.
+  const switching = cn(
+    "transition-opacity motion-reduce:transition-none",
+    busy && "cursor-progress opacity-60 delay-300",
+  );
   const trigger = rail ? (
     <button
       type="button"
       aria-label={`App: ${label}`}
+      aria-busy={busy}
       className={cn(
         "grid size-11 place-items-center rounded-lg border text-text-2 hover:border-[var(--dt-border-strong)] hover:text-foreground [&_svg]:size-[1.125rem]",
         chosen && "border-brand/40 bg-brand-soft text-brand",
+        switching,
       )}
     >
       {mark(chosen)}
@@ -632,9 +642,11 @@ function AppSwitcher({ scope, rail }: { scope: AppScope; rail: boolean }) {
   ) : (
     <button
       type="button"
+      aria-busy={busy}
       className={cn(
         "flex items-center gap-2.5 rounded-lg border px-3 py-2 text-left text-md font-medium transition-colors hover:border-[var(--dt-border-strong)] [&_svg]:size-4",
         chosen && "border-brand/40 bg-brand-soft",
+        switching,
       )}
     >
       <span className={cn("text-text-2", chosen && "text-brand")}>{mark(chosen)}</span>
@@ -653,7 +665,7 @@ function AppSwitcher({ scope, rail }: { scope: AppScope; rail: boolean }) {
       )}
       <DropdownMenuContent align="start" side={rail ? "right" : "bottom"} className="w-60">
         <DropdownMenuLabel>Show</DropdownMenuLabel>
-        <DropdownMenuRadioGroup value={scope.service} onValueChange={scope.onService}>
+        <DropdownMenuRadioGroup value={scope.pending ?? scope.service} onValueChange={scope.onService}>
           <DropdownMenuRadioItem value="" className="gap-2">
             <LayersIcon className="text-muted-foreground" />
             All apps

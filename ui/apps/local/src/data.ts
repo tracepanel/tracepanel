@@ -179,16 +179,6 @@ function sameRows<T>(a: readonly T[] | undefined, b: readonly T[]): boolean {
   return a !== undefined && a.length === b.length && a.every((item, index) => item === b[index]);
 }
 
-/**
- * The last value there was: while a new source loads (another app chosen), what the page showed stays rather than
- * blinking out and back.
- */
-export function useLast<T>(value: T | undefined): T | undefined {
-  const [last, setLast] = useState(value);
-  if (value !== undefined && value !== last) setLast(value);
-  return value ?? last;
-}
-
 /** True from the first time `now` is, and from then on: a page shown once stays shown while it reloads. */
 export function useLatch(now: boolean): boolean {
   const [latched, setLatched] = useState(now);

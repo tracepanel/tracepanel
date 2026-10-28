@@ -6,7 +6,7 @@ import { type CSSProperties, type ReactNode, useCallback, useEffect, useMemo, us
 import { AppPage } from "./AppPage";
 import { ClearDialog } from "./ClearDialog";
 import { DataPage } from "./DataPage";
-import { useLast, useSearch } from "./data";
+import { useSearch } from "./data";
 import { EntryPage } from "./EntryPage";
 import { FirstPaint } from "./firstPaint";
 import { GroupPage } from "./GroupPage";
@@ -88,33 +88,32 @@ function DetailPage({ route, source, everything }: { route: DetailRoute; source:
 }
 
 /**
- * What the menu and the filters are made of: the counts per section and the values stored. Kept while another app's
- * load, so the menu and the filters don't blink out and back; undefined until the first answer.
+ * What the menu and the filters are made of: the counts per section and the values stored, of the app shown; undefined
+ * until they load. Another app's are never shown for this one's: right after a switch the menu has the counts the
+ * switch loaded (scope.tsx), and the filters their values once they come.
  */
-function useCatalog(source: DataSource) {
-  const counts = useLast(
-    useSearch(
-      useCallback((): Promise<Counts | undefined> => source.counts(), [source]),
-      "",
-    ).data,
-  );
-  const known = useLast(
-    useSearch(
-      useCallback(() => source.knownValues(), [source]),
-      "",
-      3,
-    ).data,
-  );
+function useCatalog(source: DataSource, service: string) {
+  const { switched } = useScope();
+  const loaded = useSearch(
+    useCallback((): Promise<Counts | undefined> => source.counts(), [source]),
+    "",
+  ).data;
+  const counts = loaded ?? (switched?.service === service ? switched.counts : undefined);
+  const known = useSearch(
+    useCallback(() => source.knownValues(), [source]),
+    "",
+    3,
+  ).data;
   return { counts, known };
 }
 
 export function Console({ route, source: everything }: { route: Route; source: DataSource }) {
   // Several apps sending to one agent: the one chosen narrows every page (scope.tsx).
-  const { service, setService } = useScope();
+  const { service, setService, pending } = useScope();
   const source = useMemo(() => scopedSource(everything, service), [everything, service]);
   const apps = useApps(everything);
   // The switcher: only where there is a choice.
-  const scope = apps && apps.length > 1 ? { apps, service, onService: setService } : undefined;
+  const scope = apps && apps.length > 1 ? { apps, service, onService: setService, pending } : undefined;
   // The chosen app gone (the store cleared, another project): back to all of them.
   useEffect(() => {
     if (service && apps && !apps.some((app) => app.service === service)) setService("");
@@ -132,7 +131,7 @@ export function Console({ route, source: everything }: { route: Route; source: D
   useEffect(() => {
     source.searchSpec().then(setSpec, () => undefined);
   }, [source]);
-  const { counts, known } = useCatalog(source);
+  const { counts, known } = useCatalog(source, service);
 
   // The console opens on HTTP: where every Django project's work comes in.
   useEffect(() => {
@@ -166,12 +165,16 @@ export function Console({ route, source: everything }: { route: Route; source: D
       />
     );
   else if (isDetail(route)) {
-    page = <DetailPage route={route} source={source} everything={everything} />;
+    // An issue's or a group's page is of the app shown; an app's own is the same whichever is shown.
+    page = (
+      <DetailPage key={route.name === "app" ? "app" : service} route={route} source={source} everything={everything} />
+    );
   } else if (route.name !== "home" && isEntry(route.name)) {
     page = (
       <EntryPage
-        // The page stays across All … / By …: the overview keeps its charts, only the list below changes.
-        key={route.name}
+        // The page stays across All … / By …: the overview keeps its charts, only the list below changes. Another
+        // app's is another page: it loads as on a first visit, never with the last app's rows on screen meanwhile.
+        key={`${service} ${route.name}`}
         section={route.name}
         q={route.q}
         view={route.view ?? "calls"}
@@ -184,7 +187,7 @@ export function Console({ route, source: everything }: { route: Route; source: D
   } else if (route.name !== "home") {
     page = (
       <DataPage
-        key={route.name}
+        key={`${service} ${route.name}`}
         section={route.name}
         q={route.q}
         open={route.open}
