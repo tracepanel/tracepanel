@@ -245,6 +245,14 @@ function shifted(trace: Trace, by: number): Trace {
   };
 }
 
+/** A call's trace, its summary and its whole trace when it came whole, moved onto its call's clock. */
+function onClock(served: TraceSummary, stored: Trace | undefined, call: Span | undefined) {
+  if (!call) return { run: served, whole: stored, clock: undefined };
+  const shift = Math.round(shiftInto(served, call));
+  const run = { ...served, start: served.start + shift };
+  return { run, whole: stored && shifted(stored, shift), clock: { call, shift } };
+}
+
 /**
  * A call's trace as a row of this tree, with that trace's own rows under it when it came whole, on this trace's
  * clock (see Clock).
@@ -257,14 +265,10 @@ function callNode(
   call: Span | undefined,
   remote?: Remote,
 ): Node {
-  const shift = call ? Math.round(shiftInto(served, call)) : 0;
-  const run = shift === 0 ? served : { ...served, start: served.start + shift };
-  const stored = related.call_traces?.[served.id];
-  const whole = stored && shifted(stored, shift);
+  const { run, whole, clock } = onClock(served, related.call_traces?.[served.id], call);
   const level = chain.level + 1;
   const children = whole && !chain.seen.has(whole.id) ? servedRows(whole, chain, Boolean(remote)) : [];
   const opened = level === 1 || callsOf(related) <= CHAIN_OPEN_MAX;
-  const clock = call ? { call, shift } : undefined;
   return { type: "task", key, run, kind: "call", remote, whole, children, level, opened, clock };
 }
 
