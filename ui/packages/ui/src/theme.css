@@ -17,6 +17,8 @@
   --popover-foreground: var(--dt-text);
   --primary: var(--dt-accent-strong);
   --primary-foreground: #ffffff;
+  /* Hovered: a step darker, so white on it keeps AA (primary/90 over white went lighter, 4.2:1). */
+  --primary-hover: color-mix(in oklab, var(--dt-accent-strong) 88%, black);
   --secondary: var(--dt-faint);
   --secondary-foreground: var(--dt-text);
   --muted: var(--dt-faint);
@@ -53,6 +55,7 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-primary-hover: var(--primary-hover);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);

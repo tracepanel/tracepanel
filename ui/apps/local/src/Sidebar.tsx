@@ -808,15 +808,18 @@ export function useSidebarWidth(): { width: number; resize: (width: number) => v
 export function SidebarHandle({ width, resize }: { width: number; resize: (width: number) => void }) {
   const start = (event: React.PointerEvent<HTMLDivElement>) => {
     event.preventDefault();
+    const handle = event.currentTarget;
     const from = event.clientX;
     const initial = width;
     const move = (moved: PointerEvent) => resize(initial + moved.clientX - from);
     const stop = () => {
+      delete handle.dataset["dragging"];
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", stop);
       document.body.style.removeProperty("cursor");
       document.body.style.removeProperty("user-select");
     };
+    handle.dataset["dragging"] = "";
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
     window.addEventListener("pointermove", move);
@@ -833,7 +836,8 @@ export function SidebarHandle({ width, resize }: { width: number; resize: (width
       aria-valuenow={width}
       tabIndex={0}
       title="Drag to resize · double-click to reset"
-      className="absolute top-0 -right-1 z-10 h-full w-2 cursor-col-resize outline-none after:absolute after:inset-y-0 after:left-[0.1875rem] after:w-0.5 after:bg-transparent after:transition-colors hover:after:bg-brand/50 focus-visible:after:bg-brand"
+      // 10px to grab, centred on the sidebar's 1px border; what shows is that border, a step stronger in hand.
+      className="absolute top-0 -right-[5px] z-10 h-full w-2.5 cursor-col-resize outline-none after:absolute after:inset-y-0 after:left-[4px] after:w-px after:bg-transparent after:transition-colors hover:after:bg-(--dt-divider-active) focus-visible:after:bg-(--dt-divider-active) data-dragging:after:bg-(--dt-divider-active)"
       onPointerDown={start}
       onDoubleClick={() => resize(DEFAULT_WIDTH())}
       onKeyDown={(event) => {

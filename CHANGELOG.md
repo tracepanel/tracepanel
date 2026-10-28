@@ -107,6 +107,16 @@
   served trace's own rows (its handler, its SQL) right under it, and its
   details have the call, then what served it. A call no trace served (an
   external API) is a row as before.
+- The console and the panel are about 5% smaller (type, spacing, rows,
+  icons), the pill on the page with them.
+- Resize edges (the panel's, the request list's, the details pane's, the
+  sidebar's) stay a 1px neutral line while hovered or dragged, a step
+  stronger than the border, instead of a thick violet one. The area to
+  grab is wider.
+- The panel's Console button is the solid primary violet in both themes,
+  as tall as the icons beside it: its white text was on a light lavender
+  in the dark theme and read as blurred. Primary buttons darken on hover
+  instead of fading, so their text keeps its contrast.
 
 ### Fixed
 

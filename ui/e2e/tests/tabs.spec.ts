@@ -97,6 +97,8 @@ for (const width of WIDTHS) {
 }
 
 test("a tab chosen from More opens, and takes a place in the row", async ({ page }) => {
+  // The list wider than its default: the trace's room is narrow enough that the last tab, App, is in More.
+  await page.addInitScript(() => localStorage.setItem("tracepanel:list-width", "320"));
   await page.setViewportSize({ width: 900, height: 900 });
   await openPanel(page, "bottom");
   const tablist = panel(page).getByRole("tablist", { name: "Trace details" });

@@ -1103,8 +1103,10 @@ function PanelApp({ route }: { route: Route }) {
         detail="This request in the full console, in a new tab: every request, issue and query."
       >
         <a
-          // Filled in both themes: the panel's one way out to the console, the same button dark or light.
-          className="mr-1 inline-flex h-7 items-center gap-1.5 rounded-md bg-brand px-3 text-sm font-medium text-white shadow-sm shadow-brand/30 transition-[filter,box-shadow] hover:shadow-md hover:shadow-brand/40 hover:brightness-110 dark:shadow-none [&_svg]:size-3.5"
+          // Filled in both themes: the panel's one way out to the console, the same button dark or light. The solid
+          // primary (the brand's strong violet, 5:1 with white: AA), not the light accent (2.2:1, which read as
+          // blurred), as tall as the icons beside it; no filter or glow, which soften its text.
+          className="mr-1 inline-flex h-7.5 items-center gap-1.5 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover [&_svg]:size-3.5"
           href={`${base}${consoleHref(selectedId, { tab, from: sectionFor(selectedKind), ...sliced.params })}`}
           target="_blank"
           rel="noreferrer"
