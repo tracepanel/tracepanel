@@ -38,12 +38,17 @@
   --sidebar-border: var(--dt-border);
   --chart-1: var(--dt-chart-1);
   --chart-2: var(--dt-chart-2);
-  /* The service map's dot grid: a hairline's colour, faint on either theme. */
-  --map-dot: var(--dt-border-strong);
+  /* The service map: its canvas (opaque, so a line's halo matches it), its lines and arrowheads (at least 3:1 on the
+     canvas, WCAG's non-text contrast), and its dot grid, quieter than a hairline so the lines and boxes win. */
+  --map-canvas: color-mix(in srgb, var(--dt-faint) 20%, var(--dt-bg));
+  --map-edge: #6b7285;
+  --map-dot: #191d27;
 }
 /* The light theme's corners a little squarer: hairline boxes on white, not soft cards. */
 :root[data-theme="light"] {
   --radius: 0.5rem;
+  --map-edge: #7f8594;
+  --map-dot: #e6e6e9;
 }
 
 @theme inline {

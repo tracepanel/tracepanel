@@ -1266,4 +1266,50 @@ mod tests {
         );
         let _ = std::fs::remove_dir_all(&dir);
     }
+
+    #[test]
+    fn a_store_from_before_gets_the_covering_index_of_a_traces_issues_when_it_opens() {
+        let dir =
+            std::env::temp_dir().join(format!("tracepanel-store-index-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = path_in(&dir);
+        drop(Store::open(&path).unwrap());
+        // The index as a store made by an earlier agent of this format has it.
+        rusqlite::Connection::open(&path)
+            .unwrap()
+            .execute_batch(
+                "DROP INDEX issue_traces_trace_fingerprint;
+                 CREATE INDEX issue_traces_trace ON issue_traces (trace_id);",
+            )
+            .unwrap();
+
+        drop(Store::open(&path).unwrap());
+        let db = rusqlite::Connection::open(&path).unwrap();
+        let indexes: Vec<String> = db
+            .prepare(
+                "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'issue_traces' \
+                 AND sql IS NOT NULL",
+            )
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        let plan: String = db
+            .query_row(
+                "EXPLAIN QUERY PLAN SELECT fingerprint FROM issue_traces WHERE trace_id = 't1'",
+                [],
+                |row| row.get(3),
+            )
+            .unwrap();
+
+        assert_eq!(indexes, ["issue_traces_trace_fingerprint"]);
+
+        // A trace's issues read from the index alone: the Services page looks them up per app.
+        assert!(
+            plan.contains("COVERING INDEX issue_traces_trace_fingerprint"),
+            "{plan}"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
