@@ -13,6 +13,13 @@
   request) are its statement's or its connection's: the database's time in
   the breakdown, and no N+1 or duplicate HTTP calls of their own, as an LLM
   call's requests are the model's.
+- In a GraphQL request, an N+1's hint names the field whose resolver
+  repeats it, such as `Book.author`, when the SDK records resolvers as
+  steps, and suggests a DataLoader for repeated HTTP calls and datastore,
+  Redis, cache and RPC commands too, not only for SQL. Repeated calls to
+  another service from a backend for frontend are the field's N+1 then.
+  The DataLoader named for GraphQL Yoga and Apollo Server (the JS SDK) is
+  the `dataloader` package.
 
 ## 0.6.0 (2026-10-28)
 

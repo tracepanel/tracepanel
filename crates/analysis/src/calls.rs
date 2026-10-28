@@ -652,6 +652,7 @@ pub(crate) fn operation_issues(trace: &Trace, thresholds: &Thresholds) -> Vec<Is
     let mut systems: Vec<(&'static str, String)> = Vec::new();
     let mut order: HashMap<(&'static str, String), Vec<String>> = HashMap::new();
     let mut groups: HashMap<(&'static str, String, String), Vec<Call<'_>>> = HashMap::new();
+    let resolvers = Resolvers::of(trace);
     let over_http = trace
         .spans
         .iter()
@@ -687,7 +688,14 @@ pub(crate) fn operation_issues(trace: &Trace, thresholds: &Thresholds) -> Vec<Is
             };
             for group in &order[&(*family, system.clone())] {
                 let calls = &groups[&(*family, system.clone(), group.clone())];
-                issues.extend(group_issues(&rules, calls, group, thresholds, threshold));
+                // Lookups a resolver repeats per object, a DataLoader batches; not messages it publishes, nor a
+                // model's calls.
+                let graphql = resolvers
+                    .as_ref()
+                    .filter(|_| !matches!(*family, "messaging" | "llm"));
+                issues.extend(group_issues(
+                    &rules, calls, group, thresholds, threshold, graphql,
+                ));
             }
         }
     }
@@ -700,6 +708,7 @@ fn group_issues(
     group: &str,
     thresholds: &Thresholds,
     threshold: usize,
+    graphql: Option<&Resolvers<'_>>,
 ) -> Vec<Issue> {
     let mut issues = Vec::new();
     let label = &rules.label;
@@ -725,19 +734,26 @@ fn group_issues(
     // An LLM call's repeats are a loop only one by one: at once they are batched, and an agent's turns can't be.
     let looped = spans[0].kind != llm::KIND || llm::one_by_one(&spans);
     if distinct >= threshold && looped {
+        let hint = match spans[0].kind.as_str() {
+            storage::KIND => storage::repeated_hint(spans[0]),
+            llm::KIND => llm::repeated_hint(spans[0]),
+            "mongodb" if text(&spans[0].attrs, "db.client").as_deref() == Some("mongoose") => {
+                MONGOOSE_POPULATE
+            }
+            _ => rules.repeated_hint,
+        };
+        let hint = format!(
+            "{hint}{}",
+            graphql
+                .map(|resolvers| resolvers.hint(&spans))
+                .unwrap_or_default()
+        );
         issues.push(issue(
             issue_key("n+1", &[Some(&key), key_culprit.as_deref()]),
             "n+1",
             format!("N+1: {} similar {label} · {title}", spans.len()),
             Some(culprit_text.clone()),
-            Some(match spans[0].kind.as_str() {
-                storage::KIND => storage::repeated_hint(spans[0]),
-                llm::KIND => llm::repeated_hint(spans[0]),
-                "mongodb" if text(&spans[0].attrs, "db.client").as_deref() == Some("mongoose") => {
-                    MONGOOSE_POPULATE
-                }
-                _ => rules.repeated_hint,
-            }),
+            Some(&hint),
             spans.len(),
             spans.iter().map(|span| span.id.clone()).collect(),
         ));
