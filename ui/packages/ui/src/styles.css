@@ -2355,6 +2355,9 @@ div.dt-map-row[data-kind="code"] {
    context): one column of names for all of them, so every value starts at one edge. */
 :is(.dt-map-inline, .dt-map-side) {
   --dt-name-col: min(15rem, 45%);
+  /* A long path (src/main/java/…/CatalogController.java:109), value or plan line wraps where it must: the details
+     never scroll sideways. A statement or source keeps its lines and scrolls in its own block. */
+  overflow-wrap: anywhere;
 }
 .dt-map-inline {
   border-bottom: 1px solid var(--dt-border);

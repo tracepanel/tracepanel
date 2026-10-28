@@ -49,10 +49,11 @@ pub(crate) fn int(value: &Value, key: &str) -> i64 {
     value.get(key).and_then(Value::as_i64).unwrap_or(0)
 }
 
-/// Microseconds as a person reads them: `0.4 ms`, `27.6 ms`, `376 ms`, `12.3 s`.
+/// Microseconds as a person reads them: `0.4 ms`, `27.6 ms`, `376 ms`, `7.9 s`; a second and up in seconds, as the
+/// console says them.
 pub(crate) fn ms(us: i64) -> String {
     let ms = us as f64 / 1000.0;
-    if ms >= 10_000.0 {
+    if ms >= 1000.0 {
         format!("{:.1} s", ms / 1000.0)
     } else if ms >= 100.0 {
         format!("{ms:.0} ms")
@@ -967,4 +968,22 @@ pub(crate) fn compare(before: &Value, after: &Value) -> String {
     }
     out.extend(profile::compare(before, after));
     out.join("\n")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ms;
+
+    #[test]
+    fn times_read_as_the_console_says_them() {
+        assert_eq!(
+            [
+                400, 27_600, 376_000, 999_000, 1_000_000, 7_910_000, 12_345_000
+            ]
+            .map(ms),
+            [
+                "0.4 ms", "27.6 ms", "376 ms", "999 ms", "1.0 s", "7.9 s", "12.3 s"
+            ]
+        );
+    }
 }
