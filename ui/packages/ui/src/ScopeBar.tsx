@@ -11,6 +11,7 @@ import {
 } from "./components/ui/dropdown-menu";
 import { CloseIcon } from "./icons";
 import { callsOfTab } from "./lib/callTabs";
+import { scopedProfiles } from "./lib/chainProfile";
 import { type Member, type SpanScope, scopedIssues, scopedLogs, scopedSpans } from "./lib/scope";
 import type { ScopeIssue } from "./types";
 
@@ -151,7 +152,7 @@ function isLeaf(members: readonly Member[], under: SpanScope): boolean {
 }
 
 /** The tabs "Under this" leads to. */
-export type UnderTab = "sql" | "http" | "logs" | "issues";
+export type UnderTab = "sql" | "http" | "logs" | "issues" | "profile";
 
 /**
  * What is under a row, counted for its "Under this" line: its queries, HTTP calls, records and issues, each count
@@ -180,5 +181,6 @@ export function underCounts(
     },
     { noun: ["log", "logs"], count: scopedLogs(members, under).length, onOpen: opener("logs") },
     { noun: ["issue", "issues"], count: issues.length, onOpen: opener("issues") },
+    { noun: ["profile", "profiles"], count: scopedProfiles(members, under).length, onOpen: opener("profile") },
   ];
 }

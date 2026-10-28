@@ -42,7 +42,7 @@ import { isTyping } from "./lib/keys";
 import { scopedIssues, scopedSpans } from "./lib/scope";
 import type { Slice } from "./lib/slice";
 import { linkProps, opensTraces, openTraceAt, type TraceLinks } from "./links";
-import { ProfilePane } from "./ProfileView";
+import { ProfileTab } from "./ProfileView";
 import { RoutePath, StatusBadge, TraceBadge } from "./primitives";
 import { RequestInfo } from "./RequestInfo";
 import { UnderThis, underCounts } from "./ScopeBar";
@@ -257,6 +257,7 @@ function traceTabs({
   calls,
   app,
   logs,
+  profiled,
 }: {
   trace: Trace;
   outcome: ReactNode;
@@ -265,6 +266,8 @@ function traceTabs({
   app: App | null | undefined;
   /** How many records the trace's chain of calls has: its own and those of the traces down its calls. */
   logs: number;
+  /** Whether the trace or a trace down its calls was profiled. */
+  profiled: boolean;
 }) {
   const KindIcon = KIND_ICONS[trace.kind] ?? GlobeIcon;
   return [
@@ -297,7 +300,7 @@ function traceTabs({
     ...callsTabs(calls),
     ...(logs > 0 ? [{ id: "logs" as const, label: "Logs", icon: <ScrollTextIcon />, count: logs }] : []),
     // Recorded only when asked for: where the time went in code.
-    ...(trace.profile ? [{ id: "profile" as const, label: "Profile", icon: <FlameIcon /> }] : []),
+    ...(profiled ? [{ id: "profile" as const, label: "Profile", icon: <FlameIcon /> }] : []),
     // Last: the app that served it, its settings and versions, when its SDK says them. About the app, not this request.
     ...appTab(app),
   ];
@@ -572,6 +575,7 @@ export function TraceView({
     calls: tabbed.calls,
     app,
     logs: chain.logs.length,
+    profiled: chain.members.some((member) => member.trace.profile !== undefined),
   });
   // A tab the link asked for that only the chain has (the DB tab of a browser's view): opened once the chain came.
   const asked = useAskedTab(initialTab, tabs, setActive);
@@ -629,7 +633,7 @@ export function TraceView({
         onExplain={explain}
         links={links}
       />
-      <ProfilePane trace={trace} open={active === "profile"} />
+      <ProfileTab trace={trace} open={active === "profile"} chain={chain} />
       {active === "error" ? (
         <ErrorView
           errors={trace.errors}

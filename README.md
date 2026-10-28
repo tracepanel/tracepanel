@@ -74,7 +74,8 @@ What else is in a trace:
   whole chain of calls, each line with its app, or what is under one row of
   the call tree, added up by level, app and logger. The DB, HTTP calls and
   Issues tabs do the same, and an N+1 across apps (a service's query once
-  per call of a resolver) is one issue.
+  per call of a resolver) is one issue. The Profile tab shows each app's
+  profile of the chain.
 - Errors with their stack and the source of your frames, and in Python and
   Node their local variables.
 - `EXPLAIN` of a query, one click from the query.

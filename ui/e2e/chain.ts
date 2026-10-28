@@ -104,6 +104,46 @@ export async function chain(): Promise<string> {
       log("b0", b + 7_000, "warning", "yoga", "slow query"),
     ],
   );
+  // Profiled, its samples timed (1 ms buckets from its start): the steps' time and the BFF's own.
+  // biome-ignore-start lint/style/useNamingConvention: the trace format.
+  bff["profile"] = {
+    interval_us: 1_000,
+    samples: 7,
+    bucket_us: 1_000,
+    frames: [
+      { function: "handleGraphql", file: "server.js", line: 90, in_app: true },
+      { function: "resolveAuthor", file: "server.js", line: 70, in_app: true },
+      { function: "fetch", file: "node:internal/deps/undici", line: 1, in_app: false, waiting: true },
+    ],
+    stacks: [
+      {
+        frames: [0],
+        count: 2,
+        at: [
+          [0, 1],
+          [7, 1],
+        ],
+      },
+      {
+        frames: [0, 1],
+        count: 2,
+        at: [
+          [1, 1],
+          [3, 1],
+        ],
+      },
+      {
+        frames: [0, 1, 2],
+        count: 3,
+        at: [
+          [2, 1],
+          [4, 1],
+          [6, 1],
+        ],
+      },
+    ],
+  };
+  // biome-ignore-end lint/style/useNamingConvention: the trace format.
   const apis = [0, 1, 2].map((n) => {
     const at = b + 1_200 + n * 2_000 - ahead;
     const api = trace(
@@ -121,6 +161,15 @@ export async function chain(): Promise<string> {
     );
     // One route for the three: the BFF's step calls it once per book.
     (api["attrs"] as Doc)["http.route"] = "/authors/{id}";
+    // Profiled too, its samples not timed: the service's own process, its own flame.
+    // biome-ignore-start lint/style/useNamingConvention: the trace format.
+    api["profile"] = {
+      interval_us: 1_000,
+      samples: 1,
+      frames: [{ function: "get_author", file: "app/main.py", line: 115, in_app: true }],
+      stacks: [{ frames: [0], count: 1 }],
+    };
+    // biome-ignore-end lint/style/useNamingConvention: the trace format.
     return api;
   });
   const response = await fetch(`${CONSOLE}api/ingest`, {
