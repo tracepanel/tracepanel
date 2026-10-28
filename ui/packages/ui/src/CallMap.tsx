@@ -77,6 +77,7 @@ type Node =
       children: Node[];
       level: number;
       opened: boolean;
+      clock?: Clock | undefined;
     }
   | { type: "waiting"; key: string; span: Span; kind: "task" };
 
@@ -133,38 +134,46 @@ function isBackendCall(node: Node): boolean {
 
 const BACKEND_KINDS = new Set(["redis", "http.client"]);
 
+/**
+ * A GraphQL field's resolver (`Book.author`): one per item of a list, each with the calls it made under it. Its
+ * repeats group as a call's do (×36 for 36 books), each still opening on what it did.
+ */
+function isResolver(node: Node): node is SpanNode {
+  return node.type === "span" && node.span.kind === "function" && typeof node.span.attrs["graphql.field"] === "string";
+}
+
+/** What a row groups by with its siblings, if it groups at all. */
+function groupKey(node: Node): string | undefined {
+  if (isResolver(node)) return `resolver:${String(node.span.attrs["graphql.field"])}`;
+  return isLeafCall(node) ? groupName(node) : undefined;
+}
+
 function collapse(nodes: Node[]): Node[] {
   const byName = new Map<string, SpanNode[]>();
   for (const node of nodes) {
-    if (isLeafCall(node)) {
-      const name = groupName(node);
-      byName.set(name, [...(byName.get(name) ?? []), node]);
-    }
+    const name = groupKey(node);
+    if (name !== undefined) byName.set(name, [...(byName.get(name) ?? []), node as SpanNode]);
   }
   const result: Node[] = [];
   const emitted = new Set<string>();
   for (const node of nodes) {
-    if (isLeafCall(node)) {
-      const name = groupName(node);
-      const members = byName.get(name) ?? [];
-      if (members.length >= GROUP_MIN) {
-        if (!emitted.has(name)) {
-          emitted.add(name);
-          const spans = members.map((member) => member.span);
-          const last = spans.at(-1) ?? node.span;
-          result.push({
-            type: "group",
-            key: `group:${node.span.id}`,
-            spans,
-            members,
-            start: node.span.start,
-            end: last.start + last.duration,
-          });
-        }
-        continue;
-      }
+    const name = groupKey(node);
+    const members = name === undefined ? [] : (byName.get(name) ?? []);
+    if (name === undefined || node.type !== "span" || members.length < GROUP_MIN) {
+      result.push(node);
+      continue;
     }
-    result.push(node);
+    if (emitted.has(name)) continue;
+    emitted.add(name);
+    const spans = members.map((member) => member.span);
+    result.push({
+      type: "group",
+      key: `group:${node.span.id}`,
+      spans,
+      members,
+      start: Math.min(...spans.map((span) => span.start)),
+      end: Math.max(...spans.map((span) => span.start + span.duration)),
+    });
   }
   return result;
 }
@@ -204,13 +213,59 @@ function callsOf(related: Related): number {
   return related.calls.length + (related.remote_calls?.length ?? 0);
 }
 
-/** A call's trace as a row of this tree, with that trace's own rows under it when it came whole. */
-function callNode(key: string, run: TraceSummary, related: Related, chain: Chain, remote?: Remote): Node {
-  const whole = related.call_traces?.[run.id];
+/**
+ * How another app's trace for a call sits on this trace's clock: `shift` (µs) moved it there. Each app times its
+ * spans by its own clock, and two clocks (or two SDKs' timers) disagree by a little, often more than the way there
+ * and back takes: the served request started before the call, or ended after it. It is drawn centred in the call,
+ * the call's time not spent serving it (the way there and back) split before and after; one longer than the call
+ * starts with it, and no bar of it runs past the call's end. Times in the time column stay as measured.
+ */
+interface Clock {
+  call: Span;
+  shift: number;
+}
+
+/** How far a call's trace moves to sit centred in the call. */
+function shiftInto(run: { start: number; duration: number }, call: Span): number {
+  return call.start + Math.max(call.duration - run.duration, 0) / 2 - run.start;
+}
+
+/** From this shift (µs) on, a call's time says its app's clock differs from this one's. */
+const SKEW_NOTE_MIN = 1_000;
+
+/** A trace with every time in it moved by `by` µs. */
+function shifted(trace: Trace, by: number): Trace {
+  if (by === 0) return trace;
+  return {
+    ...trace,
+    start: trace.start + by,
+    spans: trace.spans.map((span) => ({ ...span, start: span.start + by })),
+    logs: trace.logs.map((log) => ({ ...log, time: log.time + by })),
+    errors: trace.errors.map((error) => ({ ...error, time: error.time + by })),
+  };
+}
+
+/**
+ * A call's trace as a row of this tree, with that trace's own rows under it when it came whole, on this trace's
+ * clock (see Clock).
+ */
+function callNode(
+  key: string,
+  served: TraceSummary,
+  related: Related,
+  chain: Chain,
+  call: Span | undefined,
+  remote?: Remote,
+): Node {
+  const shift = call ? Math.round(shiftInto(served, call)) : 0;
+  const run = shift === 0 ? served : { ...served, start: served.start + shift };
+  const stored = related.call_traces?.[served.id];
+  const whole = stored && shifted(stored, shift);
   const level = chain.level + 1;
   const children = whole && !chain.seen.has(whole.id) ? servedRows(whole, chain, Boolean(remote)) : [];
   const opened = level === 1 || callsOf(related) <= CHAIN_OPEN_MAX;
-  return { type: "task", key, run, kind: "call", remote, whole, children, level, opened };
+  const clock = call ? { call, shift } : undefined;
+  return { type: "task", key, run, kind: "call", remote, whole, children, level, opened, clock };
 }
 
 /**
@@ -227,12 +282,14 @@ function servedRows(whole: Trace, chain: Chain, remote: boolean): Node[] {
 }
 
 /** The traces other projects' agents have for this trace's calls, under the calls. */
-function remoteNodes(related: Related, chain: Chain): [string, Node][] {
+function remoteNodes(related: Related, chain: Chain, spans: SpanById): [string, Node][] {
   return (related.remote_calls ?? []).map(({ span_id, trace, console, project }): [string, Node] => [
     span_id,
-    callNode(`remote:${trace.id}`, trace, related, chain, { console, project }),
+    callNode(`remote:${trace.id}`, trace, related, chain, spans.get(span_id), { console, project }),
   ]);
 }
+
+type SpanById = ReadonlyMap<string, Span>;
 
 /** Each trace of its own under a span of this one, by that span's id. */
 function linked(
@@ -240,11 +297,14 @@ function linked(
   related: Related,
   kind: "task" | "call",
   chain: Chain,
+  spans: SpanById,
 ): [string, Node][] {
   return runs.flatMap((run): [string, Node][] => {
     const span = related.via[run.id];
     if (!span) return [];
-    return [[span, kind === "call" ? callNode(`call:${run.id}`, run, related, chain) : taskNode(run, chain)]];
+    const node =
+      kind === "call" ? callNode(`call:${run.id}`, run, related, chain, spans.get(span)) : taskNode(run, chain);
+    return [[span, node]];
   });
 }
 
@@ -258,12 +318,14 @@ function taskNode(run: TraceSummary, chain: Chain): Node {
  */
 function linkedNodes(trace: Trace, related: Related | undefined, chain: Chain): [string, Node][] {
   if (!related) return [];
-  const tasks = linked(related.enqueued, related, "task", chain);
+  const spans = new Map(trace.spans.map((span) => [span.id, span]));
+  const tasks = linked(related.enqueued, related, "task", chain, spans);
   const run = new Set(tasks.map(([span]) => span));
   const waiting = trace.spans
     .filter((span) => span.kind === "task.enqueue" && !run.has(span.id))
     .map((span): [string, Node] => [span.id, { type: "waiting", key: `waiting:${span.id}`, span, kind: "task" }]);
-  return [...tasks, ...linked(related.calls, related, "call", chain), ...remoteNodes(related, chain), ...waiting];
+  const calls = linked(related.calls, related, "call", chain, spans);
+  return [...tasks, ...calls, ...remoteNodes(related, chain, spans), ...waiting];
 }
 
 /**
@@ -487,6 +549,26 @@ interface RowContext {
   onProfile: ((range: TimeRange) => void) | undefined;
   /** Loads the links of a call's trace opened in the tree: the calls it made in turn open under it. */
   onChain: (traceId: string) => void;
+  /** The stretch of the span rows are under, which no bar of theirs is drawn past (and see Clock). */
+  within?: Within | undefined;
+}
+
+type Within = readonly [number, number];
+
+/** The stretch of a call, inside the one rows are already kept in. */
+function narrowed(within: Within | undefined, call: Span): Within {
+  const [from, to] = [call.start, call.start + call.duration];
+  if (!within) return [from, to];
+  const start = Math.min(Math.max(from, within[0]), within[1]);
+  return [start, Math.max(Math.min(to, within[1]), start)];
+}
+
+/** A bar's start and length cut to the stretch it is kept in. */
+function clipped(start: number, length: number, within: Within | undefined): [number, number] {
+  if (!within) return [start, length];
+  const from = Math.min(Math.max(start, within[0]), within[1]);
+  const to = Math.min(Math.max(start + length, within[0]), within[1]);
+  return [from, to - from];
 }
 
 /** The selected row's details, under it: where the click was, not past the end of a long tree. */
@@ -506,8 +588,21 @@ function RowDetails({ id, ctx }: { id: string; ctx: RowContext }) {
   );
 }
 
-function Bar({ trace, start, length, point }: { trace: Trace; start: number; length: number; point?: boolean }) {
-  const place = point ? pointPlace(trace, start) : barPlace(trace, start, length);
+function Bar({
+  trace,
+  start,
+  length,
+  point,
+  within,
+}: {
+  trace: Trace;
+  start: number;
+  length: number;
+  point?: boolean;
+  within?: Within | undefined;
+}) {
+  const [from, long] = clipped(start, length, within);
+  const place = point ? pointPlace(trace, from) : barPlace(trace, from, long);
   return (
     <span className="dt-map-track" aria-hidden="true">
       <span className="dt-map-bar" data-point={point ? "" : undefined} data-past={place.past} style={place.style} />
@@ -546,10 +641,11 @@ interface LinkedView {
   text: ReactNode;
   track: ReactNode;
   time: string;
+  timeTitle?: string | undefined;
 }
 
 /** A task's run in a worker, or the trace another app served for a call. */
-function runView(node: Extract<Node, { type: "task" }>, trace: Trace): LinkedView {
+function runView(node: Extract<Node, { type: "task" }>, trace: Trace, within: Within | undefined): LinkedView {
   return {
     status: node.run.status,
     kind: node.kind === "call" ? "app" : "task",
@@ -566,9 +662,25 @@ function runView(node: Extract<Node, { type: "task" }>, trace: Trace): LinkedVie
         <RunChips trace={node.run} />
       </>
     ),
-    track: <Bar trace={trace} start={node.run.start} length={node.run.duration} />,
+    track: <Bar trace={trace} start={node.run.start} length={node.run.duration} within={within} />,
     time: duration(node.run.duration),
+    timeTitle: clockNote(node),
   };
+}
+
+/** What moving a call's trace onto this clock did, said on its time, when it did more than round off a little. */
+function clockNote(node: Extract<Node, { type: "task" }>): string | undefined {
+  const { clock, run } = node;
+  if (!clock) return undefined;
+  const call = duration(clock.call.duration);
+  if (run.duration > clock.call.duration) {
+    const more = duration(run.duration - clock.call.duration);
+    return `Served in ${duration(run.duration)} by its app's clock, ${more} more than the ${call} call took by this one's: the two disagree. Drawn inside the call.`;
+  }
+  if (Math.abs(clock.shift) < SKEW_NOTE_MIN) return undefined;
+  const side = clock.shift < 0 ? "ahead of" : "behind";
+  const away = duration(clock.call.duration - run.duration);
+  return `Its app's clock is ${duration(Math.abs(clock.shift))} ${side} this one's: drawn centred in the ${call} call, the ${away} not spent serving it split before and after.`;
 }
 
 /** Which app served a call: its runtime's mark, and its project (another agent's) or its service (this one's). */
@@ -613,11 +725,13 @@ function LinkedRow({
   const open =
     children.length > 0 ? dim || (node.type === "waiting" || node.opened) !== ctx.collapsed.has(node.key) : undefined;
   useChainLoad(node, open, ctx.onChain);
+  const call = node.type === "task" ? node.clock?.call : undefined;
+  const inner = call ? { ...ctx, within: narrowed(ctx.within, call) } : ctx;
   return (
     <div>
-      <LinkedButton node={node} ctx={ctx} indent={indent} dim={dim} open={open} />
+      <LinkedButton node={node} ctx={inner} indent={indent} dim={dim} open={open} />
       <RowDetails id={node.key} ctx={ctx} />
-      {open ? <Rows nodes={children} depth={depth + 1} ctx={ctx} /> : null}
+      {open ? <Rows nodes={children} depth={depth + 1} ctx={inner} /> : null}
     </div>
   );
 }
@@ -650,7 +764,7 @@ function LinkedButton({
   dim: boolean;
   open: boolean | undefined;
 }) {
-  const view = linkedView(node, ctx.trace);
+  const view = linkedView(node, ctx.trace, ctx.within);
   const selected = ctx.selected === node.key;
   return (
     <button
@@ -673,13 +787,15 @@ function LinkedButton({
         {view.text}
       </span>
       {view.track}
-      <span className="dt-map-time">{view.time}</span>
+      <span className="dt-map-time" title={view.timeTitle}>
+        {view.time}
+      </span>
     </button>
   );
 }
 
-function linkedView(node: Linked, trace: Trace): LinkedView {
-  return node.type === "task" ? runView(node, trace) : waitingView(node, trace);
+function linkedView(node: Linked, trace: Trace, within: Within | undefined): LinkedView {
+  return node.type === "task" ? runView(node, trace, within) : waitingView(node, trace);
 }
 
 /** The rows under a row: a span's, or those of a call's trace that came whole. */
@@ -826,7 +942,7 @@ function LeafRow({
           <KindBadge kind={view.level} muted={true} className="dt-map-kind" />
           <span className="dt-map-text">{view.text}</span>
         </span>
-        <Bar trace={ctx.trace} start={view.time} length={0} point={true} />
+        <Bar trace={ctx.trace} start={view.time} length={0} point={true} within={ctx.within} />
         <span className="dt-map-time" title={`Logged ${since(view.time, ctx.trace.start)}`}>
           +{duration(Math.max(view.time - ctx.trace.start, 0))}
         </span>
@@ -860,7 +976,9 @@ function GroupName({
   ctx: RowContext;
   parent: Span | undefined;
 }) {
-  const issue = node.spans.map((span) => ctx.issueBySpan.get(span.id)).find(Boolean);
+  // A resolver's issue is the call it repeats, right under it (Book.author's GET /authors/{id}).
+  const spans = [...node.spans, ...node.members.flatMap(childSpans)];
+  const issue = spans.map((span) => ctx.issueBySpan.get(span.id)).find(Boolean);
   const first = node.spans[0];
   return (
     <>
@@ -877,7 +995,7 @@ function GroupName({
 /** Repeats of one call folded into one row (×N), its calls as ticks on the timeline; open, each call a row. */
 function GroupRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps<"group">) {
   const open = ctx.collapsed.has(`open:${node.key}`);
-  const total = node.spans.reduce((sum, span) => sum + span.duration, 0);
+  const wall = node.end - node.start;
   return (
     <div className="dt-map-group">
       <button
@@ -897,8 +1015,12 @@ function GroupRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProp
           <Caret open={open} onToggle={() => ctx.onToggle(`open:${node.key}`)} />
           <GroupName node={node} ctx={ctx} parent={parent} />
         </span>
-        <GroupTicks spans={node.spans} trace={ctx.trace} />
-        <RowTime time={total} slow={slowness(total, ctx.trace, ctx.categories.get(node.spans[0]?.id ?? ""))} />
+        <GroupTicks spans={node.spans} trace={ctx.trace} within={ctx.within} />
+        <RowTime
+          time={wall}
+          slow={slowness(wall, ctx.trace, ctx.categories.get(node.spans[0]?.id ?? ""))}
+          title={groupTimes(node)}
+        />
       </button>
       <RowDetails id={node.key} ctx={ctx} />
       {open ? <Rows nodes={node.members} depth={depth + 1} ctx={{ ...ctx, marks: undefined }} parent={parent} /> : null}
@@ -906,20 +1028,25 @@ function GroupRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProp
   );
 }
 
+/**
+ * A group's time: from its first call's start to its last one's end, as long as the request waited for them (36
+ * calls run side by side take about one call's time); what they took added up is the second figure.
+ */
+function groupTimes(node: Extract<Node, { type: "group" }>): string {
+  const total = node.spans.reduce((sum, span) => sum + span.duration, 0);
+  const noun = groupNoun(node.spans[0], node.spans.length);
+  return `${node.spans.length} ${noun} · ${duration(total)} total, ${duration(node.end - node.start)} from the first's start to the last's end`;
+}
+
 /** Where each call of a group started, on the request's timeline. */
-function GroupTicks({ spans, trace }: { spans: readonly Span[]; trace: Trace }) {
+function GroupTicks({ spans, trace, within }: { spans: readonly Span[]; trace: Trace; within: Within | undefined }) {
   return (
     <span className="dt-map-track" aria-hidden="true">
-      {spans.map((span) => (
-        <span
-          key={span.id}
-          className="dt-map-bar"
-          data-tick=""
-          style={{
-            left: `${Math.min(Math.max(((span.start - trace.start) / Math.max(trace.duration, 1)) * 100, 0), 100)}%`,
-          }}
-        />
-      ))}
+      {spans.map((span) => {
+        const [at] = clipped(span.start, 0, within);
+        const left = Math.min(Math.max(((at - trace.start) / Math.max(trace.duration, 1)) * 100, 0), 100);
+        return <span key={span.id} className="dt-map-bar" data-tick="" style={{ left: `${left}%` }} />;
+      })}
     </span>
   );
 }
@@ -1014,7 +1141,7 @@ function SpanRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps
           <HiddenLogs count={ctx.hiddenLogs.get(span.id)} onShow={ctx.onShowLogs} />
           {issue ? <IssueChip kind={issue} className={ISSUE_CHIP_SHRINKS} /> : null}
         </span>
-        <Bar trace={ctx.trace} start={span.start} length={span.duration} />
+        <Bar trace={ctx.trace} start={span.start} length={span.duration} within={ctx.within} />
         <RowTime
           time={span.duration}
           slow={span.parent_id === null ? undefined : slowness(span.duration, ctx.trace, ctx.categories.get(span.id))}
@@ -1024,7 +1151,14 @@ function SpanRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps
       <RowDetails id={node.key} ctx={ctx} />
       {fold ? (
         <>
-          <Rows nodes={node.children} depth={depth + 1} ctx={ctx} parent={span} />
+          {/* A child's bar never runs past its parent's: an SDK timing starts to the millisecond and durations to
+              the microsecond puts a call that ends with its caller a little past it. */}
+          <Rows
+            nodes={node.children}
+            depth={depth + 1}
+            ctx={{ ...ctx, within: narrowed(ctx.within, span) }}
+            parent={span}
+          />
           <CodeRow span={span} ctx={ctx} depth={depth + 1} />
         </>
       ) : null}
@@ -1430,7 +1564,7 @@ function GroupDetails({ node, onExplain }: DetailsProps<"group">) {
   return (
     <div className="grid gap-3 p-4">
       <p className="dt-map-details-title">
-        {node.spans.length} similar {groupNoun(first)} ·{" "}
+        {node.spans.length} similar {groupNoun(first)} · took {duration(node.end - node.start)} ·{" "}
         {duration(node.spans.reduce((sum, span) => sum + span.duration, 0))} total
       </p>
       {first ? (

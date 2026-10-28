@@ -16,6 +16,7 @@ export function groupNoun(span: Span | undefined, count = 2): string {
 const OWN_NOUNS: Record<string, { one: string; many: string }> = {
   signal: { one: "send", many: "sends" },
   "migration.operation": { one: "operation", many: "operations" },
+  function: { one: "call", many: "calls" },
 };
 
 /** A signal's sends, a migration's operations, or a system's calls. */
