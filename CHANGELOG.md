@@ -20,6 +20,16 @@
   Hibernate writes it, now counts as one. A count or an average a
   repository method reads per row gets one grouped query as its fix
   instead.
+- The MCP server reads profiles. `get_profile` gives a profiled trace's
+  CPU profile as text: the functions by their own time and in all, the
+  hottest paths with their files and lines, the time spent waiting, and what
+  wasn't sampled. With `kind: memory` it gives the peak, what the trace kept
+  and the top allocation sites. A trace with no profile gets an answer that
+  says how to record one: an `X-Tracepanel-Profile: 1` header, or `memory`
+  for memory too. `get_trace` says when a trace was profiled, and
+  `compare_traces` shows the functions whose own time changed most and the
+  memory's peak and sites, before and after. An AI coding agent can profile a
+  request, fix the code and check the result without the console.
 
 ## 0.5.1 (2026-10-26)
 
