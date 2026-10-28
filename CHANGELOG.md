@@ -37,6 +37,17 @@
   view scrolled it up under the tabs, the pane ran past the panel's bottom
   by the height of the tree's head, and its last attributes were out of
   reach (its own scrolling never moves the view).
+- A group of calls in the call tree (×N) shows how long they ran from the
+  first's start to the last's end: 36 calls run side by side take about one
+  call's time, not their sum. The sum is on hover and in the details.
+- In the call tree's chain of calls, another app's trace is drawn inside the
+  call that reached it: each app's clock differs a little from the other's,
+  and the served request's bars ran before the call or past its end. It is
+  centred in the call (the way there and back split before and after), a
+  note on its time says how far its clock was off, and its log records sit
+  on the same clock. No bar runs past its parent's. Times stay as measured.
+- GraphQL resolvers run once per item (`Book.author` for each of 36 books)
+  group as one row (×36) in the call tree, each with its calls under it.
 
 ## 0.6.0 (2026-10-28)
 

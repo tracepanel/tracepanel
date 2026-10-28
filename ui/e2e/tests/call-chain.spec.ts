@@ -43,7 +43,7 @@ function served(n: number, service: string, name: string, start: number, duratio
       // biome-ignore lint/style/useNamingConvention: the trace format.
       { id: `${trace}R`, parent_id: null, kind: "http", name, start, duration, status: "ok", attrs: {} },
       // biome-ignore lint/style/useNamingConvention: the trace format.
-      ...spans.map((each) => ({ ...each, id: `${trace}${each["id"]}`, parent_id: `${trace}R` })),
+      ...spans.map((each) => ({ ...each, id: `${trace}${each["id"]}`, parent_id: `${trace}${each["parent_id"]}` })),
     ],
     logs: [],
     errors: [],
@@ -166,6 +166,170 @@ async function chain(page: Page): Promise<string[]> {
   await page.goto(`/#/t/${click}?tab=calls`);
   return asked;
 }
+
+/** Each request the API's links answer with, by the trace asking. */
+async function answer(page: Page, links: Record<string, Doc>): Promise<void> {
+  await page.route("**/api/traces/*/related", async (route) => {
+    const trace = new URL(route.request().url()).pathname.split("/").at(-2) ?? "";
+    await route.fulfill({ json: links[trace] ?? linking([]) });
+  });
+}
+
+/** How far ahead of the BFF's clock the service's runs (µs): more than the way there and back takes. */
+const AHEAD = 5_000;
+
+/**
+ * A GraphQL BFF whose `Book.author` resolver runs once per book, side by side, each calling the service; the
+ * service's clock runs ahead of the BFF's, and its first request took longer than the call by the BFF's clock.
+ */
+async function resolvers(page: Page): Promise<number> {
+  const click = await (await page.request.get(`/api/traces/${await traceId('/books › click "Save"')}`)).json();
+  const call = (click.spans as Doc[]).find((one) => one["id"] === `${click.id}C200`) ?? {};
+  // The BFF's request as long as the click's call: on one clock with it, it stays where it is.
+  const start = Number(call["start"]);
+  const authors = Array.from({ length: AUTHORS }, (_, n) => {
+    const at = start + 1_050 + n * 20 + AHEAD;
+    const doc = served(n + 101, "library-api", `GET /authors/${n + 1}`, at, n === 0 ? 4_000 : 2_000, [
+      span("", "Q", "sql", "SELECT author.name FROM author WHERE author.id = $1", at + 200, 500),
+    ]);
+    doc["logs"] = [
+      {
+        // biome-ignore lint/style/useNamingConvention: the trace format.
+        span_id: null,
+        time: at + 1_900,
+        level: "INFO",
+        logger: "app",
+        message: `author ${n + 1} served`,
+        exception: null,
+        attrs: {},
+      },
+    ];
+    return doc;
+  });
+  const bff = served(170, "library-bff", "POST /graphql", start, Number(call["duration"]), [
+    ...authors.flatMap((_, n) => [
+      {
+        ...span("", `F${n}`, "function", "Book.author", start + 1_000 + n * 20, 3_200),
+        attrs: { "graphql.field": "Book.author", "graphql.path": `books.${n}.author` },
+      },
+      {
+        ...span("", `A${n}`, "http.client", `GET 127.0.0.1/authors/${n + 1}`, start + 1_050 + n * 20, 3_000),
+        // biome-ignore lint/style/useNamingConvention: the trace format.
+        parent_id: `F${n}`,
+      },
+    ]),
+  ]);
+  await answer(page, {
+    [click.id]: linking([[`${click.id}C200`, bff]]),
+    [String(bff["id"])]: linking(authors.map((doc, n): [string, Doc] => [`${bff["id"]}A${n}`, doc])),
+  });
+  await page.goto(`/#/t/${click.id}?tab=calls`);
+  return start - Number(click.start);
+}
+
+/** A row's bar, left and right edge on the page. */
+async function bar(row: ReturnType<Page["getByRole"]>): Promise<{ left: number; right: number }> {
+  const box = await row.locator(".dt-map-bar").first().boundingBox();
+  if (!box) throw new Error("no bar on the row");
+  return { left: box.x, right: box.x + box.width };
+}
+
+test("a resolver run per item groups as one row; open, each runs its call, and that call's service trace", async ({
+  page,
+}) => {
+  await resolvers(page);
+  const group = page.getByRole("button", { name: /^function Book\.author/i }).first();
+
+  await expect(group).toContainText(`×${AUTHORS}`);
+  await expect(group).toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByRole("button", { name: /^http\.client GET 127\.0\.0\.1\/authors/i })).toHaveCount(0);
+
+  await group.locator(".dt-map-caret[data-toggle]").click();
+
+  await expect(page.getByRole("button", { name: /^function Book\.author \d+ ms$/i })).toHaveCount(AUTHORS);
+  await expect(page.getByRole("button", { name: /^http\.client GET 127\.0\.0\.1\/authors\/\d+/i })).toHaveCount(
+    AUTHORS,
+  );
+  const service = page.getByRole("button", { name: /^app GET \/authors\/2\b/ });
+  await expect(service).toHaveAttribute("aria-expanded", "false");
+
+  await service.locator(".dt-map-caret[data-toggle]").click();
+
+  await expect(page.getByRole("button", { name: /^sql SELECT author\.name/i })).toHaveCount(1);
+});
+
+test("calls side by side show the time they ran from first to last; what they took added up is on hover", async ({
+  page,
+}) => {
+  await resolvers(page);
+  const group = page.getByRole("button", { name: /^function Book\.author/i }).first();
+  const time = group.locator(".dt-map-time");
+
+  // 36 resolvers of 3.2 ms each, 20 µs apart: 3.9 ms from the first's start to the last's end, 115 ms added up.
+  await expect(time).toHaveText("4 ms");
+  await expect(time).toHaveAttribute("title", "36 calls · 115 ms total, 4 ms from the first's start to the last's end");
+
+  await group.click();
+
+  await expect(page.getByRole("complementary", { name: "Details" })).toContainText(
+    "36 similar calls · took 4 ms · 115 ms total",
+  );
+});
+
+test("another app's trace on its own clock is drawn inside its call, its rows too; times stay as measured", async ({
+  page,
+}) => {
+  const bff = await resolvers(page);
+  await page
+    .getByRole("button", { name: /^function Book\.author/i })
+    .first()
+    .locator(".dt-map-caret[data-toggle]")
+    .click();
+  const client = page.getByRole("button", { name: /^http\.client GET 127\.0\.0\.1\/authors\/2 /i });
+  const service = page.getByRole("button", { name: /^app GET \/authors\/2\b/ });
+  await service.locator(".dt-map-caret[data-toggle]").click();
+  const sql = page.getByRole("button", { name: /^sql SELECT author\.name/i });
+  const record = page.locator('.dt-map-row[data-kind="log"]').filter({ hasText: "author 2 served" });
+
+  // The service ran 2 ms of the 3 ms call: centred in it, 0.5 ms either side, though its clock read 5 ms ahead.
+  const [call, served, query] = [await bar(client), await bar(service), await bar(sql)];
+  expect(served.left).toBeGreaterThan(call.left);
+  expect(served.right).toBeLessThan(call.right);
+  expect(query.left).toBeGreaterThanOrEqual(served.left - 0.5);
+  expect(query.right).toBeLessThanOrEqual(served.right + 0.5);
+  await expect(service.locator(".dt-map-time")).toHaveText("2 ms");
+  await expect(service.locator(".dt-map-time")).toHaveAttribute(
+    "title",
+    /^Its app.s clock is 5 ms ahead of this one.s: drawn centred in the 3 ms call, the 1 ms not spent/,
+  );
+
+  // Its record, on the same clock: before its call ended (4.1 ms after the BFF's start), not 5 ms after.
+  const callEnd = (bff + 1_070 + 3_000) / 1000;
+  const logged = Number.parseFloat((await record.locator(".dt-map-time").innerText()).slice(1));
+  expect(logged).toBeLessThanOrEqual(Math.round(callEnd));
+});
+
+test("a served request longer than its call by the caller's clock ends with the call, and says why", async ({
+  page,
+}) => {
+  await resolvers(page);
+  await page
+    .getByRole("button", { name: /^function Book\.author/i })
+    .first()
+    .locator(".dt-map-caret[data-toggle]")
+    .click();
+  const client = page.getByRole("button", { name: /^http\.client GET 127\.0\.0\.1\/authors\/1 /i });
+  const service = page.getByRole("button", { name: /^app GET \/authors\/1\b/ });
+
+  const [call, served] = [await bar(client), await bar(service)];
+  expect(served.left).toBeGreaterThanOrEqual(call.left - 0.5);
+  expect(served.right).toBeLessThanOrEqual(call.right + 0.5);
+  await expect(service.locator(".dt-map-time")).toHaveText("4 ms");
+  await expect(service.locator(".dt-map-time")).toHaveAttribute(
+    "title",
+    /^Served in 4 ms by its app's clock, 1 ms more than the 3 ms call/,
+  );
+});
 
 test("a click's call tree opens the whole chain: the BFF, each service call, the service's SQL, its own call", async ({
   page,
