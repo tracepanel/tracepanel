@@ -17,5 +17,7 @@ rm -rf "$root/ui-dist"
 cp -R "$dist" "$root/ui-dist"
 # The source maps are for the UI's own development (`pnpm dev` has them); the sources are in ui/.
 find "$root/ui-dist" -name '*.map' -delete
-uv run --no-project "$root/scripts/notices.py" --ui > "$root/ui-dist/NOTICES"
+# Into a temporary file first: a failed run must not leave NOTICES empty.
+uv run --no-project "$root/scripts/notices.py" --ui > "$root/ui-dist/NOTICES.tmp"
+mv "$root/ui-dist/NOTICES.tmp" "$root/ui-dist/NOTICES"
 echo "ui-dist/ updated from ui/" >&2
