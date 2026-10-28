@@ -704,6 +704,42 @@ tr[data-new] {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* A path cut in its middle (TailPath): what follows it (htmx's sender) gives way first, then its head, cut with an
+   ellipsis; its last segment stays whole, cut only where it alone is wider than the row. */
+.dt-request-path[data-split] {
+  display: flex;
+  min-width: 0;
+  text-overflow: clip;
+}
+.dt-path-head,
+.dt-path-tail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dt-path-head {
+  flex: 0 1 auto;
+  /* Its first character and the ellipsis, "/…/7": a box's first character is clipped, never replaced by "…". */
+  min-width: 2.125ch;
+}
+.dt-path-tail {
+  flex: none;
+  max-width: 100%;
+}
+.dt-path-head + .dt-path-tail {
+  max-width: calc(100% - 2.125ch);
+}
+.dt-request-path[data-split] > .dt-request-trigger {
+  flex: 0 1000 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: pre;
+}
+/* A run's trace: the part the run's paths share is quiet, what tells this one apart stands out. */
+.dt-request-path[data-shared] > .dt-path-head {
+  color: var(--dt-text-3);
+}
 .dt-request-meta {
   display: flex;
   flex-wrap: wrap;
@@ -747,6 +783,7 @@ tr[data-new] {
   display: grid;
   grid-template-columns: minmax(0, 1fr) repeat(4, auto);
   column-gap: 0.875rem;
+  container: dt-list / inline-size;
 }
 .dt-requests[data-compact] > li {
   display: grid;
@@ -919,6 +956,31 @@ tr[data-new] {
 }
 .dt-request-row[data-chain] .dt-map-times {
   color: var(--dt-text-2);
+}
+/* A narrow list (the panel's, ~20rem): the rest gives the path its room before it is cut. The numbers close up, a
+   2xx status goes (its cell kept, so the columns stay; any other shows), the queries are their number (the icon gone,
+   the tooltip says), a chain's rows step in less. */
+@container dt-list (max-width: 26rem) {
+  .dt-requests[data-compact] .dt-request-meta {
+    column-gap: 0.375rem;
+  }
+  /* A chain's rows: a step in is half a rem, a method's badge just its word (they are mostly one method). */
+  .dt-requests[data-compact] .dt-request-row[data-chain] {
+    --dt-lead: 0;
+    padding-left: calc(0.25rem + var(--dt-chain-level, 1) * 0.5rem);
+  }
+  .dt-requests[data-compact] .dt-request-row[data-chain] .dt-request-main {
+    gap: 0.25rem;
+  }
+  .dt-requests[data-compact] .dt-request-meta > .dt-status[data-tone="ok"] {
+    width: 0;
+    padding: 0;
+    overflow: hidden;
+    visibility: hidden;
+  }
+  .dt-requests[data-compact] .dt-request-queries > .dt-icon {
+    display: none;
+  }
 }
 /* ---------- Trace ---------- */
 

@@ -192,3 +192,54 @@ test("an app with more than 50 traces has its runs folded; open, the first 50, t
   await expect(traces.last().locator(".dt-request-path")).toHaveText("/authors/60");
   await expect(more).toHaveCount(0);
 });
+
+test("at the list's default width a chain row's path keeps its last segment whole, cut in its middle; a run's say what tells them apart", async ({
+  page,
+}) => {
+  await page.addInitScript(() => localStorage.setItem("tracepanel:list-width", "315"));
+  const product = "/api/catalog/products/trail-runner-gtx";
+  const { bff } = await fanout(4, [
+    { route: "/api/catalog/products/{slug}", path: product, at: 0 },
+    ...[7, 12, 345].map((id, n) => ({
+      route: "/api/library/authors/{author_id}",
+      path: `/api/library/authors/${id}`,
+      at: 1_000 + n * 1_000,
+    })),
+  ]);
+  const { run, traces } = await listed(page, bff);
+  const paths = traces.locator(".dt-request-path");
+
+  await expect(run).toContainText("/api/library/authors/{author_id}");
+  await expect(paths).toHaveText([
+    product,
+    "/api/library/authors/7",
+    "/api/library/authors/12",
+    "/api/library/authors/345",
+  ]);
+  await expect(paths.locator(".dt-path-tail")).toHaveText(["/trail-runner-gtx", "/7", "/12", "/345"]);
+  // Whole in the tooltip.
+  expect(await paths.evaluateAll((each) => each.map((path) => path.getAttribute("title")))).toEqual([
+    product,
+    "/api/library/authors/7",
+    "/api/library/authors/12",
+    "/api/library/authors/345",
+  ]);
+  // The run says the method once: its traces don't.
+  await expect(traces.first().locator(".dt-method")).toHaveText("GET");
+  await expect(traces.locator(".dt-method")).toHaveCount(1);
+
+  // No ellipsis inside a last segment: the head gave way (the product's cut in its middle).
+  const tails = await paths
+    .locator(".dt-path-tail")
+    .evaluateAll((each) => each.map((tail) => tail.scrollWidth > tail.clientWidth));
+  expect(tails).toEqual([false, false, false, false]);
+  // The run's own row too: its route's last segment whole.
+  await expect(run.locator(".dt-path-tail")).toHaveText("/{author_id}");
+  expect(await run.locator(".dt-path-tail").evaluate((tail) => tail.scrollWidth > tail.clientWidth)).toBe(false);
+  expect(
+    await paths
+      .first()
+      .locator(".dt-path-head")
+      .evaluate((head) => head.scrollWidth > head.clientWidth),
+  ).toBe(true);
+});

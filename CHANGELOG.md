@@ -96,6 +96,14 @@
 
 ### Changed
 
+- A list's paths are cut in the middle, not at the end: the last
+  segment stays whole (`/api/cat…/trail-runner-gtx`), and the whole path
+  is in the tooltip. In the panel's narrow list the numbers make room
+  first: a 2xx status is left out (any other shows), the queries show as
+  a number without the icon, and the rows under a request are indented
+  less. The traces of a run (`GET /authors/{author_id} ×36`) don't repeat
+  the method. Each shows its path with the shared part quiet and the
+  part that differs bright (`/authors` `/7`).
 - A trace's tabs and lists say the time of their calls on the clock, calls
   that ran side by side counted once, as a group of the call tree says
   it: the DB and HTTP calls tabs, the lists' headers (`36 queries · 1

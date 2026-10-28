@@ -9,7 +9,7 @@ import { foldKeys } from "./lib/keys";
 import { pageParts } from "./lib/page";
 import { plural } from "./lib/plural";
 import { RowFlame } from "./ProfileHint";
-import { AppChip, IssueChip, KindBadge, MethodBadge, RoutePath, StatusSlot, TaskName, Times } from "./primitives";
+import { AppChip, IssueChip, KindBadge, MethodBadge, StatusSlot, TailPath, TaskName, Times } from "./primitives";
 import type { IssueKind, TraceSummary } from "./types";
 
 export interface TraceRow {
@@ -197,7 +197,13 @@ function ChainItems({
   chains,
   selectedId,
   onSelect,
-}: ChainLevelProps & { listKey: string; items: readonly ChainItem[] }) {
+  shared,
+}: ChainLevelProps & {
+  listKey: string;
+  items: readonly ChainItem[];
+  /** A run's traces: the route they share (their rows name them by what tells them apart). */
+  shared?: string | null | undefined;
+}) {
   const allKey = `${listKey}/all`;
   const all = items.length <= SHOWN_FIRST || chains.open.has(allKey);
   const shown = all ? items : items.slice(0, SHOWN_FIRST);
@@ -208,7 +214,7 @@ function ChainItems({
         item.type === "run" ? (
           <ChainRunRows key={item.key} run={item} {...props} />
         ) : (
-          <ChainTraceRows key={item.key} row={item} {...props} />
+          <ChainTraceRows key={item.key} row={item} shared={shared} {...props} />
         ),
       )}
       {all ? null : (
@@ -268,6 +274,7 @@ function ChainRunRows({ run, rowId, level, chains, selectedId, onSelect }: Chain
         <ChainItems
           listKey={run.key}
           items={run.traces}
+          shared={run.summary.path}
           rowId={rowId}
           level={level + 1}
           chains={chains}
@@ -279,8 +286,19 @@ function ChainRunRows({ run, rowId, level, chains, selectedId, onSelect }: Chain
   );
 }
 
-/** One trace of an app: its method and path (its route in the tooltip), opened beside the list; what it called under it. */
-function ChainTraceRows({ row, rowId, level, chains, selectedId, onSelect }: ChainLevelProps & { row: ChainTraceRow }) {
+/**
+ * One trace of an app: its method and path (its route in the tooltip), opened beside the list; what it called under
+ * it. Under a run (`shared`, the run's route), the method is the run's: just its path, what tells it apart stressed.
+ */
+function ChainTraceRows({
+  row,
+  shared,
+  rowId,
+  level,
+  chains,
+  selectedId,
+  onSelect,
+}: ChainLevelProps & { row: ChainTraceRow; shared?: string | null | undefined }) {
   const nested = row.apps.length > 0;
   const open = nested && chains.open.has(row.key);
   const toggle = () => chains.onToggle(row.key);
@@ -300,7 +318,11 @@ function ChainTraceRows({ row, rowId, level, chains, selectedId, onSelect }: Cha
       >
         <span className="dt-request-main">
           {nested ? <ChainCaret onToggle={toggle} /> : <span className="dt-map-caret" />}
-          <RowName trace={row.summary} />
+          {shared && row.summary.path ? (
+            <TailPath path={row.summary.path} shared={shared} />
+          ) : (
+            <RowName trace={row.summary} />
+          )}
           <RowFlame trace={row.trace} />
         </span>
         <span className="dt-request-meta">
@@ -410,10 +432,14 @@ function FullChips({ kinds, issues }: { kinds: IssueKind[] | undefined; issues: 
   );
 }
 
-/** What a request is named by: its GraphQL operation (not POST /graphql/), its path, else its name's path. */
-function requestPath(trace: TraceSummary) {
-  if (trace.name.startsWith("GraphQL ")) return trace.name.slice("GraphQL ".length);
-  return trace.path ?? <RoutePath path={trace.name.split(" ").slice(1).join(" ")} />;
+/**
+ * What a request is named by: its GraphQL operation (not POST /graphql/), its path, else its name's path (a route,
+ * its parameters dimmed).
+ */
+function requestPath(trace: TraceSummary): { path: string; route: boolean } {
+  if (trace.name.startsWith("GraphQL ")) return { path: trace.name.slice("GraphQL ".length), route: false };
+  if (trace.path) return { path: trace.path, route: false };
+  return { path: trace.name.split(" ").slice(1).join(" "), route: true };
 }
 
 /** An htmx request: the element that sent it and where the answer went, after the path. */
@@ -438,6 +464,7 @@ function RequestName({
   target?: string | undefined;
 }) {
   const graphql = trace.name.startsWith("GraphQL ");
+  const { path, route } = requestPath(trace);
   return (
     <>
       {/* A GraphQL operation's badge is its kind's, as in the console's lists. */}
@@ -446,10 +473,9 @@ function RequestName({
       ) : (
         <MethodBadge method={trace.method ?? trace.name.split(" ")[0]} htmx={trace.htmx} />
       )}
-      <span className="dt-request-path">
-        {requestPath(trace)}
+      <TailPath path={path} params={route}>
         {trigger ? <HtmxTrigger trigger={trigger} target={target} /> : null}
-      </span>
+      </TailPath>
     </>
   );
 }
