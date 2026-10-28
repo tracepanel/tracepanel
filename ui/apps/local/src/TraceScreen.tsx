@@ -10,8 +10,8 @@ import {
   type TraceViewProps,
 } from "@tracepanel/ui";
 import { cn } from "@tracepanel/ui/lib/utils";
-import { SearchXIcon } from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
+import { HourglassIcon, SearchXIcon } from "lucide-react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useCapability } from "./hooks";
 import { track, useRefresh } from "./refresh";
 import { withShare } from "./ShareDialog";
@@ -21,6 +21,36 @@ const TRACE_RETRIES = 6;
 /** On the console's page, opened from a list or a link: a trace that isn't stored says so after one more look. */
 const PAGE_RETRIES = 1;
 const TRACE_RETRY_MS = 300;
+/**
+ * How long a trace may be on its way: a view or an action in the browser goes out once it ends (15 s at the longest),
+ * a request once the SDK wrote it. Until then a trace that isn't stored is arriving, asked for again and again, less
+ * often as it takes longer.
+ */
+export const ARRIVING_MS = 60_000;
+const ARRIVING_RETRY_MS = 3000;
+const ULID_TIME = 10;
+// An app's clock a little ahead of the browser's.
+const CLOCK_SKEW_MS = 10_000;
+const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+
+/** When a trace started, by its id (a ULID: its first ten characters are the time, in ms); null for another id. */
+function startedAt(id: string): number | null {
+  let ms = 0;
+  for (const char of id.slice(0, ULID_TIME)) {
+    const value = CROCKFORD.indexOf(char);
+    if (value === -1) return null;
+    ms = ms * 32 + value;
+  }
+  return id.length === 26 ? ms : null;
+}
+
+/** Whether a trace that isn't stored may still arrive: it started a moment ago, by its id (not in the future). */
+function recent(id: string): boolean {
+  const started = startedAt(id);
+  if (started === null) return false;
+  const age = Date.now() - started;
+  return age > -CLOCK_SKEW_MS && age < ARRIVING_MS;
+}
 
 export interface TraceScreenProps {
   id: string;
@@ -45,9 +75,13 @@ export interface TraceScreenProps {
   back?: ReactNode;
   /** A Share button, when the source can make a snapshot: the console's trace page. */
   shareable?: boolean | undefined;
-  /** Called once the trace has loaded, or is known to be gone: a page around it shows with it. */
   /** Called once the trace has loaded, with it (null when it isn't stored). */
   onLoaded?: ((trace: Trace | null) => void) | undefined;
+  /**
+   * Whether the trace is known to be on its way (the panel lists it; the agent hasn't stored it yet): it shows as
+   * arriving and loads once it is stored. Unset: as its id says, a trace that started a moment ago may still arrive.
+   */
+  arriving?: boolean | undefined;
 }
 
 // What each app said, as last loaded: the next trace of the same app opens with its App tab at once (the panel
@@ -130,46 +164,146 @@ function TraceLoading({ variant }: { variant: TraceScreenProps["variant"] }) {
   );
 }
 
+/** What the screen shows for a trace: it, null when it is gone, "arriving" while it is on its way. */
+type Loaded = Trace | null | "arriving";
+
+function isTrace(value: Loaded | undefined): value is Trace {
+  return value !== undefined && value !== null && value !== "arriving";
+}
+
+function traceOf(value: Loaded | undefined): Trace | null {
+  return isTrace(value) ? value : null;
+}
+
+interface Loading {
+  id: string;
+  source: DataSource;
+  /** Quick looks left before it is gone, or on its way. */
+  retries: number;
+  /** Whether it may still arrive, asked after the quick looks. */
+  onItsWay: () => boolean;
+  show: (value: Loaded) => void;
+}
+
 /**
- * The trace, once loaded (null when it is gone), retried briefly while it may not be stored yet. The trace on screen
- * stays until the next one is loaded: following new requests swaps one for the other instead of blinking through an
- * empty pane.
+ * Loads a trace: retried briefly while it may not be stored yet, then, while it is on its way, less and less often
+ * until it is stored. Returns the way to stop.
+ */
+function loadTrace({ id, source, retries, onItsWay, show }: Loading): () => void {
+  let cancelled = false;
+  let timer: number | undefined;
+  const later = (then: () => void, ms: number) => {
+    timer = window.setTimeout(then, ms);
+  };
+  const missing = (left: number, delay: number) => {
+    if (left > 0) return later(() => attempt(left - 1, delay), TRACE_RETRY_MS);
+    if (!onItsWay()) return show(null);
+    show("arriving");
+    later(() => attempt(0, Math.min(delay * 1.5, ARRIVING_RETRY_MS)), delay);
+  };
+  const attempt = (left: number, delay: number) => {
+    source.getTrace(id).then(
+      (result) => {
+        if (cancelled) return;
+        if (result === null) missing(left, delay);
+        else show(result);
+      },
+      () => !cancelled && show(null),
+    );
+  };
+  attempt(retries, TRACE_RETRY_MS);
+  return () => {
+    cancelled = true;
+    window.clearTimeout(timer);
+  };
+}
+
+/**
+ * The trace, once loaded (null when it is gone), retried briefly while it may not be stored yet, and for as long as
+ * it is on its way (`arriving`): it shows the moment it is stored. The trace on screen stays until the next one is
+ * loaded: following new requests swaps one for the other instead of blinking through an empty pane.
  */
 function useTrace(
   id: string,
   source: DataSource,
   onLoaded: ((trace: Trace | null) => void) | undefined,
   variant: TraceScreenProps["variant"],
-): Trace | null | undefined {
-  const [trace, setTrace] = useState<Trace | null | undefined>(undefined);
+  arriving: boolean | undefined,
+): Loaded | undefined {
+  const [loaded, setLoaded] = useState<{ id: string; value: Loaded } | undefined>(undefined);
+  const waiting = useRef(arriving);
+  waiting.current = arriving;
+  // Stored at last, as the list says: asked for again at once.
+  const known = arriving === false;
+  const have = holds(loaded, id);
   // biome-ignore lint/correctness/useExhaustiveDependencies: a new `onLoaded` is no new trace to load.
   useEffect(() => {
-    let cancelled = false;
-    let timer: number | undefined;
-    const show = (result: Trace | null) => {
-      setTrace(result);
-      onLoaded?.(result);
-    };
-    const attempt = (left: number) => {
-      source.getTrace(id).then(
-        (result) => {
-          if (cancelled) return;
-          if (result === null && left > 0) timer = window.setTimeout(() => attempt(left - 1), TRACE_RETRY_MS);
-          else show(result);
-        },
-        () => {
-          if (!cancelled) show(null);
-        },
-      );
-    };
-    // The panel follows requests as they happen, before the agent may have stored them; the page doesn't.
-    attempt(variant === "full" ? PAGE_RETRIES : TRACE_RETRIES);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [id, source, variant]);
-  return trace;
+    // Loaded already: the list catching up with the store is no reason to load it again.
+    if (have) return;
+    return loadTrace({
+      id,
+      source,
+      retries: retriesFor(variant),
+      onItsWay: () => waiting.current ?? recent(id),
+      show: (value) => {
+        setLoaded({ id, value });
+        if (value !== "arriving") onLoaded?.(value);
+      },
+    });
+  }, [id, source, variant, known]);
+  return shownFor(loaded, id);
+}
+
+/** The panel follows requests as they happen, before the agent may have stored them; the page doesn't. */
+function retriesFor(variant: TraceScreenProps["variant"]): number {
+  return variant === "full" ? PAGE_RETRIES : TRACE_RETRIES;
+}
+
+/** Whether the trace `id` is loaded. */
+function holds(loaded: { id: string; value: Loaded } | undefined, id: string): boolean {
+  return loaded?.id === id && isTrace(loaded.value);
+}
+
+/**
+ * What the screen shows while it is asked for `id`: what came of it, else the trace before it, which stays on screen
+ * while this one loads (that one gone or arriving says nothing of this one).
+ */
+function shownFor(loaded: { id: string; value: Loaded } | undefined, id: string): Loaded | undefined {
+  if (!loaded) return undefined;
+  if (loaded.id === id) return loaded.value;
+  return traceOf(loaded.value) ?? undefined;
+}
+
+/** The trace pane while there is no trace to show: loading, on its way, or gone. */
+function NoTrace({
+  loaded,
+  variant,
+  back,
+}: {
+  loaded: Loaded | undefined;
+  variant: TraceScreenProps["variant"];
+  back: ReactNode;
+}) {
+  if (loaded === undefined) return <TraceLoading variant={variant} />;
+  if (loaded === "arriving") return <TraceArriving variant={variant} />;
+  return (
+    <Empty title="Trace not found" action={back} icon={SearchXIcon} page={true}>
+      It is no longer in the local store: older traces are removed as new ones arrive, and the store starts fresh after
+      a Tracepanel upgrade.
+    </Empty>
+  );
+}
+
+/** A trace the list has and the agent hasn't stored yet: it opens here as it arrives. */
+function TraceArriving({ variant }: { variant: TraceScreenProps["variant"] }) {
+  return (
+    <div className={cn("grid", variant === "full" ? "" : "h-full")} role="status" aria-busy="true">
+      <Empty title="Trace on its way" icon={HourglassIcon} page={true}>
+        The agent hasn't stored it yet: a view or an action in the browser is sent once it ends, a request once its app
+        has written it. It opens here as it arrives.
+      </Empty>
+    </div>
+  );
 }
 
 export function TraceScreen({
@@ -186,23 +320,17 @@ export function TraceScreen({
   back,
   shareable,
   onLoaded,
+  arriving,
   ...shown
 }: TraceScreenProps) {
-  const trace = useTrace(id, source, onLoaded, variant);
+  const loaded = useTrace(id, source, onLoaded, variant, arriving);
+  const trace = traceOf(loaded);
   const related = useRelated(id, source);
   // The panel (compact, or docked as a strip) has an App tab: the console's trace page doesn't.
   const app = useApp(source, serviceOf(trace, variant));
   // EXPLAIN only where the app behind the console runs it.
   const explainable = useCapability(source, "explain");
-  if (trace === undefined) return <TraceLoading variant={variant} />;
-  if (trace === null) {
-    return (
-      <Empty title="Trace not found" action={back} icon={SearchXIcon} page={true}>
-        It is no longer in the local store: older traces are removed as new ones arrive, and the store starts fresh
-        after a Tracepanel upgrade.
-      </Empty>
-    );
-  }
+  if (trace === null) return <NoTrace loaded={loaded} variant={variant} back={back} />;
   return (
     <TraceView
       key={trace.id}
