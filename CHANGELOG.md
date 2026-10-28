@@ -52,6 +52,18 @@
   trace's records and its chain's, added up by level and app. `get_trace`
   says the traces down its calls and their warnings and errors.
 
+### Changed
+
+- In the call tree, an HTTP or RPC call and the trace another app served
+  for it are one row: the call's method and path, the app that served it
+  (and its trace's name where it says more, such as `GraphQL query
+  Books`), what that trace found (N+1, its queries) and its flame. The
+  bar is the call's time with the server's part inside it, the rest the
+  network's, and the time's tooltip says both. Opened, the row shows the
+  served trace's own rows (its handler, its SQL) right under it, and its
+  details have the call, then what served it. A call no trace served (an
+  external API) is a row as before.
+
 ### Fixed
 
 - Log records from a coloured logger (GraphQL Yoga's, a Node app's
