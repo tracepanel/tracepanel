@@ -55,6 +55,17 @@ const JOINEDLOAD: &str = "Load the related object in the same query: add `joined
     to the select() that produced these rows (or `selectinload()` for one extra query).";
 const SELECTINLOAD: &str = "Load the related rows in one extra query: add `selectinload()` for this relationship \
     to the select() that produced these rows.";
+// The JavaScript ORMs the JS SDK names in `db.client`, from the frames that made the query.
+const PRISMA_INCLUDE: &str = "Load the related records with the parent rows: `include` the relation (or a nested \
+    `select`) in the query that produced these rows (`.include()` in Prisma ORM 8).";
+const DRIZZLE_WITH: &str = "Load the related rows with the parent rows: read them through `db.query` with `with` \
+    for this relation, or `leftJoin()` the table in the select that produced these rows.";
+const TYPEORM_RELATIONS: &str = "Load the related entities in the same query: add this relation to `relations` in \
+    the find that produced these rows (or `leftJoinAndSelect()` it in a query builder).";
+const SEQUELIZE_INCLUDE: &str = "Load the associated rows with the parent rows: add the association to `include` in \
+    the finder that produced these rows.";
+const KNEX_JOIN: &str = "Load the related rows with the parent rows: `join()` the table in the query that produced \
+    these rows, or read them in one query with `whereIn()` on the collected keys.";
 const N_PLUS_ONE: &str = "Load the related rows with the parent rows (a join, or one batched query) instead of one query per row.";
 const DUPLICATES: &str = "Run the query once and reuse the result, or cache it for the request.";
 const IN_GRAPHQL: &str =
@@ -106,6 +117,11 @@ fn n_plus_one_hint(client: &str, by_pk: bool, in_template: bool) -> &'static str
         ("django", false) => PREFETCH_RELATED,
         ("sqlalchemy", true) => JOINEDLOAD,
         ("sqlalchemy", false) => SELECTINLOAD,
+        ("prisma", _) => PRISMA_INCLUDE,
+        ("drizzle", _) => DRIZZLE_WITH,
+        ("typeorm", _) => TYPEORM_RELATIONS,
+        ("sequelize", _) => SEQUELIZE_INCLUDE,
+        ("knex", _) => KNEX_JOIN,
         _ if in_template => N_PLUS_ONE_IN_TEMPLATE,
         _ => N_PLUS_ONE,
     }
@@ -1268,6 +1284,79 @@ mod tests {
     }
 
     #[test]
+    fn an_n_plus_one_through_a_javascript_orm_gets_its_hint() {
+        // What a JavaScript app's code reads through its ORM, a query per row: the JS SDK names the ORM in db.client.
+        let author = r#"SELECT "author"."name" FROM "author" WHERE "author"."id" = $1 LIMIT $2"#;
+        let tags = r#"SELECT "tag"."name" FROM "tag" WHERE "tag"."post_id" = $1"#;
+        let by_orm = |statement: &str, client: &str| {
+            (0..3)
+                .map(|n| {
+                    let attrs = serde_json::json!({
+                        "db.statement": statement, "db.fingerprint": statement, "db.params_hash": format!("p{n}"),
+                        "db.client": client, "code.origin": "app/posts/route.ts:12 in GET",
+                    });
+                    ("sql", "SELECT", attrs, 1000)
+                })
+                .collect::<Vec<_>>()
+        };
+        let culprit = Some("app/posts/route.ts:12 in GET".to_owned());
+        let hinted =
+            |client: &str| [author, tags].map(|statement| hints(&by_orm(statement, client)));
+
+        assert_eq!(
+            hinted("prisma"),
+            [
+                vec![(culprit.clone(), Some(PRISMA_INCLUDE.to_owned()))],
+                vec![(culprit.clone(), Some(PRISMA_INCLUDE.to_owned()))],
+            ]
+        );
+        assert_eq!(
+            hinted("drizzle"),
+            [
+                vec![(culprit.clone(), Some(DRIZZLE_WITH.to_owned()))],
+                vec![(culprit.clone(), Some(DRIZZLE_WITH.to_owned()))],
+            ]
+        );
+        assert_eq!(
+            hinted("typeorm"),
+            [
+                vec![(culprit.clone(), Some(TYPEORM_RELATIONS.to_owned()))],
+                vec![(culprit.clone(), Some(TYPEORM_RELATIONS.to_owned()))],
+            ]
+        );
+        assert_eq!(
+            hinted("sequelize"),
+            [
+                vec![(culprit.clone(), Some(SEQUELIZE_INCLUDE.to_owned()))],
+                vec![(culprit.clone(), Some(SEQUELIZE_INCLUDE.to_owned()))],
+            ]
+        );
+        assert_eq!(
+            hinted("knex"),
+            [
+                vec![(culprit.clone(), Some(KNEX_JOIN.to_owned()))],
+                vec![(culprit.clone(), Some(KNEX_JOIN.to_owned()))],
+            ]
+        );
+
+        // The driver alone, or an ORM without a hint of its own: the generic hint.
+        assert_eq!(
+            hinted("pg"),
+            [
+                vec![(culprit.clone(), Some(N_PLUS_ONE.to_owned()))],
+                vec![(culprit.clone(), Some(N_PLUS_ONE.to_owned()))],
+            ]
+        );
+        assert_eq!(
+            hinted("kysely"),
+            [
+                vec![(culprit.clone(), Some(N_PLUS_ONE.to_owned()))],
+                vec![(culprit, Some(N_PLUS_ONE.to_owned()))],
+            ]
+        );
+    }
+
+    #[test]
     fn a_graphql_n_plus_one_names_the_dataloader_of_its_library() {
         let author = r#"SELECT "author"."name" FROM "author" WHERE "author"."id" = %s LIMIT 21"#;
         let hint = |attrs: Value| {
@@ -1796,6 +1885,42 @@ mod tests {
                 "duplicates".to_owned(),
                 "Duplicate MongoDB commands: 2 identical · find users".to_owned(),
                 2
+            )]
+        );
+    }
+
+    #[test]
+    fn a_mongoose_n_plus_one_gets_populate_and_a_driver_s_the_in_filter() {
+        let find = |id: i64, client: &str| {
+            op(
+                "mongodb",
+                "find users",
+                serde_json::json!({"db.system": "mongodb", "db.operation": "find", "db.collection.name": "users",
+                                   "db.client": client, "db.namespace": "shop",
+                                   "db.statement": format!("{{\"filter\": {{\"_id\": {id}}}}}")}),
+                2000,
+            )
+        };
+        let culprit = Some("app/views.py:40 in feed".to_owned());
+
+        assert_eq!(
+            hints(&[
+                find(1, "mongoose"),
+                find(2, "mongoose"),
+                find(3, "mongoose")
+            ]),
+            [(culprit.clone(), Some(calls::MONGOOSE_POPULATE.to_owned()))]
+        );
+
+        assert_eq!(
+            hints(&[find(1, "mongodb"), find(2, "mongodb"), find(3, "mongodb")]),
+            [(
+                culprit,
+                Some(
+                    "Fetch the documents in one query: an `$in` filter on the field (`{\"_id\": {\"$in\": ids}}`), \
+                     or a `$lookup` in an aggregation, instead of one `find` per item."
+                        .to_owned()
+                )
             )]
         );
     }

@@ -378,6 +378,9 @@ fn mongodb_index(span: &Span) -> Option<String> {
     ))
 }
 
+// Mongoose's documents, as the JS SDK names the ODM in `db.client`.
+pub(crate) const MONGOOSE_POPULATE: &str = "Load the referenced documents in one extra query: `populate()` this path on the \
+    query that produced these documents, instead of one query per document.";
 const DATASTORE_REPEATED: &str =
     "Fetch the items in one query (an `$in` filter, a multi-get, a batch) instead of one per item.";
 const DATASTORE_DUPLICATES: &str = "Run the query once and reuse the result for the request.";
@@ -723,6 +726,9 @@ fn group_issues(
             Some(match spans[0].kind.as_str() {
                 storage::KIND => storage::repeated_hint(spans[0]),
                 llm::KIND => llm::repeated_hint(spans[0]),
+                "mongodb" if text(&spans[0].attrs, "db.client").as_deref() == Some("mongoose") => {
+                    MONGOOSE_POPULATE
+                }
                 _ => rules.repeated_hint,
             }),
             spans.len(),
