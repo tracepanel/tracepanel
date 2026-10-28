@@ -1133,6 +1133,9 @@ fn chain_docs(start: i64) -> Vec<Value> {
         if let Some(w3c) = w3c {
             attrs["w3c.span_id"] = json!(w3c);
         }
+        if kind == "http.client" {
+            attrs["url.full"] = json!(format!("http://library-api{}", &name[4..]));
+        }
         json!({"id": chain_id(n), "parent_id": parent.map(chain_id), "kind": kind, "name": name, "start": start + at,
                "duration": 100, "status": "ok", "attrs": attrs})
     };
@@ -1197,7 +1200,10 @@ fn chain_docs(start: i64) -> Vec<Value> {
             "GET /authors/1",
             200,
             Some("c000000000000001"),
-            vec![span(201, None, "http", "GET /authors/1", 200, None)],
+            vec![
+                span(201, None, "http", "GET /authors/1", 200, None),
+                span(202, Some(201), "sql", "SELECT author", 210, None),
+            ],
             vec![log(201, 220, "error", "app.db", "no author 1")],
         ),
         doc(
@@ -1206,7 +1212,10 @@ fn chain_docs(start: i64) -> Vec<Value> {
             "GET /authors/2",
             500,
             Some("c000000000000002"),
-            vec![span(301, None, "http", "GET /authors/2", 500, None)],
+            vec![
+                span(301, None, "http", "GET /authors/2", 500, None),
+                span(302, Some(301), "sql", "SELECT author", 510, None),
+            ],
             vec![log(301, 520, "info", "app.db", "author 2")],
         ),
     ]
@@ -1284,5 +1293,37 @@ their warnings and worse (1):
   +0.2 ms error library-api app.db: no author 1"
         )),
         "{trace}"
+    );
+}
+
+#[tokio::test]
+async fn a_traces_calls_come_with_its_chains() {
+    let start = tracepanel_store_local::search::now_us() - 5_000_000;
+    let dir = store("chain-calls", &chain_docs(start));
+    let server = Server::new(dir, false);
+    let bff = chain_id(1);
+
+    let (sql, _) = tool(&server, "list_calls", json!({"trace": bff})).await;
+    let (http, _) = tool(
+        &server,
+        "list_calls",
+        json!({"trace": bff, "system": "http", "chain": false}),
+    )
+    .await;
+
+    assert_eq!(
+        sql,
+        format!(
+            "sql calls of {bff} and its chain: 2 calls · 0.2 ms · 0.2 ms on the clock · slowest 0.1 ms (library-api) · by app: library-api 2
+×2 in 2 traces · 0.2 ms · library-api default: SELECT author"
+        )
+    );
+
+    assert_eq!(
+        http,
+        format!(
+            "http calls of {bff}: 2 calls · 0.2 ms · 0.2 ms on the clock · slowest 0.1 ms (library-bff) · by app: library-bff 2
+×2 in 1 trace · 0.2 ms · library-bff library-api: GET /authors/{{id}}"
+        )
     );
 }

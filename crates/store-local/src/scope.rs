@@ -503,6 +503,359 @@ pub fn log_summary(logs: &[Value], window: (i64, i64)) -> Value {
     })
 }
 
+/// The N+1 a chain shows across apps: as many calls of one kind under one span as the analysis's N+1.
+const CHAIN_REPEATS: usize = 3;
+
+/// Issues by how much they cost a request: what failed first, then what repeats, then what is slow.
+const ISSUE_ORDER: [&str; 13] = [
+    "error",
+    "n+1",
+    "duplicates",
+    "slow-sql",
+    "slow-http",
+    "slow-call",
+    "long-transaction",
+    "in-transaction",
+    "blocking-call",
+    "large-result",
+    "queue-wait",
+    "htmx",
+    "migration-risk",
+];
+
+/// A member's trace as the analysis reads it.
+fn parsed(member: &Member) -> Option<Trace> {
+    serde_json::from_value(member.doc.clone()).ok()
+}
+
+/// The time spans cover together: overlapping ones counted once.
+fn wall(mut ranges: Vec<(i64, i64)>) -> i64 {
+    ranges.sort_unstable();
+    let mut total = 0;
+    let mut reach = i64::MIN;
+    for (start, end) in ranges {
+        if end <= reach {
+            continue;
+        }
+        total += end - start.max(reach);
+        reach = end;
+    }
+    total
+}
+
+impl Scope<'_> {
+    /// The scope's calls of one family (`sql`, `http`, …), in time order, each its span with its trace, app and what
+    /// it groups by (`key`, `template`, `target`, `op`).
+    pub fn calls(&self, family: &str) -> Vec<Value> {
+        let mut calls: Vec<Value> = self
+            .members()
+            .flat_map(|(at, member)| {
+                let Some(trace) = parsed(member) else {
+                    return Vec::new();
+                };
+                let docs: HashMap<&str, &Value> = member
+                    .spans()
+                    .filter_map(|span| Some((span["id"].as_str()?, span)))
+                    .collect();
+                trace
+                    .spans
+                    .iter()
+                    .filter(|span| self.has_span(at, &span.id))
+                    .filter_map(|span| {
+                        let operation = tracepanel_analysis::calls::operation(&trace, span)?;
+                        if operation.family != family {
+                            return None;
+                        }
+                        let mut call = (*docs.get(span.id.as_str())?).clone();
+                        call["trace_id"] = Value::from(member.id());
+                        call["app"] = Value::from(member.app());
+                        call["key"] = Value::from(call_key(&operation));
+                        call["template"] = Value::from(operation.template);
+                        call["target"] = Value::from(operation.target);
+                        call["op"] = Value::from(operation.op);
+                        Some(call)
+                    })
+                    .collect()
+            })
+            .collect();
+        calls.sort_by_key(|call| call["start"].as_i64().unwrap_or_default());
+        calls
+    }
+
+    /// The issues of the scope's traces, one per fingerprint (how many traces and times, which apps), with the
+    /// chain's own N+1 across apps; the worst first. A trace taken whole brings all its issues, a part of one those on
+    /// its spans.
+    pub fn issues(&self) -> Vec<Value> {
+        let mut found: Vec<(usize, Value)> = self
+            .members()
+            .flat_map(|(at, member)| {
+                member.doc["issues"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .map(move |issue| (at, issue.clone()))
+            })
+            .chain(chain_issues(self.chain))
+            .filter(|(at, issue)| {
+                let spans = issue["span_ids"].as_array().cloned().unwrap_or_default();
+                matches!(self.parts[*at], Some(Part::Whole))
+                    || spans
+                        .iter()
+                        .filter_map(Value::as_str)
+                        .any(|span| self.has_span(*at, span))
+            })
+            .collect();
+        found.sort_by_key(|(at, _)| *at);
+        let mut grouped: Vec<Value> = Vec::new();
+        for (at, issue) in found {
+            let member = &self.chain.members[at];
+            let count = issue["count"].as_i64().unwrap_or(1).max(1);
+            if let Some(group) = grouped
+                .iter_mut()
+                .find(|group| group["fingerprint"] == issue["fingerprint"])
+            {
+                group["traces"] = Value::from(group["traces"].as_i64().unwrap_or_default() + 1);
+                group["occurrences"] =
+                    Value::from(group["occurrences"].as_i64().unwrap_or_default() + count);
+                if let Some(apps) = group["apps"].as_array_mut()
+                    && !apps.iter().any(|app| app == member.app())
+                {
+                    apps.push(Value::from(member.app()));
+                }
+                continue;
+            }
+            let mut group = issue;
+            group["trace_id"] = Value::from(member.id());
+            group["app"] = Value::from(member.app());
+            group["apps"] = serde_json::json!([member.app()]);
+            group["traces"] = Value::from(1);
+            group["occurrences"] = Value::from(count);
+            grouped.push(group);
+        }
+        let rank = |issue: &Value| {
+            ISSUE_ORDER
+                .iter()
+                .position(|kind| issue["kind"] == *kind)
+                .unwrap_or(ISSUE_ORDER.len())
+        };
+        grouped.sort_by(|a, b| {
+            rank(a)
+                .cmp(&rank(b))
+                .then(b["occurrences"].as_i64().cmp(&a["occurrences"].as_i64()))
+        });
+        grouped
+    }
+}
+
+/// What a scope's calls add up to: how many, their time (in all, and on the clock: overlapping calls once), the
+/// slowest, by app and by target (a database, a host), and each statement or endpoint they repeat with how many times
+/// and in how many traces, the most first.
+pub fn call_summary(calls: &[Value]) -> Value {
+    let int = |call: &Value, key: &str| call[key].as_i64().unwrap_or_default();
+    let total: i64 = calls.iter().map(|call| int(call, "duration")).sum();
+    let ranges = calls
+        .iter()
+        .map(|call| {
+            (
+                int(call, "start"),
+                int(call, "start") + int(call, "duration"),
+            )
+        })
+        .collect();
+    // The first of the slowest: `max_by_key` keeps the last of equals.
+    let slowest = calls
+        .iter()
+        .rev()
+        .max_by_key(|call| int(call, "duration"))
+        .map(|call| {
+            serde_json::json!({
+                "name": call["name"], "duration": call["duration"], "app": call["app"],
+                "trace_id": call["trace_id"], "span_id": call["id"],
+            })
+        })
+        .unwrap_or(Value::Null);
+    let mut groups: Vec<(String, Value, HashSet<String>)> = Vec::new();
+    for call in calls {
+        let key = call["key"].as_str().unwrap_or_default();
+        let trace = call["trace_id"].as_str().unwrap_or_default().to_owned();
+        match groups.iter_mut().find(|(each, ..)| each == key) {
+            Some((_, group, traces)) => {
+                group["count"] = Value::from(group["count"].as_i64().unwrap_or_default() + 1);
+                group["total"] = Value::from(group["total"].as_i64().unwrap_or_default() + int(call, "duration"));
+                traces.insert(trace);
+            }
+            None => groups.push((
+                key.to_owned(),
+                serde_json::json!({
+                    "key": key, "template": call["template"], "op": call["op"], "target": call["target"],
+                    "app": call["app"], "count": 1, "total": int(call, "duration"),
+                }),
+                HashSet::from([trace]),
+            )),
+        }
+    }
+    let mut groups: Vec<Value> = groups
+        .into_iter()
+        .map(|(_, mut group, traces)| {
+            group["traces"] = Value::from(traces.len());
+            group
+        })
+        .collect();
+    groups.sort_by(|a, b| {
+        b["count"]
+            .as_i64()
+            .cmp(&a["count"].as_i64())
+            .then(b["total"].as_i64().cmp(&a["total"].as_i64()))
+    });
+    serde_json::json!({
+        "count": calls.len(),
+        "total": total,
+        "wall": wall(ranges),
+        "slowest": slowest,
+        "apps": counted(calls.iter().map(|call| call["app"].as_str().unwrap_or_default()), "app"),
+        "targets": counted(calls.iter().map(|call| call["target"].as_str().unwrap_or_default()), "target"),
+        "groups": groups,
+    })
+}
+
+/// What one call's trace ran: each SQL statement it ran (its key), with its span's name (`SELECT author`), its
+/// database and how many times.
+fn statements(member: &Member) -> HashMap<String, (String, String, i64)> {
+    let mut found: HashMap<String, (String, String, i64)> = HashMap::new();
+    let Some(trace) = parsed(member) else {
+        return found;
+    };
+    for span in &trace.spans {
+        let Some(operation) = tracepanel_analysis::calls::operation(&trace, span) else {
+            continue;
+        };
+        if operation.family != "sql" {
+            continue;
+        }
+        let entry = found.entry(call_key(&operation)).or_insert((
+            span.name.clone(),
+            operation.target.clone(),
+            0,
+        ));
+        entry.2 += 1;
+    }
+    found
+}
+
+/// Where a call was made from: its GraphQL field (a resolver's step above it), else its line of code.
+fn call_place(member: &Member, call: &Value) -> (Option<String>, Option<String>) {
+    let parent = call["parent_id"].as_str().and_then(|id| member.span(id));
+    let field = parent
+        .and_then(|span| span["attrs"]["graphql.field"].as_str())
+        .map(str::to_owned);
+    let origin = call["attrs"]["code.origin"].as_str().map(str::to_owned);
+    (field, origin)
+}
+
+/// The N+1 a chain has across apps: one span's repeated calls to another app (`Book.author`'s 36 `GET /authors/{id}`)
+/// whose traces each run the same statement, so the service runs it once per item of the caller's list. Found when
+/// the chain is read: the traces of one call arrive apart, and the issue is the caller's and the service's together.
+/// Each is an issue of the calling trace, on its calls' spans, with the index of that trace in the chain.
+pub fn chain_issues(chain: &Chain) -> Vec<(usize, Value)> {
+    let mut issues = Vec::new();
+    for (at, member) in chain.members.iter().enumerate() {
+        // The traces served for this one's calls, by the call's parent span and what the call repeats.
+        let mut repeats: HashMap<(String, String), Vec<(&Value, &Member)>> = HashMap::new();
+        for child in chain
+            .members
+            .iter()
+            .filter(|child| child.parent == Some(at))
+        {
+            let Some(call) = child.via.as_deref().and_then(|via| member.span(via)) else {
+                continue;
+            };
+            // A resolver's calls (one `Book.author` step per book) repeat across its steps, not under one span.
+            let step = call["parent_id"].as_str().and_then(|id| member.span(id));
+            let parent = match step.and_then(|step| step["attrs"]["graphql.field"].as_str()) {
+                Some(field) => format!(
+                    "{field}@{}",
+                    step.map_or("", |step| step["parent_id"].as_str().unwrap_or_default())
+                ),
+                None => call["parent_id"].as_str().unwrap_or_default().to_owned(),
+            };
+            let template = child.doc["attrs"]["http.route"]
+                .as_str()
+                .or_else(|| child.doc["name"].as_str())
+                .unwrap_or_default()
+                .to_owned();
+            repeats
+                .entry((parent, template))
+                .or_default()
+                .push((call, child));
+        }
+        let mut keys: Vec<&(String, String)> = repeats.keys().collect();
+        keys.sort();
+        for key in keys {
+            let served = &repeats[key];
+            if served.len() < CHAIN_REPEATS {
+                continue;
+            }
+            let ran: Vec<HashMap<String, (String, String, i64)>> =
+                served.iter().map(|(_, child)| statements(child)).collect();
+            let mut counts: HashMap<&str, usize> = HashMap::new();
+            for each in &ran {
+                for statement in each.keys() {
+                    *counts.entry(statement.as_str()).or_default() += 1;
+                }
+            }
+            let mut repeated: Vec<(&str, usize)> = counts
+                .into_iter()
+                .filter(|(_, traces)| *traces >= CHAIN_REPEATS && *traces * 2 >= served.len())
+                .collect();
+            repeated.sort();
+            for (statement, traces) in repeated {
+                let (name, target, _) = ran
+                    .iter()
+                    .find_map(|each| each.get(statement))
+                    .cloned()
+                    .unwrap_or_default();
+                let total: i64 = ran
+                    .iter()
+                    .filter_map(|each| each.get(statement).map(|(.., n)| *n))
+                    .sum();
+                let (call, child) = served[0];
+                let (field, origin) = call_place(member, call);
+                let app = child.app();
+                let route = &key.1;
+                let per = field.as_deref().map_or_else(
+                    || format!("each `{route}` call"),
+                    |field| format!("each `{field}`"),
+                );
+                let batch = field.as_deref().map_or_else(
+                    || "Batch the calls into one".to_owned(),
+                    |field| format!("Batch `{field}` (a DataLoader) into one call"),
+                );
+                issues.push((
+                    at,
+                    serde_json::json!({
+                        "fingerprint": query_fingerprint(&format!("{}|{route}|{statement}", member.app()), "chain"),
+                        "fingerprint_version": 1,
+                        "kind": "n+1",
+                        "title": format!("N+1 across apps: {total} similar queries in {app} · {name} · one per call from {per}"),
+                        "culprit": field.or(origin),
+                        "hint": format!(
+                            "{} calls from {} to `{route}`, one per item, each run this query in {app} ({target}): \
+                             {total} queries for one request. {batch}, and have {app} read the rows for all of \
+                             them at once.",
+                            served.len(), member.app(),
+                        ),
+                        "count": total,
+                        "span_ids": served.iter().map(|(call, _)| call["id"].clone()).collect::<Vec<_>>(),
+                        "chain": true,
+                        "statement_traces": traces,
+                    }),
+                ));
+            }
+        }
+    }
+    issues
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -544,6 +897,9 @@ mod tests {
         logs: Vec<Value>,
     ) -> Received {
         let mut attrs = json!({"service.name": app, "w3c.trace_id": W3C});
+        if id.starts_with("API") {
+            attrs["http.route"] = "/authors/{id}".into();
+        }
         if let Some(parent) = parent {
             attrs["w3c.parent_span_id"] = parent.into();
         }
@@ -586,14 +942,16 @@ mod tests {
         let mut api = Vec::new();
         for n in 1..=3 {
             let start = 5000 + 200 * n;
-            bff_spans.push(span(
+            let mut step = span(
                 &format!("b-r{n}"),
                 Some("b-root"),
                 "function",
                 "Book.author",
                 start,
                 100,
-            ));
+            );
+            step["attrs"]["graphql.field"] = "Book.author".into();
+            bff_spans.push(step);
             let mut call = span(
                 &format!("b-c{n}"),
                 Some(&format!("b-r{n}")),
@@ -807,6 +1165,113 @@ mod tests {
                 .sum::<usize>(),
             5
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_scopes_queries_add_up_across_the_traces_of_the_chain() {
+        let (dir, reader) = library("calls");
+        let chain = reader.chain("VIEW", true, &no_remote).unwrap().unwrap();
+        let whole = chain.select(&Selection::default());
+        let step = chain.select(&Selection {
+            targets: vec!["b-r1".into()],
+            only: false,
+        });
+
+        let calls = whole.calls("sql");
+        let summary = call_summary(&calls);
+        let key = calls[0]["key"].clone();
+
+        assert_eq!(
+            calls
+                .iter()
+                .map(|call| (
+                    call["id"].clone(),
+                    call["app"].clone(),
+                    call["trace_id"].clone()
+                ))
+                .collect::<Vec<_>>(),
+            [
+                (json!("a1-sql"), json!("library-api"), json!("API1")),
+                (json!("a2-sql"), json!("library-api"), json!("API2")),
+                (json!("a3-sql"), json!("library-api"), json!("API3")),
+            ]
+        );
+        assert_eq!(
+            summary,
+            json!({
+                "count": 3, "total": 30, "wall": 30,
+                "slowest": {"name": "SELECT author", "duration": 10, "app": "library-api", "trace_id": "API1", "span_id": "a1-sql"},
+                "apps": [{"app": "library-api", "count": 3}],
+                "targets": [{"target": "default", "count": 3}],
+                "groups": [{
+                    "key": key, "template": "SELECT author", "op": "SELECT", "target": "default", "app": "library-api",
+                    "count": 3, "total": 30, "traces": 3,
+                }],
+            })
+        );
+
+        assert_eq!(step.calls("sql").len(), 1);
+        assert_eq!(whole.calls("http").len(), 4);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_query_each_of_a_steps_calls_runs_in_the_service_is_one_n_plus_one_across_apps() {
+        let (dir, reader) = library("chain-n1");
+        let chain = reader.chain("VIEW", true, &no_remote).unwrap().unwrap();
+
+        let found = chain_issues(&chain);
+        let whole = chain.select(&Selection::default()).issues();
+        let step = chain
+            .select(&Selection {
+                targets: vec!["b-r2".into()],
+                only: false,
+            })
+            .issues();
+        let served = chain
+            .select(&Selection {
+                targets: vec!["API2".into()],
+                only: false,
+            })
+            .issues();
+
+        assert_eq!(found.len(), 1);
+        let (at, issue) = &found[0];
+        assert_eq!(*at, 1);
+        assert_eq!(
+            json!({
+                "kind": issue["kind"], "title": issue["title"], "culprit": issue["culprit"], "hint": issue["hint"],
+                "count": issue["count"], "span_ids": issue["span_ids"], "chain": issue["chain"],
+            }),
+            json!({
+                "kind": "n+1",
+                "title": "N+1 across apps: 3 similar queries in library-api · SELECT author · one per call from each `Book.author`",
+                "culprit": "Book.author",
+                "hint": "3 calls from library-bff to `/authors/{id}`, one per item, each run this query in library-api \
+                         (default): 3 queries for one request. Batch `Book.author` (a DataLoader) into one call, and \
+                         have library-api read the rows for all of them at once.",
+                "count": 3,
+                "span_ids": ["b-c1", "b-c2", "b-c3"],
+                "chain": true,
+            })
+        );
+
+        assert_eq!(
+            whole
+                .iter()
+                .map(|issue| (
+                    issue["title"].clone(),
+                    issue["app"].clone(),
+                    issue["traces"].clone()
+                ))
+                .collect::<Vec<_>>(),
+            [(issue["title"].clone(), json!("library-bff"), json!(1))]
+        );
+
+        assert_eq!(step.len(), 1);
+
+        assert_eq!(served, Vec::<Value>::new());
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -91,6 +91,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/traces/{id}/calls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A trace scope's calls of one family (SQL by default, HTTP, Redis…) in time order, each with its trace and app, and what they add up to: the whole chain of calls by default, the trace alone, or what is under some rows. */
+        get: operations["traceCalls"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/traces/{id}/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A trace scope's issues, one per fingerprint with how many traces and times and which apps, and the chain's own N+1 across apps (a call repeated per item whose service runs the same query each time); the worst first. */
+        get: operations["traceIssues"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/snapshot/{id}": {
         parameters: {
             query?: never;
@@ -731,7 +765,82 @@ export interface components {
         };
         Chain: {
             traces: components["schemas"]["ChainTrace"][];
+            /** @description The chain's N+1 across apps, each on the calling trace (`trace_id`). */
+            issues: components["schemas"]["ScopeIssue"][];
             /** @description A limit left traces of the chain out. */
+            capped: boolean;
+        };
+        /** @description An issue of a trace in the scope (its `trace_id`, the first of them when several have it). `chain`: the chain's own, found across apps when the chain is read. */
+        ScopeIssue: {
+            fingerprint: string;
+            fingerprint_version: number;
+            kind: components["schemas"]["IssueKind"];
+            title: string;
+            culprit: string | null;
+            hint: string | null;
+            count: number;
+            span_ids: string[];
+            trace_id: string;
+            app?: string;
+            /** @description The apps whose traces have it. */
+            apps?: string[];
+            /** @description How many traces of the scope have it. */
+            traces?: number;
+            /** @description Its count added up over those traces. */
+            occurrences?: number;
+            chain?: boolean;
+            /** @description A chain's N+1: how many of the calls' traces ran the query. */
+            statement_traces?: number;
+        };
+        /** @description A call of the scope (a span) with its trace and app and what it groups by. */
+        ScopeCall: {
+            id: string;
+            parent_id?: string | null;
+            kind: string;
+            name: string;
+            start: components["schemas"]["Time"];
+            duration: number;
+            status?: string;
+            attrs?: components["schemas"]["Attrs"];
+            trace_id: string;
+            app: string;
+            /** @description What repeats of it share (`op:<key>` in search). */
+            key: string;
+            template: string;
+            /** @description The database alias, the host… */
+            target: string;
+            op: string;
+        };
+        CallSummary: {
+            count: number;
+            /** @description Their time added up. */
+            total: number;
+            /** @description Their time on the clock: overlapping calls counted once. */
+            wall: number;
+            slowest: null | {
+                name: string;
+                duration: number;
+                app: string;
+                trace_id: string;
+                span_id: string;
+            };
+            apps: components["schemas"]["Counted"][];
+            targets: components["schemas"]["Counted"][];
+            /** @description Each statement or endpoint they repeat, the most first. */
+            groups: {
+                key: string;
+                template: string;
+                op: string;
+                target: string;
+                app: string;
+                count: number;
+                total: number;
+                traces: number;
+            }[];
+        };
+        TraceCalls: {
+            calls: components["schemas"]["ScopeCall"][];
+            summary: components["schemas"]["CallSummary"];
             capped: boolean;
         };
         ScopeLog: {
@@ -750,6 +859,7 @@ export interface components {
         Counted: {
             app?: string;
             logger?: string;
+            target?: string;
             count: number;
         };
         LogSummary: {
@@ -2563,6 +2673,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TraceLogs"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    traceCalls: {
+        parameters: {
+            query?: {
+                /** @description The family: `sql` (the default), `http`, `redis`, `cache`, `datastore`, `rpc`, `storage`, `llm`. */
+                system?: string;
+                /** @description `chain` (the default): the trace and the traces down its calls; `trace`: the trace alone. */
+                scope?: components["parameters"]["scope"];
+                /** @description What is under these rows only: comma-separated span ids of any trace in the scope (a group's spans), or a trace's id for the whole of that trace (a call's trace as a row). */
+                span?: components["parameters"]["span"];
+                /** @description `1`: with `span`, what is in those spans themselves, not in a span or a trace under them. */
+                only?: components["parameters"]["only"];
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The calls and their summary. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TraceCalls"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    traceIssues: {
+        parameters: {
+            query?: {
+                /** @description `chain` (the default): the trace and the traces down its calls; `trace`: the trace alone. */
+                scope?: components["parameters"]["scope"];
+                /** @description What is under these rows only: comma-separated span ids of any trace in the scope (a group's spans), or a trace's id for the whole of that trace (a call's trace as a row). */
+                span?: components["parameters"]["span"];
+                /** @description `1`: with `span`, what is in those spans themselves, not in a span or a trace under them. */
+                only?: components["parameters"]["only"];
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The issues. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        issues: components["schemas"]["ScopeIssue"][];
+                        capped: boolean;
+                    };
                 };
             };
             404: components["responses"]["NotFound"];

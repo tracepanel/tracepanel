@@ -18,7 +18,9 @@ use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tracepanel_protocol::{Activity, Batch, Sink, Thresholds};
-use tracepanel_store_local::{Chain, ReadError, Reader, Selection, log_summary};
+use tracepanel_store_local::{
+    Chain, ReadError, Reader, Selection, call_summary, chain_issues, log_summary,
+};
 
 /// The console's UI, built from `ui/` into `ui-dist/` (`scripts/ui.sh`): what the browser loads, not the notices.
 #[derive(Embed)]
@@ -51,6 +53,8 @@ pub fn router(reader: Reader, activity: Activity) -> Router {
         .route("/api/traces/{id}/related", get(related))
         .route("/api/traces/{id}/chain", get(chain))
         .route("/api/traces/{id}/logs", get(trace_logs))
+        .route("/api/traces/{id}/calls", get(trace_calls))
+        .route("/api/traces/{id}/issues", get(trace_issues))
         .route("/api/snapshot/{id}", get(snapshot))
         .route("/api/counts", get(counts))
         .route("/api/capabilities", get(capabilities))
@@ -376,7 +380,17 @@ async fn chain(State(reader): State<Shared>, Path(id): Path<String>) -> Response
                     placed
                 })
                 .collect();
-            answer(Ok(json!({"traces": traces, "capped": chain.capped})))
+            // The chain's N+1 across apps, each on the calling trace.
+            let issues: Vec<Value> = chain_issues(&chain)
+                .into_iter()
+                .map(|(at, mut issue)| {
+                    issue["trace_id"] = Value::from(chain.members[at].id());
+                    issue
+                })
+                .collect();
+            answer(Ok(
+                json!({"traces": traces, "issues": issues, "capped": chain.capped}),
+            ))
         }
         Ok(None) => not_found(),
         Err(failure) => failure.into_response(),
@@ -406,6 +420,62 @@ async fn trace_logs(
                 "window": {"start": scope.window.0, "end": scope.window.1},
                 "capped": chain.capped,
             })))
+        }
+        Ok(None) => not_found(),
+        Err(failure) => failure.into_response(),
+    }
+}
+
+/// The family of calls `system=` names: `sql` (the default), `http` and the others the analysis knows.
+fn family_of(query: &HashMap<String, String>) -> String {
+    match query.get("system").map(String::as_str) {
+        None | Some("") | Some("db") => "sql".into(),
+        Some("http.client") => "http".into(),
+        Some(other) => other.to_owned(),
+    }
+}
+
+/// `api/traces/{id}/calls?system=&scope=&span=&only=`: a scope's calls of one family (SQL, HTTP…) in time order,
+/// each with its trace and app, and what they add up to.
+async fn trace_calls(
+    State(reader): State<Shared>,
+    Path(id): Path<String>,
+    Query(query): Params,
+) -> Response {
+    if !is_id(&id) {
+        return not_found();
+    }
+    let (whole, selection) = scope_of(&query);
+    let family = family_of(&query);
+    match chain_of(&reader, id, whole).await {
+        Ok(Some(chain)) => {
+            let scope = chain.select(&selection);
+            let calls = scope.calls(&family);
+            let summary = call_summary(&calls);
+            answer(Ok(
+                json!({"calls": calls, "summary": summary, "capped": chain.capped}),
+            ))
+        }
+        Ok(None) => not_found(),
+        Err(failure) => failure.into_response(),
+    }
+}
+
+/// `api/traces/{id}/issues?scope=&span=&only=`: a scope's issues, one per fingerprint (how many traces and times,
+/// which apps), with the chain's N+1 across apps; the worst first.
+async fn trace_issues(
+    State(reader): State<Shared>,
+    Path(id): Path<String>,
+    Query(query): Params,
+) -> Response {
+    if !is_id(&id) {
+        return not_found();
+    }
+    let (whole, selection) = scope_of(&query);
+    match chain_of(&reader, id, whole).await {
+        Ok(Some(chain)) => {
+            let issues = chain.select(&selection).issues();
+            answer(Ok(json!({"issues": issues, "capped": chain.capped})))
         }
         Ok(None) => not_found(),
         Err(failure) => failure.into_response(),

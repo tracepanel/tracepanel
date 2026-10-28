@@ -48,6 +48,28 @@
   calls, on its clock. `GET /api/traces/{id}/logs?scope=&span=&only=`: the
   records of the chain, of the trace alone, or under some of its spans,
   with what they add up to.
+- A trace's DB, HTTP calls and Issues tabs list its whole chain of calls
+  too, each query and call with its app, the tabs' counts the chain's. A
+  service's query that each of a BFF's calls runs groups as one statement
+  (`SELECT author` ×36 in 36 traces). Over each list: how many, their time
+  and their time on the clock (overlapping calls once), the slowest, a chip
+  per app, database, host and table, and the N+1 and repeats among them,
+  each a filter. "Under this" in a call tree row's details counts its
+  queries, HTTP calls, records and issues, each opening its tab on the row
+  with the same chip as the Logs tab's. EXPLAIN works on another app's
+  query of the chain too.
+- An N+1 across apps: when each of one span's calls to another app (a
+  resolver's 36 `GET /authors/{id}`) runs the same query in that app, the
+  chain has one issue on the caller's calls, naming the field and the query,
+  with a DataLoader for its hint. It is found when the chain is read: the
+  traces of one request arrive apart. The Issues tab over a chain lists each
+  issue once with its apps and how many traces have it, the worst first,
+  and leads to its row in the call tree.
+- `GET /api/traces/{id}/calls?system=&scope=&span=&only=` and
+  `GET /api/traces/{id}/issues?scope=&span=&only=`: a scope's calls of one
+  system with what they add up to, and its issues. `chain` has the chain's
+  N+1 across apps. MCP: `list_calls` takes `trace` (with `system`, `span`,
+  `only`, `chain`), and `get_trace` names an N+1 across apps with its hint.
 - MCP: `search_logs` takes `trace` (with `span`, `only`, `chain`) for a
   trace's records and its chain's, added up by level and app. `get_trace`
   says the traces down its calls and their warnings and errors.

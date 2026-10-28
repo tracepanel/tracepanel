@@ -2998,3 +2998,30 @@ div.dt-map-row[data-kind="code"] {
 .dt-under-this-link:hover {
   text-decoration: underline;
 }
+/* Over a tab whose own line (how many, grouped) follows: the scope's rows first. */
+.dt-scope-bar-calls {
+  padding-top: 0.75rem;
+}
+.dt-calls-stats {
+  margin-right: 0.25rem;
+  font-size: var(--dt-size-sm);
+}
+.dt-calls-repeat {
+  max-width: 18rem;
+  overflow: hidden;
+  font-family: var(--dt-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* An issue across a chain: its apps, and how many traces have it. */
+.dt-issue-reach {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+  margin: 0.25rem 0 0.375rem;
+  font-size: var(--dt-size-sm);
+}
+.dt-issue-reach .dt-app-chip {
+  margin-left: 0;
+}

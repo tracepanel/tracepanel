@@ -125,6 +125,58 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/TraceLogs" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /traces/{id}/calls:
+    get:
+      operationId: traceCalls
+      summary: >-
+        A trace scope's calls of one family (SQL by default, HTTP, Redis…) in time order, each with its trace and app,
+        and what they add up to: the whole chain of calls by default, the trace alone, or what is under some rows.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, pattern: "^[0-9A-Z]{26}$" }
+        - name: system
+          in: query
+          description: "The family: `sql` (the default), `http`, `redis`, `cache`, `datastore`, `rpc`, `storage`, `llm`."
+          schema: { type: string }
+        - $ref: "#/components/parameters/scope"
+        - $ref: "#/components/parameters/span"
+        - $ref: "#/components/parameters/only"
+      responses:
+        "200":
+          description: The calls and their summary.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TraceCalls" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /traces/{id}/issues:
+    get:
+      operationId: traceIssues
+      summary: >-
+        A trace scope's issues, one per fingerprint with how many traces and times and which apps, and the chain's own
+        N+1 across apps (a call repeated per item whose service runs the same query each time); the worst first.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, pattern: "^[0-9A-Z]{26}$" }
+        - $ref: "#/components/parameters/scope"
+        - $ref: "#/components/parameters/span"
+        - $ref: "#/components/parameters/only"
+      responses:
+        "200":
+          description: The issues.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [issues, capped]
+                properties:
+                  issues: { type: array, items: { $ref: "#/components/schemas/ScopeIssue" } }
+                  capped: { type: boolean }
+        "404": { $ref: "#/components/responses/NotFound" }
   /snapshot/{id}:
     get:
       operationId: traceSnapshot
@@ -873,10 +925,101 @@ components:
     Chain:
       type: object
       additionalProperties: false
-      required: [traces, capped]
+      required: [traces, issues, capped]
       properties:
         traces: { type: array, items: { $ref: "#/components/schemas/ChainTrace" } }
+        issues:
+          type: array
+          description: The chain's N+1 across apps, each on the calling trace (`trace_id`).
+          items: { $ref: "#/components/schemas/ScopeIssue" }
         capped: { type: boolean, description: A limit left traces of the chain out. }
+    ScopeIssue:
+      type: object
+      required: [fingerprint, fingerprint_version, kind, title, culprit, hint, count, span_ids, trace_id]
+      description: >-
+        An issue of a trace in the scope (its `trace_id`, the first of them when several have it). `chain`: the
+        chain's own, found across apps when the chain is read.
+      properties:
+        fingerprint: { type: string }
+        fingerprint_version: { type: integer }
+        kind: { $ref: "#/components/schemas/IssueKind" }
+        title: { type: string }
+        culprit: { type: [string, "null"] }
+        hint: { type: [string, "null"] }
+        count: { type: integer }
+        span_ids: { type: array, items: { type: string } }
+        trace_id: { type: string }
+        app: { type: string }
+        apps: { type: array, items: { type: string }, description: The apps whose traces have it. }
+        traces: { type: integer, description: How many traces of the scope have it. }
+        occurrences: { type: integer, description: Its count added up over those traces. }
+        chain: { type: boolean }
+        statement_traces: { type: integer, description: "A chain's N+1: how many of the calls' traces ran the query." }
+    ScopeCall:
+      type: object
+      required: [id, kind, name, start, duration, trace_id, app, key, template, target, op]
+      description: A call of the scope (a span) with its trace and app and what it groups by.
+      properties:
+        id: { type: string }
+        parent_id: { type: [string, "null"] }
+        kind: { type: string }
+        name: { type: string }
+        start: { $ref: "#/components/schemas/Time" }
+        duration: { type: integer }
+        status: { type: string }
+        attrs: { $ref: "#/components/schemas/Attrs" }
+        trace_id: { type: string }
+        app: { type: string }
+        key: { type: string, description: "What repeats of it share (`op:<key>` in search)." }
+        template: { type: string }
+        target: { type: string, description: "The database alias, the host…" }
+        op: { type: string }
+    CallSummary:
+      type: object
+      additionalProperties: false
+      required: [count, total, wall, slowest, apps, targets, groups]
+      properties:
+        count: { type: integer }
+        total: { type: integer, description: Their time added up. }
+        wall: { type: integer, description: "Their time on the clock: overlapping calls counted once." }
+        slowest:
+          oneOf:
+            - type: "null"
+            - type: object
+              additionalProperties: false
+              required: [name, duration, app, trace_id, span_id]
+              properties:
+                name: { type: string }
+                duration: { type: integer }
+                app: { type: string }
+                trace_id: { type: string }
+                span_id: { type: string }
+        apps: { type: array, items: { $ref: "#/components/schemas/Counted" } }
+        targets: { type: array, items: { $ref: "#/components/schemas/Counted" } }
+        groups:
+          type: array
+          description: Each statement or endpoint they repeat, the most first.
+          items:
+            type: object
+            additionalProperties: false
+            required: [key, template, op, target, app, count, total, traces]
+            properties:
+              key: { type: string }
+              template: { type: string }
+              op: { type: string }
+              target: { type: string }
+              app: { type: string }
+              count: { type: integer }
+              total: { type: integer }
+              traces: { type: integer }
+    TraceCalls:
+      type: object
+      additionalProperties: false
+      required: [calls, summary, capped]
+      properties:
+        calls: { type: array, items: { $ref: "#/components/schemas/ScopeCall" } }
+        summary: { $ref: "#/components/schemas/CallSummary" }
+        capped: { type: boolean }
     ScopeLog:
       type: object
       additionalProperties: false
@@ -898,6 +1041,7 @@ components:
       properties:
         app: { type: string }
         logger: { type: string }
+        target: { type: string }
         count: { type: integer }
     LogSummary:
       type: object

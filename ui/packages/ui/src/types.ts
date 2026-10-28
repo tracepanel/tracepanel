@@ -47,6 +47,10 @@ export type PageRow = Schemas["PageRow"];
 export type Related = Schemas["Related"];
 /** Where a trace hangs in its chain of calls (GET /traces/{id}/chain), with the trace on the chain's clock. */
 export type ChainTrace = Schemas["ChainTrace"];
+/** A trace's chain of calls (GET /traces/{id}/chain): its traces, and its own N+1 across apps. */
+export type Chain = Schemas["Chain"];
+/** An issue of a trace scope, with its trace and app (GET /traces/{id}/issues, a chain's issues). */
+export type ScopeIssue = Schemas["ScopeIssue"];
 export type ServiceApp = Schemas["ServiceApp"];
 export type ServiceNode = Schemas["ServiceNode"];
 export type ServiceEdge = Schemas["ServiceEdge"];

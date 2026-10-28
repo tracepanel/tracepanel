@@ -194,3 +194,128 @@ async fn a_traces_logs_come_from_its_chain_or_from_under_a_row() {
     assert_eq!(missing, StatusCode::NOT_FOUND);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[tokio::test]
+async fn a_chains_queries_and_issues_come_from_its_calls_and_one_n_plus_one_across_apps() {
+    let dir = std::env::temp_dir().join(format!(
+        "tracepanel-server-chain-calls-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    let path = tracepanel_store_local::path_in(&dir);
+    let step = |n: i64| {
+        let mut step = span(
+            &format!("step{n}"),
+            Some("root"),
+            "Book.author",
+            10 + n * 20,
+            15,
+            None,
+        );
+        step["attrs"]["graphql.field"] = json!("Book.author");
+        step
+    };
+    let call = |n: i64| {
+        let mut call = span(
+            &format!("call{n}"),
+            Some(&format!("step{n}")),
+            "GET /authors/{id}",
+            12 + n * 20,
+            10,
+            Some(&format!("c00000000000000{n}")),
+        );
+        call["kind"] = json!("http.client");
+        call["attrs"]["http.method"] = json!("GET");
+        call["attrs"]["url.full"] = json!(format!("http://api/authors/{n}"));
+        call
+    };
+    let mut bff_spans = vec![span("root", None, "POST /graphql", 0, 100, None)];
+    for n in 0..3 {
+        bff_spans.push(step(n));
+        bff_spans.push(call(n));
+    }
+    let mut traces = vec![trace(
+        "BFF",
+        "library-bff",
+        0,
+        None,
+        Value::Array(bff_spans),
+        json!([]),
+    )];
+    for n in 0..3 {
+        let at = 12 + n * 20;
+        let mut sql = span(
+            &format!("q{n}"),
+            Some(&format!("a{n}")),
+            "SELECT author",
+            at + 2,
+            3,
+            None,
+        );
+        sql["kind"] = json!("sql");
+        let mut api = trace(
+            &format!("API{n}"),
+            "library-api",
+            at,
+            Some(&format!("c00000000000000{n}")),
+            json!([
+                span(&format!("a{n}"), None, "GET /authors/{id}", at, 8, None),
+                sql
+            ]),
+            json!([]),
+        );
+        let mut doc: Value = serde_json::from_str(&api.doc).unwrap();
+        doc["attrs"]["http.route"] = json!("/authors/{id}");
+        doc["duration"] = json!(8);
+        api = Received {
+            trace: serde_json::from_value(doc.clone()).unwrap(),
+            doc: doc.to_string(),
+        };
+        traces.push(api);
+    }
+    Store::open(&path).unwrap().write(&traces).unwrap();
+    let router = tracepanel_server::router(Reader::new(&path), Activity::default());
+    let bff = id("BFF");
+
+    let (status, sql) = get(&router, &format!("/api/traces/{bff}/calls?system=sql")).await;
+    let (_, http) = get(
+        &router,
+        &format!("/api/traces/{bff}/calls?system=http&span=step1"),
+    )
+    .await;
+    let (_, issues) = get(&router, &format!("/api/traces/{bff}/issues")).await;
+    let (_, served) = get(
+        &router,
+        &format!("/api/traces/{bff}/issues?span={}", id("API1")),
+    )
+    .await;
+    let (_, chain) = get(&router, &format!("/api/traces/{bff}/chain")).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        json!({"count": sql["summary"]["count"], "wall": sql["summary"]["wall"], "groups": sql["summary"]["groups"].as_array().unwrap().len(),
+               "traces": sql["summary"]["groups"][0]["traces"], "apps": sql["summary"]["apps"]}),
+        json!({"count": 3, "wall": 9, "groups": 1, "traces": 3, "apps": [{"app": "library-api", "count": 3}]})
+    );
+
+    assert_eq!(
+        http["calls"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|call| call["id"].clone())
+            .collect::<Vec<_>>(),
+        [json!("call1")]
+    );
+
+    let found: Vec<Value> = issues["issues"].as_array().unwrap().iter()
+        .map(|issue| json!({"kind": issue["kind"], "app": issue["app"], "chain": issue["chain"], "span_ids": issue["span_ids"]}))
+        .collect();
+    assert!(found.contains(&json!({"kind": "n+1", "app": "library-bff", "chain": true, "span_ids": ["call0", "call1", "call2"]})), "{found:?}");
+
+    assert_eq!(served["issues"], json!([]));
+
+    assert_eq!(chain["issues"].as_array().unwrap().len(), 1);
+    assert_eq!(chain["issues"][0]["trace_id"], json!(bff));
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -251,6 +251,53 @@ pub(crate) fn call_lines(row: &Value) -> String {
     )
 }
 
+/// A scope's calls at a glance: how many, their time and on the clock, the slowest, by app.
+pub(crate) fn call_summary_line(summary: &Value) -> String {
+    if int(summary, "count") == 0 {
+        return "none".into();
+    }
+    let apps: Vec<String> = summary["apps"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|app| format!("{} {}", text(app, "app"), int(app, "count")))
+        .collect();
+    format!(
+        "{} · {} · {} on the clock · slowest {} ({}) · by app: {}",
+        count(int(summary, "count"), "call", "calls"),
+        ms(int(summary, "total")),
+        ms(int(summary, "wall")),
+        ms(int(&summary["slowest"], "duration")),
+        text(&summary["slowest"], "app"),
+        apps.join(" · ")
+    )
+}
+
+/// What a scope's calls repeat: the statement or endpoint, how often, in how many traces, their time, where.
+pub(crate) fn scope_group_line(group: &Value) -> String {
+    let (op, template) = (text(group, "op"), text(group, "template"));
+    // A statement says its verb; an endpoint's path doesn't.
+    let what = if template.starts_with(op) {
+        template.to_owned()
+    } else {
+        format!("{op} {template}")
+    };
+    let target = text(group, "target");
+    format!(
+        "×{} in {} · {} · {}{}: {}",
+        int(group, "count"),
+        count(int(group, "traces"), "trace", "traces"),
+        ms(int(group, "total")),
+        text(group, "app"),
+        if target.is_empty() {
+            String::new()
+        } else {
+            format!(" {target}")
+        },
+        short(&what, MESSAGE)
+    )
+}
+
 /// A record of a trace's scope: when after the trace started, its level, app, logger and message.
 pub(crate) fn scope_log_line(log: &Value, start: i64) -> String {
     format!(
