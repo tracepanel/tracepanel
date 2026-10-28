@@ -2,6 +2,7 @@
 
 use crate::Server;
 use crate::compact::{self, Focus, ago, fit, trace_line};
+use crate::profile::{self, Kind};
 use serde_json::{Value, json};
 use std::time::{Duration, Instant};
 use tracepanel_store_local::{ReadError, search};
@@ -26,7 +27,7 @@ pub(crate) fn list() -> Value {
             "get_trace",
             "Get a trace",
             "One trace, compact: its issues (N+1, duplicate and slow queries, errors…) with where in the code and how to \
-             fix them, the error with its stack, the call tree with repeats folded, warnings and related tasks.",
+             fix them, the error with its stack, the call tree with repeats folded, warnings, related tasks and whether it was profiled.",
             json!({
                 "id": {"type": "string", "description": "The trace's id."},
                 "focus": {
@@ -36,6 +37,19 @@ pub(crate) fn list() -> Value {
                     "description": "issues: the branches with issues, errors and most of the time; tree: the whole \
                                     call tree; sql: every statement, grouped; logs: every log record.",
                 },
+            }),
+            vec!["id"],
+        ),
+        (
+            "get_profile",
+            "Get a profile",
+            "Where a profiled trace's time went in code (cpu: functions by self and total time, the hottest paths, \
+             waiting) or its memory (memory: peak, kept, the top allocation sites), with file:line. To profile a \
+             request, send it with an `X-Tracepanel-Profile: 1` header (`memory` for its memory too).",
+            json!({
+                "id": {"type": "string", "description": "The trace's id."},
+                "kind": {"type": "string", "enum": ["cpu", "memory"], "default": "cpu"},
+                "top": {"type": "integer", "minimum": 1, "maximum": 50, "default": 10, "description": "Functions or sites listed."},
             }),
             vec!["id"],
         ),
@@ -55,7 +69,7 @@ pub(crate) fn list() -> Value {
             "compare_traces",
             "Compare two traces",
             "What changed between two traces of the same thing, e.g. before and after a fix: time, SQL, statements, \
-             issues fixed and new.",
+             issues fixed and new, and with profiles the functions' self time and memory.",
             json!({
                 "before": {"type": "string", "description": "The earlier trace's id."},
                 "after": {"type": "string", "description": "The later trace's id."},
@@ -162,6 +176,7 @@ pub(crate) fn call(server: &Server, name: &str, args: &Value) -> Option<Result<S
     let answer = match name {
         "find_traces" => find_traces(server, args),
         "get_trace" => get_trace(server, args),
+        "get_profile" => get_profile(server, args),
         "wait_for_trace" => wait_for_trace(server, args),
         "compare_traces" => compare_traces(server, args),
         "list_issues" => list_issues(server, args),
@@ -240,6 +255,23 @@ fn get_trace(server: &Server, args: &Value) -> Result<String, Refusal> {
     };
     let doc = document(server, &id)?;
     shown(server, &doc, focus)
+}
+
+fn get_profile(server: &Server, args: &Value) -> Result<String, Refusal> {
+    let id = required(args, "id")?;
+    let kind = match string(args, "kind").as_str() {
+        "" => Kind::Cpu,
+        name => Kind::parse(name)
+            .ok_or_else(|| Refusal(format!("kind is cpu or memory; not {name}")))?,
+    };
+    let doc = document(server, &id)?;
+    let body =
+        profile::profile(&doc, kind, number(args, "top", 10, 50) as usize).map_err(Refusal)?;
+    let mut answer = format!("{id}  {}\n{body}", compact::trace_head(&doc));
+    if let Some(console) = server.console_url() {
+        answer.push_str(&format!("\n\nconsole: {console}#/t/{id}"));
+    }
+    Ok(answer)
 }
 
 fn wait_for_trace(server: &Server, args: &Value) -> Result<String, Refusal> {

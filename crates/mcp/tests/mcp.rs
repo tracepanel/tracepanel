@@ -17,9 +17,10 @@ const VERSIONS: [&str; 5] = [
     "2025-11-25",
     "2026-07-28",
 ];
-const TOOLS: [&str; 9] = [
+const TOOLS: [&str; 10] = [
     "find_traces",
     "get_trace",
+    "get_profile",
     "wait_for_trace",
     "compare_traces",
     "list_issues",
@@ -763,6 +764,359 @@ async fn a_task_run_says_its_workflow() {
   01M4W0RKF10W00000000000B00  task shop.jobs.B (success) · 2.0 ms · <ago>
 group g (2 tasks):
   01M4W0RKF10W00000000000D00  task shop.jobs.D (success) · 2.0 ms · <ago>"
+        )
+    );
+}
+
+const SLOW: &str = "01M4PR0F11E0000000000000S0";
+const QUICK: &str = "01M4PR0F11E0000000000000Q0";
+const JS: &str = "01M4PR0F11E0000000000000J0";
+
+/// A request to `/reports/sales` of `id`, `duration` long, with `profile` as the SDK sent it.
+fn profiled(id: &str, duration: i64, profile: Value) -> Value {
+    json!({
+        "id": id, "kind": "http", "name": "GET /reports/sales", "start": 1_791_561_721_000_000_i64,
+        "duration": duration, "status": "ok",
+        "attrs": {"service.name": "shop", "http.method": "GET", "http.path": "/reports/sales", "http.route": "/reports/sales",
+                  "http.status_code": 200},
+        "spans": [{"id": format!("{id}R"), "parent_id": null, "kind": "http", "name": "GET /reports/sales",
+                   "start": 1_791_561_721_000_000_i64, "duration": duration, "status": "ok", "attrs": {}}],
+        "logs": [], "errors": [], "links": [], "issues": [], "profile": profile,
+    })
+}
+
+/// The frames of a Django view on ASGI as the Python SDK names them: the view awaits a sleep, builds cards with
+/// json.dumps, runs a query; the last is the line in build_cards that allocated.
+fn python_frames() -> Value {
+    let frame = |function: &str, module: &str, file: &str, line: i64, in_app: bool| json!({"function": function, "module": module, "file": file, "line": line, "in_app": in_app});
+    let mut view = frame("sales", "reports.views", "reports/views.py", 18, true);
+    view["at_line"] = json!(24);
+    let mut sleep = frame("sleep", "asyncio.tasks", "asyncio/tasks.py", 640, false);
+    sleep["waiting"] = json!(true);
+    let mut allocating = frame("build_cards", "reports.cards", "reports/cards.py", 40, true);
+    allocating["at_line"] = json!(44);
+    json!([
+        frame(
+            "ASGIHandler.handle",
+            "django.core.handlers.asgi",
+            "django/core/handlers/asgi.py",
+            160,
+            false
+        ),
+        view,
+        frame("build_cards", "reports.cards", "reports/cards.py", 40, true),
+        frame("dumps", "json", "json/__init__.py", 231, false),
+        frame(
+            "SQLCompiler.execute_sql",
+            "django.db.models.sql.compiler",
+            "django/db/models/sql/compiler.py",
+            1574,
+            false
+        ),
+        sleep,
+        allocating,
+    ])
+}
+
+/// `count` samples of a stack, one bucket of ten each from `first` on.
+fn timed_stack(frames: Value, first: i64, count: i64) -> Value {
+    let at: Vec<Value> = (0..count / 10).map(|n| json!([first + n, 10])).collect();
+    json!({"frames": frames, "count": count, "at": at})
+}
+
+/// 200 ms: json.dumps in build_cards for half of it, then build_cards, a query and a sleep; 10 ms not sampled at
+/// the end. 48 MB at the peak, most of it json.dumps's.
+fn slow_profile() -> Value {
+    json!({
+        "interval_us": 1000, "samples": 190, "dropped": 10, "bucket_us": 10_000,
+        "frames": python_frames(),
+        "stacks": [
+            timed_stack(json!([0, 1, 2, 3]), 0, 100),
+            timed_stack(json!([0, 1, 2]), 10, 20),
+            timed_stack(json!([0, 1, 4]), 12, 30),
+            timed_stack(json!([0, 1, 5]), 15, 40),
+        ],
+        "memory": {
+            "peak": 50_331_648, "net": 1_258_291, "allocated": 94_371_840, "sites_at": "peak", "shared": false,
+            "sites": [
+                {"frames": [0, 1, 6, 3], "bytes": 31_457_280, "count": 1200},
+                {"frames": [0, 1, 2], "bytes": 8_388_608, "count": 64},
+                {"frames": [0, 1, 4], "bytes": 2_097_152, "count": 300},
+            ],
+        },
+        "gc": {"collections": 2, "pause_us": 3000, "pauses": [[50_000, 1000, 0], [120_000, 2000, 2]]},
+    })
+}
+
+/// 20 ms after the fix, untimed: build_cards and the query. 6 MB at the peak, the sites at the end.
+fn quick_profile() -> Value {
+    json!({
+        "interval_us": 1000, "samples": 20,
+        "frames": python_frames(),
+        "stacks": [{"frames": [0, 1, 2], "count": 8}, {"frames": [0, 1, 4], "count": 12}],
+        "memory": {
+            "peak": 6_291_456, "net": 10_240, "sites_at": "end", "shared": true,
+            "sites": [{"frames": [0, 1, 6], "bytes": 4_194_304, "count": 10}],
+        },
+    })
+}
+
+fn profiles_store(name: &str) -> PathBuf {
+    let mut cpu_only = profiled(JS, 20_000, quick_profile());
+    cpu_only["profile"]
+        .as_object_mut()
+        .unwrap()
+        .remove("memory");
+    store(
+        name,
+        &[
+            example("python-django-fixed.json"),
+            profiled(SLOW, 200_000, slow_profile()),
+            profiled(QUICK, 20_000, quick_profile()),
+            cpu_only,
+        ],
+    )
+}
+
+#[tokio::test]
+async fn a_cpu_profile_by_function_and_path() {
+    let server = Server::new(profiles_store("profile-cpu"), false);
+
+    assert_eq!(
+        tool(&server, "get_profile", json!({"id": SLOW, "top": 3})).await,
+        (
+            "01M4PR0F11E0000000000000S0  GET /reports/sales → 200 · 200 ms
+CPU profile: 200 ms profiled of the trace's 200 ms · 190 samples, one every 1.0 ms
+waiting (a sleep, a socket, a lock, the event loop: not computing): 50.0 ms (25%), most in asyncio.sleep in sales at reports/views.py:24
+not sampled: 10.0 ms (other traces ran on the same thread), filled in from the samples around it
+GC: 2 collections, 3.0 ms paused
+note: a sample every 1.0 ms: a function that ran for less may be missed or miscounted. Its memory was counted too, which slows the code down: these times are higher than without it.
+
+functions by self time (your code, with the library calls it made):
+  100 ms  50%  dumps — json/__init__.py:231 · total 100 ms
+  50.0 ms  25%  sleep (waiting) — asyncio/tasks.py:640 · total 50.0 ms
+  30.0 ms  15%  SQLCompiler.execute_sql — django/db/models/sql/compiler.py:1574 · total 30.0 ms
+
+functions by total time:
+  200 ms  100%  sales (yours) — reports/views.py:24 · self 0.0 ms
+  120 ms  60%  build_cards (yours) — reports/cards.py:40 · self 20.0 ms
+  100 ms  50%  dumps — json/__init__.py:231 · self 100 ms
+
+hottest paths (outermost first):
+  100 ms  50%  sales (reports/views.py:24) → build_cards (reports/cards.py:40) → dumps (json/__init__.py:231)
+  50.0 ms  25%  sales (reports/views.py:24) → sleep (asyncio/tasks.py:640)
+  30.0 ms  15%  sales (reports/views.py:24) → SQLCompiler.execute_sql (django/db/models/sql/compiler.py:1574)
+  20.0 ms  10%  sales (reports/views.py:24) → build_cards (reports/cards.py:40)"
+                .to_owned(),
+            false
+        )
+    );
+}
+
+#[tokio::test]
+async fn a_memory_profile_by_site() {
+    let server = Server::new(profiles_store("profile-memory"), false);
+
+    assert_eq!(
+        tool(&server, "get_profile", json!({"id": SLOW, "kind": "memory"})).await,
+        (
+            "01M4PR0F11E0000000000000S0  GET /reports/sales → 200 · 200 ms
+memory profile: peak 48 MB above where it started · net +1.2 MB · 90 MB allocated in all
+GC: 2 collections, 3.0 ms paused
+note: counting memory slows the code down (Python's tracemalloc, a short request several times over; Node's heap sampler less, and a full GC after the response): compare times on traces profiled without it.
+
+allocation sites at the peak (3 of 3, 40 MB in all, largest first; ×: allocations counted):
+  30 MB  75%  ×1200  build_cards (yours) — reports/cards.py:44 · allocated in dumps — json/__init__.py:231
+  8.0 MB  20%  ×64  build_cards (yours) — reports/cards.py:40
+  2.0 MB  5%  ×300  sales (yours) — reports/views.py:24 · allocated in SQLCompiler.execute_sql — django/db/models/sql/compiler.py:1574"
+                .to_owned(),
+            false
+        )
+    );
+
+    assert_eq!(
+        tool(&server, "get_profile", json!({"id": QUICK, "kind": "memory"})).await.0,
+        "01M4PR0F11E0000000000000Q0  GET /reports/sales → 200 · 20.0 ms
+memory profile: peak 6.0 MB above where it started · net +10 KB
+note: the sites are where the memory was at the trace's end, not at its peak.
+note: other traces ran in the process meanwhile: these numbers include what they allocated.
+note: counting memory slows the code down (Python's tracemalloc, a short request several times over; Node's heap sampler less, and a full GC after the response): compare times on traces profiled without it.
+
+allocation sites at the end (1 of 1, 4.0 MB in all, largest first; ×: allocations counted):
+  4.0 MB  100%  ×10  build_cards (yours) — reports/cards.py:44"
+    );
+}
+
+#[tokio::test]
+async fn a_node_memory_profile_reads_the_same() {
+    // As the JavaScript SDK sends it: no modules, frames where functions are defined, V8's sampled sites at the end.
+    let frame = |function: &str, file: &str, line: i64, in_app: bool| json!({"function": function, "module": null, "file": file, "line": line, "in_app": in_app});
+    let profile = json!({
+        "interval_us": 1000, "samples": 12,
+        "frames": [
+            frame("handle", "node_modules/express/lib/router/layer.js", 86, false),
+            frame("sales", "src/reports.ts", 12, true),
+            frame("buildCards", "src/cards.ts", 30, true),
+            frame("stringify", "", 0, false),
+        ],
+        "stacks": [{"frames": [0, 1, 2, 3], "count": 9}, {"frames": [0, 1, 2], "count": 3}],
+        "memory": {
+            "peak": 25_165_824, "net": 3_145_728, "sites_at": "end", "shared": false,
+            "sites": [{"frames": [0, 1, 2, 3], "bytes": 3_145_728, "count": 96}],
+        },
+        "gc": {"collections": 1, "pause_us": 1500, "pauses": [[4000, 1500, 0]]},
+    });
+    let server = Server::new(
+        store("profile-node", &[profiled(JS, 14_000, profile)]),
+        false,
+    );
+
+    assert_eq!(
+        tool(&server, "get_profile", json!({"id": JS, "kind": "memory"})).await.0,
+        "01M4PR0F11E0000000000000J0  GET /reports/sales → 200 · 14.0 ms
+memory profile: peak 24 MB above where it started · net +3.0 MB
+GC: 1 collection, 1.5 ms paused
+note: the sites are where the memory was at the trace's end, not at its peak.
+note: counting memory slows the code down (Python's tracemalloc, a short request several times over; Node's heap sampler less, and a full GC after the response): compare times on traces profiled without it.
+
+allocation sites at the end (1 of 1, 3.0 MB in all, largest first; ×: allocations counted):
+  3.0 MB  100%  ×96  buildCards (yours) — src/cards.ts:30 · allocated in stringify"
+    );
+    assert_eq!(
+        tool(&server, "get_profile", json!({"id": JS})).await.0,
+        "01M4PR0F11E0000000000000J0  GET /reports/sales → 200 · 14.0 ms
+CPU profile: 12.0 ms sampled of the trace's 14.0 ms · 12 samples, one every 1.0 ms
+GC: 1 collection, 1.5 ms paused
+note: a sample every 1.0 ms: a function that ran for less may be missed or miscounted. Its memory was counted too, which slows the code down: these times are higher than without it.
+
+functions by self time (your code, with the library calls it made):
+  9.0 ms  75%  stringify · total 9.0 ms
+  3.0 ms  25%  buildCards (yours) — src/cards.ts:30 · total 12.0 ms
+
+functions by total time:
+  12.0 ms  100%  sales (yours) — src/reports.ts:12 · self 0.0 ms
+  12.0 ms  100%  buildCards (yours) — src/cards.ts:30 · self 3.0 ms
+  9.0 ms  75%  stringify · self 9.0 ms
+
+hottest paths (outermost first):
+  9.0 ms  75%  sales (src/reports.ts:12) → buildCards (src/cards.ts:30) → stringify
+  3.0 ms  25%  sales (src/reports.ts:12) → buildCards (src/cards.ts:30)"
+    );
+}
+
+#[tokio::test]
+async fn a_trace_says_it_was_profiled() {
+    let server = Server::new(profiles_store("profile-trace"), false);
+    let (slow, _) = tool(&server, "get_trace", json!({"id": SLOW})).await;
+    let (cpu_only, _) = tool(&server, "get_trace", json!({"id": JS})).await;
+    let (none, _) = tool(&server, "get_trace", json!({"id": FIXED})).await;
+
+    assert!(
+        slow.starts_with(
+            "01M4PR0F11E0000000000000S0  GET /reports/sales → 200 · 200 ms\nprofiled: cpu, memory → get_profile\n\nissues: none"
+        ),
+        "{slow}"
+    );
+
+    assert!(
+        cpu_only.starts_with("01M4PR0F11E0000000000000J0  GET /reports/sales → 200 · 20.0 ms\nprofiled: cpu → get_profile\n\n"),
+        "{cpu_only}"
+    );
+
+    assert!(!none.contains("profiled"), "{none}");
+}
+
+#[tokio::test]
+async fn without_a_profile_it_says_how_to_get_one() {
+    let server = Server::new(profiles_store("profile-none"), false);
+
+    assert_eq!(
+        tool(&server, "get_profile", json!({"id": FIXED})).await,
+        (
+            "Trace 01M4GPC1ESW50X1ZHJJ3ZNP7VM has no profile. Make the request again with an `X-Tracepanel-Profile: 1` \
+             header (`memory` to count its memory too) or a `tracepanel_profile=1` cookie, or turn on the `profile` \
+             setting to profile every trace; then wait_for_trace and get_profile."
+                .to_owned(),
+            true
+        )
+    );
+
+    assert_eq!(
+        tool(&server, "get_profile", json!({"id": JS, "kind": "memory"})).await,
+        (
+            "Trace 01M4PR0F11E0000000000000J0 has a CPU profile but its memory wasn't counted. Make the request \
+             again with an `X-Tracepanel-Profile: memory` header or a `tracepanel_profile=memory` cookie (the \
+             `profile_memory` setting counts every profiled trace's); then wait_for_trace and get_profile."
+                .to_owned(),
+            true
+        )
+    );
+
+    assert_eq!(
+        tool(&server, "get_profile", json!({"id": SLOW, "kind": "heap"})).await,
+        ("kind is cpu or memory; not heap".to_owned(), true)
+    );
+}
+
+#[tokio::test]
+async fn before_and_after_a_fix_with_profiles() {
+    let server = Server::new(profiles_store("profile-compare"), false);
+
+    assert_eq!(
+        tool(&server, "compare_traces", json!({"before": SLOW, "after": QUICK})).await.0,
+        "before  01M4PR0F11E0000000000000S0  GET /reports/sales → 200 · 200 ms
+after   01M4PR0F11E0000000000000Q0  GET /reports/sales → 200 · 20.0 ms
+
+time: 200 ms → 20.0 ms (-90%)
+SQL: 0 → 0 queries, 0.0 ms → 0.0 ms
+issues: 0 → 0 (0 fixed, 0 new, 0 still there)
+profile: 200 ms → 20.0 ms profiled, of which waiting 50.0 ms → 0.0 ms
+functions whose self time changed most:
+  dumps (json/__init__.py:231): 100 ms → 0.0 ms
+  sleep (asyncio/tasks.py:640): 50.0 ms → 0.0 ms
+  SQLCompiler.execute_sql (django/db/models/sql/compiler.py:1574): 30.0 ms → 12.0 ms
+  build_cards (reports/cards.py:40): 20.0 ms → 8.0 ms
+memory: peak 48 MB → 6.0 MB, net +1.2 MB → +10 KB
+allocation sites that changed most:
+  build_cards (yours) — reports/cards.py:44 · allocated in dumps — json/__init__.py:231: 30 MB → 0 B
+  build_cards (yours) — reports/cards.py:40: 8.0 MB → 0 B
+  build_cards (yours) — reports/cards.py:44: 0 B → 4.0 MB
+  sales (yours) — reports/views.py:24 · allocated in SQLCompiler.execute_sql — django/db/models/sql/compiler.py:1574: 2.0 MB → 0 B"
+    );
+
+    let (one, _) = tool(
+        &server,
+        "compare_traces",
+        json!({"before": FIXED, "after": QUICK}),
+    )
+    .await;
+    assert!(
+        one.ends_with(
+            "\nprofile: only the after trace was profiled; profile the before one too to compare (an \
+             `X-Tracepanel-Profile: 1` header)."
+        ),
+        "{one}"
+    );
+}
+
+#[tokio::test]
+async fn a_profile_too_short_for_a_sample() {
+    let profile = json!({"interval_us": 1000, "samples": 0, "dropped": 0, "bucket_us": 10_000, "frames": [], "stacks": []});
+    let server = Server::new(
+        store("profile-empty", &[profiled(QUICK, 2_900, profile)]),
+        false,
+    );
+
+    assert_eq!(
+        tool(&server, "get_profile", json!({"id": QUICK})).await,
+        (
+            "01M4PR0F11E0000000000000Q0  GET /reports/sales → 200 · 2.9 ms
+CPU profile: 0.0 ms sampled of the trace's 2.9 ms · 0 samples, one every 1.0 ms
+note: a sample every 1.0 ms: a function that ran for less may be missed or miscounted.
+
+No samples: the trace was over before the profiler saw its code (one sample every 1.0 ms)."
+                .to_owned(),
+            false
         )
     );
 }

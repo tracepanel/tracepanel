@@ -123,6 +123,14 @@ fix. A trace's 151 SQL queries fold into lines such as
 leave out SQL parameters and local variables unless you start
 `tracepanel mcp` with `--values`.
 
+A coding agent can profile too. It sends the request with an
+`X-Tracepanel-Profile: 1` header, or `memory` to count memory as well. Then
+`get_profile` reads the trace's profile as text: the functions by their own
+time and in all, the hottest paths, the time spent waiting, and for memory
+the peak and the top allocation sites, each with its file and line.
+`compare_traces` then shows which functions got faster and how the peak
+changed after a fix.
+
 ## Privacy
 
 Traces stay in `.tracepanel/` in your project. Add it to `.gitignore`. By

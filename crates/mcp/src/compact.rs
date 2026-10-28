@@ -5,6 +5,7 @@
 //! Without `values` (the default) the answers carry the shape of the data, not the data: SQL without its parameters,
 //! frames without their local variables. With it, variables whose names look secret are still masked.
 
+use crate::profile;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 
@@ -830,10 +831,15 @@ fn workflow_lines(workflow: &Value, now: i64) -> Vec<String> {
 
 /// One trace, compact: the head, its issues, then what `focus` asks for, errors, loud logs and related traces.
 pub(crate) fn trace(doc: &Value, related: &Value, focus: Focus, values: bool, now: i64) -> String {
-    let mut parts = vec![
-        format!("{}  {}", text(doc, "id"), trace_head(doc)),
-        issues_section(doc),
-    ];
+    let mut head = format!("{}  {}", text(doc, "id"), trace_head(doc));
+    let profiled = profile::kinds(doc);
+    if !profiled.is_empty() {
+        head.push_str(&format!(
+            "\nprofiled: {} → get_profile",
+            profiled.join(", ")
+        ));
+    }
+    let mut parts = vec![head, issues_section(doc)];
     if let Some(errors) = errors_section(doc, values) {
         parts.push(errors);
     }
@@ -959,5 +965,6 @@ pub(crate) fn compare(before: &Value, after: &Value) -> String {
         out.push(format!("statements that changed ({}):", changes.len()));
         out.extend(changes.into_iter().take(15).map(|(_, line)| line));
     }
+    out.extend(profile::compare(before, after));
     out.join("\n")
 }

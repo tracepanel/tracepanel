@@ -6,6 +6,7 @@
 //! their answers read (`compact`).
 
 mod compact;
+mod profile;
 mod tools;
 
 use rmcp::model::{
@@ -24,8 +25,10 @@ use tracepanel_store_local::Reader;
 const INSTRUCTIONS: &str = "Tracepanel records what the app does on each request, task and command: SQL, errors, \
     logs, timings; and finds issues in it (N+1 and duplicate queries, slow queries, long transactions, exceptions) \
     with where in the code and how to fix them. To check a change: find_traces or wait_for_trace for the request, \
-    get_trace for what it did, fix, make the request again, compare_traces. Answers leave out SQL parameters and \
-    variables' values unless the server was started with --values.";
+    get_trace for what it did, fix, make the request again, compare_traces. To find what is slow or uses memory in \
+    code: make the request with an `X-Tracepanel-Profile: 1` header (`memory` for its memory too), wait_for_trace, \
+    get_profile, fix, profile it again, compare_traces. Answers leave out SQL parameters and variables' values \
+    unless the server was started with --values.";
 
 pub struct Server {
     reader: Reader,
