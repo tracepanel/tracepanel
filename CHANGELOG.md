@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- An N+1 from a JavaScript app that reads through Prisma, Drizzle,
+  TypeORM, Sequelize, Knex or Mongoose gets that ORM's fix: `include` for
+  Prisma and Sequelize, `with` or a join for Drizzle, `relations` or
+  `leftJoinAndSelect()` for TypeORM, a join or `whereIn()` for Knex,
+  `populate()` for Mongoose. The JS SDK names the ORM in `db.client`, as the
+  Python SDK names Django and SQLAlchemy. Other queries keep the general
+  hint.
+
 ## 0.5.1 (2026-10-26)
 
 ### Changed
