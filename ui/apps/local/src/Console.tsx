@@ -73,6 +73,11 @@ function groupPage(route: Extract<Route, { name: "group" }>, source: DataSource)
   );
 }
 
+/** An issue's or a group's page is of the app shown, another for another app; an app's own is the same for all. */
+function detailKey(route: DetailRoute, service: string): string {
+  return route.name === "app" ? "app" : service;
+}
+
 /** The page of one issue, one group or one app, scrolled on its own. */
 function DetailPage({ route, source, everything }: { route: DetailRoute; source: DataSource; everything: DataSource }) {
   let page: ReactNode;
@@ -165,10 +170,7 @@ export function Console({ route, source: everything }: { route: Route; source: D
       />
     );
   else if (isDetail(route)) {
-    // An issue's or a group's page is of the app shown; an app's own is the same whichever is shown.
-    page = (
-      <DetailPage key={route.name === "app" ? "app" : service} route={route} source={source} everything={everything} />
-    );
+    page = <DetailPage key={detailKey(route, service)} route={route} source={source} everything={everything} />;
   } else if (route.name !== "home" && isEntry(route.name)) {
     page = (
       <EntryPage

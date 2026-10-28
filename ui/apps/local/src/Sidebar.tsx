@@ -612,6 +612,11 @@ export interface AppScope {
   pending?: string | null | undefined;
 }
 
+/** Switching: dimmed only if it takes a while (the delay), so a quick switch shows nothing in between. */
+function switchingClass(busy: boolean): string {
+  return cn("transition-opacity motion-reduce:transition-none", busy && "cursor-progress opacity-60 delay-300");
+}
+
 /** Which app the console shows: every one, or one of them. A rail shows the chosen app's mark. */
 function AppSwitcher({ scope, rail }: { scope: AppScope; rail: boolean }) {
   const chosen = scope.apps.find((app) => app.service === scope.service);
@@ -621,11 +626,7 @@ function AppSwitcher({ scope, rail }: { scope: AppScope; rail: boolean }) {
   };
   const label = chosen ? chosen.service : "All apps";
   const busy = scope.pending != null;
-  // Switching: dimmed only if it takes a while (the delay), so a quick switch shows nothing in between.
-  const switching = cn(
-    "transition-opacity motion-reduce:transition-none",
-    busy && "cursor-progress opacity-60 delay-300",
-  );
+  const switching = switchingClass(busy);
   const trigger = rail ? (
     <button
       type="button"
