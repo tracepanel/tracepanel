@@ -42,6 +42,7 @@ import {
   ISSUE_CHIP_SHRINKS,
   IssueChip,
   KindBadge,
+  SectionHeading,
   StateBadge,
   TaskName,
   TemplateChip,
@@ -59,7 +60,9 @@ import type { Attrs, IssueKind, Log, Related, Span, Trace, TraceError, TraceSumm
 /* ---------- tree ---------- */
 
 type Node =
-  | { type: "span"; key: string; span: Span; children: Node[] }
+  // `served`: the trace another app served for this call, merged into its row (see hopOf); its rows are then this
+  // row's children, after the call's own.
+  | { type: "span"; key: string; span: Span; children: Node[]; served?: ServedRun | undefined }
   // Repeats of one call; `members` are their rows, each with what is under it (the trace another app served for it).
   | { type: "group"; key: string; spans: Span[]; members: SpanNode[]; start: number; end: number }
   | { type: "log"; key: string; log: Log }
@@ -83,6 +86,9 @@ type Node =
   | { type: "waiting"; key: string; span: Span; kind: "task" };
 
 type SpanNode = Extract<Node, { type: "span" }>;
+
+/** The trace another app served for a call (or a task's run, `kind: "task"`). */
+type ServedRun = Extract<Node, { type: "task" }>;
 
 function startOf(node: Node): number {
   if (node.type === "span" || node.type === "waiting") return node.span.start;
@@ -343,13 +349,44 @@ export function buildTree(trace: Trace, related: Related | undefined, chain: Cha
   for (const { key, item } of keyed(trace.errors, (error) => `error:${error.time}:${error.type}`)) {
     push(item.span_id, { type: "error", key, error: item });
   }
+  // Merged after grouping: a call groups with its likes by the trace under it (groupName), each member merged too.
   const attach = (nodes: Node[]): Node[] =>
     collapse(
       nodes
         .map((node) => (node.type === "span" ? { ...node, children: attach(children.get(node.span.id) ?? []) } : node))
         .sort((a, b) => startOf(a) - startOf(b)),
-    );
+    ).map(merged);
   return attach(children.get(null) ?? []);
+}
+
+/** A row with the calls in it that another app served merged with their traces: a group's members too. */
+function merged(node: Node): Node {
+  if (node.type === "group") return { ...node, members: node.members.map(hopOf) };
+  return node.type === "span" ? hopOf(node) : node;
+}
+
+/**
+ * A call and the trace another app served for it, one row (a hop): the call's kind, method and path, the app that
+ * served it, what that trace found, the call's bar with the server's time inside it; open, that trace's rows straight
+ * under it. A call with no trace served (an external API), or more than one, stays a row of its own; so does a
+ * trace's own top row.
+ */
+function hopOf(node: SpanNode): SpanNode {
+  if (node.span.parent_id === null || !HOP_KINDS.has(node.span.kind)) return node;
+  const served = node.children.filter(isServed) as ServedRun[];
+  const [call] = served;
+  if (served.length !== 1 || !call) return node;
+  const own = node.children.filter((child) => child !== call);
+  return { ...node, served: call, children: [...own, ...call.children].sort((a, b) => startOf(a) - startOf(b)) };
+}
+
+/** The calls that ask and wait for an answer: a message sent (a publish) is no hop, its consumer runs on its own. */
+const HOP_KINDS: ReadonlySet<string> = new Set(["http.client", ...RPC]);
+
+/** The rows under a span that are its own, not the rows of the trace served for it. */
+function ownChildren(node: SpanNode): Node[] {
+  const served = node.served?.children;
+  return served ? node.children.filter((child) => !served.includes(child)) : node.children;
 }
 
 /* ---------- filters ---------- */
@@ -1104,7 +1141,7 @@ function GroupTicks({ spans, trace, within }: { spans: readonly Span[]; trace: T
 
 /** The spans right under a row: a signal's receivers among them. */
 function childSpans(node: Extract<Node, { type: "span" }>): Span[] {
-  return node.children.flatMap((child) => (child.type === "span" ? [child.span] : []));
+  return ownChildren(node).flatMap((child) => (child.type === "span" ? [child.span] : []));
 }
 
 /** A span's fold: none without rows under it; open unless folded, always on the way to a filtered row. */
@@ -1145,11 +1182,12 @@ const OP = /^([A-Z][A-Z_]+)( .*)$/;
  * A call's text, its operation set apart: a statement's verb or a command a little stronger than what it acts on,
  * an HTTP call's method in its colour as every list shows one.
  */
-function OpText({ text, kind }: { text: string; kind: string | undefined }) {
+function OpText({ text, kind, className }: { text: string; kind: string | undefined; className?: string }) {
   const op = OP.exec(text);
-  if (!op) return <span className="dt-map-text">{text}</span>;
+  const classes = className ? `dt-map-text ${className}` : "dt-map-text";
+  if (!op) return <span className={classes}>{text}</span>;
   return (
-    <span className="dt-map-text">
+    <span className={classes}>
       <span className="dt-map-op" data-method={kind === "http.client" ? op[1] : undefined}>
         {op[1]}
       </span>
@@ -1159,31 +1197,19 @@ function OpText({ text, kind }: { text: string; kind: string | undefined }) {
 }
 
 /** A span: its kind, its name and what goes with it, its bar and its time; its rows under it, open or folded. */
-function SpanRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps<"span">) {
+function SpanRow({ node, place }: RowProps<"span">) {
+  return node.served ? <HopRow node={node} served={node.served} place={place} /> : <OwnRow node={node} place={place} />;
+}
+
+function OwnRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps<"span">) {
   const { span } = node;
   const fold = spanFold(node, mark, ctx);
   const issue = ctx.issueBySpan.get(span.id);
   return (
     <div>
-      <button
-        type="button"
-        className="dt-map-row"
-        {...rowState(ctx, node.key, mark)}
-        data-kind={span.kind}
-        data-category={ctx.categories.get(span.id)}
-        data-root={span.parent_id === null ? "" : undefined}
-        data-status={span.status}
-        aria-expanded={fold}
-        onClick={() => clickSpan(ctx, node.key, fold)}
-        onKeyDown={foldKeys(fold, () => ctx.onToggle(node.key))}
-      >
+      <button type="button" {...spanButton(ctx, node, mark, fold)} data-root={span.parent_id === null ? "" : undefined}>
         <span className="dt-map-name" style={indent}>
-          <Caret open={fold} onToggle={() => ctx.onToggle(node.key)} />
-          <KindBadge
-            kind={spanKindLabel(span.kind, ctx.trace.attrs, parent?.kind)}
-            muted={true}
-            className="dt-map-kind"
-          />
+          <SpanFold ctx={ctx} node={node} parent={parent} fold={fold} />
           <SpanName span={span} />
           <AliasChip value={aliasBeside(span)} />
           <FromTemplate span={span} parent={parent} />
@@ -1214,6 +1240,173 @@ function SpanRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps
         </>
       ) : null}
     </div>
+  );
+}
+
+/* ---------- a call and the trace served for it, one row ---------- */
+
+// A call's method and where it went: the host, the app chip beside it says better.
+const HOST = /^([A-Z]+ )(?:[a-z][a-z0-9+.-]*:\/\/)?[^/\s]+(\/\S*)?$/;
+
+/** A merged call's text: its method and path ("POST /graphql"), the host left to the app chip. */
+function hopText(span: Span): string {
+  const text = callText(span);
+  const found = HOST.exec(text);
+  return found ? `${found[1]}${found[2] ?? "/"}` : text;
+}
+
+const escaped = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** Whether a trace's name says no more than the call's path: "GET /authors/{id}" for GET /authors/2. */
+function sameRoute(text: string, name: string): boolean {
+  const pathOf = (each: string) => (each.replace(/^[A-Z]+ /, "").split("?")[0] ?? "").replace(/(.)\/$/, "$1");
+  const [path, route] = [pathOf(text), pathOf(name)];
+  if (path === route) return true;
+  const parts = route.split(/\{[^}]+\}|<[^>]+>|:[A-Za-z_]\w*/);
+  return parts.length > 1 && new RegExp(`^${parts.map(escaped).join("[^/]+")}$`).test(path);
+}
+
+/** The served trace's name, where it says more than the path (a GraphQL operation's): what grows in the row. */
+function ServedName({ text, name }: { text: string; name: string }) {
+  const shown = sameRoute(text, name) ? "" : name;
+  return (
+    <span className="dt-map-text dt-map-hop-name" title={shown || undefined}>
+      {shown}
+    </span>
+  );
+}
+
+/** The call's bar, the way there and back pale; the server's time inside it, solid, on the call's clock (Clock). */
+function HopBar({
+  trace,
+  span,
+  run,
+  within,
+}: {
+  trace: Trace;
+  span: Span;
+  run: TraceSummary;
+  within: Within | undefined;
+}) {
+  const [from, long] = clipped(span.start, span.duration, within);
+  const call = barPlace(trace, from, long);
+  const [at, length] = clipped(run.start, run.duration, narrowed(within, span));
+  const server = barPlace(trace, at, length);
+  return (
+    <span className="dt-map-track" aria-hidden="true">
+      <span className="dt-map-bar" data-call="" data-past={call.past} style={call.style} />
+      <span className="dt-map-bar" data-server="" style={server.style} />
+    </span>
+  );
+}
+
+/** A merged call's time on hover: the server's part and the rest (the network, a queue), and what its clock did. */
+function hopTimes(span: Span, served: ServedRun): string {
+  const server = served.run.duration;
+  // Longer than the call by the caller's clock: the two clocks disagree (the note says), no network time to say.
+  const split =
+    server > span.duration
+      ? `server ${duration(server)} by its app's clock`
+      : `server ${duration(server)} · network ${duration(span.duration - server)}`;
+  const note = clockNote(served);
+  return note ? `${split}\n${note}` : split;
+}
+
+/**
+ * A call merged with the trace another app served for it (see hopOf): open, that trace's rows straight under it, by
+ * the chain's rules (one of many deeper down starts folded); a first click selects it, as a span's.
+ */
+function HopRow({ node, served, place }: { node: SpanNode; served: ServedRun; place: RowPlace }) {
+  const { ctx, indent, depth, mark, parent } = place;
+  const { span } = node;
+  const has = node.children.length > 0;
+  const fold = foldOf(has, has && (mark === "path" || served.opened !== ctx.collapsed.has(node.key)));
+  useChainLoad(served, fold, ctx.onChain);
+  const inner = useLinkedContext(served, ctx);
+  const root = served.whole?.spans.find((each) => each.parent_id === null);
+  const under = { ...inner, within: narrowed(ctx.within, span) };
+  const text = hopText(span);
+  return (
+    <div>
+      <button type="button" {...spanButton(ctx, node, mark, fold)} data-hop="">
+        <span className="dt-map-name" style={indent}>
+          <SpanFold ctx={ctx} node={node} parent={parent} fold={fold} />
+          <OpText text={text} kind={span.kind} className="dt-map-hop-path" />
+          <span className="dt-map-hop" aria-hidden="true">
+            →
+          </span>
+          <span className="sr-only">served by</span>
+          <CallApp node={served} />
+          <ServedName text={text} name={served.run.name} />
+          <FromTemplate span={span} parent={parent} />
+          <HiddenLogs count={ctx.hiddenLogs.get(span.id)} onShow={ctx.onShowLogs} />
+          <HopIssue span={span} served={served} ctx={ctx} />
+          <RunChips trace={served.run} />
+          <LinkedFlame node={served} ctx={ctx} />
+        </span>
+        <HopBar trace={ctx.trace} span={span} run={served.run} within={ctx.within} />
+        <RowTime
+          time={span.duration}
+          slow={slowness(span.duration, ctx.trace, ctx.categories.get(span.id))}
+          title={hopTimes(span, served)}
+        />
+      </button>
+      <RowDetails id={node.key} ctx={ctx} />
+      {fold ? (
+        <>
+          <Rows nodes={node.children} depth={depth + 1} ctx={under} />
+          {/* The served request's own code, as a span's is under its rows: the request is this row. */}
+          {root ? <CodeRow span={root} ctx={under} depth={depth + 1} /> : null}
+          <CodeRow span={span} ctx={ctx} depth={depth + 1} />
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+/** The call's own issue (an N+1 of calls), unless the served trace's chips say that one already. */
+function HopIssue({ span, served, ctx }: { span: Span; served: ServedRun; ctx: RowContext }) {
+  const issue = ctx.issueBySpan.get(span.id);
+  if (!issue || served.run.issue_kinds.includes(issue)) return null;
+  return <IssueChip kind={issue} className={ISSUE_CHIP_SHRINKS} />;
+}
+
+/** A span row's button: its state, kind and share; a click selects it and opens it, the arrows fold it. */
+function spanButton(ctx: RowContext, node: SpanNode, mark: Mark | undefined, fold: boolean | undefined) {
+  const { span } = node;
+  return {
+    className: "dt-map-row",
+    ...rowState(ctx, node.key, mark),
+    "data-kind": span.kind,
+    "data-category": ctx.categories.get(span.id),
+    "data-status": span.status,
+    "aria-expanded": fold,
+    onClick: () => clickSpan(ctx, node.key, fold),
+    onKeyDown: foldKeys(fold, () => ctx.onToggle(node.key)),
+  };
+}
+
+/** A span row's fold and its kind's badge. */
+function SpanFold({
+  ctx,
+  node,
+  parent,
+  fold,
+}: {
+  ctx: RowContext;
+  node: SpanNode;
+  parent: Span | undefined;
+  fold: boolean | undefined;
+}) {
+  return (
+    <>
+      <Caret open={fold} onToggle={() => ctx.onToggle(node.key)} />
+      <KindBadge
+        kind={spanKindLabel(node.span.kind, ctx.trace.attrs, parent?.kind)}
+        muted={true}
+        className="dt-map-kind"
+      />
+    </>
   );
 }
 
@@ -1498,6 +1691,9 @@ type Found = { node: Node; trace: Trace };
 function findIn(node: Node, key: string, trace: Trace): Found | undefined {
   if (node.key === key) return { node, trace };
   if (node.type === "group") return findNode(node.members, key, trace);
+  if (node.type === "span" && node.served) {
+    return findNode(node.served.children, key, ownerOf(node.served, trace)) ?? findNode(ownChildren(node), key, trace);
+  }
   return findNode(childrenOf(node), key, ownerOf(node, trace));
 }
 
@@ -1575,11 +1771,7 @@ function RunDetails({
       </p>
       <PropTable dense rows={runRows(run, words.label)} />
       <OpenRun run={run} words={words} links={links} remote={remote} />
-      {profile ? (
-        <button type="button" className="dt-map-open" onClick={profile}>
-          Open its profile →
-        </button>
-      ) : null}
+      <ProfileLink open={profile} />
     </div>
   );
 }
@@ -1608,8 +1800,7 @@ function LinkedDetails({
   onTraceProfile?: TraceProfileOpener | undefined;
 }) {
   if (node.type === "waiting") return <WaitingDetails span={node.span} />;
-  const whole = node.remote ? undefined : node.whole;
-  const profile = whole?.profile && onTraceProfile ? () => onTraceProfile(whole.id) : undefined;
+  const profile = servedProfile(node, onTraceProfile);
   return (
     <RunDetails run={node.run} kind={node.kind} trace={trace} links={links} remote={node.remote} profile={profile} />
   );
@@ -1717,6 +1908,7 @@ function SpanHead({
 }
 
 function SpanDetails(props: DetailsProps<"span">) {
+  if (props.node.served) return <HopDetails {...props} served={props.node.served} />;
   return props.node.span.parent_id === null ? <RootDetails {...props} /> : <CallDetails {...props} />;
 }
 
@@ -1743,6 +1935,83 @@ function CallDetails({ node: { span }, trace, onExplain }: DetailsProps<"span">)
       <SpanAttributes span={span} attrs={span.attrs} titled={summary.length > 0} />
     </div>
   );
+}
+
+/**
+ * A call merged with the trace served for it: the call (its URL, status, where it was called from, its attributes),
+ * then what served it (that trace's name and findings, the ways to it and to its profile).
+ */
+function HopDetails({
+  node: { span },
+  served,
+  trace,
+  links,
+  onTraceProfile,
+}: DetailsProps<"span"> & { served: ServedRun }) {
+  const parent = trace.spans.find((each) => each.id === span.parent_id);
+  const summary = summaryRows(span, true, parent);
+  return (
+    <div className="grid gap-5 p-4">
+      <section className="grid gap-3" aria-label="Call">
+        <SectionHeading>Call</SectionHeading>
+        <SpanHead span={span} trace={trace} parent={parent} attrs={span.attrs} />
+        {summary.length ? <Fields rows={summary} /> : null}
+        <SpanAttributes span={span} attrs={span.attrs} titled={summary.length > 0} />
+      </section>
+      <ServedBy served={served} trace={trace} links={links} onTraceProfile={onTraceProfile} />
+    </div>
+  );
+}
+
+/** What served a merged call: its app, its trace's name and findings, the ways to it and to its profile. */
+function ServedBy({
+  served,
+  trace,
+  links,
+  onTraceProfile,
+}: {
+  served: ServedRun;
+  trace: Trace;
+  links: TraceLinks | undefined;
+  onTraceProfile: TraceProfileOpener | undefined;
+}) {
+  return (
+    <section className="grid gap-3" aria-label={`Served by ${appName(served) ?? "another app"}`}>
+      <ServedHeading served={served} />
+      <p className="dt-map-details-title">
+        started {duration(Math.max(served.run.start - trace.start, 0))} after this request · took{" "}
+        {duration(served.run.duration)}
+      </p>
+      <PropTable dense rows={runRows(served.run, "Trace")} />
+      <RunChips trace={served.run} />
+      <OpenRun run={served.run} words={RUN_WORDS.call} links={links} remote={served.remote} />
+      <ProfileLink open={servedProfile(served, onTraceProfile)} />
+    </section>
+  );
+}
+
+/** "Served by" and the app's chip, as the row has it. */
+function ServedHeading({ served }: { served: ServedRun }) {
+  const app = appName(served);
+  return (
+    <SectionHeading>
+      Served by{app ? <AppChip name={app} runtime={traceRuntime(served.whole?.attrs ?? {})} /> : " another app"}
+    </SectionHeading>
+  );
+}
+
+/** Opens a call's trace's profile, when this agent has that trace whole with one. */
+function servedProfile(served: ServedRun, open: TraceProfileOpener | undefined): (() => void) | undefined {
+  const whole = served.remote ? undefined : served.whole;
+  return whole?.profile && open ? () => open(whole.id) : undefined;
+}
+
+function ProfileLink({ open }: { open: (() => void) | undefined }) {
+  return open ? (
+    <button type="button" className="dt-map-open" onClick={open}>
+      Open its profile →
+    </button>
+  ) : null;
 }
 
 /**
@@ -1944,7 +2213,7 @@ function useScrolledToInitial(initialSpan: string | undefined): RefObject<HTMLDi
 
 /** What is under a row, as the trace's tabs take it: a span's, a group's spans', a call's trace. */
 function scopeOfNode(node: Node): SpanScope | undefined {
-  if (node.type === "span") return { targets: [node.span.id], label: node.span.name, only: false };
+  if (node.type === "span") return spanScope(node);
   if (node.type === "group") {
     return {
       targets: node.spans.map((span) => span.id),
@@ -1956,6 +2225,17 @@ function scopeOfNode(node: Node): SpanScope | undefined {
     return { targets: [node.run.id], label: appName(node) ?? node.run.name, only: false };
   }
   return undefined;
+}
+
+/** A span's, a merged call's (see hopScope). */
+function spanScope({ span, served }: SpanNode): SpanScope {
+  return served ? hopScope(span, served) : { targets: [span.id], label: span.name, only: false };
+}
+
+/** What is under a merged call: its span's, which takes the trace served for it too. */
+function hopScope(span: Span, served: ServedRun): SpanScope {
+  const app = appName(served);
+  return { targets: [span.id], label: app ? `${hopText(span)} → ${app}` : span.name, only: false };
 }
 
 function detailsOf(
