@@ -611,7 +611,7 @@ function backOf(route: Route): TraceRoute | null {
  */
 const PANEL_LINKS: TraceLinks = {
   ...consoleLinks(base, true),
-  openTrace: (id) => go({ name: "trace", id, from: location.hash }),
+  openTrace: (id, tab) => go({ name: "trace", id, from: location.hash, tab }),
 };
 
 function RequestSwitcher({
