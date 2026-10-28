@@ -15,17 +15,11 @@ import { CloseIcon } from "./icons";
 import { callsOfTab } from "./lib/callTabs";
 import { scopedProfiles } from "./lib/chainProfile";
 import { appRuntimes, appsOf, type Member, type SpanScope, scopedIssues, scopedLogs, scopedSpans } from "./lib/scope";
-import { AppMark } from "./primitives";
-import type { ScopeIssue } from "./types";
+import { AppMark, IssueChip } from "./primitives";
+import type { IssueKind, ScopeIssue } from "./types";
 
 /** What is under a row of the call tree, said: its menu has "Only this span"; × goes back to the whole chain. */
-export function ScopeChip({
-  scope,
-  onChange,
-}: {
-  scope: SpanScope | null;
-  onChange: (scope: SpanScope | null) => void;
-}) {
+function ScopeChip({ scope, onChange }: { scope: SpanScope | null; onChange: (scope: SpanScope | null) => void }) {
   if (!scope) return null;
   return (
     <li>
@@ -81,36 +75,137 @@ export function CountChip({
   );
 }
 
-/** Each app of the chain with how many of the list it has: one narrows the list to it. Only for two apps or more. */
-export function AppChips({
-  apps,
-  counts,
-  picked,
-  onPick,
-  runtimes,
-}: {
+/**
+ * Each app of the chain with how many of the list it has, after "All apps" with all of them: one narrows the list to
+ * it. Only for two apps or more. Each with its mark, as the call tree's and the lists' app chips have it.
+ */
+function AppChips({ apps, counts, picked, onPick, runtimes }: AppPicks) {
+  // An app with none of the list (a scope under the BFF's step: the browser's) has no chip.
+  const some = apps.filter((app) => (counts.get(app) ?? 0) > 0 || app === picked);
+  if (some.length < 2) return null;
+  const all = some.reduce((sum, app) => sum + (counts.get(app) ?? 0), 0);
+  return (
+    <>
+      <CountChip pressed={picked === null} count={all} title="Every app" onPress={() => onPick(null)}>
+        All apps
+      </CountChip>
+      {some.map((app) => (
+        <CountChip
+          key={app}
+          pressed={picked === app}
+          count={counts.get(app) ?? 0}
+          title={picked === app ? "Every app" : `Only ${app}`}
+          onPress={() => onPick(picked === app ? null : app)}
+        >
+          <AppMark runtime={runtimes?.get(app)} />
+          {app}
+        </CountChip>
+      ))}
+    </>
+  );
+}
+
+/** The apps of a list a filter picks from: each with how many of the list it has, the one picked. */
+export interface AppPicks {
   apps: readonly string[];
   counts: ReadonlyMap<string, number>;
   picked: string | null;
   onPick: (app: string | null) => void;
-  /** Each app's runtime label (lib/runtime traceRuntime): its mark on its chip, as the call tree's app chip has it. */
+  /** Each app's runtime label (lib/runtime traceRuntime): its mark on its chip. */
   runtimes?: ReadonlyMap<string, string | undefined> | undefined;
+}
+
+/**
+ * Over every list of a trace's tabs (DB, HTTP calls, Issues, Logs, Profile), one look: the scope's chip and the
+ * apps' ("All apps", then each app), when there is a scope or more than one app; one line of what the list adds up
+ * to, with what the tab offers at its end; then the chips that narrow it (its issues first). Each row only when it
+ * has something.
+ */
+export function ScopeHeader({
+  scope,
+  onScope,
+  apps,
+  summary,
+  end,
+  filters,
+  filtersLabel,
+}: {
+  scope: SpanScope | null;
+  onScope: (scope: SpanScope | null) => void;
+  apps: AppPicks;
+  /** One line: how many, their time; nothing for an empty list. */
+  summary?: ReactNode;
+  end?: ReactNode;
+  filters?: ReactNode;
+  filtersLabel?: string | undefined;
 }) {
-  // An app with none of the list (a scope under the BFF's step: the browser's) has no chip.
-  const some = apps.filter((app) => (counts.get(app) ?? 0) > 0 || app === picked);
-  if (some.length < 2) return null;
-  return some.map((app) => (
-    <CountChip
-      key={app}
-      pressed={picked === app}
-      count={counts.get(app) ?? 0}
-      title={picked === app ? "Every app" : `Only ${app}`}
-      onPress={() => onPick(picked === app ? null : app)}
-    >
-      <AppMark runtime={runtimes?.get(app)} />
-      {app}
+  return (
+    <div className="dt-scope-head">
+      <ScopeAndApps scope={scope} onScope={onScope} apps={apps} />
+      <SummaryLine summary={summary} end={end} />
+      {filters ? (
+        <ul className="dt-scope-row" aria-label={filtersLabel}>
+          {filters}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+/** The header's first row: the scope's chip and the apps', when there is a scope or more than one app. */
+function ScopeAndApps({
+  scope,
+  onScope,
+  apps,
+}: {
+  scope: SpanScope | null;
+  onScope: (scope: SpanScope | null) => void;
+  apps: AppPicks;
+}) {
+  const several = apps.apps.filter((app) => (apps.counts.get(app) ?? 0) > 0 || app === apps.picked).length > 1;
+  if (!(scope || several)) return null;
+  return (
+    <ul className="dt-scope-row" aria-label="Scope">
+      <ScopeChip scope={scope} onChange={onScope} />
+      <AppChips {...apps} />
+    </ul>
+  );
+}
+
+/** The header's line of what the list adds up to, what the tab offers at its end. */
+function SummaryLine({ summary, end }: { summary: ReactNode; end: ReactNode }) {
+  if (!(summary || end)) return null;
+  return (
+    <div className="dt-scope-summary">
+      <span className="dt-scope-summary-text">{summary}</span>
+      {end ? <div className="dt-scope-summary-end">{end}</div> : null}
+    </div>
+  );
+}
+
+/**
+ * An issue of the list as a filter: its badge ("N+1"), what it is in the UI's words, how many; its whole title on
+ * hover. Pressed, the list narrows to its spans.
+ */
+export function IssuePick({
+  kind,
+  title,
+  count,
+  pressed,
+  onPress,
+}: {
+  kind: IssueKind;
+  title: string;
+  count: number;
+  pressed: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <CountChip pressed={pressed} count={count} title={title} onPress={onPress}>
+      <IssueChip kind={kind} />
+      <span className="dt-issue-pick-title">{title.replace(/^[^:]*:\s*/, "")}</span>
     </CountChip>
-  ));
+  );
 }
 
 /** The chain's apps in order, and each one's runtime label: the chips AppChips draws. */

@@ -11,6 +11,7 @@ import {
 } from "./lib/chainProfile";
 import { type Memory, memoryProfile, type SitePlace, sitePlaces } from "./lib/memory";
 import { percent } from "./lib/percent";
+import { plural } from "./lib/plural";
 import {
   allFrames,
   type Box,
@@ -32,8 +33,8 @@ import { rangeLabel, type TimeRange } from "./lib/slice";
 import { cn } from "./lib/utils";
 import { timed, wallClock } from "./lib/waiting";
 import { litKey, litScope } from "./lit";
-import { AppChip, AppMark } from "./primitives";
-import { CountChip, ScopeChip } from "./ScopeBar";
+import { AppChip } from "./primitives";
+import { ScopeHeader } from "./ScopeBar";
 import { Segmented } from "./Segmented";
 import { largestFirst, ShareBar, ShareFace } from "./Shares";
 import { HEAD_TEXT } from "./TableColumns";
@@ -713,37 +714,18 @@ function ChainProfiles({ profiles, chain }: { profiles: readonly ScopedProfile[]
   const [picked, setPicked] = useState<string | null>(null);
   const shown = apps.filter((app) => picked === null || app.app === picked);
   const views = useMemo(() => new Map(apps.map((app) => [app.app, appView(app)])), [apps]);
+  const runtimes = useMemo(() => new Map(apps.map((app) => [app.app, appRuntime(app)])), [apps]);
+  const counts = useMemo(() => new Map(apps.map((app) => [app.app, app.traces.length])), [apps]);
+  const traces = shown.reduce((sum, app) => sum + app.traces.length, 0);
   return (
     <>
-      <div className="dt-scope-bar dt-scope-bar-calls">
-        <ul className="dt-breakdown-legend" aria-label="Scope">
-          <ScopeChip scope={chain.scope} onChange={chain.setScope} />
-          {apps.length > 1 ? (
-            <CountChip pressed={picked === null} count={apps.length} onPress={() => setPicked(null)}>
-              All apps
-            </CountChip>
-          ) : null}
-          {apps.length > 1
-            ? apps.map((app) => (
-                <CountChip
-                  key={app.app}
-                  pressed={picked === app.app}
-                  count={app.traces.length}
-                  title={`Only ${app.app}'s profile`}
-                  onPress={() => setPicked(picked === app.app ? null : app.app)}
-                >
-                  <AppMark runtime={appRuntime(app)} />
-                  {app.app}
-                </CountChip>
-              ))
-            : null}
-        </ul>
-        <ul className="dt-breakdown-legend" aria-label="What the profiles add up to">
-          {shown.map((app) => (
-            <ProfileSums key={app.app} app={app} profile={views.get(app.app)?.profile} />
-          ))}
-        </ul>
-      </div>
+      <ScopeHeader
+        scope={chain.scope}
+        onScope={chain.setScope}
+        apps={{ apps: apps.map((app) => app.app), runtimes, counts, picked, onPick: setPicked }}
+        summary={shown.length > 0 ? plural(traces, "profiled trace", "profiled traces") : null}
+      />
+      {shown.length > 0 ? <ProfileSums apps={shown} views={views} /> : null}
       {shown.length === 0 ? <p className="dt-note">Nothing profiled under this.</p> : null}
       {shown.map((app) => {
         const view = views.get(app.app);
@@ -768,27 +750,42 @@ function appView(app: AppProfile): Scope {
   return { profile, title: `Profile of ${app.traces.length} traces`, note: null, timed: false };
 }
 
-/** An app's profiled time, of it waiting, and the function that ran most. */
-function ProfileSums({ app, profile }: { app: AppProfile; profile: Profile | undefined }) {
+/** Each app's profiled time, of it waiting, and the function that ran most: a row an app, in aligned columns. */
+function ProfileSums({ apps, views }: { apps: readonly AppProfile[]; views: ReadonlyMap<string, Scope> }) {
+  return (
+    <div className="dt-profile-sums-wrap">
+      <table className="dt-profile-sums" aria-label="What the profiles add up to">
+        <thead>
+          <tr>
+            <th scope="col">App</th>
+            <th scope="col">Profiled</th>
+            <th scope="col">Waiting</th>
+            <th scope="col">Most time in</th>
+          </tr>
+        </thead>
+        <tbody>
+          {apps.map((app) => (
+            <ProfileSumRow key={app.app} app={app} profile={views.get(app.app)?.profile} />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** One app's row: its chip, its profiled time, of it waiting, the function most time went in. */
+function ProfileSumRow({ app, profile }: { app: AppProfile; profile: Profile | undefined }) {
   if (!profile) return null;
   const sums = profileSums(profile);
   return (
-    <li className="dt-profile-sums">
-      <AppChip name={app.app} runtime={appRuntime(app)} />
-      <b>{duration(sums.time)}</b> profiled
-      {sums.waiting > 0 ? (
-        <>
-          {" "}
-          · <b>{duration(sums.waiting)}</b> waiting
-        </>
-      ) : null}
-      {sums.top ? (
-        <>
-          {" "}
-          · most in <code className="font-mono">{sums.top}</code>
-        </>
-      ) : null}
-    </li>
+    <tr>
+      <td>
+        <AppChip name={app.app} runtime={appRuntime(app)} />
+      </td>
+      <td>{duration(sums.time)}</td>
+      <td>{sums.waiting > 0 ? duration(sums.waiting) : "—"}</td>
+      <td>{sums.top ? <code title={sums.top}>{sums.top}</code> : "—"}</td>
+    </tr>
   );
 }
 
