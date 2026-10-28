@@ -11,7 +11,7 @@ import {
 } from "@tracepanel/ui";
 import { cn } from "@tracepanel/ui/lib/utils";
 import { HourglassIcon, SearchXIcon } from "lucide-react";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { useCapability } from "./hooks";
 import { track, useRefresh } from "./refresh";
 import { withShare } from "./ShareDialog";
@@ -326,6 +326,7 @@ export function TraceScreen({
   const loaded = useTrace(id, source, onLoaded, variant, arriving);
   const trace = traceOf(loaded);
   const related = useRelated(id, source);
+  const loadRelated = useCallback((traceId: string) => source.related(traceId), [source]);
   // The panel (compact, or docked as a strip) has an App tab: the console's trace page doesn't.
   const app = useApp(source, serviceOf(trace, variant));
   // EXPLAIN only where the app behind the console runs it.
@@ -343,6 +344,7 @@ export function TraceScreen({
       actions={withShare(trace, source, actions, shareable === true)}
       {...shown}
       related={related(trace.id)}
+      loadRelated={loadRelated}
       links={links}
       initialSpan={initialSpan}
       variant={variant}

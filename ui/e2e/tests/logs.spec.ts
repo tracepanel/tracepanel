@@ -129,3 +129,18 @@ test("each page lists its own fields", async ({ page }) => {
   await expect(page.getByRole("button", { name: /^state: / })).toBeVisible();
   await expect(page.getByRole("button", { name: /^logger: / })).toHaveCount(0);
 });
+
+test("a record a coloured logger wrote is stored as its text: found by its words, shown without the escapes", async ({
+  page,
+}) => {
+  // Sent as "\u001b[1;32mlisting\u001b[0m 3 orders for \u001b[35mann\u001b[39m" (seed.ts).
+  await page.goto(`/#/logs?q=${encodeURIComponent("listing orders ann")}`);
+
+  await expect(rows(page)).toHaveCount(1);
+  await expect(rows(page).first()).toContainText("listing 3 orders for ann");
+  const text = await rows(page).first().innerText();
+  expect([text.includes("\u001b"), text.includes("[1;32m"), text.includes("[0m")]).toEqual([false, false, false]);
+
+  const stored = await (await page.request.get(`/api/logs?q=${encodeURIComponent("listing orders ann")}`)).json();
+  expect(stored.logs.map((log: { message: string }) => log.message)).toEqual(["listing 3 orders for ann"]);
+});

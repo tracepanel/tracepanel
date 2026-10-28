@@ -30,6 +30,7 @@ import { ago, duration, since, stamp } from "./format";
 import { type ColumnSpec, type Columns, useColumns } from "./hooks/useColumns";
 import { useStored } from "./hooks/useStored";
 import { logAttrs } from "./LogRecordDetails";
+import { withoutAnsi } from "./lib/ansi";
 import { bodyCell, ColumnsHeader, MENU_REM, useColumnWidths } from "./TableColumns";
 import type { Log } from "./types";
 
@@ -104,12 +105,15 @@ function lastLine(text: string): string {
  * record. An exception's last line follows in what the message leaves.
  */
 function Message({ log, terms }: { log: LogLike; terms: readonly string[] }) {
+  const message = withoutAnsi(log.message);
   return (
     <span className="flex min-w-0 items-baseline gap-2.5">
-      <span title={log.message.slice(0, 2000)} className="max-w-full shrink-0 truncate font-mono">
-        <Marked text={log.message} terms={terms} />
+      <span title={message.slice(0, 2000)} className="max-w-full shrink-0 truncate font-mono">
+        <Marked text={message} terms={terms} />
       </span>
-      {log.exception ? <span className="min-w-0 truncate font-mono text-error">{lastLine(log.exception)}</span> : null}
+      {log.exception ? (
+        <span className="min-w-0 truncate font-mono text-error">{lastLine(withoutAnsi(log.exception))}</span>
+      ) : null}
     </span>
   );
 }
@@ -167,7 +171,7 @@ function leading<R extends LogLike>(
       label: "Logger",
       width: 10.5,
       drop: 2,
-      cell: (log) => <span className="font-mono text-muted-foreground">{log.logger}</span>,
+      cell: (log) => <span className="font-mono text-muted-foreground">{withoutAnsi(log.logger)}</span>,
     },
   ];
 }

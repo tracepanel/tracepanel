@@ -1830,8 +1830,8 @@ components:
         call_traces:
           type: object
           description: >-
-            The whole traces of calls and remote_calls (up to 20 of calls), by trace id: the call tree opens each
-            under its call.
+            The whole traces of calls and remote_calls (up to 50 of calls), by trace id: the call tree opens each
+            under its call, and these traces' own links (their related) the calls they made in turn.
           additionalProperties: { $ref: "trace.schema.json" }
         via:
           type: object

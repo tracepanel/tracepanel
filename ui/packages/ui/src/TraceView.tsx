@@ -308,6 +308,8 @@ export interface TraceViewProps {
   lead?: ReactNode;
   /** Traces linked to this one (Celery enqueues). */
   related?: Related | undefined;
+  /** Another trace's links: the call tree opens the chain of calls through them, a level at a time. */
+  loadRelated?: ((traceId: string) => Promise<Related>) | undefined;
   /** Where linked traces, issues, statements and logs lead; each missing leaves its links out. */
   links?: TraceLinks | undefined;
   /** A span to open in the call tree, as a link to it asks. */
@@ -374,6 +376,7 @@ export function TraceView({
   actions,
   lead,
   related,
+  loadRelated,
   links,
   initialSpan,
   app,
@@ -427,6 +430,7 @@ export function TraceView({
         trace={trace}
         issueBySpan={issueBySpan}
         related={related}
+        loadRelated={loadRelated}
         links={links}
         initialSpan={treeSpan}
         onExplain={onExplain}

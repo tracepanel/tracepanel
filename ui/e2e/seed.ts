@@ -676,11 +676,15 @@ function everyTab(): Doc {
     "http.route": "/account/orders/",
   };
   const head = { ...root, name, duration };
-  // Its own records: the example's are searched for in the Logs tests.
+  // Its own records: the example's are searched for in the Logs tests. The first in a coloured logger's ANSI escapes,
+  // as a terminal shows it: the agent stores the text.
   const logs = (doc["logs"] as Doc[]).map((record, index) => ({
     ...record,
     logger: "orders.views",
-    message: index === 0 ? "listing 3 orders for ann" : "orders served from the cache",
+    message:
+      index === 0
+        ? "\u001b[1;32mlisting\u001b[0m 3 orders for \u001b[35mann\u001b[39m"
+        : "orders served from the cache",
   }));
   return { ...doc, name, attrs, duration, logs, spans: spans.map((span) => (span === root ? head : span)) };
 }
