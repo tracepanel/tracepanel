@@ -6,12 +6,16 @@
 
 - The panel's list has, under a request that called other apps, a row
   per app it called (`library-api · 37 traces`, their queries and
-  findings), folded. Open (its arrow, or → on the keyboard), the app's
-  traces by route (`GET /authors/{author_id} ×36`, their time on the
-  clock), each open in turn to what it called. A trace's row opens it
-  beside the list. The app's row opens the request with its tabs under
-  that app (`Under library-api`). The rows stay open while the browser
-  tab does, and Follow new keeps to the list's own requests.
+  findings), folded. Open (its arrow, or → on the keyboard), each of the
+  app's traces in the order it started on the request's clock, a row of
+  its own: its method and path (`/authors/7`), the route in its tooltip.
+  Each opens in turn to what it called. Three or more of one route in a
+  row are a run (`GET /authors/{author_id} ×36`, their time on the
+  clock), open while the app has up to 50 traces and folded beyond. A
+  list longer than 50 rows shows the first 50 and `Show all`. A trace's
+  row opens it beside the list. The app's row opens the request with its
+  tabs under that app (`Under library-api`). The rows stay open while
+  the browser tab does, and Follow new keeps to the list's own requests.
 - A new span kind, `sql.connect`: the time a driver took to open a
   connection to the database (logging in to Snowflake, PostgreSQL's or
   MySQL's handshake). It counts as the database's time in the breakdown and
