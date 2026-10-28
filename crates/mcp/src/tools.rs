@@ -5,7 +5,7 @@ use crate::compact::{self, Focus, ago, fit, trace_line};
 use crate::profile::{self, Kind};
 use serde_json::{Value, json};
 use std::time::{Duration, Instant};
-use tracepanel_store_local::{ReadError, search};
+use tracepanel_store_local::{ReadError, Selection, log_summary, no_remote, search};
 
 const SEARCH: &str = "Search: free text and filters, e.g. `route:/api/* status>=500`, `has:n+1 duration>200ms`, \
     `kind:task state:FAILURE since:1h`. An unknown filter's error lists the known ones.";
@@ -110,8 +110,18 @@ pub(crate) fn list() -> Value {
         (
             "search_logs",
             "Search logs",
-            "Log records, newest first, with their level, logger and trace.",
-            json!({"query": query("Which records, e.g. `level>=warning logger:app.*`; empty for all."), "limit": limit(50, 200)}),
+            "Log records, newest first, with their level, logger and trace. With `trace`: that trace's records and \
+             those of every trace down its chain of calls (the services its calls reached, theirs in turn), in time \
+             order on its clock with each record's app, added up by level and app; `span` narrows to what is under \
+             those spans (a span's own records, its children's and its calls' traces'), `only` to the spans' own.",
+            json!({
+                "query": query("Which records, e.g. `level>=warning logger:app.*`; empty for all. Not with `trace`."),
+                "limit": limit(50, 200),
+                "trace": {"type": "string", "description": "A trace's id: its records and its chain's."},
+                "chain": {"type": "boolean", "default": true, "description": "With `trace`: false for the trace's own records only."},
+                "span": {"type": "string", "description": "With `trace`: span ids (comma-separated) or a chain trace's id; what is under them."},
+                "only": {"type": "boolean", "default": false, "description": "With `span`: the spans' own records, not those under them."},
+            }),
             vec![],
         ),
     ];
@@ -234,6 +244,9 @@ fn document(server: &Server, id: &str) -> Result<Value, Refusal> {
 fn shown(server: &Server, doc: &Value, focus: Focus) -> Result<String, Refusal> {
     let related = server.reader.related(compact::text(doc, "id"))?;
     let mut answer = compact::trace(doc, &related, focus, server.values, search::now_us());
+    if let Some(chain) = chain_section(server, compact::text(doc, "id"))? {
+        answer.push_str(&format!("\n\n{chain}"));
+    }
     if let Some(console) = server.console_url() {
         answer.push_str(&format!(
             "\n\nconsole: {console}#/t/{}",
@@ -389,6 +402,9 @@ fn list_calls(server: &Server, args: &Value) -> Result<String, Refusal> {
 
 fn search_logs(server: &Server, args: &Value) -> Result<String, Refusal> {
     store_ready(server)?;
+    if !string(args, "trace").is_empty() {
+        return trace_logs(server, args);
+    }
     let page =
         server
             .reader
@@ -402,4 +418,112 @@ fn search_logs(server: &Server, args: &Value) -> Result<String, Refusal> {
             .collect(),
         "No log records match.",
     ))
+}
+
+fn flag(args: &Value, key: &str, default: bool) -> bool {
+    args.get(key).and_then(Value::as_bool).unwrap_or(default)
+}
+
+/// A trace's records, its chain's with `chain`, under `span`: in time order, added up first.
+fn trace_logs(server: &Server, args: &Value) -> Result<String, Refusal> {
+    let id = string(args, "trace");
+    let chain = server
+        .reader
+        .chain(&id, flag(args, "chain", true), &no_remote)?
+        .ok_or_else(|| Refusal(format!("No trace {id}: find_traces lists the recent ones.")))?;
+    let selection = Selection {
+        targets: string(args, "span")
+            .split(',')
+            .map(str::trim)
+            .filter(|span| !span.is_empty())
+            .map(str::to_owned)
+            .collect(),
+        only: flag(args, "only", false),
+    };
+    let scope = chain.select(&selection);
+    let logs = scope.logs();
+    let start = compact::int(&chain.members[0].doc, "start");
+    let limit = number(args, "limit", 50, 200) as usize;
+    let summary = log_summary(&logs, scope.window);
+    let mut head = format!(
+        "logs of {id}{}{} ({} in {}):",
+        if chain.members.len() > 1 {
+            " and its chain"
+        } else {
+            ""
+        },
+        if selection.targets.is_empty() {
+            String::new()
+        } else {
+            format!(" under {}", selection.targets.join(","))
+        },
+        compact::count(logs.len() as i64, "record", "records"),
+        compact::count(chain.members.len() as i64, "trace", "traces"),
+    );
+    if logs.is_empty() {
+        return Ok(format!("{head}\nNo log records."));
+    }
+    head.push_str(&format!("\n{}", compact::scope_counts(&summary)));
+    if !summary["first_error"].is_null() {
+        head.push_str(&format!(
+            "\nfirst error: {}",
+            compact::scope_log_line(&summary["first_error"], start)
+        ));
+    }
+    let more = if logs.len() > limit {
+        format!(
+            "\n… {} more: raise limit or narrow with span",
+            logs.len() - limit
+        )
+    } else {
+        String::new()
+    };
+    let rows: Vec<String> = logs
+        .iter()
+        .take(limit)
+        .map(|log| compact::scope_log_line(log, start))
+        .collect();
+    Ok(format!("{head}\n{}{more}", rows.join("\n")))
+}
+
+/// The traces down a trace's chain of calls, when it has any: their apps, and their warnings and worse (the trace's
+/// own are in its logs).
+fn chain_section(server: &Server, id: &str) -> Result<Option<String>, Refusal> {
+    let Some(chain) = server.reader.chain(id, true, &no_remote)? else {
+        return Ok(None);
+    };
+    if chain.members.len() < 2 {
+        return Ok(None);
+    }
+    let start = compact::int(&chain.members[0].doc, "start");
+    let mut apps: Vec<&str> = Vec::new();
+    for member in &chain.members[1..] {
+        if !apps.contains(&member.app()) {
+            apps.push(member.app());
+        }
+    }
+    let loud: Vec<Value> = chain
+        .select(&Selection::default())
+        .logs()
+        .into_iter()
+        .filter(|log| {
+            log["trace_id"] != id
+                && matches!(
+                    compact::text(log, "level"),
+                    "warning" | "error" | "critical"
+                )
+        })
+        .collect();
+    let mut out = format!(
+        "chain: {} down its calls ({}); logs → search_logs trace:{id}",
+        compact::count(chain.members.len() as i64 - 1, "trace", "traces"),
+        apps.join(", ")
+    );
+    if !loud.is_empty() {
+        out.push_str(&format!("\ntheir warnings and worse ({}):", loud.len()));
+        for log in loud.iter().take(10) {
+            out.push_str(&format!("\n  {}", compact::scope_log_line(log, start)));
+        }
+    }
+    Ok(Some(out))
 }

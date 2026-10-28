@@ -34,8 +34,9 @@ import { duration } from "./format";
 import { HeadFacts } from "./HeadFacts";
 import { Hint } from "./Hint";
 import { useMenuOpen } from "./hooks/useCloseOnBlur";
+import { type TraceScope, useTraceScope } from "./hooks/useTraceChain";
 import { IssueList } from "./IssueList";
-import { LogList } from "./LogList";
+import { LogsPane } from "./LogList";
 import { groupNoun } from "./lib/calls";
 import { isTyping } from "./lib/keys";
 import type { Slice } from "./lib/slice";
@@ -43,13 +44,14 @@ import { linkProps, opensTraces, openTraceAt, type TraceLinks } from "./links";
 import { ProfilePane } from "./ProfileView";
 import { RoutePath, StatusBadge, TraceBadge } from "./primitives";
 import { RequestInfo } from "./RequestInfo";
+import { UnderThis, underCounts } from "./ScopeBar";
 import { SqlList } from "./SqlList";
 import { type SystemCalls, systemCalls, systemOfIssue } from "./systemCalls";
 import { Tabs } from "./Tabs";
 import { type MarkTarget, TimeStrip } from "./Timeline";
 import { SliceScope } from "./TimeSlice";
 import { HeadingTitle, heading, htmxOf, outcomeOf } from "./TraceHeading";
-import type { App, Issue, IssueKind, Related, Trace } from "./types";
+import type { App, ChainTrace, Issue, IssueKind, Related, Trace } from "./types";
 
 export type TabId = "request" | "app" | "tree" | "issues" | "sql" | "cache" | "http" | "logs" | "error" | "profile";
 
@@ -211,12 +213,15 @@ function traceTabs({
   findings,
   calls,
   app,
+  logs,
 }: {
   trace: Trace;
   outcome: ReactNode;
   findings: readonly Issue[];
   calls: Partial<Record<CallsTabId, SystemCalls>>;
   app: App | null | undefined;
+  /** How many records the trace's chain of calls has: its own and those of the traces down its calls. */
+  logs: number;
 }) {
   const KindIcon = KIND_ICONS[trace.kind] ?? GlobeIcon;
   return [
@@ -247,7 +252,7 @@ function traceTabs({
     }),
     // What a request is most often opened for: its SQL, cache and HTTP calls, and its logs when it wrote any.
     ...callsTabs(calls),
-    ...tabIfAny(trace.logs, { id: "logs" as const, label: "Logs", icon: <ScrollTextIcon />, count: trace.logs.length }),
+    ...(logs > 0 ? [{ id: "logs" as const, label: "Logs", icon: <ScrollTextIcon />, count: logs }] : []),
     // Recorded only when asked for: where the time went in code.
     ...(trace.profile ? [{ id: "profile" as const, label: "Profile", icon: <FlameIcon /> }] : []),
     // Last: the app that served it, its settings and versions, when its SDK says them. About the app, not this request.
@@ -310,6 +315,8 @@ export interface TraceViewProps {
   related?: Related | undefined;
   /** Another trace's links: the call tree opens the chain of calls through them, a level at a time. */
   loadRelated?: ((traceId: string) => Promise<Related>) | undefined;
+  /** The trace's whole chain of calls, on its clock: the tabs list and add it up (Logs). */
+  loadChain?: ((traceId: string) => Promise<ChainTrace[]>) | undefined;
   /** Where linked traces, issues, statements and logs lead; each missing leaves its links out. */
   links?: TraceLinks | undefined;
   /** A span to open in the call tree, as a link to it asks. */
@@ -358,13 +365,22 @@ function RequestPane({
 function TreePane({
   open,
   onSelect,
+  chain,
   ...tree
-}: ComponentProps<typeof CallMap> & { open: boolean; onSelect: (target: MarkTarget) => void }) {
+}: ComponentProps<typeof CallMap> & {
+  open: boolean;
+  onSelect: (target: MarkTarget) => void;
+  /** What a row's "Under this" counts, and where its counts lead. */
+  chain: TraceScope;
+}) {
   if (!open) return null;
   const onProfile = tree.trace.profile ? () => onSelect({ tab: "profile" }) : undefined;
   return (
     <CallMap
       {...tree}
+      under={(under) => (
+        <UnderThis counts={underCounts(chain.members, under, chain.setScope, () => onSelect({ tab: "logs" }))} />
+      )}
       head={<TimeStrip trace={tree.trace} related={tree.related} onSelect={onSelect} />}
       onProfile={onProfile}
       onTraceProfile={tree.onTraceProfile ?? linkedProfiles(tree.links)}
@@ -388,6 +404,7 @@ export function TraceView({
   lead,
   related,
   loadRelated,
+  loadChain,
   links,
   initialSpan,
   app,
@@ -420,9 +437,12 @@ export function TraceView({
   // A span to open in the call tree: from the link's `span`, or a log record's "in the call tree".
   const [treeSpan, setTreeSpan] = useState(initialSpan);
 
+  // The trace's chain of calls, and what of it the tabs list: all of it, or what is under a row of the call tree.
+  const chain = useTraceScope(trace, related, loadChain);
+
   const status = trace.attrs["http.status_code"];
   const outcome = outcomeOf(trace);
-  const tabs = traceTabs({ trace, outcome, findings, calls, app });
+  const tabs = traceTabs({ trace, outcome, findings, calls, app, logs: chain.logs.length });
   const head = heading(trace);
   const path = trace.attrs["http.path"];
   const route = trace.attrs["http.route"];
@@ -447,6 +467,7 @@ export function TraceView({
         initialSpan={treeSpan}
         onExplain={onExplain}
         onTraceProfile={onTraceProfile}
+        chain={chain}
       />
       {active === "issues" ? (
         <IssueList
@@ -460,18 +481,16 @@ export function TraceView({
           links={links}
         />
       ) : null}
-      {active === "logs" ? (
-        <LogList
-          logs={trace.logs}
-          start={trace.start}
-          traceId={trace.id}
-          links={links}
-          onShowSpan={(span) => {
-            setTreeSpan(span);
-            setActive("tree");
-          }}
-        />
-      ) : null}
+      <LogsPane
+        open={active === "logs"}
+        chain={chain}
+        trace={trace}
+        links={links}
+        onShowRow={(row) => {
+          setTreeSpan(row);
+          setActive("tree");
+        }}
+      />
       <SpanLists active={active} calls={calls} sql={{ issueBySpan, focus, onExplain, links }} />
       <ProfilePane trace={trace} open={active === "profile"} />
       {active === "error" ? (

@@ -6,6 +6,7 @@ import type {
   CallRow,
   CallsSummary,
   Capabilities,
+  ChainTrace,
   Counts,
   EndpointDetail,
   EndpointRow,
@@ -100,6 +101,11 @@ export interface DataSource {
   listServices(q: string): Promise<ServiceMap>;
   /** The trace that enqueued this one, and the traces it enqueued (Celery). */
   related(traceId: string): Promise<Related>;
+  /**
+   * The trace and every trace down the chain of its calls, each on its clock: what the trace's tabs list and add up.
+   * Optional: without it the chain is the trace and the calls' traces its links bring whole.
+   */
+  chain?: (traceId: string) => Promise<ChainTrace[]>;
   /** With `service`, only that app's calls: two apps can serve the same route. */
   getEndpoint(method: string, route: string, service?: string): Promise<EndpointDetail | null>;
   /** `group`: "endpoint" groups requests by method + route (the HTTP page), "operation" by trace name. */
@@ -347,6 +353,9 @@ export function httpSource(base: string | URL): DataSource {
     },
     async related(traceId) {
       return (await getJson<Related>(url(`traces/${traceId}/related`))) ?? NO_RELATED;
+    },
+    async chain(traceId) {
+      return (await getJson<{ traces: ChainTrace[] }>(url(`traces/${traceId}/chain`)))?.traces ?? [];
     },
     getEndpoint(method, route, service) {
       return getJson<EndpointDetail>(url("endpoints/detail", { method, route, service }));

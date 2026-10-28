@@ -1,5 +1,6 @@
 import {
   type App,
+  type ChainTrace,
   type DataSource,
   Empty,
   type ExploreItem,
@@ -142,6 +143,20 @@ function relatedLoader(source: DataSource): (traceId: string) => Promise<Related
   if (!load) {
     load = (traceId) => source.related(traceId);
     loaders.set(source, load);
+  }
+  return load;
+}
+
+const chainLoaders = new WeakMap<DataSource, (traceId: string) => Promise<ChainTrace[]>>();
+
+/** A trace's whole chain of calls, for its tabs to list: one function per source, so it keeps still. */
+function chainLoader(source: DataSource): ((traceId: string) => Promise<ChainTrace[]>) | undefined {
+  const chain = source.chain;
+  if (!chain) return undefined;
+  let load = chainLoaders.get(source);
+  if (!load) {
+    load = (traceId) => chain(traceId);
+    chainLoaders.set(source, load);
   }
   return load;
 }
@@ -356,6 +371,7 @@ export function TraceScreen({
       {...shown}
       related={related(trace.id)}
       loadRelated={relatedLoader(source)}
+      loadChain={chainLoader(source)}
       links={links}
       initialSpan={initialSpan}
       variant={variant}

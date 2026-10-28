@@ -26,6 +26,7 @@ import { plural } from "./lib/plural";
 import { ownHotspots, type Profile } from "./lib/profile";
 import { type Quiet, quietSpans } from "./lib/quiet";
 import { traceRuntime } from "./lib/runtime";
+import { type SpanScope, shifted } from "./lib/scope";
 import { isReceiver, raised } from "./lib/signals";
 import { isLoud, overlaps, type Slice, type TimeRange } from "./lib/slice";
 import { CALL_KINDS, DATASTORES, MESSAGING, RPC } from "./lib/systems";
@@ -232,18 +233,6 @@ function shiftInto(run: { start: number; duration: number }, call: Span): number
 
 /** From this shift (µs) on, a call's time says its app's clock differs from this one's. */
 const SKEW_NOTE_MIN = 1_000;
-
-/** A trace with every time in it moved by `by` µs. */
-function shifted(trace: Trace, by: number): Trace {
-  if (by === 0) return trace;
-  return {
-    ...trace,
-    start: trace.start + by,
-    spans: trace.spans.map((span) => ({ ...span, start: span.start + by })),
-    logs: trace.logs.map((log) => ({ ...log, time: log.time + by })),
-    errors: trace.errors.map((error) => ({ ...error, time: error.time + by })),
-  };
-}
 
 /** A call's trace, its summary and its whole trace when it came whole, moved onto its call's clock. */
 function onClock(served: TraceSummary, stored: Trace | undefined, call: Span | undefined) {
@@ -1953,6 +1942,22 @@ function useScrolledToInitial(initialSpan: string | undefined): RefObject<HTMLDi
   return rows;
 }
 
+/** What is under a row, as the trace's tabs take it: a span's, a group's spans', a call's trace. */
+function scopeOfNode(node: Node): SpanScope | undefined {
+  if (node.type === "span") return { targets: [node.span.id], label: node.span.name, only: false };
+  if (node.type === "group") {
+    return {
+      targets: node.spans.map((span) => span.id),
+      label: `${node.spans[0]?.name} ×${node.spans.length}`,
+      only: false,
+    };
+  }
+  if (node.type === "task" && node.kind === "call") {
+    return { targets: [node.run.id], label: appName(node) ?? node.run.name, only: false };
+  }
+  return undefined;
+}
+
 function detailsOf(
   tree: Node[],
   selected: string | null,
@@ -1961,20 +1966,25 @@ function detailsOf(
     links: TraceLinks | undefined;
     onExplain: Explain | undefined;
     onTraceProfile: TraceProfileOpener | undefined;
+    under: ((scope: SpanScope) => ReactNode) | undefined;
   },
 ): ReactNode {
   const found = selected ? findNode(tree, selected, trace) : undefined;
   if (!found) return null;
   // The host explains the trace's own queries: a linked trace's are its own.
   const onExplain = found.trace === trace ? hosts.onExplain : undefined;
+  const scope = hosts.under && scopeOfNode(found.node);
   return (
-    <Details
-      node={found.node}
-      trace={found.trace}
-      links={hosts.links}
-      onExplain={onExplain}
-      onTraceProfile={hosts.onTraceProfile}
-    />
+    <>
+      {scope ? hosts.under?.(scope) : null}
+      <Details
+        node={found.node}
+        trace={found.trace}
+        links={hosts.links}
+        onExplain={onExplain}
+        onTraceProfile={hosts.onTraceProfile}
+      />
+    </>
   );
 }
 
@@ -2192,6 +2202,8 @@ export function CallMap({
    * them, down the chain (the browser's view, the BFF, each service). Without it the tree opens one level.
    */
   loadRelated?: ((traceId: string) => Promise<Related>) | undefined;
+  /** Over a row's details: what is under it (its records, ...), each a way to the tab that lists them. */
+  under?: ((scope: SpanScope) => ReactNode) | undefined;
 }) {
   // The part of the time picked: the kinds of calls and the stretch of time the rows are kept for.
   const { slice: current, change, profileAt } = useHeldSlice();
@@ -2210,6 +2222,7 @@ export function CallMap({
     links,
     onExplain: wiring.onExplain,
     onTraceProfile: wiring.onTraceProfile,
+    under: wiring.under,
   });
   const { categories, quiet } = useSpansTime(trace);
   const marks = useMemo(() => marksOf(tree, pickedOf(current, trace, categories)), [tree, current, trace, categories]);
