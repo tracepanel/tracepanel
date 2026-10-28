@@ -153,7 +153,7 @@ function appColumn(runtimes: ReadonlyMap<string, string | undefined> | undefined
     label: "App",
     width: 11,
     drop: 1,
-    cell: (log) => <AppChip name={log.app} runtime={runtimes?.get(log.app)} />,
+    cell: (log) => <AppChip name={log.app} runtime={runtimes?.get(log.app)} compact />,
   };
 }
 

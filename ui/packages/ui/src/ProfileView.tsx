@@ -780,7 +780,7 @@ function ProfileSumRow({ app, profile }: { app: AppProfile; profile: Profile | u
   return (
     <tr>
       <td>
-        <AppChip name={app.app} runtime={appRuntime(app)} />
+        <AppChip name={app.app} runtime={appRuntime(app)} compact />
       </td>
       <td>{duration(sums.time)}</td>
       <td>{sums.waiting > 0 ? duration(sums.waiting) : "—"}</td>

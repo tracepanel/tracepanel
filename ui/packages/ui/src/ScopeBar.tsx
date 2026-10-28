@@ -15,7 +15,7 @@ import { CloseIcon } from "./icons";
 import { callsOfTab } from "./lib/callTabs";
 import { scopedProfiles } from "./lib/chainProfile";
 import { appRuntimes, appsOf, type Member, type SpanScope, scopedIssues, scopedLogs, scopedSpans } from "./lib/scope";
-import { AppMark, IssueChip } from "./primitives";
+import { AppChip, IssueChip } from "./primitives";
 import type { IssueKind, ScopeIssue } from "./types";
 
 /** What is under a row of the call tree, said: its menu has "Only this span"; × goes back to the whole chain. */
@@ -77,7 +77,7 @@ export function CountChip({
 
 /**
  * Each app of the chain with how many of the list it has, after "All apps" with all of them: one narrows the list to
- * it. Only for two apps or more. Each with its mark, as the call tree's and the lists' app chips have it.
+ * it. Only for two apps or more. Each the app's own chip (AppChip), as the call tree and the lists name it.
  */
 function AppChips({ apps, counts, picked, onPick, runtimes }: AppPicks) {
   // An app with none of the list (a scope under the BFF's step: the browser's) has no chip.
@@ -90,16 +90,18 @@ function AppChips({ apps, counts, picked, onPick, runtimes }: AppPicks) {
         All apps
       </CountChip>
       {some.map((app) => (
-        <CountChip
-          key={app}
-          pressed={picked === app}
-          count={counts.get(app) ?? 0}
-          title={picked === app ? "Every app" : `Only ${app}`}
-          onPress={() => onPick(picked === app ? null : app)}
-        >
-          <AppMark runtime={runtimes?.get(app)} />
-          {app}
-        </CountChip>
+        <li key={app}>
+          <AppChip
+            name={app}
+            runtime={runtimes?.get(app)}
+            pick={{
+              count: counts.get(app) ?? 0,
+              pressed: picked === app,
+              title: picked === app ? "Every app" : `Only ${app}`,
+              onPress: () => onPick(picked === app ? null : app),
+            }}
+          />
+        </li>
       ))}
     </>
   );

@@ -280,7 +280,7 @@ function IssueReach({ issue, runtimes }: { issue: ScopedIssue; runtimes: Readonl
   return (
     <span className="dt-issue-reach">
       {issue.apps.map((app) => (
-        <AppChip key={app} name={app} runtime={runtimes.get(app)} />
+        <AppChip key={app} name={app} runtime={runtimes.get(app)} compact />
       ))}
       <span className="text-muted-foreground">
         {issue.chain

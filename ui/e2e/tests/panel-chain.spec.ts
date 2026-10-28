@@ -1,7 +1,7 @@
 // Under a row of the panel's list whose trace called other apps: an app's row (open), then its traces in the order
 // they started, as the call tree's chain has them, three or more of one route in a row in a run (open while the app
 // has at most 50). A trace's row opens it; the app's row opens the row's trace under that app.
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { openApp, panel, pill } from "../app.ts";
 import { chain, chainTrace, type FanoutCall, fanout } from "../chain.ts";
 import { expect, test } from "../fixtures.ts";
@@ -279,3 +279,46 @@ test("at the list's default width a chain row's path keeps its last segment whol
       .evaluate((head) => head.scrollWidth > head.clientWidth),
   ).toBe(true);
 });
+
+/** Each row's badge (method or kind) and name: where they start, how wide the badge, the gap to the name. */
+function badges(list: Locator) {
+  return list.locator(".dt-request-row").evaluateAll((rows) =>
+    rows.flatMap((row) => {
+      const badge = row.querySelector(".dt-request-main :is(.dt-method, .dt-kind:not([data-muted]))");
+      const name = row.querySelector(".dt-request-main .dt-request-path");
+      if (!(badge && name)) return [];
+      const [b, n] = [badge.getBoundingClientRect(), name.getBoundingClientRect()];
+      return [
+        {
+          chain: row.getAttribute("data-chain"),
+          from: Math.round(b.left),
+          name: Math.round(n.left),
+          gap: n.left - b.right,
+        },
+      ];
+    }),
+  );
+}
+
+for (const theme of ["light", "dark"]) {
+  test(`the list's badges take a compact slot, the names a small gap after and lined up (${theme})`, async ({
+    page,
+  }) => {
+    const { bff } = await fanout(12, [{ route: "/books", path: "/books", at: 0 }, ...authors(3, 1, 1_000)]);
+    await page.addInitScript((theme) => localStorage.setItem("tracepanel:theme", theme), theme);
+    const { list } = await listed(page, bff);
+    await expect(list.locator('.dt-request-row[data-chain="trace"]')).toHaveCount(4);
+
+    const rows = await badges(list);
+    const top = rows.filter((row) => row.chain === null);
+    const traces = rows.filter((row) => row.chain === "trace" || row.chain === "run");
+
+    expect(top.length).toBeGreaterThan(0);
+    expect(traces.length).toBeGreaterThan(1);
+    // A small gap: the slot fits five letters, a three-letter badge leaves two and the row's gap.
+    for (const row of rows) expect(row.gap).toBeLessThanOrEqual(28);
+    // At each depth, the names start at one edge.
+    expect(new Set(top.map((row) => row.name - row.from)).size).toBe(1);
+    expect(new Set(traces.map((row) => row.name)).size).toBe(1);
+  });
+}

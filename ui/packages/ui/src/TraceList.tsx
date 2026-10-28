@@ -170,7 +170,7 @@ function ChainAppRows({ app, rowId, level, chains, selectedId, onSelect }: Chain
       >
         <span className="dt-request-main">
           <ChainCaret onToggle={toggle} />
-          <AppChip name={app.app} runtime={chainAppRuntime(app)} />
+          <AppChip name={app.app} runtime={chainAppRuntime(app)} compact />
         </span>
         <span className="dt-request-meta">
           {/* How many, as a run's row counts its traces: in the status column. */}
@@ -383,7 +383,7 @@ function flag(on: boolean | undefined): "" | undefined {
 
 /** The app a request came from, when the list holds several and the agent has the request (a view is the browser's). */
 function RowApp({ trace, shown }: { trace: TraceSummary; shown: boolean | undefined }) {
-  return shown && trace.kind !== "page" && trace.service ? <AppChip name={trace.service} /> : null;
+  return shown && trace.kind !== "page" && trace.service ? <AppChip name={trace.service} compact /> : null;
 }
 
 /**

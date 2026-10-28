@@ -206,7 +206,7 @@ test("in hand, every resize edge stays a thin neutral line, its hit area wider",
   const listEdge = await split.evaluate(line, "width");
   await page.mouse.up();
 
-  // The details pane's edge, mid-drag: what shows is the pane's own border.
+  // The details pane's edge, mid-drag: what shows is the line between the tree and the pane, the tree's edge.
   const side = frame.locator(".dt-map-resize");
   const sideBox = await side.boundingBox();
   if (!sideBox) throw new Error("no details pane edge");
@@ -214,10 +214,10 @@ test("in hand, every resize edge stays a thin neutral line, its hit area wider",
   await page.mouse.down();
   await page.mouse.move(sideBox.x - 40, sideBox.y + 100, { steps: 3 });
   const paneEdge = await side.evaluate((element) => {
-    const pane = getComputedStyle(element.parentElement as Element);
+    const tree = getComputedStyle(element.parentElement?.querySelector(".dt-map-tree") as Element);
     return {
-      thickness: Number.parseFloat(pane.borderLeftWidth),
-      colour: pane.borderLeftColor,
+      thickness: Number.parseFloat(tree.borderRightWidth),
+      colour: tree.borderRightColor,
       drawn: getComputedStyle(element).backgroundImage,
     };
   });
@@ -228,4 +228,26 @@ test("in hand, every resize edge stays a thin neutral line, its hit area wider",
   expect(listEdge).toEqual({ thickness: 1, colour: neutral });
 
   expect(paneEdge).toEqual({ thickness: 1, colour: neutral, drawn: "none" });
+});
+
+test("in the panel, the line between the tree and the details drags anywhere along it", async ({ page }) => {
+  await openDetails(page);
+  const frame = panel(page);
+  const pane = frame.getByRole("complementary", { name: "Details" });
+  const width = async () => Math.round((await pane.boundingBox())?.width ?? 0);
+  const before = await width();
+  const edge = await frame.locator(".dt-map-resize").boundingBox();
+  const tree = await frame.locator(".dt-map-body[data-side] .dt-map-tree").boundingBox();
+  if (!(edge && tree)) throw new Error("no details pane edge");
+
+  // As tall as the tree beside it: the whole line is the edge.
+  expect(Math.round(edge.height)).toBe(Math.round(tree.height));
+
+  const y = Math.min(edge.y + edge.height, 1000) - 20;
+  await page.mouse.move(edge.x + edge.width / 2, y);
+  await page.mouse.down();
+  await page.mouse.move(edge.x + edge.width / 2 - 120, y, { steps: 5 });
+  await page.mouse.up();
+
+  await expect.poll(width).toBe(before + 120);
 });

@@ -79,3 +79,9 @@
     color-mix(in oklab, currentColor 10%, transparent)
   );
 }
+
+/* A trace's call tree with its details beside it runs to the page's bottom: scrolled to the end, the line between
+   the tree and the details reaches the view's bottom edge, not the page's padding short of it. */
+.dt-trace-page:has(.dt-map-body[data-side]) {
+  padding-bottom: 0;
+}

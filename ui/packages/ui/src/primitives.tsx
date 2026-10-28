@@ -373,16 +373,55 @@ export function AppMark({ runtime }: { runtime?: string | undefined }) {
   return kind ? <RuntimeIcon kind={kind} /> : <AppWindowIcon className="dt-icon size-3.5" aria-hidden="true" />;
 }
 
+/** An app's chip as a filter: how many of the list it has, whether it is the one picked, what pressing it does. */
+export interface AppChipPick {
+  count: number;
+  pressed: boolean;
+  onPress: () => void;
+  title?: string | undefined;
+}
+
 /**
- * The app that served something: its runtime's mark when known, and its name. The same chip names the app of a call's
- * trace in the call tree and of a request in a list that holds several apps.
+ * An app, wherever one is named: a round chip with its runtime's mark and its name, one look everywhere (the call
+ * tree, the lists, a trace's filters, the Profile and Logs tabs, an issue's reach). `compact` in dense rows (a list's,
+ * a table's); the full size where it heads something or filters. With `pick`, it is the filter: a button with its
+ * count, pressed while the list shows only that app.
  */
-export function AppChip({ name, runtime }: { name: string; runtime?: string | undefined }) {
+export function AppChip({
+  name,
+  runtime,
+  compact = false,
+  pick,
+}: {
+  name: string;
+  runtime?: string | undefined;
+  compact?: boolean | undefined;
+  pick?: AppChipPick | undefined;
+}) {
+  const size = compact ? "compact" : undefined;
+  const mark = <AppMark runtime={runtime} />;
+  const label = <span className="dt-app-name">{name}</span>;
+  if (!pick) {
+    return (
+      <span className="dt-app-chip" data-size={size} title={runtime ? `${name} · ${runtime}` : name}>
+        {mark}
+        {label}
+      </span>
+    );
+  }
   return (
-    <span className="dt-app-chip" title={runtime ? `${name} · ${runtime}` : name}>
-      <AppMark runtime={runtime} />
-      <span className="dt-app-name">{name}</span>
-    </span>
+    <button
+      type="button"
+      className="dt-app-chip dt-map-filter"
+      data-size={size}
+      aria-pressed={pick.pressed}
+      title={pick.title}
+      onClick={pick.onPress}
+    >
+      {mark}
+      {label}
+      <span className="dt-map-filter-count">{pick.count}</span>
+    </button>
   );
 }
 
