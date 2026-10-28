@@ -52,7 +52,7 @@ import { NAV, ThemeToggle } from "./Sidebar";
 import { ScopeProvider } from "./scope";
 import { graphqlOperation, requestPath } from "./sections";
 import { tabOf } from "./TracePage";
-import { TraceScreen } from "./TraceScreen";
+import { ARRIVING_MS, TraceScreen } from "./TraceScreen";
 import { SwitchUser } from "./UserSwitcher";
 
 const base = location.href.split("#")[0] ?? location.href;
@@ -361,6 +361,18 @@ function useTabRows(history: TabHistory | null): { rows: TraceRow[]; stored: Rea
   const { traces, runs } = usePolling(load) ?? NO_TRACES;
   const stored = useMemo(() => new Set(traces.map((trace) => trace.id)), [traces]);
   return { rows: history ? arrange(history, traces) : [], stored, runs };
+}
+
+/**
+ * Whether a trace of the tab's list is on its way to the agent: listed by the widget, not stored yet, and ended a
+ * moment ago (a view still open counts from its start). Undefined for a trace the list doesn't have (a linked one).
+ */
+function arrivingIn(rows: readonly TraceRow[], stored: ReadonlySet<string>, id: string | null): boolean | undefined {
+  const row = rows.find((item) => item.trace.id === id);
+  if (!row) return undefined;
+  if (stored.has(row.trace.id)) return false;
+  const ended = (row.trace.start + row.trace.duration) / 1000;
+  return Date.now() - ended < ARRIVING_MS;
 }
 
 function idsOf(history: TabHistory | null): string[] {
@@ -1069,6 +1081,7 @@ function PanelApp({ route }: { route: Route }) {
               key={route.name === "trace" ? (route.tab ?? "") : ""}
               id={selectedId}
               source={source}
+              arriving={arrivingIn(rows, stored, selectedId)}
               variant={split ? "strip" : "compact"}
               // A link to a tab (the pill's card opens a finding on Issues) wins over the last tab used.
               initialTab={route.name === "trace" ? tabOf(route.tab) : undefined}

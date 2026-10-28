@@ -82,13 +82,19 @@ function isView(entry: TabEntry | undefined): boolean {
 }
 
 /**
- * Before a new view goes in: the last one, when nothing came after it (no request, no action), leaves the list. A
- * reload of an SPA's page would otherwise stack views with nothing under them; the latest view always stays.
+ * Before a new view goes in: the last one, when it is of the same page and nothing came after it (no request, no
+ * action), leaves the list. Reloads of an SPA's page would otherwise stack views with nothing under them. A route
+ * change is a view of another page: it goes in after the last one, which stays, with or without requests.
  */
 function dropEmptyView(tab: TabEntry[], name: string): TabEntry[] {
   const last = tab.at(-1);
-  if (!name.includes(" › ") && isView(last) && !tab.some((item) => item.parent === last?.id)) return tab.slice(0, -1);
+  if (last && isViewOf(last, name) && !tab.some((item) => item.parent === last.id)) return tab.slice(0, -1);
   return tab;
+}
+
+/** Whether an entry is a view of the page `name` (a view, not an action on it). */
+function isViewOf(entry: TabEntry, name: string): boolean {
+  return isView(entry) && entry.summary?.name === name;
 }
 
 /** What the browser recording announced before the widget listened, oldest first. */
