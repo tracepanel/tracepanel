@@ -544,13 +544,16 @@ interface RowContext {
   /** How many info and debug records each span has that don't show, by its id; and what shows them. */
   hiddenLogs: ReadonlyMap<string, number>;
   onShowLogs: () => void;
-  /** The spans whose own code ran long with nothing recorded inside (as the strip says them), and each span's share. */
-  quiet: ReadonlyMap<string, Quiet>;
+  /** Whose code the code rows under are: this trace's, or a call's trace opened under its call. */
+  code: CodeOwner;
   categories: ReadonlyMap<string, Category>;
   /** What is picked: a code row shows with its share picked, or a range it overlaps. */
   slice: Slice;
-  /** Opens the trace's profile, when it has one, at a stretch of it where the profile says when it was sampled. */
-  onProfile: ((range: TimeRange) => void) | undefined;
+  /**
+   * Opens another trace's profile (a call's trace from another app, by its id), at a stretch of it where given: its
+   * row's flame and its code rows lead there. None where the host can't open one.
+   */
+  onTraceProfile: TraceProfileOpener | undefined;
   /** Loads the links of a call's trace opened in the tree: the calls it made in turn open under it. */
   onChain: (traceId: string) => void;
   /** The stretch of the span rows are under, which no bar of theirs is drawn past (and see Clock). */
@@ -558,6 +561,26 @@ interface RowContext {
 }
 
 type Within = readonly [number, number];
+
+/** Opens a trace's profile by its id, at a stretch of it (µs since it started) where given. */
+export type TraceProfileOpener = (traceId: string, range?: TimeRange) => void;
+
+/**
+ * The trace whose own code the code rows under a row are: this one's, or a call's trace from another app opened under
+ * its call (on this trace's clock), with its own profile. `quiet`: its spans whose own code ran long with nothing
+ * recorded inside (as the strip says them); `onProfile` opens its profile at a stretch, when it has one.
+ */
+interface CodeOwner {
+  trace: Trace;
+  quiet: ReadonlyMap<string, Quiet>;
+  onProfile: ((range: TimeRange) => void) | undefined;
+}
+
+/** A call's trace as the owner of the code rows under it: its own quiet spans, its own profile. */
+function ownerFor(whole: Trace, open: TraceProfileOpener | undefined): CodeOwner {
+  const onProfile = open && whole.profile ? (range: TimeRange) => open(whole.id, range) : undefined;
+  return { trace: whole, quiet: quietSpans(whole), onProfile };
+}
 
 /** The stretch of a call, inside the one rows are already kept in. */
 function narrowed(within: Within | undefined, call: Span): Within {
@@ -729,15 +752,37 @@ function LinkedRow({
   const open =
     children.length > 0 ? dim || (node.type === "waiting" || node.opened) !== ctx.collapsed.has(node.key) : undefined;
   useChainLoad(node, open, ctx.onChain);
-  const call = node.type === "task" ? node.clock?.call : undefined;
-  const inner = call ? { ...ctx, within: narrowed(ctx.within, call) } : ctx;
+  const inner = useLinkedContext(node, ctx);
+  const root = node.type === "task" ? node.whole?.spans.find((span) => span.parent_id === null) : undefined;
   return (
     <div>
       <LinkedButton node={node} ctx={inner} indent={indent} dim={dim} open={open} />
       <RowDetails id={node.key} ctx={ctx} />
-      {open ? <Rows nodes={children} depth={depth + 1} ctx={inner} /> : null}
+      {open ? (
+        <>
+          <Rows nodes={children} depth={depth + 1} ctx={inner} />
+          {/* Its request's own code, as a span's is under its rows: the request is this row. */}
+          {root ? <CodeRow span={root} ctx={inner} depth={depth + 1} /> : null}
+        </>
+      ) : null}
     </div>
   );
+}
+
+/**
+ * What the rows of a call's trace are drawn with: no bar past the call's end (see Clock), and that trace's own code
+ * and profile for their code rows.
+ */
+function useLinkedContext(node: Linked, ctx: RowContext): RowContext {
+  const call = node.type === "task" ? node.clock?.call : undefined;
+  const whole = node.type === "task" && !node.remote ? node.whole : undefined;
+  const open = ctx.onTraceProfile;
+  const code = useMemo(() => (whole ? ownerFor(whole, open) : undefined), [whole, open]);
+  return {
+    ...ctx,
+    ...(call ? { within: narrowed(ctx.within, call) } : {}),
+    ...(code ? { code } : {}),
+  };
 }
 
 /** A call's trace whose own calls can open under it: this agent's, not too far down the chain. */
@@ -789,6 +834,7 @@ function LinkedButton({
         <Caret open={open} onToggle={() => ctx.onToggle(node.key)} />
         <KindBadge kind={view.kind} muted={true} className="dt-map-kind" />
         {view.text}
+        <LinkedFlame node={node} ctx={ctx} />
       </span>
       {view.track}
       <span className="dt-map-time" title={view.timeTitle}>
@@ -796,6 +842,18 @@ function LinkedButton({
       </span>
     </button>
   );
+}
+
+/** A call's trace with a profile: its flame, as a code row's, and a click on it opens that trace's profile. */
+function LinkedFlame({ node, ctx }: { node: Linked; ctx: RowContext }) {
+  const whole = node.type === "task" ? node.whole : undefined;
+  if (!whole?.profile) return null;
+  const open = ctx.onTraceProfile;
+  return <RowFlame trace={whole} onOpen={open && !hasRemote(node) ? () => open(whole.id) : undefined} />;
+}
+
+function hasRemote(node: Linked): boolean {
+  return node.type === "task" && node.remote !== undefined;
 }
 
 function linkedView(node: Linked, trace: Trace, within: Within | undefined): LinkedView {
@@ -1253,8 +1311,20 @@ function partRange(part: CodePart): TimeRange {
 }
 
 /** Where its code ran with nothing recorded inside, hatched in its share's colour; pieces too thin to see left out. */
-function CodeBars({ part, category, trace }: { part: CodePart; category: Category; trace: Trace }) {
+function CodeBars({
+  part,
+  category,
+  trace,
+  owner,
+}: {
+  part: CodePart;
+  category: Category;
+  trace: Trace;
+  owner: Trace;
+}) {
   const total = Math.max(trace.duration, 1);
+  // A call's trace's pieces are of its own time: on this trace's from where it starts on this one's clock.
+  const offset = owner.start - trace.start;
   return (
     <span className="dt-map-track" aria-hidden="true">
       {part.pieces
@@ -1266,7 +1336,7 @@ function CodeBars({ part, category, trace }: { part: CodePart; category: Categor
             data-quiet=""
             data-waiting={piece.waiting ? "" : undefined}
             data-category={category}
-            style={{ left: widthOf(piece.from, total), width: widthOf(piece.to - piece.from, total) }}
+            style={{ left: widthOf(piece.from + offset, total), width: widthOf(piece.to - piece.from, total) }}
           />
         ))}
     </span>
@@ -1311,7 +1381,8 @@ function ranMost(profile: Profile): string {
 /** A code row's own: a grey box ("code", or "wait"), its name, the way on to the profile, its bars and its time. */
 function CodeRowParts({ span, ctx, depth, part }: { span: Span; ctx: RowContext; depth: number; part: CodePart }) {
   const category = ctx.categories.get(span.id) ?? "code";
-  const { name, yours } = partName(part, ctx.trace);
+  const owner = ctx.code.trace;
+  const { name, yours } = partName(part, owner);
   return (
     <>
       <span className="dt-map-name" style={indentOf(depth)}>
@@ -1322,10 +1393,10 @@ function CodeRowParts({ span, ctx, depth, part }: { span: Span; ctx: RowContext;
           className={part.waiting ? "dt-map-kind dt-map-wait" : "dt-map-kind"}
         />
         <TaskName name={name} className={yours ? "dt-map-text" : "dt-map-text dt-map-lib"} />
-        <WaitPlace part={part} trace={ctx.trace} />
-        <RowFlame trace={ctx.trace} />
+        <WaitPlace part={part} trace={owner} />
+        <RowFlame trace={owner} />
       </span>
-      <CodeBars part={part} category={category} trace={ctx.trace} />
+      <CodeBars part={part} category={category} trace={ctx.trace} owner={owner} />
       <span className="dt-map-time">{duration(part.total)}</span>
     </>
   );
@@ -1339,7 +1410,7 @@ function CodeRowParts({ span, ctx, depth, part }: { span: Span; ctx: RowContext;
  */
 function CodeRow({ span, ctx, depth }: { span: Span; ctx: RowContext; depth: number }) {
   if (!hasCodeRow(span, ctx)) return null;
-  const parts = codeParts(ctx.quiet.get(span.id) as Quiet, ctx.trace);
+  const parts = codeParts(ctx.code.quiet.get(span.id) as Quiet, ctx.code.trace);
   return (
     <>
       {parts.map((part) => (
@@ -1351,7 +1422,7 @@ function CodeRow({ span, ctx, depth }: { span: Span; ctx: RowContext; depth: num
 
 function CodePartRow({ span, ctx, depth, part }: { span: Span; ctx: RowContext; depth: number; part: CodePart }) {
   const inside = <CodeRowParts span={span} ctx={ctx} depth={depth} part={part} />;
-  const open = ctx.onProfile;
+  const open = ctx.code.onProfile;
   // With a profile, a click opens it at that stretch; without, a plain row.
   return open ? (
     <button
@@ -1377,7 +1448,7 @@ function codeCategory(span: Span, ctx: RowContext): Category {
 
 /** Whether a span has a code row: its code ran long with nothing recorded inside, and what is picked keeps it. */
 function hasCodeRow(span: Span, ctx: RowContext): boolean {
-  const quiet = ctx.quiet.get(span.id);
+  const quiet = ctx.code.quiet.get(span.id);
   return quiet !== undefined && codeShown(quiet, ctx.categories.get(span.id) ?? "code", ctx);
 }
 
@@ -1496,12 +1567,15 @@ function RunDetails({
   trace,
   links,
   remote,
+  profile,
 }: {
   run: TraceSummary;
   kind: "task" | "call";
   trace: Trace;
   links?: TraceLinks | undefined;
   remote?: Remote | undefined;
+  /** Opens its profile, when it has one. */
+  profile?: (() => void) | undefined;
 }) {
   const words = RUN_WORDS[kind];
   return (
@@ -1512,6 +1586,11 @@ function RunDetails({
       </p>
       <PropTable dense rows={runRows(run, words.label)} />
       <OpenRun run={run} words={words} links={links} remote={remote} />
+      {profile ? (
+        <button type="button" className="dt-map-open" onClick={profile}>
+          Open its profile →
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -1528,9 +1607,23 @@ function WaitingDetails({ span }: { span: Span }) {
   );
 }
 
-function LinkedDetails({ node, trace, links }: { node: Linked; trace: Trace; links?: TraceLinks | undefined }) {
+function LinkedDetails({
+  node,
+  trace,
+  links,
+  onTraceProfile,
+}: {
+  node: Linked;
+  trace: Trace;
+  links?: TraceLinks | undefined;
+  onTraceProfile?: TraceProfileOpener | undefined;
+}) {
   if (node.type === "waiting") return <WaitingDetails span={node.span} />;
-  return <RunDetails run={node.run} kind={node.kind} trace={trace} links={links} remote={node.remote} />;
+  const whole = node.remote ? undefined : node.whole;
+  const profile = whole?.profile && onTraceProfile ? () => onTraceProfile(whole.id) : undefined;
+  return (
+    <RunDetails run={node.run} kind={node.kind} trace={trace} links={links} remote={node.remote} profile={profile} />
+  );
 }
 
 type DetailsProps<T extends Node["type"]> = {
@@ -1539,6 +1632,8 @@ type DetailsProps<T extends Node["type"]> = {
   links?: TraceLinks | undefined;
   /** EXPLAIN for a query of the trace shown, as its DB tab runs it; none for a linked trace's queries. */
   onExplain?: Explain | undefined;
+  /** Opens a call's trace's profile, from its details. */
+  onTraceProfile?: TraceProfileOpener | undefined;
 };
 
 function LogDetails({ node }: DetailsProps<"log">) {
@@ -1862,13 +1957,25 @@ function detailsOf(
   tree: Node[],
   selected: string | null,
   trace: Trace,
-  hosts: { links: TraceLinks | undefined; onExplain: Explain | undefined },
+  hosts: {
+    links: TraceLinks | undefined;
+    onExplain: Explain | undefined;
+    onTraceProfile: TraceProfileOpener | undefined;
+  },
 ): ReactNode {
   const found = selected ? findNode(tree, selected, trace) : undefined;
   if (!found) return null;
   // The host explains the trace's own queries: a linked trace's are its own.
   const onExplain = found.trace === trace ? hosts.onExplain : undefined;
-  return <Details node={found.node} trace={found.trace} links={hosts.links} onExplain={onExplain} />;
+  return (
+    <Details
+      node={found.node}
+      trace={found.trace}
+      links={hosts.links}
+      onExplain={onExplain}
+      onTraceProfile={hosts.onTraceProfile}
+    />
+  );
 }
 
 /** Keys toggled in and out of a set: the folded rows, the opened groups. */
@@ -2071,6 +2178,8 @@ export function CallMap({
   head?: ReactNode;
   /** Opens the trace's profile, when it has one: its code rows lead there. */
   onProfile?: (() => void) | undefined;
+  /** Opens another trace's profile by its id: a call's trace from another app, opened under its call. */
+  onTraceProfile?: TraceProfileOpener | undefined;
   /** EXPLAIN for a query of this trace: a SELECT's details then have its plan, as the DB tab's. */
   onExplain?: Explain | undefined;
   /** Linked traces: tasks this trace enqueued appear under their enqueue span. */
@@ -2097,7 +2206,11 @@ export function CallMap({
   const side = useSidePane(map);
   const rows = useScrolledToInitial(initialSpan);
   const [collapsed, toggle] = useToggleSet();
-  const details = detailsOf(tree, selected, trace, { links, onExplain: wiring.onExplain });
+  const details = detailsOf(tree, selected, trace, {
+    links,
+    onExplain: wiring.onExplain,
+    onTraceProfile: wiring.onTraceProfile,
+  });
   const { categories, quiet } = useSpansTime(trace);
   const marks = useMemo(() => marksOf(tree, pickedOf(current, trace, categories)), [tree, current, trace, categories]);
   const inline = side ? null : details;
@@ -2121,10 +2234,10 @@ export function CallMap({
                 marks,
                 details: inline,
                 hiddenLogs: hidden,
-                quiet,
+                code: { trace, quiet, onProfile: profileOpener(wiring.onProfile, trace, profileAt) },
                 categories,
                 slice: current,
-                onProfile: profileOpener(wiring.onProfile, trace, profileAt),
+                onTraceProfile: wiring.onTraceProfile,
                 onShowLogs: () => change({ ...current, logs: true }),
                 onChain: chain.want,
               }}

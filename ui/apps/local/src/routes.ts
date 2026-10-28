@@ -239,7 +239,7 @@ export function traceHref(id: string, tab?: string, span?: string): string {
 /** Where a trace's parts lead in the console: linked traces, issues, every request with a call, its logs. */
 export function consoleLinks(prefix = "", newTab = false): TraceLinks {
   return {
-    trace: (id) => `${prefix}${prefix ? href({ name: "trace", id }) : traceHref(id)}`,
+    trace: (id, tab) => `${prefix}${prefix ? href({ name: "trace", id, tab }) : traceHref(id, tab)}`,
     issue: (fingerprint, kind) => `${prefix}${href(issueRoute(fingerprint, kind))}`,
     call: (key) => `${prefix}${href({ name: "traces", q: `call:${key}` })}`,
     search: (q) => `${prefix}${href({ name: "traces", q })}`,

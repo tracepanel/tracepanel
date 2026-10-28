@@ -26,6 +26,13 @@
   is a click away in a fan-out. An N+1 of calls to another service groups
   as one row (×N), each call with its service's trace under it. The related
   API brings up to 50 call traces whole (was 20).
+- A chain's profiles in the call tree: a call's trace from another app
+  that has a profile (the panel's Profile toggle asked for it, and the
+  browser and each SDK passed the ask on with `X-Tracepanel-Profile`) shows
+  the flame a code row has, and a click on it, or "Open its profile" in its
+  details, opens that trace at its Profile tab (in the panel in place, with
+  the way back). The code rows inside it, its request's own code too, name
+  what ran from that trace's profile, on the call's clock.
 
 ### Fixed
 

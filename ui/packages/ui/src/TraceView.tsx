@@ -19,7 +19,7 @@ import {
 import { type ComponentProps, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { AppDetails, appSaidAnything } from "./AppDetails";
 import { appWarnings, warningsTone } from "./AppWarnings";
-import { CallMap } from "./CallMap";
+import { CallMap, type TraceProfileOpener } from "./CallMap";
 import { CallsList } from "./CallsList";
 import type { Explain } from "./CallTable";
 import { Button } from "./components/ui/button";
@@ -39,7 +39,7 @@ import { LogList } from "./LogList";
 import { groupNoun } from "./lib/calls";
 import { isTyping } from "./lib/keys";
 import type { Slice } from "./lib/slice";
-import { linkProps, type TraceLinks } from "./links";
+import { linkProps, opensTraces, openTraceAt, type TraceLinks } from "./links";
 import { ProfilePane } from "./ProfileView";
 import { RoutePath, StatusBadge, TraceBadge } from "./primitives";
 import { RequestInfo } from "./RequestInfo";
@@ -326,6 +326,11 @@ export interface TraceViewProps {
   initialSlice?: Slice | undefined;
   /** Called when another part of the time is picked (the console keeps it in the URL). */
   onSliceChange?: ((slice: Slice) => void) | undefined;
+  /**
+   * Opens a call's trace's profile by its id, from the call tree (its flame, its code rows). By default it opens as a
+   * linked trace does (`links`), at its Profile tab.
+   */
+  onTraceProfile?: TraceProfileOpener | undefined;
 }
 
 /** The Request tab: the trace's facts and parts; in the panel (`panel`) its request's line on top. */
@@ -362,8 +367,14 @@ function TreePane({
       {...tree}
       head={<TimeStrip trace={tree.trace} related={tree.related} onSelect={onSelect} />}
       onProfile={onProfile}
+      onTraceProfile={tree.onTraceProfile ?? linkedProfiles(tree.links)}
     />
   );
+}
+
+/** A call's trace's profile, opened as a linked trace opens, at its Profile tab; none where traces don't open. */
+function linkedProfiles(links: TraceLinks | undefined): TraceProfileOpener | undefined {
+  return opensTraces(links) ? (id) => openTraceAt(links, id, "profile") : undefined;
 }
 
 export function TraceView({
@@ -380,6 +391,7 @@ export function TraceView({
   links,
   initialSpan,
   app,
+  onTraceProfile,
   variant = "full",
   // The part of the time picked: the lanes and the call tree share it (SliceScope).
   ...held
@@ -434,6 +446,7 @@ export function TraceView({
         links={links}
         initialSpan={treeSpan}
         onExplain={onExplain}
+        onTraceProfile={onTraceProfile}
       />
       {active === "issues" ? (
         <IssueList

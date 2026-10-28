@@ -6,8 +6,8 @@ import type { IssueKind } from "./types";
  * missing leaves its links out.
  */
 export interface TraceLinks {
-  /** A linked trace: enqueued by, a task's run, a connection. */
-  trace?: ((id: string) => string) | undefined;
+  /** A linked trace: enqueued by, a task's run, a connection; at one of its tabs (`profile`) where given. */
+  trace?: ((id: string, tab?: string) => string) | undefined;
   /** An issue's page. */
   issue?: ((fingerprint: string, kind: IssueKind) => string) | undefined;
   /** Every request that made this call: the agent's key for it (`call:<key>`). */
@@ -24,7 +24,7 @@ export interface TraceLinks {
    * Opens a linked trace where the reader is (the panel, with its way back): a plain click on a linked trace does
    * this, and its address is still there for a new tab.
    */
-  openTrace?: ((id: string) => void) | undefined;
+  openTrace?: ((id: string, tab?: string) => void) | undefined;
 }
 
 /** The attributes an <a> to one of them takes. */
@@ -54,4 +54,24 @@ export function traceLinkProps(
       open(id);
     },
   };
+}
+
+/**
+ * Opens a linked trace at one of its tabs (a call's trace at its Profile): where the reader is when the host opens
+ * traces there (the panel), else at its address, in a tab of its own where links open so. Nothing without either.
+ */
+export function openTraceAt(links: TraceLinks | undefined, id: string, tab: string): void {
+  if (links?.openTrace) {
+    links.openTrace(id, tab);
+    return;
+  }
+  if (!links?.trace) return;
+  const address = links.trace(id, tab);
+  if (links.newTab) window.open(address, "_blank", "noreferrer");
+  else window.location.assign(address);
+}
+
+/** Whether a linked trace can be opened from here at all. */
+export function opensTraces(links: TraceLinks | undefined): boolean {
+  return Boolean(links?.openTrace ?? links?.trace);
 }
