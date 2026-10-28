@@ -10,7 +10,9 @@ import {
   DropdownMenuTrigger,
 } from "./components/ui/dropdown-menu";
 import { CloseIcon } from "./icons";
-import { type Member, type SpanScope, scopedLogs } from "./lib/scope";
+import { callsOfTab } from "./lib/callTabs";
+import { type Member, type SpanScope, scopedIssues, scopedLogs, scopedSpans } from "./lib/scope";
+import type { ScopeIssue } from "./types";
 
 /** What is under a row of the call tree, said: its menu has "Only this span"; × goes back to the whole chain. */
 export function ScopeChip({
@@ -136,21 +138,47 @@ export function UnderThis({ counts }: { counts: readonly UnderCount[] }) {
   );
 }
 
-/** What is under a row, counted for its "Under this" line: each count opens its tab on the scope. */
+/** Whether a scope is one span with nothing under it: no span of its trace, no trace served for it. */
+function isLeaf(members: readonly Member[], under: SpanScope): boolean {
+  const [target] = under.targets;
+  if (under.targets.length !== 1 || target === undefined) return false;
+  const owner = members.find((member) => member.trace.spans.some((span) => span.id === target));
+  if (!owner) return false;
+  return (
+    !owner.trace.spans.some((span) => span.parent_id === target) &&
+    !members.some((member) => member.parent === owner.id && member.via === target)
+  );
+}
+
+/** The tabs "Under this" leads to. */
+export type UnderTab = "sql" | "http" | "logs" | "issues";
+
+/**
+ * What is under a row, counted for its "Under this" line: its queries, HTTP calls, records and issues, each count
+ * opening its tab on the scope.
+ */
 export function underCounts(
   members: readonly Member[],
   under: SpanScope,
+  chainIssues: readonly ScopeIssue[],
   setScope: (scope: SpanScope) => void,
-  openLogs: () => void,
+  open: (tab: UnderTab) => void,
 ): UnderCount[] {
+  // A leaf (a query, a call no app answered here): nothing under it but itself.
+  if (isLeaf(members, under)) return [];
+  const opener = (tab: UnderTab) => () => {
+    setScope(under);
+    open(tab);
+  };
+  const issues = scopedIssues(members, under, chainIssues).filter((issue) => issue.kind !== "error");
   return [
+    { noun: ["query", "queries"], count: scopedSpans(members, under, callsOfTab("sql")).length, onOpen: opener("sql") },
     {
-      noun: ["log", "logs"],
-      count: scopedLogs(members, under).length,
-      onOpen: () => {
-        setScope(under);
-        openLogs();
-      },
+      noun: ["HTTP call", "HTTP calls"],
+      count: scopedSpans(members, under, callsOfTab("http")).length,
+      onOpen: opener("http"),
     },
+    { noun: ["log", "logs"], count: scopedLogs(members, under).length, onOpen: opener("logs") },
+    { noun: ["issue", "issues"], count: issues.length, onOpen: opener("issues") },
   ];
 }

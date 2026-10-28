@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { type Member, membersOf, type ScopedLog, type SpanScope, scopedLogs } from "../lib/scope";
-import type { ChainTrace, Related, Trace } from "../types";
+import type { Chain, ChainTrace, Related, ScopeIssue, Trace } from "../types";
 
 /** What tells two loads of a chain apart: its traces, and how much each of them holds by now. */
 function signature(traces: readonly ChainTrace[]): string {
@@ -22,23 +22,23 @@ function callsOf(related: Related | undefined): number {
  * whole once its links say it called anything, again as they reload (a service's trace arrives after its caller's).
  * Until then, and without `load`, the trace and the calls' traces its links bring.
  */
-export function useTraceChain(
+function useTraceChain(
   trace: Trace,
   related: Related | undefined,
-  load: ((traceId: string) => Promise<ChainTrace[]>) | undefined,
-): Member[] {
-  const [loaded, setLoaded] = useState<{ id: string; key: string; traces: ChainTrace[] } | undefined>(undefined);
+  load: ((traceId: string) => Promise<Chain>) | undefined,
+): { members: Member[]; issues: readonly ScopeIssue[] } {
+  const [loaded, setLoaded] = useState<{ id: string; key: string; chain: Chain } | undefined>(undefined);
   const calls = callsOf(related);
   // biome-ignore lint/correctness/useExhaustiveDependencies: its links reloaded or the trace grew, the chain may have too.
   useEffect(() => {
     if (!load || calls === 0) return;
     let live = true;
     load(trace.id).then(
-      (traces) => {
+      (chain) => {
         if (!live) return;
-        const key = signature(traces);
+        const key = `${signature(chain.traces)}|${chain.issues.length}`;
         setLoaded((current) =>
-          current?.id === trace.id && current.key === key ? current : { id: trace.id, key, traces },
+          current?.id === trace.id && current.key === key ? current : { id: trace.id, key, chain },
         );
       },
       () => undefined,
@@ -47,8 +47,9 @@ export function useTraceChain(
       live = false;
     };
   }, [load, calls, trace.id, related, trace.spans.length]);
-  const traces = loaded?.id === trace.id ? loaded.traces : undefined;
-  return useMemo(() => membersOf(trace, related, traces), [trace, related, traces]);
+  const chain = loaded?.id === trace.id ? loaded.chain : undefined;
+  const members = useMemo(() => membersOf(trace, related, chain?.traces), [trace, related, chain]);
+  return { members, issues: chain?.issues ?? NO_ISSUES };
 }
 
 /** A trace's chain, the part of it its tabs list (`scope`: all of it, or what is under a row), and its records. */
@@ -60,16 +61,23 @@ export interface TraceScope {
   logs: ScopedLog[];
   /** The scope's records. */
   scoped: ScopedLog[];
+  /** The chain's own issues: its N+1 across apps. */
+  chainIssues: readonly ScopeIssue[];
 }
+
+const NO_ISSUES: readonly ScopeIssue[] = [];
 
 export function useTraceScope(
   trace: Trace,
   related: Related | undefined,
-  load: ((traceId: string) => Promise<ChainTrace[]>) | undefined,
+  load: ((traceId: string) => Promise<Chain>) | undefined,
 ): TraceScope {
-  const members = useTraceChain(trace, related, load);
+  const { members, issues } = useTraceChain(trace, related, load);
   const [scope, setScope] = useState<SpanScope | null>(null);
   const logs = useMemo(() => scopedLogs(members, null), [members]);
   const scoped = useMemo(() => (scope ? scopedLogs(members, scope) : logs), [members, scope, logs]);
-  return { members, scope, setScope, logs, scoped };
+  return useMemo(
+    () => ({ members, scope, setScope, logs, scoped, chainIssues: issues }),
+    [members, scope, logs, scoped, issues],
+  );
 }

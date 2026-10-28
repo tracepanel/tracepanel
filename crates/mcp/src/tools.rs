@@ -5,7 +5,9 @@ use crate::compact::{self, Focus, ago, fit, trace_line};
 use crate::profile::{self, Kind};
 use serde_json::{Value, json};
 use std::time::{Duration, Instant};
-use tracepanel_store_local::{ReadError, Selection, log_summary, no_remote, search};
+use tracepanel_store_local::{
+    Chain, ReadError, Selection, call_summary, chain_issues, log_summary, no_remote, search,
+};
 
 const SEARCH: &str = "Search: free text and filters, e.g. `route:/api/* status>=500`, `has:n+1 duration>200ms`, \
     `kind:task state:FAILURE since:1h`. An unknown filter's error lists the known ones.";
@@ -103,8 +105,18 @@ pub(crate) fn list() -> Value {
             "List calls",
             "Calls to databases, Redis, caches, HTTP services and other systems across all traces, grouped by \
              statement or operation, heaviest first: how often, how many per trace, total and slowest time, and \
-             where in the code.",
-            json!({"query": query("Which calls, e.g. `system:sql op:select` or `system:redis failed:true`; empty for all."), "limit": limit(20, 100)}),
+             where in the code. With `trace`: that trace's calls and those of every trace down its chain of calls, \
+             by statement or endpoint with how many traces ran each, added up (count, time, on the clock, by app); \
+             `span` narrows to what is under those spans, `only` to the spans' own.",
+            json!({
+                "query": query("Which calls, e.g. `system:sql op:select` or `system:redis failed:true`; empty for all. Not with `trace`."),
+                "limit": limit(20, 100),
+                "trace": {"type": "string", "description": "A trace's id: its calls and its chain's."},
+                "system": {"type": "string", "default": "sql", "description": "With `trace`: sql, http, redis, cache, datastore, rpc, storage or llm."},
+                "chain": {"type": "boolean", "default": true, "description": "With `trace`: false for the trace's own calls only."},
+                "span": {"type": "string", "description": "With `trace`: span ids (comma-separated) or a chain trace's id; what is under them."},
+                "only": {"type": "boolean", "default": false, "description": "With `span`: the spans' own calls, not those under them."},
+            }),
             vec![],
         ),
         (
@@ -390,6 +402,9 @@ fn list_endpoints(server: &Server, args: &Value) -> Result<String, Refusal> {
 
 fn list_calls(server: &Server, args: &Value) -> Result<String, Refusal> {
     store_ready(server)?;
+    if !string(args, "trace").is_empty() {
+        return trace_calls(server, args);
+    }
     let rows = server
         .reader
         .list_calls(&string(args, "query"), number(args, "limit", 20, 100))?;
@@ -424,8 +439,8 @@ fn flag(args: &Value, key: &str, default: bool) -> bool {
     args.get(key).and_then(Value::as_bool).unwrap_or(default)
 }
 
-/// A trace's records, its chain's with `chain`, under `span`: in time order, added up first.
-fn trace_logs(server: &Server, args: &Value) -> Result<String, Refusal> {
+/// The chain of the trace `trace` names (its own alone without `chain`), and the part `span` and `only` ask for.
+fn scope_args(server: &Server, args: &Value) -> Result<(String, Chain, Selection), Refusal> {
     let id = string(args, "trace");
     let chain = server
         .reader
@@ -440,6 +455,50 @@ fn trace_logs(server: &Server, args: &Value) -> Result<String, Refusal> {
             .collect(),
         only: flag(args, "only", false),
     };
+    Ok((id, chain, selection))
+}
+
+/// A trace's calls of one family, its chain's with `chain`, under `span`: added up, then each statement or endpoint
+/// they repeat, the most first.
+fn trace_calls(server: &Server, args: &Value) -> Result<String, Refusal> {
+    let (id, chain, selection) = scope_args(server, args)?;
+    let family = match string(args, "system").as_str() {
+        "" | "db" => "sql".to_owned(),
+        "http.client" => "http".to_owned(),
+        other => other.to_owned(),
+    };
+    let calls = chain.select(&selection).calls(&family);
+    let summary = call_summary(&calls);
+    let head = format!(
+        "{family} calls of {id}{}{}: {}",
+        if chain.members.len() > 1 {
+            " and its chain"
+        } else {
+            ""
+        },
+        if selection.targets.is_empty() {
+            String::new()
+        } else {
+            format!(" under {}", selection.targets.join(","))
+        },
+        compact::call_summary_line(&summary),
+    );
+    if calls.is_empty() {
+        return Ok(head);
+    }
+    let rows: Vec<String> = summary["groups"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .take(number(args, "limit", 20, 100) as usize)
+        .map(compact::scope_group_line)
+        .collect();
+    Ok(format!("{head}\n{}", rows.join("\n")))
+}
+
+/// A trace's records, its chain's with `chain`, under `span`: in time order, added up first.
+fn trace_logs(server: &Server, args: &Value) -> Result<String, Refusal> {
+    let (id, chain, selection) = scope_args(server, args)?;
     let scope = chain.select(&selection);
     let logs = scope.logs();
     let start = compact::int(&chain.members[0].doc, "start");
@@ -519,6 +578,14 @@ fn chain_section(server: &Server, id: &str) -> Result<Option<String>, Refusal> {
         compact::count(chain.members.len() as i64 - 1, "trace", "traces"),
         apps.join(", ")
     );
+    for (at, issue) in chain_issues(&chain) {
+        out.push_str(&format!(
+            "\nissue across apps on {}: {} → list_calls trace:{id}\n  hint: {}",
+            chain.members[at].app(),
+            compact::text(&issue, "title"),
+            compact::text(&issue, "hint"),
+        ));
+    }
     if !loud.is_empty() {
         out.push_str(&format!("\ntheir warnings and worse ({}):", loud.len()));
         for log in loud.iter().take(10) {

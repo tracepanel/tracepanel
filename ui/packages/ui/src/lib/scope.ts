@@ -2,7 +2,7 @@
 // clock, and the part of it under some of its rows. The trace's tabs list and add up what is in it; the agent's
 // `GET /traces/{id}/logs?span=&only=` takes the same scope (crates/store-local/src/scope.rs), and so do the MCP tools.
 
-import type { ChainTrace, Log, Related, Span, Trace } from "../types";
+import type { ChainTrace, Issue, Log, Related, ScopeIssue, Span, Trace } from "../types";
 
 /** One trace of a chain, on the chain's clock: the trace above it and its span whose call it served. */
 export interface Member {
@@ -214,4 +214,113 @@ export function scopeWindow(members: readonly Member[], scope: SpanScope | null)
 /** The apps of a chain, in the order their traces come (the first trace's first). */
 export function appsOf(members: readonly Member[]): string[] {
   return [...new Set(members.map((member) => member.app).filter(Boolean))];
+}
+
+/** A span of a scope (a query, a call), with its trace and the app that made it. */
+export type ScopedSpan = Span & { traceId: string; app: string };
+
+function hasSpan(part: Part, span: string): boolean {
+  return part === "whole" || Boolean(part?.ids.has(span));
+}
+
+/** The scope's spans `keep` takes, in time order (on the chain's clock), each with its trace and app. */
+export function scopedSpans(
+  members: readonly Member[],
+  scope: SpanScope | null,
+  keep: (span: Span) => boolean,
+): ScopedSpan[] {
+  const parts = partsOf(members, scope);
+  return members
+    .flatMap((member, index) =>
+      member.trace.spans
+        .filter((span) => keep(span) && hasSpan(parts[index], span.id))
+        .map((span) => ({ ...span, traceId: member.id, app: member.app })),
+    )
+    .sort((a, b) => a.start - b.start);
+}
+
+/** An issue of a scope: one per fingerprint, with the trace and app it is first in, its apps, traces and times. */
+export type ScopedIssue = Issue & {
+  traceId: string;
+  app: string;
+  apps: string[];
+  traces: number;
+  occurrences: number;
+  chain: boolean;
+};
+
+/** Issues by how much they cost a request: what failed first, then what repeats, then what is slow. */
+const ISSUE_ORDER = [
+  "error",
+  "n+1",
+  "duplicates",
+  "slow-sql",
+  "slow-http",
+  "slow-call",
+  "long-transaction",
+  "in-transaction",
+  "blocking-call",
+  "large-result",
+  "queue-wait",
+  "htmx",
+  "migration-risk",
+];
+
+function rank(issue: Issue): number {
+  const at = ISSUE_ORDER.indexOf(issue.kind);
+  return at === -1 ? ISSUE_ORDER.length : at;
+}
+
+/** Whether an issue of a trace is in what the scope takes of it: all of it, or one of its spans. */
+function issueIn(part: Part, issue: Issue): boolean {
+  return part === "whole" || issue.span_ids.some((span) => hasSpan(part, span));
+}
+
+/** One more trace with an issue already listed. */
+function counted(group: ScopedIssue, issue: Issue, app: string): void {
+  group.traces += 1;
+  group.occurrences += Math.max(issue.count, 1);
+  if (!group.apps.includes(app)) group.apps.push(app);
+}
+
+/**
+ * The issues of the scope's traces and the chain's own (its N+1 across apps, `chain`), one per fingerprint with how
+ * many traces and times and which apps; the worst first, the most first.
+ */
+export function scopedIssues(
+  members: readonly Member[],
+  scope: SpanScope | null,
+  chain: readonly ScopeIssue[],
+): ScopedIssue[] {
+  const parts = partsOf(members, scope);
+  const index = new Map(members.map((member, at) => [member.id, at]));
+  const found: [number, Issue, boolean][] = [
+    ...members.flatMap((member, at) =>
+      member.trace.issues.map((issue): [number, Issue, boolean] => [at, issue, false]),
+    ),
+    ...chain.flatMap((issue): [number, Issue, boolean][] => {
+      const at = index.get(issue.trace_id);
+      return at === undefined ? [] : [[at, issue as Issue, true]];
+    }),
+  ];
+  const groups = new Map<string, ScopedIssue>();
+  for (const [at, issue, own] of found) {
+    const member = members[at];
+    if (!(member && issueIn(parts[at], issue))) continue;
+    const group = groups.get(issue.fingerprint);
+    if (group) {
+      counted(group, issue, member.app);
+      continue;
+    }
+    groups.set(issue.fingerprint, {
+      ...issue,
+      traceId: member.id,
+      app: member.app,
+      apps: [member.app],
+      traces: 1,
+      occurrences: Math.max(issue.count, 1),
+      chain: own,
+    });
+  }
+  return [...groups.values()].sort((a, b) => rank(a) - rank(b) || b.occurrences - a.occurrences);
 }

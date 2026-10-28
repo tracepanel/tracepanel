@@ -1,6 +1,6 @@
 import {
   type App,
-  type ChainTrace,
+  type Chain,
   type DataSource,
   Empty,
   type ExploreItem,
@@ -147,10 +147,10 @@ function relatedLoader(source: DataSource): (traceId: string) => Promise<Related
   return load;
 }
 
-const chainLoaders = new WeakMap<DataSource, (traceId: string) => Promise<ChainTrace[]>>();
+const chainLoaders = new WeakMap<DataSource, (traceId: string) => Promise<Chain>>();
 
 /** A trace's whole chain of calls, for its tabs to list: one function per source, so it keeps still. */
-function chainLoader(source: DataSource): ((traceId: string) => Promise<ChainTrace[]>) | undefined {
+function chainLoader(source: DataSource): ((traceId: string) => Promise<Chain>) | undefined {
   const chain = source.chain;
   if (!chain) return undefined;
   let load = chainLoaders.get(source);
@@ -159,6 +159,12 @@ function chainLoader(source: DataSource): ((traceId: string) => Promise<ChainTra
     chainLoaders.set(source, load);
   }
   return load;
+}
+
+/** A query's EXPLAIN in another trace of the chain (another app's), where the app behind the console runs it. */
+function chainExplainer(source: DataSource, explainable: boolean) {
+  if (!explainable) return undefined;
+  return (traceId: string) => (span: string, analyze: boolean) => source.explain(traceId, span, analyze);
 }
 
 /** Its queries' EXPLAIN, where the app behind the console runs it. */
@@ -365,6 +371,7 @@ export function TraceScreen({
       explore={explore?.(trace)}
       onTabChange={onTabChange}
       onExplain={explainer(source, trace.id, explainable)}
+      explainIn={chainExplainer(source, explainable)}
       initialTab={initialTab}
       preferredTab={preferredTab}
       actions={withShare(trace, source, actions, shareable === true)}
