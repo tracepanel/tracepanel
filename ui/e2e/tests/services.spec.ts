@@ -308,3 +308,111 @@ test("the arrow keys and a scroll pan the map, ctrl+wheel and Fit zoom it", asyn
     true,
   );
 });
+
+/** A computed CSS colour as sRGB channels: rgb(), or color(srgb …) for a color-mix(). */
+function channels(color: string): [number, number, number] {
+  const srgb = color.match(/color\(srgb ([\d.]+) ([\d.]+) ([\d.]+)/);
+  if (srgb) return [Number(srgb[1]) * 255, Number(srgb[2]) * 255, Number(srgb[3]) * 255];
+  const rgb = color.match(/rgba?\((\d+), (\d+), (\d+)/);
+  if (rgb) return [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])];
+  throw new Error(`not a colour: ${color}`);
+}
+
+/** WCAG's contrast ratio of two colours. */
+function contrast(a: string, b: string): number {
+  const luminance = (color: string) => {
+    const [r, g, b] = channels(color).map((value) => {
+      const c = value / 255;
+      return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    }) as [number, number, number];
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const [light, dark] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number];
+  return (light + 0.05) / (dark + 0.05);
+}
+
+for (const theme of ["dark", "light"]) {
+  test(`the map's lines and arrowheads stand out from its canvas, its dots stay quiet (${theme})`, async ({ page }) => {
+    await page.addInitScript((value) => localStorage.setItem("tracepanel:theme", value), theme);
+    await page.goto("/#/services");
+    const map = page.getByRole("region", { name: "Architecture" });
+    const line = map.locator('path[marker-end="url(#arch-arrow-edge)"]').first();
+    await expect(line).toBeVisible();
+    const colours = await map.evaluate((section) => {
+      const head = section.querySelector("#arch-arrow-edge path");
+      const root = getComputedStyle(document.documentElement);
+      // A dot's colour as the browser computes it: through an element's color.
+      const probe = document.createElement("i");
+      probe.style.color = root.getPropertyValue("--map-dot");
+      section.append(probe);
+      const dot = getComputedStyle(probe).color;
+      probe.remove();
+      return {
+        canvas: getComputedStyle(section).backgroundColor,
+        line: getComputedStyle(section.querySelector('path[marker-end="url(#arch-arrow-edge)"]') as Element).stroke,
+        head: getComputedStyle(head as Element).fill,
+        dot,
+      };
+    });
+
+    // WCAG's non-text contrast: a line and its head at least 3:1 on the canvas, in the line's colour.
+    expect(contrast(colours.line, colours.canvas)).toBeGreaterThanOrEqual(3);
+    expect(colours.head).toBe(colours.line);
+
+    // The dots a texture under the lines: far below them.
+    expect(contrast(colours.dot, colours.canvas)).toBeLessThan(1.3);
+  });
+}
+
+test("a small map opens at actual size in the canvas's middle, and Fit brings it back there", async ({ page }) => {
+  // The shop's web role and two servers it calls: a map far smaller than the canvas.
+  const shopWeb = (one: { service: string; role: string }) => one.service === "shop" && one.role === "web";
+  await page.route("**/api/services*", async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    const edges = body.edges.filter(shopWeb).slice(0, 2);
+    const peers = new Set(edges.map((edge: { peer: string }) => edge.peer));
+    await route.fulfill({
+      response,
+      json: {
+        ...body,
+        apps: body.apps.filter(shopWeb),
+        edges,
+        links: [],
+        services: body.services.filter((service: { id: string }) => peers.has(service.id)),
+      },
+    });
+  });
+  await page.goto("/#/services");
+  const map = page.getByRole("region", { name: "Architecture" });
+  const scale = map.getByRole("button", { name: "Actual size" });
+  const middle = async () => {
+    const canvas = await page.getByRole("application").boundingBox();
+    const diagram = await page.locator("[data-map=diagram]").boundingBox();
+    if (!(canvas && diagram)) throw new Error("no map");
+    return Math.round(canvas.x + canvas.width / 2 - (diagram.x + diagram.width / 2));
+  };
+
+  await expect(scale).toHaveText("100%");
+  expect(await middle()).toBe(0);
+
+  await map.getByRole("button", { name: "Zoom in" }).click();
+  await map.getByRole("button", { name: "Zoom in" }).click();
+
+  await expect(scale).toHaveText("125%");
+
+  await page.reload();
+
+  // A zoom the user chose is kept.
+  await expect(scale).toHaveText("125%");
+
+  await map.getByRole("button", { name: "Fit the map" }).click();
+
+  await expect(scale).toHaveText("100%");
+  expect(await middle()).toBe(0);
+
+  await page.reload();
+
+  // Fit forgets the chosen zoom: the map opens fitted again.
+  await expect(scale).toHaveText("100%");
+});

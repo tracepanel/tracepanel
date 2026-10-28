@@ -201,7 +201,7 @@ function dagreGraph(
   const graph = new Graph({ multigraph: false, compound: clusters.size > 0 });
   graph.setGraph({
     rankdir: "LR",
-    ranksep: 96,
+    ranksep: 48,
     nodesep: FRAME.top + FRAME.side + 12,
     marginx: FRAME.side + 4,
     marginy: FRAME.top + 4,

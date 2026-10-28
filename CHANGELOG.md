@@ -124,6 +124,16 @@
   short press on a box still opens it. It is at least 440 pixels tall
   (less in a short window), as tall as the map up to the window, on a
   dot grid that moves and scales with it, and shows in narrow windows too.
+- The service map's lines and arrowheads stand out in both themes (at
+  least 3:1 on the canvas), each arrowhead in its line's colour, over a
+  quieter, sparser dot grid that a line's halo keeps from breaking it
+  up. A map that fits opens at 100% in the middle of the canvas, never
+  shrunk into empty space. A bigger one opens fitted, at half size at
+  least. Fit does the same and forgets a zoom the user chose, which the
+  map otherwise keeps. The layers sit closer, so a row of apps needs
+  less width.
+- The Services page reads each trace's issues from one index: the store
+  gets it when it opens, with no new store format.
 - A list's paths are cut in the middle, not at the end: the last
   segment stays whole (`/api/cat…/trail-runner-gtx`), and the whole path
   is in the tooltip. In the panel's narrow list the numbers make room

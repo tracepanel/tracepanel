@@ -39,6 +39,8 @@ const ZOOM_KEY = "tracepanel:map-zoom";
 /** The steps the buttons go through; a pinch or ctrl+wheel zooms anywhere between the ends. */
 const ZOOMS = [0.1, 0.25, 0.33, 0.5, 0.67, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 2];
 const [MIN_ZOOM, MAX_ZOOM] = [ZOOMS[0] ?? 0.1, ZOOMS.at(-1) ?? 2];
+/** The least zoom the map opens at: its boxes' names still read. */
+const FIRST_ZOOM = 0.5;
 /** Room around the diagram when it is fitted into the canvas. */
 const PAD = 16;
 /** Room above it for the toolbar, which would cover its top row otherwise. */
@@ -48,7 +50,7 @@ const DRAG_SLOP = 4;
 /** How far an arrow key moves the view. */
 const KEY_STEP = 48;
 /** The dot grid's spacing at actual size: it moves with the view and scales with the zoom. */
-const DOTS = 20;
+const DOTS = 24;
 
 /** Where the diagram sits in the canvas: its top-left corner, and its scale. */
 interface View {
@@ -73,9 +75,11 @@ function storedZoom(): number | null {
   }
 }
 
-function storeZoom(k: number): void {
+/** A zoom the user chose, kept for the next visit; null forgets it: the map opens fitted again. */
+function storeZoom(k: number | null): void {
   try {
-    localStorage.setItem(ZOOM_KEY, String(k));
+    if (k === null) localStorage.removeItem(ZOOM_KEY);
+    else localStorage.setItem(ZOOM_KEY, String(k));
   } catch {
     // Blocked storage: the zoom lasts until the page reloads.
   }
@@ -94,15 +98,25 @@ function centered(diagram: Size, canvas: Size, k: number): View {
   };
 }
 
-/** The whole diagram in the canvas under the toolbar, at most actual size. */
+/**
+ * The whole diagram in the canvas under the toolbar, centered: zoomed out only as far as it takes, never in past actual
+ * size, so a small map stays at 100% in the middle rather than shrunk into empty space.
+ */
 function fitView(diagram: Size, canvas: Size): View {
-  const k = Math.min((canvas.width - 2 * PAD) / diagram.width, (canvas.height - TOP - PAD) / diagram.height, 1);
-  return centered(diagram, canvas, clampZoom(k));
+  return centered(diagram, canvas, fitScale(diagram, canvas));
 }
 
-/** The first view: the zoom chosen on an earlier visit, else the diagram as wide as the canvas at most. */
+function fitScale(diagram: Size, canvas: Size): number {
+  const k = Math.min((canvas.width - 2 * PAD) / diagram.width, (canvas.height - TOP - PAD) / diagram.height, 1);
+  return clampZoom(k);
+}
+
+/**
+ * The first view: the zoom the user chose on an earlier visit, else fitted; a map too big to fit at half size opens at
+ * half size, its top in view, where its boxes still read (Fit shows it whole).
+ */
 function firstView(diagram: Size, canvas: Size): View {
-  const k = storedZoom() ?? clampZoom(Math.min((canvas.width - 2 * PAD) / diagram.width, 1));
+  const k = storedZoom() ?? Math.max(fitScale(diagram, canvas), FIRST_ZOOM);
   return centered(diagram, canvas, k);
 }
 
@@ -149,7 +163,7 @@ function stepTo(step: number | undefined, zoom: (k: number) => void): (() => voi
 
 /**
  * The canvas's view: placed once the canvas has a size, then moved by a drag, a two-finger scroll and the arrow
- * keys, zoomed by a pinch, ctrl+wheel and the buttons. A chosen zoom is kept across visits.
+ * keys, zoomed by a pinch, ctrl+wheel and the buttons. A zoom the user chose is kept across visits, until Fit.
  */
 function useView(diagram: Diagram) {
   const [canvas, size, ref] = useCanvas();
@@ -195,8 +209,11 @@ function useView(diagram: Diagram) {
     out: stepTo(lower, (k) => zoomTo(k, middle)),
     in: stepTo(higher, (k) => zoomTo(k, middle)),
     reset: () => zoomTo(1, middle),
+    // Back to the map as it opens: fitted, the chosen zoom forgotten.
     fit: () => {
-      if (size.width > 0) setView(fitView(diagram, size));
+      if (size.width === 0) return;
+      storeZoom(null);
+      setView(fitView(diagram, size));
     },
   };
 }
@@ -703,17 +720,33 @@ function carried(link: Link): Carried | null {
   return null;
 }
 
-function strokeOf(link: Link, mine: boolean): string {
-  if (carried(link)?.errors) return "stroke-error/70";
-  return mine ? "stroke-brand" : "stroke-muted-foreground/50";
+/** A line's tone: red with failures, the brand's when its box or itself is hovered, else the map's line colour. */
+type Tone = "edge" | "error" | "mine";
+
+/** Each tone's stroke, and its arrowhead's fill: the head is the line's colour. */
+const TONES: Record<Tone, { stroke: string; head: string }> = {
+  edge: { stroke: "stroke-(--map-edge)", head: "fill-(--map-edge)" },
+  error: { stroke: "stroke-error/70", head: "fill-error/70" },
+  mine: { stroke: "stroke-brand", head: "fill-brand" },
+};
+
+function toneOf(link: Link, mine: boolean): Tone {
+  if (carried(link)?.errors) return "error";
+  return mine ? "mine" : "edge";
 }
 
-/** A link's look: red with failures; with a box or the line hovered, its own in the brand's colour, the rest faded. */
-function linkClass(link: Link, hover: string | null): string {
-  if (hover === null) return cn("transition-opacity", strokeOf(link, false));
-  const mine = [link.from, link.to, link.key].includes(hover);
-  return cn("transition-opacity", strokeOf(link, mine), !mine && "opacity-15");
+/** Whether a line is the one hovered or leads to or from the box hovered; null with nothing hovered. */
+function mineOf(link: Link, hover: string | null): boolean | null {
+  return hover === null ? null : [link.from, link.to, link.key].includes(hover);
 }
+
+/** A link's look: its tone, and with a box or another line hovered, faded. */
+function linkClass(tone: Tone, mine: boolean | null): string {
+  return cn("transition-opacity", TONES[tone].stroke, mine === false && "opacity-15");
+}
+
+/** The arrowhead of each tone, by id. */
+const arrowOf = (tone: Tone) => `arch-arrow-${tone}`;
 
 function LinkPath({
   link,
@@ -728,16 +761,16 @@ function LinkPath({
 }) {
   const d = pathOf(points);
   const what = carried(link);
-  // 1px for one call, up to 4px for the busiest: a log scale, so a few calls still show.
-  const width = 1 + (3 * Math.log1p(what?.count ?? 0)) / Math.log1p(busiest);
+  const mine = mineOf(link, hovering.hover);
+  const tone = toneOf(link, mine === true);
   return (
     <g>
       <path
         d={d}
         fill="none"
-        strokeWidth={width}
-        markerEnd="url(#arch-arrow)"
-        className={linkClass(link, hovering.hover)}
+        strokeWidth={widthOf(link, busiest)}
+        markerEnd={`url(#${arrowOf(tone)})`}
+        className={linkClass(tone, mine)}
       />
       {what ? (
         // A wider, invisible twin to point at: its numbers on hover, a link to the call's traces.
@@ -756,14 +789,19 @@ function LinkPath({
   );
 }
 
-function Links({ diagram, hovering }: { diagram: Diagram; hovering: Hovering }) {
-  const busiest = Math.max(...diagram.links.map(({ link }) => carried(link)?.count ?? 0), 1);
+/** 1px for one call, up to 4px for the busiest: a log scale, so a few calls still show. */
+function widthOf(link: Link, busiest: number): number {
+  return 1 + (3 * Math.log1p(carried(link)?.count ?? 0)) / Math.log1p(busiest);
+}
+
+/** The same arrowhead on every line, however thick (in the diagram's pixels, not the stroke's), in each tone's colour. */
+function Arrowheads() {
   return (
-    <svg className="absolute inset-0 overflow-visible" width={diagram.width} height={diagram.height} aria-hidden="true">
-      <defs>
-        {/* The same arrowhead on every line, however thick: in the diagram's pixels, not the stroke's. */}
+    <defs>
+      {(Object.keys(TONES) as Tone[]).map((tone) => (
         <marker
-          id="arch-arrow"
+          key={tone}
+          id={arrowOf(tone)}
           viewBox="0 0 8 8"
           refX="7"
           refY="4"
@@ -772,9 +810,24 @@ function Links({ diagram, hovering }: { diagram: Diagram; hovering: Hovering }) 
           markerUnits="userSpaceOnUse"
           orient="auto"
         >
-          <path d="M 0 0 L 8 4 L 0 8 z" className="fill-muted-foreground" />
+          <path d="M 0 0 L 8 4 L 0 8 z" className={TONES[tone].head} />
         </marker>
-      </defs>
+      ))}
+    </defs>
+  );
+}
+
+function Links({ diagram, hovering }: { diagram: Diagram; hovering: Hovering }) {
+  const busiest = Math.max(...diagram.links.map(({ link }) => carried(link)?.count ?? 0), 1);
+  return (
+    <svg className="absolute inset-0 overflow-visible" width={diagram.width} height={diagram.height} aria-hidden="true">
+      <Arrowheads />
+      {/* A halo in the canvas's colour under every line: the dots it crosses don't break it up. */}
+      <g className="stroke-(--map-canvas)" data-map="halos">
+        {diagram.links.map(({ link, points }) => (
+          <path key={link.key} d={pathOf(points)} fill="none" strokeWidth={widthOf(link, busiest) + 4} />
+        ))}
+      </g>
       {diagram.links.map(({ link, points }) => (
         <LinkPath key={link.key} link={link} points={points} busiest={busiest} hovering={hovering} />
       ))}
@@ -821,7 +874,8 @@ function canvasHeight(diagram: Diagram): string {
 /** The dot grid under the diagram: moving with the view, scaled with the zoom, so the map reads as a canvas. */
 function dots({ x, y, k }: View): CSSProperties {
   const step = DOTS * k;
-  const radius = Math.max(0.6, k);
+  // Small dots, a hairline's size at most: a texture, not a pattern competing with the lines.
+  const radius = Math.max(0.5, 0.75 * k);
   return {
     backgroundImage: `radial-gradient(circle, var(--map-dot) ${radius}px, transparent ${radius + 0.5}px)`,
     backgroundSize: `${step}px ${step}px`,
@@ -872,7 +926,7 @@ function MapCanvas({ map, diagram }: { map: ServiceMap; diagram: Diagram }) {
   const byKey = useMemo(() => new Map(diagram.links.map(({ link }) => [link.key, link])), [diagram]);
   const hovering: Hovering = { hover: tips.hover, onTip: tips.onTip };
   return (
-    <section className="mb-6 overflow-hidden rounded-xl border bg-muted/20" aria-label="Architecture">
+    <section className="mb-6 overflow-hidden rounded-xl border bg-(--map-canvas)" aria-label="Architecture">
       <div
         ref={(node) => {
           element.current = node;

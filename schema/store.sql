@@ -53,8 +53,11 @@ CREATE TABLE IF NOT EXISTS issue_traces (
     trace_id TEXT NOT NULL,
     PRIMARY KEY (fingerprint, trace_id)
 );
--- Every table with rows per trace has an index on trace_id: rotation and a trace sent again delete by it.
-CREATE INDEX IF NOT EXISTS issue_traces_trace ON issue_traces (trace_id);
+-- Every table with rows per trace has an index on trace_id: rotation and a trace sent again delete by it. This one
+-- covers the fingerprint too: a trace's issues (the Services page's per-app issues) read from the index alone. Under
+-- a new name, so an existing store gets it when it opens; the narrower index it replaces is dropped.
+DROP INDEX IF EXISTS issue_traces_trace;
+CREATE INDEX IF NOT EXISTS issue_traces_trace_fingerprint ON issue_traces (trace_id, fingerprint);
 CREATE TABLE IF NOT EXISTS logs (
     id INTEGER PRIMARY KEY,
     trace_id TEXT NOT NULL,
