@@ -1915,13 +1915,16 @@ components:
       description: The project's own web, workers and commands, each a service of its own.
       type: object
       additionalProperties: false
-      required: [service, role, traces, errors, total, last_seen, runtime]
+      required: [service, role, traces, errors, total, p50, p95, issues, last_seen, runtime]
       properties:
         service: { type: string, description: "service.name: the project (the TRACEPANEL service setting)." }
         role: { type: string, description: "web, worker or command." }
         traces: { type: integer, description: Requests, tasks or commands it handled. }
         errors: { type: integer, description: How many of them failed. }
         total: { $ref: "#/components/schemas/Duration" }
+        p50: { $ref: "#/components/schemas/Duration", description: Their median duration. }
+        p95: { $ref: "#/components/schemas/Duration", description: Their 95th percentile duration. }
+        issues: { type: integer, description: How many issues they raised. }
         last_seen: { $ref: "#/components/schemas/Time" }
         runtime:
           type: [string, "null"]
@@ -2047,7 +2050,7 @@ components:
         role of one to a role of the other.
       type: object
       additionalProperties: false
-      required: [service, role, to_service, to_role, peer, traces, total, errors]
+      required: [service, role, to_service, to_role, peer, traces, total, errors, p50, p95]
       properties:
         service: { type: string, description: The calling app. }
         role: { type: [string, "null"] }
@@ -2059,6 +2062,8 @@ components:
         traces: { type: integer, description: The called app's traces. }
         total: { $ref: "#/components/schemas/Duration", description: Their time. }
         errors: { type: integer, description: How many of them failed. }
+        p50: { $ref: "#/components/schemas/Duration", description: Their median duration. }
+        p95: { $ref: "#/components/schemas/Duration", description: Their 95th percentile duration. }
     Snapshot:
       type: object
       additionalProperties: false

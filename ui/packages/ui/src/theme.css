@@ -38,6 +38,8 @@
   --sidebar-border: var(--dt-border);
   --chart-1: var(--dt-chart-1);
   --chart-2: var(--dt-chart-2);
+  /* The service map's dot grid: a hairline's colour, faint on either theme. */
+  --map-dot: var(--dt-border-strong);
 }
 /* The light theme's corners a little squarer: hairline boxes on white, not soft cards. */
 :root[data-theme="light"] {

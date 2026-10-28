@@ -654,7 +654,7 @@ impl Reader {
             &format!(
                 "SELECT caller.service AS service, {caller_role} AS role, callee.service AS to_service, \
                  {callee_role} AS to_role, w3c.peer AS peer, COUNT(*) AS traces, SUM(callee.duration) AS total, \
-                 SUM(callee.status = 'error') AS errors \
+                 SUM(callee.status = 'error') AS errors, GROUP_CONCAT(callee.duration) AS durations \
                  FROM links JOIN traces callee ON callee.id = links.trace_id \
                  JOIN traces caller ON caller.id = links.linked_trace \
                  LEFT JOIN w3c ON w3c.trace_id = links.linked_trace AND w3c.span_id = links.linked_span \
@@ -669,6 +669,8 @@ impl Reader {
         Ok(rows
             .into_iter()
             .map(|row| {
+                let mut durations = numbers(&row, "durations");
+                durations.sort_unstable();
                 serde_json::json!({
                     "service": row["service"],
                     "role": row["role"],
@@ -678,6 +680,8 @@ impl Reader {
                     "traces": int(&row, "traces"),
                     "total": int(&row, "total"),
                     "errors": int(&row, "errors"),
+                    "p50": pct(&durations, 0.5),
+                    "p95": pct(&durations, 0.95),
                 })
             })
             .collect())
@@ -695,7 +699,9 @@ impl Reader {
                 // role, merged below.
                 "SELECT service, {SERVICE_ROLE} AS role, kind, COUNT(*) AS traces, \
                  SUM(status = 'error') AS errors, SUM(duration) AS total, MAX(start) AS last_seen, \
-                 attrs AS latest \
+                 attrs AS latest, GROUP_CONCAT(duration) AS durations, \
+                 GROUP_CONCAT((SELECT GROUP_CONCAT(fingerprint) FROM issue_traces WHERE trace_id = traces.id)) \
+                 AS issues \
                  FROM traces WHERE {condition} GROUP BY service, role, kind"
             ),
             params,
@@ -713,6 +719,15 @@ impl Reader {
             app.traces += int(&row, "traces");
             app.errors += int(&row, "errors");
             app.total += int(&row, "total");
+            app.durations.extend(numbers(&row, "durations"));
+            if let Some(issues) = row["issues"].as_str() {
+                app.issues.extend(
+                    issues
+                        .split(',')
+                        .filter(|one| !one.is_empty())
+                        .map(str::to_owned),
+                );
+            }
             let runtime = runtime_of(row["latest"].as_str());
             let last_seen = int(&row, "last_seen");
             // What runs it: its latest trace's that says so.
@@ -724,13 +739,17 @@ impl Reader {
         }
         Ok(apps
             .into_iter()
-            .map(|((service, role), app)| {
+            .map(|((service, role), mut app)| {
+                app.durations.sort_unstable();
                 serde_json::json!({
                     "service": service,
                     "role": role,
                     "traces": app.traces,
                     "errors": app.errors,
                     "total": app.total,
+                    "p50": pct(&app.durations, 0.5),
+                    "p95": pct(&app.durations, 0.95),
+                    "issues": app.issues.len(),
                     "last_seen": app.last_seen,
                     "runtime": app.runtime,
                 })
@@ -1348,6 +1367,18 @@ struct App {
     last_seen: i64,
     runtime: Option<String>,
     runtime_seen: i64,
+    /// Its traces' durations, for its percentiles.
+    durations: Vec<i64>,
+    /// The issues its traces raised, by fingerprint.
+    issues: BTreeSet<String>,
+}
+
+/// A GROUP_CONCAT of integers, read back.
+fn numbers(row: &serde_json::Map<String, Value>, key: &str) -> Vec<i64> {
+    row[key]
+        .as_str()
+        .map(|text| text.split(',').filter_map(|one| one.parse().ok()).collect())
+        .unwrap_or_default()
 }
 
 /// What runs an app, as the SDKs label it for the panel: "Python 3.12 · Django 6.0", "Go 1.27", "Java 21 · Spring

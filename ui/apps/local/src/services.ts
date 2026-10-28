@@ -75,6 +75,10 @@ function project(roles: readonly ServiceApp[]): Project {
     traces: sum(sorted, "traces"),
     errors: sum(sorted, "errors"),
     total: sum(sorted, "total"),
+    // Its busiest role's latency; the issues of the role that raised the most (a role's issues may be another's).
+    p50: busiest.p50,
+    p95: busiest.p95,
+    issues: Math.max(...sorted.map((role) => role.issues)),
     // biome-ignore lint/style/useNamingConvention: the API's field, as ServiceApp has it.
     last_seen: Math.max(...sorted.map((role) => role.last_seen)),
     roles: sorted,
