@@ -91,7 +91,7 @@ test("an app's 37 traces are all there, in order, the run of 36 open", async ({ 
   const { bff } = await fanout(1, [{ route: "/books", path: "/books", at: 0 }, ...authors(36, 1, 1_000)]);
   const { app, run, traces } = await listed(page, bff);
 
-  await expect(app).toContainText("library-api");
+  await expect(app).toContainText("shop");
   await expect(app).toContainText("37 traces");
   await expect(run).toHaveCount(1);
   await expect(run).toContainText("/authors/{author_id}");
@@ -125,7 +125,7 @@ test("an app's traces go by when they started on the caller's clock, across rout
       route: "/reviews/{id}",
       path: "/reviews/4",
       at: 3_000,
-      calls: { app: "ratings", route: "/stars", path: "/stars" },
+      calls: { app: "shop", route: "/stars", path: "/stars" },
     },
     { route: "/books", path: "/books", at: 0 },
     { route: "/authors/{author_id}", path: "/authors/2", at: 2_000 },
@@ -155,7 +155,7 @@ test("an app's traces go by when they started on the caller's clock, across rout
   await page.keyboard.press("ArrowRight");
 
   const deeper = list.locator('.dt-request-row[data-chain="app"]').nth(1);
-  await expect(deeper).toContainText("ratings");
+  await expect(deeper).toContainText("shop");
   await expect(deeper).toContainText("1 trace");
 });
 

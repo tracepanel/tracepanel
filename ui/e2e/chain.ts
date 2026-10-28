@@ -198,9 +198,10 @@ export interface FanoutCall {
 }
 
 /**
- * A BFF ("library-web") whose calls a service ("library-api") serves, one trace each, its clock 3 ms behind, sent in
- * the reverse order: the list puts them in the order they started on the BFF's clock. `tag` keeps each test's traces
- * apart (1…99). Returns the BFF's id.
+ * A BFF whose calls a service serves, one trace each, its clock 3 ms behind, sent in the reverse order: the list puts
+ * them in the order they started on the BFF's clock. Both are the seed's "shop", as in `chain()`: a link to another
+ * app would change the Services map the other tests read. `tag` keeps each test's traces apart (1…99). Returns the
+ * BFF's id.
  */
 export async function fanout(tag: number, calls: readonly FanoutCall[]): Promise<{ bff: string }> {
   const w3c = `5a${String(tag).padStart(30, "0")}`;
@@ -209,7 +210,7 @@ export async function fanout(tag: number, calls: readonly FanoutCall[]): Promise
   const start = Date.now() * 1000 - 7 * 3_600_000_000;
   const behind = 3_000;
   const end = Math.max(...calls.map((call) => call.at)) + 2_000;
-  const bff = trace("x", "POST /graphql", "library-web", start, end, null, [], []);
+  const bff = trace("x", "POST /graphql", "shop", start, end, null, [], []);
   bff["id"] = fid(0);
   (bff["attrs"] as Doc)["w3c.trace_id"] = w3c;
   bff["spans"] = [
@@ -220,7 +221,7 @@ export async function fanout(tag: number, calls: readonly FanoutCall[]): Promise
   ];
   const served = calls.flatMap((call, n) => {
     const at = start + call.at + 100 - behind;
-    const api = trace("x", `GET ${call.route}`, "library-api", at, 700, sid(n + 1), [], []);
+    const api = trace("x", `GET ${call.route}`, "shop", at, 700, sid(n + 1), [], []);
     api["id"] = fid(n + 1);
     const attrs = api["attrs"] as Doc;
     attrs["w3c.trace_id"] = w3c;
