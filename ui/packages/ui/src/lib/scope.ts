@@ -324,3 +324,16 @@ export function scopedIssues(
   }
   return [...groups.values()].sort((a, b) => rank(a) - rank(b) || b.occurrences - a.occurrences);
 }
+
+/** The traces a scope takes any of, each with the windows of its spans taken (none: all of it). */
+export function scopedParts(
+  members: readonly Member[],
+  scope: SpanScope | null,
+): { member: Member; windows: [number, number][] | null }[] {
+  const parts = partsOf(members, scope);
+  return members.flatMap((member, index) => {
+    const part = parts[index];
+    if (!part) return [];
+    return [{ member, windows: part === "whole" ? null : part.windows }];
+  });
+}

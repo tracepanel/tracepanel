@@ -1,5 +1,14 @@
 import { type MouseEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { bytes, duration } from "./format";
+import type { TraceScope } from "./hooks/useTraceChain";
+import {
+  type AppProfile,
+  appProfiles,
+  mergeProfiles,
+  profileSums,
+  type ScopedProfile,
+  scopedProfiles,
+} from "./lib/chainProfile";
 import { type Memory, memoryProfile, type SitePlace, sitePlaces } from "./lib/memory";
 import { percent } from "./lib/percent";
 import {
@@ -22,6 +31,8 @@ import { rangeLabel, type TimeRange } from "./lib/slice";
 import { cn } from "./lib/utils";
 import { timed, wallClock } from "./lib/waiting";
 import { litKey, litScope } from "./lit";
+import { AppChip } from "./primitives";
+import { CountChip, ScopeChip } from "./ScopeBar";
 import { Segmented } from "./Segmented";
 import { largestFirst, ShareBar, ShareFace } from "./Shares";
 import { HEAD_TEXT } from "./TableColumns";
@@ -678,5 +689,129 @@ function SiteLine({
       </div>
       <span className="text-right text-xs text-muted-foreground tabular-nums">{percent(site.bytes, total)}</span>
     </li>
+  );
+}
+
+/* ---------- a chain's profiles ---------- */
+
+/**
+ * The Profile tab: the trace's own profile, or, over a chain of calls or under a row of the call tree, each app's
+ * profile in it (its traces' merged, a row's stretch of its own), never one flame across apps.
+ */
+export function ProfileTab({ trace, open, chain }: { trace: Trace; open: boolean; chain: TraceScope }) {
+  const profiles = useMemo(() => scopedProfiles(chain.members, chain.scope), [chain.members, chain.scope]);
+  const own = profiles.length === 1 && profiles[0]?.member.id === trace.id && profiles[0].range === null;
+  if (own || (profiles.length === 0 && !chain.scope)) return <ProfilePane trace={trace} open={open} />;
+  if (!open) return null;
+  return <ChainProfiles profiles={profiles} chain={chain} />;
+}
+
+/** The scope's chip, "All apps" and a chip per profiled app; what each app's profile adds up to; their flames. */
+function ChainProfiles({ profiles, chain }: { profiles: readonly ScopedProfile[]; chain: TraceScope }) {
+  const apps = useMemo(() => appProfiles(profiles), [profiles]);
+  const [picked, setPicked] = useState<string | null>(null);
+  const shown = apps.filter((app) => picked === null || app.app === picked);
+  const views = useMemo(() => new Map(apps.map((app) => [app.app, appView(app)])), [apps]);
+  return (
+    <>
+      <div className="dt-scope-bar dt-scope-bar-calls">
+        <ul className="dt-breakdown-legend" aria-label="Scope">
+          <ScopeChip scope={chain.scope} onChange={chain.setScope} />
+          {apps.length > 1 ? (
+            <CountChip pressed={picked === null} count={apps.length} onPress={() => setPicked(null)}>
+              All apps
+            </CountChip>
+          ) : null}
+          {apps.length > 1
+            ? apps.map((app) => (
+                <CountChip
+                  key={app.app}
+                  pressed={picked === app.app}
+                  count={app.traces.length}
+                  title={`Only ${app.app}'s profile`}
+                  onPress={() => setPicked(picked === app.app ? null : app.app)}
+                >
+                  {app.app}
+                </CountChip>
+              ))
+            : null}
+        </ul>
+        <ul className="dt-breakdown-legend" aria-label="What the profiles add up to">
+          {shown.map((app) => (
+            <ProfileSums key={app.app} app={app.app} profile={views.get(app.app)?.profile} />
+          ))}
+        </ul>
+      </div>
+      {shown.length === 0 ? <p className="dt-note">Nothing profiled under this.</p> : null}
+      {shown.map((app) => {
+        const view = views.get(app.app);
+        return view ? <AppProfileSection key={app.app} app={app} view={view} /> : null;
+      })}
+    </>
+  );
+}
+
+/** An app's profile in the scope: one trace's (its stretch), or its traces' merged. */
+function appView(app: AppProfile): Scope {
+  const [one] = app.traces;
+  if (app.traces.length === 1 && one) return scopeOf(one.profile, one.range, one.member.trace.duration);
+  const profile = mergeProfiles(
+    app.traces.map((each) => scopeOf(each.profile, each.range, each.member.trace.duration).profile),
+  );
+  return { profile, title: `Profile of ${app.traces.length} traces`, note: null, timed: false };
+}
+
+/** An app's profiled time, of it waiting, and the function that ran most. */
+function ProfileSums({ app, profile }: { app: string; profile: Profile | undefined }) {
+  if (!profile) return null;
+  const sums = profileSums(profile);
+  return (
+    <li className="dt-profile-sums">
+      <AppChip name={app} />
+      <b>{duration(sums.time)}</b> profiled
+      {sums.waiting > 0 ? (
+        <>
+          {" "}
+          · <b>{duration(sums.waiting)}</b> waiting
+        </>
+      ) : null}
+      {sums.top ? (
+        <>
+          {" "}
+          · most in <code className="font-mono">{sums.top}</code>
+        </>
+      ) : null}
+    </li>
+  );
+}
+
+/** One app's flame and functions, under its name: an app's own, never mixed with another's. */
+function AppProfileSection({ app, view }: { app: AppProfile; view: Scope }) {
+  return (
+    <section className="dt-app-profile" aria-label={`Profile of ${app.app}`}>
+      <ProfileView
+        key={view.title}
+        profile={view.profile}
+        measure={(samples) => duration(samples * view.profile.interval_us)}
+        noun="Time"
+        kinds={null}
+        head={
+          <div className="grid gap-0.5">
+            <span className="flex items-center gap-2 text-xs text-muted-foreground">
+              <AppChip name={app.app} />
+              {view.title}
+            </span>
+            <span className="text-2xl font-semibold tracking-tight tabular-nums">
+              {duration(view.profile.samples * view.profile.interval_us)}
+              <span className="ml-2 text-sm font-normal text-muted-foreground">profiled</span>
+            </span>
+            {view.note ? <span className="text-xs text-muted-foreground">{view.note}</span> : null}
+          </div>
+        }
+        list={({ view: frames, palette, measure }) => (
+          <Functions rows={functions(frames).slice(0, 15)} palette={palette} time={measure} />
+        )}
+      />
+    </section>
   );
 }

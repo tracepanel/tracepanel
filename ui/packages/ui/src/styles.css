@@ -3056,3 +3056,19 @@ div.dt-map-row[data-kind="code"] {
 .dt-issue-reach .dt-app-chip {
   margin-left: 0;
 }
+/* A chain's profiles: what each app's adds up to, then each app's flame under its own line. */
+.dt-profile-sums {
+  font-size: var(--dt-size-sm);
+}
+.dt-profile-sums .dt-app-chip {
+  margin-left: 0;
+}
+.dt-profile-sums code {
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dt-app-profile + .dt-app-profile {
+  border-top: 1px solid var(--dt-border);
+}
