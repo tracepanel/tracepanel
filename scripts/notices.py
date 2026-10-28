@@ -1,3 +1,6 @@
+# /// script
+# requires-python = ">=3.11"
+# ///
 """THIRD-PARTY-NOTICES: the licenses of the open source code inside the agent's binary, shipped in every wheel.
 
 Three parts: the Rust crates it is compiled from (cargo about, about.toml and about.hbs), what every Rust program
