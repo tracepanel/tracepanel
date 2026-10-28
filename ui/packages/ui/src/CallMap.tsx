@@ -1,4 +1,14 @@
-import { type CSSProperties, type ReactNode, type RefObject, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  createContext,
+  type ReactNode,
+  type RefObject,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { type Explain, QueryPlan } from "./CallTable";
 import { duration, since } from "./format";
 import { GraphqlCode } from "./GraphqlCode";
@@ -1784,6 +1794,7 @@ function RunDetails({
         {words.what} · started {duration(Math.max(run.start - trace.start, 0))} after this request · took{" "}
         {duration(run.duration)}
       </p>
+      <Inside />
       <PropTable dense rows={runRows(run, words.label)} />
       <OpenRun run={run} words={words} links={links} remote={remote} />
       <ProfileLink open={profile} />
@@ -1861,6 +1872,7 @@ function GroupDetails({ node, onExplain }: DetailsProps<"group">) {
         {node.spans.length} similar {groupNoun(first)} · took {duration(node.end - node.start)} ·{" "}
         {duration(node.spans.reduce((sum, span) => sum + span.duration, 0))} total
       </p>
+      <Inside />
       {first ? (
         <>
           <Statement span={first} attrs={first.attrs} />
@@ -1915,6 +1927,7 @@ function SpanHead({
   return (
     <>
       <SpanTitle span={span} trace={trace} parent={parent} />
+      <Inside />
       <Raised attrs={span.attrs} />
       <Statement span={span} attrs={attrs} />
       {typeof document === "string" ? <GraphqlCode document={document} /> : null}
@@ -2242,6 +2255,22 @@ function scopeOfNode(node: Node): SpanScope | undefined {
   return undefined;
 }
 
+/** What a row's details call what is under it: "Inside this span", "Inside these calls". */
+export type UnderSubject = "this span" | "this call" | "these calls" | "this trace";
+
+function subjectOf(node: Node): UnderSubject {
+  if (node.type === "group") return "these calls";
+  if (node.type === "task") return "this trace";
+  return node.type === "span" && node.served ? "this call" : "this span";
+}
+
+/** What is under the selected row, as its details show it right under their title (see UnderThis). */
+const UnderSlot = createContext<ReactNode>(null);
+
+function Inside() {
+  return useContext(UnderSlot);
+}
+
 /** A span's, a merged call's (see hopScope). */
 function spanScope({ span, served }: SpanNode): SpanScope {
   return served ? hopScope(span, served) : { targets: [span.id], label: span.name, only: false };
@@ -2261,7 +2290,7 @@ function detailsOf(
     links: TraceLinks | undefined;
     onExplain: Explain | undefined;
     onTraceProfile: TraceProfileOpener | undefined;
-    under: ((scope: SpanScope) => ReactNode) | undefined;
+    under: ((scope: SpanScope, subject: UnderSubject) => ReactNode) | undefined;
   },
 ): ReactNode {
   const found = selected ? findNode(tree, selected, trace) : undefined;
@@ -2270,8 +2299,7 @@ function detailsOf(
   const onExplain = found.trace === trace ? hosts.onExplain : undefined;
   const scope = hosts.under && scopeOfNode(found.node);
   return (
-    <>
-      {scope ? hosts.under?.(scope) : null}
+    <UnderSlot value={scope ? hosts.under?.(scope, subjectOf(found.node)) : null}>
       <Details
         node={found.node}
         trace={found.trace}
@@ -2279,7 +2307,7 @@ function detailsOf(
         onExplain={onExplain}
         onTraceProfile={hosts.onTraceProfile}
       />
-    </>
+    </UnderSlot>
   );
 }
 
@@ -2497,8 +2525,8 @@ export function CallMap({
    * them, down the chain (the browser's view, the BFF, each service). Without it the tree opens one level.
    */
   loadRelated?: ((traceId: string) => Promise<Related>) | undefined;
-  /** Over a row's details: what is under it (its records, ...), each a way to the tab that lists them. */
-  under?: ((scope: SpanScope) => ReactNode) | undefined;
+  /** Under a row's details' title: what is under it (its records, ...), each a way to the tab that lists them. */
+  under?: ((scope: SpanScope, subject: UnderSubject) => ReactNode) | undefined;
 }) {
   // The part of the time picked: the kinds of calls and the stretch of time the rows are kept for.
   const { slice: current, change, profileAt } = useHeldSlice();

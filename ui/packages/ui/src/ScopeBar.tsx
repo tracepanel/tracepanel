@@ -2,7 +2,9 @@
 // the call tree: the scope's chip ("Under Book.author ×36", which lets go back to the whole chain) and a chip per app
 // that narrows the list to it. One row on every tab that lists the chain (Logs; DB, HTTP calls and Issues next).
 
+import { ArrowUpRightIcon, DatabaseIcon, FlameIcon, ScrollTextIcon, TriangleAlertIcon } from "lucide-react";
 import type { ReactNode } from "react";
+import type { UnderSubject } from "./CallMap";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -113,29 +115,62 @@ export function countBy<T>(items: readonly T[], key: (item: T) => string): Map<s
   return new Map([...counts].sort((a, b) => b[1] - a[1]));
 }
 
+/** The tabs "Inside this span" leads to, in the trace's tabs' order: each chip's icon, the tab's name in its tooltip. */
+const UNDER_TABS = {
+  issues: { tab: "Issues", icon: TriangleAlertIcon, noun: ["issue", "issues"] },
+  sql: { tab: "DB", icon: DatabaseIcon, noun: ["query", "queries"] },
+  http: { tab: "HTTP calls", icon: ArrowUpRightIcon, noun: ["HTTP call", "HTTP calls"] },
+  logs: { tab: "Logs", icon: ScrollTextIcon, noun: ["log", "logs"] },
+  profile: { tab: "Profile", icon: FlameIcon, noun: ["profile", "profiles"] },
+} as const;
+
+/** The tabs "Inside this span" leads to. */
+export type UnderTab = keyof typeof UNDER_TABS;
+
 /** One count of what is under a row, and the tab it opens filtered to it. */
 export interface UnderCount {
-  noun: [one: string, many: string];
+  tab: UnderTab;
   count: number;
   onOpen: () => void;
 }
 
-/** Over a row's details in the call tree: what is under it, each count a way to the tab that lists it. */
-export function UnderThis({ counts }: { counts: readonly UnderCount[] }) {
+/** A chip's words: "5 queries"; one profile is the row's "Profile". */
+function underText({ tab, count }: UnderCount): string {
+  if (tab === "profile" && count === 1) return "Profile";
+  const [one, many] = UNDER_TABS[tab].noun;
+  return `${count} ${count === 1 ? one : many}`;
+}
+
+/**
+ * Under a row's details' title: what is under it, a chip each (the trace's tabs' icons and order, issues in their
+ * tone), each opening its tab on the row.
+ */
+export function UnderThis({ counts, subject }: { counts: readonly UnderCount[]; subject: UnderSubject }) {
   const some = counts.filter((each) => each.count > 0);
   if (some.length === 0) return null;
   return (
-    <p className="dt-under-this">
-      <span className="text-muted-foreground">Under this:</span>
-      {some.map((each, index) => (
-        <span key={each.noun[1]}>
-          {index > 0 ? <span className="text-muted-foreground"> · </span> : null}
-          <button type="button" className="dt-under-this-link" onClick={each.onOpen}>
-            {each.count} {each.count === 1 ? each.noun[0] : each.noun[1]}
-          </button>
-        </span>
-      ))}
-    </p>
+    <div className="dt-under-this">
+      <span className="dt-under-this-caption">Inside {subject}</span>
+      <ul className="dt-under-this-chips" aria-label={`Inside ${subject}`}>
+        {some.map((each) => {
+          const { tab, icon: Icon } = UNDER_TABS[each.tab];
+          return (
+            <li key={each.tab}>
+              <button
+                type="button"
+                className="dt-map-filter"
+                data-tone={each.tab === "issues" ? "warn" : undefined}
+                title={`Open the ${tab} tab scoped to ${subject}`}
+                onClick={each.onOpen}
+              >
+                <Icon aria-hidden="true" />
+                {underText(each)}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 
@@ -151,12 +186,9 @@ function isLeaf(members: readonly Member[], under: SpanScope): boolean {
   );
 }
 
-/** The tabs "Under this" leads to. */
-export type UnderTab = "sql" | "http" | "logs" | "issues" | "profile";
-
 /**
- * What is under a row, counted for its "Under this" line: its queries, HTTP calls, records and issues, each count
- * opening its tab on the scope.
+ * What is under a row, counted for its "Inside this span" chips: its issues, queries, HTTP calls, records and
+ * profiles, each count opening its tab on the scope.
  */
 export function underCounts(
   members: readonly Member[],
@@ -173,14 +205,10 @@ export function underCounts(
   };
   const issues = scopedIssues(members, under, chainIssues).filter((issue) => issue.kind !== "error");
   return [
-    { noun: ["query", "queries"], count: scopedSpans(members, under, callsOfTab("sql")).length, onOpen: opener("sql") },
-    {
-      noun: ["HTTP call", "HTTP calls"],
-      count: scopedSpans(members, under, callsOfTab("http")).length,
-      onOpen: opener("http"),
-    },
-    { noun: ["log", "logs"], count: scopedLogs(members, under).length, onOpen: opener("logs") },
-    { noun: ["issue", "issues"], count: issues.length, onOpen: opener("issues") },
-    { noun: ["profile", "profiles"], count: scopedProfiles(members, under).length, onOpen: opener("profile") },
+    { tab: "issues", count: issues.length, onOpen: opener("issues") },
+    { tab: "sql", count: scopedSpans(members, under, callsOfTab("sql")).length, onOpen: opener("sql") },
+    { tab: "http", count: scopedSpans(members, under, callsOfTab("http")).length, onOpen: opener("http") },
+    { tab: "logs", count: scopedLogs(members, under).length, onOpen: opener("logs") },
+    { tab: "profile", count: scopedProfiles(members, under).length, onOpen: opener("profile") },
   ];
 }

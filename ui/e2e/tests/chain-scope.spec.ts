@@ -20,17 +20,22 @@ test("the DB tab adds up the chain's queries: the service's, one per call, as on
   await expect(page.getByText("3 queries · 1 unique")).toBeVisible();
 });
 
-test("Under this: a group of steps opens its services' queries; only its own on the chip's menu", async ({ page }) => {
+test("Inside this span: a group of steps opens its services' queries; only its own on the chip's menu", async ({
+  page,
+}) => {
   const view = await chain();
   await page.goto(`/#/t/${view}?tab=calls`);
   await page
     .getByRole("button", { name: /^function Book\.author/i })
     .first()
     .click();
-  const under = page.locator(".dt-under-this");
+  const under = page.getByRole("list", { name: "Inside these calls" });
 
-  await expect(under).toContainText("3 queries");
-  await expect(under).toContainText("3 HTTP calls");
+  await expect(under.getByRole("button")).toHaveText(["1 issue", "3 queries", "3 HTTP calls", "4 logs", "4 profiles"]);
+  await expect(under.getByRole("button", { name: "3 queries" })).toHaveAttribute(
+    "title",
+    "Open the DB tab scoped to these calls",
+  );
   await under.getByRole("button", { name: "3 queries" }).click();
 
   await expect(page.getByRole("tab", { name: /^DB/ })).toHaveAttribute("aria-selected", "true");

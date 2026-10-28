@@ -48,7 +48,7 @@ test("a browser's view with no profile of its own: the Profile tab has each app'
   await expect(section(page, "shop")).toContainText("get_author");
 });
 
-test("Under this: a step's profile is the BFF's stretch of its time and the service's trace under it", async ({
+test("Inside this span: a step's profile is the BFF's stretch of its time and the service's trace under it", async ({
   page,
 }) => {
   const view = await bffApart(page);

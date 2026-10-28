@@ -1,6 +1,6 @@
 // A trace's Logs tab lists its whole chain of calls: a browser's view calls a GraphQL BFF, whose three Book.author
 // steps each call a service. Each app's records, on the view's clock, with its app; a row of the call tree opens
-// what is under it ("Under this"), the scope's chip lets it go, and what the records add up to filters them.
+// what is under it ("Inside this span"), the scope's chip lets it go, and what the records add up to filters them.
 import type { Page } from "@playwright/test";
 import { chain } from "../chain.ts";
 import { expect, test } from "../fixtures.ts";
@@ -27,7 +27,7 @@ test("the Logs tab lists the whole chain, each record with its app, and an app's
   await expect(records(page).filter({ hasText: "shop-web" })).toHaveCount(0);
 });
 
-test("Under this: a group of steps opens the records under it, its services' too; only its own on the chip's menu", async ({
+test("Inside this span: a group of steps opens the records under it, its services' too; only its own on the chip's menu", async ({
   page,
 }) => {
   const view = await chain();

@@ -456,7 +456,7 @@ function TreePane({
 }: ComponentProps<typeof CallMap> & {
   open: boolean;
   onSelect: (target: MarkTarget) => void;
-  /** What a row's "Under this" counts, and where its counts lead. */
+  /** What a row's "Inside this span" chips count, and where they lead. */
   chain: TraceScope;
   openTab: (tab: TabId) => void;
 }) {
@@ -465,8 +465,11 @@ function TreePane({
   return (
     <CallMap
       {...tree}
-      under={(under) => (
-        <UnderThis counts={underCounts(chain.members, under, chain.chainIssues, chain.setScope, openTab)} />
+      under={(under, subject) => (
+        <UnderThis
+          counts={underCounts(chain.members, under, chain.chainIssues, chain.setScope, openTab)}
+          subject={subject}
+        />
       )}
       head={<TimeStrip trace={tree.trace} related={tree.related} onSelect={onSelect} />}
       onProfile={onProfile}
