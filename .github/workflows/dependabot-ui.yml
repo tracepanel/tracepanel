@@ -47,9 +47,10 @@ jobs:
 
       - uses: astral-sh/setup-uv@v10.3.0
 
+      # The version scripts/notices.py asks for: another one reads the crates' license files differently.
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-about
+          tool: cargo-about@0.9.3
 
       - name: Build ui-dist and the notices
         run: |

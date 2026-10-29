@@ -14,7 +14,8 @@ Licenses page show it.
     uv run scripts/notices.py --check    # fail if it is out of date (CI)
     uv run scripts/notices.py --ui       # print the UI's part (scripts/ui.sh keeps it in ui-dist/NOTICES)
 
-Needs cargo-about (`cargo install --locked cargo-about --features cli`). The UI's part comes from ui-dist/NOTICES,
+Needs cargo-about at CARGO_ABOUT (`cargo install --locked cargo-about@0.9.3 --features cli`), the version the
+workflows install: another one reads the crates' license files differently, and CI's check would disagree. The UI's part comes from ui-dist/NOTICES,
 written with the UI by scripts/ui.sh; `--ui` reads ui/ with its packages installed.
 """
 
@@ -34,6 +35,9 @@ LINKED = ROOT / "scripts" / "licenses"
 BUNDLED = ("tailwindcss", "tw-animate-css", "vite", "rolldown")
 # Source copied into ui/ rather than installed: its directory holds the license it came with.
 VENDORED = (("shadcn/ui components", UI / "packages" / "ui" / "src" / "components" / "ui", "MIT"),)
+# The cargo-about the notices are written with, here and in CI (.github/workflows): 0.9.3 found license headers in
+# more of ring's files than 0.9.2, so the same lockfile gave other notices.
+CARGO_ABOUT = "0.9.3"
 # The musl the Rust toolchain ships for its *-linux-musl targets, which link it in statically.
 MUSL = "1.2.5"
 LICENSE_FILES = ("LICENSE", "LICENSE.md", "LICENSE.txt", "LICENCE", "LICENSE-MIT", "OFL.txt", "license", "license.md")
@@ -56,6 +60,18 @@ NO_NOTICE = {"CC0-1.0", "Unlicense", "0BSD"}
 
 
 def rust() -> str:
+    version = subprocess.run(  # noqa: S603 (cargo, this workspace)
+        ["cargo", "about", "--version"],  # noqa: S607
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.split()[-1]
+    if version != CARGO_ABOUT:
+        sys.exit(
+            f"cargo-about {version}, the notices need {CARGO_ABOUT}: "
+            f"cargo install --locked cargo-about@{CARGO_ABOUT} --features cli"
+        )
     return subprocess.run(  # noqa: S603 (cargo, this workspace)
         ["cargo", "about", "generate", "--fail", "about.hbs"],  # noqa: S607
         cwd=ROOT,
