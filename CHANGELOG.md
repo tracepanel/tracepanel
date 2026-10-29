@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Added
+
+- The MCP tool `get_profile` reads the profiles of every trace down the
+  trace's chain of calls after its own. Each app's profile is apart, its
+  traces added up as one, never one profile across apps. A trace that
+  wasn't profiled itself gets its chain's. `chain: false` keeps to the
+  trace's own profile. `get_trace` says which traces down its chain were
+  profiled. `compare_traces` says when the traces' chains have profiles
+  of their own that it doesn't compare.
+
 ### Fixed
 
 - With reduced motion asked for, a drag edge's line (the panel's, the
@@ -10,6 +20,11 @@
 - A long log list no longer loses an arrow key pressed before it has
   drawn the rows the scroll brought into view: the lines around the
   focused one stay drawn, so a held key moves a row a press.
+- A chain's Profile tab has the memory its traces measured: Time or
+  Memory, as a trace's own tab has it, where one of them measured it.
+  Memory shows each app's peak, what it kept and where it allocated most,
+  then its sites by package, as a flame of bytes and as a list. An app's
+  several traces add up as one, their peak the largest of one of them.
 - A snapshot holds the trace's whole chain of calls, as the console shows
   it: the traces its calls' traces called in turn, down to the chain's
   limits (6 levels, 60 traces), other projects' traces included. Its tabs

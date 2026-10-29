@@ -174,7 +174,8 @@ coding agent makes and compare the traces before and after a fix. A trace's
 151 SQL queries fold into lines such as
 `sql SELECT auth_user ×50 · 0.7 ms  [n+1] — blog/views.py:28`. `get_profile`
 reads a profiled trace's CPU or memory profile as text, with the hottest
-functions and their lines. The answers leave out SQL parameters and local
+functions and their lines. It then reads the profiles of the traces down its
+chain of calls, one per app. The answers leave out SQL parameters and local
 variables unless you start the server with `--values`. The
 [AI coding agents](https://tracepanel.dev/docs/ai-agents) page lists the tools
 and the setup for each editor.
