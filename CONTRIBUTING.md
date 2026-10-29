@@ -145,7 +145,8 @@ has no trusted publishing: the token and the signing key are secrets of the
 ## Update dependencies
 
 After changing Rust or UI dependencies, regenerate the licenses the agent ships
-with. This needs `cargo install --locked cargo-about --features cli`.
+with. This needs cargo-about at the version `scripts/notices.py` names
+(`cargo install --locked cargo-about@0.9.3 --features cli`), as CI has.
 
 ```bash
 uv run scripts/notices.py

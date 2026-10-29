@@ -185,6 +185,15 @@
 
 ### Fixed
 
+- EXPLAIN of a query with named parameters (`%(age)s`, `:name`) sends
+  the app their names as the span recorded them, as `param_names`. The
+  app passes each value back under its name, where before it guessed the
+  names from the statement's placeholders.
+- EXPLAIN of a Python app's query in the agent's console reads as in
+  that app's own console. The agent shows the plan the app sends: SQL
+  Server's SHOWPLAN as a tree with its estimates, and SQLite's temporary
+  B-trees flagged. Before, it rebuilt the plan from the database's rows,
+  which made SQL Server's one flat line per row.
 - The agent asks only the app that recorded a query to EXPLAIN it. When
   that app couldn't take the request down its connection (a Python app
   runs EXPLAIN at its own console), the agent asked whichever one app
@@ -197,9 +206,10 @@
   now shows where the app that recorded the query runs EXPLAIN, and each
   trace of a chain asks about its own app. Before, it showed where the
   console's app ran EXPLAIN, so it could be missing for a service that
-  runs it, or offered for one that can't. The console of an app that
-  runs EXPLAIN itself (Python, Java) offers it for that app's traces
-  only. `GET /api/capabilities?service=` says so.
+  runs it, or offered for one that can't. Every console offers it for
+  each trace whose app runs it, as `GET /api/capabilities?service=` says,
+  whichever app serves that console: a Python or Java app's console sends
+  EXPLAIN of another app's trace to the agent.
 - The DB and HTTP calls tabs' Time column says a row's time on the
   clock, as the header over it does: `GET /authors/{id} ×36` that ran
   side by side reads 490 ms, not 12.7 s under a header of 673 ms. What
