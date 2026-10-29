@@ -122,10 +122,19 @@ jobs:
             *) tag=latest ;;
           esac
           echo "version $version, dist-tag $tag"
+          # A package already on npm is left as it is: a run started again after a failure publishes the rest.
+          publish() {
+            name=$(tar -xzOf "$1" package/package.json | node -p 'JSON.parse(require("fs").readFileSync(0)).name')
+            if npm view "$name@$version" version >/dev/null 2>&1; then
+              echo "$name@$version is on npm already"
+            else
+              npm publish "$1" --access public --tag "$tag" --provenance
+            fi
+          }
           for package in ./npm-dist/*.tgz; do
             [ "$package" = "$main" ] && continue
-            npm publish "$package" --access public --tag "$tag" --provenance
+            publish "$package"
           done
           # Last: once it is public, installing it needs the platform packages.
-          npm publish "$main" --access public --tag "$tag" --provenance
+          publish "$main"
           echo "::notice::$version is on npm"
