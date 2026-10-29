@@ -431,6 +431,8 @@ function useRowChains(rows: readonly TraceRow[], stored: ReadonlySet<string>): R
     if (!load) return;
     let live = true;
     const timers = new Set<number>();
+    // The loads not answered yet: a load this effect ends before it answers is dropped, so it isn't loaded either.
+    const asked = new Set<string>();
     const keep = (id: string, chain: Chain) =>
       setChains((current) => {
         const before = current.get(id);
@@ -455,7 +457,9 @@ function useRowChains(rows: readonly TraceRow[], stored: ReadonlySet<string>): R
           ? window.setTimeout(() => live && setLoading((current) => new Set(current).add(trace.id)), CHAIN_SLOW_MS)
           : undefined;
         if (timer !== undefined) timers.add(timer);
+        asked.add(trace.id);
         const settle = () => {
+          asked.delete(trace.id);
           window.clearTimeout(timer);
           if (timer !== undefined) timers.delete(timer);
           done(trace.id);
@@ -472,6 +476,8 @@ function useRowChains(rows: readonly TraceRow[], stored: ReadonlySet<string>): R
       live = false;
       window.clearInterval(timer);
       for (const each of timers) window.clearTimeout(each);
+      // The rows changed while these loaded (another request came): their answers are dropped, the next effect asks again.
+      for (const id of asked) loaded.current.delete(id);
     };
   }, [key]);
   // The waiting calls go once they stop being waited for: the rows are built again then (`expired` counts the times).

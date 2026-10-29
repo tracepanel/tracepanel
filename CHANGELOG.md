@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- The panel's list no longer leaves a request without its apps' rows
+  when another request comes while that request's chain is loading (a
+  busy agent, a page that makes its calls at once): the chain is asked
+  again, not dropped.
+
 ## 0.8.0 (2026-10-29)
 
 ### Added
