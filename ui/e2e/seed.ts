@@ -4,7 +4,7 @@
 // console's default period shows them.
 import { readdirSync, readFileSync } from "node:fs";
 import { createConnection } from "node:net";
-import { CONSOLE, STORE } from "./agent.ts";
+import { CONSOLE, RUN_STARTED, STORE } from "./agent.ts";
 
 type Doc = Record<string, unknown>;
 
@@ -1560,6 +1560,9 @@ async function hello(): Promise<void> {
 }
 
 export default async function seed(): Promise<void> {
+  // The run's one clock for what the tests store again and again under the same ids (chain.ts): set here, before the
+  // workers start, so each of them sends the same traces, not ones that move each time another test stores them.
+  process.env[RUN_STARTED] = String(Date.now());
   await hello();
   const docs = [
     // First, the oldest: its many records sit under the others on the Logs page.

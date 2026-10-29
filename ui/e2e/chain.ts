@@ -1,11 +1,16 @@
 // A chain of calls across three apps, stored by the agent: a browser's view calls a GraphQL BFF, whose three
 // Book.author steps each call a service, which runs one query each (an N+1 across apps) and logs in it.
 import { expect, test } from "@playwright/test";
-import { CONSOLE } from "./agent.ts";
+import { CONSOLE, RUN_STARTED } from "./agent.ts";
 
 type Doc = Record<string, unknown>;
 
 const W3C = "4bf92f3577b34da6a3ce929d0e0e47c1";
+
+/** When the run started (ms), as the seed set it for every worker: the clock of the traces stored under fixed ids. */
+function started(): number {
+  return Number(process.env[RUN_STARTED] ?? Date.now());
+}
 
 /** A ULID of this test's own: 26 Crockford characters. */
 const NUMBERS: Record<string, number> = { view: 1, bff: 2, api1: 11, api2: 12, api3: 13 };
@@ -69,8 +74,8 @@ function trace(
 
 /** The view, the BFF (its clock 4 ms ahead) and the service's three traces, stored by the agent. */
 export async function chain(): Promise<string> {
-  // Hours ago: the other tests list the newest records and requests first.
-  const start = Date.now() * 1000 - 6 * 3_600_000_000;
+  // Hours ago: the other tests list the newest records and requests first. Each test stores it again, the same.
+  const start = started() * 1000 - 6 * 3_600_000_000;
   const ahead = 4_000;
   const view = trace(
     "VIEW",
@@ -211,7 +216,8 @@ export async function fanout(tag: number, calls: readonly FanoutCall[]): Promise
   const w3c = `5a${String(tag).padStart(30, "0")}`;
   const fid = (n: number) => `01M4C4A1N6${String(tag * 10_000 + n).padStart(16, "0")}`;
   const sid = (n: number) => `${String(tag).padStart(4, "0")}${String(n).padStart(12, "0")}`;
-  const start = Date.now() * 1000 - 7 * 3_600_000_000;
+  // The same each time a test of `tag` stores it (its repeats too).
+  const start = started() * 1000 - 7 * 3_600_000_000;
   const behind = 3_000;
   const end = Math.max(...calls.map((call) => call.at)) + 2_000;
   const bff = linked(fid(0), w3c, "POST /graphql", start, end, null);
