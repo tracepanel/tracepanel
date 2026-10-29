@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- With reduced motion asked for, a drag edge's line (the panel's, the
+  list's, the sidebar's, a details pane's) shows at once under the
+  pointer instead of fading in. A toggle flips without sliding.
+
 ## 0.7.0 (2026-10-29)
 
 ### Added
