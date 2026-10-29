@@ -29,7 +29,8 @@ pub(crate) fn list() -> Value {
             "get_trace",
             "Get a trace",
             "One trace, compact: its issues (N+1, duplicate and slow queries, errors…) with where in the code and how to \
-             fix them, the error with its stack, the call tree with repeats folded, warnings, related tasks and whether it was profiled.",
+             fix them, the error with its stack, the call tree with repeats folded, warnings, related tasks, the \
+             traces down its chain of calls and whether it and they were profiled.",
             json!({
                 "id": {"type": "string", "description": "The trace's id."},
                 "focus": {
@@ -46,12 +47,16 @@ pub(crate) fn list() -> Value {
             "get_profile",
             "Get a profile",
             "Where a profiled trace's time went in code (cpu: functions by self and total time, the hottest paths, \
-             waiting) or its memory (memory: peak, kept, the top allocation sites), with file:line. To profile a \
-             request, send it with an `X-Tracepanel-Profile: 1` header (`memory` for its memory too).",
+             waiting) or its memory (memory: peak, kept, the top allocation sites), with file:line. Then the \
+             profiles of every trace down its chain of calls (the services its calls reached, theirs in turn), each \
+             app's apart, its traces added up as one: never one profile across apps. To profile a request, send it \
+             with an `X-Tracepanel-Profile: 1` header (`memory` for its memory too); the header goes on to the \
+             services it calls.",
             json!({
                 "id": {"type": "string", "description": "The trace's id."},
                 "kind": {"type": "string", "enum": ["cpu", "memory"], "default": "cpu"},
-                "top": {"type": "integer", "minimum": 1, "maximum": 50, "default": 10, "description": "Functions or sites listed."},
+                "top": {"type": "integer", "minimum": 1, "maximum": 50, "default": 10, "description": "Functions or sites listed, in each profile."},
+                "chain": {"type": "boolean", "default": true, "description": "false for the trace's own profile only."},
             }),
             vec!["id"],
         ),
@@ -71,7 +76,8 @@ pub(crate) fn list() -> Value {
             "compare_traces",
             "Compare two traces",
             "What changed between two traces of the same thing, e.g. before and after a fix: time, SQL, statements, \
-             issues fixed and new, and with profiles the functions' self time and memory.",
+             issues fixed and new, and with profiles the functions' self time and memory (each trace's own profile; \
+             get_profile has those of its chain of calls).",
             json!({
                 "before": {"type": "string", "description": "The earlier trace's id."},
                 "after": {"type": "string", "description": "The later trace's id."},
@@ -290,13 +296,83 @@ fn get_profile(server: &Server, args: &Value) -> Result<String, Refusal> {
             .ok_or_else(|| Refusal(format!("kind is cpu or memory; not {name}")))?,
     };
     let doc = document(server, &id)?;
-    let body =
-        profile::profile(&doc, kind, number(args, "top", 10, 50) as usize).map_err(Refusal)?;
+    let top = number(args, "top", 10, 50) as usize;
+    let chain = if flag(args, "chain", true) {
+        chain_profiles(server, &id, kind, top)?
+    } else {
+        None
+    };
+    let own = profile::profile(&doc, kind, top);
+    let body = match (own, &chain) {
+        (Ok(body), _) => body,
+        (Err(why), None) => return Err(Refusal(why)),
+        (Err(_), Some(_)) => format!(
+            "this trace: no {} profile; those of its chain follow.",
+            kind.name()
+        ),
+    };
     let mut answer = format!("{id}  {}\n{body}", compact::trace_head(&doc));
+    if let Some(chain) = chain {
+        answer.push_str(&format!("\n\n{chain}"));
+    }
     if let Some(console) = server.console_url() {
         answer.push_str(&format!("\n\nconsole: {console}#/t/{id}"));
     }
     Ok(answer)
+}
+
+/// The traces down a trace's chain of calls whose profile measured `kind`, by app in the order the apps came; the
+/// trace itself left out.
+fn profiled_chain(chain: &Chain, kind: Kind) -> Vec<(&str, Vec<&Value>)> {
+    let mut apps: Vec<(&str, Vec<&Value>)> = Vec::new();
+    for member in chain.members[1..]
+        .iter()
+        .filter(|member| profile::has(&member.doc, kind))
+    {
+        match apps.iter_mut().find(|(app, _)| *app == member.app()) {
+            Some((_, docs)) => docs.push(&member.doc),
+            None => apps.push((member.app(), vec![&member.doc])),
+        }
+    }
+    apps
+}
+
+/// The profiles of `kind` down a trace's chain of calls, each app's apart (its traces merged); none without any.
+fn chain_profiles(
+    server: &Server,
+    id: &str,
+    kind: Kind,
+    top: usize,
+) -> Result<Option<String>, Refusal> {
+    let Some(chain) = server.reader.chain(id, true, &no_remote)? else {
+        return Ok(None);
+    };
+    let apps = profiled_chain(&chain, kind);
+    let traces: usize = apps.iter().map(|(_, docs)| docs.len()).sum();
+    if traces == 0 {
+        return Ok(None);
+    }
+    let mut out = format!(
+        "chain: {} profiles of {} down its calls, each app's apart (never one profile across apps):",
+        kind.name(),
+        compact::count(traces as i64, "trace", "traces"),
+    );
+    for (app, docs) in apps {
+        let Some(body) = profile::app_profile(&docs, kind, top) else {
+            continue;
+        };
+        let ids: Vec<&str> = docs.iter().map(|doc| compact::text(doc, "id")).collect();
+        let what = if docs.len() > 1 {
+            format!(
+                "{} added up",
+                compact::count(docs.len() as i64, "trace", "traces")
+            )
+        } else {
+            compact::trace_head(docs[0])
+        };
+        out.push_str(&format!("\n\n{app} · {what} · {}\n{body}", ids.join(", ")));
+    }
+    Ok(Some(out))
 }
 
 fn wait_for_trace(server: &Server, args: &Value) -> Result<String, Refusal> {
@@ -342,9 +418,28 @@ fn wait_for_trace(server: &Server, args: &Value) -> Result<String, Refusal> {
 }
 
 fn compare_traces(server: &Server, args: &Value) -> Result<String, Refusal> {
-    let before = document(server, &required(args, "before")?)?;
-    let after = document(server, &required(args, "after")?)?;
-    Ok(compact::compare(&before, &after))
+    let (old, new) = (required(args, "before")?, required(args, "after")?);
+    let before = document(server, &old)?;
+    let after = document(server, &new)?;
+    let mut answer = compact::compare(&before, &after);
+    // Their profiles are their own: those of the traces down their calls are get_profile's.
+    let mut chains = Vec::new();
+    for id in [&old, &new] {
+        if chains.contains(&format!("get_profile id:{id}")) {
+            continue;
+        }
+        let chain = server.reader.chain(id, true, &no_remote)?;
+        if chain.is_some_and(|chain| !profiled_chain(&chain, Kind::Cpu).is_empty()) {
+            chains.push(format!("get_profile id:{id}"));
+        }
+    }
+    if !chains.is_empty() {
+        answer.push_str(&format!(
+            "\nnote: the profiles compared are the traces' own; those down their chain of calls → {}",
+            chains.join(", ")
+        ));
+    }
+    Ok(answer)
 }
 
 fn list_issues(server: &Server, args: &Value) -> Result<String, Refusal> {
@@ -578,6 +673,16 @@ fn chain_section(server: &Server, id: &str) -> Result<Option<String>, Refusal> {
         compact::count(chain.members.len() as i64 - 1, "trace", "traces"),
         apps.join(", ")
     );
+    let profiled = profiled_chain(&chain, Kind::Cpu);
+    if !profiled.is_empty() {
+        let traces: usize = profiled.iter().map(|(_, docs)| docs.len()).sum();
+        let names: Vec<&str> = profiled.iter().map(|(app, _)| *app).collect();
+        out.push_str(&format!(
+            "\nprofiled down its calls: {} ({}) → get_profile id:{id}",
+            compact::count(traces as i64, "trace", "traces"),
+            names.join(", ")
+        ));
+    }
     for (at, issue) in chain_issues(&chain) {
         out.push_str(&format!(
             "\nissue across apps on {}: {} → list_calls trace:{id}\n  hint: {}",
