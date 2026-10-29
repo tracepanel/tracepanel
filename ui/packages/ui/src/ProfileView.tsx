@@ -4,6 +4,9 @@ import type { TraceScope } from "./hooks/useTraceChain";
 import {
   type AppProfile,
   appProfiles,
+  type MemoryOf,
+  memorySums,
+  mergeMemories,
   mergeProfiles,
   profileSums,
   type ScopedProfile,
@@ -184,9 +187,18 @@ function ProfileOf({
 }
 
 /** Where the trace's memory was: its allocation sites read as the time is, by package and as a flame of bytes. */
-function MemoryPane({ profile, memory, kinds }: { profile: Profile; memory: Memory; kinds: ReactNode }) {
+function MemoryPane({
+  profile,
+  memory,
+  kinds,
+  head = <MemoryHead memory={memory} />,
+}: {
+  profile: Profile;
+  memory: Memory;
+  kinds: ReactNode;
+  head?: ReactNode;
+}) {
   const sites = useMemo(() => memoryProfile(profile, memory), [profile, memory]);
-  const head = <MemoryHead memory={memory} />;
   if (sites.samples === 0) {
     return (
       <div className="grid gap-6 p-4">
@@ -216,25 +228,62 @@ function signed(size: number): string {
   return size > 0 ? `+${bytes(size)}` : bytes(size);
 }
 
-/** What the trace allocated: its peak, what it kept and allocated in all, and what the numbers can't tell apart. */
-function MemoryHead({ memory }: { memory: Memory }) {
+/** What it kept and allocated in all: "net +1.2 MB · 90 MB allocated in all". */
+function keptLine(memory: Memory): string {
   const kept = [`net ${signed(memory.net)}`];
   if (memory.allocated !== undefined) kept.push(`${bytes(memory.allocated)} allocated in all`);
+  return kept.join(" · ");
+}
+
+/** Where the trace's memory was: of one trace, or of an app's several in a chain (their numbers added up). */
+interface MemoryWhat {
+  title: string;
+  /** The app's chip, in a chain. */
+  app?: ReactNode;
+  traces: number;
+  /** Why a stretch picked isn't what it shows. */
+  note?: string | null;
+}
+
+const WHOLE_TRACE: MemoryWhat = { title: "Memory of the whole trace", traces: 1 };
+
+/**
+ * What the trace allocated: its peak, what it kept and allocated in all, and what the numbers can't tell apart. Of
+ * an app's traces in a chain: its chip, and of several, their numbers added up, the peak the largest.
+ */
+function MemoryHead({ memory, what = WHOLE_TRACE }: { memory: Memory; what?: MemoryWhat }) {
+  const several = what.traces > 1;
   return (
     <div className="grid gap-0.5">
-      <span className="text-xs text-muted-foreground">Memory of the whole trace</span>
+      <span className="flex items-center gap-2 text-xs text-muted-foreground">
+        {what.app}
+        {what.title}
+      </span>
       <span className="text-2xl font-semibold tracking-tight tabular-nums">
         {bytes(memory.peak)}
-        <span className="ml-2 text-sm font-normal text-muted-foreground">peak, above where it started</span>
+        <span className="ml-2 text-sm font-normal text-muted-foreground">
+          {several ? "peak of one of them, above where it started" : "peak, above where it started"}
+        </span>
       </span>
-      <span className="text-xs text-muted-foreground tabular-nums">{kept.join(" · ")}</span>
+      <span className="text-xs text-muted-foreground tabular-nums">{keptLine(memory)}</span>
+      <MemoryNotes memory={memory} what={what} />
+    </div>
+  );
+}
+
+/** What the numbers can't tell apart: a stretch they can't narrow, sites at the end, other traces counted. */
+function MemoryNotes({ memory, what }: { memory: Memory; what: MemoryWhat }) {
+  const end = what.traces > 1 ? "the end of each trace" : "the end of the trace";
+  return (
+    <>
+      {what.note ? <span className="text-xs text-muted-foreground">{what.note}</span> : null}
       {memory.sites_at === "end" ? (
-        <span className="text-xs text-muted-foreground">Where it was at the end of the trace, not its peak</span>
+        <span className="text-xs text-muted-foreground">Where it was at {end}, not its peak</span>
       ) : null}
       {memory.shared ? (
         <span className="text-xs text-warn">Includes other traces that ran in the process meanwhile</span>
       ) : null}
-    </div>
+    </>
   );
 }
 
@@ -708,31 +757,100 @@ export function ProfileTab({ trace, open, chain }: { trace: Trace; open: boolean
   return <ChainProfiles profiles={profiles} chain={chain} />;
 }
 
-/** The scope's chip, "All apps" and a chip per profiled app; what each app's profile adds up to; their flames. */
+/**
+ * The scope's chip, "All apps" and a chip per profiled app; what each app's profile adds up to; their flames. Where
+ * an app's traces measured their memory, its memory instead of its time, as a trace's own Profile tab has it.
+ */
 function ChainProfiles({ profiles, chain }: { profiles: readonly ScopedProfile[]; chain: TraceScope }) {
   const apps = useMemo(() => appProfiles(profiles), [profiles]);
+  const memories = useMemo(() => appMemories(apps), [apps]);
   const [picked, setPicked] = useState<string | null>(null);
-  const shown = apps.filter((app) => picked === null || app.app === picked);
-  const views = useMemo(() => new Map(apps.map((app) => [app.app, appView(app)])), [apps]);
+  const [kind, setKind] = useState<Kind>("time");
   const runtimes = useMemo(() => new Map(apps.map((app) => [app.app, appRuntime(app)])), [apps]);
   const counts = useMemo(() => new Map(apps.map((app) => [app.app, app.traces.length])), [apps]);
-  const traces = shown.reduce((sum, app) => sum + app.traces.length, 0);
+  // Only a chain with a trace that measured its memory has the choice.
+  const measured = memories.size > 0;
+  const memory = measured && kind === "memory";
+  const listed = apps.filter((app) => (picked === null || app.app === picked) && (!memory || memories.has(app.app)));
   return (
     <>
       <ScopeHeader
         scope={chain.scope}
         onScope={chain.setScope}
         apps={{ apps: apps.map((app) => app.app), runtimes, counts, picked, onPick: setPicked }}
-        summary={shown.length > 0 ? plural(traces, "profiled trace", "profiled traces") : null}
+        summary={chainSummary(listed, memory ? memories : null)}
+        end={measured ? <Segmented label="Profile of" segments={KINDS} value={kind} onChange={setKind} /> : null}
       />
-      {shown.length > 0 ? <ProfileSums apps={shown} views={views} /> : null}
-      {shown.length === 0 ? <p className="dt-note">Nothing profiled under this.</p> : null}
-      {shown.map((app) => {
+      {memory ? <ChainMemory apps={listed} memories={memories} /> : <ChainTime apps={listed} />}
+    </>
+  );
+}
+
+/** How many traces the tab shows: profiled, or with their memory; nothing when it shows none. */
+function chainSummary(apps: readonly AppProfile[], memories: ReadonlyMap<string, AppMemory> | null): string | null {
+  if (apps.length === 0) return null;
+  if (!memories) {
+    return plural(
+      apps.reduce((sum, app) => sum + app.traces.length, 0),
+      "profiled trace",
+      "profiled traces",
+    );
+  }
+  const traces = apps.reduce((sum, app) => sum + (memories.get(app.app)?.traces ?? 0), 0);
+  return `${plural(traces, "trace", "traces")} with their memory`;
+}
+
+/** Each app's time: what it adds up to, then its flame. */
+function ChainTime({ apps }: { apps: readonly AppProfile[] }) {
+  const views = useMemo(() => new Map(apps.map((app) => [app.app, appView(app)])), [apps]);
+  if (apps.length === 0) return <p className="dt-note">Nothing profiled under this.</p>;
+  return (
+    <>
+      <ProfileSums apps={apps} views={views} />
+      {apps.map((app) => {
         const view = views.get(app.app);
         return view ? <AppProfileSection key={app.app} app={app} view={view} /> : null;
       })}
     </>
   );
+}
+
+/** Each app's memory: what it adds up to, then where it was. */
+function ChainMemory({ apps, memories }: { apps: readonly AppProfile[]; memories: ReadonlyMap<string, AppMemory> }) {
+  if (apps.length === 0) return <p className="dt-note">No memory measured under this.</p>;
+  return (
+    <>
+      <MemorySums apps={apps} memories={memories} />
+      {apps.map((app) => {
+        const measured = memories.get(app.app);
+        return measured ? <AppMemorySection key={app.app} app={app} measured={measured} /> : null;
+      })}
+    </>
+  );
+}
+
+/** An app's memory in the scope: one trace's, or its traces' added up; how many traces measured it. */
+interface AppMemory extends MemoryOf {
+  app: string;
+  traces: number;
+  title: string;
+  /** Why a stretch picked isn't what it shows: memory isn't timed. */
+  note: string | null;
+}
+
+/** The apps whose traces measured their memory, each with it. */
+function appMemories(apps: readonly AppProfile[]): ReadonlyMap<string, AppMemory> {
+  return new Map(apps.flatMap((app) => appMemory(app) ?? []).map((each) => [each.app, each]));
+}
+
+function appMemory(app: AppProfile): AppMemory | undefined {
+  const measured = app.traces.filter((each) => each.profile.memory);
+  const merged = mergeMemories(measured.map((each) => each.profile));
+  if (!merged) return undefined;
+  const title = measured.length > 1 ? `Memory of ${measured.length} traces` : "Memory of the whole trace";
+  const narrowed = measured.some((each) => each.range !== null);
+  const note = narrowed ? "Its memory isn't timed: the stretch picked can't narrow it." : null;
+  return { ...merged, app: app.app, traces: measured.length, title, note };
 }
 
 /** What an app runs on, from its first profiled trace: the mark on its chip. */
@@ -750,26 +868,37 @@ function appView(app: AppProfile): Scope {
   return { profile, title: `Profile of ${app.traces.length} traces`, note: null, timed: false };
 }
 
-/** Each app's profiled time, of it waiting, and the function that ran most: a row an app, in aligned columns. */
-function ProfileSums({ apps, views }: { apps: readonly AppProfile[]; views: ReadonlyMap<string, Scope> }) {
+/** What each app's profiles add up to, a row an app in aligned columns: the time's, or the memory's. */
+function SumsTable({ label, columns, children }: { label: string; columns: readonly string[]; children: ReactNode }) {
   return (
     <div className="dt-profile-sums-wrap">
-      <table className="dt-profile-sums" aria-label="What the profiles add up to">
+      <table className="dt-profile-sums" aria-label={label}>
         <thead>
           <tr>
-            <th scope="col">App</th>
-            <th scope="col">Profiled</th>
-            <th scope="col">Waiting</th>
-            <th scope="col">Most time in</th>
+            {columns.map((column) => (
+              <th key={column} scope="col">
+                {column}
+              </th>
+            ))}
           </tr>
         </thead>
-        <tbody>
-          {apps.map((app) => (
-            <ProfileSumRow key={app.app} app={app} profile={views.get(app.app)?.profile} />
-          ))}
-        </tbody>
+        <tbody>{children}</tbody>
       </table>
     </div>
+  );
+}
+
+const TIME_SUMS = ["App", "Profiled", "Waiting", "Most time in"] as const;
+const MEMORY_SUMS = ["App", "Peak", "Net", "Most memory in"] as const;
+
+/** Each app's profiled time, of it waiting, and the function that ran most. */
+function ProfileSums({ apps, views }: { apps: readonly AppProfile[]; views: ReadonlyMap<string, Scope> }) {
+  return (
+    <SumsTable label="What the profiles add up to" columns={TIME_SUMS}>
+      {apps.map((app) => (
+        <ProfileSumRow key={app.app} app={app} profile={views.get(app.app)?.profile} />
+      ))}
+    </SumsTable>
   );
 }
 
@@ -815,6 +944,57 @@ function AppProfileSection({ app, view }: { app: AppProfile; view: Scope }) {
         list={({ view: frames, palette, measure }) => (
           <Functions rows={functions(frames).slice(0, 15)} palette={palette} time={measure} />
         )}
+      />
+    </section>
+  );
+}
+
+/** Each app's memory: its peak, what it kept, the function that allocated most. */
+function MemorySums({ apps, memories }: { apps: readonly AppProfile[]; memories: ReadonlyMap<string, AppMemory> }) {
+  return (
+    <SumsTable label="What the memory adds up to" columns={MEMORY_SUMS}>
+      {apps.map((app) => (
+        <MemorySumRow key={app.app} app={app} measured={memories.get(app.app)} />
+      ))}
+    </SumsTable>
+  );
+}
+
+function MemorySumRow({ app, measured }: { app: AppProfile; measured: AppMemory | undefined }) {
+  if (!measured) return null;
+  const sums = memorySums(measured);
+  return (
+    <tr>
+      <td>
+        <AppChip name={app.app} runtime={appRuntime(app)} compact />
+      </td>
+      <td>{bytes(sums.peak)}</td>
+      <td>{signed(sums.net)}</td>
+      <td>{sums.top ? <code title={sums.top}>{sums.top}</code> : "—"}</td>
+    </tr>
+  );
+}
+
+/** One app's memory, under its name: its allocation sites as a trace's Memory view has them. */
+function AppMemorySection({ app, measured }: { app: AppProfile; measured: AppMemory }) {
+  return (
+    <section className="dt-app-profile" aria-label={`Memory of ${app.app}`}>
+      <MemoryPane
+        key={measured.title}
+        profile={measured.profile}
+        memory={measured.memory}
+        kinds={null}
+        head={
+          <MemoryHead
+            memory={measured.memory}
+            what={{
+              title: measured.title,
+              app: <AppChip name={app.app} runtime={appRuntime(app)} />,
+              traces: measured.traces,
+              note: measured.note,
+            }}
+          />
+        }
       />
     </section>
   );
