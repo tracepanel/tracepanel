@@ -708,9 +708,9 @@ paths:
         at its own console (`console`: `explain`, `users`). The latter are offered only to the console an app serves,
         which names the app in a `Tracepanel-Console` header: the agent's own console has nowhere to run them. The
         console shows a feature only where it works. With `service`, what a connected app of that service says it
-        does (a trace's page offers what its app does): false for an app not connected, or one that doesn't say. At
-        the console of an app that answers a capability itself (`console`: its EXPLAIN), only that app's traces have
-        it: the console runs it in that app's process.
+        does (a trace's page offers what its app does): false for an app not connected, or one that doesn't say. It
+        is the same at every console: one app's console forwards another app's request to the agent, which asks the
+        app of that service. At an app's own console, what that app answers there (`console`) counts too.
       parameters:
         - name: service
           in: query

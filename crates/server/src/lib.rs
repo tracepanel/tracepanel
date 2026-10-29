@@ -899,13 +899,14 @@ async fn capabilities(
 ) -> Response {
     let via = headers.get(VIA_APP).and_then(|value| value.to_str().ok());
     let service = query.get("service").filter(|service| !service.is_empty());
-    // With a service, what works for that app's traces: a console whose app answers it there does so for its own
-    // traces alone (it runs it in its own process); elsewhere the agent asks the app of that service.
+    // With a service, what works for that app's traces, wherever the console is: the agent asks the app of that
+    // service (a console forwards another app's to it), and the console of that app may answer it itself.
     let offers = |capability| match service {
-        Some(service) if activity.apps.answers_at_console(capability, via) => {
-            via == Some(service.as_str())
+        Some(service) => {
+            activity.apps.says(capability, service)
+                || (via == Some(service.as_str())
+                    && activity.apps.answers_at_console(capability, via))
         }
-        Some(service) => activity.apps.says(capability, service),
         None => activity.apps.offers(capability, via),
     };
     json_response(

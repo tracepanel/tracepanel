@@ -133,7 +133,7 @@ async fn get_via(router: &axum::Router, uri: &str, via: &str) -> Value {
 }
 
 #[tokio::test]
-async fn a_trace_is_explained_where_its_app_runs_explain() {
+async fn a_trace_is_explained_where_its_app_runs_explain_at_any_console() {
     let dir =
         std::env::temp_dir().join(format!("tracepanel-explain-by-app-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
@@ -153,11 +153,13 @@ async fn a_trace_is_explained_where_its_app_runs_explain() {
         std::sync::Arc::new(|_| {}),
         activity.clone(),
     ));
-    // A Node BFF runs EXPLAIN down its connection; a Python API only at its own console.
+    // A Node BFF runs EXPLAIN down its connection; a Python API at its own console and down its connection; an older
+    // app at its own console only.
     let mut apps = Vec::new();
     for hello in [
         json!({"protocol": PROTOCOL, "service": "library-bff", "capabilities": ["explain"]}),
-        json!({"protocol": PROTOCOL, "service": "library-api", "console": ["explain"]}),
+        json!({"protocol": PROTOCOL, "service": "library-api", "capabilities": ["explain"], "console": ["explain"]}),
+        json!({"protocol": PROTOCOL, "service": "library-admin", "console": ["explain"]}),
     ] {
         let mut app = BufReader::new(TcpStream::connect(&address).await.unwrap());
         app.get_mut()
@@ -170,48 +172,41 @@ async fn a_trace_is_explained_where_its_app_runs_explain() {
     }
     for _ in 0..200 {
         if activity.apps.says("explain", "library-bff")
-            && activity.apps.offers("explain", Some("library-api"))
+            && activity.apps.says("explain", "library-api")
+            && activity.apps.offers("explain", Some("library-admin"))
         {
             break;
         }
         tokio::time::sleep(Duration::from_millis(5)).await;
     }
     let explains = |answer: Value| answer["explain"] == true;
+    let at = |console: Option<&'static str>| {
+        let router = router.clone();
+        async move {
+            let mut answers = Vec::new();
+            for service in ["library-bff", "library-api", "library-admin"] {
+                let uri = format!("/api/capabilities?service={service}");
+                let answer = match console {
+                    Some(via) => get_via(&router, &uri, via).await,
+                    None => get(&router, &uri).await.1,
+                };
+                answers.push(explains(answer));
+            }
+            answers
+        }
+    };
 
-    // The agent's console: the agent asks the BFF; the API answers nobody but its own console.
-    let (_, bff) = get(&router, "/api/capabilities?service=library-bff").await;
-    let (_, api) = get(&router, "/api/capabilities?service=library-api").await;
-    // The API's console runs it for its own traces, in its process: the BFF's would be run on the API's database.
-    let api_at_api = get_via(
-        &router,
-        "/api/capabilities?service=library-api",
-        "library-api",
-    )
-    .await;
-    let bff_at_api = get_via(
-        &router,
-        "/api/capabilities?service=library-bff",
-        "library-api",
-    )
-    .await;
-    // The BFF's console (it answers none there): as the agent's.
-    let bff_at_bff = get_via(
-        &router,
-        "/api/capabilities?service=library-bff",
-        "library-bff",
-    )
-    .await;
-    let api_at_bff = get_via(
-        &router,
-        "/api/capabilities?service=library-api",
-        "library-bff",
-    )
-    .await;
+    // Each trace has it where its app runs it for the agent, at every console (one app's console forwards another
+    // app's to the agent); the admin app's own traces at its own console too, which runs it in its process.
+    let agent = at(None).await;
+    let bff = at(Some("library-bff")).await;
+    let api = at(Some("library-api")).await;
+    let admin = at(Some("library-admin")).await;
 
-    assert_eq!(
-        [bff, api, api_at_api, bff_at_api, bff_at_bff, api_at_bff].map(explains),
-        [true, false, true, false, true, false]
-    );
+    assert_eq!(agent, [true, true, false]);
+    assert_eq!(bff, [true, true, false]);
+    assert_eq!(api, [true, true, false]);
+    assert_eq!(admin, [true, true, true]);
     drop(apps);
     let _ = std::fs::remove_dir_all(&dir);
 }
