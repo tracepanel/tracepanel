@@ -1,7 +1,7 @@
 // Log records as one table wherever they are listed: the console's Logs page and a trace's Logs tab. One line per
 // record, its details opened under it; columns the reader sizes and picks, kept per browser.
 
-import { useVirtualizer, type Virtualizer } from "@tanstack/react-virtual";
+import { defaultRangeExtractor, type Range, useVirtualizer, type Virtualizer } from "@tanstack/react-virtual";
 import { cn, rem } from "@tracepanel/ui/lib/utils";
 import {
   createContext,
@@ -11,6 +11,7 @@ import {
   type RefObject,
   useCallback,
   useContext,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -521,6 +522,49 @@ function offsetIn(element: Element | null, scroller: HTMLElement): number {
   return element.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
 }
 
+/** The lines kept drawn on each side of the focused one, past what is in view: as many as the window's margin. */
+const AROUND_FOCUS = 12;
+
+/**
+ * The window's lines, with those around the focused line drawn too. An arrow key moves the focus to the next
+ * line drawn; pressed again before the window has followed the scroll (a held key on a busy machine, faster than a
+ * frame), the line after it must be there already, or the press is lost. Only a line at the window's edge counts:
+ * one scrolled far out of view isn't kept, so the lines drawn stay one run.
+ */
+function useAroundFocus(body: RefObject<HTMLTableSectionElement | null>): (range: Range) => number[] {
+  const [focused, setFocused] = useState<number | null>(null);
+  useEffect(() => {
+    const element = body.current;
+    if (!element) return;
+    const onFocus = (event: FocusEvent) => {
+      const line = (event.target as Element).closest<HTMLElement>("[data-index]");
+      setFocused(line ? Number(line.dataset["index"]) : null);
+    };
+    const onBlur = (event: FocusEvent) => {
+      if (!(event.relatedTarget instanceof Node && element.contains(event.relatedTarget))) setFocused(null);
+    };
+    element.addEventListener("focusin", onFocus);
+    element.addEventListener("focusout", onBlur);
+    return () => {
+      element.removeEventListener("focusin", onFocus);
+      element.removeEventListener("focusout", onBlur);
+    };
+  }, [body]);
+  return useCallback(
+    (range: Range) => {
+      const drawn = defaultRangeExtractor(range);
+      const first = drawn[0];
+      const last = drawn.at(-1);
+      if (focused === null || first === undefined || last === undefined) return drawn;
+      if (focused < first - 1 || focused > last + 1) return drawn;
+      const from = Math.max(0, Math.min(first, focused - AROUND_FOCUS));
+      const to = Math.min(range.count - 1, Math.max(last, focused + AROUND_FOCUS));
+      return Array.from({ length: to - from + 1 }, (_, at) => from + at);
+    },
+    [focused],
+  );
+}
+
 /** The lines drawn, and the heights of those above and below them that are not. */
 interface LineWindow {
   indexes: readonly number[];
@@ -540,7 +584,9 @@ function useLineWindow<R>(
 ): LineWindow {
   const scroller = useScroller(body, windowed);
   const margin = useScrollMargin(body, scroller);
+  const rangeExtractor = useAroundFocus(body);
   const virtualizer = useVirtualizer<HTMLElement, Element>({
+    rangeExtractor,
     count: lines.length,
     getScrollElement: () => scroller,
     estimateSize: useCallback((index: number) => rem(ESTIMATE_REM[lines[index]?.kind ?? "record"]), [lines]),
