@@ -803,15 +803,26 @@ tr[data-new] {
   grid-template-columns: subgrid;
   align-items: center;
   /* Room on the left for the "this page" dot, clear of the method's badge. */
-  padding: 0.375rem 0.75rem 0.375rem 1.125rem;
+  padding: 0.375rem 0.75rem 0.375rem var(--dt-tree-base);
+  /* The narrow list is one tree: a row at level N (a view's request 1, a task run 2, a chain's rows one deeper than
+     the row they are under, and so on) starts N steps in, its corner coming down from where its parent starts. */
+  --dt-tree-base: 1.125rem;
+  --dt-tree-step: 0.875rem;
+  --dt-tree-level: 0;
 }
 /* Narrow too, a view's or an action's requests sit under it: indented, with the tree's corner. */
 .dt-requests[data-compact] .dt-request-row[data-depth="1"] {
-  padding-left: 2rem;
+  --dt-tree-level: 1;
 }
-.dt-requests[data-compact] .dt-request-row[data-depth="1"]::after {
-  left: 1rem;
-  width: 0.5rem;
+.dt-requests[data-compact] .dt-request-row[data-depth="2"] {
+  --dt-tree-level: 2;
+}
+.dt-requests[data-compact] .dt-request-row:is([data-depth="1"], [data-depth="2"], [data-chain]) {
+  padding-left: calc(var(--dt-tree-base) + var(--dt-tree-level) * var(--dt-tree-step));
+}
+.dt-requests[data-compact] .dt-request-row:is([data-depth="1"], [data-run], [data-chain])::after {
+  left: calc(var(--dt-tree-base) + (var(--dt-tree-level) - 1) * var(--dt-tree-step) - 0.125rem);
+  width: calc(var(--dt-tree-step) - 0.375rem);
   height: 1rem;
 }
 .dt-requests[data-compact] .dt-request-main {
@@ -921,17 +932,6 @@ tr[data-new] {
 .dt-request-row[data-run][data-depth="2"]::after {
   left: 2.5rem;
 }
-.dt-requests[data-compact] .dt-request-row[data-depth="2"] {
-  padding-left: 2.875rem;
-}
-.dt-requests[data-compact] .dt-request-row[data-run]::after {
-  left: 1rem;
-  width: 0.5rem;
-  height: 1rem;
-}
-.dt-requests[data-compact] .dt-request-row[data-run][data-depth="2"]::after {
-  left: 1.875rem;
-}
 /* Under a row, the traces other apps served for its calls: an app's row, then its traces by route, each a step deeper
    (--dt-chain-level), a fold before the name as in the call tree. Quieter than the list's own rows. */
 .dt-request-row[data-chain] {
@@ -944,8 +944,17 @@ tr[data-new] {
 .dt-request-row[data-chain][aria-current="true"] {
   background: var(--dt-selected);
 }
+/* Each of a chain's rows a step deeper than the row it is under, with the tree's corner, as a view's requests have it. */
 .dt-requests[data-compact] .dt-request-row[data-chain] {
-  padding-left: calc(0.25rem + var(--dt-chain-level, 1) * 0.75rem);
+  --dt-tree-level: var(--dt-chain-level, 1);
+}
+.dt-requests[data-compact] .dt-request-row[data-chain]::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  border-bottom: 1px solid var(--dt-border-strong);
+  border-left: 1px solid var(--dt-border-strong);
+  border-bottom-left-radius: 0.25rem;
 }
 .dt-request-row[data-chain] .dt-request-main {
   gap: 0.375rem;
@@ -971,9 +980,10 @@ tr[data-new] {
   .dt-requests[data-compact] .dt-request-meta {
     column-gap: 0.375rem;
   }
-  /* A chain's rows: a step in is half a rem; their badges keep the list's slot, so the names line up at each depth. */
-  .dt-requests[data-compact] .dt-request-row[data-chain] {
-    padding-left: calc(0.25rem + var(--dt-chain-level, 1) * 0.5rem);
+  /* A step in is a little less, so a chain three or four deep keeps room for its paths; still one per level. Their
+     badges keep the list's slot, so the names line up at each depth. */
+  .dt-requests[data-compact] .dt-request-row {
+    --dt-tree-step: 0.75rem;
   }
   .dt-requests[data-compact] .dt-request-row[data-chain] .dt-request-main {
     gap: 0.25rem;
