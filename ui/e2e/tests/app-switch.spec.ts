@@ -7,7 +7,8 @@ import { expect, test } from "../fixtures.ts";
 interface Sample {
   app: string;
   nav: string[];
-  rows: number;
+  /** The rows seen, by their first cell: an endpoint's method and route. */
+  rows: string[];
   wide: boolean;
 }
 
@@ -21,9 +22,9 @@ async function record(page: Page): Promise<() => Promise<Sample[]>> {
       samples.push({
         app: aside?.querySelector("button[aria-haspopup]")?.textContent?.trim() ?? "",
         nav: [...(aside?.querySelectorAll("nav a") ?? [])].map((link) => link.textContent?.trim() ?? ""),
-        rows: [...document.querySelectorAll("main tbody tr")].filter((row) =>
-          row.checkVisibility({ opacityProperty: true, visibilityProperty: true }),
-        ).length,
+        rows: [...document.querySelectorAll("main tbody tr")]
+          .filter((row) => row.checkVisibility({ opacityProperty: true, visibilityProperty: true }))
+          .map((row) => row.querySelector("td")?.textContent?.trim() ?? ""),
         wide: document.documentElement.scrollWidth > document.documentElement.clientWidth,
       });
     };
@@ -77,6 +78,7 @@ test("another app's menu shows once its sections are known, and the last app's r
   await expect(page.locator("[aria-busy=true]")).toHaveCount(0);
   const after = (await menu(page).allTextContents()).map((name) => name.trim());
   const seen = await samples();
+  const own = seen.at(-1)?.rows ?? [];
 
   // The browser app has pages, not the server's tasks: the two menus differ, or there would be nothing to see.
   expect(after).toContain("Pages");
@@ -87,8 +89,10 @@ test("another app's menu shows once its sections are known, and the last app's r
   expect(switched.length).toBeGreaterThan(0);
   // Under the new app's name only its own menu, from the first moment: no item shown, then gone.
   for (const sample of switched) expect(sample.nav).toEqual(after);
-  // The browser app made no requests of its own: any row under its name is the last app's.
-  for (const sample of switched) expect(sample.rows).toBe(0);
+  // Under its name only its own rows, the ones it ends with (its pages' requests other tests stored, or none): any
+  // other is the last app's.
+  for (const sample of switched) for (const row of sample.rows) expect(own).toContain(row);
+  expect(seen.some((sample) => sample.app !== "shop-web" && sample.rows.some((row) => !own.includes(row)))).toBe(true);
   for (const sample of seen) expect(sample.wide).toBe(false);
 });
 
