@@ -17,7 +17,9 @@ test("an app's page lists its settings, secrets masked, a filter narrowing them,
   await page
     .getByRole("region", { name: "Services" })
     .getByRole("table")
-    .getByRole("link", { name: /^Python shop\b/ })
+    // By its name and language: its mark is its busiest role's runtime (the worker's Python, or the web's Django once
+    // other tests stored more of its requests).
+    .getByRole("link", { name: /^\S+ shop Python\b/ })
     .click();
   const settings = page.getByRole("tabpanel", { name: "Settings" });
   const filter = page.getByRole("searchbox", { name: "Filter settings" });
