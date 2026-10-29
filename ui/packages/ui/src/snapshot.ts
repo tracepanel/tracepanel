@@ -1,6 +1,7 @@
 import type { components } from "./api.gen";
+import { shifted } from "./lib/scope";
 import { type DataSource, NO_CAPABILITIES, NO_COUNTS, NO_LIVE_TASKS } from "./source";
-import type { ExplainPlan, Related, Trace } from "./types";
+import type { Chain, ChainTrace, ExplainPlan, Related, Trace } from "./types";
 
 /**
  * A snapshot: a trace and what is linked to it, as the agent's `GET /snapshot/{id}` returns it, plus the query plans
@@ -116,12 +117,63 @@ const EMPTY: Omit<DataSource, "getTrace" | "related" | "explain"> = {
   searchSpec: async () => ({}) as Awaited<ReturnType<DataSource["searchSpec"]>>,
 };
 
-/** A source that reads a snapshot: its traces, their links and the plans it carries. */
+/** How many of a trace's calls the agent's links bring whole (`call_traces`). */
+const CALL_TRACES = 50;
+
+/** A trace's links as the agent answers them: with the whole traces of its calls the snapshot holds. */
+function linksOf(snapshot: Snapshot, id: string): Related {
+  const related = (snapshot.related[id] as Related | undefined) ?? NOTHING_LINKED;
+  const calls = [
+    ...related.calls.slice(0, CALL_TRACES).map((call) => call.id),
+    ...(related.remote_calls ?? []).map((call) => call.trace.id),
+  ];
+  const whole = Object.fromEntries(
+    calls.flatMap((call) => (snapshot.traces[call] ? [[call, snapshot.traces[call]]] : [])),
+  );
+  // biome-ignore lint/style/useNamingConvention: wire format.
+  return Object.keys(whole).length > 0 ? { ...related, call_traces: whole } : related;
+}
+
+const NO_CHAIN: Chain = { traces: [], issues: [], capped: false };
+
+/**
+ * The chain of one of the snapshot's traces, as the agent's `traces/{id}/chain` answers it: the part of the shared
+ * trace's chain under it, on its clock. None for a trace outside it, and in a snapshot of an older agent.
+ */
+function chainOf(snapshot: Snapshot, id: string): Chain {
+  const top = snapshot.chain?.traces.find((each) => each.id === id);
+  if (!(snapshot.chain && top)) return NO_CHAIN;
+  // The chain lists a trace after the one above it.
+  const under = new Set([id]);
+  const traces = snapshot.chain.traces.flatMap((each): ChainTrace[] => {
+    const first = each.id === id;
+    if (!(first || (each.parent !== null && under.has(each.parent)))) return [];
+    under.add(each.id);
+    const doc = snapshot.traces[each.id] as Trace | undefined;
+    const shift = each.shift - top.shift;
+    return [
+      {
+        ...each,
+        parent: first ? null : each.parent,
+        via: first ? null : each.via,
+        level: each.level - top.level,
+        shift,
+        // The schema's trace document is the console's Trace.
+        ...(doc ? { trace: shifted(doc, shift) as unknown as NonNullable<ChainTrace["trace"]> } : {}),
+      },
+    ];
+  });
+  const issues = snapshot.chain.issues.filter((issue) => under.has(issue.trace_id));
+  return { traces, issues, capped: snapshot.chain.capped };
+}
+
+/** A source that reads a snapshot: its traces, their links, their chain and the plans it carries. */
 export function snapshotSource(snapshot: Snapshot): DataSource {
   return {
     ...EMPTY,
     getTrace: async (id) => (snapshot.traces[id] as Trace | undefined) ?? null,
-    related: async (id) => (snapshot.related[id] as Related | undefined) ?? NOTHING_LINKED,
+    related: async (id) => linksOf(snapshot, id),
+    chain: async (id) => chainOf(snapshot, id),
     async explain(trace, span, analyze) {
       const plan = analyze ? undefined : snapshot.plans?.[`${trace}/${span}`];
       if (!plan) throw new Error("This snapshot has no plan for this query: EXPLAIN runs in the app.");

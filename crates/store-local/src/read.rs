@@ -1051,31 +1051,60 @@ impl Reader {
 
     /// The trace's document, as stored.
     /// A trace to share, with what is linked to it (the request that queued it, the tasks it queued, the traces it
-    /// called and was called by, its WebSocket connection), each with its own links: everything the trace page shows,
-    /// and nothing else of the store. Without `values`, what stays local goes (`tracepanel_protocol::local`).
-    /// None when the trace isn't stored.
-    pub fn snapshot(&self, id: &str, values: bool) -> rusqlite::Result<Option<Value>> {
-        let Some(root) = self.get_trace(id)? else {
+    /// called and was called by, its WebSocket connection), each with its own links, and its whole chain of calls (as
+    /// `Reader::chain` walks it, other projects' traces from `remote`): everything the trace page shows, and nothing
+    /// else of the store. Without `values`, what stays local goes (`tracepanel_protocol::local`). None when the trace
+    /// isn't stored.
+    pub fn snapshot(
+        &self,
+        id: &str,
+        values: bool,
+        remote: Remote,
+    ) -> rusqlite::Result<Option<Value>> {
+        let Some(chain) = self.chain(id, true, remote)? else {
             return Ok(None);
         };
-        let mut order = vec![id.to_owned()];
+        // The chain whole (it holds fewer traces than a snapshot), then the trace's other links.
+        let mut order = Vec::new();
         let mut docs = serde_json::Map::new();
         let mut related = serde_json::Map::new();
-        docs.insert(id.to_owned(), document(&root, values));
-        let links = self.related(id)?;
-        for linked in linked_ids(&links) {
+        for member in &chain.members {
+            let id = member.id().to_owned();
+            docs.insert(
+                id.clone(),
+                stored(shifted(member.doc.clone(), -member.shift), values),
+            );
+            // Another project's trace has no links here: it is listed under the call that reached it.
+            match (&member.row, member.parent) {
+                (Some(row), Some(parent)) => {
+                    remote_call(&mut related, chain.members[parent].id(), row)
+                }
+                _ => {
+                    let links = self.related(&id)?;
+                    related.entry(id.clone()).or_insert(links);
+                }
+            }
+            order.push(id);
+        }
+        for linked in linked_ids(&related[id]) {
             if order.len() >= SNAPSHOT_TRACES || order.contains(&linked) {
                 continue;
             }
             if let Some(doc) = self.get_trace(&linked)? {
                 docs.insert(linked.clone(), document(&doc, values));
+                related.insert(linked.clone(), self.related(&linked)?);
                 order.push(linked);
             }
         }
-        related.insert(id.to_owned(), links);
-        for linked in &order[1..] {
-            related.insert(linked.clone(), self.related(linked)?);
-        }
+        // The chain as `api/traces/{id}/chain` answers it, without the documents (they are in `traces`).
+        let traces = chain.select(&Selection::default()).traces();
+        let issues: Vec<Value> = chain_issues(&chain)
+            .into_iter()
+            .map(|(at, mut issue)| {
+                issue["trace_id"] = Value::from(chain.members[at].id());
+                issue
+            })
+            .collect();
         Ok(Some(serde_json::json!({
             "format": SNAPSHOT_FORMAT,
             "agent": env!("CARGO_PKG_VERSION"),
@@ -1084,6 +1113,7 @@ impl Reader {
             "root": id,
             "traces": docs,
             "related": related,
+            "chain": {"traces": traces, "issues": issues, "capped": chain.capped},
         })))
     }
 
@@ -1419,13 +1449,29 @@ const SNAPSHOT_FORMAT: i64 = 1;
 /// A trace and at most this many linked to it, the trace itself included.
 const SNAPSHOT_TRACES: usize = 100;
 
+/// Another project's trace in a snapshot's links of the trace whose call reached it, as the console lists it.
+fn remote_call(related: &mut serde_json::Map<String, Value>, owner: &str, row: &Value) {
+    if let Some(Value::Object(links)) = related.get_mut(owner)
+        && let Some(calls) = links
+            .entry("remote_calls")
+            .or_insert_with(|| Value::Array(Vec::new()))
+            .as_array_mut()
+    {
+        calls.push(row.clone());
+    }
+}
+
 /// A stored document as a snapshot carries it: as it is, or without what stays local.
 fn document(doc: &str, values: bool) -> Value {
-    let mut value: Value = serde_json::from_str(doc).unwrap_or(Value::Null);
+    stored(serde_json::from_str(doc).unwrap_or(Value::Null), values)
+}
+
+/// A trace document as a snapshot carries it.
+fn stored(mut doc: Value, values: bool) -> Value {
     if !values {
-        tracepanel_protocol::local::strip(&mut value);
+        tracepanel_protocol::local::strip(&mut doc);
     }
-    value
+    doc
 }
 
 /// The ids of the traces a trace's links name, in the order the trace page lists them.

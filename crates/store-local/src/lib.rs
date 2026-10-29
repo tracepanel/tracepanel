@@ -24,6 +24,7 @@ mod workflow;
 mod write;
 
 use read::*;
+use scope::shifted;
 use searches::*;
 use services::*;
 use stats::*;
@@ -36,7 +37,7 @@ pub use read::{Page, ReadError, Reader};
 pub use rusqlite::Error;
 pub use scope::{
     CALL_TRACES, CHAIN_LEVELS, CHAIN_TRACES, Chain, Member, Remote, SCOPE_LOGS, Scope, Selection,
-    call_summary, chain_issues, log_summary, no_remote,
+    Served, call_summary, chain_issues, log_summary, no_remote,
 };
 pub use stats::{SLOW_REQUEST_US, stats};
 pub use tracepanel_analysis::calls::{call_key, query_fingerprint};
@@ -430,7 +431,7 @@ mod tests {
     }
 
     #[test]
-    fn a_snapshot_holds_the_trace_and_what_it_called_without_what_stays_local() {
+    fn a_snapshot_holds_the_trace_and_its_whole_chain_without_what_stays_local() {
         let dir =
             std::env::temp_dir().join(format!("tracepanel-store-snapshot-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
@@ -445,25 +446,82 @@ mod tests {
             trace: serde_json::from_value(shop.clone()).unwrap(),
             doc: shop.to_string(),
         };
+        // SHOP calls BILLING, which calls LEDGER, whose call another project's agent answered.
         store
             .write(&[
                 shop,
-                w3c_trace("BILLING", "billing", 2, Some("00f067aa0ba902b7"), None),
+                w3c_trace(
+                    "BILLING",
+                    "billing",
+                    2,
+                    Some("00f067aa0ba902b7"),
+                    Some("00f067aa0ba902b8"),
+                ),
+                w3c_trace(
+                    "LEDGER",
+                    "ledger",
+                    4,
+                    Some("00f067aa0ba902b8"),
+                    Some("00f067aa0ba902b9"),
+                ),
             ])
             .unwrap();
         let reader = Reader::new(&path);
+        let audit: Value =
+            serde_json::from_str(&w3c_trace("AUDIT", "audit", 1_000, None, None).doc).unwrap();
+        let row = serde_json::json!({"span_id": "LEDGER-call", "trace": {"id": "AUDIT"},
+                                     "console": "http://127.0.0.1:7071/", "project": "audit"});
+        let remote = |owner: &str| -> Vec<Served> {
+            if owner != "LEDGER" {
+                return Vec::new();
+            }
+            vec![Served {
+                via: "LEDGER-call".to_owned(),
+                doc: audit.clone(),
+                project: "audit".to_owned(),
+                row: row.clone(),
+            }]
+        };
 
-        let shared = reader.snapshot("SHOP", false).unwrap().unwrap();
-        let with_values = reader.snapshot("SHOP", true).unwrap().unwrap();
+        let shared = reader.snapshot("SHOP", false, &remote).unwrap().unwrap();
+        let with_values = reader.snapshot("SHOP", true, &no_remote).unwrap().unwrap();
 
         assert_eq!(
             (&shared["root"], &shared["values"], &shared["format"]),
             (&Value::from("SHOP"), &Value::from(false), &Value::from(1))
         );
         let ids = |map: &Value| map.as_object().unwrap().keys().cloned().collect::<Vec<_>>();
-        assert_eq!(ids(&shared["traces"]), ["BILLING", "SHOP"]);
-        assert_eq!(ids(&shared["related"]), ["BILLING", "SHOP"]);
-        assert_eq!(shared["related"]["BILLING"]["called_by"]["id"], "SHOP");
+        assert_eq!(
+            ids(&shared["traces"]),
+            ["AUDIT", "BILLING", "LEDGER", "SHOP"]
+        );
+        assert_eq!(ids(&shared["related"]), ["BILLING", "LEDGER", "SHOP"]);
+        assert_eq!(shared["related"]["LEDGER"]["called_by"]["id"], "BILLING");
+        assert_eq!(
+            shared["related"]["LEDGER"]["remote_calls"],
+            serde_json::json!([row])
+        );
+        // Each trace on its own clock, as stored: the chain says how far it moves.
+        assert_eq!(shared["traces"]["LEDGER"]["start"], 4);
+        assert_eq!(shared["traces"]["AUDIT"]["start"], 1_000);
+
+        assert_eq!(
+            shared["chain"],
+            serde_json::json!({
+                "traces": [
+                    {"id": "SHOP", "app": "shop", "name": "POST /charge", "kind": "http", "parent": null,
+                     "via": null, "level": 0, "shift": 0},
+                    {"id": "BILLING", "app": "billing", "name": "POST /charge", "kind": "http", "parent": "SHOP",
+                     "via": "SHOP-call", "level": 1, "shift": -1},
+                    {"id": "LEDGER", "app": "ledger", "name": "POST /charge", "kind": "http",
+                     "parent": "BILLING", "via": "BILLING-call", "level": 2, "shift": -2},
+                    {"id": "AUDIT", "app": "audit", "name": "POST /charge", "kind": "http", "parent": "LEDGER",
+                     "via": "LEDGER-call", "level": 3, "shift": -997},
+                ],
+                "issues": [],
+                "capped": false,
+            })
+        );
 
         assert_eq!(shared["traces"]["SHOP"]["attrs"].get("user.email"), None);
         assert_eq!(
@@ -478,8 +536,9 @@ mod tests {
             with_values["traces"]["SHOP"]["spans"][0]["attrs"]["db.params"],
             serde_json::json!([42])
         );
+        assert_eq!(ids(&with_values["traces"]), ["BILLING", "LEDGER", "SHOP"]);
 
-        assert_eq!(reader.snapshot("NONE", false).unwrap(), None);
+        assert_eq!(reader.snapshot("NONE", false, &no_remote).unwrap(), None);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

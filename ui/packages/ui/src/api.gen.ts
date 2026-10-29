@@ -132,7 +132,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** A trace to share, with the traces linked to it and the links of each: what the console writes into a snapshot file, which opens without the agent. */
+        /** A trace to share, with its whole chain of calls, the traces linked to it and the links of each: what the console writes into a snapshot file, which opens without the agent. */
         get: operations["traceSnapshot"];
         put?: never;
         post?: never;
@@ -1746,14 +1746,16 @@ export interface components {
             values: boolean;
             /** @description The id of the trace it was made from. */
             root: string;
-            /** @description The trace and those linked to it (at most 100), by id. */
+            /** @description The trace, its chain of calls and the traces linked to it (at most 100), by id. */
             traces: {
                 [key: string]: components["schemas"]["trace.schema"];
             };
-            /** @description The links of each trace in `traces`, by id. */
+            /** @description The links of each trace in `traces` this project's agent has, by id: another project's trace is in the `remote_calls` of the trace whose call reached it. */
             related: {
                 [key: string]: components["schemas"]["Related"];
             };
+            /** @description The trace's chain of calls as `/traces/{id}/chain` answers it, without each trace's document (it is in `traces`, on its own clock). Absent in snapshots of agents before 0.7.1. */
+            chain?: components["schemas"]["Chain"];
         };
         Related: {
             /** @description The trace that enqueued this task. */
