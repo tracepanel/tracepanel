@@ -1,6 +1,6 @@
 // A chain of calls across three apps, stored by the agent: a browser's view calls a GraphQL BFF, whose three
 // Book.author steps each call a service, which runs one query each (an N+1 across apps) and logs in it.
-import { expect } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import { CONSOLE } from "./agent.ts";
 
 type Doc = Record<string, unknown>;
@@ -272,15 +272,18 @@ export interface ArrivingCall {
  * their traces: the agent has only it, as when a service's trace comes a moment after its caller's. `serve(n)` stores
  * the n-th call's trace, as that service's SDK would send it. Hours ago, as `fanout()` (the other tests list the
  * newest first), all of it "shop" (the Services map stays): `now` is the moment it ended, for the browser's clock.
- * `tag` keeps tests apart (1…99).
+ * `tag` keeps tests apart (1…99), and each run of a test (a repeat, a retry) has ids of its own: the agent of a run
+ * keeps what an earlier one served, and a call whose trace is already there doesn't wait.
  */
 export async function arriving(
   tag: number,
   calls: readonly ArrivingCall[],
 ): Promise<{ bff: string; now: number; serve: (n: number) => Promise<void> }> {
-  const w3c = `6b${String(tag).padStart(30, "0")}`;
-  const fid = (n: number) => `01M4C4A1N7${String(tag * 100 + n).padStart(16, "0")}`;
-  const sid = (n: number) => `${String(tag).padStart(4, "0")}${String(n).padStart(12, "0")}`;
+  const { repeatEachIndex, retry } = test.info();
+  const run = tag * 10_000 + repeatEachIndex * 10 + retry;
+  const w3c = `6b${String(run).padStart(30, "0")}`;
+  const fid = (n: number) => `01M4C4A1N7${String(run * 100 + n).padStart(16, "0")}`;
+  const sid = (n: number) => `${String(run).padStart(8, "0")}${String(n).padStart(8, "0")}`;
   const now = (Date.now() - 8 * 3_600_000) * 1000;
   const spans = calls.map((call, n) => {
     // Each ends a moment before `now` (`ago` earlier still); the request 50 ms after its last.
