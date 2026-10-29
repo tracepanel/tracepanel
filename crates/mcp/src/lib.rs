@@ -27,7 +27,8 @@ const INSTRUCTIONS: &str = "Tracepanel records what the app does on each request
     with where in the code and how to fix them. To check a change: find_traces or wait_for_trace for the request, \
     get_trace for what it did, fix, make the request again, compare_traces. To find what is slow or uses memory in \
     code: make the request with an `X-Tracepanel-Profile: 1` header (`memory` for its memory too), wait_for_trace, \
-    get_profile, fix, profile it again, compare_traces. Answers leave out SQL parameters and variables' values \
+    get_profile (the trace's profile, then those of the services its calls reached), fix, profile it again, \
+    compare_traces. Answers leave out SQL parameters and variables' values \
     unless the server was started with --values.";
 
 pub struct Server {

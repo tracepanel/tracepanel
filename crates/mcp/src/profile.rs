@@ -32,6 +32,13 @@ pub(crate) enum Kind {
 }
 
 impl Kind {
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Self::Cpu => "cpu",
+            Self::Memory => "memory",
+        }
+    }
+
     pub(crate) fn parse(name: &str) -> Option<Self> {
         match name {
             "cpu" => Some(Self::Cpu),
@@ -475,20 +482,44 @@ pub(crate) fn kinds(doc: &Value) -> Vec<&'static str> {
     kinds
 }
 
+/// Whether a trace's profile measured `kind`.
+pub(crate) fn has(doc: &Value, kind: Kind) -> bool {
+    let kinds = kinds(doc);
+    match kind {
+        Kind::Cpu => kinds.contains(&"cpu"),
+        Kind::Memory => kinds.contains(&"memory"),
+    }
+}
+
 /// The profile of `kind`, compact, with its `top` functions or sites; why not, when the trace has none.
 pub(crate) fn profile(doc: &Value, kind: Kind, top: usize) -> Result<String, String> {
+    read(doc, kind, top, false)
+}
+
+/// An app's profiles of `kind` in a chain of calls, compact: one trace's as `profile` reads it, several merged as
+/// one (as the console's Profile tab adds an app's traces up). None when none of them measured it.
+pub(crate) fn app_profile(docs: &[&Value], kind: Kind, top: usize) -> Option<String> {
+    let measured: Vec<&Value> = docs.iter().copied().filter(|doc| has(doc, kind)).collect();
+    match measured.as_slice() {
+        [] => None,
+        [one] => read(one, kind, top, false).ok(),
+        several => read(&merged(several), kind, top, true).ok(),
+    }
+}
+
+fn read(doc: &Value, kind: Kind, top: usize, merged: bool) -> Result<String, String> {
     let id = text(doc, "id");
     let Some(profile) = Profile::of(doc) else {
         return Err(format!("Trace {id} has no profile. {HOW}"));
     };
     match kind {
-        Kind::Cpu => Ok(cpu(&profile, int(doc, "duration"), top)),
+        Kind::Cpu => Ok(cpu(&profile, int(doc, "duration"), top, merged)),
         Kind::Memory => match profile
             .raw
             .get("memory")
             .filter(|memory| memory.is_object())
         {
-            Some(memory) => Ok(memory_of(&profile, memory, top)),
+            Some(memory) => Ok(memory_of(&profile, memory, top, merged)),
             None => Err(format!(
                 "Trace {id} has a CPU profile but its memory wasn't counted. Make the request again with an \
                  `X-Tracepanel-Profile: memory` header or a `tracepanel_profile=memory` cookie (the \
@@ -496,6 +527,141 @@ pub(crate) fn profile(doc: &Value, kind: Kind, top: usize) -> Result<String, Str
             )),
         },
     }
+}
+
+/// A frame's index in `frames` (added when it isn't there yet, by all it says).
+fn interned(frames: &mut Vec<Value>, seen: &mut HashMap<String, usize>, frame: &Value) -> usize {
+    *seen.entry(frame.to_string()).or_insert_with(|| {
+        frames.push(frame.clone());
+        frames.len() - 1
+    })
+}
+
+/// A stack of one profile (indexes into its own frames) as indexes into the merged frames.
+fn remapped(
+    frames: &mut Vec<Value>,
+    seen: &mut HashMap<String, usize>,
+    own: &[Value],
+    stack: &Value,
+) -> Vec<usize> {
+    frames_of(stack)
+        .into_iter()
+        .filter_map(|at| own.get(at))
+        .map(|frame| interned(frames, seen, frame))
+        .collect()
+}
+
+/// Counts added up by stack, in the order the stacks were first seen.
+#[derive(Default)]
+struct Summed {
+    order: Vec<Vec<usize>>,
+    counts: HashMap<Vec<usize>, Vec<i64>>,
+}
+
+impl Summed {
+    fn add(&mut self, stack: Vec<usize>, counts: &[i64]) {
+        match self.counts.get_mut(&stack) {
+            Some(seen) => seen
+                .iter_mut()
+                .zip(counts)
+                .for_each(|(seen, more)| *seen += more),
+            None => {
+                self.counts.insert(stack.clone(), counts.to_vec());
+                self.order.push(stack);
+            }
+        }
+    }
+
+    fn rows(&self) -> impl Iterator<Item = (&Vec<usize>, &Vec<i64>)> {
+        self.order.iter().map(|stack| (stack, &self.counts[stack]))
+    }
+}
+
+/// Several memories' numbers as one: what they kept and allocated added up, the peak the largest of one of them
+/// (they ran apart, each from its own start), what all of them say alike.
+fn memory_numbers(memories: &[&Value]) -> serde_json::Map<String, Value> {
+    let mut out = serde_json::Map::new();
+    let peak = memories.iter().map(|memory| int(memory, "peak")).max();
+    out.insert("peak".into(), Value::from(peak.unwrap_or(0)));
+    out.insert(
+        "net".into(),
+        Value::from(
+            memories
+                .iter()
+                .map(|memory| int(memory, "net"))
+                .sum::<i64>(),
+        ),
+    );
+    let allocated: Option<i64> = memories
+        .iter()
+        .map(|memory| memory.get("allocated").and_then(Value::as_i64))
+        .sum();
+    if let Some(allocated) = allocated {
+        out.insert("allocated".into(), Value::from(allocated));
+    }
+    let at = text(memories[0], "sites_at");
+    if !at.is_empty() && memories.iter().all(|memory| text(memory, "sites_at") == at) {
+        out.insert("sites_at".into(), Value::from(at));
+    }
+    if memories
+        .iter()
+        .any(|memory| memory.get("shared").and_then(Value::as_bool) == Some(true))
+    {
+        out.insert("shared".into(), Value::Bool(true));
+    }
+    out
+}
+
+/// Several traces' profiles of one app as one, in a trace document of their time added up: their frames once,
+/// their stacks' samples and their memory's sites added up by stack, their collections too. Untimed: when each stack
+/// was seen is each trace's own.
+fn merged(docs: &[&Value]) -> Value {
+    let mut frames: Vec<Value> = Vec::new();
+    let mut seen: HashMap<String, usize> = HashMap::new();
+    let (mut stacks, mut sites) = (Summed::default(), Summed::default());
+    let mut memories: Vec<&Value> = Vec::new();
+    let (mut samples, mut dropped, mut collections, mut paused) = (0, 0, 0, 0);
+    for doc in docs {
+        let raw = &doc["profile"];
+        let own = raw["frames"].as_array().map_or(&[][..], Vec::as_slice);
+        for stack in raw["stacks"].as_array().into_iter().flatten() {
+            let at = remapped(&mut frames, &mut seen, own, &stack["frames"]);
+            stacks.add(at, &[int(stack, "count")]);
+        }
+        if let Some(memory) = raw.get("memory").filter(|memory| memory.is_object()) {
+            memories.push(memory);
+            for site in memory["sites"].as_array().into_iter().flatten() {
+                let at = remapped(&mut frames, &mut seen, own, &site["frames"]);
+                sites.add(at, &[int(site, "bytes"), int(site, "count")]);
+            }
+        }
+        samples += int(raw, "samples");
+        dropped += int(raw, "dropped");
+        collections += int(&raw["gc"], "collections");
+        paused += int(&raw["gc"], "pause_us");
+    }
+    let mut profile = serde_json::json!({
+        "interval_us": int(&docs[0]["profile"], "interval_us"),
+        "samples": samples,
+        "dropped": dropped,
+        "frames": frames,
+        "stacks": stacks.rows().map(|(frames, counts)| serde_json::json!({"frames": frames, "count": counts[0]})).collect::<Vec<_>>(),
+    });
+    if !memories.is_empty() {
+        let mut memory = memory_numbers(&memories);
+        let mut listed: Vec<Value> = sites
+            .rows()
+            .map(|(frames, counts)| serde_json::json!({"frames": frames, "bytes": counts[0], "count": counts[1]}))
+            .collect();
+        listed.sort_by_key(|site| std::cmp::Reverse(int(site, "bytes")));
+        memory.insert("sites".into(), Value::Array(listed));
+        profile["memory"] = Value::Object(memory);
+    }
+    if collections > 0 {
+        profile["gc"] = serde_json::json!({"collections": collections, "pause_us": paused});
+    }
+    let duration: i64 = docs.iter().map(|doc| int(doc, "duration")).sum();
+    serde_json::json!({"id": "", "duration": duration, "profile": profile})
 }
 
 /// `GC: 3 collections, 12 ms paused`, when the profile counted any.
@@ -516,12 +682,13 @@ fn gc_line(raw: &Value) -> Option<String> {
     })
 }
 
-fn cpu(profile: &Profile, duration: i64, top: usize) -> String {
+fn cpu(profile: &Profile, duration: i64, top: usize, merged: bool) -> String {
     let total = profile.total();
     let mut out = vec![format!(
-        "CPU profile: {} {} of the trace's {} · {} samples, one every {}",
+        "CPU profile: {} {} of the {} {} · {} samples, one every {}",
         us(total),
         if profile.timed { "profiled" } else { "sampled" },
+        if merged { "traces'" } else { "trace's" },
         ms(duration),
         profile.samples,
         ms(profile.interval)
@@ -683,11 +850,16 @@ fn sites<'a>(profile: &'a Profile<'a>, memory: &Value) -> Vec<Site<'a>> {
     sites
 }
 
-fn memory_of(profile: &Profile, memory: &Value, top: usize) -> String {
+fn memory_of(profile: &Profile, memory: &Value, top: usize, merged: bool) -> String {
     let mut facts = vec![
         format!(
-            "memory profile: peak {} above where it started",
-            bytes(int(memory, "peak"))
+            "memory profile: peak {}{} above where it started",
+            bytes(int(memory, "peak")),
+            if merged {
+                " (one trace's, the largest)"
+            } else {
+                ""
+            }
         ),
         format!("net {}", signed(int(memory, "net"))),
     ];
@@ -697,9 +869,14 @@ fn memory_of(profile: &Profile, memory: &Value, top: usize) -> String {
     let mut out = vec![facts.join(" · ")];
     out.extend(gc_line(profile.raw));
     if text(memory, "sites_at") == "end" {
-        out.push(
-            "note: the sites are where the memory was at the trace's end, not at its peak.".into(),
-        );
+        out.push(format!(
+            "note: the sites are where the memory was at {} end, not at its peak.",
+            if merged {
+                "each trace's"
+            } else {
+                "the trace's"
+            }
+        ));
     }
     if memory.get("shared").and_then(Value::as_bool) == Some(true) {
         out.push(
@@ -901,4 +1078,55 @@ pub(crate) fn compare(before: &Value, after: &Value) -> Option<String> {
         (None, None) => {}
     }
     Some(out.join("\n"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    /// A trace of one app with its memory: a site in build_cards, its peak and where the sites were taken.
+    fn traced(peak: i64, at: &str) -> Value {
+        let frame = |function: &str, file: &str, line: i64| json!({"function": function, "module": "", "file": file, "line": line, "in_app": true});
+        json!({"id": "T", "duration": 20_000, "profile": {
+            "interval_us": 1000, "samples": 2,
+            "frames": [frame("sales", "reports/views.py", 18), frame("build_cards", "reports/cards.py", 40)],
+            "stacks": [{"frames": [0, 1], "count": 2}],
+            "memory": {"peak": peak, "net": 1_024, "allocated": 2_048, "sites_at": at,
+                       "sites": [{"frames": [0, 1], "bytes": 1_048_576, "count": 2}]},
+        }})
+    }
+
+    #[test]
+    fn an_apps_traces_add_up_as_one_memory() {
+        let (one, two) = (traced(2_097_152, "end"), traced(3_145_728, "peak"));
+
+        let answer = app_profile(&[&one, &two], Kind::Memory, 5).unwrap();
+
+        assert_eq!(
+            answer,
+            "memory profile: peak 3.0 MB (one trace's, the largest) above where it started · net +2.0 KB · 4.0 KB \
+             allocated in all
+note: counting memory slows the code down (Python's tracemalloc, a short request several times over; Node's heap \
+             sampler less, and a full GC after the response): compare times on traces profiled without it.
+
+allocation sites at the peak (1 of 1, 2.0 MB in all, largest first; ×: allocations counted):
+  2.0 MB  100%  ×4  build_cards (yours) — reports/cards.py:40"
+        );
+    }
+
+    #[test]
+    fn an_apps_traces_add_up_as_one_cpu_profile() {
+        let (one, two) = (traced(0, "peak"), traced(0, "peak"));
+
+        let answer = app_profile(&[&one, &two], Kind::Cpu, 5).unwrap();
+
+        assert!(
+            answer.starts_with(
+                "CPU profile: 4.0 ms sampled of the traces' 40.0 ms · 4 samples, one every 1.0 ms"
+            ),
+            "{answer}"
+        );
+        assert_eq!(app_profile(&[], Kind::Cpu, 5), None);
+    }
 }

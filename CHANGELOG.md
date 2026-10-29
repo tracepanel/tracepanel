@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- The MCP tool `get_profile` reads the profiles of every trace down the
+  trace's chain of calls after its own. Each app's profile is apart, its
+  traces added up as one, never one profile across apps. A trace that
+  wasn't profiled itself gets its chain's. `chain: false` keeps to the
+  trace's own profile. `get_trace` says which traces down its chain were
+  profiled. `compare_traces` says when the traces' chains have profiles
+  of their own that it doesn't compare.
+
 ## 0.7.0 (2026-10-29)
 
 ### Added

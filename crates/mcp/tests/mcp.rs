@@ -1327,3 +1327,101 @@ async fn a_traces_calls_come_with_its_chains() {
         )
     );
 }
+
+#[tokio::test]
+async fn get_profile_reads_the_chains_profiles_each_apps_apart() {
+    let start = tracepanel_store_local::search::now_us() - 5_000_000;
+    let mut docs = chain_docs(start);
+    // The service's two traces profiled, the first with its memory; the BFF not.
+    docs[1]["profile"] = quick_profile();
+    let mut cpu_only = quick_profile();
+    cpu_only.as_object_mut().unwrap().remove("memory");
+    docs[2]["profile"] = cpu_only;
+    let dir = store("chain-profiles", &docs);
+    let server = Server::new(dir, false);
+    let bff = chain_id(1);
+
+    let (cpu, _) = tool(&server, "get_profile", json!({"id": bff, "top": 2})).await;
+    let (memory, _) = tool(
+        &server,
+        "get_profile",
+        json!({"id": bff, "kind": "memory", "top": 2}),
+    )
+    .await;
+    let (alone, failed) = tool(&server, "get_profile", json!({"id": bff, "chain": false})).await;
+    let (trace, _) = tool(&server, "get_trace", json!({"id": bff})).await;
+    let (compared, _) = tool(
+        &server,
+        "compare_traces",
+        json!({"before": bff, "after": bff}),
+    )
+    .await;
+
+    let (api1, api2) = (chain_id(2), chain_id(3));
+
+    assert_eq!(
+        cpu,
+        format!(
+            "{bff}  http POST /graphql · 1.0 ms
+this trace: no cpu profile; those of its chain follow.
+
+chain: cpu profiles of 2 traces down its calls, each app's apart (never one profile across apps):
+
+library-api · 2 traces added up · {api1}, {api2}
+CPU profile: 40.0 ms sampled of the traces' 2.0 ms · 40 samples, one every 1.0 ms
+note: a sample every 1.0 ms: a function that ran for less may be missed or miscounted. Its memory was counted too, which slows the code down: these times are higher than without it.
+
+functions by self time (your code, with the library calls it made):
+  24.0 ms  60%  SQLCompiler.execute_sql — django/db/models/sql/compiler.py:1574 · total 24.0 ms
+  16.0 ms  40%  build_cards (yours) — reports/cards.py:40 · total 16.0 ms
+
+functions by total time:
+  40.0 ms  100%  sales (yours) — reports/views.py:24 · self 0.0 ms
+  24.0 ms  60%  SQLCompiler.execute_sql — django/db/models/sql/compiler.py:1574 · self 24.0 ms
+
+hottest paths (outermost first):
+  24.0 ms  60%  sales (reports/views.py:24) → SQLCompiler.execute_sql (django/db/models/sql/compiler.py:1574)
+  16.0 ms  40%  sales (reports/views.py:24) → build_cards (reports/cards.py:40)"
+        )
+    );
+
+    assert_eq!(
+        memory,
+        format!(
+            "{bff}  http POST /graphql · 1.0 ms
+this trace: no memory profile; those of its chain follow.
+
+chain: memory profiles of 1 trace down its calls, each app's apart (never one profile across apps):
+
+library-api · http GET /authors/1 · 1.0 ms · 1 SQL (0.1 ms) · {api1}
+memory profile: peak 6.0 MB above where it started · net +10 KB
+note: the sites are where the memory was at the trace's end, not at its peak.
+note: other traces ran in the process meanwhile: these numbers include what they allocated.
+note: counting memory slows the code down (Python's tracemalloc, a short request several times over; Node's heap sampler less, and a full GC after the response): compare times on traces profiled without it.
+
+allocation sites at the end (1 of 1, 4.0 MB in all, largest first; ×: allocations counted):
+  4.0 MB  100%  ×10  build_cards (yours) — reports/cards.py:44"
+        )
+    );
+
+    assert!(failed);
+    assert!(
+        alone.starts_with(&format!("Trace {bff} has no profile.")),
+        "{alone}"
+    );
+
+    assert!(
+        trace.contains(&format!(
+            "chain: 2 traces down its calls (library-api); logs → search_logs trace:{bff}
+profiled down its calls: 2 traces (library-api) → get_profile id:{bff}"
+        )),
+        "{trace}"
+    );
+
+    assert!(
+        compared.ends_with(&format!(
+            "\nnote: the profiles compared are the traces' own; those down their chain of calls → get_profile id:{bff}"
+        )),
+        "{compared}"
+    );
+}
