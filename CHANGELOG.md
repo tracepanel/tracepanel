@@ -185,6 +185,11 @@
 
 ### Fixed
 
+- EXPLAIN of a Python app's query in the agent's console reads as in
+  that app's own console. The agent shows the plan the app sends: SQL
+  Server's SHOWPLAN as a tree with its estimates, and SQLite's temporary
+  B-trees flagged. Before, it rebuilt the plan from the database's rows,
+  which made SQL Server's one flat line per row.
 - The agent asks only the app that recorded a query to EXPLAIN it. When
   that app couldn't take the request down its connection (a Python app
   runs EXPLAIN at its own console), the agent asked whichever one app

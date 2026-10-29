@@ -1,6 +1,7 @@
 //! EXPLAIN of a recorded query, run by the app that recorded it: the agent has no way to the app's database, the app
 //! has its connection. The agent writes the statement for the database (EXPLAIN, EXPLAIN ANALYZE), sends it down the
-//! app's connection (`Apps::ask`), and reads the plan the rows make: one implementation for every SDK.
+//! app's connection (`Apps::ask`), and reads the plan the rows make (one implementation for the SDKs that send only
+//! the rows), or takes the app's own lines when it sends them.
 
 use serde_json::{Map, Value, json};
 
@@ -124,8 +125,30 @@ fn closing(chars: &[char], from: usize, end: &[char]) -> usize {
         .map_or(chars.len(), |at| at + end.len())
 }
 
-/// The plan the app's rows make: lines with their depth and what to look at (a full scan, a sort that spills).
+/// The plan: the app's own `lines` when it sends them (Python's, which reads SQL Server's SHOWPLAN and SQLite's temp
+/// B-trees), else the lines the app's rows make, with their depth and what to look at (a full scan, a sort that
+/// spills).
 pub(crate) fn plan(request: &Request, answer: &Value) -> Value {
+    let lines = match answer.get("lines").and_then(Value::as_array) {
+        Some(lines) => lines.iter().filter_map(own_line).collect(),
+        None => from_rows(request, answer),
+    };
+    json!({"vendor": request.vendor, "alias": request.alias, "analyzed": request.analyze, "lines": lines})
+}
+
+/// A line of the app's plan, `{"depth": 1, "text": "...", "warning": "..." | null}`, or None when it isn't one.
+fn own_line(own: &Value) -> Option<Value> {
+    let depth = own.get("depth")?.as_u64()?;
+    let text = own.get("text")?.as_str()?.to_owned();
+    let warning = own
+        .get("warning")
+        .and_then(Value::as_str)
+        .map(str::to_owned);
+    Some(line(usize::try_from(depth).ok()?, text, warning))
+}
+
+/// The lines the app's columns and rows make, as the database answered them (JavaScript's and Java's answer).
+fn from_rows(request: &Request, answer: &Value) -> Vec<Value> {
     let columns: Vec<String> = answer
         .get("columns")
         .and_then(Value::as_array)
@@ -145,12 +168,11 @@ pub(crate) fn plan(request: &Request, answer: &Value) -> Value {
                 .collect()
         })
         .unwrap_or_default();
-    let lines = match request.vendor.as_str() {
+    match request.vendor.as_str() {
         "sqlite" => sqlite(&rows),
         _ if columns.len() == 1 => text_plan(&rows),
         _ => table(&columns, &rows),
-    };
-    json!({"vendor": request.vendor, "alias": request.alias, "analyzed": request.analyze, "lines": lines})
+    }
 }
 
 fn line(depth: usize, text: String, warning: Option<String>) -> Value {
@@ -251,6 +273,73 @@ mod tests {
         }
         let span = json!({"kind": "sql", "attrs": attrs});
         request(span.as_object().unwrap(), false)
+    }
+
+    fn mssql() -> Request {
+        let span = json!({"kind": "sql", "attrs": {"db.system": "mssql", "db.statement": "SELECT * FROM books"}});
+        request(span.as_object().unwrap(), false).unwrap()
+    }
+
+    #[test]
+    fn the_apps_own_lines_are_the_plan() {
+        // Python's SQL Server plan: SHOWPLAN_ALL's rows, read by the app (their columns would make one flat line each).
+        let answer = json!({
+            "answer": 3, "vendor": "mssql", "alias": "default", "analyzed": false,
+            "lines": [
+                {"depth": 0, "text": "SELECT * FROM books  (rows=1 cost=0.0033)", "warning": null},
+                {"depth": 1, "text": "Table Scan(OBJECT:([shop].[dbo].[books]))  (rows=1 cost=0.0033)",
+                 "warning": "Full scan of [shop].[dbo].[books]: no index is used"},
+            ],
+            "columns": ["StmtText", "NodeId", "Parent", "Type"],
+            "rows": [["SELECT * FROM books", 1, 0, "PLAN_ROW"], ["  |--Table Scan(OBJECT:([shop].[dbo].[books]))", 2, 1, "PLAN_ROW"]],
+        });
+
+        let explained = plan(&mssql(), &answer);
+
+        assert_eq!(
+            explained,
+            json!({"vendor": "mssql", "alias": "default", "analyzed": false, "lines": [
+                {"depth": 0, "text": "SELECT * FROM books  (rows=1 cost=0.0033)", "warning": null},
+                {"depth": 1, "text": "Table Scan(OBJECT:([shop].[dbo].[books]))  (rows=1 cost=0.0033)",
+                 "warning": "Full scan of [shop].[dbo].[books]: no index is used"},
+            ]})
+        );
+    }
+
+    #[test]
+    fn without_lines_the_rows_are_the_plan() {
+        let answer = json!({
+            "answer": 3,
+            "columns": ["StmtText", "NodeId"],
+            "rows": [["SELECT * FROM books", 1], ["|--Table Scan", 2]],
+        });
+
+        let explained = plan(&mssql(), &answer);
+
+        assert_eq!(
+            explained,
+            json!({"vendor": "mssql", "alias": "default", "analyzed": false, "lines": [
+                {"depth": 0, "text": "StmtText=SELECT * FROM books  NodeId=1", "warning": null},
+                {"depth": 0, "text": "StmtText=|--Table Scan  NodeId=2", "warning": null},
+            ]})
+        );
+    }
+
+    #[test]
+    fn a_line_that_isnt_one_is_left_out() {
+        let answer = json!({"answer": 3, "lines": [
+            {"depth": 0, "text": "SCAN books"},
+            {"depth": -1, "text": "negative"},
+            {"depth": 1},
+            "text",
+        ]});
+
+        let explained = plan(&mssql(), &answer);
+
+        assert_eq!(
+            explained["lines"],
+            json!([{"depth": 0, "text": "SCAN books", "warning": null}])
+        );
     }
 
     #[test]
