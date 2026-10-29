@@ -12,6 +12,13 @@
   profiled. `compare_traces` says when the traces' chains have profiles
   of their own that it doesn't compare.
 
+### Fixed
+
+- A snapshot holds the trace's whole chain of calls, as the console shows
+  it: the traces its calls' traces called in turn, down to the chain's
+  limits (6 levels, 60 traces), other projects' traces included. Its tabs
+  add up the same traces as the console's, and its call tree opens them.
+
 ## 0.7.0 (2026-10-29)
 
 ### Added
