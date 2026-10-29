@@ -185,6 +185,13 @@
 
 ### Fixed
 
+- The agent asks only the app that recorded a query to EXPLAIN it. When
+  that app couldn't take the request down its connection (a Python app
+  runs EXPLAIN at its own console), the agent asked whichever one app
+  could, such as a Node BFF, which answered that it had no such
+  database. Now the answer says where the plan is (`library-api runs
+  EXPLAIN only from its own console`), or that no app of that service is
+  connected.
 - A linked trace's SELECT has its query plan in the call tree, as in the
   DB tab: opening another app's query there showed no Explain. Explain
   now shows where the app that recorded the query runs EXPLAIN, and each
