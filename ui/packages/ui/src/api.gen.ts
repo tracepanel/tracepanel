@@ -585,7 +585,7 @@ export interface paths {
         };
         /**
          * What the console's backend can do beyond the store.
-         * @description The agent answers it, and it alone, from what the connected apps said in their hello: what an app does down its connection or records in its traces (`capabilities`: `explain`, `profile`, `request`, `live_tasks`), and what it answers at its own console (`console`: `explain`, `users`). The latter are offered only to the console an app serves, which names the app in a `Tracepanel-Console` header: the agent's own console has nowhere to run them. The console shows a feature only where it works. With `service`, what a connected app of that service says it does (a trace's page offers what its app does): false for an app not connected, or one that doesn't say.
+         * @description The agent answers it, and it alone, from what the connected apps said in their hello: what an app does down its connection or records in its traces (`capabilities`: `explain`, `profile`, `request`, `live_tasks`), and what it answers at its own console (`console`: `explain`, `users`). The latter are offered only to the console an app serves, which names the app in a `Tracepanel-Console` header: the agent's own console has nowhere to run them. The console shows a feature only where it works. With `service`, what a connected app of that service says it does (a trace's page offers what its app does): false for an app not connected, or one that doesn't say. At the console of an app that answers a capability itself (`console`: its EXPLAIN), only that app's traces have it: the console runs it in that app's process.
          */
         get: operations["capabilities"];
         put?: never;

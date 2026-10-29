@@ -270,3 +270,86 @@ async fn what_an_app_answers_at_its_own_console_is_offered_only_to_the_console_i
 
     drop(stream);
 }
+
+#[tokio::test]
+async fn a_trace_is_explained_by_its_own_app_never_by_another_one_that_can() {
+    let (address, _, activity) = agent().await;
+    // A Node BFF runs EXPLAIN down its connection; a Python API only at its own console.
+    let (mut bff, _) = hello(
+        &address,
+        serde_json::json!({"protocol": PROTOCOL, "service": "library-bff", "capabilities": ["explain"]}),
+    )
+    .await;
+    let (_api, _) = hello(
+        &address,
+        serde_json::json!({"protocol": PROTOCOL, "service": "library-api", "console": ["explain"]}),
+    )
+    .await;
+    for _ in 0..200 {
+        if activity.apps.can("explain") && activity.apps.offers("explain", Some("library-api")) {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    let ask = |service: &'static str| {
+        let apps = activity.apps.clone();
+        async move {
+            apps.ask(
+                service,
+                "explain",
+                serde_json::json!({"explain": {"sql": "EXPLAIN SELECT 1", "params": []}}),
+                Duration::from_millis(200),
+            )
+            .await
+        }
+    };
+
+    let api = ask("library-api").await;
+    let orders = ask("orders").await;
+
+    // The API's trace: not the BFF's to run on its database; the API answers it at its own console.
+    assert_eq!(
+        api,
+        Err("library-api runs EXPLAIN only from its own console: open this trace in the console library-api serves.".to_owned())
+    );
+    // A service not connected: not the one app that can either.
+    assert_eq!(
+        orders,
+        Err("No app of service orders that can explain is connected.".to_owned())
+    );
+    // The BFF was asked nothing.
+    let mut length = [0u8; 4];
+    let read = tokio::time::timeout(Duration::from_millis(100), bff.read_exact(&mut length)).await;
+    assert!(read.is_err());
+}
+
+#[tokio::test]
+async fn a_request_that_names_no_service_goes_to_the_one_app_that_can() {
+    let (address, _, activity) = agent().await;
+    let (mut stream, _) = hello(
+        &address,
+        serde_json::json!({"protocol": PROTOCOL, "service": "shop", "capabilities": ["explain"]}),
+    )
+    .await;
+    for _ in 0..200 {
+        if activity.apps.can("explain") {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    let apps = activity.apps.clone();
+    let asked = tokio::spawn(async move {
+        apps.ask("", "explain", serde_json::json!({}), Duration::from_secs(5))
+            .await
+    });
+
+    let mut length = [0u8; 4];
+    stream.read_exact(&mut length).await.unwrap();
+    let mut frame = vec![0u8; u32::from_be_bytes(length) as usize];
+    stream.read_exact(&mut frame).await.unwrap();
+    let request: serde_json::Value = serde_json::from_slice(&frame).unwrap();
+    let reply = serde_json::json!({"answer": request["id"], "rows": []});
+    send(&mut stream, reply.to_string().as_bytes()).await;
+
+    assert_eq!(asked.await.unwrap().unwrap()["rows"], serde_json::json!([]));
+}

@@ -1,10 +1,18 @@
-import { TriangleAlertIcon } from "lucide-react";
+import { HourglassIcon, TriangleAlertIcon } from "lucide-react";
 import type { CSSProperties } from "react";
 import { Badge } from "./components/ui/badge";
 import { ago, duration } from "./format";
 import { ChevronRightIcon, DatabaseIcon } from "./icons";
 import { ISSUE_LABELS } from "./labels";
-import type { ChainApp, ChainItem, ChainRun, ChainTraceRow } from "./lib/chainRows";
+import {
+  type ChainApp,
+  type ChainEntry,
+  type ChainItem,
+  type ChainRun,
+  type ChainTraceRow,
+  type ChainWaiting,
+  WAITING_MS,
+} from "./lib/chainRows";
 import { foldKeys } from "./lib/keys";
 import { pageParts } from "./lib/page";
 import { plural } from "./lib/plural";
@@ -42,8 +50,10 @@ export interface TraceListProps {
 
 /** The traces other apps served for the rows' calls, and which of their rows are open. */
 export interface ListChains {
-  /** By the row's trace id: the apps it called (lib/chainRows). */
-  apps: ReadonlyMap<string, readonly ChainApp[]>;
+  /** By the row's trace id: the apps it called, and its calls whose traces are on their way (lib/chainRows). */
+  apps: ReadonlyMap<string, readonly ChainEntry[]>;
+  /** The rows whose chain is still being loaded, the first time: placeholders under them until it is. */
+  loading?: ReadonlySet<string> | undefined;
   open: ReadonlySet<string>;
   onToggle: (key: string) => void;
   /** An app's row: the row's trace, its tabs listing what that app's traces did. */
@@ -96,14 +106,7 @@ export function TraceList({
             </span>
           </button>
           {chains ? (
-            <ChainRows
-              rowId={trace.id}
-              apps={chains.apps.get(trace.id)}
-              level={depth + 1}
-              chains={chains}
-              selectedId={selectedId}
-              onSelect={onSelect}
-            />
+            <RowChain rowId={trace.id} level={depth + 1} chains={chains} selectedId={selectedId} onSelect={onSelect} />
           ) : null}
         </li>
       ))}
@@ -113,7 +116,7 @@ export function TraceList({
 
 interface ChainRowsProps {
   rowId: string;
-  apps: readonly ChainApp[] | undefined;
+  apps: readonly ChainEntry[] | undefined;
   /** How deep the rows sit: one step under the row they are under. */
   level: number;
   chains: ListChains;
@@ -128,24 +131,98 @@ interface ChainRowsProps {
  */
 function ChainRows({ rowId, apps, level, chains, selectedId, onSelect }: ChainRowsProps) {
   if (!apps?.length) return null;
-  return apps.map((app) => (
-    <ChainAppRows
-      key={app.key}
-      app={app}
-      rowId={rowId}
-      level={level}
-      chains={chains}
-      selectedId={selectedId}
-      onSelect={onSelect}
-    />
-  ));
+  return apps.map((app) =>
+    app.type === "waiting" ? (
+      <ChainWaitingRow key={app.key} call={app} level={level} />
+    ) : (
+      <ChainAppRows
+        key={app.key}
+        app={app}
+        rowId={rowId}
+        level={level}
+        chains={chains}
+        selectedId={selectedId}
+        onSelect={onSelect}
+      />
+    ),
+  );
+}
+
+/** Under a list's row: its chain's rows, or a placeholder while they load the first time. */
+function RowChain({ rowId, level, chains, selectedId, onSelect }: Omit<ChainRowsProps, "apps">) {
+  const apps = chains.apps.get(rowId);
+  if (!apps && chains.loading?.has(rowId)) return <ChainLoading level={level} />;
+  return (
+    <ChainRows rowId={rowId} apps={apps} level={level} chains={chains} selectedId={selectedId} onSelect={onSelect} />
+  );
+}
+
+/**
+ * While a row's chain loads the first time (and it is slow): a placeholder where its apps' rows would go, as tall as
+ * one, so the list says something is coming and nothing jumps when it is there.
+ */
+function ChainLoading({ level }: { level: number }) {
+  return (
+    <div
+      className="dt-request-row"
+      data-chain="loading"
+      role="status"
+      aria-label="Loading the traces of this request's calls"
+      title="Loading the traces of this request's calls"
+      style={{ "--dt-chain-level": level } as CSSProperties}
+    >
+      <span className="dt-request-main">
+        <span className="dt-map-caret" />
+        {/* In a path's line box: the row is as tall as one with a name. */}
+        <span className="dt-request-path">
+          <span className="dt-skeleton dt-chain-skeleton" style={{ width: "4.5rem" }} />
+        </span>
+        <span className="dt-request-path">
+          <span className="dt-skeleton dt-chain-skeleton" style={{ width: "7rem" }} />
+        </span>
+      </span>
+      <span className="dt-request-meta">
+        <StatusSlot status={null} />
+      </span>
+    </div>
+  );
+}
+
+/**
+ * A call whose trace hasn't arrived yet: dimmed, its method and path as the call says them, an hourglass. Its trace's
+ * row takes its place once the agent has it; a call to a service that sends none is waited for WAITING_MS.
+ */
+function ChainWaitingRow({ call, level }: { call: ChainWaiting; level: number }) {
+  const name = `${call.method ? `${call.method} ` : ""}${call.path}`;
+  return (
+    <div
+      className="dt-request-row"
+      data-chain="waiting"
+      aria-disabled="true"
+      title={`${name}: waiting for its trace. It shows here once the app that served it sends it; a service that records none is no longer waited for ${WAITING_MS / 1000} s after the call.`}
+      style={{ "--dt-chain-level": level } as CSSProperties}
+    >
+      <span className="dt-request-main">
+        <span className="dt-map-caret" />
+        {call.method ? <MethodBadge method={call.method} /> : null}
+        <TailPath path={call.path} title={name} />
+        <span className="dt-chain-waiting">
+          <HourglassIcon aria-hidden="true" />
+          waiting
+        </span>
+      </span>
+      <span className="dt-request-meta">
+        <StatusSlot status={null} />
+      </span>
+    </div>
+  );
 }
 
 type ChainLevelProps = Omit<ChainRowsProps, "apps">;
 
 /** What an app runs on, from its first trace: the mark on its chip, as the call tree's has it. */
 function chainAppRuntime(app: ChainApp): string | undefined {
-  const [first] = app.items;
+  const first = app.items.find((item) => item.type !== "waiting");
   const trace = first?.type === "run" ? first.traces[0]?.trace : first?.trace;
   return trace ? traceRuntime(trace.attrs) : undefined;
 }
@@ -222,6 +299,8 @@ function ChainItems({
       {shown.map((item) =>
         item.type === "run" ? (
           <ChainRunRows key={item.key} run={item} {...props} />
+        ) : item.type === "waiting" ? (
+          <ChainWaitingRow key={item.key} call={item} level={level} />
         ) : (
           <ChainTraceRows key={item.key} row={item} shared={shared} {...props} />
         ),

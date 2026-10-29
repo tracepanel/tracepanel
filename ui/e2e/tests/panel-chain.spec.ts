@@ -322,3 +322,66 @@ for (const theme of ["light", "dark"]) {
     expect(new Set(traces.map((row) => row.name)).size).toBe(1);
   });
 }
+
+/** Each row of the list from the top: what it is, where its content starts, and where its tree corner comes down. */
+function tree(list: Locator) {
+  return list.locator(".dt-request-row").evaluateAll((rows) =>
+    rows.map((row) => {
+      const corner = getComputedStyle(row, "::after");
+      const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
+      return {
+        chain: row.getAttribute("data-chain"),
+        rem,
+        pad: Number.parseFloat(getComputedStyle(row).paddingLeft),
+        corner: corner.content === "none" ? null : Number.parseFloat(corner.left),
+      };
+    }),
+  );
+}
+
+for (const [width, px] of [
+  ["wide", "640"],
+  ["narrow", "315"],
+]) {
+  test(`each level of a chain under an action's request is a step deeper, its corner from its parent (${width})`, async ({
+    page,
+  }) => {
+    // An action, its GraphQL request under it, the app it called, that app's trace, the app that one called, its trace.
+    const { bff } = await fanout(13, [
+      { route: "/books", path: "/books", at: 0, calls: { app: "shop", route: "/stars", path: "/stars" } },
+      { route: "/authors/{author_id}", path: "/authors/1", at: 1_000 },
+    ]);
+    await page.setViewportSize({ width: 1280, height: 900 });
+    // A list at its default width (a narrow container) steps in less: still a step a level.
+    await page.addInitScript((px) => localStorage.setItem("tracepanel:list-width", px), px);
+    await openApp(page, { graphql: { status: 200, trace: bff, queries: 0, totalMs: 8 } }, { recording: true });
+    await page.getByRole("button", { name: "Do graphql" }).click();
+    await pill(page).click();
+    const list = panel(page).getByRole("region", { name: "Pages and requests in this browser tab" });
+    const traces = list.locator('.dt-request-row[data-chain="trace"]');
+    await expect(traces).toHaveCount(2);
+    await traces.first().focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(traces).toHaveCount(3);
+
+    const rows = (await tree(list)).slice(1);
+
+    // The view, the action, its request, the app, its trace, the app that one called, its trace, then its sibling.
+    expect(rows.map((row) => row.chain)).toEqual([null, null, "app", "trace", "app", "trace", "trace"]);
+    const [action, request, app, books, deeper, stars, authors] = rows as [Row, Row, Row, Row, Row, Row, Row];
+    const step = request.pad - action.pad;
+    expect(step).toBeGreaterThanOrEqual(width === "wide" ? 12 : 10);
+    // One step a level, all the way down: the app's row is under the request, not beside it.
+    expect([app.pad, books.pad, deeper.pad, stars.pad].map((pad) => pad - action.pad)).toEqual(
+      [2, 3, 4, 5].map((levels) => expect.closeTo(levels * step, 1)),
+    );
+    expect(authors.pad).toBeCloseTo(books.pad, 1);
+    // Each row's corner comes down from just left of where the row it is under starts.
+    const under = [action, request, app, books, deeper, app];
+    expect([request, app, books, deeper, stars, authors].map((row) => row.corner)).toEqual(
+      under.map((parent) => expect.closeTo(parent.pad - parent.rem / 8, 1)),
+    );
+  });
+}
+
+type Row = { chain: string | null; rem: number; pad: number; corner: number | null };

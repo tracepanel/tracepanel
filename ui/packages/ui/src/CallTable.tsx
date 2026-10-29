@@ -12,7 +12,7 @@ import { onTheClock } from "./lib/calls";
 import { percent } from "./lib/percent";
 import { plural } from "./lib/plural";
 import { cn } from "./lib/utils";
-import type { ExplainPlan, Span } from "./types";
+import type { ExplainPlan, Span, Trace } from "./types";
 
 // A failed call marks its row's edge red, as the console's lists mark theirs; one an issue points at is highlighted.
 const ROW = cn(
@@ -219,8 +219,16 @@ export function CallLines({ heading, children }: { heading: ReactNode; children:
   );
 }
 
-/** Runs EXPLAIN for one SQL span of the trace; without it, no query shows a plan. */
-export type Explain = (spanId: string, analyze: boolean) => Promise<ExplainPlan>;
+/**
+ * Runs EXPLAIN for one SQL span of the trace; without it, no query shows a plan. `can` says which spans' queries it
+ * runs (all of them without it): a chain's, those of the traces whose apps run EXPLAIN.
+ */
+export type Explain = ((spanId: string, analyze: boolean) => Promise<ExplainPlan>) & {
+  can?: ((spanId: string) => boolean) | undefined;
+};
+
+/** EXPLAIN for the queries of a trace, where its app runs it; undefined where it doesn't. */
+export type ExplainOf = (trace: Trace) => Explain | undefined;
 
 const isSelect = (span: Span) => /^\s*SELECT\b/i.test(String(span.attrs["db.statement"] ?? ""));
 
@@ -229,6 +237,6 @@ const isSelect = (span: Span) => /^\s*SELECT\b/i.test(String(span.attrs["db.stat
  * where the host can run EXPLAIN.
  */
 export function QueryPlan({ span, onExplain }: { span: Span; onExplain: Explain | undefined }) {
-  if (!onExplain || span.kind !== "sql" || !isSelect(span)) return null;
+  if (!onExplain || span.kind !== "sql" || !isSelect(span) || onExplain.can?.(span.id) === false) return null;
   return <ExplainView vendor={String(span.attrs["db.vendor"] ?? "")} load={(analyze) => onExplain(span.id, analyze)} />;
 }

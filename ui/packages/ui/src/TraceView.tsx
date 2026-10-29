@@ -16,11 +16,11 @@ import {
   TriangleAlertIcon,
   ZapIcon,
 } from "lucide-react";
-import { type ComponentProps, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ComponentProps, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppDetails, appSaidAnything } from "./AppDetails";
 import { appWarnings, warningsTone } from "./AppWarnings";
 import { CallMap, type TraceProfileOpener } from "./CallMap";
-import type { Explain } from "./CallTable";
+import type { Explain, ExplainOf } from "./CallTable";
 import { ScopedCalls, ScopedIssues } from "./ChainTabs";
 import { Button } from "./components/ui/button";
 import {
@@ -186,22 +186,26 @@ function issuesBySpan(chain: TraceScope): Map<string, IssueKind> {
   return map;
 }
 
+/** The app a trace says it is (its `service.name`), "" where it says none. */
+function serviceName(trace: Trace): string {
+  const service = trace.attrs["service.name"];
+  return typeof service === "string" ? service : "";
+}
+
 /**
- * EXPLAIN for a query of any trace of the chain: the trace's own through `onExplain`, another app's through that
- * app's (`explainIn`), which the agent asks.
+ * EXPLAIN for a query of any trace of the chain, by the app of the trace it is in (`explainOf`): none where no app of
+ * the chain runs it; `can` says which queries' apps do.
  */
-function chainExplain(
-  chain: TraceScope,
-  onExplain: Explain | undefined,
-  explainIn: ((traceId: string) => Explain) | undefined,
-): Explain | undefined {
-  if (!onExplain) return undefined;
-  return (span, analyze) => {
-    const owner = chain.members.find((member) => member.trace.spans.some((each) => each.id === span));
-    return owner && owner !== chain.members[0] && explainIn
-      ? explainIn(owner.id)(span, analyze)
-      : onExplain(span, analyze);
+function chainExplain(chain: TraceScope, explainOf: ExplainOf): Explain | undefined {
+  const by = new Map(chain.members.map((member) => [member.id, explainOf(member.trace)]));
+  if (![...by.values()].some(Boolean)) return undefined;
+  const ownerOf = (span: string) => chain.members.find((member) => member.trace.spans.some((each) => each.id === span));
+  const explain: Explain = (span, analyze) => {
+    const run = by.get(ownerOf(span)?.id ?? "");
+    return run ? run(span, analyze) : Promise.reject(new Error("This query's app doesn't run EXPLAIN."));
   };
+  explain.can = (span) => by.get(ownerOf(span)?.id ?? "") !== undefined;
+  return explain;
 }
 
 /** What an issue's spans are called on its Show button: "queries", "HTTP calls", by the kind of its first span. */
@@ -380,8 +384,11 @@ export interface TraceViewProps {
   preferredTab?: TabId | undefined;
   /** EXPLAIN for a query of this trace; the SQL tab shows an Explain button when given. */
   onExplain?: Explain | undefined;
-  /** EXPLAIN for a query of another trace of its chain of calls (another app's). */
-  explainIn?: ((traceId: string) => Explain) | undefined;
+  /**
+   * EXPLAIN for a query of another trace of its chain of calls (another app's: `service`), where that app runs it;
+   * undefined where it doesn't.
+   */
+  explainIn?: ((traceId: string, service: string) => Explain | undefined) | undefined;
   /** The app that served it, as it said itself: an App tab after Request when it said anything (the panel). */
   app?: App | null | undefined;
   /** The part of the time to pick in the call tree, as a link asks (kinds of calls, a stretch of time). */
@@ -575,7 +582,12 @@ export function TraceView({
   // The trace's chain of calls, and what of it the tabs list: all of it, or what is under a row of the call tree.
   const chain = useTraceScope(trace, related, loadChain, initialUnder);
   const tabbed = useChainTabs(trace, chain, findings);
-  const explain = useMemo(() => chainExplain(chain, onExplain, explainIn), [chain, onExplain, explainIn]);
+  // A query's EXPLAIN by the app of its trace: the call tree's details and the DB tab alike.
+  const explainOf = useCallback<ExplainOf>(
+    (each) => (each.id === trace.id ? onExplain : explainIn?.(each.id, serviceName(each))),
+    [trace.id, onExplain, explainIn],
+  );
+  const explain = useMemo(() => chainExplain(chain, explainOf), [chain, explainOf]);
 
   const status = trace.attrs["http.status_code"];
   const outcome = outcomeOf(trace);
@@ -617,7 +629,7 @@ export function TraceView({
         loadRelated={loadRelated}
         links={links}
         initialSpan={treeSpan}
-        onExplain={onExplain}
+        explainOf={explainOf}
         onTraceProfile={onTraceProfile}
         chain={chain}
         openTab={(tab) => openTab(tab)}

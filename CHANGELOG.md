@@ -16,7 +16,12 @@
   row opens it beside the list. The app's row opens the request with its
   tabs under that app (`Under library-api`). The rows stay folded or
   open as the user left them while the browser tab does, and Follow new
-  keeps to the list's own requests.
+  keeps to the list's own requests. Each level sits a step deeper than
+  the row it is under, with the tree's corner. A call whose trace hasn't
+  reached the agent yet is a dimmed row with its method, path and an
+  hourglass, where that trace's row will be, until the trace arrives or
+  5 s after the call ended (a service without tracepanel sends none). A
+  row whose calls take long to load has a placeholder row meanwhile.
 - A new span kind, `sql.connect`: the time a driver took to open a
   connection to the database (logging in to Snowflake, PostgreSQL's or
   MySQL's handshake). It counts as the database's time in the breakdown and
@@ -180,6 +185,21 @@
 
 ### Fixed
 
+- The agent asks only the app that recorded a query to EXPLAIN it. When
+  that app couldn't take the request down its connection (a Python app
+  runs EXPLAIN at its own console), the agent asked whichever one app
+  could, such as a Node BFF, which answered that it had no such
+  database. Now the answer says where the plan is (`library-api runs
+  EXPLAIN only from its own console`), or that no app of that service is
+  connected.
+- A linked trace's SELECT has its query plan in the call tree, as in the
+  DB tab: opening another app's query there showed no Explain. Explain
+  now shows where the app that recorded the query runs EXPLAIN, and each
+  trace of a chain asks about its own app. Before, it showed where the
+  console's app ran EXPLAIN, so it could be missing for a service that
+  runs it, or offered for one that can't. The console of an app that
+  runs EXPLAIN itself (Python, Java) offers it for that app's traces
+  only. `GET /api/capabilities?service=` says so.
 - The DB and HTTP calls tabs' Time column says a row's time on the
   clock, as the header over it does: `GET /authors/{id} ×36` that ran
   side by side reads 490 ms, not 12.7 s under a header of 673 ms. What

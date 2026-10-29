@@ -2,6 +2,7 @@ import {
   ArrowLeftIcon,
   type Chain,
   type ChainApp,
+  type ChainEntry,
   ChevronDownIcon,
   ClearIcon,
   CloseIcon,
@@ -28,6 +29,7 @@ import {
   TraceList,
   type TraceRow,
   type TraceSummary,
+  waitingUntil,
   withSnapshots,
 } from "@tracepanel/ui";
 import { TooltipProvider } from "@tracepanel/ui/components/ui/tooltip";
@@ -400,13 +402,26 @@ function rowKey(trace: TraceSummary): string {
   return `${trace.id}:${trace.duration}:${trace.queries}:${trace.issues}`;
 }
 
+/** A row's first load of its chain shows placeholder rows once it takes this long (a quick one shows nothing). */
+const CHAIN_SLOW_MS = 250;
+
+/** The rows under the list's rows: the apps each one's trace called, and the rows whose first load is slow. */
+interface RowChains {
+  apps: ReadonlyMap<string, ChainEntry[]>;
+  loading: ReadonlySet<string>;
+}
+
 /**
  * The apps each row's trace called, by its id (none for a view or an action: its requests are rows of their own).
  * Read from the trace's chain, as its call tree and tabs read it (`source.chain`): loaded once a row is stored, again
- * when the row changes, and every two seconds while it is new (a service's trace can arrive after its caller's).
+ * when the row changes, and every two seconds while it is new (a service's trace can arrive after its caller's). Its
+ * calls whose traces are on their way are rows too, until they arrive or stop being waited for (lib/chainRows).
  */
-function useRowChains(rows: readonly TraceRow[], stored: ReadonlySet<string>): ReadonlyMap<string, ChainApp[]> {
+function useRowChains(rows: readonly TraceRow[], stored: ReadonlySet<string>): RowChains {
   const [chains, setChains] = useState<ReadonlyMap<string, Chain>>(() => new Map());
+  const [loading, setLoading] = useState<ReadonlySet<string>>(() => new Set());
+  const has = useRef(chains);
+  has.current = chains;
   const loaded = useRef(new Map<string, string>());
   const wanted = rows.filter((row) => row.trace.kind !== "page" && stored.has(row.trace.id)).map((row) => row.trace);
   const key = wanted.map(rowKey).join(",");
@@ -415,10 +430,18 @@ function useRowChains(rows: readonly TraceRow[], stored: ReadonlySet<string>): R
     const load = source.chain;
     if (!load) return;
     let live = true;
+    const timers = new Set<number>();
     const keep = (id: string, chain: Chain) =>
       setChains((current) => {
         const before = current.get(id);
         return before && chainKey(before) === chainKey(chain) ? current : new Map(current).set(id, chain);
+      });
+    const done = (id: string) =>
+      setLoading((current) => {
+        if (!current.has(id)) return current;
+        const next = new Set(current);
+        next.delete(id);
+        return next;
       });
     const tick = () => {
       const now = Date.now();
@@ -426,10 +449,21 @@ function useRowChains(rows: readonly TraceRow[], stored: ReadonlySet<string>): R
         const fresh = now - (trace.start + trace.duration) / 1000 < CHAIN_FRESH_MS;
         if (loaded.current.get(trace.id) === rowKey(trace) && !fresh) continue;
         loaded.current.set(trace.id, rowKey(trace));
-        load(trace.id).then(
-          (chain) => live && keep(trace.id, chain),
-          () => undefined,
-        );
+        // Its first load: placeholders under the row once it is slow, so the list says something is on its way.
+        const first = !has.current.has(trace.id);
+        const timer = first
+          ? window.setTimeout(() => live && setLoading((current) => new Set(current).add(trace.id)), CHAIN_SLOW_MS)
+          : undefined;
+        if (timer !== undefined) timers.add(timer);
+        const settle = () => {
+          window.clearTimeout(timer);
+          if (timer !== undefined) timers.delete(timer);
+          done(trace.id);
+        };
+        load(trace.id).then((chain) => {
+          if (live) keep(trace.id, chain);
+          settle();
+        }, settle);
       }
     };
     tick();
@@ -437,19 +471,32 @@ function useRowChains(rows: readonly TraceRow[], stored: ReadonlySet<string>): R
     return () => {
       live = false;
       window.clearInterval(timer);
+      for (const each of timers) window.clearTimeout(each);
     };
   }, [key]);
+  // The waiting calls go once they stop being waited for: the rows are built again then (`expired` counts the times).
+  const [expired, setExpired] = useState(0);
   const listed = rows.map((row) => row.trace.id).join(",");
-  return useMemo(() => {
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `expired` moved on: the rows are built at the time now.
+  const apps = useMemo(() => {
     const rowsIn = new Set(listed.split(","));
-    const apps = new Map<string, ChainApp[]>();
+    const apps = new Map<string, ChainEntry[]>();
     for (const [id, chain] of chains) {
       if (!rowsIn.has(id)) continue;
       const under = chainApps(chain, id, rowsIn);
       if (under.length > 0) apps.set(id, under);
     }
     return apps;
-  }, [chains, listed]);
+  }, [chains, listed, expired]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `expired` moved on: the next waiting call's end is asked.
+  useEffect(() => {
+    const ends = [...chains.values()].map((chain) => waitingUntil(chain)).filter((end) => end !== null);
+    if (ends.length === 0) return;
+    const wait = Math.max(0, Math.min(...ends) - Date.now()) + 50;
+    const timer = window.setTimeout(() => setExpired((count) => count + 1), wait);
+    return () => window.clearTimeout(timer);
+  }, [chains, expired]);
+  return { apps, loading };
 }
 
 // The rows the user folded or opened, each a change from where it starts (an app's row open, a run open while its
@@ -1057,7 +1104,8 @@ function PanelApp({ route }: { route: Route }) {
     writeFollow(value);
   };
   const chains: ListChains = {
-    apps: rowChains,
+    apps: rowChains.apps,
+    loading: rowChains.loading,
     open: chainOpen,
     onToggle: toggleChain,
     onApp: (id, app) => go({ name: "trace", id, under: app.app, tab: underTab(app, tab) }),

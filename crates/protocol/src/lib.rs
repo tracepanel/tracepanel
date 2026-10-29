@@ -99,8 +99,24 @@ impl Apps {
         })
     }
 
-    /// `request` sent to the app of `service` that can do `capability` (the only one that can, when none is of that
-    /// service), and its answer, within `timeout`.
+    /// Whether the console reached through the app of `via` (its service) is answered `capability` by that app itself,
+    /// at its own console (Python's and Java's EXPLAIN): the console's requests for it never reach the agent.
+    pub fn answers_at_console(&self, capability: &str, via: Option<&str>) -> bool {
+        let Some(via) = via else {
+            return false;
+        };
+        let inner = self
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        inner
+            .apps
+            .iter()
+            .any(|app| app.service == via && app.console.iter().any(|can| can == capability))
+    }
+
+    /// `request` sent to the app of `service` that can do `capability` (the only one that can, when `service` is ""),
+    /// and its answer, within `timeout`.
     pub async fn ask(
         &self,
         service: &str,
@@ -118,13 +134,13 @@ impl Apps {
                 .iter()
                 .filter(|app| app.capabilities.iter().any(|can| can == capability))
                 .collect();
-            let app = able
-                .iter()
-                .find(|app| app.service == service)
-                .or_else(|| (able.len() == 1).then(|| &able[0]))
-                .ok_or_else(|| {
-                    format!("No app of service {service} that can {capability} is connected.")
-                })?;
+            // The trace's own app, never another one's: an app of another service would run it on its own database.
+            // Only a request that names no service goes to the one app that can.
+            let app = match able.iter().find(|app| app.service == service) {
+                Some(app) => app,
+                None if service.is_empty() && able.len() == 1 => &able[0],
+                None => return Err(Self::unable(&inner.apps, service, capability)),
+            };
             let requests = app.requests.clone();
             inner.next += 1;
             let id = inner.next;
@@ -150,6 +166,25 @@ impl Apps {
                 inner.waiting.remove(&id);
                 Err("The app didn't answer in time.".into())
             }
+        }
+    }
+
+    /// Why no app can be asked `capability` for `service`: it answers it at its own console only, or none is there.
+    fn unable(apps: &[App], service: &str, capability: &str) -> String {
+        let what = if capability == "explain" {
+            "EXPLAIN"
+        } else {
+            capability
+        };
+        let at_console = apps
+            .iter()
+            .any(|app| app.service == service && app.console.iter().any(|can| can == capability));
+        if at_console {
+            format!(
+                "{service} runs {what} only from its own console: open this trace in the console {service} serves."
+            )
+        } else {
+            format!("No app of service {service} that can {capability} is connected.")
         }
     }
 

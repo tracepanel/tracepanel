@@ -6,7 +6,8 @@ import { expect, test } from "../fixtures.ts";
 
 /** An app that runs EXPLAIN, as the agent answers once one is connected, and the plan it gives. */
 async function explainable(page: Page): Promise<void> {
-  await page.route("**/api/capabilities", (route) =>
+  // The console's, and each app's (`?service=`): one app, its traces' queries.
+  await page.route("**/api/capabilities*", (route) =>
     // biome-ignore lint/style/useNamingConvention: wire format.
     route.fulfill({ json: { explain: true, users: false, profile: false, request: false, live_tasks: false } }),
   );

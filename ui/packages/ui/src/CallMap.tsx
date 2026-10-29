@@ -9,7 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { type Explain, QueryPlan } from "./CallTable";
+import { type Explain, type ExplainOf, QueryPlan } from "./CallTable";
 import { duration, since } from "./format";
 import { GraphqlCode } from "./GraphqlCode";
 import { useChain } from "./hooks/useChain";
@@ -1874,7 +1874,7 @@ type DetailsProps<T extends Node["type"]> = {
   node: Extract<Node, { type: T }>;
   trace: Trace;
   links?: TraceLinks | undefined;
-  /** EXPLAIN for a query of the trace shown, as its DB tab runs it; none for a linked trace's queries. */
+  /** EXPLAIN for a query of the trace shown (this one or a linked one), as the DB tab runs it, where its app can. */
   onExplain?: Explain | undefined;
   /** Opens a call's trace's profile, from its details. */
   onTraceProfile?: TraceProfileOpener | undefined;
@@ -2330,15 +2330,15 @@ function detailsOf(
   trace: Trace,
   hosts: {
     links: TraceLinks | undefined;
-    onExplain: Explain | undefined;
+    explainOf: ExplainOf | undefined;
     onTraceProfile: TraceProfileOpener | undefined;
     under: ((scope: SpanScope, subject: UnderSubject) => ReactNode) | undefined;
   },
 ): ReactNode {
   const found = selected ? findNode(tree, selected, trace) : undefined;
   if (!found) return null;
-  // The host explains the trace's own queries: a linked trace's are its own.
-  const onExplain = found.trace === trace ? hosts.onExplain : undefined;
+  // A query is explained by the app of the trace it is in: this one's, or a linked trace's (the agent asks that app).
+  const onExplain = hosts.explainOf?.(found.trace);
   const scope = hosts.under && scopeOfNode(found.node);
   return (
     <UnderSlot value={scope ? hosts.under?.(scope, subjectOf(found.node)) : null}>
@@ -2555,8 +2555,8 @@ export function CallMap({
   onProfile?: (() => void) | undefined;
   /** Opens another trace's profile by its id: a call's trace from another app, opened under its call. */
   onTraceProfile?: TraceProfileOpener | undefined;
-  /** EXPLAIN for a query of this trace: a SELECT's details then have its plan, as the DB tab's. */
-  onExplain?: Explain | undefined;
+  /** EXPLAIN for a query of this trace or a linked one: a SELECT's details then have its plan, as the DB tab's. */
+  explainOf?: ExplainOf | undefined;
   /** Linked traces: tasks this trace enqueued appear under their enqueue span. */
   related?: Related | undefined;
   links?: TraceLinks | undefined;
@@ -2585,7 +2585,7 @@ export function CallMap({
   const [collapsed, toggle] = useToggleSet();
   const details = detailsOf(tree, selected, trace, {
     links,
-    onExplain: wiring.onExplain,
+    explainOf: wiring.explainOf,
     onTraceProfile: wiring.onTraceProfile,
     under: wiring.under,
   });

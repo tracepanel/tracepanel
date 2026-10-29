@@ -1,5 +1,5 @@
 import { type Capabilities, type DataSource, NO_CAPABILITIES } from "@tracepanel/ui";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export interface EntrySummary {
   name: string;
@@ -138,6 +138,48 @@ export function useCapabilities(source: DataSource): Capabilities | undefined {
     };
   }, [source]);
   return capabilities;
+}
+
+const SERVICE_CAPABILITIES = new WeakMap<DataSource, Map<string, Promise<Capabilities>>>();
+
+/**
+ * Whether the app of a service offers `name` (`/capabilities?service=`): EXPLAIN runs in the app that recorded the
+ * trace, so a chain's traces each ask their own. Asked once per service as it is first wanted; no until it answers.
+ * A trace that names no service ("") asks what the console offers.
+ */
+export function useServiceCapability(source: DataSource, name: keyof Capabilities): (service: string) => boolean {
+  const [answers, setAnswers] = useState<ReadonlyMap<string, boolean>>(() => new Map());
+  const live = useRef(true);
+  useEffect(() => {
+    live.current = true;
+    return () => {
+      live.current = false;
+    };
+  }, []);
+  return useCallback(
+    (service: string) => {
+      const known = answers.get(service);
+      if (known !== undefined) return known;
+      let asked = SERVICE_CAPABILITIES.get(source);
+      if (!asked) {
+        asked = new Map();
+        SERVICE_CAPABILITIES.set(source, asked);
+      }
+      let answer = asked.get(service);
+      if (!answer) {
+        answer = source.capabilities(service || undefined).catch(() => NO_CAPABILITIES);
+        asked.set(service, answer);
+      }
+      answer.then((said) => {
+        if (live.current)
+          setAnswers((current) =>
+            current.has(service) ? current : new Map(current).set(service, said[name] === true),
+          );
+      });
+      return false;
+    },
+    [source, name, answers],
+  );
 }
 
 /** The ids not seen before, now seen; `newestFirst`: only those above the first one seen before (see useNewIds). */
