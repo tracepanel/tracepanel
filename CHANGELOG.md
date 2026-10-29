@@ -185,6 +185,10 @@
 
 ### Fixed
 
+- EXPLAIN of a query with named parameters (`%(age)s`, `:name`) sends
+  the app their names as the span recorded them, as `param_names`. The
+  app passes each value back under its name, where before it guessed the
+  names from the statement's placeholders.
 - EXPLAIN of a Python app's query in the agent's console reads as in
   that app's own console. The agent shows the plan the app sends: SQL
   Server's SHOWPLAN as a tree with its estimates, and SQLite's temporary

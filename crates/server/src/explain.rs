@@ -59,8 +59,7 @@ pub(crate) fn request(span: &Map<String, Value>, analyze: bool) -> Result<Reques
         .into_iter()
         .find(|alias| !alias.is_empty())
         .unwrap_or_else(|| "default".into());
-    Ok(Request {
-        body: json!({"explain": {
+    let mut body = json!({"explain": {
             "sql": format!("{prefix}{statement}"),
             "params": params,
             "vendor": vendor,
@@ -70,7 +69,13 @@ pub(crate) fn request(span: &Map<String, Value>, analyze: bool) -> Result<Reques
             "database": attrs.get("db.namespace").or_else(|| attrs.get("db.name")),
             // EXPLAIN ANALYZE runs the query: the app rolls back whatever it did.
             "analyze": analyzed,
-        }}),
+    }});
+    // Named parameters' names, as the span recorded them: the app passes the values back by name.
+    if let Some(names) = attrs.get("db.param_names").filter(|names| names.is_array()) {
+        body["explain"]["param_names"] = names.clone();
+    }
+    Ok(Request {
+        body,
         vendor,
         alias,
         analyze: analyzed,
@@ -340,6 +345,33 @@ mod tests {
             explained["lines"],
             json!([{"depth": 0, "text": "SCAN books", "warning": null}])
         );
+    }
+
+    #[test]
+    fn named_parameters_go_with_their_names() {
+        let span = json!({"kind": "sql", "attrs": {
+            "db.system": "postgresql", "db.statement": "SELECT * FROM users WHERE age > %(age)s AND name = %(name)s",
+            "db.params": [30, "ann"], "db.param_names": ["age", "name"],
+        }});
+
+        let explained = request(span.as_object().unwrap(), false).map(|request| request.body);
+
+        assert_eq!(
+            explained,
+            Ok(json!({"explain": {
+                "sql": "EXPLAIN SELECT * FROM users WHERE age > %(age)s AND name = %(name)s",
+                "params": [30, "ann"], "param_names": ["age", "name"], "vendor": "postgresql", "alias": "default",
+                "server": null, "port": null, "database": null, "analyze": false,
+            }}))
+        );
+    }
+
+    #[test]
+    fn positional_parameters_have_no_names() {
+        let explained = sql("SELECT * FROM users WHERE id = ?", Some(json!([7])))
+            .map(|request| request.body["explain"].get("param_names").cloned());
+
+        assert_eq!(explained, Ok(None));
     }
 
     #[test]
