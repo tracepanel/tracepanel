@@ -99,6 +99,22 @@ impl Apps {
         })
     }
 
+    /// Whether the console reached through the app of `via` (its service) is answered `capability` by that app itself,
+    /// at its own console (Python's and Java's EXPLAIN): the console's requests for it never reach the agent.
+    pub fn answers_at_console(&self, capability: &str, via: Option<&str>) -> bool {
+        let Some(via) = via else {
+            return false;
+        };
+        let inner = self
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        inner
+            .apps
+            .iter()
+            .any(|app| app.service == via && app.console.iter().any(|can| can == capability))
+    }
+
     /// `request` sent to the app of `service` that can do `capability` (the only one that can, when none is of that
     /// service), and its answer, within `timeout`.
     pub async fn ask(

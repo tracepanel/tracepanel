@@ -119,3 +119,99 @@ async fn an_apps_capabilities_are_its_own() {
     drop(apps);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+async fn get_via(router: &axum::Router, uri: &str, via: &str) -> Value {
+    let request = Request::get(uri)
+        .header("Tracepanel-Console", via)
+        .body(Body::empty())
+        .unwrap();
+    let response = router.clone().oneshot(request).await.unwrap();
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    serde_json::from_slice(&body).unwrap_or(Value::Null)
+}
+
+#[tokio::test]
+async fn a_trace_is_explained_where_its_app_runs_explain() {
+    let dir =
+        std::env::temp_dir().join(format!("tracepanel-explain-by-app-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let path = tracepanel_store_local::path_in(&dir);
+    Store::open(&path).unwrap();
+    let activity = Activity::default();
+    let router = tracepanel_server::router(Reader::new(&path), activity.clone());
+    let listener = Listener::tcp("127.0.0.1:0").await.unwrap();
+    let address = listener
+        .address()
+        .unwrap()
+        .strip_prefix("tcp:")
+        .unwrap()
+        .to_owned();
+    tokio::spawn(serve(
+        listener,
+        std::sync::Arc::new(|_| {}),
+        activity.clone(),
+    ));
+    // A Node BFF runs EXPLAIN down its connection; a Python API only at its own console.
+    let mut apps = Vec::new();
+    for hello in [
+        json!({"protocol": PROTOCOL, "service": "library-bff", "capabilities": ["explain"]}),
+        json!({"protocol": PROTOCOL, "service": "library-api", "console": ["explain"]}),
+    ] {
+        let mut app = BufReader::new(TcpStream::connect(&address).await.unwrap());
+        app.get_mut()
+            .write_all(format!("{hello}\n").as_bytes())
+            .await
+            .unwrap();
+        let mut line = String::new();
+        app.read_line(&mut line).await.unwrap();
+        apps.push(app);
+    }
+    for _ in 0..200 {
+        if activity.apps.says("explain", "library-bff")
+            && activity.apps.offers("explain", Some("library-api"))
+        {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    let explains = |answer: Value| answer["explain"] == true;
+
+    // The agent's console: the agent asks the BFF; the API answers nobody but its own console.
+    let (_, bff) = get(&router, "/api/capabilities?service=library-bff").await;
+    let (_, api) = get(&router, "/api/capabilities?service=library-api").await;
+    // The API's console runs it for its own traces, in its process: the BFF's would be run on the API's database.
+    let api_at_api = get_via(
+        &router,
+        "/api/capabilities?service=library-api",
+        "library-api",
+    )
+    .await;
+    let bff_at_api = get_via(
+        &router,
+        "/api/capabilities?service=library-bff",
+        "library-api",
+    )
+    .await;
+    // The BFF's console (it answers none there): as the agent's.
+    let bff_at_bff = get_via(
+        &router,
+        "/api/capabilities?service=library-bff",
+        "library-bff",
+    )
+    .await;
+    let api_at_bff = get_via(
+        &router,
+        "/api/capabilities?service=library-api",
+        "library-bff",
+    )
+    .await;
+
+    assert_eq!(
+        [bff, api, api_at_api, bff_at_api, bff_at_bff, api_at_bff].map(explains),
+        [true, false, true, false, true, false]
+    );
+    drop(apps);
+    let _ = std::fs::remove_dir_all(&dir);
+}

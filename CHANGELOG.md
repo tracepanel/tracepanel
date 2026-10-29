@@ -185,6 +185,14 @@
 
 ### Fixed
 
+- A linked trace's SELECT has its query plan in the call tree, as in the
+  DB tab: opening another app's query there showed no Explain. Explain
+  now shows where the app that recorded the query runs EXPLAIN, and each
+  trace of a chain asks about its own app. Before, it showed where the
+  console's app ran EXPLAIN, so it could be missing for a service that
+  runs it, or offered for one that can't. The console of an app that
+  runs EXPLAIN itself (Python, Java) offers it for that app's traces
+  only. `GET /api/capabilities?service=` says so.
 - The DB and HTTP calls tabs' Time column says a row's time on the
   clock, as the header over it does: `GET /authors/{id} ×36` that ran
   side by side reads 490 ms, not 12.7 s under a header of 673 ms. What

@@ -50,8 +50,9 @@ import { systemOfPage } from "@tracepanel/ui/lib/systems";
 import { cn } from "@tracepanel/ui/lib/utils";
 import { ArrowRightIcon, ChevronRightIcon, Columns3Icon, ListFilterIcon } from "lucide-react";
 import { Fragment, type ReactNode, useEffect, useState } from "react";
-import { useCapability } from "./hooks";
+import { useServiceCapability } from "./hooks";
 import { currentPeriod, endpointGroup, go, groupRoute, href, issueRoute, traceHref, withPeriod } from "./routes";
+import { useScope } from "./scope";
 import { graphqlOperation, requestPath, taskSystem } from "./sections";
 import { FitChips, Meter, Mono, Tr } from "./ui";
 
@@ -445,9 +446,13 @@ interface TableProps<T> {
   onOpen: (key: string | null) => void;
 }
 
-/** Whether a statement gets a plan: a SELECT, where the app behind the console runs EXPLAIN. */
+/**
+ * Whether a statement gets a plan: a SELECT, where the app the console shows runs EXPLAIN (its sample is that app's
+ * trace), or, with every app shown, where the app behind the console does.
+ */
 function useExplains(source: DataSource, statement: string): boolean {
-  return useCapability(source, "explain") && /^\s*SELECT\b/i.test(statement);
+  const { service } = useScope();
+  return useServiceCapability(source, "explain")(service) && /^\s*SELECT\b/i.test(statement);
 }
 
 /** What an open SQL row adds: the statement and its plan. */

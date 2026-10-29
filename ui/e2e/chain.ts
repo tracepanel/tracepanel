@@ -158,7 +158,11 @@ export async function chain(): Promise<string> {
       `c00000000000000${n + 1}`,
       [
         span(`a${n}`, null, "http", `GET /authors/${n + 1}`, at, 1_000),
-        span(`q${n}`, `a${n}`, "sql", "SELECT author", at + 200, 300),
+        // Its statement as the SDKs record it: a SELECT, which EXPLAIN runs for.
+        span(`q${n}`, `a${n}`, "sql", "SELECT author", at + 200, 300, {
+          "db.statement": "SELECT author",
+          "db.vendor": "postgresql",
+        }),
       ],
       [log(`q${n}`, at + 300, n === 1 ? "error" : "info", "app.db", n === 1 ? "no author 2" : `author ${n + 1}`)],
     );

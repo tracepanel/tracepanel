@@ -13,7 +13,7 @@ import {
 import { cn } from "@tracepanel/ui/lib/utils";
 import { HourglassIcon, SearchXIcon } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { useCapability } from "./hooks";
+import { useServiceCapability } from "./hooks";
 import { track, useRefresh } from "./refresh";
 import { withShare } from "./ShareDialog";
 
@@ -109,6 +109,12 @@ function useApp(source: DataSource, service: string | null): App | null {
   return service === null ? null : (told.get(service) ?? null);
 }
 
+/** The app a trace says it is, "" where it says none. */
+function serviceName(trace: Trace): string {
+  const service = trace.attrs["service.name"];
+  return typeof service === "string" ? service : "";
+}
+
 /** The service whose App tab the panel shows (its variants are compact and strip); none on a page. */
 function serviceOf(trace: Trace | null | undefined, variant: TraceScreenProps["variant"]): string | null {
   const service = trace?.attrs["service.name"];
@@ -163,15 +169,12 @@ function chainLoader(source: DataSource): ((traceId: string) => Promise<Chain>) 
   return load;
 }
 
-/** A query's EXPLAIN in another trace of the chain (another app's), where the app behind the console runs it. */
-function chainExplainer(source: DataSource, explainable: boolean) {
-  if (!explainable) return undefined;
-  return (traceId: string) => (span: string, analyze: boolean) => source.explain(traceId, span, analyze);
-}
-
-/** Its queries' EXPLAIN, where the app behind the console runs it. */
-function explainer(source: DataSource, traceId: string, explainable: boolean) {
-  return explainable ? (span: string, analyze: boolean) => source.explain(traceId, span, analyze) : undefined;
+/**
+ * A trace's queries' EXPLAIN, where the app that recorded it runs it (`explains`, by its service): the agent asks
+ * that app, or the console of that app answers it itself. Undefined where it doesn't.
+ */
+function explainer(source: DataSource, traceId: string, service: string, explains: (service: string) => boolean) {
+  return explains(service) ? (span: string, analyze: boolean) => source.explain(traceId, span, analyze) : undefined;
 }
 
 /** The loading bar: on the page inset as the trace's head will be, across the panel. */
@@ -363,8 +366,8 @@ export function TraceScreen({
   const related = useRelated(id, source);
   // The panel (compact, or docked as a strip) has an App tab: the console's trace page doesn't.
   const app = useApp(source, serviceOf(trace, variant));
-  // EXPLAIN only where the app behind the console runs it.
-  const explainable = useCapability(source, "explain");
+  // EXPLAIN only where the app that recorded a trace runs it: each trace of the chain by its own app.
+  const explains = useServiceCapability(source, "explain");
   if (trace === null) return <NoTrace loaded={loaded} variant={variant} back={back} />;
   return (
     <TraceView
@@ -372,8 +375,8 @@ export function TraceScreen({
       trace={trace}
       explore={explore?.(trace)}
       onTabChange={onTabChange}
-      onExplain={explainer(source, trace.id, explainable)}
-      explainIn={chainExplainer(source, explainable)}
+      onExplain={explainer(source, trace.id, serviceName(trace), explains)}
+      explainIn={(traceId, service) => explainer(source, traceId, service, explains)}
       initialTab={initialTab}
       preferredTab={preferredTab}
       actions={withShare(trace, source, actions, shareable === true)}
