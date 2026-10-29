@@ -210,9 +210,7 @@ export async function fanout(tag: number, calls: readonly FanoutCall[]): Promise
   const start = Date.now() * 1000 - 7 * 3_600_000_000;
   const behind = 3_000;
   const end = Math.max(...calls.map((call) => call.at)) + 2_000;
-  const bff = trace("x", "POST /graphql", "shop", start, end, null, [], []);
-  bff["id"] = fid(0);
-  (bff["attrs"] as Doc)["w3c.trace_id"] = w3c;
+  const bff = linked(fid(0), w3c, "POST /graphql", start, end, null);
   bff["spans"] = [
     span("b0", null, "http", "POST /graphql", start, end),
     ...calls.map((call, n) =>
@@ -221,11 +219,7 @@ export async function fanout(tag: number, calls: readonly FanoutCall[]): Promise
   ];
   const served = calls.flatMap((call, n) => {
     const at = start + call.at + 100 - behind;
-    const api = trace("x", `GET ${call.route}`, "shop", at, 700, sid(n + 1), [], []);
-    api["id"] = fid(n + 1);
-    const attrs = api["attrs"] as Doc;
-    attrs["w3c.trace_id"] = w3c;
-    attrs["http.path"] = call.path;
+    const api = linked(fid(n + 1), w3c, `GET ${call.route}`, at, 700, sid(n + 1), call.path);
     api["spans"] = [
       span(`a${n}`, null, "http", `GET ${call.route}`, at, 700),
       span(`q${n}`, `a${n}`, "sql", "SELECT 1", at + 100, 200),
@@ -234,21 +228,97 @@ export async function fanout(tag: number, calls: readonly FanoutCall[]): Promise
         : []),
     ];
     if (!call.calls) return [api];
-    const deep = trace("x", `GET ${call.calls.route}`, call.calls.app, at + 450, 100, sid(5000 + n), [], []);
-    deep["id"] = fid(5000 + n);
-    (deep["attrs"] as Doc)["w3c.trace_id"] = w3c;
-    (deep["attrs"] as Doc)["http.path"] = call.calls.path;
+    const route = `GET ${call.calls.route}`;
+    const deep = linked(fid(5000 + n), w3c, route, at + 450, 100, sid(5000 + n), call.calls.path, call.calls.app);
     deep["spans"] = [span(`e${n}`, null, "http", `GET ${call.calls.route}`, at + 450, 100)];
     return [api, deep];
   });
+  await send([bff, ...served.reverse()]);
+  await expect.poll(() => chainLength(fid(0))).toBe(1 + served.length);
+  return { bff: fid(0) };
+}
+
+/** A trace of the W3C trace `w3c`, by its id: a BFF's (no parent) or the trace a service served for its call. */
+function linked(
+  id: string,
+  w3c: string,
+  label: string,
+  start: number,
+  duration: number,
+  parent: string | null,
+  path?: string,
+  app = "shop",
+): Doc {
+  const doc = trace("x", label, app, start, duration, parent, [], []);
+  doc["id"] = id;
+  const attrs = doc["attrs"] as Doc;
+  attrs["w3c.trace_id"] = w3c;
+  if (path) attrs["http.path"] = path;
+  return doc;
+}
+
+/** A call the BFF of `arriving()` makes: where to, and how long before now it ended (µs; a moment ago unless given). */
+export interface ArrivingCall {
+  url: string;
+  ago?: number | undefined;
+}
+
+/**
+ * A BFF's request that just ended, its calls to other apps carrying the trace on (`calls`), stored before any of
+ * their traces: the agent has only it, as when a service's trace comes a moment after its caller's. `serve(n)` stores
+ * the n-th call's trace, as that service's SDK would send it. Hours ago, as `fanout()` (the other tests list the
+ * newest first), all of it "shop" (the Services map stays): `now` is the moment it ended, for the browser's clock.
+ * `tag` keeps tests apart (1…99).
+ */
+export async function arriving(
+  tag: number,
+  calls: readonly ArrivingCall[],
+): Promise<{ bff: string; now: number; serve: (n: number) => Promise<void> }> {
+  const w3c = `6b${String(tag).padStart(30, "0")}`;
+  const fid = (n: number) => `01M4C4A1N7${String(tag * 100 + n).padStart(16, "0")}`;
+  const sid = (n: number) => `${String(tag).padStart(4, "0")}${String(n).padStart(12, "0")}`;
+  const now = (Date.now() - 8 * 3_600_000) * 1000;
+  const spans = calls.map((call, n) => {
+    // Each ends a moment before `now` (`ago` earlier still); the request 50 ms after its last.
+    const end = now - (call.ago ?? 0) - 100_000;
+    // One after another, each well before the next: its trace's row comes before the next call's.
+    const at = end - 200_000 + 20_000 * n;
+    const path = new URL(call.url).pathname;
+    return span(`c${n}`, "b0", "http.client", `GET ${path}`, at, end - at, {
+      "http.method": "GET",
+      "url.full": call.url,
+      "w3c.span_id": sid(n + 1),
+    });
+  });
+  // The request around its calls.
+  const start = Math.min(...spans.map((call) => call["start"] as number)) - 50_000;
+  const end = Math.max(...spans.map((call) => (call["start"] as number) + (call["duration"] as number))) + 50_000;
+  const bff = linked(fid(0), w3c, "POST /graphql", start, end - start, null);
+  bff["spans"] = [span("b0", null, "http", "POST /graphql", start, end - start), ...spans];
+  await send([bff]);
+  const serve = async (n: number) => {
+    const call = spans[n] as Doc;
+    const path = new URL((calls[n] as ArrivingCall).url).pathname;
+    const api = linked(fid(n + 1), w3c, `GET ${path}`, (call["start"] as number) + 1_000, 50_000, sid(n + 1), path);
+    api["spans"] = [span(`a${n}`, null, "http", `GET ${path}`, api["start"] as number, 50_000)];
+    const before = await chainLength(fid(0));
+    await send([api]);
+    await expect.poll(() => chainLength(fid(0))).toBe(before + 1);
+  };
+  await expect.poll(() => chainLength(fid(0))).toBe(1);
+  return { bff: fid(0), now: now / 1000, serve };
+}
+
+async function send(traces: Doc[]): Promise<void> {
   const response = await fetch(`${CONSOLE}api/ingest`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify([bff, ...served.reverse()]),
+    body: JSON.stringify(traces),
   });
   expect(response.status).toBe(202);
-  await expect
-    .poll(async () => ((await (await fetch(`${CONSOLE}api/traces/${fid(0)}/chain`)).json()) as Doc)["traces"])
-    .toHaveLength(1 + served.length);
-  return { bff: fid(0) };
+}
+
+async function chainLength(id: string): Promise<number> {
+  const response = await fetch(`${CONSOLE}api/traces/${id}/chain`);
+  return response.ok ? (((await response.json()) as Doc)["traces"] as unknown[]).length : 0;
 }

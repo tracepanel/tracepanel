@@ -956,6 +956,40 @@ tr[data-new] {
   border-left: 1px solid var(--dt-border-strong);
   border-bottom-left-radius: 0.25rem;
 }
+/* Not rows to open: a call whose trace is on its way, and the placeholder of a chain still loading. Dimmed, still. */
+.dt-request-row:is([data-chain="waiting"], [data-chain="loading"]) {
+  cursor: default;
+}
+.dt-request-row:is([data-chain="waiting"], [data-chain="loading"]):hover {
+  background: color-mix(in srgb, var(--dt-subtle) 45%, transparent);
+}
+.dt-request-row[data-chain="waiting"] > .dt-request-main {
+  opacity: 0.55;
+}
+/* The placeholder's bars, each in a path's line: the row is as tall as the one that takes its place. */
+.dt-chain-skeleton {
+  display: inline-block;
+  height: 0.875rem;
+  vertical-align: middle;
+}
+.dt-chain-waiting {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--dt-text-3);
+  font-size: var(--dt-size-xs);
+}
+.dt-chain-waiting > svg {
+  width: 0.75rem;
+  height: 0.75rem;
+  animation: dt-skeleton 1.2s ease-in-out infinite alternate;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dt-chain-waiting > svg {
+    animation: none;
+  }
+}
 .dt-request-row[data-chain] .dt-request-main {
   gap: 0.375rem;
 }

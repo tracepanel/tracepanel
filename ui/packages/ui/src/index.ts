@@ -16,7 +16,7 @@ export * from "./Logo";
 export { LogRecord, logAttrs } from "./LogRecordDetails";
 export { type AttributeColumns, type LogColumn, LogLevel, LogTable, useAttributeColumns } from "./LogTable";
 export { ISSUE_LABELS, issueTitle } from "./labels";
-export { type ChainApp, chainApps } from "./lib/chainRows";
+export { type ChainApp, type ChainEntry, chainApps, waitingUntil } from "./lib/chainRows";
 export { queryFingerprint } from "./lib/fingerprint";
 export { isTyping } from "./lib/keys";
 export { percent } from "./lib/percent";

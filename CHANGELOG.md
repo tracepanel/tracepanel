@@ -16,7 +16,12 @@
   row opens it beside the list. The app's row opens the request with its
   tabs under that app (`Under library-api`). The rows stay folded or
   open as the user left them while the browser tab does, and Follow new
-  keeps to the list's own requests.
+  keeps to the list's own requests. Each level sits a step deeper than
+  the row it is under, with the tree's corner. A call whose trace hasn't
+  reached the agent yet is a dimmed row with its method, path and an
+  hourglass, where that trace's row will be, until the trace arrives or
+  5 s after the call ended (a service without tracepanel sends none). A
+  row whose calls take long to load has a placeholder row meanwhile.
 - A new span kind, `sql.connect`: the time a driver took to open a
   connection to the database (logging in to Snowflake, PostgreSQL's or
   MySQL's handshake). It counts as the database's time in the breakdown and

@@ -2,9 +2,10 @@
 // summary row ("library-api · 37 traces"), then each of them in the order they started on the caller's clock, what
 // each called under it, and so on down the chain. Three or more of one route in a row fold into a run (×36), open
 // while the app has few traces. Plain data, no React: built from the chain the call tree and the trace's tabs read
-// (`GET /traces/{id}/chain`), so the list says the same counts, under the same limits.
+// (`GET /traces/{id}/chain`), so the list says the same counts, under the same limits. A call whose trace hasn't
+// reached the agent yet is a row too, waiting, where that trace's row will be (`ChainWaiting`).
 
-import type { Chain, ChainTrace, IssueKind, Trace, TraceSummary } from "../types";
+import type { Chain, ChainTrace, IssueKind, Span, Trace, TraceSummary } from "../types";
 import { onTheClock } from "./calls";
 
 /** One trace of an app, a row of its own: its method and actual path, its route in the tooltip. */
@@ -16,8 +17,10 @@ export interface ChainTraceRow {
   summary: TraceSummary;
   /** Its route ("GET /authors/{author_id}"), its name where it has none. */
   route: string;
-  /** The apps it called in turn. */
-  apps: ChainApp[];
+  /** When the call it served started, on the chain's clock (its own start where the call isn't known). */
+  called: number;
+  /** The apps it called in turn, and its calls whose traces are on their way. */
+  apps: ChainEntry[];
 }
 
 /** Consecutive traces of one route (three or more): one row (×N, their time on the clock), each of them under it. */
@@ -32,10 +35,29 @@ export interface ChainRun {
   open: boolean;
 }
 
-export type ChainItem = ChainTraceRow | ChainRun;
+/**
+ * A call a trace of the chain made whose trace isn't in the chain yet: the agent stores each app's trace as it gets
+ * it, so a service's can come a moment after its caller's. Its method and path, from the call's span; replaced by
+ * the trace's row once it arrives (in its app's rows when another call to the same host already named the app).
+ */
+export interface ChainWaiting {
+  type: "waiting";
+  key: string;
+  method: string | null;
+  path: string;
+  /** When the call started and ended, on the chain's clock (µs). */
+  start: number;
+  end: number;
+}
+
+export type ChainItem = ChainTraceRow | ChainRun | ChainWaiting;
+
+/** What a level of the chain lists: the apps called there, and the calls still waiting for an app's trace. */
+export type ChainEntry = ChainApp | ChainWaiting;
 
 /** One app's traces at one place down the chain: the summary row ("library-api · 37 traces"). */
 export interface ChainApp {
+  type: "app";
   key: string;
   app: string;
   ids: string[];
@@ -47,6 +69,14 @@ export interface ChainApp {
 
 /** Traces of one route in a row that make a run. */
 export const RUN_MIN = 3;
+/**
+ * How long after a call ended its trace is waited for. A call carried the trace on (its span says which span the
+ * callee's trace names as its parent: `w3c.span_id`), but that alone doesn't say the service it reached records
+ * traces: a third-party API, or an app without tracepanel, never sends one. An app's SDK sends a trace as its request
+ * ends and the agent stores it within a second or two, so a call is waited for this long after it ended, then its row
+ * goes; a trace that comes later still shows as it arrives (the list asks for the chain again while the row is new).
+ */
+export const WAITING_MS = 5_000;
 /** An app with up to this many traces has its runs open: all of them in order, at a glance. */
 export const RUN_OPEN_LIMIT = 50;
 
@@ -132,19 +162,142 @@ function routeOf(trace: Trace): string {
   return typeof route === "string" && typeof method === "string" ? `${method} ${route}` : trace.name;
 }
 
-function appsUnder(
-  parents: ReadonlySet<string>,
-  children: ReadonlyMap<string, Served[]>,
-  chainKinds: ReadonlyMap<string, IssueKind[]>,
-  seen: Set<string>,
-  path: string,
-): ChainApp[] {
+/** The kinds of span that call a service which may record a trace of its own (not a message: it runs any time later). */
+const CALL_KINDS = new Set(["http.client", "grpc", "rpc", "otel"]);
+
+function text(attrs: Span["attrs"], key: string): string | null {
+  const value = attrs[key];
+  return typeof value === "string" && value !== "" ? value : null;
+}
+
+/** The URL a call went to, when its span says it. */
+function urlOf(span: Span): URL | null {
+  const full = text(span.attrs, "url.full") ?? text(span.attrs, "http.url");
+  if (!full) return null;
+  try {
+    return new URL(full);
+  } catch {
+    return null;
+  }
+}
+
+/** Where a call went: its host and port (local apps differ by port alone). */
+function hostOf(span: Span): string | null {
+  const url = urlOf(span);
+  if (url) return url.host;
+  const address = text(span.attrs, "server.address") ?? text(span.attrs, "net.peer.name");
+  const port = span.attrs["server.port"] ?? span.attrs["net.peer.port"];
+  return address ? `${address}${typeof port === "number" || typeof port === "string" ? `:${port}` : ""}` : null;
+}
+
+/** A call that carried the trace on to a service: a service that records traces answers it with one. */
+function carries(span: Span): boolean {
+  return CALL_KINDS.has(span.kind) && text(span.attrs, "w3c.span_id") !== null && !("messaging.system" in span.attrs);
+}
+
+/** A waiting call's row: its method and path as the span says them ("GET /authors/batch"). */
+function waitingOf(span: Span, key: string): ChainWaiting {
+  const method = text(span.attrs, "http.request.method") ?? text(span.attrs, "http.method");
+  const [first = "", ...rest] = span.name.split(" ");
+  const named = /^[A-Z]+$/.test(first);
+  const path = urlOf(span)?.pathname ?? text(span.attrs, "url.path") ?? (named ? rest.join(" ") : span.name);
+  return {
+    type: "waiting",
+    key: `${key}/waiting/${span.id}`,
+    method: method ?? (named ? first : null),
+    path: path || span.name,
+    start: span.start,
+    end: span.start + span.duration,
+  };
+}
+
+/** A waiting call with the host it went to, by the trace that made it. */
+type Pending = { row: ChainWaiting; host: string | null };
+
+/**
+ * The calls of the chain's traces whose traces haven't arrived (by the trace that made them): those that carried the
+ * trace on, no trace of the chain names them, and they ended less than WAITING_MS ago (`now`, µs). None when a limit
+ * left traces out of the chain: those calls' traces aren't missing.
+ */
+function waitingCalls(chain: Chain, now: number): Map<string, Pending[]> {
+  const waiting = new Map<string, Pending[]>();
+  if (chain.capped) return waiting;
+  const answered = new Set(chain.traces.map((each) => `${each.parent}/${each.via}`));
+  for (const each of chain.traces.filter(served)) {
+    const calls = each.trace.spans.filter(
+      (span) =>
+        carries(span) &&
+        !answered.has(`${each.id}/${span.id}`) &&
+        now - (span.start + span.duration) < WAITING_MS * 1000,
+    );
+    if (calls.length === 0) continue;
+    waiting.set(
+      each.id,
+      calls.map((span) => ({ row: waitingOf(span, each.id), host: hostOf(span) })),
+    );
+  }
+  return waiting;
+}
+
+/** When the first of the chain's waiting calls stops being waited for (ms), if any is. */
+export function waitingUntil(chain: Chain, now: number = Date.now()): number | null {
+  const ends = [...waitingCalls(chain, now * 1000).values()].flat().map((each) => each.row.end / 1000 + WAITING_MS);
+  return ends.length > 0 ? Math.min(...ends) : null;
+}
+
+function startOf(item: ChainItem | ChainEntry): number {
+  if (item.type === "waiting") return item.start;
+  if (item.type === "trace") return item.called;
+  if (item.type === "run") return (item.traces[0] as ChainTraceRow).called;
+  return startOf(item.items[0] as ChainItem);
+}
+
+/**
+ * Rows in order with waiting calls put in by when they started, as the rows' calls did: each where its trace's row
+ * will be.
+ */
+function inOrder<T extends ChainItem | ChainEntry>(rows: readonly T[], waiting: readonly ChainWaiting[]): T[] {
+  const out = [...rows];
+  for (const call of [...waiting].sort((a, b) => a.start - b.start)) {
+    const at = out.findIndex((row) => startOf(row) > call.start);
+    out.splice(at === -1 ? out.length : at, 0, call as T);
+  }
+  return out;
+}
+
+interface Context {
+  children: ReadonlyMap<string, Served[]>;
+  waiting: ReadonlyMap<string, Pending[]>;
+  /** Each trace of the chain by its id. */
+  traces: ReadonlyMap<string, Served>;
+  chainKinds: ReadonlyMap<string, IssueKind[]>;
+  seen: Set<string>;
+}
+
+function appsUnder(parents: ReadonlySet<string>, context: Context, path: string): ChainEntry[] {
+  const { children, chainKinds, seen } = context;
   const below = [...parents].flatMap((id) => children.get(id) ?? []).filter((each) => !seen.has(each.id));
   for (const each of below) seen.add(each.id);
   below.sort((a, b) => a.trace.start - b.trace.start || a.id.localeCompare(b.id));
   const byApp = new Map<string, Served[]>();
   for (const each of below) byApp.set(each.app, [...(byApp.get(each.app) ?? []), each]);
-  return [...byApp].map(([app, traces]) => {
+  // A waiting call to a host an arrived call reached: that app's, among its traces. Else a row of its own.
+  const hosts = new Map<string, string>();
+  const calls = new Map<string, Span>();
+  for (const each of below) {
+    const parent = each.parent ? context.traces.get(each.parent) : undefined;
+    const call = parent?.trace.spans.find((span) => span.id === each.via);
+    if (!call) continue;
+    calls.set(each.id, call);
+    const host = hostOf(call);
+    if (host) hosts.set(host, each.app);
+  }
+  const waiting = [...parents].flatMap((id) => context.waiting.get(id) ?? []);
+  const waitingIn = (app: string | undefined): ChainWaiting[] =>
+    waiting
+      .filter((each) => (each.host === null ? undefined : hosts.get(each.host)) === app)
+      .map((each) => ({ ...each.row, key: `${path}/${each.row.key}` }));
+  const apps = [...byApp].map(([app, traces]): ChainApp => {
     const key = `${path}/${app}`;
     const rows = traces.map(
       (each): ChainTraceRow => ({
@@ -154,10 +307,12 @@ function appsUnder(
         trace: each.trace,
         summary: together([each.trace], chainKinds),
         route: routeOf(each.trace),
-        apps: appsUnder(new Set([each.id]), children, chainKinds, seen, `${key}/${each.id}`),
+        called: calls.get(each.id)?.start ?? each.trace.start,
+        apps: appsUnder(new Set([each.id]), context, `${key}/${each.id}`),
       }),
     );
     return {
+      type: "app",
       key,
       app,
       ids: traces.map((each) => each.id),
@@ -165,9 +320,10 @@ function appsUnder(
         traces.map((each) => each.trace),
         chainKinds,
       ),
-      items: runsOf(rows, key, rows.length <= RUN_OPEN_LIMIT, chainKinds),
+      items: inOrder(runsOf(rows, key, rows.length <= RUN_OPEN_LIMIT, chainKinds), waitingIn(app)),
     };
   });
+  return inOrder<ChainEntry>(apps, waitingIn(undefined));
 }
 
 /** The rows in order, three or more of one route in a row folded into a run (keyed by its first trace). */
@@ -214,7 +370,13 @@ function runsOf(
  * The rows under a list row whose trace called other apps: each app it called, by route, and theirs in turn. The
  * traces in `listed` are rows of the list already (a request a page made), with what is under them: left out.
  */
-export function chainApps(chain: Chain, root: string, listed: ReadonlySet<string> = new Set()): ChainApp[] {
+export function chainApps(
+  chain: Chain,
+  root: string,
+  listed: ReadonlySet<string> = new Set(),
+  /** Now, in ms: the calls that ended a moment before it are waited for. */
+  now: number = Date.now(),
+): ChainEntry[] {
   const children = new Map<string, Served[]>();
   for (const each of chain.traces.filter(served)) {
     if (each.parent === null || each.id === root || listed.has(each.id)) continue;
@@ -226,5 +388,7 @@ export function chainApps(chain: Chain, root: string, listed: ReadonlySet<string
     chainKinds.set(issue.trace_id, [...(chainKinds.get(issue.trace_id) ?? []), issue.kind]);
   }
   chainKinds.delete(root);
-  return appsUnder(new Set([root]), children, chainKinds, new Set([root]), root);
+  const traces = new Map(chain.traces.filter(served).map((each) => [each.id, each]));
+  const waiting = waitingCalls(chain, now * 1000);
+  return appsUnder(new Set([root]), { children, waiting, traces, chainKinds, seen: new Set([root]) }, root);
 }
