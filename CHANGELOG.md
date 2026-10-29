@@ -9,6 +9,10 @@
   Memory shows each app's peak, what it kept and where it allocated most,
   then its sites by package, as a flame of bytes and as a list. An app's
   several traces add up as one, their peak the largest of one of them.
+- A snapshot holds the trace's whole chain of calls, as the console shows
+  it: the traces its calls' traces called in turn, down to the chain's
+  limits (6 levels, 60 traces), other projects' traces included. Its tabs
+  add up the same traces as the console's, and its call tree opens them.
 
 ## 0.7.0 (2026-10-29)
 

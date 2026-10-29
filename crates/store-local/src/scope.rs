@@ -26,6 +26,8 @@ pub struct Member {
     pub shift: i64,
     /// Another project's (its agent served it), by that project's name.
     pub project: Option<String>,
+    /// Another project's: how the call tree lists it under its call (`Served::row`).
+    pub row: Option<Value>,
 }
 
 impl Member {
@@ -62,12 +64,28 @@ pub struct Chain {
     pub capped: bool,
 }
 
-/// Other projects' traces for the calls of a trace no trace here answered: (the call's span id, the trace, the
-/// project). Only the console asks other agents; elsewhere none.
-pub type Remote<'a> = &'a dyn Fn(&str) -> Vec<(String, Value, String)>;
+/// Another project's trace for a call of a trace no trace here answered.
+pub struct Served {
+    /// The call's span id.
+    pub via: String,
+    /// The trace.
+    pub doc: Value,
+    /// The project whose agent served it, by name.
+    pub project: String,
+    /// How the call tree lists it under the call (an entry of `remote_calls`): its summary, the call's span, that
+    /// project and its console.
+    pub row: Value,
+}
+
+/// Other projects' traces for the calls of a trace no trace here answered. Only the console asks other agents;
+/// elsewhere none.
+pub type Remote<'a> = &'a dyn Fn(&str) -> Vec<Served>;
+
+/// A trace found for a call: the call's span id, the trace, and for another project's its name and row.
+type Found = (String, Value, Option<(String, Value)>);
 
 /// No other agents to ask.
-pub fn no_remote(_: &str) -> Vec<(String, Value, String)> {
+pub fn no_remote(_: &str) -> Vec<Served> {
     Vec::new()
 }
 
@@ -86,7 +104,7 @@ fn shift_into(call: &Value, served: &Value) -> i64 {
 }
 
 /// A trace document with every time in it moved by `by` µs.
-fn shifted(mut doc: Value, by: i64) -> Value {
+pub(crate) fn shifted(mut doc: Value, by: i64) -> Value {
     if by == 0 {
         return doc;
     }
@@ -140,6 +158,7 @@ impl Reader {
                 level: 0,
                 shift: 0,
                 project: None,
+                row: None,
             }],
             capped: false,
         };
@@ -157,7 +176,7 @@ impl Reader {
                 continue;
             }
             let (level, owner) = (member.level + 1, member.id().to_owned());
-            let mut found: Vec<(String, Value, Option<String>)> = Vec::new();
+            let mut found: Vec<Found> = Vec::new();
             for (child, via) in self.served_calls(&owner)?.into_iter().take(CALL_TRACES) {
                 if seen.contains(&child) {
                     continue;
@@ -166,10 +185,10 @@ impl Reader {
                     found.push((via, doc, None));
                 }
             }
-            for (via, doc, project) in remote(&owner) {
-                found.push((via, doc, Some(project)));
+            for served in remote(&owner) {
+                found.push((served.via, served.doc, Some((served.project, served.row))));
             }
-            for (via, doc, project) in found {
+            for (via, doc, remote) in found {
                 let child = doc["id"].as_str().unwrap_or_default().to_owned();
                 if !seen.insert(child) {
                     continue;
@@ -187,7 +206,8 @@ impl Reader {
                     via: Some(via),
                     level,
                     shift,
-                    project,
+                    project: remote.as_ref().map(|(project, _)| project.clone()),
+                    row: remote.map(|(_, row)| row),
                 });
             }
         }
