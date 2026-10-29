@@ -304,7 +304,7 @@ const STYLE = `
   /* While dragging, the size follows the pointer: no transition (these selectors outrank the dock rules). */
   :host .panel[data-resizing], :host .panel[data-resizing][data-open], :host .panel[data-resizing] ~ .badge,
   :host([data-dock="bottom"]) .panel[data-resizing][data-open] { transition: none; }
-  @media (prefers-reduced-motion: reduce) { .panel, .badge { transition: none; } .name[data-pulse] { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { .panel, .badge, .resize::after { transition: none; } .name[data-pulse] { animation: none; } }
 `;
 
 const PENDING = "pending";

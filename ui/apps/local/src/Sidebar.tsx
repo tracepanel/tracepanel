@@ -837,7 +837,7 @@ export function SidebarHandle({ width, resize }: { width: number; resize: (width
       tabIndex={0}
       title="Drag to resize · double-click to reset"
       // 10px to grab, centred on the sidebar's 1px border; what shows is that border, a step stronger in hand.
-      className="absolute top-0 -right-[5px] z-10 h-full w-2.5 cursor-col-resize outline-none after:absolute after:inset-y-0 after:left-[4px] after:w-px after:bg-transparent after:transition-colors hover:after:bg-(--dt-divider-active) focus-visible:after:bg-(--dt-divider-active) data-dragging:after:bg-(--dt-divider-active)"
+      className="absolute top-0 -right-[5px] z-10 h-full w-2.5 cursor-col-resize outline-none after:absolute after:inset-y-0 after:left-[4px] after:w-px after:bg-transparent after:transition-colors motion-reduce:after:transition-none hover:after:bg-(--dt-divider-active) focus-visible:after:bg-(--dt-divider-active) data-dragging:after:bg-(--dt-divider-active)"
       onPointerDown={start}
       onDoubleClick={() => resize(DEFAULT_WIDTH())}
       onKeyDown={(event) => {

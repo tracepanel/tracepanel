@@ -14,6 +14,12 @@
 
 ### Fixed
 
+- With reduced motion asked for, a drag edge's line (the panel's, the
+  list's, the sidebar's, a details pane's) shows at once under the
+  pointer instead of fading in. A toggle flips without sliding.
+- A long log list no longer loses an arrow key pressed before it has
+  drawn the rows the scroll brought into view: the lines around the
+  focused one stay drawn, so a held key moves a row a press.
 - A chain's Profile tab has the memory its traces measured: Time or
   Memory, as a trace's own tab has it, where one of them measured it.
   Memory shows each app's peak, what it kept and where it allocated most,

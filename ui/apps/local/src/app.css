@@ -2034,3 +2034,14 @@ body {
 .error-message {
   color: var(--dt-text);
 }
+
+/* Last, to outrank the rules above: a drag edge's line shows at once under the pointer, its colour never part way,
+   and a toggle flips without sliding. */
+@media (prefers-reduced-motion: reduce) {
+  .split-handle::after,
+  .detail-resize::after,
+  .toggle-track,
+  .toggle-track::after {
+    transition: none;
+  }
+}
