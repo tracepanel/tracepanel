@@ -10,6 +10,10 @@
 - A long log list no longer loses an arrow key pressed before it has
   drawn the rows the scroll brought into view: the lines around the
   focused one stay drawn, so a held key moves a row a press.
+- A snapshot holds the trace's whole chain of calls, as the console shows
+  it: the traces its calls' traces called in turn, down to the chain's
+  limits (6 levels, 60 traces), other projects' traces included. Its tabs
+  add up the same traces as the console's, and its call tree opens them.
 
 ## 0.7.0 (2026-10-29)
 

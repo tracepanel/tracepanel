@@ -19,7 +19,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tracepanel_protocol::{Activity, Batch, Sink, Thresholds};
 use tracepanel_store_local::{
-    Chain, ReadError, Reader, Selection, call_summary, chain_issues, log_summary,
+    Chain, ReadError, Reader, Selection, Served, call_summary, chain_issues, log_summary,
 };
 
 /// The console's UI, built from `ui/` into `ui-dist/` (`scripts/ui.sh`): what the browser loads, not the notices.
@@ -314,7 +314,7 @@ async fn related(State(reader): State<Shared>, Path(id): Path<String>) -> Respon
 
 /// Other projects' traces for the calls of a trace that no trace here answered, as the chain takes them: (the call's
 /// span, the trace, the project). Blocking: asks the other agents on this machine.
-fn neighbours_served(reader: &Reader, id: &str) -> Vec<(String, Value, String)> {
+fn neighbours_served(reader: &Reader, id: &str) -> Vec<Served> {
     let Some((_, console)) = IDENTITY.get() else {
         return Vec::new();
     };
@@ -328,9 +328,15 @@ fn neighbours_served(reader: &Reader, id: &str) -> Vec<(String, Value, String)> 
         .filter_map(|(w3c_trace, w3c_span, span)| {
             neighbours.iter().find_map(|neighbour| {
                 let mut found = neighbors::ask(neighbour, w3c_trace, w3c_span)?;
-                let doc = found.get_mut("detail").map(Value::take)?;
+                let doc = found.as_object_mut()?.remove("detail")?;
                 let project = found["project"].as_str().unwrap_or_default().to_owned();
-                Some((span.clone(), doc, project))
+                found["span_id"] = Value::from(span.clone());
+                Some(Served {
+                    via: span.clone(),
+                    doc,
+                    project,
+                    row: found,
+                })
             })
         })
         .collect()
@@ -502,7 +508,8 @@ async fn whole_traces(reader: &Shared, ids: Vec<String>) -> serde_json::Map<Stri
 /// An N+1 of calls to another service (a GraphQL resolver's, one per item) opens whole up to here.
 const CALL_TRACES_LIMIT: usize = 50;
 
-/// A trace to share and what is linked to it (`Reader::snapshot`); `values=1` keeps what otherwise stays local.
+/// A trace to share and what is linked to it (`Reader::snapshot`), its chain with other projects' traces as the
+/// console's; `values=1` keeps what otherwise stays local.
 async fn snapshot(
     State(reader): State<Shared>,
     Path(id): Path<String>,
@@ -512,7 +519,11 @@ async fn snapshot(
         return not_found();
     }
     let values = query.get("values").is_some_and(|value| value == "1");
-    match read(&reader, move |reader| Ok(reader.snapshot(&id, values)?)).await {
+    match read(&reader, move |reader| {
+        Ok(reader.snapshot(&id, values, &|owner| neighbours_served(reader, owner))?)
+    })
+    .await
+    {
         Ok(Some(snapshot)) => json_response(StatusCode::OK, snapshot.to_string()),
         Ok(None) => not_found(),
         Err(failure) => failure.into_response(),

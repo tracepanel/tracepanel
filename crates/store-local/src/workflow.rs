@@ -777,7 +777,7 @@ mod tests {
                 ),
             ],
         );
-        let snapshot = reader.snapshot("B", true).unwrap().unwrap();
+        let snapshot = reader.snapshot("B", true, &no_remote).unwrap().unwrap();
         let mut traces: Vec<&String> = snapshot["traces"].as_object().unwrap().keys().collect();
         traces.sort();
 
