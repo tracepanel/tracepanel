@@ -286,7 +286,8 @@ struct Rules {
 struct Slow {
     kind: &'static str,
     prefix: String,
-    threshold_ms: fn(&Thresholds) -> i64,
+    /// By the family's first call: its system's own limit, where the app set one.
+    threshold_ms: fn(&Thresholds, &Span) -> i64,
     hint: &'static str,
 }
 
@@ -403,7 +404,7 @@ fn rules(family: &str, system: &str) -> Option<Rules> {
             slow: Some(Slow {
                 kind: "slow-http",
                 prefix: "Slow HTTP call".into(),
-                threshold_ms: |thresholds| thresholds.slow_http_ms,
+                threshold_ms: |thresholds, _| thresholds.slow_http_ms,
                 hint: SLOW_HTTP,
             }),
         },
@@ -438,7 +439,9 @@ fn rules(family: &str, system: &str) -> Option<Rules> {
             slow: (!IN_MEMORY.contains(&system)).then(|| Slow {
                 kind: "slow-call",
                 prefix: format!("Slow {name} query"),
-                threshold_ms: |thresholds| thresholds.slow_sql_ms,
+                threshold_ms: |thresholds, span| {
+                    crate::limits::slow_sql_ms(thresholds, &span.attrs)
+                },
                 hint: SLOW_DATASTORE,
             }),
         },
@@ -459,7 +462,7 @@ fn rules(family: &str, system: &str) -> Option<Rules> {
             slow: Some(Slow {
                 kind: "slow-call",
                 prefix: "Slow storage call".into(),
-                threshold_ms: |thresholds| thresholds.slow_http_ms,
+                threshold_ms: |thresholds, _| thresholds.slow_http_ms,
                 hint: storage::SLOW,
             }),
         },
@@ -479,7 +482,7 @@ fn rules(family: &str, system: &str) -> Option<Rules> {
             slow: Some(Slow {
                 kind: "slow-call",
                 prefix: format!("Slow {name} call"),
-                threshold_ms: |thresholds| thresholds.slow_http_ms,
+                threshold_ms: |thresholds, _| thresholds.slow_http_ms,
                 hint: SLOW_RPC,
             }),
         },
@@ -787,7 +790,7 @@ fn group_issues(
         }
     }
     if let Some(rule) = &rules.slow {
-        let threshold_us = (rule.threshold_ms)(thresholds) * 1000;
+        let threshold_us = (rule.threshold_ms)(thresholds, spans[0]) * 1000;
         let slow: Vec<&Span> = spans
             .iter()
             .copied()

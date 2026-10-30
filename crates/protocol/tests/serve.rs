@@ -86,7 +86,7 @@ async fn frames_reach_the_sink_with_the_sdks_settings() {
     let batches = received.lock().unwrap();
     assert_eq!(batches[1].frame, br#"[{"id": "b"}, {"id": "c"}]"#);
     assert_eq!(batches[0].max_traces, Some(50));
-    let thresholds = batches[0].thresholds;
+    let thresholds = &batches[0].thresholds;
     assert_eq!(
         (
             thresholds.n_plus_one,
@@ -96,6 +96,48 @@ async fn frames_reach_the_sink_with_the_sdks_settings() {
         ),
         // An SDK that doesn't know a threshold yet gets its default.
         (5, 20, 900, 500)
+    );
+    // Nor any limit per database: the app's own apply to every database.
+    assert!(thresholds.slow_sql_ms_by_db.is_empty());
+    assert!(thresholds.long_transaction_ms_by_db.is_empty());
+}
+
+#[tokio::test]
+async fn an_sdk_sets_its_limits_per_database() {
+    let (address, received, _) = agent().await;
+    let settings = serde_json::json!({
+        "protocol": PROTOCOL,
+        "thresholds": {
+            "slow_sql_ms": 50,
+            "slow_sql_ms_by_db": {"snowflake": 3000, "postgresql": 20},
+            "long_transaction_ms_by_db": {"snowflake": 20000},
+        },
+    });
+    let (mut stream, answer) = hello(&address, settings).await;
+
+    assert_eq!(answer, serde_json::json!({"ok": true}));
+
+    send(&mut stream, b"[]").await;
+    wait_for(&received, 1).await;
+
+    let batches = received.lock().unwrap();
+    let thresholds = &batches[0].thresholds;
+    assert_eq!(
+        (thresholds.slow_sql_ms, thresholds.long_transaction_ms),
+        (50, 500)
+    );
+
+    assert_eq!(
+        thresholds.slow_sql_ms_by_db,
+        [
+            ("postgresql".to_owned(), 20),
+            ("snowflake".to_owned(), 3000)
+        ]
+        .into()
+    );
+    assert_eq!(
+        thresholds.long_transaction_ms_by_db,
+        [("snowflake".to_owned(), 20000)].into()
     );
 }
 
@@ -108,7 +150,7 @@ async fn without_settings_the_defaults() {
     wait_for(&received, 1).await;
 
     let batches = received.lock().unwrap();
-    let thresholds = batches[0].thresholds;
+    let thresholds = &batches[0].thresholds;
     assert_eq!(batches[0].max_traces, None);
     assert_eq!(
         (

@@ -91,7 +91,7 @@ A trace can be shared as one HTML file that opens in any browser.
 | --- | --- |
 | N+1 queries and calls | the same query or call once per item, for SQL, Redis, caches, HTTP, MongoDB, AWS and other systems |
 | Duplicates | the same read with the same values more than once in a trace |
-| Slow SQL | a query over the threshold, with its plan |
+| Slow SQL | a query over the threshold (2 s on an analytical warehouse), with its plan |
 | Slow HTTP and datastore calls | an outgoing call over the threshold, and for MongoDB the index its filter needs |
 | Large results | a `SELECT` without a `LIMIT` that read many rows |
 | Long transactions | a transaction that holds its locks too long |

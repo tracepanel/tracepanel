@@ -13,6 +13,7 @@ use tracepanel_protocol::{Attrs, Issue, Span, Thresholds, Trace};
 
 pub mod aws;
 pub mod calls;
+mod limits;
 pub mod llm;
 pub mod logs;
 pub mod migrations;
@@ -506,10 +507,12 @@ fn sql_issues(trace: &Trace, thresholds: &Thresholds) -> Vec<Issue> {
                 repeated.iter().map(|span| span.id.clone()).collect(),
             ));
         }
+        // A statement on one alias runs on one database: its first span's limit is all of theirs.
+        let slow_us = limits::slow_sql_ms(thresholds, &first.attrs) * 1000;
         let slow: Vec<&Span> = spans
             .iter()
             .copied()
-            .filter(|span| span.duration >= thresholds.slow_sql_ms * 1000)
+            .filter(|span| span.duration >= slow_us)
             .collect();
         if !slow.is_empty() {
             let slowest = slow.iter().map(|span| span.duration).max().unwrap_or(0);
@@ -607,9 +610,12 @@ fn leading_wildcard(span: &Span) -> bool {
     pattern_param || LIKE_LEADING_WILDCARD.is_match(&statement)
 }
 
-/// What to do about a slow query, and why its index doesn't help when its LIKE pattern starts with `%`.
+/// What to do about a slow query, and why its index doesn't help when its LIKE pattern starts with `%`; on an
+/// analytical warehouse, what makes it answer less often or off the request.
 fn slow_sql_hint(slow: &[&Span]) -> String {
-    if slow.iter().any(|span| leading_wildcard(span)) {
+    if slow.iter().any(|span| limits::warehouse(&span.attrs)) {
+        limits::WAREHOUSE_SLOW_SQL.to_owned()
+    } else if slow.iter().any(|span| leading_wildcard(span)) {
         format!("{SLOW_SQL} {LIKE_HINT}")
     } else {
         SLOW_SQL.to_owned()
@@ -895,7 +901,7 @@ fn transaction_issues(trace: &Trace, thresholds: &Thresholds) -> Vec<Issue> {
     for span in &trace.spans {
         let outer =
             span.kind == "transaction" && !truthy(span.attrs.get("db.transaction.savepoint"));
-        if outer && span.duration >= thresholds.long_transaction_ms * 1000 {
+        if outer && span.duration >= limits::long_transaction_ms(thresholds, &span.attrs) * 1000 {
             let culprit_text = text(&span.attrs, "code.origin");
             let alias = py_str(span.attrs.get("db.alias"));
             issues.push(issue(
@@ -1956,6 +1962,143 @@ mod tests {
             )),
             SLOW_SQL
         );
+    }
+
+    /// A query on `system`, `ms` long, and the transaction around it, `transaction_ms` long.
+    fn on(system: &str, ms: i64, transaction_ms: i64) -> Trace {
+        let statement = "SELECT region, SUM(total) FROM orders GROUP BY region";
+        let database = serde_json::json!({
+            "db.system": system, "db.vendor": system, "db.alias": system, "code.origin": "app/views.py:9 in report",
+        });
+        let mut query = database.clone();
+        query["db.statement"] = Value::from(statement);
+        query["db.fingerprint"] = Value::from(statement);
+        request(&[
+            (
+                "transaction",
+                "transaction",
+                database,
+                transaction_ms * 1000,
+            ),
+            ("sql", "SELECT orders", query, ms * 1000),
+        ])
+    }
+
+    #[test]
+    fn an_analytical_warehouse_is_slow_and_long_from_seconds() {
+        // Snowflake answers in seconds by design: 1.5 s isn't slow, 8 s isn't long.
+        assert_eq!(found(&on("snowflake", 1_500, 8_000)), []);
+        assert_eq!(
+            found(&on("snowflake", 2_500, 12_000)),
+            [
+                (
+                    "slow-sql".to_owned(),
+                    "Slow query: 2500 ms · SELECT orders".to_owned(),
+                    1
+                ),
+                (
+                    "long-transaction".to_owned(),
+                    "Long transaction: 12000 ms on snowflake".to_owned(),
+                    1
+                ),
+            ]
+        );
+        // As the Java SDK names BigQuery and Databricks (JDBC's product names), and OpenTelemetry Redshift.
+        for system in ["googlebigquery", "sparksql", "aws.redshift", "ClickHouse"] {
+            assert_eq!(found(&on(system, 1_500, 8_000)), [], "{system}");
+        }
+
+        // PostgreSQL keeps the app's limits: 150 ms is slow, 600 ms long.
+        assert_eq!(
+            found(&on("postgresql", 150, 600)),
+            [
+                (
+                    "slow-sql".to_owned(),
+                    "Slow query: 150 ms · SELECT orders".to_owned(),
+                    1
+                ),
+                (
+                    "long-transaction".to_owned(),
+                    "Long transaction: 600 ms on postgresql".to_owned(),
+                    1
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_slow_warehouse_query_gets_a_warehouse_s_hint() {
+        let hints: Vec<_> = analyze(&on("snowflake", 2_500, 0), &Thresholds::default())
+            .into_iter()
+            .map(|issue| (issue.kind, issue.hint))
+            .collect();
+
+        assert_eq!(
+            hints,
+            [(
+                "slow-sql".to_owned(),
+                Some(limits::WAREHOUSE_SLOW_SQL.to_owned())
+            )]
+        );
+    }
+
+    #[test]
+    fn an_app_s_limit_for_a_database_wins() {
+        let own = Thresholds {
+            slow_sql_ms_by_db: [
+                ("Snowflake".to_owned(), 1_000),
+                ("postgresql".to_owned(), 200),
+            ]
+            .into(),
+            long_transaction_ms_by_db: [("snowflake".to_owned(), 5_000)].into(),
+            ..Thresholds::default()
+        };
+        let found = |trace: &Trace| -> Vec<(String, String)> {
+            analyze(trace, &own)
+                .into_iter()
+                .map(|issue| (issue.kind, issue.title))
+                .collect()
+        };
+
+        // Lower than the warehouse's default, as the app set it.
+        assert_eq!(
+            found(&on("snowflake", 1_500, 8_000)),
+            [
+                (
+                    "slow-sql".to_owned(),
+                    "Slow query: 1500 ms · SELECT orders".to_owned()
+                ),
+                (
+                    "long-transaction".to_owned(),
+                    "Long transaction: 8000 ms on snowflake".to_owned()
+                ),
+            ]
+        );
+
+        // Higher than the app's limit for every database.
+        assert_eq!(found(&on("postgresql", 150, 400)), []);
+
+        // A database the app set nothing for keeps the rest.
+        assert_eq!(
+            found(&on("mysql", 150, 600)),
+            [
+                (
+                    "slow-sql".to_owned(),
+                    "Slow query: 150 ms · SELECT orders".to_owned()
+                ),
+                (
+                    "long-transaction".to_owned(),
+                    "Long transaction: 600 ms on mysql".to_owned()
+                ),
+            ]
+        );
+
+        // An app whose limit for every database is higher than a warehouse's default keeps it there too.
+        let relaxed = Thresholds {
+            slow_sql_ms: 5_000,
+            ..Thresholds::default()
+        };
+        assert!(analyze(&on("snowflake", 2_500, 0), &relaxed).is_empty());
     }
 
     #[test]
