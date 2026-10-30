@@ -460,3 +460,89 @@ async fn the_endpoint_takes_an_export_and_sends_its_traces_on() {
         (1, 1, &json!("GET /orders/{id}"))
     );
 }
+
+/// Apollo Router 2.18's trace of one query through it to a subgraph (tests/fixtures/apollo-router-*.json, one per
+/// `spans.mode`), as the agent keeps it.
+fn router(mode: &str) -> Received {
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/json"),
+    );
+    let start = Instant::now();
+    let mut assembler = Assembler::default();
+    assembler.add(
+        tracepanel_otlp::decode(&headers, &fixture(&format!("apollo-router-{mode}.json"))).unwrap(),
+        start,
+    );
+    let docs = assembler.ready(start + QUIET);
+    assert_eq!(docs.len(), 1);
+    analyzed(&docs[0])
+}
+
+#[test]
+fn apollo_router_s_request_to_its_subgraph_is_a_call_that_links_its_trace() {
+    for (mode, subgraph_parent) in [
+        ("spec-compliant", "04e918f5f648dcf5"),
+        ("deprecated", "9ff0673cffc76eca"),
+    ] {
+        let received = router(mode);
+        let doc: Value = serde_json::from_str(&received.doc).unwrap();
+        let tree: Vec<(&str, &str, Option<&str>)> = doc["spans"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|span| {
+                let parent = span["parent_id"].as_str().map(|id| {
+                    doc["spans"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .find(|each| each["id"] == id)
+                        .unwrap()["name"]
+                        .as_str()
+                        .unwrap()
+                });
+                (
+                    span["kind"].as_str().unwrap(),
+                    span["name"].as_str().unwrap(),
+                    parent,
+                )
+            })
+            .collect();
+        let call = doc["spans"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|span| span["kind"] == "http.client")
+            .unwrap();
+
+        // The Router's stages are left out, their calls under the request: one call to the subgraph, the span whose
+        // id the subgraph got, so the subgraph's trace links to it.
+        assert_eq!(doc["name"], "GraphQL query Books", "{mode}");
+        assert_eq!(
+            (
+                &doc["attrs"]["graphql.operation.type"],
+                &doc["attrs"]["graphql.operation.name"]
+            ),
+            (&json!("query"), &json!("Books"))
+        );
+        assert_eq!(
+            tree.iter()
+                .filter(|(kind, ..)| *kind == "http.client")
+                .count(),
+            1,
+            "{mode}: {tree:?}"
+        );
+        assert!(
+            tree.iter().all(|(kind, ..)| *kind != "function"),
+            "{mode}: {tree:?}"
+        );
+        assert_eq!(call["name"], "POST host.docker.internal/", "{mode}");
+        assert_eq!(call["attrs"]["w3c.span_id"], subgraph_parent, "{mode}");
+        assert_eq!(
+            received.trace.spans.len(),
+            doc["spans"].as_array().unwrap().len()
+        );
+    }
+}
