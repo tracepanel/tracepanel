@@ -541,6 +541,21 @@ function ExploreMenu({ explore, links }: { explore: readonly ExploreItem[]; link
   );
 }
 
+/**
+ * The tab a trace opens at: the one the link asked for, else Error for a failed one, else the one the panel remembers,
+ * else the call tree. A tab the trace has not (an error tab without an error) falls back like no tab.
+ */
+function firstTab(
+  trace: Trace,
+  initialTab: TabId | undefined,
+  preferredTab: TabId | undefined,
+  app: App | null | undefined,
+): TabId {
+  if (hasTab(trace, initialTab, app)) return initialTab;
+  if (trace.errors.length > 0) return "error";
+  return hasTab(trace, preferredTab, app) ? preferredTab : "tree";
+}
+
 export function TraceView({
   trace,
   explore = [],
@@ -566,17 +581,7 @@ export function TraceView({
 }: TraceViewProps) {
   const compact = variant === "compact" || variant === "strip";
   const findings = useMemo(() => findingsOf(trace), [trace]);
-  const [active, setActive] = useState<TabId>(
-    // A tab the link asked for that this trace has not (an error tab without an error) falls back like no tab.
-    () =>
-      hasTab(trace, initialTab, app)
-        ? initialTab
-        : trace.errors.length > 0
-          ? "error"
-          : hasTab(trace, preferredTab, app)
-            ? preferredTab
-            : "tree",
-  );
+  const [active, setActive] = useState<TabId>(() => firstTab(trace, initialTab, preferredTab, app));
   const spansNoun = useMemo(() => nounsOf(trace), [trace]);
   const [focus, setFocus] = useState<ReadonlySet<string> | undefined>(undefined);
   // A span to open in the call tree: from the link's `span`, or a log record's "in the call tree".
