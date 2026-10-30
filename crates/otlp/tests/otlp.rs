@@ -137,6 +137,7 @@ fn the_agent_maps_the_spans_and_finds_the_issues() {
     assert_eq!(
         kinds,
         [
+            ("http", "GET /orders/{id}"),
             ("sql", "SELECT order_item"),
             ("sql", "SELECT order_item"),
             ("sql", "SELECT order_item"),
@@ -153,12 +154,12 @@ fn the_agent_maps_the_spans_and_finds_the_issues() {
         .collect();
     assert_eq!(issues, ["n+1"]);
     assert_eq!(
-        shop.trace.spans[0].attrs["code.origin"],
+        shop.trace.spans[1].attrs["code.origin"],
         "shop/views.py:31 in order"
     );
     // The call to billing keeps the W3C id billing's trace names as its parent.
     assert_eq!(
-        shop.trace.spans[5].attrs["w3c.span_id"],
+        shop.trace.spans[6].attrs["w3c.span_id"],
         docs[1]["attrs"]["w3c.parent_span_id"]
     );
 }
@@ -174,7 +175,7 @@ fn the_w3c_ids_link_a_call_to_the_service_that_served_it() {
         .unwrap();
 
     // Only calls that carry the trace on get theirs: not the SQL.
-    assert_eq!(docs[0]["spans"][0]["attrs"].get("w3c.span_id"), None);
+    assert_eq!(docs[0]["spans"][1]["attrs"].get("w3c.span_id"), None);
     assert_eq!(
         docs[1]["attrs"]["w3c.parent_span_id"],
         call["attrs"]["w3c.span_id"]
@@ -245,7 +246,7 @@ fn a_late_span_sends_its_trace_again_under_the_same_id() {
             first[0]["spans"].as_array().unwrap().len(),
             again[0]["spans"].as_array().unwrap().len()
         ),
-        (5, 6)
+        (6, 7)
     );
     // Long after, it is forgotten: the same spans again are a new arrival.
     assert_eq!(
@@ -296,11 +297,19 @@ fn otlp_json_as_the_specification_writes_it() {
             &json!(200)
         )
     );
+    // The trace's own span first, the request; the query under it.
     assert_eq!(
         (
-            &docs[0]["spans"][0]["status"],
-            &docs[0]["spans"][0]["start"],
-            &docs[0]["spans"][0]["attrs"]["otel.span_kind"]
+            &docs[0]["spans"][0]["kind"],
+            &docs[0]["spans"][0]["parent_id"]
+        ),
+        (&json!("http"), &Value::Null)
+    );
+    assert_eq!(
+        (
+            &docs[0]["spans"][1]["status"],
+            &docs[0]["spans"][1]["start"],
+            &docs[0]["spans"][1]["attrs"]["otel.span_kind"]
         ),
         (
             &json!("error"),
@@ -554,6 +563,14 @@ fn apollo_router_s_request_to_its_subgraph_is_a_call_that_links_its_trace() {
             "{mode}: {tree:?}"
         );
         assert_eq!(call["name"], "POST host.docker.internal/", "{mode}");
+        // Under the request, the trace's own span, as an SDK's: what the console opens under the call that reached it.
+        assert_eq!(tree[0], ("http", "GraphQL query Books", None), "{mode}");
+        assert!(
+            tree[1..]
+                .iter()
+                .all(|(.., parent)| *parent == Some("GraphQL query Books")),
+            "{mode}: {tree:?}"
+        );
         // What came over OTLP stays with it: the Router's span, named only by its URL, and why it is a call.
         let mut came = call["received"].clone();
         let attrs = came.as_object_mut().unwrap().remove("attrs").unwrap();
