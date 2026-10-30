@@ -171,6 +171,16 @@ function chainLoader(source: DataSource): ((traceId: string) => Promise<Chain>) 
 }
 
 /**
+ * What the apps that recorded traces can do, each trace of the chain by its own app: run EXPLAIN (by the app's
+ * service), and profile a request when asked (by the trace).
+ */
+function useAppsCan(source: DataSource) {
+  const explains = useServiceCapability(source, "explain");
+  const profiles = useServiceCapability(source, "profile");
+  return { explains, profilesIn: (trace: Trace) => profiles(serviceName(trace)) };
+}
+
+/**
  * A trace's queries' EXPLAIN, where the app that recorded it runs it (`explains`, by its service): the agent asks
  * that app, or the console of that app answers it itself. Undefined where it doesn't.
  */
@@ -367,9 +377,7 @@ export function TraceScreen({
   const related = useRelated(id, source);
   // The panel (compact, or docked as a strip) has an App tab: the console's trace page doesn't.
   const app = useApp(source, serviceOf(trace, variant));
-  // EXPLAIN only where the app that recorded a trace runs it: each trace of the chain by its own app.
-  const explains = useServiceCapability(source, "explain");
-  const profiles = useServiceCapability(source, "profile");
+  const { explains, profilesIn } = useAppsCan(source);
   if (trace === null) return <NoTrace loaded={loaded} variant={variant} back={back} />;
   return (
     <TraceView
@@ -379,7 +387,7 @@ export function TraceScreen({
       onTabChange={onTabChange}
       onExplain={explainer(source, trace.id, serviceName(trace), explains)}
       explainIn={(traceId, service) => explainer(source, traceId, service, explains)}
-      profilesIn={(each) => profiles(serviceName(each))}
+      profilesIn={profilesIn}
       initialTab={initialTab}
       preferredTab={preferredTab}
       actions={withShare(trace, source, actions, shareable === true)}
