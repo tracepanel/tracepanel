@@ -56,12 +56,20 @@ paths:
           in: path
           required: true
           schema: { type: string, pattern: "^[0-9A-Z]{26}$" }
+        - name: missing
+          in: query
+          description: >-
+            `no-content`: a trace not stored (yet) is 204 No Content instead of 404, for a client that waits for it
+            (a browser logs each 404 as an error).
+          schema: { type: string, enum: [no-content] }
       responses:
         "200":
           description: The trace document.
           content:
             application/json:
               schema: { $ref: "trace.schema.json" }
+        "204":
+          description: Not stored (yet), asked with `missing=no-content`.
         "404": { $ref: "#/components/responses/NotFound" }
   /traces/{id}/related:
     get:

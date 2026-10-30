@@ -140,7 +140,7 @@ export interface DataSource {
 
 async function getJson<T>(url: URL): Promise<T | null> {
   const response = await fetch(url, { headers: { accept: "application/json" } });
-  if (response.status === 404) return null;
+  if (response.status === 404 || response.status === 204) return null;
   if (response.status === 400) {
     const body = (await response.json()) as { error?: string };
     throw new SearchError(body.error ?? "Invalid search");
@@ -240,7 +240,8 @@ export function httpSource(base: string | URL): DataSource {
       return { items: body?.traces ?? [], next: body?.next ?? null };
     },
     getTrace(id) {
-      return getJson<Trace>(url(`traces/${encodeURIComponent(id)}`));
+      // A trace not stored yet (on its way) is no error: the browser logs none for its 204.
+      return getJson<Trace>(url(`traces/${encodeURIComponent(id)}`, { missing: "no-content" }));
     },
     async searchLogs(q, before) {
       const body = await getJson<{ logs: LogRow[]; next: number | null }>(url("logs", { q, before }));

@@ -4,6 +4,10 @@
 
 ### Fixed
 
+- The panel waiting for a trace on its way (the view of a page still
+  open, which the browser sends once it ends) no longer fills the
+  browser's console with errors. The agent answers a trace not stored
+  yet with 204 when asked so (`?missing=no-content`), not 404.
 - A trace that came over OTLP has its own span, the request (or the
   task, the command) the others hang under, as an SDK's trace has. Its
   spans had no parent instead, so a trace like Apollo Router's opened

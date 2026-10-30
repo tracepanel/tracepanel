@@ -2652,7 +2652,10 @@ export interface operations {
     };
     getTrace: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `no-content`: a trace not stored (yet) is 204 No Content instead of 404, for a client that waits for it (a browser logs each 404 as an error). */
+                missing?: "no-content";
+            };
             header?: never;
             path: {
                 id: string;
@@ -2669,6 +2672,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["trace.schema"];
                 };
+            };
+            /** @description Not stored (yet), asked with `missing=no-content`. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             404: components["responses"]["NotFound"];
         };

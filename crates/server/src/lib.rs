@@ -265,13 +265,26 @@ async fn traces(State(reader): State<Shared>, Query(query): Params) -> Response 
     )
 }
 
-async fn trace(State(reader): State<Shared>, Path(id): Path<String>) -> Response {
+/// A trace by its id. Asked with `?missing=no-content`, one not stored yet is 204, not 404, which a browser logs as an
+/// error on every try (the panel's view of the page still open, sent once it ends).
+async fn trace(
+    State(reader): State<Shared>,
+    Path(id): Path<String>,
+    Query(asked): Params,
+) -> Response {
+    let not_yet = || {
+        if asked.get("missing").map(String::as_str) == Some("no-content") {
+            StatusCode::NO_CONTENT.into_response()
+        } else {
+            not_found()
+        }
+    };
     if !is_id(&id) {
         return not_found();
     }
     match read(&reader, move |reader| Ok(reader.get_trace(&id)?)).await {
         Ok(Some(doc)) => json_response(StatusCode::OK, doc),
-        Ok(None) => not_found(),
+        Ok(None) => not_yet(),
         Err(failure) => failure.into_response(),
     }
 }
