@@ -19,12 +19,17 @@ async function broken(): Promise<Call> {
  */
 async function profiles(
   page: Page,
-  { memory, all = false, memoryAll = false }: { memory: boolean; all?: boolean; memoryAll?: boolean },
+  {
+    memory,
+    all = false,
+    memoryAll = false,
+    profile = true,
+  }: { memory: boolean; all?: boolean; memoryAll?: boolean; profile?: boolean },
 ): Promise<void> {
   const json = {
     explain: false,
     users: false,
-    profile: true,
+    profile,
     // biome-ignore lint/style/useNamingConvention: wire format.
     profile_memory: memory,
     // biome-ignore lint/style/useNamingConvention: wire format.
@@ -458,6 +463,49 @@ test("Profile, when the app's settings profile every request with memory, is lit
   await button.click({ force: true });
 
   await expect(button).toHaveAccessibleName("Profiling time and memory");
+  expect(await profileCookie(context)).toBeUndefined();
+});
+
+test("Profile, with no app here that profiles on request but the cookie set, shows what it asks and turns it off", async ({
+  page,
+  context,
+}) => {
+  // The cookie is the host's: a console on another port of it set it, and the page's calls still ask with it.
+  await context.addCookies([{ name: "tracepanel_profile", value: "memory", domain: "127.0.0.1", path: "/" }]);
+  await profiles(page, { memory: false, profile: false });
+  await openApp(page, { posts: await posts() });
+  await page.getByRole("button", { name: "Load posts" }).click();
+  await pill(page).click();
+  const button = panel(page).getByRole("button", { name: /^Profiling/ });
+
+  await expect(button).toHaveAccessibleName("Profiling time and memory");
+  await expect(button.getByTestId("profile-memory-dot")).toBeVisible();
+  await expectHint(page, button, "Asking the apps this browser calls to profile time and memory");
+  await expectHint(page, button, "· click: off");
+
+  await button.click();
+
+  // Off: no cookie, nothing asks; with no app here to profile, the button goes.
+  expect(await profileCookie(context)).toBeUndefined();
+  await expect(button).toHaveCount(0);
+});
+
+test("Profile, when the cookie asks for memory where the apps profile time only, says memory", async ({
+  page,
+  context,
+}) => {
+  await context.addCookies([{ name: "tracepanel_profile", value: "memory", domain: "127.0.0.1", path: "/" }]);
+  await profiles(page, { memory: false });
+  await openApp(page, { posts: await posts() });
+  await page.getByRole("button", { name: "Load posts" }).click();
+  await pill(page).click();
+  const button = panel(page).getByRole("button", { name: /^Profiling/ });
+
+  await expect(button).toHaveAccessibleName("Profiling time and memory");
+
+  await button.click();
+
+  await expect(button).toHaveAccessibleName("Profiling off");
   expect(await profileCookie(context)).toBeUndefined();
 });
 

@@ -2314,7 +2314,8 @@ details[data-focused] > .dt-sql-group {
 .dt-map-row[data-kind="signal"] {
   --dt-k: var(--dt-k-signal);
 }
-.dt-map-row[data-level="warning"] {
+.dt-map-row[data-level="warning"],
+.dt-map-row[data-status="warn"] {
   --dt-k: var(--dt-warn-strong);
 }
 .dt-map-row[data-level="error"],
@@ -3008,6 +3009,11 @@ div.dt-map-row[data-kind="code"] {
 .dt-map-row[data-category][data-status="error"] {
   --dt-k: var(--dt-error);
   --dt-k-ink: var(--dt-error);
+}
+/* A call answered 4xx: a warning's colour over its share's, as the lists mark one. */
+.dt-map-row[data-category][data-status="warn"] {
+  --dt-k: var(--dt-warn-strong);
+  --dt-k-ink: var(--dt-warn-strong);
 }
 /* The kind's badge: a soft fill of its share's colour and the word in it, one size and case for every kind. */
 .dt-map-row[data-category] .dt-map-kind[data-muted] {

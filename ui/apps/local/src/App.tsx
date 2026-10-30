@@ -412,8 +412,9 @@ interface RowChains {
 }
 
 /**
- * The apps each row's trace called, by its id (none for a view or an action: its requests are rows of their own).
- * Read from the trace's chain, as its call tree and tabs read it (`source.chain`): loaded once a row is stored, again
+ * The apps each row's trace called, by its id. A view's or an action's too: its requests to an app with an SDK are
+ * rows of their own (left out here), but a call through a proxy or a gateway (Apollo Router, over OTLP) answers with
+ * no trace id for the widget to list, and only the chain says what served it. Read from the trace's chain, as its call tree and tabs read it (`source.chain`): loaded once a row is stored, again
  * when the row changes, and every two seconds while it is new (a service's trace can arrive after its caller's). Its
  * calls whose traces are on their way are rows too, until they arrive or stop being waited for (lib/chainRows).
  */
@@ -423,7 +424,7 @@ function useRowChains(rows: readonly TraceRow[], stored: ReadonlySet<string>): R
   const has = useRef(chains);
   has.current = chains;
   const loaded = useRef(new Map<string, string>());
-  const wanted = rows.filter((row) => row.trace.kind !== "page" && stored.has(row.trace.id)).map((row) => row.trace);
+  const wanted = rows.filter((row) => stored.has(row.trace.id)).map((row) => row.trace);
   const key = wanted.map(rowKey).join(",");
   // biome-ignore lint/correctness/useExhaustiveDependencies: `key` says which rows and what they hold.
   useEffect(() => {

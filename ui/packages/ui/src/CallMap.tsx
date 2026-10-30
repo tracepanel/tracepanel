@@ -22,6 +22,7 @@ import { LlmConversation, withoutMessages } from "./LlmConversation";
 import { AllAttributes, LogRecordDetails } from "./LogRecordDetails";
 import { withoutAnsi } from "./lib/ansi";
 import { type Category, spanCategories } from "./lib/breakdown";
+import { answers, callAnswer, unfinished } from "./lib/callAnswer";
 import { callFields, templatePlace } from "./lib/callFields";
 import { callTemplate, callText, groupNoun } from "./lib/calls";
 import { spanKindLabel } from "./lib/handler";
@@ -58,6 +59,7 @@ import {
   KindBadge,
   SectionHeading,
   StateBadge,
+  StatusBadge,
   TaskName,
   TemplateChip,
   Times,
@@ -76,7 +78,8 @@ import type { Attrs, IssueKind, Log, Related, Span, Trace, TraceError, TraceSumm
 type Node =
   // `served`: the trace another app served for this call, merged into its row (see hopOf); its rows are then this
   // row's children, after the call's own.
-  | { type: "span"; key: string; span: Span; children: Node[]; served?: ServedRun | undefined }
+  // `cut`: the call hadn't ended when its trace went out; its time is then the served trace's (see lastedFor).
+  | { type: "span"; key: string; span: Span; children: Node[]; served?: ServedRun | undefined; cut?: boolean }
   // Repeats of one call; `members` are their rows, each with what is under it (the trace another app served for it).
   | { type: "group"; key: string; spans: Span[]; members: SpanNode[]; start: number; end: number }
   | { type: "log"; key: string; log: Log }
@@ -391,7 +394,17 @@ function hopOf(node: SpanNode): SpanNode {
   const [call] = served;
   if (served.length !== 1 || !call) return node;
   const own = node.children.filter((child) => child !== call);
-  return { ...node, served: call, children: [...own, ...call.children].sort((a, b) => startOf(a) - startOf(b)) };
+  const children = [...own, ...call.children].sort((a, b) => startOf(a) - startOf(b));
+  return { ...node, span: lastedFor(node.span, call.run), served: call, children, cut: unfinished(node.span) };
+}
+
+/**
+ * A call cut short (its trace went out before it ended, see `unfinished`) lasts at least until the trace served for
+ * it ended: never 0 µs for a call whose trace took seconds.
+ */
+function lastedFor(span: Span, run: TraceSummary): Span {
+  if (!unfinished(span)) return span;
+  return { ...span, duration: Math.max(span.duration, run.start + run.duration - span.start) };
 }
 
 /** The calls that ask and wait for an answer: a message sent (a publish) is no hop, its consumer runs on its own. */
@@ -1258,6 +1271,19 @@ function SpanRow({ node, place }: RowProps<"span">) {
   return node.served ? <HopRow node={node} served={node.served} place={place} /> : <OwnRow node={node} place={place} />;
 }
 
+/** A span's time; a call the page sent its trace before it ended, with no trace served for it, has none known. */
+function OwnTime({ span, ctx }: { span: Span; ctx: RowContext }) {
+  if (answers(span) && span.duration === 0 && unfinished(span)) {
+    return (
+      <span className="dt-map-time" title={UNENDED_NOTE}>
+        —
+      </span>
+    );
+  }
+  const slow = span.parent_id === null ? undefined : slowness(span.duration, ctx.trace, ctx.categories.get(span.id));
+  return <RowTime time={span.duration} slow={slow} title={timeTitle(span, ctx.trace)} />;
+}
+
 function OwnRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps<"span">) {
   const { span } = node;
   const fold = spanFold(node, mark, ctx);
@@ -1268,6 +1294,7 @@ function OwnRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps<
         <span className="dt-map-name" style={indent}>
           <SpanFold ctx={ctx} node={node} parent={parent} fold={fold} />
           <SpanName span={span} />
+          <CallStatus node={node} />
           <AliasChip value={aliasBeside(span)} />
           <FromTemplate span={span} parent={parent} />
           <SignalNotes span={span} parent={parent} under={childSpans(node)} />
@@ -1276,11 +1303,7 @@ function OwnRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps<
           <RowChips>{issue ? <IssueChip kind={issue} className={ISSUE_CHIP_SHRINKS} /> : null}</RowChips>
         </span>
         <Bar trace={ctx.trace} start={span.start} length={span.duration} within={ctx.within} />
-        <RowTime
-          time={span.duration}
-          slow={span.parent_id === null ? undefined : slowness(span.duration, ctx.trace, ctx.categories.get(span.id))}
-          title={timeTitle(span, ctx.trace)}
-        />
+        <OwnTime span={span} ctx={ctx} />
       </button>
       <RowDetails id={node.key} ctx={ctx} />
       {fold ? (
@@ -1357,6 +1380,13 @@ function HopBar({
   );
 }
 
+/** A call cut short, on its time's hover. */
+const CUT_NOTE =
+  "The page sent its trace before this call ended (a route change, or its longest wait): its time is until the trace served for it ended";
+/** A call cut short with no trace served for it: its time isn't known. */
+const UNENDED_NOTE =
+  "The page sent its trace before this call ended (a route change, or its longest wait): its time isn't known";
+
 /** A merged call's time on hover: the server's part and the rest (the network, a queue), and what its clock did. */
 function hopTimes(span: Span, served: ServedRun): string {
   const server = served.run.duration;
@@ -1395,6 +1425,8 @@ function HopRow({ node, served, place }: { node: SpanNode; served: ServedRun; pl
           <span className="sr-only">served by</span>
           <CallApp node={served} />
           <ServedName text={text} name={served.run.name} />
+          {/* After what served it: the answer is the served trace's when the call says none. */}
+          <CallStatus node={node} />
           <FromTemplate span={span} parent={parent} />
           <HiddenLogs count={ctx.hiddenLogs.get(span.id)} onShow={ctx.onShowLogs} />
           <RowChips>
@@ -1407,7 +1439,7 @@ function HopRow({ node, served, place }: { node: SpanNode; served: ServedRun; pl
         <RowTime
           time={span.duration}
           slow={slowness(span.duration, ctx.trace, ctx.categories.get(span.id))}
-          title={hopTimes(span, served)}
+          title={node.cut ? `${CUT_NOTE}\n${hopTimes(span, served)}` : hopTimes(span, served)}
         />
       </button>
       <RowDetails id={node.key} ctx={ctx} />
@@ -1430,6 +1462,30 @@ function HopIssue({ span, served, ctx }: { span: Span; served: ServedRun; ctx: R
   return <IssueChip kind={issue} className={ISSUE_CHIP_SHRINKS} />;
 }
 
+/** A row's look by how it went: a call by what it was answered (5xx or none red, 4xx amber), else its span's status. */
+function rowStatus(node: SpanNode): string {
+  if (!answers(node.span)) return node.span.status;
+  const { tone } = callAnswer(node.span, node.served?.run);
+  return tone ?? node.span.status;
+}
+
+/**
+ * What a call was answered, beside its name: its status code as every list shows one, "failed" when no answer came
+ * (a connection error, a timeout). Nothing for a call that says neither.
+ */
+function CallStatus({ node }: { node: SpanNode }) {
+  if (!answers(node.span)) return null;
+  const { status, tone } = callAnswer(node.span, node.served?.run);
+  if (status !== null) return <StatusBadge status={status} />;
+  if (tone !== "error") return null;
+  const failure = node.span.attrs["error.type"];
+  return (
+    <span className="dt-status" data-tone="error" title={typeof failure === "string" ? failure : "No answer"}>
+      failed
+    </span>
+  );
+}
+
 /** A span row's button: its state, kind and share; a click selects it and opens it, the arrows fold it. */
 function spanButton(ctx: RowContext, node: SpanNode, mark: Mark | undefined, fold: boolean | undefined) {
   const { span } = node;
@@ -1438,7 +1494,7 @@ function spanButton(ctx: RowContext, node: SpanNode, mark: Mark | undefined, fol
     ...rowState(ctx, node.key, mark),
     "data-kind": span.kind,
     "data-category": ctx.categories.get(span.id),
-    "data-status": span.status,
+    "data-status": rowStatus(node),
     "aria-expanded": fold,
     onClick: () => clickSpan(ctx, node.key, fold),
     onKeyDown: foldKeys(fold, () => ctx.onToggle(node.key)),

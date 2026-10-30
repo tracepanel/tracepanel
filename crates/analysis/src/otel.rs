@@ -284,12 +284,14 @@ fn map_in_place(span: &mut Value) {
     };
     let mapped = map(&name, &attrs);
     span["received"] = received(name, attrs, &mapped);
+    if mapped.error {
+        span["status"] = Value::from("error");
+    } else if answered_4xx(&mapped) {
+        span["status"] = Value::from("ok");
+    }
     span["kind"] = Value::from(mapped.kind);
     span["name"] = Value::from(mapped.name);
     span["attrs"] = Value::Object(mapped.attrs);
-    if mapped.error {
-        span["status"] = Value::from("error");
-    }
 }
 
 /// The URL attributes whose credentials and sensitive query values are masked, as a mapped span's own `url.full` is.
@@ -1133,10 +1135,32 @@ fn http_client(attrs: &Attrs, method: &str) -> Mapped {
     Mapped {
         kind: "http.client".into(),
         name: format!("{method} {host}{path}"),
-        error: status.is_some_and(|status| status >= 400) || attrs.contains_key("error.type"),
+        error: call_failed(status, text(attrs, &["error.type"]).as_deref()),
         reason: String::new(),
         attrs: out,
     }
+}
+
+/// Whether an HTTP call failed: answered 5xx, or with no answer at all (`error.type` names a connection error or a
+/// timeout). A 4xx answer is no failure of the call: OpenTelemetry's `error.type` then names the status code ("404"),
+/// as its HTTP conventions set the span's status to Error; the console shows such a call as a warning.
+fn call_failed(status: Option<i64>, error: Option<&str>) -> bool {
+    match status {
+        Some(status) if status >= 500 => true,
+        Some(status) => error.is_some_and(|error| error != status.to_string()),
+        None => error.is_some(),
+    }
+}
+
+/// An HTTP call answered 4xx and that failed in no other way: no error, whatever its OpenTelemetry status says.
+fn answered_4xx(mapped: &Mapped) -> bool {
+    mapped.kind == "http.client"
+        && !mapped.error
+        && mapped
+            .attrs
+            .get("http.response.status_code")
+            .and_then(Value::as_i64)
+            .is_some_and(|status| (400..500).contains(&status))
 }
 
 struct UrlParts {
