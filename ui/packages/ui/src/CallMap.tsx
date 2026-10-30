@@ -1,3 +1,4 @@
+import { FlameIcon } from "lucide-react";
 import {
   type CSSProperties,
   createContext,
@@ -13,6 +14,7 @@ import { AsReceived } from "./AsReceived";
 import { type Explain, type ExplainOf, QueryPlan } from "./CallTable";
 import { duration, since } from "./format";
 import { GraphqlCode } from "./GraphqlCode";
+import { Hint } from "./Hint";
 import { useChain } from "./hooks/useChain";
 import { ChevronRightIcon, CloseIcon } from "./icons";
 import { keyed } from "./keys";
@@ -592,6 +594,7 @@ interface RowContext {
    * row's flame and its code rows lead there. None where the host can't open one.
    */
   onTraceProfile: TraceProfileOpener | undefined;
+  profilesIn: ProfilesIn | undefined;
   /** Loads the links of a call's trace opened in the tree: the calls it made in turn open under it. */
   onChain: (traceId: string) => void;
   /** The stretch of the span rows are under, which no bar of theirs is drawn past (and see Clock). */
@@ -612,13 +615,18 @@ interface CodeOwner {
   trace: Trace;
   quiet: ReadonlyMap<string, Quiet>;
   onProfile: ((range: TimeRange) => void) | undefined;
+  /** Its app profiles a request when asked: untraced code then says how to see what ran. */
+  profiles: boolean;
 }
 
 /** A call's trace as the owner of the code rows under it: its own quiet spans, its own profile. */
-function ownerFor(whole: Trace, open: TraceProfileOpener | undefined): CodeOwner {
+function ownerFor(whole: Trace, open: TraceProfileOpener | undefined, profilesIn: ProfilesIn | undefined): CodeOwner {
   const onProfile = open && whole.profile ? (range: TimeRange) => open(whole.id, range) : undefined;
-  return { trace: whole, quiet: quietSpans(whole), onProfile };
+  return { trace: whole, quiet: quietSpans(whole), onProfile, profiles: profilesIn?.(whole) === true };
 }
+
+/** Whether the app that recorded a trace profiles a request when asked. */
+export type ProfilesIn = (trace: Trace) => boolean;
 
 /** The stretch of a call, inside the one rows are already kept in. */
 function narrowed(within: Within | undefined, call: Span): Within {
@@ -817,7 +825,8 @@ function useLinkedContext(node: Linked, ctx: RowContext): RowContext {
   const call = node.type === "task" ? node.clock?.call : undefined;
   const whole = node.type === "task" && !node.remote ? node.whole : undefined;
   const open = ctx.onTraceProfile;
-  const code = useMemo(() => (whole ? ownerFor(whole, open) : undefined), [whole, open]);
+  const profilesIn = ctx.profilesIn;
+  const code = useMemo(() => (whole ? ownerFor(whole, open, profilesIn) : undefined), [whole, open, profilesIn]);
   return {
     ...ctx,
     ...(call ? { within: narrowed(ctx.within, call) } : {}),
@@ -1648,13 +1657,34 @@ function CodeRowParts({ span, ctx, depth, part }: { span: Span; ctx: RowContext;
           muted={true}
           className={part.waiting ? "dt-map-kind dt-map-wait" : "dt-map-kind"}
         />
-        <TaskName name={name} className={yours ? "dt-map-text" : "dt-map-text dt-map-lib"} />
+        <UntracedHint name={name} code={ctx.code}>
+          <TaskName name={name} className={yours ? "dt-map-text" : "dt-map-text dt-map-lib"} />
+        </UntracedHint>
         <WaitPlace part={part} code={ctx.code} span={span.id} />
         <RowFlame trace={owner} />
       </span>
       <CodeBars part={part} category={category} trace={ctx.trace} owner={owner} />
       <span className="dt-map-time">{duration(part.total)}</span>
     </>
+  );
+}
+
+/** On untraced code of a trace without a profile, where the app can profile, on hover: how to see what ran there. */
+function UntracedHint({ name, code, children }: { name: string; code: CodeOwner; children: ReactNode }) {
+  if (name !== UNTRACED || !code.profiles || code.trace.profile) return children;
+  return (
+    <Hint
+      title="Untraced code"
+      detail={
+        <>
+          Your code between the spans here. To see which of your functions ran, profile the request with the{" "}
+          <FlameIcon className="inline size-3.5 align-[-2px]" aria-label="flame" /> in the panel.
+        </>
+      }
+      side="top"
+    >
+      <span className="flex min-w-0">{children}</span>
+    </Hint>
   );
 }
 
@@ -2559,6 +2589,8 @@ export function CallMap({
   onProfile?: (() => void) | undefined;
   /** Opens another trace's profile by its id: a call's trace from another app, opened under its call. */
   onTraceProfile?: TraceProfileOpener | undefined;
+  /** Whether the app that recorded a trace profiles a request when asked: its untraced code then says how. */
+  profilesIn?: ProfilesIn | undefined;
   /** EXPLAIN for a query of this trace or a linked one: a SELECT's details then have its plan, as the DB tab's. */
   explainOf?: ExplainOf | undefined;
   /** Linked traces: tasks this trace enqueued appear under their enqueue span. */
@@ -2616,10 +2648,16 @@ export function CallMap({
                 marks,
                 details: inline,
                 hiddenLogs: hidden,
-                code: { trace, quiet, onProfile: profileOpener(wiring.onProfile, trace, profileAt) },
+                code: {
+                  trace,
+                  quiet,
+                  onProfile: profileOpener(wiring.onProfile, trace, profileAt),
+                  profiles: wiring.profilesIn?.(trace) === true,
+                },
                 categories,
                 slice: current,
                 onTraceProfile: wiring.onTraceProfile,
+                profilesIn: wiring.profilesIn,
                 onShowLogs: () => change({ ...current, logs: true }),
                 onChain: chain.want,
               }}

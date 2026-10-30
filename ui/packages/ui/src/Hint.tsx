@@ -17,7 +17,7 @@ export function Hint({
   children,
 }: {
   title: string;
-  detail?: string | undefined;
+  detail?: ReactNode | undefined;
   keys?: string | undefined;
   side?: "top" | "bottom" | "left" | "right";
   children: ReactNode;

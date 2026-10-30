@@ -19,7 +19,7 @@ import {
 import { type ComponentProps, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppDetails, appSaidAnything } from "./AppDetails";
 import { appWarnings, warningsTone } from "./AppWarnings";
-import { CallMap, type TraceProfileOpener } from "./CallMap";
+import { CallMap, type ProfilesIn, type TraceProfileOpener } from "./CallMap";
 import type { Explain, ExplainOf } from "./CallTable";
 import { ScopedCalls, ScopedIssues } from "./ChainTabs";
 import { Button } from "./components/ui/button";
@@ -389,6 +389,8 @@ export interface TraceViewProps {
    * undefined where it doesn't.
    */
   explainIn?: ((traceId: string, service: string) => Explain | undefined) | undefined;
+  /** Whether the app that recorded a trace profiles a request when asked: the call tree's untraced code then says how. */
+  profilesIn?: ProfilesIn | undefined;
   /** The app that served it, as it said itself: an App tab after Request when it said anything (the panel). */
   app?: App | null | undefined;
   /** The part of the time to pick in the call tree, as a link asks (kinds of calls, a stretch of time). */
@@ -539,6 +541,21 @@ function ExploreMenu({ explore, links }: { explore: readonly ExploreItem[]; link
   );
 }
 
+/**
+ * The tab a trace opens at: the one the link asked for, else Error for a failed one, else the one the panel remembers,
+ * else the call tree. A tab the trace has not (an error tab without an error) falls back like no tab.
+ */
+function firstTab(
+  trace: Trace,
+  initialTab: TabId | undefined,
+  preferredTab: TabId | undefined,
+  app: App | null | undefined,
+): TabId {
+  if (hasTab(trace, initialTab, app)) return initialTab;
+  if (trace.errors.length > 0) return "error";
+  return hasTab(trace, preferredTab, app) ? preferredTab : "tree";
+}
+
 export function TraceView({
   trace,
   explore = [],
@@ -558,22 +575,12 @@ export function TraceView({
   app,
   onTraceProfile,
   variant = "full",
-  // The part of the time picked: the lanes and the call tree share it (SliceScope).
+  // The part of the time picked: the lanes and the call tree share it (SliceScope); whether apps profile.
   ...held
 }: TraceViewProps) {
   const compact = variant === "compact" || variant === "strip";
   const findings = useMemo(() => findingsOf(trace), [trace]);
-  const [active, setActive] = useState<TabId>(
-    // A tab the link asked for that this trace has not (an error tab without an error) falls back like no tab.
-    () =>
-      hasTab(trace, initialTab, app)
-        ? initialTab
-        : trace.errors.length > 0
-          ? "error"
-          : hasTab(trace, preferredTab, app)
-            ? preferredTab
-            : "tree",
-  );
+  const [active, setActive] = useState<TabId>(() => firstTab(trace, initialTab, preferredTab, app));
   const spansNoun = useMemo(() => nounsOf(trace), [trace]);
   const [focus, setFocus] = useState<ReadonlySet<string> | undefined>(undefined);
   // A span to open in the call tree: from the link's `span`, or a log record's "in the call tree".
@@ -631,6 +638,7 @@ export function TraceView({
         initialSpan={treeSpan}
         explainOf={explainOf}
         onTraceProfile={onTraceProfile}
+        profilesIn={held.profilesIn}
         chain={chain}
         openTab={(tab) => openTab(tab)}
       />
