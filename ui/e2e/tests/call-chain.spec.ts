@@ -342,7 +342,10 @@ test("another app's trace on its own clock is drawn inside its call, its rows to
     /^server 2 ms · network 1 ms\nIts app.s clock is 5 ms ahead of this one.s: drawn centred in the 3 ms call, the 1 ms not spent/,
   );
 
-  // Its record, on the same clock: before its call ended (4.1 ms after the BFF's start), not 5 ms after.
+  // Its record, an info one, counted on its row until shown; then on the same clock: before its call ended (4.1 ms
+  // after the BFF's start), not 5 ms after.
+  await expect(record).toHaveCount(0);
+  await page.locator(".dt-map-logs").first().click();
   const callEnd = (bff + 1_070 + 3_000) / 1000;
   const logged = Number.parseFloat((await record.locator(".dt-map-time").innerText()).slice(1));
   expect(logged).toBeLessThanOrEqual(Math.round(callEnd));

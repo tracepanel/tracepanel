@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- The call tree shows the warnings and worse of the calls' traces
+  opened under the calls, their info and debug records counted on their
+  row until the Logs chip shows them, as it does for the trace itself.
+  They showed every record. A call's trace's own records count on its
+  call's row.
+- A browser's view is a view wherever it shows: its call tree's first
+  row and its first tab say view (or click, or bg, as its row in the
+  list does), not page.
+
+### Changed
+
+- In the panel's list, a row's chain of apps folds under it and opens
+  again, as an app's row does. It starts open.
+
 ## 0.9.3 (2026-10-30)
 
 ### Fixed

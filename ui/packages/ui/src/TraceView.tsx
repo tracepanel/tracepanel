@@ -39,6 +39,7 @@ import { IssueList } from "./IssueList";
 import { LogsPane } from "./LogList";
 import { groupNoun, onTheClock } from "./lib/calls";
 import { isTyping } from "./lib/keys";
+import { pageParts } from "./lib/page";
 import { scopedIssues, scopedSpans } from "./lib/scope";
 import type { Slice } from "./lib/slice";
 import { linkProps, opensTraces, openTraceAt, type TraceLinks } from "./links";
@@ -232,7 +233,14 @@ const KIND_ICONS: Record<string, typeof GlobeIcon> = {
 };
 
 // A command is a job wherever the console names it: the sidebar, its badge (JOB) and its first tab.
-const KIND_LABELS: Record<string, string> = { task: "Task", command: "Job", websocket: "WebSocket", page: "Page" };
+const KIND_LABELS: Record<string, string> = { task: "Task", command: "Job", websocket: "WebSocket" };
+
+/** What the first tab is named after: a browser's view or action as the list names it (View, Click), else its kind. */
+function tabLabel(trace: Trace): string {
+  if (trace.kind !== "page") return KIND_LABELS[trace.kind] ?? "Request";
+  const badge = pageParts(trace.name).badge;
+  return badge.charAt(0) + badge.slice(1).toLowerCase();
+}
 
 /**
  * A system's tab, when the request called it: how many calls, and how long they took on the clock (calls side by
@@ -282,7 +290,7 @@ function traceTabs({
   return [
     {
       id: "request" as const,
-      label: KIND_LABELS[trace.kind] ?? "Request",
+      label: tabLabel(trace),
       icon: <KindIcon />,
       // How it went and how long it took, on the tab that describes it: no separate metrics line.
       badge: outcome,

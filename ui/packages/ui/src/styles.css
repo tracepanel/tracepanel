@@ -1010,8 +1010,12 @@ tr[data-new] {
 .dt-request-row[data-chain] .dt-map-caret .dt-icon {
   transition: transform 120ms ease;
 }
-.dt-request-row[data-chain][aria-expanded="true"] > .dt-request-main > .dt-map-caret .dt-icon {
+.dt-request-row[data-chain][aria-expanded="true"] > .dt-request-main > .dt-map-caret .dt-icon,
+.dt-request-row[data-fold][aria-expanded="true"] > .dt-request-main > .dt-map-caret .dt-icon {
   transform: rotate(90deg);
+}
+.dt-request-row[data-fold] .dt-map-caret .dt-icon {
+  transition: transform 120ms ease;
 }
 .dt-request-row[data-chain] .dt-map-times {
   color: var(--dt-text-2);
