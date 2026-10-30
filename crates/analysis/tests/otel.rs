@@ -91,14 +91,15 @@ fn python_instrumentations() {
     assert_eq!(spans[4].attrs["redis.alias"], "redis/1");
     assert_eq!(spans[6].attrs["redis.key"], 2);
     assert_eq!(spans[6].attrs["db.operation"], "PIPELINE");
-    // The URL without credentials, a sensitive value masked; a 404 is an error.
+    // The URL without credentials, a sensitive value masked; a 404 is no error (a warning in the console).
     assert_eq!(
         spans[7].attrs["url.full"],
         "http://127.0.0.1:61738/users/1?token=********&page=2"
     );
     assert_eq!(spans[7].attrs["http.response.status_code"], 200);
     assert!(!spans[7].error);
-    assert!(spans[8].error);
+    assert_eq!(spans[8].attrs["http.response.status_code"], 404);
+    assert!(!spans[8].error);
     // gRPC: NOT_FOUND (5) is an error.
     assert!(!spans[10].error);
     assert!(spans[11].error);
@@ -142,7 +143,9 @@ fn javascript_instrumentations() {
     );
     // Only what describes the call is kept.
     assert!(!spans[4].attrs.contains_key("network.peer.address"));
-    assert!(spans[6].error);
+    // A 404 is no error, though undici's span says it in `error.type`: the console shows it as a warning.
+    assert_eq!(spans[6].attrs["http.response.status_code"], 404);
+    assert!(!spans[6].error);
 }
 
 #[test]
@@ -632,7 +635,9 @@ fn normalized(spans: Value) -> Vec<Value> {
                 span["kind"] = Value::from("otel");
                 span["start"] = Value::from(1);
                 span["duration"] = Value::from(1);
-                span["status"] = Value::from("ok");
+                if span.get("status").is_none() {
+                    span["status"] = Value::from("ok");
+                }
                 span
             }),
     );
@@ -711,5 +716,44 @@ fn a_mapped_span_keeps_what_it_received_and_why() {
             "name": "render", "span_kind": "internal", "scope": "app", "mapped_as": "An internal span: a step",
             "same": {"items": "items"},
         })
+    );
+}
+
+/// An HTTP call is an error when it was answered 5xx or not answered at all (a connection error, a timeout); a 4xx
+/// answer is not, though OpenTelemetry's conventions set a client span's status to Error and `error.type` to the code.
+#[test]
+fn a_call_answered_4xx_is_no_error_one_answered_5xx_or_not_at_all_is() {
+    let call = |status: Option<i64>, error: Option<&str>, otel_status: &str| {
+        let mut attrs = json!({"otel.span_kind": "client", "http.request.method": "GET",
+                               "url.full": "https://api.example.com/items"});
+        if let Some(status) = status {
+            attrs["http.response.status_code"] = Value::from(status);
+        }
+        if let Some(error) = error {
+            attrs["error.type"] = Value::from(error);
+        }
+        json!({"name": "GET", "status": otel_status, "attrs": attrs})
+    };
+    let spans = normalized(json!([
+        call(Some(200), None, "ok"),
+        call(Some(404), Some("404"), "error"),
+        call(Some(503), Some("503"), "error"),
+        call(None, Some("java.net.ConnectException"), "error"),
+        call(Some(400), Some("TimeoutError"), "error"),
+    ]));
+
+    let statuses: Vec<(&Value, &Value)> = spans
+        .iter()
+        .map(|span| (&span["attrs"]["http.response.status_code"], &span["status"]))
+        .collect();
+    assert_eq!(
+        statuses,
+        [
+            (&json!(200), &json!("ok")),
+            (&json!(404), &json!("ok")),
+            (&json!(503), &json!("error")),
+            (&Value::Null, &json!("error")),
+            (&json!(400), &json!("error")),
+        ]
     );
 }

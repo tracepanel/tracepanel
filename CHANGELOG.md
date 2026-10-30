@@ -1,5 +1,35 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- The panel's list shows the apps a browser's view called under it, as
+  it does for a request. A call through a gateway (Apollo Router, over
+  OTLP) answers the page with no trace id for the widget, so a view
+  whose calls all went through one had nothing under it.
+- The page's pill says what a view's calls did once it ends: its
+  queries, its HTTP calls and its issues down the chain, as the panel's
+  tabs count them. It said the view's name and time only.
+- A call says what it was answered, in the call tree and the HTTP calls
+  tab alike, whatever sent it: its status code, or failed when no
+  answer came. Answered 5xx or not at all it is an error, red. Answered
+  4xx it is a warning, amber, not an error. The agent no longer maps an
+  OpenTelemetry HTTP call answered 4xx as an error, though its span's
+  status and `error.type` say one. A call whose trace another app served
+  shows that trace's status when it has none of its own.
+- A call the browser hadn't ended when it sent the page's trace (on a
+  route change, or after its longest wait) takes the time of the trace
+  served for it, not 0 µs. Its time says so on hover. A browser's call
+  that got no answer (status 0 from an older SDK) shows as failed.
+- The panel's Profile button shows while the `tracepanel_profile`
+  cookie is set, even when no app connected to this agent profiles on
+  request, so it can always be turned off. The cookie is the host's,
+  not the port's: one set in another console on the same host makes the
+  page ask the apps it calls for a profile, and a gateway that passes
+  headers on asks theirs. The button shows the mode the cookie asks
+  for, memory included, where it was shown as time.
+
 ## 0.9.1 (2026-10-30)
 
 ### Fixed

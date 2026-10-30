@@ -60,15 +60,45 @@ function choiceOf(memory: boolean, all: boolean, memoryAll: boolean): Choice {
 }
 
 /**
+ * What the cookie asks for, as a mode to choose even where the apps don't offer it: the button shows what this
+ * browser asks, and a click moves on from there.
+ */
+function withStored(choice: Choice, stored: Mode): Choice {
+  const order: readonly Mode[] = ["off", "time", "memory"];
+  // Below what the settings profile anyway, the button shows the settings' (see shown).
+  if (choice.modes.includes(stored) || order.indexOf(stored) < order.indexOf(choice.floor)) return choice;
+  return { ...choice, modes: order.filter((mode) => mode === stored || choice.modes.includes(mode)) };
+}
+
+/**
+ * The cookie is the host's, not the port's: one set in any console on this host goes with every request this
+ * browser makes to it, and a page's browser recording passes it on to the apps it calls (X-Tracepanel-Profile), a
+ * gateway to theirs. Set with no app here that profiles on request (another project's, an agent of its own), it still
+ * profiles them: the button shows, to turn it off.
+ */
+const ELSEWHERE: Record<Exclude<Mode, "off">, string> = {
+  time: "Asking the apps this browser calls to profile time (the tracepanel_profile cookie, for every port of this host)",
+  memory:
+    "Asking the apps this browser calls to profile time and memory (the tracepanel_profile cookie, for every port of this host)",
+};
+
+/**
  * Profiling on or off for this browser: a cookie on the app's own origin (the panel is on it) that the app sees on
- * each request. Shown only when a connected app profiles on request; memory too only when it can. Lit with no cookie
- * when the app's settings profile every request.
+ * each request. Shown when a connected app profiles on request (memory too only when it can), or while the cookie
+ * asks for it anyway (see ELSEWHERE). Lit with no cookie when the app's settings profile every request.
  */
 export function ProfileToggle({ source }: { source: DataSource }) {
   const capabilities = useCapabilities(source);
-  if (!capabilities?.profile) return null;
+  const [stored, choose] = useProfiling();
+  if (!capabilities?.profile) {
+    if (stored === "off") return null;
+    return (
+      <ProfileButton choice={{ modes: ["off", stored], floor: "off" }} stored={stored} choose={choose} elsewhere />
+    );
+  }
   const { profile_memory: memory, profile_all: all, profile_memory_all: memoryAll } = capabilities;
-  return <ProfileButton choice={choiceOf(memory, all, memoryAll)} />;
+  const choice = withStored(choiceOf(memory, all, memoryAll), stored);
+  return <ProfileButton choice={choice} stored={stored} choose={choose} />;
 }
 
 /** The mode this browser profiles in, kept with the cookie wherever it is changed. */
@@ -87,15 +117,25 @@ function useProfiling(): [Mode, (mode: Mode) => void] {
  * memory is profiled too. A click (or Enter, Space) moves to the next mode and round. Its name is the mode it is in,
  * and a change is said aloud, as a screen reader doesn't read a focused button's new name by itself.
  */
-function ProfileButton({ choice: { modes, floor } }: { choice: Choice }) {
-  const [stored, choose] = useProfiling();
+function ProfileButton({
+  choice: { modes, floor },
+  stored,
+  choose,
+  elsewhere = false,
+}: {
+  choice: Choice;
+  stored: Mode;
+  choose: (mode: Mode) => void;
+  /** No app here profiles on request: the cookie asks the apps the browser calls (ELSEWHERE). */
+  elsewhere?: boolean;
+}) {
   const mode = shown(stored, modes, floor);
   const next = modes[(modes.indexOf(mode) + 1) % modes.length] ?? floor;
   const [said, say] = useState("");
   const fixed = modes.length < 2;
   return (
     <>
-      <Hint {...hint(mode, fixed ? null : next, floor)}>
+      <Hint {...hint(mode, fixed ? null : next, floor, elsewhere)}>
         <button
           type="button"
           className={cn(
@@ -123,8 +163,12 @@ function ProfileButton({ choice: { modes, floor } }: { choice: Choice }) {
   );
 }
 
-/** What the hint says: the mode, or the app's setting that profiles it, and what a click does (`next`, if any). */
-function hint(mode: Mode, next: Mode | null, floor: Mode): { title: string; detail?: string } {
+/**
+ * What the hint says: the mode, or the app's setting that profiles it, or what the cookie asks of the apps the browser
+ * calls (`elsewhere`), and what a click does (`next`, if any).
+ */
+function hint(mode: Mode, next: Mode | null, floor: Mode, elsewhere: boolean): { title: string; detail?: string } {
+  if (elsewhere && mode !== "off") return { title: `${ELSEWHERE[mode]} · click: off` };
   const forced = floor !== "off";
   const name = forced && mode === floor ? FORCED[floor] : NAMES[mode];
   if (!next) return { title: name, detail: SETTINGS };

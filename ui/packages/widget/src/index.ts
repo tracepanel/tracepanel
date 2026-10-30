@@ -1,9 +1,11 @@
 // Corner badge, fetch and XHR capture, slide-out panel (iframe inside Shadow DOM).
 
 import TOKENS from "virtual:tracepanel-tokens";
+import type { ChainCounts } from "@tracepanel/ui/lib/chainCounts";
 import { plural } from "@tracepanel/ui/lib/plural";
 import { APP_ICON_SVG, runtimeKind, runtimeMark, runtimeName, traceRuntime } from "@tracepanel/ui/lib/runtime";
 import { CARD_STYLE, mountCard, nameWithMethod } from "./card";
+import { countsKey, followViewChain } from "./viewChain";
 
 export interface TraceInfo {
   /** The trace's own name when it says more than the request line (a GraphQL operation). */
@@ -54,9 +56,15 @@ function followPages(onPage: (announced: PageAnnouncement) => void): void {
  * Before the page's first request: its own view, as the browser recording timed it (the SPA's counterpart of a
  * server page's load), with no time while it still loads.
  */
-function addView(parent: HTMLElement, view: PageAnnouncement): void {
+function addView(parent: HTMLElement, view: PageAnnouncement, counts: ChainCounts | null): void {
   addName(parent, { name: `VIEW ${view.name}` }, false);
-  if (!view.open) addTime(parent, view.duration / 1000);
+  if (view.open) return;
+  addTime(parent, view.duration / 1000);
+  // What its calls did in the apps they reached, as the panel's tabs count it: a request's numbers, for a view.
+  if (!counts) return;
+  addQueries(parent, counts.queries);
+  addCalls(parent, counts.calls);
+  if (counts.issues) addIssues(parent, counts.issues, "warn");
 }
 
 /** Nothing on this page yet: its server didn't trace it and nothing records it in the browser. */
@@ -67,9 +75,20 @@ function addWaiting(parent: HTMLElement): void {
   segment(parent).append(idle);
 }
 
-function idleLabel(view: PageAnnouncement | null, runtime: string | undefined): string {
-  const shown = view ? `view of ${view.name}, no requests yet` : "no requests yet";
+function idleLabel(view: PageAnnouncement | null, runtime: string | undefined, counts: ChainCounts | null): string {
+  const shown = view ? `view of ${view.name}${countsLine(counts)}` : "no requests yet";
   return `tracepanel: ${shown}${runtime ? `. Served by ${runtime}` : ""}`;
+}
+
+/** ": 3 queries, 19 HTTP calls, 8 issues down its calls", or ", no requests yet" before its chain is known. */
+function countsLine(counts: ChainCounts | null): string {
+  if (!counts) return ", no requests yet";
+  const parts = [
+    plural(counts.queries, "query", "queries"),
+    plural(counts.calls, "HTTP call", "HTTP calls"),
+    ...(counts.issues ? [plural(counts.issues, "issue", "issues")] : []),
+  ];
+  return `: ${parts.join(", ")} down its calls`;
 }
 
 function firstOf(...ids: (string | undefined)[]): string | null {
@@ -531,6 +550,9 @@ const ICONS = {
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>',
   alert:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 21h20L12 3Z"/><path d="M12 10v4M12 17.5h.01"/></svg>',
+  // The panel's HTTP calls tab's (lucide arrow-up-right).
+  calls:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>',
   // The corner its task runs hang from in the panel's list.
   below:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 10 5 5-5 5"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/></svg>',
@@ -575,6 +597,16 @@ function addQueries(parent: HTMLElement, queries: number): void {
   value.textContent = String(queries);
   seg.append(value);
   seg.title = `${queries} SQL ${queries === 1 ? "query" : "queries"}`;
+}
+
+/** A view's calls down its chain: the panel's HTTP calls tab's count, under its icon. */
+function addCalls(parent: HTMLElement, calls: number): void {
+  const seg = segment(parent);
+  seg.innerHTML = ICONS.calls;
+  const value = document.createElement("b");
+  value.textContent = String(calls);
+  seg.append(value);
+  seg.title = `${plural(calls, "HTTP call", "HTTP calls")} down its calls`;
 }
 
 function addIssues(parent: HTMLElement, issues: number, tone: "warn" | "error"): void {
@@ -963,6 +995,8 @@ export function mount(options: WidgetOptions = {}): Widget {
   showRuntime(runtimeChip, runtime);
   // This page's latest view, from the browser recording: what the pill shows before the page's first request.
   let view: PageAnnouncement | null = null;
+  // What the view's calls did down its chain, once it ended and the console answered: by the view's id.
+  let viewCounts: { id: string; counts: ChainCounts } | null = null;
   let runtimeAsked = Boolean(runtime);
   const panel = query<HTMLElement>(root, ".panel");
   const panelUrl = options.api ? new URL(options.api, location.href) : null;
@@ -1111,11 +1145,30 @@ export function mount(options: WidgetOptions = {}): Widget {
    */
   function renderIdle(): void {
     stats.textContent = "";
-    if (view) addView(stats, view);
+    const counts = view && viewCounts?.id === view.id ? viewCounts.counts : null;
+    if (view) addView(stats, view, counts);
     else addWaiting(stats);
     fitBadge();
-    badge.dataset["verdict"] = view?.status === "error" ? "error" : "ok";
-    badge.setAttribute("aria-label", idleLabel(view, runtime));
+    badge.dataset["verdict"] = view?.status === "error" ? "error" : counts?.issues ? "warn" : "ok";
+    badge.setAttribute("aria-label", idleLabel(view, runtime, counts));
+  }
+
+  /** Once a view ends: what its calls did down its chain, asked from the console while the pill shows it. */
+  function followView(ended: PageAnnouncement): void {
+    if (!panelUrl) return;
+    const wanted = () => view?.id === ended.id && requests().length === 0;
+    void followViewChain(
+      fetchJson,
+      panelUrl,
+      ended.id,
+      wanted,
+      (counts) => {
+        if (viewCounts?.id === ended.id && countsKey(viewCounts.counts) === countsKey(counts)) return;
+        viewCounts = { id: ended.id, counts };
+        render();
+      },
+      UNREACHABLE,
+    );
   }
 
   /** A page htmx loaded (a boosted link or form): it heads the list, and what follows is its requests. */
@@ -1221,6 +1274,7 @@ export function mount(options: WidgetOptions = {}): Widget {
     if (!announced.name.includes(" › ")) {
       view = announced;
       render();
+      if (!announced.open) followView(announced);
     }
     const entry: TabEntry = {
       id: announced.id,

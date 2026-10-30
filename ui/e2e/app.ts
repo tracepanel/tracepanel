@@ -52,7 +52,7 @@ const RECORDING = `
     seen.set(detail.id, detail);
     dispatchEvent(new CustomEvent("tracepanel:page", { detail }));
   };
-  const view = { id: id(), name: location.pathname, start: Math.round(performance.timeOrigin * 1000), duration: 0, status: "ok", open: true };
+  const view = { id: globalThis.TRACEPANEL_VIEW ?? id(), name: location.pathname, start: Math.round(performance.timeOrigin * 1000), duration: 0, status: "ok", open: true };
   announce(view);
   addEventListener("load", () => announce({ ...view, duration: now() - view.start, open: false }));
   let current = null;
@@ -80,12 +80,19 @@ export const OTHER_API = "http://api.example.test/app/";
  * Opens /app/ with a button per call: "Load <key>" fetches /app/api/<key> (on `api`: <api>api/<key>); with
  * `recording`, "Do <key>" does it as a click the browser recording sees. The recording starts before the widget,
  * or after it with "after widget" (an app that starts it from its own code, once the widget loaded). `server`: the
- * page's own load was traced (a server-rendered page). `charset`: the page's encoding, UTF-8 unless given.
+ * page's own load was traced (a server-rendered page). `charset`: the page's encoding, UTF-8 unless given. `view`:
+ * the id the recording gives the page's view, a trace the test stored.
  */
 export async function openApp(
   page: Page,
   calls: Record<string, Call>,
-  options: { server?: ServerPage; recording?: boolean | "after widget"; api?: string; charset?: string } = {},
+  options: {
+    server?: ServerPage;
+    recording?: boolean | "after widget";
+    api?: string;
+    charset?: string;
+    view?: string;
+  } = {},
 ): Promise<void> {
   const api = options.api ?? "/app/";
   const cors = options.api
@@ -115,7 +122,9 @@ export async function openApp(
         : [],
     )
     .join("");
-  const recording = `<script>${RECORDING}</script>`;
+  // The view's id: a stored trace's, when the test seeded the view the agent has (its chain, its calls).
+  const viewId = options.view ? `globalThis.TRACEPANEL_VIEW = ${JSON.stringify(options.view)};` : "";
+  const recording = `<script>${viewId}${RECORDING}</script>`;
   const html = `<!doctype html><html><head>
     ${options.recording === true ? recording : ""}
     <script src="/widget.min.js" data-tracepanel-api="/" ${tag}></script>

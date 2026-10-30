@@ -10,6 +10,7 @@ import {
   timeColumns,
 } from "./CallTable";
 import type { DataColumn } from "./DataTable";
+import { callAnswer } from "./lib/callAnswer";
 import { callTemplate, groupNoun, onTheClock } from "./lib/calls";
 import { IssueChip, MethodBadge, SectionHeading, StatusBadge, Times } from "./primitives";
 import type { IssueKind, Span } from "./types";
@@ -37,10 +38,9 @@ interface Group {
 
 const HTTP_METHOD = /^(GET|HEAD|POST|PUT|PATCH|DELETE|OPTIONS|TRACE|CONNECT) (.+)$/;
 
-/** A call failed: an error, or a 5xx answer. */
+/** A call failed: an error, a 5xx answer, or none. */
 function failed(span: Span): boolean {
-  const status = span.attrs["http.response.status_code"];
-  return span.status === "error" || (typeof status === "number" && status >= 500);
+  return span.status === "error" || callAnswer(span).tone === "error";
 }
 
 /** What a group repeats: an HTTP call's method in its badge, as every list shows a request's, then the rest. */
@@ -77,9 +77,9 @@ function groupCalls(spans: readonly Span[], issueBySpan: ReadonlyMap<string, Iss
 
 /** One call's outcome: its HTTP status as every list shows one, else whether it failed. */
 function Status({ span }: { span: Span }) {
-  const status = span.attrs["http.response.status_code"];
-  if (typeof status === "number") return <StatusBadge status={status} />;
-  return span.status === "error" ? <span className="text-destructive">failed</span> : <span>—</span>;
+  const { status, tone } = callAnswer(span);
+  if (status !== null) return <StatusBadge status={status} />;
+  return tone === "error" ? <span className="text-destructive">failed</span> : <span>—</span>;
 }
 
 /** Where a call's text is: an HTTP call's URL, a command or statement. */
