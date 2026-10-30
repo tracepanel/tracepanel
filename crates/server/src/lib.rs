@@ -824,9 +824,9 @@ pub fn identify(token: String, console: String) {
     let _ = IDENTITY.set((token, console));
 }
 
-/// Where this agent takes OpenTelemetry exporters' spans (OTLP/HTTP), or where it was to and couldn't: set once as it
-/// starts, never with OTLP off.
-static OTLP: std::sync::OnceLock<Otlp> = std::sync::OnceLock::new();
+/// Where this agent takes OpenTelemetry exporters' spans (OTLP/HTTP), or where it was to and couldn't: set as it
+/// starts, and again when it takes over a port it found taken; never with OTLP off.
+static OTLP: std::sync::Mutex<Option<Otlp>> = std::sync::Mutex::new(None);
 
 /// This agent's OTLP/HTTP: the console shows where exporters send to it, or why it takes nothing.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -844,25 +844,31 @@ pub struct Otlp {
 
 /// Says where this agent takes OTLP/HTTP, or was to and couldn't.
 pub fn otlp(otlp: Otlp) {
-    let _ = OTLP.set(otlp);
+    if let Ok(mut current) = OTLP.lock() {
+        *current = Some(otlp);
+    }
 }
 
 /// The OTLP status as the console's API says it. A taken port names the project whose agent holds it, asked each
 /// time: agents started at the same moment register in any order.
 async fn otlp_status() -> Option<Value> {
-    let otlp = OTLP.get()?.clone();
+    let otlp = OTLP.lock().ok()?.clone()?;
     let own = IDENTITY
         .get()
         .map(|(_, console)| console.clone())
         .unwrap_or_default();
-    let taken_by = if otlp.taken {
+    let holder = if otlp.taken {
         let address = otlp.address.clone();
         tokio::task::spawn_blocking(move || neighbors::holding_otlp(&address, &own))
             .await
             .ok()
-            .flatten()
     } else {
         None
+    };
+    let (taken_by, taken_by_agent) = match holder {
+        Some(neighbors::OtlpHolder::Agent(project)) => (Some(project), true),
+        Some(neighbors::OtlpHolder::OlderAgent) => (None, true),
+        _ => (None, false),
     };
     Some(json!({
         "address": otlp.address,
@@ -870,6 +876,7 @@ async fn otlp_status() -> Option<Value> {
         "error": otlp.error,
         "taken": otlp.taken,
         "taken_by": taken_by,
+        "taken_by_agent": taken_by_agent,
         "free": otlp.free,
     }))
 }

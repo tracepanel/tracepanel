@@ -149,14 +149,84 @@ pub fn ask(neighbour: &Neighbour, w3c_trace: &str, w3c_span: &str) -> Option<Val
     Some(answer)
 }
 
-/// The project whose agent takes OTLP/HTTP on the port of `address` (`HOST:PORT`), as its store's `otlp.addr` says;
-/// none when no neighbour's does (a collector holds it, or an agent with no console).
-pub fn holding_otlp(address: &str, own_console: &str) -> Option<String> {
-    let port = port(address)?;
-    neighbours(own_console).into_iter().find_map(|neighbour| {
+/// Who holds the OTLP port this agent wanted.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OtlpHolder {
+    /// The agent of this project.
+    Agent(String),
+    /// A Tracepanel agent from before agents said whose they are, with no console to find it by.
+    OlderAgent,
+    /// Another program: a collector of the developer's own, or nothing that answers HTTP.
+    Other,
+}
+
+/// Who takes OTLP/HTTP on the port of `address` (`HOST:PORT`). Its agent says whose it is when asked on
+/// 127.0.0.1 (`GET /tracepanel`), with or without a console. An agent from before that is found by its store's
+/// `otlp.addr`, while it has a console, else told by how it refuses an export that isn't one.
+pub fn holding_otlp(address: &str, own_console: &str) -> OtlpHolder {
+    let Some(port) = port(address) else {
+        return OtlpHolder::Other;
+    };
+    if let Some(project) = ask_otlp(port) {
+        return OtlpHolder::Agent(project);
+    }
+    let registered = neighbours(own_console).into_iter().find_map(|neighbour| {
         let held = std::fs::read_to_string(Path::new(&neighbour.dir).join(OTLP_FILE)).ok()?;
         (self::port(held.trim()) == Some(port)).then(|| project(&neighbour.dir))
-    })
+    });
+    match registered {
+        Some(project) => OtlpHolder::Agent(project),
+        None if older_agent(port) => OtlpHolder::OlderAgent,
+        None => OtlpHolder::Other,
+    }
+}
+
+/// An HTTP client for the OTLP port's holder: only 127.0.0.1, and quick, since it may be anything.
+fn otlp_client() -> ureq::Agent {
+    ureq::Agent::config_builder()
+        .timeout_global(Some(ASK_TIMEOUT))
+        .http_status_as_error(false)
+        .max_redirects(0)
+        .build()
+        .new_agent()
+}
+
+/// The project whose agent serves OTLP on 127.0.0.1:`port`, as it says.
+fn ask_otlp(port: u16) -> Option<String> {
+    let mut response = otlp_client()
+        .get(format!("http://127.0.0.1:{port}/tracepanel"))
+        .call()
+        .ok()?;
+    if response.status() != 200 {
+        return None;
+    }
+    let answer: Value = response
+        .body_mut()
+        .with_config()
+        .limit(1 << 12)
+        .read_json()
+        .ok()?;
+    answer.get("tracepanel")?;
+    answer["project"].as_str().map(str::to_owned)
+}
+
+/// Whether 127.0.0.1:`port` refuses a JSON export that isn't one as an agent does (`JSON: ...`, as plain text): an
+/// agent from before it said whose it is.
+fn older_agent(port: u16) -> bool {
+    let Ok(mut response) = otlp_client()
+        .post(format!("http://127.0.0.1:{port}/v1/traces"))
+        .content_type("application/json")
+        .send("!")
+    else {
+        return false;
+    };
+    response.status() == 400
+        && response
+            .body_mut()
+            .with_config()
+            .limit(1 << 12)
+            .read_to_string()
+            .is_ok_and(|text| text.starts_with("JSON: "))
 }
 
 /// The port of `HOST:PORT` or `http://HOST:PORT`.
@@ -168,7 +238,7 @@ fn port(address: &str) -> Option<u16> {
 }
 
 /// A project by its store's directory: the folder that holds `.tracepanel`.
-fn project(dir: &str) -> String {
+pub fn project(dir: &str) -> String {
     let path = Path::new(dir);
     let folder = if path.file_name().is_some_and(|name| name == ".tracepanel") {
         path.parent().unwrap_or(path)
