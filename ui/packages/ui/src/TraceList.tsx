@@ -99,10 +99,12 @@ export function TraceList({
         const counts = chains?.counts?.get(row.trace.id);
         const trace = withChain(row.trace, counts);
         const depth = row.depth ?? 0;
+        const fold = chains ? rowFold(chains, trace.id) : undefined;
         return (
           <li key={trace.id}>
             <ListRow
               row={{ ...row, trace }}
+              fold={fold}
               chained={counts !== undefined && counts.traces > 1}
               selected={trace.id === selectedId}
               current={trace.id === currentId}
@@ -111,7 +113,7 @@ export function TraceList({
               services={services}
               onSelect={onSelect}
             />
-            {chains ? (
+            {chains && fold?.open !== false ? (
               <RowChain
                 rowId={trace.id}
                 level={depth + 1}
@@ -130,6 +132,7 @@ export function TraceList({
 /** One row of the list: its name, status and time, then its numbers (its chain's, `chained`). */
 function ListRow({
   row: { trace, depth = 0, trigger, target, run },
+  fold,
   chained,
   selected,
   current,
@@ -139,6 +142,8 @@ function ListRow({
   onSelect,
 }: {
   row: TraceRow;
+  /** Its chain's rows under it (the narrow list): open or folded, a caret; a placeholder for a row without. */
+  fold?: RowFold | null | undefined;
   chained: boolean;
   selected: boolean;
   current: boolean;
@@ -156,10 +161,12 @@ function ListRow({
       data-kind={trace.kind === "page" ? "page" : undefined}
       data-tone={toneOf(trace)}
       aria-current={selected ? "true" : undefined}
+      {...foldProps(fold)}
       data-new={fresh ? "" : undefined}
       onClick={() => onSelect(trace.id)}
     >
       <span className="dt-request-main">
+        <RowCaret fold={fold} />
         <RowName trace={trace} trigger={trigger} target={target} />
         <RowApp trace={trace} shown={services} />
         {current ? <ThisPage compact={compact} /> : null}
@@ -172,6 +179,34 @@ function ListRow({
       </span>
     </button>
   );
+}
+
+/** A row's chain folded or not: open until folded, as an app's row; null for a row whose trace called no app. */
+interface RowFold {
+  open: boolean;
+  onToggle: () => void;
+}
+
+/** A foldable row's state and keys; a row of a list without chains, none. */
+function foldProps(fold: RowFold | null | undefined) {
+  if (fold === undefined) return {};
+  return {
+    "aria-expanded": fold ? fold.open : undefined,
+    "data-fold": "",
+    onKeyDown: fold ? foldKeys(fold.open, fold.onToggle) : undefined,
+  };
+}
+
+/** Its caret, or the caret's room for a row with no chain, so the names line up. */
+function RowCaret({ fold }: { fold: RowFold | null | undefined }) {
+  if (fold === undefined) return null;
+  return fold ? <ChainCaret onToggle={fold.onToggle} /> : <span className="dt-map-caret" />;
+}
+
+function rowFold(chains: ListChains, id: string): RowFold | null {
+  if (!chains.apps.get(id)?.length) return null;
+  const key = `row:${id}`;
+  return { open: !chains.open.has(key), onToggle: () => chains.onToggle(key) };
 }
 
 /** The page open in the browser tab: narrow, a dot, so the path keeps its room (the row is also highlighted). */

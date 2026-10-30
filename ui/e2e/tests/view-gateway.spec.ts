@@ -122,3 +122,25 @@ test("the view's row counts its chain as the pill and the tabs do; a row with ro
   await expect(panel(page).getByRole("tab", { name: /^Issues/ })).toContainText("4");
   await expect(panel(page).getByRole("tab", { name: /^DB/ })).toContainText("3");
 });
+
+test("a view's chain folds under its row and opens again; its call tree and first tab call it a view", async ({
+  page,
+}) => {
+  const seeded = await gatewayView(4, FIVE);
+  const { view, apps } = await listed(page, seeded.view);
+
+  await expect(view).toHaveAttribute("aria-expanded", "true");
+  await view.locator("[data-toggle]").click();
+
+  await expect(view).toHaveAttribute("aria-expanded", "false");
+  await expect(apps).toHaveCount(0);
+
+  await view.locator("[data-toggle]").click();
+
+  await expect(apps.first()).toBeVisible();
+  // The same name as the list's row: VIEW, not PAGE.
+  const frame = panel(page);
+  await expect(frame.getByRole("tab", { name: /^View/ })).toBeVisible();
+  await frame.getByRole("tab", { name: /^Call tree/ }).click();
+  await expect(frame.locator(".dt-map-row[data-root] .dt-kind").first()).toHaveText(/^view$/i);
+});

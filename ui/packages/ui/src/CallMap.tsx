@@ -27,6 +27,7 @@ import { callFields, templatePlace } from "./lib/callFields";
 import { callTemplate, callText, groupNoun } from "./lib/calls";
 import { spanKindLabel } from "./lib/handler";
 import { foldKeys } from "./lib/keys";
+import { pageParts } from "./lib/page";
 import { widthOf } from "./lib/percent";
 import { plural } from "./lib/plural";
 import { ownHotspots, type Profile } from "./lib/profile";
@@ -217,9 +218,11 @@ interface Chain {
   level: number;
   relatedOf: (traceId: string) => Related | undefined;
   seen: ReadonlySet<string>;
+  /** Every record shows (the legend's Logs chip), in the calls' traces as in this one: else warnings and worse. */
+  allLogs: boolean;
 }
 
-const NO_CHAIN: Chain = { level: 0, relatedOf: () => undefined, seen: new Set() };
+const NO_CHAIN: Chain = { level: 0, relatedOf: () => undefined, seen: new Set(), allLogs: true };
 
 /**
  * The most traces down the chain the tree opens (the browser's view, the BFF, the service, ...): deeper calls are
@@ -292,7 +295,7 @@ function servedRows(whole: Trace, chain: Chain, remote: boolean): Node[] {
   const level = chain.level + 1;
   const related = remote || level >= CHAIN_LEVELS ? undefined : chain.relatedOf(whole.id);
   const next = { ...chain, level, seen: new Set([...chain.seen, whole.id]) };
-  return buildTree(whole, related, next).flatMap((node) =>
+  return buildTree(withShownLogs(whole, chain.allLogs), related, next).flatMap((node) =>
     node.type === "span" && node.span.parent_id === null ? node.children : [node],
   );
 }
@@ -1516,13 +1519,15 @@ function SpanFold({
   return (
     <>
       <Caret open={fold} onToggle={() => ctx.onToggle(node.key)} />
-      <KindBadge
-        kind={spanKindLabel(node.span.kind, ctx.trace.attrs, parent?.kind)}
-        muted={true}
-        className="dt-map-kind"
-      />
+      <KindBadge kind={rowKind(node.span, ctx.trace, parent)} muted={true} className="dt-map-kind" />
     </>
   );
+}
+
+/** A row's kind as its badge says it: a browser's view or action as its list names it (view, click, bg). */
+function rowKind(span: Span, trace: Trace, parent: Span | undefined): string {
+  if (span.kind === "page") return pageParts(span.name).badge.toLowerCase();
+  return spanKindLabel(span.kind, trace.attrs, parent?.kind);
 }
 
 /** Whether a span runs inside another, however deep. */
@@ -2539,9 +2544,7 @@ function withCallIssues(
   related: Related | undefined,
   chain: ReadonlyMap<string, Related>,
 ): ReadonlyMap<string, IssueKind> {
-  const issues = [related, ...chain.values()]
-    .flatMap((each) => Object.values(each?.call_traces ?? {}))
-    .flatMap((trace) => trace.issues);
+  const issues = callTraces(related, chain).flatMap((trace) => trace.issues);
   return new Map([
     ...issueBySpan,
     ...issues.flatMap((issue) => issue.span_ids.map((id): [string, IssueKind] => [id, issue.kind])),
@@ -2553,15 +2556,34 @@ export function withShownLogs(trace: Trace, all: boolean): Trace {
   return all ? trace : { ...trace, logs: trace.logs.filter((log) => isLoud(log.level)) };
 }
 
-/** How many records don't show, by the span they were logged in (the root's for those logged outside any). */
-function hiddenLogsOf(trace: Trace): Map<string, number> {
-  const root = rootOf(trace);
+/**
+ * How many records don't show, by the span they were logged in (the root's for those logged outside any), in this
+ * trace and the calls' traces opened under the calls. A call's trace's own records are its call's row's: its root
+ * is that row (`calls`: the call's span by the trace's id).
+ */
+function hiddenLogsOf(traces: readonly Trace[], calls: ReadonlyMap<string, string>): Map<string, number> {
   const hidden = new Map<string, number>();
+  for (const trace of traces) countQuiet(trace, calls.get(trace.id), hidden);
+  return hidden;
+}
+
+/** A trace's info and debug records, counted by their span; its root's on `row` when its root shows as that row. */
+function countQuiet(trace: Trace, row: string | undefined, hidden: Map<string, number>): void {
+  const own = rootOf(trace);
   for (const log of trace.logs.filter((each) => !isLoud(each.level))) {
-    const span = log.span_id ?? root;
+    const span = log.span_id === null || log.span_id === own ? (row ?? own) : log.span_id;
     hidden.set(span, (hidden.get(span) ?? 0) + 1);
   }
-  return hidden;
+}
+
+/** The span of the call that reached each call's trace, by the trace's id, however far down the chain. */
+function callSpans(related: Related | undefined, chain: ReadonlyMap<string, Related>): Map<string, string> {
+  return new Map([related, ...chain.values()].flatMap((each) => Object.entries(each?.via ?? {})));
+}
+
+/** The calls' traces opened under the calls, however far down the chain. */
+function callTraces(related: Related | undefined, chain: ReadonlyMap<string, Related>): Trace[] {
+  return [related, ...chain.values()].flatMap((each) => Object.values(each?.call_traces ?? {}));
 }
 
 function rootOf(trace: Trace): string {
@@ -2571,10 +2593,16 @@ function rootOf(trace: Trace): string {
 /** The tree with the records that show, and how many don't, by span: none hidden while every one shows. */
 function useShownLogs(trace: Trace, related: Related | undefined, all: boolean, loaded: ReadonlyMap<string, Related>) {
   const tree = useMemo(() => {
-    const chain: Chain = { level: 0, relatedOf: (id) => loaded.get(id), seen: new Set([trace.id]) };
+    const chain: Chain = { level: 0, relatedOf: (id) => loaded.get(id), seen: new Set([trace.id]), allLogs: all };
     return buildTree(withShownLogs(trace, all), related, chain);
   }, [trace, related, all, loaded]);
-  const hidden = useMemo(() => (all ? new Map<string, number>() : hiddenLogsOf(trace)), [trace, all]);
+  const hidden = useMemo(
+    () =>
+      all
+        ? new Map<string, number>()
+        : hiddenLogsOf([trace, ...callTraces(related, loaded)], callSpans(related, loaded)),
+    [trace, related, all, loaded],
+  );
   return { tree, hidden };
 }
 
