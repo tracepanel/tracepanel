@@ -1677,9 +1677,8 @@ function UntracedHint({ name, code, children }: { name: string; code: CodeOwner;
       title="Untraced code"
       detail={
         <>
-          Your code between the spans here. To see which of your functions ran, profile the request: the{" "}
-          <FlameIcon className="inline size-3.5 align-[-2px]" aria-label="flame" /> in the panel, or an
-          X-Tracepanel-Profile: 1 header.
+          Your code between the spans here. To see which of your functions ran, profile the request with the{" "}
+          <FlameIcon className="inline size-3.5 align-[-2px]" aria-label="flame" /> in the panel.
         </>
       }
       side="top"
