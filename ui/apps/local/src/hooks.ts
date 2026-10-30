@@ -1,4 +1,4 @@
-import { type Capabilities, type DataSource, NO_CAPABILITIES } from "@tracepanel/ui";
+import { type Capabilities, type DataSource, NO_CAPABILITIES, type Otlp } from "@tracepanel/ui";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export interface EntrySummary {
@@ -138,6 +138,35 @@ export function useCapabilities(source: DataSource): Capabilities | undefined {
     };
   }, [source]);
   return capabilities;
+}
+
+/** How often the console asks again while the agent takes no OTLP: the agent tries its port every 10 seconds. */
+export const OTLP_REFRESH_MS = 10_000;
+
+/**
+ * Where the agent takes OTLP, or why it doesn't. Asked again while it serves none: it takes the port over once its
+ * holder has gone, and the notice turns into the address.
+ */
+export function useOtlp(source: DataSource): Otlp | undefined {
+  const first = useCapabilities(source)?.otlp;
+  const [later, setLater] = useState<{ source: DataSource; otlp: Otlp | undefined }>();
+  const otlp = later?.source === source ? later.otlp : first;
+  const waiting = otlp !== undefined && !otlp.serving;
+  useEffect(() => {
+    if (!waiting) return;
+    let current = true;
+    const timer = window.setInterval(() => {
+      source.capabilities().then(
+        (answer) => current && setLater({ source, otlp: answer.otlp }),
+        () => undefined,
+      );
+    }, OTLP_REFRESH_MS);
+    return () => {
+      current = false;
+      window.clearInterval(timer);
+    };
+  }, [source, waiting]);
+  return otlp;
 }
 
 const SERVICE_CAPABILITIES = new WeakMap<DataSource, Map<string, Promise<Capabilities>>>();

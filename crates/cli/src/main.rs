@@ -17,8 +17,10 @@ use std::process::ExitCode;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{Receiver, SyncSender, TrySendError, sync_channel};
+use std::time::Duration;
 use tracepanel_protocol::{Activity, Batch, Listener, Received};
 use tracepanel_sender::Sender;
+use tracepanel_server::neighbors::OtlpHolder;
 use tracepanel_store_local::{self as store_local, Store};
 
 /// Frames waiting for the writer; a full queue drops frames rather than slowing the senders down.
@@ -292,18 +294,19 @@ async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
 
     let otlp_wanted = otlp_address(otlp.as_deref(), std::env::var(OTLP_ENV).ok().as_deref());
     let mut otlp_missed = None;
+    let mut otlp_url = None;
+    // The agent says whose it is on its OTLP port: another project's agent that wants the same one names it.
+    let project = tracepanel_server::neighbors::project(&dir.to_string_lossy());
     let otlp = match &otlp_wanted {
-        Some(addr) => match serve_otlp(addr, sink.clone(), activity.clone()).await {
-            Ok((address, task)) => {
-                std::fs::write(&otlp_file, format!("http://{address}\n"))?;
-                tracepanel_server::otlp(tracepanel_server::Otlp {
-                    address: address.clone(),
-                    serving: true,
-                    error: None,
-                    taken: false,
-                    free: None,
-                });
-                Some((format!("http://{address}"), task))
+        Some(addr) => match tokio::net::TcpListener::bind(addr).await {
+            Ok(listener) => {
+                otlp_url = Some(format!("http://{}", took_otlp(&listener, &otlp_file)?));
+                Some(tokio::spawn(tracepanel_otlp::serve(
+                    listener,
+                    sink.clone(),
+                    activity.clone(),
+                    project,
+                )))
             }
             Err(error) => {
                 let taken = error.kind() == std::io::ErrorKind::AddrInUse;
@@ -316,7 +319,14 @@ async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
                 };
                 tracepanel_server::otlp(missed.clone());
                 otlp_missed = Some(missed);
-                None
+                // Its holder may go (another project's agent stopped): this one takes the port then.
+                Some(tokio::spawn(retry_otlp(
+                    addr.clone(),
+                    otlp_file.clone(),
+                    sink.clone(),
+                    activity.clone(),
+                    project,
+                )))
             }
         },
         None => None,
@@ -359,7 +369,7 @@ async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
     if let Some((url, _)) = &console {
         println!("  console  {url}");
     }
-    if let Some((url, _)) = &otlp {
+    if let Some(url) = &otlp_url {
         println!("  otlp     {url}");
     }
     if let Some(cloud) = &cloud_line {
@@ -381,15 +391,11 @@ async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
                 tracepanel_server::neighbors::holding_otlp(&address, &own)
             })
             .await
-            .ok()
-            .flatten()
+            .unwrap_or(OtlpHolder::Other)
         } else {
-            None
+            OtlpHolder::Other
         };
-        eprintln!(
-            "tracepanel-agent: {}",
-            otlp_missed_line(&missed, holder.as_deref())
-        );
+        eprintln!("tracepanel-agent: {}", otlp_missed_line(&missed, &holder));
     }
 
     tokio::select! {
@@ -400,7 +406,7 @@ async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
     if let Some((_, console)) = console {
         console.abort();
     }
-    if let Some((_, otlp)) = otlp {
+    if let Some(otlp) = otlp {
         otlp.abort();
     }
     // What was received gets written before exiting.
@@ -486,19 +492,51 @@ async fn idle(activity: &Activity, seconds: Option<i64>) {
     }
 }
 
-/// OTLP/HTTP on `addr`, into the same queue as the SDKs' traces, with the `HOST:PORT` it serves on. A port in use
-/// (another project's agent, a collector of the developer's own) is said and skipped: the SDKs' traces matter more.
-async fn serve_otlp(
-    addr: &str,
+/// The OTLP port taken: its `HOST:PORT` goes to `otlp.addr` and the console's API. A port in use (another project's
+/// agent, a collector of the developer's own) is said and tried again later (`retry_otlp`): the SDKs' traces matter
+/// more.
+fn took_otlp(listener: &tokio::net::TcpListener, file: &Path) -> std::io::Result<String> {
+    let address = listener.local_addr()?.to_string();
+    std::fs::write(file, format!("http://{address}\n"))?;
+    tracepanel_server::otlp(tracepanel_server::Otlp {
+        address: address.clone(),
+        serving: true,
+        error: None,
+        taken: false,
+        free: None,
+    });
+    Ok(address)
+}
+
+/// How often an agent with no OTLP tries its port again.
+const OTLP_RETRY: Duration = Duration::from_secs(10);
+
+/// `OTLP_RETRY`, or as many milliseconds as `TRACEPANEL_OTLP_RETRY_MS` says (the tests' own, not documented).
+fn otlp_retry() -> Duration {
+    std::env::var("TRACEPANEL_OTLP_RETRY_MS")
+        .ok()
+        .and_then(|ms| ms.trim().parse().ok())
+        .map_or(OTLP_RETRY, Duration::from_millis)
+}
+
+/// Tries `addr` every `otlp_retry()` until it is free (its holder gone), then serves OTLP/HTTP there, into the same
+/// queue as the SDKs' traces, until the task is dropped.
+async fn retry_otlp(
+    addr: String,
+    file: PathBuf,
     sink: tracepanel_protocol::Sink,
     activity: Activity,
-) -> std::io::Result<(String, tokio::task::JoinHandle<std::io::Result<()>>)> {
-    let listener = tokio::net::TcpListener::bind(addr).await?;
-    let address = listener.local_addr()?.to_string();
-    Ok((
-        address,
-        tokio::spawn(tracepanel_otlp::serve(listener, sink, activity)),
-    ))
+    project: String,
+) -> std::io::Result<()> {
+    let every = otlp_retry();
+    loop {
+        tokio::time::sleep(every).await;
+        if let Ok(listener) = tokio::net::TcpListener::bind(&addr).await {
+            let address = took_otlp(&listener, &file)?;
+            eprintln!("tracepanel-agent: OTLP on http://{address} now: the port is free again");
+            return tracepanel_otlp::serve(listener, sink, activity, project).await;
+        }
+    }
 }
 
 /// How many ports after a taken one are tried for a free one to suggest.
@@ -518,16 +556,17 @@ async fn free_after(addr: &str) -> Option<String> {
 }
 
 /// The log line of an agent that takes no OTLP: why, and for a taken port, what this project's apps do instead.
-fn otlp_missed_line(missed: &tracepanel_server::Otlp, holder: Option<&str>) -> String {
+fn otlp_missed_line(missed: &tracepanel_server::Otlp, holder: &OtlpHolder) -> String {
     let address = &missed.address;
     let error = missed.error.as_deref().unwrap_or("not served");
     if !missed.taken {
         return format!("no OTLP on {address}: {error}");
     }
-    let by = holder.map_or_else(
-        || "another program".to_owned(),
-        |project| format!("the agent of {project}"),
-    );
+    let by = match holder {
+        OtlpHolder::Agent(project) => format!("the agent of {project}"),
+        OtlpHolder::OlderAgent => "an older Tracepanel agent".to_owned(),
+        OtlpHolder::Other => "another program".to_owned(),
+    };
     match &missed.free {
         Some(free) => format!(
             "no OTLP on {address}: it is taken by {by}. Set {OTLP_ENV}={free} for this project's apps and point \
@@ -800,14 +839,19 @@ mod tests {
         };
 
         assert_eq!(
-            otlp_missed_line(&taken, Some("shop")),
+            otlp_missed_line(&taken, &OtlpHolder::Agent("shop".into())),
             "no OTLP on 127.0.0.1:4318: it is taken by the agent of shop. Set TRACEPANEL_OTLP=127.0.0.1:4319 for \
              this project's apps and point its OTLP exporters there"
         );
         assert_eq!(
-            otlp_missed_line(&taken, None),
+            otlp_missed_line(&taken, &OtlpHolder::Other),
             "no OTLP on 127.0.0.1:4318: it is taken by another program. Set TRACEPANEL_OTLP=127.0.0.1:4319 for \
              this project's apps and point its OTLP exporters there"
+        );
+        assert_eq!(
+            otlp_missed_line(&taken, &OtlpHolder::OlderAgent),
+            "no OTLP on 127.0.0.1:4318: it is taken by an older Tracepanel agent. Set TRACEPANEL_OTLP=127.0.0.1:4319 \
+             for this project's apps and point its OTLP exporters there"
         );
         assert_eq!(
             otlp_missed_line(
@@ -818,7 +862,7 @@ mod tests {
                     taken: false,
                     free: None,
                 },
-                None
+                &OtlpHolder::Other
             ),
             "no OTLP on 10.9.9.9:4318: Can't assign requested address (os error 49)"
         );

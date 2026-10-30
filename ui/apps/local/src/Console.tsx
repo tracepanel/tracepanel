@@ -10,7 +10,7 @@ import { useSearch } from "./data";
 import { EntryPage } from "./EntryPage";
 import { FirstPaint } from "./firstPaint";
 import { GroupPage } from "./GroupPage";
-import { useCapabilities } from "./hooks";
+import { useOtlp } from "./hooks";
 import { IssuePage } from "./IssuePage";
 import { useRowKeys } from "./keyboard";
 import { go, isEntry, parse, periodOf, type Route, type Section } from "./routes";
@@ -119,7 +119,7 @@ export function Console({ route, source: everything }: { route: Route; source: D
   const source = useMemo(() => scopedSource(everything, service), [everything, service]);
   const apps = useApps(everything);
   // The agent's own, whichever app is chosen: where it takes OTLP, shown in the sidebar's footer.
-  const otlp = useCapabilities(everything)?.otlp;
+  const otlp = useOtlp(everything);
   // The switcher: only where there is a choice.
   const scope = apps && apps.length > 1 ? { apps, service, onService: setService, pending } : undefined;
   // The chosen app gone (the store cleared, another project): back to all of them.

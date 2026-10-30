@@ -615,7 +615,11 @@ function SidebarFooter({
  * traces still come, only this project's OpenTelemetry exporters need an address of its own.
  */
 function OtlpNotice({ otlp }: { otlp: Otlp }) {
-  const by = otlp.taken_by ? `the agent of ${otlp.taken_by}` : "another program";
+  const by = otlp.taken_by
+    ? `the agent of ${otlp.taken_by}`
+    : otlp.taken_by_agent
+      ? "an older Tracepanel agent"
+      : "another program";
   return (
     <div role="note" aria-label="OTLP" className="flex gap-2 rounded-md border bg-muted/40 p-2.5 leading-relaxed">
       <UnplugIcon className="mt-1 size-3.5 shrink-0 text-warn" aria-hidden={true} />

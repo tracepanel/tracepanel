@@ -15,6 +15,12 @@
   the project whose agent holds it and the setting to use instead:
   `TRACEPANEL_OTLP=127.0.0.1:4319` with a free port. `api/capabilities`
   has it as `otlp`.
+- An agent says whose it is on its OTLP port (`GET /tracepanel`), so
+  the project that holds a taken port is named even when its agent
+  serves no console. An agent from before this shows as an older
+  Tracepanel agent. An agent whose port was taken tries it again every
+  10 seconds and takes it over once its holder has gone. The console's
+  notice then turns into the address.
 - Apollo Router over OTLP: its request to a subgraph is an HTTP call
   (`POST`, the subgraph's URL), and the subgraph's trace links to it,
   though the Router's span names only its URL. The Router's own stages
