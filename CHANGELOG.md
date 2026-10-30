@@ -11,6 +11,9 @@
 
 ### Fixed
 
+- A trace whose spans' parents loop (a span its own ancestor, from a
+  broken instrumentation) no longer keeps the agent busy forever: the
+  search for the transaction a span ran in stops at the trace's size.
 - A query's comments (an ORM's or sqlcommenter's tags, a traceparent,
   a note) no longer name it or set it apart from its repeats: it is
   named by what it does (`SELECT orders`, not its comment), and the same

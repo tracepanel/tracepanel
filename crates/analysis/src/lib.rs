@@ -865,7 +865,9 @@ fn in_transactions(trace: &Trace) -> Vec<(&Span, &Span)> {
             .parent_id
             .as_deref()
             .and_then(|id| by_id.get(id).copied());
-        while let Some(current) = parent {
+        // A broken tree (a span its own ancestor) stops at its size, not never.
+        for _ in 0..by_id.len() {
+            let Some(current) = parent else { break };
             if truthy(current.attrs.get("db.transaction.on_commit")) {
                 outer = None;
                 break;
@@ -2637,6 +2639,22 @@ mod tests {
             [("n+1".to_owned(), 3)]
         );
         assert!(found(&trace)[0].1.contains("SELECT"));
+    }
+
+    #[test]
+    fn a_trace_whose_parents_loop_is_analyzed_and_ends() {
+        // A broken SDK's spans, each the other's parent: the walk up to a transaction stops at the trace's size.
+        let span = |id: &str, parent: &str, kind: &str| {
+            serde_json::json!({"id": id, "parent_id": parent, "kind": kind, "name": kind, "start": 0, "duration": 1,
+                               "status": "ok", "attrs": {"db.statement": "SELECT 1", "db.fingerprint": "SELECT 1"}})
+        };
+        let trace: Trace = serde_json::from_value(serde_json::json!({
+            "id": "t", "kind": "http", "name": "GET /", "start": 0,
+            "spans": [span("a", "b", "transaction"), span("b", "a", "sql")],
+        }))
+        .unwrap();
+
+        assert!(analyze(&trace, &Thresholds::default()).is_empty());
     }
 
     #[test]
