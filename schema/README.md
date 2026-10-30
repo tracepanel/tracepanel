@@ -81,6 +81,18 @@ are ULIDs.
   exists. The agent keeps the tasks in flight in memory, not in the store,
   and serves them at `GET /api/tasks/live`. `crates/protocol/src/live.rs`
   names the fields.
+- **Thresholds**: the limits an app's issues are found with, in its hello
+  (`thresholds`): `n_plus_one`, `slow_sql_ms`, `long_transaction_ms`,
+  `slow_http_ms`, `queue_wait_ms` and others, each optional, with the
+  agent's defaults for the ones left out. `slow_sql_ms_by_db` and
+  `long_transaction_ms_by_db` set them for one database, by its
+  `db.system` (`{"snowflake": 3000}`): what is set there wins. An
+  analytical warehouse (Snowflake, BigQuery, Databricks, Redshift,
+  ClickHouse) answers in seconds by design, so the agent holds it to 2 s
+  per query and 10 s per transaction unless the app set its own, or set
+  higher limits for every database. Agents before the maps ignore them,
+  and SDKs before them send none.
+  `crates/protocol/src/lib.rs` (`Thresholds`) names the fields.
 - **App**: what an app says about itself once, in its hello (`app`): its
   settings, masked by its SDK, the versions of what it runs on, and what its
   checks found (`checks`, `migrations`), or in an `{"app": {...}}` frame

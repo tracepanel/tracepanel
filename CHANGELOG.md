@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- A query on an analytical warehouse (Snowflake, BigQuery, Databricks,
+  Redshift, ClickHouse) is slow from 2 s, not 100 ms, and a transaction
+  there long from 10 s, not 500 ms. A warehouse answers in seconds by
+  design, so every query was a "Slow query" and every transaction a
+  "Long transaction". The app's own limits still apply when they are
+  higher. A slow warehouse query's hint says what helps there: cache the
+  result, pre-aggregate it, run it off the request, or check the
+  warehouse's size and queue. It no longer says to add an index.
+- An SDK can set the slow query and long transaction limits for one
+  database in its hello (`slow_sql_ms_by_db`, `long_transaction_ms_by_db`,
+  by `db.system`). They win over the app's limits and the warehouse
+  defaults. Older SDKs send none, and older agents ignore them.
+
 ## 0.9.3 (2026-10-30)
 
 ### Fixed

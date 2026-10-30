@@ -15,6 +15,7 @@ pub mod local;
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use serde_json::{Map, Value};
+use std::collections::BTreeMap;
 #[cfg(unix)]
 use std::path::Path;
 use std::sync::Arc;
@@ -460,12 +461,18 @@ struct Hello {
 }
 
 /// The limits issues are found with, as the SDK is configured (these defaults otherwise).
-#[derive(Debug, Clone, Copy, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct Thresholds {
     pub n_plus_one: i64,
     pub slow_sql_ms: i64,
     pub long_transaction_ms: i64,
+    /// The app's own `slow_sql_ms` for one database, by its `db.system` (`{"snowflake": 3000}`, any case): it wins
+    /// over `slow_sql_ms` and the agent's default for an analytical warehouse. SDKs from before send none, and agents
+    /// from before ignore it.
+    pub slow_sql_ms_by_db: BTreeMap<String, i64>,
+    /// The app's own `long_transaction_ms` for one database, as `slow_sql_ms_by_db`.
+    pub long_transaction_ms_by_db: BTreeMap<String, i64>,
     /// An outgoing HTTP call this slow is an issue (SDKs from before it send none: the default then).
     pub slow_http_ms: i64,
     /// Repeated Redis commands or cache operations are an issue only when they cost this much together: an
@@ -483,6 +490,8 @@ impl Default for Thresholds {
             n_plus_one: 3,
             slow_sql_ms: 100,
             long_transaction_ms: 500,
+            slow_sql_ms_by_db: BTreeMap::new(),
+            long_transaction_ms_by_db: BTreeMap::new(),
             slow_http_ms: 500,
             n_plus_one_min_ms: 5,
             queue_wait_ms: 1000,
@@ -657,7 +666,7 @@ async fn frames<R: AsyncRead + Unpin>(
         sink(Batch {
             frame,
             max_traces: hello.max_traces,
-            thresholds: hello.thresholds,
+            thresholds: hello.thresholds.clone(),
         });
     }
 }
