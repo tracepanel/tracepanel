@@ -531,3 +531,84 @@ fn model_calls_are_llm_spans_in_the_current_names() {
 
     assert_eq!(tool.kind, "function");
 }
+
+#[test]
+fn sql_comments_name_and_group_nothing() {
+    let mapped = map(
+        "query",
+        &attrs(json!({
+            "db.system": "postgresql",
+            "db.statement": "/*controller='orders',traceparent='00-4bf9-01'*/ SELECT id\n-- the page's rows\nFROM orders \
+                             WHERE note = '-- not /* a */ comment' AND id IN ($1, $2)",
+        })),
+    );
+
+    assert_eq!(mapped.name, "SELECT orders");
+    assert_eq!(
+        mapped.attrs["db.fingerprint"],
+        "SELECT id FROM orders WHERE note = '-- not /* a */ comment' AND id IN (...)"
+    );
+    // The statement keeps them, its line comment closed so the line it ended still reads as SQL.
+    assert_eq!(
+        mapped.attrs["db.statement"],
+        "/*controller='orders',traceparent='00-4bf9-01'*/ SELECT id /* the page's rows */ FROM orders \
+         WHERE note = '-- not /* a */ comment' AND id IN ($1, $2)"
+    );
+}
+
+#[test]
+fn an_sdks_commented_queries_are_named_and_grouped_without_them() {
+    let query = |id: &str, statement: &str| {
+        json!({"id": id, "parent_id": "01M5SQLR00T000000000000000", "kind": "sql", "name": "/*TRACEPARENT='00-1'*/",
+               "start": 1, "duration": 1, "status": "ok",
+               "attrs": {"db.statement": statement, "db.fingerprint": statement}})
+    };
+    let doc = json!({
+        "id": "01M5SQLTRACE00000000000000", "kind": "request", "name": "GET /orders", "start": 0, "duration": 10,
+        "status": "ok", "attrs": {},
+        "spans": [
+            {"id": "01M5SQLR00T000000000000000", "parent_id": null, "kind": "request", "name": "GET /orders",
+             "start": 0, "duration": 10, "status": "ok", "attrs": {}},
+            query("01M5SQLQUERY10000000000000", "/*traceparent='00-1'*/ SELECT * FROM orders WHERE id IN (%s, %s)"),
+            query("01M5SQLQUERY20000000000000", "/*traceparent='00-2'*/ SELECT * FROM orders WHERE id IN (%s)"),
+            // An older SDK's statement on one line: its `--` comment runs to its end, and is left as it is.
+            query("01M5SQLQUERY30000000000000", "-- name: orders SELECT * FROM orders"),
+        ],
+        "logs": [], "errors": [], "links": [], "issues": [],
+    });
+    let mut received = tracepanel_protocol::Received {
+        trace: serde_json::from_value(doc.clone()).unwrap(),
+        doc: doc.to_string(),
+    };
+
+    tracepanel_analysis::otel::uncomment(&mut received);
+
+    let rows: Vec<(&str, &Value)> = received.trace.spans[1..]
+        .iter()
+        .map(|span| (span.name.as_str(), &span.attrs["db.fingerprint"]))
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            (
+                "SELECT orders",
+                &json!("SELECT * FROM orders WHERE id IN (...)")
+            ),
+            (
+                "SELECT orders",
+                &json!("SELECT * FROM orders WHERE id IN (...)")
+            ),
+            (
+                "/*TRACEPARENT='00-1'*/",
+                &json!("-- name: orders SELECT * FROM orders")
+            ),
+        ]
+    );
+
+    let stored: Value = serde_json::from_str(&received.doc).unwrap();
+    assert_eq!(stored["spans"][1]["name"], "SELECT orders");
+    assert_eq!(
+        stored["spans"][1]["attrs"]["db.statement"],
+        "/*traceparent='00-1'*/ SELECT * FROM orders WHERE id IN (%s, %s)"
+    );
+}

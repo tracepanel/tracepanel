@@ -61,7 +61,7 @@ export {
   SearchError,
   type TracesWithRuns,
 } from "./source";
-export { formatSql, tokenizeSql } from "./sql";
+export { formatSql, tokenizeSql, uncommented } from "./sql";
 export { type Tab, Tabs } from "./Tabs";
 export { Timeline } from "./Timeline";
 export { type ListChains, TraceList, type TraceRow } from "./TraceList";

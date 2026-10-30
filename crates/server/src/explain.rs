@@ -31,7 +31,7 @@ pub(crate) fn request(span: &Map<String, Value>, analyze: bool) -> Result<Reques
             .to_owned()
     };
     let statement = text("db.statement");
-    let first = statement
+    let first = after_comments(&statement)
         .split_whitespace()
         .next()
         .unwrap_or_default()
@@ -267,6 +267,21 @@ fn table(columns: &[String], rows: &[Vec<Value>]) -> Vec<Value> {
         .collect()
 }
 
+/// A statement from its first word on: its leading comments (an ORM's or sqlcommenter's tags) are not what it does.
+fn after_comments(statement: &str) -> &str {
+    let mut rest = statement.trim_start();
+    loop {
+        let skipped = if let Some(comment) = rest.strip_prefix("/*") {
+            comment.split_once("*/").map_or("", |(_, after)| after)
+        } else if let Some(comment) = rest.strip_prefix("--") {
+            comment.split_once('\n').map_or("", |(_, after)| after)
+        } else {
+            return rest;
+        };
+        rest = skipped.trim_start();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -283,6 +298,21 @@ mod tests {
     fn mssql() -> Request {
         let span = json!({"kind": "sql", "attrs": {"db.system": "mssql", "db.statement": "SELECT * FROM books"}});
         request(span.as_object().unwrap(), false).unwrap()
+    }
+
+    #[test]
+    fn a_select_after_its_comments_is_explained() {
+        let commented = sql(
+            "/* traceparent='00-1' */ -- a note\nSELECT * FROM books",
+            None,
+        );
+        let update = sql("/* SELECT */ UPDATE books SET n = 1", None);
+
+        assert!(commented.is_ok());
+        assert_eq!(
+            update.err(),
+            Some((422, "Only SELECT statements can be explained.".into()))
+        );
     }
 
     #[test]

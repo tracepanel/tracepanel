@@ -4,6 +4,14 @@
 
 ### Fixed
 
+- A query's comments (an ORM's or sqlcommenter's tags, a traceparent,
+  a note) no longer name it or set it apart from its repeats: it is
+  named by what it does (`SELECT orders`, not its comment), and the same
+  query with a different traceparent in its comment is one row, its
+  N+1 and duplicates found. Its statement keeps them, and a SELECT
+  after a comment gets its EXPLAIN. A line comment (`-- a note`) is
+  closed when the statement is put on one line, so the line it ended
+  still reads as SQL.
 - The panel's list no longer leaves a request without its apps' rows
   when another request comes while that request's chain is loading (a
   busy agent, a page that makes its calls at once): the chain is asked

@@ -21,6 +21,11 @@ use tracepanel_protocol::{Attrs, Received};
 pub const KIND: &str = "otel";
 
 static WHITESPACE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s+").unwrap());
+// A comment (`-- a note` to the line's end, `/* sqlcommenter's tags */`), or a string or quoted name, whose `--` and
+// `/*` are its text: matched so a comment is told from a string that looks like one.
+static COMMENT: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"(?s)(--[^\n]*)|(/\*.*?\*/)|'(?:[^']|'')*'|"(?:[^"]|"")*"|`[^`]*`"#).unwrap()
+});
 static IN_LIST: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(&format!(r"(?i)\bIN \({PLACEHOLDER}(?:, ?{PLACEHOLDER})*\)")).unwrap()
 });
@@ -132,6 +137,54 @@ pub fn normalize(received: &mut Received) {
         for span in spans.iter_mut().filter(|span| span["kind"] == KIND) {
             map_in_place(span);
         }
+    }
+    if let Ok(trace) = serde_json::from_value(doc.clone()) {
+        received.trace = trace;
+        received.doc = doc.to_string();
+    }
+}
+
+/// Name and group the trace's queries without their comments, in its rows and in its document (what the console
+/// shows): an SDK names a statement by its first word and groups it by its whole text, a leading `/* … */` and its
+/// traceparent included. The statement itself keeps them. A trace without a commented query is left as it is.
+pub fn uncomment(received: &mut Received) {
+    let commented = |kind: &str, attrs: &Attrs| {
+        kind == "sql"
+            && attrs
+                .get("db.statement")
+                .and_then(Value::as_str)
+                .is_some_and(|sql| sql.contains("/*") || sql.contains("--"))
+    };
+    if !received
+        .trace
+        .spans
+        .iter()
+        .any(|span| commented(&span.kind, &span.attrs))
+    {
+        return;
+    }
+    let Ok(mut doc) = serde_json::from_str::<Value>(&received.doc) else {
+        return;
+    };
+    for span in doc
+        .get_mut("spans")
+        .and_then(Value::as_array_mut)
+        .into_iter()
+        .flatten()
+    {
+        let Some(attrs) = span.get("attrs").and_then(Value::as_object) else {
+            continue;
+        };
+        if !commented(span["kind"].as_str().unwrap_or_default(), attrs) {
+            continue;
+        }
+        let bare = uncommented(attrs["db.statement"].as_str().unwrap_or_default());
+        // An older SDK's statement on one line: its `--` comment runs to the end, and nothing is left to name.
+        if bare.is_empty() {
+            continue;
+        }
+        span["name"] = Value::from(span_name(&bare));
+        span["attrs"]["db.fingerprint"] = Value::from(IN_LIST.replace_all(&bare, "IN (...)"));
     }
     if let Ok(trace) = serde_json::from_value(doc.clone()) {
         received.trace = trace;
@@ -352,15 +405,40 @@ fn llm(name: &str, attrs: &Attrs) -> Option<Mapped> {
 
 // ---------- SQL ----------
 
-/// A statement on one line, as the SDKs record it.
+/// A statement on one line, as the SDKs record it: a line comment made a `/* */` one, so the line it ended still
+/// reads as SQL.
 pub fn statement(sql: &str) -> String {
-    WHITESPACE.replace_all(sql, " ").trim().to_owned()
+    let closed = if sql.contains("--") {
+        COMMENT.replace_all(sql, |found: &regex::Captures| match found.get(1) {
+            Some(line) => format!("/* {} */", line.as_str()[2..].trim().replace("*/", "* /")),
+            None => found[0].to_owned(),
+        })
+    } else {
+        sql.into()
+    };
+    WHITESPACE.replace_all(&closed, " ").trim().to_owned()
 }
 
-/// What the agent groups queries by: the one-line statement, its IN lists collapsed.
+/// A statement without its comments (an ORM's or sqlcommenter's tags, a note), on one line: what names it and groups
+/// it, since a comment that carries the request's traceparent differs in every query.
+pub fn uncommented(sql: &str) -> String {
+    if !sql.contains("--") && !sql.contains("/*") {
+        return statement(sql);
+    }
+    let bare = COMMENT.replace_all(sql, |found: &regex::Captures| {
+        if found.get(1).is_some() || found.get(2).is_some() {
+            " ".to_owned()
+        } else {
+            found[0].to_owned()
+        }
+    });
+    statement(&bare)
+}
+
+/// What the agent groups queries by: the one-line statement without its comments, its IN lists collapsed.
 pub fn fingerprint(sql: &str) -> String {
     IN_LIST
-        .replace_all(&statement(sql), "IN (...)")
+        .replace_all(&uncommented(sql), "IN (...)")
         .into_owned()
 }
 
@@ -432,7 +510,7 @@ fn sql(name: &str, attrs: &Attrs, system: &str) -> Mapped {
     }
     Mapped {
         kind: "sql".into(),
-        name: span_name(&one_line),
+        name: span_name(&uncommented(&raw)),
         attrs: out,
         error: false,
     }

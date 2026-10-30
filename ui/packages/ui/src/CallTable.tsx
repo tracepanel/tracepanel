@@ -12,6 +12,7 @@ import { onTheClock } from "./lib/calls";
 import { percent } from "./lib/percent";
 import { plural } from "./lib/plural";
 import { cn } from "./lib/utils";
+import { uncommented } from "./sql";
 import type { ExplainPlan, Span, Trace } from "./types";
 
 // A failed call marks its row's edge red, as the console's lists mark theirs; one an issue points at is highlighted.
@@ -230,7 +231,7 @@ export type Explain = ((spanId: string, analyze: boolean) => Promise<ExplainPlan
 /** EXPLAIN for the queries of a trace, where its app runs it; undefined where it doesn't. */
 export type ExplainOf = (trace: Trace) => Explain | undefined;
 
-const isSelect = (span: Span) => /^\s*SELECT\b/i.test(String(span.attrs["db.statement"] ?? ""));
+const isSelect = (span: Span) => /^SELECT\b/i.test(uncommented(String(span.attrs["db.statement"] ?? "")));
 
 /**
  * A query's plan on demand, the same wherever a query's details open (a trace's DB tab, its call tree): a SELECT's,

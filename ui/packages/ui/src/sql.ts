@@ -77,3 +77,11 @@ export function tokenizeSql(sql: string): SqlToken[] {
   }
   return tokens;
 }
+
+/** A statement without its comments (an ORM's or sqlcommenter's tags, a note): what it does, as a check reads it. */
+export function uncommented(sql: string): string {
+  return tokenizeSql(sql)
+    .map((token) => (token.type === "comment" ? " " : token.text))
+    .join("")
+    .trim();
+}
