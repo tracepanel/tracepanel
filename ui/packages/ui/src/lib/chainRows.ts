@@ -5,8 +5,9 @@
 // (`GET /traces/{id}/chain`), so the list says the same counts, under the same limits. A call whose trace hasn't
 // reached the agent yet is a row too, waiting, where that trace's row will be (`ChainWaiting`).
 
-import type { Chain, ChainTrace, IssueKind, Span, Trace, TraceSummary } from "../types";
+import type { Chain, ChainTrace, Span, Trace, TraceSummary } from "../types";
 import { onTheClock } from "./calls";
+import { type ChainCounts, countsOf } from "./chainCounts";
 
 /** One trace of an app, a row of its own: its method and actual path, its route in the tooltip. */
 export interface ChainTraceRow {
@@ -86,10 +87,6 @@ function served(each: ChainTrace): each is Served {
   return each.trace !== undefined;
 }
 
-function queriesOf(trace: Trace): number {
-  return trace.spans.filter((span) => span.kind === "sql").length;
-}
-
 /** A trace as the list names a request: its method and its route (the path where it has none). */
 // biome-ignore-start lint/style/useNamingConvention: builds an API object; its field names are the wire format.
 function summaryOf(trace: Trace): TraceSummary {
@@ -112,13 +109,13 @@ function summaryOf(trace: Trace): TraceSummary {
     route: attr("http.route"),
     view: null,
     user_id: null,
-    queries: queriesOf(trace),
+    queries: 0,
     db_time: 0,
-    issues: trace.issues.length,
+    issues: 0,
     errors: trace.errors.length,
     logs: trace.logs.length,
     mails: 0,
-    issue_kinds: [...new Set(trace.issues.map((issue) => issue.kind))],
+    issue_kinds: [],
     db_aliases: [],
     cache_aliases: [],
     task_state: null,
@@ -128,37 +125,33 @@ function summaryOf(trace: Trace): TraceSummary {
 // biome-ignore-end lint/style/useNamingConvention: builds an API object; its field names are the wire format.
 
 /**
- * Several traces as one row: the first's name, their queries and findings added up (the chain's own N+1 across apps
- * on the traces that made the calls), their time on the clock (from the first's start to the last's end, overlaps
- * once, as the call tree's groups say it).
+ * Several traces as one row: the first's name, their time on the clock (from the first's start to the last's end,
+ * overlaps once, as the call tree's groups say it), and what they and everything under them did (`counts`), as the
+ * tabs count it under them: a row never says less than one under it.
  */
-function together(traces: readonly Trace[], chainKinds: ReadonlyMap<string, IssueKind[]>): TraceSummary {
+function together(traces: readonly Trace[], counts: ChainCounts): TraceSummary {
   const first = summaryOf(traces[0] as Trace);
   const each = traces.map(summaryOf);
-  const kinds = new Set(each.flatMap((one) => one.issue_kinds));
-  let issues = each.reduce((sum, one) => sum + one.issues, 0);
-  for (const trace of traces) {
-    for (const kind of chainKinds.get(trace.id) ?? []) {
-      kinds.add(kind);
-      issues += 1;
-    }
-  }
   return {
     ...first,
     duration: onTheClock(traces),
     status: each.some((one) => one.status === "error") ? "error" : "ok",
-    queries: each.reduce((sum, one) => sum + one.queries, 0),
-    issues,
+    queries: counts.queries,
+    issues: counts.issues,
     errors: each.reduce((sum, one) => sum + one.errors, 0),
     // biome-ignore lint/style/useNamingConvention: wire format.
-    issue_kinds: [...kinds],
+    issue_kinds: counts.kinds,
   };
 }
 
-/** What a group of traces is: its app, its kind, and its route (its name where it has none). */
+/**
+ * What a run of traces shares, as their rows name them: a GraphQL operation ("GraphQL query Books": many share one
+ * route, POST /graphql), else the method and route, else the name.
+ */
 function routeOf(trace: Trace): string {
   const route = trace.attrs["http.route"];
   const method = trace.attrs["http.method"];
+  if (trace.name.startsWith("GraphQL ")) return trace.name;
   return typeof route === "string" && typeof method === "string" ? `${method} ${route}` : trace.name;
 }
 
@@ -270,12 +263,13 @@ interface Context {
   waiting: ReadonlyMap<string, Pending[]>;
   /** Each trace of the chain by its id. */
   traces: ReadonlyMap<string, Served>;
-  chainKinds: ReadonlyMap<string, IssueKind[]>;
+  /** What some traces and everything under them did, as the tabs count it. */
+  counted: (ids: readonly string[]) => ChainCounts;
   seen: Set<string>;
 }
 
 function appsUnder(parents: ReadonlySet<string>, context: Context, path: string): ChainEntry[] {
-  const { children, chainKinds, seen } = context;
+  const { children, counted, seen } = context;
   const below = [...parents].flatMap((id) => children.get(id) ?? []).filter((each) => !seen.has(each.id));
   for (const each of below) seen.add(each.id);
   below.sort((a, b) => a.trace.start - b.trace.start || a.id.localeCompare(b.id));
@@ -305,7 +299,7 @@ function appsUnder(parents: ReadonlySet<string>, context: Context, path: string)
         key: `${key}/${each.id}`,
         id: each.id,
         trace: each.trace,
-        summary: together([each.trace], chainKinds),
+        summary: together([each.trace], counted([each.id])),
         route: routeOf(each.trace),
         called: calls.get(each.id)?.start ?? each.trace.start,
         apps: appsUnder(new Set([each.id]), context, `${key}/${each.id}`),
@@ -318,21 +312,16 @@ function appsUnder(parents: ReadonlySet<string>, context: Context, path: string)
       ids: traces.map((each) => each.id),
       summary: together(
         traces.map((each) => each.trace),
-        chainKinds,
+        counted(traces.map((each) => each.id)),
       ),
-      items: inOrder(runsOf(rows, key, rows.length <= RUN_OPEN_LIMIT, chainKinds), waitingIn(app)),
+      items: inOrder(runsOf(rows, key, rows.length <= RUN_OPEN_LIMIT, counted), waitingIn(app)),
     };
   });
   return inOrder<ChainEntry>(apps, waitingIn(undefined));
 }
 
 /** The rows in order, three or more of one route in a row folded into a run (keyed by its first trace). */
-function runsOf(
-  rows: readonly ChainTraceRow[],
-  key: string,
-  open: boolean,
-  chainKinds: ReadonlyMap<string, IssueKind[]>,
-): ChainItem[] {
+function runsOf(rows: readonly ChainTraceRow[], key: string, open: boolean, counted: Context["counted"]): ChainItem[] {
   const items: ChainItem[] = [];
   let at = 0;
   while (at < rows.length) {
@@ -350,7 +339,7 @@ function runsOf(
         summary: {
           ...together(
             members.map((each) => each.trace),
-            chainKinds,
+            counted(members.map((each) => each.id)),
           ),
           path: first.summary.route,
         },
@@ -382,13 +371,32 @@ export function chainApps(
     if (each.parent === null || each.id === root || listed.has(each.id)) continue;
     children.set(each.parent, [...(children.get(each.parent) ?? []), each]);
   }
-  // The chain's N+1 across apps is the calling trace's finding: its row says it.
-  const chainKinds = new Map<string, IssueKind[]>();
-  for (const issue of chain.issues) {
-    chainKinds.set(issue.trace_id, [...(chainKinds.get(issue.trace_id) ?? []), issue.kind]);
-  }
-  chainKinds.delete(root);
   const traces = new Map(chain.traces.filter(served).map((each) => [each.id, each]));
   const waiting = waitingCalls(chain, now * 1000);
-  return appsUnder(new Set([root]), { children, waiting, traces, chainKinds, seen: new Set([root]) }, root);
+  return appsUnder(
+    new Set([root]),
+    { children, waiting, traces, counted: countedIn(chain, children, traces), seen: new Set([root]) },
+    root,
+  );
+}
+
+/**
+ * What some traces of the chain and all those under them did, as the tabs count it under an app's row (the chain's
+ * own N+1 across apps on the traces that made the calls).
+ */
+function countedIn(
+  chain: Chain,
+  children: ReadonlyMap<string, Served[]>,
+  traces: ReadonlyMap<string, Served>,
+): Context["counted"] {
+  return (ids) => {
+    const members: Served[] = [];
+    const next = [...ids];
+    for (let id = next.shift(); id !== undefined; id = next.shift()) {
+      const each = traces.get(id);
+      if (each) members.push(each);
+      next.push(...(children.get(id) ?? []).map((child) => child.id));
+    }
+    return countsOf(members, chain.issues);
+  };
 }

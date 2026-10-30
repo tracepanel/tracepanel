@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- The panel's list folds an app's traces into a run (×3) only when they
+  are the same operation: a gateway's GraphQL operations all go to
+  `POST /graphql`, so different ones were grouped under the first's
+  name. A run's traces are named as the same rows outside a run: their
+  badge and operation, or their method and path, not the path alone.
+- The panel's list counts as the pill and the tabs do. A view's row
+  says the queries and issues of its whole chain, as the pill and its
+  tabs, where it said nothing. An app's row, a run's, and a trace that
+  called other apps say what they and everything under them did, so a
+  row no longer says 0 queries over one that says 3. Issues count once
+  however many traces have them, as the Issues tab counts them.
+- A log record whose first line is a border (a table or a banner
+  printed to the log) shows its first line with words in the call tree
+  and the Logs tab, not a line of box-drawing characters. The whole
+  record is in its details as before.
+
 ## 0.9.2 (2026-10-30)
 
 ### Fixed
