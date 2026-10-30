@@ -1984,6 +1984,25 @@ export interface components {
         } & {
             [key: string]: (string | number | boolean | null) | (string | number | boolean | null)[];
         };
+        /** @description Set by the agent on a span it mapped from an otel one, never sent by an SDK: the span as it came, and why it became what it is. */
+        received: {
+            /** @description The span's name as its instrumentation gave it. */
+            name: string;
+            /** @description Its OpenTelemetry kind: client, server, producer, consumer, internal. */
+            span_kind?: string;
+            /** @description The instrumentation scope that made it. */
+            scope?: string;
+            /** @description Why it became what it is, in words: which attributes made it a call, or why it is none, and whether a call carried the trace on. */
+            mapped_as: string;
+            /** @description The attributes it came with that the span doesn't keep as they were. URLs are masked as the span's own are. */
+            attrs?: {
+                [key: string]: unknown;
+            };
+            /** @description The attributes it came with that the span keeps with the same value: each by its name as it came, to its name on the span. */
+            same?: {
+                [key: string]: string;
+            };
+        };
         frame: {
             /** @description Relative to the project root for application code. */
             filename: string;
@@ -2024,6 +2043,7 @@ export interface components {
             duration: components["schemas"]["trace.schema"]["$defs"]["duration"];
             status: components["schemas"]["trace.schema"]["$defs"]["status"];
             attrs: components["schemas"]["trace.schema"]["$defs"]["attrs"];
+            received?: components["schemas"]["trace.schema"]["$defs"]["received"];
         };
         log: {
             span_id: components["schemas"]["trace.schema"]["$defs"]["id"] | null;
@@ -2426,6 +2446,26 @@ export interface components {
                     duration: components["schemas"]["trace.schema"]["$defs"]["duration"];
                     status: components["schemas"]["trace.schema"]["$defs"]["status"];
                     attrs: components["schemas"]["trace.schema"]["$defs"]["attrs"];
+                    received?: components["schemas"]["trace.schema"]["$defs"]["received"];
+                };
+                /** @description Set by the agent on a span it mapped from an otel one, never sent by an SDK: the span as it came, and why it became what it is. */
+                received: {
+                    /** @description The span's name as its instrumentation gave it. */
+                    name: string;
+                    /** @description Its OpenTelemetry kind: client, server, producer, consumer, internal. */
+                    span_kind?: string;
+                    /** @description The instrumentation scope that made it. */
+                    scope?: string;
+                    /** @description Why it became what it is, in words: which attributes made it a call, or why it is none, and whether a call carried the trace on. */
+                    mapped_as: string;
+                    /** @description The attributes it came with that the span doesn't keep as they were. URLs are masked as the span's own are. */
+                    attrs?: {
+                        [key: string]: unknown;
+                    };
+                    /** @description The attributes it came with that the span keeps with the same value: each by its name as it came, to its name on the span. */
+                    same?: {
+                        [key: string]: string;
+                    };
                 };
                 log: {
                     span_id: components["schemas"]["trace.schema"]["$defs"]["id"] | null;

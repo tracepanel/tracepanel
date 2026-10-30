@@ -1584,6 +1584,33 @@ tr[data-new] {
   color: var(--dt-text-2);
   cursor: pointer;
 }
+
+/* ---------- a span's details: as received over OTLP ---------- */
+
+.dt-received > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  width: fit-content;
+  color: var(--dt-text);
+  font-size: var(--dt-size-sm);
+  font-weight: 500;
+  list-style: none;
+  cursor: pointer;
+}
+.dt-received > summary::-webkit-details-marker {
+  display: none;
+}
+.dt-received > summary:hover .dt-icon {
+  color: var(--dt-text);
+}
+.dt-received > summary .dt-icon {
+  color: var(--dt-text-3);
+  transition: transform 120ms ease;
+}
+.dt-received[open] > summary .dt-icon {
+  transform: rotate(90deg);
+}
 /* ---------- Issues tab ---------- */
 
 .dt-issue-cards {

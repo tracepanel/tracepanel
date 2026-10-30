@@ -513,6 +513,7 @@ fn model_calls_are_llm_spans_in_the_current_names() {
                 "gen_ai.usage.output_tokens": 5, "server.address": "api.openai.com", "server.port": 443,
             })),
             error: false,
+            reason: "A call to a model: the GenAI conventions' gen_ai.* attributes".into(),
         }
     );
 
@@ -610,5 +611,105 @@ fn an_sdks_commented_queries_are_named_and_grouped_without_them() {
     assert_eq!(
         stored["spans"][1]["attrs"]["db.statement"],
         "/*traceparent='00-1'*/ SELECT * FROM orders WHERE id IN (%s, %s)"
+    );
+}
+
+/// The trace's `otel` spans mapped by `normalize`, from their documents.
+fn normalized(spans: Value) -> Vec<Value> {
+    let root = json!({"id": "01M5OTELR00T00000000000000", "parent_id": null, "kind": "request", "name": "GET /",
+                      "start": 0, "duration": 10, "status": "ok", "attrs": {}});
+    let mut all = vec![root];
+    all.extend(
+        spans
+            .as_array()
+            .unwrap()
+            .iter()
+            .enumerate()
+            .map(|(n, span)| {
+                let mut span = span.clone();
+                span["id"] = Value::from(format!("01M5OTELSPAN{n:014}"));
+                span["parent_id"] = Value::from("01M5OTELR00T00000000000000");
+                span["kind"] = Value::from("otel");
+                span["start"] = Value::from(1);
+                span["duration"] = Value::from(1);
+                span["status"] = Value::from("ok");
+                span
+            }),
+    );
+    let doc = json!({
+        "id": "01M5OTELTRACE0000000000000", "kind": "request", "name": "GET /", "start": 0, "duration": 10,
+        "status": "ok", "attrs": {}, "spans": all, "logs": [], "errors": [], "links": [], "issues": [],
+    });
+    let mut received = tracepanel_protocol::Received {
+        trace: serde_json::from_value(doc.clone()).unwrap(),
+        doc: doc.to_string(),
+    };
+
+    tracepanel_analysis::otel::normalize(&mut received);
+
+    let stored: Value = serde_json::from_str(&received.doc).unwrap();
+    stored["spans"].as_array().unwrap()[1..].to_vec()
+}
+
+/// A mapped span keeps what came over OTLP under `received`: its name, its OpenTelemetry kind and scope, why it became
+/// what it is, and its attributes. One the mapped span keeps with the same value is named in `same`, by the key it is
+/// under there, not copied. A URL's credentials and sensitive values stay masked.
+#[test]
+fn a_mapped_span_keeps_what_it_received_and_why() {
+    let spans = normalized(json!([
+        {"name": "GET", "attrs": {
+            "otel.span_kind": "client", "otel.scope": "opentelemetry.instrumentation.requests",
+            "http.method": "GET", "http.url": "https://user:pw@shop.test/items?token=abc&page=2",
+            "http.target": "/items?api_key=abc", "http.status_code": 200, "w3c.span_id": "00f067aa0ba902b7"}},
+        {"name": "SELECT shop", "attrs": {
+            "otel.span_kind": "client", "otel.scope": "@opentelemetry/instrumentation-pg",
+            "db.system.name": "postgresql", "db.query.text": "SELECT * FROM book", "db.namespace": "shop"}},
+        {"name": "send", "attrs": {
+            "otel.span_kind": "client", "otel.scope": "custom", "peer.service": "billing"}},
+        {"name": "render", "attrs": {"otel.span_kind": "internal", "otel.scope": "app", "items": 3}},
+    ]));
+
+    assert_eq!(
+        spans[0]["received"],
+        json!({
+            "name": "GET", "span_kind": "client", "scope": "opentelemetry.instrumentation.requests",
+            "mapped_as": "HTTP call: method from http.method, URL from http.url. It carries the trace on: links the \
+                          trace of the service it called",
+            "attrs": {"http.target": "/items?api_key=********"},
+            "same": {"http.method": "http.request.method", "http.status_code": "http.response.status_code",
+                     "http.url": "url.full", "w3c.span_id": "w3c.span_id"},
+        })
+    );
+
+    assert_eq!(
+        spans[1]["received"],
+        json!({
+            "name": "SELECT shop", "span_kind": "client", "scope": "@opentelemetry/instrumentation-pg",
+            "mapped_as": "SQL: postgresql from db.system.name, statement from db.query.text",
+            "same": {"db.namespace": "db.namespace", "db.query.text": "db.statement",
+                     "db.system.name": "db.system"},
+        })
+    );
+
+    assert_eq!(
+        (&spans[2]["kind"], &spans[2]["received"]),
+        (
+            &json!("function"),
+            &json!({
+                "name": "send", "span_kind": "client", "scope": "custom",
+                "mapped_as": "Not a call: a client span with no HTTP method or URL, no rpc.system or \
+                              messaging.system, kept as a step. It carries no trace on: not linked to the service \
+                              it called",
+                "same": {"peer.service": "peer.service"},
+            })
+        )
+    );
+
+    assert_eq!(
+        spans[3]["received"],
+        json!({
+            "name": "render", "span_kind": "internal", "scope": "app", "mapped_as": "An internal span: a step",
+            "same": {"items": "items"},
+        })
     );
 }

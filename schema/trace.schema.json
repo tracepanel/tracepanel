@@ -692,6 +692,45 @@
         },
         "attrs": {
           "$ref": "#/$defs/attrs"
+        },
+        "received": {
+          "$ref": "#/$defs/received"
+        }
+      }
+    },
+    "received": {
+      "type": "object",
+      "description": "Set by the agent on a span it mapped from an otel one, never sent by an SDK: the span as it came, and why it became what it is.",
+      "required": ["name", "mapped_as"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The span's name as its instrumentation gave it."
+        },
+        "span_kind": {
+          "type": "string",
+          "description": "Its OpenTelemetry kind: client, server, producer, consumer, internal."
+        },
+        "scope": {
+          "type": "string",
+          "description": "The instrumentation scope that made it."
+        },
+        "mapped_as": {
+          "type": "string",
+          "description": "Why it became what it is, in words: which attributes made it a call, or why it is none, and whether a call carried the trace on."
+        },
+        "attrs": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "The attributes it came with that the span doesn't keep as they were. URLs are masked as the span's own are."
+        },
+        "same": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "The attributes it came with that the span keeps with the same value: each by its name as it came, to its name on the span."
         }
       }
     },

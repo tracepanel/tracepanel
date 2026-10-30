@@ -539,6 +539,38 @@ fn apollo_router_s_request_to_its_subgraph_is_a_call_that_links_its_trace() {
             "{mode}: {tree:?}"
         );
         assert_eq!(call["name"], "POST host.docker.internal/", "{mode}");
+        // What came over OTLP stays with it: the Router's span, named only by its URL, and why it is a call.
+        let mut came = call["received"].clone();
+        let attrs = came.as_object_mut().unwrap().remove("attrs").unwrap();
+        assert_eq!(
+            came,
+            json!({
+                "name": "http_request", "span_kind": "client", "scope": "apollo-router",
+                "mapped_as": "Apollo Router's call to a subgraph: a POST to http.url. It carries the trace on: \
+                              links the trace of the service it called",
+                "same": {
+                    "code.origin": "code.origin", "http.response.status_code": "http.response.status_code",
+                    "http.url": "url.full", "net.peer.name": "server.address", "w3c.span_id": "w3c.span_id",
+                },
+            }),
+            "{mode}"
+        );
+        assert_eq!(
+            attrs.as_object().unwrap().keys().collect::<Vec<_>>(),
+            [
+                "busy_ns",
+                "code.filepath",
+                "code.lineno",
+                "code.namespace",
+                "http.route",
+                "idle_ns",
+                "net.peer.port",
+                "net.transport",
+                "thread.id",
+                "thread.name"
+            ],
+            "{mode}"
+        );
         assert_eq!(call["attrs"]["w3c.span_id"], subgraph_parent, "{mode}");
         assert_eq!(
             received.trace.spans.len(),

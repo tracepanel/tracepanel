@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { AsReceived } from "./AsReceived";
 import { type Explain, type ExplainOf, QueryPlan } from "./CallTable";
 import { duration, since } from "./format";
 import { GraphqlCode } from "./GraphqlCode";
@@ -1986,6 +1987,7 @@ function RootDetails({ node: { span }, trace }: DetailsProps<"span">) {
     <div className="grid gap-3 p-4">
       <SpanHead span={span} trace={trace} attrs={attrs} />
       <RootAttributes attrs={attrs} />
+      <AsReceived span={span} />
     </div>
   );
 }
@@ -2000,6 +2002,7 @@ function CallDetails({ node: { span }, trace, onExplain }: DetailsProps<"span">)
       {summary.length ? <Fields rows={summary} /> : null}
       <QueryPlan span={span} onExplain={onExplain} />
       <SpanAttributes span={span} attrs={span.attrs} titled={summary.length > 0} />
+      <AsReceived span={span} />
     </div>
   );
 }
@@ -2024,6 +2027,7 @@ function HopDetails({
         <SpanHead span={span} trace={trace} parent={parent} attrs={span.attrs} />
         {summary.length ? <Fields rows={summary} /> : null}
         <SpanAttributes span={span} attrs={span.attrs} titled={summary.length > 0} />
+        <AsReceived span={span} />
       </section>
       <ServedBy served={served} trace={trace} links={links} onTraceProfile={onTraceProfile} />
     </div>
