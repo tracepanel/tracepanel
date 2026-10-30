@@ -567,19 +567,33 @@ fn document(trace: u128, root: &Got, root_id: u64, members: &[u64], bucket: &Buc
         .as_ref()
         .is_some_and(|status| status.code == STATUS_ERROR)
         || status_code >= 500;
-    // A command that only called out (a script's request) keeps its call as a span: the call is its work.
+    let name = trace_name(&root.span, &root_attrs, kind);
+    // The trace's own span, as the SDKs send it: the request (or the task, the command) its spans hang under, the
+    // one span without a parent. A command that only called out (a script's request) keeps its call as that span:
+    // the call is its work.
     let root_is_call = matches!(root.span.kind, 3 | 4);
-    let parent_of = |got: &Got| {
-        let parent = id64(&got.span.parent_span_id)?;
-        (parent != root_id || root_is_call).then(|| span_id(trace, parent))
-    };
     let mut spans: Vec<Value> = members
         .iter()
-        .filter(|id| **id != root_id || root_is_call)
         .map(|id| {
             let got = &bucket.spans[id];
-            let parent = if *id == root_id { None } else { parent_of(got) };
-            span_doc(trace, got, parent)
+            if *id != root_id {
+                let parent = id64(&got.span.parent_span_id).map(|parent| span_id(trace, parent));
+                return span_doc(trace, got, parent);
+            }
+            if root_is_call {
+                return span_doc(trace, got, None);
+            }
+            // Its attributes are the trace's, as an SDK's request span has none of its own.
+            json!({
+                "id": span_id(trace, root_id),
+                "parent_id": null,
+                "kind": kind,
+                "name": name,
+                "start": micros(got.span.start_time_unix_nano),
+                "duration": micros(got.span.end_time_unix_nano.saturating_sub(got.span.start_time_unix_nano)),
+                "status": if failed { "error" } else { "ok" },
+                "attrs": {},
+            })
         })
         .collect();
     spans.sort_by_key(|span| span["start"].as_i64());
@@ -590,7 +604,7 @@ fn document(trace: u128, root: &Got, root_id: u64, members: &[u64], bucket: &Buc
     json!({
         "id": trace_id(trace, root_id),
         "kind": kind,
-        "name": trace_name(&root.span, &root_attrs, kind),
+        "name": name,
         "start": micros(root.span.start_time_unix_nano),
         "duration": micros(root.span.end_time_unix_nano.saturating_sub(root.span.start_time_unix_nano)),
         "status": if failed { "error" } else { "ok" },

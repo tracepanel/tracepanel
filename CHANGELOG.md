@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- A trace that came over OTLP has its own span, the request (or the
+  task, the command) the others hang under, as an SDK's trace has. Its
+  spans had no parent instead, so a trace like Apollo Router's opened
+  empty under the call that reached it, and a trace with several such
+  spans showed each as its root.
+
 ## 0.9.0 (2026-10-30)
 
 ### Added
