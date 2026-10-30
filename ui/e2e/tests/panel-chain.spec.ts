@@ -229,11 +229,11 @@ test("an app with more than 50 traces has its runs folded; open, the first 50, t
   await expect(more).toHaveCount(0);
 });
 
-test("at the list's default width a chain row's path keeps its last segment whole, cut in its middle; a run's say what tells them apart", async ({
+test("at the list's default width a chain row's path keeps its last segment whole, cut in its middle, in a run too", async ({
   page,
 }) => {
   await page.addInitScript(() => localStorage.setItem("tracepanel:list-width", "315"));
-  const product = "/api/catalog/products/trail-runner-gtx";
+  const product = "/api/catalog/products/trail-runner";
   const { bff } = await fanout(4, [
     { route: "/api/catalog/products/{slug}", path: product, at: 0 },
     ...[7, 12, 345].map((id, n) => ({
@@ -252,7 +252,7 @@ test("at the list's default width a chain row's path keeps its last segment whol
     "/api/library/authors/12",
     "/api/library/authors/345",
   ]);
-  await expect(paths.locator(".dt-path-tail")).toHaveText(["/trail-runner-gtx", "/7", "/12", "/345"]);
+  await expect(paths.locator(".dt-path-tail")).toHaveText(["/trail-runner", "/7", "/12", "/345"]);
   // Whole in the tooltip.
   expect(await paths.evaluateAll((each) => each.map((path) => path.getAttribute("title")))).toEqual([
     product,
@@ -260,9 +260,8 @@ test("at the list's default width a chain row's path keeps its last segment whol
     "/api/library/authors/12",
     "/api/library/authors/345",
   ]);
-  // The run says the method once: its traces don't.
-  await expect(traces.first().locator(".dt-method")).toHaveText("GET");
-  await expect(traces.locator(".dt-method")).toHaveCount(1);
+  // A run's traces say their method, as the same rows outside a run do.
+  await expect(traces.locator(".dt-method")).toHaveText(["GET", "GET", "GET", "GET"]);
 
   // No ellipsis inside a last segment: the head gave way (the product's cut in its middle).
   const tails = await paths
@@ -317,9 +316,9 @@ for (const theme of ["light", "dark"]) {
     expect(traces.length).toBeGreaterThan(1);
     // A small gap: the slot fits five letters, a three-letter badge leaves two and the row's gap.
     for (const row of rows) expect(row.gap).toBeLessThanOrEqual(28);
-    // At each depth, the names start at one edge.
+    // The names start at one edge after the badge, at each depth: a run's traces as the rows outside it.
     expect(new Set(top.map((row) => row.name - row.from)).size).toBe(1);
-    expect(new Set(traces.map((row) => row.name)).size).toBe(1);
+    expect(new Set(traces.map((row) => row.name - row.from)).size).toBe(1);
   });
 }
 

@@ -755,10 +755,6 @@ tr[data-new] {
   text-overflow: ellipsis;
   white-space: pre;
 }
-/* A run's trace: the part the run's paths share is quiet, what tells this one apart stands out. */
-.dt-request-path[data-shared] > .dt-path-head {
-  color: var(--dt-text-3);
-}
 .dt-request-meta {
   display: flex;
   flex-wrap: wrap;

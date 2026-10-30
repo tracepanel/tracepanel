@@ -34,6 +34,7 @@ import {
 } from "@tracepanel/ui";
 import { TooltipProvider } from "@tracepanel/ui/components/ui/tooltip";
 import { useCloseOnBlur } from "@tracepanel/ui/hooks/useCloseOnBlur";
+import { type ChainCounts, chainCounts } from "@tracepanel/ui/lib/chainCounts";
 import { rem } from "@tracepanel/ui/lib/utils";
 import {
   type ReactNode,
@@ -409,6 +410,18 @@ const CHAIN_SLOW_MS = 250;
 interface RowChains {
   apps: ReadonlyMap<string, ChainEntry[]>;
   loading: ReadonlySet<string>;
+  /** What each row's whole chain did, as the pill and the trace's tabs count it: the row says the same. */
+  counts: ReadonlyMap<string, ChainCounts>;
+}
+
+/** Each chain's counts, by its row's trace id. */
+function countsOf(chains: ReadonlyMap<string, Chain>): ReadonlyMap<string, ChainCounts> {
+  const counts = new Map<string, ChainCounts>();
+  for (const [id, chain] of chains) {
+    const counted = chainCounts(chain);
+    if (counted) counts.set(id, counted);
+  }
+  return counts;
 }
 
 /**
@@ -503,7 +516,8 @@ function useRowChains(rows: readonly TraceRow[], stored: ReadonlySet<string>): R
     const timer = window.setTimeout(() => setExpired((count) => count + 1), wait);
     return () => window.clearTimeout(timer);
   }, [chains, expired]);
-  return { apps, loading };
+  const counts = useMemo(() => countsOf(chains), [chains]);
+  return { apps, loading, counts };
 }
 
 // The rows the user folded or opened, each a change from where it starts (an app's row open, a run open while its
@@ -1113,6 +1127,7 @@ function PanelApp({ route }: { route: Route }) {
   const chains: ListChains = {
     apps: rowChains.apps,
     loading: rowChains.loading,
+    counts: rowChains.counts,
     open: chainOpen,
     onToggle: toggleChain,
     onApp: (id, app) => go({ name: "trace", id, under: app.app, tab: underTab(app, tab) }),

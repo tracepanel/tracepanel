@@ -4,6 +4,7 @@ import { Badge } from "./components/ui/badge";
 import { ago, duration } from "./format";
 import { ChevronRightIcon, DatabaseIcon } from "./icons";
 import { ISSUE_LABELS } from "./labels";
+import type { ChainCounts } from "./lib/chainCounts";
 import {
   type ChainApp,
   type ChainEntry,
@@ -68,6 +69,18 @@ export interface ListChains {
   onToggle: (key: string) => void;
   /** An app's row: the row's trace, its tabs listing what that app's traces did. */
   onApp: (rowId: string, app: ChainApp) => void;
+  /**
+   * By the row's trace id: what its whole chain did (lib/chainCounts), as the pill and the trace's tabs count it. The
+   * row says it, a view's too, whose own trace ran nothing.
+   */
+  counts?: ReadonlyMap<string, ChainCounts> | undefined;
+}
+
+/** A row's summary with what its chain did, when it has one: its own trace's numbers are part of it. */
+function withChain(trace: TraceSummary, counts: ChainCounts | undefined): TraceSummary {
+  if (!counts || counts.traces < 2) return trace;
+  // biome-ignore lint/style/useNamingConvention: wire format.
+  return { ...trace, queries: counts.queries, issues: counts.issues, issue_kinds: counts.kinds };
 }
 
 export function TraceList({
@@ -82,45 +95,91 @@ export function TraceList({
 }: TraceListProps) {
   return (
     <ul className="dt-requests" data-compact={compact ? "" : undefined}>
-      {rows.map(({ trace, depth = 0, trigger, target, run }) => (
-        <li key={trace.id}>
-          <button
-            type="button"
-            className="dt-request-row"
-            data-depth={depth}
-            data-run={flag(run)}
-            data-kind={trace.kind === "page" ? "page" : undefined}
-            data-tone={trace.status === "error" ? "error" : trace.issues > 0 ? "warn" : "ok"}
-            aria-current={trace.id === selectedId ? "true" : undefined}
-            data-new={newIds?.has(trace.id) ? "" : undefined}
-            onClick={() => onSelect(trace.id)}
-          >
-            <span className="dt-request-main">
-              <RowName trace={trace} trigger={trigger} target={target} />
-              <RowApp trace={trace} shown={services} />
-              {trace.id === currentId ? (
-                compact ? (
-                  // Narrow: a dot, so the path keeps its room; the row is also highlighted.
-                  <span className="dt-this-page" role="img" aria-label="This page" title="This page" />
-                ) : (
-                  <span className="dt-tag">this page</span>
-                )
-              ) : null}
-            </span>
-            <span className="dt-request-meta">
-              {/* A view or an action has no status of its own: an empty cell keeps the columns in place. */}
-              {/* No status of its own (a view, a task, a job): its slot kept, so the time lines up with a request's. */}
-              <StatusSlot status={trace.kind === "page" ? null : trace.http_status} />
-              <span>{duration(trace.duration)}</span>
-              {compact ? <CompactMeta trace={trace} /> : <FullMeta trace={trace} />}
-            </span>
-          </button>
-          {chains ? (
-            <RowChain rowId={trace.id} level={depth + 1} chains={chains} selectedId={selectedId} onSelect={onSelect} />
-          ) : null}
-        </li>
-      ))}
+      {rows.map((row) => {
+        const counts = chains?.counts?.get(row.trace.id);
+        const trace = withChain(row.trace, counts);
+        const depth = row.depth ?? 0;
+        return (
+          <li key={trace.id}>
+            <ListRow
+              row={{ ...row, trace }}
+              chained={counts !== undefined && counts.traces > 1}
+              selected={trace.id === selectedId}
+              current={trace.id === currentId}
+              fresh={newIds?.has(trace.id) ?? false}
+              compact={compact}
+              services={services}
+              onSelect={onSelect}
+            />
+            {chains ? (
+              <RowChain
+                rowId={trace.id}
+                level={depth + 1}
+                chains={chains}
+                selectedId={selectedId}
+                onSelect={onSelect}
+              />
+            ) : null}
+          </li>
+        );
+      })}
     </ul>
+  );
+}
+
+/** One row of the list: its name, status and time, then its numbers (its chain's, `chained`). */
+function ListRow({
+  row: { trace, depth = 0, trigger, target, run },
+  chained,
+  selected,
+  current,
+  fresh,
+  compact,
+  services,
+  onSelect,
+}: {
+  row: TraceRow;
+  chained: boolean;
+  selected: boolean;
+  current: boolean;
+  fresh: boolean;
+  compact: boolean | undefined;
+  services: boolean | undefined;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="dt-request-row"
+      data-depth={depth}
+      data-run={flag(run)}
+      data-kind={trace.kind === "page" ? "page" : undefined}
+      data-tone={toneOf(trace)}
+      aria-current={selected ? "true" : undefined}
+      data-new={fresh ? "" : undefined}
+      onClick={() => onSelect(trace.id)}
+    >
+      <span className="dt-request-main">
+        <RowName trace={trace} trigger={trigger} target={target} />
+        <RowApp trace={trace} shown={services} />
+        {current ? <ThisPage compact={compact} /> : null}
+      </span>
+      <span className="dt-request-meta">
+        {/* No status of its own (a view, a task, a job): its slot kept, so the time lines up with a request's. */}
+        <StatusSlot status={trace.kind === "page" ? null : trace.http_status} />
+        <span>{duration(trace.duration)}</span>
+        {compact ? <CompactMeta trace={trace} chained={chained} /> : <FullMeta trace={trace} chained={chained} />}
+      </span>
+    </button>
+  );
+}
+
+/** The page open in the browser tab: narrow, a dot, so the path keeps its room (the row is also highlighted). */
+function ThisPage({ compact }: { compact: boolean | undefined }) {
+  return compact ? (
+    <span className="dt-this-page" role="img" aria-label="This page" title="This page" />
+  ) : (
+    <span className="dt-tag">this page</span>
   );
 }
 
@@ -293,12 +352,9 @@ function ChainItems({
   chains,
   selectedId,
   onSelect,
-  shared,
 }: ChainLevelProps & {
   listKey: string;
   items: readonly ChainItem[];
-  /** A run's traces: the route they share (their rows name them by what tells them apart). */
-  shared?: string | null | undefined;
 }) {
   const allKey = `${listKey}/all`;
   const all = items.length <= SHOWN_FIRST || chains.open.has(allKey);
@@ -312,7 +368,7 @@ function ChainItems({
         ) : item.type === "waiting" ? (
           <ChainWaitingRow key={item.key} call={item} level={level} />
         ) : (
-          <ChainTraceRows key={item.key} row={item} shared={shared} {...props} />
+          <ChainTraceRows key={item.key} row={item} {...props} />
         ),
       )}
       {all ? null : (
@@ -372,7 +428,6 @@ function ChainRunRows({ run, rowId, level, chains, selectedId, onSelect }: Chain
         <ChainItems
           listKey={run.key}
           items={run.traces}
-          shared={run.summary.path}
           rowId={rowId}
           level={level + 1}
           chains={chains}
@@ -385,18 +440,10 @@ function ChainRunRows({ run, rowId, level, chains, selectedId, onSelect }: Chain
 }
 
 /**
- * One trace of an app: its method and path (its route in the tooltip), opened beside the list; what it called under
- * it. Under a run (`shared`, the run's route), the method is the run's: just its path, what tells it apart stressed.
+ * One trace of an app: named as the list names a request (its GraphQL operation, or its method and path; its route
+ * in the tooltip), the same under a run as anywhere; opened beside the list; what it called under it.
  */
-function ChainTraceRows({
-  row,
-  shared,
-  rowId,
-  level,
-  chains,
-  selectedId,
-  onSelect,
-}: ChainLevelProps & { row: ChainTraceRow; shared?: string | null | undefined }) {
+function ChainTraceRows({ row, rowId, level, chains, selectedId, onSelect }: ChainLevelProps & { row: ChainTraceRow }) {
   const nested = row.apps.length > 0;
   const open = nested && chains.open.has(row.key);
   const toggle = () => chains.onToggle(row.key);
@@ -416,11 +463,7 @@ function ChainTraceRows({
       >
         <span className="dt-request-main">
           {nested ? <ChainCaret onToggle={toggle} /> : <span className="dt-map-caret" />}
-          {shared && row.summary.path ? (
-            <TailPath path={row.summary.path} shared={shared} />
-          ) : (
-            <RowName trace={row.summary} />
-          )}
+          <RowName trace={row.summary} />
           <RowFlame trace={row.trace} />
         </span>
         <span className="dt-request-meta">
@@ -477,11 +520,12 @@ function RowApp({ trace, shown }: { trace: TraceSummary; shown: boolean | undefi
 
 /**
  * The narrow list's numbers after the time: the queries (the database icon says what they count, the tooltip spells
- * it out), then the first finding. A browser view or action runs no SQL itself: its requests, under it, do.
+ * it out), then the first finding. A browser view or action runs no SQL itself: its chain's, when it has one
+ * (`chained`), else none.
  */
-function CompactMeta({ trace }: { trace: TraceSummary }) {
+function CompactMeta({ trace, chained = false }: { trace: TraceSummary; chained?: boolean }) {
   const queries =
-    trace.kind === "page" ? (
+    trace.kind === "page" && !chained ? (
       <span />
     ) : (
       <span
@@ -502,10 +546,12 @@ function CompactMeta({ trace }: { trace: TraceSummary }) {
 }
 
 /** The wide list's numbers after the time: the queries, every finding, when it happened. */
-function FullMeta({ trace }: { trace: TraceSummary }) {
+function FullMeta({ trace, chained }: { trace: TraceSummary; chained: boolean }) {
   return (
     <>
-      <span>{trace.kind === "page" ? "" : `${trace.queries} ${trace.queries === 1 ? "query" : "queries"}`}</span>
+      <span>
+        {trace.kind === "page" && !chained ? "" : `${trace.queries} ${trace.queries === 1 ? "query" : "queries"}`}
+      </span>
       <FullChips kinds={trace.issue_kinds} issues={trace.issues} />
       <span className="dt-request-time">{ago(trace.start)}</span>
     </>
