@@ -161,14 +161,12 @@ function ListRow({
       data-kind={trace.kind === "page" ? "page" : undefined}
       data-tone={toneOf(trace)}
       aria-current={selected ? "true" : undefined}
-      aria-expanded={fold ? fold.open : undefined}
-      data-fold={fold === undefined ? undefined : ""}
+      {...foldProps(fold)}
       data-new={fresh ? "" : undefined}
       onClick={() => onSelect(trace.id)}
-      onKeyDown={fold ? foldKeys(fold.open, fold.onToggle) : undefined}
     >
       <span className="dt-request-main">
-        {fold === undefined ? null : fold ? <ChainCaret onToggle={fold.onToggle} /> : <span className="dt-map-caret" />}
+        <RowCaret fold={fold} />
         <RowName trace={trace} trigger={trigger} target={target} />
         <RowApp trace={trace} shown={services} />
         {current ? <ThisPage compact={compact} /> : null}
@@ -187,6 +185,22 @@ function ListRow({
 interface RowFold {
   open: boolean;
   onToggle: () => void;
+}
+
+/** A foldable row's state and keys; a row of a list without chains, none. */
+function foldProps(fold: RowFold | null | undefined) {
+  if (fold === undefined) return {};
+  return {
+    "aria-expanded": fold ? fold.open : undefined,
+    "data-fold": "",
+    onKeyDown: fold ? foldKeys(fold.open, fold.onToggle) : undefined,
+  };
+}
+
+/** Its caret, or the caret's room for a row with no chain, so the names line up. */
+function RowCaret({ fold }: { fold: RowFold | null | undefined }) {
+  if (fold === undefined) return null;
+  return fold ? <ChainCaret onToggle={fold.onToggle} /> : <span className="dt-map-caret" />;
 }
 
 function rowFold(chains: ListChains, id: string): RowFold | null {

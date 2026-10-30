@@ -2563,15 +2563,17 @@ export function withShownLogs(trace: Trace, all: boolean): Trace {
  */
 function hiddenLogsOf(traces: readonly Trace[], calls: ReadonlyMap<string, string>): Map<string, number> {
   const hidden = new Map<string, number>();
-  for (const trace of traces) {
-    const own = rootOf(trace);
-    const root = calls.get(trace.id) ?? own;
-    for (const log of trace.logs.filter((each) => !isLoud(each.level))) {
-      const span = log.span_id === null || log.span_id === own ? root : log.span_id;
-      hidden.set(span, (hidden.get(span) ?? 0) + 1);
-    }
-  }
+  for (const trace of traces) countQuiet(trace, calls.get(trace.id), hidden);
   return hidden;
+}
+
+/** A trace's info and debug records, counted by their span; its root's on `row` when its root shows as that row. */
+function countQuiet(trace: Trace, row: string | undefined, hidden: Map<string, number>): void {
+  const own = rootOf(trace);
+  for (const log of trace.logs.filter((each) => !isLoud(each.level))) {
+    const span = log.span_id === null || log.span_id === own ? (row ?? own) : log.span_id;
+    hidden.set(span, (hidden.get(span) ?? 0) + 1);
+  }
 }
 
 /** The span of the call that reached each call's trace, by the trace's id, however far down the chain. */
