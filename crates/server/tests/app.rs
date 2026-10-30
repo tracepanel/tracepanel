@@ -134,3 +134,20 @@ async fn an_app_says_its_settings_and_versions_in_its_hello() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[tokio::test]
+async fn a_trace_not_stored_yet_is_no_error_to_a_client_that_waits_for_it() {
+    let dir = std::env::temp_dir().join(format!("tracepanel-not-yet-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let path = tracepanel_store_local::path_in(&dir);
+    Store::open(&path).unwrap();
+    let router = tracepanel_server::router(Reader::new(&path), Activity::default());
+    let id = "01M6660HQFP6QW4T4SE7SJW7N9";
+
+    let (gone, _) = get(&router, &format!("/api/traces/{id}")).await;
+    let (waited, body) = get(&router, &format!("/api/traces/{id}?missing=no-content")).await;
+
+    assert_eq!(gone, StatusCode::NOT_FOUND);
+    assert_eq!((waited, body), (StatusCode::NO_CONTENT, Value::Null));
+    let _ = std::fs::remove_dir_all(&dir);
+}
