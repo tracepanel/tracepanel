@@ -1,3 +1,4 @@
+import { FlameIcon } from "lucide-react";
 import {
   type CSSProperties,
   createContext,
@@ -1674,7 +1675,13 @@ function UntracedHint({ name, code, children }: { name: string; code: CodeOwner;
   return (
     <Hint
       title="Untraced code"
-      detail="Your code between the spans here. To see which of your functions ran, profile the request: the flame in the panel, or an X-Tracepanel-Profile: 1 header."
+      detail={
+        <>
+          Your code between the spans here. To see which of your functions ran, profile the request: the{" "}
+          <FlameIcon className="inline size-3.5 align-[-2px]" aria-label="flame" /> in the panel, or an
+          X-Tracepanel-Profile: 1 header.
+        </>
+      }
       side="top"
     >
       <span className="flex min-w-0">{children}</span>
