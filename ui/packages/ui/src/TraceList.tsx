@@ -1,4 +1,4 @@
-import { HourglassIcon, TriangleAlertIcon } from "lucide-react";
+import { TriangleAlertIcon } from "lucide-react";
 import type { CSSProperties } from "react";
 import { Badge } from "./components/ui/badge";
 import { ago, duration } from "./format";
@@ -18,7 +18,17 @@ import { pageParts } from "./lib/page";
 import { plural } from "./lib/plural";
 import { traceRuntime } from "./lib/runtime";
 import { RowFlame } from "./ProfileHint";
-import { AppChip, IssueChip, KindBadge, MethodBadge, StatusSlot, TailPath, TaskName, Times } from "./primitives";
+import {
+  AppChip,
+  IssueChip,
+  KindBadge,
+  MethodBadge,
+  StatusSlot,
+  TailPath,
+  TaskName,
+  Times,
+  WaitingIcon,
+} from "./primitives";
 import type { IssueKind, TraceSummary } from "./types";
 
 export interface TraceRow {
@@ -207,7 +217,7 @@ function ChainWaitingRow({ call, level }: { call: ChainWaiting; level: number })
         {call.method ? <MethodBadge method={call.method} /> : null}
         <TailPath path={call.path} title={name} />
         <span className="dt-chain-waiting">
-          <HourglassIcon aria-hidden="true" />
+          <WaitingIcon />
           waiting
         </span>
       </span>

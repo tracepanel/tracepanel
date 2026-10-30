@@ -540,6 +540,25 @@ code,
   }
 }
 
+/* Something on its way: the hourglass turns over, rests, turns again, as one does while the sand runs. */
+.dt-waiting-icon {
+  animation: dt-turn-over 1.8s ease-in-out infinite;
+}
+@keyframes dt-turn-over {
+  0% {
+    transform: rotate(0deg);
+  }
+  35%,
+  100% {
+    transform: rotate(180deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dt-waiting-icon {
+    animation: none;
+  }
+}
+
 .dt-details-footer {
   display: flex;
   flex-wrap: wrap;
@@ -983,12 +1002,6 @@ tr[data-new] {
 .dt-chain-waiting > svg {
   width: 0.75rem;
   height: 0.75rem;
-  animation: dt-skeleton 1.2s ease-in-out infinite alternate;
-}
-@media (prefers-reduced-motion: reduce) {
-  .dt-chain-waiting > svg {
-    animation: none;
-  }
 }
 .dt-request-row[data-chain] .dt-request-main {
   gap: 0.375rem;

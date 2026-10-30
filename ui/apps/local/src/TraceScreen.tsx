@@ -9,9 +9,10 @@ import {
   type Trace,
   TraceView,
   type TraceViewProps,
+  WaitingIcon,
 } from "@tracepanel/ui";
 import { cn } from "@tracepanel/ui/lib/utils";
-import { HourglassIcon, SearchXIcon } from "lucide-react";
+import { SearchXIcon } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useServiceCapability } from "./hooks";
 import { track, useRefresh } from "./refresh";
@@ -336,7 +337,7 @@ function NoTrace({
 function TraceArriving({ variant }: { variant: TraceScreenProps["variant"] }) {
   return (
     <div className={cn("grid", variant === "full" ? "" : "h-full")} role="status" aria-busy="true">
-      <Empty title="Trace on its way" icon={HourglassIcon} page={true}>
+      <Empty title="Trace on its way" icon={WaitingIcon} page={true}>
         The agent hasn't stored it yet: a view or an action in the browser is sent once it ends, a request once its app
         has written it. It opens here as it arrives.
       </Empty>
