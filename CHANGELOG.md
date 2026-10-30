@@ -26,6 +26,10 @@
   `http.url`) carries the trace on: the service it called links its
   trace to it. A client span around another to the same URL is one
   call, the inner span kept.
+- Over OTLP, a browser's CORS preflight (an `OPTIONS` request the
+  server answers before the request it asks about) and Apollo Router's
+  own work outside a request (its `starting`, a schema reloaded) are no
+  traces, as the SDKs leave the preflight out.
 - A span an OpenTelemetry instrumentation made ends its details with
   "As received over OTLP", collapsed: why it became what it is (an
   HTTP call, a query, a step that is no call), whether it links the
