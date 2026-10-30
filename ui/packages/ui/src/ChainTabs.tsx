@@ -17,11 +17,12 @@ import { AppChip } from "./primitives";
 import { CountChip, countBy, IssuePick, ScopeHeader, useChainApps } from "./ScopeBar";
 import { Segmented } from "./Segmented";
 import { SQL_MODES, SqlList, type SqlMode, sqlKey } from "./SqlList";
+import { uncommented } from "./sql";
 import type { IssueKind, Span } from "./types";
 
 /** The table a statement reads or writes first: what a query is about at a glance. */
 function tableOf(span: Span): string | undefined {
-  const statement = String(span.attrs["db.statement"] ?? span.name);
+  const statement = uncommented(String(span.attrs["db.statement"] ?? span.name));
   return /\b(?:FROM|INTO|UPDATE|JOIN)\s+["`[]?([\w.]+)/i.exec(statement)?.[1];
 }
 

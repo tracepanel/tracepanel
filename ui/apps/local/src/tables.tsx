@@ -38,6 +38,7 @@ import {
   TaskName,
   type TaskRow,
   type TraceSummary,
+  uncommented,
   useAttributeColumns,
   type WebsocketRow,
 } from "@tracepanel/ui";
@@ -452,7 +453,7 @@ interface TableProps<T> {
  */
 function useExplains(source: DataSource, statement: string): boolean {
   const { service } = useScope();
-  return useServiceCapability(source, "explain")(service) && /^\s*SELECT\b/i.test(statement);
+  return useServiceCapability(source, "explain")(service) && /^SELECT\b/i.test(uncommented(statement));
 }
 
 /** What an open SQL row adds: the statement and its plan. */
