@@ -562,7 +562,6 @@ export function TraceView({
   onTabChange,
   onExplain,
   explainIn,
-  profilesIn,
   initialTab,
   preferredTab,
   actions,
@@ -576,7 +575,7 @@ export function TraceView({
   app,
   onTraceProfile,
   variant = "full",
-  // The part of the time picked: the lanes and the call tree share it (SliceScope).
+  // The part of the time picked: the lanes and the call tree share it (SliceScope); whether apps profile.
   ...held
 }: TraceViewProps) {
   const compact = variant === "compact" || variant === "strip";
@@ -639,7 +638,7 @@ export function TraceView({
         initialSpan={treeSpan}
         explainOf={explainOf}
         onTraceProfile={onTraceProfile}
-        profilesIn={profilesIn}
+        profilesIn={held.profilesIn}
         chain={chain}
         openTab={(tab) => openTab(tab)}
       />
