@@ -224,8 +224,20 @@ fn traces(trace: u128, bucket: &Bucket) -> Vec<Value> {
     }
     groups
         .into_iter()
+        .filter(|(root, _)| !nobodys(&bucket.spans[root]))
         .map(|(root, members)| document(trace, &bucket.spans[&root], root, &members, bucket))
         .collect()
+}
+
+/// A trace that is nobody's work, left out: a browser's CORS preflight (`OPTIONS`, which the server answers before
+/// the request it asks about, and which the SDKs leave out too), and Apollo Router's own work outside a request (its
+/// `starting`, a schema reloaded), an internal root of its own scope.
+fn nobodys(root: &Got) -> bool {
+    let attrs = attributes(&root.span.attributes);
+    let preflight = root.span.kind == 2
+        && text(&attrs, &["http.request.method", "http.method"]) == Some("OPTIONS");
+    let routers_own = &*root.scope == "apollo-router" && root.span.kind == 1;
+    preflight || routers_own
 }
 
 fn micros(nanos: u64) -> i64 {
