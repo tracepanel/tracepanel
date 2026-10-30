@@ -1554,8 +1554,9 @@ components:
       description: >-
         The agent's OTLP/HTTP: `--otlp`, else `TRACEPANEL_OTLP`, else 127.0.0.1:4318. While it serves there, its
         store's `otlp.addr` says `http://HOST:PORT`. One agent on a machine gets a port: another project's agent
-        that wants the same one takes no OTLP, and the console says whose it is and where to send instead.
-      required: [address, serving, error, taken, taken_by, free]
+        that wants the same one takes no OTLP, tries the port again every 10 seconds, and takes it once its holder
+        has gone. Until then the console says whose it is and where to send instead.
+      required: [address, serving, error, taken, taken_by, taken_by_agent, free]
       properties:
         address: { type: string, description: "HOST:PORT: where the agent serves, or where it was to." }
         serving: { type: boolean }
@@ -1564,8 +1565,13 @@ components:
         taken_by:
           type: [string, "null"]
           description: >-
-            The project (the folder that holds its store) whose agent holds the port. Null when no agent of
-            another project on this machine says it does (a collector of the developer's own).
+            The project (the folder that holds its store) whose agent holds the port, as that agent says on it
+            (`GET /tracepanel` on the OTLP port), with or without a console. Null when the holder says no project
+            (a collector of the developer's own, an older agent).
+        taken_by_agent:
+          type: boolean
+          description: >-
+            A Tracepanel agent holds the port. With `taken_by` null: one from before agents said whose they are.
         free:
           type: [string, "null"]
           description: >-

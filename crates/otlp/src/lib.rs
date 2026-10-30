@@ -4,6 +4,9 @@
 //! `assemble` for the rest of their traces, which then go where the SDKs' do (the store writer's queue) as trace
 //! documents with `otel` spans: the agent maps those by the semantic conventions, finds the issues and keeps them, as
 //! it does an SDK's. Any language whose OpenTelemetry SDK exports OTLP shows in the console with no Tracepanel SDK.
+//!
+//! `GET /tracepanel` says whose agent it is (`IDENTITY_PATH`): another project's agent that wants the same port asks
+//! there, to name the project that holds it.
 
 pub mod assemble;
 pub mod json;
@@ -15,7 +18,7 @@ use axum::body::Bytes;
 use axum::extract::{DefaultBodyLimit, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
-use axum::routing::post;
+use axum::routing::{get, post};
 use prost::Message;
 use std::io::Read;
 use std::sync::{Arc, Mutex};
@@ -26,6 +29,9 @@ use tracepanel_protocol::{Activity, Batch, Sink, Thresholds};
 const MAX_BODY: usize = 64 << 20;
 /// How often waiting traces are looked at.
 const TICK: Duration = Duration::from_millis(500);
+
+/// Where the agent says whose it is: `{"tracepanel": VERSION, "project": NAME}`.
+pub const IDENTITY_PATH: &str = "/tracepanel";
 
 #[derive(Clone)]
 struct Shared {
@@ -128,11 +134,23 @@ async fn forward(assembler: Arc<Mutex<Assembler>>, sink: Sink) {
     }
 }
 
-pub fn router(sink: Sink, activity: Activity) -> Router {
+/// The OTLP/HTTP endpoint of the agent of `project` (the folder that holds its store).
+pub fn router(sink: Sink, activity: Activity, project: String) -> Router {
     let assembler = Arc::new(Mutex::new(Assembler::default()));
     tokio::spawn(forward(assembler.clone(), sink));
+    let identity = serde_json::json!({"tracepanel": env!("CARGO_PKG_VERSION"), "project": project})
+        .to_string();
     Router::new()
         .route("/v1/traces", post(traces))
+        .route(
+            IDENTITY_PATH,
+            get(move || {
+                std::future::ready((
+                    [(header::CONTENT_TYPE, "application/json")],
+                    identity.clone(),
+                ))
+            }),
+        )
         .layer(DefaultBodyLimit::max(MAX_BODY))
         .with_state(Shared {
             assembler,
@@ -140,11 +158,12 @@ pub fn router(sink: Sink, activity: Activity) -> Router {
         })
 }
 
-/// Serves OTLP/HTTP on the listener until the task is dropped.
+/// Serves OTLP/HTTP on the listener, as the agent of `project`, until the task is dropped.
 pub async fn serve(
     listener: tokio::net::TcpListener,
     sink: Sink,
     activity: Activity,
+    project: String,
 ) -> std::io::Result<()> {
-    axum::serve(listener, router(sink, activity)).await
+    axum::serve(listener, router(sink, activity, project)).await
 }

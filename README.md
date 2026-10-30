@@ -167,7 +167,9 @@ export OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4319
 
 The agent writes the address it serves OTLP on to `.tracepanel/otlp.addr`.
 The console shows it at the foot of the sidebar. When the port is taken, the
-console names the project whose agent holds it and suggests a free one.
+console names the project whose agent holds it and suggests a free one. The
+agent tries the port again every 10 seconds and takes it over once the other
+project's agent has stopped.
 
 Calls between services link their traces by the W3C trace context, whether
 each service uses a Tracepanel SDK or OpenTelemetry.

@@ -426,7 +426,7 @@ async fn the_endpoint_takes_an_export_and_sends_its_traces_on() {
         let batches = batches.clone();
         Arc::new(move |batch: Batch| batches.lock().unwrap().push(batch))
     };
-    let router = tracepanel_otlp::router(sink, Activity::default());
+    let router = tracepanel_otlp::router(sink, Activity::default(), "shop".into());
     let post = |body: Vec<u8>, content_type: &'static str| {
         Request::post("/v1/traces")
             .header(header::CONTENT_TYPE, content_type)
@@ -447,10 +447,25 @@ async fn the_endpoint_takes_an_export_and_sends_its_traces_on() {
         (StatusCode::OK, "application/x-protobuf")
     );
     let refused = router
+        .clone()
         .oneshot(post(b"{".to_vec(), "application/json"))
         .await
         .unwrap();
     assert_eq!(refused.status(), StatusCode::BAD_REQUEST);
+
+    // Whose agent it is, for another project's agent that wants the same port.
+    let identity = router
+        .oneshot(Request::get("/tracepanel").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(identity.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(identity.into_body(), 1 << 10)
+        .await
+        .unwrap();
+    assert_eq!(
+        serde_json::from_slice::<Value>(&body).unwrap(),
+        json!({"tracepanel": env!("CARGO_PKG_VERSION"), "project": "shop"})
+    );
 
     tokio::time::sleep(QUIET + Duration::from_secs(1)).await;
     let batches = batches.lock().unwrap();
