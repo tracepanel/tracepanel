@@ -578,3 +578,48 @@ fn apollo_router_s_request_to_its_subgraph_is_a_call_that_links_its_trace() {
         );
     }
 }
+
+#[test]
+fn a_cors_preflight_and_apollo_router_s_own_start_are_nobody_s_traces() {
+    let span = |trace: &str, id: &str, name: &str, kind: i32, scope: &str, method: Option<&str>| {
+        let attributes: Vec<Value> = method
+            .map(|method| json!({"key": "http.request.method", "value": {"stringValue": method}}))
+            .into_iter()
+            .collect();
+        json!({"scope": {"name": scope}, "spans": [
+            {"traceId": trace, "spanId": id, "name": name, "kind": kind, "startTimeUnixNano": "1544712660000000000",
+             "endTimeUnixNano": "1544712660100000000", "attributes": attributes}]})
+    };
+    let export = json!({"resourceSpans": [{
+    "resource": {"attributes": [{"key": "service.name", "value": {"stringValue": "library-router"}}]},
+    "scopeSpans": [
+        span("5b8efff798038103d269b633813fc601", "eee19b7ec3c1b171", "starting", 1, "apollo-router", None),
+        span("5b8efff798038103d269b633813fc602", "eee19b7ec3c1b172", "request", 2, "apollo-router", Some("OPTIONS")),
+        span("5b8efff798038103d269b633813fc603", "eee19b7ec3c1b173", "query Books", 2, "apollo-router", Some("POST")),
+        span("5b8efff798038103d269b633813fc604", "eee19b7ec3c1b174", "nightly-report", 1, "manual", None),
+    ]}]});
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/json"),
+    );
+    let start = Instant::now();
+    let mut assembler = Assembler::default();
+    assembler.add(
+        tracepanel_otlp::decode(&headers, export.to_string().as_bytes()).unwrap(),
+        start,
+    );
+
+    let mut names: Vec<Value> = assembler
+        .ready(start + QUIET)
+        .into_iter()
+        .map(|doc| doc["name"].clone())
+        .collect();
+    names.sort_by_key(ToString::to_string);
+
+    // Another program's internal root (a script's run) is still a command.
+    assert_eq!(
+        names,
+        [json!("GraphQL query Books"), json!("nightly-report")]
+    );
+}
