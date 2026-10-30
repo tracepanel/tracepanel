@@ -433,9 +433,7 @@ fn sql_issues(trace: &Trace, thresholds: &Thresholds) -> Vec<Issue> {
             0
         };
         let by_pk = BY_PK.is_match(&statement);
-        let select = otel::uncommented(&statement)
-            .to_uppercase()
-            .starts_with("SELECT");
+        let select = otel::is_select(&statement);
         // Only actionable patterns: reads that project code triggers.
         let mut actionable = culprit_text.is_some() && select;
         // A loop of by-key lookups run entirely by a library is still the view's N+1.
@@ -550,9 +548,7 @@ fn large_result_issues(trace: &Trace, thresholds: &Thresholds) -> Vec<Issue> {
     let mut groups: HashMap<String, Vec<&Span>> = HashMap::new();
     for span in trace.spans.iter().filter(|span| span.kind == "sql") {
         let statement = py_str(span.attrs.get("db.statement"));
-        let select = otel::uncommented(&statement)
-            .to_uppercase()
-            .starts_with("SELECT");
+        let select = otel::is_select(&statement);
         if !select || BOUNDED.is_match(&statement) || rows(span) < thresholds.large_result_rows {
             continue;
         }

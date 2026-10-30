@@ -435,6 +435,29 @@ pub fn uncommented(sql: &str) -> String {
     statement(&bare)
 }
 
+/// A statement from its first word on, its leading comments (an ORM's or sqlcommenter's tags) skipped: what a check of
+/// what it does reads, with no copy made.
+pub fn after_comments(sql: &str) -> &str {
+    let mut rest = sql.trim_start();
+    loop {
+        let skipped = if let Some(comment) = rest.strip_prefix("/*") {
+            comment.split_once("*/").map_or("", |(_, after)| after)
+        } else if let Some(comment) = rest.strip_prefix("--") {
+            comment.split_once('\n').map_or("", |(_, after)| after)
+        } else {
+            return rest;
+        };
+        rest = skipped.trim_start();
+    }
+}
+
+/// Whether a statement is a SELECT, after its leading comments.
+pub fn is_select(sql: &str) -> bool {
+    after_comments(sql)
+        .get(..6)
+        .is_some_and(|verb| verb.eq_ignore_ascii_case("SELECT"))
+}
+
 /// What the agent groups queries by: the one-line statement without its comments, its IN lists collapsed.
 pub fn fingerprint(sql: &str) -> String {
     IN_LIST
