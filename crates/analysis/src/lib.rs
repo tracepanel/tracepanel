@@ -18,6 +18,7 @@ pub mod logs;
 pub mod migrations;
 pub mod otel;
 pub mod storage;
+pub mod transport;
 mod waits;
 
 pub const FINGERPRINT_VERSION: i64 = 1;
@@ -1060,15 +1061,16 @@ pub(crate) fn rekind(
 }
 
 /// A received trace, made ready for the store: its OpenTelemetry spans mapped to tracepanel's kinds (an older SDK's
-/// storage and LLM calls, and migrations too), its queries named and grouped without their comments, its LLM calls
-/// priced, its log records' ANSI colours dropped, then its issues found, in its rows and in its document, which the
-/// console shows.
+/// storage and LLM calls, and migrations too), its queries named and grouped without their comments, its database
+/// drivers' own HTTP requests left out, its LLM calls priced, its log records' ANSI colours dropped, then its issues
+/// found, in its rows and in its document, which the console shows.
 pub fn apply(received: &mut tracepanel_protocol::Received, thresholds: &Thresholds) {
     otel::normalize(received);
     otel::uncomment(received);
     storage::normalize(received);
     migrations::normalize(received);
     llm::normalize(received);
+    transport::normalize(received);
     logs::normalize(received);
     let issues = analyze(&received.trace, thresholds);
     if issues.is_empty() {
