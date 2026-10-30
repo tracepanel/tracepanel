@@ -43,6 +43,7 @@ export {
   StatusBadge,
   TaskName,
   TraceBadge,
+  WaitingIcon,
 } from "./primitives";
 export { RequestInfo } from "./RequestInfo";
 export { RunChips } from "./RunChips";
