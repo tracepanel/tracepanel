@@ -379,7 +379,7 @@ export function TraceScreen({
       onTabChange={onTabChange}
       onExplain={explainer(source, trace.id, serviceName(trace), explains)}
       explainIn={(traceId, service) => explainer(source, traceId, service, explains)}
-      profilesIn={profiles}
+      profilesIn={(each) => profiles(serviceName(each))}
       initialTab={initialTab}
       preferredTab={preferredTab}
       actions={withShare(trace, source, actions, shareable === true)}

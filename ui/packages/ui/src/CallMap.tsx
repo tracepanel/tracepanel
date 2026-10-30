@@ -1656,7 +1656,7 @@ function CodeRowParts({ span, ctx, depth, part }: { span: Span; ctx: RowContext;
           muted={true}
           className={part.waiting ? "dt-map-kind dt-map-wait" : "dt-map-kind"}
         />
-        <UntracedHint shown={name === UNTRACED && !owner.profile && ctx.code.profiles}>
+        <UntracedHint name={name} code={ctx.code}>
           <TaskName name={name} className={yours ? "dt-map-text" : "dt-map-text dt-map-lib"} />
         </UntracedHint>
         <WaitPlace part={part} code={ctx.code} span={span.id} />
@@ -1669,8 +1669,8 @@ function CodeRowParts({ span, ctx, depth, part }: { span: Span; ctx: RowContext;
 }
 
 /** On untraced code of a trace without a profile, where the app can profile, on hover: how to see what ran there. */
-function UntracedHint({ shown, children }: { shown: boolean; children: ReactNode }) {
-  if (!shown) return children;
+function UntracedHint({ name, code, children }: { name: string; code: CodeOwner; children: ReactNode }) {
+  if (name !== UNTRACED || !code.profiles || code.trace.profile) return children;
   return (
     <Hint
       title="Untraced code"

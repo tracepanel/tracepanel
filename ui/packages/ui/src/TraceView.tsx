@@ -19,7 +19,7 @@ import {
 import { type ComponentProps, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppDetails, appSaidAnything } from "./AppDetails";
 import { appWarnings, warningsTone } from "./AppWarnings";
-import { CallMap, type TraceProfileOpener } from "./CallMap";
+import { CallMap, type ProfilesIn, type TraceProfileOpener } from "./CallMap";
 import type { Explain, ExplainOf } from "./CallTable";
 import { ScopedCalls, ScopedIssues } from "./ChainTabs";
 import { Button } from "./components/ui/button";
@@ -389,8 +389,8 @@ export interface TraceViewProps {
    * undefined where it doesn't.
    */
   explainIn?: ((traceId: string, service: string) => Explain | undefined) | undefined;
-  /** Whether an app (by its service) profiles a request when asked: the call tree's untraced code then says how. */
-  profilesIn?: ((service: string) => boolean) | undefined;
+  /** Whether the app that recorded a trace profiles a request when asked: the call tree's untraced code then says how. */
+  profilesIn?: ProfilesIn | undefined;
   /** The app that served it, as it said itself: an App tab after Request when it said anything (the panel). */
   app?: App | null | undefined;
   /** The part of the time to pick in the call tree, as a link asks (kinds of calls, a stretch of time). */
@@ -634,7 +634,7 @@ export function TraceView({
         initialSpan={treeSpan}
         explainOf={explainOf}
         onTraceProfile={onTraceProfile}
-        profilesIn={profilesIn ? (each) => profilesIn(serviceName(each)) : undefined}
+        profilesIn={profilesIn}
         chain={chain}
         openTab={(tab) => openTab(tab)}
       />
