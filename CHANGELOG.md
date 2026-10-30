@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Changed
+
+- What is on its way shows it: the hourglass of a trace on its way (the
+  console's page, the panel's) and of a call waiting for its trace in the
+  panel's list turns over and over until it arrives. With reduced motion
+  asked for, it stays still.
+
 ### Fixed
 
 - A query's comments (an ORM's or sqlcommenter's tags, a traceparent,

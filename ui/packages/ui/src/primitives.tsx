@@ -1,4 +1,4 @@
-import { AppWindowIcon, ArrowRightIcon } from "lucide-react";
+import { AppWindowIcon, ArrowRightIcon, HourglassIcon } from "lucide-react";
 import { type ComponentType, type ReactNode, useLayoutEffect, useRef } from "react";
 import { Badge } from "./components/ui/badge";
 import { Button } from "./components/ui/button";
@@ -216,6 +216,14 @@ export function Empty({
       {action ? <p className="dt-empty-action">{action}</p> : null}
     </div>
   );
+}
+
+/**
+ * Something on its way (a trace the agent hasn't stored yet, a call whose trace hasn't arrived): an hourglass that
+ * turns over and over while it waits, one wherever that is said. Still with reduced motion.
+ */
+export function WaitingIcon({ className }: { className?: string }) {
+  return <HourglassIcon className={cn("dt-waiting-icon", className)} aria-hidden="true" />;
 }
 
 /** An empty state's icon in its tile, when it has one. */
