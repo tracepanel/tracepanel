@@ -15,6 +15,12 @@
   `http.url`) carries the trace on: the service it called links its
   trace to it. A client span around another to the same URL is one
   call, the inner span kept.
+- A span an OpenTelemetry instrumentation made ends its details with
+  "As received over OTLP", collapsed: why it became what it is (an
+  HTTP call, a query, a step that is no call), whether it links the
+  trace of the service it called, and its name, kind, scope and
+  attributes as they came. It tells why a span did or didn't become a
+  call. The console and the panel show it.
 
 ### Changed
 

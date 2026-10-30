@@ -116,13 +116,15 @@ const BROKERS: &[(&str, &str)] = &[
     ("sqs", "sqs"),
 ];
 
-/// A mapped span: its kind, name, attributes, and whether the mapping found it failed.
+/// A mapped span: its kind, name, attributes, whether the mapping found it failed, and why it became what it is (what
+/// the console shows under "As received over OTLP").
 #[derive(Debug, Clone, PartialEq)]
 pub struct Mapped {
     pub kind: String,
     pub name: String,
     pub attrs: Attrs,
     pub error: bool,
+    pub reason: String,
 }
 
 /// Map the trace's `otel` spans, in its rows and in its document (what the console shows). A trace without any is
@@ -276,12 +278,12 @@ fn fold(doc: &mut Value) {
 
 fn map_in_place(span: &mut Value) {
     let name = span["name"].as_str().unwrap_or_default().to_owned();
-    let attrs = span
-        .get("attrs")
-        .and_then(Value::as_object)
-        .cloned()
-        .unwrap_or_default();
+    let attrs = match span.get_mut("attrs").map(Value::take) {
+        Some(Value::Object(attrs)) => attrs,
+        _ => Map::new(),
+    };
     let mapped = map(&name, &attrs);
+    span["received"] = received(name, attrs, &mapped);
     span["kind"] = Value::from(mapped.kind);
     span["name"] = Value::from(mapped.name);
     span["attrs"] = Value::Object(mapped.attrs);
@@ -290,37 +292,148 @@ fn map_in_place(span: &mut Value) {
     }
 }
 
-/// One OpenTelemetry span, by its name and attributes, as tracepanel's kind.
+/// The URL attributes whose credentials and sensitive query values are masked, as a mapped span's own `url.full` is.
+const URLS: &[&str] = &["url.full", "http.url", "http.target"];
+
+/// The span as it came, next to what it became: its name, its OpenTelemetry kind and scope, why it was mapped as it
+/// was, and its attributes. One the mapped span keeps with the same value is named, not copied (`same`: its key
+/// there), so a statement or a step's attributes aren't stored twice. URLs are masked as the mapped span's are.
+fn received(name: String, attrs: Attrs, mapped: &Mapped) -> Value {
+    let mut out = Map::new();
+    let mut changed = Map::new();
+    let mut same = Map::new();
+    for (key, value) in attrs {
+        match key.as_str() {
+            "otel.span_kind" => {
+                out.insert("span_kind".into(), value);
+                continue;
+            }
+            "otel.scope" => {
+                out.insert("scope".into(), value);
+                continue;
+            }
+            _ => {}
+        }
+        let value = match value {
+            Value::String(url) if URLS.contains(&key.as_str()) => Value::from(safe_url(&url)),
+            Value::String(query) if key == "url.query" => Value::from(masked_query(&query)),
+            other => other,
+        };
+        // Kept as it came, or renamed (`http.method` as `http.request.method`): the key it is under, never the
+        // fingerprint, which `uncomment` rewrites.
+        if mapped.attrs.get(&key) == Some(&value) {
+            same.insert(key.clone(), Value::from(key));
+        } else if let Some((kept, _)) = mapped
+            .attrs
+            .iter()
+            .find(|(kept, each)| *kept != "db.fingerprint" && **each == value)
+        {
+            same.insert(key, Value::from(kept.clone()));
+        } else {
+            changed.insert(key, value);
+        }
+    }
+    out.insert("name".into(), Value::from(name));
+    out.insert("mapped_as".into(), Value::from(mapped.reason.clone()));
+    if !changed.is_empty() {
+        out.insert("attrs".into(), Value::Object(changed));
+    }
+    if !same.is_empty() {
+        out.insert("same".into(), Value::Object(same));
+    }
+    Value::Object(out)
+}
+
+/// One OpenTelemetry span, by its name and attributes, as tracepanel's kind, and why: which attributes made it a call
+/// (or why it is none), and whether a call carried the trace on to the service it called.
 pub fn map(name: &str, attrs: &Attrs) -> Mapped {
     let span_kind = text(attrs, &["otel.span_kind"]).unwrap_or_default();
-    if let Some(mapped) = llm(name, attrs) {
-        return mapped;
+    let mut mapped = classify(name, attrs, &span_kind);
+    let call = matches!(
+        mapped.kind.as_str(),
+        "http.client" | "grpc" | GENERIC_RPC | GENERIC_MESSAGING | "kafka" | "rabbitmq" | "sqs"
+    );
+    if matches!(span_kind.as_str(), "client" | "producer") {
+        if attrs.contains_key("w3c.span_id") {
+            mapped
+                .reason
+                .push_str(". It carries the trace on: links the trace of the service it called");
+        } else if call || mapped.kind == "function" {
+            mapped
+                .reason
+                .push_str(". It carries no trace on: not linked to the service it called");
+        }
     }
-    if let Some(system) = db_system(attrs) {
+    mapped
+}
+
+/// The first of these attributes that is set, by its name: what a mapping read.
+fn which<'a>(attrs: &Attrs, keys: &[&'a str]) -> &'a str {
+    keys.iter()
+        .copied()
+        .find(|key| match attrs.get(*key) {
+            Some(Value::String(value)) => !value.is_empty(),
+            Some(Value::Null) | None => false,
+            Some(_) => true,
+        })
+        .unwrap_or(keys[0])
+}
+
+fn because(mut mapped: Mapped, reason: String) -> Mapped {
+    mapped.reason = reason;
+    mapped
+}
+
+fn classify(name: &str, attrs: &Attrs, span_kind: &str) -> Mapped {
+    if let Some(mapped) = llm(name, attrs) {
+        let reason = "A call to a model: the GenAI conventions' gen_ai.* attributes".to_owned();
+        return because(mapped, reason);
+    }
+    let system = db_system(attrs);
+    let sql_system = system
+        .as_deref()
+        .filter(|system| SQL_SYSTEMS.contains(system));
+    if let Some(system) = system.as_deref() {
+        let from = which(attrs, &["db.system.name", "db.system"]);
         // A SQL span without a statement is the driver's own work (`pg.connect`): no query to show.
-        if SQL_SYSTEMS.contains(&system.as_str())
-            && text(attrs, &["db.query.text", "db.statement"]).is_some()
-        {
-            return sql(name, attrs, &system);
+        if sql_system.is_some() && text(attrs, &["db.query.text", "db.statement"]).is_some() {
+            let statement = which(attrs, &["db.query.text", "db.statement"]);
+            let reason = format!("SQL: {system} from {from}, statement from {statement}");
+            return because(sql(name, attrs, system), reason);
         }
         if system == "redis" {
-            return redis(attrs);
+            let command = which(
+                attrs,
+                &[
+                    "db.operation.name",
+                    "db.operation",
+                    "db.query.text",
+                    "db.statement",
+                ],
+            );
+            let reason = format!("Redis: from {from}, the command from {command}");
+            return because(redis(attrs), reason);
         }
         if let Some((_, kind)) = DATASTORES.iter().find(|(name, _)| *name == system) {
-            return datastore(name, attrs, kind, &system);
+            let reason = format!("A {system} call: from {from}");
+            return because(datastore(name, attrs, kind, system), reason);
         }
         // Any other database (neo4j, couchbase, influxdb…): the family's kind, `db`, with its own name kept.
-        if !SQL_SYSTEMS.contains(&system.as_str()) {
-            return datastore(name, attrs, GENERIC_DB, &system);
+        if sql_system.is_none() {
+            let reason = format!("A database call: {system} from {from}");
+            return because(datastore(name, attrs, GENERIC_DB, system), reason);
         }
     }
     if text(attrs, &["rpc.system"]).as_deref() == Some("aws-api")
         && text(attrs, &["rpc.service"]).as_deref() == Some("DynamoDB")
     {
-        return datastore(name, attrs, "dynamodb", "dynamodb");
+        let reason = "A DynamoDB call: rpc.system aws-api, rpc.service DynamoDB".to_owned();
+        return because(datastore(name, attrs, "dynamodb", "dynamodb"), reason);
     }
-    if let Some(mapped) = messaging(name, attrs, &span_kind) {
-        return mapped;
+    if let Some(mapped) = messaging(name, attrs, span_kind) {
+        let system = text(attrs, &["messaging.system"]).unwrap_or_default();
+        let reason = format!("A message sent: {system} from messaging.system, a {span_kind} span");
+        return because(mapped, reason);
     }
     if span_kind == "client"
         && let Some(system) = text(attrs, &["rpc.system"]).map(|system| system.to_lowercase())
@@ -331,25 +444,56 @@ pub fn map(name: &str, attrs: &Attrs) -> Mapped {
         } else {
             GENERIC_RPC
         };
-        return rpc(name, attrs, kind, &system);
+        let reason = format!("An RPC call: {system} from rpc.system, a client span");
+        return because(rpc(name, attrs, kind, &system), reason);
     }
+    let has_url = text(attrs, &["url.full", "http.url"]).is_some();
+    let url = which(attrs, &["url.full", "http.url"]);
     if span_kind == "client"
         && let Some(method) = text(attrs, &["http.request.method", "http.method"])
     {
-        return http_client(attrs, &method);
+        let from = which(attrs, &["http.request.method", "http.method"]);
+        let reason = if has_url {
+            format!("HTTP call: method from {from}, URL from {url}")
+        } else {
+            let host = which(attrs, &["server.address", "net.peer.name", "http.host"]);
+            let path = which(attrs, &["url.path", "http.target"]);
+            format!("HTTP call: method from {from}, URL from {host} and {path}")
+        };
+        return because(http_client(attrs, &method), reason);
     }
     // A call that names only its URL: Apollo Router's request to a subgraph, always a POST of the subgraph's query.
     if span_kind == "client"
         && text(attrs, &["otel.scope"]).as_deref() == Some(APOLLO_ROUTER)
-        && text(attrs, &["url.full", "http.url"]).is_some()
+        && has_url
     {
-        return http_client(attrs, "POST");
+        let reason = format!("Apollo Router's call to a subgraph: a POST to {url}");
+        return because(http_client(attrs, "POST"), reason);
     }
+    let reason = match (sql_system, span_kind) {
+        (Some(system), _) => format!(
+            "Not a query: a {system} span with no statement (the driver's own work), kept as a step"
+        ),
+        (None, "client") if has_url => {
+            "Not a call: a client span with a URL but no HTTP method, kept as a step".to_owned()
+        }
+        (None, "client") => "Not a call: a client span with no HTTP method or URL, no rpc.system \
+                             or messaging.system, kept as a step"
+            .to_owned(),
+        (None, "producer") => {
+            "Not a message sent: a producer span with no messaging.system, kept as a step"
+                .to_owned()
+        }
+        (None, "consumer") => "A consumer's work: a step".to_owned(),
+        (None, "server") => "A server span: a step".to_owned(),
+        _ => "An internal span: a step".to_owned(),
+    };
     Mapped {
         kind: "function".into(),
         name: name.to_owned(),
         attrs: attrs.clone(),
         error: false,
+        reason,
     }
 }
 
@@ -489,6 +633,7 @@ fn llm(name: &str, attrs: &Attrs) -> Option<Mapped> {
         name: name.to_owned(),
         attrs: out,
         error: false,
+        reason: String::new(),
     })
 }
 
@@ -625,6 +770,7 @@ fn sql(name: &str, attrs: &Attrs, system: &str) -> Mapped {
         name: span_name(&uncommented(&raw)),
         attrs: out,
         error: false,
+        reason: String::new(),
     }
 }
 
@@ -813,6 +959,7 @@ fn redis(attrs: &Attrs) -> Mapped {
         name,
         attrs: out,
         error: false,
+        reason: String::new(),
     }
 }
 
@@ -861,6 +1008,7 @@ fn datastore(name: &str, attrs: &Attrs, kind: &str, system: &str) -> Mapped {
         name,
         attrs: out,
         error: false,
+        reason: String::new(),
     }
 }
 
@@ -912,6 +1060,7 @@ fn messaging(name: &str, attrs: &Attrs, span_kind: &str) -> Option<Mapped> {
         ),
         attrs: out,
         error: false,
+        reason: String::new(),
     })
 }
 
@@ -941,6 +1090,7 @@ fn rpc(name: &str, attrs: &Attrs, kind: &str, system: &str) -> Mapped {
         name,
         attrs: out,
         error: code.is_some_and(|code| code != 0) || attrs.contains_key("error.type"),
+        reason: String::new(),
     }
 }
 
@@ -984,6 +1134,7 @@ fn http_client(attrs: &Attrs, method: &str) -> Mapped {
         kind: "http.client".into(),
         name: format!("{method} {host}{path}"),
         error: status.is_some_and(|status| status >= 400) || attrs.contains_key("error.type"),
+        reason: String::new(),
         attrs: out,
     }
 }
@@ -1036,21 +1187,27 @@ fn safe_url(url: &str) -> String {
         None => (address, ""),
     };
     let authority = authority.rsplit('@').next().unwrap_or_default();
-    let query: Vec<String> = query
-        .split('&')
-        .filter(|pair| !pair.is_empty())
-        .map(|pair| match pair.split_once('=') {
-            Some((key, _)) if SENSITIVE.is_match(key) => format!("{key}={MASK}"),
-            _ => pair.to_owned(),
-        })
-        .collect();
+    let query = masked_query(query);
     let mut safe = match scheme {
         Some(scheme) => format!("{scheme}://{authority}{path}"),
         None => format!("{authority}{path}"),
     };
     if !query.is_empty() {
         safe.push('?');
-        safe.push_str(&query.join("&"));
+        safe.push_str(&query);
     }
     safe
+}
+
+/// A query string with the values of its sensitive parameters masked.
+fn masked_query(query: &str) -> String {
+    query
+        .split('&')
+        .filter(|pair| !pair.is_empty())
+        .map(|pair| match pair.split_once('=') {
+            Some((key, _)) if SENSITIVE.is_match(key) => format!("{key}={MASK}"),
+            _ => pair.to_owned(),
+        })
+        .collect::<Vec<_>>()
+        .join("&")
 }
