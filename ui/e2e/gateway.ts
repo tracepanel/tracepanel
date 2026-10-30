@@ -8,9 +8,6 @@ type Doc = Record<string, unknown>;
 
 const ms = 1_000;
 
-/** The subgraph's record printed as a table: its first line, a border with no words. */
-export const GATEWAY_TABLE = { border: "├───────────┬──────────────┤", words: "│ operation │" };
-
 function span(id: string, parent: string | null, kind: string, name: string, start: number, duration: number): Doc {
   // biome-ignore lint/style/useNamingConvention: the trace format.
   return { id, parent_id: parent, kind, name, start, duration, status: "ok", attrs: {} as Doc };
@@ -125,18 +122,6 @@ export async function gatewayView(tag: number, operations: readonly string[]): P
       "http.status_code": 200,
     },
     spans: [call("s0", `${subgraphId}r`, "http://127.0.0.1:4002/items", "GET", sub + 20 * ms, 600 * ms, hex("c", 0))],
-    // A record printed as a table: its first line a border.
-    logs: [
-      {
-        // biome-ignore lint/style/useNamingConvention: the trace format.
-        span_id: null,
-        time: sub + 10 * ms,
-        level: "info",
-        logger: "subgraph",
-        message: `${GATEWAY_TABLE.border}\n│ operation │ ${operations[last]} │\n└───────────┴──────────────┘`,
-        attrs: {},
-      },
-    ],
   });
   const queries = [0, 1, 2].map((q) => ({
     ...span(`q${q}`, `${restId}r`, "sql", "SELECT items", sub + 40 * ms + q * 20 * ms, 10 * ms),

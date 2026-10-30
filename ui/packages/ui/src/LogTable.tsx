@@ -31,7 +31,7 @@ import { ago, duration, since, stamp } from "./format";
 import { type ColumnSpec, type Columns, useColumns } from "./hooks/useColumns";
 import { useStored } from "./hooks/useStored";
 import { logAttrs } from "./LogRecordDetails";
-import { messageLine, withoutAnsi } from "./lib/ansi";
+import { withoutAnsi } from "./lib/ansi";
 import { bodyCell, ColumnsHeader, MENU_REM, useColumnWidths } from "./TableColumns";
 import type { Log } from "./types";
 
@@ -110,7 +110,7 @@ function Message({ log, terms }: { log: LogLike; terms: readonly string[] }) {
   return (
     <span className="flex min-w-0 items-baseline gap-2.5">
       <span title={message.slice(0, 2000)} className="max-w-full shrink-0 truncate font-mono">
-        <Marked text={messageLine(log.message)} terms={terms} />
+        <Marked text={message} terms={terms} />
       </span>
       {log.exception ? (
         <span className="min-w-0 truncate font-mono text-error">{lastLine(withoutAnsi(log.exception))}</span>

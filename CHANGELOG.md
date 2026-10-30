@@ -15,10 +15,6 @@
   called other apps say what they and everything under them did, so a
   row no longer says 0 queries over one that says 3. Issues count once
   however many traces have them, as the Issues tab counts them.
-- A log record whose first line is a border (a table or a banner
-  printed to the log) shows its first line with words in the call tree
-  and the Logs tab, not a line of box-drawing characters. The whole
-  record is in its details as before.
 
 ## 0.9.2 (2026-10-30)
 

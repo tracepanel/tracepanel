@@ -20,7 +20,7 @@ import { ChevronRightIcon, CloseIcon } from "./icons";
 import { keyed } from "./keys";
 import { LlmConversation, withoutMessages } from "./LlmConversation";
 import { AllAttributes, LogRecordDetails } from "./LogRecordDetails";
-import { messageLine } from "./lib/ansi";
+import { withoutAnsi } from "./lib/ansi";
 import { type Category, spanCategories } from "./lib/breakdown";
 import { answers, callAnswer, unfinished } from "./lib/callAnswer";
 import { callFields, templatePlace } from "./lib/callFields";
@@ -1039,7 +1039,7 @@ function leafView(node: Extract<Node, { type: "log" | "error" }>) {
     const text = `${node.error.type.replace(/^builtins\./, "")}: ${node.error.message}`;
     return { kind: "error", level: "error", time: node.error.time, text };
   }
-  return { kind: "log", level: node.log.level, time: node.log.time, text: messageLine(node.log.message) };
+  return { kind: "log", level: node.log.level, time: node.log.time, text: withoutAnsi(node.log.message) };
 }
 
 /** A log record or an error: a point on the timeline, at its time since the request started. */

@@ -6,7 +6,7 @@ import type { TraceScope } from "./hooks/useTraceChain";
 import { keyed } from "./keys";
 import { LogRecordDetails } from "./LogRecordDetails";
 import { type LogColumn, LogLevel, LogTable } from "./LogTable";
-import { messageLine, withoutAnsi } from "./lib/ansi";
+import { withoutAnsi } from "./lib/ansi";
 import { plural } from "./lib/plural";
 import { type Member, type ScopedLog, type SpanScope, scopeWindow } from "./lib/scope";
 import { linkProps, type TraceLinks } from "./links";
@@ -86,7 +86,7 @@ function FirstError({ log, start, onOpen }: { log: ScopedLog | undefined; start:
       <button type="button" className="dt-map-filter dt-log-first-error" title="Open the first error" onClick={onOpen}>
         <span className="text-error">First error</span>
         <span className="dt-map-filter-count">{since(log.time, start)}</span>
-        <span className="truncate">{messageLine(log.message)}</span>
+        <span className="truncate">{withoutAnsi(log.message)}</span>
       </button>
     </li>
   );

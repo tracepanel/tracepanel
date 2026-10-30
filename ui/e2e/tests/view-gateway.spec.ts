@@ -5,7 +5,7 @@
 import type { Page } from "@playwright/test";
 import { openApp, panel, pill } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
-import { GATEWAY_TABLE, gatewayView } from "../gateway.ts";
+import { gatewayView } from "../gateway.ts";
 
 const FIVE = ["query Features", "query Profile", "query Roles", "query Notifications", "query Items"];
 
@@ -121,21 +121,4 @@ test("the view's row counts its chain as the pill and the tabs do; a row with ro
   await expect(panel(page).locator(".dt-scope-chip")).toContainText("Under gateway");
   await expect(panel(page).getByRole("tab", { name: /^Issues/ })).toContainText("4");
   await expect(panel(page).getByRole("tab", { name: /^DB/ })).toContainText("3");
-});
-
-test("a record whose first line is a border says its first line with words on its row", async ({ page }) => {
-  const seeded = await gatewayView(4, FIVE);
-  await page.goto(`/#/t/${seeded.subgraph}?tab=tree`);
-  // The trace's own record, under its first row.
-  await page.getByRole("button", { name: "1 log", exact: true }).click();
-  const records = page.locator('.dt-map-row[data-kind="log"]');
-
-  await expect(records.filter({ hasText: GATEWAY_TABLE.words })).toHaveCount(1);
-  await expect(records.filter({ hasText: GATEWAY_TABLE.border })).toHaveCount(0);
-
-  await page.getByRole("tab", { name: /^Logs/ }).click();
-  const rows = page.locator("tbody tr");
-
-  await expect(rows.filter({ hasText: GATEWAY_TABLE.words })).toHaveCount(1);
-  await expect(rows.filter({ hasText: GATEWAY_TABLE.border })).toHaveCount(0);
 });

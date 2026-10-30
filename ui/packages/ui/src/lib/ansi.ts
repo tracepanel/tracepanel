@@ -10,14 +10,3 @@ const ANSI = /(?:\u001b\[|\u009b)[ -?]*[@-~]?|\u001b[\]P_^X][^\u0007\u001b]*(?:\
 export function withoutAnsi(text: string): string {
   return text.includes("\u001b") || text.includes("\u009b") ? text.replace(ANSI, "") : text;
 }
-
-/**
- * A log record's text as a row shows it, on one line: from its first line with words when it starts with borders
- * only (a table's or a banner's `├───┬───`, `=====`), which say nothing on a row. All of it in its details.
- */
-export function messageLine(message: string): string {
-  const text = withoutAnsi(message);
-  const lines = text.split("\n");
-  const first = lines.findIndex((line) => /[\p{L}\p{N}]/u.test(line));
-  return first > 0 ? lines.slice(first).join("\n") : text;
-}
