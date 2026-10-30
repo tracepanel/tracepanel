@@ -10,7 +10,7 @@ const STATEMENT =
 test("a SQL Server statement is laid out and coloured like any other", async ({ page }) => {
   const id = await traceId("PATCH /campaigns/{id}/report");
   // The trace as a Django app on SQL Server would have sent it: its first query rewritten.
-  await page.route(`**/api/traces/${id}`, async (route) => {
+  await page.route(`**/api/traces/${id}*`, async (route) => {
     const trace = await (await route.fetch()).json();
     const span = trace.spans.find((candidate: { name: string }) => candidate.name === "SELECT campaign_stats_1");
     span.attrs = { ...span.attrs, "db.statement": STATEMENT, "db.vendor": "microsoft", "db.system": "mssql" };

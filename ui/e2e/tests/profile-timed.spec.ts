@@ -122,7 +122,7 @@ interface WireProfile {
 /** The digest's trace as the agent gives it, its profile changed by `change`. */
 async function withProfile(page: Page, change: (profile: WireProfile) => void): Promise<string> {
   const id = await traceId(DIGEST);
-  await page.route(`**/api/traces/${id}`, async (route) => {
+  await page.route(`**/api/traces/${id}*`, async (route) => {
     const trace = await (await route.fetch()).json();
     change(trace.profile);
     await route.fulfill({ json: trace });

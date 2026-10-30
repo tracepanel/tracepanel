@@ -135,7 +135,7 @@ async function chain(page: Page): Promise<{ click: string; bff: string }> {
     const trace = new URL(route.request().url()).pathname.split("/").at(-2) ?? "";
     await route.fulfill({ json: links[trace] ?? linking([]) });
   });
-  await page.route(`**/api/traces/${bff["id"]}`, (route) => route.fulfill({ json: bff }));
+  await page.route(`**/api/traces/${bff["id"]}*`, (route) => route.fulfill({ json: bff }));
   return { click: click.id, bff: String(bff["id"]) };
 }
 
