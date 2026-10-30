@@ -4,6 +4,17 @@
 
 ### Added
 
+- `TRACEPANEL_OTLP` sets where the agent takes OTLP (`HOST:PORT` or
+  `off`) when `--otlp` doesn't. The SDKs start the agent in the app's
+  environment, so each project can have a port of its own. Only one
+  agent on a machine gets `127.0.0.1:4318`, and before this the
+  others ran without OTLP and nothing said so.
+- The agent writes the address it serves OTLP on to
+  `.tracepanel/otlp.addr`, and the console shows it at the foot of the
+  sidebar. When the port is taken, the console and the agent's log name
+  the project whose agent holds it and the setting to use instead:
+  `TRACEPANEL_OTLP=127.0.0.1:4319` with a free port. `api/capabilities`
+  has it as `otlp`.
 - Apollo Router over OTLP: its request to a subgraph is an HTTP call
   (`POST`, the subgraph's URL), and the subgraph's trace links to it,
   though the Router's span names only its URL. The Router's own stages

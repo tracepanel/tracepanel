@@ -1,4 +1,4 @@
-import { type Counts, Hint, Logo, LogoMark, RuntimeIcon, runtimeKind } from "@tracepanel/ui";
+import { type Counts, Hint, Logo, LogoMark, type Otlp, RuntimeIcon, runtimeKind } from "@tracepanel/ui";
 import { Button } from "@tracepanel/ui/components/ui/button";
 import {
   DropdownMenu,
@@ -45,6 +45,7 @@ import {
   SunIcon,
   TerminalIcon,
   Trash2Icon,
+  UnplugIcon,
   WaypointsIcon,
   ZapIcon,
 } from "lucide-react";
@@ -284,6 +285,7 @@ export function Sidebar({
   drawer = false,
   collapsed = false,
   scope,
+  otlp,
 }: {
   section: Section | null;
   /** Issues (the badge turns red with errors) and traces per entry point (empty ones are hidden). */
@@ -297,6 +299,8 @@ export function Sidebar({
   collapsed?: boolean;
   /** Several apps in the store: which one the console shows. Left out with one app. */
   scope?: AppScope | undefined;
+  /** Where the agent takes OTLP, or why it doesn't; left out with OTLP off or by a backend that is no agent. */
+  otlp?: Otlp | undefined;
 }) {
   const visible = visibleSections(counts);
   const rail = collapsed && !drawer;
@@ -314,7 +318,7 @@ export function Sidebar({
       {scope ? <AppSwitcher scope={scope} rail={rail} /> : null}
       <SearchButton rail={rail} onSearch={onSearch} />
       <SidebarNav rail={rail} groupProps={groupProps} />
-      <SidebarFooter rail={rail} onClear={onClear} />
+      <SidebarFooter rail={rail} onClear={onClear} otlp={otlp} />
     </aside>
   );
 }
@@ -533,10 +537,26 @@ function OpenCount({ label, count, tone }: { label: string; count: number | unde
   );
 }
 
-function SidebarFooter({ rail, onClear }: { rail: boolean; onClear?: (() => void) | undefined }) {
+function SidebarFooter({
+  rail,
+  onClear,
+  otlp,
+}: {
+  rail: boolean;
+  onClear?: (() => void) | undefined;
+  otlp?: Otlp | undefined;
+}) {
+  const missed = otlp && !otlp.serving ? otlp : undefined;
   if (rail) {
     return (
       <footer className="mt-auto flex flex-col items-center gap-1 border-t pt-4">
+        {missed ? (
+          <RailTip label={`No OTLP: ${missed.address} ${missed.taken ? "is taken" : "isn't served"}`}>
+            <span className="grid size-9 place-items-center text-warn" role="img" aria-label="No OTLP">
+              <UnplugIcon className="size-4" />
+            </span>
+          </RailTip>
+        ) : null}
         {onClear ? (
           <RailTip label="Delete all data">
             <button
@@ -555,27 +575,68 @@ function SidebarFooter({ rail, onClear }: { rail: boolean; onClear?: (() => void
     );
   }
   return (
-    // Its text starts where the items' icons do, on one line: the full sentence on hover.
-    <footer className="mt-auto flex items-center justify-between gap-2 border-t pt-4 pl-3.5 text-xs text-muted-foreground">
-      <span className="min-w-0 truncate" title="Local: the data is stored in .tracepanel/">
-        Local · <code className="font-mono">.tracepanel/</code>
-      </span>
-      <span className="flex items-center gap-1">
-        {onClear ? (
-          <button
-            type="button"
-            className="grid size-8 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-error"
-            title="Delete all data"
-            aria-label="Delete all data"
-            onClick={onClear}
-          >
-            <Trash2Icon className="size-4" />
-          </button>
-        ) : null}
-        <LicensesLink rail={false} />
-        <ThemeToggle />
-      </span>
+    <footer className="mt-auto flex flex-col gap-2 border-t pt-4 pl-3.5 text-xs text-muted-foreground">
+      {missed ? <OtlpNotice otlp={missed} /> : null}
+      {/* Its text starts where the items' icons do, on one line: the full sentence on hover. */}
+      <div className="flex items-center justify-between gap-2">
+        <span className="min-w-0 truncate" title="Local: the data is stored in .tracepanel/">
+          Local · <code className="font-mono">.tracepanel/</code>
+        </span>
+        <span className="flex items-center gap-1">
+          {onClear ? (
+            <button
+              type="button"
+              className="grid size-8 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-error"
+              title="Delete all data"
+              aria-label="Delete all data"
+              onClick={onClear}
+            >
+              <Trash2Icon className="size-4" />
+            </button>
+          ) : null}
+          <LicensesLink rail={false} />
+          <ThemeToggle />
+        </span>
+      </div>
+      {otlp?.serving ? (
+        <p
+          className="min-w-0 truncate"
+          title={`OpenTelemetry exporters send their spans here: OTEL_EXPORTER_OTLP_ENDPOINT=http://${otlp.address}`}
+        >
+          OTLP · <code className="font-mono">{otlp.address}</code>
+        </p>
+      ) : null}
     </footer>
+  );
+}
+
+/**
+ * The agent takes no OTLP: another project's agent (or another program) holds the port it wanted. Calm: the SDKs'
+ * traces still come, only this project's OpenTelemetry exporters need an address of its own.
+ */
+function OtlpNotice({ otlp }: { otlp: Otlp }) {
+  const by = otlp.taken_by ? `the agent of ${otlp.taken_by}` : "another program";
+  return (
+    <div role="note" aria-label="OTLP" className="flex gap-2 rounded-md border bg-muted/40 p-2.5 leading-relaxed">
+      <UnplugIcon className="mt-1 size-3.5 shrink-0 text-warn" aria-hidden={true} />
+      {otlp.taken ? (
+        <p className="min-w-0 break-words">
+          OTLP: <code className="font-mono text-foreground">{otlp.address}</code> is taken by {by}. Set{" "}
+          {/* Where it doesn't fit on the line, broken after the = only. */}
+          <code className="font-mono text-foreground select-all">
+            <span className="whitespace-nowrap">TRACEPANEL_OTLP=</span>
+            <wbr />
+            <span className="whitespace-nowrap">{otlp.free ?? "HOST:PORT"}</span>
+          </code>{" "}
+          for this project's apps and point its OTLP exporters there.
+        </p>
+      ) : (
+        <p className="min-w-0 break-words">
+          OTLP: not served on <code className="font-mono text-foreground">{otlp.address}</code>
+          {otlp.error ? `: ${otlp.error}` : ""}.
+        </p>
+      )}
+    </div>
   );
 }
 

@@ -152,7 +152,22 @@ OpenTelemetry's exporters send them by default. A service in any language that
 exports its traces with OpenTelemetry shows in the console while the agent
 runs. The agent reads the spans by OpenTelemetry's semantic conventions and
 finds the same issues in them. `--otlp HOST:PORT` moves the address, and
-`--otlp off` turns it off.
+`--otlp off` turns it off. Without `--otlp`, the agent reads the address from
+`TRACEPANEL_OTLP` (`HOST:PORT` or `off`).
+
+Only one agent on a machine gets a port. With several projects running at
+once, the first project's agent takes `127.0.0.1:4318`, and the others take
+no OTLP. Give each other project a port of its own in its environment, where
+its SDK starts the agent, and point its exporters there:
+
+```bash
+export TRACEPANEL_OTLP=127.0.0.1:4319
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4319
+```
+
+The agent writes the address it serves OTLP on to `.tracepanel/otlp.addr`.
+The console shows it at the foot of the sidebar. When the port is taken, the
+console names the project whose agent holds it and suggests a free one.
 
 Calls between services link their traces by the W3C trace context, whether
 each service uses a Tracepanel SDK or OpenTelemetry.
