@@ -4,6 +4,10 @@
 
 ### Added
 
+- The call tree's untraced code says, on hover, how to see what ran
+  there: profile the request, with the panel's flame or an
+  `X-Tracepanel-Profile: 1` header. Only where the app that recorded it
+  profiles a request when asked, and the trace has no profile yet.
 - `TRACEPANEL_OTLP` sets where the agent takes OTLP (`HOST:PORT` or
   `off`) when `--otlp` doesn't. The SDKs start the agent in the app's
   environment, so each project can have a port of its own. Only one

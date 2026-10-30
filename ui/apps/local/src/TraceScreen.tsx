@@ -369,6 +369,7 @@ export function TraceScreen({
   const app = useApp(source, serviceOf(trace, variant));
   // EXPLAIN only where the app that recorded a trace runs it: each trace of the chain by its own app.
   const explains = useServiceCapability(source, "explain");
+  const profiles = useServiceCapability(source, "profile");
   if (trace === null) return <NoTrace loaded={loaded} variant={variant} back={back} />;
   return (
     <TraceView
@@ -378,6 +379,7 @@ export function TraceScreen({
       onTabChange={onTabChange}
       onExplain={explainer(source, trace.id, serviceName(trace), explains)}
       explainIn={(traceId, service) => explainer(source, traceId, service, explains)}
+      profilesIn={profiles}
       initialTab={initialTab}
       preferredTab={preferredTab}
       actions={withShare(trace, source, actions, shareable === true)}

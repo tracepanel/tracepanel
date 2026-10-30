@@ -266,12 +266,22 @@ test("with no profile, the tree's code row has no flame, and a click on it picks
   await expect(code.locator(".dt-map-text")).toHaveText("untraced code");
   await expect(code.locator(".dt-map-flame")).toHaveCount(0);
 
+  await code.locator(".dt-map-text").hover();
+
+  await expect(page.getByRole("tooltip")).toContainText("Untraced code");
+  await expect(page.getByRole("tooltip")).toContainText("profile the request");
+
   await code.click();
   await page.mouse.click(...(await centre(page.locator(QUIET).first())));
 
   await expect(page).not.toHaveURL(/[?&]range=/);
   await expect(page.getByRole("button", { name: /^Time / })).toHaveCount(0);
   await expect(page.getByRole("tab", { name: "Call tree" })).toHaveAttribute("aria-selected", "true");
+
+  const frame = await openSales(page);
+  await frame.locator('.dt-map-row[data-kind="code"] .dt-map-text').hover();
+
+  await expect(frame.getByRole("tooltip")).toContainText("Untraced code");
 });
 
 test("an app that can't profile: the tree's code row is a plain row, nothing offered", async ({ page }) => {

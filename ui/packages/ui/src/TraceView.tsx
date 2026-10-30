@@ -389,6 +389,8 @@ export interface TraceViewProps {
    * undefined where it doesn't.
    */
   explainIn?: ((traceId: string, service: string) => Explain | undefined) | undefined;
+  /** Whether an app (by its service) profiles a request when asked: the call tree's untraced code then says how. */
+  profilesIn?: ((service: string) => boolean) | undefined;
   /** The app that served it, as it said itself: an App tab after Request when it said anything (the panel). */
   app?: App | null | undefined;
   /** The part of the time to pick in the call tree, as a link asks (kinds of calls, a stretch of time). */
@@ -545,6 +547,7 @@ export function TraceView({
   onTabChange,
   onExplain,
   explainIn,
+  profilesIn,
   initialTab,
   preferredTab,
   actions,
@@ -631,6 +634,7 @@ export function TraceView({
         initialSpan={treeSpan}
         explainOf={explainOf}
         onTraceProfile={onTraceProfile}
+        profilesIn={profilesIn ? (each) => profilesIn(serviceName(each)) : undefined}
         chain={chain}
         openTab={(tab) => openTab(tab)}
       />
