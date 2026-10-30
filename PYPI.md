@@ -20,7 +20,9 @@ tracepanel-agent --serve 127.0.0.1:8765
 
 It takes OpenTelemetry spans over OTLP/HTTP too, on `127.0.0.1:4318`, where
 OpenTelemetry's exporters send them by default: a service in any language shows
-in the console. And it gives AI coding agents your traces over MCP:
+in the console. With several projects at once, give each other project a port
+of its own in its environment, such as `TRACEPANEL_OTLP=127.0.0.1:4319`. And it
+gives AI coding agents your traces over MCP:
 `tracepanel-agent mcp`.
 
 Your traces stay on your machine.

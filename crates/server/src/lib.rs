@@ -824,6 +824,56 @@ pub fn identify(token: String, console: String) {
     let _ = IDENTITY.set((token, console));
 }
 
+/// Where this agent takes OpenTelemetry exporters' spans (OTLP/HTTP), or where it was to and couldn't: set once as it
+/// starts, never with OTLP off.
+static OTLP: std::sync::OnceLock<Otlp> = std::sync::OnceLock::new();
+
+/// This agent's OTLP/HTTP: the console shows where exporters send to it, or why it takes nothing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Otlp {
+    /// `HOST:PORT`: where it serves, or where it was to.
+    pub address: String,
+    pub serving: bool,
+    /// Why not, as the system said it.
+    pub error: Option<String>,
+    /// The port is in use: by another project's agent or another program (a collector of the developer's own).
+    pub taken: bool,
+    /// When taken: a free address on the same host, for this project's apps to send to instead.
+    pub free: Option<String>,
+}
+
+/// Says where this agent takes OTLP/HTTP, or was to and couldn't.
+pub fn otlp(otlp: Otlp) {
+    let _ = OTLP.set(otlp);
+}
+
+/// The OTLP status as the console's API says it. A taken port names the project whose agent holds it, asked each
+/// time: agents started at the same moment register in any order.
+async fn otlp_status() -> Option<Value> {
+    let otlp = OTLP.get()?.clone();
+    let own = IDENTITY
+        .get()
+        .map(|(_, console)| console.clone())
+        .unwrap_or_default();
+    let taken_by = if otlp.taken {
+        let address = otlp.address.clone();
+        tokio::task::spawn_blocking(move || neighbors::holding_otlp(&address, &own))
+            .await
+            .ok()
+            .flatten()
+    } else {
+        None
+    };
+    Some(json!({
+        "address": otlp.address,
+        "serving": otlp.serving,
+        "error": otlp.error,
+        "taken": otlp.taken,
+        "taken_by": taken_by,
+        "free": otlp.free,
+    }))
+}
+
 /// For each call no trace here answered, the trace another project's agent has for it, with its console.
 async fn remote_calls(unanswered: Vec<(String, String, String)>) -> Vec<Value> {
     let Some((_, console)) = IDENTITY.get() else {
@@ -920,20 +970,23 @@ async fn capabilities(
         }
         None => activity.apps.offers(capability, via),
     };
-    json_response(
-        StatusCode::OK,
-        json!({
-            "explain": offers("explain"),
-            "users": offers("users"),
-            "profile": offers("profile"),
-            "profile_memory": offers("profile_memory"),
-            "profile_all": offers("profile_all"),
-            "profile_memory_all": offers("profile_memory_all"),
-            "request": offers("request"),
-            "live_tasks": offers("live_tasks"),
-        })
-        .to_string(),
-    )
+    let mut answer = json!({
+        "explain": offers("explain"),
+        "users": offers("users"),
+        "profile": offers("profile"),
+        "profile_memory": offers("profile_memory"),
+        "profile_all": offers("profile_all"),
+        "profile_memory_all": offers("profile_memory_all"),
+        "request": offers("request"),
+        "live_tasks": offers("live_tasks"),
+    });
+    // The agent's own, not an app's: asked without a service.
+    if service.is_none()
+        && let Some(otlp) = otlp_status().await
+    {
+        answer["otlp"] = otlp;
+    }
+    json_response(StatusCode::OK, answer.to_string())
 }
 
 /// `api/app?service=`: what that app said about itself in its hello (its settings, masked by its SDK, and its

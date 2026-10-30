@@ -1,8 +1,9 @@
 //! `tracepanel-agent`: the project's agent. It receives the traces its processes record (an SDK in each: Python, Go)
 //! over a unix socket (TCP on Windows, or with `--listen tcp:HOST:PORT`), finds their issues, keeps them in the
 //! project's store and, with `--serve`, serves the console. OpenTelemetry exporters send it their spans over OTLP/HTTP
-//! (`--otlp`, 127.0.0.1:4318 by default, where they send them unless told otherwise). Its addresses go to `<dir>/agent.addr` and
-//! `<dir>/console.addr`, where the SDKs look for them. One agent serves a store: it holds `<dir>/agent.lock` while it
+//! (`--otlp`, else `TRACEPANEL_OTLP`, else 127.0.0.1:4318, where they send them unless told otherwise). Its addresses
+//! go to `<dir>/agent.addr` and `<dir>/console.addr`, where the SDKs look for them, and `<dir>/otlp.addr` while it
+//! takes OTLP. One agent serves a store: it holds `<dir>/agent.lock` while it
 //! runs, and another started on the same store exits at once with status 3 (`ALREADY_RUNS`). With `TRACEPANEL_API_KEY` set, it also sends the traces it keeps
 //! to Tracepanel Cloud (`tracepanel-sender`).
 
@@ -33,7 +34,9 @@ const USAGE: &str = "usage: tracepanel-agent [--dir DIR] [--listen unix|tcp:HOST
   --dir        the project's store directory (default .tracepanel)
   --listen     where SDKs connect: a unix socket (default; not on Windows) or TCP, e.g. tcp:127.0.0.1:0
   --serve      also serve the console (UI and API), e.g. 127.0.0.1:8765 (port 0: any free one)
-  --otlp       take OpenTelemetry exporters' spans over OTLP/HTTP here (default 127.0.0.1:4318; off: don't)
+  --otlp       take OpenTelemetry exporters' spans over OTLP/HTTP here, or off (default $TRACEPANEL_OTLP, else
+               127.0.0.1:4318). One agent per machine gets a port: give each project's its own, as
+               TRACEPANEL_OTLP=127.0.0.1:4319 in that project's environment
   --idle-exit  exit after this many seconds unused (an agent an SDK started)
   --record     also save each trace as received, before analysis, to DIR/<id>.json (schema/examples)
   --llm-prices the LLM prices to estimate costs with, over the built-in ones (default DIR/llm-prices.json, if any)
@@ -74,7 +77,7 @@ struct Options {
     dir: PathBuf,
     listen: Option<String>,
     serve: Option<String>,
-    /// Where OTLP/HTTP is served; none with `--otlp off`.
+    /// What `--otlp` says (`HOST:PORT` or `off`); none: `TRACEPANEL_OTLP` or the default (`otlp_address`).
     otlp: Option<String>,
     idle_exit: Option<i64>,
     record: Option<PathBuf>,
@@ -87,6 +90,17 @@ const LLM_PRICES: &str = "llm-prices.json";
 
 /// Where OpenTelemetry exporters send OTLP/HTTP unless told otherwise.
 const OTLP_DEFAULT: &str = "127.0.0.1:4318";
+
+/// Where OTLP/HTTP is served without `--otlp`: an SDK starts the agent in its app's environment, so a project's own
+/// port goes there.
+const OTLP_ENV: &str = "TRACEPANEL_OTLP";
+
+/// Where OTLP/HTTP is served: `--otlp`, else `TRACEPANEL_OTLP`, else the default; none when the one that says is `off`.
+fn otlp_address(flag: Option<&str>, env: Option<&str>) -> Option<String> {
+    let env = env.map(str::trim).filter(|env| !env.is_empty());
+    let address = flag.or(env).unwrap_or(OTLP_DEFAULT);
+    (address != "off").then(|| address.to_owned())
+}
 
 /// What to do: run, or print something and exit.
 #[derive(Debug, PartialEq)]
@@ -108,7 +122,7 @@ fn parse(args: impl IntoIterator<Item = String>) -> Result<Command, String> {
         dir: PathBuf::from(".tracepanel"),
         listen: None,
         serve: None,
-        otlp: Some(OTLP_DEFAULT.into()),
+        otlp: None,
         idle_exit: None,
         record: None,
         llm_prices: None,
@@ -127,10 +141,7 @@ fn parse(args: impl IntoIterator<Item = String>) -> Result<Command, String> {
             "--serve" => options.serve = Some(value("HOST:PORT")?),
             "--record" => options.record = Some(PathBuf::from(value("a directory")?)),
             "--llm-prices" => options.llm_prices = Some(PathBuf::from(value("a file")?)),
-            "--otlp" => {
-                let otlp = value("HOST:PORT or off")?;
-                options.otlp = (otlp != "off").then_some(otlp);
-            }
+            "--otlp" => options.otlp = Some(value("HOST:PORT or off")?),
             "--listen" => {
                 let listen = value("unix or tcp:HOST:PORT")?;
                 if listen != "unix" && !listen.starts_with("tcp:") {
@@ -240,6 +251,7 @@ async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
     let store_path = store_local::path_in(&dir);
     let addr_file = dir.join("agent.addr");
     let console_file = dir.join("console.addr");
+    let otlp_file = dir.join(tracepanel_server::neighbors::OTLP_FILE);
     let running = std::fs::read_to_string(&addr_file).unwrap_or_default();
     if tracepanel_protocol::answers(running.trim()) {
         // An agent from before the lock.
@@ -248,6 +260,7 @@ async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
     // The addresses of an agent that didn't exit cleanly (killed, a reboot): nobody answers there.
     let _ = std::fs::remove_file(&addr_file);
     let _ = std::fs::remove_file(&console_file);
+    let _ = std::fs::remove_file(&otlp_file);
     let store = Store::open(&store_path)?;
     let listener = bind(&dir, listen.as_deref()).await?;
     let address = listener.address()?;
@@ -277,8 +290,35 @@ async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
     let sender = queue.clone();
     let sink = Arc::new(move |batch: Batch| enqueue(&sender, batch));
 
-    let otlp = match otlp {
-        Some(addr) => serve_otlp(&addr, sink.clone(), activity.clone()).await,
+    let otlp_wanted = otlp_address(otlp.as_deref(), std::env::var(OTLP_ENV).ok().as_deref());
+    let mut otlp_missed = None;
+    let otlp = match &otlp_wanted {
+        Some(addr) => match serve_otlp(addr, sink.clone(), activity.clone()).await {
+            Ok((address, task)) => {
+                std::fs::write(&otlp_file, format!("http://{address}\n"))?;
+                tracepanel_server::otlp(tracepanel_server::Otlp {
+                    address: address.clone(),
+                    serving: true,
+                    error: None,
+                    taken: false,
+                    free: None,
+                });
+                Some((format!("http://{address}"), task))
+            }
+            Err(error) => {
+                let taken = error.kind() == std::io::ErrorKind::AddrInUse;
+                let missed = tracepanel_server::Otlp {
+                    address: addr.clone(),
+                    serving: false,
+                    error: Some(error.to_string()),
+                    taken,
+                    free: if taken { free_after(addr).await } else { None },
+                };
+                tracepanel_server::otlp(missed.clone());
+                otlp_missed = Some(missed);
+                None
+            }
+        },
         None => None,
     };
     let server = tokio::spawn({
@@ -329,6 +369,28 @@ async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
         Some(seconds) => println!("Ctrl-C stops it; it exits after {seconds} s unused"),
         None => println!("Ctrl-C stops it"),
     }
+    if let Some(missed) = otlp_missed {
+        // Once the SDKs have the address: asking the neighbours takes a moment.
+        let own = console
+            .as_ref()
+            .map(|(url, _)| url.clone())
+            .unwrap_or_default();
+        let holder = if missed.taken {
+            let address = missed.address.clone();
+            tokio::task::spawn_blocking(move || {
+                tracepanel_server::neighbors::holding_otlp(&address, &own)
+            })
+            .await
+            .ok()
+            .flatten()
+        } else {
+            None
+        };
+        eprintln!(
+            "tracepanel-agent: {}",
+            otlp_missed_line(&missed, holder.as_deref())
+        );
+    }
 
     tokio::select! {
         result = server => { result??; }
@@ -347,6 +409,7 @@ async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
     drop(registration);
     let _ = std::fs::remove_file(&addr_file);
     let _ = std::fs::remove_file(&console_file);
+    let _ = std::fs::remove_file(&otlp_file);
     if let Some(socket) = address.strip_prefix("unix:") {
         let _ = std::fs::remove_file(socket);
     }
@@ -423,25 +486,57 @@ async fn idle(activity: &Activity, seconds: Option<i64>) {
     }
 }
 
-/// OTLP/HTTP on `addr`, into the same queue as the SDKs' traces. A port in use (a collector of the developer's own)
-/// is said and skipped: the SDKs' traces matter more.
+/// OTLP/HTTP on `addr`, into the same queue as the SDKs' traces, with the `HOST:PORT` it serves on. A port in use
+/// (another project's agent, a collector of the developer's own) is said and skipped: the SDKs' traces matter more.
 async fn serve_otlp(
     addr: &str,
     sink: tracepanel_protocol::Sink,
     activity: Activity,
-) -> Option<(String, tokio::task::JoinHandle<std::io::Result<()>>)> {
-    match tokio::net::TcpListener::bind(addr).await {
-        Ok(listener) => {
-            let url = format!("http://{}", listener.local_addr().ok()?);
-            Some((
-                url,
-                tokio::spawn(tracepanel_otlp::serve(listener, sink, activity)),
-            ))
+) -> std::io::Result<(String, tokio::task::JoinHandle<std::io::Result<()>>)> {
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    let address = listener.local_addr()?.to_string();
+    Ok((
+        address,
+        tokio::spawn(tracepanel_otlp::serve(listener, sink, activity)),
+    ))
+}
+
+/// How many ports after a taken one are tried for a free one to suggest.
+const FREE_TRIES: u16 = 20;
+
+/// A free `HOST:PORT` after the port of `addr`, on its host: where this project's apps can send OTLP instead.
+async fn free_after(addr: &str) -> Option<String> {
+    let (host, port) = addr.rsplit_once(':')?;
+    let port: u16 = port.parse().ok()?;
+    for next in (1..=FREE_TRIES).filter_map(|step| port.checked_add(step)) {
+        let candidate = format!("{host}:{next}");
+        if tokio::net::TcpListener::bind(&candidate).await.is_ok() {
+            return Some(candidate);
         }
-        Err(error) => {
-            eprintln!("tracepanel-agent: no OTLP on {addr}: {error}");
-            None
-        }
+    }
+    None
+}
+
+/// The log line of an agent that takes no OTLP: why, and for a taken port, what this project's apps do instead.
+fn otlp_missed_line(missed: &tracepanel_server::Otlp, holder: Option<&str>) -> String {
+    let address = &missed.address;
+    let error = missed.error.as_deref().unwrap_or("not served");
+    if !missed.taken {
+        return format!("no OTLP on {address}: {error}");
+    }
+    let by = holder.map_or_else(
+        || "another program".to_owned(),
+        |project| format!("the agent of {project}"),
+    );
+    match &missed.free {
+        Some(free) => format!(
+            "no OTLP on {address}: it is taken by {by}. Set {OTLP_ENV}={free} for this project's apps and point \
+             its OTLP exporters there"
+        ),
+        None => format!(
+            "no OTLP on {address}: it is taken by {by}. Set {OTLP_ENV} to a free HOST:PORT for this project's \
+             apps and point its OTLP exporters there"
+        ),
     }
 }
 
@@ -621,7 +716,7 @@ mod tests {
                 dir: PathBuf::from(".tracepanel"),
                 listen: None,
                 serve: None,
-                otlp: Some("127.0.0.1:4318".into()),
+                otlp: None,
                 idle_exit: None,
                 record: None,
                 llm_prices: None,
@@ -633,7 +728,7 @@ mod tests {
                 dir: PathBuf::from(".tracepanel"),
                 listen: None,
                 serve: None,
-                otlp: None,
+                otlp: Some("off".into()),
                 idle_exit: None,
                 record: None,
                 llm_prices: None,
@@ -645,7 +740,7 @@ mod tests {
                 dir: PathBuf::from(".tracepanel"),
                 listen: None,
                 serve: None,
-                otlp: Some("127.0.0.1:4318".into()),
+                otlp: None,
                 idle_exit: None,
                 record: None,
                 llm_prices: Some(PathBuf::from("prices.json")),
@@ -668,6 +763,64 @@ mod tests {
                 dir: PathBuf::from(".tracepanel"),
                 values: false,
             })
+        );
+    }
+
+    #[test]
+    fn otlp_from_the_flag_else_the_environment_else_the_default() {
+        assert_eq!(otlp_address(None, None), Some("127.0.0.1:4318".into()));
+        assert_eq!(
+            otlp_address(None, Some("127.0.0.1:4319")),
+            Some("127.0.0.1:4319".into())
+        );
+        assert_eq!(otlp_address(None, Some("off")), None);
+        // Set to nothing: as if unset.
+        assert_eq!(otlp_address(None, Some(" ")), Some("127.0.0.1:4318".into()));
+
+        // The flag wins, either way.
+        assert_eq!(
+            otlp_address(Some("0.0.0.0:4320"), Some("127.0.0.1:4319")),
+            Some("0.0.0.0:4320".into())
+        );
+        assert_eq!(otlp_address(Some("off"), Some("127.0.0.1:4319")), None);
+        assert_eq!(
+            otlp_address(Some("127.0.0.1:4319"), Some("off")),
+            Some("127.0.0.1:4319".into())
+        );
+    }
+
+    #[test]
+    fn a_taken_otlp_port_says_whose_and_what_to_set() {
+        let taken = tracepanel_server::Otlp {
+            address: "127.0.0.1:4318".into(),
+            serving: false,
+            error: Some("Address already in use (os error 48)".into()),
+            taken: true,
+            free: Some("127.0.0.1:4319".into()),
+        };
+
+        assert_eq!(
+            otlp_missed_line(&taken, Some("shop")),
+            "no OTLP on 127.0.0.1:4318: it is taken by the agent of shop. Set TRACEPANEL_OTLP=127.0.0.1:4319 for \
+             this project's apps and point its OTLP exporters there"
+        );
+        assert_eq!(
+            otlp_missed_line(&taken, None),
+            "no OTLP on 127.0.0.1:4318: it is taken by another program. Set TRACEPANEL_OTLP=127.0.0.1:4319 for \
+             this project's apps and point its OTLP exporters there"
+        );
+        assert_eq!(
+            otlp_missed_line(
+                &tracepanel_server::Otlp {
+                    address: "10.9.9.9:4318".into(),
+                    serving: false,
+                    error: Some("Can't assign requested address (os error 49)".into()),
+                    taken: false,
+                    free: None,
+                },
+                None
+            ),
+            "no OTLP on 10.9.9.9:4318: Can't assign requested address (os error 49)"
         );
     }
 

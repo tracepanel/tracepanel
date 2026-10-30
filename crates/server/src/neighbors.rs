@@ -8,6 +8,9 @@ use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+/// The file in a store's directory that says where its agent takes OTLP/HTTP (`http://HOST:PORT`), while it does.
+pub const OTLP_FILE: &str = "otlp.addr";
+
 /// How long a neighbour has to answer: the console's relations wait for it.
 const ASK_TIMEOUT: Duration = Duration::from_millis(400);
 
@@ -144,6 +147,24 @@ pub fn ask(neighbour: &Neighbour, w3c_trace: &str, w3c_span: &str) -> Option<Val
     answer["console"] = Value::from(neighbour.console.clone());
     answer["project"] = Value::from(project(&neighbour.dir));
     Some(answer)
+}
+
+/// The project whose agent takes OTLP/HTTP on the port of `address` (`HOST:PORT`), as its store's `otlp.addr` says;
+/// none when no neighbour's does (a collector holds it, or an agent with no console).
+pub fn holding_otlp(address: &str, own_console: &str) -> Option<String> {
+    let port = port(address)?;
+    neighbours(own_console).into_iter().find_map(|neighbour| {
+        let held = std::fs::read_to_string(Path::new(&neighbour.dir).join(OTLP_FILE)).ok()?;
+        (self::port(held.trim()) == Some(port)).then(|| project(&neighbour.dir))
+    })
+}
+
+/// The port of `HOST:PORT` or `http://HOST:PORT`.
+fn port(address: &str) -> Option<u16> {
+    address
+        .trim_end_matches('/')
+        .rsplit_once(':')
+        .and_then(|(_, port)| port.parse().ok())
 }
 
 /// A project by its store's directory: the folder that holds `.tracepanel`.

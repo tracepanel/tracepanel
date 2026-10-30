@@ -1269,6 +1269,22 @@ export interface components {
             request: boolean;
             /** @description The app can switch the user this browser is logged in as (api/users, api/users/me, api/users/switch). */
             users: boolean;
+            /** @description Where the agent takes OpenTelemetry exporters' spans, asked without `service`: the agent's own. Left out with OTLP off, and by a backend that is no agent. */
+            otlp?: components["schemas"]["Otlp"];
+        };
+        /** @description The agent's OTLP/HTTP: `--otlp`, else `TRACEPANEL_OTLP`, else 127.0.0.1:4318. While it serves there, its store's `otlp.addr` says `http://HOST:PORT`. One agent on a machine gets a port: another project's agent that wants the same one takes no OTLP, and the console says whose it is and where to send instead. */
+        Otlp: {
+            /** @description HOST:PORT: where the agent serves, or where it was to. */
+            address: string;
+            serving: boolean;
+            /** @description Why it serves none, as the system said it. */
+            error: string | null;
+            /** @description The port is in use, by another project's agent or another program. */
+            taken: boolean;
+            /** @description The project (the folder that holds its store) whose agent holds the port. Null when no agent of another project on this machine says it does (a collector of the developer's own). */
+            taken_by: string | null;
+            /** @description When taken: a free HOST:PORT on the same host, to set as TRACEPANEL_OTLP for this project's apps and to point its OTLP exporters to. */
+            free: string | null;
         };
         App: {
             service: string;
