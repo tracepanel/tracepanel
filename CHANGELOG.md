@@ -24,6 +24,13 @@
 
 ### Changed
 
+- A database driver's own HTTP requests leave the call tree: the
+  requests Snowflake's connector makes to log in, run a query and fetch
+  its results (and BigQuery's, Databricks', Elasticsearch's, DynamoDB's
+  clients, under any SDK or OpenTelemetry) are its transport, not the
+  app's calls. Their time stays in the connection or the query, which
+  counts them (`db.http_calls`). An HTTP call the app makes while a
+  query runs stays.
 - What is on its way shows it: the hourglass of a trace on its way (the
   console's page, the panel's) and of a call waiting for its trace in the
   panel's list turns over and over until it arrives. With reduced motion
