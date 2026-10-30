@@ -1,7 +1,8 @@
 // A span an OpenTelemetry instrumentation made: its details end with what the agent got over OTLP, collapsed, and
 // why it became what it is: a call that links the trace of the service it called, or a step that is no call.
-import type { Page } from "@playwright/test";
+import type { FrameLocator, Page } from "@playwright/test";
 import { CONSOLE } from "../agent.ts";
+import { openApp, panel, pill } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
 
 type Doc = Record<string, unknown>;
@@ -57,7 +58,7 @@ async function seed(): Promise<void> {
   await expect.poll(async () => (await fetch(`${CONSOLE}api/traces/${ID}`)).status).toBe(200);
 }
 
-async function received(page: Page, kind: string, name: string) {
+async function received(page: Page | FrameLocator, kind: string, name: string) {
   await page.locator(`.dt-map-row[data-kind="${kind}"]`).filter({ hasText: name }).click();
   const block = page.getByRole("complementary", { name: "Details" }).getByRole("group", {
     name: "As received over OTLP",
@@ -110,4 +111,29 @@ test("a client span that is no call says why: a step, not linked to the service 
       "carries no trace on: not linked to the service it called",
   );
   await expect(block.locator("dt")).toHaveText(["name", "kind", "scope", "peer.service"]);
+});
+
+test("in the panel too: the same block, the same why", async ({ page }) => {
+  await seed();
+  await openApp(page, { checkout: { status: 200, trace: ID, queries: 0, totalMs: 20 } });
+  await page.getByRole("button", { name: "Load checkout" }).click();
+  await pill(page).click();
+  const frame = panel(page);
+  await frame.getByRole("tab", { name: /^Call tree/ }).click();
+
+  const block = await received(frame, "http.client", "billing.test/charge");
+
+  await expect(block.locator("[data-mapped-as]")).toHaveText(
+    "HTTP call: method from http.method, URL from http.url. It carries the trace on: links the trace of the " +
+      "service it called",
+  );
+  await expect(block.locator("dt")).toHaveText([
+    "name",
+    "kind",
+    "scope",
+    "http.method",
+    "http.status_code",
+    "http.url",
+    "w3c.span_id",
+  ]);
 });
