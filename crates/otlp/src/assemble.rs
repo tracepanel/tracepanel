@@ -580,12 +580,20 @@ fn document(trace: u128, root: &Got, root_id: u64, members: &[u64], bucket: &Buc
                 let parent = id64(&got.span.parent_span_id).map(|parent| span_id(trace, parent));
                 return span_doc(trace, got, parent);
             }
-            let mut own = span_doc(trace, got, None);
-            if !root_is_call {
-                own["kind"] = Value::from(kind);
-                own["name"] = Value::from(name.clone());
+            if root_is_call {
+                return span_doc(trace, got, None);
             }
-            own
+            // Its attributes are the trace's, as an SDK's request span has none of its own.
+            json!({
+                "id": span_id(trace, root_id),
+                "parent_id": null,
+                "kind": kind,
+                "name": name,
+                "start": micros(got.span.start_time_unix_nano),
+                "duration": micros(got.span.end_time_unix_nano.saturating_sub(got.span.start_time_unix_nano)),
+                "status": if failed { "error" } else { "ok" },
+                "attrs": {},
+            })
         })
         .collect();
     spans.sort_by_key(|span| span["start"].as_i64());
