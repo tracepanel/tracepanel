@@ -379,6 +379,10 @@ fn trace_attrs(
         if let Some(path) = path {
             out.insert("http.path".into(), Value::from(path));
         }
+        if let Some((operation, name)) = graphql_operation(&root.span, attrs) {
+            out.insert("graphql.operation.type".into(), Value::from(operation));
+            out.insert("graphql.operation.name".into(), Value::from(name));
+        }
     }
     if kind == "rpc" {
         for key in [
@@ -424,6 +428,9 @@ fn trace_name(root: &Span, attrs: &Map<String, Value>, kind: &str) -> String {
     if kind != "http" {
         return root.name.clone();
     }
+    if let Some((operation, name)) = graphql_operation(root, attrs) {
+        return format!("GraphQL {operation} {name}");
+    }
     let method = text(attrs, &["http.request.method", "http.method"]);
     let target = text(attrs, &["http.route", "url.path", "http.target"]);
     match (method, target) {
@@ -432,6 +439,21 @@ fn trace_name(root: &Span, attrs: &Map<String, Value>, kind: &str) -> String {
         }
         _ => root.name.clone(),
     }
+}
+
+/// A GraphQL server's operation, as its type and name: from the conventions' `graphql.operation.*`, or from a span named
+/// after it (Apollo Router's `query Books`). The trace is named after it, as the SDKs name theirs.
+fn graphql_operation(root: &Span, attrs: &Map<String, Value>) -> Option<(String, String)> {
+    if let (Some(operation), Some(name)) = (
+        text(attrs, &["graphql.operation.type"]),
+        text(attrs, &["graphql.operation.name"]),
+    ) {
+        return Some((operation.to_owned(), name.to_owned()));
+    }
+    let (operation, name) = root.name.split_once(' ')?;
+    let named = !name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '_');
+    (matches!(operation, "query" | "mutation" | "subscription") && named)
+        .then(|| (operation.to_owned(), name.to_owned()))
 }
 
 /// `file:line in function`, from the conventions' `code.*` attributes, as the SDKs write `code.origin`.
@@ -453,10 +475,13 @@ fn span_doc(trace: u128, got: &Got, parent: Option<String>) -> Value {
     if let Some(origin) = origin(&attrs) {
         attrs.entry("code.origin").or_insert(Value::from(origin));
     }
-    // A call that carries the trace on (HTTP, RPC, a message): the id the service it reaches sees as its parent.
+    // A call that carries the trace on (HTTP, RPC, a message): the id the service it reaches sees as its parent. An
+    // HTTP call may name only its URL or its peer (Apollo Router's requests to its subgraphs carry no method).
     let carries = [
         "http.request.method",
         "http.method",
+        "url.full",
+        "http.url",
         "rpc.system",
         "messaging.system",
     ]

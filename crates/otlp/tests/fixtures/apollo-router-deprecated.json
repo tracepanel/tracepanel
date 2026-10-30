@@ -1,0 +1,1126 @@
+{
+ "resourceSpans": [
+  {
+   "resource": {
+    "attributes": [
+     {
+      "key": "service.name",
+      "value": {
+       "stringValue": "library-router"
+      }
+     },
+     {
+      "key": "service.version",
+      "value": {
+       "stringValue": "2.18.0"
+      }
+     },
+     {
+      "key": "process.executable.name",
+      "value": {
+       "stringValue": "router"
+      }
+     }
+    ]
+   },
+   "scopeSpans": [
+    {
+     "scope": {
+      "name": "apollo-router",
+      "version": "2.18.0"
+     },
+     "spans": [
+      {
+       "traceId": "1bf7651916cd43dd8448eb211c80319d",
+       "spanId": "19ecd864d3ca1cfb",
+       "parentSpanId": "8b6f8f149371355d",
+       "flags": 257,
+       "name": "compute_job.execution",
+       "kind": 1,
+       "startTimeUnixNano": "1793344242895197527",
+       "endTimeUnixNano": "1793344242895815513",
+       "attributes": [
+        {
+         "key": "code.filepath",
+         "value": {
+          "stringValue": "apollo-router/src/compute_job/mod.rs"
+         }
+        },
+        {
+         "key": "code.namespace",
+         "value": {
+          "stringValue": "apollo_router::compute_job"
+         }
+        },
+        {
+         "key": "code.lineno",
+         "value": {
+          "intValue": "176"
+         }
+        },
+        {
+         "key": "thread.id",
+         "value": {
+          "intValue": "16"
+         }
+        },
+        {
+         "key": "job.type",
+         "value": {
+          "stringValue": "query_parsing"
+         }
+        },
+        {
+         "key": "job.age",
+         "value": {
+          "stringValue": "P4"
+         }
+        },
+        {
+         "key": "busy_ns",
+         "value": {
+          "intValue": "597598"
+         }
+        },
+        {
+         "key": "idle_ns",
+         "value": {
+          "intValue": "16344"
+         }
+        }
+       ],
+       "status": {}
+      },
+      {
+       "traceId": "1bf7651916cd43dd8448eb211c80319d",
+       "spanId": "8b6f8f149371355d",
+       "parentSpanId": "2bccc4d8c8f84450",
+       "flags": 257,
+       "name": "compute_job",
+       "kind": 1,
+       "startTimeUnixNano": "1793344242894526089",
+       "endTimeUnixNano": "1793344242895827480",
+       "attributes": [
+        {
+         "key": "code.filepath",
+         "value": {
+          "stringValue": "apollo-router/src/compute_job/mod.rs"
+         }
+        },
+        {
+         "key": "code.namespace",
+         "value": {
+          "stringValue": "apollo_router::compute_job"
+         }
+        },
+        {
+         "key": "code.lineno",
+         "value": {
+          "intValue": "295"
+         }
+        },
+        {
+         "key": "thread.id",
+         "value": {
+          "intValue": "3"
+         }
+        },
+        {
+         "key": "thread.name",
+         "value": {
+          "stringValue": "tokio-rt-worker"
+         }
+        },
+        {
+         "key": "job.type",
+         "value": {
+          "stringValue": "query_parsing"
+         }
+        },
+        {
+         "key": "job.outcome",
+         "value": {
+          "stringValue": "executed_ok"
+         }
+        },
+        {
+         "key": "busy_ns",
+         "value": {
+          "intValue": "875238"
+         }
+        },
+        {
+         "key": "idle_ns",
+         "value": {
+          "intValue": "425944"
+         }
+        }
+       ],
+       "status": {},
+       "events": [
+        {
+         "timeUnixNano": "1793344242894948865",
+         "name": "compute job thread pool created",
+         "attributes": [
+          {
+           "key": "level",
+           "value": {
+            "stringValue": "INFO"
+           }
+          },
+          {
+           "key": "target",
+           "value": {
+            "stringValue": "apollo_router::compute_job"
+           }
+          },
+          {
+           "key": "threads",
+           "value": {
+            "stringValue": "8"
+           }
+          },
+          {
+           "key": "queue_capacity",
+           "value": {
+            "stringValue": "8000"
+           }
+          },
+          {
+           "key": "code.filepath",
+           "value": {
+            "stringValue": "apollo-router/src/compute_job/mod.rs"
+           }
+          },
+          {
+           "key": "code.namespace",
+           "value": {
+            "stringValue": "apollo_router::compute_job"
+           }
+          },
+          {
+           "key": "code.lineno",
+           "value": {
+            "intValue": "222"
+           }
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "traceId": "1bf7651916cd43dd8448eb211c80319d",
+       "spanId": "2bccc4d8c8f84450",
+       "parentSpanId": "ca2bc20c7d3b804f",
+       "flags": 257,
+       "name": "parse_query",
+       "kind": 1,
+       "startTimeUnixNano": "1793344242894350600",
+       "endTimeUnixNano": "1793344242895829106",
+       "attributes": [
+        {
+         "key": "code.filepath",
+         "value": {
+          "stringValue": "apollo-router/src/services/layers/query_analysis.rs"
+         }
+        },
+        {
+         "key": "code.namespace",
+         "value": {
+          "stringValue": "apollo_router::services::layers::query_analysis"
+         }
+        },
+        {
+         "key": "code.lineno",
+         "value": {
+          "intValue": "127"
+         }
+        },
+        {
+         "key": "thread.id",
+         "value": {
+          "intValue": "3"
+         }
+        },
+        {
+         "key": "thread.name",
+         "value": {
+          "stringValue": "tokio-rt-worker"
+         }
+        },
+        {
+         "key": "busy_ns",
+         "value": {
+          "intValue": "669646"
+         }
+        },
+        {
+         "key": "idle_ns",
+         "value": {
+          "intValue": "432114"
+         }
+        }
+       ],
+       "status": {}
+      },
+      {
+       "traceId": "1bf7651916cd43dd8448eb211c80319d",
+       "spanId": "fc7d96f438b0d1d5",
+       "parentSpanId": "90ed1763fe82ded3",
+       "flags": 257,
+       "name": "compute_job.execution",
+       "kind": 1,
+       "startTimeUnixNano": "1793344242895840780",
+       "endTimeUnixNano": "1793344242896416655",
+       "attributes": [
+        {
+         "key": "code.filepath",
+         "value": {
+          "stringValue": "apollo-router/src/compute_job/mod.rs"
+         }
+        },
+        {
+         "key": "code.namespace",
+         "value": {
+          "stringValue": "apollo_router::compute_job"
+         }
+        },
+        {
+         "key": "code.lineno",
+         "value": {
+          "intValue": "176"
+         }
+        },
+        {
+         "key": "thread.id",
+         "value": {
+          "intValue": "15"
+         }
+        },
+        {
+         "key": "job.type",
+         "value": {
+          "stringValue": "query_planning"
+         }
+        },
+        {
+         "key": "job.age",
+         "value": {
+          "stringValue": "P8"
+         }
+        },
+        {
+         "key": "busy_ns",
+         "value": {
+          "intValue": "561991"
+         }
+        },
+        {
+         "key": "idle_ns",
+         "value": {
+          "intValue": "12800"
+         }
+        }
+       ],
+       "status": {}
+      },
+      {
+       "traceId": "1bf7651916cd43dd8448eb211c80319d",
+       "spanId": "90ed1763fe82ded3",
+       "parentSpanId": "c2c2423d3d2f422c",
+       "flags": 257,
+       "name": "compute_job",
+       "kind": 1,
+       "startTimeUnixNano": "1793344242895782534",
+       "endTimeUnixNano": "1793344242896438044",
+       "attributes": [
+        {
+         "key": "code.filepath",
+         "value": {
+          "stringValue": "apollo-router/src/compute_job/mod.rs"
+         }
+        },
+        {
+         "key": "code.namespace",
+         "value": {
+          "stringValue": "apollo_router::compute_job"
+         }
+        },
+        {
+         "key": "code.lineno",
+         "value": {
+          "intValue": "295"
+         }
+        },
+        {
+         "key": "thread.id",
+         "value": {
+          "intValue": "3"
+         }
+        },
+        {
+         "key": "thread.name",
+         "value": {
+          "stringValue": "tokio-rt-worker"
+         }
+        },
+        {
+         "key": "job.type",
+         "value": {
+          "stringValue": "query_planning"
+         }
+        },
+        {
+         "key": "job.outcome",
+         "value": {
+          "stringValue": "executed_ok"
+         }
+        },
+        {
+         "key": "busy_ns",
+         "value": {
+          "intValue": "621988"
+         }
+        },
+        {
+         "key": "idle_ns",
+         "value": {
+          "intValue": "32689"
+         }
+        }
+       ],
+       "status": {}
+      },
+      {
+       "traceId": "1bf7651916cd43dd8448eb211c80319d",
+       "spanId": "c2c2423d3d2f422c",
+       "parentSpanId": "79cddac971e1f032",
+       "flags": 257,
+       "name": "query_planning",
+       "kind": 1,
+       "startTimeUnixNano": "1793344242895649947",
+       "endTimeUnixNano": "1793344242896680953",
+       "attributes": [
+        {
+         "key": "code.filepath",
+         "value": {
+          "stringValue": "apollo-router/src/services/supergraph/service.rs"
+         }
+        },
+        {
+         "key": "code.namespace",
+         "value": {
+          "stringValue": "apollo_router::services::supergraph::service"
+         }
+        },
+        {
+         "key": "code.lineno",
+         "value": {
+          "intValue": "451"
+         }
+        },
+        {
+         "key": "thread.id",
+         "value": {
+          "intValue": "3"
+         }
+        },
+        {
+         "key": "thread.name",
+         "value": {
+          "stringValue": "tokio-rt-worker"
+         }
+        },
+        {
+         "key": "busy_ns",
+         "value": {
+          "intValue": "361485"
+         }
+        },
+        {
+         "key": "idle_ns",
+         "value": {
+          "intValue": "668853"
+         }
+        }
+       ],
+       "status": {}
+      },
+      {
+       "traceId": "1bf7651916cd43dd8448eb211c80319d",
+       "spanId": "9ff0673cffc76eca",
+       "parentSpanId": "238aa18d87682276",
+       "flags": 257,
+       "name": "http_request",
+       "kind": 3,
+       "startTimeUnixNano": "1793344242896897761",
+       "endTimeUnixNano": "1793344243000254981",
+       "attributes": [
+        {
+         "key": "code.filepath",
+         "value": {
+          "stringValue": "apollo-router/src/plugins/telemetry/mod.rs"
+         }
+        },
+        {
+         "key": "code.namespace",
+         "value": {
+          "stringValue": "apollo_router::plugins::telemetry"
+         }
+        },
+        {
+         "key": "code.lineno",
+         "value": {
+          "intValue": "1263"
+         }
+        },
+        {
+         "key": "thread.id",
+         "value": {
+          "intValue": "3"
+         }
+        },
+        {
+         "key": "thread.name",
+         "value": {
+          "stringValue": "tokio-rt-worker"
+         }
+        },
+        {
+         "key": "net.peer.name",
+         "value": {
+          "stringValue": "host.docker.internal"
+         }
+        },
+        {
+         "key": "net.peer.port",
+         "value": {
+          "stringValue": "18044"
+         }
+        },
+        {
+         "key": "http.route",
+         "value": {
+          "stringValue": "/"
+         }
+        },
+        {
+         "key": "http.url",
+         "value": {
+          "stringValue": "http://host.docker.internal:18044/"
+         }
+        },
+        {
+         "key": "net.transport",
+         "value": {
+          "stringValue": "ip_tcp"
+         }
+        },
+        {
+         "key": "http.response.status_code",
+         "value": {
+          "intValue": "200"
+         }
+        },
+        {
+         "key": "busy_ns",
+         "value": {
+          "intValue": "977012"
+         }
+        },
+        {
+         "key": "idle_ns",
+         "value": {
+          "intValue": "102365949"
+         }
+        }
+       ],
+       "status": {}
+      },
+      {
+       "traceId": "1bf7651916cd43dd8448eb211c80319d",
+       "spanId": "238aa18d87682276",
+       "parentSpanId": "4116c13a41ac12c8",
+       "flags": 257,
+       "name": "subgraph_request",
+       "kind": 3,
+       "startTimeUnixNano": "1793344242896875913",
+       "endTimeUnixNano": "1793344243000302596",
+       "attributes": [
+        {
+         "key": "code.filepath",
+         "value": {
+          "stringValue": "apollo-router/src/services/subgraph_service.rs"
+         }
+        },
+        {
+         "key": "code.namespace",
+         "value": {
+          "stringValue": "apollo_router::services::subgraph_service"
+         }
+        },
+        {
+         "key": "code.lineno",
+         "value": {
+          "intValue": "834"
+         }
+        },
+        {
+         "key": "thread.id",
+         "value": {
+          "intValue": "3"
+         }
+        },
+        {
+         "key": "thread.name",
+         "value": {
+          "stringValue": "tokio-rt-worker"
+         }
+        },
+        {
+         "key": "net.peer.name",
+         "value": {
+          "stringValue": "host.docker.internal"
+         }
+        },
+        {
+         "key": "net.peer.port",
+         "value": {
+          "stringValue": "18044"
+         }
+        },
+        {
+         "key": "http.route",
+         "value": {
+          "stringValue": "/"
+         }
+        },
+        {
+         "key": "http.url",
+         "value": {
+          "stringValue": "http://host.docker.internal:18044/"
+         }
+        },
+        {
+         "key": "net.transport",
+         "value": {
+          "stringValue": "ip_tcp"
+         }
+        },
+        {
+         "key": "apollo.subgraph.name",
+         "value": {
+          "stringValue": "library"
+         }
+        },
+        {
+         "key": "graphql.operation.name",
+         "value": {
+          "stringValue": "Books__library__0"
+         }
+        },
+        {
+         "key": "busy_ns",
+         "value": {
+          "intValue": "1077830"
+         }
+        },
+        {
+         "key": "idle_ns",
+         "value": {
+          "intValue": "102348227"
+         }
+        }
+       ],
+       "status": {}
+      },
+      {
+       "traceId": "1bf7651916cd43dd8448eb211c80319d",
+       "spanId": "4116c13a41ac12c8",
+       "parentSpanId": "af6e3b06d92dd1d8",
+       "flags": 257,
+       "name": "subgraph",
+       "kind": 1,
+       "startTimeUnixNano": "1793344242896795361",
+       "endTimeUnixNano": "1793344243000426843",
+       "attributes": [
+        {
+         "key": "code.filepath",
+         "value": {
+          "stringValue": "apollo-router/src/plugins/telemetry/span_factory.rs"
+         }
+        },
+        {
+         "key": "code.namespace",
+         "value": {
+          "stringValue": "apollo_router::plugins::telemetry::span_factory"
+         }
+        },
+        {
+         "key": "code.lineno",
+         "value": {
+          "intValue": "231"
+         }
+        },
+        {
+         "key": "thread.id",
+         "value": {
+          "intValue": "3"
+         }
+        },
+        {
+         "key": "thread.name",
+         "value": {
+          "stringValue": "tokio-rt-worker"
+         }
+        },
+        {
+         "key": "apollo.subgraph.name",
+         "value": {
+          "stringValue": "library"
+         }
+        },
+        {
+         "key": "graphql.document",
+         "value": {
+          "stringValue": "query Books__library__0 { books { id title author { name } } }"
+         }
+        },
+        {
+         "key": "graphql.operation.name",
+         "value": {
+          "stringValue": "Books__library__0"
+         }
+        },
+        {
+         "key": "subgraph.name",
+         "value": {
+          "stringValue": "library"
+         }
+        },
+        {
+         "key": "busy_ns",
+         "value": {
+          "intValue": "1312647"
+         }
+        },
+        {
+         "key": "idle_ns",
+         "value": {
+          "intValue": "102318377"
+         }
+        }
+       ],
+       "status": {
+        "code": 1
+       }
+      },
+      {
+       "traceId": "1bf7651916cd43dd8448eb211c80319d",
+       "spanId": "af6e3b06d92dd1d8",
+       "parentSpanId": "9ca8868c2fb5d93b",
+       "flags": 257,
+       "name": "fetch",
+       "kind": 1,
+       "startTimeUnixNano": "1793344242896767926",
+       "endTimeUnixNano": "1793344243000443521",
+       "attributes": [
+        {
+         "key": "code.filepath",
+         "value": {
+          "stringValue": "apollo-router/src/services/fetch_service.rs"
+         }
+        },
+        {
+         "key": "code.namespace",
+         "value": {
+          "stringValue": "apollo_router::services::fetch_service"
+         }
+        },
+        {
+         "key": "code.lineno",
+         "value": {
+          "intValue": "111"
+         }
+        },
+        {
+         "key": "thread.id",
+         "value": {
+          "intValue": "3"
+         }
+        },
+        {
+         "key": "thread.name",
+         "value": {
+          "stringValue": "tokio-rt-worker"
+         }
+        },
+        {
+         "key": "apollo.subgraph.name",
+         "value": {
+          "stringValue": "library"
+         }
+        },
+        {
+         "key": "busy_ns",
+         "value": {
+          "intValue": "1364351"
+         }
+        },
+        {
+         "key": "idle_ns",
+         "value": {
+          "intValue": "102310619"
+         }
+        }
+       ],
+       "status": {}
+      },
+      {
+       "traceId": "1bf7651916cd43dd8448eb211c80319d",
+       "spanId": "9ca8868c2fb5d93b",
+       "parentSpanId": "79cddac971e1f032",
+       "flags": 257,
+       "name": "execution",
+       "kind": 1,
+       "startTimeUnixNano": "1793344242896716976",
+       "endTimeUnixNano": "1793344243000678883",
+       "attributes": [
+        {
+         "key": "code.filepath",
+         "value": {
+          "stringValue": "apollo-router/src/plugins/telemetry/mod.rs"
+         }
+        },
+        {
+         "key": "code.namespace",
+         "value": {
+          "stringValue": "apollo_router::plugins::telemetry"
+         }
+        },
+        {
+         "key": "code.lineno",
+         "value": {
+          "intValue": "972"
+         }
+        },
+        {
+         "key": "thread.id",
+         "value": {
+          "intValue": "3"
+         }
+        },
+        {
+         "key": "thread.name",
+         "value": {
+          "stringValue": "tokio-rt-worker"
+         }
+        },
+        {
+         "key": "graphql.operation.type",
+         "value": {
+          "stringValue": "query"
+         }
+        },
+        {
+         "key": "busy_ns",
+         "value": {
+          "intValue": "1500771"
+         }
+        },
+        {
+         "key": "idle_ns",
+         "value": {
+          "intValue": "102369451"
+         }
+        }
+       ],
+       "status": {}
+      },
+      {
+       "traceId": "1bf7651916cd43dd8448eb211c80319d",
+       "spanId": "79cddac971e1f032",
+       "parentSpanId": "ca2bc20c7d3b804f",
+       "flags": 257,
+       "name": "supergraph",
+       "kind": 1,
+       "startTimeUnixNano": "1793344242895542919",
+       "endTimeUnixNano": "1793344243000680801",
+       "attributes": [
+        {
+         "key": "code.filepath",
+         "value": {
+          "stringValue": "apollo-router/src/plugins/telemetry/span_factory.rs"
+         }
+        },
+        {
+         "key": "code.namespace",
+         "value": {
+          "stringValue": "apollo_router::plugins::telemetry::span_factory"
+         }
+        },
+        {
+         "key": "code.lineno",
+         "value": {
+          "intValue": "166"
+         }
+        },
+        {
+         "key": "thread.id",
+         "value": {
+          "intValue": "3"
+         }
+        },
+        {
+         "key": "thread.name",
+         "value": {
+          "stringValue": "tokio-rt-worker"
+         }
+        },
+        {
+         "key": "graphql.document",
+         "value": {
+          "stringValue": "query Books { books { id title author { name } } }"
+         }
+        },
+        {
+         "key": "graphql.operation.name",
+         "value": {
+          "stringValue": "Books"
+         }
+        },
+        {
+         "key": "busy_ns",
+         "value": {
+          "intValue": "1370516"
+         }
+        },
+        {
+         "key": "idle_ns",
+         "value": {
+          "intValue": "103714498"
+         }
+        }
+       ],
+       "status": {}
+      },
+      {
+       "traceId": "1bf7651916cd43dd8448eb211c80319d",
+       "spanId": "ca2bc20c7d3b804f",
+       "parentSpanId": "384fca0b1143c1c3",
+       "flags": 257,
+       "name": "router",
+       "kind": 1,
+       "startTimeUnixNano": "1793344242893698717",
+       "endTimeUnixNano": "1793344243000737796",
+       "attributes": [
+        {
+         "key": "code.filepath",
+         "value": {
+          "stringValue": "apollo-router/src/plugins/telemetry/span_factory.rs"
+         }
+        },
+        {
+         "key": "code.namespace",
+         "value": {
+          "stringValue": "apollo_router::plugins::telemetry::span_factory"
+         }
+        },
+        {
+         "key": "code.lineno",
+         "value": {
+          "intValue": "84"
+         }
+        },
+        {
+         "key": "thread.id",
+         "value": {
+          "intValue": "3"
+         }
+        },
+        {
+         "key": "thread.name",
+         "value": {
+          "stringValue": "tokio-rt-worker"
+         }
+        },
+        {
+         "key": "http.method",
+         "value": {
+          "stringValue": "POST"
+         }
+        },
+        {
+         "key": "http.request.method",
+         "value": {
+          "stringValue": "POST"
+         }
+        },
+        {
+         "key": "http.route",
+         "value": {
+          "stringValue": "/"
+         }
+        },
+        {
+         "key": "http.flavor",
+         "value": {
+          "stringValue": "HTTP/1.1"
+         }
+        },
+        {
+         "key": "trace_id",
+         "value": {
+          "stringValue": "1bf7651916cd43dd8448eb211c80319d"
+         }
+        },
+        {
+         "key": "url.path",
+         "value": {
+          "stringValue": "/"
+         }
+        },
+        {
+         "key": "client.name",
+         "value": {
+          "stringValue": ""
+         }
+        },
+        {
+         "key": "client.version",
+         "value": {
+          "stringValue": ""
+         }
+        },
+        {
+         "key": "http.response.status_code",
+         "value": {
+          "intValue": "200"
+         }
+        },
+        {
+         "key": "busy_ns",
+         "value": {
+          "intValue": "3370073"
+         }
+        },
+        {
+         "key": "idle_ns",
+         "value": {
+          "intValue": "103668798"
+         }
+        }
+       ],
+       "status": {
+        "code": 1
+       }
+      },
+      {
+       "traceId": "1bf7651916cd43dd8448eb211c80319d",
+       "spanId": "384fca0b1143c1c3",
+       "parentSpanId": "c7ad6b7169203332",
+       "flags": 769,
+       "name": "query Books",
+       "kind": 2,
+       "startTimeUnixNano": "1793344242893439631",
+       "endTimeUnixNano": "1793344243000804381",
+       "attributes": [
+        {
+         "key": "code.filepath",
+         "value": {
+          "stringValue": "apollo-router/src/plugins/telemetry/span_factory.rs"
+         }
+        },
+        {
+         "key": "code.namespace",
+         "value": {
+          "stringValue": "apollo_router::plugins::telemetry::span_factory"
+         }
+        },
+        {
+         "key": "code.lineno",
+         "value": {
+          "intValue": "58"
+         }
+        },
+        {
+         "key": "thread.id",
+         "value": {
+          "intValue": "3"
+         }
+        },
+        {
+         "key": "thread.name",
+         "value": {
+          "stringValue": "tokio-rt-worker"
+         }
+        },
+        {
+         "key": "http.method",
+         "value": {
+          "stringValue": "POST"
+         }
+        },
+        {
+         "key": "http.request.method",
+         "value": {
+          "stringValue": "POST"
+         }
+        },
+        {
+         "key": "http.route",
+         "value": {
+          "stringValue": "/"
+         }
+        },
+        {
+         "key": "http.flavor",
+         "value": {
+          "stringValue": "HTTP/1.1"
+         }
+        },
+        {
+         "key": "graphql.operation.type",
+         "value": {
+          "stringValue": "query"
+         }
+        },
+        {
+         "key": "graphql.operation.name",
+         "value": {
+          "stringValue": "Books"
+         }
+        },
+        {
+         "key": "otel.name",
+         "value": {
+          "stringValue": "query Books"
+         }
+        },
+        {
+         "key": "busy_ns",
+         "value": {
+          "intValue": "2701969"
+         }
+        },
+        {
+         "key": "idle_ns",
+         "value": {
+          "intValue": "104660947"
+         }
+        },
+        {
+         "key": "otel.original_name",
+         "value": {
+          "stringValue": "request"
+         }
+        }
+       ],
+       "status": {}
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

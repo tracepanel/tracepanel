@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### Added
+
+- Apollo Router over OTLP: its request to a subgraph is an HTTP call
+  (`POST`, the subgraph's URL), and the subgraph's trace links to it,
+  though the Router's span names only its URL. The Router's own stages
+  (`supergraph`, `execution`, `fetch`, `subgraph`, `format_response`…)
+  are left out of the tree, their time in the request. Parsing and
+  planning a query show when they take 5 ms or more. Its trace is
+  named after its operation, `GraphQL query Books`, not `POST /`.
+- An OTLP client span that names only its URL (`url.full`,
+  `http.url`) carries the trace on: the service it called links its
+  trace to it. A client span around another to the same URL is one
+  call, the inner span kept.
+
 ### Changed
 
 - What is on its way shows it: the hourglass of a trace on its way (the

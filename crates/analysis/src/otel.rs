@@ -14,6 +14,7 @@ use crate::PLACEHOLDER;
 use regex::Regex;
 use serde_json::{Map, Value};
 use sha1::{Digest, Sha1};
+use std::collections::HashMap;
 use std::sync::LazyLock;
 use tracepanel_protocol::{Attrs, Received};
 
@@ -133,6 +134,7 @@ pub fn normalize(received: &mut Received) {
     let Ok(mut doc) = serde_json::from_str::<Value>(&received.doc) else {
         return;
     };
+    fold(&mut doc);
     if let Some(spans) = doc.get_mut("spans").and_then(Value::as_array_mut) {
         for span in spans.iter_mut().filter(|span| span["kind"] == KIND) {
             map_in_place(span);
@@ -189,6 +191,86 @@ pub fn uncomment(received: &mut Received) {
     if let Ok(trace) = serde_json::from_value(doc.clone()) {
         received.trace = trace;
         received.doc = doc.to_string();
+    }
+}
+
+/// Apollo Router's own instrumentation scope.
+const APOLLO_ROUTER: &str = "apollo-router";
+/// The steps of Apollo Router's own that stay in the tree when they take this long (µs): parsing and planning a
+/// query, its own work. Its other steps (`supergraph`, `execution`, `fetch`, `subgraph`, `format_response`…) are
+/// stages every request goes through, their time their calls' or nothing.
+const ROUTER_STEP_SHOWN: i64 = 5_000;
+const ROUTER_STEPS: &[&str] = &["parse_query", "query_planning"];
+
+/// Leave out the spans that only wrap others, their children moved up to the span above them, their time still in
+/// it: Apollo Router's stages, and a client span around another client span to the same URL (the Router's
+/// `subgraph_request` around its `http_request`: one call, its inner span the one whose id the subgraph got).
+fn fold(doc: &mut Value) {
+    let Some(spans) = doc.get("spans").and_then(Value::as_array) else {
+        return;
+    };
+    let attr = |span: &Value, key: &str| span["attrs"][key].as_str().map(str::to_owned);
+    let url = |span: &Value| attr(span, "url.full").or_else(|| attr(span, "http.url"));
+    let client = |span: &Value| {
+        span["kind"] == KIND && attr(span, "otel.span_kind").as_deref() == Some("client")
+    };
+    // The URLs each span's client spans called: a client span calling one of its own is a wrapper.
+    let mut called: HashMap<&str, Vec<String>> = HashMap::new();
+    for span in spans.iter().filter(|span| client(span)) {
+        if let (Some(parent), Some(url)) = (span["parent_id"].as_str(), url(span)) {
+            called.entry(parent).or_default().push(url);
+        }
+    }
+    let mut gone: HashMap<String, Option<String>> = HashMap::new();
+    for span in spans.iter().filter(|span| span["kind"] == KIND) {
+        let (Some(id), parent) = (span["id"].as_str(), span["parent_id"].as_str()) else {
+            continue;
+        };
+        let stage = attr(span, "otel.scope").as_deref() == Some(APOLLO_ROUTER)
+            && attr(span, "otel.span_kind").as_deref() == Some("internal")
+            && !(ROUTER_STEPS.contains(&span["name"].as_str().unwrap_or_default())
+                && span["duration"].as_i64().unwrap_or(0) >= ROUTER_STEP_SHOWN);
+        let wrapper = client(span)
+            && url(span).is_some_and(|url| called.get(id).is_some_and(|urls| urls.contains(&url)));
+        if stage || wrapper {
+            gone.insert(id.to_owned(), parent.map(str::to_owned));
+        }
+    }
+    if gone.is_empty() {
+        return;
+    }
+    // The nearest span above that stays; a loop in broken parent ids stops at the number of spans left out.
+    let kept = |mut id: Option<String>| {
+        for _ in 0..=gone.len() {
+            match id.as_deref().and_then(|current| gone.get(current)) {
+                Some(parent) => id.clone_from(parent),
+                None => break,
+            }
+        }
+        id
+    };
+    let mut moved: Vec<Value> = Vec::new();
+    for span in doc["spans"].as_array().into_iter().flatten() {
+        if span["id"].as_str().is_some_and(|id| gone.contains_key(id)) {
+            continue;
+        }
+        let mut span = span.clone();
+        let parent = kept(span["parent_id"].as_str().map(str::to_owned));
+        span["parent_id"] = parent.map_or(Value::Null, Value::from);
+        moved.push(span);
+    }
+    doc["spans"] = Value::Array(moved);
+    for list in ["errors", "logs"] {
+        for item in doc
+            .get_mut(list)
+            .and_then(Value::as_array_mut)
+            .into_iter()
+            .flatten()
+        {
+            if let Some(id) = item["span_id"].as_str().filter(|id| gone.contains_key(*id)) {
+                item["span_id"] = kept(Some(id.to_owned())).map_or(Value::Null, Value::from);
+            }
+        }
     }
 }
 
@@ -255,6 +337,13 @@ pub fn map(name: &str, attrs: &Attrs) -> Mapped {
         && let Some(method) = text(attrs, &["http.request.method", "http.method"])
     {
         return http_client(attrs, &method);
+    }
+    // A call that names only its URL: Apollo Router's request to a subgraph, always a POST of the subgraph's query.
+    if span_kind == "client"
+        && text(attrs, &["otel.scope"]).as_deref() == Some(APOLLO_ROUTER)
+        && text(attrs, &["url.full", "http.url"]).is_some()
+    {
+        return http_client(attrs, "POST");
     }
     Mapped {
         kind: "function".into(),
