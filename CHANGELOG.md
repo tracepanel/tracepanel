@@ -53,6 +53,16 @@
   (`.rs`) are coloured as Rust: keywords, strings, characters,
   comments, attributes, macros, numbers and calls.
 
+### Fixed
+
+- A database driver's HTTP request that reached a service which records
+  traces too still links the two traces, though it left the call tree.
+  The connection or query it served keeps the W3C span ids its requests
+  carried the trace on with (`db.http_w3c_span_ids`), so the called
+  service's trace is called by the caller's trace through that span,
+  and the caller lists it among its calls. The services page counts
+  each called trace once, through the database's server.
+
 ## 0.9.5 (2026-10-31)
 
 ### Added
