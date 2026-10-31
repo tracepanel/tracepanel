@@ -228,24 +228,34 @@ fn traces(trace: u128, bucket: &Bucket) -> Vec<Value> {
     }
     groups
         .into_iter()
-        .filter(|(root, members)| !nobodys(&bucket.spans[root], members.len() == 1))
+        .filter(|(root, members)| !nobodys(&bucket.spans[root], members, bucket))
         .map(|(root, members)| document(trace, &bucket.spans[&root], root, &members, bucket))
         .collect()
 }
 
 /// A trace that is nobody's work, left out: a browser's CORS preflight (which the server answers before the request
 /// it asks about, and which the SDKs leave out too), and Apollo Router's own work outside a request (its `starting`, a
-/// schema reloaded), an internal root of its own scope, and so Hive Gateway's. `alone`: the root has no spans under it.
-fn nobodys(root: &Got, alone: bool) -> bool {
+/// schema reloaded), an internal root of its own scope, and so Hive Gateway's. `members`: the root's trace's spans.
+fn nobodys(root: &Got, members: &[u64], bucket: &Bucket) -> bool {
     let routers_own = &*root.scope == "apollo-router" && root.span.kind == 1;
-    // Hive Gateway's (and GraphQL Mesh's) start and its schema loaded, under its default tracer.
-    let gateways_own = &*root.scope == "gateway"
-        && root.span.kind == 1
-        && matches!(
-            root.span.name.as_str(),
-            "gateway.initialization" | "gateway.schema"
-        );
-    routers_own || gateways_own || preflight(root, alone)
+    // Hive Gateway's (and GraphQL Mesh's) start, its schema loaded under it, or a schema loaded again: under its
+    // default tracer, or another one by the schema's span (`gateway.schema`, which says whether it changed).
+    let schema = |span: &Span| {
+        span.name == "gateway.schema"
+            && span
+                .attributes
+                .iter()
+                .any(|pair| pair.key == "gateway.schema.changed")
+    };
+    let gateways_own = root.span.kind == 1
+        && match root.span.name.as_str() {
+            "gateway.initialization" => {
+                &*root.scope == "gateway" || members.iter().any(|id| schema(&bucket.spans[id].span))
+            }
+            "gateway.schema" => &*root.scope == "gateway" || schema(&root.span),
+            _ => false,
+        };
+    routers_own || gateways_own || preflight(root, members.len() == 1)
 }
 
 /// A CORS preflight: an `OPTIONS` request served that asks for another method (its `Access-Control-Request-Method`

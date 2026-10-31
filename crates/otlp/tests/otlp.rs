@@ -611,86 +611,13 @@ fn apollo_router_s_request_to_its_subgraph_is_a_call_that_links_its_trace() {
     }
 }
 
-/// Other GraphQL gateways' traces of one query to a subgraph (tests/fixtures/<gateway>.json, made by hand in the
-/// shapes their sources make): WunderGraph Cosmo Router, Hive Gateway (and GraphQL Mesh), Hive Router, Grafbase
-/// Gateway. Each one's traces, as the agent keeps them.
-fn gateway(name: &str) -> Vec<Received> {
-    let mut headers = HeaderMap::new();
-    headers.insert(
-        header::CONTENT_TYPE,
-        HeaderValue::from_static("application/json"),
-    );
-    let start = Instant::now();
-    let mut assembler = Assembler::default();
-    assembler.add(
-        tracepanel_otlp::decode(&headers, &fixture(&format!("{name}.json"))).unwrap(),
-        start,
-    );
-    assembler
-        .ready(start + QUIET)
-        .iter()
-        .map(analyzed)
-        .collect()
-}
-
-#[test]
-fn a_graphql_gateway_s_stages_fold_and_its_request_to_a_subgraph_is_a_call() {
-    for (name, slow_step, subgraph_parent) in [
-        ("cosmo-router", "Operation - Plan", "c00000000000000a"),
-        ("hive-gateway", "graphql.parse", "d000000000000008"),
-        ("hive-router", "graphql.plan", "e00000000000000a"),
-        ("grafbase-gateway", "prepare operation", "f000000000000005"),
-    ] {
-        let traces = gateway(name);
-        // Hive Gateway's start and its schema loaded are nobody's traces.
-        assert_eq!(traces.len(), 1, "{name}");
-        let doc: Value = serde_json::from_str(&traces[0].doc).unwrap();
-        let spans = doc["spans"].as_array().unwrap();
-        let tree: Vec<(&str, &str, Option<&str>)> = spans
-            .iter()
-            .map(|span| {
-                (
-                    span["kind"].as_str().unwrap(),
-                    span["name"].as_str().unwrap(),
-                    span["parent_id"].as_str(),
-                )
-            })
-            .collect();
-        let root = spans[0]["id"].as_str();
-
-        // The request, named after its operation; a slow step of the gateway's own; one call to the subgraph, the
-        // span whose id the subgraph got, so the subgraph's trace links to it. The other stages are left out.
-        assert_eq!(
-            (&doc["kind"], &doc["name"]),
-            (&json!("http"), &json!("GraphQL query Books")),
-            "{name}"
-        );
-        assert_eq!(
-            tree,
-            [
-                ("http", "GraphQL query Books", None),
-                ("function", slow_step, root),
-                ("http.client", "POST books/graphql", root),
-            ],
-            "{name}"
-        );
-        assert_eq!(spans[2]["attrs"]["w3c.span_id"], subgraph_parent, "{name}");
-        assert_eq!(spans[2]["status"], "ok", "{name}");
-    }
-}
-
-#[test]
-fn a_graphql_gateway_s_fast_steps_fold_too() {
-    let mut export: Value = serde_json::from_slice(&fixture("cosmo-router.json")).unwrap();
-    for span in export["resourceSpans"][0]["scopeSpans"]
-        .as_array_mut()
-        .unwrap()
-        .iter_mut()
-        .flat_map(|scope| scope["spans"].as_array_mut().unwrap().iter_mut())
-        .filter(|span| span["name"] == "Operation - Plan")
-    {
-        span["endTimeUnixNano"] = json!("1793344008001000000");
-    }
+/// Other GraphQL gateways' traces of one query to two subgraphs (tests/fixtures/<gateway>.json), captured from their
+/// official images exporting to a capture server, hosts renamed: WunderGraph Cosmo Router 0.365.2, Hive Gateway 2.15.4
+/// (GraphQL Mesh records the same), Hive Router 0.3.9 and Grafbase Gateway 0.53.5 (with `trace_context`
+/// propagation on, off by default). Each one's traces, as the agent keeps them, the export changed by `change`.
+fn gateway(name: &str, change: impl FnOnce(&mut Value)) -> Vec<Received> {
+    let mut export: Value = serde_json::from_slice(&fixture(&format!("{name}.json"))).unwrap();
+    change(&mut export);
     let mut headers = HeaderMap::new();
     headers.insert(
         header::CONTENT_TYPE,
@@ -702,17 +629,156 @@ fn a_graphql_gateway_s_fast_steps_fold_too() {
         tracepanel_otlp::decode(&headers, export.to_string().as_bytes()).unwrap(),
         start,
     );
-
-    let docs = assembler.ready(start + QUIET);
-    let doc: Value = serde_json::from_str(&analyzed(&docs[0]).doc).unwrap();
-    let kinds: Vec<&str> = doc["spans"]
-        .as_array()
-        .unwrap()
+    assembler
+        .ready(start + QUIET)
         .iter()
-        .map(|span| span["kind"].as_str().unwrap())
-        .collect();
+        .map(analyzed)
+        .collect()
+}
 
-    assert_eq!(kinds, ["http", "http.client"]);
+/// Each span of an export, to change.
+fn each_span(export: &mut Value) -> impl Iterator<Item = &mut Value> {
+    export["resourceSpans"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .flat_map(|resource| resource["scopeSpans"].as_array_mut().unwrap().iter_mut())
+        .flat_map(|scope| scope["spans"].as_array_mut().unwrap().iter_mut())
+}
+
+/// A trace's spans as (kind, name, parent's name).
+fn tree(doc: &Value) -> Vec<(String, String, Option<String>)> {
+    let spans = doc["spans"].as_array().unwrap();
+    let name = |id: &str| {
+        spans
+            .iter()
+            .find(|span| span["id"] == id)
+            .map(|span| span["name"].as_str().unwrap().to_owned())
+    };
+    spans
+        .iter()
+        .map(|span| {
+            (
+                span["kind"].as_str().unwrap().to_owned(),
+                span["name"].as_str().unwrap().to_owned(),
+                span["parent_id"].as_str().and_then(name),
+            )
+        })
+        .collect()
+}
+
+const GATEWAYS: [(&str, &str, [&str; 2]); 4] = [
+    (
+        "cosmo-router",
+        "Operation - Plan",
+        ["e31b3b3cddbf6805", "6d62a9450a1ed7f8"],
+    ),
+    (
+        "hive-gateway",
+        "graphql.parse",
+        ["3d92e9f0a94bfb7f", "d8fdb4951f203697"],
+    ),
+    (
+        "hive-router",
+        "graphql.plan",
+        ["d3b27026a57f3705", "bdd0a23531c7429f"],
+    ),
+    (
+        "grafbase-gateway",
+        "prepare operation",
+        ["61edf1bc70898ccd", "c372c7ed9e73462f"],
+    ),
+];
+
+#[test]
+fn a_graphql_gateway_s_stages_fold_and_its_requests_to_subgraphs_are_calls() {
+    for (name, _, subgraph_parents) in GATEWAYS {
+        let traces = gateway(name, |_| {});
+        // Hive Gateway's start (its schema loaded under it) is nobody's trace.
+        assert_eq!(traces.len(), 1, "{name}");
+        let doc: Value = serde_json::from_str(&traces[0].doc).unwrap();
+        let spans = doc["spans"].as_array().unwrap();
+        let request = || Some("GraphQL query Books".to_owned());
+
+        // The request, named after its operation, and its two calls, each the span whose id its subgraph got (the
+        // ids the subgraphs logged in `traceparent`), so their traces link to it. The stages are left out.
+        assert_eq!(
+            (&doc["kind"], &doc["name"]),
+            (&json!("http"), &json!("GraphQL query Books")),
+            "{name}"
+        );
+        assert_eq!(
+            tree(&doc),
+            [
+                ("http".into(), "GraphQL query Books".into(), None),
+                ("http.client".into(), "POST books/graphql".into(), request()),
+                (
+                    "http.client".into(),
+                    "POST authors/graphql".into(),
+                    request()
+                ),
+            ],
+            "{name}"
+        );
+        assert_eq!(
+            (
+                &spans[1]["attrs"]["w3c.span_id"],
+                &spans[2]["attrs"]["w3c.span_id"]
+            ),
+            (&json!(subgraph_parents[0]), &json!(subgraph_parents[1])),
+            "{name}"
+        );
+        assert_eq!(
+            (&spans[1]["status"], &spans[2]["status"]),
+            (&json!("ok"), &json!("ok")),
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn a_graphql_gateway_s_slow_parse_or_plan_stays() {
+    for (name, step, _) in GATEWAYS {
+        let traces = gateway(name, |export| {
+            for span in each_span(export).filter(|span| span["name"] == step) {
+                let start: u64 = span["startTimeUnixNano"].as_str().unwrap().parse().unwrap();
+                span["endTimeUnixNano"] = json!((start + 6_000_000).to_string());
+            }
+        });
+        let doc: Value = serde_json::from_str(&traces[0].doc).unwrap();
+
+        assert_eq!(
+            tree(&doc)
+                .into_iter()
+                .map(|(kind, name, _)| (kind, name))
+                .collect::<Vec<_>>(),
+            [
+                ("http".to_owned(), "GraphQL query Books".to_owned()),
+                ("function".to_owned(), step.to_owned()),
+                ("http.client".to_owned(), "POST books/graphql".to_owned()),
+                ("http.client".to_owned(), "POST authors/graphql".to_owned()),
+            ],
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn hive_gateway_under_a_tracer_of_another_name_folds_as_well() {
+    // Hive Gateway built into an app's own server can record under the app's tracer: its spans are told by their
+    // names and its attributes (`hive.graphql`, `hive.upstream`), not by the scope.
+    let traces = gateway("hive-gateway", |export| {
+        for resource in export["resourceSpans"].as_array_mut().unwrap() {
+            for scope in resource["scopeSpans"].as_array_mut().unwrap() {
+                scope["scope"]["name"] = json!("books-api");
+            }
+        }
+    });
+
+    assert_eq!(traces.len(), 1);
+    let doc: Value = serde_json::from_str(&traces[0].doc).unwrap();
+    let kinds: Vec<String> = tree(&doc).into_iter().map(|(kind, ..)| kind).collect();
+    assert_eq!(kinds, ["http", "http.client", "http.client"]);
 }
 
 #[test]

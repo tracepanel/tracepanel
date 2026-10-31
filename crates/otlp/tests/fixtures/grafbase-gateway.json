@@ -8,6 +8,24 @@
       "value": {
        "stringValue": "grafbase-gateway"
       }
+     },
+     {
+      "key": "telemetry.sdk.name",
+      "value": {
+       "stringValue": "opentelemetry"
+      }
+     },
+     {
+      "key": "telemetry.sdk.language",
+      "value": {
+       "stringValue": "rust"
+      }
+     },
+     {
+      "key": "telemetry.sdk.version",
+      "value": {
+       "stringValue": "0.30.0"
+      }
      }
     ]
    },
@@ -19,43 +37,85 @@
      },
      "spans": [
       {
-       "traceId": "4bf92f3577b34da6a3ce929d0e0e4704",
-       "spanId": "f000000000000001",
-       "parentSpanId": "",
-       "flags": 256,
-       "name": "POST /graphql",
-       "kind": 2,
-       "startTimeUnixNano": "1793344008000000000",
-       "endTimeUnixNano": "1793344008012000000",
+       "traceId": "1e95007638180c06e7dd403a27bd1c75",
+       "spanId": "dad45a1a2f5f27fb",
+       "parentSpanId": "3b849b4028503bf6",
+       "name": "prepare operation",
+       "kind": 1,
+       "startTimeUnixNano": "1793454389998375499",
+       "endTimeUnixNano": "1793454389998718514",
        "attributes": [
         {
-         "key": "grafbase.kind",
+         "key": "code.filepath",
          "value": {
-          "stringValue": "http-request"
+          "stringValue": "crates/engine/src/prepare/mod.rs"
          }
         },
         {
-         "key": "server.address",
+         "key": "code.namespace",
          "value": {
-          "stringValue": "localhost"
+          "stringValue": "engine::prepare"
          }
         },
         {
-         "key": "server.port",
+         "key": "code.lineno",
          "value": {
-          "intValue": "5000"
+          "intValue": "38"
          }
         },
         {
-         "key": "url.path",
+         "key": "thread.name",
          "value": {
-          "stringValue": "/graphql"
+          "stringValue": "grafbase-gateway"
          }
         },
         {
-         "key": "url.scheme",
+         "key": "busy_ns",
          "value": {
-          "stringValue": "http"
+          "intValue": "337432"
+         }
+        },
+        {
+         "key": "idle_ns",
+         "value": {
+          "intValue": "5874"
+         }
+        }
+       ],
+       "status": {},
+       "flags": 1
+      },
+      {
+       "traceId": "1e95007638180c06e7dd403a27bd1c75",
+       "spanId": "61edf1bc70898ccd",
+       "parentSpanId": "d9f0376fdb4cabf9",
+       "name": "POST /graphql",
+       "kind": 1,
+       "startTimeUnixNano": "1793454389999044069",
+       "endTimeUnixNano": "1793454390003638263",
+       "attributes": [
+        {
+         "key": "code.filepath",
+         "value": {
+          "stringValue": "crates/telemetry/src/span/subgraph.rs"
+         }
+        },
+        {
+         "key": "code.namespace",
+         "value": {
+          "stringValue": "grafbase_telemetry::span::subgraph"
+         }
+        },
+        {
+         "key": "code.lineno",
+         "value": {
+          "intValue": "68"
+         }
+        },
+        {
+         "key": "thread.name",
+         "value": {
+          "stringValue": "grafbase-gateway"
          }
         },
         {
@@ -65,116 +125,78 @@
          }
         },
         {
-         "key": "user_agent.original",
+         "key": "server.address",
          "value": {
-          "stringValue": "curl/8.7.1"
+          "stringValue": "books"
+         }
+        },
+        {
+         "key": "server.port",
+         "value": {
+          "stringValue": "4001"
+         }
+        },
+        {
+         "key": "url.full",
+         "value": {
+          "stringValue": "http://books:4001/graphql"
          }
         },
         {
          "key": "http.response.status_code",
          "value": {
-          "intValue": "200"
+          "stringValue": "200"
          }
         },
         {
-         "key": "graphql.operations.name",
+         "key": "busy_ns",
          "value": {
-          "stringValue": "Books"
+          "intValue": "1347389"
          }
         },
         {
-         "key": "graphql.operations.type",
+         "key": "idle_ns",
          "value": {
-          "stringValue": "query"
-         }
-        },
-        {
-         "key": "target",
-         "value": {
-          "stringValue": "grafbase"
+          "intValue": "3247597"
          }
         }
        ],
-       "status": {}
+       "status": {},
+       "flags": 1
       },
       {
-       "traceId": "4bf92f3577b34da6a3ce929d0e0e4704",
-       "spanId": "f000000000000002",
-       "parentSpanId": "f000000000000001",
-       "flags": 257,
-       "name": "Books",
-       "kind": 2,
-       "startTimeUnixNano": "1793344008000100000",
-       "endTimeUnixNano": "1793344008011900000",
+       "traceId": "1e95007638180c06e7dd403a27bd1c75",
+       "spanId": "d9f0376fdb4cabf9",
+       "parentSpanId": "3b849b4028503bf6",
+       "name": "books",
+       "kind": 3,
+       "startTimeUnixNano": "1793454389998835477",
+       "endTimeUnixNano": "1793454390003754476",
        "attributes": [
-        {
-         "key": "grafbase.kind",
-         "value": {
-          "stringValue": "graphql-operation"
-         }
-        },
-        {
-         "key": "graphql.operation.name",
-         "value": {
-          "stringValue": "Books"
-         }
-        },
-        {
-         "key": "graphql.operation.type",
-         "value": {
-          "stringValue": "query"
-         }
-        },
-        {
-         "key": "graphql.operation.document",
-         "value": {
-          "stringValue": "query Books { books { title } }"
-         }
-        },
-        {
-         "key": "target",
-         "value": {
-          "stringValue": "grafbase"
-         }
-        }
-       ],
-       "status": {}
-      },
-      {
-       "traceId": "4bf92f3577b34da6a3ce929d0e0e4704",
-       "spanId": "f000000000000003",
-       "parentSpanId": "f000000000000002",
-       "flags": 257,
-       "name": "prepare operation",
-       "kind": 1,
-       "startTimeUnixNano": "1793344008000150000",
-       "endTimeUnixNano": "1793344008006150000",
-       "attributes": [
-        {
-         "key": "target",
-         "value": {
-          "stringValue": "engine::prepare"
-         }
-        },
         {
          "key": "code.filepath",
          "value": {
-          "stringValue": "crates/engine/src/prepare/mod.rs"
+          "stringValue": "crates/telemetry/src/span/subgraph.rs"
          }
-        }
-       ],
-       "status": {}
-      },
-      {
-       "traceId": "4bf92f3577b34da6a3ce929d0e0e4704",
-       "spanId": "f000000000000004",
-       "parentSpanId": "f000000000000002",
-       "flags": 257,
-       "name": "books",
-       "kind": 3,
-       "startTimeUnixNano": "1793344008006200000",
-       "endTimeUnixNano": "1793344008011700000",
-       "attributes": [
+        },
+        {
+         "key": "code.namespace",
+         "value": {
+          "stringValue": "grafbase_telemetry::span::subgraph"
+         }
+        },
+        {
+         "key": "code.lineno",
+         "value": {
+          "intValue": "32"
+         }
+        },
+        {
+         "key": "thread.name",
+         "value": {
+          "stringValue": "grafbase-gateway"
+         }
+        },
         {
          "key": "grafbase.kind",
          "value": {
@@ -196,28 +218,64 @@
         {
          "key": "graphql.operation.document",
          "value": {
-          "stringValue": "query { books { title } }"
+          "stringValue": "query { books { title author { id } } }"
          }
         },
         {
-         "key": "target",
+         "key": "graphql.response.data.is_present",
          "value": {
-          "stringValue": "grafbase"
+          "boolValue": true
+         }
+        },
+        {
+         "key": "busy_ns",
+         "value": {
+          "intValue": "1603276"
+         }
+        },
+        {
+         "key": "idle_ns",
+         "value": {
+          "intValue": "3316223"
          }
         }
        ],
-       "status": {}
+       "status": {},
+       "flags": 1
       },
       {
-       "traceId": "4bf92f3577b34da6a3ce929d0e0e4704",
-       "spanId": "f000000000000005",
-       "parentSpanId": "f000000000000004",
-       "flags": 257,
+       "traceId": "1e95007638180c06e7dd403a27bd1c75",
+       "spanId": "c372c7ed9e73462f",
+       "parentSpanId": "b42733fe62cd0e73",
        "name": "POST /graphql",
        "kind": 1,
-       "startTimeUnixNano": "1793344008006250000",
-       "endTimeUnixNano": "1793344008011650000",
+       "startTimeUnixNano": "1793454390003865564",
+       "endTimeUnixNano": "1793454390005919234",
        "attributes": [
+        {
+         "key": "code.filepath",
+         "value": {
+          "stringValue": "crates/telemetry/src/span/subgraph.rs"
+         }
+        },
+        {
+         "key": "code.namespace",
+         "value": {
+          "stringValue": "grafbase_telemetry::span::subgraph"
+         }
+        },
+        {
+         "key": "code.lineno",
+         "value": {
+          "intValue": "68"
+         }
+        },
+        {
+         "key": "thread.name",
+         "value": {
+          "stringValue": "grafbase-gateway"
+         }
+        },
         {
          "key": "http.request.method",
          "value": {
@@ -227,35 +285,328 @@
         {
          "key": "server.address",
          "value": {
-          "stringValue": "books"
+          "stringValue": "authors"
          }
         },
         {
          "key": "server.port",
          "value": {
-          "intValue": "4001"
+          "stringValue": "4002"
          }
         },
         {
          "key": "url.full",
          "value": {
-          "stringValue": "http://books:4001/graphql"
+          "stringValue": "http://authors:4002/graphql"
          }
         },
         {
          "key": "http.response.status_code",
          "value": {
-          "intValue": "200"
+          "stringValue": "200"
          }
         },
         {
-         "key": "target",
+         "key": "busy_ns",
          "value": {
-          "stringValue": "grafbase"
+          "intValue": "346848"
+         }
+        },
+        {
+         "key": "idle_ns",
+         "value": {
+          "intValue": "1707405"
          }
         }
        ],
-       "status": {}
+       "status": {},
+       "flags": 1
+      },
+      {
+       "traceId": "1e95007638180c06e7dd403a27bd1c75",
+       "spanId": "b42733fe62cd0e73",
+       "parentSpanId": "3b849b4028503bf6",
+       "name": "authors",
+       "kind": 3,
+       "startTimeUnixNano": "1793454390003801520",
+       "endTimeUnixNano": "1793454390005976403",
+       "attributes": [
+        {
+         "key": "code.filepath",
+         "value": {
+          "stringValue": "crates/telemetry/src/span/subgraph.rs"
+         }
+        },
+        {
+         "key": "code.namespace",
+         "value": {
+          "stringValue": "grafbase_telemetry::span::subgraph"
+         }
+        },
+        {
+         "key": "code.lineno",
+         "value": {
+          "intValue": "32"
+         }
+        },
+        {
+         "key": "thread.name",
+         "value": {
+          "stringValue": "grafbase-gateway"
+         }
+        },
+        {
+         "key": "grafbase.kind",
+         "value": {
+          "stringValue": "subgraph-graphql-request"
+         }
+        },
+        {
+         "key": "subgraph.name",
+         "value": {
+          "stringValue": "authors"
+         }
+        },
+        {
+         "key": "graphql.operation.type",
+         "value": {
+          "stringValue": "query"
+         }
+        },
+        {
+         "key": "graphql.operation.document",
+         "value": {
+          "stringValue": "query($var0: [_Any!]!) { _entities(representations: $var0) { ... on Author { name } } }"
+         }
+        },
+        {
+         "key": "graphql.response.data.is_present",
+         "value": {
+          "boolValue": true
+         }
+        },
+        {
+         "key": "busy_ns",
+         "value": {
+          "intValue": "448643"
+         }
+        },
+        {
+         "key": "idle_ns",
+         "value": {
+          "intValue": "1727032"
+         }
+        }
+       ],
+       "status": {},
+       "flags": 1
+      },
+      {
+       "traceId": "1e95007638180c06e7dd403a27bd1c75",
+       "spanId": "3b849b4028503bf6",
+       "parentSpanId": "85663438a1a56804",
+       "name": "Books",
+       "kind": 2,
+       "startTimeUnixNano": "1793454389998339581",
+       "endTimeUnixNano": "1793454390006022572",
+       "attributes": [
+        {
+         "key": "code.filepath",
+         "value": {
+          "stringValue": "crates/telemetry/src/span/graphql.rs"
+         }
+        },
+        {
+         "key": "code.namespace",
+         "value": {
+          "stringValue": "grafbase_telemetry::span::graphql"
+         }
+        },
+        {
+         "key": "code.lineno",
+         "value": {
+          "intValue": "26"
+         }
+        },
+        {
+         "key": "thread.name",
+         "value": {
+          "stringValue": "grafbase-gateway"
+         }
+        },
+        {
+         "key": "grafbase.kind",
+         "value": {
+          "stringValue": "graphql-operation"
+         }
+        },
+        {
+         "key": "graphql.response.data.is_present",
+         "value": {
+          "boolValue": true
+         }
+        },
+        {
+         "key": "graphql.response.errors.count_by_code",
+         "value": {
+          "stringValue": ""
+         }
+        },
+        {
+         "key": "graphql.operation.name",
+         "value": {
+          "stringValue": "Books"
+         }
+        },
+        {
+         "key": "graphql.operation.document",
+         "value": {
+          "stringValue": "query Books { books { title author { name } } }"
+         }
+        },
+        {
+         "key": "graphql.operation.type",
+         "value": {
+          "stringValue": "query"
+         }
+        },
+        {
+         "key": "busy_ns",
+         "value": {
+          "intValue": "3060716"
+         }
+        },
+        {
+         "key": "idle_ns",
+         "value": {
+          "intValue": "4623650"
+         }
+        }
+       ],
+       "status": {},
+       "flags": 1
+      },
+      {
+       "traceId": "1e95007638180c06e7dd403a27bd1c75",
+       "spanId": "85663438a1a56804",
+       "name": "POST /graphql",
+       "kind": 2,
+       "startTimeUnixNano": "1793454389997503504",
+       "endTimeUnixNano": "1793454390006157578",
+       "attributes": [
+        {
+         "key": "code.filepath",
+         "value": {
+          "stringValue": "crates/telemetry/src/span/http_request.rs"
+         }
+        },
+        {
+         "key": "code.namespace",
+         "value": {
+          "stringValue": "grafbase_telemetry::span::http_request"
+         }
+        },
+        {
+         "key": "code.lineno",
+         "value": {
+          "intValue": "86"
+         }
+        },
+        {
+         "key": "thread.name",
+         "value": {
+          "stringValue": "grafbase-gateway"
+         }
+        },
+        {
+         "key": "grafbase.kind",
+         "value": {
+          "stringValue": "http-request"
+         }
+        },
+        {
+         "key": "server.address",
+         "value": {
+          "stringValue": "localhost:4000"
+         }
+        },
+        {
+         "key": "url.path",
+         "value": {
+          "stringValue": "/graphql"
+         }
+        },
+        {
+         "key": "http.request.body.size",
+         "value": {
+          "stringValue": "83"
+         }
+        },
+        {
+         "key": "http.request.method",
+         "value": {
+          "stringValue": "POST"
+         }
+        },
+        {
+         "key": "user_agent.original",
+         "value": {
+          "stringValue": "curl/8.4.0"
+         }
+        },
+        {
+         "key": "http.response.status_code",
+         "value": {
+          "stringValue": "200"
+         }
+        },
+        {
+         "key": "http.response.body.size",
+         "value": {
+          "stringValue": "114"
+         }
+        },
+        {
+         "key": "graphql.operations.name",
+         "value": {
+          "stringValue": "Books"
+         }
+        },
+        {
+         "key": "graphql.operations.type",
+         "value": {
+          "stringValue": "query"
+         }
+        },
+        {
+         "key": "graphql.response.errors.count",
+         "value": {
+          "stringValue": "0"
+         }
+        },
+        {
+         "key": "graphql.response.errors.count_by_code",
+         "value": {
+          "stringValue": ""
+         }
+        },
+        {
+         "key": "busy_ns",
+         "value": {
+          "intValue": "4205425"
+         }
+        },
+        {
+         "key": "idle_ns",
+         "value": {
+          "intValue": "4464691"
+         }
+        }
+       ],
+       "status": {
+        "code": 1
+       },
+       "flags": 1
       }
      ]
     }

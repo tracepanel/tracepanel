@@ -8,102 +8,59 @@
       "value": {
        "stringValue": "hive-router"
       }
+     },
+     {
+      "key": "telemetry.sdk.version",
+      "value": {
+       "stringValue": "0.32.1"
+      }
+     },
+     {
+      "key": "telemetry.sdk.name",
+      "value": {
+       "stringValue": "opentelemetry"
+      }
+     },
+     {
+      "key": "telemetry.sdk.language",
+      "value": {
+       "stringValue": "rust"
+      }
      }
     ]
    },
    "scopeSpans": [
     {
      "scope": {
-      "name": "graphql-hive.router"
+      "name": "graphql-hive.router",
+      "version": "0.3.9"
      },
      "spans": [
       {
-       "traceId": "4bf92f3577b34da6a3ce929d0e0e4703",
-       "spanId": "e000000000000001",
-       "parentSpanId": "",
-       "flags": 256,
-       "name": "http.server",
-       "kind": 2,
-       "startTimeUnixNano": "1793344008000000000",
-       "endTimeUnixNano": "1793344008012000000",
+       "traceId": "30007a151d44ae92879de40309af2af5",
+       "spanId": "ee8b2eadfc038335",
+       "parentSpanId": "adfc6e463af30595",
+       "name": "graphql.parse",
+       "kind": 1,
+       "startTimeUnixNano": "1793454235414643330",
+       "endTimeUnixNano": "1793454235415171667",
        "attributes": [
+        {
+         "key": "target",
+         "value": {
+          "stringValue": "hive-router"
+         }
+        },
         {
          "key": "hive.kind",
          "value": {
-          "stringValue": "http.server"
+          "stringValue": "graphql.parse"
          }
         },
         {
-         "key": "server.address",
+         "key": "cache.hit",
          "value": {
-          "stringValue": "localhost"
-         }
-        },
-        {
-         "key": "server.port",
-         "value": {
-          "intValue": "4000"
-         }
-        },
-        {
-         "key": "url.full",
-         "value": {
-          "stringValue": "http://localhost:4000/graphql"
-         }
-        },
-        {
-         "key": "url.path",
-         "value": {
-          "stringValue": "/graphql"
-         }
-        },
-        {
-         "key": "url.scheme",
-         "value": {
-          "stringValue": "http"
-         }
-        },
-        {
-         "key": "http.request.method",
-         "value": {
-          "stringValue": "POST"
-         }
-        },
-        {
-         "key": "network.protocol.version",
-         "value": {
-          "stringValue": "1.1"
-         }
-        },
-        {
-         "key": "http.response.status_code",
-         "value": {
-          "intValue": "200"
-         }
-        },
-        {
-         "key": "http.route",
-         "value": {
-          "stringValue": "/graphql"
-         }
-        }
-       ],
-       "status": {}
-      },
-      {
-       "traceId": "4bf92f3577b34da6a3ce929d0e0e4703",
-       "spanId": "e000000000000002",
-       "parentSpanId": "e000000000000001",
-       "flags": 257,
-       "name": "graphql.operation",
-       "kind": 2,
-       "startTimeUnixNano": "1793344008000100000",
-       "endTimeUnixNano": "1793344008011900000",
-       "attributes": [
-        {
-         "key": "hive.kind",
-         "value": {
-          "stringValue": "graphql.operation"
+          "boolValue": false
          }
         },
         {
@@ -121,209 +78,152 @@
         {
          "key": "graphql.document.hash",
          "value": {
-          "stringValue": "a1b2c3"
+          "stringValue": "3708956976662708686"
          }
         }
        ],
-       "status": {}
+       "status": {},
+       "flags": 257
       },
       {
-       "traceId": "4bf92f3577b34da6a3ce929d0e0e4703",
-       "spanId": "e000000000000003",
-       "parentSpanId": "e000000000000002",
-       "flags": 257,
-       "name": "graphql.parse",
-       "kind": 1,
-       "startTimeUnixNano": "1793344008000150000",
-       "endTimeUnixNano": "1793344008000350000",
-       "attributes": [
-        {
-         "key": "hive.kind",
-         "value": {
-          "stringValue": "graphql.parse"
-         }
-        }
-       ],
-       "status": {}
-      },
-      {
-       "traceId": "4bf92f3577b34da6a3ce929d0e0e4703",
-       "spanId": "e000000000000004",
-       "parentSpanId": "e000000000000002",
-       "flags": 257,
+       "traceId": "30007a151d44ae92879de40309af2af5",
+       "spanId": "4977e7b9b13dca65",
+       "parentSpanId": "adfc6e463af30595",
        "name": "graphql.validate",
        "kind": 1,
-       "startTimeUnixNano": "1793344008000360000",
-       "endTimeUnixNano": "1793344008000560000",
+       "startTimeUnixNano": "1793454235415248591",
+       "endTimeUnixNano": "1793454235415431523",
        "attributes": [
+        {
+         "key": "target",
+         "value": {
+          "stringValue": "hive-router"
+         }
+        },
         {
          "key": "hive.kind",
          "value": {
           "stringValue": "graphql.validate"
          }
+        },
+        {
+         "key": "cache.hit",
+         "value": {
+          "boolValue": false
+         }
         }
        ],
-       "status": {}
+       "status": {},
+       "flags": 257
       },
       {
-       "traceId": "4bf92f3577b34da6a3ce929d0e0e4703",
-       "spanId": "e000000000000005",
-       "parentSpanId": "e000000000000002",
-       "flags": 257,
+       "traceId": "30007a151d44ae92879de40309af2af5",
+       "spanId": "748f5161662e762e",
+       "parentSpanId": "adfc6e463af30595",
        "name": "graphql.normalize",
        "kind": 1,
-       "startTimeUnixNano": "1793344008000570000",
-       "endTimeUnixNano": "1793344008000770000",
+       "startTimeUnixNano": "1793454235415438732",
+       "endTimeUnixNano": "1793454235415758593",
        "attributes": [
+        {
+         "key": "target",
+         "value": {
+          "stringValue": "hive-router"
+         }
+        },
         {
          "key": "hive.kind",
          "value": {
           "stringValue": "graphql.normalize"
          }
+        },
+        {
+         "key": "cache.hit",
+         "value": {
+          "boolValue": false
+         }
         }
        ],
-       "status": {}
+       "status": {},
+       "flags": 257
       },
       {
-       "traceId": "4bf92f3577b34da6a3ce929d0e0e4703",
-       "spanId": "e000000000000006",
-       "parentSpanId": "e000000000000002",
-       "flags": 257,
+       "traceId": "30007a151d44ae92879de40309af2af5",
+       "spanId": "417920728b597677",
+       "parentSpanId": "adfc6e463af30595",
+       "name": "graphql.variable_coercion",
+       "kind": 1,
+       "startTimeUnixNano": "1793454235415833475",
+       "endTimeUnixNano": "1793454235415835017",
+       "attributes": [
+        {
+         "key": "target",
+         "value": {
+          "stringValue": "hive-router"
+         }
+        },
+        {
+         "key": "hive.kind",
+         "value": {
+          "stringValue": "graphql.variable_coercion"
+         }
+        }
+       ],
+       "status": {},
+       "flags": 257
+      },
+      {
+       "traceId": "30007a151d44ae92879de40309af2af5",
+       "spanId": "3aef962786185812",
+       "parentSpanId": "adfc6e463af30595",
        "name": "graphql.plan",
        "kind": 1,
-       "startTimeUnixNano": "1793344008000780000",
-       "endTimeUnixNano": "1793344008006780000",
+       "startTimeUnixNano": "1793454235415896564",
+       "endTimeUnixNano": "1793454235416639128",
        "attributes": [
+        {
+         "key": "target",
+         "value": {
+          "stringValue": "hive-router"
+         }
+        },
         {
          "key": "hive.kind",
          "value": {
           "stringValue": "graphql.plan"
          }
-        }
-       ],
-       "status": {}
-      },
-      {
-       "traceId": "4bf92f3577b34da6a3ce929d0e0e4703",
-       "spanId": "e000000000000007",
-       "parentSpanId": "e000000000000002",
-       "flags": 257,
-       "name": "graphql.execute",
-       "kind": 1,
-       "startTimeUnixNano": "1793344008006800000",
-       "endTimeUnixNano": "1793344008011800000",
-       "attributes": [
+        },
         {
-         "key": "hive.kind",
+         "key": "cache.hit",
          "value": {
-          "stringValue": "graphql.execute"
+          "boolValue": true
+         }
+        },
+        {
+         "key": "cache.hit",
+         "value": {
+          "boolValue": false
          }
         }
        ],
-       "status": {}
+       "status": {},
+       "flags": 257
       },
       {
-       "traceId": "4bf92f3577b34da6a3ce929d0e0e4703",
-       "spanId": "e000000000000008",
-       "parentSpanId": "e000000000000007",
-       "flags": 257,
-       "name": "graphql.subgraph.operation",
-       "kind": 3,
-       "startTimeUnixNano": "1793344008006850000",
-       "endTimeUnixNano": "1793344008011750000",
-       "attributes": [
-        {
-         "key": "hive.kind",
-         "value": {
-          "stringValue": "graphql.subgraph.operation"
-         }
-        },
-        {
-         "key": "graphql.operation.type",
-         "value": {
-          "stringValue": "query"
-         }
-        },
-        {
-         "key": "hive.graphql.subgraph.name",
-         "value": {
-          "stringValue": "books"
-         }
-        }
-       ],
-       "status": {}
-      },
-      {
-       "traceId": "4bf92f3577b34da6a3ce929d0e0e4703",
-       "spanId": "e000000000000009",
-       "parentSpanId": "e000000000000008",
-       "flags": 257,
-       "name": "http.inflight",
-       "kind": 1,
-       "startTimeUnixNano": "1793344008006900000",
-       "endTimeUnixNano": "1793344008011700000",
-       "attributes": [
-        {
-         "key": "hive.kind",
-         "value": {
-          "stringValue": "http.inflight"
-         }
-        },
-        {
-         "key": "server.address",
-         "value": {
-          "stringValue": "books"
-         }
-        },
-        {
-         "key": "server.port",
-         "value": {
-          "intValue": "4001"
-         }
-        },
-        {
-         "key": "url.full",
-         "value": {
-          "stringValue": "http://books:4001/graphql"
-         }
-        },
-        {
-         "key": "url.path",
-         "value": {
-          "stringValue": "/graphql"
-         }
-        },
-        {
-         "key": "http.request.method",
-         "value": {
-          "stringValue": "POST"
-         }
-        },
-        {
-         "key": "hive.inflight.role",
-         "value": {
-          "stringValue": "leader"
-         }
-        },
-        {
-         "key": "http.response.status_code",
-         "value": {
-          "intValue": "200"
-         }
-        }
-       ],
-       "status": {}
-      },
-      {
-       "traceId": "4bf92f3577b34da6a3ce929d0e0e4703",
-       "spanId": "e00000000000000a",
-       "parentSpanId": "e000000000000009",
-       "flags": 257,
+       "traceId": "30007a151d44ae92879de40309af2af5",
+       "spanId": "d3b27026a57f3705",
+       "parentSpanId": "606b208f15b88c3e",
        "name": "http.client",
        "kind": 3,
-       "startTimeUnixNano": "1793344008006950000",
-       "endTimeUnixNano": "1793344008011650000",
+       "startTimeUnixNano": "1793454235417048414",
+       "endTimeUnixNano": "1793454235472767676",
        "attributes": [
+        {
+         "key": "target",
+         "value": {
+          "stringValue": "hive-router"
+         }
+        },
         {
          "key": "hive.kind",
          "value": {
@@ -361,9 +261,21 @@
          }
         },
         {
+         "key": "http.request.body.size",
+         "value": {
+          "intValue": "48"
+         }
+        },
+        {
          "key": "http.request.method",
          "value": {
           "stringValue": "POST"
+         }
+        },
+        {
+         "key": "network.protocol.version",
+         "value": {
+          "stringValue": "1.1"
          }
         },
         {
@@ -373,7 +285,557 @@
          }
         }
        ],
-       "status": {}
+       "status": {
+        "code": 1
+       },
+       "flags": 257
+      },
+      {
+       "traceId": "30007a151d44ae92879de40309af2af5",
+       "spanId": "606b208f15b88c3e",
+       "parentSpanId": "c717821c600f56cb",
+       "name": "http.inflight",
+       "kind": 1,
+       "startTimeUnixNano": "1793454235417037079",
+       "endTimeUnixNano": "1793454235472789678",
+       "attributes": [
+        {
+         "key": "target",
+         "value": {
+          "stringValue": "hive-router"
+         }
+        },
+        {
+         "key": "hive.kind",
+         "value": {
+          "stringValue": "http.inflight"
+         }
+        },
+        {
+         "key": "server.address",
+         "value": {
+          "stringValue": "books"
+         }
+        },
+        {
+         "key": "server.port",
+         "value": {
+          "intValue": "4001"
+         }
+        },
+        {
+         "key": "url.full",
+         "value": {
+          "stringValue": "http://books:4001/graphql"
+         }
+        },
+        {
+         "key": "url.path",
+         "value": {
+          "stringValue": "/graphql"
+         }
+        },
+        {
+         "key": "url.scheme",
+         "value": {
+          "stringValue": "http"
+         }
+        },
+        {
+         "key": "http.request.body.size",
+         "value": {
+          "intValue": "48"
+         }
+        },
+        {
+         "key": "http.request.method",
+         "value": {
+          "stringValue": "POST"
+         }
+        },
+        {
+         "key": "network.protocol.version",
+         "value": {
+          "stringValue": "1.1"
+         }
+        },
+        {
+         "key": "hive.inflight.role",
+         "value": {
+          "stringValue": "leader"
+         }
+        },
+        {
+         "key": "hive.inflight.key",
+         "value": {
+          "stringValue": "12595003960853994378"
+         }
+        },
+        {
+         "key": "http.response.status_code",
+         "value": {
+          "intValue": "200"
+         }
+        },
+        {
+         "key": "http.response.body.size",
+         "value": {
+          "intValue": "140"
+         }
+        }
+       ],
+       "status": {
+        "code": 1
+       },
+       "flags": 257
+      },
+      {
+       "traceId": "30007a151d44ae92879de40309af2af5",
+       "spanId": "c717821c600f56cb",
+       "parentSpanId": "6a978aa6971afc4d",
+       "name": "graphql.subgraph.operation",
+       "kind": 3,
+       "startTimeUnixNano": "1793454235416831395",
+       "endTimeUnixNano": "1793454235472914272",
+       "attributes": [
+        {
+         "key": "target",
+         "value": {
+          "stringValue": "hive-router"
+         }
+        },
+        {
+         "key": "hive.kind",
+         "value": {
+          "stringValue": "graphql.subgraph.operation"
+         }
+        },
+        {
+         "key": "hive.graphql.subgraph.name",
+         "value": {
+          "stringValue": "books"
+         }
+        },
+        {
+         "key": "graphql.operation.type",
+         "value": {
+          "stringValue": "query"
+         }
+        },
+        {
+         "key": "graphql.document.hash",
+         "value": {
+          "stringValue": "9554051330723601903"
+         }
+        }
+       ],
+       "status": {},
+       "flags": 257
+      },
+      {
+       "traceId": "30007a151d44ae92879de40309af2af5",
+       "spanId": "bdd0a23531c7429f",
+       "parentSpanId": "aab2ef0234847c78",
+       "name": "http.client",
+       "kind": 3,
+       "startTimeUnixNano": "1793454235472979861",
+       "endTimeUnixNano": "1793454235477838033",
+       "attributes": [
+        {
+         "key": "target",
+         "value": {
+          "stringValue": "hive-router"
+         }
+        },
+        {
+         "key": "hive.kind",
+         "value": {
+          "stringValue": "http.client"
+         }
+        },
+        {
+         "key": "server.address",
+         "value": {
+          "stringValue": "authors"
+         }
+        },
+        {
+         "key": "server.port",
+         "value": {
+          "intValue": "4002"
+         }
+        },
+        {
+         "key": "url.full",
+         "value": {
+          "stringValue": "http://authors:4002/graphql"
+         }
+        },
+        {
+         "key": "url.path",
+         "value": {
+          "stringValue": "/graphql"
+         }
+        },
+        {
+         "key": "url.scheme",
+         "value": {
+          "stringValue": "http"
+         }
+        },
+        {
+         "key": "http.request.body.size",
+         "value": {
+          "intValue": "212"
+         }
+        },
+        {
+         "key": "http.request.method",
+         "value": {
+          "stringValue": "POST"
+         }
+        },
+        {
+         "key": "network.protocol.version",
+         "value": {
+          "stringValue": "1.1"
+         }
+        },
+        {
+         "key": "http.response.status_code",
+         "value": {
+          "intValue": "200"
+         }
+        }
+       ],
+       "status": {
+        "code": 1
+       },
+       "flags": 257
+      },
+      {
+       "traceId": "30007a151d44ae92879de40309af2af5",
+       "spanId": "aab2ef0234847c78",
+       "parentSpanId": "96d2697c1049710f",
+       "name": "http.inflight",
+       "kind": 1,
+       "startTimeUnixNano": "1793454235472969527",
+       "endTimeUnixNano": "1793454235477858452",
+       "attributes": [
+        {
+         "key": "target",
+         "value": {
+          "stringValue": "hive-router"
+         }
+        },
+        {
+         "key": "hive.kind",
+         "value": {
+          "stringValue": "http.inflight"
+         }
+        },
+        {
+         "key": "server.address",
+         "value": {
+          "stringValue": "authors"
+         }
+        },
+        {
+         "key": "server.port",
+         "value": {
+          "intValue": "4002"
+         }
+        },
+        {
+         "key": "url.full",
+         "value": {
+          "stringValue": "http://authors:4002/graphql"
+         }
+        },
+        {
+         "key": "url.path",
+         "value": {
+          "stringValue": "/graphql"
+         }
+        },
+        {
+         "key": "url.scheme",
+         "value": {
+          "stringValue": "http"
+         }
+        },
+        {
+         "key": "http.request.body.size",
+         "value": {
+          "intValue": "212"
+         }
+        },
+        {
+         "key": "http.request.method",
+         "value": {
+          "stringValue": "POST"
+         }
+        },
+        {
+         "key": "network.protocol.version",
+         "value": {
+          "stringValue": "1.1"
+         }
+        },
+        {
+         "key": "hive.inflight.role",
+         "value": {
+          "stringValue": "leader"
+         }
+        },
+        {
+         "key": "hive.inflight.key",
+         "value": {
+          "stringValue": "12595003960853994377"
+         }
+        },
+        {
+         "key": "http.response.status_code",
+         "value": {
+          "intValue": "200"
+         }
+        },
+        {
+         "key": "http.response.body.size",
+         "value": {
+          "intValue": "66"
+         }
+        }
+       ],
+       "status": {
+        "code": 1
+       },
+       "flags": 257
+      },
+      {
+       "traceId": "30007a151d44ae92879de40309af2af5",
+       "spanId": "96d2697c1049710f",
+       "parentSpanId": "6a978aa6971afc4d",
+       "name": "graphql.subgraph.operation",
+       "kind": 3,
+       "startTimeUnixNano": "1793454235472952150",
+       "endTimeUnixNano": "1793454235477874912",
+       "attributes": [
+        {
+         "key": "target",
+         "value": {
+          "stringValue": "hive-router"
+         }
+        },
+        {
+         "key": "hive.kind",
+         "value": {
+          "stringValue": "graphql.subgraph.operation"
+         }
+        },
+        {
+         "key": "hive.graphql.subgraph.name",
+         "value": {
+          "stringValue": "authors"
+         }
+        },
+        {
+         "key": "graphql.operation.type",
+         "value": {
+          "stringValue": "query"
+         }
+        },
+        {
+         "key": "graphql.document.hash",
+         "value": {
+          "stringValue": "15415321447146943510"
+         }
+        }
+       ],
+       "status": {},
+       "flags": 257
+      },
+      {
+       "traceId": "30007a151d44ae92879de40309af2af5",
+       "spanId": "6a978aa6971afc4d",
+       "parentSpanId": "adfc6e463af30595",
+       "name": "graphql.execute",
+       "kind": 1,
+       "startTimeUnixNano": "1793454235416649171",
+       "endTimeUnixNano": "1793454235477897705",
+       "attributes": [
+        {
+         "key": "target",
+         "value": {
+          "stringValue": "hive-router"
+         }
+        },
+        {
+         "key": "hive.kind",
+         "value": {
+          "stringValue": "graphql.execute"
+         }
+        }
+       ],
+       "status": {},
+       "flags": 257
+      },
+      {
+       "traceId": "30007a151d44ae92879de40309af2af5",
+       "spanId": "adfc6e463af30595",
+       "parentSpanId": "27873502e398c91d",
+       "name": "graphql.operation",
+       "kind": 2,
+       "startTimeUnixNano": "1793454235414038819",
+       "endTimeUnixNano": "1793454235477930500",
+       "attributes": [
+        {
+         "key": "target",
+         "value": {
+          "stringValue": "hive-router"
+         }
+        },
+        {
+         "key": "hive.kind",
+         "value": {
+          "stringValue": "graphql.operation"
+         }
+        },
+        {
+         "key": "hive.supergraph.name",
+         "value": {
+          "stringValue": "default"
+         }
+        },
+        {
+         "key": "graphql.operation.name",
+         "value": {
+          "stringValue": "Books"
+         }
+        },
+        {
+         "key": "graphql.operation.type",
+         "value": {
+          "stringValue": "query"
+         }
+        },
+        {
+         "key": "graphql.document.hash",
+         "value": {
+          "stringValue": "3708956976662708686"
+         }
+        },
+        {
+         "key": "hive.graphql.operation.hash",
+         "value": {
+          "stringValue": "e75e7a7c80f7d3fc77d3fc8c882d22aa"
+         }
+        }
+       ],
+       "status": {},
+       "flags": 257
+      },
+      {
+       "traceId": "30007a151d44ae92879de40309af2af5",
+       "spanId": "27873502e398c91d",
+       "name": "http.server",
+       "kind": 2,
+       "startTimeUnixNano": "1793454235413640451",
+       "endTimeUnixNano": "1793454235477938542",
+       "attributes": [
+        {
+         "key": "target",
+         "value": {
+          "stringValue": "hive-router"
+         }
+        },
+        {
+         "key": "hive.kind",
+         "value": {
+          "stringValue": "http.server"
+         }
+        },
+        {
+         "key": "server.address",
+         "value": {
+          "stringValue": "localhost"
+         }
+        },
+        {
+         "key": "server.port",
+         "value": {
+          "intValue": "4000"
+         }
+        },
+        {
+         "key": "url.full",
+         "value": {
+          "stringValue": "/graphql"
+         }
+        },
+        {
+         "key": "url.path",
+         "value": {
+          "stringValue": "/graphql"
+         }
+        },
+        {
+         "key": "url.scheme",
+         "value": {
+          "stringValue": "http"
+         }
+        },
+        {
+         "key": "http.request.method",
+         "value": {
+          "stringValue": "POST"
+         }
+        },
+        {
+         "key": "network.protocol.version",
+         "value": {
+          "stringValue": "1.1"
+         }
+        },
+        {
+         "key": "user_agent.original",
+         "value": {
+          "stringValue": "curl/8.4.0"
+         }
+        },
+        {
+         "key": "http.route",
+         "value": {
+          "stringValue": "/graphql"
+         }
+        },
+        {
+         "key": "router.request_id",
+         "value": {
+          "stringValue": "01a19233-df15-71ce-b704-6971f9c5c583"
+         }
+        },
+        {
+         "key": "http.request.body.size",
+         "value": {
+          "intValue": "83"
+         }
+        },
+        {
+         "key": "http.response.status_code",
+         "value": {
+          "intValue": "200"
+         }
+        },
+        {
+         "key": "http.response.body.size",
+         "value": {
+          "intValue": "114"
+         }
+        }
+       ],
+       "status": {},
+       "flags": 257
       }
      ]
     }
