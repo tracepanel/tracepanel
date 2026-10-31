@@ -287,7 +287,7 @@ struct Slow {
     kind: &'static str,
     prefix: String,
     /// By the family's first call: its system's own limit, where the app set one.
-    threshold_ms: fn(&Thresholds, &Span) -> i64,
+    threshold_ms: fn(&Thresholds, &Attrs) -> i64,
     hint: &'static str,
 }
 
@@ -439,9 +439,7 @@ fn rules(family: &str, system: &str) -> Option<Rules> {
             slow: (!IN_MEMORY.contains(&system)).then(|| Slow {
                 kind: "slow-call",
                 prefix: format!("Slow {name} query"),
-                threshold_ms: |thresholds, span| {
-                    crate::limits::slow_sql_ms(thresholds, &span.attrs)
-                },
+                threshold_ms: crate::limits::slow_sql_ms,
                 hint: SLOW_DATASTORE,
             }),
         },
@@ -488,6 +486,25 @@ fn rules(family: &str, system: &str) -> Option<Rules> {
         },
         _ => return None,
     })
+}
+
+/// From how many milliseconds a call of `system` (its `family`'s; `vendor`, SQL's database) is a slow-call issue
+/// with these thresholds: what the console offers as a system's "Slow". None for a family that has no slow issue (an
+/// in-memory store, a broker, a model).
+pub fn slow_ms(
+    thresholds: &Thresholds,
+    family: &str,
+    system: &str,
+    vendor: Option<&str>,
+) -> Option<i64> {
+    let mut attrs = Attrs::new();
+    attrs.insert("db.system".into(), Value::from(vendor.unwrap_or(system)));
+    if family == "sql" {
+        return Some(crate::limits::slow_sql_ms(thresholds, &attrs));
+    }
+    rules(family, system)?
+        .slow
+        .map(|slow| (slow.threshold_ms)(thresholds, &attrs))
 }
 
 // Datastore operations that only read: a repeat of one with the same query is wasted.
@@ -790,7 +807,7 @@ fn group_issues(
         }
     }
     if let Some(rule) = &rules.slow {
-        let threshold_us = (rule.threshold_ms)(thresholds, spans[0]) * 1000;
+        let threshold_us = (rule.threshold_ms)(thresholds, &spans[0].attrs) * 1000;
         let slow: Vec<&Span> = spans
             .iter()
             .copied()

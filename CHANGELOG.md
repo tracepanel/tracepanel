@@ -11,6 +11,24 @@
   It searches `service:`, as the sidebar's app does, and lists the apps
   with rows on that page only. With the sidebar on one app it is not
   shown. `/api/values` answers `apps`, the apps of each page.
+- A Slower than filter on every page with times: the traces, the HTTP,
+  GraphQL, Tasks, WebSocket, Jobs, RPC and Pages pages, and every
+  system's page (Database, HTTP calls, MongoDB, Kafka, LLM, Storage…).
+  Its first pick is where the agent calls that page's rows slow: a
+  query from the app's `slow_sql_ms` (2 s on a warehouse), an HTTP call
+  from `slow_http_ms`, a request from 500 ms. Then 1 s, 5 s, or a time
+  of one's own. It searches `duration>500ms`. It replaces the traces'
+  Duration menu.
+- A row grouped by something keeps only its slow ones with Slower than
+  on, its numbers theirs, and says how many of how many: "12 of 340
+  calls over 500 ms", "3 of 20 runs over 1 s". Rows with none are gone.
+  On a system's page an opened row's requests are those where that call
+  was that slow (`call:<id> call_duration>500ms`, a new trace filter).
+  `duration` is a filter of `/api/calls` and the HTTP, GraphQL, Tasks,
+  WebSocket, Jobs, RPC and Pages lists, whose rows answer how many they
+  have without it (`all_calls`, `all_runs`, `all_connections`,
+  `all_count`). `/api/values` answers `slow`, each page's slow time,
+  from the limits the apps' SDKs send.
 
 ### Changed
 

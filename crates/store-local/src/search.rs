@@ -134,6 +134,31 @@ pub fn parse(query: &str) -> Vec<Term> {
     terms
 }
 
+/// The search without its filters on `key` (any operator), and those filters alone, each as typed: `duration>500ms
+/// route:/a` is `("route:/a", "duration>500ms")` for `duration`.
+pub fn split_off(query: &str, key: &str) -> (String, String) {
+    let (mut rest, mut those) = (Vec::new(), Vec::new());
+    let mut text = query.trim_start();
+    while !text.is_empty() {
+        let (term, end) = filter(text).unwrap_or_else(|| {
+            let end = word_end(text);
+            let word = Term {
+                key: None,
+                op: ":".into(),
+                value: String::new(),
+            };
+            (word, end)
+        });
+        if term.key.as_deref() == Some(key) {
+            those.push(&text[..end]);
+        } else {
+            rest.push(&text[..end]);
+        }
+        text = text[end..].trim_start();
+    }
+    (rest.join(" "), those.join(" "))
+}
+
 /// Python's repr() of a string, as error messages quote values.
 pub fn py_repr(value: &str) -> String {
     let quote = if value.contains('\'') && !value.contains('"') {
@@ -394,6 +419,8 @@ pub fn time_bound(column: &str, upper: bool) -> Compiler {
 }
 
 pub type FreeText = Box<dyn Fn(&str) -> (String, Vec<Sql>) + Send + Sync>;
+/// A filter that narrows another filter of the search, compiled with that filter's last `:` term (None without one).
+pub type Narrowing = Box<dyn Fn(Option<&Term>, &Term) -> Clause + Send + Sync>;
 pub type Prefixed = Box<dyn Fn(&str) -> Compiler + Send + Sync>;
 
 /// Searchable fields of one resource and how free text is matched.
@@ -402,6 +429,9 @@ pub struct Schema {
     pub free_text: FreeText,
     /// "extra." -> compiler for any key under that prefix (fields spelled "extra.*").
     pub prefixed: Vec<(String, Prefixed)>,
+    /// A field that narrows another (`call_duration` narrows `call`: that call slower than the value), by its name:
+    /// the one it narrows, and how. It is still declared with a compiler of its own, for a search without the other.
+    pub narrowing: Vec<(String, String, Narrowing)>,
 }
 
 /// A resource's declared fields (from the spec): name -> type.
@@ -463,6 +493,7 @@ pub fn schema_for(
         fields,
         free_text,
         prefixed: prefixes,
+        narrowing: Vec::new(),
     }
 }
 
@@ -470,19 +501,33 @@ pub fn compile_where(query: &str, schema: &Schema) -> Result<(String, Vec<Sql>),
     let mut clauses = Vec::new();
     let mut params = Vec::new();
     let mut words = Vec::new();
-    for term in parse(query) {
+    let terms = parse(query);
+    for term in &terms {
         let Some(name) = term.key.clone() else {
             words.push(term.value.clone());
             continue;
         };
-        let clause = if let Some(compiler) = schema.fields.get(&name) {
-            compiler(&term)?
+        let narrowed = schema
+            .narrowing
+            .iter()
+            .find(|(field, _, _)| *field == name)
+            .and_then(|(_, other, narrowing)| {
+                let other = terms
+                    .iter()
+                    .rev()
+                    .find(|each| each.key.as_deref() == Some(other.as_str()) && each.op == ":")?;
+                Some((other, narrowing))
+            });
+        let clause = if let Some((other, narrowing)) = narrowed {
+            narrowing(Some(other), term)?
+        } else if let Some(compiler) = schema.fields.get(&name) {
+            compiler(term)?
         } else if let Some((_, factory)) = schema
             .prefixed
             .iter()
             .find(|(prefix, _)| name.starts_with(prefix.as_str()) && name.len() > prefix.len())
         {
-            factory(&name)(&term)?
+            factory(&name)(term)?
         } else {
             let known: Vec<&str> = schema.fields.keys().map(String::as_str).collect();
             return Err(SearchError(format!(
@@ -577,6 +622,25 @@ mod tests {
                     value: "connection refused".into()
                 },
             ]
+        );
+    }
+
+    #[test]
+    fn a_key_s_filters_split_off_as_typed() {
+        assert_eq!(
+            split_off(
+                r#"duration>500ms route:"/a b" duration<=2s slow"#,
+                "duration"
+            ),
+            (
+                r#"route:"/a b" slow"#.into(),
+                "duration>500ms duration<=2s".into()
+            )
+        );
+
+        assert_eq!(
+            split_off("system:sql", "duration"),
+            ("system:sql".into(), String::new())
         );
     }
 

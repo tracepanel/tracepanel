@@ -1082,6 +1082,8 @@ export interface components {
             cost: number | null;
             /** @description An LLM: its calls' p95. */
             p95: components["schemas"]["Duration"] | null;
+            /** @description With duration in the search, the group is only its calls that slow (its numbers, its latest call and its line of code are theirs): how many calls it has without it, the rest of the search still holding. Null without. */
+            all_calls: number | null;
         };
         ExplainPlan: {
             vendor: string;
@@ -1106,6 +1108,8 @@ export interface components {
             last_seen: components["schemas"]["Time"];
             /** @description Distinct GraphQL operations served by this endpoint (0 for plain HTTP). */
             graphql_operations: number;
+            /** @description With duration in the search: how many the group has without it (the rest of the search still holds); null without. */
+            all_calls: number | null;
         };
         StatsSummary: {
             calls: number;
@@ -1384,6 +1388,14 @@ export interface components {
             span: string[];
             /** @description extra.* keys seen in logs. */
             extra: string[];
+            /** @description From how many milliseconds each page calls a row slow, by its name ({"calls/sql": {"ms": 100, "mixed": false}}): a system's page from where the agent raises its slow-call issue, with each app's limits from its hello (a warehouse's own for SQL); the pages of requests, tasks and the rest from 500 ms. Where the apps or the databases on a page disagree, the lowest of their defaults, mixed. A system with no slow issue (Redis, a broker, a model) has none. */
+            slow: {
+                [key: string]: {
+                    ms: number;
+                    /** @description The page's apps or databases have different limits: this is the lowest default. */
+                    mixed: boolean;
+                };
+            };
         };
         SearchField: {
             /** @enum {string} */
@@ -1440,6 +1452,8 @@ export interface components {
             with_issues: number;
             queues: string[];
             last_seen: components["schemas"]["Time"];
+            /** @description With duration in the search: how many the group has without it (the rest of the search still holds); null without. */
+            all_runs: number | null;
         };
         LiveTasks: {
             /** @description The agent's clock: how long a task has waited or run is now minus its time. */
@@ -1508,6 +1522,8 @@ export interface components {
             avg_queries: number;
             with_issues: number;
             last_seen: components["schemas"]["Time"];
+            /** @description With duration in the search: how many the group has without it (the rest of the search still holds); null without. */
+            all_calls: number | null;
         };
         TraceGroup: {
             /** @description The search that names the group. */
@@ -1532,6 +1548,8 @@ export interface components {
             avg_queries: number;
             with_issues: number;
             last_seen: components["schemas"]["Time"];
+            /** @description With duration in the search: how many the group has without it (the rest of the search still holds); null without. */
+            all_runs: number | null;
         };
         RpcRow: {
             /** @description The method, Service/Method: helloworld.Greeter/SayHello. */
@@ -1546,6 +1564,8 @@ export interface components {
             avg_queries: number;
             with_issues: number;
             last_seen: components["schemas"]["Time"];
+            /** @description With duration in the search: how many the group has without it (the rest of the search still holds); null without. */
+            all_calls: number | null;
         };
         /** @description A page's view (its load, an SPA's route change) or an action on it (what the user did that called the API: a click, a submit; background when nobody did). A page's view comes first, then its actions. */
         PageRow: {
@@ -1568,6 +1588,8 @@ export interface components {
             avg_calls: number;
             with_issues: number;
             last_seen: components["schemas"]["Time"];
+            /** @description With duration in the search: how many the group has without it (the rest of the search still holds); null without. */
+            all_count: number | null;
         };
         GraphqlDetail: {
             operation: string;
@@ -1612,6 +1634,8 @@ export interface components {
             /** @description Up to five paths seen. */
             paths: string[];
             last_seen: components["schemas"]["Time"];
+            /** @description With duration in the search: how many the group has without it (the rest of the search still holds); null without. */
+            all_connections: number | null;
         };
         /** @description The project's own web, workers and commands, each a service of its own. */
         ServiceApp: {

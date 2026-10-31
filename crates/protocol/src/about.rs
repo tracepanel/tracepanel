@@ -10,7 +10,7 @@
 //! then (a hello, its checks' frame after it) may be from before the migrate: told later, the migrate is applied to
 //! it again.
 
-use crate::Trace;
+use crate::{Thresholds, Trace};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, PoisonError};
@@ -31,6 +31,8 @@ struct Told {
     open: usize,
     /// The latest migrate command the agent had a trace of.
     migrated: Option<Migrated>,
+    /// The limits its latest hello set for finding issues: what the console offers as a page's "Slow".
+    thresholds: Option<Thresholds>,
 }
 
 /// A migrate command's trace: what it applied and unapplied, `(app, name)` each, in the order it ran them.
@@ -216,6 +218,24 @@ impl About {
         told.migrated = Some(migrated);
     }
 
+    /// The limits a hello of `service` set for finding issues: the latest hello's win.
+    pub(crate) fn limits(&self, service: &str, thresholds: &Thresholds) {
+        if service.is_empty() {
+            return;
+        }
+        let mut apps = self.apps.lock().unwrap_or_else(PoisonError::into_inner);
+        apps.entry(service.to_owned()).or_default().thresholds = Some(thresholds.clone());
+    }
+
+    /// Each app's limits, as its latest hello set them: an app that sent none (OpenTelemetry's, or before the agent
+    /// started) has the defaults.
+    pub fn thresholds(&self) -> HashMap<String, Thresholds> {
+        let apps = self.apps.lock().unwrap_or_else(PoisonError::into_inner);
+        apps.iter()
+            .filter_map(|(service, told)| Some((service.clone(), told.thresholds.clone()?)))
+            .collect()
+    }
+
     /// A connection of `service` closed.
     pub(crate) fn left(&self, service: &str) {
         let mut apps = self.apps.lock().unwrap_or_else(PoisonError::into_inner);
@@ -247,6 +267,32 @@ impl About {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_app_s_limits_are_its_latest_hello_s() {
+        let about = About::default();
+        about.limits(
+            "shop",
+            &Thresholds {
+                slow_sql_ms: 250,
+                ..Thresholds::default()
+            },
+        );
+        about.limits(
+            "shop",
+            &Thresholds {
+                slow_sql_ms: 300,
+                ..Thresholds::default()
+            },
+        );
+        // A hello with no service.name, and an app that only said who it is, have none.
+        about.limits("", &Thresholds::default());
+        about.hello("billing", None, 10);
+
+        let limits = about.thresholds();
+        assert_eq!(limits.keys().collect::<Vec<_>>(), ["shop"]);
+        assert_eq!(limits["shop"].slow_sql_ms, 300);
+    }
 
     #[test]
     fn the_latest_hello_that_says_anything_wins_and_stays_after_the_app_goes() {

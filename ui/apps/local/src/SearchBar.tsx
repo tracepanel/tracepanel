@@ -25,6 +25,7 @@ import {
 import { type FilterItem, FilterMenu } from "./FilterMenu";
 import { LEVELS, levelSummary, levelsFrom, levelTerm } from "./levels";
 import { type CallsSection, type EntrySection, type Section, systemOfSection } from "./routes";
+import { SlowerQuick, type SlowLimit } from "./SlowerQuick";
 import { taskSystem } from "./sections";
 import { TimeRange } from "./TimeRange";
 import { parseAbsolute, shortTime } from "./time";
@@ -165,6 +166,8 @@ export type KnownValues = Partial<
   /** The apps with rows on each page, by its section (`logs`, `calls/sql`): its App filter's choices. */
   apps?: Readonly<Record<string, readonly string[]>>;
   ops?: Readonly<Record<string, readonly string[]>>;
+  /** From when each page calls a row slow, by its section (`traces`, `calls/sql`): Slower than's first pick. */
+  slow?: Readonly<Record<string, SlowLimit>>;
 };
 
 interface QuickFilter {
@@ -192,11 +195,18 @@ interface LevelsFilter extends MultiFilter {
   levels: true;
 }
 
-type Control = QuickFilter | MultiFilter | LevelsFilter | TimeControl;
+/** Slower than: `duration>`, from the page's slow time (`KnownValues.slow`) or a time of one's own. */
+interface SlowerControl {
+  label: "Slower than";
+  slower: true;
+}
+
+type Control = QuickFilter | MultiFilter | LevelsFilter | TimeControl | SlowerControl;
 
 const isMulti = (control: Control): control is MultiFilter => "key" in control;
 const isLevels = (control: Control): control is LevelsFilter => "levels" in control;
 const isTime = (control: Control): control is TimeControl => "verb" in control;
+const isSlower = (control: Control): control is SlowerControl => "slower" in control;
 
 const f = (key: string, op: string, value: string): Filter => ({ key, op, value });
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"];
@@ -253,15 +263,7 @@ const STATUS: QuickFilter = {
     { label: "5xx", terms: [f("status", ">=", "500")] },
   ],
 };
-const DURATION: QuickFilter = {
-  label: "Duration",
-  title: "Slower than",
-  options: [
-    { label: "100 ms", terms: [f("duration", ">", "100ms")] },
-    { label: "500 ms", terms: [f("duration", ">", "500ms")] },
-    { label: "1 s", terms: [f("duration", ">", "1s")] },
-  ],
-};
+const SLOWER: SlowerControl = { label: "Slower than", slower: true };
 const ISSUE: QuickFilter = {
   label: "Issue",
   title: "Filter by issue",
@@ -364,11 +366,11 @@ function systemFilters(system: string, family: Family | undefined): Control[] {
     // What the store has seen, else what the system is known to do.
     values: (known) => known.ops?.[system] ?? meta.ops,
   };
-  return [{ ...TIME, verb: "Called" }, target, operations, FAILED, ...(meta.family === "redis" ? [VIA] : [])];
+  return [{ ...TIME, verb: "Called" }, target, operations, SLOWER, FAILED, ...(meta.family === "redis" ? [VIA] : [])];
 }
 
 const QUICK: Record<Exclude<Section, CallsSection>, Control[]> = {
-  traces: [TIME, STATUS, METHOD, ROUTE, DURATION, ISSUE, CONTAINS],
+  traces: [TIME, STATUS, METHOD, ROUTE, SLOWER, ISSUE, CONTAINS],
   logs: [
     { ...TIME, verb: "Logged" },
     {
@@ -422,7 +424,7 @@ const QUICK: Record<Exclude<Section, CallsSection>, Control[]> = {
     },
     ROUTE,
   ],
-  endpoints: [{ ...TIME, verb: "Called" }, METHOD, ROUTE],
+  endpoints: [{ ...TIME, verb: "Called" }, METHOD, ROUTE, SLOWER],
   tasks: [
     { ...TIME, verb: "Ran" },
     TASK,
@@ -436,17 +438,20 @@ const QUICK: Record<Exclude<Section, CallsSection>, Control[]> = {
       values: (known) => known.task_system ?? [],
       format: taskSystem,
     },
+    SLOWER,
   ],
   aws: [{ ...TIME, verb: "Called" }, FAILED],
   mails: [{ ...TIME, verb: "Sent" }],
   pages: [
     { ...TIME, verb: "Viewed" },
     { label: "Page", title: "Filter by page", key: "page", values: (known) => known.page ?? [] },
+    SLOWER,
   ],
   rpc: [
     { ...TIME, verb: "Called" },
     { label: "Method", title: "Filter by method", key: "rpc", values: (known) => known.rpc ?? [] },
     { label: "System", title: "Filter by RPC system", key: "system", values: ["grpc"] },
+    SLOWER,
   ],
   jobs: [
     { ...TIME, verb: "Ran" },
@@ -459,6 +464,7 @@ const QUICK: Record<Exclude<Section, CallsSection>, Control[]> = {
       values: ["manage.py", "custom"],
       format: (value) => (value === "custom" ? "Traced in code" : "Django command"),
     },
+    SLOWER,
   ],
   graphql: [
     { ...TIME, verb: "Called" },
@@ -469,6 +475,7 @@ const QUICK: Record<Exclude<Section, CallsSection>, Control[]> = {
       values: ["query", "mutation", "subscription"],
       format: capital,
     },
+    SLOWER,
   ],
   websockets: [
     { ...TIME, verb: "Handled" },
@@ -479,6 +486,7 @@ const QUICK: Record<Exclude<Section, CallsSection>, Control[]> = {
       values: ["connect", "receive", "disconnect"],
       format: capital,
     },
+    SLOWER,
   ],
   services: [
     { ...TIME, verb: "Called" },
@@ -505,12 +513,12 @@ const QUICK: Record<Exclude<Section, CallsSection>, Control[]> = {
  */
 const CALLS: Record<EntrySection, Control[]> = {
   endpoints: QUICK.traces,
-  graphql: [{ ...TIME, verb: "Called" }, OPERATION_TYPE, DURATION, ISSUE, CONTAINS],
-  tasks: [{ ...TIME, verb: "Ran" }, TASK, STATE, QUEUE, DURATION, ISSUE],
-  websockets: [{ ...TIME, verb: "Handled" }, DURATION, ISSUE, CONTAINS],
-  jobs: [{ ...TIME, verb: "Ran" }, DURATION, ISSUE, CONTAINS],
-  rpc: [{ ...TIME, verb: "Called" }, DURATION, ISSUE, CONTAINS],
-  pages: [{ ...TIME, verb: "Viewed" }, DURATION, ISSUE, CONTAINS],
+  graphql: [{ ...TIME, verb: "Called" }, OPERATION_TYPE, SLOWER, ISSUE, CONTAINS],
+  tasks: [{ ...TIME, verb: "Ran" }, TASK, STATE, QUEUE, SLOWER, ISSUE],
+  websockets: [{ ...TIME, verb: "Handled" }, SLOWER, ISSUE, CONTAINS],
+  jobs: [{ ...TIME, verb: "Ran" }, SLOWER, ISSUE, CONTAINS],
+  rpc: [{ ...TIME, verb: "Called" }, SLOWER, ISSUE, CONTAINS],
+  pages: [{ ...TIME, verb: "Viewed" }, SLOWER, ISSUE, CONTAINS],
 };
 
 const CALLS_EXAMPLE: Record<EntrySection, string> = {
@@ -1078,6 +1086,7 @@ export function SearchBar(props: SearchBarProps) {
       {error ? <p className="mt-2 text-base text-error">{error}</p> : null}
       <FilterRow
         controls={controlsFor(section, family, callsOf)}
+        page={callsOf ?? section}
         known={known}
         filters={parsed.filters}
         open={open}
@@ -1095,6 +1104,7 @@ export function SearchBar(props: SearchBarProps) {
  */
 function FilterRow({
   controls,
+  page,
   known,
   filters,
   open,
@@ -1103,6 +1113,8 @@ function FilterRow({
   count,
 }: {
   controls: Control[];
+  /** The page's section, as `KnownValues` keys its values. */
+  page: string;
   known: KnownValues | undefined;
   filters: Filter[];
   open: string | null;
@@ -1120,6 +1132,7 @@ function FilterRow({
         <QuickControl
           key={control.label}
           control={control}
+          page={page}
           known={known ?? NO_KNOWN}
           filters={filters}
           open={open === control.label}
@@ -1147,6 +1160,7 @@ function placeholderFor(
 
 interface QuickControlProps {
   control: Control;
+  page: string;
   known: KnownValues;
   filters: Filter[];
   open: boolean;
@@ -1162,6 +1176,7 @@ function QuickControl(props: QuickControlProps) {
 
 function viewOf(control: Control): (props: QuickControlProps) => ReactNode {
   if (isTime(control)) return TimeQuick;
+  if (isSlower(control)) return SlowerView;
   if (isLevels(control)) return LevelQuick;
   return isMulti(control) ? MultiQuick : OptionsQuick;
 }
@@ -1185,6 +1200,20 @@ function TimeQuick({ control, filters, open, onToggle, onChange }: QuickControlP
         if (until) next.push(f("until", ":", until));
         onChange(next, true);
       }}
+    />
+  );
+}
+
+/** Slower than, from the page's slow time as the agent knows it. */
+function SlowerView({ page, known, filters, open, onToggle, onChange }: QuickControlProps) {
+  return (
+    <SlowerQuick
+      filters={filters}
+      limit={known.slow?.[page]}
+      open={open}
+      onOpenChange={openChange(open, onToggle)}
+      onChange={onChange}
+      make={f}
     />
   );
 }

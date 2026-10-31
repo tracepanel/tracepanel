@@ -26,6 +26,7 @@ import { ServicesView } from "./ServicesView";
 import { useScope } from "./scope";
 import { pageMeta } from "./sections";
 import { byProject } from "./services";
+import { slowerOf } from "./slower";
 import { CallsTable, IssuesTable, LogsTable, MailsTable, TracesTable } from "./tables";
 import { rangeTerms } from "./time";
 import { Loading, LoadMore, PageHeader, Reveal } from "./ui";
@@ -439,14 +440,14 @@ function servicesBody({ data, q, setService }: BodyContext): ReactNode {
   );
 }
 
-function callsBody({ source, data, open, setOpen, refine, noun }: BodyContext) {
+function callsBody({ source, data, open, setOpen, refine, noun, q }: BodyContext) {
   return (
     <>
       <SystemTiles summary={data.summary.data} onFailed={() => refine({ failed: "true" })} />
       {listBody(
         data.stats.data,
         (items) => (
-          <CallsTable items={items} source={source} open={open ?? null} onOpen={setOpen} />
+          <CallsTable items={items} source={source} open={open ?? null} onOpen={setOpen} slower={slowerOf(q)} />
         ),
         <Empty title={`No ${noun ?? "operations"} match`}>Try a broader search, or another filter.</Empty>,
       )}

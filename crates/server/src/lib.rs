@@ -623,9 +623,23 @@ async fn mails(State(reader): State<Shared>, Query(query): Params) -> Response {
     )
 }
 
-async fn values(State(reader): State<Shared>, Query(query): Params) -> Response {
+/// `api/values`: what the console offers in its menus, and from when each page calls a row slow, with the limits the
+/// apps' hellos set.
+async fn values(
+    State(reader): State<Shared>,
+    Extension(activity): Extension<Activity>,
+    Query(query): Params,
+) -> Response {
     let service = service(&query);
-    answer(read(&reader, move |reader| reader.known_values(&service)).await)
+    let limits = activity.about.thresholds();
+    answer(
+        read(&reader, move |reader| {
+            let mut known = reader.known_values(&service)?;
+            known["slow"] = reader.slow_limits(&service, &limits)?;
+            Ok(known)
+        })
+        .await,
+    )
 }
 
 /// `service=`: one app's data, as the console's app switcher picks it; "" or absent is every app.

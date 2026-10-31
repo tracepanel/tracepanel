@@ -18,6 +18,7 @@ mod read;
 mod scope;
 mod searches;
 mod services;
+mod slow;
 mod stats;
 mod values;
 mod workflow;

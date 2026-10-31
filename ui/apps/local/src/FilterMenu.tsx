@@ -47,6 +47,8 @@ export interface FilterMenuProps {
   onClear: () => void;
   /** The search key the menu sets (logger): typed in its own box too (logger:org), it is left out of the match. */
   searchKey?: string | undefined;
+  /** Under the list: a value of one's own (Slower than's time). */
+  footer?: ReactNode;
 }
 
 const SEARCH_FROM = 7;
@@ -73,6 +75,7 @@ export function FilterMenu({
   onSelect,
   onClear,
   searchKey,
+  footer,
 }: FilterMenuProps) {
   // Nothing is highlighted until the pointer or the arrow keys pick a row: cmdk marks the first one when the value
   // is empty, so it starts at one no row has.
@@ -140,6 +143,7 @@ export function FilterMenu({
             </CommandGroup>
           </CommandList>
         </Command>
+        {footer}
       </PopoverContent>
     </Popover>
   );
