@@ -10,9 +10,13 @@
 //! Ids are made from the W3C ones, so a trace sent again is the same trace: a span's from the trace id's high half and
 //! its span id, a trace's from the trace id's low half and its root's span id. `w3c.*` attributes keep the W3C ids,
 //! what links one service's trace to the one that called it.
+//!
+//! A span's events: an `exception` is the trace's error, a query sqlx logged a `sql` span of its own (Rust's
+//! `tracing` events, which tracing-opentelemetry exports as events of the span they happened in), and any other a log
+//! record of the trace, as the SDKs send theirs.
 
 use crate::proto::{
-    AnyValue, ExportTraceServiceRequest, FLAG_HAS_IS_REMOTE, FLAG_IS_REMOTE, KeyValue,
+    AnyValue, Event, ExportTraceServiceRequest, FLAG_HAS_IS_REMOTE, FLAG_IS_REMOTE, KeyValue,
     STATUS_ERROR, Span, Value as Any, span_kind,
 };
 use serde_json::{Map, Value, json};
@@ -233,9 +237,10 @@ fn traces(trace: u128, bucket: &Bucket) -> Vec<Value> {
 /// the request it asks about, and which the SDKs leave out too), and Apollo Router's own work outside a request (its
 /// `starting`, a schema reloaded), an internal root of its own scope.
 fn nobodys(root: &Got) -> bool {
-    let attrs = attributes(&root.span.attributes);
-    let preflight = root.span.kind == 2
-        && text(&attrs, &["http.request.method", "http.method"]) == Some("OPTIONS");
+    let mut attrs = attributes(&root.span.attributes);
+    let served = tower_request(&mut attrs) || root.span.kind == 2;
+    let preflight =
+        served && text(&attrs, &["http.request.method", "http.method"]) == Some("OPTIONS");
     let routers_own = &*root.scope == "apollo-router" && root.span.kind == 1;
     preflight || routers_own
 }
@@ -250,22 +255,22 @@ fn hex(bytes: &[u8]) -> String {
 
 /// What came in, from the root's kind and attributes: a request served (HTTP, or an RPC call such as gRPC), a task
 /// taken, or a command run.
-fn kind_of(root: &Span, attrs: &Map<String, Value>) -> (&'static str, &'static str) {
+fn kind_of(span_kind: i32, attrs: &Map<String, Value>) -> (&'static str, &'static str) {
     let http = text(attrs, &["http.request.method", "http.method"]).is_some();
-    if root.kind == 2 && http {
+    if span_kind == 2 && http {
         return ("http", "web");
     }
-    if root.kind == 2 && text(attrs, &["rpc.system"]).is_some() {
+    if span_kind == 2 && text(attrs, &["rpc.system"]).is_some() {
         return ("rpc", "web");
     }
     let processing = matches!(
         text(attrs, &["messaging.operation.type", "messaging.operation"]),
         Some("process" | "receive")
     );
-    if root.kind == 5 || processing {
+    if span_kind == 5 || processing {
         return ("task", "worker");
     }
-    if root.kind == 2 {
+    if span_kind == 2 {
         return ("http", "web");
     }
     ("command", "command")
@@ -479,12 +484,22 @@ fn origin(attrs: &Map<String, Value>) -> Option<String> {
     Some(function.map_or(place.clone(), |function| format!("{place} in {function}")))
 }
 
-fn span_doc(trace: u128, got: &Got, parent: Option<String>) -> Value {
+fn span_doc(trace: u128, got: &Got, parent: Option<String>, bucket: &Bucket) -> Value {
     let span = &got.span;
     let mut attrs = attributes(&span.attributes);
     attrs.insert("otel.span_kind".into(), Value::from(span_kind(span.kind)));
     attrs.insert("otel.scope".into(), Value::from(&*got.scope));
-    if let Some(origin) = origin(&attrs) {
+    // A span a Rust dependency made (reqwest-tracing's call) is where the app's code called it from: the nearest
+    // span up that the app made, as a query sqlx logged is.
+    let in_library = text(&attrs, &["code.file.path", "code.filepath"]).is_some_and(library);
+    let origin = if in_library {
+        id64(&span.parent_span_id)
+            .filter(|parent| !remote(span) && bucket.spans.contains_key(parent))
+            .and_then(|parent| app_origin(bucket, parent))
+    } else {
+        origin(&attrs)
+    };
+    if let Some(origin) = origin {
         attrs.entry("code.origin").or_insert(Value::from(origin));
     }
     // A call that carries the trace on (HTTP, RPC, a message): the id the service it reaches sees as its parent. An
@@ -544,10 +559,322 @@ fn errors(trace: u128, got: &Got, on_root: bool) -> Vec<Value> {
         .collect()
 }
 
+/// tower-http's `TraceLayer` request span (a Rust app's, through tracing-opentelemetry), read as the conventions'
+/// request: a span with `method` and `uri` and none of the conventions' HTTP attributes, exported as an internal span
+/// unless the app sets `otel.kind`. Its method and path are set as `http.request.method` and `url.path`, so it is
+/// named and listed as a request served. Whether it is one.
+fn tower_request(attrs: &mut Map<String, Value>) -> bool {
+    if text(attrs, &["http.request.method", "http.method"]).is_some() {
+        return false;
+    }
+    let (Some(method), Some(uri)) = (text(attrs, &["method"]), text(attrs, &["uri"])) else {
+        return false;
+    };
+    let method_like = !method.is_empty() && method.bytes().all(|byte| byte.is_ascii_uppercase());
+    let Some(path) = uri_path(uri).filter(|_| method_like) else {
+        return false;
+    };
+    let (method, path) = (Value::from(method), Value::from(path));
+    attrs.insert("http.request.method".into(), method);
+    attrs.insert("url.path".into(), path);
+    true
+}
+
+/// A request's URI without its query: `/users/7?tab=1` as `/users/7`, `http://host/users/7` as `/users/7`.
+fn uri_path(uri: &str) -> Option<&str> {
+    let rest = match uri.split_once("://") {
+        Some((_, after)) => after.find('/').map_or("/", |at| &after[at..]),
+        None => uri,
+    };
+    let path = rest.split(['?', '#']).next().unwrap_or_default();
+    path.starts_with('/').then_some(path)
+}
+
+/// The status code tower-http's `TraceLayer` logged as the request finished (its `on_response` event's `status`).
+fn tower_status(span: &Span) -> Option<i64> {
+    span.events.iter().rev().find_map(|event| {
+        let attrs = attributes(&event.attributes);
+        if text(&attrs, &["target"]) != Some("tower_http::trace::on_response") {
+            return None;
+        }
+        match attrs.get("status")? {
+            Value::Number(number) => number.as_i64(),
+            Value::String(number) => number.parse().ok(),
+            _ => None,
+        }
+    })
+}
+
+/// What a span event is to the trace.
+enum Happened {
+    /// An `exception`: the trace's error (`errors`).
+    Exception,
+    /// A query sqlx logged when it was done (target `sqlx::query`): a `sql` span.
+    Query,
+    /// tower-http's `TraceLayer` saying a request started or finished: the request span itself says so.
+    Lifecycle,
+    /// Anything else: a log record.
+    Log,
+}
+
+fn happened(event: &Event, attrs: &Map<String, Value>) -> Happened {
+    let target = text(attrs, &["target"]).unwrap_or_default();
+    if event.name == "exception" {
+        Happened::Exception
+    } else if target == "sqlx::query" {
+        Happened::Query
+    } else if target
+        .strip_prefix("tower_http::trace::")
+        .is_some_and(|step| {
+            matches!(
+                step,
+                "on_request" | "on_response" | "on_body_chunk" | "on_eos"
+            )
+        })
+    {
+        Happened::Lifecycle
+    } else {
+        Happened::Log
+    }
+}
+
+/// A span's events, as the trace's `sql` spans and log records (its exceptions are `errors`).
+fn events(
+    trace: u128,
+    id: u64,
+    root_id: u64,
+    bucket: &Bucket,
+    spans: &mut Vec<Value>,
+    logs: &mut Vec<Value>,
+) {
+    let got = &bucket.spans[&id];
+    if got.span.events.is_empty() {
+        return;
+    }
+    // What a query needs of the span, read once it has one.
+    let mut owner: Option<(Map<String, Value>, Option<String>)> = None;
+    for (index, event) in got.span.events.iter().enumerate() {
+        if event.name == "exception" {
+            continue;
+        }
+        let attrs = attributes(&event.attributes);
+        match happened(event, &attrs) {
+            Happened::Exception | Happened::Lifecycle => {}
+            Happened::Query => {
+                let (owner_attrs, site) = owner.get_or_insert_with(|| {
+                    (attributes(&got.span.attributes), app_origin(bucket, id))
+                });
+                let context = [&attrs, &*owner_attrs, &*got.resource];
+                spans.push(query(trace, id, index, event, &attrs, &context, site));
+            }
+            Happened::Log => {
+                let span = (id != root_id).then(|| span_id(trace, id));
+                logs.push(log(event, attrs, span, &got.scope));
+            }
+        }
+    }
+}
+
+/// A Rust source file of a dependency (crates.io's registry, a git dependency) or of the standard library, as
+/// `file!()` spells them: not the app's own code.
+fn library(file: &str) -> bool {
+    const FOLDERS: [&str; 4] = [
+        "/registry/src/",
+        "\\registry\\src\\",
+        "/git/checkouts/",
+        "\\git\\checkouts\\",
+    ];
+    FOLDERS.iter().any(|folder| file.contains(folder)) || file.starts_with("/rustc/")
+}
+
+/// A dependency's file from its crate's folder on (`tower-http-0.7.1/src/trace/make_span.rs`), the app's as it is.
+fn short_path(file: &str) -> &str {
+    ["/registry/src/", "/git/checkouts/"]
+        .iter()
+        .find_map(|marker| {
+            let (_, after) = file.split_once(marker)?;
+            after.split_once('/').map(|(_, path)| path)
+        })
+        .unwrap_or(file)
+}
+
+/// Where in the app a query ran: the nearest span up from the one it happened in that the app's own code made (a
+/// handler under `#[tracing::instrument]`), as `file:line in name`. sqlx logs its queries from its own code, so the
+/// event says nothing of it.
+fn app_origin(bucket: &Bucket, mut id: u64) -> Option<String> {
+    for _ in 0..bucket.spans.len() {
+        let got = &bucket.spans[&id];
+        let attrs = attributes(&got.span.attributes);
+        if let Some(file) = text(&attrs, &["code.file.path", "code.filepath"])
+            && !library(file)
+        {
+            let line = ["code.line.number", "code.lineno"]
+                .iter()
+                .find_map(|key| attrs.get(*key)?.as_i64());
+            let place = line.map_or(file.to_owned(), |line| format!("{file}:{line}"));
+            let function =
+                text(&attrs, &["code.function.name", "code.function"]).unwrap_or(&got.span.name);
+            return Some(format!("{place} in {function}"));
+        }
+        let parent = id64(&got.span.parent_span_id)?;
+        if remote(&got.span) || !bucket.spans.contains_key(&parent) {
+            return None;
+        }
+        id = parent;
+    }
+    None
+}
+
+/// A number an exporter may send as text: tracing-opentelemetry records a `u64` field by its `Debug`.
+fn count(attrs: &Map<String, Value>, key: &str) -> Option<i64> {
+    match attrs.get(key)? {
+        Value::Number(number) => number.as_i64(),
+        Value::String(number) => number.parse().ok(),
+        _ => None,
+    }
+}
+
+/// A span id of its own for a span made from an event: the same each time the trace is sent.
+fn event_span_id(span: u64, index: usize) -> u64 {
+    // SplitMix64's finalizer over the span's id and the event's place in it.
+    let mut mixed = span ^ (index as u64 + 1).wrapping_mul(0x9e37_79b9_7f4a_7c15);
+    mixed = (mixed ^ (mixed >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    mixed = (mixed ^ (mixed >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+    mixed ^ (mixed >> 31)
+}
+
+/// A query sqlx logged, as the client span an instrumented driver would have sent: it ended when it was logged and
+/// took `elapsed_secs`. Its statement is `db.statement` (empty when the SQL is four words or fewer) or the `summary`.
+/// sqlx doesn't name its database: the system is the span's or the app's `db.system.name` when either has one, else
+/// `other_sql`, any SQL database. Its call site is the app's (`app_origin`), never sqlx's own code.
+fn query(
+    trace: u128,
+    owner: u64,
+    index: usize,
+    event: &Event,
+    attrs: &Map<String, Value>,
+    context: &[&Map<String, Value>],
+    call_site: &Option<String>,
+) -> Value {
+    let summary = text(attrs, &["summary"]).unwrap_or_default();
+    let statement = text(attrs, &["db.statement"])
+        .map(str::trim)
+        .filter(|sql| !sql.is_empty())
+        .unwrap_or_else(|| summary.trim_end_matches(" …"));
+    let system = context
+        .iter()
+        .find_map(|attrs| text(attrs, &["db.system.name", "db.system"]))
+        .unwrap_or("other_sql");
+    let elapsed = attrs
+        .get("elapsed_secs")
+        .and_then(Value::as_f64)
+        .filter(|secs| secs.is_finite() && *secs >= 0.0)
+        .map_or(0, |secs| (secs * 1e9) as u64);
+    let mut out = Map::new();
+    out.insert("db.system.name".into(), Value::from(system));
+    out.insert("db.query.text".into(), Value::from(statement));
+    if let Some(rows) = count(attrs, "rows_returned") {
+        out.insert("db.response.returned_rows".into(), Value::from(rows));
+    }
+    if let Some(rows) = count(attrs, "rows_affected") {
+        out.insert("db.response.affected_rows".into(), Value::from(rows));
+    }
+    out.insert("otel.span_kind".into(), Value::from("client"));
+    out.insert("otel.scope".into(), Value::from("sqlx"));
+    if let Some(site) = call_site {
+        out.insert("code.origin".into(), Value::from(site.as_str()));
+    }
+    let start = event.time_unix_nano.saturating_sub(elapsed);
+    json!({
+        "id": span_id(trace, event_span_id(owner, index)),
+        "parent_id": span_id(trace, owner),
+        "kind": "otel",
+        "name": summary,
+        "start": micros(start),
+        "duration": micros(elapsed),
+        "status": "ok",
+        "attrs": out,
+    })
+}
+
+/// A level as the SDKs write it: `tracing`'s `TRACE`…`ERROR`, or an OpenTelemetry severity's text.
+fn level(attrs: &Map<String, Value>) -> &'static str {
+    let level = text(attrs, &["level", "log.severity", "severity"]).unwrap_or("INFO");
+    match level.to_ascii_lowercase().as_str() {
+        "trace" | "debug" => "debug",
+        "warn" | "warning" => "warning",
+        "error" => "error",
+        "fatal" | "critical" => "critical",
+        _ => "info",
+    }
+}
+
+/// A span event as a log record of the trace: its level from `level`, its logger the event's `target` (a Rust
+/// module, where `tracing` logged it) or else the span's instrumentation, its message the event's name
+/// (tracing-opentelemetry names an event after its `message`). An event logged with no message (`event
+/// src/main.rs:12`, as `tracing` names it) reads as its fields. Its other attributes are kept as `extra.*`, where it
+/// was logged as `code.origin`.
+fn log(event: &Event, attrs: Map<String, Value>, span: Option<String>, scope: &str) -> Value {
+    let mut out = Map::new();
+    if let Some(file) = text(&attrs, &["code.file.path", "code.filepath"]) {
+        let line = ["code.line.number", "code.lineno"]
+            .iter()
+            .find_map(|key| attrs.get(*key)?.as_i64());
+        let file = short_path(file);
+        let place = line.map_or(file.to_owned(), |line| format!("{file}:{line}"));
+        out.insert("code.origin".into(), Value::from(place));
+    }
+    let level = level(&attrs);
+    let logger = text(&attrs, &["target"])
+        .unwrap_or(if scope.is_empty() { "otel" } else { scope })
+        .to_owned();
+    let mut fields = Vec::new();
+    for (key, value) in attrs {
+        if matches!(key.as_str(), "level" | "target" | "message") || key.starts_with("code.") {
+            continue;
+        }
+        let shown = value
+            .as_str()
+            .map_or_else(|| value.to_string(), str::to_owned);
+        fields.push(format!("{key}={shown}"));
+        out.insert(format!("extra.{key}"), value);
+    }
+    let unnamed = event.name.starts_with("event ") && event.name.contains(".rs:");
+    let message = if unnamed && !fields.is_empty() {
+        fields.join(" ")
+    } else {
+        event.name.clone()
+    };
+    json!({
+        "span_id": span,
+        "time": micros(event.time_unix_nano),
+        "level": level,
+        "logger": logger,
+        "message": message,
+        "exception": null,
+        "attrs": out,
+    })
+}
+
 /// One trace: the root as the trace (and as a span too when it is a call out), the rest as its spans.
 fn document(trace: u128, root: &Got, root_id: u64, members: &[u64], bucket: &Bucket) -> Value {
-    let root_attrs = attributes(&root.span.attributes);
-    let (kind, role) = kind_of(&root.span, &root_attrs);
+    let mut root_attrs = attributes(&root.span.attributes);
+    let tower = tower_request(&mut root_attrs);
+    // tracing-opentelemetry records a `u16` field as its digits: the status code as a number again.
+    for key in ["http.response.status_code", "http.status_code"] {
+        if let Some(code) = count(&root_attrs, key) {
+            root_attrs.insert(key.into(), Value::from(code));
+        }
+    }
+    let has_status = ["http.response.status_code", "http.status_code"]
+        .iter()
+        .any(|key| root_attrs.contains_key(*key));
+    if !has_status && let Some(status) = tower_status(&root.span) {
+        root_attrs.insert("http.response.status_code".into(), Value::from(status));
+    }
+    // tower-http's request span is a server's, whatever kind it was exported as.
+    let span_kind = if tower { 2 } else { root.span.kind };
+    let (kind, role) = kind_of(span_kind, &root_attrs);
     let mut attrs = trace_attrs(root, &root_attrs, kind, role);
     // The framework, as the SDKs name it: from the instrumentation that recorded the trace's spans (OpenTelemetry's
     // Java agent records a Spring request from Tomcat, its controller from spring-webmvc).
@@ -578,10 +905,10 @@ fn document(trace: u128, root: &Got, root_id: u64, members: &[u64], bucket: &Buc
             let got = &bucket.spans[id];
             if *id != root_id {
                 let parent = id64(&got.span.parent_span_id).map(|parent| span_id(trace, parent));
-                return span_doc(trace, got, parent);
+                return span_doc(trace, got, parent, bucket);
             }
             if root_is_call {
-                return span_doc(trace, got, None);
+                return span_doc(trace, got, None, bucket);
             }
             // Its attributes are the trace's, as an SDK's request span has none of its own.
             json!({
@@ -596,7 +923,12 @@ fn document(trace: u128, root: &Got, root_id: u64, members: &[u64], bucket: &Buc
             })
         })
         .collect();
+    let mut logs = Vec::new();
+    for id in members {
+        events(trace, *id, root_id, bucket, &mut spans, &mut logs);
+    }
     spans.sort_by_key(|span| span["start"].as_i64());
+    logs.sort_by_key(|log| log["time"].as_i64());
     let errors: Vec<Value> = members
         .iter()
         .flat_map(|id| errors(trace, &bucket.spans[id], *id == root_id))
@@ -610,7 +942,7 @@ fn document(trace: u128, root: &Got, root_id: u64, members: &[u64], bucket: &Buc
         "status": if failed { "error" } else { "ok" },
         "attrs": attrs,
         "spans": spans,
-        "logs": [],
+        "logs": logs,
         "errors": errors,
         "links": [],
         "issues": [],

@@ -40,3 +40,23 @@ fn assemble_traces(bencher: Bencher) {
             assembler.ready(start + QUIET)
         });
 }
+
+/// An axum app's export through tracing-opentelemetry (OTLP/JSON): a request whose queries sqlx logged as events.
+const RUST_EXPORT: &[u8] = include_bytes!("../tests/fixtures/rust-tracing.json");
+
+#[divan::bench]
+fn assemble_rust_traces(bencher: Bencher) {
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        axum::http::header::CONTENT_TYPE,
+        axum::http::HeaderValue::from_static("application/json"),
+    );
+    let start = Instant::now();
+    bencher
+        .with_inputs(|| tracepanel_otlp::decode(&headers, RUST_EXPORT).unwrap())
+        .bench_local_values(|request| {
+            let mut assembler = Assembler::default();
+            assembler.add(request, start);
+            assembler.ready(start + QUIET)
+        });
+}

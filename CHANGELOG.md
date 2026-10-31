@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- A Rust app that exports its `tracing` spans over OTLP, through
+  tracing-opentelemetry, shows as other OpenTelemetry services do.
+  tower-http's `TraceLayer` request span is a request served, named by
+  its method and path, such as `GET /books`, with the status code from
+  its `finished processing request` event. Before, it was a command
+  named `request`.
+- The queries sqlx logs (its `sqlx::query` events) are `sql` spans
+  under the span they ran in, with their statement, rows and time. They
+  are listed and analyzed as any query: N+1, slow and large results.
+  Their call site is the nearest span the app's own code made, such as
+  a handler under `#[tracing::instrument]`, never sqlx's own code. A
+  span a dependency made, such as reqwest-tracing's call, takes the same
+  call site. sqlx doesn't say which database it is: the app's
+  `db.system.name` resource attribute names it, else it shows as `sql`.
+- The other events of OpenTelemetry spans are the trace's log records,
+  in any language. The level comes from `level`, the logger from
+  `target` (the Rust module that logged it) or else the span's scope,
+  and the other attributes are kept as `extra.*`. An event `tracing`
+  logged with no message reads as its fields, such as `id=2 status=200`.
+  tower-http's own events of a request's start and end aren't kept.
+
 ## 0.9.5 (2026-10-31)
 
 ### Added

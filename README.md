@@ -155,6 +155,11 @@ finds the same issues in them. `--otlp HOST:PORT` moves the address, and
 `--otlp off` turns it off. Without `--otlp`, the agent reads the address from
 `TRACEPANEL_OTLP` (`HOST:PORT` or `off`).
 
+A Rust app shows through tracing-opentelemetry. tower-http's `TraceLayer`
+request span is a request, named by its method and path. The queries sqlx logs
+at `sqlx::query=debug` are SQL queries, analyzed as any other, and the other
+`tracing` events are the trace's log records.
+
 Only one agent on a machine gets a port. With several projects running at
 once, the first project's agent takes `127.0.0.1:4318`, and the others take
 no OTLP. Give each other project a port of its own in its environment, where
