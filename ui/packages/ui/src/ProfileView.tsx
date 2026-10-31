@@ -282,8 +282,8 @@ function MemoryNotes({ memory, what }: { memory: Memory; what: MemoryWhat }) {
   const end = what.traces > 1 ? "the end of each trace" : "the end of the trace";
   return (
     <>
-      {what.reason ? <span className="text-xs text-muted-foreground">{what.reason}</span> : null}
-      {what.note ? <span className="text-xs text-muted-foreground">{what.note}</span> : null}
+      <NoteLine text={what.reason} />
+      <NoteLine text={what.note} />
       {memory.sites_at === "end" ? (
         <span className="text-xs text-muted-foreground">Where it was at {end}, not its peak</span>
       ) : null}
@@ -328,10 +328,14 @@ function samplesLine(profile: Profile): string {
   return `${profile.samples.toLocaleString()} samples, one every ${duration(profile.interval_us)}`;
 }
 
+/** A line of the head in small print, when there is something to say. */
+function NoteLine({ text }: { text: string | null | undefined }) {
+  return text ? <span className="text-xs text-muted-foreground">{text}</span> : null;
+}
+
 /** Why the trace was profiled, when its SDK says: "Profiled: by the panel's cookie". */
 function Reason({ trace }: { trace: Trace }) {
-  const reason = profileReason(trace);
-  return reason ? <span className="text-xs text-muted-foreground">{reason}</span> : null;
+  return <NoteLine text={profileReason(trace)} />;
 }
 
 /** The time it couldn't sample (its thread ran other traces), and, timed, that the samples around it fill it in. */
