@@ -56,10 +56,16 @@ export function shareText(
  * over 100 ms"; null without them.
  */
 export function slowerText(terms: string): string | null {
-  const own = /(?:^|\s)duration>=?(\S+)/.exec(terms)?.[1];
-  const call = /(?:^|\s)call_duration>=?(\S+)/.exec(terms)?.[1];
-  const ownText = own === undefined ? null : overText(own);
-  const callText = call === undefined ? null : overText(call);
-  const parts = [ownText, callText === null ? null : `with a call ${callText}`].filter(Boolean);
+  const call = overOf(terms, CALL_SLOWER);
+  const parts = [overOf(terms, OWN_SLOWER), call && `with a call ${call}`].filter(Boolean);
   return parts.length > 0 ? parts.join(", ") : null;
+}
+
+const OWN_SLOWER = /(?:^|\s)duration>=?(\S+)/;
+const CALL_SLOWER = /(?:^|\s)call_duration>=?(\S+)/;
+
+/** "over 500 ms" for the term `pattern` finds in `terms`; null without one. */
+function overOf(terms: string, pattern: RegExp): string | null {
+  const value = pattern.exec(terms)?.[1];
+  return value === undefined ? null : overText(value);
 }

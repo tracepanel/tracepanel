@@ -206,6 +206,72 @@ function NoCalls({ section, groupKey, scope }: { section: EntrySection; groupKey
   );
 }
 
+/** A group's data over its scope, reloaded by the refresh control; undefined while it loads. */
+function useGroup(source: DataSource, section: EntrySection, groupKey: string, scope: Scope): Loaded | undefined {
+  const [loaded, setLoaded] = useState<Loaded | undefined>(undefined);
+  const { cycle, tick } = useRefresh();
+  const { period, slower } = scope;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `tick` reloads on "refresh now", `cycle` on the clock.
+  useEffect(() => {
+    let cancelled = false;
+    track(load(source, section, groupKey, { period, slower })).then(
+      (result) => !cancelled && setLoaded(result),
+      () => !cancelled && setLoaded({ group: null, all: null }),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [section, groupKey, period, slower, source, cycle, tick]);
+  return loaded;
+}
+
+/** The group's crumbs, its name, the way to its calls in the list, and what it looks at: its period, Slower than. */
+function GroupHeader({
+  section,
+  groupKey,
+  scope,
+  calls,
+  all,
+}: {
+  section: EntrySection;
+  groupKey: string;
+  scope: Scope;
+  calls: number;
+  all: number | null;
+}) {
+  const entry = ENTRY[section];
+  const kept = section === "graphql" ? "" : scope.slower;
+  const own = [entry.group(groupKey).replace(entry.scope, "").trim(), kept].join(" ").trim();
+  return (
+    <header className="grid gap-2">
+      <CrumbBar
+        items={[
+          { label: entry.label, href: href({ name: section, q: scope.period }) },
+          { label: crumb(section, groupKey) },
+        ]}
+        actions={<RefreshControl />}
+      />
+      <div className="flex flex-wrap items-center gap-3">
+        <h1 className="flex min-w-0 flex-1 items-center gap-3 font-mono text-2xl font-semibold">
+          <Title section={section} groupKey={groupKey} />
+        </h1>
+        <Button
+          variant="outline"
+          onClick={() => go({ name: section, q: withPeriod(own, scope.period), view: "calls" })}
+        >
+          {calls === 1 ? "View the call" : `View all ${calls} calls`}
+          <ArrowRightIcon />
+        </Button>
+      </div>
+      {/* Its own size, at the start of the line: the header's grid would stretch it across the page. */}
+      <div className="flex flex-wrap items-center gap-3">
+        <GroupPeriod section={section} groupKey={groupKey} scope={scope} />
+        <SlowerChip section={section} groupKey={groupKey} scope={scope} calls={calls} all={all} />
+      </div>
+    </header>
+  );
+}
+
 export function GroupPage({
   section,
   groupKey,
@@ -221,65 +287,19 @@ export function GroupPage({
   slower: string;
   source: DataSource;
 }) {
-  const [loaded, setLoaded] = useState<Loaded | undefined>(undefined);
-  const { cycle, tick } = useRefresh();
-  const entry = ENTRY[section];
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `tick` reloads on "refresh now", `cycle` on the clock.
-  useEffect(() => {
-    let cancelled = false;
-    track(load(source, section, groupKey, { period, slower })).then(
-      (result) => !cancelled && setLoaded(result),
-      () => !cancelled && setLoaded({ group: null, all: null }),
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [section, groupKey, period, slower, source, cycle, tick]);
-
   const scope = { period, slower };
+  const loaded = useGroup(source, section, groupKey, scope);
   if (loaded === undefined) return <Loading />;
   const { group, all } = loaded;
   if (group === null || group.summary === null) return <NoCalls section={section} groupKey={groupKey} scope={scope} />;
   const s = group.summary;
-  const kept = section === "graphql" ? "" : slower;
   const errors = group.issues.filter((issue) => issue.kind === "error");
   const findings = group.issues.filter((issue) => issue.kind !== "error");
   const graphql = "resolvers" in group ? group : null;
   return (
     <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-9 px-10 pt-7 pb-16 *:min-w-0">
       {/* One column no wider than the page: a long error message or SQL wraps instead of widening it. */}
-      <header className="grid gap-2">
-        <CrumbBar
-          items={[
-            { label: entry.label, href: href({ name: section, q: period }) },
-            { label: crumb(section, groupKey) },
-          ]}
-          actions={<RefreshControl />}
-        />
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="flex min-w-0 flex-1 items-center gap-3 font-mono text-2xl font-semibold">
-            <Title section={section} groupKey={groupKey} />
-          </h1>
-          <Button
-            variant="outline"
-            onClick={() =>
-              go({
-                name: section,
-                q: withPeriod([entry.group(groupKey).replace(entry.scope, "").trim(), kept].join(" ").trim(), period),
-                view: "calls",
-              })
-            }
-          >
-            {s.calls === 1 ? "View the call" : `View all ${s.calls} calls`}
-            <ArrowRightIcon />
-          </Button>
-        </div>
-        {/* Its own size, at the start of the line: the header's grid would stretch it across the page. */}
-        <div className="flex flex-wrap items-center gap-3">
-          <GroupPeriod section={section} groupKey={groupKey} scope={scope} />
-          <SlowerChip section={section} groupKey={groupKey} scope={scope} calls={s.calls} all={all} />
-        </div>
-      </header>
+      <GroupHeader section={section} groupKey={groupKey} scope={scope} calls={s.calls} all={all} />
 
       {/* The tiles an entry point's Overview has, the same seven in the same order: one look for a summary. */}
       <StatGrid label="Summary">
