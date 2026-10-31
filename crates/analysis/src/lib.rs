@@ -81,6 +81,11 @@ const HIBERNATE_BATCH_SIZE: &str = "Load the related collections in a few batche
     association or set `hibernate.default_batch_fetch_size` (or `join fetch` it in the query that produced these rows).";
 const EXPOSED_WITH: &str = "Load the referenced entities with the parent rows: add `.with()` for this reference to the \
     DAO query that produced these rows (`load()` for one entity), or join the table in a DSL query.";
+// The Go ORM the Go SDK names in `db.client` (`gorm`); its drivers (`pgx`, `database/sql`) get the generic hint.
+const GORM_JOINS: &str = "Load the related row in the same query: `Joins()` this association in the query that \
+    produced these rows (or `Preload()` it for one extra query).";
+const GORM_PRELOAD: &str = "Load the related rows in one extra query: `Preload()` this association in the query that \
+    produced these rows.";
 const AGGREGATE_PER_ROW: &str = "Compute it for all the rows in one query, grouped by the key (`group by` with the keys \
     in an `in` list), instead of one aggregate query per row.";
 const N_PLUS_ONE: &str = "Load the related rows with the parent rows (a join, or one batched query) instead of one query per row.";
@@ -190,7 +195,7 @@ impl<'a> Resolvers<'a> {
 fn n_plus_one_hint(client: &str, statement: &str, by_pk: bool, in_template: bool) -> &'static str {
     match (client, by_pk) {
         // The JVM ORMs' repository methods run per row: no association to fetch.
-        ("hibernate" | "exposed", _) if AGGREGATE.is_match(statement) => AGGREGATE_PER_ROW,
+        ("hibernate" | "exposed" | "gorm", _) if AGGREGATE.is_match(statement) => AGGREGATE_PER_ROW,
         ("django", true) => SELECT_RELATED,
         ("django", false) => PREFETCH_RELATED,
         ("sqlalchemy", true) => JOINEDLOAD,
@@ -203,6 +208,8 @@ fn n_plus_one_hint(client: &str, statement: &str, by_pk: bool, in_template: bool
         ("hibernate", true) => HIBERNATE_JOIN_FETCH,
         ("hibernate", false) => HIBERNATE_BATCH_SIZE,
         ("exposed", _) => EXPOSED_WITH,
+        ("gorm", true) => GORM_JOINS,
+        ("gorm", false) => GORM_PRELOAD,
         _ if in_template => N_PLUS_ONE_IN_TEMPLATE,
         _ => N_PLUS_ONE,
     }
@@ -1523,6 +1530,40 @@ mod tests {
                 vec![(culprit, Some(N_PLUS_ONE.to_owned()))],
             ]
         );
+    }
+
+    #[test]
+    fn an_n_plus_one_through_gorm_gets_its_hint() {
+        // What a Go app's code reads through GORM, a query per row (a First, a Find, a Count in a loop): the Go SDK
+        // names it in db.client. Its drivers alone (pgx, database/sql) get the generic hint.
+        let author = r#"SELECT * FROM "authors" WHERE "authors"."id" = $1 AND "authors"."deleted_at" IS NULL ORDER BY "authors"."id" LIMIT 1"#;
+        let books =
+            r#"SELECT * FROM "books" WHERE author_id = $1 AND "books"."deleted_at" IS NULL"#;
+        let reviews = r#"SELECT count(*) FROM "reviews" WHERE product_id = $1"#;
+        let mysql_author =
+            "SELECT * FROM `authors` WHERE `authors`.`id` = ? ORDER BY `authors`.`id` LIMIT 1";
+        let by_client = |statement: &str, client: &str| {
+            let spans: Vec<_> = (0..3)
+                .map(|n| {
+                    let attrs = serde_json::json!({
+                        "db.statement": statement, "db.fingerprint": statement, "db.params_hash": format!("p{n}"),
+                        "db.client": client, "code.origin": "internal/books/handler.go:42 in List",
+                    });
+                    ("sql", "SELECT", attrs, 1000)
+                })
+                .collect();
+            hints(&spans)
+        };
+        let culprit = Some("internal/books/handler.go:42 in List".to_owned());
+        let hinted = |hint: &str| vec![(culprit.clone(), Some(hint.to_owned()))];
+
+        assert_eq!(by_client(author, "gorm"), hinted(GORM_JOINS));
+        assert_eq!(by_client(mysql_author, "gorm"), hinted(GORM_JOINS));
+        assert_eq!(by_client(books, "gorm"), hinted(GORM_PRELOAD));
+        assert_eq!(by_client(reviews, "gorm"), hinted(AGGREGATE_PER_ROW));
+
+        assert_eq!(by_client(author, "pgx"), hinted(N_PLUS_ONE));
+        assert_eq!(by_client(books, "database/sql"), hinted(N_PLUS_ONE));
     }
 
     #[test]
