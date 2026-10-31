@@ -656,6 +656,95 @@ fn a_cors_preflight_and_apollo_router_s_own_start_are_nobody_s_traces() {
     );
 }
 
+#[test]
+fn only_an_options_request_that_is_a_preflight_is_left_out() {
+    // A server span asked OPTIONS: its attributes, its status code (2 is an error), and a child span when it did work.
+    let request = |n: u8, attributes: Value, status: i32, child: bool| {
+        let trace = format!("5b8efff798038103d269b633813fd6{n:02x}");
+        let mut spans = vec![json!({
+            "traceId": trace, "spanId": format!("eee19b7ec3c1b1{n:02x}"), "name": format!("OPTIONS /books/{n}"),
+            "kind": 2, "startTimeUnixNano": "1544712660000000000", "endTimeUnixNano": "1544712660100000000",
+            "attributes": attributes, "status": {"code": status}})];
+        if child {
+            spans.push(json!({
+                "traceId": trace, "spanId": format!("fff19b7ec3c1b1{n:02x}"), "parentSpanId": format!("eee19b7ec3c1b1{n:02x}"),
+                "name": "SELECT books", "kind": 3, "startTimeUnixNano": "1544712660010000000",
+                "endTimeUnixNano": "1544712660020000000",
+                "attributes": [{"key": "db.system.name", "value": {"stringValue": "postgresql"}}]}));
+        }
+        spans
+    };
+    let attrs = |n: u8, status: Option<i64>, headers: &[(&str, &str)]| {
+        let mut list = vec![
+            json!({"key": "http.request.method", "value": {"stringValue": "OPTIONS"}}),
+            json!({"key": "url.path", "value": {"stringValue": format!("/books/{n}")}}),
+        ];
+        if let Some(status) = status {
+            list.push(json!({"key": "http.response.status_code", "value": {"intValue": status.to_string()}}));
+        }
+        for (name, value) in headers {
+            list.push(json!({"key": format!("http.request.header.{name}"),
+                             "value": {"arrayValue": {"values": [{"stringValue": value}]}}}));
+        }
+        Value::from(list)
+    };
+    let asks = [("access-control-request-method", "POST")];
+    let spans: Vec<Value> = [
+        // Preflights: the header says so (whatever ran under it), or nothing ran and it answered 2xx (or no status).
+        request(1, attrs(1, Some(204), &asks), 0, false),
+        request(
+            2,
+            attrs(2, Some(200), &[("access_control_request_method", "PUT")]),
+            0,
+            true,
+        ),
+        request(3, attrs(3, Some(204), &[]), 0, false),
+        request(4, attrs(4, None, &[]), 0, false),
+        request(
+            5,
+            attrs(5, Some(200), &[("origin", "http://localhost:3000")]),
+            0,
+            false,
+        ),
+        // Requests: one that did work, one that failed, one answered 404 or 405, one that ended in an error.
+        request(6, attrs(6, Some(200), &[]), 0, true),
+        request(7, attrs(7, Some(500), &[]), 0, false),
+        request(8, attrs(8, Some(405), &[]), 0, false),
+        request(9, attrs(9, Some(200), &[]), 2, false),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    let export = json!({"resourceSpans": [{
+        "resource": {"attributes": [{"key": "service.name", "value": {"stringValue": "books"}}]},
+        "scopeSpans": [{"scope": {"name": "manual"}, "spans": spans}]}]});
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/json"),
+    );
+    let start = Instant::now();
+    let mut assembler = Assembler::default();
+    assembler.add(
+        tracepanel_otlp::decode(&headers, export.to_string().as_bytes()).unwrap(),
+        start,
+    );
+
+    let mut paths: Vec<String> = assembler
+        .ready(start + QUIET)
+        .into_iter()
+        .map(|doc| {
+            doc["attrs"]["http.path"]
+                .as_str()
+                .unwrap_or_default()
+                .to_owned()
+        })
+        .collect();
+    paths.sort();
+
+    assert_eq!(paths, ["/books/6", "/books/7", "/books/8", "/books/9"]);
+}
+
 /// An axum app's export through tracing-opentelemetry 0.34 (tests/fixtures/rust-tracing.json, made by hand in its
 /// shape): tower-http's `TraceLayer` request span, a handler under `#[tracing::instrument]` with the queries sqlx
 /// logged as its events, a reqwest-tracing call, two log lines, and a browser's CORS preflight. The export as it

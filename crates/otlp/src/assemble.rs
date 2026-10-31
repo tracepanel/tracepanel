@@ -228,21 +228,63 @@ fn traces(trace: u128, bucket: &Bucket) -> Vec<Value> {
     }
     groups
         .into_iter()
-        .filter(|(root, _)| !nobodys(&bucket.spans[root]))
+        .filter(|(root, members)| !nobodys(&bucket.spans[root], members.len() == 1))
         .map(|(root, members)| document(trace, &bucket.spans[&root], root, &members, bucket))
         .collect()
 }
 
-/// A trace that is nobody's work, left out: a browser's CORS preflight (`OPTIONS`, which the server answers before
-/// the request it asks about, and which the SDKs leave out too), and Apollo Router's own work outside a request (its
-/// `starting`, a schema reloaded), an internal root of its own scope.
-fn nobodys(root: &Got) -> bool {
+/// A trace that is nobody's work, left out: a browser's CORS preflight (which the server answers before the request
+/// it asks about, and which the SDKs leave out too), and Apollo Router's own work outside a request (its `starting`, a
+/// schema reloaded), an internal root of its own scope. `alone`: the root has no spans under it.
+fn nobodys(root: &Got, alone: bool) -> bool {
+    let routers_own = &*root.scope == "apollo-router" && root.span.kind == 1;
+    routers_own || preflight(root, alone)
+}
+
+/// A CORS preflight: an `OPTIONS` request served that asks for another method (its `Access-Control-Request-Method`
+/// header, when the instrumentation recorded it). Most exports carry no request headers: then an `OPTIONS` that did
+/// no work of its own, no span under it, no error and no status but a 2xx one, is taken for one. An `OPTIONS` that did
+/// work (a handler that queried, failed or answered otherwise) is a request as any other.
+fn preflight(root: &Got, alone: bool) -> bool {
     let mut attrs = attributes(&root.span.attributes);
     let served = tower_request(&mut attrs) || root.span.kind == 2;
-    let preflight =
-        served && text(&attrs, &["http.request.method", "http.method"]) == Some("OPTIONS");
-    let routers_own = &*root.scope == "apollo-router" && root.span.kind == 1;
-    preflight || routers_own
+    if !served || text(&attrs, &["http.request.method", "http.method"]) != Some("OPTIONS") {
+        return false;
+    }
+    if asks_for_method(&attrs) {
+        return true;
+    }
+    let failed = root
+        .span
+        .status
+        .as_ref()
+        .is_some_and(|status| status.code == STATUS_ERROR);
+    let status = ["http.response.status_code", "http.status_code"]
+        .iter()
+        .find_map(|key| count(&attrs, key))
+        .or_else(|| tower_status(&root.span));
+    alone && !failed && status.is_none_or(|status| (200..300).contains(&status))
+}
+
+/// The request's `Access-Control-Request-Method` header, recorded as OpenTelemetry names a request header
+/// (`http.request.header.access-control-request-method`, a list of values; older instrumentations wrote `_` for `-`).
+fn asks_for_method(attrs: &Map<String, Value>) -> bool {
+    attrs.iter().any(|(key, value)| {
+        let named = key
+            .strip_prefix("http.request.header.")
+            .is_some_and(|name| {
+                name.replace('_', "-")
+                    .eq_ignore_ascii_case("access-control-request-method")
+            });
+        let given = match value {
+            Value::String(text) => !text.is_empty(),
+            Value::Array(values) => values
+                .iter()
+                .any(|value| value.as_str().is_some_and(|text| !text.is_empty())),
+            _ => false,
+        };
+        named && given
+    })
 }
 
 fn micros(nanos: u64) -> i64 {
