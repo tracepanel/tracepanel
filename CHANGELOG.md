@@ -61,8 +61,11 @@
   execute, its fetch around each request) are left out, their time
   still in the request. Parsing and planning stay when they take 5 ms
   or more. Grafbase Gateway's request to a subgraph, which it records
-  as an internal span, is a call too. Hive Gateway's start and its
-  schema loaded are no traces.
+  as an internal span, is a call too. Its calls link the subgraphs'
+  traces once its `trace_context` propagation is on, off by default.
+  Hive Gateway's start and its schema loaded are no traces. Hive
+  Gateway is told by its span names and attributes too, so its stages
+  fold under a tracer the app named otherwise.
 - An N+1 a Go app's code ran through GORM (the Go SDK's `db.client`
   `gorm`) names GORM's fix: `Joins()` or `Preload()` the association
   for a related row looked up by its id, `Preload()` it for related

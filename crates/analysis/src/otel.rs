@@ -214,7 +214,8 @@ const ROUTER_STEP_SHOWN: i64 = 5_000;
 ///   but a call (its `Authenticate` and `Load Persisted Operation` are client spans with no URL). Its requests, in
 ///   and out, are otelhttp's, of a scope of their own.
 /// - Hive Gateway and GraphQL Mesh (The Guild's OpenTelemetry plugin, its default tracer `gateway`): its
-///   `graphql.*` spans of an operation.
+///   `graphql.*` spans of an operation. Under a tracer of another name (`hive`: the trace has its attributes,
+///   `hive.graphql` on the operation, `hive.upstream` on a subgraph's request), by those names alone.
 /// - Hive Router (`graphql-hive.router`): its internal spans (its stages, `http.inflight` around a request to a
 ///   subgraph) and its `graphql.operation` server span under the request.
 /// - Grafbase Gateway (`grafbase`): its internal spans but its request to a subgraph, and its `graphql` server
@@ -224,20 +225,12 @@ fn gateway_stage(
     name: &str,
     span_kind: &str,
     call: bool,
+    hive: bool,
 ) -> Option<&'static [&'static str]> {
     match scope {
         APOLLO_ROUTER if span_kind == "internal" => Some(&["parse_query", "query_planning"]),
         _ if scope.starts_with("wundergraph/cosmo/router/") && !call => {
             Some(&["Operation - Parse", "Operation - Plan"])
-        }
-        "gateway"
-            if matches!(
-                name,
-                "graphql.context" | "graphql.parse" | "graphql.validate" | "graphql.execute"
-            ) || name == "graphql.operation"
-                || name.starts_with("graphql.operation ") =>
-        {
-            Some(&["graphql.parse"])
         }
         "graphql-hive.router" if matches!(span_kind, "internal" | "server") => {
             Some(&["graphql.parse", "graphql.plan"])
@@ -245,13 +238,26 @@ fn gateway_stage(
         GRAFBASE if matches!(span_kind, "internal" | "server") && !call => {
             Some(&["prepare operation"])
         }
+        _ if (scope == "gateway" || hive) && hive_gateway_stage(name) => Some(&["graphql.parse"]),
         _ => None,
     }
 }
 
+/// Hive Gateway's spans of an operation: `graphql.operation Books` and its stages.
+fn hive_gateway_stage(name: &str) -> bool {
+    matches!(
+        name,
+        "graphql.operation"
+            | "graphql.context"
+            | "graphql.parse"
+            | "graphql.validate"
+            | "graphql.execute"
+    ) || name.starts_with("graphql.operation ")
+}
+
 /// A GraphQL gateway's span around its request to a subgraph (Hive Gateway's `subgraph.execute (books)`, Hive
 /// Router's `graphql.subgraph.operation`, Grafbase Gateway's `subgraph-request`): a client span with no URL of its
-/// own, a call under it.
+/// own, a call under it. Hive Gateway's under a tracer of another name says so (`hive.upstream`).
 fn gateway_scope(scope: &str) -> bool {
     matches!(
         scope,
@@ -304,6 +310,11 @@ fn fold(doc: &mut Value) {
             parent = parents.get(id).copied();
         }
     }
+    // Hive Gateway's trace, under whatever tracer: its operation or a subgraph's request says so.
+    let hive_marked = |span: &Value| {
+        span["attrs"]["hive.graphql"] == true || span["attrs"]["hive.upstream"] == true
+    };
+    let hive = spans.iter().any(hive_marked);
     let mut gone: HashMap<String, Option<String>> = HashMap::new();
     for span in spans.iter().filter(|span| span["kind"] == KIND) {
         let (Some(id), parent) = (span["id"].as_str(), span["parent_id"].as_str()) else {
@@ -312,13 +323,17 @@ fn fold(doc: &mut Value) {
         let scope = attr(span, "otel.scope").unwrap_or_default();
         let name = span["name"].as_str().unwrap_or_default();
         let span_kind = attr(span, "otel.span_kind").unwrap_or_default();
-        let stage = gateway_stage(&scope, name, &span_kind, call(span)).is_some_and(|shown| {
-            !(shown.contains(&name) && span["duration"].as_i64().unwrap_or(0) >= ROUTER_STEP_SHOWN)
-        });
+        let stage =
+            gateway_stage(&scope, name, &span_kind, call(span), hive).is_some_and(|shown| {
+                !(shown.contains(&name)
+                    && span["duration"].as_i64().unwrap_or(0) >= ROUTER_STEP_SHOWN)
+            });
         let wrapper = client(span)
             && url(span).is_some_and(|url| called.get(id).is_some_and(|urls| urls.contains(&url)));
-        let around_call =
-            client(span) && gateway_scope(&scope) && !call(span) && above_call.contains(id);
+        let around_call = client(span)
+            && (gateway_scope(&scope) || hive_marked(span))
+            && !call(span)
+            && above_call.contains(id);
         if stage || wrapper || around_call {
             gone.insert(id.to_owned(), parent.map(str::to_owned));
         }

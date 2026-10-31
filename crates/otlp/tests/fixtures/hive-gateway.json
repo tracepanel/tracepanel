@@ -8,8 +8,15 @@
       "value": {
        "stringValue": "hive-gateway"
       }
+     },
+     {
+      "key": "service.version",
+      "value": {
+       "stringValue": "2.15.4"
+      }
      }
-    ]
+    ],
+    "droppedAttributesCount": 0
    },
    "scopeSpans": [
     {
@@ -18,141 +25,96 @@
      },
      "spans": [
       {
-       "traceId": "4bf92f3577b34da6a3ce929d0e0e4702",
-       "spanId": "d000000000000001",
-       "parentSpanId": "",
-       "flags": 256,
-       "name": "POST /graphql",
-       "kind": 2,
-       "startTimeUnixNano": "1793344008000000000",
-       "endTimeUnixNano": "1793344008012000000",
+       "traceId": "ac9308b90be181268010f1b13cb27a6f",
+       "spanId": "fdb9e48251f8f8d5",
+       "parentSpanId": "d145d506167cfe6e",
+       "name": "gateway.schema",
+       "kind": 1,
+       "startTimeUnixNano": "1793454426791000000",
+       "endTimeUnixNano": "1793454426794202587",
        "attributes": [
         {
-         "key": "http.method",
+         "key": "gateway.schema.changed",
          "value": {
-          "stringValue": "POST"
-         }
-        },
-        {
-         "key": "http.url",
-         "value": {
-          "stringValue": "http://localhost:4000/graphql"
-         }
-        },
-        {
-         "key": "http.route",
-         "value": {
-          "stringValue": "/graphql"
-         }
-        },
-        {
-         "key": "http.scheme",
-         "value": {
-          "stringValue": "http:"
-         }
-        },
-        {
-         "key": "net.host.name",
-         "value": {
-          "stringValue": "localhost"
-         }
-        },
-        {
-         "key": "http.host",
-         "value": {
-          "stringValue": "localhost:4000"
-         }
-        },
-        {
-         "key": "http.user_agent",
-         "value": {
-          "stringValue": "curl/8.7.1"
-         }
-        },
-        {
-         "key": "hive.request",
-         "value": {
-          "boolValue": true
-         }
-        },
-        {
-         "key": "http.status_code",
-         "value": {
-          "intValue": "200"
+          "boolValue": false
          }
         }
        ],
-       "status": {}
+       "droppedAttributesCount": 0,
+       "events": [],
+       "droppedEventsCount": 0,
+       "status": {
+        "code": 0
+       },
+       "links": [],
+       "droppedLinksCount": 0,
+       "flags": 257
       },
       {
-       "traceId": "4bf92f3577b34da6a3ce929d0e0e4702",
-       "spanId": "d000000000000002",
-       "parentSpanId": "d000000000000001",
-       "flags": 257,
-       "name": "graphql.operation Books",
+       "traceId": "ac9308b90be181268010f1b13cb27a6f",
+       "spanId": "d145d506167cfe6e",
+       "name": "gateway.initialization",
        "kind": 1,
-       "startTimeUnixNano": "1793344008000100000",
-       "endTimeUnixNano": "1793344008011900000",
-       "attributes": [
-        {
-         "key": "hive.graphql",
-         "value": {
-          "boolValue": true
-         }
-        },
-        {
-         "key": "graphql.document",
-         "value": {
-          "stringValue": "query Books{books{title}}"
-         }
-        },
-        {
-         "key": "graphql.operation.type",
-         "value": {
-          "stringValue": "query"
-         }
-        },
-        {
-         "key": "graphql.operation.name",
-         "value": {
-          "stringValue": "Books"
-         }
-        },
-        {
-         "key": "hive.graphql.operation.hash",
-         "value": {
-          "stringValue": "a1b2c3"
-         }
-        }
-       ],
-       "status": {}
-      },
-      {
-       "traceId": "4bf92f3577b34da6a3ce929d0e0e4702",
-       "spanId": "d000000000000003",
-       "parentSpanId": "d000000000000002",
-       "flags": 257,
-       "name": "graphql.context",
-       "kind": 1,
-       "startTimeUnixNano": "1793344008000150000",
-       "endTimeUnixNano": "1793344008000200000",
+       "startTimeUnixNano": "1793454426487286309",
+       "endTimeUnixNano": "1793454426845000000",
        "attributes": [],
-       "status": {}
-      },
+       "droppedAttributesCount": 0,
+       "events": [],
+       "droppedEventsCount": 0,
+       "status": {
+        "code": 0
+       },
+       "links": [],
+       "droppedLinksCount": 0,
+       "flags": 257
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "resource": {
+    "attributes": [
+     {
+      "key": "service.name",
+      "value": {
+       "stringValue": "hive-gateway"
+      }
+     },
+     {
+      "key": "service.version",
+      "value": {
+       "stringValue": "2.15.4"
+      }
+     }
+    ],
+    "droppedAttributesCount": 0
+   },
+   "scopeSpans": [
+    {
+     "scope": {
+      "name": "gateway"
+     },
+     "spans": [
       {
-       "traceId": "4bf92f3577b34da6a3ce929d0e0e4702",
-       "spanId": "d000000000000004",
-       "parentSpanId": "d000000000000002",
-       "flags": 257,
+       "traceId": "247a0dde7fa112f37fab19b540275580",
+       "spanId": "1caa581a32ba0dfb",
+       "parentSpanId": "df05d3c3e64b0870",
        "name": "graphql.parse",
        "kind": 1,
-       "startTimeUnixNano": "1793344008000220000",
-       "endTimeUnixNano": "1793344008006220000",
+       "startTimeUnixNano": "1793454433609000000",
+       "endTimeUnixNano": "1793454433611218119",
        "attributes": [
         {
          "key": "graphql.document",
          "value": {
-          "stringValue": "query Books{books{title}}"
+          "stringValue": "query Books { books { title author { name } } }"
+         }
+        },
+        {
+         "key": "graphql.operation.type",
+         "value": {
+          "stringValue": "query"
          }
         },
         {
@@ -162,22 +124,29 @@
          }
         }
        ],
-       "status": {}
+       "droppedAttributesCount": 0,
+       "events": [],
+       "droppedEventsCount": 0,
+       "status": {
+        "code": 0
+       },
+       "links": [],
+       "droppedLinksCount": 0,
+       "flags": 257
       },
       {
-       "traceId": "4bf92f3577b34da6a3ce929d0e0e4702",
-       "spanId": "d000000000000005",
-       "parentSpanId": "d000000000000002",
-       "flags": 257,
+       "traceId": "247a0dde7fa112f37fab19b540275580",
+       "spanId": "cdca898f7fa708c6",
+       "parentSpanId": "df05d3c3e64b0870",
        "name": "graphql.validate",
        "kind": 1,
-       "startTimeUnixNano": "1793344008006300000",
-       "endTimeUnixNano": "1793344008006600000",
+       "startTimeUnixNano": "1793454433612000000",
+       "endTimeUnixNano": "1793454433619401353",
        "attributes": [
         {
-         "key": "graphql.document",
+         "key": "graphql.operation.type",
          "value": {
-          "stringValue": "query Books{books{title}}"
+          "stringValue": "query"
          }
         },
         {
@@ -187,97 +156,43 @@
          }
         }
        ],
-       "status": {}
+       "droppedAttributesCount": 0,
+       "events": [],
+       "droppedEventsCount": 0,
+       "status": {
+        "code": 0
+       },
+       "links": [],
+       "droppedLinksCount": 0,
+       "flags": 257
       },
       {
-       "traceId": "4bf92f3577b34da6a3ce929d0e0e4702",
-       "spanId": "d000000000000006",
-       "parentSpanId": "d000000000000002",
-       "flags": 257,
-       "name": "graphql.execute",
+       "traceId": "247a0dde7fa112f37fab19b540275580",
+       "spanId": "363cd8f861fcee68",
+       "parentSpanId": "df05d3c3e64b0870",
+       "name": "graphql.context",
        "kind": 1,
-       "startTimeUnixNano": "1793344008006700000",
-       "endTimeUnixNano": "1793344008011700000",
-       "attributes": [
-        {
-         "key": "graphql.operation.type",
-         "value": {
-          "stringValue": "query"
-         }
-        },
-        {
-         "key": "graphql.operation.name",
-         "value": {
-          "stringValue": "Books"
-         }
-        },
-        {
-         "key": "hive.gateway.operation.subgraph.names",
-         "value": {
-          "arrayValue": {
-           "values": [
-            {
-             "stringValue": "books"
-            }
-           ]
-          }
-         }
-        }
-       ],
-       "status": {}
+       "startTimeUnixNano": "1793454433619000000",
+       "endTimeUnixNano": "1793454433619467442",
+       "attributes": [],
+       "droppedAttributesCount": 0,
+       "events": [],
+       "droppedEventsCount": 0,
+       "status": {
+        "code": 0
+       },
+       "links": [],
+       "droppedLinksCount": 0,
+       "flags": 257
       },
       {
-       "traceId": "4bf92f3577b34da6a3ce929d0e0e4702",
-       "spanId": "d000000000000007",
-       "parentSpanId": "d000000000000006",
-       "flags": 257,
-       "name": "subgraph.execute (books)",
-       "kind": 3,
-       "startTimeUnixNano": "1793344008006800000",
-       "endTimeUnixNano": "1793344008011500000",
-       "attributes": [
-        {
-         "key": "graphql.operation.name",
-         "value": {
-          "stringValue": "Books"
-         }
-        },
-        {
-         "key": "graphql.document",
-         "value": {
-          "stringValue": "{books{title}}"
-         }
-        },
-        {
-         "key": "graphql.operation.type",
-         "value": {
-          "stringValue": "query"
-         }
-        },
-        {
-         "key": "hive.gateway.upstream.subgraph.name",
-         "value": {
-          "stringValue": "books"
-         }
-        },
-        {
-         "key": "hive.upstream",
-         "value": {
-          "boolValue": true
-         }
-        }
-       ],
-       "status": {}
-      },
-      {
-       "traceId": "4bf92f3577b34da6a3ce929d0e0e4702",
-       "spanId": "d000000000000008",
-       "parentSpanId": "d000000000000007",
-       "flags": 257,
+       "traceId": "247a0dde7fa112f37fab19b540275580",
+       "spanId": "3d92e9f0a94bfb7f",
+       "parentSpanId": "1285181657e18669",
        "name": "http.fetch",
        "kind": 3,
-       "startTimeUnixNano": "1793344008006850000",
-       "endTimeUnixNano": "1793344008011450000",
+       "startTimeUnixNano": "1793454433651000000",
+       "endTimeUnixNano": "1793454433742447669",
        "attributes": [
         {
          "key": "http.method",
@@ -318,84 +233,369 @@
         {
          "key": "http.status_code",
          "value": {
-          "intValue": "200"
+          "intValue": 200
          }
         }
        ],
-       "status": {}
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "resource": {
-    "attributes": [
-     {
-      "key": "service.name",
-      "value": {
-       "stringValue": "hive-gateway"
-      }
-     }
-    ]
-   },
-   "scopeSpans": [
-    {
-     "scope": {
-      "name": "gateway"
-     },
-     "spans": [
+       "droppedAttributesCount": 0,
+       "events": [],
+       "droppedEventsCount": 0,
+       "status": {
+        "code": 1
+       },
+       "links": [],
+       "droppedLinksCount": 0,
+       "flags": 257
+      },
       {
-       "traceId": "4bf92f3577b34da6a3ce929d0e0e4712",
-       "spanId": "d100000000000001",
-       "parentSpanId": "",
-       "flags": 256,
-       "name": "gateway.initialization",
-       "kind": 1,
-       "startTimeUnixNano": "1793344008000000000",
-       "endTimeUnixNano": "1793344008000900000",
-       "attributes": [],
-       "status": {}
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "resource": {
-    "attributes": [
-     {
-      "key": "service.name",
-      "value": {
-       "stringValue": "hive-gateway"
-      }
-     }
-    ]
-   },
-   "scopeSpans": [
-    {
-     "scope": {
-      "name": "gateway"
-     },
-     "spans": [
-      {
-       "traceId": "4bf92f3577b34da6a3ce929d0e0e4722",
-       "spanId": "d200000000000001",
-       "parentSpanId": "",
-       "flags": 256,
-       "name": "gateway.schema",
-       "kind": 1,
-       "startTimeUnixNano": "1793344008000000000",
-       "endTimeUnixNano": "1793344008000300000",
+       "traceId": "247a0dde7fa112f37fab19b540275580",
+       "spanId": "1285181657e18669",
+       "parentSpanId": "9beaf69fa9cae39f",
+       "name": "subgraph.execute (books)",
+       "kind": 3,
+       "startTimeUnixNano": "1793454433646000000",
+       "endTimeUnixNano": "1793454433743465574",
        "attributes": [
         {
-         "key": "gateway.schema.changed",
+         "key": "graphql.operation.name",
+         "value": {
+          "stringValue": "Books"
+         }
+        },
+        {
+         "key": "graphql.document",
+         "value": {
+          "stringValue": "query Books{books{title author{__typename id}}}"
+         }
+        },
+        {
+         "key": "graphql.operation.type",
+         "value": {
+          "stringValue": "query"
+         }
+        },
+        {
+         "key": "hive.gateway.upstream.subgraph.name",
+         "value": {
+          "stringValue": "books"
+         }
+        },
+        {
+         "key": "hive.upstream",
          "value": {
           "boolValue": true
          }
         }
        ],
-       "status": {}
+       "droppedAttributesCount": 0,
+       "events": [],
+       "droppedEventsCount": 0,
+       "status": {
+        "code": 0
+       },
+       "links": [],
+       "droppedLinksCount": 0,
+       "flags": 257
+      },
+      {
+       "traceId": "247a0dde7fa112f37fab19b540275580",
+       "spanId": "d8fdb4951f203697",
+       "parentSpanId": "61f73b747dfafdf5",
+       "name": "http.fetch",
+       "kind": 3,
+       "startTimeUnixNano": "1793454433749000000",
+       "endTimeUnixNano": "1793454433757439075",
+       "attributes": [
+        {
+         "key": "http.method",
+         "value": {
+          "stringValue": "POST"
+         }
+        },
+        {
+         "key": "http.url",
+         "value": {
+          "stringValue": "http://authors:4002/graphql"
+         }
+        },
+        {
+         "key": "net.host.name",
+         "value": {
+          "stringValue": "authors"
+         }
+        },
+        {
+         "key": "http.host",
+         "value": {
+          "stringValue": "authors:4002"
+         }
+        },
+        {
+         "key": "http.route",
+         "value": {
+          "stringValue": "/graphql"
+         }
+        },
+        {
+         "key": "http.scheme",
+         "value": {
+          "stringValue": "http:"
+         }
+        },
+        {
+         "key": "http.status_code",
+         "value": {
+          "intValue": 200
+         }
+        }
+       ],
+       "droppedAttributesCount": 0,
+       "events": [],
+       "droppedEventsCount": 0,
+       "status": {
+        "code": 1
+       },
+       "links": [],
+       "droppedLinksCount": 0,
+       "flags": 257
+      },
+      {
+       "traceId": "247a0dde7fa112f37fab19b540275580",
+       "spanId": "61f73b747dfafdf5",
+       "parentSpanId": "9beaf69fa9cae39f",
+       "name": "subgraph.execute (authors)",
+       "kind": 3,
+       "startTimeUnixNano": "1793454433749000000",
+       "endTimeUnixNano": "1793454433758268411",
+       "attributes": [
+        {
+         "key": "graphql.operation.name",
+         "value": {
+          "stringValue": "Books"
+         }
+        },
+        {
+         "key": "graphql.document",
+         "value": {
+          "stringValue": "query Books($representations:[_Any!]!){_entities(representations:$representations){__typename ...on Author{name}}}"
+         }
+        },
+        {
+         "key": "graphql.operation.type",
+         "value": {
+          "stringValue": "query"
+         }
+        },
+        {
+         "key": "hive.gateway.upstream.subgraph.name",
+         "value": {
+          "stringValue": "authors"
+         }
+        },
+        {
+         "key": "hive.upstream",
+         "value": {
+          "boolValue": true
+         }
+        }
+       ],
+       "droppedAttributesCount": 0,
+       "events": [],
+       "droppedEventsCount": 0,
+       "status": {
+        "code": 0
+       },
+       "links": [],
+       "droppedLinksCount": 0,
+       "flags": 257
+      },
+      {
+       "traceId": "247a0dde7fa112f37fab19b540275580",
+       "spanId": "9beaf69fa9cae39f",
+       "parentSpanId": "df05d3c3e64b0870",
+       "name": "graphql.execute",
+       "kind": 1,
+       "startTimeUnixNano": "1793454433620000000",
+       "endTimeUnixNano": "1793454433758786736",
+       "attributes": [
+        {
+         "key": "graphql.operation.type",
+         "value": {
+          "stringValue": "query"
+         }
+        },
+        {
+         "key": "graphql.operation.name",
+         "value": {
+          "stringValue": "Books"
+         }
+        },
+        {
+         "key": "hive.gateway.operation.subgraph.names",
+         "value": {
+          "arrayValue": {
+           "values": [
+            {
+             "stringValue": "books"
+            },
+            {
+             "stringValue": "authors"
+            }
+           ]
+          }
+         }
+        }
+       ],
+       "droppedAttributesCount": 0,
+       "events": [],
+       "droppedEventsCount": 0,
+       "status": {
+        "code": 0
+       },
+       "links": [],
+       "droppedLinksCount": 0,
+       "flags": 257
+      },
+      {
+       "traceId": "247a0dde7fa112f37fab19b540275580",
+       "spanId": "df05d3c3e64b0870",
+       "parentSpanId": "09816f4d1ec1db0f",
+       "name": "graphql.operation Books",
+       "kind": 1,
+       "startTimeUnixNano": "1793454433608000000",
+       "endTimeUnixNano": "1793454433758820753",
+       "attributes": [
+        {
+         "key": "hive.graphql",
+         "value": {
+          "boolValue": true
+         }
+        },
+        {
+         "key": "graphql.document",
+         "value": {
+          "stringValue": "query Books{books{title author{name}}}"
+         }
+        },
+        {
+         "key": "graphql.operation.name",
+         "value": {
+          "stringValue": "Books"
+         }
+        },
+        {
+         "key": "graphql.operation.type",
+         "value": {
+          "stringValue": "query"
+         }
+        },
+        {
+         "key": "hive.graphql.operation.hash",
+         "value": {
+          "stringValue": "3f768d68cfcf26372e62ff401356d762"
+         }
+        },
+        {
+         "key": "gateway.cache.response_cache",
+         "value": {
+          "stringValue": "miss"
+         }
+        }
+       ],
+       "droppedAttributesCount": 0,
+       "events": [],
+       "droppedEventsCount": 0,
+       "status": {
+        "code": 0
+       },
+       "links": [],
+       "droppedLinksCount": 0,
+       "flags": 257
+      },
+      {
+       "traceId": "247a0dde7fa112f37fab19b540275580",
+       "spanId": "09816f4d1ec1db0f",
+       "name": "POST /graphql",
+       "kind": 2,
+       "startTimeUnixNano": "1793454433603000000",
+       "endTimeUnixNano": "1793454433759530808",
+       "attributes": [
+        {
+         "key": "http.method",
+         "value": {
+          "stringValue": "POST"
+         }
+        },
+        {
+         "key": "http.url",
+         "value": {
+          "stringValue": "http://localhost:4000/graphql"
+         }
+        },
+        {
+         "key": "http.route",
+         "value": {
+          "stringValue": "/graphql"
+         }
+        },
+        {
+         "key": "http.scheme",
+         "value": {
+          "stringValue": "http:"
+         }
+        },
+        {
+         "key": "net.host.name",
+         "value": {
+          "stringValue": "localhost"
+         }
+        },
+        {
+         "key": "http.host",
+         "value": {
+          "stringValue": "localhost:4000"
+         }
+        },
+        {
+         "key": "http.user_agent",
+         "value": {
+          "stringValue": "curl/8.4.0"
+         }
+        },
+        {
+         "key": "hive.request",
+         "value": {
+          "boolValue": true
+         }
+        },
+        {
+         "key": "hive.request.id",
+         "value": {
+          "stringValue": "c3bd3988-519c-468c-8087-341bdbfb325b"
+         }
+        },
+        {
+         "key": "http.status_code",
+         "value": {
+          "intValue": 200
+         }
+        },
+        {
+         "key": "gateway.cache.response_cache",
+         "value": {
+          "stringValue": "miss"
+         }
+        }
+       ],
+       "droppedAttributesCount": 0,
+       "events": [],
+       "droppedEventsCount": 0,
+       "status": {
+        "code": 1
+       },
+       "links": [],
+       "droppedLinksCount": 0,
+       "flags": 257
       }
      ]
     }
