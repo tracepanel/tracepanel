@@ -355,7 +355,7 @@
         },
         "dump.lang": {
           "type": "string",
-          "description": "On a dump (log.kind dump), optional: the language its values are printed in, to colour them: python, javascript, go, java, kotlin, or another name. Without it the console goes by the dumper (the record's logger) and then by the call site's file extension."
+          "description": "On a dump (log.kind dump), optional: the language its values are printed in, to colour them: python, javascript (TypeScript too), go, java, kotlin, rust, or another name. Without it the console goes by the dumper (the record's logger) and then by the call site's file extension."
         },
         "signal.name": {
           "type": "string",

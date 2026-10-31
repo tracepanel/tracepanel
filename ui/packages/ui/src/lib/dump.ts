@@ -84,6 +84,8 @@ const LANGUAGES = new Map<string, Language>([
   ["java", "java"],
   ["kotlin", "kotlin"],
   ["kt", "kotlin"],
+  ["rust", "rust"],
+  ["rs", "rust"],
 ]);
 
 /** The language a dump says its values are in; undefined when it doesn't say, null for one not coloured. */

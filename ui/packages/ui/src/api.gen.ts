@@ -1923,7 +1923,7 @@ export interface components {
                 /** @description Its length, for a value that has one (a list, a dict, a string). */
                 len: number | null;
             }[];
-            /** @description On a dump (log.kind dump), optional: the language its values are printed in, to colour them: python, javascript, go, java, kotlin, or another name. Without it the console goes by the dumper (the record's logger) and then by the call site's file extension. */
+            /** @description On a dump (log.kind dump), optional: the language its values are printed in, to colour them: python, javascript (TypeScript too), go, java, kotlin, rust, or another name. Without it the console goes by the dumper (the record's logger) and then by the call site's file extension. */
             "dump.lang"?: string;
             /** @description On a signal span and on each of its receivers' spans: the signal's dotted path, e.g. "django.db.models.signals.post_save". The signal span's name is Django's own signal by its name ("post_save"), any other by this path. */
             "signal.name"?: string;
@@ -2387,7 +2387,7 @@ export interface components {
                         /** @description Its length, for a value that has one (a list, a dict, a string). */
                         len: number | null;
                     }[];
-                    /** @description On a dump (log.kind dump), optional: the language its values are printed in, to colour them: python, javascript, go, java, kotlin, or another name. Without it the console goes by the dumper (the record's logger) and then by the call site's file extension. */
+                    /** @description On a dump (log.kind dump), optional: the language its values are printed in, to colour them: python, javascript (TypeScript too), go, java, kotlin, rust, or another name. Without it the console goes by the dumper (the record's logger) and then by the call site's file extension. */
                     "dump.lang"?: string;
                     /** @description On a signal span and on each of its receivers' spans: the signal's dotted path, e.g. "django.db.models.signals.post_save". The signal span's name is Django's own signal by its name ("post_save"), any other by this path. */
                     "signal.name"?: string;

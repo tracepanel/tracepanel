@@ -5,11 +5,11 @@
  *
  * The same tokenizers colour values as the SDKs print them (a dump, a Python repr, JSON): Node's util.inspect
  * (`Order { id: 7, tags: [Array] }`, `Map(2) {…}`), Go's (`main.Order{ID: 7}`, `map[string]int{…}`, `&{…}`), Java's and
- * Kotlin's toString (`Order(id=7)`, `Order[id=7]`, `{a=1}`). In a value a word named before `:` or `=` is a key, never
+ * Kotlin's toString (`Order(id=7)`, `Order[id=7]`, `{a=1}`), Rust's Debug (`Order { id: 7 }`, `Some(3)`). In a value a word named before `:` or `=` is a key, never
  * a keyword (`type: 'book'`, `default=1`).
  */
 
-export type Language = "python" | "go" | "javascript" | "java" | "kotlin";
+export type Language = "python" | "go" | "javascript" | "java" | "kotlin" | "rust";
 
 /** The classes a token takes, as Prism names them: the console's styles color them. */
 export type SourceTokenType =
@@ -44,6 +44,7 @@ const EXTENSIONS: Record<string, Language> = {
   tsx: "javascript",
   java: "java",
   kt: "kotlin",
+  rs: "rust",
 };
 
 /** The language a frame's file is written in, by its name; null for one shown as plain text. */
@@ -70,6 +71,8 @@ const LINE_COMMENT = /\/\/[^\n]*/y;
 const BLOCK_COMMENT = /\/\*[\s\S]*?(?:\*\/|$)/y;
 const DOUBLE_QUOTED = /"(?:\\.|[^"\\\n])*"?/y;
 const SINGLE_QUOTED = /'(?:\\.|[^'\\\n])*'?/y;
+// Rust's suffixed numbers (`1u32`, `2.5f64`); the others are any language's.
+const RUST_NUMBER = /\d[\d_]*(?:\.\d[\d_]*)?(?:e[+-]?\d+)?(?:[iu](?:8|16|32|64|128|size)|f32|f64)\b/iy;
 
 const GRAMMARS: Record<Language, Grammar> = {
   python: {
@@ -147,6 +150,24 @@ const GRAMMARS: Record<Language, Grammar> = {
       ["string", DOUBLE_QUOTED],
       ["string", SINGLE_QUOTED],
       ["decorator", /(?<![\w$])@[\w.:]+/y],
+    ],
+  },
+  rust: {
+    keywords: words(`as async await break const continue crate dyn else enum extern fn for if impl in let loop match
+      mod move mut pub ref return self Self static struct super trait type unsafe use where while`),
+    booleans: words("true false None"),
+    builtins: words(`Some Ok Err Option Result Vec String Box Rc Arc HashMap HashSet BTreeMap i8 i16 i32 i64 i128
+      isize u8 u16 u32 u64 u128 usize f32 f64 bool char str`),
+    spans: [
+      ["comment", LINE_COMMENT],
+      ["comment", BLOCK_COMMENT],
+      ["string", /b?r(#*)"[\s\S]*?(?:"\1|$)/y],
+      ["string", /b?"(?:\\.|[^"\\\n])*"?/y],
+      // A character, not a lifetime ('a): closed on the same few characters.
+      ["string", /b?'(?:\\(?:u\{[\da-f]+\}|x[\da-f]{2}|.)|[^'\\\n])'/iy],
+      ["decorator", /#!?\[[^\]\n]*\]?/y],
+      ["function", /[a-z_]\w*!(?=\s*[([{])/y],
+      ["number", RUST_NUMBER],
     ],
   },
 };

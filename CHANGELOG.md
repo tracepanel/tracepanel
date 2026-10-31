@@ -39,14 +39,19 @@
   objects (`expr`, `repr`, `type`, `len`). Every other attribute is
   still a scalar or a list of scalars.
 - A dump may say the language its values are printed in, `dump.lang`:
-  `python`, `javascript`, `go`, `java`, `kotlin` or another name. Its
+  `python`, `javascript` (TypeScript too), `go`, `java`, `kotlin`,
+  `rust` or another name. Its
   values are coloured in it, else in its dumper's language, else in its
   call site's file's. The colouring reads each SDK's printed values:
   Node's `util.inspect` (`Order { id: 7, items: [Array] }`,
   `Map(2) {…}`), Go's (`main.Order{ID: 7}`, `[]int{1, 2}`,
   `map[string]int{…}`, `&{…}`, `nil`) and Java's and Kotlin's
-  `toString` (`Order(id=7)`, `Order[id=7]`, `{a=1}`, `null`). A key
+  `toString` (`Order(id=7)`, `Order[id=7]`, `{a=1}`, `null`) and
+  Rust's `Debug` (`Order { id: 7 }`, `Some(3)`, `None`, `Ok(…)`). A key
   in a value stays a key, not a keyword, such as `type: 'book'`.
+- The source around an error's frame and a dump's call site in Rust
+  (`.rs`) are coloured as Rust: keywords, strings, characters,
+  comments, attributes, macros, numbers and calls.
 
 ## 0.9.5 (2026-10-31)
 

@@ -192,12 +192,14 @@ test("a dump's values are in the language it says, else its dumper's, else its f
   const said = (lang: string | undefined, logger = "tracepanel", origin = "main.go:3") =>
     dumpLanguage({ logger, attrs: { "code.origin": origin, ...(lang === undefined ? {} : { "dump.lang": lang }) } });
 
-  expect([said("go"), said("Kotlin", "devtools"), said("TypeScript"), said("ruby", "devtools")]).toEqual([
-    "go",
-    "kotlin",
-    "javascript",
-    null,
-  ]);
+  expect([
+    said("go"),
+    said("Kotlin", "devtools"),
+    said("typescript"),
+    said("TypeScript"),
+    said("rust"),
+    said("ruby", "devtools"),
+  ]).toEqual(["go", "kotlin", "javascript", "javascript", "rust", null]);
 
   expect([said(undefined), said(undefined, "devtools"), said("", "tracepanel", "Shop.kt:9 in Shop.buy")]).toEqual([
     "go",
