@@ -14,7 +14,7 @@ use crate::PLACEHOLDER;
 use regex::Regex;
 use serde_json::{Map, Value};
 use sha1::{Digest, Sha1};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::LazyLock;
 use tracepanel_protocol::{Attrs, Received};
 
@@ -198,15 +198,71 @@ pub fn uncomment(received: &mut Received) {
 
 /// Apollo Router's own instrumentation scope.
 const APOLLO_ROUTER: &str = "apollo-router";
-/// The steps of Apollo Router's own that stay in the tree when they take this long (µs): parsing and planning a
-/// query, its own work. Its other steps (`supergraph`, `execution`, `fetch`, `subgraph`, `format_response`…) are
-/// stages every request goes through, their time their calls' or nothing.
+/// Grafbase Gateway's instrumentation scope: every span it exports.
+const GRAFBASE: &str = "grafbase";
+/// The steps of a GraphQL gateway's own that stay in the tree when they take this long (µs): parsing and planning a
+/// query, its own work. Its other steps (Apollo Router's `supergraph`, `execution`, `fetch`, `subgraph`; Cosmo
+/// Router's `Operation - Normalize`, `Engine - Fetch`…) are stages every request goes through, their time their
+/// calls' or nothing.
 const ROUTER_STEP_SHOWN: i64 = 5_000;
-const ROUTER_STEPS: &[&str] = &["parse_query", "query_planning"];
+
+/// A GraphQL gateway's own stage, by the scope its spans come in (and what kind of span it is): the steps of it
+/// that stay when slow, or `None` for a span that is no stage of a gateway's. Its request stays, and so do its
+/// requests to subgraphs, which are calls.
+/// - Apollo Router (`apollo-router`): its internal spans.
+/// - WunderGraph Cosmo Router (`wundergraph/cosmo/router/...`, its handlers' and its engine's tracers): every span
+///   but a call (its `Authenticate` and `Load Persisted Operation` are client spans with no URL). Its requests, in
+///   and out, are otelhttp's, of a scope of their own.
+/// - Hive Gateway and GraphQL Mesh (The Guild's OpenTelemetry plugin, its default tracer `gateway`): its
+///   `graphql.*` spans of an operation.
+/// - Hive Router (`graphql-hive.router`): its internal spans (its stages, `http.inflight` around a request to a
+///   subgraph) and its `graphql.operation` server span under the request.
+/// - Grafbase Gateway (`grafbase`): its internal spans but its request to a subgraph, and its `graphql` server
+///   span under the request.
+fn gateway_stage(
+    scope: &str,
+    name: &str,
+    span_kind: &str,
+    call: bool,
+) -> Option<&'static [&'static str]> {
+    match scope {
+        APOLLO_ROUTER if span_kind == "internal" => Some(&["parse_query", "query_planning"]),
+        _ if scope.starts_with("wundergraph/cosmo/router/") && !call => {
+            Some(&["Operation - Parse", "Operation - Plan"])
+        }
+        "gateway"
+            if matches!(
+                name,
+                "graphql.context" | "graphql.parse" | "graphql.validate" | "graphql.execute"
+            ) || name == "graphql.operation"
+                || name.starts_with("graphql.operation ") =>
+        {
+            Some(&["graphql.parse"])
+        }
+        "graphql-hive.router" if matches!(span_kind, "internal" | "server") => {
+            Some(&["graphql.parse", "graphql.plan"])
+        }
+        GRAFBASE if matches!(span_kind, "internal" | "server") && !call => {
+            Some(&["prepare operation"])
+        }
+        _ => None,
+    }
+}
+
+/// A GraphQL gateway's span around its request to a subgraph (Hive Gateway's `subgraph.execute (books)`, Hive
+/// Router's `graphql.subgraph.operation`, Grafbase Gateway's `subgraph-request`): a client span with no URL of its
+/// own, a call under it.
+fn gateway_scope(scope: &str) -> bool {
+    matches!(
+        scope,
+        APOLLO_ROUTER | "gateway" | "graphql-hive.router" | GRAFBASE
+    ) || scope.starts_with("wundergraph/cosmo/router/")
+}
 
 /// Leave out the spans that only wrap others, their children moved up to the span above them, their time still in
-/// it: Apollo Router's stages, and a client span around another client span to the same URL (the Router's
-/// `subgraph_request` around its `http_request`: one call, its inner span the one whose id the subgraph got).
+/// it: a GraphQL gateway's stages, a gateway's client span with no URL around its call to a subgraph, and a client
+/// span around another client span to the same URL (Apollo Router's `subgraph_request` around its `http_request`:
+/// one call, its inner span the one whose id the subgraph got).
 fn fold(doc: &mut Value) {
     let Some(spans) = doc.get("spans").and_then(Value::as_array) else {
         return;
@@ -223,18 +279,47 @@ fn fold(doc: &mut Value) {
             called.entry(parent).or_default().push(url);
         }
     }
+    // A call: a span with a URL, a method or an RPC system, of a client (or Grafbase's internal request).
+    let call = |span: &Value| {
+        url(span).is_some()
+            || ["http.request.method", "http.method", "rpc.system"]
+                .iter()
+                .any(|key| attr(span, key).is_some())
+    };
+    let parents: HashMap<&str, &str> = spans
+        .iter()
+        .filter_map(|span| Some((span["id"].as_str()?, span["parent_id"].as_str()?)))
+        .collect();
+    // The spans a call is under, at any depth.
+    let mut above_call: HashSet<&str> = HashSet::new();
+    for span in spans
+        .iter()
+        .filter(|span| span["kind"] == KIND && call(span))
+    {
+        let mut parent = span["parent_id"].as_str();
+        for _ in 0..spans.len() {
+            let Some(id) = parent.filter(|id| above_call.insert(id)) else {
+                break;
+            };
+            parent = parents.get(id).copied();
+        }
+    }
     let mut gone: HashMap<String, Option<String>> = HashMap::new();
     for span in spans.iter().filter(|span| span["kind"] == KIND) {
         let (Some(id), parent) = (span["id"].as_str(), span["parent_id"].as_str()) else {
             continue;
         };
-        let stage = attr(span, "otel.scope").as_deref() == Some(APOLLO_ROUTER)
-            && attr(span, "otel.span_kind").as_deref() == Some("internal")
-            && !(ROUTER_STEPS.contains(&span["name"].as_str().unwrap_or_default())
-                && span["duration"].as_i64().unwrap_or(0) >= ROUTER_STEP_SHOWN);
+        let scope = attr(span, "otel.scope").unwrap_or_default();
+        let name = span["name"].as_str().unwrap_or_default();
+        let span_kind = attr(span, "otel.span_kind").unwrap_or_default();
+        let stage = gateway_stage(&scope, name, &span_kind, call(span)).is_some_and(|shown| {
+            !(shown.contains(&name) && span["duration"].as_i64().unwrap_or(0) >= ROUTER_STEP_SHOWN)
+        });
         let wrapper = client(span)
             && url(span).is_some_and(|url| called.get(id).is_some_and(|urls| urls.contains(&url)));
-        if stage || wrapper {
+        let around_call =
+            client(span) && gateway_scope(&scope) && !call(span) && above_call.contains(id);
+        if stage || wrapper || around_call {
             gone.insert(id.to_owned(), parent.map(str::to_owned));
         }
     }
@@ -462,6 +547,19 @@ fn classify(name: &str, attrs: &Attrs, span_kind: &str) -> Mapped {
             let path = which(attrs, &["url.path", "http.target"]);
             format!("HTTP call: method from {from}, URL from {host} and {path}")
         };
+        return because(http_client(attrs, &method), reason);
+    }
+    // Grafbase Gateway's request to a subgraph, which it records as an internal span.
+    if span_kind == "internal"
+        && text(attrs, &["otel.scope"]).as_deref() == Some(GRAFBASE)
+        && let (Some(method), true) = (
+            text(attrs, &["http.request.method"]),
+            text(attrs, &["url.full"]).is_some(),
+        )
+    {
+        let reason = "Grafbase Gateway's request to a subgraph: an internal span with http.request.method and \
+                      url.full. It carries the trace on: links the trace of the service it called"
+            .to_owned();
         return because(http_client(attrs, &method), reason);
     }
     // A call that names only its URL: Apollo Router's request to a subgraph, always a POST of the subgraph's query.
