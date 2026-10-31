@@ -293,6 +293,26 @@
   flex: none;
 }
 
+/* A runtime's monogram (RuntimeIcon): its letters, from data-letters, on a faint square in the icon's colour. CSS
+   draws them, so they are no text of the chip or row the mark sits in. The page widget's pill has the same rule. */
+.dt-monogram {
+  display: inline-grid;
+  place-items: center;
+  container-type: size;
+  border-radius: 25%;
+  background: color-mix(in srgb, currentColor 16%, transparent);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+.dt-monogram::before {
+  content: attr(data-letters);
+  font-size: 56cqh;
+}
+.dt-monogram[data-letters="J"]::before {
+  font-size: 72cqh;
+}
+
 code,
 .dt-code {
   font-family: var(--dt-mono);

@@ -8,6 +8,9 @@ Third-party components and their licenses are listed in THIRD-PARTY-NOTICES.
 
 Product names and logos are trademarks of their respective owners; their use
 here does not imply endorsement. Tracepanel is not affiliated with them. The
-console names frameworks, languages and services in text, and shows the Go,
-Ruby on Rails and Node.js marks unaltered, from Simple Icons (CC0-1.0), to say
-it supports them.
+console names frameworks, languages and services in text, marks each with a
+monogram of its own, and shows an owner's logo, unaltered, only where the
+owner's published policy allows it: the Kotlin icon, from the Kotlin
+Foundation's brand kit, under its brand usage guidelines. The brands, their
+policies and the conditions followed are listed in
+ui/packages/ui/src/icons/BRANDS.md.

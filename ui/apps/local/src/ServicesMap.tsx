@@ -1,5 +1,6 @@
 import {
   type AppLink,
+  AppMark,
   duration,
   plural,
   type ServiceApp,
@@ -23,7 +24,6 @@ import {
 } from "lucide-react";
 import { type CSSProperties, Fragment, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { AppMark } from "./appMark";
 import { type Box, type Diagram, type Link, laidOut, mermaidOf, type Placed, type Point } from "./architecture";
 import { href, type Route } from "./routes";
 import { appTarget, type Host, type HostEdge, hostUses, hostWhere, serviceTarget } from "./services";
@@ -463,7 +463,7 @@ function Card({
       onFocus={(event) => hovering.onTip({ id, x: 0, y: 0 }, event.currentTarget)}
       onBlur={() => hovering.onTip(null)}
     >
-      <span className="grid size-6 shrink-0 place-items-center rounded border bg-muted/60 text-text-2 [&_svg]:size-3.5">
+      <span className="grid size-6 shrink-0 place-items-center rounded border bg-muted/60 text-text-2 [&_svg]:size-3.5 [&_.dt-monogram]:size-3.5">
         {icon}
       </span>
       <span className="min-w-0 flex-1">
@@ -501,7 +501,7 @@ function RoleBox({ placed, hovering }: { placed: Placed<Box>; hovering: Hovering
       placed={placed}
       to={href(appTarget(box.app))}
       // A role it didn't name reads "app".
-      icon={<AppMark runtime={box.runtime} />}
+      icon={<AppMark runtime={box.runtime} labelled />}
       name={box.app.role || "app"}
       detail={box.runtime}
       failed={box.app.errors}

@@ -3,7 +3,14 @@
 import TOKENS from "virtual:tracepanel-tokens";
 import type { ChainCounts } from "@tracepanel/ui/lib/chainCounts";
 import { plural } from "@tracepanel/ui/lib/plural";
-import { APP_ICON_SVG, runtimeKind, runtimeMark, runtimeName, traceRuntime } from "@tracepanel/ui/lib/runtime";
+import {
+  BROWSER_ICON_SVG,
+  type RuntimeMark,
+  runtimeKind,
+  runtimeMark,
+  runtimeName,
+  traceRuntime,
+} from "@tracepanel/ui/lib/runtime";
 import { CARD_STYLE, mountCard, nameWithMethod } from "./card";
 import { countsKey, followViewChain } from "./viewChain";
 
@@ -244,6 +251,9 @@ const STYLE = `
   .logo-3 { fill: var(--dt-lime); }
   .runtime { align-self: center; display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 4px 7px; border-radius: 999px; background: var(--dt-float-chip); color: var(--dt-text-2); font-size: 10.5px; font-weight: 600; letter-spacing: 0.01em; }
   .brand .runtime svg { width: 12px; height: 12px; }
+  .monogram { display: inline-grid; place-items: center; width: 12px; height: 12px; container-type: size; border-radius: 25%; background: color-mix(in srgb, currentColor 16%, transparent); font-weight: 700; line-height: 1; letter-spacing: -0.02em; }
+  .monogram::before { content: attr(data-letters); font-size: 56cqh; }
+  .monogram[data-letters="J"]::before { font-size: 72cqh; }
   .runtime:empty { display: none; }
   .stats { display: inline-flex; align-items: center; min-width: 0; height: 100%; }
   .seg { display: inline-flex; align-items: center; gap: 5px; height: 21px; padding: 0 8.5px; white-space: nowrap; }
@@ -943,8 +953,8 @@ function stored(summary: EntrySummary, row: ListedTrace): EntrySummary {
 }
 
 /**
- * What served the page, as the console's RuntimeIcon draws it: its owner's mark where allowed, else the plain app icon,
- * and its name. An unknown runtime keeps its language's first word.
+ * What served the page, as the console's RuntimeIcon draws it: its owner's logo where allowed, the globe for the
+ * browser, else our monogram; and its name. An unknown runtime keeps its language's first word.
  */
 function showRuntime(element: HTMLElement, label: string | undefined): void {
   if (!label) return;
@@ -953,20 +963,48 @@ function showRuntime(element: HTMLElement, label: string | undefined): void {
     element.textContent = label.split(" · ")[0]?.split(" ")[0] ?? "";
     return;
   }
-  const mark = runtimeMark(kind);
-  if (!mark) {
-    element.innerHTML = APP_ICON_SVG;
-    element.append(runtimeName(kind));
-    return;
+  element.append(runtimeElement(runtimeMark(kind)), runtimeName(kind));
+}
+
+let logoIds = 0;
+
+/** A runtime's mark as an element, the shapes RuntimeIcon renders. */
+function runtimeElement(mark: RuntimeMark): Element {
+  if (mark.type === "browser") return svgOf(BROWSER_ICON_SVG);
+  if (mark.type === "monogram") {
+    // The console's .dt-monogram: CSS draws the letters.
+    const monogram = document.createElement("span");
+    monogram.className = "monogram";
+    monogram.dataset["mark"] = "monogram";
+    monogram.dataset["letters"] = mark.letters;
+    return monogram;
   }
   const svg = document.createElementNS(SVG, "svg");
-  svg.setAttribute("viewBox", "0 0 24 24");
   svg.setAttribute("aria-hidden", "true");
-  const path = document.createElementNS(SVG, "path");
-  path.setAttribute("d", mark.path);
-  path.setAttribute("fill", mark.color ?? "currentColor");
-  svg.append(path);
-  element.append(svg, runtimeName(kind));
+  svg.dataset["mark"] = mark.type;
+  const { logo } = mark;
+  logoIds += 1;
+  const id = `dt-logo-${logoIds}`;
+  const { cx, cy, r, stops } = logo.gradient;
+  const gradient = svgElement("radialGradient", { id, cx, cy, r, gradientUnits: "userSpaceOnUse" });
+  gradient.append(...stops.map(([offset, color]) => svgElement("stop", { offset, "stop-color": color })));
+  const defs = svgElement("defs", {});
+  defs.append(gradient);
+  svg.setAttribute("viewBox", logo.viewBox);
+  svg.append(defs, svgElement("path", { d: logo.path, fill: `url(#${id})` }));
+  return svg;
+}
+
+function svgElement(name: string, attrs: Record<string, string | number>): Element {
+  const element = document.createElementNS(SVG, name);
+  for (const [key, value] of Object.entries(attrs)) element.setAttribute(key, String(value));
+  return element;
+}
+
+function svgOf(markup: string): Element {
+  const template = document.createElement("template");
+  template.innerHTML = markup;
+  return template.content.firstElementChild as Element;
 }
 
 export function mount(options: WidgetOptions = {}): Widget {

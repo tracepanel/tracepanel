@@ -1,12 +1,4 @@
-import {
-  type App,
-  AppDetails,
-  type DataSource,
-  RuntimeIcon,
-  runtimeKind,
-  type ServiceApp,
-  serviceRuntime,
-} from "@tracepanel/ui";
+import { type App, AppDetails, AppMark, type DataSource, type ServiceApp, serviceRuntime } from "@tracepanel/ui";
 import { ActivityIcon, type LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { consoleLinks, href } from "./routes";
@@ -74,10 +66,9 @@ function RoleLinks({ roles }: { roles: readonly ServiceApp[] }) {
 
 /** The app's name with its runtime's mark, and what runs it under. */
 function Title({ service, runtime }: { service: string; runtime: string | null }) {
-  const kind = runtime ? runtimeKind(runtime) : null;
   return (
-    <h1 className="flex items-center gap-3 text-2xl font-semibold tracking-tight [&_svg]:size-6">
-      {kind ? <RuntimeIcon kind={kind} /> : null}
+    <h1 className="flex items-center gap-3 text-2xl font-semibold tracking-tight [&_svg]:size-6 [&_.dt-monogram]:size-6">
+      <AppMark runtime={runtime} />
       {service}
     </h1>
   );
