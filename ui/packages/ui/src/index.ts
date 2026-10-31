@@ -21,7 +21,7 @@ export { queryFingerprint } from "./lib/fingerprint";
 export { isTyping } from "./lib/keys";
 export { percent } from "./lib/percent";
 export { plural } from "./lib/plural";
-export { type RuntimeKind, runtimeKind, runtimeName } from "./lib/runtime";
+export { type RuntimeKind, runtimeKind, runtimeName, serviceRuntime } from "./lib/runtime";
 export { parseSlice, type Slice, sliceParams } from "./lib/slice";
 export { linkProps, type TraceLinks, traceLinkProps } from "./links";
 export { MailList } from "./MailList";

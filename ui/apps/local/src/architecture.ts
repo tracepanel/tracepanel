@@ -148,7 +148,8 @@ function graphOf(map: ServiceMap): { boxes: Box[]; links: Link[] } {
       type: "role" as const,
       id: roleId(role.service, role.role),
       service: role.service,
-      runtime: role.runtime ?? project.runtime,
+      // The project's, as its row on the Services page and its page say it: one app, one look.
+      runtime: project.runtime,
       app: role,
     })),
   );

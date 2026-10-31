@@ -1,4 +1,4 @@
-import type { Counts, DataSource, ServiceApp } from "@tracepanel/ui";
+import { type Counts, type DataSource, type ServiceApp, serviceRuntime } from "@tracepanel/ui";
 import { createContext, type ReactNode, useCallback, useContext, useMemo, useRef, useState } from "react";
 import { useSearch } from "./data";
 
@@ -135,11 +135,9 @@ export function useApps(source: DataSource): App[] | undefined {
 }
 
 function merge(apps: ServiceApp[]): App[] {
-  const seen = new Map<string, App>();
-  for (const app of apps) {
-    const known = seen.get(app.service);
-    if (!known) seen.set(app.service, { service: app.service, runtime: app.runtime });
-    else known.runtime ??= app.runtime;
-  }
-  return [...seen.values()].sort((a, b) => a.service.localeCompare(b.service));
+  const roles = new Map<string, ServiceApp[]>();
+  for (const app of apps) roles.set(app.service, [...(roles.get(app.service) ?? []), app]);
+  return [...roles]
+    .map(([service, its]) => ({ service, runtime: serviceRuntime(its.map((role) => role.runtime)) }))
+    .sort((a, b) => a.service.localeCompare(b.service));
 }
