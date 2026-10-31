@@ -435,6 +435,7 @@ impl Reader {
                 "SELECT DISTINCT route FROM traces WHERE route != '' AND {traces} AND id IN (SELECT trace_id FROM logs) \
                  ORDER BY 1"
             ))?,
+            "apps": apps_by_page(&db, service)?,
             "db": distinct(&format!("SELECT DISTINCT target FROM calls WHERE system = 'sql' AND {of_trace} ORDER BY 1"))?,
             "targets": by_system(&db, "target", of_trace, service)?,
             "ops": by_system(&db, "op", of_trace, service)?,
@@ -1291,6 +1292,74 @@ fn cloud(row: &serde_json::Map<String, Value>) -> Value {
 
 /// One column of each system's operations, its distinct values for the console's filters: the targets (databases,
 /// instances, hosts, topics) or the operations (SELECT, GET, find, publish).
+/// The apps with rows on each page, by the page's name in the console (`endpoints`, `logs`, `calls/sql`…): what its
+/// App menu offers. With `service`, only that app.
+fn apps_by_page(db: &Connection, service: &str) -> rusqlite::Result<Value> {
+    let scope = if service.is_empty() {
+        "1"
+    } else {
+        "service = ?1"
+    };
+    // A page's traces: the condition on the traces table that finds the traces behind its rows.
+    let pages = [
+        ("traces", "1"),
+        ("services", "1"),
+        ("endpoints", "kind = 'http' AND route IS NOT NULL"),
+        ("graphql", "kind = 'http' AND name LIKE 'GraphQL %'"),
+        ("tasks", "kind = 'task'"),
+        ("websockets", "kind = 'websocket'"),
+        ("jobs", "kind = 'command'"),
+        ("rpc", "kind = 'rpc'"),
+        ("pages", "kind = 'page'"),
+        ("logs", "id IN (SELECT trace_id FROM logs)"),
+        ("mails", "id IN (SELECT trace_id FROM mails)"),
+        ("aws", "id IN (SELECT trace_id FROM aws_calls)"),
+        (
+            "errors",
+            "id IN (SELECT trace_id FROM issue_traces JOIN issues USING (fingerprint) WHERE issues.kind = 'error')",
+        ),
+        (
+            "issues",
+            "id IN (SELECT trace_id FROM issue_traces JOIN issues USING (fingerprint) WHERE issues.kind != 'error')",
+        ),
+    ];
+    let mut union: Vec<String> = pages
+        .iter()
+        .map(|(page, condition)| {
+            format!("SELECT '{page}' AS page, service FROM traces WHERE {condition} AND {scope}")
+        })
+        .collect();
+    // Each system's calls page.
+    union.push(format!(
+        "SELECT 'calls/' || calls.system, traces.service FROM calls JOIN traces ON traces.id = calls.trace_id \
+         WHERE {}",
+        scope.replace("service", "traces.service")
+    ));
+    let mut statement = db.prepare(&format!(
+        "SELECT DISTINCT page, service FROM ({}) WHERE service != '' ORDER BY 1, 2",
+        union.join(" UNION ALL ")
+    ))?;
+    let params: Vec<&dyn rusqlite::ToSql> = if statement.parameter_count() == 0 {
+        vec![]
+    } else {
+        vec![&service]
+    };
+    let mut by_page = serde_json::Map::new();
+    let rows = statement.query_map(params.as_slice(), |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+    })?;
+    for row in rows {
+        let (page, app) = row?;
+        by_page
+            .entry(page)
+            .or_insert_with(|| Value::Array(Vec::new()))
+            .as_array_mut()
+            .expect("an array")
+            .push(Value::from(app));
+    }
+    Ok(Value::Object(by_page))
+}
+
 fn by_system(
     db: &Connection,
     column: &str,

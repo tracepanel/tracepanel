@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Every page of the console has an App filter when its rows come from
+  more than one app: the HTTP, GraphQL, Tasks, WebSocket, Jobs, RPC and
+  Pages pages, every system's page (Database, Redis, Kafka, HTTP
+  calls…), AWS, Emails, Logs, Errors, Issues, Services and the traces.
+  It searches `service:`, as the sidebar's app does, and lists the apps
+  with rows on that page only. With the sidebar on one app it is not
+  shown. `/api/values` answers `apps`, the apps of each page.
+
+### Changed
+
+- The Logs page's Level menu lists each level once. Its "WARNING and
+  above" and "ERROR and above" rows are gone: a level's row offers "and
+  above" on hover, and the chip says "WARNING and above" whenever the
+  levels checked are a level and every one above it, however they were
+  checked. The search keeps `level>=warning`, so links from before
+  filter the same.
+
 ## 0.9.4 (2026-10-30)
 
 ### Fixed

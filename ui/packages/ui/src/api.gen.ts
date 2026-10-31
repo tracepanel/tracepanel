@@ -1363,6 +1363,10 @@ export interface components {
             route: string[];
             /** @description Routes whose requests logged anything. */
             log_route: string[];
+            /** @description The apps (service.name) with rows on each page of the console, by its name: {"logs": ["shop", "billing"], "calls/sql": ["shop"]}. */
+            apps: {
+                [key: string]: string[];
+            };
             logger: string[];
             /** @description Database aliases. */
             db: string[];

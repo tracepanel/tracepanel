@@ -1165,6 +1165,82 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    #[test]
+    fn records_are_found_by_the_app_that_wrote_them() {
+        let dir =
+            std::env::temp_dir().join(format!("tracepanel-store-log-apps-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = path_in(&dir);
+        let mut store = Store::open(&path).unwrap();
+        let trace = |id: &str, service: &str, route: Option<&str>, message: Option<&str>| {
+            let logs: Vec<Value> = message
+                .map(|message| {
+                    serde_json::json!({"span_id": null, "time": 10, "level": "info", "logger": "app",
+                                       "message": message, "exception": null, "attrs": {}})
+                })
+                .into_iter()
+                .collect();
+            let doc = serde_json::json!({
+                "id": id, "kind": "http", "name": "GET /", "start": 0, "duration": 1000, "status": "ok",
+                "attrs": {"service.name": service, "http.route": route}, "spans": [], "errors": [], "links": [],
+                "issues": [], "logs": logs,
+            });
+            Received {
+                trace: serde_json::from_value(doc.clone()).unwrap(),
+                doc: doc.to_string(),
+            }
+        };
+        store
+            .write(&[
+                trace("A1", "shop", Some("/orders"), Some("order placed")),
+                trace("B1", "billing", Some("/invoices"), Some("invoice sent")),
+                trace("C1", "quiet", None, None),
+                aws_request(),
+            ])
+            .unwrap();
+        let reader = Reader::new(&path);
+        let messages = |query: &str| -> Vec<Value> {
+            reader
+                .search_logs(query, 50, None)
+                .unwrap()
+                .items
+                .iter()
+                .map(|log| log["message"].clone())
+                .collect()
+        };
+
+        assert_eq!(messages("service:shop"), [Value::from("order placed")]);
+        assert_eq!(
+            messages("service:billing,shop"),
+            [Value::from("invoice sent"), Value::from("order placed")]
+        );
+
+        // Each page's App menu offers the apps with rows there: the logs' leaves out the app that logged nothing.
+        assert_eq!(
+            reader.known_values("").unwrap()["apps"],
+            serde_json::json!({
+                "aws": ["shop"],
+                "calls/aws-api": ["shop"],
+                "calls/storage": ["shop"],
+                "endpoints": ["billing", "shop"],
+                "logs": ["billing", "shop"],
+                "services": ["billing", "quiet", "shop"],
+                "traces": ["billing", "quiet", "shop"],
+            })
+        );
+        // The sidebar on one app: its own only, so no menu offers another.
+        assert_eq!(
+            reader.known_values("billing").unwrap()["apps"],
+            serde_json::json!({
+                "endpoints": ["billing"],
+                "logs": ["billing"],
+                "services": ["billing"],
+                "traces": ["billing"],
+            })
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     /// A request that calls AWS: a Django storage on S3 (its PutObject inside it), two HeadObjects of S3's API (the
     /// second missing, after a retry), and a Lambda.
     fn aws_request() -> Received {
