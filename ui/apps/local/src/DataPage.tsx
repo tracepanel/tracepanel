@@ -17,6 +17,7 @@ import { useLatch, usePaged, useSearch } from "./data";
 import { EmptyPage, PageShell } from "./EmptyPage";
 import { refineQuery } from "./EntryPage";
 import { usePaintWhen } from "./firstPaint";
+import { LEVELS, levelsFrom, levelTerm } from "./levels";
 import { Figure, OverviewNumbers, OverviewRange, OverviewSection, useOverviewOpen } from "./Overview";
 import { RefreshControl } from "./refresh";
 import { type CallsSection, type EntrySection, go, type Section, systemOfSection, traceHref } from "./routes";
@@ -184,29 +185,18 @@ function freeText(q: string): string[] {
     .filter((word) => !/^-|[:<>=]/.test(word));
 }
 
-const LEVELS = ["debug", "info", "warning", "error", "critical"];
-
 /** The levels a search has: `level:warning,error` → warning, error; `level>=warning` → warning and every one above. */
 function levelsOf(q: string): string[] {
   const term = q.split(/\s+/).find((token) => /^level(:|>=)/.test(token));
   if (!term) return [];
   if (!term.startsWith("level>=")) return term.slice("level:".length).split(",").filter(Boolean);
-  return LEVELS.slice(Math.max(LEVELS.indexOf(term.slice("level>=".length).toLowerCase()), 0));
+  return levelsFrom(term.slice("level>=".length));
 }
 
-/**
- * The search's level filter for the levels the legend leaves shown: a level and every one above it as `level>=`, as
- * the Level menu says it, any other pick as a list.
- */
-function levelTerm(levels: readonly string[]): string {
-  const from = levels[0] ?? "";
-  return isRange(levels, from) ? `>=${from}` : levels.join(",");
-}
-
-/** Whether the levels are `from` and every one above it, more than one. */
-function isRange(levels: readonly string[], from: string): boolean {
-  const above = LEVELS.slice(LEVELS.indexOf(from));
-  return levels.length > 1 && above.length === levels.length && above.every((level) => levels.includes(level));
+/** The search's level filter for the levels the legend leaves shown, as the Level menu says it. */
+function levelQuery(levels: readonly string[]): string {
+  const { op, value } = levelTerm(levels);
+  return op === ":" ? value : `${op}${value}`;
 }
 
 /** Whether a search has a time range: the chart stays then, empty, to show the range and drag another. */
@@ -268,7 +258,7 @@ function LogsOverview({
       <LogsChart
         series={series}
         onSelect={(start, end) => onRefine(rangeTerms(start, end))}
-        levels={{ chosen: levelsOf(q), onChoose: (levels) => onRefine({ level: levelTerm(levels) }) }}
+        levels={{ chosen: levelsOf(q), onChoose: (levels) => onRefine({ level: levelQuery(levels) }) }}
       />
     </OverviewSection>
   );

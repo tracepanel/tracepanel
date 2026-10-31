@@ -1,4 +1,5 @@
 import {
+  AppChip,
   IssueChip,
   type IssueKind,
   LogLevel,
@@ -22,6 +23,7 @@ import {
   useState,
 } from "react";
 import { type FilterItem, FilterMenu } from "./FilterMenu";
+import { LEVELS, levelSummary, levelsFrom, levelTerm } from "./levels";
 import { type CallsSection, type EntrySection, type Section, systemOfSection } from "./routes";
 import { taskSystem } from "./sections";
 import { TimeRange } from "./TimeRange";
@@ -160,6 +162,8 @@ export type KnownValues = Partial<
 > & {
   /** Each system's targets and operations, by the name its page has (`sql`, `redis`, `mongodb`…). */
   targets?: Readonly<Record<string, readonly string[]>>;
+  /** The apps with rows on each page, by its section (`logs`, `calls/sql`): its App filter's choices. */
+  apps?: Readonly<Record<string, readonly string[]>>;
   ops?: Readonly<Record<string, readonly string[]>>;
 };
 
@@ -183,15 +187,15 @@ interface MultiFilter {
   display?: (value: string) => ReactNode;
 }
 
-/** The Level filter: single levels, and `atLeast` offered as a level and every one above it (`level>=warning`). */
+/** The Level filter: the levels; a level and every one above it is one pick (`level>=warning`). */
 interface LevelsFilter extends MultiFilter {
-  atLeast: readonly string[];
+  levels: true;
 }
 
 type Control = QuickFilter | MultiFilter | LevelsFilter | TimeControl;
 
 const isMulti = (control: Control): control is MultiFilter => "key" in control;
-const isLevels = (control: Control): control is LevelsFilter => "atLeast" in control;
+const isLevels = (control: Control): control is LevelsFilter => "levels" in control;
 const isTime = (control: Control): control is TimeControl => "verb" in control;
 
 const f = (key: string, op: string, value: string): Filter => ({ key, op, value });
@@ -302,6 +306,23 @@ const STATE: MultiFilter = {
   values: ["success", "failure", "retry"],
   format: capital,
 };
+/**
+ * Every page's App filter: the app a row came from, by its trace's service, `service:` as the sidebar's app scope
+ * says it. Offered when two apps or more have rows on the page; with one app, or the sidebar on one, there is
+ * nothing to pick.
+ */
+function appFilter(page: string): MultiFilter {
+  return {
+    label: "App",
+    title: "Filter by app",
+    key: "service",
+    values: (known) => {
+      const apps = known.apps?.[page] ?? [];
+      return apps.length > 1 ? apps : [];
+    },
+    display: (app) => <AppChip name={app} compact />,
+  };
+}
 const QUEUE: MultiFilter = {
   label: "Queue",
   title: "Filter by queue",
@@ -354,11 +375,11 @@ const QUICK: Record<Exclude<Section, CallsSection>, Control[]> = {
       label: "Level",
       title: "Filter by level",
       key: "level",
-      values: ["debug", "info", "warning", "error", "critical"],
+      values: LEVELS,
       // As the table and the chart name it.
       format: (level) => level.toUpperCase(),
       display: (level) => <LogLevel level={level} />,
-      atLeast: ["warning", "error"],
+      levels: true,
     } satisfies LevelsFilter,
     { label: "Logger", title: "Filter by logger", key: "logger", values: (known) => known.logger ?? [] },
     // The routes whose requests logged anything: the others would find nothing here.
@@ -565,8 +586,15 @@ function exampleFor(section: Section, family: Family | undefined, callsOf: Entry
   return op ? `op:${op}` : "failed:true";
 }
 
-/** The filter chips: an entry point's calls', a system's, else the section's own. */
+/** The filter chips: an entry point's calls', a system's, else the section's own; the App filter after Time. */
 function controlsFor(section: Section, family: Family | undefined, callsOf: EntrySection | undefined): Control[] {
+  const [first, ...rest] = ownControls(section, family, callsOf);
+  const app = appFilter(callsOf ?? section);
+  if (!first) return [app];
+  return isTime(first) ? [first, app, ...rest] : [app, first, ...rest];
+}
+
+function ownControls(section: Section, family: Family | undefined, callsOf: EntrySection | undefined): Control[] {
   if (callsOf) return CALLS[callsOf];
   const system = systemOfSection(section);
   return system ? systemFilters(system, family) : QUICK[section as keyof typeof QUICK];
@@ -1264,65 +1292,53 @@ function OptionsQuick({ control, known, filters, open, onToggle, onChange }: Qui
   );
 }
 
-/* ---------- the Level filter: single levels, or a level and every one above it ---------- */
+/* ---------- the Level filter: the levels, a pick of a level and every one above it said so ---------- */
 
-const LEVELS = ["debug", "info", "warning", "error", "critical"];
-// A row of the menu that picks a level and those above it: its value, `>=` and the level.
-const AT_LEAST = ">=";
-
-/** The levels a search's level filters let through: `level>=warning`'s, else `level:a,b`'s. */
-function levelPick(filters: readonly Filter[]): { from: string | undefined; picked: Set<string> } {
-  const from = filters.find((item) => item.key === "level" && item.op === AT_LEAST)?.value.toLowerCase();
-  if (from) return { from, picked: new Set(LEVELS.slice(LEVELS.indexOf(from))) };
-  return { from, picked: pickedOf(filters.find((item) => item.key === "level" && item.op === ":")) };
+/** The levels a search's level filter lets through: `level>=warning`'s, else `level:a,b`'s. */
+function levelPick(filters: readonly Filter[]): Set<string> {
+  const from = filters.find((item) => item.key === "level" && item.op === ">=")?.value;
+  if (from) return new Set(levelsFrom(from));
+  return pickedOf(filters.find((item) => item.key === "level" && item.op === ":"));
 }
 
-/** A "WARNING and above" row: the level's tag, as in the table, and the words. */
-function AtLeast({ level }: { level: string }) {
-  return (
-    <span className="flex items-center gap-1.5">
-      <LogLevel level={level} />
-      <span className="text-muted-foreground">and above</span>
-    </span>
-  );
-}
-
-/** The Level menu's rows: each level, then "WARNING and above" and "ERROR and above". */
-function levelItems(control: LevelsFilter, from: string | undefined, picked: ReadonlySet<string>): FilterItem[] {
-  const ranges = control.atLeast.map((level) => ({
-    value: `${AT_LEAST}${level}`,
-    label: `${level.toUpperCase()} and above`,
-    selected: from === level,
-    display: <AtLeast level={level} />,
-  }));
-  return [...multiItems(control, LEVELS, picked), ...ranges];
+/** The filters with a pick of levels: `level>=warning` for a level and every one above it, else `level:a,b`. */
+function withLevels(rest: Filter[], picked: ReadonlySet<string>): Filter[] {
+  if (picked.size === 0) return rest;
+  const { op, value } = levelTerm(picked);
+  return [...rest, f("level", op, value)];
 }
 
 /**
- * The filters after a pick in the Level menu: a range replaces any level filter (or goes, picked again); a single
- * level is checked or unchecked among those shown checked, a range's included.
+ * A level's row: its tag, as in the table, and on hover the "and above" that picks it and every level above it (not
+ * on the lowest, that is every level, nor on the highest, that is itself).
  */
-function levelFilters(rest: Filter[], value: string, from: string | undefined, picked: ReadonlySet<string>): Filter[] {
-  if (!value.startsWith(AT_LEAST)) return withPick(rest, "level", LEVELS, flipped(picked, value));
-  const level = value.slice(AT_LEAST.length);
-  return level === from ? rest : [...rest, f("level", AT_LEAST, level)];
+function levelItems(control: LevelsFilter, picked: ReadonlySet<string>, onAbove: (level: string) => void) {
+  return multiItems(control, LEVELS, picked).map(
+    (item): FilterItem =>
+      item.value === LEVELS[0] || item.value === LEVELS.at(-1)
+        ? item
+        : {
+            ...item,
+            action: { label: "and above", title: `${item.label} and above`, onClick: () => onAbove(item.value) },
+          },
+  );
 }
 
 function LevelQuick({ control, filters, open, onToggle, onChange }: QuickControlProps) {
   const levels = control as LevelsFilter;
-  const { from, picked } = levelPick(filters);
+  const picked = levelPick(filters);
   const rest = filters.filter((item) => item.key !== "level");
   return (
     <FilterMenu
       label={levels.label}
       title={levels.title}
       searchKey="level"
-      summary={from ? `≥ ${from.toUpperCase()}` : pickSummary(picked, (level) => level.toUpperCase())}
-      items={levelItems(levels, from, picked)}
+      summary={levelSummary(picked)}
+      items={levelItems(levels, picked, (level) => onChange(withLevels(rest, new Set(levelsFrom(level))), false))}
       multiple={true}
       open={open}
       onOpenChange={openChange(open, onToggle)}
-      onSelect={(value) => onChange(levelFilters(rest, value, from, picked), false)}
+      onSelect={(value) => onChange(withLevels(rest, flipped(picked, value)), false)}
       onClear={() => onChange(rest, true)}
     />
   );

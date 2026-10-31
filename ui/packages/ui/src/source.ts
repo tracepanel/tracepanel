@@ -191,6 +191,7 @@ export const NO_KNOWN: KnownValues = {
   in: [],
   // biome-ignore lint/style/useNamingConvention: wire format.
   log_route: [],
+  apps: {},
   span: [],
   extra: [],
 };

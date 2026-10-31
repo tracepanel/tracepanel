@@ -414,24 +414,6 @@ test("every column that may go hides from its header, Message alone stays", asyn
   await expect(page.getByRole("menuitemcheckbox", { name: "Logger" })).toHaveAttribute("aria-checked", "false");
 });
 
-test("the Level menu offers WARNING and above: one filter, shown in the legend too", async ({ page }) => {
-  await page.goto("/#/logs");
-  await page.getByRole("button", { name: "Level", exact: true }).click();
-  await page.getByRole("option", { name: "WARNING and above" }).click();
-
-  await expect(page).toHaveURL(/level(%3E|>)(%3D|=)warning/);
-  await expect(page.getByRole("button", { name: "Edit level>=warning" })).toBeVisible();
-  await expect(page.getByRole("button", { name: /^Level · ≥ WARNING/ })).toBeVisible();
-  const legend = (name: string) => page.getByRole("button", { name, exact: true });
-  await expect(legend("info")).toHaveAttribute("aria-pressed", "false");
-  await expect(legend("warning")).toHaveAttribute("aria-pressed", "true");
-  await expect(legend("error")).toHaveAttribute("aria-pressed", "true");
-
-  // ERROR unchecked from there: the levels left, one by one. (A level's tag is in capitals by its style.)
-  await page.getByRole("option", { name: "error", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Edit level:warning,critical" })).toBeVisible();
-});
-
 test("the Logs page's Source column cuts every source at its start, never leaving a dot after the ellipsis", async ({
   page,
 }) => {

@@ -1683,7 +1683,7 @@ components:
     KnownValues:
       type: object
       additionalProperties: false
-      required: [route, log_route, logger, db, targets, ops, task, task_system, queue, job, rpc, page, in, span, extra]
+      required: [route, log_route, apps, logger, db, targets, ops, task, task_system, queue, job, rpc, page, in, span, extra]
       properties:
         task: { type: array, description: Celery task names., items: { type: string } }
         task_system:
@@ -1696,6 +1696,10 @@ components:
         page: { type: array, description: "Paths of pages viewed in a browser.", items: { type: string } }
         route: { type: array, items: { type: string } }
         log_route: { type: array, description: Routes whose requests logged anything., items: { type: string } }
+        apps:
+          type: object
+          description: "The apps (service.name) with rows on each page of the console, by its name: {\"logs\": [\"shop\", \"billing\"], \"calls/sql\": [\"shop\"]}."
+          additionalProperties: { type: array, items: { type: string } }
         logger: { type: array, items: { type: string } }
         db: { type: array, description: Database aliases., items: { type: string } }
         targets:

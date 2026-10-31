@@ -20,6 +20,15 @@ export interface FilterItem {
   tone?: string | undefined;
   /** Shown instead of the label, e.g. the same level tag as in the table. */
   display?: ReactNode;
+  /** A second pick on the row, shown at its end on hover: the Level menu's "and above". */
+  action?: FilterAction | undefined;
+}
+
+export interface FilterAction {
+  label: string;
+  /** What it picks, said whole: "WARNING and above". */
+  title: string;
+  onClick: () => void;
 }
 
 export interface FilterMenuProps {
@@ -118,26 +127,11 @@ export function FilterMenu({
                     onSelect(item.value);
                     if (!multiple) onOpenChange(false);
                   }}
-                  className="gap-2.5 px-2.5 py-1.5 text-base"
+                  className="group gap-2.5 px-2.5 py-1.5 text-base"
                 >
-                  {multiple ? (
-                    <span
-                      className={cn(
-                        "flex size-4 shrink-0 items-center justify-center rounded-[0.25rem] border border-muted-foreground/40",
-                        item.selected && "border-primary bg-primary text-primary-foreground",
-                      )}
-                    >
-                      {item.selected ? <CheckIcon className="size-3" strokeWidth={3} /> : null}
-                    </span>
-                  ) : null}
-                  {item.display ?? (
-                    <>
-                      {item.tone ? (
-                        <span className={cn("size-2 shrink-0 rounded-full", item.tone)} aria-hidden="true" />
-                      ) : null}
-                      <span className="truncate">{item.label}</span>
-                    </>
-                  )}
+                  {multiple ? <CheckBox checked={item.selected} /> : null}
+                  <ItemLabel item={item} />
+                  {item.action ? <RowAction action={item.action} /> : null}
                   {!multiple && item.selected ? (
                     <CheckIcon className="ml-auto size-4 text-brand" strokeWidth={2.5} />
                   ) : null}
@@ -148,6 +142,49 @@ export function FilterMenu({
         </Command>
       </PopoverContent>
     </Popover>
+  );
+}
+
+/** A row's box in a menu of several picks. */
+function CheckBox({ checked }: { checked: boolean }) {
+  return (
+    <span
+      className={cn(
+        "flex size-4 shrink-0 items-center justify-center rounded-[0.25rem] border border-muted-foreground/40",
+        checked && "border-primary bg-primary text-primary-foreground",
+      )}
+    >
+      {checked ? <CheckIcon className="size-3" strokeWidth={3} /> : null}
+    </span>
+  );
+}
+
+/** A row's value: as the console shows it elsewhere, else its label after its colored dot. */
+function ItemLabel({ item }: { item: FilterItem }) {
+  if (item.display) return item.display;
+  return (
+    <>
+      {item.tone ? <span className={cn("size-2 shrink-0 rounded-full", item.tone)} aria-hidden="true" /> : null}
+      <span className="truncate">{item.label}</span>
+    </>
+  );
+}
+
+/** A row's second pick at its end, there on hover or when the keys reach the row; its click is its own. */
+function RowAction({ action }: { action: FilterAction }) {
+  return (
+    <button
+      type="button"
+      aria-label={action.title}
+      title={action.title}
+      className="-my-1 ml-auto shrink-0 rounded px-1.5 py-0.5 text-sm text-muted-foreground opacity-0 group-hover:opacity-100 group-data-[selected=true]:opacity-100 hover:bg-background hover:text-foreground focus-visible:opacity-100"
+      onClick={(event) => {
+        event.stopPropagation();
+        action.onClick();
+      }}
+    >
+      {action.label}
+    </button>
   );
 }
 
