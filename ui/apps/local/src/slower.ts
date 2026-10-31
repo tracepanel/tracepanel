@@ -50,3 +50,22 @@ export function shareText(
   if (all === null || all === undefined || over === null) return null;
   return `${count.toLocaleString()} of ${all.toLocaleString()} ${all === 1 ? noun[0] : noun[1]} ${over}`;
 }
+
+/**
+ * What a group's page keeps of its list's Slower than terms (see slowerTermsOf), said: "over 500 ms", "with a call
+ * over 100 ms"; null without them.
+ */
+export function slowerText(terms: string): string | null {
+  const call = overOf(terms, CALL_SLOWER);
+  const parts = [overOf(terms, OWN_SLOWER), call && `with a call ${call}`].filter(Boolean);
+  return parts.length > 0 ? parts.join(", ") : null;
+}
+
+const OWN_SLOWER = /(?:^|\s)duration>=?(\S+)/;
+const CALL_SLOWER = /(?:^|\s)call_duration>=?(\S+)/;
+
+/** "over 500 ms" for the term `pattern` finds in `terms`; null without one. */
+function overOf(terms: string, pattern: RegExp): string | null {
+  const value = pattern.exec(terms)?.[1];
+  return value === undefined ? null : overText(value);
+}

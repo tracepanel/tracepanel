@@ -26,6 +26,7 @@ import { PeriodChip } from "./PeriodChip";
 import { RefreshControl, track, useRefresh } from "./refresh";
 import { type EntrySection, go, href, issueRoute, periodOf, traceHref, withPeriod } from "./routes";
 import { ENTRY } from "./sections";
+import { type Noun, shareText, slowerText } from "./slower";
 import { TimeRange } from "./TimeRange";
 import { TracesTable } from "./tables";
 import { rangeTerms } from "./time";
@@ -33,29 +34,44 @@ import { CrumbBar, Loading, Meter, Mono, Tr } from "./ui";
 
 type Group = TraceGroup | GraphqlDetail;
 
-/** A group over another period: since:/until: in its address. */
-function goPeriod(section: EntrySection, key: string, since: string | undefined, until: string | undefined): void {
+/** What the page looks at besides the group: its period (since:/until:) and its list's Slower than terms. */
+interface Scope {
+  period: string;
+  /** `duration>500ms`, `call:… call_duration>100ms`, or empty (see slowerTermsOf). */
+  slower: string;
+}
+
+/** A group's page with these terms in its address. */
+function groupHref(section: EntrySection, key: string, ...terms: string[]): string {
+  const q = terms.filter(Boolean).join(" ");
+  return href({ name: "group", section, key, q: q || undefined });
+}
+
+/** A group over another period, its Slower than kept: since:/until: in its address. */
+function goPeriod(section: EntrySection, key: string, slower: string, since?: string, until?: string): void {
   const period = [since ? `since:${since}` : "", until ? `until:${until}` : ""].filter(Boolean).join(" ");
-  go({ name: "group", section, key, q: period || undefined });
+  const q = [period, slower].filter(Boolean).join(" ");
+  go({ name: "group", section, key, q: q || undefined });
 }
 
 /** Drag on the calls chart to look at that stretch; none where the group has no period (a GraphQL operation). */
-function zoom(section: EntrySection, key: string) {
+function zoom(section: EntrySection, key: string, slower: string) {
   if (section === "graphql") return undefined;
   return (start: number, end: number) => {
     const { since, until } = rangeTerms(start, end);
-    goPeriod(section, key, since, until);
+    goPeriod(section, key, slower, since, until);
   };
 }
 
 /** The period the page looks at, to pick another one: the same presets and range as a list's Time. */
-function GroupPeriod({ section, groupKey, period }: { section: EntrySection; groupKey: string; period: string }) {
+function GroupPeriod({ section, groupKey, scope }: { section: EntrySection; groupKey: string; scope: Scope }) {
+  const { period, slower } = scope;
   const [open, setOpen] = useState(false);
   if (section === "graphql") {
     return (
       <PeriodChip
         period={period}
-        allTime={href({ name: "group", section, key: groupKey })}
+        allTime={groupHref(section, groupKey, slower)}
         unsupported="an operation's detail has no period, so this shows all time"
       />
     );
@@ -71,18 +87,72 @@ function GroupPeriod({ section, groupKey, period }: { section: EntrySection; gro
       until={bound("until")}
       open={open}
       onOpenChange={setOpen}
-      onChange={(since, until) => goPeriod(section, groupKey, since, until)}
+      onChange={(since, until) => goPeriod(section, groupKey, slower, since, until)}
     />
   );
 }
 
+/** A group's data, and with Slower than on, how many calls it has in all (the "of 340"). */
+interface Loaded {
+  group: Group | null;
+  all: number | null;
+}
+
 /**
- * The data of one group over a period: a GraphQL operation has its own endpoint (with resolvers, and no period),
- * the rest is a search.
+ * The data of one group over a period: a GraphQL operation has its own endpoint (with resolvers, no period and no
+ * Slower than), the rest is a search; with Slower than, of the slow calls, and how many it has in all beside.
  */
-function load(source: DataSource, section: EntrySection, key: string, period: string): Promise<Group | null> {
-  if (section === "graphql") return source.getGraphqlOperation(key);
-  return source.summarizeTraces(`${ENTRY[section].group(key)} ${period}`.trim());
+async function load(source: DataSource, section: EntrySection, key: string, scope: Scope): Promise<Loaded> {
+  if (section === "graphql") return { group: await source.getGraphqlOperation(key), all: null };
+  const search = (...terms: string[]) => source.summarizeTraces([ENTRY[section].group(key), ...terms].join(" ").trim());
+  if (!scope.slower) return { group: await search(scope.period), all: null };
+  const [group, all] = await Promise.all([search(scope.period, scope.slower), search(scope.period)]);
+  return { group, all: all?.summary?.calls ?? 0 };
+}
+
+/** What the list a group's row is in calls its calls, as the row's "12 of 340 requests over 500 ms" says. */
+const NOUNS: Partial<Record<EntrySection, Noun>> = {
+  endpoints: ["request", "requests"],
+  tasks: ["run", "runs"],
+  websockets: ["connection", "connections"],
+};
+
+/**
+ * The list's Slower than, kept: how many of the group's calls it keeps ("12 of 340 calls over 500 ms"), as the list's
+ * row said, and the way to all of them. A GraphQL operation's page can't keep them: it says so.
+ */
+function SlowerChip({
+  section,
+  groupKey,
+  scope,
+  calls,
+  all,
+}: {
+  section: EntrySection;
+  groupKey: string;
+  scope: Scope;
+  calls: number;
+  all: number | null;
+}) {
+  const over = slowerText(scope.slower);
+  if (!over) return null;
+  if (section === "graphql") {
+    return (
+      <p className="text-sm text-muted-foreground">
+        {over} on the list: an operation's detail can't keep only those, so this shows all of its calls.
+      </p>
+    );
+  }
+  return (
+    <p className="flex items-center gap-2 text-sm text-muted-foreground">
+      <span className="rounded-md border px-2 py-0.5 font-medium text-foreground">
+        {shareText(calls, all, NOUNS[section] ?? ["call", "calls"], over)}
+      </span>
+      <a href={groupHref(section, groupKey, scope.period)} className="font-medium text-brand hover:underline">
+        All calls
+      </a>
+    </p>
+  );
 }
 
 function Title({ section, groupKey }: { section: EntrySection; groupKey: string }) {
@@ -109,46 +179,119 @@ function crumb(section: EntrySection, groupKey: string): ReactNode {
   return section === "tasks" ? <TaskName name={groupKey} className="font-sans" /> : groupKey;
 }
 
+/** A group with none of its calls in the page's scope: none stored yet, or none as slow as the list kept. */
+function NoCalls({ section, groupKey, scope }: { section: EntrySection; groupKey: string; scope: Scope }) {
+  const over = section === "graphql" ? null : slowerText(scope.slower);
+  if (over) {
+    return (
+      <Empty
+        title={`No calls of ${groupKey} ${over}`}
+        action={<a href={groupHref(section, groupKey, scope.period)}>All its calls</a>}
+        icon={SearchXIcon}
+        page={true}
+      >
+        None of its calls in this period took that long.
+      </Empty>
+    );
+  }
+  return (
+    <Empty
+      title={`No calls of ${groupKey}`}
+      action={<a href={href({ name: section, q: scope.period })}>All {ENTRY[section].label}</a>}
+      icon={SearchXIcon}
+      page={true}
+    >
+      It has no stored traces yet.
+    </Empty>
+  );
+}
+
+/** A group's data over its scope, reloaded by the refresh control; undefined while it loads. */
+function useGroup(source: DataSource, section: EntrySection, groupKey: string, scope: Scope): Loaded | undefined {
+  const [loaded, setLoaded] = useState<Loaded | undefined>(undefined);
+  const { cycle, tick } = useRefresh();
+  const { period, slower } = scope;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `tick` reloads on "refresh now", `cycle` on the clock.
+  useEffect(() => {
+    let cancelled = false;
+    track(load(source, section, groupKey, { period, slower })).then(
+      (result) => !cancelled && setLoaded(result),
+      () => !cancelled && setLoaded({ group: null, all: null }),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [section, groupKey, period, slower, source, cycle, tick]);
+  return loaded;
+}
+
+/** The group's crumbs, its name, the way to its calls in the list, and what it looks at: its period, Slower than. */
+function GroupHeader({
+  section,
+  groupKey,
+  scope,
+  calls,
+  all,
+}: {
+  section: EntrySection;
+  groupKey: string;
+  scope: Scope;
+  calls: number;
+  all: number | null;
+}) {
+  const entry = ENTRY[section];
+  const kept = section === "graphql" ? "" : scope.slower;
+  const own = [entry.group(groupKey).replace(entry.scope, "").trim(), kept].join(" ").trim();
+  return (
+    <header className="grid gap-2">
+      <CrumbBar
+        items={[
+          { label: entry.label, href: href({ name: section, q: scope.period }) },
+          { label: crumb(section, groupKey) },
+        ]}
+        actions={<RefreshControl />}
+      />
+      <div className="flex flex-wrap items-center gap-3">
+        <h1 className="flex min-w-0 flex-1 items-center gap-3 font-mono text-2xl font-semibold">
+          <Title section={section} groupKey={groupKey} />
+        </h1>
+        <Button
+          variant="outline"
+          onClick={() => go({ name: section, q: withPeriod(own, scope.period), view: "calls" })}
+        >
+          {calls === 1 ? "View the call" : `View all ${calls} calls`}
+          <ArrowRightIcon />
+        </Button>
+      </div>
+      {/* Its own size, at the start of the line: the header's grid would stretch it across the page. */}
+      <div className="flex flex-wrap items-center gap-3">
+        <GroupPeriod section={section} groupKey={groupKey} scope={scope} />
+        <SlowerChip section={section} groupKey={groupKey} scope={scope} calls={calls} all={all} />
+      </div>
+    </header>
+  );
+}
+
 export function GroupPage({
   section,
   groupKey,
   period,
+  slower,
   source,
 }: {
   section: EntrySection;
   groupKey: string;
   /** The since:/until: of the list it was opened from, if any. */
   period: string;
+  /** The list's Slower than terms (`duration>500ms`), if any: the page is of those calls (see slowerTermsOf). */
+  slower: string;
   source: DataSource;
 }) {
-  const [group, setGroup] = useState<Group | null | undefined>(undefined);
-  const { cycle, tick } = useRefresh();
-  const entry = ENTRY[section];
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `tick` reloads on "refresh now", `cycle` on the clock.
-  useEffect(() => {
-    let cancelled = false;
-    track(load(source, section, groupKey, period)).then(
-      (result) => !cancelled && setGroup(result),
-      () => !cancelled && setGroup(null),
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [section, groupKey, period, source, cycle, tick]);
-
-  if (group === undefined) return <Loading />;
-  if (group === null || group.summary === null) {
-    return (
-      <Empty
-        title={`No calls of ${groupKey}`}
-        action={<a href={href({ name: section, q: period })}>All {ENTRY[section].label}</a>}
-        icon={SearchXIcon}
-        page={true}
-      >
-        It has no stored traces yet.
-      </Empty>
-    );
-  }
+  const scope = { period, slower };
+  const loaded = useGroup(source, section, groupKey, scope);
+  if (loaded === undefined) return <Loading />;
+  const { group, all } = loaded;
+  if (group === null || group.summary === null) return <NoCalls section={section} groupKey={groupKey} scope={scope} />;
   const s = group.summary;
   const errors = group.issues.filter((issue) => issue.kind === "error");
   const findings = group.issues.filter((issue) => issue.kind !== "error");
@@ -156,37 +299,7 @@ export function GroupPage({
   return (
     <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-9 px-10 pt-7 pb-16 *:min-w-0">
       {/* One column no wider than the page: a long error message or SQL wraps instead of widening it. */}
-      <header className="grid gap-2">
-        <CrumbBar
-          items={[
-            { label: entry.label, href: href({ name: section, q: period }) },
-            { label: crumb(section, groupKey) },
-          ]}
-          actions={<RefreshControl />}
-        />
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="flex min-w-0 flex-1 items-center gap-3 font-mono text-2xl font-semibold">
-            <Title section={section} groupKey={groupKey} />
-          </h1>
-          <Button
-            variant="outline"
-            onClick={() =>
-              go({
-                name: section,
-                q: withPeriod(entry.group(groupKey).replace(entry.scope, "").trim(), period),
-                view: "calls",
-              })
-            }
-          >
-            {s.calls === 1 ? "View the call" : `View all ${s.calls} calls`}
-            <ArrowRightIcon />
-          </Button>
-        </div>
-        {/* Its own size, at the start of the line: the header's grid would stretch it across the page. */}
-        <div className="flex">
-          <GroupPeriod section={section} groupKey={groupKey} period={period} />
-        </div>
-      </header>
+      <GroupHeader section={section} groupKey={groupKey} scope={scope} calls={s.calls} all={all} />
 
       {/* The tiles an entry point's Overview has, the same seven in the same order: one look for a summary. */}
       <StatGrid label="Summary">
@@ -208,7 +321,7 @@ export function GroupPage({
 
       <div className="grid grid-cols-2 gap-4 max-[1100px]:grid-cols-1 [&>:first-child]:col-span-full">
         <LatencyChart series={group.series} />
-        <CallsChart series={group.series} onSelect={zoom(section, groupKey)} />
+        <CallsChart series={group.series} onSelect={zoom(section, groupKey, slower)} />
         <Histogram histogram={group.histogram} p50={s.p50} p95={s.p95} />
       </div>
 

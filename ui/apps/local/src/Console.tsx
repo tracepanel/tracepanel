@@ -13,7 +13,7 @@ import { GroupPage } from "./GroupPage";
 import { useOtlp } from "./hooks";
 import { IssuePage } from "./IssuePage";
 import { useRowKeys } from "./keyboard";
-import { go, isEntry, parse, periodOf, type Route, type Section } from "./routes";
+import { go, isEntry, parse, periodOf, type Route, type Section, slowerTermsOf } from "./routes";
 import { SearchPalette } from "./SearchPalette";
 import {
   navItems,
@@ -69,6 +69,7 @@ function groupPage(route: Extract<Route, { name: "group" }>, source: DataSource)
       section={route.section}
       groupKey={route.key}
       period={periodOf(q)}
+      slower={slowerTermsOf(q)}
       source={source}
     />
   );

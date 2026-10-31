@@ -83,6 +83,13 @@
   fading out there, as its bar in the call tree now does too. Before,
   it was a mark of no width at its start, and its bar in the call tree
   a sliver. A call answered 4xx is amber on the lane, as its row is.
+- A group opened from a list with Slower than on keeps it: the page of
+  an endpoint, a task, a WebSocket consumer or a job is of its slow
+  calls, says how many of all it has ("12 of 340 requests over 500
+  ms", as the list's row did) and has a link to all of them. Its period,
+  its chart's drag and its View all calls keep it too. Before, the page
+  showed every call. `call_duration>` goes along with its `call:`. A
+  GraphQL operation's page can't keep it and says so.
 - A database driver's HTTP request that reached a service which records
   traces too still links the two traces, though it left the call tree.
   The connection or query it served keeps the W3C span ids its requests

@@ -83,9 +83,28 @@ export function currentPeriod(): string {
   return "q" in route && route.q ? periodOf(route.q) : "";
 }
 
-/** One group's page, over the period the page it is opened from looks at. */
+// What Slower than keeps (`duration>500ms`), or the slow call a request made (`call:… call_duration>100ms`).
+const SLOWER_TERM = /^(?:call_)?duration>=?\S+$/;
+const CALL_TERM = /^call:\S+$/;
+
+/**
+ * The Slower than terms of a search, as a group's page takes them from its list: `duration>`, and `call_duration>`
+ * with the `call:` it is about. Empty without them.
+ */
+export function slowerTermsOf(q: string): string {
+  const terms = q.split(/\s+/).filter(Boolean);
+  const call = terms.some((term) => term.startsWith("call_duration>"));
+  return terms.filter((term) => SLOWER_TERM.test(term) || (call && CALL_TERM.test(term))).join(" ");
+}
+
+/**
+ * One group's page, over the period the page it is opened from looks at, and with its Slower than: a list of the
+ * slow calls opens on the group's slow calls ("12 of 340 calls over 500 ms").
+ */
 export function groupRoute(section: EntrySection, key: string): Route {
-  return { name: "group", section, key, q: currentPeriod() || undefined };
+  const route = parse(location.hash);
+  const q = "q" in route && route.q ? [periodOf(route.q), slowerTermsOf(route.q)].filter(Boolean).join(" ") : "";
+  return { name: "group", section, key, q: q || undefined };
 }
 
 /** One endpoint's group: its key is "METHOD route", the way the agent's issue endpoints write it too. */
