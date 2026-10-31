@@ -145,3 +145,33 @@ test("HTTP's Slower than starts from a slow request, and each endpoint says how 
   const [slow, all] = [endpoints[0]?.["calls"], endpoints[0]?.["all_calls"]];
   await expect(rows.first()).toContainText(`${slow} of ${all} ${all === 1 ? "request" : "requests"} over 500 ms`);
 });
+
+test("an endpoint opened with Slower than on is a page of its slow requests, N of M as its row said", async ({
+  page,
+}) => {
+  const answer = await fetch(`${CONSOLE}api/endpoints?q=${encodeURIComponent("duration>500ms")}`);
+  const { endpoints } = (await answer.json()) as { endpoints: Record<string, number>[] };
+  const [slow, all] = [endpoints[0]?.["calls"], endpoints[0]?.["all_calls"]];
+  const said = `${slow} of ${all} ${all === 1 ? "request" : "requests"} over 500 ms`;
+  await page.goto(`/#/endpoints?view=overview&q=${encodeURIComponent("duration>500ms")}`);
+  const row = page.getByRole("main").locator("tbody tr").first();
+  await expect(row).toContainText(said);
+
+  await row.click();
+
+  await expect(page).toHaveURL(/#\/group\/endpoints\/.+q=duration%3E500ms/);
+  const summary = page.getByRole("region", { name: "Summary" });
+  await expect(page.getByText(said, { exact: true })).toBeVisible();
+  await expect(summary).toContainText(`Calls${slow}`);
+
+  // Its calls in the list are the slow ones too.
+  await page.getByRole("button", { name: slow === 1 ? "View the call" : `View all ${slow} calls` }).click();
+  await expect(page.getByRole("button", { name: "Edit duration>500ms" })).toBeVisible();
+  await page.goBack();
+
+  await page.getByRole("link", { name: "All calls" }).click();
+
+  await expect(page).not.toHaveURL(/duration/);
+  await expect(summary).toContainText(`Calls${all}`);
+  await expect(page.getByText(said, { exact: true })).toHaveCount(0);
+});
