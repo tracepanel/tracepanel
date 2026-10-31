@@ -1,10 +1,12 @@
 // A log record's details, one look wherever it opens: the Logs page, a trace's Logs tab, the call tree's pane.
 import { type ReactNode, useMemo, useState } from "react";
 import { CopyButton } from "./CopyButton";
+import { DumpArgs } from "./Dump";
 import { ExceptionView } from "./ErrorView";
 import { localTime } from "./format";
 import { jsonDocument } from "./json";
 import { withoutAnsi } from "./lib/ansi";
+import { dumpSite, isDump } from "./lib/dump";
 import { cn } from "./lib/utils";
 import { rawText } from "./lib/values";
 import { type NameValue, NameValues, RowsLookContext } from "./NameValues";
@@ -152,6 +154,26 @@ function MessageBlock({ text }: { text: string }) {
   );
 }
 
+// A dump's arguments and where it was called are laid out above its fields: not again among them.
+const DUMP_SHOWN = new Set(["log.kind", "dump.args", "code.origin"]);
+
+/** The text of the record: a dump's arguments laid out (its text as printed a click away), else its message. */
+function RecordText({ log }: { log: Log }) {
+  const message = withoutAnsi(log.message);
+  if (!isDump(log)) return <MessageBlock text={message} />;
+  return (
+    <ReadOrRaw label="Dump" read="Values" text={message}>
+      <DumpArgs log={log} />
+    </ReadOrRaw>
+  );
+}
+
+/** A record's own attributes as its fields list them: a dump's without what its arguments' block shows. */
+function fieldAttrs(log: Log): [string, unknown][] {
+  const all = Object.entries(logAttrs(log.attrs));
+  return isDump(log) ? all.filter(([key]) => !DUMP_SHOWN.has(key)) : all;
+}
+
 /** The exception: its frames as an error shows them, when its traceback reads as one; else its text. */
 function ExceptionBlock({ text }: { text: string }) {
   const exception = useMemo(() => parseTraceback(text), [text]);
@@ -186,12 +208,12 @@ export function LogRecord({
     ["logger", withoutAnsi(log.logger)],
     ["level", log.level],
     ["time", localTime(log.time)],
-    ...Object.entries(logAttrs(log.attrs)),
+    ...fieldAttrs(log),
   ];
   return (
     <div className="grid gap-3.5">
       {header}
-      <MessageBlock text={withoutAnsi(log.message)} />
+      <RecordText log={log} />
       {log.exception ? <ExceptionBlock text={withoutAnsi(log.exception)} /> : null}
       <section aria-label="Fields" className="overflow-hidden rounded-md border bg-background">
         <NameValues
@@ -212,7 +234,9 @@ export function LogRecordDetails({ log, titled = false }: { log: Log; titled?: b
     <div className={cn("grid gap-3", titled ? "p-4" : "px-5 py-4")}>
       {titled ? (
         <p className="dt-map-details-title">
-          Log · {log.level} · {withoutAnsi(log.logger)}
+          {isDump(log)
+            ? `Dump · ${dumpSite(log) ?? withoutAnsi(log.logger)}`
+            : `Log · ${log.level} · ${withoutAnsi(log.logger)}`}
         </p>
       ) : null}
       <LogRecord log={log} />

@@ -1,3 +1,4 @@
+import { attrsWhere } from "./lib/values";
 import { NameValues, RowsLookContext } from "./NameValues";
 import { SectionHeading } from "./primitives";
 import type { Attrs } from "./types";
@@ -11,7 +12,7 @@ const OMITTED = `${PREFIX}omitted`;
 
 /** A span's attributes without its template context: shown as rows of its own, not again among them. */
 export function withoutContext(attrs: Attrs): Attrs {
-  return Object.fromEntries(Object.entries(attrs).filter(([key]) => !key.startsWith(PREFIX)));
+  return attrsWhere(attrs, (key) => !key.startsWith(PREFIX));
 }
 
 function rowsOf(attrs: Attrs): { name: string; value: string }[] | null {

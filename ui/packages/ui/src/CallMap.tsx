@@ -12,6 +12,7 @@ import {
 } from "react";
 import { AsReceived } from "./AsReceived";
 import { type Explain, type ExplainOf, QueryPlan } from "./CallTable";
+import { DumpBadge, DumpLine } from "./Dump";
 import { duration, since } from "./format";
 import { GraphqlCode } from "./GraphqlCode";
 import { Hint } from "./Hint";
@@ -25,6 +26,7 @@ import { type Category, spanCategories } from "./lib/breakdown";
 import { answers, callAnswer, unfinished } from "./lib/callAnswer";
 import { callFields, templatePlace } from "./lib/callFields";
 import { callTemplate, callText, groupNoun } from "./lib/calls";
+import { isDump } from "./lib/dump";
 import { spanKindLabel } from "./lib/handler";
 import { foldKeys } from "./lib/keys";
 import { pageParts } from "./lib/page";
@@ -35,8 +37,9 @@ import { type Quiet, quietSpans } from "./lib/quiet";
 import { traceRuntime } from "./lib/runtime";
 import { type SpanScope, shifted } from "./lib/scope";
 import { isReceiver, raised } from "./lib/signals";
-import { isLoud, overlaps, type Slice, type TimeRange } from "./lib/slice";
+import { isShown, overlaps, type Slice, type TimeRange } from "./lib/slice";
 import { CALL_KINDS, DATASTORES, MESSAGING, RPC } from "./lib/systems";
+import { attrsWhere } from "./lib/values";
 import {
   bucketOwners,
   ownProfile,
@@ -1042,7 +1045,21 @@ function leafView(node: Extract<Node, { type: "log" | "error" }>) {
     const text = `${node.error.type.replace(/^builtins\./, "")}: ${node.error.message}`;
     return { kind: "error", level: "error", time: node.error.time, text };
   }
+  // A dump is a kind of its own, its badge and its line: printed to be looked at, not logged.
+  if (isDump(node.log)) return { kind: "dump", level: "dump", time: node.log.time, text: "" };
   return { kind: "log", level: node.log.level, time: node.log.time, text: withoutAnsi(node.log.message) };
+}
+
+/** A leaf's badge: its level, muted, or a dump's own. */
+function LeafBadge({ kind, level }: { kind: string; level: string }) {
+  if (kind === "dump") return <DumpBadge className="dt-map-kind" />;
+  return <KindBadge kind={level} muted={true} className="dt-map-kind" />;
+}
+
+/** A leaf's text: a dump's call site and first value, coloured; any other's message or error. */
+function LeafText({ node, text }: { node: Extract<Node, { type: "log" | "error" }>; text: string }) {
+  if (node.type === "log" && isDump(node.log)) return <DumpLine log={node.log} className="dt-map-text" />;
+  return <span className="dt-map-text">{text}</span>;
 }
 
 /** A log record or an error: a point on the timeline, at its time since the request started. */
@@ -1066,8 +1083,8 @@ function LeafRow({
       >
         <span className="dt-map-name" style={indent}>
           <span className="dt-map-caret" />
-          <KindBadge kind={view.level} muted={true} className="dt-map-kind" />
-          <span className="dt-map-text">{view.text}</span>
+          <LeafBadge kind={view.kind} level={view.level} />
+          <LeafText node={node} text={view.text} />
         </span>
         <Bar trace={ctx.trace} start={view.time} length={0} point={true} within={ctx.within} />
         <span className="dt-map-time" title={`Logged ${since(view.time, ctx.trace.start)}`}>
@@ -2183,7 +2200,7 @@ function ProfileLink({ open }: { open: (() => void) | undefined }) {
  */
 function RootAttributes({ attrs }: { attrs: Attrs }) {
   const { "graphql.document": _, ...rest } = attrs;
-  const others = Object.fromEntries(Object.entries(rest).filter(([key]) => !isRequestDetail(key)));
+  const others = attrsWhere(rest, (key) => !isRequestDetail(key));
   return <RequestParts parts={requestParts(rest, others)} look="plain" />;
 }
 
@@ -2551,9 +2568,9 @@ function withCallIssues(
   ]);
 }
 
-/** A trace with only the log records that show: its warnings and worse, or every one of them (`all`). */
+/** A trace with only the log records that show: its warnings and worse and its dumps, or every one of them (`all`). */
 export function withShownLogs(trace: Trace, all: boolean): Trace {
-  return all ? trace : { ...trace, logs: trace.logs.filter((log) => isLoud(log.level)) };
+  return all ? trace : { ...trace, logs: trace.logs.filter(isShown) };
 }
 
 /**
@@ -2567,10 +2584,10 @@ function hiddenLogsOf(traces: readonly Trace[], calls: ReadonlyMap<string, strin
   return hidden;
 }
 
-/** A trace's info and debug records, counted by their span; its root's on `row` when its root shows as that row. */
+/** A trace's info and debug records (dumps aside), counted by their span; its root's on `row` when its root shows as that row. */
 function countQuiet(trace: Trace, row: string | undefined, hidden: Map<string, number>): void {
   const own = rootOf(trace);
-  for (const log of trace.logs.filter((each) => !isLoud(each.level))) {
+  for (const log of trace.logs.filter((each) => !isShown(each))) {
     const span = log.span_id === null || log.span_id === own ? (row ?? own) : log.span_id;
     hidden.set(span, (hidden.get(span) ?? 0) + 1);
   }

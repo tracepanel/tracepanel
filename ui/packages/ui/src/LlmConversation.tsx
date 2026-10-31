@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { attrsWhere } from "./lib/values";
 import { SectionHeading } from "./primitives";
 import type { Attrs } from "./types";
 
@@ -12,9 +13,7 @@ const MESSAGE_ATTRS = [INPUT, OUTPUT, SYSTEM];
 
 /** A span's attributes without its messages: shown as a conversation, not again among them. */
 export function withoutMessages(attrs: Attrs): Attrs {
-  return Object.fromEntries(
-    Object.entries(attrs).filter(([key]) => !MESSAGE_ATTRS.some((name) => key === name || key === `${name}.truncated`)),
-  );
+  return attrsWhere(attrs, (key) => !MESSAGE_ATTRS.some((name) => key === name || key === `${name}.truncated`));
 }
 
 /** A part of a message, as the conventions shape it: its type and what that type has. */

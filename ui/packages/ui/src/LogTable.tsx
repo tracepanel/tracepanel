@@ -27,11 +27,13 @@ import {
   DropdownMenuSubTrigger,
 } from "./components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableRow } from "./components/ui/table";
+import { DumpLine } from "./Dump";
 import { ago, duration, since, stamp } from "./format";
 import { type ColumnSpec, type Columns, useColumns } from "./hooks/useColumns";
 import { useStored } from "./hooks/useStored";
 import { logAttrs } from "./LogRecordDetails";
 import { withoutAnsi } from "./lib/ansi";
+import { isDump } from "./lib/dump";
 import { bodyCell, ColumnsHeader, MENU_REM, useColumnWidths } from "./TableColumns";
 import type { Log } from "./types";
 
@@ -57,6 +59,11 @@ const LEVEL_DOT: Record<string, string> = {
   error: "bg-error",
   critical: "bg-error ring-2 ring-error/30",
 };
+
+/** A record's level as its row marks it: a dump isn't a quiet debug line, printed to be seen. */
+function rowLevel(log: LogLike): string {
+  return isDump(log) ? "dump" : log.level;
+}
 
 /** A log level as a colored dot and its name: the same in every list of records and in the Level filter. */
 export function LogLevel({ level }: { level: string }) {
@@ -106,6 +113,7 @@ function lastLine(text: string): string {
  * record. An exception's last line follows in what the message leaves.
  */
 function Message({ log, terms }: { log: LogLike; terms: readonly string[] }) {
+  if (isDump(log)) return <DumpLine log={log} badge={true} />;
   const message = withoutAnsi(log.message);
   return (
     <span className="flex min-w-0 items-baseline gap-2.5">
@@ -439,7 +447,7 @@ function LogRecordRow<R extends LogLike>({
     <TableRow
       ref={placed.measure}
       data-index={placed.index}
-      data-level={log.level}
+      data-level={rowLevel(log)}
       data-record=""
       tabIndex={0}
       aria-expanded={opened}

@@ -72,6 +72,30 @@ fn every_example_matches_the_schema_as_the_sdk_sent_it() {
     }
 }
 
+#[test]
+fn a_dump_matches_the_schema() {
+    let validator = validator();
+    let mut doc = examples().remove(0).1;
+    let dump = serde_json::json!({
+        "span_id": null, "time": doc["start"], "level": "debug", "logger": "devtools",
+        "message": "app.py:3 main\n    x: 1 (int)", "exception": null,
+        "attrs": {
+            "log.kind": "dump", "code.origin": "app.py:3 in main",
+            "dump.args": [{"expr": "x", "repr": "1", "type": "int", "len": null}],
+        },
+    });
+    doc["logs"] = serde_json::json!([dump]);
+    let errors: Vec<String> = validator
+        .iter_errors(&doc)
+        .map(|error| error.to_string())
+        .collect();
+    assert_eq!(errors, Vec::<String>::new());
+
+    // An argument is an object with its four fields: a bare value isn't one.
+    doc["logs"][0]["attrs"]["dump.args"] = serde_json::json!(["1"]);
+    assert!(!validator.is_valid(&doc));
+}
+
 #[tokio::test]
 async fn the_agent_finds_the_issues_and_the_api_returns_them() {
     let validator = validator();

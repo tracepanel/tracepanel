@@ -2,6 +2,7 @@
 // a word as it came, a list one item a line, a structure (JSON, a Python repr) laid out and coloured.
 import type { Language } from "../highlight";
 import { jsonDocument } from "../json";
+import type { Attrs } from "../types";
 
 /** Past this size a value is shown as it came: laid out and coloured, it would cost more than it tells. */
 export const STRUCTURE_LIMIT = 16 * 1024;
@@ -207,4 +208,9 @@ export const MASK = "********";
  */
 export function isMasked(text: string): boolean {
   return text.trim().replace(/^(['"])(.*)\1$/, "$2") === MASK;
+}
+
+/** The attributes whose names `keep` keeps: the rest are shown elsewhere, or not at all. */
+export function attrsWhere(attrs: Attrs, keep: (key: string) => boolean): Attrs {
+  return Object.fromEntries(Object.entries(attrs).filter(([key]) => keep(key))) as Attrs;
 }

@@ -459,6 +459,42 @@ logs from warning (1):
 }
 
 #[tokio::test]
+async fn a_dump_comes_with_its_values() {
+    let mut fixed = example("python-django-fixed.json");
+    let time = fixed["logs"][0]["time"].as_i64().unwrap() + 100;
+    fixed["logs"].as_array_mut().unwrap().push(json!({
+        "span_id": "01M4GPC1ESMAS8WD6BCPFAJCD5", "time": time, "level": "debug", "logger": "devtools",
+        "message": "blog/views.py:35 post_list_fixed\n    posts: [<Post: 1>, <Post: 2>] (list) len=2",
+        "exception": null,
+        "attrs": {
+            "log.kind": "dump",
+            "code.origin": "blog/views.py:35 in post_list_fixed",
+            "dump.args": [
+                {"expr": "posts", "repr": "[\n    <Post: 1>,\n    <Post: 2>,\n]", "type": "list", "len": 2},
+                {"expr": null, "repr": "'ready'", "type": "str", "len": 5},
+            ],
+        },
+    }));
+    let server = Server::new(store("dump", &[fixed]), false);
+
+    let (trace, _) = tool(&server, "get_trace", json!({"id": FIXED})).await;
+    // A dump shows by default, as warnings do; the info record doesn't.
+    assert!(trace.ends_with(
+        "logs from warning, and dumps (1):
+  dump at blog/views.py:35 in post_list_fixed:
+    posts = [ <Post: 1>, <Post: 2>, ] (list, len 2)
+    'ready' (str, len 5)"
+    ));
+
+    assert_eq!(
+        tool(&server, "search_logs", json!({"query": "has:dump"})).await.0,
+        "logs (1, newest first):
+<ago> debug devtools: dump at blog/views.py:35 in post_list_fixed: posts = [ <Post: 1>, <Post: 2>, ] (list, len 2); \
+         'ready' (str, len 5) · GET /fixed/ (01M4GPC1ESW50X1ZHJJ3ZNP7VM)"
+    );
+}
+
+#[tokio::test]
 async fn before_and_after_a_fix() {
     let server = Server::new(store("compare", &examples()), false);
 

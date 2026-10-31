@@ -24,6 +24,20 @@
   and the other attributes are kept as `extra.*`. An event `tracing`
   logged with no message reads as its fields, such as `id=2 status=200`.
   tower-http's own events of a request's start and end aren't kept.
+- Dumps: what a developer prints to look at, such as python-devtools'
+  `debug()`, arrives as a log record with `log.kind` `dump`, its
+  arguments in `dump.args` and its call site in `code.origin`. The
+  call tree always shows a dump, with the Logs chip off too, as a DUMP
+  row with its call site and its first argument, `expr = value`. Its
+  details lay out each argument with its type and length, its value as
+  printed and coloured as Python. The Logs page lists dumps with the
+  same look, and its Kind menu finds them: `has:dump`, or
+  `has!=dump` for the records logged. The MCP server's `get_trace`
+  shows a trace's dumps with their values, and `search_logs` lists
+  them so.
+- The trace schema documents `log.kind` and `dump.args`, a list of
+  objects (`expr`, `repr`, `type`, `len`). Every other attribute is
+  still a scalar or a list of scalars.
 
 ## 0.9.5 (2026-10-31)
 

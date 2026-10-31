@@ -15,6 +15,8 @@ pub(crate) const BUDGET: usize = 16_000;
 const TREE_LINES: usize = 80;
 const STATEMENT: usize = 400;
 const MESSAGE: usize = 300;
+/// A dumped value, at most: what a developer printed to look at is worth more of the budget than a message.
+const DUMPED: usize = 1_000;
 
 /// What `get_trace` shows of a trace besides its head and issues.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -298,6 +300,62 @@ pub(crate) fn scope_group_line(group: &Value) -> String {
     )
 }
 
+/// Whether a record is a dump: what a developer printed to look at (devtools' `debug()`), not a record logged.
+pub(crate) fn is_dump(log: &Value) -> bool {
+    log["attrs"]["log.kind"] == "dump"
+}
+
+/// A dump's arguments, each `expr = value (type, len n)` on one line, its value cut at `limit`; none for any other
+/// record. The list comes as sent, or as JSON text.
+fn dump_args(log: &Value, limit: usize) -> Vec<String> {
+    let args = &log["attrs"]["dump.args"];
+    let parsed;
+    let list = match args {
+        Value::String(json) => {
+            parsed = serde_json::from_str::<Value>(json).unwrap_or_default();
+            &parsed
+        }
+        other => other,
+    };
+    list.as_array()
+        .into_iter()
+        .flatten()
+        .map(|arg| {
+            let value = short(text(arg, "repr"), limit);
+            let kind = match arg.get("len").and_then(Value::as_i64) {
+                Some(len) => format!("{}, len {len}", text(arg, "type")),
+                None => text(arg, "type").to_owned(),
+            };
+            match text(arg, "expr") {
+                "" => format!("{value} ({kind})"),
+                expr => format!("{expr} = {value} ({kind})"),
+            }
+        })
+        .collect()
+}
+
+/// Where a dump was called: `shop/views.py:12 in checkout`.
+fn dump_origin(log: &Value) -> String {
+    let attrs = &log["attrs"];
+    match text(attrs, "code.origin") {
+        "" => format!(
+            "{}:{}",
+            text(attrs, "code.filepath"),
+            int(attrs, "code.lineno")
+        ),
+        origin => origin.to_owned(),
+    }
+}
+
+/// A record's text on one line: a dump's place and arguments, any other's message.
+fn record_text(log: &Value) -> String {
+    if is_dump(log) {
+        let args = dump_args(log, MESSAGE).join("; ");
+        return format!("dump at {}: {args}", dump_origin(log));
+    }
+    short(text(log, "message"), MESSAGE)
+}
+
 /// A record of a trace's scope: when after the trace started, its level, app, logger and message.
 pub(crate) fn scope_log_line(log: &Value, start: i64) -> String {
     format!(
@@ -306,7 +364,7 @@ pub(crate) fn scope_log_line(log: &Value, start: i64) -> String {
         text(log, "level"),
         text(log, "app"),
         text(log, "logger"),
-        short(text(log, "message"), MESSAGE)
+        record_text(log)
     )
 }
 
@@ -336,7 +394,7 @@ pub(crate) fn log_line(row: &Value, now: i64) -> String {
         ago(int(row, "time"), now),
         text(row, "level"),
         text(row, "logger"),
-        short(text(row, "message"), MESSAGE),
+        record_text(row),
         text(row, "trace_name"),
         text(row, "trace_id")
     )
@@ -547,17 +605,27 @@ fn logs_section(doc: &Value, all: bool) -> Option<String> {
         .and_then(Value::as_array)
         .into_iter()
         .flatten()
-        .filter(|log| all || LOUD.contains(&text(log, "level")))
+        .filter(|log| all || LOUD.contains(&text(log, "level")) || is_dump(log))
         .collect();
     if logs.is_empty() {
         return None;
     }
     let mut out = if all {
         format!("logs ({}):", logs.len())
+    } else if logs.iter().any(|log| is_dump(log)) {
+        format!("logs from warning, and dumps ({}):", logs.len())
     } else {
         format!("logs from warning ({}):", logs.len())
     };
     for log in logs.iter().take(if all { 200 } else { 10 }) {
+        if is_dump(log) {
+            // What the developer printed, each value whole up to its cut: the reason they printed it.
+            out.push_str(&format!("\n  dump at {}:", dump_origin(log)));
+            for arg in dump_args(log, DUMPED) {
+                out.push_str(&format!("\n    {arg}"));
+            }
+            continue;
+        }
         let attrs = &log["attrs"];
         out.push_str(&format!(
             "\n  {} {}: {}",
