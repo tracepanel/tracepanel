@@ -62,6 +62,13 @@
   service's trace is called by the caller's trace through that span,
   and the caller lists it among its calls. The services page counts
   each called trace once, through the database's server.
+- Only a CORS preflight is left out of what arrives over OTLP, not
+  every `OPTIONS` request. An `OPTIONS` that asks for another method
+  (its `Access-Control-Request-Method` header, when the instrumentation
+  recorded it) is one. Without the header, only an `OPTIONS` with no
+  spans under it, no error and a 2xx status (or none) is taken for one.
+  An `OPTIONS` handler that did work, failed or answered otherwise is a
+  trace as any other request.
 
 ## 0.9.5 (2026-10-31)
 
