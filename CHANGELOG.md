@@ -63,6 +63,12 @@
   or more. Grafbase Gateway's request to a subgraph, which it records
   as an internal span, is a call too. Hive Gateway's start and its
   schema loaded are no traces.
+- An N+1 a Go app's code ran through GORM (the Go SDK's `db.client`
+  `gorm`) names GORM's fix: `Joins()` or `Preload()` the association
+  for a related row looked up by its id, `Preload()` it for related
+  rows, and one grouped query for an aggregate run per row (a `Count`
+  in a loop). Through pgx or database/sql alone it keeps the generic
+  hint: a join, or one batched query.
 
 ### Fixed
 
