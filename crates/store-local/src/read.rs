@@ -126,6 +126,9 @@ const NAMING: &str = "system, family, target, op, template, name, statement, ven
 /// `p95` (null for the others), `origin` (the most common line of code) and the latest call (`sample_trace`,
 /// `sample_span`), which the console opens.
 ///
+/// With `duration` in the search a group is only its calls that slow: its numbers, its latest call and its line of
+/// code are theirs, and `all_calls` says how many it has without it (null without `duration`).
+///
 /// The numbers come from the `calls_group` index alone, per trace first and then per group (named: without
 /// statistics, SQLite would take `calls_system` for `system:` and read the table row by row); what names a group and
 /// the latest call come from one row each. Taking them by MAX() over every call read the whole table twice.
@@ -161,11 +164,15 @@ pub(crate) fn aggregate(
     let marks = marks(keys.len());
     let text_of =
         |row: &serde_json::Map<String, Value>| row["key"].as_str().unwrap_or("").to_owned();
+    let slower = Slower::of(query)?;
     // The latest call of each group: the console opens it (and explains it, for SQL), and it names the group.
     let latest: Vec<Sql> = objects(
         db,
-        &format!("SELECT rowid AS id, MAX(start) FROM calls WHERE key IN ({marks}) GROUP BY key"),
-        keys.clone(),
+        &format!(
+            "SELECT rowid AS id, MAX(start) FROM calls WHERE key IN ({marks}){} GROUP BY key",
+            slower.clause
+        ),
+        slower.params(&keys),
     )?
     .iter()
     .filter_map(|row| row["id"].as_i64().map(Sql::Integer))
@@ -188,9 +195,10 @@ pub(crate) fn aggregate(
         db,
         &format!(
             "SELECT key, origin, COUNT(*) AS n, MIN(rowid) AS first FROM calls \
-             WHERE key IN ({marks}) AND origin IS NOT NULL GROUP BY key, origin"
+             WHERE key IN ({marks}) AND origin IS NOT NULL{} GROUP BY key, origin",
+            slower.clause
         ),
-        keys,
+        slower.params(&keys),
     )? {
         let (n, first) = (
             row["n"].as_i64().unwrap_or(0),
@@ -204,10 +212,17 @@ pub(crate) fn aggregate(
             *best = (n, first, origin);
         }
     }
+    let mut all = slower.all_calls(db, &keys)?;
     let rows: Vec<serde_json::Map<String, Value>> = rows
         .into_iter()
         .map(|mut row| {
             let group = text_of(&row);
+            row.insert(
+                "all_calls".into(),
+                all.as_mut().map_or(Value::Null, |all| {
+                    Value::from(all.remove(&group).unwrap_or(0))
+                }),
+            );
             let named = naming.remove(&group).unwrap_or_default();
             let cache = named.get("family").and_then(Value::as_str) == Some("cache");
             for field in ["hits", "misses"] {
@@ -231,6 +246,76 @@ pub(crate) fn aggregate(
         })
         .collect();
     with_llm_usage(db, &condition, filters, rows)
+}
+
+/// A search's `duration` filters, for a list of calls' groups: what keeps a group's slow calls alone, and the search
+/// without them, which counts each group's calls whatever their time.
+struct Slower {
+    /// ` AND (…)` on the calls table, empty without `duration`.
+    clause: String,
+    filters: Vec<Sql>,
+    /// The search without `duration`: None without it.
+    rest: Option<String>,
+}
+
+impl Slower {
+    fn of(query: &str) -> Result<Self, ReadError> {
+        let (rest, those) = search::split_off(query, "duration");
+        if those.is_empty() {
+            return Ok(Self {
+                clause: String::new(),
+                filters: Vec::new(),
+                rest: None,
+            });
+        }
+        let (condition, filters) = search::compile_where(&those, &CALLS_SEARCH)?;
+        Ok(Self {
+            clause: format!(" AND ({condition})"),
+            filters,
+            rest: Some(rest),
+        })
+    }
+
+    /// The groups' keys, then the filters' values: the parameters of a query on them with `clause` after them.
+    fn params(&self, keys: &[Sql]) -> Vec<Sql> {
+        keys.iter()
+            .cloned()
+            .chain(self.filters.iter().cloned())
+            .collect()
+    }
+
+    /// How many calls each group has without `duration` (the rest of the search still holds), from the group index.
+    fn all_calls(
+        &self,
+        db: &Connection,
+        keys: &[Sql],
+    ) -> Result<Option<HashMap<String, i64>>, ReadError> {
+        let Some(rest) = &self.rest else {
+            return Ok(None);
+        };
+        let (condition, filters) = search::compile_where(rest, &CALLS_SEARCH)?;
+        let params = keys.iter().cloned().chain(filters).collect();
+        let counts = objects(
+            db,
+            &format!(
+                "SELECT key, COUNT(*) AS n FROM calls INDEXED BY calls_group \
+                 WHERE key IN ({}) AND ({condition}) GROUP BY key",
+                marks(keys.len())
+            ),
+            params,
+        )?;
+        Ok(Some(
+            counts
+                .into_iter()
+                .map(|row| {
+                    (
+                        row["key"].as_str().unwrap_or("").to_owned(),
+                        row["n"].as_i64().unwrap_or(0),
+                    )
+                })
+                .collect(),
+        ))
+    }
 }
 
 const LLM_FIELDS: [&str; 4] = ["tokens_in", "tokens_out", "cost", "p95"];

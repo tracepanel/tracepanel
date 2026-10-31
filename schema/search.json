@@ -56,6 +56,10 @@
       "type": "text",
       "help": "Made this call (id from Database, Redis, Cache, HTTP calls or another system's page)"
     },
+    "call_duration": {
+      "type": "duration",
+      "help": "Made a call this slow; with call:, that call: call_duration>500ms"
+    },
     "peer": {
       "type": "text",
       "help": "Called this service (id from Services)"
@@ -212,6 +216,10 @@
       "type": "text",
       "help": "Operation id"
     },
+    "duration": {
+      "type": "duration",
+      "help": "Only calls this slow; a group's numbers are theirs: duration>500ms"
+    },
     "service": {
       "type": "text",
       "help": "The app that recorded it (service.name): service:shop"
@@ -298,6 +306,10 @@
       "type": "text",
       "help": "Which queue ran it: celery, django"
     },
+    "duration": {
+      "type": "duration",
+      "help": "A run's time: duration>1s"
+    },
     "service": {
       "type": "text",
       "help": "The app that recorded it (service.name): service:shop"
@@ -319,6 +331,10 @@
     "source": {
       "type": "text",
       "help": "manage.py or custom (tracepanel.trace)"
+    },
+    "duration": {
+      "type": "duration",
+      "help": "A run's time: duration>1s"
     },
     "service": {
       "type": "text",
@@ -342,6 +358,10 @@
       "type": "text",
       "help": "The RPC system: system:grpc"
     },
+    "duration": {
+      "type": "duration",
+      "help": "A call's time: duration>500ms"
+    },
     "service": {
       "type": "text",
       "help": "The app that recorded it (service.name): service:shop"
@@ -359,6 +379,10 @@
     "page": {
       "type": "text",
       "help": "The page's path, * wildcards: /books/*"
+    },
+    "duration": {
+      "type": "duration",
+      "help": "A view's or an action's time: duration>1s"
     },
     "service": {
       "type": "text",
@@ -386,6 +410,10 @@
       "type": "text",
       "help": "The URL it was sent to: route:/graphql/"
     },
+    "duration": {
+      "type": "duration",
+      "help": "An operation's time: duration>500ms"
+    },
     "service": {
       "type": "text",
       "help": "The app that recorded it (service.name): service:shop"
@@ -408,6 +436,10 @@
       "type": "text",
       "help": "connect, receive, disconnect, or a channel layer message type: chat.message"
     },
+    "duration": {
+      "type": "duration",
+      "help": "A handler's time: duration>500ms"
+    },
     "service": {
       "type": "text",
       "help": "The app that recorded it (service.name): service:shop"
@@ -429,6 +461,10 @@
     "method": {
       "type": "text",
       "help": "HTTP method"
+    },
+    "duration": {
+      "type": "duration",
+      "help": "A request's time: duration>500ms"
     },
     "service": {
       "type": "text",

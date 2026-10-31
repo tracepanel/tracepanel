@@ -55,6 +55,7 @@ import { useServiceCapability } from "./hooks";
 import { currentPeriod, endpointGroup, go, groupRoute, href, issueRoute, traceHref, withPeriod } from "./routes";
 import { useScope } from "./scope";
 import { graphqlOperation, requestPath, taskSystem } from "./sections";
+import { type Noun, overText, shareText } from "./slower";
 import { FitChips, Meter, Mono, Tr } from "./ui";
 
 /** What a trace is: its method and path, a GraphQL operation, or its kind and name (a task, a job, a WebSocket). */
@@ -212,6 +213,51 @@ export function lastColumn<T extends Pick<EndpointRow, "last_seen">>(): DataColu
   };
 }
 
+/**
+ * Under a row's name, with Slower than on: how many of the group's are that slow, of all it has ("12 of 340 calls
+ * over 500 ms"). One line for every list grouped by something: requests, tasks, each system's calls.
+ */
+function SlowerShare({ text }: { text: string | null }) {
+  if (text === null) return null;
+  return <span className="text-sm font-normal text-warn tabular-nums">{text}</span>;
+}
+
+/** The share of a group's that is slow: its count, how many it has without Slower than (`all`), in the row's noun. */
+type Share<T> = (item: T) => string | null;
+
+/** A list's columns with its first one saying the row's share of slow ones under what it says already. */
+function withShare<T>(columns: DataColumn<T>[], share: Share<T> | undefined): DataColumn<T>[] {
+  const [first, ...rest] = columns;
+  if (!(first && share)) return columns;
+  const cell = (item: T) => {
+    const text = share(item);
+    if (text === null) return first.cell(item);
+    return (
+      <span className="flex min-w-0 flex-col gap-0.5">
+        {first.cell(item)}
+        <SlowerShare text={text} />
+      </span>
+    );
+  };
+  return [{ ...first, cell }, ...rest];
+}
+
+/** A row's share, from its count and its `all_` count, in its noun, with the time Slower than keeps. */
+function shareOf<T>(
+  slower: string | null | undefined,
+  noun: Noun,
+  count: (item: T) => number,
+  all: (item: T) => number | null,
+): Share<T> | undefined {
+  const over = slower ? overText(slower) : null;
+  return over ? (item: T) => shareText(count(item), all(item), noun, over) : undefined;
+}
+
+/** The time Slower than keeps (`duration>`'s value: 500ms), null without it. */
+interface Over {
+  slower?: string | null | undefined;
+}
+
 function endpointColumns(items: readonly EndpointRow[]): DataColumn<EndpointRow>[] {
   return [
     {
@@ -251,9 +297,15 @@ function endpointColumns(items: readonly EndpointRow[]): DataColumn<EndpointRow>
   ];
 }
 
-export function EndpointsTable({ items }: { items: readonly EndpointRow[] }) {
+export function EndpointsTable({ items, slower }: { items: readonly EndpointRow[] } & Over) {
+  const share = shareOf<EndpointRow>(
+    slower,
+    ["request", "requests"],
+    (item) => item.calls,
+    (item) => item.all_calls,
+  );
   return (
-    <DataTable table="endpoints" columns={endpointColumns(items)}>
+    <DataTable table="endpoints" columns={withShare(endpointColumns(items), share)}>
       {({ cells }) =>
         items.map((item) => (
           <Tr
@@ -349,6 +401,7 @@ function CallStatsTable<T extends CallStats>({
   items,
   name,
   extra,
+  share,
   ...rest
 }: {
   table: string;
@@ -356,11 +409,14 @@ function CallStatsTable<T extends CallStats>({
   keyOf: (item: T) => string;
   name: (item: T) => ReactNode;
   extra?: readonly ExtraColumn<T>[] | undefined;
+  share?: Share<T> | undefined;
   details: (item: T) => ReactNode;
   open: string | null;
   onOpen: (key: string | null) => void;
 }) {
-  return <OpeningTable items={items} columns={callStatsColumns(items, name, extra ?? [])} {...rest} />;
+  return (
+    <OpeningTable items={items} columns={withShare(callStatsColumns(items, name, extra ?? []), share)} {...rest} />
+  );
 }
 
 /**
@@ -559,12 +615,12 @@ function systemOf(items: readonly CallRow[], family: string): string {
 }
 
 /** What an open row of a page of calls shows: SQL's statement and plan, and the requests that made the call. */
-function CallDetails({ item, source }: { item: CallRow; source: DataSource }) {
+function CallDetails({ item, source, slower }: { item: CallRow; source: DataSource } & Over) {
   return (
     <>
       {item.family === "sql" ? <SqlDetails item={item} source={source} /> : null}
       <RequestLinks
-        q={`call:${item.key}`}
+        q={slowCalls(item.key, slower)}
         traces={item.traces}
         what={systemOfPage(item.system, item.family).one}
         sample={item.sample_trace}
@@ -573,11 +629,22 @@ function CallDetails({ item, source }: { item: CallRow; source: DataSource }) {
   );
 }
 
+/** The requests that made a call; with Slower than on, those where it was that slow (`call_duration>`). */
+function slowCalls(key: string, slower: string | null | undefined): string {
+  return slower ? `call:${key} call_duration>${slower}` : `call:${key}`;
+}
+
 /**
  * One system's operations, the same table for every system: SQL, Redis, a cache, MongoDB, a broker, HTTP calls, or a
  * system the console has never heard of. An open row shows SQL's statement and plan, and the requests that made it.
  */
-export function CallsTable({ items, source, open, onOpen }: TableProps<CallRow> & { source: DataSource }) {
+export function CallsTable({
+  items,
+  source,
+  open,
+  onOpen,
+  slower,
+}: TableProps<CallRow> & { source: DataSource } & Over) {
   const family = items[0]?.family ?? "datastore";
   return (
     <CallStatsTable
@@ -587,7 +654,13 @@ export function CallsTable({ items, source, open, onOpen }: TableProps<CallRow> 
       keyOf={(item) => item.key}
       name={(item) => <OpName item={item} />}
       extra={EXTRA[family]}
-      details={(item) => <CallDetails item={item} source={source} />}
+      share={shareOf<CallRow>(
+        slower,
+        ["call", "calls"],
+        (item) => item.calls,
+        (item) => item.all_calls,
+      )}
+      details={(item) => <CallDetails item={item} source={source} slower={slower} />}
       open={open}
       onOpen={onOpen}
     />
@@ -1363,9 +1436,15 @@ function taskColumns(items: readonly TaskRow[]): DataColumn<TaskRow>[] {
   ];
 }
 
-export function TasksTable({ items }: { items: readonly TaskRow[] }) {
+export function TasksTable({ items, slower }: { items: readonly TaskRow[] } & Over) {
+  const share = shareOf<TaskRow>(
+    slower,
+    ["run", "runs"],
+    (item) => item.runs,
+    (item) => item.all_runs,
+  );
   return (
-    <DataTable table="tasks" columns={taskColumns(items)}>
+    <DataTable table="tasks" columns={withShare(taskColumns(items), share)}>
       {({ cells }) =>
         items.map((item) => (
           <Tr
@@ -1428,9 +1507,15 @@ function graphqlColumns(items: readonly GraphqlRow[]): DataColumn<GraphqlRow>[] 
   ];
 }
 
-export function GraphqlTable({ items }: { items: readonly GraphqlRow[] }) {
+export function GraphqlTable({ items, slower }: { items: readonly GraphqlRow[] } & Over) {
+  const share = shareOf<GraphqlRow>(
+    slower,
+    ["operation", "operations"],
+    (item) => item.calls,
+    (item) => item.all_calls,
+  );
   return (
-    <DataTable table="graphql" columns={graphqlColumns(items)}>
+    <DataTable table="graphql" columns={withShare(graphqlColumns(items), share)}>
       {({ cells }) =>
         items.map((item) => (
           <Tr
@@ -1457,6 +1542,8 @@ type NamedRow = Pick<JobRow, "failures" | "with_issues" | "p95" | "last_seen"> &
   count: number;
   /** Queries per run or call, calls per page view. */
   average: number;
+  /** How many it has without Slower than: null without it. */
+  all: number | null;
 };
 
 /** A named row's badge: a string as a name's tag, a node (a page's action) as it is. */
@@ -1487,14 +1574,24 @@ function NamedTable({
   section,
   head,
   items,
+  noun,
+  slower,
 }: {
   section: "jobs" | "rpc" | "pages";
   /** Column titles: the name, the badge, the count, the queries. */
   head: [string, string, string, string];
   items: readonly NamedRow[];
-}) {
+  /** What its count counts, as its share of slow ones says it. */
+  noun: Noun;
+} & Over) {
+  const share = shareOf<NamedRow>(
+    slower,
+    noun,
+    (item) => item.count,
+    (item) => item.all,
+  );
   return (
-    <DataTable table={section} columns={namedColumns(head, items)}>
+    <DataTable table={section} columns={withShare(namedColumns(head, items), share)}>
       {({ cells }) =>
         items.map((item) => (
           <Tr
@@ -1510,26 +1607,44 @@ function NamedTable({
   );
 }
 
-export function JobsTable({ items }: { items: readonly JobRow[] }) {
+export function JobsTable({ items, slower }: { items: readonly JobRow[] } & Over) {
   const rows = items.map((item) => ({
     ...item,
     name: item.job,
     badge: JOB_SOURCES[item.source] ?? item.source,
     count: item.runs,
     average: item.avg_queries,
+    all: item.all_runs,
   }));
-  return <NamedTable section="jobs" head={["Job", "Source", "Runs", "Queries / run"]} items={rows} />;
+  return (
+    <NamedTable
+      section="jobs"
+      head={["Job", "Source", "Runs", "Queries / run"]}
+      items={rows}
+      noun={["run", "runs"]}
+      slower={slower}
+    />
+  );
 }
 
-export function RpcTable({ items }: { items: readonly RpcRow[] }) {
+export function RpcTable({ items, slower }: { items: readonly RpcRow[] } & Over) {
   const rows = items.map((item) => ({
     ...item,
     name: item.rpc,
     badge: item.system ?? "rpc",
     count: item.calls,
     average: item.avg_queries,
+    all: item.all_calls,
   }));
-  return <NamedTable section="rpc" head={["Method", "System", "Calls", "Queries / call"]} items={rows} />;
+  return (
+    <NamedTable
+      section="rpc"
+      head={["Method", "System", "Calls", "Queries / call"]}
+      items={rows}
+      noun={["call", "calls"]}
+      slower={slower}
+    />
+  );
 }
 
 /** What a row of Pages is: a page's view, or an action on it with what started it (click "Save"). */
@@ -1549,7 +1664,7 @@ function PageAction({ item }: { item: PageRow }) {
  * Pages and what is done on them: a page's views (its load, an SPA's route change), then its actions (a click or a
  * submit that called the API, background calls nobody started); the path once, the actions under it.
  */
-export function PagesTable({ items }: { items: readonly PageRow[] }) {
+export function PagesTable({ items, slower }: { items: readonly PageRow[] } & Over) {
   const rows = items.map((item, index) => ({
     ...item,
     label: (
@@ -1559,8 +1674,17 @@ export function PagesTable({ items }: { items: readonly PageRow[] }) {
     ),
     badge: <PageAction item={item} />,
     average: item.avg_calls,
+    all: item.all_count,
   }));
-  return <NamedTable section="pages" head={["Page", "Action", "Count", "Calls each"]} items={rows} />;
+  return (
+    <NamedTable
+      section="pages"
+      head={["Page", "Action", "Count", "Calls each"]}
+      items={rows}
+      noun={["view", "views"]}
+      slower={slower}
+    />
+  );
 }
 
 function websocketColumns(items: readonly WebsocketRow[]): DataColumn<WebsocketRow>[] {
@@ -1597,9 +1721,15 @@ function websocketColumns(items: readonly WebsocketRow[]): DataColumn<WebsocketR
   ];
 }
 
-export function WebsocketsTable({ items }: { items: readonly WebsocketRow[] }) {
+export function WebsocketsTable({ items, slower }: { items: readonly WebsocketRow[] } & Over) {
+  const share = shareOf<WebsocketRow>(
+    slower,
+    ["connection", "connections"],
+    (item) => item.connections,
+    (item) => item.all_connections,
+  );
   return (
-    <DataTable table="websockets" columns={websocketColumns(items)}>
+    <DataTable table="websockets" columns={withShare(websocketColumns(items), share)}>
       {({ cells }) =>
         items.map((item) => (
           <Tr

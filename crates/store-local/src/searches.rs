@@ -65,9 +65,40 @@ fn in_issue_traces(filter: Compiler) -> Compiler {
     })
 }
 
+/// Traces with a call this slow (`call_duration>500ms`); narrowing `call:`, that call (`slow_call`).
+fn call_slower() -> Compiler {
+    let slower = search::duration("duration");
+    Box::new(move |term| {
+        let (clause, params) = slower(term)?;
+        Ok((
+            format!("id IN (SELECT trace_id FROM calls WHERE {clause})"),
+            params,
+        ))
+    })
+}
+
+/// `call:<key> call_duration>500ms`: the traces where that call itself was this slow, not any other.
+fn slow_call() -> search::Narrowing {
+    let slower = search::duration("duration");
+    Box::new(move |call, term| {
+        let (clause, mut params) = slower(term)?;
+        let Some(call) = call else {
+            return Ok((
+                format!("id IN (SELECT trace_id FROM calls WHERE {clause})"),
+                params,
+            ));
+        };
+        params.insert(0, Sql::Text(call.value.clone()));
+        Ok((
+            format!("id IN (SELECT trace_id FROM calls WHERE key = ? AND {clause})"),
+            params,
+        ))
+    })
+}
+
 pub(crate) fn trace_search() -> search::Schema {
     let task_name = search::text("name");
-    search::schema_for(
+    let mut schema = search::schema_for(
         "traces",
         &[
             ("kind", "kind"),
@@ -141,9 +172,14 @@ pub(crate) fn trace_search() -> search::Schema {
                 }),
             ),
             ("cache", contains("cache_aliases")),
+            ("call_duration", call_slower()),
         ],
         vec![],
-    )
+    );
+    schema
+        .narrowing
+        .push(("call_duration".into(), "call".into(), slow_call()));
+    schema
 }
 
 pub(crate) static TRACE_SEARCH: std::sync::LazyLock<search::Schema> =
@@ -322,6 +358,7 @@ pub(crate) fn calls_search() -> search::Schema {
             ("db", "target"),
             ("host", "target"),
             ("key", "key"),
+            ("duration", "duration"),
             ("since", "start"),
             ("until", "start"),
         ],

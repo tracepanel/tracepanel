@@ -19,6 +19,7 @@ import { LIVE_MS, RefreshControl, useRefresh } from "./refresh";
 import { type EntrySection, type EntryView, go, href, traceHref } from "./routes";
 import { SearchBar } from "./SearchBar";
 import { ENTRY } from "./sections";
+import { slowerOf } from "./slower";
 import {
   GRAPHQL_OPERATIONS,
   HTTP_REQUESTS,
@@ -428,14 +429,20 @@ function CallsList({ calls, section, q }: { calls: Calls; section: EntrySection;
 }
 
 /** The groups' table of each entry point. */
-const GROUP_TABLES: Record<EntrySection, (items: readonly unknown[]) => ReactNode> = {
-  endpoints: (items) => <EndpointsTable items={items as Parameters<typeof EndpointsTable>[0]["items"]} />,
-  graphql: (items) => <GraphqlTable items={items as Parameters<typeof GraphqlTable>[0]["items"]} />,
-  tasks: (items) => <TasksTable items={items as Parameters<typeof TasksTable>[0]["items"]} />,
-  websockets: (items) => <WebsocketsTable items={items as Parameters<typeof WebsocketsTable>[0]["items"]} />,
-  jobs: (items) => <JobsTable items={items as Parameters<typeof JobsTable>[0]["items"]} />,
-  rpc: (items) => <RpcTable items={items as Parameters<typeof RpcTable>[0]["items"]} />,
-  pages: (items) => <PagesTable items={items as Parameters<typeof PagesTable>[0]["items"]} />,
+const GROUP_TABLES: Record<EntrySection, (items: readonly unknown[], slower: string | null) => ReactNode> = {
+  endpoints: (items, slower) => (
+    <EndpointsTable items={items as Parameters<typeof EndpointsTable>[0]["items"]} slower={slower} />
+  ),
+  graphql: (items, slower) => (
+    <GraphqlTable items={items as Parameters<typeof GraphqlTable>[0]["items"]} slower={slower} />
+  ),
+  tasks: (items, slower) => <TasksTable items={items as Parameters<typeof TasksTable>[0]["items"]} slower={slower} />,
+  websockets: (items, slower) => (
+    <WebsocketsTable items={items as Parameters<typeof WebsocketsTable>[0]["items"]} slower={slower} />
+  ),
+  jobs: (items, slower) => <JobsTable items={items as Parameters<typeof JobsTable>[0]["items"]} slower={slower} />,
+  rpc: (items, slower) => <RpcTable items={items as Parameters<typeof RpcTable>[0]["items"]} slower={slower} />,
+  pages: (items, slower) => <PagesTable items={items as Parameters<typeof PagesTable>[0]["items"]} slower={slower} />,
 };
 
 function GroupsList({
@@ -447,5 +454,5 @@ function GroupsList({
   section: EntrySection;
   q: string;
 }) {
-  return rowsOr(groups, section, q, GROUP_TABLES[section]);
+  return rowsOr(groups, section, q, (items) => GROUP_TABLES[section](items, slowerOf(q)));
 }

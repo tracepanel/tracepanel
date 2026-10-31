@@ -113,6 +113,7 @@ pub(crate) fn name_search(
         resource,
         &[
             (column_name, "name"),
+            ("duration", "duration"),
             ("service", "service"),
             ("since", "start"),
             ("until", "start"),
@@ -182,13 +183,125 @@ pub(crate) fn resolver_stats(docs: &[Value]) -> Vec<Value> {
     busiest(rows, i64::MAX)
 }
 
+/// With `duration` in the search, a list's groups are their slow traces alone: each item then gets `all_<count>`, how
+/// many its group has without `duration` (the rest of the search still holds), from `unfiltered`. Null without it.
+fn with_all(
+    query: &str,
+    mut items: Vec<Value>,
+    count: &str,
+    key: fn(&Value) -> String,
+    unfiltered: impl FnOnce(&str) -> Result<Vec<Value>, ReadError>,
+) -> Result<Vec<Value>, ReadError> {
+    let field = format!("all_{count}");
+    let (rest, those) = search::split_off(query, "duration");
+    if those.is_empty() {
+        for item in &mut items {
+            item[&field] = Value::Null;
+        }
+        return Ok(items);
+    }
+    let all: HashMap<String, Value> = unfiltered(&rest)?
+        .into_iter()
+        .map(|item| (key(&item), item[count].clone()))
+        .collect();
+    for item in &mut items {
+        item[&field] = all.get(&key(item)).cloned().unwrap_or(Value::from(0));
+    }
+    Ok(items)
+}
+
 impl Reader {
-    /// HTTP traffic per route: calls, latency percentiles, queries per call, issues, errors.
+    /// The list of `endpoints_rows`, each with `all_calls` (see `with_all`).
     pub fn list_endpoints(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
+        let items = self.endpoints_rows(query, limit)?;
+        with_all(
+            query,
+            items,
+            "calls",
+            |item| format!("{} {}", text_of(&item["method"]), text_of(&item["route"])),
+            |rest| self.endpoints_rows(rest, i64::MAX),
+        )
+    }
+
+    /// The list of `tasks_rows`, each with `all_runs` (see `with_all`).
+    pub fn list_tasks(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
+        let items = self.tasks_rows(query, limit)?;
+        with_all(
+            query,
+            items,
+            "runs",
+            |item| text_of(&item["task"]),
+            |rest| self.tasks_rows(rest, i64::MAX),
+        )
+    }
+
+    /// The list of `websockets_rows`, each with `all_connections` (see `with_all`).
+    pub fn list_websockets(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
+        let items = self.websockets_rows(query, limit)?;
+        with_all(
+            query,
+            items,
+            "connections",
+            |item| text_of(&item["consumer"]),
+            |rest| self.websockets_rows(rest, i64::MAX),
+        )
+    }
+
+    /// The list of `graphql_rows`, each with `all_calls` (see `with_all`).
+    pub fn list_graphql(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
+        let items = self.graphql_rows(query, limit)?;
+        with_all(
+            query,
+            items,
+            "calls",
+            |item| text_of(&item["operation"]),
+            |rest| self.graphql_rows(rest, i64::MAX),
+        )
+    }
+
+    /// The list of `jobs_rows`, each with `all_runs` (see `with_all`).
+    pub fn list_jobs(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
+        let items = self.jobs_rows(query, limit)?;
+        with_all(
+            query,
+            items,
+            "runs",
+            |item| text_of(&item["job"]),
+            |rest| self.jobs_rows(rest, i64::MAX),
+        )
+    }
+
+    /// The list of `rpcs_rows`, each with `all_calls` (see `with_all`).
+    pub fn list_rpcs(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
+        let items = self.rpcs_rows(query, limit)?;
+        with_all(
+            query,
+            items,
+            "calls",
+            |item| text_of(&item["rpc"]),
+            |rest| self.rpcs_rows(rest, i64::MAX),
+        )
+    }
+
+    /// The list of `pages_rows`, each with `all_count` (see `with_all`).
+    pub fn list_pages(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
+        let items = self.pages_rows(query, limit)?;
+        with_all(
+            query,
+            items,
+            "count",
+            |item| text_of(&item["name"]),
+            |rest| self.pages_rows(rest, i64::MAX),
+        )
+    }
+
+    /// HTTP traffic per route: calls, latency percentiles, queries per call, issues, errors.
+    fn endpoints_rows(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
         let schema = search::schema_for(
             "endpoints",
             &[
                 ("route", "route"),
+                ("duration", "duration"),
                 ("service", "service"),
                 ("since", "start"),
                 ("until", "start"),
@@ -245,7 +358,7 @@ impl Reader {
     }
 
     /// Tasks by name: runs, failures, retries, latency, time waiting in the queue; busiest first.
-    pub fn list_tasks(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
+    fn tasks_rows(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
         let schema = name_search(
             "tasks",
             "task",
@@ -296,11 +409,12 @@ impl Reader {
     }
 
     /// WebSocket consumers: connections, messages, errors and handler time per consumer; busiest first.
-    pub fn list_websockets(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
+    fn websockets_rows(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
         let schema = search::schema_for(
             "websockets",
             &[
                 ("consumer", "view"),
+                ("duration", "duration"),
                 ("service", "service"),
                 ("since", "start"),
                 ("until", "start"),
@@ -355,11 +469,12 @@ impl Reader {
     }
 
     /// GraphQL operations by name: calls, errors, latency and queries per call; busiest first.
-    pub fn list_graphql(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
+    fn graphql_rows(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
         let schema = search::schema_for(
             "graphql",
             &[
                 ("route", "route"),
+                ("duration", "duration"),
                 ("service", "service"),
                 ("since", "start"),
                 ("until", "start"),
@@ -548,7 +663,7 @@ impl Reader {
     }
 
     /// Jobs: management commands and `tracepanel.trace()` blocks (kind command) by name; busiest first.
-    pub fn list_jobs(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
+    fn jobs_rows(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
         let source = format!("CASE WHEN {COMMAND} IS NULL THEN 'custom' ELSE 'manage.py' END");
         let schema = name_search("jobs", "job", vec![("source", search::text(&source))]);
         let (condition, params) = search::compile_where(query, &schema)?;
@@ -583,7 +698,7 @@ impl Reader {
     }
 
     /// RPC calls served (kind rpc: gRPC and other RPC systems' servers) by method, `Service/Method`; busiest first.
-    pub fn list_rpcs(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
+    fn rpcs_rows(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
         let schema = name_search("rpc", "rpc", vec![("system", search::text(RPC_SYSTEM))]);
         let (condition, params) = search::compile_where(query, &schema)?;
         let db = self.connect()?;
@@ -618,7 +733,7 @@ impl Reader {
 
     /// Pages viewed in a browser (kind page: tracepanel-js's browser recording) by path; busiest first. Their time is
     /// the page's load, their calls the requests the page made to its API.
-    pub fn list_pages(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
+    fn pages_rows(&self, query: &str, limit: i64) -> Result<Vec<Value>, ReadError> {
         let schema = name_search("pages", "page", vec![]);
         let (condition, params) = search::compile_where(query, &schema)?;
         let db = self.connect()?;

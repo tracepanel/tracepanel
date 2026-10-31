@@ -1252,7 +1252,7 @@ components:
       additionalProperties: false
       required: [key, system, family, target, op, template, name, calls, traces, errors, total, slowest, last_seen,
         most_per_trace, origin, sample_trace, sample_span, statement, vendor, hits, misses, via, tokens_in, tokens_out,
-        cost, p95]
+        cost, p95, all_calls]
       properties:
         key: { type: string, description: "Call id (search traces with call:<key>; for SQL also query:<key>)." }
         system:
@@ -1286,6 +1286,11 @@ components:
         tokens_out: { type: [integer, "null"], description: "An LLM: the output's tokens." }
         cost: { type: [number, "null"], description: "An LLM: what the calls cost in US dollars, estimated; null without a price." }
         p95: { oneOf: [{ $ref: "#/components/schemas/Duration" }, { type: "null" }], description: "An LLM: its calls' p95." }
+        all_calls:
+          type: [integer, "null"]
+          description: >-
+            With duration in the search, the group is only its calls that slow (its numbers, its latest call and its line
+            of code are theirs): how many calls it has without it, the rest of the search still holding. Null without.
     ExplainPlan:
       type: object
       additionalProperties: false
@@ -1307,7 +1312,8 @@ components:
     EndpointRow:
       type: object
       additionalProperties: false
-      required: [method, route, calls, p50, p95, total, avg_queries, with_issues, errors, last_seen, graphql_operations]
+      required: [method, route, calls, p50, p95, total, avg_queries, with_issues, errors, last_seen, graphql_operations,
+        all_calls]
       properties:
         method: { type: string }
         route: { type: string }
@@ -1322,6 +1328,7 @@ components:
         graphql_operations:
           type: integer
           description: Distinct GraphQL operations served by this endpoint (0 for plain HTTP).
+        all_calls: { type: [integer, "null"], description: "With duration in the search: how many the group has without it (the rest of the search still holds); null without." }
     StatsSummary:
       type: object
       additionalProperties: false
@@ -1683,7 +1690,8 @@ components:
     KnownValues:
       type: object
       additionalProperties: false
-      required: [route, log_route, apps, logger, db, targets, ops, task, task_system, queue, job, rpc, page, in, span, extra]
+      required: [route, log_route, apps, logger, db, targets, ops, task, task_system, queue, job, rpc, page, in, span, extra,
+        slow]
       properties:
         task: { type: array, description: Celery task names., items: { type: string } }
         task_system:
@@ -1713,6 +1721,21 @@ components:
         in: { type: array, description: "Kinds and systems of the spans records were logged inside.", items: { type: string } }
         span: { type: array, description: "Names of the traces' spans (their roots left out).", items: { type: string } }
         extra: { type: array, description: "extra.* keys seen in logs.", items: { type: string } }
+        slow:
+          type: object
+          description: >-
+            From how many milliseconds each page calls a row slow, by its name ({"calls/sql": {"ms": 100, "mixed":
+            false}}): a system's page from where the agent raises its slow-call issue, with each app's limits from its
+            hello (a warehouse's own for SQL); the pages of requests, tasks and the rest from 500 ms. Where the apps or
+            the databases on a page disagree, the lowest of their defaults, mixed. A system with no slow issue (Redis,
+            a broker, a model) has none.
+          additionalProperties:
+            type: object
+            additionalProperties: false
+            required: [ms, mixed]
+            properties:
+              ms: { type: integer }
+              mixed: { type: boolean, description: "The page's apps or databases have different limits: this is the lowest default." }
     SearchField:
       type: object
       additionalProperties: false
@@ -1767,7 +1790,7 @@ components:
       type: object
       additionalProperties: false
       required: [task, system, runs, failures, retries, p50, p95, total, wait_p50, wait_p95, avg_queries, with_issues,
-        queues, last_seen]
+        queues, last_seen, all_runs]
       properties:
         task: { type: string, description: Dotted task name. }
         system: { type: string, description: "task.system: the queue that ran it (celery, django)." }
@@ -1783,6 +1806,7 @@ components:
         with_issues: { type: integer }
         queues: { type: array, items: { type: string } }
         last_seen: { $ref: "#/components/schemas/Time" }
+        all_runs: { type: [integer, "null"], description: "With duration in the search: how many the group has without it (the rest of the search still holds); null without." }
     LiveTasks:
       type: object
       additionalProperties: false
@@ -1836,7 +1860,7 @@ components:
     GraphqlRow:
       type: object
       additionalProperties: false
-      required: [operation, type, name, calls, errors, p50, p95, total, avg_queries, with_issues, last_seen]
+      required: [operation, type, name, calls, errors, p50, p95, total, avg_queries, with_issues, last_seen, all_calls]
       properties:
         operation: { type: string, description: "Type and name: query PostList; an unnamed operation by its root fields, query { posts }." }
         type: { type: [string, "null"], description: query, mutation or subscription. }
@@ -1849,6 +1873,7 @@ components:
         avg_queries: { type: number }
         with_issues: { type: integer }
         last_seen: { $ref: "#/components/schemas/Time" }
+        all_calls: { type: [integer, "null"], description: "With duration in the search: how many the group has without it (the rest of the search still holds); null without." }
     TraceGroup:
       type: object
       additionalProperties: false
@@ -1864,7 +1889,7 @@ components:
     JobRow:
       type: object
       additionalProperties: false
-      required: [job, source, runs, failures, p50, p95, total, avg_queries, with_issues, last_seen]
+      required: [job, source, runs, failures, p50, p95, total, avg_queries, with_issues, last_seen, all_runs]
       properties:
         job: { type: string, description: "manage.py migrate, or the name given to tracepanel.trace()." }
         source: { type: string, enum: [manage.py, custom] }
@@ -1876,10 +1901,11 @@ components:
         avg_queries: { type: number }
         with_issues: { type: integer }
         last_seen: { $ref: "#/components/schemas/Time" }
+        all_runs: { type: [integer, "null"], description: "With duration in the search: how many the group has without it (the rest of the search still holds); null without." }
     RpcRow:
       type: object
       additionalProperties: false
-      required: [rpc, system, calls, failures, p50, p95, total, avg_queries, with_issues, last_seen]
+      required: [rpc, system, calls, failures, p50, p95, total, avg_queries, with_issues, last_seen, all_calls]
       properties:
         rpc: { type: string, description: "The method, Service/Method: helloworld.Greeter/SayHello." }
         system: { type: [string, "null"], description: "grpc, or another RPC system's name." }
@@ -1891,13 +1917,15 @@ components:
         avg_queries: { type: number }
         with_issues: { type: integer }
         last_seen: { $ref: "#/components/schemas/Time" }
+        all_calls: { type: [integer, "null"], description: "With duration in the search: how many the group has without it (the rest of the search still holds); null without." }
     PageRow:
       type: object
       additionalProperties: false
       description: >-
         A page's view (its load, an SPA's route change) or an action on it (what the user did that called the API:
         a click, a submit; background when nobody did). A page's view comes first, then its actions.
-      required: [name, page, action, trigger, count, failures, p50, p95, total, avg_calls, with_issues, last_seen]
+      required: [name, page, action, trigger, count, failures, p50, p95, total, avg_calls, with_issues, last_seen,
+        all_count]
       properties:
         name: { type: string, description: "The traces' name, the group's key: /books, or /books › click \"Save\"." }
         page: { type: string, description: "The page's path: /books/42." }
@@ -1911,6 +1939,7 @@ components:
         avg_calls: { type: number, description: Requests to the API per view or action. }
         with_issues: { type: integer }
         last_seen: { $ref: "#/components/schemas/Time" }
+        all_count: { type: [integer, "null"], description: "With duration in the search: how many the group has without it (the rest of the search still holds); null without." }
     GraphqlDetail:
       type: object
       additionalProperties: false
@@ -1944,7 +1973,7 @@ components:
       type: object
       additionalProperties: false
       required: [consumer, connections, received, delivered, disconnects, errors, p50, p95, total, avg_queries,
-        with_issues, paths, last_seen]
+        with_issues, paths, last_seen, all_connections]
       properties:
         consumer: { type: string, description: Dotted consumer class. }
         connections: { type: integer }
@@ -1959,6 +1988,7 @@ components:
         with_issues: { type: integer }
         paths: { type: array, items: { type: string }, description: Up to five paths seen. }
         last_seen: { $ref: "#/components/schemas/Time" }
+        all_connections: { type: [integer, "null"], description: "With duration in the search: how many the group has without it (the rest of the search still holds); null without." }
     ServiceApp:
       description: The project's own web, workers and commands, each a service of its own.
       type: object

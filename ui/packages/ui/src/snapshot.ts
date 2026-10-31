@@ -104,6 +104,7 @@ const EMPTY: Omit<DataSource, "getTrace" | "related" | "explain"> = {
     // biome-ignore lint/style/useNamingConvention: wire format.
     log_route: [],
     apps: {},
+    slow: {},
     span: [],
     extra: [],
   }),

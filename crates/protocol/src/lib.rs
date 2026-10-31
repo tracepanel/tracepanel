@@ -600,6 +600,7 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send + 'static>(
     activity
         .about
         .hello(&hello.service, hello.app.as_ref(), said);
+    activity.about.limits(&hello.service, &hello.thresholds);
     // An app that can do something for the console takes requests down this connection, one frame each.
     let registered = (!(hello.capabilities.is_empty() && hello.console.is_empty())).then(|| {
         let (requests, mut queue) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
