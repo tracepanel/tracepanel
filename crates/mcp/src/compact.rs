@@ -977,13 +977,40 @@ fn workflow_lines(workflow: &Value, now: i64) -> Vec<String> {
     out
 }
 
+/// Why the trace was profiled, as its SDK says on its root span (`profile.reason`, else the trace's attributes):
+/// "by the panel's cookie", "by its own setting"; a reason it doesn't know, as sent. None when it doesn't say.
+fn profile_reason(doc: &Value) -> Option<String> {
+    let root = doc
+        .get("spans")
+        .and_then(Value::as_array)
+        .and_then(|spans| {
+            spans
+                .iter()
+                .find(|span| span.get("parent_id").is_some_and(Value::is_null))
+        });
+    let reason = [root.and_then(|span| span.get("attrs")), doc.get("attrs")]
+        .into_iter()
+        .flatten()
+        .find_map(|attrs| attrs.get("profile.reason").and_then(Value::as_str))
+        .filter(|reason| !reason.is_empty())?;
+    Some(match reason {
+        "cookie" => "by the panel's cookie".into(),
+        "setting" => "by its own setting".into(),
+        "header" => "by a request header".into(),
+        "parent" => "by its caller".into(),
+        "code" => "by your code".into(),
+        other => other.into(),
+    })
+}
+
 /// One trace, compact: the head, its issues, then what `focus` asks for, errors, loud logs and related traces.
 pub(crate) fn trace(doc: &Value, related: &Value, focus: Focus, values: bool, now: i64) -> String {
     let mut head = format!("{}  {}", text(doc, "id"), trace_head(doc));
     let profiled = profile::kinds(doc);
     if !profiled.is_empty() {
+        let why = profile_reason(doc).map_or(String::new(), |reason| format!(" ({reason})"));
         head.push_str(&format!(
-            "\nprofiled: {} → get_profile",
+            "\nprofiled: {}{why} → get_profile",
             profiled.join(", ")
         ));
     }

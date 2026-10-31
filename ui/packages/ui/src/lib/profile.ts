@@ -215,3 +215,23 @@ function innermostOwn(profile: Profile, stack: Stack): string | undefined {
     .map((index) => profile.frames[index])
     .find((frame) => frame?.in_app)?.function;
 }
+
+/** Why the SDKs say a trace was profiled (`profile.reason`), as people read it. */
+const REASONS: Record<string, string> = {
+  cookie: "by the panel's cookie",
+  setting: "by its own setting",
+  header: "by a request header",
+  parent: "by its caller",
+  code: "by your code",
+};
+
+/**
+ * "Profiled: by the panel's cookie": why the trace was profiled, as its SDK says on its root span (or the trace's
+ * attributes); a reason the console doesn't know, as sent. Null when it doesn't say.
+ */
+export function profileReason(trace: Pick<Trace, "attrs" | "spans">): string | null {
+  const root = trace.spans.find((span) => span.parent_id === null);
+  const value = root?.attrs["profile.reason"] ?? trace.attrs["profile.reason"];
+  if (typeof value !== "string" || value === "") return null;
+  return `Profiled: ${REASONS[value] ?? value}`;
+}

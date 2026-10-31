@@ -321,7 +321,7 @@
     },
     "attrs": {
       "type": "object",
-      "description": "Namespaced attributes (http.*, db.*, cache.*, storage.*, gen_ai.*, code.*, user.*, task.*, signal.*, exception.*, collectstatic.*, migration.*, migrate.*, log.*, dump.*). task.* is shared by every task queue (task.system says which: celery, django, django-q, dramatiq, huey, rq, taskiq, channels). Values are scalars or lists of scalars; dump.args alone is a list of objects.",
+      "description": "Namespaced attributes (http.*, db.*, cache.*, storage.*, gen_ai.*, code.*, user.*, task.*, signal.*, exception.*, collectstatic.*, migration.*, migrate.*, log.*, dump.*, profile.*). task.* is shared by every task queue (task.system says which: celery, django, django-q, dramatiq, huey, rq, taskiq, channels). Values are scalars or lists of scalars; dump.args alone is a list of objects.",
       "propertyNames": {
         "pattern": "^[a-z][a-z0-9_]*(\\.[a-z0-9_]+)+$"
       },
@@ -356,6 +356,10 @@
         "dump.lang": {
           "type": "string",
           "description": "On a dump (log.kind dump), optional: the language its values are printed in, to colour them: python, javascript (TypeScript too), go, java, kotlin, rust, or another name. Without it the console goes by the dumper (the record's logger) and then by the call site's file extension."
+        },
+        "profile.reason": {
+          "type": "string",
+          "description": "On a profiled trace's root span, optional: why it was profiled. setting (the app's own setting), header (a request's X-Tracepanel-Profile header), cookie (the panel's profile cookie), parent (its caller was profiled, and asked for it), code (the app's code started it); an SDK may send another word. The console says it where it shows the profile."
         },
         "signal.name": {
           "type": "string",

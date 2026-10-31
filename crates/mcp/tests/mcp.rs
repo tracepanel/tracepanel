@@ -904,6 +904,8 @@ fn profiles_store(name: &str) -> PathBuf {
         .as_object_mut()
         .unwrap()
         .remove("memory");
+    // Profiled because the panel's cookie asked, as the SDK says on its root span.
+    cpu_only["spans"][0]["attrs"]["profile.reason"] = json!("cookie");
     store(
         name,
         &[
@@ -1056,7 +1058,7 @@ async fn a_trace_says_it_was_profiled() {
     );
 
     assert!(
-        cpu_only.starts_with("01M4PR0F11E0000000000000J0  GET /reports/sales → 200 · 20.0 ms\nprofiled: cpu → get_profile\n\n"),
+        cpu_only.starts_with("01M4PR0F11E0000000000000J0  GET /reports/sales → 200 · 20.0 ms\nprofiled: cpu (by the panel's cookie) → get_profile\n\n"),
         "{cpu_only}"
     );
 

@@ -31,7 +31,8 @@ pub(crate) fn list() -> Value {
             "One trace, compact: its issues (N+1, duplicate and slow queries, errors…) with where in the code and how to \
              fix them, the error with its stack, the call tree with repeats folded, warnings, what the developer \
              printed to look at (debug() dumps, with their values), related tasks, the \
-             traces down its chain of calls and whether it and they were profiled.",
+             traces down its chain of calls and whether it and they were profiled (and why: a setting, a header, the \
+             panel's cookie, its caller, the code).",
             json!({
                 "id": {"type": "string", "description": "The trace's id."},
                 "focus": {

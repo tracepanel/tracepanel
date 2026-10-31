@@ -69,6 +69,12 @@
   rows, and one grouped query for an aggregate run per row (a `Count`
   in a loop). Through pgx or database/sql alone it keeps the generic
   hint: a join, or one batched query.
+- A profiled trace may say why it was profiled: `profile.reason` on its
+  root span, `setting`, `header`, `cookie`, `parent` or `code` (another
+  word is kept as sent). Its Profile tab says it under the time and the
+  memory, such as "Profiled: by the panel's cookie", and the MCP
+  server's `get_trace` says it after what was profiled. The trace
+  schema documents it.
 
 ### Fixed
 
