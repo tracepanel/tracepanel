@@ -3,7 +3,7 @@
 // amber as a warning is, not an error; anything else went well. A call whose trace another app served for it, and that
 // says no answer of its own (the page sent its trace before the call ended), takes that trace's.
 
-import type { Span, TraceSummary } from "../types";
+import type { Span, Trace, TraceSummary } from "../types";
 
 /** How a call went: its status code (none when it has none to say), and its tone. */
 export interface CallAnswer {
@@ -84,4 +84,13 @@ export function groupAnswer(calls: readonly { span: Span; served?: TraceSummary 
   const warned = codes.length;
   const code = new Set(codes).size === 1 ? (codes[0] ?? null) : null;
   return { failed, warned, code, tone: failed > 0 ? "error" : warned > 0 ? "warn" : undefined };
+}
+
+/**
+ * A call that hadn't ended when its trace went out, as the call tree's bar and the time strip's mark draw it: until
+ * the trace's end, where it was cut (or its own time, if longer). Null for any other call.
+ */
+export function cutLength(span: Span, trace: Pick<Trace, "start" | "duration">): number | null {
+  if (!(answers(span) && unfinished(span))) return null;
+  return Math.max(span.duration, trace.start + trace.duration - span.start, 0);
 }

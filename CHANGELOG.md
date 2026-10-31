@@ -78,6 +78,11 @@
   answer), `3 × 404` in amber for the ones answered 4xx (`4xx` when the
   codes differ). The row's edge is the worst of them. Before, the row
   looked fine until it was opened.
+- A call the page's trace went out before it ended (a route change)
+  runs on the time strip's lane to where it was cut, the trace's end,
+  fading out there, as its bar in the call tree now does too. Before,
+  it was a mark of no width at its start, and its bar in the call tree
+  a sliver. A call answered 4xx is amber on the lane, as its row is.
 - A database driver's HTTP request that reached a service which records
   traces too still links the two traces, though it left the call tree.
   The connection or query it served keeps the W3C span ids its requests

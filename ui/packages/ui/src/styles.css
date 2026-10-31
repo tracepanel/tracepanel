@@ -1423,6 +1423,12 @@ tr[data-new] {
   --dt-lit: var(--dt-error);
   background: var(--dt-error);
 }
+/* A call cut short (its trace went out before it ended): to where it was cut, fading out there, as its bar in the
+   call tree. */
+.dt-mark[data-cut] {
+  border-radius: 2px 0 0 2px;
+  mask-image: linear-gradient(to right, #000 max(40%, calc(100% - 2rem)), transparent);
+}
 /* Outside the picked stretch of time: still there, stepped back. */
 .dt-mark[data-out] {
   opacity: 0.3;

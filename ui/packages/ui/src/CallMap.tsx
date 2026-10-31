@@ -23,7 +23,7 @@ import { LlmConversation, withoutMessages } from "./LlmConversation";
 import { AllAttributes, LogRecordDetails } from "./LogRecordDetails";
 import { withoutAnsi } from "./lib/ansi";
 import { type Category, spanCategories } from "./lib/breakdown";
-import { answers, callAnswer, type GroupAnswer, groupAnswer, unfinished } from "./lib/callAnswer";
+import { answers, callAnswer, cutLength, type GroupAnswer, groupAnswer, unfinished } from "./lib/callAnswer";
 import { callFields, templatePlace } from "./lib/callFields";
 import { callTemplate, callText, groupNoun } from "./lib/calls";
 import { isDump } from "./lib/dump";
@@ -686,19 +686,23 @@ function Bar({
   start,
   length,
   point,
+  cut,
   within,
 }: {
   trace: Trace;
   start: number;
   length: number;
   point?: boolean;
+  /** A call cut short (see cutLength): it fades out where it was cut, as one that runs past the end does. */
+  cut?: boolean;
   within?: Within | undefined;
 }) {
   const [from, long] = clipped(start, length, within);
   const place = point ? pointPlace(trace, from) : barPlace(trace, from, long);
+  const past = place.past ?? (cut ? "" : undefined);
   return (
     <span className="dt-map-track" aria-hidden="true">
-      <span className="dt-map-bar" data-point={point ? "" : undefined} data-past={place.past} style={place.style} />
+      <span className="dt-map-bar" data-point={point ? "" : undefined} data-past={past} style={place.style} />
     </span>
   );
 }
@@ -1315,6 +1319,14 @@ function OwnTime({ span, ctx }: { span: Span; ctx: RowContext }) {
   return <RowTime time={span.duration} slow={slow} title={timeTitle(span, ctx.trace)} />;
 }
 
+/** A span's bar; a call cut short runs to where it was cut, fading out there, never a 0-width mark. */
+function OwnBar({ span, ctx }: { span: Span; ctx: RowContext }) {
+  const cut = cutLength(span, ctx.trace);
+  return (
+    <Bar trace={ctx.trace} start={span.start} length={cut ?? span.duration} cut={cut !== null} within={ctx.within} />
+  );
+}
+
 function OwnRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps<"span">) {
   const { span } = node;
   const fold = spanFold(node, mark, ctx);
@@ -1333,7 +1345,7 @@ function OwnRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps<
           <HiddenLogs count={ctx.hiddenLogs.get(span.id)} onShow={ctx.onShowLogs} />
           <RowChips>{issue ? <IssueChip kind={issue} className={ISSUE_CHIP_SHRINKS} /> : null}</RowChips>
         </span>
-        <Bar trace={ctx.trace} start={span.start} length={span.duration} within={ctx.within} />
+        <OwnBar span={span} ctx={ctx} />
         <OwnTime span={span} ctx={ctx} />
       </button>
       <RowDetails id={node.key} ctx={ctx} />
