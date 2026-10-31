@@ -1,7 +1,18 @@
 // One thing, one look: a request's method, an issue's kind and title, a page's action, a failed call and a job are
 // drawn the same wherever they show.
-import { traceId } from "../app.ts";
+import type { Page } from "@playwright/test";
+import { laidOut, traceId } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
+
+/**
+ * A trace opened in the page: its heading names it. A goto that only changes the hash keeps the last trace on the
+ * screen until the new one is loaded, and a locator would find the last one's parts.
+ */
+async function openTrace(page: Page, name: string, tab = ""): Promise<void> {
+  await page.goto(`/#/t/${await traceId(name)}${tab}`);
+  // Its heading ends with the name's last word: a method is a badge of its own, a task's name may be cut at its start.
+  await expect(page.locator(".dt-trace-title h2").first()).toContainText(name.split(/[ .]/).at(-1) ?? name);
+}
 
 test("an error's row names where it happened: an endpoint by its method's badge, a task by its kind's", async ({
   page,
@@ -92,7 +103,7 @@ test("an issue that isn't stored says so as an empty section does: an icon, a ti
 test("a copy button follows its value, in an attribute's row as in a fact's; an attribute's name has no tooltip", async ({
   page,
 }) => {
-  await page.goto(`/#/t/${await traceId("GET /api/posts")}?tab=request`);
+  await openTrace(page, "GET /api/posts", "?tab=request");
   const main = page.getByRole("main");
   // How far the button starts after the end of the value beside it.
   const gap = (button: ReturnType<typeof main.getByRole>) =>
@@ -107,6 +118,10 @@ test("a copy button follows its value, in an attribute's row as in a fact's; an 
     .first()
     .getByRole("button", { name: /^Copy / })
     .first();
+
+  await expect(attribute).toBeVisible();
+  await expect(fact).toBeVisible();
+  await laidOut(page);
 
   expect(await gap(attribute)).toBeLessThanOrEqual(16);
   expect(await gap(attribute)).toBeGreaterThanOrEqual(0);
@@ -127,11 +142,13 @@ test("a choice of lists is the pill switch every pane has: the chosen one raised
 });
 
 test("a trace's parts without a switch are named on the same pill track as the ones with one", async ({ page }) => {
-  await page.goto(`/#/t/${await traceId("shop.tasks.parse_feed")}`);
+  await openTrace(page, "shop.tasks.parse_feed");
   await page.getByRole("tablist").first().getByRole("tab", { name: /^Task/ }).click();
   const workflow = page.getByRole("region", { name: "Workflow" }).getByRole("heading");
 
   await expect(workflow).toHaveText("Workflow");
+  await expect(page.getByRole("tablist", { name: "Request details" })).toBeVisible();
+  await laidOut(page);
   const track = await workflow.locator("span").first().boundingBox();
   const attributes = await page.getByRole("tablist", { name: "Request details" }).boundingBox();
   if (!(track && attributes)) throw new Error("no tracks");
@@ -156,6 +173,7 @@ for (const [name, url] of [
 
     await expect(footer).toHaveCount(1);
     await expect(open).toHaveText(/^(Open|Latest) /);
+    await laidOut(page);
     const [box, row] = [await open.boundingBox(), await footer.boundingBox()];
     if (!(box && row)) throw new Error("no footer");
     expect(row.x + row.width - (box.x + box.width)).toBeLessThan(2);
@@ -174,6 +192,7 @@ test("a group's summary has the tiles an entry point's Overview has, in the same
   const summary = page.getByRole("region", { name: "Summary" });
 
   await expect(summary.getByText(/^(Calls|Errors|Slow ≥ 500 ms|p50|p95|p99|Avg queries)$/)).toHaveCount(7);
+  await laidOut(page);
   // In one row at 1440 px, as the Overview's.
   const tops = await summary
     .locator(":scope > *")
@@ -215,10 +234,14 @@ test("a trace's facts start their second column's values at one x, whatever its 
     "shop.tasks.send_receipt",
     "manage.py rebuild_index",
   ]) {
-    await page.goto(`/#/t/${await traceId(name)}`);
+    await openTrace(page, name);
     await page.getByRole("tablist").first().getByRole("tab").first().click();
     const second = page.getByRole("main").locator("dl").first().locator("dd").nth(1);
-    starts.push(Math.round((await second.boundingBox())?.x ?? 0));
+    await expect(second).toBeVisible();
+    await laidOut(page);
+    const box = await second.boundingBox();
+    if (!box) throw new Error(`${name}: no second fact`);
+    starts.push(Math.round(box.x));
   }
 
   expect(new Set(starts).size).toBe(1);

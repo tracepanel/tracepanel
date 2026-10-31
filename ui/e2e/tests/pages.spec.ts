@@ -3,7 +3,8 @@ import { expect, test } from "../fixtures.ts";
 
 test("a page lists its view, then its actions, a failed one counted", async ({ page }) => {
   await page.goto("/#/pages?view=overview");
-  const rows = page.getByRole("main").getByRole("table").last().getByRole("link");
+  // The seed's page, /books: other tests store views of pages of their own (/app/), hours ago but in this period.
+  const rows = page.getByRole("main").getByRole("table").last().getByRole("link").filter({ hasText: "/books" });
 
   await expect(rows).toHaveCount(3);
   await expect(rows.nth(0)).toContainText("view");

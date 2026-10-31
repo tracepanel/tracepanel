@@ -1,7 +1,7 @@
 // A page of an app with the widget, served on the console's origin (as an app's dev server serves the console): its
 // own load, and the calls it makes to its API, answered with the headers an SDK puts on them and the ids of real
 // traces in the agent, so the panel opens them.
-import type { Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 import { CONSOLE } from "./agent.ts";
 
 /** An answer of the page's API, as an SDK sends it: its status, its trace, what Server-Timing says. */
@@ -150,8 +150,25 @@ export const autoRefresh = (page: Page) =>
     .first()
     .getByRole("button", { name: /^(Every|Live|Auto-refresh)/ });
 
+/**
+ * Before a test measures where things are, or drags onto them: the page's fonts loaded (the text's widths are
+ * Geist's, not the fallback's), and no frame still to draw. A measure taken earlier reads a layout about to change.
+ */
+export async function laidOut(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  });
+}
+
 /** Live, chosen from the header's auto-refresh menu, as a person turns it on. */
 export async function chooseLive(page: Page): Promise<void> {
-  await autoRefresh(page).click();
-  await page.getByRole("menuitemradio", { name: /^Live/ }).click();
+  const live = page.getByRole("menuitemradio", { name: /^Live/ });
+  // The page's header renders again once its rows load, which closes a menu opened before: open it again until the
+  // choice is made, and the button says Live.
+  await expect(async () => {
+    if (!(await live.isVisible())) await autoRefresh(page).click();
+    await live.click({ timeout: 2_000 });
+    await expect(autoRefresh(page)).toHaveText(/^Live/, { timeout: 1_000 });
+  }).toPass();
 }
