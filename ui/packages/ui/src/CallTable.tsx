@@ -15,11 +15,13 @@ import { cn } from "./lib/utils";
 import { uncommented } from "./sql";
 import type { ExplainPlan, Span, Trace } from "./types";
 
-// A failed call marks its row's edge red, as the console's lists mark theirs; one an issue points at is highlighted.
+// A failed call marks its row's edge red, one answered 4xx amber, as the console's lists mark theirs; one an issue
+// points at is highlighted.
 const ROW = cn(
   "cursor-pointer focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
   "data-focused:bg-brand-soft/60",
   "data-[tone=error]:[&>td:first-child]:shadow-[inset_3px_0_0_var(--color-error)]",
+  "data-[tone=warn]:[&>td:first-child]:shadow-[inset_3px_0_0_var(--dt-warn-strong)]",
 );
 
 /** Whether a click in a row opens it: anywhere but a link or a button in it, and not the end of selecting its text. */
@@ -37,7 +39,7 @@ function onRowKey(event: KeyboardEvent<HTMLTableRowElement>, onToggle: () => voi
 /** What the table needs of a row: its key, its edge, whether an issue points at it, what opens under it. */
 export interface CallRowOf<T> {
   key: (item: T) => string;
-  failed?: ((item: T) => boolean) | undefined;
+  tone?: ((item: T) => "error" | "warn" | undefined) | undefined;
   focused: (item: T) => boolean;
   details: (item: T) => ReactNode;
 }
@@ -81,7 +83,7 @@ export function CallTable<T>({
               <Fragment key={key}>
                 <TableRow
                   {...focusMark(row.focused(item))}
-                  data-tone={row.failed?.(item) ? "error" : undefined}
+                  data-tone={row.tone?.(item)}
                   tabIndex={0}
                   aria-expanded={opened}
                   className={ROW}

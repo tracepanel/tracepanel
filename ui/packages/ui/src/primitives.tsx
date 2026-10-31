@@ -3,6 +3,7 @@ import { type ComponentType, type ReactNode, useLayoutEffect, useRef } from "rea
 import { Badge } from "./components/ui/badge";
 import { Button } from "./components/ui/button";
 import { ISSUE_LABELS } from "./labels";
+import type { GroupAnswer } from "./lib/callAnswer";
 import { templatePlace } from "./lib/callFields";
 import { runtimeKind } from "./lib/runtime";
 import { cn } from "./lib/utils";
@@ -76,6 +77,29 @@ export function IssueChip({
 export function Times({ count }: { count: number }) {
   if (count <= 1) return null;
   return <span className="dt-map-times">×{count}</span>;
+}
+
+/**
+ * How a group's calls went, beside its ×N wherever repeats fold into one row: "2 failed" red, as a call that failed
+ * says "failed" or its 5xx; "3 × 404" amber, as a call answered 404 shows its code ("4xx" when the codes differ).
+ * Nothing when every call went well.
+ */
+export function GroupStatus({ answer }: { answer: GroupAnswer }) {
+  const { failed, warned, code } = answer;
+  return (
+    <>
+      {failed > 0 ? (
+        <span className="dt-status" data-tone="error" title={`${failed} of these calls failed`}>
+          {failed} failed
+        </span>
+      ) : null}
+      {warned > 0 ? (
+        <span className="dt-status" data-tone="warn" title={`${warned} of these calls were answered ${code ?? "4xx"}`}>
+          {warned} × {code ?? "4xx"}
+        </span>
+      ) : null}
+    </>
+  );
 }
 
 /** Database or cache alias, shown only when it is not "default". */

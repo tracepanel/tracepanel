@@ -55,3 +55,33 @@ export function callAnswer(span: Span, served?: TraceSummary | undefined): CallA
 export function answers(span: Span): boolean {
   return span.kind === "http.client" || codeOf(span) !== null;
 }
+
+/** How a group of calls went, as its one row says it: how many failed, how many were answered 4xx. */
+export interface GroupAnswer {
+  failed: number;
+  warned: number;
+  /** The 4xx code the warned calls share, when they share one (404 ×3); null when they differ. */
+  code: number | null;
+  /** The worst of them, the row's edge as a single call's: a failure over a 4xx. */
+  tone: CallAnswer["tone"];
+}
+
+/** A call's tone wherever a row shows it: a call out's answer, else an errored span's red. */
+function toneOfCall(span: Span, served?: TraceSummary | undefined): CallAnswer["tone"] {
+  if (answers(span)) return callAnswer(span, served).tone;
+  return span.status === "error" ? "error" : undefined;
+}
+
+/** What a group's calls were answered, together: one rule with each call's own row (see callAnswer). */
+export function groupAnswer(calls: readonly { span: Span; served?: TraceSummary | undefined }[]): GroupAnswer {
+  let failed = 0;
+  const codes: (number | null)[] = [];
+  for (const { span, served } of calls) {
+    const tone = toneOfCall(span, served);
+    if (tone === "error") failed += 1;
+    if (tone === "warn") codes.push(callAnswer(span, served).status);
+  }
+  const warned = codes.length;
+  const code = new Set(codes).size === 1 ? (codes[0] ?? null) : null;
+  return { failed, warned, code, tone: failed > 0 ? "error" : warned > 0 ? "warn" : undefined };
+}

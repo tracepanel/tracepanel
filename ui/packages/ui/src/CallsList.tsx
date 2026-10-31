@@ -10,9 +10,9 @@ import {
   timeColumns,
 } from "./CallTable";
 import type { DataColumn } from "./DataTable";
-import { callAnswer } from "./lib/callAnswer";
+import { callAnswer, type GroupAnswer, groupAnswer } from "./lib/callAnswer";
 import { callTemplate, groupNoun, onTheClock } from "./lib/calls";
-import { IssueChip, MethodBadge, SectionHeading, StatusBadge, Times } from "./primitives";
+import { GroupStatus, IssueChip, MethodBadge, SectionHeading, StatusBadge, Times } from "./primitives";
 import type { IssueKind, Span } from "./types";
 
 export interface CallsListProps {
@@ -32,16 +32,13 @@ interface Group {
   /** Its calls' time: on the clock, added up; set once the calls are grouped. */
   time: RowTime;
   issue: IssueKind | undefined;
-  /** One of its calls failed: the row has the red edge a failed request's has in a list. */
-  failed: boolean;
+  /** How its calls went: the row's edge (red for a failure, amber for a 4xx) as a request's in a list. */
+  answer: GroupAnswer;
 }
+
+const NO_ANSWER: GroupAnswer = { failed: 0, warned: 0, code: null, tone: undefined };
 
 const HTTP_METHOD = /^(GET|HEAD|POST|PUT|PATCH|DELETE|OPTIONS|TRACE|CONNECT) (.+)$/;
-
-/** A call failed: an error, a 5xx answer, or none. */
-function failed(span: Span): boolean {
-  return span.status === "error" || callAnswer(span).tone === "error";
-}
 
 /** What a group repeats: an HTTP call's method in its badge, as every list shows a request's, then the rest. */
 function Template({ template }: { template: string }) {
@@ -54,11 +51,10 @@ function Template({ template }: { template: string }) {
   );
 }
 
-/** A group with one more of its calls: its time, its issue, whether one failed. */
+/** A group with one more of its calls and its issue. */
 function withCall(group: Group, span: Span, issue: IssueKind | undefined): Group {
   group.spans.push(span);
   group.issue ??= issue;
-  group.failed ||= failed(span);
   return group;
 }
 
@@ -67,11 +63,20 @@ function groupCalls(spans: readonly Span[], issueBySpan: ReadonlyMap<string, Iss
   const groups = new Map<string, Group>();
   for (const span of spans) {
     const template = callTemplate(span);
-    const group = groups.get(template) ?? { template, spans: [], time: rowTime([]), issue: undefined, failed: false };
+    const group = groups.get(template) ?? {
+      template,
+      spans: [],
+      time: rowTime([]),
+      issue: undefined,
+      answer: NO_ANSWER,
+    };
     groups.set(template, withCall(group, span, issueBySpan.get(span.id)));
   }
-  // Each row's time on the clock, as the table shows it and sorts by.
-  for (const group of groups.values()) group.time = rowTime(group.spans);
+  // Each row's time on the clock, as the table shows it and sorts by, and how its calls went.
+  for (const group of groups.values()) {
+    group.time = rowTime(group.spans);
+    group.answer = groupAnswer(group.spans.map((span) => ({ span })));
+  }
   return [...groups.values()].sort((a, b) => b.time.clock - a.time.clock);
 }
 
@@ -112,12 +117,13 @@ function Call({ span, index, focused }: { span: Span; index: number; focused: bo
   );
 }
 
-/** A group's name in its row: what its calls repeat, how many, its issue. */
+/** A group's name in its row: what its calls repeat, how many, how they went, its issue. */
 function GroupName({ group }: { group: Group }) {
   return (
     <span className="flex min-w-0 items-center gap-2">
       <Template template={group.template} />
       <Times count={group.spans.length} />
+      {group.spans.length > 1 ? <GroupStatus answer={group.answer} /> : null}
       {group.issue ? <IssueChip kind={group.issue} /> : null}
     </span>
   );
@@ -165,7 +171,7 @@ export function CallsList({ spans, issueBySpan, focus, table = "trace-calls" }: 
       focus={focus}
       row={{
         key: (group) => group.template,
-        failed: (group) => group.failed,
+        tone: (group) => group.answer.tone,
         focused: (group) => (focus ? group.spans.some((span) => focus.has(span.id)) : false),
         details: (group) => <GroupDetails group={group} focus={focus} />,
       }}
