@@ -6,7 +6,8 @@ name: Maven Central
 #
 # - After a release (release.yml, on a version tag) publishes to PyPI: it publishes the binaries that release built,
 #   taken out of its npm packages. The binaries on Maven Central are the ones on PyPI and npm, byte for byte.
-# - By hand, with a version already on PyPI (0.3.7): the same, from that release's wheels on PyPI.
+# - By hand, with a version already on PyPI (0.3.7): the same, from that release's wheels on PyPI, each binary checked
+#   against the one npm serves for that version.
 #
 # The Central Portal has no trusted publishing: it takes a user token and a PGP signature on every file. Both are in
 # the environment maven-central, as secrets: MAVEN_CENTRAL_USERNAME and MAVEN_CENTRAL_PASSWORD (a Central Portal user
@@ -83,10 +84,32 @@ jobs:
           mkdir npm-dist
           for package in npm/*/; do (cd "$package" && npm pack --pack-destination ../../npm-dist); done
 
+      # The binaries made from the wheels are the ones npm serves for this version, byte for byte.
+      - name: The binaries are the ones on npm
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          mkdir -p npm-published ours theirs
+          for tgz in npm-dist/*.tgz; do
+            name=$(tar -xOzf "$tgz" package/package.json | jq -r .name)
+            # @tracepanel/agent holds the launcher, made by this commit's scripts/npm.py: no binary to compare.
+            [ "$name" = "@tracepanel/agent" ] && continue
+            published=$(cd npm-published && npm pack "$name@$VERSION" --silent)
+            rm -rf ours/* theirs/*
+            tar -xzf "$tgz" -C ours
+            tar -xzf "npm-published/$published" -C theirs
+            if ! diff -r ours/package/bin theirs/package/bin; then
+              echo "::error::$name: the binary differs from npm's $VERSION" && exit 1
+            fi
+            sha512sum ours/package/bin/* | sed "s|ours/package/bin/|$name: |"
+          done
+
       - name: Make the bundle
         env:
           VERSION: ${{ steps.version.outputs.version }}
-        run: uv run --no-project scripts/maven.py "$VERSION" npm-dist bundle
+        # Releases up to 0.10.0 have CRLF license files in their Windows packages; the binaries go as they are.
+        run: uv run --no-project scripts/maven.py --any-line-endings "$VERSION" npm-dist bundle
 
       - uses: actions/upload-artifact@v7
         with:

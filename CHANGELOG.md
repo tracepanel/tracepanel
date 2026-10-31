@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- The Windows wheels and npm packages carry LICENSE, NOTICE and
+  THIRD-PARTY-NOTICES with LF line endings, as every other platform's
+  do. Their CRLF copies kept the agent's releases since 0.5.0 off Maven
+  Central.
+
 ## 0.10.0 (2026-10-31)
 
 ### Added
