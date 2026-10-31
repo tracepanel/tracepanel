@@ -27,6 +27,7 @@ import {
   type Profile,
   packageOf,
   packageTimes,
+  profileReason,
   tree,
   WAITING,
   YOUR_CODE,
@@ -170,7 +171,10 @@ function ProfileOf({
   const memory = profile.memory;
   // Only a profile that measured its memory has the choice.
   const kinds = memory ? <Segmented label="Profile of" segments={KINDS} value={kind} onChange={onKind} /> : null;
-  if (memory && kind === "memory") return <MemoryPane profile={profile} memory={memory} kinds={kinds} />;
+  if (memory && kind === "memory") {
+    const head = <MemoryHead memory={memory} what={{ ...WHOLE_TRACE, reason: profileReason(trace) }} />;
+    return <MemoryPane profile={profile} memory={memory} kinds={kinds} head={head} />;
+  }
   return (
     <ProfileView
       key={scope.title}
@@ -243,6 +247,8 @@ interface MemoryWhat {
   traces: number;
   /** Why a stretch picked isn't what it shows. */
   note?: string | null;
+  /** Why it was profiled ("Profiled: by the panel's cookie"), when its SDK says. */
+  reason?: string | null;
 }
 
 const WHOLE_TRACE: MemoryWhat = { title: "Memory of the whole trace", traces: 1 };
@@ -276,7 +282,8 @@ function MemoryNotes({ memory, what }: { memory: Memory; what: MemoryWhat }) {
   const end = what.traces > 1 ? "the end of each trace" : "the end of the trace";
   return (
     <>
-      {what.note ? <span className="text-xs text-muted-foreground">{what.note}</span> : null}
+      <NoteLine text={what.reason} />
+      <NoteLine text={what.note} />
       {memory.sites_at === "end" ? (
         <span className="text-xs text-muted-foreground">Where it was at {end}, not its peak</span>
       ) : null}
@@ -321,6 +328,16 @@ function samplesLine(profile: Profile): string {
   return `${profile.samples.toLocaleString()} samples, one every ${duration(profile.interval_us)}`;
 }
 
+/** A line of the head in small print, when there is something to say. */
+function NoteLine({ text }: { text: string | null | undefined }) {
+  return text ? <span className="text-xs text-muted-foreground">{text}</span> : null;
+}
+
+/** Why the trace was profiled, when its SDK says: "Profiled: by the panel's cookie". */
+function Reason({ trace }: { trace: Trace }) {
+  return <NoteLine text={profileReason(trace)} />;
+}
+
 /** The time it couldn't sample (its thread ran other traces), and, timed, that the samples around it fill it in. */
 function Dropped({ whole, timed: filled }: { whole: Profile; timed: boolean }) {
   if (!whole.dropped) return null;
@@ -348,6 +365,7 @@ function ProfileHead({ whole, shown, trace, scope }: { whole: Profile; shown: Pr
         </span>
       </span>
       <span className="text-xs text-muted-foreground">{scope.note ?? samplesLine(whole)}</span>
+      <Reason trace={trace} />
       <Dropped whole={whole} timed={scope.timed} />
     </div>
   );
