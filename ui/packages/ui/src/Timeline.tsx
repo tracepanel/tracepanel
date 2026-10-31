@@ -11,6 +11,7 @@ import { duration } from "./format";
 import { keyed } from "./keys";
 import { withoutAnsi } from "./lib/ansi";
 import { type Category, spanCategories } from "./lib/breakdown";
+import { answers, callAnswer, cutLength } from "./lib/callAnswer";
 import { GC } from "./lib/memory";
 import type { Profile } from "./lib/profile";
 import { isShown, overlaps, type Slice, type TimeRange, togglePart } from "./lib/slice";
@@ -34,6 +35,8 @@ interface Mark {
   target: MarkTarget;
   /** A call's share of the time (its legend item's): hovering one lights the other. */
   category?: string | undefined;
+  /** A call that hadn't ended when its trace went out: drawn to where it was cut, fading out there. */
+  cut?: boolean | undefined;
 }
 
 interface Lane {
@@ -63,10 +66,36 @@ const CALL_LANES: readonly { noun: Noun; kinds: readonly string[]; always: boole
   { noun: ["RPC call", "RPC calls"], kinds: RPC, always: true },
 ];
 
-/** A span's tone on its lane: red when it failed (the trace's own too when the trace did), amber with an issue. */
+/**
+ * A span's tone on its lane: red when it failed (the trace's own too when the trace did), amber with an issue or, a
+ * call out, answered 4xx: as its row in the call tree says it (see callAnswer).
+ */
 function toneOf(span: Span, trace: Trace, flagged: ReadonlySet<string>): Mark["tone"] {
-  if (failed(span, trace)) return "error";
-  return flagged.has(span.id) ? "warn" : "neutral";
+  const answer = answers(span) ? callAnswer(span).tone : undefined;
+  if (answer === "error" || failed(span, trace)) return "error";
+  return answer === "warn" || flagged.has(span.id) ? "warn" : "neutral";
+}
+
+/** Said on a cut call's mark, in place of a time it doesn't have. */
+const CUT_LABEL = "hadn't ended when the trace went out";
+
+/**
+ * A call's mark. One cut short (its trace went out before it ended, see `unfinished`) has no time of its own (0 µs,
+ * or until it was cut): it runs to the trace's end, where it was cut, never a 0-width mark.
+ */
+function callMark(span: Span, trace: Trace, flagged: ReadonlySet<string>, category: string | undefined): Mark {
+  const length = cutLength(span, trace);
+  const cut = length !== null;
+  return {
+    key: span.id,
+    start: span.start,
+    duration: length ?? span.duration,
+    label: `${span.name} · ${cut ? CUT_LABEL : duration(span.duration)}`,
+    tone: toneOf(span, trace, flagged),
+    target: { tab: "tree", span: span.id },
+    category,
+    cut,
+  };
 }
 
 function failed(span: Span, trace: Trace): boolean {
@@ -81,15 +110,7 @@ function callLanes(trace: Trace): Lane[] {
     always,
     marks: trace.spans
       .filter((span) => kinds.includes(span.kind))
-      .map((span) => ({
-        key: span.id,
-        start: span.start,
-        duration: span.duration,
-        label: `${span.name} · ${duration(span.duration)}`,
-        tone: toneOf(span, trace, flagged),
-        target: { tab: "tree", span: span.id } as const,
-        category: categories.get(span.id),
-      })),
+      .map((span) => callMark(span, trace, flagged, categories.get(span.id))),
   }));
 }
 
@@ -207,7 +228,8 @@ function LaneRow({
             look={{
               className: "dt-mark",
               "data-tone": mark.tone,
-              "data-point": mark.duration === 0 ? "" : undefined,
+              "data-point": mark.duration === 0 && !mark.cut ? "" : undefined,
+              "data-cut": mark.cut ? "" : undefined,
               "data-out": outside(mark, trace, range),
               ...litKey(mark.category),
               style: position(mark, trace, total),
