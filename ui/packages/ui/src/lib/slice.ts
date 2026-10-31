@@ -2,6 +2,8 @@
 // the timeline. Plain data, no React: the call tree draws from it, the console keeps it in its URL.
 
 import { duration } from "../format";
+import type { Log } from "../types";
+import { isDump } from "./dump";
 
 /** A stretch of the trace's time, in microseconds since it started. */
 export type TimeRange = readonly [number, number];
@@ -32,6 +34,11 @@ export function isLoud(level: string): boolean {
 }
 
 const LOUD = new Set(["warning", "warn", "error", "critical", "fatal"]);
+
+/** A record that shows by default: a warning or worse, or a dump (printed on purpose, to be seen). */
+export function isShown(log: Pick<Log, "level" | "attrs">): boolean {
+  return isLoud(log.level) || isDump(log);
+}
 
 /** The slice with `part` picked, or no longer picked. */
 export function togglePart(slice: Slice, part: string): Slice {

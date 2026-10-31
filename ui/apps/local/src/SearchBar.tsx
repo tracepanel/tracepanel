@@ -384,6 +384,15 @@ const QUICK: Record<Exclude<Section, CallsSection>, Control[]> = {
       levels: true,
     } satisfies LevelsFilter,
     { label: "Logger", title: "Filter by logger", key: "logger", values: (known) => known.logger ?? [] },
+    // What a developer printed to look at (debug()), apart from what was logged.
+    {
+      label: "Kind",
+      title: "Filter by kind of record",
+      options: [
+        { label: "Dumps", terms: [f("has", ":", "dump")] },
+        { label: "Logged", terms: [f("has", "!=", "dump")] },
+      ],
+    },
     // The routes whose requests logged anything: the others would find nothing here.
     { ...ROUTE, values: (known) => known.log_route ?? [] },
     // Records a task or a job wrote: shown when the project has any.

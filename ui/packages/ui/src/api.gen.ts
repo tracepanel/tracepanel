@@ -1908,8 +1908,21 @@ export interface components {
         duration: number;
         /** @enum {unknown} */
         status: "ok" | "error";
-        /** @description Namespaced attributes (http.*, db.*, cache.*, storage.*, gen_ai.*, code.*, user.*, task.*, signal.*, exception.*, collectstatic.*, migration.*, migrate.*). task.* is shared by every task queue (task.system says which: celery, django, django-q, dramatiq, huey, rq, taskiq, channels). Values are scalars or lists of scalars. */
+        /** @description Namespaced attributes (http.*, db.*, cache.*, storage.*, gen_ai.*, code.*, user.*, task.*, signal.*, exception.*, collectstatic.*, migration.*, migrate.*, log.*, dump.*). task.* is shared by every task queue (task.system says which: celery, django, django-q, dramatiq, huey, rq, taskiq, channels). Values are scalars or lists of scalars; dump.args alone is a list of objects. */
         attrs: {
+            /** @description On a log record: dump for what a developer printed to look at (python-devtools' debug()), which the console always shows and `has:dump` finds; absent for a record logged. */
+            "log.kind"?: string;
+            /** @description On a dump (log.kind dump): each argument printed, in order. Its message is the dump as text. */
+            "dump.args"?: {
+                /** @description The argument as written in the call, e.g. "order.items"; null when the SDK couldn't read it. */
+                expr: string | null;
+                /** @description The value, pretty-printed over lines; the SDK may cut a long one and say so. */
+                repr: string;
+                /** @description The value's type, e.g. "dict", "Order". */
+                type: string;
+                /** @description Its length, for a value that has one (a list, a dict, a string). */
+                len: number | null;
+            }[];
             /** @description On a signal span and on each of its receivers' spans: the signal's dotted path, e.g. "django.db.models.signals.post_save". The signal span's name is Django's own signal by its name ("post_save"), any other by this path. */
             "signal.name"?: string;
             /** @description On a signal span: who sent it, a model by its label ("auth.Group"), any other class by its dotted path. Absent for a send with no sender. */
@@ -2357,8 +2370,21 @@ export interface components {
                 duration: number;
                 /** @enum {unknown} */
                 status: "ok" | "error";
-                /** @description Namespaced attributes (http.*, db.*, cache.*, storage.*, gen_ai.*, code.*, user.*, task.*, signal.*, exception.*, collectstatic.*, migration.*, migrate.*). task.* is shared by every task queue (task.system says which: celery, django, django-q, dramatiq, huey, rq, taskiq, channels). Values are scalars or lists of scalars. */
+                /** @description Namespaced attributes (http.*, db.*, cache.*, storage.*, gen_ai.*, code.*, user.*, task.*, signal.*, exception.*, collectstatic.*, migration.*, migrate.*, log.*, dump.*). task.* is shared by every task queue (task.system says which: celery, django, django-q, dramatiq, huey, rq, taskiq, channels). Values are scalars or lists of scalars; dump.args alone is a list of objects. */
                 attrs: {
+                    /** @description On a log record: dump for what a developer printed to look at (python-devtools' debug()), which the console always shows and `has:dump` finds; absent for a record logged. */
+                    "log.kind"?: string;
+                    /** @description On a dump (log.kind dump): each argument printed, in order. Its message is the dump as text. */
+                    "dump.args"?: {
+                        /** @description The argument as written in the call, e.g. "order.items"; null when the SDK couldn't read it. */
+                        expr: string | null;
+                        /** @description The value, pretty-printed over lines; the SDK may cut a long one and say so. */
+                        repr: string;
+                        /** @description The value's type, e.g. "dict", "Order". */
+                        type: string;
+                        /** @description Its length, for a value that has one (a list, a dict, a string). */
+                        len: number | null;
+                    }[];
                     /** @description On a signal span and on each of its receivers' spans: the signal's dotted path, e.g. "django.db.models.signals.post_save". The signal span's name is Django's own signal by its name ("post_save"), any other by this path. */
                     "signal.name"?: string;
                     /** @description On a signal span: who sent it, a model by its label ("auth.Group"), any other class by its dotted path. Absent for a send with no sender. */

@@ -8,7 +8,7 @@ import { cutByPauses, GC, gcPauses } from "./lib/memory";
 import { percent } from "./lib/percent";
 import { plural } from "./lib/plural";
 import { type Quiet, quietSpans } from "./lib/quiet";
-import { cleared, isLoud, rangeLabel, type Slice, togglePart } from "./lib/slice";
+import { cleared, isShown, rangeLabel, type Slice, togglePart } from "./lib/slice";
 import { waitedIn } from "./lib/waiting";
 import { litKey } from "./lit";
 import { largestFirst, ShareFace } from "./Shares";
@@ -222,7 +222,7 @@ function Share({ share, filters }: { share: SpanShare; filters: SliceState }) {
  * one of them. There only when it has info or debug records to show.
  */
 function LogsChip({ trace, filters }: { trace: Trace; filters: SliceState }) {
-  if (trace.logs.every((log) => isLoud(log.level))) return null;
+  if (trace.logs.every(isShown)) return null;
   return (
     <li>
       <button

@@ -13,7 +13,7 @@ import { withoutAnsi } from "./lib/ansi";
 import { type Category, spanCategories } from "./lib/breakdown";
 import { GC } from "./lib/memory";
 import type { Profile } from "./lib/profile";
-import { isLoud, overlaps, type Slice, type TimeRange, togglePart } from "./lib/slice";
+import { isShown, overlaps, type Slice, type TimeRange, togglePart } from "./lib/slice";
 import { DATASTORES, MESSAGING, RPC } from "./lib/systems";
 import { timed } from "./lib/waiting";
 import { litKey, litScope } from "./lit";
@@ -100,7 +100,7 @@ function logTone(level: string): Mark["tone"] {
 
 /** The lanes of what happened at a point: log records (warnings and worse, unless every one shows), errors. */
 function pointLanes(trace: Trace, allLogs: boolean): Lane[] {
-  const shown = allLogs ? trace.logs : trace.logs.filter((log) => isLoud(log.level));
+  const shown = allLogs ? trace.logs : trace.logs.filter(isShown);
   const logs = keyed(shown, (log) => `log:${log.time}:${log.message}`).map(({ key, item: log }) => ({
     key,
     start: log.time,

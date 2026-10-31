@@ -1167,6 +1167,66 @@ mod tests {
     }
 
     #[test]
+    fn dumps_are_found_by_has_dump() {
+        let dir =
+            std::env::temp_dir().join(format!("tracepanel-store-log-dumps-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = path_in(&dir);
+        let mut store = Store::open(&path).unwrap();
+        let args = serde_json::json!([
+            {"expr": "order", "repr": "Order(\n    id=7,\n)", "type": "Order", "len": null},
+            {"expr": null, "repr": "[1, 2]", "type": "list", "len": 2},
+        ]);
+        let doc = serde_json::json!({
+            "id": "D1", "kind": "http", "name": "GET /", "start": 0, "duration": 1000, "status": "ok",
+            "attrs": {"service.name": "shop"}, "spans": [], "errors": [], "links": [], "issues": [],
+            "logs": [
+                {"span_id": null, "time": 10, "level": "debug", "logger": "devtools",
+                 "message": "shop/views.py:12 checkout\n    order: Order(id=7) (Order)", "exception": null,
+                 "attrs": {"log.kind": "dump", "dump.args": args, "code.origin": "shop/views.py:12 in checkout"}},
+                {"span_id": null, "time": 20, "level": "debug", "logger": "shop", "message": "cart loaded",
+                 "exception": null, "attrs": {}},
+                {"span_id": null, "time": 30, "level": "info", "logger": "shop", "message": "order placed",
+                 "exception": null, "attrs": {"log.kind": "record"}},
+            ],
+        });
+        store
+            .write(&[Received {
+                trace: serde_json::from_value(doc.clone()).unwrap(),
+                doc: doc.to_string(),
+            }])
+            .unwrap();
+        let reader = Reader::new(&path);
+        let messages = |query: &str| -> Vec<Value> {
+            reader
+                .search_logs(query, 50, None)
+                .unwrap()
+                .items
+                .iter()
+                .map(|log| log["message"].clone())
+                .collect()
+        };
+
+        let dumps = reader.search_logs("has:dump", 50, None).unwrap().items;
+        assert_eq!(dumps.len(), 1);
+        // The arguments come back as they were sent: a list of objects, not text.
+        assert_eq!(dumps[0]["attrs"]["dump.args"], args);
+        assert_eq!(dumps[0]["logger"], "devtools");
+
+        assert_eq!(
+            messages("has!=dump"),
+            [Value::from("order placed"), Value::from("cart loaded")]
+        );
+        // With the other filters, as any record.
+        assert_eq!(messages("has:dump level:info"), Vec::<Value>::new());
+        assert_eq!(messages("has:dump logger:devtools").len(), 1);
+
+        assert!(reader.search_logs("has:mail", 50, None).is_err());
+        assert!(reader.search_logs("has>dump", 50, None).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn records_are_found_by_the_app_that_wrote_them() {
         let dir =
             std::env::temp_dir().join(format!("tracepanel-store-log-apps-{}", std::process::id()));

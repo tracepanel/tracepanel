@@ -11,6 +11,7 @@ import { migratePlan, planSummary } from "./lib/migrations";
 import { shownValue } from "./lib/pyliteral";
 import { traceRuntime } from "./lib/runtime";
 import { unreceived } from "./lib/signals";
+import { attrsWhere } from "./lib/values";
 import { linkProps, type TraceLinks } from "./links";
 import { MigrationList, riskCount } from "./Migrations";
 import { type PropRow, PropTable } from "./PropTable";
@@ -410,7 +411,7 @@ export function RequestInfo({ trace, related, links, hero: wanted }: RequestInfo
   const document = text(trace.attrs["graphql.document"]);
   // The document is shown formatted in its own part: not again, on one line, among the attributes.
   const { "graphql.document": _, ...rest } = trace.attrs;
-  const others = Object.fromEntries(Object.entries(rest).filter(([key]) => !isRequestDetail(key)));
+  const others = attrsWhere(rest, (key) => !isRequestDetail(key));
   const graphql = document ? [{ id: "graphql", label: "GraphQL", content: <GraphqlCode document={document} /> }] : [];
   // The traces it is linked to come after its own: what queued it, what it called, what it delivered to.
   // A task run's workflow lists the runs before and after it: the other rows leave those out.

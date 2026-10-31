@@ -29,7 +29,8 @@ pub(crate) fn list() -> Value {
             "get_trace",
             "Get a trace",
             "One trace, compact: its issues (N+1, duplicate and slow queries, errors…) with where in the code and how to \
-             fix them, the error with its stack, the call tree with repeats folded, warnings, related tasks, the \
+             fix them, the error with its stack, the call tree with repeats folded, warnings, what the developer \
+             printed to look at (debug() dumps, with their values), related tasks, the \
              traces down its chain of calls and whether it and they were profiled.",
             json!({
                 "id": {"type": "string", "description": "The trace's id."},
@@ -131,7 +132,9 @@ pub(crate) fn list() -> Value {
             "Log records, newest first, with their level, logger and trace. With `trace`: that trace's records and \
              those of every trace down its chain of calls (the services its calls reached, theirs in turn), in time \
              order on its clock with each record's app, added up by level and app; `span` narrows to what is under \
-             those spans (a span's own records, its children's and its calls' traces'), `only` to the spans' own.",
+             those spans (a span's own records, its children's and its calls' traces'), `only` to the spans' own. \
+             A dump, what the developer printed to look at (devtools' `debug()`), comes with its values; `has:dump` \
+             finds them.",
             json!({
                 "query": query("Which records, e.g. `level>=warning logger:app.*`; empty for all. Not with `trace`."),
                 "limit": limit(50, 200),
@@ -662,10 +665,11 @@ fn chain_section(server: &Server, id: &str) -> Result<Option<String>, Refusal> {
         .into_iter()
         .filter(|log| {
             log["trace_id"] != id
-                && matches!(
-                    compact::text(log, "level"),
-                    "warning" | "error" | "critical"
-                )
+                && (compact::is_dump(log)
+                    || matches!(
+                        compact::text(log, "level"),
+                        "warning" | "error" | "critical"
+                    ))
         })
         .collect();
     let mut out = format!(
@@ -692,7 +696,15 @@ fn chain_section(server: &Server, id: &str) -> Result<Option<String>, Refusal> {
         ));
     }
     if !loud.is_empty() {
-        out.push_str(&format!("\ntheir warnings and worse ({}):", loud.len()));
+        let dumps = if loud.iter().any(compact::is_dump) {
+            ", and dumps"
+        } else {
+            ""
+        };
+        out.push_str(&format!(
+            "\ntheir warnings and worse{dumps} ({}):",
+            loud.len()
+        ));
         for log in loud.iter().take(10) {
             out.push_str(&format!("\n  {}", compact::scope_log_line(log, start)));
         }

@@ -229,6 +229,7 @@ pub(crate) fn log_search(fts: bool) -> search::Schema {
             ("job", named("command")),
             ("in", inside(&["kind", "system"])),
             ("span", inside(&["name"])),
+            ("has", Box::new(log_has)),
         ],
         // Keys come from the query grammar ([a-z0-9_.] only), so they are safe inside the JSON path.
         vec![(
@@ -240,6 +241,26 @@ pub(crate) fn log_search(fts: bool) -> search::Schema {
             }),
         )],
     )
+}
+
+/// A log's `has:dump`: the records a developer printed to look at (devtools' `debug()`), `log.kind` dump; `!=` the
+/// others.
+fn log_has(term: &Term) -> search::Clause {
+    let negated = match term.op.as_str() {
+        ":" => false,
+        "!=" => true,
+        _ => return Err(SearchError("has supports only ':' and '!='".into())),
+    };
+    match term.value.as_str() {
+        "dump" => Ok((
+            format!(
+                "IFNULL(json_extract(logs.attrs, '$.\"log.kind\"'), '') {} 'dump'",
+                if negated { "!=" } else { "=" }
+            ),
+            vec![],
+        )),
+        _ => Err(SearchError("has expects dump".into())),
+    }
 }
 
 /// A trace's name, for traces of `kind` alone: a log's `task:` and `job:`.

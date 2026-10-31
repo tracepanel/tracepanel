@@ -87,6 +87,7 @@
   --dt-k-datastore: #22d3ee;
   --dt-k-messaging: #e879f9;
   --dt-k-log: #9a93bd;
+  --dt-k-dump: #34d399;
   --dt-k-mail: #f472b6;
   --dt-k-storage: #d4a373;
   --dt-k-llm: #7dd3fc;
@@ -222,6 +223,7 @@
   --dt-k-datastore: #0e7490;
   --dt-k-messaging: #a21caf;
   --dt-k-log: #8a84a6;
+  --dt-k-dump: #047857;
   --dt-k-mail: #db2777;
   --dt-k-storage: #9a5b2c;
   --dt-k-llm: #0369a1;
@@ -2311,6 +2313,9 @@ details[data-focused] > .dt-sql-group {
 .dt-map-row[data-kind="log"] {
   --dt-k: var(--dt-k-log);
 }
+.dt-map-row[data-kind="dump"] {
+  --dt-k: var(--dt-k-dump);
+}
 .dt-map-row[data-kind="signal"] {
   --dt-k: var(--dt-k-signal);
 }
@@ -2364,6 +2369,38 @@ details[data-focused] > .dt-sql-group {
 .dt-map-row[data-kind="error"] .dt-map-kind {
   color: var(--dt-k);
   background: color-mix(in srgb, var(--dt-k) 14%, transparent);
+}
+/* A dump's badge, the muted kind badge in its own colour, as a level's in its tone: the call tree and the lists. */
+.dt-kind.dt-dump-badge {
+  color: var(--dt-k-dump);
+  background: color-mix(in srgb, var(--dt-k-dump) 14%, transparent);
+}
+/* A dump on one line (debug() output): its call site, quiet, then its first value coloured, cut; how many more. */
+.dt-dump-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--dt-mono);
+  white-space: nowrap;
+}
+.dt-dump-site {
+  flex: none;
+  color: var(--dt-text-3);
+}
+.dt-dump-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dt-dump-more {
+  flex: none;
+  padding: 0 0.3125rem;
+  border-radius: 0.25rem;
+  color: var(--dt-text-3);
+  background: var(--dt-hover);
+  font-size: var(--dt-size-xs);
 }
 .dt-map-text {
   flex: 1 1000 auto;

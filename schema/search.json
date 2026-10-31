@@ -138,6 +138,10 @@
       "type": "text",
       "help": "Kind of the trace that logged it: http, task, command, page"
     },
+    "has": {
+      "type": "has",
+      "help": "dump: what the developer printed to look at, such as devtools' debug(); has!=dump leaves dumps out"
+    },
     "task": {
       "type": "text",
       "help": "Task that logged it, * wildcards: shop.tasks.*"
