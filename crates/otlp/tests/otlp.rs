@@ -611,6 +611,110 @@ fn apollo_router_s_request_to_its_subgraph_is_a_call_that_links_its_trace() {
     }
 }
 
+/// Other GraphQL gateways' traces of one query to a subgraph (tests/fixtures/<gateway>.json, made by hand in the
+/// shapes their sources make): WunderGraph Cosmo Router, Hive Gateway (and GraphQL Mesh), Hive Router, Grafbase
+/// Gateway. Each one's traces, as the agent keeps them.
+fn gateway(name: &str) -> Vec<Received> {
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/json"),
+    );
+    let start = Instant::now();
+    let mut assembler = Assembler::default();
+    assembler.add(
+        tracepanel_otlp::decode(&headers, &fixture(&format!("{name}.json"))).unwrap(),
+        start,
+    );
+    assembler
+        .ready(start + QUIET)
+        .iter()
+        .map(analyzed)
+        .collect()
+}
+
+#[test]
+fn a_graphql_gateway_s_stages_fold_and_its_request_to_a_subgraph_is_a_call() {
+    for (name, slow_step, subgraph_parent) in [
+        ("cosmo-router", "Operation - Plan", "c00000000000000a"),
+        ("hive-gateway", "graphql.parse", "d000000000000008"),
+        ("hive-router", "graphql.plan", "e00000000000000a"),
+        ("grafbase-gateway", "prepare operation", "f000000000000005"),
+    ] {
+        let traces = gateway(name);
+        // Hive Gateway's start and its schema loaded are nobody's traces.
+        assert_eq!(traces.len(), 1, "{name}");
+        let doc: Value = serde_json::from_str(&traces[0].doc).unwrap();
+        let spans = doc["spans"].as_array().unwrap();
+        let tree: Vec<(&str, &str, Option<&str>)> = spans
+            .iter()
+            .map(|span| {
+                (
+                    span["kind"].as_str().unwrap(),
+                    span["name"].as_str().unwrap(),
+                    span["parent_id"].as_str(),
+                )
+            })
+            .collect();
+        let root = spans[0]["id"].as_str();
+
+        // The request, named after its operation; a slow step of the gateway's own; one call to the subgraph, the
+        // span whose id the subgraph got, so the subgraph's trace links to it. The other stages are left out.
+        assert_eq!(
+            (&doc["kind"], &doc["name"]),
+            (&json!("http"), &json!("GraphQL query Books")),
+            "{name}"
+        );
+        assert_eq!(
+            tree,
+            [
+                ("http", "GraphQL query Books", None),
+                ("function", slow_step, root),
+                ("http.client", "POST books/graphql", root),
+            ],
+            "{name}"
+        );
+        assert_eq!(spans[2]["attrs"]["w3c.span_id"], subgraph_parent, "{name}");
+        assert_eq!(spans[2]["status"], "ok", "{name}");
+    }
+}
+
+#[test]
+fn a_graphql_gateway_s_fast_steps_fold_too() {
+    let mut export: Value = serde_json::from_slice(&fixture("cosmo-router.json")).unwrap();
+    for span in export["resourceSpans"][0]["scopeSpans"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .flat_map(|scope| scope["spans"].as_array_mut().unwrap().iter_mut())
+        .filter(|span| span["name"] == "Operation - Plan")
+    {
+        span["endTimeUnixNano"] = json!("1793344008001000000");
+    }
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/json"),
+    );
+    let start = Instant::now();
+    let mut assembler = Assembler::default();
+    assembler.add(
+        tracepanel_otlp::decode(&headers, export.to_string().as_bytes()).unwrap(),
+        start,
+    );
+
+    let docs = assembler.ready(start + QUIET);
+    let doc: Value = serde_json::from_str(&analyzed(&docs[0]).doc).unwrap();
+    let kinds: Vec<&str> = doc["spans"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|span| span["kind"].as_str().unwrap())
+        .collect();
+
+    assert_eq!(kinds, ["http", "http.client"]);
+}
+
 #[test]
 fn a_cors_preflight_and_apollo_router_s_own_start_are_nobody_s_traces() {
     let span = |trace: &str, id: &str, name: &str, kind: i32, scope: &str, method: Option<&str>| {

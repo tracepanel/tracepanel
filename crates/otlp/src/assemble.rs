@@ -235,10 +235,17 @@ fn traces(trace: u128, bucket: &Bucket) -> Vec<Value> {
 
 /// A trace that is nobody's work, left out: a browser's CORS preflight (which the server answers before the request
 /// it asks about, and which the SDKs leave out too), and Apollo Router's own work outside a request (its `starting`, a
-/// schema reloaded), an internal root of its own scope. `alone`: the root has no spans under it.
+/// schema reloaded), an internal root of its own scope, and so Hive Gateway's. `alone`: the root has no spans under it.
 fn nobodys(root: &Got, alone: bool) -> bool {
     let routers_own = &*root.scope == "apollo-router" && root.span.kind == 1;
-    routers_own || preflight(root, alone)
+    // Hive Gateway's (and GraphQL Mesh's) start and its schema loaded, under its default tracer.
+    let gateways_own = &*root.scope == "gateway"
+        && root.span.kind == 1
+        && matches!(
+            root.span.name.as_str(),
+            "gateway.initialization" | "gateway.schema"
+        );
+    routers_own || gateways_own || preflight(root, alone)
 }
 
 /// A CORS preflight: an `OPTIONS` request served that asks for another method (its `Access-Control-Request-Method`
@@ -500,12 +507,13 @@ fn trace_name(root: &Span, attrs: &Map<String, Value>, kind: &str) -> String {
     }
 }
 
-/// A GraphQL server's operation, as its type and name: from the conventions' `graphql.operation.*`, or from a span named
-/// after it (Apollo Router's `query Books`). The trace is named after it, as the SDKs name theirs.
+/// A GraphQL server's operation, as its type and name: from the conventions' `graphql.operation.*` (Cosmo Router's
+/// `wg.operation.*`), or from a span named after it (Apollo Router's `query Books`). The trace is named after it, as
+/// the SDKs name theirs.
 fn graphql_operation(root: &Span, attrs: &Map<String, Value>) -> Option<(String, String)> {
     if let (Some(operation), Some(name)) = (
-        text(attrs, &["graphql.operation.type"]),
-        text(attrs, &["graphql.operation.name"]),
+        text(attrs, &["graphql.operation.type", "wg.operation.type"]),
+        text(attrs, &["graphql.operation.name", "wg.operation.name"]),
     ) {
         return Some((operation.to_owned(), name.to_owned()));
     }
@@ -524,6 +532,16 @@ fn origin(attrs: &Map<String, Value>) -> Option<String> {
     let function = text(attrs, &["code.function.name", "code.function"]);
     let place = line.map_or(file.to_owned(), |line| format!("{file}:{line}"));
     Some(function.map_or(place.clone(), |function| format!("{place} in {function}")))
+}
+
+/// Grafbase Gateway's request to a subgraph: an internal span (it names no kind) with a method and a URL, the span
+/// whose id the subgraph gets.
+fn grafbase_request(got: &Got) -> bool {
+    let attrs = attributes(&got.span.attributes);
+    &*got.scope == "grafbase"
+        && got.span.kind == 1
+        && text(&attrs, &["http.request.method"]).is_some()
+        && text(&attrs, &["url.full"]).is_some()
 }
 
 fn span_doc(trace: u128, got: &Got, parent: Option<String>, bucket: &Bucket) -> Value {
@@ -556,7 +574,7 @@ fn span_doc(trace: u128, got: &Got, parent: Option<String>, bucket: &Bucket) -> 
     ]
     .iter()
     .any(|key| attrs.contains_key(*key));
-    if matches!(span.kind, 3 | 4) && carries {
+    if (matches!(span.kind, 3 | 4) || grafbase_request(got)) && carries {
         attrs.insert("w3c.span_id".into(), Value::from(hex(&span.span_id)));
     }
     let failed = span
@@ -898,10 +916,44 @@ fn log(event: &Event, attrs: Map<String, Value>, span: Option<String>, scope: &s
     })
 }
 
+/// A GraphQL gateway's request names its operation on the span under it, not on its own: Hive Gateway's
+/// `graphql.operation`, Hive Router's, Grafbase Gateway's `graphql`. The root takes it from the span right under it
+/// (not from a call to a subgraph, which names the subgraph's operation), unless it names one itself.
+fn lift_operation(
+    root_attrs: &mut Map<String, Value>,
+    root_id: u64,
+    members: &[u64],
+    bucket: &Bucket,
+) {
+    let keys = ["graphql.operation.type", "graphql.operation.name"];
+    if keys.iter().all(|key| text(root_attrs, &[key]).is_some()) {
+        return;
+    }
+    let operation = members.iter().find_map(|id| {
+        let span = &bucket.spans[id].span;
+        if *id == root_id
+            || matches!(span.kind, 3 | 4)
+            || id64(&span.parent_span_id) != Some(root_id)
+        {
+            return None;
+        }
+        let attrs = attributes(&span.attributes);
+        let (Some(kind), Some(name)) = (text(&attrs, &[keys[0]]), text(&attrs, &[keys[1]])) else {
+            return None;
+        };
+        Some((kind.to_owned(), name.to_owned()))
+    });
+    if let Some((kind, name)) = operation {
+        root_attrs.insert(keys[0].into(), Value::from(kind));
+        root_attrs.insert(keys[1].into(), Value::from(name));
+    }
+}
+
 /// One trace: the root as the trace (and as a span too when it is a call out), the rest as its spans.
 fn document(trace: u128, root: &Got, root_id: u64, members: &[u64], bucket: &Bucket) -> Value {
     let mut root_attrs = attributes(&root.span.attributes);
     let tower = tower_request(&mut root_attrs);
+    lift_operation(&mut root_attrs, root_id, members, bucket);
     // tracing-opentelemetry records a `u16` field as its digits: the status code as a number again.
     for key in ["http.response.status_code", "http.status_code"] {
         if let Some(code) = count(&root_attrs, key) {

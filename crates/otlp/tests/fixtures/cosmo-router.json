@@ -1,0 +1,612 @@
+{
+ "resourceSpans": [
+  {
+   "resource": {
+    "attributes": [
+     {
+      "key": "service.name",
+      "value": {
+       "stringValue": "cosmo-router"
+      }
+     },
+     {
+      "key": "service.version",
+      "value": {
+       "stringValue": "0.365.2"
+      }
+     }
+    ]
+   },
+   "scopeSpans": [
+    {
+     "scope": {
+      "name": "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp",
+      "version": "0.71.0"
+     },
+     "spans": [
+      {
+       "traceId": "4bf92f3577b34da6a3ce929d0e0e4701",
+       "spanId": "c000000000000001",
+       "parentSpanId": "",
+       "flags": 256,
+       "name": "query Books",
+       "kind": 2,
+       "startTimeUnixNano": "1793344008000000000",
+       "endTimeUnixNano": "1793344008012000000",
+       "attributes": [
+        {
+         "key": "http.method",
+         "value": {
+          "stringValue": "POST"
+         }
+        },
+        {
+         "key": "http.scheme",
+         "value": {
+          "stringValue": "http"
+         }
+        },
+        {
+         "key": "net.host.name",
+         "value": {
+          "stringValue": "localhost"
+         }
+        },
+        {
+         "key": "net.host.port",
+         "value": {
+          "intValue": "3002"
+         }
+        },
+        {
+         "key": "http.target",
+         "value": {
+          "stringValue": "/graphql"
+         }
+        },
+        {
+         "key": "http.flavor",
+         "value": {
+          "stringValue": "1.1"
+         }
+        },
+        {
+         "key": "http.status_code",
+         "value": {
+          "intValue": "200"
+         }
+        },
+        {
+         "key": "wg.component.name",
+         "value": {
+          "stringValue": "router-server"
+         }
+        },
+        {
+         "key": "wg.router.root_span",
+         "value": {
+          "boolValue": true
+         }
+        },
+        {
+         "key": "wg.operation.name",
+         "value": {
+          "stringValue": "Books"
+         }
+        },
+        {
+         "key": "wg.operation.type",
+         "value": {
+          "stringValue": "query"
+         }
+        },
+        {
+         "key": "wg.operation.hash",
+         "value": {
+          "stringValue": "1163600561566987607"
+         }
+        },
+        {
+         "key": "wg.router.version",
+         "value": {
+          "stringValue": "0.365.2"
+         }
+        },
+        {
+         "key": "wg.router.config.version",
+         "value": {
+          "stringValue": "c1a2b3"
+         }
+        }
+       ],
+       "status": {}
+      },
+      {
+       "traceId": "4bf92f3577b34da6a3ce929d0e0e4701",
+       "spanId": "c00000000000000a",
+       "parentSpanId": "c000000000000009",
+       "flags": 257,
+       "name": "query Books",
+       "kind": 3,
+       "startTimeUnixNano": "1793344008007150000",
+       "endTimeUnixNano": "1793344008011550000",
+       "attributes": [
+        {
+         "key": "http.method",
+         "value": {
+          "stringValue": "POST"
+         }
+        },
+        {
+         "key": "http.url",
+         "value": {
+          "stringValue": "http://books:4001/graphql"
+         }
+        },
+        {
+         "key": "net.peer.name",
+         "value": {
+          "stringValue": "books"
+         }
+        },
+        {
+         "key": "net.peer.port",
+         "value": {
+          "intValue": "4001"
+         }
+        },
+        {
+         "key": "http.flavor",
+         "value": {
+          "stringValue": "1.1"
+         }
+        },
+        {
+         "key": "http.status_code",
+         "value": {
+          "intValue": "200"
+         }
+        },
+        {
+         "key": "wg.component.name",
+         "value": {
+          "stringValue": "engine-transport"
+         }
+        },
+        {
+         "key": "wg.operation.name",
+         "value": {
+          "stringValue": "Books"
+         }
+        },
+        {
+         "key": "wg.operation.type",
+         "value": {
+          "stringValue": "query"
+         }
+        },
+        {
+         "key": "wg.operation.hash",
+         "value": {
+          "stringValue": "1163600561566987607"
+         }
+        },
+        {
+         "key": "wg.router.version",
+         "value": {
+          "stringValue": "0.365.2"
+         }
+        },
+        {
+         "key": "wg.router.config.version",
+         "value": {
+          "stringValue": "c1a2b3"
+         }
+        }
+       ],
+       "status": {}
+      }
+     ]
+    },
+    {
+     "scope": {
+      "name": "wundergraph/cosmo/router/pre_handler",
+      "version": "0.0.1"
+     },
+     "spans": [
+      {
+       "traceId": "4bf92f3577b34da6a3ce929d0e0e4701",
+       "spanId": "c000000000000002",
+       "parentSpanId": "c000000000000001",
+       "flags": 257,
+       "name": "HTTP - Read Body",
+       "kind": 1,
+       "startTimeUnixNano": "1793344008000100000",
+       "endTimeUnixNano": "1793344008000150000",
+       "attributes": [
+        {
+         "key": "wg.operation.name",
+         "value": {
+          "stringValue": "Books"
+         }
+        },
+        {
+         "key": "wg.operation.type",
+         "value": {
+          "stringValue": "query"
+         }
+        },
+        {
+         "key": "wg.operation.hash",
+         "value": {
+          "stringValue": "1163600561566987607"
+         }
+        },
+        {
+         "key": "wg.router.version",
+         "value": {
+          "stringValue": "0.365.2"
+         }
+        },
+        {
+         "key": "wg.router.config.version",
+         "value": {
+          "stringValue": "c1a2b3"
+         }
+        }
+       ],
+       "status": {}
+      },
+      {
+       "traceId": "4bf92f3577b34da6a3ce929d0e0e4701",
+       "spanId": "c000000000000003",
+       "parentSpanId": "c000000000000001",
+       "flags": 257,
+       "name": "Load Persisted Operation",
+       "kind": 3,
+       "startTimeUnixNano": "1793344008000160000",
+       "endTimeUnixNano": "1793344008000200000",
+       "attributes": [
+        {
+         "key": "wg.engine.persisted_operation_cache_hit",
+         "value": {
+          "boolValue": false
+         }
+        },
+        {
+         "key": "wg.operation.name",
+         "value": {
+          "stringValue": "Books"
+         }
+        },
+        {
+         "key": "wg.operation.type",
+         "value": {
+          "stringValue": "query"
+         }
+        },
+        {
+         "key": "wg.operation.hash",
+         "value": {
+          "stringValue": "1163600561566987607"
+         }
+        },
+        {
+         "key": "wg.router.version",
+         "value": {
+          "stringValue": "0.365.2"
+         }
+        },
+        {
+         "key": "wg.router.config.version",
+         "value": {
+          "stringValue": "c1a2b3"
+         }
+        }
+       ],
+       "status": {}
+      },
+      {
+       "traceId": "4bf92f3577b34da6a3ce929d0e0e4701",
+       "spanId": "c000000000000004",
+       "parentSpanId": "c000000000000001",
+       "flags": 257,
+       "name": "Operation - Parse",
+       "kind": 1,
+       "startTimeUnixNano": "1793344008000220000",
+       "endTimeUnixNano": "1793344008000520000",
+       "attributes": [
+        {
+         "key": "wg.operation.name",
+         "value": {
+          "stringValue": "Books"
+         }
+        },
+        {
+         "key": "wg.operation.type",
+         "value": {
+          "stringValue": "query"
+         }
+        },
+        {
+         "key": "wg.operation.hash",
+         "value": {
+          "stringValue": "1163600561566987607"
+         }
+        },
+        {
+         "key": "wg.router.version",
+         "value": {
+          "stringValue": "0.365.2"
+         }
+        },
+        {
+         "key": "wg.router.config.version",
+         "value": {
+          "stringValue": "c1a2b3"
+         }
+        }
+       ],
+       "status": {}
+      },
+      {
+       "traceId": "4bf92f3577b34da6a3ce929d0e0e4701",
+       "spanId": "c000000000000005",
+       "parentSpanId": "c000000000000001",
+       "flags": 257,
+       "name": "Operation - Normalize",
+       "kind": 1,
+       "startTimeUnixNano": "1793344008000540000",
+       "endTimeUnixNano": "1793344008000740000",
+       "attributes": [
+        {
+         "key": "wg.engine.normalization_cache_hit",
+         "value": {
+          "boolValue": false
+         }
+        },
+        {
+         "key": "wg.operation.name",
+         "value": {
+          "stringValue": "Books"
+         }
+        },
+        {
+         "key": "wg.operation.type",
+         "value": {
+          "stringValue": "query"
+         }
+        },
+        {
+         "key": "wg.operation.hash",
+         "value": {
+          "stringValue": "1163600561566987607"
+         }
+        },
+        {
+         "key": "wg.router.version",
+         "value": {
+          "stringValue": "0.365.2"
+         }
+        },
+        {
+         "key": "wg.router.config.version",
+         "value": {
+          "stringValue": "c1a2b3"
+         }
+        }
+       ],
+       "status": {}
+      },
+      {
+       "traceId": "4bf92f3577b34da6a3ce929d0e0e4701",
+       "spanId": "c000000000000006",
+       "parentSpanId": "c000000000000001",
+       "flags": 257,
+       "name": "Operation - Validate",
+       "kind": 1,
+       "startTimeUnixNano": "1793344008000760000",
+       "endTimeUnixNano": "1793344008000910000",
+       "attributes": [
+        {
+         "key": "wg.operation.name",
+         "value": {
+          "stringValue": "Books"
+         }
+        },
+        {
+         "key": "wg.operation.type",
+         "value": {
+          "stringValue": "query"
+         }
+        },
+        {
+         "key": "wg.operation.hash",
+         "value": {
+          "stringValue": "1163600561566987607"
+         }
+        },
+        {
+         "key": "wg.router.version",
+         "value": {
+          "stringValue": "0.365.2"
+         }
+        },
+        {
+         "key": "wg.router.config.version",
+         "value": {
+          "stringValue": "c1a2b3"
+         }
+        }
+       ],
+       "status": {}
+      },
+      {
+       "traceId": "4bf92f3577b34da6a3ce929d0e0e4701",
+       "spanId": "c000000000000007",
+       "parentSpanId": "c000000000000001",
+       "flags": 257,
+       "name": "Operation - Plan",
+       "kind": 1,
+       "startTimeUnixNano": "1793344008000930000",
+       "endTimeUnixNano": "1793344008006930000",
+       "attributes": [
+        {
+         "key": "wg.engine.plan_cache_hit",
+         "value": {
+          "boolValue": false
+         }
+        },
+        {
+         "key": "wg.operation.name",
+         "value": {
+          "stringValue": "Books"
+         }
+        },
+        {
+         "key": "wg.operation.type",
+         "value": {
+          "stringValue": "query"
+         }
+        },
+        {
+         "key": "wg.operation.hash",
+         "value": {
+          "stringValue": "1163600561566987607"
+         }
+        },
+        {
+         "key": "wg.router.version",
+         "value": {
+          "stringValue": "0.365.2"
+         }
+        },
+        {
+         "key": "wg.router.config.version",
+         "value": {
+          "stringValue": "c1a2b3"
+         }
+        }
+       ],
+       "status": {}
+      }
+     ]
+    },
+    {
+     "scope": {
+      "name": "wundergraph/cosmo/router/graphql_handler",
+      "version": "0.0.1"
+     },
+     "spans": [
+      {
+       "traceId": "4bf92f3577b34da6a3ce929d0e0e4701",
+       "spanId": "c000000000000008",
+       "parentSpanId": "c000000000000001",
+       "flags": 257,
+       "name": "Operation - Execute",
+       "kind": 1,
+       "startTimeUnixNano": "1793344008007000000",
+       "endTimeUnixNano": "1793344008011800000",
+       "attributes": [
+        {
+         "key": "wg.operation.name",
+         "value": {
+          "stringValue": "Books"
+         }
+        },
+        {
+         "key": "wg.operation.type",
+         "value": {
+          "stringValue": "query"
+         }
+        },
+        {
+         "key": "wg.operation.hash",
+         "value": {
+          "stringValue": "1163600561566987607"
+         }
+        },
+        {
+         "key": "wg.router.version",
+         "value": {
+          "stringValue": "0.365.2"
+         }
+        },
+        {
+         "key": "wg.router.config.version",
+         "value": {
+          "stringValue": "c1a2b3"
+         }
+        }
+       ],
+       "status": {}
+      }
+     ]
+    },
+    {
+     "scope": {
+      "name": "wundergraph/cosmo/router/engine/loader",
+      "version": "0.0.1"
+     },
+     "spans": [
+      {
+       "traceId": "4bf92f3577b34da6a3ce929d0e0e4701",
+       "spanId": "c000000000000009",
+       "parentSpanId": "c000000000000008",
+       "flags": 257,
+       "name": "Engine - Fetch",
+       "kind": 1,
+       "startTimeUnixNano": "1793344008007100000",
+       "endTimeUnixNano": "1793344008011600000",
+       "attributes": [
+        {
+         "key": "wg.subgraph.name",
+         "value": {
+          "stringValue": "books"
+         }
+        },
+        {
+         "key": "wg.subgraph.id",
+         "value": {
+          "stringValue": "0"
+         }
+        },
+        {
+         "key": "wg.operation.name",
+         "value": {
+          "stringValue": "Books"
+         }
+        },
+        {
+         "key": "wg.operation.type",
+         "value": {
+          "stringValue": "query"
+         }
+        },
+        {
+         "key": "wg.operation.hash",
+         "value": {
+          "stringValue": "1163600561566987607"
+         }
+        },
+        {
+         "key": "wg.router.version",
+         "value": {
+          "stringValue": "0.365.2"
+         }
+        },
+        {
+         "key": "wg.router.config.version",
+         "value": {
+          "stringValue": "c1a2b3"
+         }
+        }
+       ],
+       "status": {}
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

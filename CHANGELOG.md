@@ -52,6 +52,17 @@
 - The source around an error's frame and a dump's call site in Rust
   (`.rs`) are coloured as Rust: keywords, strings, characters,
   comments, attributes, macros, numbers and calls.
+- The traces of other GraphQL gateways read as Apollo Router's do:
+  WunderGraph Cosmo Router, Hive Gateway (and GraphQL Mesh, through The
+  Guild's OpenTelemetry plugin), Hive Router and Grafbase Gateway. The
+  gateway's request stays, named after its operation, such as `GraphQL
+  query Books`, with its requests to subgraphs as calls that link the
+  subgraphs' traces. Its own stages (parse, normalize, validate, plan,
+  execute, its fetch around each request) are left out, their time
+  still in the request. Parsing and planning stay when they take 5 ms
+  or more. Grafbase Gateway's request to a subgraph, which it records
+  as an internal span, is a call too. Hive Gateway's start and its
+  schema loaded are no traces.
 
 ### Fixed
 
