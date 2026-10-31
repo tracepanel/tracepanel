@@ -747,9 +747,14 @@ fn sql(name: &str, attrs: &Attrs, system: &str) -> Mapped {
     out.insert("db.client".into(), Value::from(client(attrs)));
     out.insert("db.system".into(), Value::from(system));
     out.insert("db.vendor".into(), Value::from(vendor));
+    // A database the span doesn't name (the conventions' `other_sql`) is plain `sql` where it is shown.
+    let unnamed = match system {
+        "other_sql" => "sql",
+        other => other,
+    };
     out.insert(
         "db.alias".into(),
-        Value::from(namespace.clone().unwrap_or_else(|| system.to_owned())),
+        Value::from(namespace.clone().unwrap_or_else(|| unnamed.to_owned())),
     );
     if let Some(namespace) = namespace {
         out.insert("db.namespace".into(), Value::from(namespace));

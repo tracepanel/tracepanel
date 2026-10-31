@@ -655,3 +655,304 @@ fn a_cors_preflight_and_apollo_router_s_own_start_are_nobody_s_traces() {
         [json!("GraphQL query Books"), json!("nightly-report")]
     );
 }
+
+/// An axum app's export through tracing-opentelemetry 0.34 (tests/fixtures/rust-tracing.json, made by hand in its
+/// shape): tower-http's `TraceLayer` request span, a handler under `#[tracing::instrument]` with the queries sqlx
+/// logged as its events, a reqwest-tracing call, two log lines, and a browser's CORS preflight. The export as it
+/// is, or changed by `change`, assembled.
+fn rust_app(change: impl FnOnce(&mut Value)) -> Vec<Value> {
+    let mut export: Value = serde_json::from_slice(&fixture("rust-tracing.json")).unwrap();
+    change(&mut export);
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/json"),
+    );
+    let start = Instant::now();
+    let mut assembler = Assembler::default();
+    assembler.add(
+        tracepanel_otlp::decode(&headers, export.to_string().as_bytes()).unwrap(),
+        start,
+    );
+    assembler.ready(start + QUIET)
+}
+
+/// The spans sqlx's events became: parent, start, duration and attributes.
+fn queries(doc: &Value) -> Vec<Value> {
+    doc["spans"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|span| span["attrs"]["otel.scope"] == "sqlx")
+        .map(|span| {
+            json!([
+                span["parent_id"],
+                span["start"],
+                span["duration"],
+                span["name"],
+                span["attrs"]
+            ])
+        })
+        .collect()
+}
+
+#[test]
+fn tower_http_s_request_span_is_a_request_named_by_its_method_and_path() {
+    let docs = rust_app(|_| {});
+
+    // The preflight is nobody's trace.
+    assert_eq!(docs.len(), 1);
+
+    assert_eq!(
+        (
+            &docs[0]["kind"],
+            &docs[0]["name"],
+            &docs[0]["status"],
+            &docs[0]["attrs"]
+        ),
+        (
+            &json!("http"),
+            &json!("GET /books"),
+            &json!("ok"),
+            &json!({
+                "http.method": "GET",
+                "http.path": "/books",
+                // From TraceLayer's `finished processing request` event.
+                "http.status_code": 200,
+                "service.name": "shop",
+                "service.role": "web",
+                "telemetry.sdk.language": "rust",
+                "w3c.trace_id": "e502e43e6d7f60c9c10bfadbb38c62f6",
+            })
+        )
+    );
+    assert_eq!(
+        docs[0]["spans"][0],
+        json!({"id": docs[0]["spans"][0]["id"], "parent_id": null, "kind": "http", "name": "GET /books",
+               "start": 1_793_439_824_000_000_i64, "duration": 1320, "status": "ok", "attrs": {}})
+    );
+}
+
+#[test]
+fn sqlx_s_queries_are_sql_spans_of_the_span_they_ran_in() {
+    let docs = rust_app(|_| {});
+    let handler = &docs[0]["spans"][1];
+    let base = 1_793_439_824_000_000_i64;
+    let attrs = |sql: &str, rows: i64| {
+        json!({
+            "code.origin": "src/main.rs:35 in books",
+            "db.query.text": sql,
+            "db.response.affected_rows": 0,
+            "db.response.returned_rows": rows,
+            "db.system.name": "other_sql",
+            "otel.scope": "sqlx",
+            "otel.span_kind": "client",
+        })
+    };
+    let by_id = "SELECT title FROM books WHERE id = ?";
+
+    assert_eq!(handler["name"], "books");
+
+    // Each ends when sqlx logged it and took its `elapsed_secs`. Its statement is `db.statement`, or the summary when
+    // that is empty (four words or fewer). Its call site is the handler's, not sqlx's logger.
+    assert_eq!(
+        queries(&docs[0]),
+        [
+            json!([
+                handler["id"],
+                base + 30,
+                90,
+                "SELECT id FROM books …",
+                attrs("SELECT id FROM books ORDER BY id", 4)
+            ]),
+            json!([
+                handler["id"],
+                base + 180,
+                40,
+                "SELECT title FROM books …",
+                attrs(by_id, 1)
+            ]),
+            json!([
+                handler["id"],
+                base + 290,
+                30,
+                "SELECT title FROM books …",
+                attrs(by_id, 1)
+            ]),
+            json!([
+                handler["id"],
+                base + 390,
+                30,
+                "SELECT title FROM books …",
+                attrs(by_id, 1)
+            ]),
+            json!([
+                handler["id"],
+                base + 490,
+                30,
+                "SELECT title FROM books …",
+                attrs(by_id, 1)
+            ]),
+            json!([
+                handler["id"],
+                base + 590,
+                10,
+                "SELECT 1",
+                attrs("SELECT 1", 1)
+            ]),
+        ]
+    );
+
+    let received = analyzed(&docs[0]);
+    let first = received
+        .trace
+        .spans
+        .iter()
+        .find(|span| span.kind == "sql")
+        .unwrap();
+
+    assert_eq!(
+        (
+            first.name.as_str(),
+            serde_json::to_value(&first.attrs).unwrap()
+        ),
+        (
+            "SELECT books",
+            json!({
+                "code.origin": "src/main.rs:35 in books",
+                "db.alias": "sql",
+                "db.client": "sqlx",
+                "db.fingerprint": "SELECT id FROM books ORDER BY id",
+                "db.response.returned_rows": 4,
+                "db.statement": "SELECT id FROM books ORDER BY id",
+                "db.system": "other_sql",
+                "db.vendor": "other_sql",
+                "otel.scope": "sqlx",
+            })
+        )
+    );
+
+    let issues: Vec<_> = received
+        .trace
+        .issues
+        .iter()
+        .map(|issue| {
+            (
+                issue.kind.as_str(),
+                issue.title.as_str(),
+                issue.culprit.as_deref(),
+                issue.count,
+            )
+        })
+        .collect();
+    assert_eq!(
+        issues,
+        [(
+            "n+1",
+            "N+1: 4 similar queries · SELECT books",
+            Some("src/main.rs:35 in books"),
+            4
+        )]
+    );
+}
+
+#[test]
+fn a_query_s_database_is_the_one_the_app_names() {
+    let docs = rust_app(|export| {
+        export["resourceSpans"][0]["resource"]["attributes"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({"key": "db.system.name", "value": {"stringValue": "postgresql"}}));
+    });
+
+    let received = analyzed(&docs[0]);
+    let systems: Vec<_> = received
+        .trace
+        .spans
+        .iter()
+        .filter(|span| span.kind == "sql")
+        .map(|span| {
+            (
+                span.attrs["db.system"].clone(),
+                span.attrs["db.alias"].clone(),
+            )
+        })
+        .collect();
+    assert_eq!(systems, vec![(json!("postgresql"), json!("postgresql")); 6]);
+}
+
+#[test]
+fn other_events_are_the_trace_s_log_records() {
+    let docs = rust_app(|_| {});
+    let handler = &docs[0]["spans"][1]["id"];
+
+    // TraceLayer's own `started processing request`, `finished processing request` and `end of stream` aren't.
+    assert_eq!(
+        docs[0]["logs"],
+        json!([
+            {"span_id": handler, "time": 1_793_439_824_001_100_i64, "level": "info", "logger": "shop",
+             "message": "listed books", "exception": null,
+             "attrs": {"code.origin": "src/main.rs:50", "extra.count": "4"}},
+            // `tracing::warn!(id, status)`, with no message, reads as its fields.
+            {"span_id": handler, "time": 1_793_439_824_001_200_i64, "level": "warning", "logger": "shop",
+             "message": "id=2 status=200", "exception": null,
+             "attrs": {"code.origin": "src/main.rs:58", "extra.id": 2, "extra.status": "200"}},
+        ])
+    );
+}
+
+#[test]
+fn a_dependency_s_span_is_where_the_app_called_it_from() {
+    let docs = rust_app(|_| {});
+    let received = analyzed(&docs[0]);
+    let call = received
+        .trace
+        .spans
+        .iter()
+        .find(|span| span.kind == "http.client")
+        .unwrap();
+
+    // reqwest-tracing's span says it was made in reqwest-tracing, under the cargo registry.
+    assert_eq!(
+        (
+            call.name.as_str(),
+            &call.attrs["code.origin"],
+            &call.attrs["http.response.status_code"]
+        ),
+        (
+            "GET stock.internal/stock",
+            &json!("src/main.rs:35 in books"),
+            &json!(200)
+        )
+    );
+}
+
+#[test]
+fn an_event_of_another_sdk_is_a_log_record_of_its_scope() {
+    let export = json!({"resourceSpans": [{
+        "resource": {"attributes": [{"key": "service.name", "value": {"stringValue": "billing"}}]},
+        "scopeSpans": [{"scope": {"name": "billing.jobs"}, "spans": [{
+            "traceId": "5b8efff798038103d269b633813fc6aa", "spanId": "eee19b7ec3c1b1aa", "name": "nightly-report",
+            "kind": 1, "startTimeUnixNano": "1544712660000000000", "endTimeUnixNano": "1544712660100000000",
+            "events": [{"timeUnixNano": "1544712660050000000", "name": "cache miss",
+                        "attributes": [{"key": "key", "value": {"stringValue": "report:7"}}]}]}]}]}]});
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/json"),
+    );
+    let start = Instant::now();
+    let mut assembler = Assembler::default();
+    assembler.add(
+        tracepanel_otlp::decode(&headers, export.to_string().as_bytes()).unwrap(),
+        start,
+    );
+
+    let docs = assembler.ready(start + QUIET);
+
+    assert_eq!(
+        docs[0]["logs"],
+        json!([{"span_id": null, "time": 1_544_712_660_050_000_i64, "level": "info", "logger": "billing.jobs",
+                "message": "cache miss", "exception": null, "attrs": {"extra.key": "report:7"}}])
+    );
+}
