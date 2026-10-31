@@ -232,6 +232,11 @@ jobs:
           mkdir npm-dist
           for package in npm/*/; do (cd "$package" && npm pack --pack-destination ../../npm-dist); done
 
+      # maven.yml makes the Maven Central bundle from these packages after the release: every package must carry
+      # the same license files, byte for byte, and a binary for each platform.
+      - name: The Maven Central bundle from them
+        run: uv run --no-project scripts/maven.py 0.0.0 npm-dist maven-bundle
+
       - uses: actions/upload-artifact@v7
         with:
           name: npm-packages

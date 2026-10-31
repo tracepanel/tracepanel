@@ -1,0 +1,4 @@
+# Every text file is checked out with LF, Windows too: a Windows runner's git converts to CRLF by default, and the
+# Windows wheels and npm packages then carried LICENSE, NOTICE and THIRD-PARTY-NOTICES (and embedded them) with CRLF,
+# unlike every other platform's.
+* text=auto eol=lf

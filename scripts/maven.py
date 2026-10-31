@@ -9,11 +9,15 @@ protoc is published. The Java SDK downloads the one it runs on, from Maven Centr
 licenses go beside them, as the wheels and npm packages carry them: `tracepanel-agent-0.3.8-license.txt`, `-notice.txt`
 and `-third-party-notices.txt` (each binary also prints them: `tracepanel-agent licenses`).
 
-    uv run --no-project scripts/maven.py VERSION NPM_PACKAGES OUT
+    uv run --no-project scripts/maven.py [--any-line-endings] VERSION NPM_PACKAGES OUT
 
 NPM_PACKAGES holds the npm packages (.tgz) that scripts/npm.py made. OUT gets the bundle in the Maven repository
 layout, with the checksums the Central Portal asks for. The signatures (.asc) are added after, by gpg, where the key
 is. Python's standard library only.
+
+The license files must be the same, byte for byte, in every package. Releases up to 0.10.0 have them with CRLF in the
+Windows packages (git's checkout on the Windows runners, fixed by .gitattributes): --any-line-endings takes a CRLF
+copy as the same text and publishes the LF one. The binaries are taken as they are either way.
 """
 
 import hashlib
@@ -85,8 +89,11 @@ def binaries(packages: Path) -> dict[str, bytes]:
     return found
 
 
-def licenses(packages: Path) -> dict[str, bytes]:
-    """LICENSE, NOTICE and THIRD-PARTY-NOTICES, by their classifier: the same in every platform package, or no bundle."""
+def licenses(packages: Path, any_line_endings: bool) -> dict[str, bytes]:
+    """LICENSE, NOTICE and THIRD-PARTY-NOTICES, by their classifier: the same in every platform package, or no bundle.
+
+    With any_line_endings, a copy that differs only by CRLF is the same, and the LF one is kept.
+    """
     found: dict[str, bytes] = {}
     for path in sorted(packages.glob("*.tgz")):
         with tarfile.open(path) as tgz:
@@ -96,6 +103,10 @@ def licenses(packages: Path) -> dict[str, bytes]:
                 except KeyError:
                     sys.exit(f"{path.name}: no {name}")
                 data = member.read()
+                if any_line_endings:
+                    data = data.replace(b"\r\n", b"\n")
+                elif b"\r\n" in data:
+                    sys.exit(f"{path.name}: its {name} has CRLF line endings")
                 if found.setdefault(classifier, data) != data:
                     sys.exit(f"{path.name}: its {name} differs from another package's")
     return found
@@ -108,7 +119,7 @@ def write(path: Path, data: bytes) -> None:
         path.with_name(f"{path.name}.{algorithm}").write_text(hashlib.new(algorithm, data).hexdigest())
 
 
-def main(version: str, packages: Path, out: Path) -> None:
+def main(version: str, packages: Path, out: Path, any_line_endings: bool = False) -> None:
     found = binaries(packages)
     if len(found) != PLATFORMS:
         sys.exit(f"{len(found)} platform packages in {packages}, expected {PLATFORMS}")
@@ -119,12 +130,16 @@ def main(version: str, packages: Path, out: Path) -> None:
     for platform, binary in sorted(found.items()):
         write(directory / f"{ARTIFACT}-{version}-{platform}.exe", binary)
         print(f"{platform}: {len(binary):,} bytes, sha512 {hashlib.sha512(binary).hexdigest()[:16]}…")
-    for classifier, text in sorted(licenses(packages).items()):
+    for classifier, text in sorted(licenses(packages, any_line_endings).items()):
         write(directory / f"{ARTIFACT}-{version}-{classifier}.txt", text)
         print(f"{classifier}: {len(text):,} bytes")
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 4:
+    arguments = sys.argv[1:]
+    any_line_endings = "--any-line-endings" in arguments
+    if any_line_endings:
+        arguments.remove("--any-line-endings")
+    if len(arguments) != 3:
         sys.exit(__doc__)
-    main(sys.argv[1], Path(sys.argv[2]), Path(sys.argv[3]))
+    main(arguments[0], Path(arguments[1]), Path(arguments[2]), any_line_endings)
