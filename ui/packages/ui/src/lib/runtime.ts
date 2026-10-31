@@ -187,6 +187,28 @@ export function runtimeKind(label: string): RuntimeKind | null {
   return frameworkKind ?? LANGUAGES.get(languageName) ?? null;
 }
 
+const FRAMEWORK_KINDS: ReadonlySet<RuntimeKind> = new Set(FRAMEWORKS.values());
+
+/** How much a label says of what runs an app: a framework (Django) over its language alone (Python), over nothing. */
+function specificity(label: string): number {
+  const kind = runtimeKind(label);
+  if (kind === null) return 0;
+  return FRAMEWORK_KINDS.has(kind) ? 2 : 1;
+}
+
+/**
+ * What runs a service, one label wherever it shows (the Services page, its map, its page, the app switcher): of what
+ * its roles say (its web role "Python 3.14 · Django 6.0", its worker "Python 3.14"), the one that says most, its
+ * framework, the newest of those. Never the busiest role's, so its icon doesn't change with the traffic.
+ */
+export function serviceRuntime(runtimes: readonly (string | null | undefined)[]): string | null {
+  const labels = runtimes.filter((label): label is string => Boolean(label));
+  const ranked = [...labels].sort(
+    (a, b) => specificity(b) - specificity(a) || b.localeCompare(a, undefined, { numeric: true }),
+  );
+  return ranked[0] ?? null;
+}
+
 type Attrs = Record<string, unknown>;
 
 // JavaScript runtimes that aren't Node, by OpenTelemetry's process.runtime.name.

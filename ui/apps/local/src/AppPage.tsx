@@ -1,4 +1,12 @@
-import { type App, AppDetails, type DataSource, RuntimeIcon, runtimeKind, type ServiceApp } from "@tracepanel/ui";
+import {
+  type App,
+  AppDetails,
+  type DataSource,
+  RuntimeIcon,
+  runtimeKind,
+  type ServiceApp,
+  serviceRuntime,
+} from "@tracepanel/ui";
 import { ActivityIcon, type LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { consoleLinks, href } from "./routes";
@@ -76,7 +84,7 @@ function Title({ service, runtime }: { service: string; runtime: string | null }
 }
 
 function AppHeader({ service, roles }: { service: string; roles: readonly ServiceApp[] }) {
-  const runtime = roles.find((role) => role.runtime)?.runtime ?? null;
+  const runtime = serviceRuntime(roles.map((role) => role.runtime));
   return (
     <header className="grid gap-3">
       <CrumbBar items={[{ label: "Services", href: href({ name: "services", q: "" }) }, { label: service }]} />

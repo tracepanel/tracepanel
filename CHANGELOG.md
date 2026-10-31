@@ -90,6 +90,11 @@
   its chart's drag and its View all calls keep it too. Before, the page
   showed every call. `call_duration>` goes along with its `call:`. A
   GraphQL operation's page can't keep it and says so.
+- An app's mark is the same wherever it shows, the Services page and
+  map, its page, the app switcher, a chain's app chips: its framework's
+  (Django), from whichever of its roles says it, never its busiest
+  role's. A Django app whose worker ran more than its web showed
+  Python's mark until its requests caught up.
 - A database driver's HTTP request that reached a service which records
   traces too still links the two traces, though it left the call tree.
   The connection or query it served keeps the W3C span ids its requests

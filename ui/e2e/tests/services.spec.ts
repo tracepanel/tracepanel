@@ -132,6 +132,35 @@ test("a web app's row opens its page, and the console narrows to that app", asyn
   await expect(page.getByRole("heading", { level: 1, name: "HTTP" })).toBeVisible();
 });
 
+test("an app's mark is its framework's wherever it shows, whichever of its roles is busiest", async ({ page }) => {
+  // The shop's worker (Python alone) far busier than its web (Django): its mark is still Django's.
+  await page.route("**/api/services*", async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    for (const app of body.apps as { service: string; role: string; runtime: string | null; traces: number }[]) {
+      if (app.service !== "shop") continue;
+      app.runtime = app.role === "web" ? "Python 3.12 · Django 6.0" : "Python 3.12";
+      if (app.role === "worker") app.traces = 1_000_000;
+    }
+    await route.fulfill({ response, json: body });
+  });
+  await page.goto("/#/services");
+
+  const map = page.getByRole("region", { name: "Architecture" });
+  await expect(map.getByRole("link", { name: /^Django web/ }).first()).toBeVisible();
+  await expect(map.getByRole("link", { name: /^Django worker/ }).first()).toBeVisible();
+  await expect(map.getByRole("link", { name: /^Python worker/ })).toHaveCount(0);
+
+  await page
+    .getByRole("region", { name: "Services" })
+    .getByRole("table")
+    .getByRole("link", { name: /^Django shop Python 3\.12 · Django 6\.0/ })
+    .click();
+
+  await expect(page.getByRole("heading", { level: 1, name: "Django shop" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Django shop" })).toBeVisible();
+});
+
 test("a call's line leaves its box's right side and arrives at the middle of the other's left", async ({ page }) => {
   await page.goto("/#/services");
   const map = page.getByRole("main").locator("svg path[marker-end]");

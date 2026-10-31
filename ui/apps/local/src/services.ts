@@ -1,5 +1,12 @@
 // What the Services page shows, as data: the project's apps by project, its services by host, and where each leads.
-import { SERVICE_KINDS, type ServiceApp, type ServiceEdge, type ServiceNode, serviceWhere } from "@tracepanel/ui";
+import {
+  SERVICE_KINDS,
+  type ServiceApp,
+  type ServiceEdge,
+  type ServiceNode,
+  serviceRuntime,
+  serviceWhere,
+} from "@tracepanel/ui";
 import { SQL_VENDORS } from "@tracepanel/ui/lib/systems";
 import { callsSection, currentPeriod, type Route, type Section, withPeriod } from "./routes";
 
@@ -71,7 +78,8 @@ function project(roles: readonly ServiceApp[]): Project {
   const busiest = sorted[0] as ServiceApp;
   return {
     service: busiest.service,
-    runtime: sorted.find((role) => role.runtime)?.runtime ?? null,
+    // What runs it, the same wherever it shows: not its busiest role's, which changes with the traffic.
+    runtime: serviceRuntime(sorted.map((role) => role.runtime)),
     traces: sum(sorted, "traces"),
     errors: sum(sorted, "errors"),
     total: sum(sorted, "total"),

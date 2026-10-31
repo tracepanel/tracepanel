@@ -31,7 +31,7 @@ import {
   WAITING,
   YOUR_CODE,
 } from "./lib/profile";
-import { traceRuntime } from "./lib/runtime";
+import { serviceRuntime, traceRuntime } from "./lib/runtime";
 import { rangeLabel, type TimeRange } from "./lib/slice";
 import { cn } from "./lib/utils";
 import { timed, wallClock } from "./lib/waiting";
@@ -855,7 +855,7 @@ function appMemory(app: AppProfile): AppMemory | undefined {
 
 /** What an app runs on, from its first profiled trace: the mark on its chip. */
 function appRuntime(app: AppProfile): string | undefined {
-  return traceRuntime(app.traces[0]?.member.trace.attrs ?? {});
+  return serviceRuntime(app.traces.map((each) => traceRuntime(each.member.trace.attrs))) ?? undefined;
 }
 
 /** An app's profile in the scope: one trace's (its stretch), or its traces' merged. */

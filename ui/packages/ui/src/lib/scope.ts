@@ -3,7 +3,7 @@
 // `GET /traces/{id}/logs?span=&only=` takes the same scope (crates/store-local/src/scope.rs), and so do the MCP tools.
 
 import type { ChainTrace, Issue, Log, Related, ScopeIssue, Span, Trace } from "../types";
-import { traceRuntime } from "./runtime";
+import { serviceRuntime, traceRuntime } from "./runtime";
 
 /** One trace of a chain, on the chain's clock: the trace above it and its span whose call it served. */
 export interface Member {
@@ -219,11 +219,12 @@ export function appsOf(members: readonly Member[]): string[] {
 
 /** Each app's runtime label, from its first trace that says one: the mark on its chip. */
 export function appRuntimes(members: readonly Member[]): Map<string, string | undefined> {
-  const runtimes = new Map<string, string | undefined>();
+  const labels = new Map<string, (string | undefined)[]>();
   for (const member of members) {
-    if (!runtimes.get(member.app)) runtimes.set(member.app, traceRuntime(member.trace.attrs));
+    labels.set(member.app, [...(labels.get(member.app) ?? []), traceRuntime(member.trace.attrs)]);
   }
-  return runtimes;
+  // An app's, as the console says it everywhere (see serviceRuntime): its framework's, not its first trace's.
+  return new Map([...labels].map(([app, its]) => [app, serviceRuntime(its) ?? undefined]));
 }
 
 /** A span of a scope (a query, a call), with its trace and the app that made it. */
