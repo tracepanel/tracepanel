@@ -9,11 +9,19 @@ const shown = (line: SourceToken[] | undefined): string[] =>
     .map((token) => (token.type === "plain" ? token.text.trim() : `${token.type}:${token.text}`));
 
 test("each SDK's files have their language, others none", () => {
-  const languages = ["app.py", "app.go", "server.js", "routes.ts", "page.tsx", "Main.java", "App.kt", "views.rb"].map(
-    languageOf,
-  );
+  const languages = [
+    "app.py",
+    "app.go",
+    "server.js",
+    "routes.ts",
+    "page.tsx",
+    "Main.java",
+    "App.kt",
+    "main.rs",
+    "views.rb",
+  ].map(languageOf);
 
-  expect(languages).toEqual(["python", "go", "javascript", "javascript", "javascript", "java", "kotlin", null]);
+  expect(languages).toEqual(["python", "go", "javascript", "javascript", "javascript", "java", "kotlin", "rust", null]);
 });
 
 test("Python: keywords, strings, comments, decorators and calls", () => {
@@ -95,6 +103,288 @@ test("Java: annotations, types and a block comment across lines", () => {
       "punctuation:)",
       "punctuation:{",
     ],
+  ]);
+});
+
+/** A value printed (a dump), as `shown` gives each of its lines. */
+const value = (text: string, language: Parameters<typeof tokenizeLines>[1]): string[][] =>
+  tokenizeLines(text.split("\n"), language, true).map(shown);
+
+test("a JavaScript value as util.inspect prints it: class names, keys, nested and collections", () => {
+  expect(value("Order { id: 7, type: 'book', items: [Array], total: 12n }", "javascript")).toEqual([
+    [
+      "class-name:Order",
+      "punctuation:{",
+      "id",
+      "operator::",
+      "number:7",
+      "punctuation:,",
+      "type",
+      "operator::",
+      "string:'book'",
+      "punctuation:,",
+      "items",
+      "operator::",
+      "punctuation:[",
+      "builtin:Array",
+      "punctuation:]",
+      "punctuation:,",
+      "total",
+      "operator::",
+      "number:12n",
+      "punctuation:}",
+    ],
+  ]);
+
+  expect(value("Map(2) { 'a' => 1, 'b' => null } [Function: price]", "javascript")).toEqual([
+    [
+      "builtin:Map",
+      "punctuation:(",
+      "number:2",
+      "punctuation:)",
+      "punctuation:{",
+      "string:'a'",
+      "operator:=>",
+      "number:1",
+      "punctuation:,",
+      "string:'b'",
+      "operator:=>",
+      "boolean:null",
+      "punctuation:}",
+      "punctuation:[",
+      "builtin:Function",
+      "operator::",
+      "price",
+      "punctuation:]",
+    ],
+  ]);
+});
+
+test("a Go value as its pretty printer prints it: types, slices, maps, pointers and nil", () => {
+  expect(
+    value('main.Order{ID: 7, Items: []int{1, 2},\n  Tags: map[string]int{"x": 1}, Next: &{}, Err: nil}', "go"),
+  ).toEqual([
+    [
+      "main",
+      "punctuation:.",
+      "class-name:Order",
+      "punctuation:{",
+      "ID",
+      "operator::",
+      "number:7",
+      "punctuation:,",
+      "Items",
+      "operator::",
+      "punctuation:[",
+      "punctuation:]",
+      "builtin:int",
+      "punctuation:{",
+      "number:1",
+      "punctuation:,",
+      "number:2",
+      "punctuation:}",
+      "punctuation:,",
+    ],
+    [
+      "Tags",
+      "operator::",
+      "keyword:map",
+      "punctuation:[",
+      "builtin:string",
+      "punctuation:]",
+      "builtin:int",
+      "punctuation:{",
+      'string:"x"',
+      "operator::",
+      "number:1",
+      "punctuation:}",
+      "punctuation:,",
+      "Next",
+      "operator::",
+      "operator:&",
+      "punctuation:{",
+      "punctuation:}",
+      "punctuation:,",
+      "Err",
+      "operator::",
+      "boolean:nil",
+      "punctuation:}",
+    ],
+  ]);
+});
+
+test("a Java or Kotlin value as toString prints it: classes, records, maps, lists and null", () => {
+  expect(value("Order(id=7, total=12.50, tags=[1, 2], meta={a=1, default=null})", "java")).toEqual([
+    [
+      "function:Order",
+      "punctuation:(",
+      "id",
+      "operator:=",
+      "number:7",
+      "punctuation:,",
+      "total",
+      "operator:=",
+      "number:12.50",
+      "punctuation:,",
+      "tags",
+      "operator:=",
+      "punctuation:[",
+      "number:1",
+      "punctuation:,",
+      "number:2",
+      "punctuation:]",
+      "punctuation:,",
+      "meta",
+      "operator:=",
+      "punctuation:{",
+      "a",
+      "operator:=",
+      "number:1",
+      "punctuation:,",
+      "default",
+      "operator:=",
+      "boolean:null",
+      "punctuation:}",
+      "punctuation:)",
+    ],
+  ]);
+
+  expect(value("Order[id=7, paid=false] Order@1b6d3586", "java")).toEqual([
+    [
+      "class-name:Order",
+      "punctuation:[",
+      "id",
+      "operator:=",
+      "number:7",
+      "punctuation:,",
+      "paid",
+      "operator:=",
+      "boolean:false",
+      "punctuation:]",
+      "class-name:Order",
+      "@1b6d3586",
+    ],
+  ]);
+
+  expect(value("Order(id=7, note=null)", "kotlin")).toEqual([
+    [
+      "function:Order",
+      "punctuation:(",
+      "id",
+      "operator:=",
+      "number:7",
+      "punctuation:,",
+      "note",
+      "operator:=",
+      "boolean:null",
+      "punctuation:)",
+    ],
+  ]);
+});
+
+test("Rust: attributes, macros, raw strings, characters and lifetimes", () => {
+  const lines = tokenizeLines(
+    ["#[derive(Debug)]", "pub fn books(db: &Db) -> Vec<Book> { // all", "    println!(r#\"{}\"#, 'x', 7u32); 'a"],
+    "rust",
+  );
+
+  expect(lines.map(shown)).toEqual([
+    ["decorator:#[derive(Debug)]"],
+    [
+      "keyword:pub",
+      "keyword:fn",
+      "function:books",
+      "punctuation:(",
+      "db",
+      "operator::",
+      "operator:&",
+      "class-name:Db",
+      "punctuation:)",
+      "operator:->",
+      "builtin:Vec",
+      "operator:<",
+      "class-name:Book",
+      "operator:>",
+      "punctuation:{",
+      "comment:// all",
+    ],
+    [
+      "function:println!",
+      "punctuation:(",
+      'string:r#"{}"#',
+      "punctuation:,",
+      "string:'x'",
+      "punctuation:,",
+      "number:7u32",
+      "punctuation:)",
+      "punctuation:;",
+      "'a",
+    ],
+  ]);
+});
+
+test("a Rust value as {:#?} prints it: structs, options, results, lists and maps", () => {
+  expect(value("Order { id: 7, type: 'c', items: [Item { sku: \"tea\", qty: 2 }] }", "rust")).toEqual([
+    [
+      "class-name:Order",
+      "punctuation:{",
+      "id",
+      "operator::",
+      "number:7",
+      "punctuation:,",
+      "type",
+      "operator::",
+      "string:'c'",
+      "punctuation:,",
+      "items",
+      "operator::",
+      "punctuation:[",
+      "class-name:Item",
+      "punctuation:{",
+      "sku",
+      "operator::",
+      'string:"tea"',
+      "punctuation:,",
+      "qty",
+      "operator::",
+      "number:2",
+      "punctuation:}",
+      "punctuation:]",
+      "punctuation:}",
+    ],
+  ]);
+
+  expect(value('Some(1.5) None Ok([1, 2]) Err("text") {"a": true}', "rust")).toEqual([
+    [
+      "builtin:Some",
+      "punctuation:(",
+      "number:1.5",
+      "punctuation:)",
+      "boolean:None",
+      "builtin:Ok",
+      "punctuation:(",
+      "punctuation:[",
+      "number:1",
+      "punctuation:,",
+      "number:2",
+      "punctuation:]",
+      "punctuation:)",
+      "builtin:Err",
+      "punctuation:(",
+      'string:"text"',
+      "punctuation:)",
+      "punctuation:{",
+      'string:"a"',
+      "operator::",
+      "boolean:true",
+      "punctuation:}",
+    ],
+  ]);
+});
+
+test("in source a keyword before a colon stays a keyword", () => {
+  expect(tokenizeLines(["default: return"], "go").map(shown)).toEqual([
+    ["keyword:default", "operator::", "keyword:return"],
   ]);
 });
 

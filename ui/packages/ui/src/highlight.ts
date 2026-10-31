@@ -2,9 +2,14 @@
  * Highlighting of the source around an error's frame: a window of a file, a few lines. A tokenizer of its own per
  * language, enough for keywords, strings, comments, numbers and calls, without a highlighter's grammars in the bundle.
  * A string or comment opened above the window is read as code, which is the price of a window.
+ *
+ * The same tokenizers colour values as the SDKs print them (a dump, a Python repr, JSON): Node's util.inspect
+ * (`Order { id: 7, tags: [Array] }`, `Map(2) {…}`), Go's (`main.Order{ID: 7}`, `map[string]int{…}`, `&{…}`), Java's and
+ * Kotlin's toString (`Order(id=7)`, `Order[id=7]`, `{a=1}`), Rust's Debug (`Order { id: 7 }`, `Some(3)`). In a value a word named before `:` or `=` is a key, never
+ * a keyword (`type: 'book'`, `default=1`).
  */
 
-export type Language = "python" | "go" | "javascript" | "java" | "kotlin";
+export type Language = "python" | "go" | "javascript" | "java" | "kotlin" | "rust";
 
 /** The classes a token takes, as Prism names them: the console's styles color them. */
 export type SourceTokenType =
@@ -39,6 +44,7 @@ const EXTENSIONS: Record<string, Language> = {
   tsx: "javascript",
   java: "java",
   kt: "kotlin",
+  rs: "rust",
 };
 
 /** The language a frame's file is written in, by its name; null for one shown as plain text. */
@@ -65,6 +71,8 @@ const LINE_COMMENT = /\/\/[^\n]*/y;
 const BLOCK_COMMENT = /\/\*[\s\S]*?(?:\*\/|$)/y;
 const DOUBLE_QUOTED = /"(?:\\.|[^"\\\n])*"?/y;
 const SINGLE_QUOTED = /'(?:\\.|[^'\\\n])*'?/y;
+// Rust's suffixed numbers (`1u32`, `2.5f64`); the others are any language's.
+const RUST_NUMBER = /\d[\d_]*(?:\.\d[\d_]*)?(?:e[+-]?\d+)?(?:[iu](?:8|16|32|64|128|size)|f32|f64)\b/iy;
 
 const GRAMMARS: Record<Language, Grammar> = {
   python: {
@@ -77,7 +85,7 @@ const GRAMMARS: Record<Language, Grammar> = {
       ["comment", /#[^\n]*/y],
       ["string", /[rbfuRBFU]{0,2}("""|''')[\s\S]*?(?:\1|$)/y],
       ["string", /[rbfuRBFU]{0,2}(?:"(?:\\.|[^"\\\n])*"?|'(?:\\.|[^'\\\n])*'?)/y],
-      ["decorator", /@[\w.]+/y],
+      ["decorator", /(?<![\w$])@[\w.]+/y],
     ],
   },
   go: {
@@ -102,14 +110,14 @@ const GRAMMARS: Record<Language, Grammar> = {
       throw try type typeof var void while with yield`),
     booleans: words("true false null undefined NaN Infinity"),
     builtins: words(`console window document globalThis process require module exports Promise Array Object String
-      Number Boolean Map Set JSON Math Date Error RegExp Symbol`),
+      Number Boolean Map Set WeakMap WeakSet JSON Math Date Error RegExp Symbol Function Buffer`),
     spans: [
       ["comment", LINE_COMMENT],
       ["comment", BLOCK_COMMENT],
       ["string", /`(?:\\[\s\S]|[^`\\])*`?/y],
       ["string", DOUBLE_QUOTED],
       ["string", SINGLE_QUOTED],
-      ["decorator", /@[\w.]+/y],
+      ["decorator", /(?<![\w$])@[\w.]+/y],
     ],
   },
   java: {
@@ -125,7 +133,7 @@ const GRAMMARS: Record<Language, Grammar> = {
       ["string", /"""[\s\S]*?(?:"""|$)/y],
       ["string", DOUBLE_QUOTED],
       ["string", SINGLE_QUOTED],
-      ["decorator", /@[\w.]+/y],
+      ["decorator", /(?<![\w$])@[\w.]+/y],
     ],
   },
   kotlin: {
@@ -141,7 +149,25 @@ const GRAMMARS: Record<Language, Grammar> = {
       ["string", /"""[\s\S]*?(?:"""|$)/y],
       ["string", DOUBLE_QUOTED],
       ["string", SINGLE_QUOTED],
-      ["decorator", /@[\w.:]+/y],
+      ["decorator", /(?<![\w$])@[\w.:]+/y],
+    ],
+  },
+  rust: {
+    keywords: words(`as async await break const continue crate dyn else enum extern fn for if impl in let loop match
+      mod move mut pub ref return self Self static struct super trait type unsafe use where while`),
+    booleans: words("true false None"),
+    builtins: words(`Some Ok Err Option Result Vec String Box Rc Arc HashMap HashSet BTreeMap i8 i16 i32 i64 i128
+      isize u8 u16 u32 u64 u128 usize f32 f64 bool char str`),
+    spans: [
+      ["comment", LINE_COMMENT],
+      ["comment", BLOCK_COMMENT],
+      ["string", /b?r(#*)"[\s\S]*?(?:"\1|$)/y],
+      ["string", /b?"(?:\\.|[^"\\\n])*"?/y],
+      // A character, not a lifetime ('a): closed on the same few characters.
+      ["string", /b?'(?:\\(?:u\{[\da-f]+\}|x[\da-f]{2}|.)|[^'\\\n])'/iy],
+      ["decorator", /#!?\[[^\]\n]*\]?/y],
+      ["function", /[a-z_]\w*!(?=\s*[([{])/y],
+      ["number", RUST_NUMBER],
     ],
   },
 };
@@ -158,13 +184,13 @@ const SYMBOLS: readonly [SourceTokenType, RegExp][] = [
 ];
 
 /** The token at `at`: a comment, string or annotation first, then a word, a number or a symbol, else a character. */
-function tokenAt(code: string, at: number, grammar: Grammar): SourceToken {
+function tokenAt(code: string, at: number, grammar: Grammar, values: boolean): SourceToken {
   for (const [type, pattern] of grammar.spans) {
     const text = match(pattern, code, at);
     if (text) return { type, text };
   }
   const word = match(WORD, code, at);
-  if (word) return { type: wordType(word, code, at + word.length, grammar), text: word };
+  if (word) return { type: wordType(word, code, at + word.length, grammar, values), text: word };
   for (const [type, pattern] of SYMBOLS) {
     const text = match(pattern, code, at);
     if (text) return { type, text };
@@ -173,11 +199,11 @@ function tokenAt(code: string, at: number, grammar: Grammar): SourceToken {
 }
 
 /** The tokens of `code`, in order: their texts put together are `code`. Plain text runs together. */
-function tokenize(code: string, language: Language): SourceToken[] {
+function tokenize(code: string, language: Language, values: boolean): SourceToken[] {
   const grammar = GRAMMARS[language];
   const tokens: SourceToken[] = [];
   for (let at = 0; at < code.length; ) {
-    const token = tokenAt(code, at, grammar);
+    const token = tokenAt(code, at, grammar, values);
     const last = tokens.at(-1);
     if (token.type === "plain" && last?.type === "plain") last.text += token.text;
     else tokens.push(token);
@@ -186,7 +212,21 @@ function tokenize(code: string, language: Language): SourceToken[] {
   return tokens;
 }
 
-function wordType(word: string, code: string, after: number, grammar: Grammar): SourceTokenType {
+/**
+ * Whether `word`, ending at `after`, names a key in a value: `type: 'book'`, Go's `Items: […]`, `default=1`; not
+ * `a::b` or `a == b`, nor the type util.inspect tags a value with (`[Function: price]`).
+ */
+function isKey(word: string, code: string, after: number): boolean {
+  if (!/^\s?[:=](?![:=>])/.test(code.slice(after, after + 3))) return false;
+  return !(/^[A-Z]/.test(word) && code[after - word.length - 1] === "[");
+}
+
+/** A word's class: a key in a value is plain, whatever word it is. */
+function wordType(word: string, code: string, after: number, grammar: Grammar, values: boolean): SourceTokenType {
+  return values && isKey(word, code, after) ? "plain" : sourceWordType(word, code, after, grammar);
+}
+
+function sourceWordType(word: string, code: string, after: number, grammar: Grammar): SourceTokenType {
   if (grammar.keywords.has(word)) return "keyword";
   if (grammar.booleans.has(word)) return "boolean";
   if (grammar.builtins.has(word)) return "builtin";
@@ -195,10 +235,13 @@ function wordType(word: string, code: string, after: number, grammar: Grammar): 
   return "plain";
 }
 
-/** The tokens of each line: a token across lines, such as a block comment, is split at each line's end. */
-export function tokenizeLines(lines: readonly string[], language: Language): SourceToken[][] {
+/**
+ * The tokens of each line: a token across lines, such as a block comment, is split at each line's end. `values`: the
+ * lines are a value printed (a dump, a repr, JSON), not source, so its keys stay keys.
+ */
+export function tokenizeLines(lines: readonly string[], language: Language, values = false): SourceToken[][] {
   const result: SourceToken[][] = [[]];
-  for (const token of tokenize(lines.join("\n"), language)) {
+  for (const token of tokenize(lines.join("\n"), language, values)) {
     token.text.split("\n").forEach((part, index) => {
       if (index > 0) result.push([]);
       if (part) result.at(-1)?.push({ type: token.type, text: part });

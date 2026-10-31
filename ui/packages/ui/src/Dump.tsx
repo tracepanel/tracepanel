@@ -1,5 +1,5 @@
 // A dump (debug() output), one look wherever it shows: a line in the call tree and the lists of records, its
-// arguments laid out in its details. Its values coloured as its dumper writes them (devtools: Python's reprs).
+// arguments laid out in its details. Its values coloured in the language it says, else as its dumper writes them.
 import { CopyButton } from "./CopyButton";
 import type { Language } from "./highlight";
 import { argLine, type DumpArg, dumpArgs, dumpLanguage, dumpOrigin, dumpSite } from "./lib/dump";
