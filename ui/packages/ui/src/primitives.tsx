@@ -386,12 +386,18 @@ export function StateBadge({ state }: { state: string }) {
 }
 
 /**
- * An app's mark wherever an app is named (its chip, its filter): its runtime's when known, else the plain app icon,
- * so an app has a mark everywhere.
+ * An app's mark wherever an app is named (its chip, its filter, the services table and map, its page, the app
+ * switcher): its runtime's when known, else the plain app icon, so an app has a mark everywhere. `labelled` names the
+ * plain icon "App" where the mark stands for the app (a map's box), not beside its name.
  */
-export function AppMark({ runtime }: { runtime?: string | undefined }) {
+export function AppMark({ runtime, labelled = false }: { runtime?: string | null | undefined; labelled?: boolean }) {
   const kind = runtime ? runtimeKind(runtime) : null;
-  return kind ? <RuntimeIcon kind={kind} /> : <AppWindowIcon className="dt-icon size-3.5" aria-hidden="true" />;
+  if (kind) return <RuntimeIcon kind={kind} />;
+  return labelled ? (
+    <AppWindowIcon className="dt-icon size-3.5" role="img" aria-label="App" />
+  ) : (
+    <AppWindowIcon className="dt-icon size-3.5" aria-hidden="true" />
+  );
 }
 
 /** An app's chip as a filter: how many of the list it has, whether it is the one picked, what pressing it does. */

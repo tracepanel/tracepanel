@@ -30,6 +30,7 @@ export * from "./PropTable";
 export {
   AliasChip,
   AppChip,
+  AppMark,
   DetailsFooter,
   Empty,
   IssueChip,

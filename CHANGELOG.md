@@ -79,6 +79,21 @@
   server's `get_trace` says it after what was profiled. The trace
   schema documents it.
 
+### Changed
+
+- Every app has a mark of its own: its framework's, else its language's,
+  in the Services table and map, an app's page, the app switcher, the
+  app chips and the panel's pill alike. A runtime's mark is a monogram
+  Tracepanel draws (Dj for Django, FA for FastAPI, SB for Spring Boot,
+  Go for Go) in the theme's icon colour, and the Kotlin icon in its own
+  colours, the one logo whose owner's policy lets a tool show it to name
+  the language. The Go, Node.js and Rails logos are monograms now: their
+  policies ask for permission or a link. A page in the browser shows a
+  globe. Each mark is named for screen readers and in its tooltip. Go
+  apps built with Gin, Echo or gRPC and Python apps on Starlette show
+  their framework. ui/packages/ui/src/icons/BRANDS.md lists each brand,
+  its policy and the condition followed.
+
 ### Fixed
 
 - A call's repeats folded into one row (×N), in the call tree and in a

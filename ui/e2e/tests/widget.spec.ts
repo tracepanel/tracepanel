@@ -81,6 +81,9 @@ test("a server page's own load heads the pill, with the framework its server nam
   await expect(pill(page)).toContainText("GET /app/");
   await expect(pill(page)).toContainText("154");
   await expect(pill(page)).toContainText("Django");
+  // Its mark as the console draws it: Django's monogram, its letters drawn by CSS, not text of the pill.
+  await expect(pill(page).locator('[data-mark="monogram"]')).toHaveAttribute("data-letters", "Dj");
+  await expect(pill(page).locator('[data-mark="monogram"]')).toHaveText("");
 });
 
 test("a failed call turns the pill red; once another follows, it is counted", async ({ page }) => {

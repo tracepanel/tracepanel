@@ -1,4 +1,4 @@
-import { type Counts, Hint, Logo, LogoMark, type Otlp, RuntimeIcon, runtimeKind } from "@tracepanel/ui";
+import { AppMark, type Counts, Hint, Logo, LogoMark, type Otlp } from "@tracepanel/ui";
 import { Button } from "@tracepanel/ui/components/ui/button";
 import {
   DropdownMenu,
@@ -685,10 +685,7 @@ function switchingClass(busy: boolean): string {
 /** Which app the console shows: every one, or one of them. A rail shows the chosen app's mark. */
 function AppSwitcher({ scope, rail }: { scope: AppScope; rail: boolean }) {
   const chosen = scope.apps.find((app) => app.service === scope.service);
-  const mark = (app: App | undefined) => {
-    const kind = app?.runtime ? runtimeKind(app.runtime) : null;
-    return kind ? <RuntimeIcon kind={kind} /> : <LayersIcon />;
-  };
+  const mark = (app: App | undefined) => (app ? <AppMark runtime={app.runtime} /> : <LayersIcon />);
   const label = chosen ? chosen.service : "All apps";
   const busy = scope.pending != null;
   const switching = switchingClass(busy);
@@ -698,7 +695,7 @@ function AppSwitcher({ scope, rail }: { scope: AppScope; rail: boolean }) {
       aria-label={`App: ${label}`}
       aria-busy={busy}
       className={cn(
-        "grid size-11 place-items-center rounded-lg border text-text-2 hover:border-[var(--dt-border-strong)] hover:text-foreground [&_svg]:size-[1.125rem]",
+        "grid size-11 place-items-center rounded-lg border text-text-2 hover:border-[var(--dt-border-strong)] hover:text-foreground [&_svg]:size-[1.125rem] [&_.dt-monogram]:size-[1.125rem]",
         chosen && "border-brand/40 bg-brand-soft text-brand",
         switching,
       )}
@@ -710,7 +707,7 @@ function AppSwitcher({ scope, rail }: { scope: AppScope; rail: boolean }) {
       type="button"
       aria-busy={busy}
       className={cn(
-        "flex items-center gap-2.5 rounded-lg border px-3 py-2 text-left text-md font-medium transition-colors hover:border-[var(--dt-border-strong)] [&_svg]:size-4",
+        "flex items-center gap-2.5 rounded-lg border px-3 py-2 text-left text-md font-medium transition-colors hover:border-[var(--dt-border-strong)] [&_svg]:size-4 [&_.dt-monogram]:size-4",
         chosen && "border-brand/40 bg-brand-soft",
         switching,
       )}
