@@ -521,15 +521,25 @@ pub(crate) fn link_calls(db: &Connection, trace: &Trace) -> rusqlite::Result<()>
         .execute(params![trace.id, w3c_trace, parent])?;
     }
     for span in &trace.spans {
-        let Some(w3c_span) = text(span.attrs.get("w3c.span_id")) else {
-            continue;
-        };
-        db.prepare_cached(
-            "INSERT INTO w3c (trace_id, w3c_trace, w3c_span, side, span_id, peer) VALUES (?1, ?2, ?3, 'out', ?4, ?5)",
-        )?
-        .execute(
-            params![trace.id, w3c_trace, w3c_span, span.id, services::peer(span).map(|peer| peer.id())],
-        )?;
+        // A database driver's own HTTP requests left the trace: their span ids are on the database span they served.
+        let folded = span
+            .attrs
+            .get("db.http_w3c_span_ids")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|id| text(Some(id)));
+        for w3c_span in text(span.attrs.get("w3c.span_id"))
+            .into_iter()
+            .chain(folded)
+        {
+            db.prepare_cached(
+                "INSERT INTO w3c (trace_id, w3c_trace, w3c_span, side, span_id, peer) VALUES (?1, ?2, ?3, 'out', ?4, ?5)",
+            )?
+            .execute(
+                params![trace.id, w3c_trace, w3c_span, span.id, services::peer(span).map(|peer| peer.id())],
+            )?;
+        }
     }
     db.prepare_cached(
         "INSERT INTO links (trace_id, kind, linked_trace, linked_span)

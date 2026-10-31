@@ -730,7 +730,7 @@ impl Reader {
 
     /// The project's own web, workers and commands, as services of their own: what they handled and what runs them.
     /// One app's calls to another (`called_by` links): from which role to which, through which server the caller saw
-    /// (its HTTP host, its RPC service), how many traces, their time and failures on the called side. The page's
+    /// (its HTTP host, its RPC service; the call the callee names, as a database span carries several), how many traces, their time and failures on the called side. The page's
     /// search picks the calling traces.
     fn list_app_links(&self, db: &Connection, query: &str) -> Result<Vec<Value>, ReadError> {
         let (condition, params) = search::compile_where(query, &APP_SEARCH)?;
@@ -743,8 +743,9 @@ impl Reader {
                  SUM(callee.status = 'error') AS errors, GROUP_CONCAT(callee.duration) AS durations \
                  FROM links JOIN traces callee ON callee.id = links.trace_id \
                  JOIN traces caller ON caller.id = links.linked_trace \
-                 LEFT JOIN w3c ON w3c.trace_id = links.linked_trace AND w3c.span_id = links.linked_span \
-                 AND w3c.side = 'out' \
+                 LEFT JOIN w3c inbound ON inbound.trace_id = links.trace_id AND inbound.side = 'in' \
+                 LEFT JOIN w3c ON w3c.w3c_trace = inbound.w3c_trace AND w3c.w3c_span = inbound.w3c_span \
+                 AND w3c.trace_id = links.linked_trace AND w3c.side = 'out' \
                  WHERE links.kind = 'called_by' AND links.linked_trace IN (SELECT id FROM traces WHERE {condition}) \
                  GROUP BY 1, 2, 3, 4, 5 ORDER BY traces DESC",
                 caller_role = role("caller"),

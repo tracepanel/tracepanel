@@ -544,6 +544,66 @@ mod tests {
     }
 
     #[test]
+    fn a_drivers_folded_requests_still_link_the_traces_they_reached() {
+        let dir =
+            std::env::temp_dir().join(format!("tracepanel-store-w3c-db-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = path_in(&dir);
+        let mut store = Store::open(&path).unwrap();
+        // The query's driver sent two requests to services that record traces; they left the trace, their ids stay.
+        let mut shop: Value =
+            serde_json::from_str(&w3c_trace("SHOP", "shop", 0, None, None).doc).unwrap();
+        shop["status"] = "ok".into();
+        shop["spans"] = serde_json::json!([{
+            "id": "SHOP-query", "parent_id": null, "kind": "sql", "name": "SELECT orders", "start": 1,
+            "duration": 5, "status": "ok", "attrs": {
+                "db.system": "clickhouse", "server.address": "warehouse", "server.port": 8123,
+                "db.http_calls": 2, "db.http_w3c_span_ids": ["00f067aa0ba902c1", "00f067aa0ba902c2"],
+            },
+        }]);
+        let shop = Received {
+            trace: serde_json::from_value(shop.clone()).unwrap(),
+            doc: shop.to_string(),
+        };
+        store
+            .write(&[
+                shop,
+                w3c_trace("WAREHOUSE", "warehouse", 2, Some("00f067aa0ba902c1"), None),
+                w3c_trace("WAREHOUSE2", "warehouse", 3, Some("00f067aa0ba902c2"), None),
+            ])
+            .unwrap();
+        let reader = Reader::new(&path);
+
+        let called = reader.related("WAREHOUSE").unwrap();
+        assert_eq!(called["called_by"]["id"], "SHOP");
+        let from_shop = reader.related("SHOP").unwrap();
+        let calls: Vec<&Value> = from_shop["calls"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|call| &call["id"])
+            .collect();
+        assert_eq!(
+            calls,
+            [&Value::from("WAREHOUSE"), &Value::from("WAREHOUSE2")]
+        );
+        assert_eq!(
+            from_shop["via"],
+            serde_json::json!({"WAREHOUSE": "SHOP-query", "WAREHOUSE2": "SHOP-query"})
+        );
+
+        // Each called trace once, through the database span's server.
+        let services = reader.list_services("").unwrap();
+        assert_eq!(
+            services["links"],
+            serde_json::json!([{"service": "shop", "role": "web", "to_service": "warehouse", "to_role": "web",
+                                "peer": "database:clickhouse/warehouse:8123", "traces": 2, "total": 20, "errors": 2,
+                                "p50": 10, "p95": 10}])
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn a_call_links_the_trace_it_reached_whichever_comes_first() {
         let dir = std::env::temp_dir().join(format!("tracepanel-store-w3c-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
