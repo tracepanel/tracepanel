@@ -1,7 +1,7 @@
 // The logs table: one line per record, columns the reader drags wider and picks, kept in the browser across reloads,
 // on the Logs page and in a trace's Logs tab alike.
 import type { Page } from "@playwright/test";
-import { autoRefresh, chooseLive, traceId } from "../app.ts";
+import { autoRefresh, chooseLive, laidOut, traceId } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
 
 const region = (page: Page) => page.getByRole("region", { name: "Logs" });
@@ -201,6 +201,7 @@ test("a column dragged onto another moves there, and stays there after a reload"
   await expect(names.first()).toHaveAccessibleName("Time");
   // The records in: the headers have their widths, and stay where the drag aims.
   await expect(rows(page).first()).toBeVisible();
+  await laidOut(page);
 
   await header(page, "Logger").getByText("Logger").dragTo(header(page, "Time"));
 

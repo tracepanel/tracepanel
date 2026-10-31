@@ -20,6 +20,9 @@ export const test = base.extend<{ problems: string[] }>({
         if (response.status() >= 500 && !own) problems.push(`${response.status()} ${response.url()}`);
       });
       await use(problems);
+      // A route handler still answering the page's polling (the panel's) once the test is done: let it go, or it
+      // fails the test as the context closes under it ("Response has been disposed").
+      await page.unrouteAll({ behavior: "ignoreErrors" });
       expect(problems, "the page's console, uncaught errors and failed calls").toEqual([]);
     },
     { auto: true },

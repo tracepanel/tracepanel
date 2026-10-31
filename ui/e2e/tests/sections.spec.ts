@@ -16,7 +16,12 @@ const SECTIONS = [
 for (const section of SECTIONS) {
   test(`${section.link} opens from the sidebar`, async ({ page }) => {
     await page.goto("/");
-    await page.getByRole("navigation").getByRole("link", { name: section.link, exact: false }).first().click();
+    // By its whole name, its count after it ("Errors 4"): "HTTP" is not "HTTP calls", which may show first while the
+    // sidebar's sections arrive one by one.
+    await page
+      .getByRole("navigation")
+      .getByRole("link", { name: new RegExp(`^${section.link}(\\s*\\d+)?$`) })
+      .click();
 
     await expect(page.getByRole("heading", { level: 1, name: section.heading })).toBeVisible();
     if (section.row) await expect(page.getByRole("main").getByText(section.row).first()).toBeVisible();
@@ -25,8 +30,9 @@ for (const section of SECTIONS) {
 
 test("the Data group lists the stores, the brokers, the calls out, storage, then logs", async ({ page }) => {
   await page.goto("/");
-  const names = await page.getByRole("navigation").getByRole("link").allTextContents();
+  const links = page.getByRole("navigation").getByRole("link");
   const order = ["Services", "Database", "Redis", "Kafka", "HTTP calls", "AWS", "LLM", "Storage", "Logs"];
 
-  expect(names.filter((name) => order.includes(name))).toEqual(order);
+  // Read again until every section has arrived: the sidebar shows a section once its counts say it has rows.
+  await expect.poll(async () => (await links.allTextContents()).filter((name) => order.includes(name))).toEqual(order);
 });
