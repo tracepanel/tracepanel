@@ -70,8 +70,36 @@ export function argLine(arg: DumpArg): string {
 // The SDKs' dumpers, by the logger they send under, and the language their values read as.
 const DUMPERS = new Map<string, Language>([["devtools", "python"]]);
 
-/** What a dump's values are written in, to colour them: its dumper's, else its file's; null for plain text. */
+// The languages a dump says it is printed in (`dump.lang`), with the other names an SDK may give them.
+const LANGUAGES = new Map<string, Language>([
+  ["python", "python"],
+  ["py", "python"],
+  ["javascript", "javascript"],
+  ["js", "javascript"],
+  ["typescript", "javascript"],
+  ["ts", "javascript"],
+  ["node", "javascript"],
+  ["go", "go"],
+  ["golang", "go"],
+  ["java", "java"],
+  ["kotlin", "kotlin"],
+  ["kt", "kotlin"],
+]);
+
+/** The language a dump says its values are in; undefined when it doesn't say, null for one not coloured. */
+function saidLanguage(log: Pick<Log, "attrs">): Language | null | undefined {
+  const said = log.attrs["dump.lang"];
+  if (typeof said !== "string" || !said.trim()) return undefined;
+  return LANGUAGES.get(said.trim().toLowerCase()) ?? null;
+}
+
+/**
+ * What a dump's values are written in, to colour them: as it says (`dump.lang`), else its dumper's, else its file's;
+ * null for plain text, such as a language the console has no tokenizer for.
+ */
 export function dumpLanguage(log: Pick<Log, "logger" | "attrs">): Language | null {
+  const said = saidLanguage(log);
+  if (said !== undefined) return said;
   const known = DUMPERS.get(log.logger);
   if (known) return known;
   const site = dumpSite(log);

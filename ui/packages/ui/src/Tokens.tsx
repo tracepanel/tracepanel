@@ -34,7 +34,7 @@ export function CodeLines({
   limit?: number;
 }) {
   const tokens = useMemo(
-    () => (text.length > limit ? null : tokenizeLines(text.split("\n"), language)),
+    () => (text.length > limit ? null : tokenizeLines(text.split("\n"), language, true)),
     [text, language, limit],
   );
   if (tokens === null) return text;

@@ -155,7 +155,7 @@ function MessageBlock({ text }: { text: string }) {
 }
 
 // A dump's arguments and where it was called are laid out above its fields: not again among them.
-const DUMP_SHOWN = new Set(["log.kind", "dump.args", "code.origin"]);
+const DUMP_SHOWN = new Set(["log.kind", "dump.args", "dump.lang", "code.origin"]);
 
 /** The text of the record: a dump's arguments laid out (its text as printed a click away), else its message. */
 function RecordText({ log }: { log: Log }) {
