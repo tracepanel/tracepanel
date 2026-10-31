@@ -23,7 +23,7 @@ import { LlmConversation, withoutMessages } from "./LlmConversation";
 import { AllAttributes, LogRecordDetails } from "./LogRecordDetails";
 import { withoutAnsi } from "./lib/ansi";
 import { type Category, spanCategories } from "./lib/breakdown";
-import { answers, callAnswer, unfinished } from "./lib/callAnswer";
+import { answers, callAnswer, type GroupAnswer, groupAnswer, unfinished } from "./lib/callAnswer";
 import { callFields, templatePlace } from "./lib/callFields";
 import { callTemplate, callText, groupNoun } from "./lib/calls";
 import { isDump } from "./lib/dump";
@@ -58,6 +58,7 @@ import { PropTable } from "./PropTable";
 import {
   AliasChip,
   AppChip,
+  GroupStatus,
   ISSUE_CHIP_SHRINKS,
   IssueChip,
   KindBadge,
@@ -1110,15 +1111,17 @@ function saidAbove(span: Span, parent: Span | undefined): boolean {
   return parent?.kind === "template" && parent.name === templatePlace(span.attrs);
 }
 
-/** A group's kind, its call's template, its alias, the page template that made it, how many and its issue. */
+/** A group's kind, its call's template, its alias, the page template that made it, how many, how they went and its issue. */
 function GroupName({
   node,
   ctx,
   parent,
+  answer,
 }: {
   node: Extract<Node, { type: "group" }>;
   ctx: RowContext;
   parent: Span | undefined;
+  answer: GroupAnswer;
 }) {
   const issue = groupIssue(node, ctx.issueBySpan);
   const first = node.spans[0];
@@ -1129,6 +1132,7 @@ function GroupName({
       <AliasChip value={aliasOf(first)} />
       <FromTemplate span={first} parent={parent} />
       <Times count={node.spans.length} />
+      <GroupStatus answer={answer} />
       <RowChips>{issue ? <IssueChip kind={issue} className={ISSUE_CHIP_SHRINKS} /> : null}</RowChips>
     </>
   );
@@ -1172,6 +1176,7 @@ function GroupRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProp
   const open = ctx.collapsed.has(`open:${node.key}`);
   const wall = node.end - node.start;
   const issueBySpan = useMemo(() => withoutGroupIssue(node, ctx.issueBySpan), [node, ctx.issueBySpan]);
+  const answer = useMemo(() => groupAnswerOf(node), [node]);
   return (
     <div className="dt-map-group">
       <button
@@ -1180,6 +1185,7 @@ function GroupRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProp
         {...rowState(ctx, node.key, mark)}
         data-kind={node.spans[0]?.kind}
         data-category={ctx.categories.get(node.spans[0]?.id ?? "")}
+        data-status={answer.tone}
         aria-expanded={open}
         onClick={() => {
           ctx.onSelect(node.key);
@@ -1189,7 +1195,7 @@ function GroupRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProp
       >
         <span className="dt-map-name" style={indent}>
           <Caret open={open} onToggle={() => ctx.onToggle(`open:${node.key}`)} />
-          <GroupName node={node} ctx={ctx} parent={parent} />
+          <GroupName node={node} ctx={ctx} parent={parent} answer={answer} />
         </span>
         <GroupTicks spans={node.spans} trace={ctx.trace} within={ctx.within} />
         <RowTime
@@ -1204,6 +1210,11 @@ function GroupRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProp
       ) : null}
     </div>
   );
+}
+
+/** How a group's calls went, each with the trace served for it as its own row takes it (see rowStatus). */
+function groupAnswerOf(node: Extract<Node, { type: "group" }>): GroupAnswer {
+  return groupAnswer(node.members.map((member) => ({ span: member.span, served: member.served?.run })));
 }
 
 /**

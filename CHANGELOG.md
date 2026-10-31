@@ -53,6 +53,15 @@
   (`.rs`) are coloured as Rust: keywords, strings, characters,
   comments, attributes, macros, numbers and calls.
 
+### Fixed
+
+- A call's repeats folded into one row (×N), in the call tree and in a
+  trace's HTTP and cache calls tabs, say how they went, as each call's
+  own row does: `2 failed` in red for the ones that failed (a 5xx or no
+  answer), `3 × 404` in amber for the ones answered 4xx (`4xx` when the
+  codes differ). The row's edge is the worst of them. Before, the row
+  looked fine until it was opened.
+
 ## 0.9.5 (2026-10-31)
 
 ### Added
