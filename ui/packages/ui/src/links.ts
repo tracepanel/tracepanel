@@ -2,12 +2,26 @@ import type { MouseEvent } from "react";
 import type { IssueKind } from "./types";
 
 /**
+ * Where in a linked trace a link lands: its tab, the row selected in its call tree, the stretch its Profile opens at
+ * (`from-to`, µs since it started). A link from inside a trace names at least the tab: a row of the call tree leads to
+ * the linked trace's call tree, a flame to its Profile.
+ */
+export interface TraceAt {
+  tab?: string | undefined;
+  span?: string | undefined;
+  stretch?: string | undefined;
+}
+
+/** Where a linked trace opens when a link names nothing more: its call tree, as the row it was opened from. */
+const AT_TREE: TraceAt = { tab: "tree" };
+
+/**
  * Where a trace's parts lead, as addresses the host builds: the components stay out of its router. Each one
  * missing leaves its links out.
  */
 export interface TraceLinks {
-  /** A linked trace: enqueued by, a task's run, a connection; at one of its tabs (`profile`) where given. */
-  trace?: ((id: string, tab?: string) => string) | undefined;
+  /** A linked trace: enqueued by, a task's run, a connection; at a tab, a row, a stretch of it where given. */
+  trace?: ((id: string, at?: TraceAt) => string) | undefined;
   /** An issue's page. */
   issue?: ((fingerprint: string, kind: IssueKind) => string) | undefined;
   /** Every request that made this call: the agent's key for it (`call:<key>`). */
@@ -24,7 +38,7 @@ export interface TraceLinks {
    * Opens a linked trace where the reader is (the panel, with its way back): a plain click on a linked trace does
    * this, and its address is still there for a new tab.
    */
-  openTrace?: ((id: string, tab?: string) => void) | undefined;
+  openTrace?: ((id: string, at?: TraceAt) => void) | undefined;
 }
 
 /** The attributes an <a> to one of them takes. */
@@ -35,13 +49,17 @@ export function linkProps(
   return links?.newTab ? { href, target: "_blank", rel: "noreferrer" } : { href };
 }
 
-/** A linked trace's <a>: its address, opened in place on a plain click where the host does that (`openTrace`). */
+/**
+ * A linked trace's <a>: its address, opened in place on a plain click where the host does that (`openTrace`). It
+ * lands on its call tree unless `at` says more (its root row, another tab).
+ */
 export function traceLinkProps(
   links: TraceLinks | undefined,
   id: string,
+  at: TraceAt = AT_TREE,
 ): { href: string; target?: string; rel?: string; onClick?: (event: MouseEvent) => void } | undefined {
   if (!links?.trace) return undefined;
-  const props = linkProps(links, links.trace(id));
+  const props = linkProps(links, links.trace(id, at));
   const open = links.openTrace;
   if (!open) return props;
   return {
@@ -51,22 +69,23 @@ export function traceLinkProps(
       const modified = [event.metaKey, event.ctrlKey, event.shiftKey, event.altKey].some(Boolean);
       if (modified || event.button !== 0) return;
       event.preventDefault();
-      open(id);
+      open(id, at);
     },
   };
 }
 
 /**
- * Opens a linked trace at one of its tabs (a call's trace at its Profile): where the reader is when the host opens
- * traces there (the panel), else at its address, in a tab of its own where links open so. Nothing without either.
+ * Opens a linked trace at one of its tabs (a call's trace at its Profile, at a stretch): where the reader is when the
+ * host opens traces there (the panel), else at its address, in a tab of its own where links open so. Nothing without
+ * either.
  */
-export function openTraceAt(links: TraceLinks | undefined, id: string, tab: string): void {
+export function openTraceAt(links: TraceLinks | undefined, id: string, at: TraceAt): void {
   if (links?.openTrace) {
-    links.openTrace(id, tab);
+    links.openTrace(id, at);
     return;
   }
   if (!links?.trace) return;
-  const address = links.trace(id, tab);
+  const address = links.trace(id, at);
   if (links.newTab) window.open(address, "_blank", "noreferrer");
   else window.location.assign(address);
 }

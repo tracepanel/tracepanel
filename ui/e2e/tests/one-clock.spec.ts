@@ -156,8 +156,8 @@ test("the line drags anywhere along it, the arrow keys move it, and the width is
 
   await expect.poll(async () => (await split(page)).pane).toBe(before.pane + 182);
 
+  // The row selected is in the address: the reload opens it again, its details beside it.
   await page.reload();
-  await page.locator('.dt-map-row[data-kind="sql"]').first().click();
 
   await expect.poll(async () => (await split(page)).pane).toBe(before.pane + 182);
 });

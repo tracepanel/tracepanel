@@ -60,6 +60,7 @@ export interface TraceScreenProps {
   /** The Explore menu for the loaded trace. */
   explore?: ((trace: Trace) => ExploreItem[]) | undefined;
   onTabChange?: TraceViewProps["onTabChange"];
+  onTabShown?: TraceViewProps["onTabShown"];
   variant?: "full" | "compact" | "strip" | undefined;
   initialTab?: TraceViewProps["initialTab"];
   preferredTab?: TraceViewProps["preferredTab"];
@@ -75,6 +76,9 @@ export interface TraceScreenProps {
   /** The part of the time picked in the call tree, and where it goes as it changes. */
   initialSlice?: TraceViewProps["initialSlice"];
   onSliceChange?: TraceViewProps["onSliceChange"];
+  /** What the view's parts remember to start from (Back, a link), and where it goes as it changes. */
+  initialMemory?: TraceViewProps["initialMemory"];
+  onMemoryChange?: TraceViewProps["onMemoryChange"];
   /** The way back when the trace is gone (the console's page); the panel has none to offer. */
   back?: ReactNode;
   /** A Share button, when the source can make a snapshot: the console's trace page. */

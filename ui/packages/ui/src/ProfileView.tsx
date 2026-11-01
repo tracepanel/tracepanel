@@ -35,6 +35,7 @@ import {
 import { serviceRuntime, traceRuntime } from "./lib/runtime";
 import { rangeLabel, type TimeRange } from "./lib/slice";
 import { cn } from "./lib/utils";
+import { useRemembered, VIEW_KEYS } from "./lib/viewMemory";
 import { timed, wallClock } from "./lib/waiting";
 import { litKey, litScope } from "./lit";
 import { AppChip } from "./primitives";
@@ -136,15 +137,28 @@ const FRAMES = [
 
 type Kind = "time" | "memory";
 
+// The view remembers Memory only: Time is where the tab opens.
+const readKind = (value: string): Kind | undefined => (value === "memory" ? "memory" : undefined);
+const writeKind = (kind: Kind): string | undefined => (kind === "memory" ? "memory" : undefined);
+
+/** Time or Memory, as the view remembers it: Back to the Profile tab shows the same. */
+function useKind(): [Kind, (kind: Kind) => void] {
+  return useRemembered<Kind>(VIEW_KEYS.profileKind, "time", readKind, writeKind);
+}
+
+const readFrames = (value: string): boolean | undefined =>
+  value === "own" ? true : value === "all" ? false : undefined;
+const writeFrames = (own: boolean): string => (own ? "own" : "all");
+
 const KINDS = [
   { id: "time", label: "Time" },
   { id: "memory", label: "Memory" },
 ] as const;
 
 /** The Profile tab's content, when it is the tab open and the trace has a profile: its time, or its memory. */
-export function ProfilePane({ trace, open }: { trace: Trace; open: boolean }) {
+function ProfilePane({ trace, open }: { trace: Trace; open: boolean }) {
   const range = useProfileRange(open);
-  const [kind, setKind] = useState<Kind>("time");
+  const [kind, setKind] = useKind();
   // Kept while the profile and the range are: the flame graph's zoom belongs to the profile it was made in.
   const scope = useMemo(
     () => (trace.profile ? scopeOf(trace.profile, range, trace.duration) : null),
@@ -397,7 +411,8 @@ function ProfileView({
   kinds: ReactNode;
   list: (shown: Shown) => ReactNode;
 }) {
-  const [own, setOwn] = useState(() => mostlyYours(profile));
+  // Your code or All frames, as the view remembers it; at first, your code where the profile is mostly yours.
+  const [own, setOwn] = useRemembered(VIEW_KEYS.frames, () => mostlyYours(profile), readFrames, writeFrames);
   const [lit, setLit] = useState<ReadonlySet<string>>(new Set());
   const packages = useMemo(() => packageTimes(profile), [profile]);
   const palette = useMemo(() => colors(packages.map((item) => item.name)), [packages]);
@@ -783,7 +798,7 @@ function ChainProfiles({ profiles, chain }: { profiles: readonly ScopedProfile[]
   const apps = useMemo(() => appProfiles(profiles), [profiles]);
   const memories = useMemo(() => appMemories(apps), [apps]);
   const [picked, setPicked] = useState<string | null>(null);
-  const [kind, setKind] = useState<Kind>("time");
+  const [kind, setKind] = useKind();
   const runtimes = useMemo(() => new Map(apps.map((app) => [app.app, appRuntime(app)])), [apps]);
   const counts = useMemo(() => new Map(apps.map((app) => [app.app, app.traces.length])), [apps]);
   // Only a chain with a trace that measured its memory has the choice.

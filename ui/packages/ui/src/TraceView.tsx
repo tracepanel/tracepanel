@@ -41,7 +41,8 @@ import { groupNoun, onTheClock } from "./lib/calls";
 import { isTyping } from "./lib/keys";
 import { pageParts } from "./lib/page";
 import { scopedIssues, scopedSpans } from "./lib/scope";
-import type { Slice } from "./lib/slice";
+import { type Slice, stretchText } from "./lib/slice";
+import { useViewMemory, VIEW_KEYS, type ViewMemory, type ViewMemoryHeld, ViewMemoryScope } from "./lib/viewMemory";
 import { linkProps, opensTraces, openTraceAt, type TraceLinks } from "./links";
 import { ProfileTab } from "./ProfileView";
 import { RoutePath, StatusBadge, TraceBadge } from "./primitives";
@@ -365,8 +366,13 @@ export interface TraceViewProps {
   variant?: "full" | "compact" | "strip" | undefined;
   /** The Explore menu; hidden when empty. */
   explore?: readonly ExploreItem[] | undefined;
-  /** Called when another tab opens (the console keeps it in the URL). */
+  /** Called when the reader picks another tab (its bar, its keys, a tile that leads to one). */
   onTabChange?: ((tab: TabId) => void) | undefined;
+  /**
+   * Called with the tab on screen whenever it changes, the one the view opened on too: the host keeps it for Back
+   * (the console in the URL), so Back returns to it whatever the next trace's tab was.
+   */
+  onTabShown?: ((tab: TabId) => void) | undefined;
   /**
    * Extra header buttons from the host page (open full page, close), shown after Explore; or a function of the
    * Explore button that places it among them (the panel: after Console, with the other icons).
@@ -405,6 +411,13 @@ export interface TraceViewProps {
   initialSlice?: Slice | undefined;
   /** Called when another part of the time is picked (the console keeps it in the URL). */
   onSliceChange?: ((slice: Slice) => void) | undefined;
+  /**
+   * What the view's parts remember to start from (the row selected, the rows folded, the Profile tab's choices): a
+   * link's, or the history entry Back returns to. Read once, as the view opens.
+   */
+  initialMemory?: ViewMemory | undefined;
+  /** Called as what the view's parts remember changes: the host keeps it for Back, and some of it in the URL. */
+  onMemoryChange?: ((memory: ViewMemory) => void) | undefined;
   /**
    * Opens a call's trace's profile by its id, from the call tree (its flame, its code rows). By default it opens as a
    * linked trace does (`links`), at its Profile tab.
@@ -495,9 +508,13 @@ function TreePane({
   );
 }
 
-/** A call's trace's profile, opened as a linked trace opens, at its Profile tab; none where traces don't open. */
+/**
+ * A call's trace's profile, opened as a linked trace opens, at its Profile tab and at the stretch a code row stands
+ * for; none where traces don't open.
+ */
 function linkedProfiles(links: TraceLinks | undefined): TraceProfileOpener | undefined {
-  return opensTraces(links) ? (id) => openTraceAt(links, id, "profile") : undefined;
+  if (!opensTraces(links)) return undefined;
+  return (id, range) => openTraceAt(links, id, { tab: "profile", stretch: range ? stretchText(range) : undefined });
 }
 
 /** Explore: the ways out of this trace the page itself doesn't show. */
@@ -564,10 +581,106 @@ function firstTab(
   return hasTab(trace, preferredTab, app) ? preferredTab : "tree";
 }
 
+/** 1–9 open the tabs in the order they are shown; the latest list, without rebinding on every render. */
+function useTabKeys(tabs: readonly { id: TabId }[], openTab: (id: TabId) => void): void {
+  const shown = useRef({ tabs, openTab });
+  shown.current = { tabs, openTab };
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (isTyping(event)) return;
+      const tab = shown.current.tabs[Number(event.key) - 1];
+      if (!/^[1-9]$/.test(event.key) || tab === undefined) return;
+      event.preventDefault();
+      shown.current.openTab(tab.id);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+}
+
+/** The console page's head: the trace's badge, name, status, time and facts, its route, Explore and the actions. */
+function FullHeader({ trace, placed }: { trace: Trace; placed: { explore: ReactNode; actions: ReactNode } }) {
+  const head = heading(trace);
+  const status = trace.attrs["http.status_code"];
+  const path = trace.attrs["http.path"];
+  const route = trace.attrs["http.route"];
+  return (
+    <header className="dt-trace-head">
+      <div className="flex items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="dt-trace-title">
+            <TraceBadge word={head.badge} htmx={htmxOf(trace)} />
+            <h2>
+              <HeadingTitle kind={trace.kind} title={head.title} />
+            </h2>
+            <StatusBadge status={typeof status === "number" ? status : null} />
+            <span className="dt-trace-time">{duration(trace.duration)}</span>
+            <HeadFacts trace={trace} />
+          </div>
+          {typeof route === "string" && route !== path ? (
+            <p className="dt-trace-route">
+              route <RoutePath path={route} />
+            </p>
+          ) : null}
+        </div>
+        {placed.explore}
+        {placed.actions ? <div className="flex shrink-0 items-center gap-0.5">{placed.actions}</div> : null}
+      </div>
+    </header>
+  );
+}
+
+/** What a trace's view keeps for its parts: what they remember, and the part of its time picked. */
+function ViewScopes({
+  memory,
+  slice,
+  onSlice,
+  children,
+}: {
+  memory: ViewMemoryHeld;
+  slice: Slice | undefined;
+  onSlice: ((slice: Slice) => void) | undefined;
+  children: ReactNode;
+}) {
+  return (
+    <ViewMemoryScope memory={memory}>
+      <SliceScope initial={slice} onChange={onSlice}>
+        {children}
+      </SliceScope>
+    </ViewMemoryScope>
+  );
+}
+
+/** Tells the host the tab on screen whenever it changes, the first one too. */
+function useTabShown(active: TabId, onTabShown: ((tab: TabId) => void) | undefined): void {
+  const told = useRef(onTabShown);
+  told.current = onTabShown;
+  useEffect(() => {
+    told.current?.(active);
+  }, [active]);
+}
+
+/**
+ * A span asked for in the call tree: from the link's `span`, or a log record's "in the call tree". Selected from
+ * then on: the call tree opened again (another tab, then back) starts on it.
+ */
+function useTreeSpan(
+  memory: ViewMemoryHeld,
+  initialSpan: string | undefined,
+): [string | undefined, (span: string | undefined) => void] {
+  const [span, ask] = useState(initialSpan);
+  const select = (next: string | undefined) => {
+    if (next) memory.set(VIEW_KEYS.span, next);
+    ask(next);
+  };
+  return [span, select];
+}
+
 export function TraceView({
   trace,
   explore = [],
   onTabChange,
+  onTabShown,
   onExplain,
   explainIn,
   initialTab,
@@ -582,6 +695,8 @@ export function TraceView({
   initialUnder,
   app,
   onTraceProfile,
+  initialMemory,
+  onMemoryChange,
   variant = "full",
   // The part of the time picked: the lanes and the call tree share it (SliceScope); whether apps profile.
   ...held
@@ -589,10 +704,12 @@ export function TraceView({
   const compact = variant === "compact" || variant === "strip";
   const findings = useMemo(() => findingsOf(trace), [trace]);
   const [active, setActive] = useState<TabId>(() => firstTab(trace, initialTab, preferredTab, app));
+  useTabShown(active, onTabShown);
   const spansNoun = useMemo(() => nounsOf(trace), [trace]);
   const [focus, setFocus] = useState<ReadonlySet<string> | undefined>(undefined);
-  // A span to open in the call tree: from the link's `span`, or a log record's "in the call tree".
-  const [treeSpan, setTreeSpan] = useState(initialSpan);
+  // What the view's parts remember (the row selected, the rows folded, the Profile tab's choices), for Back.
+  const memory = useViewMemory(initialMemory, onMemoryChange);
+  const [treeSpan, setTreeSpan] = useTreeSpan(memory, initialSpan);
 
   // The trace's chain of calls, and what of it the tabs list: all of it, or what is under a row of the call tree.
   const chain = useTraceScope(trace, related, loadChain, initialUnder);
@@ -604,7 +721,6 @@ export function TraceView({
   );
   const explain = useMemo(() => chainExplain(chain, explainOf), [chain, explainOf]);
 
-  const status = trace.attrs["http.status_code"];
   const outcome = outcomeOf(trace);
   const tabs = traceTabs({
     trace,
@@ -617,9 +733,6 @@ export function TraceView({
   });
   // A tab the link asked for that only the chain has (the DB tab of a browser's view): opened once the chain came.
   const asked = useAskedTab(initialTab, tabs, setActive);
-  const head = heading(trace);
-  const path = trace.attrs["http.path"];
-  const route = trace.attrs["http.route"];
 
   // A record's or an issue's row in the call tree.
   const showRow = (row: string) => {
@@ -689,20 +802,7 @@ export function TraceView({
     setFocus(undefined);
     onTabChange?.(id);
   };
-  // 1–7 open the tabs in the order they are shown; the latest list, without rebinding on every render.
-  const shown = useRef({ tabs, openTab });
-  shown.current = { tabs, openTab };
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (isTyping(event)) return;
-      const tab = shown.current.tabs[Number(event.key) - 1];
-      if (!/^[1-9]$/.test(event.key) || tab === undefined) return;
-      event.preventDefault();
-      shown.current.openTab(tab.id);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  useTabKeys(tabs, openTab);
 
   const placed = placeExplore(exploreMenu, actions);
   const tabsBar = <Tabs label="Trace details" tabs={tabs} active={active} onChange={openTab} />;
@@ -710,43 +810,22 @@ export function TraceView({
   // In the panel (either dock) the tabs carry the status and timings: one toolbar row, then the content.
   if (compact) {
     return (
-      <SliceScope initial={held.initialSlice} onChange={held.onSliceChange}>
-        <article className="dt-trace" data-variant="strip">
+      <ViewScopes memory={memory} slice={held.initialSlice} onSlice={held.onSliceChange}>
+        <article className="dt-trace" data-variant="strip" data-trace={trace.id}>
           <StripHeader lead={lead} tabs={tabsBar} explore={placed.explore} actions={placed.actions} />
           {panel}
         </article>
-      </SliceScope>
+      </ViewScopes>
     );
   }
 
   return (
-    <SliceScope initial={held.initialSlice} onChange={held.onSliceChange}>
-      <article className="dt-trace" data-variant={variant}>
-        <header className="dt-trace-head">
-          <div className="flex items-center gap-3">
-            <div className="min-w-0 flex-1">
-              <div className="dt-trace-title" hidden={compact}>
-                <TraceBadge word={head.badge} htmx={htmxOf(trace)} />
-                <h2>
-                  <HeadingTitle kind={trace.kind} title={head.title} />
-                </h2>
-                <StatusBadge status={typeof status === "number" ? status : null} />
-                <span className="dt-trace-time">{duration(trace.duration)}</span>
-                <HeadFacts trace={trace} />
-              </div>
-              {compact ? null : typeof route === "string" && route !== path ? (
-                <p className="dt-trace-route">
-                  route <RoutePath path={route} />
-                </p>
-              ) : null}
-            </div>
-            {placed.explore}
-            {placed.actions ? <div className="flex shrink-0 items-center gap-0.5">{placed.actions}</div> : null}
-          </div>
-        </header>
+    <ViewScopes memory={memory} slice={held.initialSlice} onSlice={held.onSliceChange}>
+      <article className="dt-trace" data-variant={variant} data-trace={trace.id}>
+        <FullHeader trace={trace} placed={placed} />
         {tabsBar}
         {panel}
       </article>
-    </SliceScope>
+    </ViewScopes>
   );
 }

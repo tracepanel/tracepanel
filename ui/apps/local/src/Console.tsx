@@ -170,6 +170,9 @@ export function Console({ route, source: everything }: { route: Route; source: D
         part={route.part}
         range={route.range}
         logs={route.logs}
+        profile={route.profile}
+        frames={route.frames}
+        at={route.at}
         source={source}
       />
     );

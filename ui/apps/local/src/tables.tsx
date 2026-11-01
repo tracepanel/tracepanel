@@ -38,6 +38,7 @@ import {
   TaskName,
   type TaskRow,
   type TraceSummary,
+  traceLabel,
   uncommented,
   useAttributeColumns,
   type WebsocketRow,
@@ -56,6 +57,7 @@ import { currentPeriod, endpointGroup, go, groupRoute, href, issueRoute, traceHr
 import { useScope } from "./scope";
 import { graphqlOperation, requestPath, taskSystem } from "./sections";
 import { type Noun, overText, shareText } from "./slower";
+import { useSummaries } from "./summaries";
 import { FitChips, Meter, Mono, Tr } from "./ui";
 
 /** What a trace is: its method and path, a GraphQL operation, or its kind and name (a task, a job, a WebSocket). */
@@ -156,6 +158,8 @@ export function TracesTable({
             selected={trace.id === selectedId}
             tone={traceTone(trace)}
             href={hrefFor(trace.id)}
+            // One clean name, as the panel's list gives its rows: the cells read in pieces (a path cut at its start).
+            aria-label={traceLabel(trace)}
             fresh={newIds?.has(trace.id)}
           >
             {cells(trace)}
@@ -483,10 +487,23 @@ function CallStatsDetails({ open, span, children }: { open: boolean; span: numbe
 }
 
 /** "Show N requests with this …" and the latest call, under an open row. */
-function RequestLinks({ q, traces, what, sample }: { q: string; traces: number; what: string; sample: string }) {
+function RequestLinks({
+  q,
+  traces,
+  what,
+  sample,
+  span,
+}: {
+  q: string;
+  traces: number;
+  what: string;
+  sample: string;
+  /** The latest call's span: its trace opens on its call tree, that call selected. */
+  span: string;
+}) {
   const requests = traces === 1 ? "request" : "requests";
   return (
-    <DetailsFooter open={{ label: `Latest ${what}`, link: { href: traceHref(sample) } }}>
+    <DetailsFooter open={{ label: `Latest ${what}`, link: { href: traceHref(sample, "tree", span) } }}>
       <Button variant="outline" size="sm" asChild>
         <a href={href({ name: "traces", q })}>
           Show {traces} {requests} with this {what}
@@ -624,6 +641,7 @@ function CallDetails({ item, source, slower }: { item: CallRow; source: DataSour
         traces={item.traces}
         what={systemOfPage(item.system, item.family).one}
         sample={item.sample_trace}
+        span={item.sample_span}
       />
     </>
   );
@@ -1082,22 +1100,10 @@ function IssuePlaces({ item, entries }: { item: IssueRow; entries: ReadonlyMap<s
  * where a request's names its endpoint.
  */
 function useEntries(items: readonly IssueRow[], source: DataSource): ReadonlyMap<string, TraceSummary> {
-  const ids = items.filter((item) => !item.endpoints.length).map((item) => item.last_trace_id);
-  const key = ids.join(",");
-  const [entries, setEntries] = useState<ReadonlyMap<string, TraceSummary>>(new Map());
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the ids, by their key.
-  useEffect(() => {
-    if (!ids.length) return;
-    let current = true;
-    source.listTraces({ ids, limit: ids.length }).then(
-      (traces) => current && setEntries(new Map(traces.map((trace) => [trace.id, trace]))),
-      () => undefined,
-    );
-    return () => {
-      current = false;
-    };
-  }, [key, source]);
-  return entries;
+  return useSummaries(
+    items.filter((item) => !item.endpoints.length).map((item) => item.last_trace_id),
+    source,
+  );
 }
 
 /** Up to three of the values, one a line, and how many more there are. */

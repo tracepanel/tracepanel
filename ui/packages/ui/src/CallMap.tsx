@@ -40,6 +40,7 @@ import { isReceiver, raised } from "./lib/signals";
 import { isShown, overlaps, type Slice, type TimeRange } from "./lib/slice";
 import { CALL_KINDS, DATASTORES, MESSAGING, RPC } from "./lib/systems";
 import { attrsWhere } from "./lib/values";
+import { useRemembered, VIEW_KEYS } from "./lib/viewMemory";
 import {
   bucketOwners,
   ownProfile,
@@ -1821,6 +1822,12 @@ function CodePartRow({ span, ctx, depth, part }: { span: Span; ctx: RowContext; 
       className="dt-map-row"
       data-kind="code"
       data-category={codeCategory(span, ctx)}
+      // Says where it leads: a code row of a call's trace opens that trace, not a tab of this one.
+      title={
+        ctx.code.trace.id === ctx.trace.id
+          ? "Open the profile at this stretch"
+          : "Open the profile of the trace that served this call, at this stretch"
+      }
       onClick={() => open(partRange(part))}
     >
       {inside}
@@ -1924,11 +1931,14 @@ function OpenRun({
   words,
   links,
   remote,
+  whole,
 }: {
   run: TraceSummary;
   words: { open: string };
   links?: TraceLinks | undefined;
   remote?: Remote | undefined;
+  /** The run's trace, when this agent has it whole: it opens with its root row selected. */
+  whole?: Trace | undefined;
 }) {
   if (remote) {
     return (
@@ -1937,7 +1947,8 @@ function OpenRun({
       </a>
     );
   }
-  const open = traceLinkProps(links, run.id);
+  // A row of the call tree leads to the run's own call tree, on the row that stands for all of it.
+  const open = traceLinkProps(links, run.id, { tab: "tree", span: whole ? rootOf(whole) || undefined : undefined });
   return open ? (
     <a className="dt-map-open" {...open}>
       {words.open}
@@ -1951,6 +1962,7 @@ function RunDetails({
   trace,
   links,
   remote,
+  whole,
   profile,
 }: {
   run: TraceSummary;
@@ -1958,6 +1970,7 @@ function RunDetails({
   trace: Trace;
   links?: TraceLinks | undefined;
   remote?: Remote | undefined;
+  whole?: Trace | undefined;
   /** Opens its profile, when it has one. */
   profile?: (() => void) | undefined;
 }) {
@@ -1970,7 +1983,7 @@ function RunDetails({
       </p>
       <Inside />
       <PropTable dense rows={runRows(run, words.label)} />
-      <OpenRun run={run} words={words} links={links} remote={remote} />
+      <OpenRun run={run} words={words} links={links} remote={remote} whole={whole} />
       <ProfileLink open={profile} />
     </div>
   );
@@ -2002,7 +2015,15 @@ function LinkedDetails({
   if (node.type === "waiting") return <WaitingDetails span={node.span} />;
   const profile = servedProfile(node, onTraceProfile);
   return (
-    <RunDetails run={node.run} kind={node.kind} trace={trace} links={links} remote={node.remote} profile={profile} />
+    <RunDetails
+      run={node.run}
+      kind={node.kind}
+      trace={trace}
+      links={links}
+      remote={node.remote}
+      whole={node.whole}
+      profile={profile}
+    />
   );
 }
 
@@ -2190,7 +2211,7 @@ function ServedBy({
       </p>
       <PropTable dense rows={runRows(served.run, "Trace")} />
       <RunChips trace={served.run} />
-      <OpenRun run={served.run} words={RUN_WORDS.call} links={links} remote={served.remote} />
+      <OpenRun run={served.run} words={RUN_WORDS.call} links={links} remote={served.remote} whole={served.whole} />
       <ProfileLink open={servedProfile(served, onTraceProfile)} />
     </section>
   );
@@ -2400,24 +2421,60 @@ function MapBody({ details, onClose, children }: { details: ReactNode; onClose: 
 
 /* ---------- component ---------- */
 
-/** The selected row; clicking it again closes its details. */
+const readKey = (value: string): string | null | undefined => value || undefined;
+const writeKey = (key: string | null): string | undefined => key ?? undefined;
+
+/**
+ * The selected row; clicking it again closes its details. Remembered by the view (Back returns to it, the console
+ * keeps it in the URL): the tree opened again starts on it, else on the span a link asked for.
+ */
 function useSelection(initialSpan: string | undefined) {
-  const [selected, setSelected] = useState<string | null>(initialSpan ?? null);
+  const [selected, setSelected] = useRemembered<string | null>(VIEW_KEYS.span, initialSpan ?? null, readKey, writeKey);
   // Another span asked for while the tree is open (a mark on the lanes over it): that one is selected.
+  const asked = useRef(initialSpan);
   useEffect(() => {
+    if (initialSpan === asked.current) return;
+    asked.current = initialSpan;
     if (initialSpan) setSelected(initialSpan);
-  }, [initialSpan]);
-  const select = (key: string) => setSelected((current) => (current === key ? null : key));
+  }, [initialSpan, setSelected]);
+  const select = (key: string) => setSelected(selected === key ? null : key);
   return { selected, select, close: () => setSelected(null) };
 }
 
-/** The rows, brought into view once when a link opened the tree on one of them. */
+/**
+ * The rows, brought into view once when a link opened the tree on one of them. Back puts the page's own scroll back
+ * after this: the row stays where the reader left it.
+ */
 function useScrolledToInitial(initialSpan: string | undefined): RefObject<HTMLDivElement | null> {
   const rows = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (initialSpan) rows.current?.querySelector('[aria-current="true"]')?.scrollIntoView({ block: "center" });
   }, [initialSpan]);
   return rows;
+}
+
+function readKeys(value: string): ReadonlySet<string> | undefined {
+  try {
+    const keys: unknown = JSON.parse(value);
+    return Array.isArray(keys) ? new Set(keys.filter((key) => typeof key === "string")) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+const writeKeys = (keys: ReadonlySet<string>): string | undefined =>
+  keys.size ? JSON.stringify([...keys]) : undefined;
+
+/** The rows folded or opened from where they start: remembered by the view, so Back returns to the same tree. */
+function useFolded(): [ReadonlySet<string>, (key: string) => void] {
+  const [keys, setKeys] = useRemembered<ReadonlySet<string>>(VIEW_KEYS.folded, () => new Set(), readKeys, writeKeys);
+  const toggle = (key: string) => {
+    const next = new Set(keys);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    setKeys(next);
+  };
+  return [keys, toggle];
 }
 
 /** What is under a row, as the trace's tabs take it: a span's, a group's spans', a call's trace. */
@@ -2490,19 +2547,6 @@ function detailsOf(
       />
     </UnderSlot>
   );
-}
-
-/** Keys toggled in and out of a set: the folded rows, the opened groups. */
-function useToggleSet(): [ReadonlySet<string>, (key: string) => void] {
-  const [keys, setKeys] = useState<ReadonlySet<string>>(new Set());
-  const toggle = (key: string) =>
-    setKeys((current) => {
-      const next = new Set(current);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  return [keys, toggle];
 }
 
 /** The rows a slice keeps, or undefined while it is the whole trace. */
@@ -2746,7 +2790,7 @@ export function CallMap({
   const map = useRef<HTMLDivElement>(null);
   const side = useSidePane(map);
   const rows = useScrolledToInitial(initialSpan);
-  const [collapsed, toggle] = useToggleSet();
+  const [collapsed, toggle] = useFolded();
   const details = detailsOf(tree, selected, trace, {
     links,
     explainOf: wiring.explainOf,

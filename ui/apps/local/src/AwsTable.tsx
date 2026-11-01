@@ -137,7 +137,7 @@ function CallLine({ call }: { call: AwsCall }) {
   return (
     <li>
       <a
-        href={traceHref(call.trace_id, undefined, call.span_id)}
+        href={traceHref(call.trace_id, "tree", call.span_id)}
         className="flex items-baseline gap-3 rounded px-1 py-0.5 text-foreground no-underline hover:bg-accent"
       >
         <span className="w-16 shrink-0 text-muted-foreground tabular-nums">{ago(call.start)}</span>
@@ -176,7 +176,7 @@ function AwsDetails({ item, q, source }: { item: AwsOperation; q: string; source
     <>
       <CalledFrom item={item} />
       <LatestCalls item={item} q={q} source={source} />
-      <DetailsFooter open={{ label: "Latest call", link: { href: traceHref(item.sample_trace) } }}>
+      <DetailsFooter open={{ label: "Latest call", link: { href: traceHref(item.sample_trace, "tree") } }}>
         {page ? (
           <Button variant="outline" size="sm" asChild>
             <a href={href(page.route)}>Its N+1 and duplicates on {page.label}</a>
