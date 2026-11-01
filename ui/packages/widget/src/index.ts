@@ -1390,6 +1390,7 @@ export function mount(options: WidgetOptions = {}): Widget {
     badge.setAttribute("aria-expanded", "true");
     makeRoom();
     savePanel(panelState());
+    tellShown();
   }
 
   function close(): void {
@@ -1397,6 +1398,12 @@ export function mount(options: WidgetOptions = {}): Widget {
     badge.setAttribute("aria-expanded", "false");
     makeRoom();
     savePanel(panelState());
+    tellShown();
+  }
+
+  /** Tells the panel whether it shows: closed, nothing in it moves (an hourglass of a trace on its way). */
+  function tellShown(): void {
+    frame?.contentWindow?.postMessage({ type: "tracepanel:shown", shown: panel.hasAttribute("data-open") }, "*");
   }
 
   // Hover (or keyboard focus): the request at a glance, before opening the panel.
@@ -1466,6 +1473,7 @@ export function mount(options: WidgetOptions = {}): Widget {
       data.type === "tracepanel:ready"
     ) {
       frame.contentWindow?.postMessage({ type: "tracepanel:dock", dock }, "*");
+      tellShown();
       sendTab();
     }
   });

@@ -107,6 +107,8 @@ export const CARD_STYLE = `
   [data-category="mail"] { --k: var(--dt-k-mail); }
   [data-category="signal"] { --k: var(--dt-k-signal); }
   .panel[data-open] ~ .card { display: none; }
+  /* A card out of sight shimmers no more, still loading or not. */
+  .card:not([data-open]) .card-skeleton { animation: none; }
   @media (prefers-reduced-motion: reduce) { .card { transition: none; } .card-skeleton { animation: none; } }
 `;
 
