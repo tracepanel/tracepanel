@@ -9,7 +9,18 @@ import {
   useState,
 } from "react";
 import { isTyping } from "./lib/keys";
-import { cleared, isWhole, rangeOf, type Slice, sliceKey, type TimeRange, WHOLE } from "./lib/slice";
+import {
+  cleared,
+  isWhole,
+  parseStretch,
+  rangeOf,
+  type Slice,
+  sliceKey,
+  stretchText,
+  type TimeRange,
+  WHOLE,
+} from "./lib/slice";
+import { useRemembered, VIEW_KEYS } from "./lib/viewMemory";
 
 /** A move this short is a click, not a drag. */
 const DRAG_PX = 4;
@@ -78,6 +89,8 @@ export function RangeBand({ range, total }: { range: TimeRange; total: number })
   return <div className="dt-range" style={bandPlace(range, total)} aria-hidden="true" />;
 }
 
+const writeStretch = (range: TimeRange | null): string | undefined => (range ? stretchText(range) : undefined);
+
 /** Esc, not taken by anything open before (a menu, a dialog) nor typed into a field. */
 function isFreeEscape(event: KeyboardEvent): boolean {
   return event.key === "Escape" && !event.defaultPrevented && !isTyping(event);
@@ -91,7 +104,8 @@ function isFreeEscape(event: KeyboardEvent): boolean {
  */
 function useSlice(initial: Slice | undefined, onChange: ((slice: Slice) => void) | undefined) {
   const [slice, setSlice] = useState(initial ?? WHOLE);
-  const [stretch, profileAt] = useState<TimeRange | null>(null);
+  // Remembered by the view: Back to a profile opened at a stretch opens it there again, and a link carries it.
+  const [stretch, profileAt] = useRemembered<TimeRange | null>(VIEW_KEYS.stretch, null, parseStretch, writeStretch);
   // Another link to the same trace (Back, a link with another part picked): the slice it says.
   const asked = useRef(initial ?? WHOLE);
   asked.current = initial ?? WHOLE;
@@ -113,7 +127,7 @@ function useSlice(initial: Slice | undefined, onChange: ((slice: Slice) => void)
     // Caught on the way down: the page's own Esc (back, close) listens on the way up.
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, []);
+  }, [profileAt]);
   return { slice, change, stretch, profileAt };
 }
 

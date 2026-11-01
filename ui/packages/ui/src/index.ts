@@ -23,7 +23,8 @@ export { percent } from "./lib/percent";
 export { plural } from "./lib/plural";
 export { type RuntimeKind, runtimeKind, runtimeName, serviceRuntime } from "./lib/runtime";
 export { parseSlice, type Slice, sliceParams } from "./lib/slice";
-export { linkProps, type TraceLinks, traceLinkProps } from "./links";
+export { memoryFromParams, type ViewMemory } from "./lib/viewMemory";
+export { linkProps, type TraceAt, type TraceLinks, traceLinkProps } from "./links";
 export { MailList } from "./MailList";
 export { type NameValue, NameValues } from "./NameValues";
 export * from "./PropTable";
@@ -66,6 +67,6 @@ export {
 export { formatSql, tokenizeSql, uncommented } from "./sql";
 export { type Tab, Tabs } from "./Tabs";
 export { Timeline } from "./Timeline";
-export { type ListChains, TraceList, type TraceRow } from "./TraceList";
+export { type ListChains, TraceList, type TraceRow, traceLabel } from "./TraceList";
 export { type ExploreItem, type TabId, TraceView, type TraceViewProps } from "./TraceView";
 export type * from "./types";

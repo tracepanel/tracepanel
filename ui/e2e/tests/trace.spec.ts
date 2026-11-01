@@ -14,9 +14,8 @@ test("an endpoint's N+1 shows in its trace, down to the repeated query", async (
   await page.getByRole("table").last().getByRole("link").first().click();
 
   await expect(page.getByRole("heading", { level: 2, name: "/api/posts" })).toBeVisible();
-  // Opened from its endpoint's page: on what it was, its Request tab; the query is in its call tree.
-  await expect(page.getByRole("tab", { name: /^Request/ })).toHaveAttribute("aria-selected", "true");
-  await page.getByRole("tab", { name: "Call tree" }).click();
+  // Opened fresh with no tab picked yet: on its call tree, where the query is (NAVIGATION.md, rule 3).
+  await expect(page.getByRole("tab", { name: "Call tree" })).toHaveAttribute("aria-selected", "true");
   const repeated = page.getByRole("button", { name: /SELECT author .*×13 N\+1/ });
   await expect(repeated).toBeVisible();
 

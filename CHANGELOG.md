@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+### Changed
+
+- Back returns to exactly where you were. In the panel, a linked trace
+  (a task, the trace a call reached) opened from a call tree came back
+  on another tab, often Issues. Now Back and Esc return to the same
+  tab, the row selected, the rows folded, the Logs chip and the part
+  of the time picked, the Profile tab's choices and the scroll, one
+  step at a time down a chain of linked traces. The Back button names
+  where it goes, such as "Call tree · GET /shelf".
+- A linked trace opened from a row of the call tree opens on its call
+  tree, its root row selected. A flame or a code row opens its Profile
+  at the stretch the row stands for, and a code row of a call's trace
+  says in its tooltip that it opens that trace.
+- A trace opened fresh opens on one rule in the panel and the console:
+  the tab its link names, else Error when it failed, else the tab last
+  picked in a trace's tab bar, else the call tree. Profile and App are
+  never carried over, so picking a job in the panel's list after a
+  profile no longer shows its empty Profile. The console's lists of
+  HTTP requests and tasks opened on Request before.
+- In the console, the trace page's address holds its row and its
+  Profile choices as well as its tab, so a reload or a shared link
+  opens the same view. A trace opened from another one goes back to
+  that trace, not the list before it: the crumbs show the way it came,
+  and Esc goes where the browser's Back goes.
+- A request opened from an issue's list opens on its Issues or Error
+  tab. The latest call of a query or an AWS operation opens on its row
+  in the call tree.
+- Each row of the panel's list and the console's trace lists has one
+  accessible name: its method and whole path, its status, its time
+  and its findings, such as "GET /api/openapi.json, 200, 12 ms".
+
 ### Fixed
 
 - A task a request enqueued a moment ago shows its run in the call tree

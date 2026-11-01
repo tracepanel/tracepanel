@@ -161,6 +161,7 @@ function ListRow({
       data-kind={trace.kind === "page" ? "page" : undefined}
       data-tone={toneOf(trace)}
       aria-current={selected ? "true" : undefined}
+      aria-label={traceLabel(trace, { trigger, target, current })}
       {...foldProps(fold)}
       data-new={fresh ? "" : undefined}
       onClick={() => onSelect(trace.id)}
@@ -492,6 +493,7 @@ function ChainTraceRows({ row, rowId, level, chains, selectedId, onSelect }: Cha
         style={{ "--dt-chain-level": level } as CSSProperties}
         aria-current={row.id === selectedId ? "true" : undefined}
         aria-expanded={nested ? open : undefined}
+        aria-label={traceLabel(row.summary)}
         title={row.route}
         onClick={() => onSelect(row.id)}
         onKeyDown={foldKeys(nested ? open : undefined, toggle)}
@@ -619,6 +621,46 @@ function requestPath(trace: TraceSummary): { path: string; route: boolean } {
   if (trace.name.startsWith("GraphQL ")) return { path: trace.name.slice("GraphQL ".length), route: false };
   if (trace.path) return { path: trace.path, route: false };
   return { path: trace.name.split(" ").slice(1).join(" "), route: true };
+}
+
+/** A row's name in words: what the badge and the path say, as one string. */
+function rowName(trace: TraceSummary): string {
+  if (trace.kind === "page") return trace.name;
+  if (trace.kind === "http") {
+    if (trace.name.startsWith("GraphQL ")) return trace.name;
+    const method = trace.method ?? trace.name.split(" ")[0] ?? "";
+    return `${method} ${requestPath(trace).path}`.trim();
+  }
+  const kind = trace.kind === "command" ? "job" : trace.kind;
+  return `${kind} ${trace.name.replace(/^WS /, "")}`;
+}
+
+/**
+ * A row's accessible name, one clean line: its method and whole path (its badge and its path are separate boxes, and
+ * a path cut at its start reads in pieces), how it ended, how long it took, its findings, what sent it.
+ */
+export function traceLabel(
+  trace: TraceSummary,
+  extra: { trigger?: string | undefined; target?: string | undefined; current?: boolean } = {},
+): string {
+  const outcome =
+    trace.task_state ??
+    (trace.kind !== "page" && typeof trace.http_status === "number"
+      ? String(trace.http_status)
+      : trace.status === "error"
+        ? "failed"
+        : undefined);
+  const sent = extra.trigger ? `sent by ${extra.trigger}${extra.target ? ` → ${extra.target}` : ""}` : undefined;
+  return [
+    rowName(trace),
+    outcome,
+    duration(trace.duration),
+    trace.issues > 0 ? plural(trace.issues, "issue", "issues") : undefined,
+    sent,
+    extra.current ? "this page" : undefined,
+  ]
+    .filter(Boolean)
+    .join(", ");
 }
 
 /** An htmx request: the element that sent it and where the answer went, after the path. */

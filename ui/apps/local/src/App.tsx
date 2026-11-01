@@ -20,6 +20,8 @@ import {
   LayersIcon,
   type ListChains,
   Logo,
+  memoryFromParams,
+  parseSlice,
   type Slice,
   sliceParams,
   type TabId,
@@ -29,6 +31,7 @@ import {
   TraceList,
   type TraceRow,
   type TraceSummary,
+  type ViewMemory,
   waitingUntil,
   withSnapshots,
 } from "@tracepanel/ui";
@@ -50,9 +53,19 @@ import { ClearDialog } from "./ClearDialog";
 import { Console } from "./Console";
 import { exploreFor } from "./explore";
 import { type EntrySummary, type TabEntry, type TabHistory, useNewIds, usePolling, useTabHistory } from "./hooks";
+import { readLastTab, writeLastTab } from "./lastTab";
 import { ProfileToggle } from "./ProfileToggle";
+import {
+  forgetUnless,
+  goBackInPanel,
+  openLinked,
+  type PanelView,
+  restoringFor,
+  setCurrentView,
+  useBackStep,
+} from "./panelBack";
 import { RefreshProvider } from "./refresh";
-import { consoleLinks, go, href, parse, type Route, useRoute } from "./routes";
+import { consoleLinks, go, href, type Route, useRoute } from "./routes";
 import { SearchPalette } from "./SearchPalette";
 import { ShareAction } from "./ShareDialog";
 import { NAV, ThemeToggle } from "./Sidebar";
@@ -748,49 +761,82 @@ function useSummary(id: string | null): TraceSummary | undefined {
   return found?.id === id ? found : undefined;
 }
 
-/**
- * The way back to the trace a linked one (a task it enqueued) was opened from, named as the list names it, before
- * the trace's tabs. Esc goes there too. `bare` (docked right, the tabs need the room): the arrow alone, the switcher
- * beside the logo names the trace on screen.
- */
-function BackTo({ route, rows, bare }: { route: TraceRoute | null; rows: readonly TraceRow[]; bare: boolean }) {
-  return route ? <BackButton route={route} rows={rows} bare={bare} /> : null;
+/** A tab as the Back button names it: where it goes. */
+const TAB_NAMES: Record<TabId, string> = {
+  request: "Request",
+  app: "App",
+  tree: "Call tree",
+  issues: "Issues",
+  sql: "DB",
+  cache: "Cache",
+  http: "HTTP calls",
+  logs: "Logs",
+  error: "Error",
+  profile: "Profile",
+};
+
+// The first tab is named after the trace's kind, as its tab bar names it.
+const KIND_TABS: Record<string, string> = { task: "Task", command: "Job", websocket: "WebSocket", page: "View" };
+
+function tabName(tab: TabId | undefined, trace: TraceSummary | undefined): string {
+  if (tab === "request") return KIND_TABS[trace?.kind ?? ""] ?? TAB_NAMES.request;
+  return tab ? TAB_NAMES[tab] : "Trace";
 }
 
-function BackButton({ route, rows, bare }: { route: TraceRoute; rows: readonly TraceRow[]; bare: boolean }) {
-  const trace = useNamed(route.id, rows);
+/**
+ * The way back to the view a linked trace was opened from, named for where it goes: that trace's tab and the trace,
+ * as the list names it ("← Call tree · GQL query Books"). Esc goes there too. `bare` (docked right, the tabs need the
+ * room): the arrow alone, its name in its label and tooltip.
+ */
+function BackTo({ view, rows, bare }: { view: PanelView | null; rows: readonly TraceRow[]; bare: boolean }) {
+  return view ? <BackButton view={view} rows={rows} bare={bare} /> : null;
+}
+
+function BackButton({ view, rows, bare }: { view: PanelView; rows: readonly TraceRow[]; bare: boolean }) {
+  const trace = useNamed(view.route.id, rows);
+  const tab = tabName(view.tab, trace);
+  const name = trace ? (graphqlOperation(trace) ?? trace.name) : "the trace";
   return (
-    <Hint title="Back" detail="To the trace this one was opened from." keys="Esc">
+    <Hint title={`Back to ${tab} · ${name}`} detail="Where you opened this trace from, as you left it." keys="Esc">
       <button
         type="button"
         className="panel-back"
         data-bare={bare || undefined}
-        aria-label="Back"
-        onClick={() => go(route)}
+        aria-label={`Back to ${tab} · ${name}`}
+        onClick={() => goBackInPanel(currentTrace())}
       >
         <ArrowLeftIcon />
-        {trace && !bare ? <TraceName trace={trace} /> : null}
+        {bare ? null : (
+          <>
+            <span className="panel-back-tab">{tab}</span>
+            {trace ? (
+              <>
+                <span aria-hidden="true" className="panel-back-dot">
+                  ·
+                </span>
+                <TraceName trace={trace} />
+              </>
+            ) : null}
+          </>
+        )}
       </button>
     </Hint>
   );
 }
 
-type TraceRoute = Extract<Route, { name: "trace" }>;
-
-/** The trace a linked one was opened from in the panel, when it was. */
-function backOf(route: Route): TraceRoute | null {
-  if (route.name !== "trace" || !route.from) return null;
-  const from = parse(route.from);
-  return from.name === "trace" ? from : null;
+/** The trace on screen in the panel, as its address says. */
+function currentTrace(): string | null {
+  const match = /^#\/t\/([^?]+)/.exec(location.hash);
+  return match?.[1] ?? null;
 }
 
 /**
- * Where a trace's parts lead from the panel: to the console in a new tab, but a linked trace (a task it enqueued)
- * opens here, with the way back to this one.
+ * Where a trace's parts lead from the panel: to the console in a new tab, but a linked trace (a task it enqueued, the
+ * trace a call reached) opens here, with the way back to the view on screen.
  */
 const PANEL_LINKS: TraceLinks = {
   ...consoleLinks(base, true),
-  openTrace: (id, tab) => go({ name: "trace", id, from: location.hash, tab }),
+  openTrace: openLinked,
 };
 
 function RequestSwitcher({
@@ -869,10 +915,6 @@ function RequestSwitcher({
   );
 }
 
-const TAB_KEY = "tracepanel:panel-tab";
-const PANEL_TABS = new Set<TabId>(["request", "tree", "issues", "sql", "cache", "http", "logs", "error"]);
-
-/** The tab the panel opens: the last one picked, kept across requests and page loads. */
 /** The console list a request of this kind belongs to: the way back from its trace page there. */
 function sectionFor(kind: string | undefined): string | undefined {
   const section = {
@@ -884,23 +926,6 @@ function sectionFor(kind: string | undefined): string | undefined {
     page: "pages",
   }[kind ?? ""];
   return section ? `#/${section}` : undefined;
-}
-
-function readTab(): TabId | undefined {
-  try {
-    const value = localStorage.getItem(TAB_KEY);
-    return value && PANEL_TABS.has(value as TabId) ? (value as TabId) : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function writeTab(tab: TabId): void {
-  try {
-    localStorage.setItem(TAB_KEY, tab);
-  } catch {
-    // Storage can be blocked; the choice then lasts for this panel only.
-  }
 }
 
 const FOLLOW_KEY = "tracepanel:follow";
@@ -1075,13 +1100,100 @@ function consoleHref(id: string | null, shown: Omit<Extract<Route, { name: "trac
  * The part of the time picked in the trace on screen: kept while the trace is, for its screen to open with again,
  * and the Console button opens the trace with it.
  */
-function usePanelSlice(id: string | null) {
+function usePanelSlice(id: string | null, route: Route) {
   const [sliced, setSliced] = useState<{ id: string | null; slice: Slice } | null>(null);
-  const slice = sliced?.id === id ? sliced.slice : undefined;
+  // Else the one its address says: Back to a view with a part picked picks it again.
+  const asked = route.name === "trace" && route.id === id && (route.part || route.range || route.logs);
+  const slice =
+    sliced?.id === id
+      ? sliced.slice
+      : asked && route.name === "trace"
+        ? parseSlice(route.part, route.range, route.logs)
+        : undefined;
   return {
     slice,
     params: slice ? sliceParams(slice) : {},
     onChange: (next: Slice) => setSliced({ id, slice: next }),
+  };
+}
+
+/** The panel's scrolling pane: the trace's. */
+function traceScroller(): HTMLElement | null {
+  return document.querySelector(".panel-body");
+}
+
+/** How long Back waits for the trace it returns to to be drawn tall enough to scroll back into. */
+const RESTORE_MS = 1500;
+
+/** Puts the panel's scroll back where it was once the trace `id` is drawn, as Back returns to it. */
+function restoreScroll(id: string, scroll: number): () => void {
+  const until = Date.now() + RESTORE_MS;
+  let timer = 0;
+  const attempt = () => {
+    const pane = traceScroller();
+    const drawn = pane?.querySelector(`.dt-trace[data-trace="${id}"]`);
+    if (pane && drawn && pane.scrollHeight - pane.clientHeight >= scroll) {
+      pane.scrollTop = scroll;
+      return;
+    }
+    if (Date.now() < until) timer = window.setTimeout(attempt, 50);
+  };
+  attempt();
+  return () => window.clearTimeout(timer);
+}
+
+/**
+ * The view on screen as the panel keeps it for Back: the tab shown, what the view's parts remember, the part of its
+ * time picked; read when a linked trace opens from it. Returning to a view (Back), it opens with what it had and its
+ * scroll comes back.
+ */
+function usePanelView(route: Route, id: string | null, slice: Readonly<Record<string, string>>) {
+  const restoring = restoringFor(id);
+  const initialMemory: ViewMemory =
+    restoring?.memory ?? (route.name === "trace" && route.id === id ? memoryFromParams(route) : {});
+  const shown = useRef<{ id: string | null; tab: TabId | undefined; memory: ViewMemory }>({
+    id,
+    tab: undefined,
+    memory: initialMemory,
+  });
+  if (shown.current.id !== id) shown.current = { id, tab: undefined, memory: initialMemory };
+  const latest = useRef({ route, id, slice });
+  latest.current = { route, id, slice };
+  useEffect(() => {
+    setCurrentView(() => {
+      const { route: now, id: on, slice: picked } = latest.current;
+      if (now.name !== "trace" || on === null || shown.current.id !== on) return null;
+      return {
+        route: now,
+        tab: shown.current.tab,
+        memory: shown.current.memory,
+        slice: picked,
+        scroll: traceScroller()?.scrollTop ?? 0,
+      };
+    });
+  }, []);
+  // The way back is gone once the trace on screen came another way (the list, Follow new).
+  useEffect(() => {
+    forgetUnless(route.name === "trace" ? route.id : null);
+  }, [route]);
+  const scroll = restoring?.scroll;
+  useEffect(() => {
+    if (id === null || scroll === undefined) return;
+    return restoreScroll(id, scroll);
+  }, [id, scroll]);
+  return {
+    initialMemory,
+    onTabShown: (tab: TabId) => {
+      shown.current = { ...shown.current, tab };
+    },
+    onMemoryChange: (memory: ViewMemory) => {
+      shown.current = { ...shown.current, memory };
+    },
+    /** The view on screen as an address of the console's: its Console button opens the same. */
+    address: () => {
+      const { tab, memory } = shown.current;
+      return { tab, span: memory["span"], profile: memory["profile"], frames: memory["frames"], at: memory["at"] };
+    },
   };
 }
 
@@ -1097,17 +1209,16 @@ function PanelApp({ route }: { route: Route }) {
     : [];
   const selectedId =
     route.name === "trace" ? route.id : (currentId ?? rows.find((row) => row.depth === 0)?.trace.id ?? null);
-  // A linked trace opened from another one: the way back to it.
-  const back = backOf(route);
-  const backRef = useRef(back);
-  backRef.current = back;
+  // A linked trace opened from another view: the way back to it, as it was.
+  const back = useBackStep(selectedId);
 
   const dock = useDock();
   const splitRef = useRef<HTMLDivElement>(null);
   const split = useSplit(dock);
   const [follow, setFollow] = useState(readFollow);
-  const [tab, setTab] = useState(readTab);
-  const sliced = usePanelSlice(selectedId);
+  const [tab, setTab] = useState(readLastTab);
+  const sliced = usePanelSlice(selectedId, route);
+  const view = usePanelView(route, selectedId, sliced.params);
   const [clearing, setClearing] = useState(false);
   const [searching, setSearching] = useState(false);
   // ⌘K, as in the console: a trace opens here, anything else in the console, in a new tab.
@@ -1151,18 +1262,19 @@ function PanelApp({ route }: { route: Route }) {
   }, [follow, latestChild, history]);
 
   // Esc anywhere in the panel closes it, as on the page; a menu or list open in it takes the Esc first, and a linked
-  // trace goes back to the one it was opened from.
+  // trace goes back to the view it was opened from, as the Back button does.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || event.defaultPrevented) return;
-      if (backRef.current) go(backRef.current);
-      else tellWidget("tracepanel:close");
+      if (!goBackInPanel(currentTrace())) tellWidget("tracepanel:close");
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
   const selectedKind = listed.find((row) => row.trace.id === selectedId)?.trace.kind;
+  const consoleAt = () =>
+    `${base}${consoleHref(selectedId, { ...view.address(), from: sectionFor(selectedKind), ...sliced.params })}`;
   const toolbarInTrace = split && selectedId !== null;
   const switchUser = <SwitchUser source={source} onSwitched={() => tellWidget("tracepanel:reload")} />;
   // One row of quiet icons: what is done to this trace or this panel; who you are sits with the list. Explore, when
@@ -1179,7 +1291,14 @@ function PanelApp({ route }: { route: Route }) {
           // primary (the brand's strong violet, 5:1 with white: AA), not the light accent (2.2:1, which read as
           // blurred), as tall as the icons beside it; no filter or glow, which soften its text.
           className="mr-1 inline-flex h-7.5 items-center gap-1.5 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover [&_svg]:size-3.5"
-          href={`${base}${consoleHref(selectedId, { tab, from: sectionFor(selectedKind), ...sliced.params })}`}
+          href={consoleAt()}
+          // The view on screen as it is at the click: a tab or a row picked since the panel last drew.
+          onClick={(event) => {
+            event.currentTarget.href = consoleAt();
+          }}
+          onMouseDown={(event) => {
+            event.currentTarget.href = consoleAt();
+          }}
           target="_blank"
           rel="noreferrer"
         >
@@ -1286,13 +1405,17 @@ function PanelApp({ route }: { route: Route }) {
               initialUnder={route.name === "trace" ? route.under : undefined}
               preferredTab={tab}
               onTabChange={(next) => {
-                setTab(next);
-                writeTab(next);
+                // Only the tabs worth opening every trace on are kept (not Profile or App): see lastTab.ts.
+                writeLastTab(next);
+                setTab(readLastTab());
               }}
               initialSlice={sliced.slice}
               onSliceChange={sliced.onChange}
+              onTabShown={view.onTabShown}
+              initialMemory={view.initialMemory}
+              onMemoryChange={view.onMemoryChange}
               actions={split ? panelActions : undefined}
-              lead={<BackTo route={back} rows={listed} bare={!split} />}
+              lead={<BackTo view={back} rows={listed} bare={!split} />}
               links={PANEL_LINKS}
               explore={(trace) => exploreFor(trace, (route) => `${base}${href(route)}`)}
             />

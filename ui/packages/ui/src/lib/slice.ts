@@ -111,3 +111,18 @@ export function sliceKey(slice: Slice): string {
   const { part, range, logs } = sliceParams(slice);
   return `${part ?? ""}|${range ?? ""}|${logs ?? ""}`;
 }
+
+const STRETCH = /^(\d+)-(\d+)$/;
+
+/** A stretch as a link and Back carry it: `from-to`, in whole µs since the trace started. */
+export function stretchText(range: TimeRange): string {
+  return `${Math.round(range[0])}-${Math.round(range[1])}`;
+}
+
+/** A stretch from its text (stretchText); undefined where it isn't one. */
+export function parseStretch(value: string): TimeRange | undefined {
+  const found = STRETCH.exec(value);
+  if (!found) return undefined;
+  const [from, to] = [Number(found[1]), Number(found[2])];
+  return to > from ? [from, to] : undefined;
+}

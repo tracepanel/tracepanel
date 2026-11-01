@@ -102,7 +102,13 @@ export function IssuePage({
           <h2 className="text-xl font-semibold">
             Requests <span className="font-normal text-muted-foreground">· newest first</span>
           </h2>
-          <TracesTable table="issue:calls" items={issue.traces} selectedId={null} hrefFor={traceHref} />
+          <TracesTable
+            table="issue:calls"
+            items={issue.traces}
+            selectedId={null}
+            // Each opens where this issue is: its Error tab, or its Issues tab.
+            hrefFor={(id) => traceHref(id, error ? "error" : "issues")}
+          />
         </section>
       </div>
     </Reveal>

@@ -1,9 +1,9 @@
-import type { TraceLinks } from "@tracepanel/ui";
+import type { TraceAt, TraceLinks } from "@tracepanel/ui";
 import { useEffect, useState } from "react";
 
 /** Where work comes in: each has an overview of its groups and a list of its calls. */
 export type EntrySection = "endpoints" | "graphql" | "tasks" | "websockets" | "jobs" | "rpc" | "pages";
-export const ENTRY_SECTIONS: EntrySection[] = ["endpoints", "graphql", "tasks", "websockets", "jobs", "rpc", "pages"];
+const ENTRY_SECTIONS: EntrySection[] = ["endpoints", "graphql", "tasks", "websockets", "jobs", "rpc", "pages"];
 
 /** A system's page of operations: `calls/sql`, `calls/redis`, `calls/mongodb`, `calls/neo4j`… one per system in the data. */
 export type CallsSection = `calls/${string}`;
@@ -54,6 +54,10 @@ export type Route =
       logs?: string | undefined;
       /** An app of the trace's chain: its tabs list what that app's traces did ("Under library-api"). */
       under?: string | undefined;
+      /** The Profile tab's choices: `memory` (else its time), `own` or `all` frames, the stretch it opened at. */
+      profile?: string | undefined;
+      frames?: string | undefined;
+      at?: string | undefined;
     }
   | { name: "issue"; fingerprint: string; error?: boolean | undefined; q?: string | undefined }
   | { name: "app"; service: string };
@@ -156,7 +160,8 @@ function appOf(path: string): Route | null {
 }
 
 // What a trace's address says besides its id: where it was opened from, its tab, its span, the part of its time.
-const TRACE_PARAMS = ["from", "tab", "span", "part", "range", "logs", "under"] as const;
+// The view's own (span, profile, frames, at) are the keys it remembers them by (VIEW_PARAMS).
+const TRACE_PARAMS = ["from", "tab", "span", "part", "range", "logs", "under", "profile", "frames", "at"] as const;
 
 /** `t/<id>?from=…&tab=…`: a trace's page. */
 function traceOf(path: string, params: URLSearchParams): Route | null {
@@ -249,18 +254,24 @@ export function openInNewTab(target: string): void {
   window.open(`${location.href.split("#")[0]}${target}`, "_blank", "noopener");
 }
 
-/** Where a trace opens from here: its page, remembering this one as the way back. */
-export function traceHref(id: string, tab?: string, span?: string): string {
-  const from = location.hash.startsWith("#/t/") ? parse(location.hash) : null;
-  // From one trace to a linked one: keep the original way back.
-  const back = from?.name === "trace" ? from.from : location.hash;
-  return href({ name: "trace", id, from: back || undefined, tab, span });
+/**
+ * Where a trace opens from here: its page, remembering this page as the way back. From one trace to a linked one, the
+ * way back is that trace as it is on screen (its tab, its row, its own way back): Back and the crumbs go where the
+ * browser's Back goes.
+ */
+export function traceHref(id: string, tab?: string, span?: string, at?: string): string {
+  return href({ name: "trace", id, from: location.hash || undefined, tab, span, at });
+}
+
+/** A linked trace's address with nothing to go back to (the panel's links to the console, a snapshot's). */
+function linkedHref(id: string, at: TraceAt | undefined): string {
+  return href({ name: "trace", id, tab: at?.tab, span: at?.span, at: at?.stretch });
 }
 
 /** Where a trace's parts lead in the console: linked traces, issues, every request with a call, its logs. */
 export function consoleLinks(prefix = "", newTab = false): TraceLinks {
   return {
-    trace: (id, tab) => `${prefix}${prefix ? href({ name: "trace", id, tab }) : traceHref(id, tab)}`,
+    trace: (id, at) => `${prefix}${prefix ? linkedHref(id, at) : traceHref(id, at?.tab, at?.span, at?.stretch)}`,
     issue: (fingerprint, kind) => `${prefix}${href(issueRoute(fingerprint, kind))}`,
     call: (key) => `${prefix}${href({ name: "traces", q: `call:${key}` })}`,
     search: (q) => `${prefix}${href({ name: "traces", q })}`,
@@ -275,10 +286,57 @@ export function openTrace(id: string, tab?: string): void {
   follow(traceHref(id, tab));
 }
 
+// The console's history entries in this browser tab, each numbered in its own `history.state` (`entry`), and the
+// address of each by its number: an in-app Back knows whether the entry before is where it means to go, and then
+// goes Back as the browser would, with that entry's scroll and view (NAVIGATION.md, rule 4).
+const TRAIL_KEY = "tracepanel:trail";
+let entry = -1;
+
+function readTrail(): string[] {
+  try {
+    const trail: unknown = JSON.parse(sessionStorage.getItem(TRAIL_KEY) ?? "[]");
+    return Array.isArray(trail) ? trail.map((each) => (typeof each === "string" ? each : "")) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Numbers the entry on screen, if it is new, and notes its address (a tab switch replaces it in place). */
+function noteEntry(): void {
+  const state: Record<string, unknown> = history.state && typeof history.state === "object" ? history.state : {};
+  const trail = readTrail();
+  if (typeof state["entry"] === "number") {
+    entry = state["entry"];
+  } else {
+    // A new entry: the ones after the one it was made from are gone, as the browser's Forward is.
+    entry += 1;
+    trail.length = Math.max(entry, 0);
+    history.replaceState({ ...state, entry }, "");
+  }
+  trail[entry] = location.hash;
+  try {
+    sessionStorage.setItem(TRAIL_KEY, JSON.stringify(trail));
+  } catch {
+    // Storage can be blocked: Back then always goes to its address.
+  }
+}
+
+/**
+ * Back to `target`, the page this one was opened from: the browser's Back where the entry before is that page (its
+ * scroll and view come back with it), else to its address (a reload, a link opened in a new tab).
+ */
+export function goBack(target: string): void {
+  if (!EMBEDDED && entry > 0 && readTrail()[entry - 1] === target) history.back();
+  else follow(target);
+}
+
 export function useRoute(): Route {
   const [route, setRoute] = useState(() => parse(location.hash));
   useEffect(() => {
-    const onChange = () => setRoute(parse(location.hash));
+    const onChange = () => {
+      if (!EMBEDDED) noteEntry();
+      setRoute(parse(location.hash));
+    };
     window.addEventListener("hashchange", onChange);
     // Child effects run first: a redirect made before this listener existed (home → HTTP) must still count.
     onChange();
