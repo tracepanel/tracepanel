@@ -18,6 +18,13 @@ html[data-embedded] body {
   background: var(--dt-panel);
 }
 
+/* The widget closed the panel: out of sight, nothing in it moves (a trace on its way's hourglass, a skeleton). */
+html[data-hidden] *,
+html[data-hidden] *::before,
+html[data-hidden] *::after {
+  animation-play-state: paused !important;
+}
+
 #root {
   height: 100%;
 }

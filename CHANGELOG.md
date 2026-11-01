@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- Nothing in the widget moves while it is out of sight: the closed
+  panel's hourglass of a trace on its way stops until the panel opens
+  again, and the pill's card shimmers only while it shows and loads.
+  The pill itself moves only for its short pulse when a new request
+  takes it.
 - A long value is read whole in every code block: a dump's value, a
   query, a GraphQL document, a request's or response's body and a query
   plan wrap their long lines inside their box, each line's indentation
