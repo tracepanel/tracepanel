@@ -10,7 +10,6 @@ const ORIGIN = /^(.+):(\d+) in (.+)$/;
 
 interface Origin {
   file: string;
-  line: number;
   function: string;
 }
 
@@ -18,8 +17,8 @@ function originOf(span: Pick<Span, "attrs">): Origin | null {
   const value = span.attrs["code.origin"];
   const found = typeof value === "string" ? ORIGIN.exec(value) : null;
   if (!found) return null;
-  const [, file = "", line = "0", name = ""] = found;
-  return { file, line: Number(line), function: name };
+  const [, file = "", , name = ""] = found;
+  return { file, function: name };
 }
 
 /** The same file, however much of its path each names: `catalog.go` and `shop/catalog.go`. */
@@ -36,17 +35,25 @@ function sameName(a: string, b: string): boolean {
 }
 
 /**
- * The frame of yours a call's origin names: in its file, the function it names, else the function its line is in
- * (the one starting last before it). None where no sampled frame of yours is in that file.
+ * The sampled frame of yours a call's origin names: in its file, the function it names. None where that function
+ * was never sampled: a line says nothing of which function it is in.
  */
 function frameOf(profile: Profile, origin: Origin): number | null {
-  const inFile = profile.frames.flatMap((frame, index) =>
-    frame.in_app && sameFile(frame.file, origin.file) ? [{ frame, index }] : [],
+  const index = profile.frames.findIndex(
+    (frame) => frame.in_app && sameFile(frame.file, origin.file) && sameName(frame.function, origin.function),
   );
-  const named = inFile.find(({ frame }) => sameName(frame.function, origin.function));
-  if (named) return named.index;
-  const around = inFile.filter(({ frame }) => frame.line <= origin.line).sort((a, b) => b.frame.line - a.frame.line)[0];
-  return around?.index ?? null;
+  return index === -1 ? null : index;
+}
+
+/** The sampled frame of yours a handler's span names by its full name (code.function: `shop.(*App).listProducts`). */
+function frameNamed(profile: Profile, span: Pick<Span, "attrs">): number | null {
+  const full = span.attrs["code.function"];
+  if (typeof full !== "string" || full === "") return null;
+  const index = profile.frames.findIndex(
+    (frame) =>
+      frame.in_app && frame.function !== "" && (full === frame.function || full.endsWith(`.${frame.function}`)),
+  );
+  return index === -1 ? null : index;
 }
 
 /**
@@ -63,11 +70,14 @@ function pathTo(profile: Profile, index: number): number[] | null {
   return paths.sort((a, b) => b.yours - a.yours || b.count - a.count)[0]?.path ?? null;
 }
 
-/** Who waited for a call: the stack to the function of yours its origin (else its callers' nearest one) names. */
+/**
+ * Who waited for a call: the stack to the deepest sampled function of yours above it in the trace, the one its
+ * origin names, else its callers' (a function's row, the handler's); none, the trace's own waiting, without one.
+ */
 function waiterOf(profile: Profile, span: Span, byId: ReadonlyMap<string, Span>): number[] | null {
   for (let at: Span | undefined = span; at; at = at.parent_id ? byId.get(at.parent_id) : undefined) {
     const origin = originOf(at);
-    const index = origin ? frameOf(profile, origin) : null;
+    const index = (origin ? frameOf(profile, origin) : null) ?? frameNamed(profile, at);
     const path = index === null ? null : pathTo(profile, index);
     if (path) return path;
   }
@@ -118,7 +128,8 @@ function timeWaited(calls: readonly Waited[]): Map<string, { path: number[]; us:
  * A CPU profile read on the trace's clock: the time it wasn't on the CPU (not sampled, nor dropped for other traces;
  * the database, the network, a lock, a timer) waiting (WAITED), as a Python or a JVM profile has its waits. The
  * trace's calls say who waited for them: their time off the CPU is waiting under the function of yours that made
- * each (its code.origin, matched to the profile's frames); the rest, no call's, one waiting stack of its own. None
+ * each (its code.origin, else the nearest function of yours above it in the trace that was sampled); the rest, no
+ * call's or no sampled function's, one waiting stack of its own. None
  * where its code ran on the CPU for longer than the trace (goroutines at once).
  */
 export function withOffCpu(profile: Profile, trace: Pick<Trace, "start" | "duration" | "spans">): Profile {

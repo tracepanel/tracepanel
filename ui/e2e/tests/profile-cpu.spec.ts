@@ -10,11 +10,11 @@ import { expect, test } from "../fixtures.ts";
 const GO = "01M4PR0F11E00000000000C0G1";
 const NODE = "01M4PR0F11E00000000000C0N1";
 
-/** A call out of the request (a query, a Redis command), `at` ms into it, made from `origin`. */
-function call(id: string, kind: string, start: number, at: number, ms: number, origin: string): object {
+/** A call out of the request (a query, a Redis command), `at` ms into it, made from `origin`, under span `parent`. */
+function call(id: string, kind: string, start: number, at: number, ms: number, origin: string, parent = "r"): object {
   return {
     id,
-    parent_id: "r",
+    parent_id: parent,
     kind,
     name: id,
     start: start + at * 1000,
@@ -30,7 +30,9 @@ function frame(fn: string, module: string | null, file: string, line: number, in
 
 /**
  * A Go request: its queries from listProducts and similar, a Redis command from count (never on the CPU when
- * sampled, so its line in catalog.go is listProducts'), 30 ms of the 69 off the CPU in none of them.
+ * sampled, so under the handler above it, listProducts), one from warm right under the request (never sampled
+ * either: the request's own waiting, though its line in catalog.go comes after listProducts'), 30 ms of the 69 off
+ * the CPU in none of the others.
  */
 function goRequest(start: number): object {
   return {
@@ -58,9 +60,20 @@ function goRequest(start: number): object {
         status: "ok",
         attrs: {},
       },
-      call("products", "sql", start, 5, 20, "catalog.go:14 in (*App).listProducts"),
-      call("similar", "sql", start, 40, 10, "similar.go:8 in (*App).similar"),
-      call("count", "redis", start, 60, 9, "catalog.go:30 in (*App).count"),
+      {
+        id: "v",
+        parent_id: "r",
+        kind: "view",
+        name: "(*App).listProducts",
+        start,
+        duration: 79_000,
+        status: "ok",
+        attrs: { "code.function": "github.com/acme/shop.(*App).listProducts" },
+      },
+      call("products", "sql", start, 5, 20, "catalog.go:14 in (*App).listProducts", "v"),
+      call("similar", "sql", start, 40, 10, "similar.go:8 in (*App).similar", "v"),
+      call("count", "redis", start, 60, 9, "catalog.go:30 in (*App).count", "v"),
+      call("warm", "redis", start, 80, 5, "catalog.go:50 in (*App).warm"),
     ],
     logs: [],
     errors: [],
@@ -204,11 +217,12 @@ test("a Go profile is its time on the CPU; the rest of the request's time waited
       "waiting",
       "waiting",
     ]);
-  // The functions, then what no function is, apart at the bottom though waiting took most.
+  // The functions, then what no function is, apart at the bottom though waiting took most. listProducts holds its
+  // query's and count's waits (count through the handler), not warm's: a line in its file isn't in it.
   const functions = page.getByRole("region", { name: "Functions" });
   await expect(functions.getByRole("listitem")).toHaveText([
     /^editDistance\s*similar\.go:40/,
-    /^\(\*App\)\.listProducts\s*catalog\.go:10/,
+    /^\(\*App\)\.listProducts\s*catalog\.go:10\s*3 ms\s*67 ms$/,
     /^\(\*App\)\.similar\s*similar\.go:5/,
     /^framework & runtime\s*2 ms\s*2 ms$/,
     /^waiting\s*69 ms\s*69 ms$/,

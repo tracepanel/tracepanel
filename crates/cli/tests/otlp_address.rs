@@ -17,18 +17,25 @@ fn store(name: &str) -> PathBuf {
     dir.canonicalize().unwrap()
 }
 
-/// A port nothing listens on, from the system; never 4318, which a developer's own agent may hold.
-fn free_port() -> u16 {
-    loop {
-        let port = std::net::TcpListener::bind("127.0.0.1:0")
-            .unwrap()
-            .local_addr()
-            .unwrap()
-            .port();
-        if port != 4318 {
-            return port;
-        }
-    }
+/// The tests of this file, one at a time: a port one test's agent frees (stopped, or taking over) must not go to
+/// another's meanwhile.
+fn serial() -> std::sync::MutexGuard<'static, ()> {
+    static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    SERIAL
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// A port of the system's own choosing for the first agent's OTLP (`127.0.0.1:0`): its agent binds it and says which
+/// in `otlp.addr`, so no port picked here and freed can be taken by anyone before the agent binds it.
+const ANY_PORT: &str = "127.0.0.1:0";
+
+/// The `HOST:PORT` an agent serves OTLP on, once it does.
+fn otlp_address(dir: &Path) -> String {
+    written(dir, "otlp.addr")
+        .trim()
+        .trim_start_matches("http://")
+        .to_owned()
 }
 
 /// How often an agent with no OTLP tries its port again, here: not the 10 s it waits otherwise.
@@ -148,13 +155,13 @@ fn project(dir: &Path) -> String {
 
 #[test]
 fn a_projects_own_otlp_port_from_its_environment_and_whose_a_taken_one_is() {
+    let _serial = serial();
     let cache = store("cache");
     let (shop, blog) = (store("shop"), store("blog"));
-    let port = free_port();
-    let address = format!("127.0.0.1:{port}");
 
-    let first = start(&shop, &cache, Some(&address), &[]);
+    let first = start(&shop, &cache, Some(ANY_PORT), &[]);
     let shop_console = console(&shop);
+    let address = otlp_address(&shop);
     let mut second = start(&blog, &cache, Some(&address), &[]);
     let blog_console = console(&blog);
 
@@ -203,6 +210,7 @@ fn a_projects_own_otlp_port_from_its_environment_and_whose_a_taken_one_is() {
 
 #[test]
 fn a_port_another_program_holds_is_taken_by_nobody_known() {
+    let _serial = serial();
     let cache = store("cache-other");
     let dir = store("other");
     let holder = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
@@ -228,11 +236,11 @@ fn a_port_another_program_holds_is_taken_by_nobody_known() {
 
 #[test]
 fn the_flag_beats_the_environment() {
+    let _serial = serial();
     let cache = store("cache-flag");
     let dir = store("flag");
-    let address = format!("127.0.0.1:{}", free_port());
 
-    let agent = start(&dir, &cache, Some(&address), &["--otlp", "off"]);
+    let agent = start(&dir, &cache, Some(ANY_PORT), &["--otlp", "off"]);
     let answer = capabilities(&console(&dir));
 
     assert!(!dir.join("otlp.addr").exists());
@@ -246,12 +254,12 @@ fn the_flag_beats_the_environment() {
 #[test]
 fn an_agent_without_a_console_says_whose_port_it_holds() {
     let cache = store("cache-headless");
+    let _serial = serial();
     let (worker, blog) = (store("worker"), store("blog-headless"));
-    let address = format!("127.0.0.1:{}", free_port());
 
     // Not in the registry: only its OTLP port says whose it is.
-    let first = start_without_console(&worker, &cache, &address);
-    written(&worker, "otlp.addr");
+    let first = start_without_console(&worker, &cache, ANY_PORT);
+    let address = otlp_address(&worker);
     let mut second = start(&blog, &cache, Some(&address), &[]);
     let taken = capabilities(&console(&blog))["otlp"].clone();
 
@@ -307,6 +315,7 @@ fn older_agent(listener: std::net::TcpListener) {
 
 #[test]
 fn an_older_agent_holding_the_port_is_told_by_how_it_refuses() {
+    let _serial = serial();
     let cache = store("cache-older");
     let dir = store("older");
     let holder = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
@@ -331,11 +340,11 @@ fn an_older_agent_holding_the_port_is_told_by_how_it_refuses() {
 #[test]
 fn the_port_is_taken_over_once_its_holder_exits() {
     let cache = store("cache-over");
+    let _serial = serial();
     let (shop, blog) = (store("shop-over"), store("blog-over"));
-    let address = format!("127.0.0.1:{}", free_port());
 
-    let first = start_without_console(&shop, &cache, &address);
-    written(&shop, "otlp.addr");
+    let first = start_without_console(&shop, &cache, ANY_PORT);
+    let address = otlp_address(&shop);
     let mut second = start(&blog, &cache, Some(&address), &[]);
     let blog_console = console(&blog);
     assert_eq!(capabilities(&blog_console)["otlp"]["serving"], false);

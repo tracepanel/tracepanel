@@ -184,7 +184,6 @@ fn off_cpu_stacks(doc: &Value, frames: &mut Vec<Frame>, stacks: &mut Vec<Stack>,
         .map(|frame| off_cpu::Place {
             function: frame.function,
             file: frame.file,
-            line: frame.line,
             in_app: frame.in_app,
         })
         .collect();
@@ -1422,14 +1421,16 @@ allocation sites at the peak (1 of 1, 2.0 MB in all, largest first; ×: allocati
             .collect()
     }
 
-    /// A call out of the request, `at` ms into it, `ms` long, made from `origin`.
-    fn call(kind: &str, at: i64, ms: i64, origin: &str) -> Value {
-        json!({"id": format!("{kind}{at}"), "parent_id": "r", "kind": kind, "start": 1_000_000 + at * 1000,
+    /// A call out of the request under span `parent`, `at` ms into it, `ms` long, made from `origin`.
+    fn call(parent: &str, kind: &str, at: i64, ms: i64, origin: &str) -> Value {
+        json!({"id": format!("{kind}{at}"), "parent_id": parent, "kind": kind, "start": 1_000_000 + at * 1000,
                "duration": ms * 1000, "attrs": {"code.origin": origin}})
     }
 
     /// A Gin request's CPU profile with its calls: a query from listProducts, one from similar, a Redis command from
-    /// count (never sampled: its line in catalog.go is listProducts'), 30 ms of the 69 off the CPU in none.
+    /// count (never sampled, so under the handler above it, listProducts), one from warm (never sampled, right under
+    /// the request: the request's own waiting, though its line in catalog.go comes after listProducts'), 30 ms of
+    /// the 69 off the CPU in none of the others.
     #[test]
     fn a_go_profiles_calls_wait_under_the_function_that_made_them() {
         let frame = |function: &str, file: &str, line: i64, in_app: bool| json!({"function": function, "module": "shop", "file": file, "line": line, "in_app": in_app});
@@ -1437,9 +1438,12 @@ allocation sites at the peak (1 of 1, 2.0 MB in all, largest first; ×: allocati
             "attrs": {"telemetry.sdk.language": "go"},
             "spans": [
                 {"id": "r", "parent_id": null, "kind": "http", "start": 1_000_000, "duration": 99_000, "attrs": {}},
-                call("sql", 5, 20, "catalog.go:14 in (*App).listProducts"),
-                call("sql", 40, 10, "similar.go:8 in (*App).similar"),
-                call("redis", 60, 9, "catalog.go:30 in (*App).count"),
+                {"id": "v", "parent_id": "r", "kind": "view", "start": 1_000_000, "duration": 79_000,
+                 "attrs": {"code.function": "github.com/acme/shop.(*App).listProducts"}},
+                call("v", "sql", 5, 20, "catalog.go:14 in (*App).listProducts"),
+                call("v", "sql", 40, 10, "similar.go:8 in (*App).similar"),
+                call("v", "redis", 60, 9, "catalog.go:30 in (*App).count"),
+                call("r", "redis", 80, 5, "catalog.go:50 in (*App).warm"),
             ],
             "profile": {
                 "interval_us": 1000, "samples": 30, "dropped": 0,
