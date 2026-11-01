@@ -1,7 +1,9 @@
+// biome-ignore-all lint/style/useNamingConvention: the trace format's field names.
 // A profile with the trace's memory and the collector's pauses: the header says its peak and the pauses in one line,
 // the Profile tab has a Memory view (its peak, what it kept, where the memory was by package, as a flame of bytes and
 // as a list of sites, and what the numbers can't tell apart), the time strip has a GC share. A profile without them
 // shows none of it.
+import { CONSOLE } from "../agent.ts";
 import { traceId } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
 import { DIGEST } from "../seed.ts";
@@ -60,6 +62,106 @@ test("the Memory view: its peak, what it kept, where the memory was, and what it
   await page.getByRole("button", { name: "totals reports/queries.py:42" }).hover();
 
   await expect(page.getByRole("tooltip")).toContainText("30 MB · 71% · 0 B in itself");
+});
+
+const TASK = "01M4PR0F11E0000000000MEM01";
+
+/**
+ * A Django task as tracepanel-python 0.10.0 sends it from a virtual environment: its time mostly its own code, its
+ * memory mostly Redis's, and the profiler's own counter among the sites.
+ */
+async function seedTask(): Promise<void> {
+  const start = Date.now() * 1000 - 4 * 3_600_000_000;
+  const frame = (fn: string, module: string, file: string, inApp: boolean) => ({
+    function: fn,
+    module,
+    file,
+    line: 1,
+    in_app: inApp,
+  });
+  const trace = {
+    id: TASK,
+    kind: "task",
+    name: "shop.tasks.refresh_tracking",
+    start,
+    duration: 10_000,
+    status: "ok",
+    // No language: the services' tests count the Python apps the seed has.
+    attrs: { "service.name": "memory-store" },
+    spans: [
+      {
+        id: "r",
+        parent_id: null,
+        kind: "task",
+        name: "shop.tasks.refresh_tracking",
+        start,
+        duration: 10_000,
+        status: "ok",
+        attrs: {},
+      },
+    ],
+    logs: [],
+    errors: [],
+    links: [],
+    issues: [],
+    profile: {
+      interval_us: 1000,
+      samples: 10,
+      frames: [
+        frame("refresh_tracking", "shop.tasks", "shop/tasks.py", true),
+        frame("CaseInsensitiveDict.__setitem__", "redis.client", "redis/client.py", false),
+        frame("run", "threading", "threading.py", false),
+        frame("count", "tracepanel.core.profile", "tracepanel/core/profile.py", false),
+      ],
+      stacks: [{ frames: [0, 1], count: 10 }],
+      memory: {
+        peak: 55_000,
+        net: 36_000,
+        sites: [
+          { frames: [1], bytes: 12_000, count: 40 },
+          { frames: [2, 3], bytes: 4_500, count: 30 },
+          { frames: [0], bytes: 900, count: 3 },
+        ],
+      },
+    },
+  };
+  const response = await fetch(`${CONSOLE}api/ingest`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify([trace]),
+  });
+  expect(response.status).toBe(202);
+  await expect.poll(async () => (await fetch(`${CONSOLE}api/traces/${TASK}`)).status).toBe(200);
+}
+
+test("Your code or All frames is one choice for Time and Memory, its first from the time; Tracepanel's sites never show", async ({
+  page,
+}) => {
+  await seedTask();
+  await page.goto(`/#/t/${TASK}?tab=profile`);
+  const kinds = page.getByRole("tablist", { name: "Profile of" });
+  const frames = page.getByRole("tablist", { name: "Frames shown" });
+
+  await expect(frames.getByRole("tab", { name: "Your code" })).toHaveAttribute("aria-selected", "true");
+
+  await kinds.getByRole("tab", { name: "Memory" }).click();
+
+  await expect(page.getByText("Memory of the whole trace")).toBeVisible();
+  await expect(frames.getByRole("tab", { name: "Your code" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("region", { name: "Allocation sites" }).getByRole("listitem")).toHaveCount(2);
+  await expect(page.getByRole("region", { name: "Allocation sites" })).not.toContainText("tracepanel");
+
+  await frames.getByRole("tab", { name: "All frames" }).click();
+
+  await expect(page.getByRole("region", { name: "Memory by package" }).getByRole("button")).toHaveText([
+    /^redis\s*12 KB/,
+    /^your code\s*900 B/,
+  ]);
+
+  await kinds.getByRole("tab", { name: "Time" }).click();
+
+  await expect(page.getByRole("region", { name: "Time by package" })).toBeVisible();
+  await expect(frames.getByRole("tab", { name: "All frames" })).toHaveAttribute("aria-selected", "true");
 });
 
 test("the strip has the collector's pauses as their own share, and a click on one picks nothing", async ({ page }) => {
