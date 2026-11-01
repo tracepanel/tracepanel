@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- A profile's Your code shows your code only. Its bar named the
+  packages the time ran in, so a Next.js route read as
+  @opentelemetry/sdk-trace 34%, next and node:internal, and its flame
+  graph started at OpenTelemetry's onStart. Now the bar has your code,
+  one "framework & runtime" for the samples that ran none of it, and
+  waiting. The flame graph has your functions only, a library call's
+  time counted to the function of yours that made it. Time in
+  OpenTelemetry's or Tracepanel's own code (a span started, an
+  attribute set) is the framework & runtime's even under your code.
+  All frames keeps every frame and the packages. The MCP server's
+  `get_profile` reads a profile the same way.
+
 ## 0.10.1 (2026-11-01)
 
 ### Changed

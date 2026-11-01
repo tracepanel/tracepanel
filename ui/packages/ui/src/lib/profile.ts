@@ -16,9 +16,20 @@ export const YOUR_CODE = "your code";
 
 /** What a frame belongs to: your code, or a library's package (django.db, django.template, requests, threading). */
 export function packageOf(frame: Frame): string {
+  if (frame === OUTSIDE) return FRAMEWORK;
   if (frame.waiting) return WAITING;
   return frame.in_app ? YOUR_CODE : libraryOf(frame);
 }
+
+/**
+ * Your code's time is the framework's and the runtime's that ran none of it: the server's, a worker's, the
+ * runtime's timers, OpenTelemetry's and Tracepanel's own. One box and one share in Your code, never a library's.
+ */
+export const FRAMEWORK = "framework & runtime";
+
+/** The frame Your code draws the samples that ran none of your code as: one, not theirs. */
+// biome-ignore lint/style/useNamingConvention: a frame as the SDKs send it.
+const OUTSIDE: Frame = { function: FRAMEWORK, module: null, file: "", line: 0, in_app: false };
 
 /** Time a sample's innermost frame waited (a sleep, the event loop's select, a socket), not computing: its own share. */
 export const WAITING = "waiting";
@@ -66,22 +77,37 @@ function merged(profile: Profile, stacks: Stack[]): Profile {
 }
 
 /**
- * A stack as your code sees it: your frames, and under each the library call it made (what it spent was spent in
- * that call); the server's frames above your first are left out. A stack without your code is the library code it
- * was running, its innermost frame alone: none of the framework's or the runtime's frames on the way there are yours.
+ * Tracing's own code, never the app's, wherever it runs: OpenTelemetry's and Tracepanel's SDKs in every language, and
+ * the hooks they patch a Node app's modules with. By its module, else its file, as each SDK names them.
  */
-function ownFrames(profile: Profile, frames: readonly number[]): number[] {
-  const yours = frames.map((index) => profile.frames[index]?.in_app === true);
-  // A frame of yours, or the call one of yours made: after it, its own calls are part of it.
-  const kept = frames.filter((_, at) => yours[at] || yours[at - 1]);
-  if (kept.length) return kept;
-  return frames.length ? [frames[frames.length - 1] as number] : [];
+const TRACING =
+  /^(?:@opentelemetry\/|@tracepanel\/|(?:require|import)-in-the-middle\/|opentelemetry[./]|tracepanel[./]|io\.opentelemetry\.|dev\.tracepanel\.|go\.opentelemetry\.io\/|github\.com\/tracepanel\/)/;
+
+function tracing(frame: Frame | undefined): boolean {
+  return frame !== undefined && !frame.in_app && TRACING.test(frame.module || frame.file);
 }
 
+/**
+ * A stack as your code sees it: your frames only, the time in the libraries they called counted to the innermost of
+ * them; its innermost frame too where that waited (a socket, a sleep: waiting, not a library's time). A stack with
+ * none of your code, or running tracing's own code (a span started, an attribute set), is the framework's and the
+ * runtime's (`outside`): none of their frames, nor tracing's time, are yours.
+ */
+function ownFrames(profile: Profile, frames: readonly number[], outside: number): number[] {
+  const yours = frames.filter((index) => profile.frames[index]?.in_app === true);
+  const leaf = frames.at(-1);
+  const inner = leaf === undefined ? undefined : profile.frames[leaf];
+  if (leaf !== undefined && inner?.waiting === true && !inner.in_app) return [...yours, leaf];
+  return yours.length && !tracing(inner) ? yours : [outside];
+}
+
+/** Your code's view of the profile: its frames alone, and the rest one framework & runtime frame (FRAMEWORK). */
 export function ownCode(profile: Profile): Profile {
+  const frames = [...profile.frames, OUTSIDE];
+  const outside = frames.length - 1;
   return merged(
-    profile,
-    profile.stacks.map((stack) => ({ frames: ownFrames(profile, stack.frames), count: stack.count })),
+    { ...profile, frames },
+    profile.stacks.map((stack) => ({ frames: ownFrames(profile, stack.frames, outside), count: stack.count })),
   );
 }
 
