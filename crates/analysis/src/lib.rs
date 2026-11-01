@@ -18,6 +18,7 @@ pub mod llm;
 pub mod logs;
 pub mod migrations;
 pub mod otel;
+pub mod profiles;
 pub mod storage;
 pub mod transport;
 mod waits;

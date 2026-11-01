@@ -931,21 +931,20 @@ not sampled: 10.0 ms (other traces ran on the same thread), filled in from the s
 GC: 2 collections, 3.0 ms paused
 note: a sample every 1.0 ms: a function that ran for less may be missed or miscounted. Its memory was counted too, which slows the code down: these times are higher than without it.
 
-functions by self time (your code, with the library calls it made):
-  100 ms  50%  dumps — json/__init__.py:231 · total 100 ms
+functions by self time (your code: library calls counted to the function of yours that made them):
+  120 ms  60%  build_cards (yours) — reports/cards.py:40 · total 120 ms
   50.0 ms  25%  sleep (waiting) — asyncio/tasks.py:640 · total 50.0 ms
-  30.0 ms  15%  SQLCompiler.execute_sql — django/db/models/sql/compiler.py:1574 · total 30.0 ms
+  30.0 ms  15%  sales (yours) — reports/views.py:24 · total 200 ms
 
 functions by total time:
-  200 ms  100%  sales (yours) — reports/views.py:24 · self 0.0 ms
-  120 ms  60%  build_cards (yours) — reports/cards.py:40 · self 20.0 ms
-  100 ms  50%  dumps — json/__init__.py:231 · self 100 ms
+  200 ms  100%  sales (yours) — reports/views.py:24 · self 30.0 ms
+  120 ms  60%  build_cards (yours) — reports/cards.py:40 · self 120 ms
+  50.0 ms  25%  sleep (waiting) — asyncio/tasks.py:640 · self 50.0 ms
 
 hottest paths (outermost first):
-  100 ms  50%  sales (reports/views.py:24) → build_cards (reports/cards.py:40) → dumps (json/__init__.py:231)
+  120 ms  60%  sales (reports/views.py:24) → build_cards (reports/cards.py:40)
   50.0 ms  25%  sales (reports/views.py:24) → sleep (asyncio/tasks.py:640)
-  30.0 ms  15%  sales (reports/views.py:24) → SQLCompiler.execute_sql (django/db/models/sql/compiler.py:1574)
-  20.0 ms  10%  sales (reports/views.py:24) → build_cards (reports/cards.py:40)"
+  30.0 ms  15%  sales (reports/views.py:24)"
                 .to_owned(),
             false
         )
@@ -1028,18 +1027,15 @@ CPU profile: 12.0 ms sampled of the trace's 14.0 ms · 12 samples, one every 1.0
 GC: 1 collection, 1.5 ms paused
 note: a sample every 1.0 ms: a function that ran for less may be missed or miscounted. Its memory was counted too, which slows the code down: these times are higher than without it.
 
-functions by self time (your code, with the library calls it made):
-  9.0 ms  75%  stringify · total 9.0 ms
-  3.0 ms  25%  buildCards (yours) — src/cards.ts:30 · total 12.0 ms
+functions by self time (your code: library calls counted to the function of yours that made them):
+  12.0 ms  100%  buildCards (yours) — src/cards.ts:30 · total 12.0 ms
 
 functions by total time:
   12.0 ms  100%  sales (yours) — src/reports.ts:12 · self 0.0 ms
-  12.0 ms  100%  buildCards (yours) — src/cards.ts:30 · self 3.0 ms
-  9.0 ms  75%  stringify · self 9.0 ms
+  12.0 ms  100%  buildCards (yours) — src/cards.ts:30 · self 12.0 ms
 
 hottest paths (outermost first):
-  9.0 ms  75%  sales (src/reports.ts:12) → buildCards (src/cards.ts:30) → stringify
-  3.0 ms  25%  sales (src/reports.ts:12) → buildCards (src/cards.ts:30)"
+  12.0 ms  100%  sales (src/reports.ts:12) → buildCards (src/cards.ts:30)"
     );
 }
 
@@ -1111,10 +1107,9 @@ SQL: 0 → 0 queries, 0.0 ms → 0.0 ms
 issues: 0 → 0 (0 fixed, 0 new, 0 still there)
 profile: 200 ms → 20.0 ms profiled, of which waiting 50.0 ms → 0.0 ms
 functions whose self time changed most:
-  dumps (json/__init__.py:231): 100 ms → 0.0 ms
+  build_cards (reports/cards.py:40): 120 ms → 8.0 ms
   sleep (asyncio/tasks.py:640): 50.0 ms → 0.0 ms
-  SQLCompiler.execute_sql (django/db/models/sql/compiler.py:1574): 30.0 ms → 12.0 ms
-  build_cards (reports/cards.py:40): 20.0 ms → 8.0 ms
+  sales (reports/views.py:18): 30.0 ms → 12.0 ms
 memory: peak 48 MB → 6.0 MB, net +1.2 MB → +10 KB
 allocation sites that changed most:
   build_cards (yours) — reports/cards.py:44 · allocated in dumps — json/__init__.py:231: 30 MB → 0 B
@@ -1410,16 +1405,16 @@ library-api · 2 traces added up · {api1}, {api2}
 CPU profile: 40.0 ms sampled of the traces' 2.0 ms · 40 samples, one every 1.0 ms
 note: a sample every 1.0 ms: a function that ran for less may be missed or miscounted. Its memory was counted too, which slows the code down: these times are higher than without it.
 
-functions by self time (your code, with the library calls it made):
-  24.0 ms  60%  SQLCompiler.execute_sql — django/db/models/sql/compiler.py:1574 · total 24.0 ms
+functions by self time (your code: library calls counted to the function of yours that made them):
+  24.0 ms  60%  sales (yours) — reports/views.py:24 · total 40.0 ms
   16.0 ms  40%  build_cards (yours) — reports/cards.py:40 · total 16.0 ms
 
 functions by total time:
-  40.0 ms  100%  sales (yours) — reports/views.py:24 · self 0.0 ms
-  24.0 ms  60%  SQLCompiler.execute_sql — django/db/models/sql/compiler.py:1574 · self 24.0 ms
+  40.0 ms  100%  sales (yours) — reports/views.py:24 · self 24.0 ms
+  16.0 ms  40%  build_cards (yours) — reports/cards.py:40 · self 16.0 ms
 
 hottest paths (outermost first):
-  24.0 ms  60%  sales (reports/views.py:24) → SQLCompiler.execute_sql (django/db/models/sql/compiler.py:1574)
+  24.0 ms  60%  sales (reports/views.py:24)
   16.0 ms  40%  sales (reports/views.py:24) → build_cards (reports/cards.py:40)"
         )
     );

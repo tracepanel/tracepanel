@@ -1,8 +1,9 @@
 //! A trace's profile as the model reads it: where its time went in code (the functions by their own time and in
 //! all, the hottest paths) and where its memory was (the peak, what it kept, the sites that held most). The numbers
 //! are the console's Profile tab's, read the same way: a profile that says when its stacks were seen reads in the
-//! trace's own time, one with enough of the project's code reads as that code (a library call it made counts all
-//! the call did), and a site is named by the line of the project's code that led to it.
+//! trace's own time, one with enough of the project's code reads as that code (its frames alone: what a library call
+//! of its spent, it spent; the samples that ran none of it one "framework & runtime"), and a site is named by the line
+//! of the project's code that led to it.
 
 use crate::compact::{int, ms, text};
 use serde_json::Value;
@@ -18,6 +19,8 @@ const PATHS: usize = 5;
 const PATH_FRAMES: usize = 8;
 /// The changes `compare` lists, at most.
 const CHANGES: usize = 8;
+/// What the project's code reads the samples that ran none of it as: the server's, the runtime's, the SDKs'.
+const FRAMEWORK: &str = "(framework & runtime)";
 
 /// How to profile a request: what a refusal says.
 const HOW: &str = "Make the request again with an `X-Tracepanel-Profile: 1` header (`memory` to count its memory \
@@ -93,6 +96,11 @@ impl Frame<'_> {
         }
     }
 
+    /// Tracing's own code, never the project's (a span started, an attribute set).
+    fn tracing(&self) -> bool {
+        !self.in_app && tracepanel_analysis::profiles::tracing(self.module, self.file)
+    }
+
     /// `asyncio.sleep`: a function by its package and name.
     fn called(&self) -> String {
         match self
@@ -124,6 +132,8 @@ struct Profile<'a> {
     /// Read in the trace's own time: the profile says when its stacks were seen.
     timed: bool,
     raw: &'a Value,
+    /// The frame the samples that ran none of the project's code read as, in its view (FRAMEWORK), last of `frames`.
+    outside: usize,
 }
 
 fn frames_of(value: &Value) -> Vec<usize> {
@@ -139,7 +149,7 @@ fn frames_of(value: &Value) -> Vec<usize> {
 impl<'a> Profile<'a> {
     fn of(doc: &'a Value) -> Option<Self> {
         let raw = doc.get("profile").filter(|profile| profile.is_object())?;
-        let frames = raw
+        let mut frames: Vec<Frame> = raw
             .get("frames")
             .and_then(Value::as_array)
             .into_iter()
@@ -154,6 +164,16 @@ impl<'a> Profile<'a> {
                 waiting: frame.get("waiting").and_then(Value::as_bool) == Some(true),
             })
             .collect();
+        let outside = frames.len();
+        frames.push(Frame {
+            function: FRAMEWORK,
+            module: "",
+            file: "",
+            line: 0,
+            at_line: None,
+            in_app: false,
+            waiting: false,
+        });
         let interval = int(raw, "interval_us").max(1);
         let mut stacks: Vec<Stack> = raw
             .get("stacks")
@@ -175,6 +195,7 @@ impl<'a> Profile<'a> {
             dropped: int(raw, "dropped"),
             timed,
             raw,
+            outside,
         })
     }
 
@@ -209,22 +230,26 @@ impl<'a> Profile<'a> {
         yours as f64 >= self.samples as f64 * OWN_ENOUGH
     }
 
-    /// A stack as the project's code sees it: its frames, and after each the library call it made (what that call
-    /// spent, it spent). A stack without the project's code is the library code it was running, its innermost frame
-    /// alone: none of the framework's or the runtime's frames on the way there are the project's.
+    /// A stack as the project's code sees it: its frames alone, what the library calls they made spent counted to the
+    /// innermost of them; its innermost frame too where that waited (a socket, a sleep). A stack without the
+    /// project's code, or running tracing's own (a span started), is the framework's and the runtime's (FRAMEWORK):
+    /// none of their frames, nor tracing's time, are the project's.
     fn own_frames(&self, frames: &[usize]) -> Vec<usize> {
-        let yours: Vec<bool> = frames.iter().map(|&index| self.yours(index)).collect();
-        let kept: Vec<usize> = frames
+        let mut kept: Vec<usize> = frames
             .iter()
-            .enumerate()
-            .filter(|&(at, _)| yours[at] || (at > 0 && yours[at - 1]))
-            .map(|(_, &index)| index)
+            .copied()
+            .filter(|&index| self.yours(index))
             .collect();
-        if kept.is_empty() {
-            frames.last().map(|&leaf| vec![leaf]).unwrap_or_default()
-        } else {
-            kept
+        let leaf = frames.last().copied();
+        let inner = leaf.and_then(|leaf| self.frame(leaf));
+        match (leaf, inner) {
+            (Some(leaf), Some(frame)) if frame.waiting && !frame.in_app => kept.push(leaf),
+            (_, frame) if kept.is_empty() || frame.is_some_and(Frame::tracing) => {
+                kept = vec![self.outside];
+            }
+            _ => {}
         }
+        kept
     }
 
     /// Every frame, less the library frames every stack starts with (the server, the thread) but the last few.
@@ -270,7 +295,10 @@ impl<'a> Profile<'a> {
     /// The stacks as the console opens them: as the project's code when there is enough of it, else every frame.
     fn view(&self) -> (Vec<Stack>, &'static str) {
         if self.mostly_yours() {
-            (self.own_code(), "your code, with the library calls it made")
+            (
+                self.own_code(),
+                "your code: library calls counted to the function of yours that made them",
+            )
         } else {
             (self.all_frames(), "every frame")
         }
@@ -1150,7 +1178,7 @@ allocation sites at the peak (1 of 1, 2.0 MB in all, largest first; ×: allocati
     }
 
     #[test]
-    fn your_code_is_the_apps_frames_a_stack_without_them_its_innermost_frame_alone() {
+    fn your_code_is_the_apps_frames_alone_a_stack_without_them_the_framework_and_runtimes() {
         let doc = node_task();
         let profile = Profile::of(&doc).unwrap();
 
@@ -1168,7 +1196,63 @@ allocation sites at the peak (1 of 1, 2.0 MB in all, largest first; ×: allocati
 
         assert_eq!(
             stacks,
-            vec![vec!["rankProducts", "stringify"], vec!["stringify"]]
+            vec![vec!["rankProducts"], vec!["(framework & runtime)"]]
+        );
+    }
+
+    /// A Next.js request's samples as tracepanel-js sends them (the route's handler, its helper, pg and
+    /// OpenTelemetry's span processor under it; Next's error inspection; the runtime's timers and files).
+    fn next_request() -> Value {
+        let frame = |function: &str, file: &str, in_app: bool| json!({"function": function, "module": null, "file": file, "line": 1, "in_app": in_app});
+        json!({"id": "N", "duration": 10_000, "profile": {
+            "interval_us": 1000, "samples": 10,
+            "frames": [
+                frame("processTicksAndRejections", "node:internal/process/task_queues", false),
+                frame("runMicrotasks", "", false),
+                frame("GET", "app/api/catalog/products/route.ts", true),
+                frame("card", "lib/catalog.ts", true),
+                frame("query", "pg-pool/index.js", false),
+                frame("connect", "@opentelemetry/instrumentation-pg/build/src/instrumentation.js", false),
+                frame("startSpan", "@opentelemetry/sdk-trace/build/src/Tracer.js", false),
+                frame("onStart", "@opentelemetry/sdk-trace/build/src/MultiSpanProcessor.js", false),
+                frame("prepareUnsourcemappedStackTrace", "next/dist/server/patch-error-inspect.js", false),
+                frame("readFileSync", "node:fs", false),
+            ],
+            "stacks": [
+                {"frames": [0, 1, 2, 3, 4, 5, 6, 7], "count": 4},
+                {"frames": [0, 1, 2, 3, 8], "count": 3},
+                {"frames": [0, 1, 2, 3, 4], "count": 2},
+                {"frames": [9], "count": 1},
+            ],
+        }})
+    }
+
+    #[test]
+    fn tracings_own_time_is_never_your_code() {
+        let doc = next_request();
+        let profile = Profile::of(&doc).unwrap();
+
+        let stacks: Vec<(Vec<&str>, i64)> = profile
+            .own_code()
+            .iter()
+            .map(|stack| {
+                let names = stack
+                    .frames
+                    .iter()
+                    .map(|&index| profile.frames[index].function)
+                    .collect();
+                (names, stack.count)
+            })
+            .collect();
+
+        assert_eq!(
+            stacks,
+            vec![
+                (vec!["(framework & runtime)"], 4),
+                (vec!["GET", "card"], 3),
+                (vec!["GET", "card"], 2),
+                (vec!["(framework & runtime)"], 1),
+            ]
         );
     }
 }

@@ -18,6 +18,7 @@ import { plural } from "./lib/plural";
 import {
   allFrames,
   type Box,
+  FRAMEWORK,
   type Frame,
   functions,
   layout,
@@ -82,11 +83,18 @@ const REST: Tone = {
 type Palette = Map<string, Tone>;
 type Share = { name: string; samples: number };
 
-/** Your code, then the packages that took most, one color each; the rest share one gray as "other". */
+/** The shares that aren't a package: your code, the framework and the runtime around it, waiting. */
+const KINDS_OF_TIME = new Set([YOUR_CODE, FRAMEWORK, WAITING]);
+
+/**
+ * Your code, then the packages that took most, one color each; the rest share one gray as "other". The framework
+ * and the runtime around your code (Your code's one share for them) are that gray too, by their own name.
+ */
 function colors(names: readonly string[]): Palette {
-  const others = names.filter((name) => name !== YOUR_CODE && name !== WAITING).slice(0, PALETTE.length);
+  const others = names.filter((name) => !KINDS_OF_TIME.has(name)).slice(0, PALETTE.length);
   return new Map([
     [YOUR_CODE, YOURS],
+    [FRAMEWORK, REST],
     [WAITING, WAITS],
     ...others.map((name, at): [string, Tone] => [name, PALETTE[at] ?? REST]),
   ]);
@@ -414,9 +422,10 @@ function ProfileView({
   // Your code or All frames, as the view remembers it; at first, your code where the profile is mostly yours.
   const [own, setOwn] = useRemembered(VIEW_KEYS.frames, () => mostlyYours(profile), readFrames, writeFrames);
   const [lit, setLit] = useState<ReadonlySet<string>>(new Set());
-  const packages = useMemo(() => packageTimes(profile), [profile]);
-  const palette = useMemo(() => colors(packages.map((item) => item.name)), [packages]);
   const view = useMemo(() => (own ? ownCode(profile) : allFrames(profile)), [profile, own]);
+  // Your code's shares are its own and the framework's around it; every frame's, each package's.
+  const packages = useMemo(() => packageTimes(view), [view]);
+  const palette = useMemo(() => colors(packages.map((item) => item.name)), [packages]);
   return (
     <div className="@container grid gap-6 p-4">
       <header className="flex flex-wrap items-end justify-between gap-3">
@@ -427,7 +436,11 @@ function ProfileView({
             label="Frames shown"
             segments={FRAMES}
             value={own ? "own" : "all"}
-            onChange={(id) => setOwn(id === "own")}
+            onChange={(id) => {
+              setOwn(id === "own");
+              // The packages lit are the other view's.
+              setLit(new Set());
+            }}
           />
         </div>
       </header>
@@ -455,9 +468,10 @@ function summed(packages: readonly Share[], palette: Palette): Share[] {
   return other ? [...named, { name: "other", samples: other }] : named;
 }
 
-/** Waiting after every package, and the rest folded together before it. */
+/** Waiting after every package, the framework and the runtime before it, and the rest folded together before them. */
 function rankOf(share: Share): number {
-  if (share.name === WAITING) return 2;
+  if (share.name === WAITING) return 3;
+  if (share.name === FRAMEWORK) return 2;
   return share.name === "other" ? 1 : 0;
 }
 

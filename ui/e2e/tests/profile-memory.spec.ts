@@ -39,6 +39,8 @@ test("the Memory view: its peak, what it kept, where the memory was, and what it
   await expect(page.getByText("Where it was at the end of the trace, not its peak")).toBeVisible();
   await expect(page.getByText("Includes other traces that ran in the process meanwhile")).toBeVisible();
 
+  await page.getByRole("tab", { name: "All frames" }).click();
+
   await expect(page.getByRole("region", { name: "Memory by package" }).getByRole("button")).toHaveText([
     /^django\.db\s*30 MB\s*71%$/,
     /^django\.template\s*8\.0 MB\s*19%$/,

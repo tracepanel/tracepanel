@@ -75,6 +75,7 @@ test("the Profile tab's package bar lights a package in its own colour with its 
   page,
 }) => {
   await page.goto(`/#/t/${await traceId("GET /reports/sales")}?tab=profile`);
+  await page.getByRole("tab", { name: "All frames" }).click();
   const packages = page.getByRole("region", { name: "Time by package" });
   const segments = packages.locator(".dt-share-bar > span");
   await segments.nth(1).hover();
