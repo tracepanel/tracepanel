@@ -32,7 +32,7 @@ import { foldKeys } from "./lib/keys";
 import { pageParts } from "./lib/page";
 import { widthOf } from "./lib/percent";
 import { plural } from "./lib/plural";
-import { ownHotspots, type Profile } from "./lib/profile";
+import { hottestOwn, type Profile } from "./lib/profile";
 import { type Quiet, quietSpans } from "./lib/quiet";
 import { traceRuntime } from "./lib/runtime";
 import { type SpanScope, shifted } from "./lib/scope";
@@ -1738,10 +1738,14 @@ function waited(profile: Profile | undefined): { name: string; yours: boolean } 
   return wait ?? { name: "waiting", yours: false };
 }
 
-/** "aggregate · render_csv": the two functions of yours that ran most, or untraced code where none of yours ran. */
+/**
+ * "editDistance in (*App).similar": the function of yours that ran most, and the function of yours that called it
+ * there (its parent in the samples, as the flame graph draws it); untraced code where none of yours ran.
+ */
 function ranMost(profile: Profile): string {
-  const names = ownHotspots(profile, 2).map((hotspot) => hotspot.name);
-  return names.join(" · ") || UNTRACED;
+  const hottest = hottestOwn(profile);
+  if (!hottest) return UNTRACED;
+  return hottest.caller ? `${hottest.name} in ${hottest.caller}` : hottest.name;
 }
 
 /** A code row's own: a grey box ("code", or "wait"), its name, the way on to the profile, its bars and its time. */

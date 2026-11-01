@@ -10,6 +10,7 @@ type Doc = Record<string, unknown>;
 
 const ID = "01M4C0DER0W5000000000000B1";
 const PARALLEL = "01M4C0DER0W5000000000000P1";
+const GO = "01M4C0DER0W5000000000000G1";
 
 function span(id: string, parent: string | null, kind: string, name: string, start: number, duration: number): Doc {
   // biome-ignore lint/style/useNamingConvention: the trace format.
@@ -104,12 +105,52 @@ function parallel(start: number): Doc {
   ]);
 }
 
+/**
+ * A Go handler's profile as tracepanel-go sends it: most samples in editDistance, which (*App).similar calls, under
+ * the handler; a few in (*App).card's own code, which the handler calls too.
+ */
+function goSearch(start: number): Doc {
+  const go = (fn: string, inApp: boolean) => ({
+    function: fn,
+    module: inApp ? "shop" : "net/http",
+    file: inApp ? "shop/search.go" : "net/http/server.go",
+    line: 1,
+    // biome-ignore lint/style/useNamingConvention: a frame as the SDKs send it.
+    in_app: inApp,
+  });
+  const doc = trace(GO, "GET /search", start, 30_000, [
+    span("r", null, "http", "GET /search", start, 30_000),
+    span("q", "r", "sql", "SELECT product", start + 1_000, 2_000),
+  ]);
+  // biome-ignore-start lint/style/useNamingConvention: a profile as the SDKs send it.
+  doc["profile"] = {
+    interval_us: 1_000,
+    samples: 28,
+    frames: [
+      go("(*conn).serve", false),
+      go("(*App).listProducts", true),
+      go("(*App).similar", true),
+      go("editDistance", true),
+      go("(*App).card", true),
+      go("runtime.mallocgc", false),
+    ],
+    stacks: [
+      { frames: [0, 1, 2, 3], count: 16 },
+      { frames: [0, 1, 2, 3, 5], count: 4 },
+      { frames: [0, 1, 4], count: 5 },
+      { frames: [0, 1], count: 3 },
+    ],
+  };
+  // biome-ignore-end lint/style/useNamingConvention: a profile as the SDKs send it.
+  return doc;
+}
+
 async function seed(): Promise<void> {
   const start = Date.now() * 1000 - 7 * 3_600_000_000;
   const response = await fetch(`${CONSOLE}api/ingest`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify([books(start), parallel(start + 100_000)]),
+    body: JSON.stringify([books(start), parallel(start + 100_000), goSearch(start + 200_000)]),
   });
   expect(response.status).toBe(202);
   await expect.poll(async () => (await fetch(`${CONSOLE}api/traces/${PARALLEL}`)).status).toBe(200);
@@ -121,7 +162,16 @@ test("the handler's code row and its transaction's are named by their own time's
   await seed();
   await page.goto(`/#/t/${ID}?tab=tree`);
 
-  await expect(codeRows(page).locator(".dt-map-text")).toHaveText(["book_out", "get_db · serialize"]);
+  await expect(codeRows(page).locator(".dt-map-text")).toHaveText(["book_out in list_books", "get_db in list_books"]);
+});
+
+test("a code row names the function of yours that ran most by its real caller, as the flame graph draws it", async ({
+  page,
+}) => {
+  await seed();
+  await page.goto(`/#/t/${GO}?tab=tree`);
+
+  await expect(codeRows(page).locator(".dt-map-text")).toHaveText(["editDistance in (*App).similar"]);
 });
 
 test("calls side by side: the tab, the list and the head say their time on the clock, the sum in a tooltip", async ({

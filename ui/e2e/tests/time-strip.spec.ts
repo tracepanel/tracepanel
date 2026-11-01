@@ -85,7 +85,7 @@ test("a transaction's time says on hover how long it was open and its SQL; its n
   const code = page.locator('.dt-map-row[data-kind="code"]');
   await expect(code).toHaveCount(1);
   await expect(code.locator(".dt-map-kind")).toHaveText("code");
-  await expect(code.locator(".dt-map-text")).toHaveText("aggregate · render_csv");
+  await expect(code.locator(".dt-map-text")).toHaveText("aggregate in reconcile_stock");
   await expect(code.locator(".dt-map-time")).toHaveText("1.6 s");
 });
 
@@ -237,7 +237,7 @@ test("the tree's code row leads to the profile: its flame, a click opens it, in 
   const code = page.locator('.dt-map-row[data-kind="code"]');
 
   await expect(code.locator(".dt-map-flame")).toBeVisible();
-  await expect(code.locator(".dt-map-text")).toHaveText("aggregate · render_csv");
+  await expect(code.locator(".dt-map-text")).toHaveText("aggregate in reconcile_stock");
 
   await code.hover();
 
