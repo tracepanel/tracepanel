@@ -4,6 +4,12 @@
 
 ### Fixed
 
+- A code row in the call tree is named by the function of yours that
+  ran most and the function of yours that called it there, as the flame
+  graph draws it: `editDistance in (*App).similar`. Before, it named the
+  two functions that ran most, `editDistance · (*App).card`, which read
+  as a function and its caller and changed from one run to the next
+  with the few samples of the second.
 - The panel lists a server-rendered page's own request under the view
   the browser recording made of its load, as one load: `VIEW /docs`
   with `GET /docs` and the page's calls under it. Before, a Next.js

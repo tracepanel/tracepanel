@@ -197,33 +197,41 @@ export function layout(focus: Node): Box[] {
   return boxes;
 }
 
-/** A function of the project's own and the share of the samples it was the innermost of them in. */
-export interface Hotspot {
-  name: string;
-  share: number;
-}
-
 /**
- * Where the project's own code was, over the whole profile: each sample counts for the innermost function of yours
- * in its stack (its own time and the libraries it called), the first `count` of them by share.
+ * The function of the project's own that ran most (each sample counted for the innermost of yours in its stack), and
+ * the function of yours that called it most often in those samples: its real parent, the nearest frame of yours above
+ * it. None when no code of yours ran.
  */
-export function ownHotspots(profile: Profile, count = 3): Hotspot[] {
+export function hottestOwn(profile: Profile): { name: string; caller: string | null } | null {
   const samples = new Map<string, number>();
+  const callers = new Map<string, Map<string, number>>();
   for (const stack of profile.stacks) {
-    const own = innermostOwn(profile, stack);
-    if (own) samples.set(own, (samples.get(own) ?? 0) + stack.count);
+    const own = stack.frames.map((index) => profile.frames[index]).filter((frame) => frame?.in_app);
+    const name = own.at(-1)?.function;
+    if (name === undefined) continue;
+    samples.set(name, (samples.get(name) ?? 0) + stack.count);
+    const caller = own.at(-2)?.function;
+    if (caller === undefined || caller === name) continue;
+    const counts = callers.get(name) ?? new Map<string, number>();
+    counts.set(caller, (counts.get(caller) ?? 0) + stack.count);
+    callers.set(name, counts);
   }
-  return [...samples]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, count)
-    .map(([name, taken]) => ({ name, share: taken / Math.max(profile.samples, 1) }));
+  const top = mostOf(samples);
+  if (top === null) return null;
+  return { name: top, caller: mostOf(callers.get(top) ?? new Map()) };
 }
 
-function innermostOwn(profile: Profile, stack: Stack): string | undefined {
-  return [...stack.frames]
-    .reverse()
-    .map((index) => profile.frames[index])
-    .find((frame) => frame?.in_app)?.function;
+/** The key with the most samples; the first seen of those tied. */
+function mostOf(counts: ReadonlyMap<string, number>): string | null {
+  let best: string | null = null;
+  let most = 0;
+  for (const [key, count] of counts) {
+    if (count > most) {
+      best = key;
+      most = count;
+    }
+  }
+  return best;
 }
 
 /** Why the SDKs say a trace was profiled (`profile.reason`), as people read it. */

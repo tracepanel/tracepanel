@@ -86,7 +86,7 @@ test("the call tree has the wait and the code as rows of their own; the wait's o
 
   await expect(page.getByRole("tooltip")).toHaveCount(0);
 
-  await expect(codeRow(page, "code").locator(".dt-map-text")).toHaveText("render_digest");
+  await expect(codeRow(page, "code").locator(".dt-map-text")).toHaveText("render_digest in send_digest");
   await expect(codeRow(page, "wait").locator(".dt-map-time")).toHaveText("1.5 s");
   await expect(codeRow(page, "code").locator(".dt-map-time")).toHaveText("102 ms");
 
