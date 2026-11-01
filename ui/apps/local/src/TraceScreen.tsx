@@ -123,14 +123,36 @@ function serviceOf(trace: Trace | null | undefined, variant: TraceScreenProps["v
   return panel && typeof service === "string" ? service : null;
 }
 
+/** How often the links are asked again while a task the trace enqueued waits for its run: a worker takes it soon. */
+const ENQUEUED_ASK_MS = 1_000;
+/** How long after its enqueue a task's run is asked for that often; then on the page's clock, as everything else. */
+const ENQUEUED_FOLLOW_MS = 60_000;
+
 /**
- * Traces linked to this one, reloaded while it is open (tasks a request enqueued finish later). Kept with the id
- * they are for: while the next trace loads, the one on screen doesn't get the next one's links.
+ * Whether a task this trace enqueued in the last minute has no run linked yet: its row says "waiting for a worker"
+ * until the links are asked again.
  */
-function useRelated(id: string, source: DataSource): (traceId: string) => Related | undefined {
+function awaitsRun(trace: Trace | null, related: Related | undefined, now: number): boolean {
+  if (!trace || !related) return false;
+  const linked = new Set(Object.values(related.via));
+  return trace.spans.some(
+    (span) =>
+      span.kind === "task.enqueue" &&
+      !linked.has(span.id) &&
+      now - (span.start + span.duration) / 1000 < ENQUEUED_FOLLOW_MS,
+  );
+}
+
+/**
+ * Traces linked to this one, reloaded while it is open (tasks a request enqueued finish later): on the page's clock,
+ * and every second while a task it enqueued a moment ago waits for its run, so the run shows as it arrives. Kept with
+ * the id they are for: while the next trace loads, the one on screen doesn't get the next one's links.
+ */
+function useRelated(id: string, source: DataSource, trace: Trace | null): (traceId: string) => Related | undefined {
   const [related, setRelated] = useState<{ id: string; related: Related } | undefined>(undefined);
+  const [asked, setAsked] = useState(0);
   const { cycle, tick } = useRefresh();
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `tick` reloads on "refresh now", `cycle` on the clock.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `tick` reloads on "refresh now", `cycle` on the clock, `asked` while a run is awaited.
   useEffect(() => {
     let cancelled = false;
     track(source.related(id)).then(
@@ -140,7 +162,15 @@ function useRelated(id: string, source: DataSource): (traceId: string) => Relate
     return () => {
       cancelled = true;
     };
-  }, [id, source, cycle, tick]);
+  }, [id, source, cycle, tick, asked]);
+  const current = related?.id === id ? related.related : undefined;
+  const waiting = trace?.id === id && awaitsRun(trace, current, Date.now());
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `current`, each answer, asks again a second after it.
+  useEffect(() => {
+    if (!waiting) return;
+    const timer = window.setTimeout(() => setAsked((count) => count + 1), ENQUEUED_ASK_MS);
+    return () => window.clearTimeout(timer);
+  }, [waiting, current]);
   return (traceId) => (related?.id === traceId ? related.related : undefined);
 }
 
@@ -374,7 +404,7 @@ export function TraceScreen({
 }: TraceScreenProps) {
   const loaded = useTrace(id, source, onLoaded, variant, arriving);
   const trace = traceOf(loaded);
-  const related = useRelated(id, source);
+  const related = useRelated(id, source, trace);
   // The panel (compact, or docked as a strip) has an App tab: the console's trace page doesn't.
   const app = useApp(source, serviceOf(trace, variant));
   const { explains, profilesIn } = useAppsCan(source);

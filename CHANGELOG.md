@@ -4,6 +4,12 @@
 
 ### Fixed
 
+- A task a request enqueued a moment ago shows its run in the call tree
+  as the run arrives, in the panel and on the console's page. Its row
+  said "waiting for a worker…" until the page's next refresh, up to
+  15 s, while the panel's list already had the run. The trace's links
+  are asked again every second while such a task, enqueued in the last
+  minute, waits.
 - A code row in the call tree is named by the function of yours that
   ran most and the function of yours that called it there, as the flame
   graph draws it: `editDistance in (*App).similar`. Before, it named the
