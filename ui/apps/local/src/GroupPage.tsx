@@ -416,7 +416,7 @@ function Resolvers({ operation }: { operation: GraphqlDetail }) {
         <span className="font-normal text-muted-foreground">· your resolvers in this operation, most time first</span>
       </h2>
       {operation.document ? (
-        <pre className="m-0 overflow-auto rounded-md border bg-muted/60 px-4 py-3 font-mono text-sm whitespace-pre-wrap">
+        <pre className="m-0 overflow-auto rounded-md border bg-muted/60 px-4 py-3 font-mono text-sm whitespace-pre-wrap [overflow-wrap:anywhere]">
           {operation.document}
         </pre>
       ) : null}

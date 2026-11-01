@@ -236,7 +236,7 @@ function BodyText({ body, text }: { body: BodyOf; text: string }) {
   return (
     <pre
       className={cn(
-        "dt-syntax m-0 max-h-96 overflow-auto p-3 font-mono text-xs whitespace-pre-wrap",
+        "dt-syntax m-0 max-h-96 overflow-auto p-3 font-mono text-xs whitespace-pre-wrap [overflow-wrap:anywhere]",
         // On the page a body is the one boxed thing: code, as code is shown everywhere.
         !card && "rounded-lg border bg-card",
       )}

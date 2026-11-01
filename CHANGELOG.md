@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- A long value is read whole in every code block: a dump's value, a
+  query, a GraphQL document, a request's or response's body and a query
+  plan wrap their long lines inside their box, each line's indentation
+  kept. Before, a dump's details cut a long line off on the right in the
+  docked panel, such as a `datetime.datetime(...)` in a dict.
 - The Windows wheels and npm packages carry LICENSE, NOTICE and
   THIRD-PARTY-NOTICES with LF line endings, as every other platform's
   do. Their CRLF copies kept the agent's releases since 0.5.0 off Maven

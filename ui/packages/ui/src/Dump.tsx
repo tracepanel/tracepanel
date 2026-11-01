@@ -71,7 +71,7 @@ function DumpArgBlock({ arg, index, language }: { arg: DumpArg; index: number; l
         <span className="dt-dump-type shrink-0 font-mono text-xs text-muted-foreground">{typeOf(arg)}</span>
         <CopyButton text={arg.repr} label="Copy the value" className="ml-auto" />
       </div>
-      <pre className="dt-syntax m-0 max-h-96 overflow-auto px-3 py-2 font-mono text-sm whitespace-pre">
+      <pre className="dt-syntax m-0 max-h-96 overflow-auto px-3 py-2 font-mono text-sm whitespace-pre-wrap [overflow-wrap:anywhere]">
         <Coloured text={arg.repr} language={language} limit={COLOURED} />
       </pre>
     </section>
