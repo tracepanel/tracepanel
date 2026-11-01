@@ -13,6 +13,7 @@ import {
   scopedProfiles,
 } from "./lib/chainProfile";
 import { type Memory, memoryProfile, type SitePlace, sitePlaces } from "./lib/memory";
+import { withOffCpu } from "./lib/offCpu";
 import { percent } from "./lib/percent";
 import { plural } from "./lib/plural";
 import {
@@ -33,7 +34,6 @@ import {
   summaryOf,
   tree,
   WAITING,
-  withOffCpu,
   YOUR_CODE,
 } from "./lib/profile";
 import { serviceRuntime, traceRuntime } from "./lib/runtime";
@@ -183,10 +183,10 @@ function ProfilePane({ trace, open }: { trace: Trace; open: boolean }) {
   const range = useProfileRange(open);
   const [kind, setKind] = useKind();
   // Kept while the profile and the range are: the flame graph's zoom belongs to the profile it was made in.
-  const cpu = onCpuOnly(trace);
+  const { profile, start, duration: total, spans, attrs } = trace;
   const scope = useMemo(
-    () => (trace.profile ? scopeOf(trace.profile, range, trace.duration, cpu) : null),
-    [trace.profile, range, trace.duration, cpu],
+    () => (profile ? scopeOf(profile, range, { start, duration: total, spans, attrs }) : null),
+    [profile, range, start, total, spans, attrs],
   );
   if (!(open && trace.profile && scope)) return null;
   return <ProfileOf trace={trace} profile={trace.profile} scope={scope} kind={kind} onKind={setKind} />;
@@ -365,15 +365,19 @@ interface Scope {
   cpu: boolean;
 }
 
-function scopeOf(profile: Profile, range: TimeRange | null, total: number, cpu: boolean): Scope {
+/** A trace as its profile's scope reads it: its clock, its calls (who waited), its SDK's language. */
+type Profiled = Pick<Trace, "start" | "duration" | "spans" | "attrs">;
+
+function scopeOf(profile: Profile, range: TimeRange | null, trace: Profiled): Scope {
   // Timed, it reads in the trace's own time, as the time strip does; a range narrows it.
   if (timed(profile)) {
     const title = range ? `Profile of ${rangeLabel(range)}` : "Profile of the whole trace";
-    return { profile: wallClock(profile, total, range), title, note: null, timed: true, cpu: false };
+    return { profile: wallClock(profile, trace.duration, range), title, note: null, timed: true, cpu: false };
   }
   const note = range ? "Its samples aren't timed: the range picked can't narrow it." : null;
-  // On the trace's clock: the time off the CPU waited.
-  const shown = cpu ? withOffCpu(profile, total) : profile;
+  // On the trace's clock: the time off the CPU waited, under the function of yours that made each call waited for.
+  const cpu = onCpuOnly(trace);
+  const shown = cpu ? withOffCpu(profile, trace) : profile;
   return { profile: shown, title: "Profile of the whole trace", note, timed: false, cpu };
 }
 
@@ -1093,8 +1097,7 @@ function appRuntime(app: AppProfile): string | undefined {
 /** An app's profile in the scope: one trace's (its stretch), or its traces' merged. */
 function appView(app: AppProfile): Scope {
   const [one] = app.traces;
-  const scoped = (each: AppProfile["traces"][number]) =>
-    scopeOf(each.profile, each.range, each.member.trace.duration, onCpuOnly(each.member.trace));
+  const scoped = (each: AppProfile["traces"][number]) => scopeOf(each.profile, each.range, each.member.trace);
   if (app.traces.length === 1 && one) return scoped(one);
   const profile = mergeProfiles(app.traces.map((each) => scoped(each).profile));
   return { profile, title: `Profile of ${app.traces.length} traces`, note: null, timed: false, cpu: false };

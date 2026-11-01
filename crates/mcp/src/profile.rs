@@ -6,6 +6,7 @@
 //! of the project's code that led to it.
 
 use crate::compact::{int, ms, text};
+use crate::off_cpu;
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -139,8 +140,58 @@ struct Profile<'a> {
     raw: &'a Value,
     /// The frame the samples that ran none of the project's code read as, in its view (FRAMEWORK), last of `frames`.
     outside: usize,
-    /// A CPU profile's (CPU_ONLY) time on the CPU; the rest of the trace's time is one waiting stack (OFF_CPU).
+    /// A CPU profile's (CPU_ONLY) time on the CPU; the rest of the trace's time is waiting (OFF_CPU), under the
+    /// function of the project's that made each call it waited for.
     on_cpu: Option<f64>,
+}
+
+/// A CPU profile's `off` µs off the CPU as waiting stacks (OFF_CPU): each call's time under the function of the
+/// project's that made it (off_cpu), shared down to `off` where the calls took more (their time on the CPU is in the
+/// samples); the rest, no call's, one waiting stack of its own.
+fn off_cpu_stacks(doc: &Value, frames: &mut Vec<Frame>, stacks: &mut Vec<Stack>, off: f64) {
+    let places: Vec<off_cpu::Place> = frames
+        .iter()
+        .map(|frame| off_cpu::Place {
+            function: frame.function,
+            file: frame.file,
+            line: frame.line,
+            in_app: frame.in_app,
+        })
+        .collect();
+    let seen: Vec<(&[usize], i64)> = stacks
+        .iter()
+        .map(|stack| (stack.frames.as_slice(), stack.count))
+        .collect();
+    let waiters = off_cpu::waited(doc, &places, &seen);
+    frames.push(Frame {
+        function: OFF_CPU,
+        module: "",
+        file: "",
+        line: 0,
+        at_line: None,
+        in_app: false,
+        waiting: true,
+    });
+    let waiting = frames.len() - 1;
+    let in_calls: f64 = waiters.iter().map(|(_, us)| us).sum();
+    let scale = if in_calls > off { off / in_calls } else { 1.0 };
+    for (path, us) in waiters {
+        let mut frames = path;
+        frames.push(waiting);
+        stacks.push(Stack {
+            frames,
+            count: 0,
+            us: us * scale,
+        });
+    }
+    let rest = off - in_calls * scale;
+    if rest > 0.0 {
+        stacks.push(Stack {
+            frames: vec![waiting],
+            count: 0,
+            us: rest,
+        });
+    }
 }
 
 fn frames_of(value: &Value) -> Vec<usize> {
@@ -203,20 +254,7 @@ impl<'a> Profile<'a> {
                 let sampled = (int(raw, "samples") + int(raw, "dropped")) * interval;
                 let off = int(doc, "duration") - sampled;
                 if off >= interval {
-                    frames.push(Frame {
-                        function: OFF_CPU,
-                        module: "",
-                        file: "",
-                        line: 0,
-                        at_line: None,
-                        in_app: false,
-                        waiting: true,
-                    });
-                    stacks.push(Stack {
-                        frames: vec![frames.len() - 1],
-                        count: off / interval,
-                        us: off as f64,
-                    });
+                    off_cpu_stacks(doc, &mut frames, &mut stacks, off as f64);
                 }
                 (int(raw, "samples") * interval) as f64
             });
@@ -1325,6 +1363,79 @@ allocation sites at the peak (1 of 1, 2.0 MB in all, largest first; ×: allocati
             [
                 "CPU profile: 30.0 ms on the CPU of the trace's 99.0 ms · 30 samples, one every 1.0 ms of CPU time",
                 "waiting, off the CPU (the database, the network, a lock, a timer; not sampled): 69.0 ms (70%)",
+            ]
+        );
+    }
+
+    /// A stack of the profile's view by its functions' names, with its time in µs.
+    fn named(profile: &Profile, stacks: &[Stack]) -> Vec<(Vec<String>, i64)> {
+        stacks
+            .iter()
+            .map(|stack| {
+                let names = stack
+                    .frames
+                    .iter()
+                    .map(|&index| profile.frames[index].function.to_owned())
+                    .collect();
+                (names, stack.us.round() as i64)
+            })
+            .collect()
+    }
+
+    /// A call out of the request, `at` ms into it, `ms` long, made from `origin`.
+    fn call(kind: &str, at: i64, ms: i64, origin: &str) -> Value {
+        json!({"id": format!("{kind}{at}"), "parent_id": "r", "kind": kind, "start": 1_000_000 + at * 1000,
+               "duration": ms * 1000, "attrs": {"code.origin": origin}})
+    }
+
+    /// A Gin request's CPU profile with its calls: a query from listProducts, one from similar, a Redis command from
+    /// count (never sampled: its line in catalog.go is listProducts'), 30 ms of the 69 off the CPU in none.
+    #[test]
+    fn a_go_profiles_calls_wait_under_the_function_that_made_them() {
+        let frame = |function: &str, file: &str, line: i64, in_app: bool| json!({"function": function, "module": "shop", "file": file, "line": line, "in_app": in_app});
+        let doc = json!({"id": "G", "start": 1_000_000, "duration": 99_000,
+            "attrs": {"telemetry.sdk.language": "go"},
+            "spans": [
+                {"id": "r", "parent_id": null, "kind": "http", "start": 1_000_000, "duration": 99_000, "attrs": {}},
+                call("sql", 5, 20, "catalog.go:14 in (*App).listProducts"),
+                call("sql", 40, 10, "similar.go:8 in (*App).similar"),
+                call("redis", 60, 9, "catalog.go:30 in (*App).count"),
+            ],
+            "profile": {
+                "interval_us": 1000, "samples": 30, "dropped": 0,
+                "frames": [
+                    frame("(*App).listProducts", "catalog.go", 10, true),
+                    frame("(*App).similar", "similar.go", 5, true),
+                    frame("editDistance", "similar.go", 40, true),
+                    frame("syscall.syscall", "syscall/syscall_darwin.go", 1, false),
+                ],
+                "stacks": [{"frames": [0, 1, 2], "count": 25}, {"frames": [0, 3], "count": 5}],
+            },
+        });
+        let profile = Profile::of(&doc).unwrap();
+
+        let stacks = named(&profile, &profile.own_code());
+
+        let names = |names: &[&str]| {
+            names
+                .iter()
+                .map(|name| (*name).to_owned())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            stacks,
+            vec![
+                (
+                    names(&["(*App).listProducts", "(*App).similar", "editDistance"]),
+                    25_000
+                ),
+                (names(&["(*App).listProducts"]), 5_000),
+                (names(&["(*App).listProducts", "off the CPU"]), 29_000),
+                (
+                    names(&["(*App).listProducts", "(*App).similar", "off the CPU"]),
+                    10_000
+                ),
+                (names(&["off the CPU"]), 30_000),
             ]
         );
     }

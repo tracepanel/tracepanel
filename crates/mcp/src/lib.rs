@@ -6,6 +6,7 @@
 //! their answers read (`compact`).
 
 mod compact;
+mod off_cpu;
 mod profile;
 mod tools;
 

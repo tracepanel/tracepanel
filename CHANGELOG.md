@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- A Go or a Node.js profile's waiting is under the function of yours
+  that waited, as a Python or a JVM profile's is. Their profilers sample
+  the CPU only, so the time off it has no stack: it was one "waiting"
+  box beside your functions. Now each query's, HTTP call's or cache
+  call's time is waiting under the function its call site
+  (`code.origin`) names, in the flame graph, the function list and the
+  MCP server's profile. The time no call took stays one "waiting" box
+  of its own.
+
 ## 0.10.3 (2026-11-01)
 
 ### Fixed

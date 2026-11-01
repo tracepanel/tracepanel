@@ -40,7 +40,7 @@ export const WAITING = "waiting";
  * every language; All frames keeps the frame that waited, where the profile has one.
  */
 // biome-ignore lint/style/useNamingConvention: a frame as the SDKs send it.
-const WAITED: Frame = { function: WAITING, module: null, file: "", line: 0, in_app: false, waiting: true };
+export const WAITED: Frame = { function: WAITING, module: null, file: "", line: 0, in_app: false, waiting: true };
 
 /**
  * A library frame's package: its module's (org.springframework, not org; Django's first two parts, as it is many
@@ -320,21 +320,4 @@ const CPU_ONLY = new Set(["go", "nodejs"]);
 export function onCpuOnly(trace: Pick<Trace, "attrs">): boolean {
   const language = trace.attrs["telemetry.sdk.language"];
   return typeof language === "string" && CPU_ONLY.has(language);
-}
-
-/**
- * A CPU profile read on the trace's clock: the time it wasn't on the CPU (not sampled, nor dropped for other traces;
- * the database, the network, a lock, a timer) one waiting stack (WAITED), as a Python or a JVM profile has its
- * waits. None where its code ran on the CPU for longer than the trace (goroutines at once).
- */
-export function withOffCpu(profile: Profile, duration: number): Profile {
-  const off = duration / profile.interval_us - profile.samples - (profile.dropped ?? 0);
-  if (off < 1) return profile;
-  const frames = [...profile.frames, WAITED];
-  return {
-    ...profile,
-    frames,
-    stacks: [...profile.stacks, { frames: [frames.length - 1], count: off }],
-    samples: profile.samples + off,
-  };
 }
