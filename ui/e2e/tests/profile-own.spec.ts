@@ -10,6 +10,7 @@ import { expect, test } from "../fixtures.ts";
 const NODE = "01M4PR0F0WN000000000000N01";
 const NEXT = "01M4PR0F0WN000000000000X01";
 const JVM = "01M4PR0F0WN000000000000J01";
+const PYTHON = "01M4PR0F0WN000000000000P01";
 
 const frame = (fn: string, module: string | null, file: string, inApp: boolean) => ({
   function: fn,
@@ -206,12 +207,68 @@ function jvmRequest(start: number): object {
   };
 }
 
+/**
+ * A Taskiq task's profile as tracepanel-python sends it: the task's code under the worker's, asleep in asyncio (its
+ * frame waits), and awaiting a thread for the ORM.
+ */
+function pythonTask(start: number): object {
+  const wait = (fn: string, module: string, file: string) => ({ ...frame(fn, module, file, false), waiting: true });
+  return {
+    id: PYTHON,
+    kind: "task",
+    name: "shop.tasks.refresh_tracking",
+    start,
+    duration: 10_000,
+    status: "ok",
+    attrs: { "service.name": "shop-worker", "telemetry.sdk.language": "python" },
+    spans: [
+      {
+        id: "r",
+        parent_id: null,
+        kind: "task",
+        name: "shop.tasks.refresh_tracking",
+        start,
+        duration: 10_000,
+        status: "ok",
+        attrs: {},
+      },
+    ],
+    logs: [],
+    errors: [],
+    links: [],
+    issues: [],
+    profile: {
+      interval_us: 1000,
+      samples: 10,
+      frames: [
+        frame("Receiver.callback", "taskiq.receiver.receiver", "taskiq/receiver/receiver.py", false),
+        frame("Receiver.run_task", "taskiq.receiver.receiver", "taskiq/receiver/receiver.py", false),
+        frame("refresh_tracking", "shop.tasks", "shop/tasks.py", true),
+        frame("track_parcel", "shop.tasks", "shop/tasks.py", true),
+        wait("sleep", "asyncio.tasks", "asyncio/tasks.py"),
+        frame("QuerySet.aupdate", "django.db.models.query", "django/db/models/query.py", false),
+        wait("SyncToAsync.__call__", "asgiref.sync", "asgiref/sync.py"),
+      ],
+      stacks: [
+        { frames: [0, 1, 2, 3, 4], count: 7 },
+        { frames: [0, 1, 2, 5, 6], count: 2 },
+        { frames: [0, 1, 2, 3], count: 1 },
+      ],
+    },
+  };
+}
+
 async function seed(): Promise<void> {
   const start = Date.now() * 1000 - 4 * 3_600_000_000;
   const response = await fetch(`${CONSOLE}api/ingest`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify([nodeTask(start), nextRequest(start + 10_000), jvmRequest(start + 20_000)]),
+    body: JSON.stringify([
+      nodeTask(start),
+      nextRequest(start + 10_000),
+      jvmRequest(start + 20_000),
+      pythonTask(start + 30_000),
+    ]),
   });
   expect(response.status).toBe(202);
   await expect.poll(async () => (await fetch(`${CONSOLE}api/traces/${JVM}`)).status).toBe(200);
@@ -224,6 +281,19 @@ async function boxes(page: Page): Promise<string[]> {
     .getByRole("button")
     .evaluateAll((buttons) => buttons.map((button) => button.getAttribute("aria-label") ?? ""));
   return labels.map((label) => label.replace(/ \S+:\d+$/, "").trim()).sort();
+}
+
+/** The flame graph's boxes named so, waiting's hatched as the time strip draws it. */
+function boxesNamed(page: Page, name: string) {
+  return page.getByRole("region", { name: "Flame graph" }).getByRole("button", { name: new RegExp(`^${name}`) });
+}
+
+/** The functions the list under the flame graph names, in order. */
+function functionNames(page: Page): Promise<string[]> {
+  return page
+    .getByRole("region", { name: "Functions" })
+    .getByRole("listitem")
+    .evaluateAll((rows) => rows.map((row) => row.querySelector("span.font-mono")?.textContent ?? ""));
 }
 
 /** The shares the bar over the flame graph names, in order. */
@@ -273,11 +343,33 @@ test("a JVM request's code is its packages': Spring's, the JDK's and Hibernate's
 }) => {
   await page.goto(`/#/t/${JVM}?tab=profile`);
 
-  await expect.poll(() => boxes(page)).toEqual(["CatalogController.listProducts", "Unsafe.park", "VirtualThread.park"]);
+  // A park is waiting, as every language's is: no JDK frame in Your code, in the flame nor in the list.
+  await expect.poll(() => boxes(page)).toEqual(["CatalogController.listProducts", "waiting", "waiting"]);
   await expect(shares(page)).toHaveText([/^your code\s*4 ms/, /^waiting\s*6 ms/]);
+  await expect(boxesNamed(page, "waiting").first()).toHaveClass(/dt-hatched/);
+  await expect.poll(() => functionNames(page)).toEqual(["waiting", "CatalogController.listProducts"]);
 
   await page.getByRole("tab", { name: "All frames" }).click();
 
+  // Every frame keeps the one that waited.
   await expect.poll(() => boxes(page)).toContain("Brand$HibernateProxy.getName");
+  await expect.poll(() => boxes(page)).toContain("VirtualThread.park");
+  await expect(boxesNamed(page, "VirtualThread.park")).toHaveClass(/dt-hatched/);
   await expect(shares(page)).toHaveText([/^org\.springframework\s*4 ms/, /^waiting\s*6 ms/]);
+});
+
+test("a Python task's waits are waiting under the function of yours that waited, as a JVM's park is", async ({
+  page,
+}) => {
+  await page.goto(`/#/t/${PYTHON}?tab=profile`);
+
+  await expect(page.getByRole("tab", { name: "Your code", selected: true })).toBeVisible();
+  await expect.poll(() => boxes(page)).toEqual(["refresh_tracking", "track_parcel", "waiting", "waiting"]);
+  await expect(shares(page)).toHaveText([/^your code\s*1 ms/, /^waiting\s*9 ms/]);
+  await expect(boxesNamed(page, "waiting").first()).toHaveClass(/dt-hatched/);
+  await expect.poll(() => functionNames(page)).toEqual(["waiting", "track_parcel", "refresh_tracking"]);
+
+  await page.getByRole("tab", { name: "All frames" }).click();
+
+  await expect.poll(() => boxes(page)).toEqual(expect.arrayContaining(["sleep", "SyncToAsync.__call__"]));
 });

@@ -92,7 +92,12 @@ test("a Go profile is its time on the CPU; the rest of the request's time waited
     /^framework & runtime\s*2 ms\s*2%/,
     /^waiting\s*69 ms\s*70%/,
   ]);
-  await expect(
-    page.getByRole("region", { name: "Flame graph" }).getByRole("button", { name: /^off the CPU/ }),
-  ).toBeVisible();
+  // Waiting, as a Python or a JVM profile names its waits: one name, hatched, in either view.
+  const waiting = page.getByRole("region", { name: "Flame graph" }).getByRole("button", { name: /^waiting/ });
+  await expect(waiting).toBeVisible();
+  await expect(waiting).toHaveClass(/dt-hatched/);
+
+  await page.getByRole("tab", { name: "All frames" }).click();
+
+  await expect(waiting).toBeVisible();
 });

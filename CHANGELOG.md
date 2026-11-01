@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Waiting has one name and one look in every language's profile. In
+  Your code, a JVM's parked thread showed as the JDK's
+  `VirtualThread.park`, in the flame graph and as a row of the function
+  list, a Python task's sleep as asyncio's `sleep`, and a Go or a
+  Node.js profile's time off the CPU as "off the CPU", while the bar
+  called all of them waiting. Now each is one hatched "waiting" box
+  under the function of yours that waited, and one "waiting" row. All
+  frames keeps the frame that waited.
+
 ## 0.10.2 (2026-11-01)
 
 ### Fixed
