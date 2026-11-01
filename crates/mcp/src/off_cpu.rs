@@ -34,16 +34,16 @@ const CALLS: [&str; 18] = [
 pub(crate) struct Place<'a> {
     pub(crate) function: &'a str,
     pub(crate) file: &'a str,
-    pub(crate) line: i64,
     pub(crate) in_app: bool,
 }
 
-/// `lib/catalog.ts:31 in card`, as every SDK writes code.origin: the file, the line, the function.
-fn origin(span: &Value) -> Option<(&str, i64, &str)> {
+/// `lib/catalog.ts:31 in card`, as every SDK writes code.origin: the file and the function.
+fn origin(span: &Value) -> Option<(&str, &str)> {
     let value = span.get("attrs")?.get("code.origin")?.as_str()?;
     let (place, function) = value.split_once(" in ")?;
     let (file, line) = place.rsplit_once(':')?;
-    Some((file, line.parse().ok()?, function))
+    line.parse::<i64>().ok()?;
+    Some((file, function))
 }
 
 /// The same file, however much of its path each names: `catalog.go` and `shop/catalog.go`.
@@ -57,23 +57,23 @@ fn same_name(a: &str, b: &str) -> bool {
     a == b || a.rsplit('.').next() == b.rsplit('.').next()
 }
 
-/// The frame of the app's an origin names: in its file, the function it names, else the function its line is in
-/// (the one starting last before it).
-fn frame_of(frames: &[Place], (file, line, function): (&str, i64, &str)) -> Option<usize> {
-    let in_file: Vec<usize> = (0..frames.len())
-        .filter(|&index| frames[index].in_app && same_file(frames[index].file, file))
-        .collect();
-    in_file
-        .iter()
-        .copied()
-        .find(|&index| same_name(frames[index].function, function))
-        .or_else(|| {
-            in_file
-                .iter()
-                .copied()
-                .filter(|&index| frames[index].line <= line)
-                .max_by_key(|&index| frames[index].line)
-        })
+/// The sampled frame of the app's an origin names: in its file, the function it names. None where that function was
+/// never sampled: a line says nothing of which function it is in.
+fn frame_of(frames: &[Place], (file, function): (&str, &str)) -> Option<usize> {
+    frames.iter().position(|frame| {
+        frame.in_app && same_file(frame.file, file) && same_name(frame.function, function)
+    })
+}
+
+/// The sampled frame of the app's a handler's span names by its full name (code.function:
+/// `shop.(*App).listProducts`).
+fn frame_named(frames: &[Place], span: &Value) -> Option<usize> {
+    let full = span.get("attrs")?.get("code.function")?.as_str()?;
+    frames.iter().position(|frame| {
+        frame.in_app
+            && !frame.function.is_empty()
+            && (full == frame.function || full.ends_with(&format!(".{}", frame.function)))
+    })
 }
 
 /// The stack down to a frame, outermost first, the frame last: as the stacks reached it through most of the app's
@@ -94,8 +94,9 @@ fn path_to(frames: &[Place], stacks: &[(&[usize], i64)], index: usize) -> Option
         .map(|(_, _, path)| path)
 }
 
-/// Each call's stretch of the trace (µs since it started) and the stack that waited for it: the function its
-/// origin names, else its callers' nearest one's.
+/// Each call's stretch of the trace (µs since it started) and the stack that waited for it: the deepest sampled
+/// function of the app's above it in the trace, the one its origin names, else its callers' (a function's row, the
+/// handler's); a call without one is the trace's own waiting.
 fn calls(doc: &Value, frames: &[Place], stacks: &[(&[usize], i64)]) -> Vec<(i64, i64, Vec<usize>)> {
     let spans: Vec<&Value> = doc
         .get("spans")
@@ -123,7 +124,9 @@ fn calls(doc: &Value, frames: &[Place], stacks: &[(&[usize], i64)]) -> Vec<(i64,
                 Some(span)
             })
             .find_map(|span| {
-                let index = frame_of(frames, origin(span)?)?;
+                let index = origin(span)
+                    .and_then(|origin| frame_of(frames, origin))
+                    .or_else(|| frame_named(frames, span))?;
                 path_to(frames, stacks, index)
             })?;
             let from = (int(span, "start") - start).max(0);

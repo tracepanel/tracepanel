@@ -10,8 +10,10 @@
   box beside your functions. Now each query's, HTTP call's or cache
   call's time is waiting under the function its call site
   (`code.origin`) names, in the flame graph, the function list and the
-  MCP server's profile. The time no call took stays one "waiting" box
-  of its own.
+  MCP server's profile. Where that function was never sampled, it is
+  the nearest sampled function of yours above the call in the trace (a
+  traced function, the handler), never a guess by line. With none, and
+  for the time no call took, it is one "waiting" box of its own.
 - One function is one box and one row in a profile. A Python task
   awaiting the ORM (`await Order.objects.aupdate()`) and awaiting its
   own coroutine listed `refresh_tracking shop/tasks.py:26` twice, with
