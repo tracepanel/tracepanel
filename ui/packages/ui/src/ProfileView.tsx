@@ -30,6 +30,7 @@ import {
   packageOf,
   packageTimes,
   profileReason,
+  summaryOf,
   tree,
   WAITING,
   withOffCpu,
@@ -224,7 +225,7 @@ function ProfileOf({
       kinds={kinds}
       head={<ProfileHead whole={profile} shown={scope.profile} trace={trace} scope={scope} />}
       list={({ view, palette, measure }) => (
-        <Functions rows={functions(view).slice(0, 30)} palette={palette} time={measure} />
+        <Functions rows={functions(view)} limit={30} palette={palette} time={measure} />
       )}
     />
   );
@@ -265,7 +266,13 @@ function MemoryPane({
       noun="Memory"
       kinds={kinds}
       head={head}
-      list={({ palette }) => <Sites profile={profile} memory={memory} total={sites.samples} palette={palette} />}
+      list={({ view, palette }) =>
+        frames.own ? (
+          <OwnSites view={view} total={sites.samples} palette={palette} />
+        ) : (
+          <Sites profile={profile} memory={memory} total={sites.samples} palette={palette} />
+        )
+      }
     />
   );
 }
@@ -693,9 +700,40 @@ function FlameBox({
 
 type FunctionRow = { frame: Frame; self: number; total: number };
 
-/** The functions by the time they ran themselves: each with where it is, whole, and a bar of its share. */
-function Functions({ rows, palette, time }: { rows: readonly FunctionRow[]; palette: Palette; time: Measure }) {
-  const most = Math.max(1, ...rows.map((row) => row.self));
+/** A list's rows: the functions, most first and `limit` of them, then the summaries apart (FRAMEWORK, WAITING). */
+function apart<T extends { frame: Frame }>(rows: readonly T[], limit: number): { named: T[]; summaries: T[] } {
+  const named = rows.filter((row) => summaryOf(row.frame) === null).slice(0, limit);
+  const summaries = rows
+    .filter((row) => summaryOf(row.frame) !== null)
+    .sort((a, b) => summaryRank(a.frame) - summaryRank(b.frame));
+  return { named, summaries };
+}
+
+/** The framework & runtime before waiting, as the bar has them. */
+function summaryRank(frame: Frame): number {
+  return summaryOf(frame) === WAITING ? 1 : 0;
+}
+
+/** A list row's grid, as its head's: the name, then two numbers. */
+const LIST_ROW = "grid grid-cols-[minmax(0,1fr)_5rem_4.5rem] items-center gap-3 px-3 py-1.5";
+
+/**
+ * The functions by the time they ran themselves: each with where it is, whole, and a bar of its share; under them,
+ * apart, what no function is (the framework & runtime, waiting).
+ */
+function Functions({
+  rows,
+  limit,
+  palette,
+  time,
+}: {
+  rows: readonly FunctionRow[];
+  limit: number;
+  palette: Palette;
+  time: Measure;
+}) {
+  const { named, summaries } = apart(rows, limit);
+  const most = Math.max(1, ...named.map((row) => row.self), ...summaries.map((row) => row.self));
   return (
     // One box with its header in it, as every table's: the head's band and hairline, its names' case and colour.
     <section className="overflow-hidden rounded-lg border bg-card" aria-label="Functions">
@@ -705,47 +743,128 @@ function Functions({ rows, palette, time }: { rows: readonly FunctionRow[]; pale
         <span className="text-right">In all</span>
       </div>
       <ol className="m-0 list-none p-0">
-        {rows.map((row) => (
-          <FunctionLine
-            key={`${row.frame.file}:${row.frame.line}:${row.frame.function}`}
-            row={row}
-            tone={toneOf(palette, packageOf(row.frame))}
+        {named.map(({ frame, self, total }) => (
+          <ListLine
+            key={`${frame.file}:${frame.line}:${frame.function}`}
+            name={frame.function}
+            place={where(frame)}
+            tone={toneOf(palette, packageOf(frame))}
+            amount={self}
             most={most}
-            time={time}
+            value={self ? time(self) : "—"}
+            other={time(total)}
           />
         ))}
       </ol>
+      <Summaries
+        rows={summaries.map((row) => ({
+          name: row.frame.function,
+          amount: row.self,
+          other: time(row.total),
+        }))}
+        palette={palette}
+        most={most}
+        measure={time}
+      />
     </section>
   );
 }
 
-function FunctionLine({
-  row: { frame, self, total },
-  tone,
+/** A summary row: what no function is, its amount, and the list's second number. */
+interface SummaryRow {
+  name: string;
+  amount: number;
+  other: string;
+}
+
+/**
+ * Under a list's functions, after a rule: what no function is, the framework & runtime and waiting, muted, without
+ * a place, never ranked among the functions. The same in every language's list, of time or of memory.
+ */
+function Summaries({
+  rows,
+  palette,
   most,
-  time,
+  measure,
 }: {
-  row: FunctionRow;
-  tone: Tone;
+  rows: readonly SummaryRow[];
+  palette: Palette;
   most: number;
-  time: Measure;
+  measure: Measure;
+}) {
+  if (rows.length === 0) return null;
+  return (
+    <ol className="m-0 list-none border-t-2 bg-muted/20 p-0" aria-label="Not a function">
+      {rows.map((row) => {
+        const tone = toneOf(palette, row.name);
+        return (
+          <li
+            key={row.name}
+            className={cn(LIST_ROW, "border-t first:border-t-0 text-muted-foreground")}
+            data-summary=""
+          >
+            <div className="flex min-w-0 items-center gap-2">
+              <span className={cn("size-2 shrink-0 rounded-sm", tone.dot)} />
+              <span className="text-xs italic">{row.name}</span>
+            </div>
+            <div className="grid gap-1">
+              <span className="text-right text-xs tabular-nums">{row.amount ? measure(row.amount) : "—"}</span>
+              <span className="h-1 overflow-hidden rounded-full bg-muted">
+                <span
+                  className={cn("block h-full rounded-full", tone.dot)}
+                  style={{ width: `${(row.amount / most) * 100}%` }}
+                />
+              </span>
+            </div>
+            <span className="text-right text-xs tabular-nums">{row.other}</span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+/**
+ * A row of a list under the flame graph: a function, where it is (or, for a site, the line of yours that led there),
+ * its amount with a bar of its share, and the list's second number. Every list's rows look alike.
+ */
+function ListLine({
+  name,
+  place,
+  tone,
+  amount,
+  most,
+  value,
+  other,
+  title,
+}: {
+  name: string;
+  place: string;
+  tone: Tone;
+  amount: number;
+  most: number;
+  value: string;
+  other: string;
+  title?: string;
 }) {
   return (
-    <li className="grid grid-cols-[minmax(0,1fr)_5rem_4.5rem] items-center gap-3 border-t px-3 py-1.5 first:border-t-0 hover:bg-muted/40">
+    <li className={cn(LIST_ROW, "border-t first:border-t-0 hover:bg-muted/40")}>
       <div className="flex min-w-0 items-start gap-2">
         <span className={cn("mt-1 size-2 shrink-0 rounded-sm", tone.dot)} />
         <div className="grid min-w-0 gap-0.5">
-          <span className="font-mono text-xs [overflow-wrap:anywhere]">{frame.function}</span>
-          <span className="font-mono text-[11px] text-muted-foreground [overflow-wrap:anywhere]">{where(frame)}</span>
+          <span className="font-mono text-xs [overflow-wrap:anywhere]">{name}</span>
+          <span className="font-mono text-[11px] text-muted-foreground [overflow-wrap:anywhere]">{place}</span>
         </div>
       </div>
       <div className="grid gap-1">
-        <span className="text-right text-xs tabular-nums">{self ? time(self) : "—"}</span>
+        <span className="text-right text-xs tabular-nums" title={title}>
+          {value}
+        </span>
         <span className="h-1 overflow-hidden rounded-full bg-muted">
-          <span className={cn("block h-full rounded-full", tone.dot)} style={{ width: `${(self / most) * 100}%` }} />
+          <span className={cn("block h-full rounded-full", tone.dot)} style={{ width: `${(amount / most) * 100}%` }} />
         </span>
       </div>
-      <span className="text-right text-xs text-muted-foreground tabular-nums">{time(total)}</span>
+      <span className="text-right text-xs text-muted-foreground tabular-nums">{other}</span>
     </li>
   );
 }
@@ -766,11 +885,7 @@ function Sites({
   const most = Math.max(1, ...places.map(({ site }) => site.bytes));
   return (
     <section className="overflow-hidden rounded-lg border bg-card" aria-label="Allocation sites">
-      <div className={LIST_HEAD}>
-        <span>Allocated in</span>
-        <span className="text-right">Bytes</span>
-        <span className="text-right">Share</span>
-      </div>
+      <SitesHead />
       <ol className="m-0 list-none p-0">
         {places.map((place) => (
           <SiteLine
@@ -786,6 +901,55 @@ function Sites({
   );
 }
 
+/** The head of the list of allocation sites, in either view. */
+function SitesHead() {
+  return (
+    <div className={LIST_HEAD}>
+      <span>Allocated in</span>
+      <span className="text-right">Bytes</span>
+      <span className="text-right">Share</span>
+    </div>
+  );
+}
+
+/**
+ * Your code's allocation sites, as its flame graph has them: each function of yours with the bytes allocated in it
+ * and in the libraries it called, largest first; under them, apart, the framework & runtime's (sites with none of
+ * your code). No library's function is a row.
+ */
+function OwnSites({ view, total, palette }: { view: Profile; total: number; palette: Palette }) {
+  const { named, summaries } = apart(
+    functions(view).filter((row) => row.self > 0),
+    Number.POSITIVE_INFINITY,
+  );
+  const most = Math.max(1, ...named.map((row) => row.self), ...summaries.map((row) => row.self));
+  return (
+    <section className="overflow-hidden rounded-lg border bg-card" aria-label="Allocation sites">
+      <SitesHead />
+      <ol className="m-0 list-none p-0">
+        {named.map(({ frame, self }) => (
+          <ListLine
+            key={`${frame.file}:${frame.line}:${frame.function}`}
+            name={frame.function}
+            place={where(frame)}
+            tone={toneOf(palette, packageOf(frame))}
+            amount={self}
+            most={most}
+            value={bytes(self)}
+            other={percent(self, total)}
+          />
+        ))}
+      </ol>
+      <Summaries
+        rows={summaries.map((row) => ({ name: row.frame.function, amount: row.self, other: percent(row.self, total) }))}
+        palette={palette}
+        most={most}
+        measure={bytes}
+      />
+    </section>
+  );
+}
+
 function SiteLine({
   place: { site, allocated, own },
   palette,
@@ -797,29 +961,17 @@ function SiteLine({
   most: number;
   total: number;
 }) {
-  const tone = toneOf(palette, packageOf(allocated));
   return (
-    <li className="grid grid-cols-[minmax(0,1fr)_5rem_4.5rem] items-center gap-3 border-t px-3 py-1.5 first:border-t-0 hover:bg-muted/40">
-      <div className="flex min-w-0 items-start gap-2">
-        <span className={cn("mt-1 size-2 shrink-0 rounded-sm", tone.dot)} />
-        <div className="grid min-w-0 gap-0.5">
-          <span className="font-mono text-xs [overflow-wrap:anywhere]">{allocated.function}</span>
-          <span className="font-mono text-[11px] text-muted-foreground [overflow-wrap:anywhere]">{where(own)}</span>
-        </div>
-      </div>
-      <div className="grid gap-1">
-        <span className="text-right text-xs tabular-nums" title={`${site.count.toLocaleString()} blocks`}>
-          {bytes(site.bytes)}
-        </span>
-        <span className="h-1 overflow-hidden rounded-full bg-muted">
-          <span
-            className={cn("block h-full rounded-full", tone.dot)}
-            style={{ width: `${(site.bytes / most) * 100}%` }}
-          />
-        </span>
-      </div>
-      <span className="text-right text-xs text-muted-foreground tabular-nums">{percent(site.bytes, total)}</span>
-    </li>
+    <ListLine
+      name={allocated.function}
+      place={where(own)}
+      tone={toneOf(palette, packageOf(allocated))}
+      amount={site.bytes}
+      most={most}
+      value={bytes(site.bytes)}
+      other={percent(site.bytes, total)}
+      title={`${site.count.toLocaleString()} blocks`}
+    />
   );
 }
 
@@ -1024,7 +1176,7 @@ function AppProfileSection({ app, view }: { app: AppProfile; view: Scope }) {
           </div>
         }
         list={({ view: frames, palette, measure }) => (
-          <Functions rows={functions(frames).slice(0, 15)} palette={palette} time={measure} />
+          <Functions rows={functions(frames)} limit={15} palette={palette} time={measure} />
         )}
       />
     </section>

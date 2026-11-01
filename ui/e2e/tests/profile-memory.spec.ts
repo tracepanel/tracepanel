@@ -164,6 +164,109 @@ test("Your code or All frames is one choice for Time and Memory, its first from 
   await expect(frames.getByRole("tab", { name: "All frames" })).toHaveAttribute("aria-selected", "true");
 });
 
+const WORKER = "01M4PR0F11E0000000000MEM02";
+
+/**
+ * A Taskiq task's memory as tracepanel-python sends it: most of it allocated by Redis's client and pydantic with none
+ * of the task's code on the stack, the rest under the task's functions, one of them awaiting a thread (its frame
+ * waits).
+ */
+async function seedWorker(): Promise<void> {
+  const start = Date.now() * 1000 - 4 * 3_600_000_000;
+  const frame = (fn: string, module: string, file: string, line: number, inApp: boolean) => ({
+    function: fn,
+    module,
+    file,
+    line,
+    in_app: inApp,
+  });
+  const trace = {
+    id: WORKER,
+    kind: "task",
+    name: "shop.tasks.refresh_tracking",
+    start,
+    duration: 10_000,
+    status: "ok",
+    attrs: { "service.name": "memory-store" },
+    spans: [
+      {
+        id: "r",
+        parent_id: null,
+        kind: "task",
+        name: "shop.tasks.refresh_tracking",
+        start,
+        duration: 10_000,
+        status: "ok",
+        attrs: {},
+      },
+    ],
+    logs: [],
+    errors: [],
+    links: [],
+    issues: [],
+    profile: {
+      interval_us: 1000,
+      samples: 10,
+      frames: [
+        frame("refresh_tracking", "shop.tasks", "shop/tasks.py", 26, true),
+        frame("track_parcel", "shop.tasks", "shop/tasks.py", 20, true),
+        frame("CaseInsensitiveDict.__setitem__", "redis.client", "redis/client.py", 144, false),
+        frame("BaseModel.__init__", "pydantic.main", "pydantic/main.py", 250, false),
+        frame("Redis.execute_command.<locals>.<lambda>", "redis.asyncio.client", "redis/asyncio/client.py", 600, false),
+        { ...frame("SyncToAsync.__call__", "asgiref.sync", "asgiref/sync.py", 502, false), waiting: true },
+      ],
+      stacks: [{ frames: [0, 1], count: 10 }],
+      memory: {
+        peak: 54_000,
+        net: 35_000,
+        sites: [
+          { frames: [2], bytes: 12_000, count: 40 },
+          { frames: [3], bytes: 936, count: 3 },
+          { frames: [0, 1, 4], bytes: 520, count: 2 },
+          { frames: [0, 5], bytes: 336, count: 1 },
+        ],
+      },
+    },
+  };
+  const response = await fetch(`${CONSOLE}api/ingest`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify([trace]),
+  });
+  expect(response.status).toBe(202);
+  await expect.poll(async () => (await fetch(`${CONSOLE}api/traces/${WORKER}`)).status).toBe(200);
+}
+
+test("Your code's sites are its flame's: a library's bytes its caller's, none of yours the framework & runtime's", async ({
+  page,
+}) => {
+  await seedWorker();
+  await page.goto(`/#/t/${WORKER}?tab=profile`);
+  await page.getByRole("tablist", { name: "Profile of" }).getByRole("tab", { name: "Memory" }).click();
+  const frames = page.getByRole("tablist", { name: "Frames shown" });
+  const sites = page.getByRole("region", { name: "Allocation sites" });
+
+  await expect(frames.getByRole("tab", { name: "Your code" })).toHaveAttribute("aria-selected", "true");
+  // Memory isn't time: the bytes allocated under a frame that waits are its caller's, not waiting's.
+  await expect(page.getByRole("region", { name: "Memory by package" }).getByRole("button")).toHaveText([
+    /^your code\s*856 B/,
+    /^framework & runtime\s*13 KB/,
+  ]);
+  await expect(sites.getByRole("listitem")).toHaveText([
+    /^track_parcel\s*shop\/tasks\.py:20\s*520 B\s*4%$/,
+    /^refresh_tracking\s*shop\/tasks\.py:26\s*336 B\s*2%$/,
+    /^framework & runtime\s*13 KB\s*94%$/,
+  ]);
+  await expect(sites.getByRole("list", { name: "Not a function" }).getByRole("listitem")).toHaveCount(1);
+  await expect(sites).not.toContainText("CaseInsensitiveDict");
+  await expect(sites).not.toContainText("BaseModel");
+
+  await frames.getByRole("tab", { name: "All frames" }).click();
+
+  await expect(sites.getByRole("listitem").first()).toContainText("CaseInsensitiveDict.__setitem__");
+  await expect(sites.getByRole("list", { name: "Not a function" })).toHaveCount(0);
+});
+
 test("the strip has the collector's pauses as their own share, and a click on one picks nothing", async ({ page }) => {
   await page.goto(`/#/t/${await traceId(SALES)}?tab=tree`);
   const legend = page.getByRole("list", { name: /^Where the time went/ });

@@ -92,7 +92,23 @@ test("a Go profile is its time on the CPU; the rest of the request's time waited
     /^framework & runtime\s*2 ms\s*2%/,
     /^waiting\s*69 ms\s*70%/,
   ]);
-  await expect(
-    page.getByRole("region", { name: "Flame graph" }).getByRole("button", { name: /^off the CPU/ }),
-  ).toBeVisible();
+  // Waiting, as a Python or a JVM profile names its waits: one name, hatched, in either view.
+  const waiting = page.getByRole("region", { name: "Flame graph" }).getByRole("button", { name: /^waiting/ });
+  await expect(waiting).toBeVisible();
+  await expect(waiting).toHaveClass(/dt-hatched/);
+  // The functions, then what no function is, apart at the bottom though waiting took most.
+  const functions = page.getByRole("region", { name: "Functions" });
+  await expect(functions.getByRole("listitem")).toHaveText([
+    /^editDistance\s*similar\.go:1/,
+    /^\(\*App\)\.listProducts\s*catalog\.go:1/,
+    /^\(\*App\)\.similar\s*similar\.go:1/,
+    /^framework & runtime\s*2 ms\s*2 ms$/,
+    /^waiting\s*69 ms\s*69 ms$/,
+  ]);
+  await expect(functions.getByRole("list", { name: "Not a function" }).getByRole("listitem")).toHaveCount(2);
+
+  await page.getByRole("tab", { name: "All frames" }).click();
+
+  await expect(waiting).toBeVisible();
+  await expect(functions.getByRole("list", { name: "Not a function" })).toHaveText(/^waiting\s*69 ms\s*69 ms$/);
 });

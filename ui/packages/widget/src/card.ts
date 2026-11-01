@@ -1,5 +1,6 @@
 // The pill's hover card: the request at a glance (where its time went, what to fix first, what the page asked
 // for after it loaded) before opening the panel.
+import { duration } from "@tracepanel/ui/format";
 import { breakdown, categoryLabel } from "@tracepanel/ui/lib/breakdown";
 import { percent } from "@tracepanel/ui/lib/percent";
 import { plural } from "@tracepanel/ui/lib/plural";
@@ -137,17 +138,6 @@ function element<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
-function ms(microseconds: number): string {
-  const value = microseconds / 1000;
-  if (value >= 1000) return `${(value / 1000).toFixed(1)} s`;
-  return value >= 10 ? `${Math.round(value)} ms` : `${value.toFixed(1).replace(/\.0$/, "")} ms`;
-}
-
-/** As the pill shows time: whole milliseconds, seconds from one. */
-function pillMs(value: number): string {
-  return value >= 1000 ? `${(value / 1000).toFixed(1)} s` : `${Math.round(value)} ms`;
-}
-
 function statusChip(status: number | null | undefined): HTMLElement | null {
   if (status === null || status === undefined) return null;
   const chip = element("span", "status", String(status));
@@ -230,7 +220,7 @@ function requestLabel(info: TraceInfo, isPage: boolean): HTMLElement {
 /** Its time, amber or red when slow. */
 function timeCell(info: TraceInfo): HTMLElement {
   const total = info.totalMs ?? 0;
-  const time = element("span", "card-ms", pillMs(total));
+  const time = element("span", "card-ms", duration(total * 1000));
   const speed = speedOf(total);
   if (speed) time.dataset["speed"] = speed;
   return time;
@@ -240,7 +230,12 @@ function timeCell(info: TraceInfo): HTMLElement {
 function mostLine(label: string, category: string, value: number, total: number): HTMLElement {
   const line = element("p", "card-most");
   line.dataset["category"] = category;
-  line.append(element("i"), `Most time: ${label} `, element("b", undefined, ms(value)), ` · ${percent(value, total)}`);
+  line.append(
+    element("i"),
+    `Most time: ${label} `,
+    element("b", undefined, duration(value)),
+    ` · ${percent(value, total)}`,
+  );
   return line;
 }
 
@@ -295,8 +290,8 @@ export function mountCard(root: ShadowRoot, badge: HTMLElement, source: CardSour
     row.append(name);
     const chip = statusChip(info.status);
     if (chip) row.append(chip);
-    // The pill's number, rounded the pill's way: the two never disagree.
-    row.append(element("span", "card-time", pillMs(info.totalMs ?? (trace?.duration ?? 0) / 1000)));
+    // The pill's number, said as the panel's list says it (0.5 ms): the three never disagree.
+    row.append(element("span", "card-time", duration((info.totalMs ?? (trace?.duration ?? 0) / 1000) * 1000)));
     return row;
   }
 
@@ -313,14 +308,14 @@ export function mountCard(root: ShadowRoot, badge: HTMLElement, source: CardSour
       const piece = element("span");
       piece.dataset["category"] = category;
       piece.style.flex = `${value / total} 1 0`;
-      piece.title = `${categoryLabel(category, trace)} ${ms(value)}`;
+      piece.title = `${categoryLabel(category, trace)} ${duration(value)}`;
       bar.append(piece);
     }
     const [top] = [...parts].sort((a, b) => b[1] - a[1]);
     if (!top) return [bar];
     const [category, value] = top;
     const label = categoryLabel(category, trace);
-    bar.setAttribute("aria-label", `Most time: ${label}, ${ms(value)}`);
+    bar.setAttribute("aria-label", `Most time: ${label}, ${duration(value)}`);
     // A failed request's story is its error (under Fix first), not where its time went.
     return failed(info) ? [bar] : [bar, mostLine(label, category, value, total)];
   }

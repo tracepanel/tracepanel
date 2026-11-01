@@ -7,6 +7,7 @@
     ".": "./src/index.ts",
     "./styles.css": "./src/styles.css",
     "./theme.css": "./src/theme.css",
+    "./format": "./src/format.ts",
     "./lib/*": "./src/lib/*.ts",
     "./types": "./src/types.ts",
     "./components/ui/*": "./src/components/ui/*.tsx",

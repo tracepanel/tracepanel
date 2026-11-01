@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Waiting has one name and one look in every language's profile. In
+  Your code, a JVM's parked thread showed as the JDK's
+  `VirtualThread.park`, in the flame graph and as a row of the function
+  list, a Python task's sleep as asyncio's `sleep`, and a Go or a
+  Node.js profile's time off the CPU as "off the CPU", while the bar
+  called all of them waiting. Now each is one hatched "waiting" box
+  under the function of yours that waited, and one "waiting" row. All
+  frames keeps the frame that waited.
+- A profile's Memory in Your code lists your functions only, as its
+  flame graph has them. A Django task whose flame graph was one
+  "framework & runtime" box still listed redis's
+  `CaseInsensitiveDict.__setitem__` and pydantic's
+  `BaseModel.__init__` under Allocated in. Now a library's bytes count
+  to the function of yours that called it, and the sites with none of
+  your code are one "framework & runtime" row. A frame that waits
+  allocates as any other: its bytes are its caller's, not waiting's.
+  All frames lists every site as before.
+- The function list under a profile's flame graph shows "framework &
+  runtime" and "waiting" apart from the functions: muted, without a
+  file, after a rule at the bottom, in every language and in Memory.
+  They were rows among the functions, often the first, as if they were
+  functions.
+- The pill and its hover card say a request's time as the panel's list
+  does. A 0.45 ms request read "0 ms" on the pill and in the card while
+  the list said 0.5 ms, and the card's "Most time" said 4.6 ms where
+  the panel said 5 ms. All of them now share one formatter.
+
 ## 0.10.2 (2026-11-01)
 
 ### Fixed

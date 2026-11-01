@@ -35,6 +35,14 @@ const OUTSIDE: Frame = { function: FRAMEWORK, module: null, file: "", line: 0, i
 export const WAITING = "waiting";
 
 /**
+ * The frame waiting is drawn as where no frame of the runtime's should name it: Your code's waits (a JVM's
+ * VirtualThread.park, Python's sleep), and a CPU profile's time off the CPU (Go's, Node's). One name and one look in
+ * every language; All frames keeps the frame that waited, where the profile has one.
+ */
+// biome-ignore lint/style/useNamingConvention: a frame as the SDKs send it.
+const WAITED: Frame = { function: WAITING, module: null, file: "", line: 0, in_app: false, waiting: true };
+
+/**
  * A library frame's package: its module's (org.springframework, not org; Django's first two parts, as it is many
  * packages in one), else its file's first folder (express, node:internal), a scoped npm package's first two
  * (@opentelemetry/instrumentation-http).
@@ -87,27 +95,37 @@ function tracing(frame: Frame | undefined): boolean {
   return frame !== undefined && !frame.in_app && TRACING.test(frame.module || frame.file);
 }
 
+/** Where Your code's two frames of its own are in its frames: the framework & runtime's, and waiting's. */
+interface Kept {
+  outside: number;
+  waited: number;
+}
+
 /**
  * A stack as your code sees it: your frames only, the time in the libraries they called counted to the innermost of
- * them; its innermost frame too where that waited (a socket, a sleep: waiting, not a library's time). A stack with
- * none of your code, or running tracing's own code (a span started, an attribute set), is the framework's and the
- * runtime's (`outside`): none of their frames, nor tracing's time, are yours.
+ * them; one waiting frame under them where the stack waited (a socket, a sleep, a parked thread: waiting, not a
+ * library's time, nor its frame's). A stack with none of your code, or running tracing's own code (a span started,
+ * an attribute set), is the framework's and the runtime's (`outside`): none of their frames, nor tracing's time, are
+ * yours.
  */
-function ownFrames(profile: Profile, frames: readonly number[], outside: number): number[] {
+function ownFrames(profile: Profile, frames: readonly number[], kept: Kept): number[] {
   const yours = frames.filter((index) => profile.frames[index]?.in_app === true);
   const leaf = frames.at(-1);
   const inner = leaf === undefined ? undefined : profile.frames[leaf];
-  if (leaf !== undefined && inner?.waiting === true && !inner.in_app) return [...yours, leaf];
-  return yours.length && !tracing(inner) ? yours : [outside];
+  if (inner?.waiting === true && !inner.in_app) return [...yours, kept.waited];
+  return yours.length && !tracing(inner) ? yours : [kept.outside];
 }
 
-/** Your code's view of the profile: its frames alone, and the rest one framework & runtime frame (FRAMEWORK). */
+/**
+ * Your code's view of the profile: its frames alone, the rest one framework & runtime frame (FRAMEWORK), and its
+ * waits one waiting frame (WAITING).
+ */
 export function ownCode(profile: Profile): Profile {
-  const frames = [...profile.frames, OUTSIDE];
-  const outside = frames.length - 1;
+  const frames = [...profile.frames, OUTSIDE, WAITED];
+  const kept = { outside: frames.length - 2, waited: frames.length - 1 };
   return merged(
     { ...profile, frames },
-    profile.stacks.map((stack) => ({ frames: ownFrames(profile, stack.frames, outside), count: stack.count })),
+    profile.stacks.map((stack) => ({ frames: ownFrames(profile, stack.frames, kept), count: stack.count })),
   );
 }
 
@@ -195,6 +213,17 @@ export function functions(profile: Profile): { frame: Frame; self: number; total
       return frame ? [{ frame, self: self.get(index) ?? 0, total: samples }] : [];
     })
     .sort((a, b) => b.self - a.self || b.total - a.total);
+}
+
+/**
+ * What a frame of the console's own stands for, no function's: the framework & runtime (Your code's samples that
+ * ran none of it), or waiting (Your code's waits, a CPU profile's time off the CPU). Null for a function's frame,
+ * however it is named. By its fields, as a chain's merged profiles copy their frames.
+ */
+export function summaryOf(frame: Frame): typeof FRAMEWORK | typeof WAITING | null {
+  if (frame.file !== "" || frame.in_app || frame.module) return null;
+  if (frame.function === FRAMEWORK && !frame.waiting) return FRAMEWORK;
+  return frame.function === WAITING && frame.waiting === true ? WAITING : null;
 }
 
 /** A box per call, a row per depth, each as wide as its share of the focused node's samples. */
@@ -293,19 +322,15 @@ export function onCpuOnly(trace: Pick<Trace, "attrs">): boolean {
   return typeof language === "string" && CPU_ONLY.has(language);
 }
 
-/** The time a CPU profile reads as off the CPU: waiting on the database, the network, a lock, a timer. */
-// biome-ignore lint/style/useNamingConvention: a frame as the SDKs send it.
-const OFF_CPU: Frame = { function: "off the CPU", module: null, file: "", line: 0, in_app: false, waiting: true };
-
 /**
- * A CPU profile read on the trace's clock: the time it wasn't on the CPU (not sampled, nor dropped for other traces)
- * one waiting stack (OFF_CPU), as a Python or a JVM profile has its waits. None where its code ran on the CPU for
- * longer than the trace (goroutines at once).
+ * A CPU profile read on the trace's clock: the time it wasn't on the CPU (not sampled, nor dropped for other traces;
+ * the database, the network, a lock, a timer) one waiting stack (WAITED), as a Python or a JVM profile has its
+ * waits. None where its code ran on the CPU for longer than the trace (goroutines at once).
  */
 export function withOffCpu(profile: Profile, duration: number): Profile {
   const off = duration / profile.interval_us - profile.samples - (profile.dropped ?? 0);
   if (off < 1) return profile;
-  const frames = [...profile.frames, OFF_CPU];
+  const frames = [...profile.frames, WAITED];
   return {
     ...profile,
     frames,

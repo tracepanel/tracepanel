@@ -23,12 +23,14 @@ function gcFact(gc: Profile["gc"]): string | null {
 
 /**
  * The allocation sites as a profile is read: each site a stack, its bytes its count (a "sample" of one byte). The
- * time profile's views (by package, the flame graph, your code or every frame) then read it as they read time.
+ * time profile's views (by package, the flame graph, your code or every frame) then read it as they read time. A
+ * frame that waits allocates as any other (memory isn't time): Your code counts its bytes to the function of yours
+ * that called it.
  */
 export function memoryProfile(profile: Profile, memory: Memory): Profile {
   const stacks = (memory.sites ?? []).filter((site) => site.bytes > 0);
   return {
-    frames: profile.frames,
+    frames: profile.frames.map(({ waiting: _, ...frame }) => frame),
     // biome-ignore lint/style/useNamingConvention: a profile as the SDKs send it.
     interval_us: 1,
     samples: stacks.reduce((sum, site) => sum + site.bytes, 0),

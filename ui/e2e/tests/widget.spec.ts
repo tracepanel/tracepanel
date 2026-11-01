@@ -1,6 +1,7 @@
 // The widget on an app's page: the pill's states, the panel it opens, and the tab's list.
 import { readFileSync } from "node:fs";
 import type { BrowserContext, Locator, Page } from "@playwright/test";
+import { duration } from "../../packages/ui/src/format.ts";
 import { CONSOLE } from "../agent.ts";
 import { type Call, chooseTheme, OTHER_API, openApp, panel, pill, traceId } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
@@ -113,7 +114,27 @@ test("once the agent stored the request, the pill shows its time as the panel do
   await openApp(page, { posts: call });
   await page.getByRole("button", { name: "Load posts" }).click();
 
-  await expect(pill(page)).toHaveAccessibleName(new RegExp(` · ${Math.round(stored.duration / 1000)} ms · `));
+  await expect(pill(page)).toHaveAccessibleName(new RegExp(` · ${duration(stored.duration)} · `));
+});
+
+test("a request under a millisecond says so on the pill and in its hover card, as the panel's list does", async ({
+  page,
+}) => {
+  const books: Call = { status: 200, trace: await traceId("GET /books"), queries: 0, totalMs: 0.45 };
+  const quick: Call = { ...(await posts()), totalMs: 0.3, issues: 0 };
+  await openApp(page, { books, posts: quick });
+  await page.getByRole("button", { name: "Load books" }).click();
+  await page.getByRole("button", { name: "Load posts" }).click();
+
+  await expect(pill(page)).toHaveAccessibleName(/ · 0\.3 ms · /);
+  await expect(pill(page)).toContainText(/0\.3\s*ms/);
+
+  await pill(page).hover();
+  const card = page.getByRole("dialog", { name: "This request at a glance" });
+
+  await expect(card.locator(".card-head .card-time")).toHaveText("0.3 ms");
+  await expect(card.locator(".card-row").filter({ hasText: "/books" })).toContainText("0.5 ms");
+  await expect(card).not.toContainText(/\b0 ms/);
 });
 
 test("the panel opens on the latest request's trace, from the agent", async ({ page }) => {
