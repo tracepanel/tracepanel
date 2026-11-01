@@ -1,6 +1,7 @@
 // A trace's profile made readable: its stacks as a tree, its time by package, and the two ways of looking at it (the
 // project's own code, every frame).
 import type { Trace } from "../types";
+import { packageOf as modulePackage } from "./packages";
 
 export type Profile = NonNullable<Trace["profile"]>;
 export type Frame = Profile["frames"][number];
@@ -16,17 +17,24 @@ export const YOUR_CODE = "your code";
 /** What a frame belongs to: your code, or a library's package (django.db, django.template, requests, threading). */
 export function packageOf(frame: Frame): string {
   if (frame.waiting) return WAITING;
-  return frame.in_app ? YOUR_CODE : libraryOf(frame.module ?? frame.file.replace(/\.py$/, "").split("/").join("."));
+  return frame.in_app ? YOUR_CODE : libraryOf(frame);
 }
 
 /** Time a sample's innermost frame waited (a sleep, the event loop's select, a socket), not computing: its own share. */
 export const WAITING = "waiting";
 
-/** A dotted module's package: its first part; Django's first two, as it is many packages in one. */
-function libraryOf(module: string): string {
-  const parts = module.split(".").filter(Boolean);
-  const depth = parts[0] === "django" ? 2 : 1;
-  return parts.slice(0, depth).join(".") || "(unknown)";
+/**
+ * A library frame's package: its module's (org.springframework, not org; Django's first two parts, as it is many
+ * packages in one), else its file's first folder (express, node:internal), a scoped npm package's first two
+ * (@opentelemetry/instrumentation-http).
+ */
+function libraryOf(frame: Frame): string {
+  const module = frame.module ?? "";
+  if (module) return module.startsWith("django.") ? module.split(".").slice(0, 2).join(".") : modulePackage(module);
+  const parts = frame.file.replace(/\.py$/, "").split("/").filter(Boolean);
+  const first = parts[0] ?? "";
+  if (first.startsWith("@")) return parts.slice(0, 2).join("/");
+  return (parts.length > 1 ? first : first.split(".")[0]) || "(unknown)";
 }
 
 /** The package whose code a stack was running: its innermost frame's. */
@@ -59,13 +67,15 @@ function merged(profile: Profile, stacks: Stack[]): Profile {
 
 /**
  * A stack as your code sees it: your frames, and under each the library call it made (what it spent was spent in
- * that call); the server's frames above your first are left out. A stack without your code is left as it is.
+ * that call); the server's frames above your first are left out. A stack without your code is the library code it
+ * was running, its innermost frame alone: none of the framework's or the runtime's frames on the way there are yours.
  */
 function ownFrames(profile: Profile, frames: readonly number[]): number[] {
   const yours = frames.map((index) => profile.frames[index]?.in_app === true);
   // A frame of yours, or the call one of yours made: after it, its own calls are part of it.
   const kept = frames.filter((_, at) => yours[at] || yours[at - 1]);
-  return kept.length ? kept : [...frames];
+  if (kept.length) return kept;
+  return frames.length ? [frames[frames.length - 1] as number] : [];
 }
 
 export function ownCode(profile: Profile): Profile {

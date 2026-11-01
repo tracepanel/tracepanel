@@ -4,6 +4,18 @@
 
 ### Fixed
 
+- A profile's Your code is the app's own frames only, in the console
+  and in MCP's `get_profile`. A sample with none of them, such as a
+  Node worker in the runtime's timers and OpenTelemetry's exporter or a
+  JVM thread parked in the JDK, is the library code it was running, its
+  innermost frame alone. Before, it showed whole, every framework and
+  runtime frame on the way there, and filled a JavaScript or Java
+  task's profile with them.
+- A profile's packages are named as their ecosystems name them:
+  `org.springframework` and `com.acme`, not `org` and `com`. A scoped
+  npm package by its scope and name, such as
+  `@opentelemetry/sdk-trace-base`, and a Go module by its path, such as
+  `github.com/acme/kit`.
 - Nothing in the widget moves while it is out of sight: the closed
   panel's hourglass of a trace on its way stops until the panel opens
   again, and the pill's card shimmers only while it shows and loads.
