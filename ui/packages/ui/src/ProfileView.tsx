@@ -24,6 +24,7 @@ import {
   layout,
   mostlyYours,
   type Node,
+  onCpuOnly,
   ownCode,
   type Profile,
   packageOf,
@@ -31,6 +32,7 @@ import {
   profileReason,
   tree,
   WAITING,
+  withOffCpu,
   YOUR_CODE,
 } from "./lib/profile";
 import { serviceRuntime, traceRuntime } from "./lib/runtime";
@@ -180,9 +182,10 @@ function ProfilePane({ trace, open }: { trace: Trace; open: boolean }) {
   const range = useProfileRange(open);
   const [kind, setKind] = useKind();
   // Kept while the profile and the range are: the flame graph's zoom belongs to the profile it was made in.
+  const cpu = onCpuOnly(trace);
   const scope = useMemo(
-    () => (trace.profile ? scopeOf(trace.profile, range, trace.duration) : null),
-    [trace.profile, range, trace.duration],
+    () => (trace.profile ? scopeOf(trace.profile, range, trace.duration, cpu) : null),
+    [trace.profile, range, trace.duration, cpu],
   );
   if (!(open && trace.profile && scope)) return null;
   return <ProfileOf trace={trace} profile={trace.profile} scope={scope} kind={kind} onKind={setKind} />;
@@ -351,21 +354,32 @@ interface Scope {
   note: string | null;
   /** In the trace's own time (the profile says when its samples were taken), not in samples. */
   timed: boolean;
+  /** Its samples are the CPU's alone (Go's, Node's): the rest of the trace's time is waiting, off the CPU. */
+  cpu: boolean;
 }
 
-function scopeOf(profile: Profile, range: TimeRange | null, total: number): Scope {
+function scopeOf(profile: Profile, range: TimeRange | null, total: number, cpu: boolean): Scope {
   // Timed, it reads in the trace's own time, as the time strip does; a range narrows it.
   if (timed(profile)) {
     const title = range ? `Profile of ${rangeLabel(range)}` : "Profile of the whole trace";
-    return { profile: wallClock(profile, total, range), title, note: null, timed: true };
+    return { profile: wallClock(profile, total, range), title, note: null, timed: true, cpu: false };
   }
   const note = range ? "Its samples aren't timed: the range picked can't narrow it." : null;
-  return { profile, title: "Profile of the whole trace", note, timed: false };
+  // On the trace's clock: the time off the CPU waited.
+  const shown = cpu ? withOffCpu(profile, total) : profile;
+  return { profile: shown, title: "Profile of the whole trace", note, timed: false, cpu };
 }
 
-/** "110 samples, one every 10 ms": what the profile took. */
-function samplesLine(profile: Profile): string {
-  return `${profile.samples.toLocaleString()} samples, one every ${duration(profile.interval_us)}`;
+/** "110 samples, one every 10 ms": what the profile took; a CPU profile's, "of CPU time". */
+function samplesLine(profile: Profile, cpu: boolean): string {
+  const line = `${profile.samples.toLocaleString()} samples, one every ${duration(profile.interval_us)}`;
+  return cpu ? `${line} of CPU time; waiting isn't sampled` : line;
+}
+
+/** What the big number is of the trace's time: profiled (timed), sampled, or on the CPU (a CPU profile). */
+function profiledWord(scope: Scope): string {
+  if (scope.cpu) return "on the CPU";
+  return scope.timed ? "profiled" : "sampled";
 }
 
 /** A line of the head in small print, when there is something to say. */
@@ -399,12 +413,13 @@ function ProfileHead({ whole, shown, trace, scope }: { whole: Profile; shown: Pr
     <div className="grid gap-0.5">
       <span className="text-xs text-muted-foreground">{scope.title}</span>
       <span className="text-2xl font-semibold tracking-tight tabular-nums">
-        {time(shown.samples)}
+        {/* A CPU profile's own samples: the time off the CPU added to it is the trace's, not sampled. */}
+        {time(scope.cpu ? whole.samples : shown.samples)}
         <span className="ml-2 text-sm font-normal text-muted-foreground">
-          {scope.timed ? "profiled" : "sampled"} of the trace's {duration(trace.duration)}
+          {profiledWord(scope)} of the trace's {duration(trace.duration)}
         </span>
       </span>
-      <span className="text-xs text-muted-foreground">{scope.note ?? samplesLine(whole)}</span>
+      <span className="text-xs text-muted-foreground">{scope.note ?? samplesLine(whole, scope.cpu)}</span>
       <Reason trace={trace} />
       <Dropped whole={whole} timed={scope.timed} />
     </div>
@@ -926,11 +941,11 @@ function appRuntime(app: AppProfile): string | undefined {
 /** An app's profile in the scope: one trace's (its stretch), or its traces' merged. */
 function appView(app: AppProfile): Scope {
   const [one] = app.traces;
-  if (app.traces.length === 1 && one) return scopeOf(one.profile, one.range, one.member.trace.duration);
-  const profile = mergeProfiles(
-    app.traces.map((each) => scopeOf(each.profile, each.range, each.member.trace.duration).profile),
-  );
-  return { profile, title: `Profile of ${app.traces.length} traces`, note: null, timed: false };
+  const scoped = (each: AppProfile["traces"][number]) =>
+    scopeOf(each.profile, each.range, each.member.trace.duration, onCpuOnly(each.member.trace));
+  if (app.traces.length === 1 && one) return scoped(one);
+  const profile = mergeProfiles(app.traces.map((each) => scoped(each).profile));
+  return { profile, title: `Profile of ${app.traces.length} traces`, note: null, timed: false, cpu: false };
 }
 
 /** What each app's profiles add up to, a row an app in aligned columns: the time's, or the memory's. */

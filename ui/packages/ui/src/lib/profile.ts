@@ -279,3 +279,37 @@ export function profileReason(trace: Pick<Trace, "attrs" | "spans">): string | n
   if (typeof value !== "string" || value === "") return null;
   return `Profiled: ${REASONS[value] ?? value}`;
 }
+
+/**
+ * The SDKs that sample the CPU alone, by their language: Go's (runtime/pprof samples the goroutines running) and
+ * Node's (V8's profiler, its idle samples left out). Python's and the JVM's sample each thread's stack on the clock,
+ * waiting or not.
+ */
+const CPU_ONLY = new Set(["go", "nodejs"]);
+
+/** Whether a trace's profile is its time on the CPU only, not its time on the clock. */
+export function onCpuOnly(trace: Pick<Trace, "attrs">): boolean {
+  const language = trace.attrs["telemetry.sdk.language"];
+  return typeof language === "string" && CPU_ONLY.has(language);
+}
+
+/** The time a CPU profile reads as off the CPU: waiting on the database, the network, a lock, a timer. */
+// biome-ignore lint/style/useNamingConvention: a frame as the SDKs send it.
+const OFF_CPU: Frame = { function: "off the CPU", module: null, file: "", line: 0, in_app: false, waiting: true };
+
+/**
+ * A CPU profile read on the trace's clock: the time it wasn't on the CPU (not sampled, nor dropped for other traces)
+ * one waiting stack (OFF_CPU), as a Python or a JVM profile has its waits. None where its code ran on the CPU for
+ * longer than the trace (goroutines at once).
+ */
+export function withOffCpu(profile: Profile, duration: number): Profile {
+  const off = duration / profile.interval_us - profile.samples - (profile.dropped ?? 0);
+  if (off < 1) return profile;
+  const frames = [...profile.frames, OFF_CPU];
+  return {
+    ...profile,
+    frames,
+    stacks: [...profile.stacks, { frames: [frames.length - 1], count: off }],
+    samples: profile.samples + off,
+  };
+}
