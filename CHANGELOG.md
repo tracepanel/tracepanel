@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- The panel lists a server-rendered page's own request under the view
+  the browser recording made of its load, as one load: `VIEW /docs`
+  with `GET /docs` and the page's calls under it. Before, a Next.js
+  page with `<Tracepanel />` showed the two side by side, as if the
+  page had loaded twice.
 - A profile's Your code is the app's own frames only, in the console
   and in MCP's `get_profile`. A sample with none of them, such as a
   Node worker in the runtime's timers and OpenTelemetry's exporter or a

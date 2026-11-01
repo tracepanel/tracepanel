@@ -187,6 +187,28 @@ test("with the browser recording, the pill shows the page's view, and the panel 
   ]);
 });
 
+test("a server-rendered page's own request sits under the view that loaded it, one row for one load", async ({
+  page,
+}) => {
+  const home = await traceId("GET /");
+  await openApp(
+    page,
+    { posts: await posts() },
+    {
+      recording: true,
+      server: { status: 200, trace: home, queries: 1, totalMs: 12, runtime: "Node.js 26 · Next.js 16" },
+    },
+  );
+  await page.getByRole("button", { name: "Do posts" }).click();
+  await pill(page).click();
+  const rows = panel(page).getByRole("region", { name: "Pages and requests in this browser tab" }).getByRole("button");
+
+  await expect(rows).toHaveText([/^VIEW\s*\/app\//, /^GET\s*\/blog/, /^CLICK\s*"posts"/, /^GET\s*\/api\/posts/]);
+  await expect
+    .poll(() => rows.evaluateAll((buttons) => buttons.map((button) => button.getAttribute("data-depth"))))
+    .toEqual(["0", "1", "0", "1"]);
+});
+
 test("calls to an API on another origin sit under the action that made them, with a recording started after the widget", async ({
   page,
 }) => {

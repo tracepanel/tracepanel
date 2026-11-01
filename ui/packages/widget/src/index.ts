@@ -1033,6 +1033,8 @@ export function mount(options: WidgetOptions = {}): Widget {
   showRuntime(runtimeChip, runtime);
   // This page's latest view, from the browser recording: what the pill shows before the page's first request.
   let view: PageAnnouncement | null = null;
+  // The recording's first view on this page: the browser's side of its load.
+  let loadView: string | null = null;
   // What the view's calls did down its chain, once it ended and the console answered: by the view's id.
   let viewCounts: { id: string; counts: ChainCounts } | null = null;
   let runtimeAsked = Boolean(runtime);
@@ -1333,8 +1335,22 @@ export function mount(options: WidgetOptions = {}): Widget {
       at === -1
         ? [...dropEmptyView(tab, announced.name), entry]
         : tab.map((item, index) => (index === at ? entry : item));
+    tab = underLoadView(tab, announced);
     saveTab(tab);
     sendTab();
+  }
+
+  /**
+   * The page's own request (the document its server rendered) under the view that loaded it: the recording's first
+   * view on this page is the browser's side of the same load, its calls listed under it. Else the two would be rows
+   * side by side, GET /docs and VIEW /docs, for one page load.
+   */
+  function underLoadView(entries: TabEntry[], announced: PageAnnouncement): TabEntry[] {
+    if (announced.name.includes(" › ")) return entries;
+    loadView ??= announced.id;
+    const own = page && !pageCleared ? page.trace : undefined;
+    if (loadView !== announced.id || !own) return entries;
+    return entries.map((item) => (item.id === own && item.parent === null ? { ...item, parent: announced.id } : item));
   }
 
   /** What a request is listed under: the view or action that made it, else the page it was made on. */
