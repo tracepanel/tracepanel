@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- A Go or a Node.js profile's waiting is under the function of yours
+  that waited, as a Python or a JVM profile's is. Their profilers sample
+  the CPU only, so the time off it has no stack: it was one "waiting"
+  box beside your functions. Now each query's, HTTP call's or cache
+  call's time is waiting under the function its call site
+  (`code.origin`) names, in the flame graph, the function list and the
+  MCP server's profile. The time no call took stays one "waiting" box
+  of its own.
+- One function is one box and one row in a profile. A Python task
+  awaiting the ORM (`await Order.objects.aupdate()`) and awaiting its
+  own coroutine listed `refresh_tracking shop/tasks.py:26` twice, with
+  a second small box: the SDK names the line a coroutine awaits at,
+  and each line was a function of its own. The function list, the
+  flame graph and the MCP server's profile now tell functions apart by
+  their name and where they are defined.
+
 ## 0.10.3 (2026-11-01)
 
 ### Fixed

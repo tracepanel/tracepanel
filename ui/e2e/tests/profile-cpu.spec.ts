@@ -1,21 +1,38 @@
 // biome-ignore-all lint/style/useNamingConvention: the trace format's field names.
 // A Go request's profile, as tracepanel-go sends it: runtime/pprof samples the CPU only, so its 30 samples are 30 ms
 // on the CPU of a 99 ms request, and the rest of its time, waiting on Postgres, is waiting, as a Python or a JVM
-// profile has its waits. The header says it is CPU time.
+// profile has its waits. The header says it is CPU time. A query's or a Redis command's time is waiting under the
+// function of yours that made it (its code.origin), as a Python or a JVM profile has it; a Node request's too.
 import type { Page } from "@playwright/test";
 import { CONSOLE } from "../agent.ts";
 import { expect, test } from "../fixtures.ts";
 
 const GO = "01M4PR0F11E00000000000C0G1";
+const NODE = "01M4PR0F11E00000000000C0N1";
 
+/** A call out of the request (a query, a Redis command), `at` ms into it, made from `origin`. */
+function call(id: string, kind: string, start: number, at: number, ms: number, origin: string): object {
+  return {
+    id,
+    parent_id: "r",
+    kind,
+    name: id,
+    start: start + at * 1000,
+    duration: ms * 1000,
+    status: "ok",
+    attrs: { "code.origin": origin },
+  };
+}
+
+function frame(fn: string, module: string | null, file: string, line: number, inApp: boolean) {
+  return { function: fn, module, file, line, in_app: inApp };
+}
+
+/**
+ * A Go request: its queries from listProducts and similar, a Redis command from count (never on the CPU when
+ * sampled, so its line in catalog.go is listProducts'), 30 ms of the 69 off the CPU in none of them.
+ */
 function goRequest(start: number): object {
-  const frame = (fn: string, module: string, file: string, inApp: boolean) => ({
-    function: fn,
-    module,
-    file,
-    line: 1,
-    in_app: inApp,
-  });
   return {
     id: GO,
     kind: "http",
@@ -41,6 +58,9 @@ function goRequest(start: number): object {
         status: "ok",
         attrs: {},
       },
+      call("products", "sql", start, 5, 20, "catalog.go:14 in (*App).listProducts"),
+      call("similar", "sql", start, 40, 10, "similar.go:8 in (*App).similar"),
+      call("count", "redis", start, 60, 9, "catalog.go:30 in (*App).count"),
     ],
     logs: [],
     errors: [],
@@ -51,11 +71,11 @@ function goRequest(start: number): object {
       samples: 30,
       dropped: 0,
       frames: [
-        frame("(*App).listProducts", "github.com/acme/shop", "catalog.go", true),
-        frame("(*App).similar", "github.com/acme/shop", "similar.go", true),
-        frame("editDistance", "github.com/acme/shop", "similar.go", true),
-        frame("syscall.syscall", "syscall", "syscall/syscall_darwin.go", false),
-        frame("runtime.mallocgc", "runtime", "runtime/malloc.go", false),
+        frame("(*App).listProducts", "github.com/acme/shop", "catalog.go", 10, true),
+        frame("(*App).similar", "github.com/acme/shop", "similar.go", 5, true),
+        frame("editDistance", "github.com/acme/shop", "similar.go", 40, true),
+        frame("syscall.syscall", "syscall", "syscall/syscall_darwin.go", 1, false),
+        frame("runtime.mallocgc", "runtime", "runtime/malloc.go", 1, false),
       ],
       stacks: [
         { frames: [0, 1, 2], count: 25 },
@@ -66,18 +86,94 @@ function goRequest(start: number): object {
   };
 }
 
+/**
+ * A Next.js route as tracepanel-js sends it: GET calls card, whose stack after an await starts at it; card's 30
+ * queries at once with GET's two, 40 ms of the request's 50 ms off the CPU.
+ */
+function nodeRequest(start: number): object {
+  return {
+    id: NODE,
+    kind: "http",
+    name: "GET /api/catalog/products",
+    start,
+    duration: 50_000,
+    status: "ok",
+    attrs: {
+      "service.name": "next-shop",
+      "http.method": "GET",
+      "http.route": "/api/catalog/products",
+      "http.status_code": 200,
+      "telemetry.sdk.language": "nodejs",
+    },
+    spans: [
+      {
+        id: "r",
+        parent_id: null,
+        kind: "http",
+        name: "GET /api/catalog/products",
+        start,
+        duration: 50_000,
+        status: "ok",
+        attrs: {},
+      },
+      call("count", "sql", start, 2, 8, "app/api/catalog/products/route.ts:42 in GET"),
+      ...Array.from({ length: 30 }, (_, at) =>
+        call(`card${at}`, "sql", start, 10 + at, 1, "lib/catalog.ts:33 in card"),
+      ),
+      call("cached", "redis", start, 40, 2, "app/api/catalog/products/route.ts:58 in GET"),
+    ],
+    logs: [],
+    errors: [],
+    links: [],
+    issues: [],
+    profile: {
+      interval_us: 1000,
+      samples: 10,
+      frames: [
+        frame("processTicksAndRejections", null, "node:internal/process/task_queues", 1, false),
+        frame("GET", null, "app/api/catalog/products/route.ts", 26, true),
+        frame("card", null, "lib/catalog.ts", 31, true),
+        frame("query", null, "pg-pool/index.js", 1, false),
+      ],
+      stacks: [
+        { frames: [0, 1, 2, 3], count: 3 },
+        { frames: [0, 2, 3], count: 5 },
+        { frames: [0], count: 2 },
+      ],
+    },
+  };
+}
+
 async function seed(): Promise<void> {
+  const start = Date.now() * 1000 - 4 * 3_600_000_000;
   const response = await fetch(`${CONSOLE}api/ingest`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify([goRequest(Date.now() * 1000 - 4 * 3_600_000_000)]),
+    body: JSON.stringify([goRequest(start), nodeRequest(start + 100_000)]),
   });
   expect(response.status).toBe(202);
-  await expect.poll(async () => (await fetch(`${CONSOLE}api/traces/${GO}`)).status).toBe(200);
+  await expect.poll(async () => (await fetch(`${CONSOLE}api/traces/${NODE}`)).status).toBe(200);
 }
 
 function shares(page: Page) {
   return page.getByRole("region", { name: "Time by package" }).getByRole("button");
+}
+
+/** The functions the flame graph draws, as its boxes name them (their places left off). */
+async function boxes(page: Page): Promise<string[]> {
+  const labels = await page
+    .getByRole("region", { name: "Flame graph" })
+    .getByRole("button")
+    .evaluateAll((buttons) => buttons.map((button) => button.getAttribute("aria-label") ?? ""));
+  // The Show all button, zoomed in, names no function.
+  return labels
+    .filter(Boolean)
+    .map((label) => label.replace(/ \S+:\d+$/, "").trim())
+    .sort();
+}
+
+function box(page: Page, name: string) {
+  return page.getByRole("region", { name: "Flame graph" }).getByRole("button", { name: new RegExp(`^${name}`) });
 }
 
 test.beforeEach(seed);
@@ -92,23 +188,50 @@ test("a Go profile is its time on the CPU; the rest of the request's time waited
     /^framework & runtime\s*2 ms\s*2%/,
     /^waiting\s*69 ms\s*70%/,
   ]);
-  // Waiting, as a Python or a JVM profile names its waits: one name, hatched, in either view.
-  const waiting = page.getByRole("region", { name: "Flame graph" }).getByRole("button", { name: /^waiting/ });
-  await expect(waiting).toBeVisible();
-  await expect(waiting).toHaveClass(/dt-hatched/);
+  // Waiting, as a Python or a JVM profile names its waits: one name, hatched, in either view. The queries' and the
+  // Redis command's under the functions that made them; the 30 ms in none of them on its own.
+  const waiting = box(page, "waiting");
+  await expect(waiting).toHaveCount(3);
+  await expect(waiting.first()).toHaveClass(/dt-hatched/);
+  await expect
+    .poll(() => boxes(page))
+    .toEqual([
+      "(*App).listProducts",
+      "(*App).similar",
+      "editDistance",
+      "framework & runtime",
+      "waiting",
+      "waiting",
+      "waiting",
+    ]);
   // The functions, then what no function is, apart at the bottom though waiting took most.
   const functions = page.getByRole("region", { name: "Functions" });
   await expect(functions.getByRole("listitem")).toHaveText([
-    /^editDistance\s*similar\.go:1/,
-    /^\(\*App\)\.listProducts\s*catalog\.go:1/,
-    /^\(\*App\)\.similar\s*similar\.go:1/,
+    /^editDistance\s*similar\.go:40/,
+    /^\(\*App\)\.listProducts\s*catalog\.go:10/,
+    /^\(\*App\)\.similar\s*similar\.go:5/,
     /^framework & runtime\s*2 ms\s*2 ms$/,
     /^waiting\s*69 ms\s*69 ms$/,
   ]);
   await expect(functions.getByRole("list", { name: "Not a function" }).getByRole("listitem")).toHaveCount(2);
 
+  // Zoomed into listProducts: its calls, and its own wait and similar's, not the request's.
+  await box(page, "\\(\\*App\\)\\.listProducts").click();
+  await expect.poll(() => boxes(page)).toEqual(["(*App).similar", "editDistance", "waiting", "waiting"]);
+
   await page.getByRole("tab", { name: "All frames" }).click();
 
-  await expect(waiting).toBeVisible();
+  await expect(waiting.first()).toBeVisible();
   await expect(functions.getByRole("list", { name: "Not a function" })).toHaveText(/^waiting\s*69 ms\s*69 ms$/);
+});
+
+test("a Node request's queries waited in card under GET, as a Python profile has its waits", async ({ page }) => {
+  await page.goto(`/#/t/${NODE}?tab=profile`);
+
+  await expect(shares(page)).toHaveText([/^your code\s*8 ms/, /^framework & runtime\s*2 ms/, /^waiting\s*40 ms/]);
+  // card is under GET, where its stack before the await had it, though most of its samples start at it.
+  await box(page, "GET").click();
+  await expect.poll(() => boxes(page)).toEqual(["card", "waiting", "waiting"]);
+  await box(page, "card").click();
+  await expect.poll(() => boxes(page)).toEqual(["waiting"]);
 });

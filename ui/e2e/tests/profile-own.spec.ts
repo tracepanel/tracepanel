@@ -209,7 +209,8 @@ function jvmRequest(start: number): object {
 
 /**
  * A Taskiq task's profile as tracepanel-python sends it: the task's code under the worker's, asleep in asyncio (its
- * frame waits), and awaiting a thread for the ORM.
+ * frame waits), and awaiting a thread for the ORM, where the task's coroutine is a frame of its own, with the line it
+ * awaits at.
  */
 function pythonTask(start: number): object {
   const wait = (fn: string, module: string, file: string) => ({ ...frame(fn, module, file, false), waiting: true });
@@ -249,10 +250,11 @@ function pythonTask(start: number): object {
         wait("sleep", "asyncio.tasks", "asyncio/tasks.py"),
         frame("QuerySet.aupdate", "django.db.models.query", "django/db/models/query.py", false),
         wait("SyncToAsync.__call__", "asgiref.sync", "asgiref/sync.py"),
+        { ...frame("refresh_tracking", "shop.tasks", "shop/tasks.py", true), at_line: 32 },
       ],
       stacks: [
         { frames: [0, 1, 2, 3, 4], count: 7 },
-        { frames: [0, 1, 2, 5, 6], count: 2 },
+        { frames: [0, 1, 7, 5, 6], count: 2 },
         { frames: [0, 1, 2, 3], count: 1 },
       ],
     },
@@ -376,6 +378,8 @@ test("a Python task's waits are waiting under the function of yours that waited,
   await page.goto(`/#/t/${PYTHON}?tab=profile`);
 
   await expect(page.getByRole("tab", { name: "Your code", selected: true })).toBeVisible();
+  // refresh_tracking awaiting the ORM's thread is the same function as refresh_tracking awaiting track_parcel: one
+  // box, one row.
   await expect.poll(() => boxes(page)).toEqual(["refresh_tracking", "track_parcel", "waiting", "waiting"]);
   await expect(shares(page)).toHaveText([/^your code\s*1 ms/, /^waiting\s*9 ms/]);
   await expect(boxesNamed(page, "waiting").first()).toHaveClass(/dt-hatched/);
@@ -384,4 +388,7 @@ test("a Python task's waits are waiting under the function of yours that waited,
   await page.getByRole("tab", { name: "All frames" }).click();
 
   await expect.poll(() => boxes(page)).toEqual(expect.arrayContaining(["sleep", "SyncToAsync.__call__"]));
+  await expect
+    .poll(async () => (await boxes(page)).filter((name) => name === "refresh_tracking"))
+    .toEqual(["refresh_tracking"]);
 });

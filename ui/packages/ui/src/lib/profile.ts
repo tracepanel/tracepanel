@@ -40,7 +40,7 @@ export const WAITING = "waiting";
  * every language; All frames keeps the frame that waited, where the profile has one.
  */
 // biome-ignore lint/style/useNamingConvention: a frame as the SDKs send it.
-const WAITED: Frame = { function: WAITING, module: null, file: "", line: 0, in_app: false, waiting: true };
+export const WAITED: Frame = { function: WAITING, module: null, file: "", line: 0, in_app: false, waiting: true };
 
 /**
  * A library frame's package: its module's (org.springframework, not org; Django's first two parts, as it is many
@@ -72,10 +72,34 @@ export function packageTimes(profile: Profile): { name: string; samples: number 
   return [...times.entries()].map(([name, samples]) => ({ name, samples })).sort((a, b) => b.samples - a.samples);
 }
 
-/** The same stacks, merged where they are now alike. */
+/** A function as the console tells functions apart: its name, where it is defined, whether it waits. */
+function functionKey(frame: Frame): string {
+  return [frame.function, frame.module ?? "", frame.file, frame.line, frame.in_app, frame.waiting === true].join("|");
+}
+
+/**
+ * Each frame's index as the function's first: one function is one frame, however many its profile has. A Python
+ * coroutine is two, the line it awaits at (`at_line`) told apart from the same function running: one box and one row.
+ * The frame without an await's line stands for the function.
+ */
+function sameFunctions(frames: readonly Frame[]): number[] {
+  const first = new Map<string, number>();
+  frames.forEach((frame, index) => {
+    const key = functionKey(frame);
+    const found = first.get(key);
+    if (found === undefined || (frames[found]?.at_line !== undefined && frame.at_line === undefined)) {
+      first.set(key, index);
+    }
+  });
+  return frames.map((frame) => first.get(functionKey(frame)) ?? 0);
+}
+
+/** The same stacks, merged where they are now alike: a function's frames as one. */
 function merged(profile: Profile, stacks: Stack[]): Profile {
+  const same = sameFunctions(profile.frames);
   const counts = new Map<string, Stack>();
-  for (const stack of stacks) {
+  for (const each of stacks) {
+    const stack = { ...each, frames: each.frames.map((index) => same[index] ?? index) };
     const key = stack.frames.join(",");
     const found = counts.get(key);
     if (found) found.count += stack.count;
@@ -320,21 +344,4 @@ const CPU_ONLY = new Set(["go", "nodejs"]);
 export function onCpuOnly(trace: Pick<Trace, "attrs">): boolean {
   const language = trace.attrs["telemetry.sdk.language"];
   return typeof language === "string" && CPU_ONLY.has(language);
-}
-
-/**
- * A CPU profile read on the trace's clock: the time it wasn't on the CPU (not sampled, nor dropped for other traces;
- * the database, the network, a lock, a timer) one waiting stack (WAITED), as a Python or a JVM profile has its
- * waits. None where its code ran on the CPU for longer than the trace (goroutines at once).
- */
-export function withOffCpu(profile: Profile, duration: number): Profile {
-  const off = duration / profile.interval_us - profile.samples - (profile.dropped ?? 0);
-  if (off < 1) return profile;
-  const frames = [...profile.frames, WAITED];
-  return {
-    ...profile,
-    frames,
-    stacks: [...profile.stacks, { frames: [frames.length - 1], count: off }],
-    samples: profile.samples + off,
-  };
 }
