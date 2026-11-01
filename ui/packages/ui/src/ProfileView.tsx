@@ -158,6 +158,18 @@ const readFrames = (value: string): boolean | undefined =>
   value === "own" ? true : value === "all" ? false : undefined;
 const writeFrames = (own: boolean): string => (own ? "own" : "all");
 
+/** Your code or All frames, one setting for Time and Memory: at first, your code where its time is mostly yours. */
+interface Frames {
+  own: boolean;
+  onOwn: (own: boolean) => void;
+}
+
+/** Your code or All frames, as the view remembers it; at first, your code where the time profile is mostly yours. */
+function useFrames(time: Profile): Frames {
+  const [own, onOwn] = useRemembered(VIEW_KEYS.frames, () => mostlyYours(time), readFrames, writeFrames);
+  return { own, onOwn };
+}
+
 const KINDS = [
   { id: "time", label: "Time" },
   { id: "memory", label: "Memory" },
@@ -191,16 +203,19 @@ function ProfileOf({
   onKind: (kind: Kind) => void;
 }) {
   const memory = profile.memory;
+  // One choice for both: Memory keeps what Time had, and back.
+  const frames = useFrames(profile);
   // Only a profile that measured its memory has the choice.
   const kinds = memory ? <Segmented label="Profile of" segments={KINDS} value={kind} onChange={onKind} /> : null;
   if (memory && kind === "memory") {
     const head = <MemoryHead memory={memory} what={{ ...WHOLE_TRACE, reason: profileReason(trace) }} />;
-    return <MemoryPane profile={profile} memory={memory} kinds={kinds} head={head} />;
+    return <MemoryPane profile={profile} memory={memory} kinds={kinds} head={head} frames={frames} />;
   }
   return (
     <ProfileView
       key={scope.title}
       profile={scope.profile}
+      frames={frames}
       measure={(samples) => duration(samples * scope.profile.interval_us)}
       noun="Time"
       kinds={kinds}
@@ -217,11 +232,13 @@ function MemoryPane({
   profile,
   memory,
   kinds,
+  frames,
   head = <MemoryHead memory={memory} />,
 }: {
   profile: Profile;
   memory: Memory;
   kinds: ReactNode;
+  frames: Frames;
   head?: ReactNode;
 }) {
   const sites = useMemo(() => memoryProfile(profile, memory), [profile, memory]);
@@ -240,6 +257,7 @@ function MemoryPane({
     <ProfileView
       key="memory"
       profile={sites}
+      frames={frames}
       measure={bytes}
       noun="Memory"
       kinds={kinds}
@@ -406,6 +424,7 @@ interface Shown {
  */
 function ProfileView({
   profile,
+  frames: { own, onOwn: setOwn },
   head,
   measure,
   noun,
@@ -413,14 +432,13 @@ function ProfileView({
   list,
 }: {
   profile: Profile;
+  frames: Frames;
   head: ReactNode;
   measure: Measure;
   noun: string;
   kinds: ReactNode;
   list: (shown: Shown) => ReactNode;
 }) {
-  // Your code or All frames, as the view remembers it; at first, your code where the profile is mostly yours.
-  const [own, setOwn] = useRemembered(VIEW_KEYS.frames, () => mostlyYours(profile), readFrames, writeFrames);
   const [lit, setLit] = useState<ReadonlySet<string>>(new Set());
   const view = useMemo(() => (own ? ownCode(profile) : allFrames(profile)), [profile, own]);
   // Your code's shares are its own and the framework's around it; every frame's, each package's.
@@ -967,11 +985,13 @@ function ProfileSumRow({ app, profile }: { app: AppProfile; profile: Profile | u
 
 /** One app's flame and functions, under its name: an app's own, never mixed with another's. */
 function AppProfileSection({ app, view }: { app: AppProfile; view: Scope }) {
+  const frames = useFrames(view.profile);
   return (
     <section className="dt-app-profile" aria-label={`Profile of ${app.app}`}>
       <ProfileView
         key={view.title}
         profile={view.profile}
+        frames={frames}
         measure={(samples) => duration(samples * view.profile.interval_us)}
         noun="Time"
         kinds={null}
@@ -1024,12 +1044,15 @@ function MemorySumRow({ app, measured }: { app: AppProfile; measured: AppMemory 
 
 /** One app's memory, under its name: its allocation sites as a trace's Memory view has them. */
 function AppMemorySection({ app, measured }: { app: AppProfile; measured: AppMemory }) {
+  // The app's time profile decides the first choice, as a trace's own Profile tab has it.
+  const frames = useFrames(measured.profile);
   return (
     <section className="dt-app-profile" aria-label={`Memory of ${app.app}`}>
       <MemoryPane
         key={measured.title}
         profile={measured.profile}
         memory={measured.memory}
+        frames={frames}
         kinds={null}
         head={
           <MemoryHead

@@ -109,7 +109,42 @@ fn frames(profile: &mut Value) -> bool {
     changed
 }
 
-/// A received trace's profile, its frames as `frames` has them, in its document (what the console shows).
+/// Whether a frame is tracing's own code, never the app's.
+fn tracing_frame(frame: &Value) -> bool {
+    let text = |key: &str| frame.get(key).and_then(Value::as_str).unwrap_or_default();
+    frame.get("in_app") != Some(&Value::Bool(true)) && tracing(text("module"), text("file"))
+}
+
+/// A profile's memory without the sites tracing's own code allocated in (the SDK's profiler counting its samples,
+/// a span's attributes): never the app's memory, whichever SDK sent them. Whether any were.
+fn sites(profile: &mut Value) -> bool {
+    let frames = profile
+        .get("frames")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let Some(sites) = profile
+        .get_mut("memory")
+        .and_then(|memory| memory.get_mut("sites"))
+        .and_then(Value::as_array_mut)
+    else {
+        return false;
+    };
+    let before = sites.len();
+    sites.retain(|site| {
+        let leaf = site
+            .get("frames")
+            .and_then(Value::as_array)
+            .and_then(|indexes| indexes.last())
+            .and_then(Value::as_u64)
+            .and_then(|index| frames.get(usize::try_from(index).ok()?));
+        !leaf.is_some_and(tracing_frame)
+    });
+    sites.len() != before
+}
+
+/// A received trace's profile, its frames as `frames` has them and its memory's sites as `sites` does, in its
+/// document (what the console shows).
 pub fn normalize(received: &mut Received) {
     if !received.doc.contains("\"profile\"") {
         return;
@@ -120,14 +155,15 @@ pub fn normalize(received: &mut Received) {
     let Some(profile) = doc.get_mut("profile").filter(|profile| profile.is_object()) else {
         return;
     };
-    if frames(profile) {
+    let framed = frames(profile);
+    if sites(profile) || framed {
         received.doc = doc.to_string();
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{frames, tracing};
+    use super::{frames, sites, tracing};
     use serde_json::{Value, json};
 
     #[test]
@@ -208,6 +244,37 @@ mod tests {
         assert_eq!(
             read("waiting"),
             [false, false, false, false, true, true, false]
+        );
+    }
+
+    /// A Django task's memory as tracepanel-python 0.10.0 sends it in a virtual environment: the profiler's own
+    /// allocation (its sample counter) among the app's and Redis's.
+    #[test]
+    fn tracings_own_allocations_are_not_the_apps_memory() {
+        let frame = |function: &str, module: &str, file: &str, in_app: bool| json!({"function": function, "module": module, "file": file, "line": 1, "in_app": in_app});
+        let mut profile = json!({
+            "frames": [
+                frame("refresh_tracking", "shop.tasks", "shop/tasks.py", true),
+                frame("CaseInsensitiveDict.__setitem__", "redis.client", "redis/client.py", false),
+                frame("run", "threading", "threading.py", false),
+                frame("count", "tracepanel.core.profile", "tracepanel/core/profile.py", false),
+            ],
+            "memory": {"peak": 55_000, "net": 36_000, "sites": [
+                {"frames": [0, 1], "bytes": 12_000, "count": 40},
+                {"frames": [2, 3], "bytes": 1_400, "count": 30},
+                {"frames": [0], "bytes": 900, "count": 3},
+            ]},
+        });
+
+        let changed = sites(&mut profile);
+
+        assert!(changed);
+        assert_eq!(
+            profile["memory"]["sites"],
+            json!([
+                {"frames": [0, 1], "bytes": 12_000, "count": 40},
+                {"frames": [0], "bytes": 900, "count": 3},
+            ])
         );
     }
 }

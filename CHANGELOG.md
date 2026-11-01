@@ -21,6 +21,14 @@
   as in a Python profile. A Spring request's bar read java 77%: its
   virtual threads parked on Postgres. The agent reads every Java SDK's
   profiles so, earlier ones too.
+- The Profile tab's Your code or All frames is one choice for Time and
+  Memory. Memory opened on All frames when its sites were mostly a
+  library's, though Time showed Your code. The first choice is now the
+  time profile's.
+- A profile's memory no longer counts Tracepanel's or OpenTelemetry's
+  own allocations as the app's: a Django task's Memory view had
+  `tracepanel` 15% and the profiler's `count` as a site. The agent
+  leaves such sites out of every SDK's profiles, earlier ones too.
 
 ## 0.10.1 (2026-11-01)
 
