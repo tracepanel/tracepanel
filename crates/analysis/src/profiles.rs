@@ -1,4 +1,8 @@
-//! A profile's frames as the console and the MCP server read them: which are tracing's own code, never the app's.
+//! A profile's frames as the console and the MCP server read them: which are tracing's own code, never the app's;
+//! which of a JVM's are classes made at runtime, never the app's either, and which wait rather than compute.
+
+use serde_json::Value;
+use tracepanel_protocol::Received;
 
 /// Tracing's own code by its module's or its file's start, as each SDK names them: OpenTelemetry's and Tracepanel's
 /// SDKs in every language, and the hooks they patch a Node app's modules with. The console's `TRACING` is the same.
@@ -24,9 +28,107 @@ pub fn tracing(module: &str, file: &str) -> bool {
     TRACING.iter().any(|prefix| name.starts_with(prefix))
 }
 
+/// A JVM's methods a thread waits in (parked, asleep, polling a socket): a sample whose innermost frame is one waited,
+/// as the Python SDK marks its waits. By their class and their method.
+const JVM_WAITS: [(&str, &[&str]); 10] = [
+    ("java.lang.VirtualThread", &["park", "parkNanos"]),
+    ("jdk.internal.misc.Unsafe", &["park"]),
+    ("java.lang.Object", &["wait", "wait0"]),
+    (
+        "java.lang.Thread",
+        &["sleep", "sleep0", "sleepNanos", "sleepNanos0"],
+    ),
+    ("sun.nio.ch.KQueue", &["poll"]),
+    ("sun.nio.ch.EPoll", &["wait"]),
+    ("sun.nio.ch.WEPoll", &["wait"]),
+    ("sun.nio.ch.Net", &["poll"]),
+    ("sun.nio.ch.SocketDispatcher", &["read0"]),
+    ("java.net.SocketInputStream", &["socketRead0"]),
+];
+
+/// A JVM's frame by its file: Java's, Kotlin's, Scala's, Groovy's.
+fn jvm(frame: &Value) -> bool {
+    let file = frame
+        .get("file")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    [".java", ".kt", ".scala", ".groovy"]
+        .iter()
+        .any(|extension| file.ends_with(extension))
+}
+
+/// A class made at runtime, whatever package it is in: Hibernate's lazy proxies (Brand$HibernateProxy, or with a
+/// suffix), Spring's CGLIB subclasses and lambdas ($$), ByteBuddy's, the JDK's interface proxies ($Proxy172).
+fn generated(class: &str) -> bool {
+    let simple = class.rsplit('.').next().unwrap_or(class);
+    class.contains("$$")
+        || class.contains("$HibernateProxy")
+        || class.contains("$ByteBuddy$")
+        || simple.starts_with("$Proxy")
+}
+
+/// Whether a JVM frame is a method threads wait in.
+fn jvm_wait(class: &str, function: &str) -> bool {
+    let method = function.rsplit('.').next().unwrap_or(function);
+    JVM_WAITS
+        .iter()
+        .any(|(waits, methods)| *waits == class && methods.contains(&method))
+}
+
+/// A profile's frames as the console reads them, whichever SDK sent them: a JVM's class made at runtime is never
+/// the app's (an SDK that took Brand$HibernateProxy for the app's), and its methods threads wait in wait. Whether
+/// any changed.
+fn frames(profile: &mut Value) -> bool {
+    let mut changed = false;
+    for frame in profile
+        .get_mut("frames")
+        .and_then(Value::as_array_mut)
+        .into_iter()
+        .flatten()
+    {
+        if !jvm(frame) {
+            continue;
+        }
+        let text = |key: &str| {
+            frame
+                .get(key)
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_owned()
+        };
+        let (class, function) = (text("module"), text("function"));
+        if frame.get("in_app") == Some(&Value::Bool(true)) && generated(&class) {
+            frame["in_app"] = Value::Bool(false);
+            changed = true;
+        }
+        if frame.get("waiting") != Some(&Value::Bool(true)) && jvm_wait(&class, &function) {
+            frame["waiting"] = Value::Bool(true);
+            changed = true;
+        }
+    }
+    changed
+}
+
+/// A received trace's profile, its frames as `frames` has them, in its document (what the console shows).
+pub fn normalize(received: &mut Received) {
+    if !received.doc.contains("\"profile\"") {
+        return;
+    }
+    let Ok(mut doc) = serde_json::from_str::<Value>(&received.doc) else {
+        return;
+    };
+    let Some(profile) = doc.get_mut("profile").filter(|profile| profile.is_object()) else {
+        return;
+    };
+    if frames(profile) {
+        received.doc = doc.to_string();
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::tracing;
+    use super::{frames, tracing};
+    use serde_json::{Value, json};
 
     #[test]
     fn tracing_is_opentelemetry_and_tracepanel_in_every_language() {
@@ -71,5 +173,41 @@ mod tests {
 
         assert!(named.iter().all(|(module, file)| tracing(module, file)));
         assert!(!others.iter().any(|(module, file)| tracing(module, file)));
+    }
+
+    /// A Spring request's frames as tracepanel-java 0.10.1 sends them: the controller, Hibernate 6's lazy proxy
+    /// (taken for the app's), a JDK proxy, and the virtual thread parked on Postgres's socket.
+    #[test]
+    fn a_jvms_proxies_are_not_the_apps_and_a_parked_thread_waits() {
+        let frame = |function: &str, module: &str, file: &str, in_app: bool| json!({"function": function, "module": module, "file": file, "line": 0, "in_app": in_app});
+        let mut profile = json!({"frames": [
+            frame("CatalogController.card", "shop.catalog.CatalogController", "src/main/java/shop/catalog/CatalogController.java", true),
+            frame("Brand$HibernateProxy.getName", "shop.catalog.Brand$HibernateProxy", "src/main/java/shop/catalog/Brand.java", true),
+            frame("$Proxy172.averageRating", "jdk.proxy2.$Proxy172", "jdk/proxy2/$Proxy172.java", false),
+            frame("NioSocketImpl.park", "sun.nio.ch.NioSocketImpl", "sun/nio/ch/NioSocketImpl.java", false),
+            frame("VirtualThread.park", "java.lang.VirtualThread", "java/lang/VirtualThread.java", false),
+            frame("Unsafe.park", "jdk.internal.misc.Unsafe", "jdk/internal/misc/Unsafe.java", false),
+            frame("card", "", "lib/catalog.ts", true),
+        ]});
+
+        let changed = frames(&mut profile);
+
+        let read = |key: &str| -> Vec<bool> {
+            profile["frames"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|frame| frame.get(key) == Some(&Value::Bool(true)))
+                .collect()
+        };
+        assert!(changed);
+        assert_eq!(
+            read("in_app"),
+            [true, false, false, false, false, false, true]
+        );
+        assert_eq!(
+            read("waiting"),
+            [false, false, false, false, true, true, false]
+        );
     }
 }

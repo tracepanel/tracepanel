@@ -15,6 +15,12 @@
   attribute set) is the framework & runtime's even under your code.
   All frames keeps every frame and the packages. The MCP server's
   `get_profile` reads a profile the same way.
+- A JVM profile's Your code no longer has Hibernate 6's lazy proxies
+  (`Brand$HibernateProxy.getName`) or the JDK's interface proxies, and
+  a thread parked (on a database's socket, a lock, a sleep) is waiting,
+  as in a Python profile. A Spring request's bar read java 77%: its
+  virtual threads parked on Postgres. The agent reads every Java SDK's
+  profiles so, earlier ones too.
 
 ## 0.10.1 (2026-11-01)
 

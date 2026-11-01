@@ -187,9 +187,19 @@ function jvmRequest(start: number): object {
           "java/util/concurrent/ScheduledThreadPoolExecutor.java",
           false,
         ),
+        // Hibernate 6's lazy proxy, which tracepanel-java 0.10.1 took for the app's code.
+        frame(
+          "Brand$HibernateProxy.getName",
+          "shop.catalog.Brand$HibernateProxy",
+          "src/main/java/shop/catalog/Brand.java",
+          true,
+        ),
+        frame("VirtualThread.park", "java.lang.VirtualThread", "java/lang/VirtualThread.java", false),
       ],
       stacks: [
-        { frames: [0, 1, 2, 3], count: 7 },
+        { frames: [0, 1, 2, 3], count: 4 },
+        // The virtual thread parked on Postgres's socket, under the proxy: waiting.
+        { frames: [0, 1, 2, 6, 7], count: 3 },
         { frames: [0, 5, 4], count: 3 },
       ],
     },
@@ -258,13 +268,16 @@ test("a Next.js route's code is its handler's: pg's time is its helper's, OpenTe
   ]);
 });
 
-test("a JVM request's code is its packages': Spring's and the JDK's frames are not yours", async ({ page }) => {
+test("a JVM request's code is its packages': Spring's, the JDK's and Hibernate's proxies are not yours, a park waits", async ({
+  page,
+}) => {
   await page.goto(`/#/t/${JVM}?tab=profile`);
 
-  await expect.poll(() => boxes(page)).toEqual(["CatalogController.listProducts", "framework & runtime"]);
-  await expect(shares(page)).toHaveText([/^your code\s*7 ms/, /^framework & runtime\s*3 ms/]);
+  await expect.poll(() => boxes(page)).toEqual(["CatalogController.listProducts", "Unsafe.park", "VirtualThread.park"]);
+  await expect(shares(page)).toHaveText([/^your code\s*4 ms/, /^waiting\s*6 ms/]);
 
   await page.getByRole("tab", { name: "All frames" }).click();
 
-  await expect(shares(page)).toHaveText([/^org\.springframework\s*7 ms/, /^jdk\s*3 ms/]);
+  await expect.poll(() => boxes(page)).toContain("Brand$HibernateProxy.getName");
+  await expect(shares(page)).toHaveText([/^org\.springframework\s*4 ms/, /^waiting\s*6 ms/]);
 });
