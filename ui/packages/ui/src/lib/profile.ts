@@ -215,6 +215,17 @@ export function functions(profile: Profile): { frame: Frame; self: number; total
     .sort((a, b) => b.self - a.self || b.total - a.total);
 }
 
+/**
+ * What a frame of the console's own stands for, no function's: the framework & runtime (Your code's samples that
+ * ran none of it), or waiting (Your code's waits, a CPU profile's time off the CPU). Null for a function's frame,
+ * however it is named. By its fields, as a chain's merged profiles copy their frames.
+ */
+export function summaryOf(frame: Frame): typeof FRAMEWORK | typeof WAITING | null {
+  if (frame.file !== "" || frame.in_app || frame.module) return null;
+  if (frame.function === FRAMEWORK && !frame.waiting) return FRAMEWORK;
+  return frame.function === WAITING && frame.waiting === true ? WAITING : null;
+}
+
 /** A box per call, a row per depth, each as wide as its share of the focused node's samples. */
 export interface Box {
   node: Node;

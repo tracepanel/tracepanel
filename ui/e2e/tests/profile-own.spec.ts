@@ -220,7 +220,8 @@ function pythonTask(start: number): object {
     start,
     duration: 10_000,
     status: "ok",
-    attrs: { "service.name": "shop-worker", "telemetry.sdk.language": "python" },
+    // No language: the services' tests count the Python apps the seed has.
+    attrs: { "service.name": "shop-worker" },
     spans: [
       {
         id: "r",
@@ -288,12 +289,21 @@ function boxesNamed(page: Page, name: string) {
   return page.getByRole("region", { name: "Flame graph" }).getByRole("button", { name: new RegExp(`^${name}`) });
 }
 
-/** The functions the list under the flame graph names, in order. */
+/**
+ * The rows the list under the flame graph names, in order: its functions, then, after a rule, what no function is
+ * (in brackets: the framework & runtime, waiting), with no place of their own.
+ */
 function functionNames(page: Page): Promise<string[]> {
   return page
     .getByRole("region", { name: "Functions" })
     .getByRole("listitem")
-    .evaluateAll((rows) => rows.map((row) => row.querySelector("span.font-mono")?.textContent ?? ""));
+    .evaluateAll((rows) =>
+      rows.map((row) => {
+        const name = row.querySelector("span.font-mono, span.italic")?.textContent ?? "";
+        if (!("summary" in (row as HTMLElement).dataset)) return name;
+        return row.textContent?.includes(":") ? `[${name}] with a place` : `[${name}]`;
+      }),
+    );
 }
 
 /** The shares the bar over the flame graph names, in order. */
@@ -311,6 +321,8 @@ test("a Node task's code is its own frames: the runtime's and OpenTelemetry's ar
   await expect(page.getByRole("tab", { name: "Your code", selected: true })).toBeVisible();
   await expect.poll(() => boxes(page)).toEqual(["editDistance", "framework & runtime", "rankProducts"]);
   await expect(shares(page)).toHaveText([/^your code\s*6 ms/, /^framework & runtime\s*4 ms/]);
+  // The framework & runtime is no function: under the functions, apart, though it took more than rankProducts.
+  await expect.poll(() => functionNames(page)).toEqual(["editDistance", "rankProducts", "[framework & runtime]"]);
 
   await page.getByRole("tab", { name: "All frames" }).click();
 
@@ -347,7 +359,7 @@ test("a JVM request's code is its packages': Spring's, the JDK's and Hibernate's
   await expect.poll(() => boxes(page)).toEqual(["CatalogController.listProducts", "waiting", "waiting"]);
   await expect(shares(page)).toHaveText([/^your code\s*4 ms/, /^waiting\s*6 ms/]);
   await expect(boxesNamed(page, "waiting").first()).toHaveClass(/dt-hatched/);
-  await expect.poll(() => functionNames(page)).toEqual(["waiting", "CatalogController.listProducts"]);
+  await expect.poll(() => functionNames(page)).toEqual(["CatalogController.listProducts", "[waiting]"]);
 
   await page.getByRole("tab", { name: "All frames" }).click();
 
@@ -367,7 +379,7 @@ test("a Python task's waits are waiting under the function of yours that waited,
   await expect.poll(() => boxes(page)).toEqual(["refresh_tracking", "track_parcel", "waiting", "waiting"]);
   await expect(shares(page)).toHaveText([/^your code\s*1 ms/, /^waiting\s*9 ms/]);
   await expect(boxesNamed(page, "waiting").first()).toHaveClass(/dt-hatched/);
-  await expect.poll(() => functionNames(page)).toEqual(["waiting", "track_parcel", "refresh_tracking"]);
+  await expect.poll(() => functionNames(page)).toEqual(["track_parcel", "refresh_tracking", "[waiting]"]);
 
   await page.getByRole("tab", { name: "All frames" }).click();
 
