@@ -19,6 +19,11 @@ const PATHS: usize = 5;
 const PATH_FRAMES: usize = 8;
 /// The changes `compare` lists, at most.
 const CHANGES: usize = 8;
+/// The SDKs that sample the CPU alone, by their language: Go's runtime/pprof, Node's V8 profiler without its idle
+/// samples. Python's and the JVM's sample each thread on the clock, waiting or not.
+const CPU_ONLY: [&str; 2] = ["go", "nodejs"];
+/// A CPU profile's time off the CPU, read as waiting: the database, the network, a lock, a timer.
+const OFF_CPU: &str = "off the CPU";
 /// What the project's code reads the samples that ran none of it as: the server's, the runtime's, the SDKs'.
 const FRAMEWORK: &str = "(framework & runtime)";
 
@@ -134,6 +139,8 @@ struct Profile<'a> {
     raw: &'a Value,
     /// The frame the samples that ran none of the project's code read as, in its view (FRAMEWORK), last of `frames`.
     outside: usize,
+    /// A CPU profile's (CPU_ONLY) time on the CPU; the rest of the trace's time is one waiting stack (OFF_CPU).
+    on_cpu: Option<f64>,
 }
 
 fn frames_of(value: &Value) -> Vec<usize> {
@@ -187,6 +194,32 @@ impl<'a> Profile<'a> {
             })
             .collect();
         let timed = wall_clock(raw, int(doc, "duration"), &mut stacks);
+        let language = doc
+            .get("attrs")
+            .and_then(|attrs| attrs.get("telemetry.sdk.language"))
+            .and_then(Value::as_str);
+        let on_cpu = (!timed && language.is_some_and(|language| CPU_ONLY.contains(&language)))
+            .then(|| {
+                let sampled = (int(raw, "samples") + int(raw, "dropped")) * interval;
+                let off = int(doc, "duration") - sampled;
+                if off >= interval {
+                    frames.push(Frame {
+                        function: OFF_CPU,
+                        module: "",
+                        file: "",
+                        line: 0,
+                        at_line: None,
+                        in_app: false,
+                        waiting: true,
+                    });
+                    stacks.push(Stack {
+                        frames: vec![frames.len() - 1],
+                        count: off / interval,
+                        us: off as f64,
+                    });
+                }
+                (int(raw, "samples") * interval) as f64
+            });
         Some(Self {
             frames,
             stacks,
@@ -196,6 +229,7 @@ impl<'a> Profile<'a> {
             timed,
             raw,
             outside,
+            on_cpu,
         })
     }
 
@@ -690,7 +724,9 @@ fn merged(docs: &[&Value]) -> Value {
         profile["gc"] = serde_json::json!({"collections": collections, "pause_us": paused});
     }
     let duration: i64 = docs.iter().map(|doc| int(doc, "duration")).sum();
-    serde_json::json!({"id": "", "duration": duration, "profile": profile})
+    // The first trace's attributes: one app's, its language the same.
+    let attrs = docs.first().and_then(|doc| doc.get("attrs")).cloned();
+    serde_json::json!({"id": "", "duration": duration, "attrs": attrs, "profile": profile})
 }
 
 /// `GC: 3 collections, 12 ms paused`, when the profile counted any.
@@ -714,13 +750,22 @@ fn gc_line(raw: &Value) -> Option<String> {
 fn cpu(profile: &Profile, duration: i64, top: usize, merged: bool) -> String {
     let total = profile.total();
     let mut out = vec![format!(
-        "CPU profile: {} {} of the {} {} · {} samples, one every {}",
-        us(total),
-        if profile.timed { "profiled" } else { "sampled" },
+        "CPU profile: {} {} of the {} {} · {} samples, one every {}{}",
+        us(profile.on_cpu.unwrap_or(total)),
+        match (profile.on_cpu, profile.timed) {
+            (Some(_), _) => "on the CPU",
+            (None, true) => "profiled",
+            (None, false) => "sampled",
+        },
         if merged { "traces'" } else { "trace's" },
         ms(duration),
         profile.samples,
-        ms(profile.interval)
+        ms(profile.interval),
+        if profile.on_cpu.is_some() {
+            " of CPU time"
+        } else {
+            ""
+        }
     )];
     let waited: f64 = profile
         .stacks
@@ -729,12 +774,13 @@ fn cpu(profile: &Profile, duration: i64, top: usize, merged: bool) -> String {
         .map(|stack| stack.us)
         .sum();
     if waited > 0.0 {
-        let mut line = format!(
-            "waiting (a sleep, a socket, a lock, the event loop: not computing): {} ({})",
-            us(waited),
-            share(waited, total)
-        );
-        if let Some(name) = profile.wait_name() {
+        let what = if profile.on_cpu.is_some() {
+            ", off the CPU (the database, the network, a lock, a timer; not sampled)"
+        } else {
+            " (a sleep, a socket, a lock, the event loop: not computing)"
+        };
+        let mut line = format!("waiting{what}: {} ({})", us(waited), share(waited, total));
+        if let Some(name) = profile.wait_name().filter(|_| profile.on_cpu.is_none()) {
             line.push_str(&format!(", most in {name}"));
         }
         out.push(line);
@@ -1252,6 +1298,33 @@ allocation sites at the peak (1 of 1, 2.0 MB in all, largest first; ×: allocati
                 (vec!["GET", "card"], 3),
                 (vec!["GET", "card"], 2),
                 (vec!["(framework & runtime)"], 1),
+            ]
+        );
+    }
+
+    /// A Gin request's CPU profile as tracepanel-go sends it: 30 ms on the CPU of 99 ms, the rest waiting on
+    /// Postgres, which runtime/pprof doesn't sample.
+    #[test]
+    fn a_go_profile_is_its_time_on_the_cpu_the_rest_waiting() {
+        let frame = |function: &str, module: &str, file: &str, in_app: bool| json!({"function": function, "module": module, "file": file, "line": 1, "in_app": in_app});
+        let doc = json!({"id": "G", "duration": 99_000, "attrs": {"telemetry.sdk.language": "go"}, "profile": {
+            "interval_us": 1000, "samples": 30, "dropped": 0,
+            "frames": [
+                frame("(*App).listProducts", "shop", "catalog.go", true),
+                frame("editDistance", "shop", "similar.go", true),
+                frame("syscall.syscall", "syscall", "syscall/syscall_darwin.go", false),
+            ],
+            "stacks": [{"frames": [0, 1], "count": 25}, {"frames": [0, 2], "count": 5}],
+        }});
+
+        let read = profile(&doc, Kind::Cpu, 3).unwrap();
+        let lines: Vec<&str> = read.lines().take(2).collect();
+
+        assert_eq!(
+            lines,
+            [
+                "CPU profile: 30.0 ms on the CPU of the trace's 99.0 ms · 30 samples, one every 1.0 ms of CPU time",
+                "waiting, off the CPU (the database, the network, a lock, a timer; not sampled): 69.0 ms (70%)",
             ]
         );
     }

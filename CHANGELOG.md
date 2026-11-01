@@ -29,6 +29,13 @@
   own allocations as the app's: a Django task's Memory view had
   `tracepanel` 15% and the profiler's `count` as a site. The agent
   leaves such sites out of every SDK's profiles, earlier ones too.
+- A Go or a Node.js profile says it is CPU time: "30 ms on the CPU of
+  the trace's 99 ms", its samples "of CPU time". Their profilers sample
+  the CPU only, so "30 samples, one every 1 ms" of a 99 ms request
+  read as the request's time. The rest of the trace's time is waiting,
+  off the CPU (the database, the network, a lock), one hatched share
+  and box, as a Python or a JVM profile has its waits. `get_profile`
+  says the same.
 
 ## 0.10.1 (2026-11-01)
 
