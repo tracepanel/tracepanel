@@ -117,7 +117,10 @@ const PLAN_CLASSES: Record<PlanToken["type"], string | undefined> = {
 function PlanText({ text, warning }: { text: string; warning: boolean }) {
   const tokens = useMemo(() => tokenizePlan(text), [text]);
   return (
-    <code className="dt-plan-line font-mono text-sm whitespace-pre-wrap" data-warning={warning ? "" : undefined}>
+    <code
+      className="dt-plan-line font-mono text-sm whitespace-pre-wrap [overflow-wrap:anywhere]"
+      data-warning={warning ? "" : undefined}
+    >
       {tokens.map((token, index) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: the parts of one line never reorder.
         <span key={index} className={PLAN_CLASSES[token.type]}>
