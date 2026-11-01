@@ -1,6 +1,7 @@
 // Slower than: one menu on every page with times. Its first pick is where the agent calls the page's rows slow (a
 // query from 100 ms, a request from 500 ms), then 1 s, 5 s and a time of one's own; a grouped row says how many of
-// its own are that slow, and opening it finds those alone.
+// its own are that slow, and opening it finds those alone. The rows checked are the test's own (GET /slow-probe):
+// other tests store slow requests while these run, so any other row's numbers may change under them.
 import type { Page } from "@playwright/test";
 import { CONSOLE } from "../agent.ts";
 import { expect, test } from "../fixtures.ts";
@@ -8,6 +9,8 @@ import { expect, test } from "../fixtures.ts";
 type Doc = Record<string, unknown>;
 
 const PROBE = "01SL0WERTHANPR0BE000000000";
+// Two more requests of the probe's endpoint, slow ones (700 ms and 900 ms): 2 of its 3 are over 500 ms.
+const SLOW = ["01SL0WERTHANPR0BE000000001", "01SL0WERTHANPR0BE000000002"];
 const STATEMENT = 'SELECT * FROM "slow_probe" WHERE "id" = %s';
 
 function span(id: string, parent: string | null, kind: string, name: string, at: [number, number], attrs: Doc): Doc {
@@ -23,7 +26,34 @@ function query(suffix: string, start: number, duration: number): Doc {
   });
 }
 
-/** A request whose one statement ran three times: 30 ms, 40 ms and 160 ms. */
+/** A request of the probe's endpoint with no query, `duration` µs long. */
+function slowRequest(id: string, start: number, duration: number): Doc {
+  return {
+    id,
+    kind: "http",
+    name: "GET /slow-probe",
+    start,
+    duration,
+    status: "ok",
+    attrs: { "service.name": "shop", "http.method": "GET", "http.route": "/slow-probe" },
+    spans: [span("r", null, "http", "GET /slow-probe", [start, duration], {})],
+    logs: [],
+    errors: [],
+    links: [],
+    issues: [],
+  };
+}
+
+/** The endpoint's requests as the agent lists them: how many it has stored. */
+async function probeRequests(): Promise<number> {
+  const answer = await fetch(`${CONSOLE}api/traces?q=${encodeURIComponent("route:/slow-probe")}&limit=10`);
+  return ((await answer.json()) as { traces: Doc[] }).traces.length;
+}
+
+/**
+ * A request whose one statement ran three times: 30 ms, 40 ms and 160 ms; and two more of its endpoint, 700 ms and
+ * 900 ms long. Stored again before each test, the same ids: the agent keeps one of each.
+ */
 async function probe(): Promise<void> {
   const start = Date.now() * 1000 - 60_000_000;
   const trace = {
@@ -48,7 +78,11 @@ async function probe(): Promise<void> {
   const response = await fetch(`${CONSOLE}api/ingest`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify([trace]),
+    body: JSON.stringify([
+      trace,
+      slowRequest(SLOW[0] ?? "", start + 1_000, 700_000),
+      slowRequest(SLOW[1] ?? "", start + 2_000, 900_000),
+    ]),
   });
   expect(response.status).toBe(202);
   await expect
@@ -57,6 +91,7 @@ async function probe(): Promise<void> {
       return ((await answer.json()) as { calls: Doc[] }).calls.length;
     })
     .toBe(1);
+  await expect.poll(probeRequests).toBe(3);
 }
 
 const chip = (page: Page) => page.getByRole("button", { name: /^Slower than\b/ });
@@ -125,10 +160,17 @@ test("a time of one's own is written as a duration, and a group with no call tha
   await expect(row).toHaveCount(0);
 });
 
+/** The probe's endpoint's row: its numbers are the test's own. */
+const probeRow = (page: Page) => page.getByRole("main").locator("tbody tr").filter({ hasText: "/slow-probe" });
+
+const SAID = "2 of 3 requests over 500 ms";
+
 test("HTTP's Slower than starts from a slow request, and each endpoint says how many of its requests are", async ({
   page,
 }) => {
   await page.goto("/#/endpoints?view=overview");
+  await expect(probeRow(page)).toBeVisible();
+  await expect(probeRow(page)).not.toContainText(" of ");
   await chip(page).click();
 
   await expect(page.getByRole("option")).toHaveText(["Slow (over 500 ms)", "1 s", "5 s"]);
@@ -136,42 +178,34 @@ test("HTTP's Slower than starts from a slow request, and each endpoint says how 
   await page.getByRole("option", { name: "Slow (over 500 ms)" }).click();
 
   await expect(page.getByRole("button", { name: "Edit duration>500ms" })).toBeVisible();
-  const answer = await fetch(`${CONSOLE}api/endpoints?q=${encodeURIComponent("duration>500ms")}`);
-  // The endpoints as the agent counts them: the slow requests of each, and all it has.
-  const { endpoints } = (await answer.json()) as { endpoints: Record<string, number>[] };
-  expect(endpoints.length).toBeGreaterThan(0);
-  const rows = page.getByRole("main").locator("tbody tr");
-  await expect(rows).toHaveCount(endpoints.length);
-  const [slow, all] = [endpoints[0]?.["calls"], endpoints[0]?.["all_calls"]];
-  await expect(rows.first()).toContainText(`${slow} of ${all} ${all === 1 ? "request" : "requests"} over 500 ms`);
+  await expect(probeRow(page)).toContainText(SAID);
+  // Every endpoint listed has a slow request, and says how many of its own: read at one moment, as drawn.
+  const rows = await page.getByRole("main").locator("tbody tr").allInnerTexts();
+  for (const row of rows) expect(row).toMatch(/\d+ of \d+ requests? over 500 ms/);
 });
 
 test("an endpoint opened with Slower than on is a page of its slow requests, N of M as its row said", async ({
   page,
 }) => {
-  const answer = await fetch(`${CONSOLE}api/endpoints?q=${encodeURIComponent("duration>500ms")}`);
-  const { endpoints } = (await answer.json()) as { endpoints: Record<string, number>[] };
-  const [slow, all] = [endpoints[0]?.["calls"], endpoints[0]?.["all_calls"]];
-  const said = `${slow} of ${all} ${all === 1 ? "request" : "requests"} over 500 ms`;
   await page.goto(`/#/endpoints?view=overview&q=${encodeURIComponent("duration>500ms")}`);
-  const row = page.getByRole("main").locator("tbody tr").first();
-  await expect(row).toContainText(said);
+  const row = probeRow(page);
+  await expect(row).toContainText(SAID);
 
   await row.click();
 
   await expect(page).toHaveURL(/#\/group\/endpoints\/.+q=duration%3E500ms/);
   const summary = page.getByRole("region", { name: "Summary" });
-  await expect(page.getByText(said, { exact: true })).toBeVisible();
-  await expect(summary).toContainText(`Calls${slow}`);
+  await expect(page.getByText(SAID, { exact: true })).toBeVisible();
+  await expect(summary).toContainText("Calls2");
 
   // Its calls in the list are the slow ones too.
-  await page.getByRole("button", { name: slow === 1 ? "View the call" : `View all ${slow} calls` }).click();
+  await page.getByRole("button", { name: "View all 2 calls" }).click();
   await expect(page.getByRole("button", { name: "Edit duration>500ms" })).toBeVisible();
   await page.goBack();
 
   await page.getByRole("link", { name: "All calls" }).click();
 
   await expect(page).not.toHaveURL(/duration/);
-  await expect(summary).toContainText(`Calls${all}`);
-  await expect(page.getByText(said, { exact: true })).toHaveCount(0);
+  await expect(summary).toContainText("Calls3");
+  await expect(page.getByText(SAID, { exact: true })).toHaveCount(0);
 });
