@@ -143,6 +143,36 @@ struct Profile<'a> {
     /// A CPU profile's (CPU_ONLY) time on the CPU; the rest of the trace's time is waiting (OFF_CPU), under the
     /// function of the project's that made each call it waited for.
     on_cpu: Option<f64>,
+    /// Each frame's index as its function's first: a Python coroutine's frame with the line it awaits at is the
+    /// same function as its frame running, one row and one step.
+    same: Vec<usize>,
+}
+
+/// A function as the console tells functions apart: its name, where it is defined, whether it waits.
+fn function_key<'a>(frame: &Frame<'a>) -> (&'a str, &'a str, &'a str, i64, bool, bool) {
+    (
+        frame.function,
+        frame.module,
+        frame.file,
+        frame.line,
+        frame.in_app,
+        frame.waiting,
+    )
+}
+
+/// Each frame's index as its function's first; the frame without an await's line stands for the function.
+fn same_functions(frames: &[Frame]) -> Vec<usize> {
+    let mut first: HashMap<(&str, &str, &str, i64, bool, bool), usize> = HashMap::new();
+    for (index, frame) in frames.iter().enumerate() {
+        let found = first.entry(function_key(frame)).or_insert(index);
+        if frames[*found].at_line.is_some() && frame.at_line.is_none() {
+            *found = index;
+        }
+    }
+    frames
+        .iter()
+        .map(|frame| first[&function_key(frame)])
+        .collect()
 }
 
 /// A CPU profile's `off` µs off the CPU as waiting stacks (OFF_CPU): each call's time under the function of the
@@ -258,6 +288,7 @@ impl<'a> Profile<'a> {
                 }
                 (int(raw, "samples") * interval) as f64
             });
+        let same = same_functions(&frames);
         Some(Self {
             frames,
             stacks,
@@ -268,6 +299,7 @@ impl<'a> Profile<'a> {
             raw,
             outside,
             on_cpu,
+            same,
         })
     }
 
@@ -348,7 +380,7 @@ impl<'a> Profile<'a> {
         self.stacks
             .iter()
             .map(|stack| Stack {
-                frames: stack.frames[cut.min(stack.frames.len())..].to_vec(),
+                frames: self.functions_of(&stack.frames[cut.min(stack.frames.len())..]),
                 ..stack.clone()
             })
             .collect()
@@ -358,9 +390,17 @@ impl<'a> Profile<'a> {
         self.stacks
             .iter()
             .map(|stack| Stack {
-                frames: self.own_frames(&stack.frames),
+                frames: self.functions_of(&self.own_frames(&stack.frames)),
                 ..stack.clone()
             })
+            .collect()
+    }
+
+    /// A stack's frames as its functions: a function's frames as one (`same`).
+    fn functions_of(&self, frames: &[usize]) -> Vec<usize> {
+        frames
+            .iter()
+            .map(|&index| self.same.get(index).copied().unwrap_or(index))
             .collect()
     }
 
@@ -1436,6 +1476,43 @@ allocation sites at the peak (1 of 1, 2.0 MB in all, largest first; ×: allocati
                     10_000
                 ),
                 (names(&["off the CPU"]), 30_000),
+            ]
+        );
+    }
+
+    /// A Taskiq task's coroutine as tracepanel-python sends it: refresh_tracking awaiting track_parcel, and again
+    /// (a frame of its own, with the line it awaits at) awaiting the ORM's thread.
+    #[test]
+    fn a_function_awaiting_at_a_line_is_the_same_function() {
+        let frame = |function: &str, file: &str, in_app: bool| json!({"function": function, "module": "shop.tasks", "file": file, "line": 26, "in_app": in_app});
+        let mut awaiting = frame("refresh_tracking", "shop/tasks.py", true);
+        awaiting["at_line"] = json!(32);
+        let mut sleep = frame("sleep", "asyncio/tasks.py", false);
+        sleep["waiting"] = json!(true);
+        let doc = json!({"id": "P", "duration": 10_000, "profile": {
+            "interval_us": 1000, "samples": 10,
+            "frames": [awaiting, frame("refresh_tracking", "shop/tasks.py", true), frame("track_parcel", "shop/tasks.py", true), sleep],
+            "stacks": [{"frames": [1, 2, 3], "count": 7}, {"frames": [0, 3], "count": 3}],
+        }});
+        let profile = Profile::of(&doc).unwrap();
+
+        let rows: Vec<(&str, Option<i64>, i64)> = functions(&profile.own_code())
+            .into_iter()
+            .map(|(index, _, total)| {
+                (
+                    profile.frames[index].function,
+                    profile.frames[index].at_line,
+                    total.round() as i64,
+                )
+            })
+            .collect();
+
+        assert_eq!(
+            rows,
+            vec![
+                ("sleep", None, 10_000),
+                ("refresh_tracking", None, 10_000),
+                ("track_parcel", None, 7_000)
             ]
         );
     }
