@@ -1,6 +1,7 @@
 // Corner badge, fetch and XHR capture, slide-out panel (iframe inside Shadow DOM).
 
 import TOKENS from "virtual:tracepanel-tokens";
+import { duration } from "@tracepanel/ui/format";
 import type { ChainCounts } from "@tracepanel/ui/lib/chainCounts";
 import { plural } from "@tracepanel/ui/lib/plural";
 import {
@@ -526,7 +527,7 @@ function tasksPart(info: TraceInfo): string {
 
 function line(info: TraceInfo): string {
   const issues = info.issues ? ` · ${info.issues} issue${info.issues === 1 ? "" : "s"}` : "";
-  return `${title(info)} → ${info.status ?? "?"} · ${Math.round(info.totalMs ?? 0)} ms · ${info.queries ?? 0} q${issues}${tasksPart(info)}`;
+  return `${title(info)} → ${info.status ?? "?"} · ${duration((info.totalMs ?? 0) * 1000)} · ${info.queries ?? 0} q${issues}${tasksPart(info)}`;
 }
 
 /** Its own findings, or its tasks': either wants a look. */
@@ -593,10 +594,12 @@ function addTime(parent: HTMLElement, ms: number): void {
   else if (ms >= 300) seg.dataset["speed"] = "slow";
   seg.innerHTML = ICONS.clock;
   const value = document.createElement("b");
-  value.textContent = ms >= 1000 ? (ms / 1000).toFixed(1) : String(Math.round(ms));
+  // As the panel's list and the card say it: "0.5 ms", "88 ms", "1.2 s".
+  const [number = "", word = ""] = duration(ms * 1000).split(" ");
+  value.textContent = number;
   const unit = document.createElement("span");
   unit.className = "unit";
-  unit.textContent = ms >= 1000 ? "s" : "ms";
+  unit.textContent = word;
   seg.append(value, unit);
 }
 
