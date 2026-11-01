@@ -210,7 +210,8 @@ impl<'a> Profile<'a> {
     }
 
     /// A stack as the project's code sees it: its frames, and after each the library call it made (what that call
-    /// spent, it spent). A stack without the project's code is left as it is.
+    /// spent, it spent). A stack without the project's code is the library code it was running, its innermost frame
+    /// alone: none of the framework's or the runtime's frames on the way there are the project's.
     fn own_frames(&self, frames: &[usize]) -> Vec<usize> {
         let yours: Vec<bool> = frames.iter().map(|&index| self.yours(index)).collect();
         let kept: Vec<usize> = frames
@@ -220,7 +221,7 @@ impl<'a> Profile<'a> {
             .map(|(_, &index)| index)
             .collect();
         if kept.is_empty() {
-            frames.to_vec()
+            frames.last().map(|&leaf| vec![leaf]).unwrap_or_default()
         } else {
             kept
         }
@@ -1128,5 +1129,46 @@ allocation sites at the peak (1 of 1, 2.0 MB in all, largest first; ×: allocati
             "{answer}"
         );
         assert_eq!(app_profile(&[], Kind::Cpu, 5), None);
+    }
+
+    /// A Node task's samples as tracepanel-js sends them: one in the job's own code under the worker's and the
+    /// runtime's frames, one in the runtime and OpenTelemetry's code alone.
+    fn node_task() -> Value {
+        let frame = |function: &str, file: &str, in_app: bool| json!({"function": function, "module": null, "file": file, "line": 1, "in_app": in_app});
+        json!({"id": "T", "duration": 10_000, "profile": {
+            "interval_us": 1000, "samples": 10,
+            "frames": [
+                frame("processTicksAndRejections", "node:internal/process/task_queues", false),
+                frame("callback", "bullmq/dist/cjs/classes/worker.js", false),
+                frame("rankProducts", "worker.ts", true),
+                frame("stringify", "", false),
+                frame("export", "@opentelemetry/sdk-trace-base/build/src/export/BatchSpanProcessorBase.js", false),
+                frame("listOnTimeout", "node:internal/timers", false),
+            ],
+            "stacks": [{"frames": [0, 1, 2, 3], "count": 6}, {"frames": [5, 4, 3], "count": 4}],
+        }})
+    }
+
+    #[test]
+    fn your_code_is_the_apps_frames_a_stack_without_them_its_innermost_frame_alone() {
+        let doc = node_task();
+        let profile = Profile::of(&doc).unwrap();
+
+        let stacks: Vec<Vec<&str>> = profile
+            .own_code()
+            .iter()
+            .map(|stack| {
+                stack
+                    .frames
+                    .iter()
+                    .map(|&index| profile.frames[index].function)
+                    .collect()
+            })
+            .collect();
+
+        assert_eq!(
+            stacks,
+            vec![vec!["rankProducts", "stringify"], vec!["stringify"]]
+        );
     }
 }
