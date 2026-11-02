@@ -44,6 +44,7 @@ function view(traceId: string, path: string, start: number, duration: number, ca
     attrs: {
       "service.name": "shop-web",
       "service.role": "browser",
+      "telemetry.sdk.language": "webjs",
       "page.path": path,
       "page.trigger": "navigation",
       "user_agent.original": "e2e",
@@ -204,9 +205,9 @@ test("in the panel the redirect is no row: its view says where it came from, eac
   await expect(frame.locator(".dt-hero")).toContainText("redirected from /sms");
   const calls = frame.getByRole("tab", { name: /^HTTP calls/ });
   await expect(calls.locator(".dt-tab-count")).toHaveText("6");
-  await expect(calls).toHaveAttribute(
+  await expect(calls.locator(".dt-tab-count")).toHaveAttribute(
     "title",
-    "HTTP calls: 6 HTTP calls down its chain of calls: 3 by this view, 3 by the apps it called",
+    "6 HTTP calls down its chain of calls: 3 by this view, 3 by the apps it called",
   );
   await expect(pill(page).locator(".seg").filter({ hasText: "6" })).toHaveAttribute(
     "title",
