@@ -21,7 +21,7 @@ export interface Tab<T extends string> {
   badge?: ReactNode;
   /** A small icon before the label. */
   icon?: ReactNode;
-  /** What its count covers, in its tooltip after its name: a chain's calls, its own among them. */
+  /** What its count covers, in the count's tooltip: a chain's calls, its own among them. */
   hint?: string | undefined;
 }
 
@@ -83,7 +83,7 @@ function TabButton<T extends string>({
       aria-selected={selected}
       className="dt-tab"
       // Narrow, the other tabs show their icon and count only: the name is in the tooltip.
-      title={tab.hint ? `${tab.label}: ${tab.hint}` : tab.label}
+      title={tab.label}
       tabIndex={onClick ? undefined : -1}
       onClick={onClick}
     >
@@ -111,7 +111,7 @@ function TabBody<T extends string>({ tab }: { tab: Tab<T> }) {
 function TabCount<T extends string>({ tab }: { tab: Tab<T> }) {
   if (tab.count === undefined) return null;
   return (
-    <span className="dt-tab-count" data-tone={tab.tone}>
+    <span className="dt-tab-count" data-tone={tab.tone} title={tab.hint}>
       {tab.count}
     </span>
   );

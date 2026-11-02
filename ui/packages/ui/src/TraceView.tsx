@@ -252,7 +252,7 @@ function tabLabel(trace: Trace): string {
  * side, as a chain's 36 calls to another app run, counted once); what they add up to in its tooltip.
  */
 function callsTabs(calls: Partial<Record<CallsTabId, SystemCalls>>, trace: Trace) {
-  // The chain's count, its own among them in the tooltip: a view's 23 HTTP calls are its 3 and its apps' 20.
+  // The chain's count, its own among them in the count's tooltip: a view's 23 HTTP calls are its 3 and its apps' 20.
   const own = callsByTab(trace);
   return CALLS_TABS.flatMap(({ id, label, icon: Icon }) => {
     const of = calls[id];
@@ -260,7 +260,8 @@ function callsTabs(calls: Partial<Record<CallsTabId, SystemCalls>>, trace: Trace
     const timed = of.total > 0;
     const detail = timed ? duration(onTheClock(of.spans)) : undefined;
     const detailTitle = timed ? `${duration(of.total)} total` : undefined;
-    const hint = chainScope(id, of.spans.length, own[id]?.spans.length ?? 0, whoseOwn(trace.kind));
+    const mine = own[id]?.spans.length ?? 0;
+    const hint = mine < of.spans.length ? chainScope(id, of.spans.length, mine, whoseOwn(trace.kind)) : undefined;
     return [{ id, label, icon: <Icon />, count: of.spans.length, detail, detailTitle, hint }];
   });
 }
