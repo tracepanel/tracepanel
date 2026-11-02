@@ -39,6 +39,7 @@ import { IssueList } from "./IssueList";
 import { RunningMark } from "./LiveMarks";
 import { LogsPane } from "./LogList";
 import { groupNoun, onTheClock } from "./lib/calls";
+import { chainScope, whoseOwn } from "./lib/chainCounts";
 import type { ChainWaiting } from "./lib/chainRows";
 import { isTyping } from "./lib/keys";
 import { pageParts, redirectedFrom, redirectNote } from "./lib/page";
@@ -250,14 +251,17 @@ function tabLabel(trace: Trace): string {
  * A system's tab, when the request called it: how many calls, and how long they took on the clock (calls side by
  * side, as a chain's 36 calls to another app run, counted once); what they add up to in its tooltip.
  */
-function callsTabs(calls: Partial<Record<CallsTabId, SystemCalls>>) {
+function callsTabs(calls: Partial<Record<CallsTabId, SystemCalls>>, trace: Trace) {
+  // The chain's count, its own among them in the tooltip: a view's 23 HTTP calls are its 3 and its apps' 20.
+  const own = callsByTab(trace);
   return CALLS_TABS.flatMap(({ id, label, icon: Icon }) => {
     const of = calls[id];
     if (!of) return [];
     const timed = of.total > 0;
     const detail = timed ? duration(onTheClock(of.spans)) : undefined;
     const detailTitle = timed ? `${duration(of.total)} total` : undefined;
-    return [{ id, label, icon: <Icon />, count: of.spans.length, detail, detailTitle }];
+    const hint = chainScope(id, of.spans.length, own[id]?.spans.length ?? 0, whoseOwn(trace.kind));
+    return [{ id, label, icon: <Icon />, count: of.spans.length, detail, detailTitle, hint }];
   });
 }
 
@@ -318,7 +322,7 @@ function traceTabs({
       tone: "warn" as const,
     }),
     // What a request is most often opened for: its SQL, cache and HTTP calls, and its logs when it wrote any.
-    ...callsTabs(calls),
+    ...callsTabs(calls, trace),
     ...(logs > 0 ? [{ id: "logs" as const, label: "Logs", icon: <ScrollTextIcon />, count: logs }] : []),
     // Recorded only when asked for: where the time went in code.
     ...(profiled ? [{ id: "profile" as const, label: "Profile", icon: <FlameIcon /> }] : []),

@@ -12,6 +12,12 @@
   counts leave it out. A view that called anything, failed, or lasted
   until the next one came later than 100 ms stays, and so does a page's
   load.
+- A view's counts say what they cover. Its HTTP calls tab and the
+  pill count every call down its chain, so a view that made one call
+  read "HTTP calls 8" beside one row under it, as if calls were
+  missing. Their tooltips now say "8 HTTP calls down its chain of
+  calls: 1 by this view, 7 by the apps it called", and so do the DB
+  and Cache tabs.
 - Apollo Router's answers to a browser's CORS preflights are no longer
   traces of their own ("router", a few hundred µs each, one per call of
   a view): its CORS layer answers them before it reads the request, so

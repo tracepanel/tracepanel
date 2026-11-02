@@ -2,7 +2,7 @@
 
 import TOKENS from "virtual:tracepanel-tokens";
 import { duration } from "@tracepanel/ui/format";
-import type { ChainCounts } from "@tracepanel/ui/lib/chainCounts";
+import { type ChainCounts, chainScope } from "@tracepanel/ui/lib/chainCounts";
 import { graphqlName, namesOperation } from "@tracepanel/ui/lib/graphql";
 import { clockOf, cutNote, NO_ANSWER, PENDING, runningLabel, runningTime, TICK_MS } from "@tracepanel/ui/lib/live";
 import { REDIRECT_MS } from "@tracepanel/ui/lib/page";
@@ -94,7 +94,7 @@ function addChainCounts(parent: HTMLElement, facts: ChainFacts | null): void {
     return;
   }
   addQueries(parent, facts.counts.queries);
-  addCalls(parent, facts.counts.calls);
+  addCalls(parent, facts.counts.calls, facts.counts.ownCalls);
   if (facts.counts.issues) addIssues(parent, facts.counts.issues, "warn");
 }
 
@@ -828,14 +828,14 @@ function addQueries(parent: HTMLElement, queries: number | null): void {
   seg.title = `${queries} SQL ${queries === 1 ? "query" : "queries"}`;
 }
 
-/** A view's calls down its chain: the panel's HTTP calls tab's count, under its icon. */
-function addCalls(parent: HTMLElement, calls: number): void {
+/** A view's calls down its chain: the panel's HTTP calls tab's count, under its icon; its own among them in its title. */
+function addCalls(parent: HTMLElement, calls: number, own: number): void {
   const seg = segment(parent);
   seg.innerHTML = ICONS.calls;
   const value = document.createElement("b");
   value.textContent = String(calls);
   seg.append(value);
-  seg.title = `${plural(calls, "HTTP call", "HTTP calls")} down its calls`;
+  seg.title = chainScope("http", calls, own, "this view");
 }
 
 function addIssues(parent: HTMLElement, issues: number, tone: "warn" | "error"): void {
