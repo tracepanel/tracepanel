@@ -106,6 +106,38 @@ test("the hover card of a request in flight says it waits, and follows it as it 
   await expect(card.locator(".status")).toHaveText("200");
 });
 
+test("the hover card open as a request answers fills in once its trace is stored, no hover needed", async ({
+  page,
+}) => {
+  const call = await posts();
+  await openApp(page, { slow: call });
+  const release = await holdSlow(page, call);
+  // The app writes its trace a moment after its answer: until then the agent hasn't got it.
+  let stored = false;
+  await page.route(`**/api/traces/${call.trace}`, (route) =>
+    stored ? route.continue() : route.fulfill({ status: 404 }),
+  );
+
+  await page.getByRole("button", { name: "Load slow" }).click();
+  await expect(pill(page).locator('.seg[data-state="running"]')).toHaveCount(1);
+  await pill(page).hover();
+  const card = page.getByRole("dialog", { name: "This request at a glance" });
+  await expect(card).toContainText("Waiting for its answer");
+  release();
+
+  // Answered, not stored: its head, and where its time went still loading.
+  await expect(card.locator(".status")).toHaveText("200");
+  await expect(card.locator(".card-skeleton")).toHaveCount(2);
+  await expect(card).not.toContainText("Fix first");
+
+  stored = true;
+
+  // Open all along: where its time went and what to fix first, as a card opened after it was stored shows them.
+  await expect(card.locator(".card-bar")).toBeVisible();
+  await expect(card).toContainText("Fix first");
+  await expect(card.locator(".card-skeleton")).toHaveCount(0);
+});
+
 test("an SPA's route change is a new page: the pill shows its view running, not the last view's requests", async ({
   page,
 }) => {

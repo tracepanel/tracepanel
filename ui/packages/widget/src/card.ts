@@ -323,6 +323,13 @@ function worstFirst(requests: readonly TraceInfo[], counted: (info: TraceInfo) =
   return [...requests].sort((a, b) => rank(b) - rank(a) || (b.totalMs ?? 0) - (a.totalMs ?? 0));
 }
 
+/**
+ * A request answered before its app had written its trace: the card open on it asks again this often, this many times
+ * (about 15 s, as long as a view's trace may take), until it is stored. Then it fills in, no hover needed.
+ */
+const RETRY_MS = 500;
+const RETRIES = 30;
+
 /** The narrowest the card gets: its findings and bar need the room, a short pill ("Waiting") or not. */
 const MIN_CARD_WIDTH = 320;
 
@@ -348,6 +355,8 @@ export function mountCard(
   const resolved = new Map<string, Trace | null>();
   let showTimer: number | undefined;
   let hideTimer: number | undefined;
+  // A trace not stored yet, asked for again while the card stays open on it: its id, the timer, how many times so far.
+  let retry: { id: string; timer: number | undefined; count: number } | null = null;
 
   function load(id: string): Promise<Trace | null> {
     let found = traces.get(id);
@@ -614,10 +623,41 @@ export function mountCard(
     return id !== "" && source.api !== null;
   }
 
-  /** A trace loaded: kept, and drawn if the card is still open on its request. */
+  /**
+   * A trace loaded: kept, and drawn if the card is still open on its request. One not stored yet (the request
+   * answered before its app wrote it) is asked again while the card stays open on it: it fills in once stored.
+   */
   function landed(id: string, trace: Trace | null): void {
+    if (!trace) {
+      if (stillOn(id)) askAgain(id);
+      return;
+    }
     resolved.set(id, trace);
+    if (retry?.id === id) {
+      window.clearTimeout(retry.timer);
+      retry = null;
+    }
     if (stillOn(id)) draw();
+  }
+
+  /** The card open on a request whose trace isn't stored yet: drawn again (and so asked again) in a moment. */
+  function askAgain(id: string): void {
+    const count = retry?.id === id ? retry.count + 1 : 1;
+    window.clearTimeout(retry?.timer);
+    if (count > RETRIES) {
+      resolved.set(id, null);
+      retry = null;
+      draw();
+      return;
+    }
+    retry = {
+      id,
+      count,
+      timer: window.setTimeout(() => {
+        if (retry) retry.timer = undefined;
+        if (stillOn(id)) draw();
+      }, RETRY_MS),
+    };
   }
 
   /** Whether the card is still open on the request `id`, none in flight in front of it. */
@@ -629,6 +669,9 @@ export function mountCard(
     window.clearTimeout(hideTimer);
     if (source.panelOpen()) return;
     if (!source.requests().length && !source.flights().length && !source.view()) return;
+    // A trace given up on while the card was open is asked for again on this hover.
+    const id = current().info?.trace;
+    if (id && resolved.get(id) === null) resolved.delete(id);
     draw();
     alignWith(card, badge);
     card.toggleAttribute("data-open", true);
