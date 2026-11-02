@@ -5,14 +5,13 @@
 import { Fragment, type KeyboardEvent, type MouseEvent, type ReactNode, useState } from "react";
 import { TableCell, TableRow } from "./components/ui/table";
 import { type DataColumn, DataTable } from "./DataTable";
-import { ExplainView } from "./ExplainView";
+import { StatementPlan } from "./ExplainView";
 import { duration } from "./format";
 import { focusMark, useScrollToFocus } from "./hooks/useScrollToFocus";
 import { onTheClock } from "./lib/calls";
 import { percent } from "./lib/percent";
 import { plural } from "./lib/plural";
 import { cn } from "./lib/utils";
-import { uncommented } from "./sql";
 import type { ExplainPlan, Span, Trace } from "./types";
 
 // A failed call marks its row's edge red, one answered 4xx amber, as the console's lists mark theirs; one an issue
@@ -233,13 +232,20 @@ export type Explain = ((spanId: string, analyze: boolean) => Promise<ExplainPlan
 /** EXPLAIN for the queries of a trace, where its app runs it; undefined where it doesn't. */
 export type ExplainOf = (trace: Trace) => Explain | undefined;
 
-const isSelect = (span: Span) => /^SELECT\b/i.test(uncommented(String(span.attrs["db.statement"] ?? "")));
+/** A query's database, as the agent picks how to explain it. */
+const vendorOf = (span: Span) => String(span.attrs["db.system"] || span.attrs["db.vendor"] || "");
 
 /**
- * A query's plan on demand, the same wherever a query's details open (a trace's DB tab, its call tree): a SELECT's,
- * where the host can run EXPLAIN.
+ * A query's plan on demand, the same wherever a query's details open (a trace's DB tab, its call tree): a SELECT's or
+ * a WITH's, where the host can run EXPLAIN.
  */
 export function QueryPlan({ span, onExplain }: { span: Span; onExplain: Explain | undefined }) {
-  if (!onExplain || span.kind !== "sql" || !isSelect(span) || onExplain.can?.(span.id) === false) return null;
-  return <ExplainView vendor={String(span.attrs["db.vendor"] ?? "")} load={(analyze) => onExplain(span.id, analyze)} />;
+  if (!onExplain || span.kind !== "sql" || onExplain.can?.(span.id) === false) return null;
+  return (
+    <StatementPlan
+      statement={String(span.attrs["db.statement"] ?? "")}
+      vendor={vendorOf(span)}
+      load={(analyze) => onExplain(span.id, analyze)}
+    />
+  );
 }

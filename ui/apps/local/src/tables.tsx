@@ -10,7 +10,6 @@ import {
   DetailsFooter,
   duration,
   type EndpointRow,
-  ExplainView,
   type GraphqlRow,
   ISSUE_LABELS,
   IssueChip,
@@ -34,12 +33,12 @@ import {
   type Span,
   SqlCode,
   StateBadge,
+  StatementPlan,
   StatusBadge,
   TaskName,
   type TaskRow,
   type TraceSummary,
   traceLabel,
-  uncommented,
   useAttributeColumns,
   type WebsocketRow,
 } from "@tracepanel/ui";
@@ -521,24 +520,28 @@ interface TableProps<T> {
 }
 
 /**
- * Whether a statement gets a plan: a SELECT, where the app the console shows runs EXPLAIN (its sample is that app's
- * trace), or, with every app shown, where the app behind the console does.
+ * Whether a statement can get a plan: where the app the console shows runs EXPLAIN (its sample is that app's trace),
+ * or, with every app shown, where the app behind the console does. Which statements, StatementPlan says.
  */
-function useExplains(source: DataSource, statement: string): boolean {
+function useExplains(source: DataSource): boolean {
   const { service } = useScope();
-  return useServiceCapability(source, "explain")(service) && /^SELECT\b/i.test(uncommented(statement));
+  return useServiceCapability(source, "explain")(service);
 }
 
 /** What an open SQL row adds: the statement and its plan. */
 function SqlDetails({ item, source }: { item: CallRow; source: DataSource }) {
   const statement = item.statement ?? item.template;
   const vendor = item.vendor ?? "";
-  const explainable = useExplains(source, statement);
+  const explains = useExplains(source);
   return (
     <>
       <SqlCode sql={statement} vendor={vendor} />
-      {explainable ? (
-        <ExplainView vendor={vendor} load={(analyze) => source.explain(item.sample_trace, item.sample_span, analyze)} />
+      {explains ? (
+        <StatementPlan
+          statement={statement}
+          vendor={vendor}
+          load={(analyze) => source.explain(item.sample_trace, item.sample_span, analyze)}
+        />
       ) : null}
     </>
   );

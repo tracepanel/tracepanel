@@ -2,6 +2,7 @@ import { CircleCheckIcon, TriangleAlertIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Badge } from "./components/ui/badge";
 import { Button } from "./components/ui/button";
+import { explainRefusal, NOT_SELECT } from "./explainable";
 import { keyed } from "./keys";
 import { type PlanToken, tokenizePlan } from "./lib/plan";
 import { SectionHeading } from "./primitives";
@@ -11,6 +12,8 @@ export interface ExplainViewProps {
   /** Runs EXPLAIN (or EXPLAIN ANALYZE) for the query on its database. */
   load: (analyze: boolean) => Promise<ExplainPlan>;
   vendor: string;
+  /** Why the query isn't analyzed (it locks rows): said instead of the ANALYZE button. */
+  analyzeRefusal?: string | null | undefined;
 }
 
 type State =
@@ -20,9 +23,11 @@ type State =
   | { status: "failed"; message: string };
 
 /** Query plan on demand: the database's own EXPLAIN, with full scans and spilled sorts called out. */
-export function ExplainView({ load, vendor }: ExplainViewProps) {
+export function ExplainView({ load, vendor, analyzeRefusal }: ExplainViewProps) {
   const [state, setState] = useState<State>({ status: "idle" });
-  const canAnalyze = vendor === "postgresql" || vendor === "mysql";
+  // As the agent runs it: EXPLAIN (ANALYZE, BUFFERS), MySQL's and MariaDB's EXPLAIN ANALYZE.
+  const analyzes = ANALYZED.has(vendor);
+  const canAnalyze = analyzes && !analyzeRefusal;
   const run = (analyze: boolean) => {
     setState({ status: "loading", analyze });
     load(analyze).then(
@@ -78,11 +83,7 @@ export function ExplainView({ load, vendor }: ExplainViewProps) {
         ) : null}
       </div>
       {state.status === "failed" ? <p className="text-sm text-error">{state.message}</p> : null}
-      {state.status === "idle" ? (
-        <p className="text-sm text-muted-foreground">
-          Run EXPLAIN on the database to see how it reads the tables{canAnalyze ? ", or ANALYZE to time it" : ""}.
-        </p>
-      ) : null}
+      {state.status === "idle" ? <Idle canAnalyze={canAnalyze} why={analyzes ? analyzeRefusal : null} /> : null}
       {plan ? (
         <ol className="m-0 grid list-none rounded-md border bg-muted/60 py-1.5">
           {keyed(plan.lines, (line) => `${line.depth}:${line.text}`).map(({ key, item: line }) => (
@@ -100,6 +101,40 @@ export function ExplainView({ load, vendor }: ExplainViewProps) {
       ) : null}
     </section>
   );
+}
+
+const ANALYZED = new Set(["postgresql", "mysql", "mariadb"]);
+
+/** What the buttons do, and why ANALYZE isn't one of them where the database has it. */
+function Idle({ canAnalyze, why }: { canAnalyze: boolean; why: string | null | undefined }) {
+  return (
+    <p className="text-sm text-muted-foreground">
+      Run EXPLAIN on the database to see how it reads the tables{canAnalyze ? ", or ANALYZE to time it" : ""}.
+      {why ? ` ${why}` : ""}
+    </p>
+  );
+}
+
+export interface StatementPlanProps extends Omit<ExplainViewProps, "analyzeRefusal"> {
+  statement: string;
+}
+
+/**
+ * A statement's plan, by the rule the agent explains by: none for one that isn't a SELECT or a WITH, why not for one
+ * that changes data (a WITH that deletes), the buttons for one that only reads.
+ */
+export function StatementPlan({ statement, ...props }: StatementPlanProps) {
+  const refusal = explainRefusal(statement, false);
+  if (refusal === NOT_SELECT) return null;
+  if (refusal) {
+    return (
+      <section className="grid gap-2">
+        <SectionHeading>Query plan</SectionHeading>
+        <p className="text-sm text-muted-foreground">{refusal}</p>
+      </section>
+    );
+  }
+  return <ExplainView {...props} analyzeRefusal={explainRefusal(statement, true)} />;
 }
 
 const PLAN_CLASSES: Record<PlanToken["type"], string | undefined> = {

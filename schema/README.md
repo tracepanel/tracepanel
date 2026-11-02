@@ -8,6 +8,7 @@ The contracts between the SDKs, the agent and the UI.
 | `openapi.yaml` | The console's API. The UI generates its types from it (`pnpm api`) |
 | `search.json` | The fields of the search language, which `GET /api/search` serves |
 | `store.sql` | The store's tables. Its `-- version:` line names the store's file |
+| `explainable.json` | Which statements EXPLAIN runs, and why not: the cases the agent, the console and each SDK check their rule against |
 | `examples/` | Traces as the SDKs send them, with the issues each must get (`expected.json`). `crates/server/tests/examples.rs` checks the schema, the analysis and the API against them |
 
 Times are Unix epoch microseconds (UTC), durations are microseconds, and ids
