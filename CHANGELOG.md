@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Apollo Router's answers to a browser's CORS preflights are no longer
+  traces of their own ("router", a few hundred µs each, one per call of
+  a view): its CORS layer answers them before it reads the request, so
+  they say nothing a request did.
+
 ## 0.12.0 (2026-11-02)
 
 ### Fixed

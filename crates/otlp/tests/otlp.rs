@@ -782,7 +782,7 @@ fn hive_gateway_under_a_tracer_of_another_name_folds_as_well() {
 }
 
 #[test]
-fn a_cors_preflight_and_apollo_router_s_own_start_are_nobody_s_traces() {
+fn a_cors_preflight_apollo_router_s_answer_to_one_and_its_own_start_are_nobody_s_traces() {
     let span = |trace: &str, id: &str, name: &str, kind: i32, scope: &str, method: Option<&str>| {
         let attributes: Vec<Value> = method
             .map(|method| json!({"key": "http.request.method", "value": {"stringValue": method}}))
@@ -798,6 +798,8 @@ fn a_cors_preflight_and_apollo_router_s_own_start_are_nobody_s_traces() {
         span("5b8efff798038103d269b633813fc601", "eee19b7ec3c1b171", "starting", 1, "apollo-router", None),
         span("5b8efff798038103d269b633813fc602", "eee19b7ec3c1b172", "request", 2, "apollo-router", Some("OPTIONS")),
         span("5b8efff798038103d269b633813fc603", "eee19b7ec3c1b173", "query Books", 2, "apollo-router", Some("POST")),
+        // Apollo Router's answer to a preflight: its CORS layer answers before the request is read, no method.
+        span("5b8efff798038103d269b633813fc605", "eee19b7ec3c1b175", "router", 2, "apollo-router", None),
         span("5b8efff798038103d269b633813fc604", "eee19b7ec3c1b174", "nightly-report", 1, "manual", None),
     ]}]});
     let mut headers = HeaderMap::new();
