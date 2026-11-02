@@ -4,6 +4,8 @@
 
 ### Fixed
 
+- A view's pane while it is open reads its time on a line of its own:
+  "1.8 s", then "Its trace is sent once it ends…", not "1.8 sIts trace".
 - Work in flight shows as it runs. The pill shows the newest request
   still in flight, browser-queued ones too, with a turning ring and its
   time so far, not the last one that finished. An open view runs the

@@ -63,6 +63,11 @@ test("a view the panel follows while it is open shows as running, then on its wa
   await expect(main.getByText("View still open")).toBeVisible();
   await expect(rows.nth(1)).toHaveAttribute("data-state", "running");
   const ticking = main.locator('[data-state="running"]');
+  // Its time on a line of its own, above what it says: never run on into the text ("1.8 sIts trace…").
+  await expect(ticking).toHaveCSS("display", "flex");
+  const [time, text] = [await ticking.boundingBox(), await main.locator(".dt-empty-text").boundingBox()];
+  if (!(time && text)) throw new Error("no time or text");
+  expect(time.width).toBeCloseTo(text.width, 0);
   const before = await ticking.innerText();
   // Longer than the panel's quick retries: still on its way, never "not found".
   await page.waitForTimeout(2500);
