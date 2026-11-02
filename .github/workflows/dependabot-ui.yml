@@ -54,16 +54,17 @@ jobs:
 
       - name: Build ui-dist and the notices
         run: |
+          (cd ui && pnpm install --frozen-lockfile && pnpm api)
           scripts/ui.sh
           uv run --no-project scripts/notices.py
 
       - id: changed
         name: Anything to commit
         run: |
-          if git diff --quiet -- ui-dist THIRD-PARTY-NOTICES; then
+          if git diff --quiet -- ui-dist THIRD-PARTY-NOTICES ui/packages/ui/src/api.gen.ts; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
-            git diff --stat -- ui-dist THIRD-PARTY-NOTICES
+            git diff --stat -- ui-dist THIRD-PARTY-NOTICES ui/packages/ui/src/api.gen.ts
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
@@ -75,7 +76,9 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add ui-dist THIRD-PARTY-NOTICES
+          git add ui-dist THIRD-PARTY-NOTICES ui/packages/ui/src/api.gen.ts
           git commit -m "ui-dist and notices for the bumped UI dependencies"
-          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:${BRANCH}"
+          # The install set up the repository's git hooks; their pre-push audit needs origin/main, which this
+          # checkout doesn't have, and CI checks the same right after.
+          LEFTHOOK=0 git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:${BRANCH}"
           gh workflow run ci.yml --ref "$BRANCH"
