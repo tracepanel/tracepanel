@@ -114,7 +114,14 @@ mod tests {
     }
 
     /// A view of the browser's: `/path` by `trigger`, at `start` for `duration` µs, with a call when `called`.
-    fn view(id: &str, path: &str, trigger: &str, start: i64, duration: i64, called: bool) -> Received {
+    fn view(
+        id: &str,
+        path: &str,
+        trigger: &str,
+        start: i64,
+        duration: i64,
+        called: bool,
+    ) -> Received {
         let mut spans = vec![serde_json::json!({
             "id": format!("{id}-root"), "parent_id": null, "kind": "page", "name": path, "start": start,
             "duration": duration, "status": "ok", "attrs": {},
@@ -139,22 +146,45 @@ mod tests {
 
     #[test]
     fn a_view_the_spa_redirected_from_at_once_folds_into_the_view_it_sent_to() {
-        let dir = std::env::temp_dir().join(format!("tracepanel-store-redirect-{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("tracepanel-store-redirect-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let path = path_in(&dir);
         let mut store = Store::open(&path).unwrap();
         let second = 1_000_000;
         // A route that sends on as it renders, twice in a row; a page's load that redirects (it has the load's
         // time); a view that called before the route changed; a view left two seconds later.
-        store.write(&[view("A1", "/sms", "navigation", 0, 0, false)]).unwrap();
-        store.write(&[view("A2", "/sms/list", "navigation", 2_000, 0, false)]).unwrap();
-        store.write(&[view("A3", "/sms/list/all", "navigation", 3_000, 900_000, true)]).unwrap();
-        store.write(&[view("L1", "/home", "load", 5 * second, 30_000, false)]).unwrap();
-        store.write(&[view("L2", "/home/feed", "navigation", 5 * second + 30_000, 0, false)]).unwrap();
-        store.write(&[view("C1", "/books", "navigation", 10 * second, 40_000, true)]).unwrap();
-        store.write(&[view("C2", "/books/1", "navigation", 10 * second + 40_000, 5_000, false)]).unwrap();
-        store.write(&[view("S1", "/authors", "navigation", 20 * second, 0, false)]).unwrap();
-        store.write(&[view("S2", "/authors/1", "navigation", 22 * second, 0, false)]).unwrap();
+        let sent = [
+            ("A1", "/sms", "navigation", 0, 0, false),
+            ("A2", "/sms/list", "navigation", 2_000, 0, false),
+            ("A3", "/sms/list/all", "navigation", 3_000, 900_000, true),
+            ("L1", "/home", "load", 5 * second, 30_000, false),
+            (
+                "L2",
+                "/home/feed",
+                "navigation",
+                5 * second + 30_000,
+                0,
+                false,
+            ),
+            ("C1", "/books", "navigation", 10 * second, 40_000, true),
+            (
+                "C2",
+                "/books/1",
+                "navigation",
+                10 * second + 40_000,
+                5_000,
+                false,
+            ),
+            ("S1", "/authors", "navigation", 20 * second, 0, false),
+            ("S2", "/authors/1", "navigation", 22 * second, 0, false),
+        ];
+        // Each as the browser sends it: once it ended, the one before it stored already.
+        for (id, path, trigger, start, duration, called) in sent {
+            store
+                .write(&[view(id, path, trigger, start, duration, called)])
+                .unwrap();
+        }
         let reader = Reader::new(&path);
 
         let listed: Vec<(Value, Value)> = reader
