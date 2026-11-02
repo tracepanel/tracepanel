@@ -388,6 +388,62 @@ async fn the_whole_tree_on_request() {
     );
 }
 
+/// A view in the browser that called a GraphQL server twice for `query Authors` and once for `mutation Save`.
+fn view_of_graphql_calls() -> Value {
+    let call = |id: &str, start: i64, kind: &str, name: &str| {
+        json!({"id": id, "parent_id": "ROOT", "kind": "http.client", "name": "POST 127.0.0.1:8051/graphql",
+               "start": start, "duration": 2000, "status": "ok",
+               "attrs": {"http.request.method": "POST", "url.full": "http://127.0.0.1:8051/graphql",
+                         "graphql.operation.type": kind, "graphql.operation.name": name}})
+    };
+    json!({
+        "id": "01M4GQ1C11E0000000000000V0", "kind": "page", "name": "/authors", "start": 1_000_000,
+        "duration": 9000, "status": "ok", "attrs": {"service.name": "library-web"},
+        "spans": [
+            {"id": "ROOT", "parent_id": null, "kind": "page", "name": "/authors", "start": 1_000_000,
+             "duration": 9000, "status": "ok", "attrs": {}},
+            call("A", 1_001_000, "query", "Authors"),
+            call("B", 1_003_000, "query", "Authors"),
+            call("C", 1_005_000, "mutation", "Save"),
+        ],
+        "logs": [], "errors": [], "links": [], "issues": [],
+    })
+}
+
+#[tokio::test]
+async fn calls_to_a_graphql_server_by_their_operation() {
+    let server = Server::new(store("graphql-calls", &[view_of_graphql_calls()]), false);
+
+    let (trace, _) = tool(
+        &server,
+        "get_trace",
+        json!({"id": "01M4GQ1C11E0000000000000V0", "focus": "tree"}),
+    )
+    .await;
+    let (calls, _) = tool(
+        &server,
+        "list_calls",
+        json!({"trace": "01M4GQ1C11E0000000000000V0", "system": "http"}),
+    )
+    .await;
+
+    assert_eq!(
+        &trace[trace.find("tree:").unwrap()..],
+        "tree:
+  page /authors · 9.0 ms
+    http.client GraphQL query Authors ×2 · 4.0 ms
+    http.client GraphQL mutation Save · 2.0 ms"
+    );
+
+    assert_eq!(
+        calls.lines().skip(1).collect::<Vec<_>>(),
+        [
+            "×2 in 1 trace · 4.0 ms · library-web 127.0.0.1: POST GraphQL query Authors",
+            "×1 in 1 trace · 2.0 ms · library-web 127.0.0.1: POST GraphQL mutation Save",
+        ]
+    );
+}
+
 #[tokio::test]
 async fn sql_without_its_values_unless_asked() {
     let dir = store("sql", &examples());

@@ -1,6 +1,7 @@
 // Outgoing calls (HTTP, cache) shown like queries: one row per call, and a template that groups the calls a loop
 // makes (`GET api.example.com/users/{id}`), as a statement's fingerprint groups its queries.
 import type { Span } from "../types";
+import { callOperation } from "./graphql";
 import { sendTemplate } from "./signals";
 import { SYSTEMS, type System, systemOfSpan } from "./systems";
 
@@ -61,8 +62,18 @@ const BADGE_WORDS: Record<string, RegExp> = { storage: /^storage /, migration: /
  * (`exists avatars/1.png`), a migration applied too (`shop 0012_add_sku`, `unapply` kept), any other by its name.
  */
 export function callText(span: Span): string {
+  const operation = graphqlCall(span);
+  if (operation) return operation;
   const word = BADGE_WORDS[span.kind];
   return word ? span.name.replace(word, "") : span.name;
+}
+
+/**
+ * An HTTP call to a GraphQL server by the operation it carries ("GraphQL query Authors"), as the agent names its
+ * calls and requests: its URL (`POST api:8051/graphql`) is every operation's.
+ */
+function graphqlCall(span: Span): string | undefined {
+  return span.kind === "http.client" ? callOperation(span.attrs) : undefined;
 }
 
 /**
@@ -91,7 +102,7 @@ const TEMPLATES: Record<string, (span: Span) => string> = {
   redis: (span) => keyTemplate(span.name),
   cache: (span) => keyTemplate(span.name),
   storage: storageTemplate,
-  "http.client": (span) => endpointTemplate(span.name),
+  "http.client": (span) => graphqlCall(span) ?? endpointTemplate(span.name),
   signal: sendTemplate,
 };
 

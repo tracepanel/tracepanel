@@ -7,6 +7,7 @@
 
 use crate::profile;
 use serde_json::Value;
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 
 /// The most an answer says (~4 000 tokens); the rest is cut, with a note.
@@ -412,6 +413,19 @@ fn sql_spans(doc: &Value) -> impl Iterator<Item = &Value> {
     spans(doc).iter().filter(|span| text(span, "kind") == "sql")
 }
 
+/// A span's name in the call tree: a call to a GraphQL server by its operation (`GraphQL query Authors`), as the
+/// console names it, not by the URL every operation shares.
+fn span_name(span: &Value) -> Cow<'_, str> {
+    if text(span, "kind") == "http.client"
+        && let Some(operation) = span["attrs"]
+            .as_object()
+            .and_then(tracepanel_analysis::graphql::carried)
+    {
+        return Cow::Owned(operation);
+    }
+    Cow::Borrowed(text(span, "name"))
+}
+
 /// The statement a SQL span runs, without its values.
 fn statement(span: &Value) -> &str {
     let attrs = &span["attrs"];
@@ -804,7 +818,7 @@ fn tree_section(doc: &Value, focus: Focus) -> String {
                 let key = format!(
                     "{}\u{0}{}\u{0}{}",
                     text(span, "kind"),
-                    text(span, "name"),
+                    span_name(span),
                     statement(span)
                 );
                 if !groups.contains_key(&key) {
@@ -845,7 +859,7 @@ fn tree_section(doc: &Value, focus: Focus) -> String {
                 "{}{} {}",
                 "  ".repeat(depth + 1),
                 text(span, "kind"),
-                short(text(span, "name"), 120)
+                short(&span_name(span), 120)
             );
             if group.len() > 1 {
                 line.push_str(&format!(" ×{}", group.len()));
