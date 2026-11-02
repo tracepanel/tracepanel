@@ -1031,7 +1031,8 @@ function withPage(tab: TabEntry[], announced: PageAnnouncement, load: string | n
 /**
  * A new view after one the SPA redirected from at once: that one leaves the list, the new one says where it came from
  * (the first of a chain of redirects). Such a view ended, made no call and failed nothing, and the new one started
- * within REDIRECT_MS of it; the page's load (`load`, which has the load's time) and a view that did anything stay.
+ * as it ended, within REDIRECT_MS of its start; the page's load (`load`, which has the load's time) and a view that
+ * did anything stay.
  * The agent folds it in the store by the same measure.
  */
 function foldRedirect(tab: TabEntry[], entry: TabEntry, load: string | null): TabEntry[] {
@@ -1040,7 +1041,8 @@ function foldRedirect(tab: TabEntry[], entry: TabEntry, load: string | null): Ta
   const next = entry.summary;
   if (!(last && before && next && isView(last) && isView(entry) && last.id !== load)) return [...tab, entry];
   const empty = !(before.open || before.failed) && !tab.some((item) => item.parent === last.id);
-  if (!empty || next.start - before.start > REDIRECT_MS * 1000) return [...tab, entry];
+  const atOnce = next.start - before.start <= REDIRECT_MS * 1000 && before.start + before.duration <= next.start;
+  if (!(empty && atOnce)) return [...tab, entry];
   next.redirectedFrom = before.redirectedFrom ?? before.name;
   return [...tab.slice(0, -1), entry];
 }
