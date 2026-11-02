@@ -14,7 +14,7 @@ test("Database lists the statements, the slowest first, and finds one by its tex
   const region = page.getByRole("region", { name: "Database" });
 
   await expect(region.getByRole("region", { name: "Summary" })).toContainText("Calls");
-  await expect(region.getByRole("rowgroup").last().getByRole("row").first()).toContainText("WITH c");
+  await expect(region.getByRole("rowgroup").last().getByRole("row").first()).toContainText("SELECT c (WITH)");
 
   // Only the FastAPI app's author lookup selects author.name; the free text reads the whole statement.
   await page.getByRole("searchbox", { name: "Search" }).fill("author.name");
@@ -67,7 +67,7 @@ test("a query has no Explain where the console's backend can't run it: the agent
   const region = page.getByRole("region", { name: "Database" });
   await region.getByRole("rowgroup").last().getByRole("row").first().click();
 
-  await expect(region.getByText("WITH c").nth(1)).toBeVisible();
+  await expect(region.getByText("SELECT c (WITH)").nth(1)).toBeVisible();
   await expect(region.getByRole("button", { name: /^Explain/ })).toHaveCount(0);
 });
 

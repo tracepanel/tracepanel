@@ -11,6 +11,7 @@ publish.workspace = true
 [dependencies]
 tracepanel-protocol.workspace = true
 tracepanel-store-local.workspace = true
+tracepanel-analysis.workspace = true
 axum = "0.8"
 # Gzips the API's large answers (fresh.rs).
 flate2 = "1.1"
@@ -24,4 +25,3 @@ ureq = { version = "3.4.2", default-features = false, features = ["json"] }
 [dev-dependencies]
 jsonschema = { version = "0.58.6", default-features = false }
 tower = { version = "0.5.3", features = ["util"] }
-tracepanel-analysis.workspace = true

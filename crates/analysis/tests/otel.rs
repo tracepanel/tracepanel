@@ -266,6 +266,64 @@ fn schema_qualified_tables_are_named_by_the_table() {
 }
 
 #[test]
+fn a_with_is_named_by_what_it_does() {
+    let names: Vec<(String, String)> = [
+        "WITH gone AS (DELETE FROM review WHERE id = $1 RETURNING id) SELECT count(*) FROM gone",
+        "WITH x AS (INSERT INTO review (book_id) VALUES ($1) RETURNING id) SELECT id FROM x",
+        r#"with moved as (update "public"."review" set book_id = $1 returning id) select * from moved"#,
+        // Several CTEs: the one that changes data names it, by the table it changes.
+        "WITH a AS (SELECT * FROM book), d AS (DELETE FROM review WHERE book_id IN (SELECT id FROM a) RETURNING id) \
+         SELECT * FROM d",
+        "WITH a AS (DELETE FROM review RETURNING *), b AS (INSERT INTO archive SELECT * FROM a) SELECT 1",
+        // The final statement changes data.
+        "WITH old AS (SELECT id FROM review WHERE stale) DELETE FROM review WHERE id IN (SELECT id FROM old)",
+        "WITH src AS (SELECT * FROM staged) MERGE INTO review USING src ON review.id = src.id \
+         WHEN MATCHED THEN DELETE",
+        // Reads only: what it reads first.
+        "WITH recent AS (SELECT * FROM books WHERE year > 2000) SELECT * FROM recent",
+        "WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c WHERE x < 3) SELECT count(*) FROM c",
+        "WITH a AS (SELECT * FROM book) SELECT * FROM a FOR UPDATE",
+        // A keyword in a string, a quoted name or a comment changes nothing.
+        "WITH a AS (SELECT 'DELETE FROM review' AS note FROM book) SELECT * FROM a",
+        r#"WITH "delete" AS (SELECT 1 AS "update" FROM book) SELECT "update" FROM "delete""#,
+        "WITH a AS (SELECT id /* DELETE FROM review */ FROM book -- UPDATE review\n) SELECT * FROM a",
+        "WITH a AS (SELECT $$INSERT INTO review$$ AS x FROM book) SELECT * FROM a",
+        // Not a WITH: as before.
+        "SELECT * FROM review WHERE body = 'WITH x AS (DELETE FROM review)'",
+    ]
+    .into_iter()
+    .map(|sql| {
+        (
+            tracepanel_analysis::otel::span_name(sql),
+            tracepanel_analysis::calls::sql_verb(sql),
+        )
+    })
+    .collect();
+
+    assert_eq!(
+        names,
+        [
+            ("DELETE review (WITH)", "DELETE"),
+            ("INSERT review (WITH)", "INSERT"),
+            ("UPDATE review (WITH)", "UPDATE"),
+            ("DELETE review (WITH)", "DELETE"),
+            ("DELETE review (WITH)", "DELETE"),
+            ("DELETE review (WITH)", "DELETE"),
+            ("MERGE review (WITH)", "MERGE"),
+            ("SELECT books (WITH)", "SELECT"),
+            ("SELECT COUNT c (WITH)", "SELECT"),
+            ("SELECT book (WITH)", "SELECT"),
+            ("SELECT book (WITH)", "SELECT"),
+            ("SELECT book (WITH)", "SELECT"),
+            ("SELECT book (WITH)", "SELECT"),
+            ("SELECT book (WITH)", "SELECT"),
+            ("SELECT review", "SELECT"),
+        ]
+        .map(|(name, verb)| (name.to_owned(), verb.to_owned()))
+    );
+}
+
+#[test]
 fn sql_server_names_and_placeholders() {
     // go-mssqldb's @p1, tedious's @name, JDBC's ?: each IN list collapses, and the table is named without its schema.
     for (statement, fingerprint) in [
@@ -615,6 +673,51 @@ fn an_sdks_commented_queries_are_named_and_grouped_without_them() {
         stored["spans"][1]["attrs"]["db.statement"],
         "/*traceparent='00-1'*/ SELECT * FROM orders WHERE id IN (%s, %s)"
     );
+}
+
+#[test]
+fn an_sdks_with_is_named_by_what_it_does() {
+    let query = |id: &str, name: &str, statement: &str| {
+        json!({"id": id, "parent_id": "01M5SQLR00T000000000000000", "kind": "sql", "name": name,
+               "start": 1, "duration": 1, "status": "ok",
+               "attrs": {"db.statement": statement, "db.fingerprint": "as the SDK groups it"}})
+    };
+    let doc = json!({
+        "id": "01M5SQLTRACE00000000000000", "kind": "request", "name": "DELETE /reviews", "start": 0,
+        "duration": 10, "status": "ok", "attrs": {},
+        "spans": [
+            {"id": "01M5SQLR00T000000000000000", "parent_id": null, "kind": "request", "name": "DELETE /reviews",
+             "start": 0, "duration": 10, "status": "ok", "attrs": {}},
+            query("01M5SQLQUERY10000000000000", "WITH review",
+                  "WITH gone AS (DELETE FROM review WHERE id = %s RETURNING id) SELECT count(*) FROM gone"),
+            query("01M5SQLQUERY20000000000000", "WITH book",
+                  "with recent as (select * from book) select * from recent"),
+            query("01M5SQLQUERY30000000000000", "SELECT review", "SELECT * FROM review"),
+        ],
+        "logs": [], "errors": [], "links": [], "issues": [],
+    });
+    let mut received = tracepanel_protocol::Received {
+        trace: serde_json::from_value(doc.clone()).unwrap(),
+        doc: doc.to_string(),
+    };
+
+    tracepanel_analysis::otel::uncomment(&mut received);
+
+    let rows: Vec<(&str, &Value)> = received.trace.spans[1..]
+        .iter()
+        .map(|span| (span.name.as_str(), &span.attrs["db.fingerprint"]))
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            ("DELETE review (WITH)", &json!("as the SDK groups it")),
+            ("SELECT book (WITH)", &json!("as the SDK groups it")),
+            ("SELECT review", &json!("as the SDK groups it")),
+        ]
+    );
+
+    let stored: Value = serde_json::from_str(&received.doc).unwrap();
+    assert_eq!(stored["spans"][1]["name"], "DELETE review (WITH)");
 }
 
 /// The trace's `otel` spans mapped by `normalize`, from their documents.
