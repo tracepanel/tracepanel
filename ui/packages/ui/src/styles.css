@@ -3496,12 +3496,20 @@ div.dt-map-row[data-kind="code"] {
   height: 0.8125rem;
   color: var(--dt-text-3);
 }
-/* A row's time where its trace was cut: the time, then "no answer". */
-.dt-request-cut {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  white-space: nowrap;
+/* A row whose trace was cut, "no answer" beside its name: the name keeps its room, the words give way down to the
+   hourglass, so the row's time column stays a time's width. */
+.dt-request-main > .dt-no-answer {
+  /* Gives way before the name does, whatever the name's own shrinking. */
+  flex: 0 1000000 auto;
+  min-width: 0.75rem;
+}
+.dt-request-main > .dt-no-answer > svg {
+  flex: none;
+}
+.dt-request-main > .dt-no-answer > .dt-no-answer-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 /* A trace still running, in its pane's empty state: the ring as big as an empty state's icon, the time on its line.
    Both classes: .dt-running-time below would else win, inline, and the text would run on from the time. */
