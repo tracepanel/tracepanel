@@ -5,6 +5,7 @@ import {
   DataTable,
   duration,
   Empty,
+  GraphqlCode,
   type GraphqlDetail,
   Histogram,
   IssueGroupList,
@@ -415,11 +416,7 @@ function Resolvers({ operation }: { operation: GraphqlDetail }) {
         Resolvers{" "}
         <span className="font-normal text-muted-foreground">· your resolvers in this operation, most time first</span>
       </h2>
-      {operation.document ? (
-        <pre className="m-0 overflow-auto rounded-md border bg-muted/60 px-4 py-3 font-mono text-sm whitespace-pre-wrap [overflow-wrap:anywhere]">
-          {operation.document}
-        </pre>
-      ) : null}
+      {operation.document ? <GraphqlCode document={operation.document} /> : null}
       {operation.resolvers.length > 0 ? (
         <DataTable table="resolvers" columns={resolverColumns(slowest)}>
           {({ cells }) =>

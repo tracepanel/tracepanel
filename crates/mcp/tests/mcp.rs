@@ -1515,3 +1515,74 @@ profiled down its calls: 2 traces (library-api) → get_profile id:{bff}"
         "{compared}"
     );
 }
+
+/// A router's request (`ago` µs before now): a call to a subgraph that sends its trace, and two to a host that sends
+/// none.
+fn router_docs(ago: i64, n: u32) -> Vec<Value> {
+    let start = tracepanel_store_local::search::now_us() - ago;
+    let id = |k: u32| format!("01M4R0VTER{n:0>3}{k:0>13}");
+    let call = |k: u32, url: &str, at: i64, w3c: &str| {
+        json!({"id": id(k), "parent_id": id(100), "kind": "http.client", "name": format!("POST {}", &url[url.find("//").unwrap_or(0) + 2..]),
+               "start": start + at, "duration": 300, "status": "ok",
+               "attrs": {"url.full": url, "w3c.span_id": w3c, "http.response.status_code": 200}})
+    };
+    let doc = |k: u32, app: &str, parent: Option<&str>, spans: Vec<Value>| {
+        let mut attrs = json!({"service.name": app, "w3c.trace_id": format!("{n:0>32}")});
+        if let Some(parent) = parent {
+            attrs["w3c.parent_span_id"] = json!(parent);
+        }
+        let mut all = vec![
+            json!({"id": id(100 + k), "parent_id": null, "kind": "http", "name": "POST /graphql",
+                                  "start": start, "duration": 1000, "status": "ok", "attrs": {}}),
+        ];
+        all.extend(spans);
+        json!({"id": id(k), "kind": "http", "name": "POST /graphql", "start": start, "duration": 1000, "status": "ok",
+               "attrs": attrs, "spans": all, "logs": [], "errors": [], "links": [], "issues": []})
+    };
+    vec![
+        doc(
+            0,
+            "router",
+            None,
+            vec![
+                call(1, "http://127.0.0.1:4071/graphql", 10, "d000000000000001"),
+                call(
+                    2,
+                    "https://reviews.example.test/graphql",
+                    400,
+                    "d000000000000002",
+                ),
+                call(
+                    3,
+                    "https://reviews.example.test/graphql",
+                    700,
+                    "d000000000000003",
+                ),
+            ],
+        ),
+        doc(1, "books", Some("d000000000000001"), vec![]),
+    ]
+}
+
+#[tokio::test]
+async fn get_trace_says_which_calls_went_to_hosts_that_send_no_traces() {
+    let earlier = router_docs(3_600_000_000, 1);
+    let now = router_docs(1_000_000, 2);
+    let dir = store("untraced", &[earlier.clone(), now.clone()].concat());
+    let server = Server::new(dir, false);
+
+    let (old, _) = tool(&server, "get_trace", json!({"id": earlier[0]["id"]})).await;
+    let (fresh, _) = tool(&server, "get_trace", json!({"id": now[0]["id"]})).await;
+
+    assert!(
+        old.contains(
+            "not traced (these hosts send no traces to Tracepanel: what ran there isn't recorded):
+  reviews.example.test: 2 calls, as POST reviews.example.test/graphql"
+        ),
+        "{old}"
+    );
+    assert!(!old.contains("127.0.0.1:4071:"), "{old}");
+
+    // Ended a moment ago: its trace may still come.
+    assert!(!fresh.contains("not traced"), "{fresh}");
+}

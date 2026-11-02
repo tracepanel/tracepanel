@@ -266,6 +266,41 @@ export function waitingIn(traces: readonly Placed[], capped = false, now: number
   return [...waitingAmong(traces, capped, now * 1000).values()].flat().map((each) => each.row);
 }
 
+/**
+ * The calls of the chain no trace answered and none will: they carried the trace on, they ended (not cut short) and
+ * were waited for as long as a call is, and no call of the chain to the same host was answered (an app that records
+ * traces there would say what this one did). By span id, the host each went to: "not traced: <host> sends no traces
+ * to Tracepanel". None when a limit left traces out of the chain: their calls' traces may be among those.
+ */
+export function untracedIn(
+  traces: readonly Placed[],
+  capped = false,
+  now: number = Date.now(),
+): ReadonlyMap<string, string> {
+  if (capped) return new Map();
+  const calls = carriedCalls(traces);
+  const known = new Set(calls.filter((call) => call.answered).map((call) => call.host));
+  const gone = (call: CarriedCall) => !(call.answered || known.has(call.host)) && waitedOut(call.span, now * 1000);
+  return new Map(calls.filter(gone).flatMap((call) => (call.host === null ? [] : [[call.span.id, call.host]])));
+}
+
+/** A call of the chain that carried the trace on: whether a trace answered it, the host it went to. */
+type CarriedCall = { span: Span; answered: boolean; host: string | null };
+
+function carriedCalls(traces: readonly Placed[]): CarriedCall[] {
+  const answered = new Set(traces.map((each) => `${each.parent}/${each.via}`));
+  return traces.flatMap((each) =>
+    (each.trace?.spans ?? [])
+      .filter(carries)
+      .map((span) => ({ span, answered: answered.has(`${each.id}/${span.id}`), host: hostOf(span) })),
+  );
+}
+
+/** A call that ended (not cut short) and was waited for as long as a call is (`at`, µs). */
+function waitedOut(span: Span, at: number): boolean {
+  return !isCut(span) && at - (span.start + span.duration) >= waitedFor(span);
+}
+
 /** When the first of the chain's waiting calls stops being waited for (ms), if any is. */
 export function waitingUntil(chain: Chain, now: number = Date.now()): number | null {
   const ends = [...waitingCalls(chain, now * 1000).values()]

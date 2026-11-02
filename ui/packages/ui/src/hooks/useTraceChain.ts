@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { type ChainWaiting, waitingIn } from "../lib/chainRows";
+import { type ChainWaiting, untracedIn, waitingIn } from "../lib/chainRows";
 import { type Member, membersOf, type ScopedLog, type SpanScope, scopedLogs } from "../lib/scope";
 import type { Chain, ChainTrace, Related, ScopeIssue, Trace } from "../types";
 
@@ -31,7 +31,12 @@ function useTraceChain(
   trace: Trace,
   related: Related | undefined,
   load: ((traceId: string) => Promise<Chain>) | undefined,
-): { members: Member[]; issues: readonly ScopeIssue[]; waiting: readonly ChainWaiting[] } {
+): {
+  members: Member[];
+  issues: readonly ScopeIssue[];
+  waiting: readonly ChainWaiting[];
+  untraced: ReadonlyMap<string, string>;
+} {
   const [loaded, setLoaded] = useState<{ id: string; key: string; chain: Chain } | undefined>(undefined);
   // When the chain was last asked for again while calls of it wait (ms); 0 before.
   const [asked, setAsked] = useState(0);
@@ -61,13 +66,19 @@ function useTraceChain(
   // Read again at each ask, at its time: a call stops being waited for in time, with no new answer.
   const capped = chain?.capped ?? false;
   const waiting = useMemo(() => waitingIn(members, capped, asked || Date.now()), [members, capped, asked]);
+  // Said only once the chain is all there is to know: loaded, or none to load (no call any trace answered).
+  const settled = chain !== undefined || !load || calls + unlinked === 0;
+  const untraced = useMemo(
+    () => (settled ? untracedIn(members, capped, asked || Date.now()) : NO_UNTRACED),
+    [settled, members, capped, asked],
+  );
   // More on its way: asked for again until it is all there (or no longer waited for).
   useEffect(() => {
     if (!load || waiting.length === 0) return;
     const timer = window.setTimeout(() => setAsked(Date.now()), WAITING_ASK_MS);
     return () => window.clearTimeout(timer);
   }, [load, waiting]);
-  return { members, issues: chain?.issues ?? NO_ISSUES, waiting };
+  return { members, issues: chain?.issues ?? NO_ISSUES, waiting, untraced };
 }
 
 /** A trace's chain, the part of it its tabs list (`scope`: all of it, or what is under a row), and its records. */
@@ -83,9 +94,12 @@ export interface TraceScope {
   chainIssues: readonly ScopeIssue[];
   /** Its calls whose traces are still on their way: while there are any, the chain is partial. */
   waiting: readonly ChainWaiting[];
+  /** Its calls no trace answered and none will, by span id: the host each went to (lib/chainRows, untracedIn). */
+  untraced: ReadonlyMap<string, string>;
 }
 
 const NO_ISSUES: readonly ScopeIssue[] = [];
+const NO_UNTRACED: ReadonlyMap<string, string> = new Map();
 
 /** What is under the trace of one app: its traces down the chain, whole (the panel's list opens a trace so). */
 function underApp(members: readonly Member[], app: string): SpanScope | null {
@@ -100,7 +114,7 @@ export function useTraceScope(
   /** An app whose traces the scope starts as, once the chain has them ("Under library-api"). */
   under?: string | undefined,
 ): TraceScope {
-  const { members, issues, waiting } = useTraceChain(trace, related, load);
+  const { members, issues, waiting, untraced } = useTraceChain(trace, related, load);
   const [scope, setScope] = useState<SpanScope | null>(null);
   const asked = useRef(under);
   useEffect(() => {
@@ -113,7 +127,7 @@ export function useTraceScope(
   const logs = useMemo(() => scopedLogs(members, null), [members]);
   const scoped = useMemo(() => (scope ? scopedLogs(members, scope) : logs), [members, scope, logs]);
   return useMemo(
-    () => ({ members, scope, setScope, logs, scoped, chainIssues: issues, waiting }),
-    [members, scope, logs, scoped, issues, waiting],
+    () => ({ members, scope, setScope, logs, scoped, chainIssues: issues, waiting, untraced }),
+    [members, scope, logs, scoped, issues, waiting, untraced],
   );
 }

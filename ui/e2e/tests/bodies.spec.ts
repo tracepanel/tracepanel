@@ -39,6 +39,35 @@ test("a JSON body is laid out and coloured; a cut response as far as it goes, ma
   await expectBodies(page);
 });
 
+test.describe("copied", () => {
+  test.use({ permissions: ["clipboard-read", "clipboard-write"] });
+
+  test("a body's copy button copies it as stored, not as laid out; a cut one says it copies what was kept", async ({
+    page,
+    request,
+  }) => {
+    const id = await traceId(ORDER);
+    const stored = (await (await request.get(`/api/traces/${id}`)).json()) as { attrs: Record<string, unknown> };
+    await page.goto(`/#/t/${id}?tab=request`);
+    const response = await part(page, "Response body");
+    const copy = response.getByRole("button", { name: "Copy the response body as kept (it was cut)" });
+
+    await response.locator("pre").hover();
+    await expect(copy).toBeVisible();
+
+    await copy.click();
+
+    await expect(response.getByRole("button", { name: "Copied" })).toBeVisible();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(stored.attrs["http.response.body"]);
+
+    const body = await part(page, "Request body");
+    await body.locator("pre").hover();
+    await body.getByRole("button", { name: "Copy the request body" }).click();
+
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(stored.attrs["http.request.body"]);
+  });
+});
+
 test("the call tree's request row shows the same bodies behind the same switch", async ({ page }) => {
   await page.goto(`/#/t/${await traceId(ORDER)}?tab=calls`);
   await page.locator(".dt-map-row").first().click();

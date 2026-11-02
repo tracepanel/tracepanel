@@ -4,6 +4,7 @@ use crate::Server;
 use crate::compact::{self, Focus, ago, fit, trace_line};
 use crate::profile::{self, Kind};
 use serde_json::{Value, json};
+use std::collections::HashSet;
 use std::time::{Duration, Instant};
 use tracepanel_store_local::{
     Chain, ReadError, Selection, call_summary, chain_issues, log_summary, no_remote, search,
@@ -266,8 +267,16 @@ fn document(server: &Server, id: &str) -> Result<Value, Refusal> {
 fn shown(server: &Server, doc: &Value, focus: Focus) -> Result<String, Refusal> {
     let related = server.reader.related(compact::text(doc, "id"))?;
     let mut answer = compact::trace(doc, &related, focus, server.values, search::now_us());
-    if let Some(chain) = chain_section(server, compact::text(doc, "id"))? {
-        answer.push_str(&format!("\n\n{chain}"));
+    let chain = server
+        .reader
+        .chain(compact::text(doc, "id"), true, &no_remote)?;
+    if let Some(chain) = &chain {
+        if let Some(section) = chain_section(chain, compact::text(doc, "id")) {
+            answer.push_str(&format!("\n\n{section}"));
+        }
+        if let Some(section) = untraced_section(chain, search::now_us()) {
+            answer.push_str(&format!("\n\n{section}"));
+        }
     }
     if let Some(console) = server.console_url() {
         answer.push_str(&format!(
@@ -646,12 +655,9 @@ fn trace_logs(server: &Server, args: &Value) -> Result<String, Refusal> {
 
 /// The traces down a trace's chain of calls, when it has any: their apps, and their warnings and worse (the trace's
 /// own are in its logs).
-fn chain_section(server: &Server, id: &str) -> Result<Option<String>, Refusal> {
-    let Some(chain) = server.reader.chain(id, true, &no_remote)? else {
-        return Ok(None);
-    };
+fn chain_section(chain: &Chain, id: &str) -> Option<String> {
     if chain.members.len() < 2 {
-        return Ok(None);
+        return None;
     }
     let start = compact::int(&chain.members[0].doc, "start");
     let mut apps: Vec<&str> = Vec::new();
@@ -678,7 +684,7 @@ fn chain_section(server: &Server, id: &str) -> Result<Option<String>, Refusal> {
         compact::count(chain.members.len() as i64 - 1, "trace", "traces"),
         apps.join(", ")
     );
-    let profiled = profiled_chain(&chain, Kind::Cpu);
+    let profiled = profiled_chain(chain, Kind::Cpu);
     if !profiled.is_empty() {
         let traces: usize = profiled.iter().map(|(_, docs)| docs.len()).sum();
         let names: Vec<&str> = profiled.iter().map(|(app, _)| *app).collect();
@@ -688,7 +694,7 @@ fn chain_section(server: &Server, id: &str) -> Result<Option<String>, Refusal> {
             names.join(", ")
         ));
     }
-    for (at, issue) in chain_issues(&chain) {
+    for (at, issue) in chain_issues(chain) {
         out.push_str(&format!(
             "\nissue across apps on {}: {} → list_calls trace:{id}\n  hint: {}",
             chain.members[at].app(),
@@ -710,5 +716,108 @@ fn chain_section(server: &Server, id: &str) -> Result<Option<String>, Refusal> {
             out.push_str(&format!("\n  {}", compact::scope_log_line(log, start)));
         }
     }
-    Ok(Some(out))
+    Some(out)
+}
+
+/// The kinds of span that call another service, which answers with a trace when it records them.
+const CALL_KINDS: [&str; 4] = ["http.client", "grpc", "rpc", "otel"];
+/// How long after it ended a call's trace is waited for (µs), as the console waits: then it is not coming.
+const WAITED_US: i64 = 5_000_000;
+
+/// Where a call went: its URL's host and port, else its peer's address.
+fn call_host(span: &Value) -> Option<String> {
+    let attrs = &span["attrs"];
+    if let Some(url) = attrs["url.full"]
+        .as_str()
+        .or_else(|| attrs["http.url"].as_str())
+    {
+        let rest = url.split_once("://").map_or(url, |(_, rest)| rest);
+        let host = rest.split(['/', '?', '#']).next().unwrap_or_default();
+        let host = host.rsplit_once('@').map_or(host, |(_, host)| host);
+        if !host.is_empty() {
+            return Some(host.to_string());
+        }
+    }
+    let address = attrs["server.address"]
+        .as_str()
+        .or_else(|| attrs["net.peer.name"].as_str())
+        .filter(|address| !address.is_empty())?;
+    let port = attrs
+        .get("server.port")
+        .or_else(|| attrs.get("net.peer.port"))
+        .filter(|port| port.is_number() || port.is_string())
+        .map(|port| {
+            port.as_str()
+                .map_or_else(|| port.to_string(), str::to_string)
+        });
+    Some(port.map_or_else(|| address.to_string(), |port| format!("{address}:{port}")))
+}
+
+/// A call that carried the trace on: a service that records traces answers it with one.
+fn carries(span: &Value) -> bool {
+    CALL_KINDS.contains(&compact::text(span, "kind"))
+        && span["attrs"]["w3c.span_id"]
+            .as_str()
+            .is_some_and(|id| !id.is_empty())
+        && span["attrs"].get("messaging.system").is_none()
+}
+
+/// The calls down the chain no trace answered and none will, as the console says them ("not traced"): they carried
+/// the trace on, ended (not cut short) more than WAITED_US ago, and no call of the chain to the same host was answered.
+/// None when a limit left traces out of the chain.
+fn untraced_section(chain: &Chain, now: i64) -> Option<String> {
+    if chain.capped {
+        return None;
+    }
+    let answered: HashSet<(usize, &str)> = chain
+        .members
+        .iter()
+        .filter_map(|member| Some((member.parent?, member.via.as_deref()?)))
+        .collect();
+    let calls: Vec<(&Value, bool)> = chain
+        .members
+        .iter()
+        .enumerate()
+        .flat_map(|(at, member)| {
+            let answered = &answered;
+            member.doc["spans"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter(|span| carries(span))
+                .map(move |span| (span, answered.contains(&(at, compact::text(span, "id")))))
+        })
+        .collect();
+    let known: HashSet<String> = calls
+        .iter()
+        .filter(|(_, served)| *served)
+        .filter_map(|(span, _)| call_host(span))
+        .collect();
+    let mut hosts: Vec<(String, Vec<String>)> = Vec::new();
+    for (span, served) in calls {
+        let cut = span["attrs"]["http.unfinished"] == true;
+        let ended = compact::int(span, "start") + compact::int(span, "duration");
+        let Some(host) = call_host(span) else {
+            continue;
+        };
+        if served || cut || known.contains(&host) || now - ended < WAITED_US {
+            continue;
+        }
+        let name = compact::text(span, "name").to_string();
+        match hosts.iter_mut().find(|(each, _)| *each == host) {
+            Some((_, names)) => names.push(name),
+            None => hosts.push((host, vec![name])),
+        }
+    }
+    if hosts.is_empty() {
+        return None;
+    }
+    let mut out = String::from(
+        "not traced (these hosts send no traces to Tracepanel: what ran there isn't recorded):",
+    );
+    for (host, names) in hosts {
+        let calls = compact::count(names.len() as i64, "call", "calls");
+        out.push_str(&format!("\n  {host}: {calls}, as {}", names[0]));
+    }
+    Some(out)
 }

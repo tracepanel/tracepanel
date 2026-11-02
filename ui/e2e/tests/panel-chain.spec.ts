@@ -1,6 +1,6 @@
 // Under a row of the panel's list whose trace called other apps: an app's row (open), then its traces in the order
 // they started, as the call tree's chain has them, three or more of one route in a row in a run (open while the app
-// has at most 50). A trace's row opens it; the app's row opens the row's trace under that app.
+// has at most 50). A trace's row opens it; the app's row opens the row's trace on its call tree, at that app's part.
 import type { Locator, Page } from "@playwright/test";
 import { openApp, panel, pill } from "../app.ts";
 import { chain, chainTrace, type FanoutCall, fanout } from "../chain.ts";
@@ -45,9 +45,13 @@ test("a row that called another app has that app's traces under it, open, in ord
 
   await app.click();
 
-  // The BFF's trace, its tabs under the app's traces.
+  // The BFF's trace on its call tree, at the row where shop's part starts; its tabs under the app's traces.
+  await expect(panel(page).getByRole("tab", { name: /^Call tree/ })).toHaveAttribute("aria-selected", "true");
+  await expect(panel(page).locator('.dt-map-row[aria-current="true"]')).toContainText("shop");
+
+  await panel(page).getByRole("tab", { name: /^DB/ }).click();
+
   await expect(panel(page).locator(".dt-scope-chip")).toContainText("Under shop");
-  await expect(panel(page).getByRole("tab", { name: /^DB/ })).toHaveAttribute("aria-selected", "true");
   await expect(panel(page).getByText("3 queries · 1 unique")).toBeVisible();
 
   // As in the call tree: ← folds it, → opens it again.

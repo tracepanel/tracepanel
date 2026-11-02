@@ -115,8 +115,14 @@ test("the view's row counts its chain as the pill and the tabs do; a row with ro
   await expect(issues(traces)).toHaveText(["1", "2", "1", "1", "2", "2", "2"]);
   await expect(queries(apps)).toHaveText(["3", "3", "3"]);
 
-  // The app's row opens its tabs under it: they count what the row says.
+  // The app's row opens the call tree at its part, its tabs under it: they count what the row says.
   await apps.nth(0).click();
+
+  await expect(panel(page).getByRole("tab", { name: /^Call tree/ })).toHaveAttribute("aria-selected", "true");
+
+  await panel(page)
+    .getByRole("tab", { name: /^Issues/ })
+    .click();
 
   await expect(panel(page).locator(".dt-scope-chip")).toContainText("Under gateway");
   await expect(panel(page).getByRole("tab", { name: /^Issues/ })).toContainText("4");

@@ -1,5 +1,6 @@
 import { CircleCheckIcon, TriangleAlertIcon } from "lucide-react";
 import { useMemo, useState } from "react";
+import { CopyBlock } from "./CopyButton";
 import { Badge } from "./components/ui/badge";
 import { Button } from "./components/ui/button";
 import { explainRefusal, NOT_SELECT } from "./explainable";
@@ -85,22 +86,38 @@ export function ExplainView({ load, vendor, analyzeRefusal }: ExplainViewProps) 
       {state.status === "failed" ? <p className="text-sm text-error">{state.message}</p> : null}
       {state.status === "idle" ? <Idle canAnalyze={canAnalyze} why={analyzes ? analyzeRefusal : null} /> : null}
       {plan ? (
-        <ol className="m-0 grid list-none rounded-md border bg-muted/60 py-1.5">
-          {keyed(plan.lines, (line) => `${line.depth}:${line.text}`).map(({ key, item: line }) => (
-            <li key={key} className="grid gap-0.5 py-1 pr-3" style={{ paddingLeft: `${0.75 + line.depth * 1.25}rem` }}>
-              <PlanText text={line.text} warning={Boolean(line.warning)} />
-              {line.warning ? (
-                <span className="flex items-center gap-1.5 text-sm text-text-2">
-                  <TriangleAlertIcon className="size-3.5 text-warn" />
-                  {line.warning}
-                </span>
-              ) : null}
-            </li>
-          ))}
-        </ol>
+        <CopyBlock text={planText(plan)} label="Copy the plan" className="rounded-md border bg-muted/60">
+          <ol className="m-0 grid list-none py-1.5 pr-9">
+            {keyed(plan.lines, (line) => `${line.depth}:${line.text}`).map(({ key, item: line }) => (
+              <li
+                key={key}
+                className="grid gap-0.5 py-1 pr-3"
+                style={{ paddingLeft: `${0.75 + line.depth * 1.25}rem` }}
+              >
+                <PlanText text={line.text} warning={Boolean(line.warning)} />
+                {line.warning ? (
+                  <span className="flex items-center gap-1.5 text-sm text-text-2">
+                    <TriangleAlertIcon className="size-3.5 text-warn" />
+                    {line.warning}
+                  </span>
+                ) : null}
+              </li>
+            ))}
+          </ol>
+        </CopyBlock>
       ) : null}
     </section>
   );
+}
+
+/** A plan as text, each line indented two spaces a level, its warning under it: as a database prints one. */
+function planText(plan: ExplainPlan): string {
+  return plan.lines
+    .flatMap((line) => {
+      const indent = "  ".repeat(line.depth);
+      return line.warning ? [`${indent}${line.text}`, `${indent}  ! ${line.warning}`] : [`${indent}${line.text}`];
+    })
+    .join("\n");
 }
 
 const ANALYZED = new Set(["postgresql", "mysql", "mariadb"]);

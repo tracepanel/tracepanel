@@ -44,7 +44,7 @@ import type { ChainWaiting } from "./lib/chainRows";
 import { isTyping } from "./lib/keys";
 import { pageParts, redirectedFrom, redirectNote } from "./lib/page";
 import { plural } from "./lib/plural";
-import { scopedIssues, scopedSpans } from "./lib/scope";
+import { type Member, scopedIssues, scopedSpans } from "./lib/scope";
 import { type Slice, stretchText } from "./lib/slice";
 import { useViewMemory, VIEW_KEYS, type ViewMemory, type ViewMemoryHeld, ViewMemoryScope } from "./lib/viewMemory";
 import { linkProps, opensTraces, openTraceAt, type TraceLinks } from "./links";
@@ -58,6 +58,7 @@ import { type MarkTarget, TimeStrip } from "./Timeline";
 import { SliceScope } from "./TimeSlice";
 import { HeadingTitle, heading, htmxOf, outcomeOf } from "./TraceHeading";
 import type { App, Chain, Issue, IssueKind, Related, Trace } from "./types";
+import { UntracedCalls } from "./Untraced";
 
 export type TabId = "request" | "app" | "tree" | "issues" | "sql" | "cache" | "http" | "logs" | "error" | "profile";
 
@@ -715,11 +716,35 @@ function useTreeSpan(
   initialSpan: string | undefined,
 ): [string | undefined, (span: string | undefined) => void] {
   const [span, ask] = useState(initialSpan);
-  const select = (next: string | undefined) => {
-    if (next) memory.set(VIEW_KEYS.span, next);
-    ask(next);
-  };
+  const select = useCallback(
+    (next: string | undefined) => {
+      if (next) memory.set(VIEW_KEYS.span, next);
+      ask(next);
+    },
+    [memory],
+  );
   return [span, select];
+}
+
+/**
+ * Opened under an app of its chain (the panel's list, an app's row): the call tree's row where that app's part
+ * starts, the call its first trace served, selected once the chain has it. Not over a row the view already had (Back
+ * returns to the row left).
+ */
+function useUnderRow(
+  members: readonly Member[],
+  under: string | undefined,
+  memory: ViewMemoryHeld,
+  select: (span: string | undefined) => void,
+): void {
+  const asked = useRef(under !== undefined && memory.get(VIEW_KEYS.span) === undefined ? under : undefined);
+  useEffect(() => {
+    const app = asked.current;
+    const via = app ? members.slice(1).find((member) => member.app === app && member.via !== null)?.via : undefined;
+    if (!via) return;
+    asked.current = undefined;
+    select(via);
+  }, [members, select]);
 }
 
 export function TraceView({
@@ -759,6 +784,7 @@ export function TraceView({
 
   // The trace's chain of calls, and what of it the tabs list: all of it, or what is under a row of the call tree.
   const chain = useTraceScope(trace, related, loadChain, initialUnder);
+  useUnderRow(chain.members, initialUnder, memory, setTreeSpan);
   const tabbed = useChainTabs(trace, chain, findings);
   // A query's EXPLAIN by the app of its trace: the call tree's details and the DB tab alike.
   const explainOf = useCallback<ExplainOf>(
@@ -791,55 +817,58 @@ export function TraceView({
     openTab(target.tab);
   };
   const panel = (
-    <div role="tabpanel" className="dt-tabpanel">
-      <RequestPane open={active === "request"} trace={trace} related={related} links={links} panel={compact} />
-      <AppPane open={active === "app"} app={app} links={links} />
-      <TreePane
-        open={active === "tree"}
-        onSelect={openAt}
-        trace={trace}
-        issueBySpan={tabbed.issueBySpan}
-        related={related}
-        loadRelated={loadRelated}
-        links={links}
-        initialSpan={treeSpan}
-        explainOf={explainOf}
-        onTraceProfile={onTraceProfile}
-        profilesIn={held.profilesIn}
-        chain={chain}
-        openTab={(tab) => openTab(tab)}
-      />
-      <IssuesPane
-        open={active === "issues"}
-        chain={chain}
-        findings={findings}
-        links={links}
-        onShowSpans={(ids) => {
-          setFocus(new Set(ids));
-          setTreeSpan(ids[0]);
-          setActive(tabOfSpans(trace, ids));
-        }}
-        onShowRow={showRow}
-        spansNoun={spansNoun}
-      />
-      <LogsPane open={active === "logs"} chain={chain} trace={trace} links={links} onShowRow={showRow} />
-      <SpanLists
-        active={active}
-        chain={chain}
-        issueBySpan={tabbed.issueBySpan}
-        focus={focus}
-        onExplain={explain}
-        links={links}
-      />
-      <ProfileTab trace={trace} open={active === "profile"} chain={chain} onShowRow={showRow} />
-      {active === "error" ? (
-        <ErrorView
-          errors={trace.errors}
-          issues={trace.issues.filter((issue) => issue.kind === "error")}
+    // The calls no trace answered: said on their rows in the call tree and the calls tabs alike.
+    <UntracedCalls value={chain.untraced}>
+      <div role="tabpanel" className="dt-tabpanel">
+        <RequestPane open={active === "request"} trace={trace} related={related} links={links} panel={compact} />
+        <AppPane open={active === "app"} app={app} links={links} />
+        <TreePane
+          open={active === "tree"}
+          onSelect={openAt}
+          trace={trace}
+          issueBySpan={tabbed.issueBySpan}
+          related={related}
+          loadRelated={loadRelated}
+          links={links}
+          initialSpan={treeSpan}
+          explainOf={explainOf}
+          onTraceProfile={onTraceProfile}
+          profilesIn={held.profilesIn}
+          chain={chain}
+          openTab={(tab) => openTab(tab)}
+        />
+        <IssuesPane
+          open={active === "issues"}
+          chain={chain}
+          findings={findings}
+          links={links}
+          onShowSpans={(ids) => {
+            setFocus(new Set(ids));
+            setTreeSpan(ids[0]);
+            setActive(tabOfSpans(trace, ids));
+          }}
+          onShowRow={showRow}
+          spansNoun={spansNoun}
+        />
+        <LogsPane open={active === "logs"} chain={chain} trace={trace} links={links} onShowRow={showRow} />
+        <SpanLists
+          active={active}
+          chain={chain}
+          issueBySpan={tabbed.issueBySpan}
+          focus={focus}
+          onExplain={explain}
           links={links}
         />
-      ) : null}
-    </div>
+        <ProfileTab trace={trace} open={active === "profile"} chain={chain} onShowRow={showRow} />
+        {active === "error" ? (
+          <ErrorView
+            errors={trace.errors}
+            issues={trace.issues.filter((issue) => issue.kind === "error")}
+            links={links}
+          />
+        ) : null}
+      </div>
+    </UntracedCalls>
   );
   const exploreMenu = explore.length > 0 ? <ExploreMenu explore={explore} links={links} /> : null;
   const openTab = (id: TabId) => {

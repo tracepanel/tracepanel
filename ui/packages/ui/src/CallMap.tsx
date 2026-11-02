@@ -80,6 +80,7 @@ import { SqlCode } from "./SqlCode";
 import { TemplateContext, withoutContext } from "./TemplateContext";
 import { RangeBand, useHeldSlice, useRangeDrag } from "./TimeSlice";
 import type { Attrs, IssueKind, Log, Related, Span, Trace, TraceError, TraceSummary } from "./types";
+import { GroupNotTraced, NotTraced, NotTracedNote } from "./Untraced";
 
 /* ---------- tree ---------- */
 
@@ -1140,6 +1141,7 @@ function GroupName({
       <FromTemplate span={first} parent={parent} />
       <Times count={node.spans.length} />
       <GroupStatus answer={answer} />
+      <GroupNotTraced spans={node.spans} />
       <RowChips>{issue ? <IssueChip kind={issue} className={ISSUE_CHIP_SHRINKS} /> : null}</RowChips>
     </>
   );
@@ -1343,6 +1345,7 @@ function OwnRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps<
           <SpanFold ctx={ctx} node={node} parent={parent} fold={fold} />
           <SpanName span={span} />
           <CallStatus node={node} />
+          <NotTraced spanId={span.id} />
           <AliasChip value={aliasBeside(span)} />
           <FromTemplate span={span} parent={parent} />
           <SignalNotes span={span} parent={parent} under={childSpans(node)} />
@@ -1900,6 +1903,21 @@ function findNode(nodes: Node[], key: string, trace: Trace): Found | undefined {
 
 type Found = { node: Node; trace: Trace };
 
+/** The rows on the way to a row, outermost first, the row last; undefined when the tree hasn't got it. */
+function pathTo(nodes: readonly Node[], key: string): Node[] | undefined {
+  for (const node of nodes) {
+    const path = pathFrom(node, key);
+    if (path) return path;
+  }
+  return undefined;
+}
+
+function pathFrom(node: Node, key: string): Node[] | undefined {
+  if (node.key === key) return [node];
+  const inner = pathTo(node.type === "group" ? node.members : childrenOf(node), key);
+  return inner && [node, ...inner];
+}
+
 function findIn(node: Node, key: string, trace: Trace): Found | undefined {
   if (node.key === key) return { node, trace };
   if (node.type === "group") return findNode(node.members, key, trace);
@@ -2161,6 +2179,7 @@ function CallDetails({ node: { span }, trace, onExplain }: DetailsProps<"span">)
   return (
     <div className="grid gap-3 p-4">
       <SpanHead span={span} trace={trace} parent={parent} attrs={span.attrs} />
+      <NotTracedNote spanId={span.id} />
       {summary.length ? <Fields rows={summary} /> : null}
       <QueryPlan span={span} onExplain={onExplain} />
       <SpanAttributes span={span} attrs={span.attrs} titled={summary.length > 0} />
@@ -2471,8 +2490,14 @@ function readKeys(value: string): ReadonlySet<string> | undefined {
 const writeKeys = (keys: ReadonlySet<string>): string | undefined =>
   keys.size ? JSON.stringify([...keys]) : undefined;
 
-/** The rows folded or opened from where they start: remembered by the view, so Back returns to the same tree. */
-function useFolded(): [ReadonlySet<string>, (key: string) => void] {
+/**
+ * The rows folded or opened from where they start: remembered by the view, so Back returns to the same tree. The rows
+ * on the way to the one a link asked for (`initialSpan`) are opened.
+ */
+function useFolded(
+  tree: readonly Node[],
+  initialSpan: string | undefined,
+): [ReadonlySet<string>, (key: string) => void] {
   const [keys, setKeys] = useRemembered<ReadonlySet<string>>(VIEW_KEYS.folded, () => new Set(), readKeys, writeKeys);
   const toggle = (key: string) => {
     const next = new Set(keys);
@@ -2480,7 +2505,50 @@ function useFolded(): [ReadonlySet<string>, (key: string) => void] {
     else next.add(key);
     setKeys(next);
   };
+  // The rows on the way to one opened: a group's opened (it starts folded), a span's not folded (it starts open).
+  const openPath = (path: readonly Node[]) => {
+    const next = openedTo(keys, path);
+    if (next.size !== keys.size || [...next].some((key) => !keys.has(key))) setKeys(next);
+  };
+  useOpenedTo(tree, initialSpan, openPath);
   return [keys, toggle];
+}
+
+/** The rows folded or opened with those on the way to a row opened: a group's opened, a span's no longer folded. */
+function openedTo(keys: ReadonlySet<string>, path: readonly Node[]): Set<string> {
+  const next = new Set(keys);
+  for (const node of path.slice(0, -1)) {
+    if (node.type === "group") next.add(`open:${node.key}`);
+    else next.delete(node.key);
+  }
+  return next;
+}
+
+/**
+ * A row a link asked for, shown: the rows on its way opened, once, as soon as the tree has it (a call's trace comes
+ * with the chain, a moment after the tree).
+ */
+function useOpenedTo(
+  tree: readonly Node[],
+  initialSpan: string | undefined,
+  openPath: (path: readonly Node[]) => void,
+) {
+  // The row asked for and not shown yet; another one asked for later takes its place.
+  const pending = useRef<{ asked: string | undefined; key: string | undefined }>({ asked: undefined, key: undefined });
+  const opener = useRef(openPath);
+  opener.current = openPath;
+  useEffect(() => {
+    if (pending.current.asked !== initialSpan) pending.current = { asked: initialSpan, key: initialSpan };
+    const key = pending.current.key;
+    const path = key ? pathTo(tree, key) : undefined;
+    if (!path) return;
+    pending.current.key = undefined;
+    opener.current(path);
+    // Into view once it is drawn, open.
+    requestAnimationFrame(() =>
+      document.querySelector('.dt-map-rows [aria-current="true"]')?.scrollIntoView({ block: "center" }),
+    );
+  }, [tree, initialSpan]);
 }
 
 /** What is under a row, as the trace's tabs take it: a span's, a group's spans', a call's trace. */
@@ -2796,7 +2864,7 @@ export function CallMap({
   const map = useRef<HTMLDivElement>(null);
   const side = useSidePane(map);
   const rows = useScrolledToInitial(initialSpan);
-  const [collapsed, toggle] = useFolded();
+  const [collapsed, toggle] = useFolded(tree, initialSpan);
   const details = detailsOf(tree, selected, trace, {
     links,
     explainOf: wiring.explainOf,

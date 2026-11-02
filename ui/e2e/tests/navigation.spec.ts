@@ -256,6 +256,47 @@ test("a trace picked in the panel's list opens on the tab last picked, never on 
   await expect(opened(frame)).toHaveText(/^Call tree/);
 });
 
+test("a row of the panel's list says the tab it opens on; an app's row opens the call tree at that app's part", async ({
+  page,
+}) => {
+  await chain();
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await openApp(page, {
+    graphql: { status: 200, trace: chainTrace("bff"), queries: 0, totalMs: 8 },
+    reports: { status: 202, trace: await traceId("POST /api/reports/sales"), queries: 0, totalMs: 12 },
+  });
+  await page.getByRole("button", { name: "Load graphql" }).click();
+  await page.getByRole("button", { name: "Load reports" }).click();
+  await pill(page).click();
+  const frame = panel(page);
+  const list = frame.getByRole("region", { name: "Pages and requests in this browser tab" });
+  const graphql = list.getByRole("button", { name: /^POST \/graphql, / });
+  const reports = list.getByRole("button", { name: /^POST \/api\/reports\/sales, 202, / });
+  const app = list.locator('.dt-request-row[data-chain="app"]');
+  const authors = list.locator('.dt-request-row[data-chain="trace"]').first();
+  const opensOnDb = "Opens on DB, the tab you used last (the call tree where it has none)";
+  // Nothing picked yet: a row opens on the call tree, and says nothing of it.
+  await expect(reports).not.toHaveAttribute("title");
+
+  await graphql.click();
+  await tab(frame, /^DB/).click();
+
+  // A trace's row says the tab it opens on, the chain's too, under its route.
+  await expect(reports).toHaveAttribute("title", opensOnDb);
+  await expect(authors).toHaveAttribute("title", `GET /authors/{id}\n${opensOnDb}`);
+  await expect(app).toHaveAttribute("title", /Opens its call tree where shop's part starts/);
+
+  await app.click();
+
+  // The app's part: the call tree, the call shop served selected; DB stays the tab picked last.
+  await expect(opened(frame)).toHaveText(/^Call tree/);
+  await expect(frame.locator('.dt-map-row[aria-current="true"]')).toContainText("shop");
+
+  await authors.click();
+
+  await expect(opened(frame)).toHaveText(/^DB/);
+});
+
 test("the lists name each row in one line: its method and whole path, its status, its time", async ({ page }) => {
   await openApp(page, {
     reports: { status: 202, trace: await traceId("POST /api/reports/sales"), queries: 0, totalMs: 12 },

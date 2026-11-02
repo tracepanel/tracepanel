@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { CopyButton } from "./CopyButton";
+import { TokenBlock } from "./CopyButton";
 import { formatSql, placeholders, tokenizeSql } from "./sql";
 
 export interface SqlCodeProps {
@@ -14,27 +14,5 @@ export interface SqlCodeProps {
 export function SqlCode({ sql, vendor, raw }: SqlCodeProps) {
   const text = useMemo(() => (raw ? placeholders(sql) : formatSql(sql, vendor)), [sql, vendor, raw]);
   const tokens = useMemo(() => tokenizeSql(text), [text]);
-  return (
-    <div className="group/sql relative min-w-0 overflow-hidden rounded-md border bg-muted/60">
-      <pre className="m-0 max-h-[30rem] overflow-auto px-4 py-3 pr-12 font-mono text-sm leading-relaxed whitespace-pre-wrap text-foreground [overflow-wrap:anywhere] [tab-size:2]">
-        <code>
-          {tokens.map((token, index) =>
-            token.type === "text" ? (
-              token.text
-            ) : (
-              // biome-ignore lint/suspicious/noArrayIndexKey: tokens of one statement never reorder.
-              <span key={index} className={`dt-sql-${token.type}`}>
-                {token.text}
-              </span>
-            ),
-          )}
-        </code>
-      </pre>
-      <CopyButton
-        text={text}
-        label="Copy SQL"
-        className="absolute top-2 right-2 opacity-0 transition-opacity group-hover/sql:opacity-100 focus-visible:opacity-100"
-      />
-    </div>
-  );
+  return <TokenBlock text={text} tokens={tokens} prefix="dt-sql-" label="Copy SQL" className="[tab-size:2]" />;
 }
