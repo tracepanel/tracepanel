@@ -8,6 +8,7 @@
 import type { Chain, ChainTrace, Span, Trace, TraceSummary } from "../types";
 import { onTheClock } from "./calls";
 import { type ChainCounts, countsOf } from "./chainCounts";
+import { isCut } from "./live";
 
 /** One trace of an app, a row of its own: its method and actual path, its route in the tooltip. */
 export interface ChainTraceRow {
@@ -49,6 +50,12 @@ export interface ChainWaiting {
   /** When the call started and ended, on the chain's clock (µs). */
   start: number;
   end: number;
+  /**
+   * Cut short (lib/live): its trace went out before it answered, here its time so far (µs). It is still waiting, "no
+   * answer yet", for as long as CUT_WAITING_MS: its answer, if it comes, is a trace sent when that request ends. Null
+   * for a call that ended.
+   */
+  cut: number | null;
 }
 
 export type ChainItem = ChainTraceRow | ChainRun | ChainWaiting;
@@ -78,6 +85,12 @@ export const RUN_MIN = 3;
  * goes; a trace that comes later still shows as it arrives (the list asks for the chain again while the row is new).
  */
 export const WAITING_MS = 5_000;
+/**
+ * How long after it was cut a call with no answer yet is waited for: the app that serves it sends its trace once the
+ * request ends, however long that takes (a handler that sleeps, a database that hangs). Not for ever: a call nothing
+ * ever answers goes in the end.
+ */
+export const CUT_WAITING_MS = 300_000;
 /** An app with up to this many traces has its runs open: all of them in order, at a glance. */
 export const RUN_OPEN_LIMIT = 50;
 
@@ -201,40 +214,63 @@ function waitingOf(span: Span, key: string): ChainWaiting {
     path: path || span.name,
     start: span.start,
     end: span.start + span.duration,
+    cut: isCut(span) ? span.duration : null,
   };
 }
 
 /** A waiting call with the host it went to, by the trace that made it. */
 type Pending = { row: ChainWaiting; host: string | null };
 
+/** How long a call is waited for after it ended (µs): a call cut short, with no answer yet, much longer. */
+function waitedFor(span: Span): number {
+  return (isCut(span) ? CUT_WAITING_MS : WAITING_MS) * 1000;
+}
+
 /**
  * The calls of the chain's traces whose traces haven't arrived (by the trace that made them): those that carried the
- * trace on, no trace of the chain names them, and they ended less than WAITING_MS ago (`now`, µs). None when a limit
- * left traces out of the chain: those calls' traces aren't missing.
+ * trace on, no trace of the chain names them, and they ended less than WAITING_MS ago (`now`, µs), or were cut short
+ * less than CUT_WAITING_MS ago. None when a limit left traces out of the chain: those calls' traces aren't missing.
  */
 function waitingCalls(chain: Chain, now: number): Map<string, Pending[]> {
+  return waitingAmong(chain.traces, chain.capped, now);
+}
+
+/** A trace where it hangs in a chain, as the waiting calls are read from it: a chain's, or a call tree's members. */
+type Placed = { id: string; parent: string | null; via: string | null; trace?: Trace | undefined };
+
+function waitingAmong(traces: readonly Placed[], capped: boolean, now: number): Map<string, Pending[]> {
   const waiting = new Map<string, Pending[]>();
-  if (chain.capped) return waiting;
-  const answered = new Set(chain.traces.map((each) => `${each.parent}/${each.via}`));
-  for (const each of chain.traces.filter(served)) {
-    const calls = each.trace.spans.filter(
-      (span) =>
-        carries(span) &&
-        !answered.has(`${each.id}/${span.id}`) &&
-        now - (span.start + span.duration) < WAITING_MS * 1000,
-    );
-    if (calls.length === 0) continue;
-    waiting.set(
-      each.id,
-      calls.map((span) => ({ row: waitingOf(span, each.id), host: hostOf(span) })),
-    );
+  if (capped) return waiting;
+  const answered = new Set(traces.map((each) => `${each.parent}/${each.via}`));
+  for (const each of traces) {
+    const calls = unanswered(each, answered, now);
+    if (calls.length > 0) waiting.set(each.id, calls);
   }
   return waiting;
 }
 
+/** A trace's calls that carried it on and no trace answered yet, while they are still waited for (`now`, µs). */
+function unanswered(each: Placed, answered: ReadonlySet<string>, now: number): Pending[] {
+  const spans = each.trace?.spans ?? [];
+  return spans
+    .filter((span) => carries(span) && !answered.has(`${each.id}/${span.id}`))
+    .filter((span) => now - (span.start + span.duration) < waitedFor(span))
+    .map((span) => ({ row: waitingOf(span, each.id), host: hostOf(span) }));
+}
+
+/**
+ * The calls of the chain still waiting for their traces: while there are any, what the chain shows is partial, more
+ * on its way (the call tree says so).
+ */
+export function waitingIn(traces: readonly Placed[], capped = false, now: number = Date.now()): ChainWaiting[] {
+  return [...waitingAmong(traces, capped, now * 1000).values()].flat().map((each) => each.row);
+}
+
 /** When the first of the chain's waiting calls stops being waited for (ms), if any is. */
 export function waitingUntil(chain: Chain, now: number = Date.now()): number | null {
-  const ends = [...waitingCalls(chain, now * 1000).values()].flat().map((each) => each.row.end / 1000 + WAITING_MS);
+  const ends = [...waitingCalls(chain, now * 1000).values()]
+    .flat()
+    .map((each) => each.row.end / 1000 + (each.row.cut === null ? WAITING_MS : CUT_WAITING_MS));
   return ends.length > 0 ? Math.min(...ends) : null;
 }
 

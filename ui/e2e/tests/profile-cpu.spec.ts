@@ -22,7 +22,7 @@ function call(id: string, kind: string, start: number, at: number, ms: number, o
     start: start + at * 1000,
     duration: ms * 1000,
     status: "ok",
-    attrs: { "code.origin": origin },
+    attrs: { "code.origin": origin, "db.system": kind === "sql" ? "postgresql" : "redis" },
   };
 }
 
@@ -263,10 +263,10 @@ test("a Go profile is its time on the CPU; the rest of the request's time waited
     /^framework & runtime\s*2 ms\s*2%/,
     /^waiting\s*69 ms\s*70%/,
   ]);
-  // Waiting, as a Python or a JVM profile names its waits: one name, hatched, in either view. The queries' and the
-  // Redis command's under the functions that made them; the 30 ms in none of them on its own.
+  // Waiting, as a Python or a JVM profile has its waits, hatched, named by what was in flight: the queries' and the
+  // Redis command's under the functions that made them; the 30 ms in none of them on its own, no call's.
   const waiting = box(page, "waiting");
-  await expect(waiting).toHaveCount(3);
+  await expect(waiting).toHaveCount(4);
   await expect(waiting.first()).toHaveClass(/dt-hatched/);
   await expect
     .poll(() => boxes(page))
@@ -275,9 +275,10 @@ test("a Go profile is its time on the CPU; the rest of the request's time waited
       "(*App).similar",
       "editDistance",
       "framework & runtime",
-      "waiting",
-      "waiting",
-      "waiting",
+      "waiting (no call)",
+      "waiting · SQL postgresql",
+      "waiting · SQL postgresql",
+      "waiting · redis",
     ]);
   // The functions, then what no function is, apart at the bottom though waiting took most. listProducts holds its
   // query's and count's waits (count through the handler), not warm's: a line in its file isn't in it.
@@ -287,18 +288,32 @@ test("a Go profile is its time on the CPU; the rest of the request's time waited
     /^\(\*App\)\.listProducts\s*catalog\.go:10\s*3 ms\s*67 ms$/,
     /^\(\*App\)\.similar\s*similar\.go:5/,
     /^framework & runtime\s*2 ms\s*2 ms$/,
-    /^waiting\s*69 ms\s*69 ms$/,
+    /^waiting · SQL postgresql\s*30 ms\s*30 ms$/,
+    /^waiting \(no call\)\s*30 ms\s*30 ms$/,
+    /^waiting · redis\s*9 ms\s*9 ms$/,
   ]);
-  await expect(functions.getByRole("list", { name: "Not a function" }).getByRole("listitem")).toHaveCount(2);
+  await expect(functions.getByRole("list", { name: "Not a function" }).getByRole("listitem")).toHaveCount(4);
 
   // Zoomed into listProducts: its calls, and its own wait and similar's, not the request's.
   await box(page, "\\(\\*App\\)\\.listProducts").click();
-  await expect.poll(() => boxes(page)).toEqual(["(*App).similar", "editDistance", "waiting", "waiting"]);
+  await expect
+    .poll(() => boxes(page))
+    .toEqual([
+      "(*App).similar",
+      "editDistance",
+      "waiting · SQL postgresql",
+      "waiting · SQL postgresql",
+      "waiting · redis",
+    ]);
 
   await page.getByRole("tab", { name: "All frames" }).click();
 
   await expect(waiting.first()).toBeVisible();
-  await expect(functions.getByRole("list", { name: "Not a function" })).toHaveText(/^waiting\s*69 ms\s*69 ms$/);
+  await expect(functions.getByRole("list", { name: "Not a function" }).getByRole("listitem")).toHaveText([
+    /^waiting · SQL postgresql\s*30 ms/,
+    /^waiting \(no call\)\s*30 ms/,
+    /^waiting · redis\s*9 ms/,
+  ]);
 });
 
 test("a Node request's queries waited in card under GET, as a Python profile has its waits", async ({ page }) => {
@@ -307,9 +322,11 @@ test("a Node request's queries waited in card under GET, as a Python profile has
   await expect(shares(page)).toHaveText([/^your code\s*8 ms/, /^framework & runtime\s*2 ms/, /^waiting\s*40 ms/]);
   // card is under GET, where its stack before the await had it, though most of its samples start at it.
   await box(page, "GET").click();
-  await expect.poll(() => boxes(page)).toEqual(["card", "waiting", "waiting"]);
+  await expect
+    .poll(() => boxes(page))
+    .toEqual(["card", "waiting · SQL postgresql", "waiting · SQL postgresql", "waiting · redis"]);
   await box(page, "card").click();
-  await expect.poll(() => boxes(page)).toEqual(["waiting"]);
+  await expect.poll(() => boxes(page)).toEqual(["waiting · SQL postgresql"]);
 });
 
 test("the call tree's legend splits a CPU profile's time off the CPU out of the code's, as the Profile tab does", async ({

@@ -28,8 +28,11 @@ export interface TraceLinks {
   call?: ((key: string) => string) | undefined;
   /** The traces a search finds (`group:<id>`: a task group's runs). */
   search?: ((query: string) => string) | undefined;
-  /** This trace's records in the logs list. */
-  logs?: ((traceId: string) => string) | undefined;
+  /**
+   * The records its Logs tab lists, in the logs list: those of the trace's whole chain of calls (`chain:<id>`), with
+   * the filters picked there (`service:`, `level:`, `logger:`), so the page shows what the tab did.
+   */
+  logs?: ((traceId: string, filters?: string) => string) | undefined;
   /** The page of the app that recorded it (service.name): its settings and versions. */
   app?: ((service: string) => string) | undefined;
   /** Open them in a new tab: the panel lives inside someone's page, the console does not. */

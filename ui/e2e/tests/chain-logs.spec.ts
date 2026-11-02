@@ -107,3 +107,24 @@ test("what the records add up to: by level and logger, the first error, each a f
   await expect(records(page)).toHaveCount(8);
   await expect(page.locator('[data-record][aria-expanded="true"]')).toContainText("no author 2");
 });
+
+test("Open in Logs lists what the Logs tab listed: the whole chain's records, with the chips picked there", async ({
+  page,
+}) => {
+  const view = await chain();
+  await page.goto(`/#/t/${view}?tab=logs`);
+  await expect(records(page)).toHaveCount(8);
+  const scope = page.getByRole("list", { name: "Scope" });
+  await scope.getByRole("button", { name: /^shop 7$/ }).click();
+  await expect(records(page)).toHaveCount(7);
+
+  await page.getByRole("tabpanel").getByRole("link", { name: "Open in Logs" }).click();
+
+  // Not the view's own record alone (`trace:`): its chain's, as many as the tab had, narrowed to the app picked.
+  await expect(page).toHaveURL(new RegExp(`#/logs\\?q=chain%3A${view}(%20|\\+)service%3Ashop`));
+  const logs = page.getByRole("region", { name: "Logs" }).getByRole("rowgroup").last().getByRole("row");
+  await expect(logs).toHaveCount(7);
+  await expect(logs.filter({ hasText: "author 2 asked" })).toHaveCount(1);
+  // The chip names the chain by the trace that heads it.
+  await expect(page.getByRole("button", { name: `Edit chain:${view}` })).toHaveText("chain of GET /shelf");
+});

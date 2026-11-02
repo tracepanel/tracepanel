@@ -2,8 +2,9 @@
 // the trace's calls say who waited (a query's, an HTTP call's code.origin), under that function of yours, as a Python
 // or a JVM profile has its waits under the function that waited. Plain data, no React.
 import type { Span, Trace } from "../types";
-import { type Frame, type Profile, type Stack, WAITED } from "./profile";
+import type { Frame, Profile, Stack } from "./profile";
 import { CALL_KINDS } from "./systems";
+import { callLabel, waitFrame } from "./waitCalls";
 
 /** "lib/catalog.ts:31 in card": where the app made a call, as every SDK writes code.origin. */
 const ORIGIN = /^(.+):(\d+) in (.+)$/;
@@ -84,11 +85,13 @@ function waiterOf(profile: Profile, span: Span, byId: ReadonlyMap<string, Span>)
   return null;
 }
 
-/** A call's stretch of the trace (µs since it started), and the stack that waited for it. */
+/** A call's stretch of the trace (µs since it started), the stack that waited for it, and what the call is. */
 interface Waited {
   from: number;
   to: number;
   path: number[];
+  label: string;
+  span: string;
 }
 
 /** The trace's calls out (queries, HTTP calls, cache and queue calls) with the function of yours that made each. */
@@ -99,7 +102,7 @@ function callsWaited(profile: Profile, trace: Pick<Trace, "start" | "duration" |
     const path = waiterOf(profile, span, byId);
     const from = Math.max(0, span.start - trace.start);
     const to = Math.min(trace.duration, span.start + span.duration - trace.start);
-    return path && to > from ? [{ from, to, path }] : [];
+    return path && to > from ? [{ from, to, path, label: callLabel(span), span: span.id }] : [];
   });
 }
 
@@ -107,21 +110,43 @@ function callsWaited(profile: Profile, trace: Pick<Trace, "start" | "duration" |
  * Each waiter's time in the calls (µs), by its stack: calls at once share the time they overlap, so none is
  * counted twice.
  */
-function timeWaited(calls: readonly Waited[]): Map<string, { path: number[]; us: number }> {
+function timeWaited(calls: readonly Waited[]): Map<string, WaitedBy> {
   const edges = [...new Set(calls.flatMap((call) => [call.from, call.to]))].sort((a, b) => a - b);
-  const waited = new Map<string, { path: number[]; us: number }>();
+  const waited = new Map<string, WaitedBy>();
   for (const [at, from] of edges.entries()) {
     const to = edges[at + 1];
     if (to === undefined) break;
     const open = calls.filter((call) => call.from <= from && call.to >= to);
     for (const call of open) {
-      const key = call.path.join(",");
-      const found = waited.get(key) ?? { path: call.path, us: 0 };
+      const key = `${call.path.join(",")}|${call.label}`;
+      const found = waited.get(key) ?? { path: call.path, label: call.label, spans: new Set(), us: 0 };
       found.us += (to - from) / open.length;
+      found.spans.add(call.span);
       waited.set(key, found);
     }
   }
   return waited;
+}
+
+/** A stack's time waiting on calls of one kind (its label), and which calls. */
+interface WaitedBy {
+  path: number[];
+  label: string;
+  spans: Set<string>;
+  us: number;
+}
+
+/** The profile's frames with a wait frame per label of the calls waited on, and where each is. */
+function waitFrames(profile: Profile, waiters: readonly WaitedBy[]): { frames: Frame[]; at: Map<string, number> } {
+  const spans = new Map<string, Set<string>>();
+  for (const each of waiters) spans.set(each.label, new Set([...(spans.get(each.label) ?? []), ...each.spans]));
+  const frames: Frame[] = [...profile.frames];
+  const at = new Map<string, number>();
+  for (const [label, ids] of spans) {
+    at.set(label, frames.length);
+    frames.push(waitFrame(label, [...ids]));
+  }
+  return { frames, at };
 }
 
 /**
@@ -143,14 +168,15 @@ export function offCpu(profile: Profile, trace: Pick<Trace, "duration">): number
 export function withOffCpu(profile: Profile, trace: Pick<Trace, "start" | "duration" | "spans">): Profile {
   const off = offCpu(profile, trace) / profile.interval_us;
   if (off < 1) return profile;
-  const frames: Frame[] = [...profile.frames, WAITED];
-  const waiting = frames.length - 1;
   const waiters = [...timeWaited(callsWaited(profile, trace)).values()];
+  // Each wait named by what it waited on ("waiting · SQL postgresql"); the rest, no call's.
+  const { frames, at } = waitFrames(profile, waiters);
+  const waiting = frames.push(waitFrame(null)) - 1;
   const inCalls = waiters.reduce((sum, each) => sum + each.us, 0) / profile.interval_us;
   // The calls' time on the CPU (a driver encoding a query) is in the samples already: theirs is what's left, shared.
   const scale = inCalls > off ? off / inCalls : 1;
-  const stacks: Stack[] = waiters.map(({ path, us }) => ({
-    frames: [...path, waiting],
+  const stacks: Stack[] = waiters.map(({ path, label, us }) => ({
+    frames: [...path, at.get(label) ?? waiting],
     count: (us / profile.interval_us) * scale,
   }));
   const rest = off - inCalls * scale;

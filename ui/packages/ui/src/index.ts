@@ -11,6 +11,7 @@ export { Hint } from "./Hint";
 export { IssueGroupList } from "./IssueGroupList";
 export { IssueList } from "./IssueList";
 export * from "./icons";
+export { NoAnswer, Pending, Running, RunningMark, useNow } from "./LiveMarks";
 export { LogList } from "./LogList";
 export * from "./Logo";
 export { LogRecord, logAttrs } from "./LogRecordDetails";
@@ -67,6 +68,6 @@ export {
 export { formatSql, tokenizeSql, uncommented } from "./sql";
 export { type Tab, Tabs } from "./Tabs";
 export { Timeline } from "./Timeline";
-export { type ListChains, TraceList, type TraceRow, traceLabel } from "./TraceList";
+export { type ListChains, PageName, TraceList, type TraceRow, traceLabel } from "./TraceList";
 export { type ExploreItem, type TabId, TraceView, type TraceViewProps } from "./TraceView";
 export type * from "./types";

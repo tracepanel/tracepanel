@@ -15,6 +15,11 @@ export interface EntrySummary {
   /** A view or an action recorded in the browser (tracepanel-js), not a request: its requests come under it. */
   kind?: "page" | undefined;
   failed?: boolean | undefined;
+  /**
+   * In flight (lib/live): a request the page still waits for (its id the widget's own, "~" and a number, until its
+   * answer names its trace), or a view still open. Its time ticks from `start`.
+   */
+  open?: boolean | undefined;
 }
 
 export interface TabEntry {
@@ -48,6 +53,11 @@ export interface TabHistory {
   current: string | null;
   /** What served the page ("Python 3.12 · Django 6.0"), as its script tag says. */
   runtime: string | null;
+  /**
+   * What "this page" is, as the pill counts it: the page (or the view of an SPA's route) and the actions done on it,
+   * their requests under them. Just `current` from a widget that doesn't say.
+   */
+  scope: readonly string[];
 }
 
 function isEntry(value: unknown): value is TabEntry {
@@ -74,7 +84,13 @@ export function useTabHistory(): TabHistory | null {
       const entries = "entries" in data && Array.isArray(data.entries) ? data.entries.filter(isEntry) : [];
       const current = "current" in data && typeof data.current === "string" ? data.current : null;
       const runtime = "runtime" in data && typeof data.runtime === "string" ? data.runtime : null;
-      setHistory({ entries, current, runtime });
+      const scope =
+        "scope" in data && Array.isArray(data.scope)
+          ? data.scope.filter((id): id is string => typeof id === "string")
+          : current
+            ? [current]
+            : [];
+      setHistory({ entries, current, runtime, scope });
     };
     window.addEventListener("message", onMessage);
     window.parent.postMessage({ type: "tracepanel:ready" }, "*");
@@ -141,7 +157,7 @@ export function useCapabilities(source: DataSource): Capabilities | undefined {
 }
 
 /** How often the console asks again while the agent takes no OTLP: the agent tries its port every 10 seconds. */
-export const OTLP_REFRESH_MS = 10_000;
+const OTLP_REFRESH_MS = 10_000;
 
 /**
  * Where the agent takes OTLP, or why it doesn't. Asked again while it serves none: it takes the port over once its

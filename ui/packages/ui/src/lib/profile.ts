@@ -119,6 +119,11 @@ function tracing(frame: Frame | undefined): boolean {
   return frame !== undefined && !frame.in_app && TRACING.test(frame.module || frame.file);
 }
 
+/** Whether a frame is a wait the console named by what was in flight ("waiting · SQL snowflake"). */
+function named(frame: Frame): boolean {
+  return frame.file === "" && frame.function.startsWith(`${WAITING} `);
+}
+
 /** Where Your code's two frames of its own are in its frames: the framework & runtime's, and waiting's. */
 interface Kept {
   outside: number;
@@ -136,7 +141,9 @@ function ownFrames(profile: Profile, frames: readonly number[], kept: Kept): num
   const yours = frames.filter((index) => profile.frames[index]?.in_app === true);
   const leaf = frames.at(-1);
   const inner = leaf === undefined ? undefined : profile.frames[leaf];
-  if (inner?.waiting === true && !inner.in_app) return [...yours, kept.waited];
+  // A wait named by what was in flight (lib/waitCalls) keeps its name; any other is Your code's one waiting frame.
+  if (inner?.waiting === true && !inner.in_app)
+    return [...yours, named(inner) && leaf !== undefined ? leaf : kept.waited];
   return yours.length && !tracing(inner) ? yours : [kept.outside];
 }
 
@@ -247,7 +254,7 @@ export function functions(profile: Profile): { frame: Frame; self: number; total
 export function summaryOf(frame: Frame): typeof FRAMEWORK | typeof WAITING | null {
   if (frame.file !== "" || frame.in_app || frame.module) return null;
   if (frame.function === FRAMEWORK && !frame.waiting) return FRAMEWORK;
-  return frame.function === WAITING && frame.waiting === true ? WAITING : null;
+  return frame.function.startsWith(WAITING) && frame.waiting === true ? WAITING : null;
 }
 
 /** A box per call, a row per depth, each as wide as its share of the focused node's samples. */

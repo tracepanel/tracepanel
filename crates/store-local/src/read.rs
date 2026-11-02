@@ -874,6 +874,7 @@ impl Reader {
             [],
             |row| row.get::<_, i64>(0),
         )? > 0;
+        let query = &self.with_chains(query)?;
         let (condition, params) = search::compile_where(query, &log_search(fts))?;
         let from = format!("FROM logs JOIN traces ON traces.id = logs.trace_id WHERE {condition}");
         let (first, last): (Option<i64>, Option<i64>) = db.query_row(
@@ -923,6 +924,34 @@ impl Reader {
         Ok(serde_json::json!({"series": series}))
     }
 
+    /// The query with each `chain:<id>` spelled out as the ids of that chain's traces here (`chain:<id>,<id>,…`):
+    /// the trace and every trace down the chain of its calls, as its Logs tab in the panel lists their records. A
+    /// trace not stored is its own chain.
+    fn with_chains(&self, query: &str) -> Result<String, ReadError> {
+        static CHAIN: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+            regex::Regex::new(r"(^|\s)chain:([0-9A-Z]{26})(\s|$)").expect("a valid pattern")
+        });
+        let mut out = query.to_owned();
+        for found in CHAIN.captures_iter(query) {
+            let id = &found[2];
+            let ids = match self.chain(id, true, &|_| Vec::new())? {
+                Some(chain) => chain
+                    .members
+                    .iter()
+                    .filter(|member| member.project.is_none())
+                    .map(|member| member.id().to_owned())
+                    .collect::<Vec<_>>(),
+                None => vec![id.to_owned()],
+            };
+            out = out.replacen(
+                &format!("chain:{id}"),
+                &format!("chain:{}", ids.join(",")),
+                1,
+            );
+        }
+        Ok(out)
+    }
+
     pub fn search_logs(
         &self,
         query: &str,
@@ -935,7 +964,8 @@ impl Reader {
             [],
             |row| row.get::<_, i64>(0),
         )? > 0;
-        let (mut condition, mut params) = search::compile_where(query, &log_search(fts))?;
+        let query = self.with_chains(query)?;
+        let (mut condition, mut params) = search::compile_where(&query, &log_search(fts))?;
         if let Some(before) = before {
             condition.push_str(" AND logs.time < ?");
             params.push(Sql::Integer(before));

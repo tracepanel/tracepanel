@@ -546,7 +546,7 @@ async fn lists_one_line_each() {
         .await
         .0,
         "issues (1, most recent first):
-slow-sql  Slow query: 376 ms · WITH n
+slow-sql  Slow query: 376 ms · SELECT n (WITH)
     at app.go:130 in (*App).slowReport
     fix: Check the query plan (`EXPLAIN`) and add an index or narrow the query.
     1× · last <ago> · on GET /reports/slow · fingerprint d21ce3db4a532371"

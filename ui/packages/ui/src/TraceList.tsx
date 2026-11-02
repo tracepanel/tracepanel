@@ -3,6 +3,7 @@ import type { CSSProperties } from "react";
 import { Badge } from "./components/ui/badge";
 import { ago, duration } from "./format";
 import { ChevronRightIcon, DatabaseIcon } from "./icons";
+import { NoAnswer, Pending, Running } from "./LiveMarks";
 import { ISSUE_LABELS } from "./labels";
 import type { ChainCounts } from "./lib/chainCounts";
 import {
@@ -15,6 +16,7 @@ import {
   WAITING_MS,
 } from "./lib/chainRows";
 import { foldKeys } from "./lib/keys";
+import { cutNote, NO_ANSWER } from "./lib/live";
 import { pageParts } from "./lib/page";
 import { plural } from "./lib/plural";
 import { traceRuntime } from "./lib/runtime";
@@ -41,6 +43,8 @@ export interface TraceRow {
   /** For an htmx request, the element that sent it ("Reload (fixed)") and where the answer went ("#rows-todo"). */
   trigger?: string | undefined;
   target?: string | undefined;
+  /** In flight (lib/live): a request the page waits for, a view still open. Its time ticks, its numbers are pending. */
+  open?: boolean | undefined;
 }
 
 export interface TraceListProps {
@@ -74,6 +78,22 @@ export interface ListChains {
    * row says it, a view's too, whose own trace ran nothing.
    */
   counts?: ReadonlyMap<string, ChainCounts> | undefined;
+  /**
+   * The rows whose chain has loaded once: until then a row's numbers are pending, not a definite 0 that jumps once
+   * its calls' traces are counted. Undefined where chains aren't loaded at all: a row's own numbers are all there is.
+   */
+  settled?: ReadonlySet<string> | undefined;
+  /** By the row's trace id: where its trace was cut with a call still waiting for its answer (lib/live). */
+  cut?: ReadonlyMap<string, number> | undefined;
+}
+
+/**
+ * Whether a row's numbers aren't known yet: it runs, or its chain hasn't loaded once. A task run under a request
+ * is listed with its own numbers: no chain is loaded for it.
+ */
+function pendingIn(chains: ListChains | undefined, row: TraceRow): boolean {
+  if (row.open) return true;
+  return !row.run && chains?.settled !== undefined && !chains.settled.has(row.trace.id);
 }
 
 /** A row's summary with what its chain did, when it has one: its own trace's numbers are part of it. */
@@ -106,6 +126,8 @@ export function TraceList({
               row={{ ...row, trace }}
               fold={fold}
               chained={counts !== undefined && counts.traces > 1}
+              pending={pendingIn(chains, row)}
+              cut={chains?.cut?.get(trace.id) ?? null}
               selected={trace.id === selectedId}
               current={trace.id === currentId}
               fresh={newIds?.has(trace.id) ?? false}
@@ -131,9 +153,11 @@ export function TraceList({
 
 /** One row of the list: its name, status and time, then its numbers (its chain's, `chained`). */
 function ListRow({
-  row: { trace, depth = 0, trigger, target, run },
+  row: { trace, depth = 0, trigger, target, run, open },
   fold,
   chained,
+  pending,
+  cut,
   selected,
   current,
   fresh,
@@ -145,6 +169,10 @@ function ListRow({
   /** Its chain's rows under it (the narrow list): open or folded, a caret; a placeholder for a row without. */
   fold?: RowFold | null | undefined;
   chained: boolean;
+  /** Its numbers aren't known yet: "…" in their place. */
+  pending: boolean;
+  /** Where its trace was cut with a call unanswered, if it was. */
+  cut: number | null;
   selected: boolean;
   current: boolean;
   fresh: boolean;
@@ -159,9 +187,9 @@ function ListRow({
       data-depth={depth}
       data-run={flag(run)}
       data-kind={trace.kind === "page" ? "page" : undefined}
-      data-tone={toneOf(trace)}
+      {...liveProps(trace, open, cut)}
       aria-current={selected ? "true" : undefined}
-      aria-label={traceLabel(trace, { trigger, target, current })}
+      aria-label={traceLabel(trace, { trigger, target, current, open, cut: cut !== null })}
       {...foldProps(fold)}
       data-new={fresh ? "" : undefined}
       onClick={() => onSelect(trace.id)}
@@ -172,13 +200,56 @@ function ListRow({
         <RowApp trace={trace} shown={services} />
         {current ? <ThisPage compact={compact} /> : null}
       </span>
-      <span className="dt-request-meta">
-        {/* No status of its own (a view, a task, a job): its slot kept, so the time lines up with a request's. */}
-        <StatusSlot status={trace.kind === "page" ? null : trace.http_status} />
-        <span>{duration(trace.duration)}</span>
-        {compact ? <CompactMeta trace={trace} chained={chained} /> : <FullMeta trace={trace} chained={chained} />}
-      </span>
+      <RowMeta trace={trace} open={open} cut={cut} chained={chained} pending={pending} compact={compact} />
     </button>
+  );
+}
+
+/** A row's tone and its state (lib/live): running has no tone yet, a cut one says so. */
+function liveProps(trace: TraceSummary, open: boolean | undefined, cut: number | null) {
+  if (open) return { "data-state": "running" };
+  return { "data-tone": toneOf(trace), "data-state": cut === null ? undefined : "cut" };
+}
+
+/** A row's status, time and numbers: none of a status while it runs, its numbers pending until known. */
+function RowMeta({
+  trace,
+  open,
+  cut,
+  chained,
+  pending,
+  compact,
+}: {
+  trace: TraceSummary;
+  open: boolean | undefined;
+  cut: number | null;
+  chained: boolean;
+  pending: boolean;
+  compact: boolean | undefined;
+}) {
+  const Meta = compact ? CompactMeta : FullMeta;
+  return (
+    <span className="dt-request-meta">
+      {/* No status of its own (a view, a task, a job): its slot kept, so the time lines up with a request's. */}
+      <StatusSlot status={trace.kind === "page" || open ? null : trace.http_status} />
+      <RowTime trace={trace} open={open} cut={cut} />
+      <Meta trace={trace} chained={chained} pending={pending} />
+    </span>
+  );
+}
+
+/**
+ * A row's time: ticking while it runs; its time and "no answer" when its trace went out with a call unanswered (its
+ * time is where it was cut, not how slow it was); else its time.
+ */
+function RowTime({ trace, open, cut }: { trace: TraceSummary; open: boolean | undefined; cut: number | null }) {
+  if (open) return <Running start={trace.start} />;
+  if (cut === null) return <span>{duration(trace.duration)}</span>;
+  return (
+    <span className="dt-request-cut">
+      {duration(trace.duration)}
+      <NoAnswer at={cut} short={true} />
+    </span>
   );
 }
 
@@ -304,22 +375,36 @@ function ChainWaitingRow({ call, level }: { call: ChainWaiting; level: number })
       className="dt-request-row"
       data-chain="waiting"
       aria-disabled="true"
-      title={`${name}: waiting for its trace. It shows here once the app that served it sends it; a service that records none is no longer waited for ${WAITING_MS / 1000} s after the call.`}
+      title={waitingTitle(name, call.cut)}
       style={{ "--dt-chain-level": level } as CSSProperties}
     >
       <span className="dt-request-main">
         <span className="dt-map-caret" />
         {call.method ? <MethodBadge method={call.method} /> : null}
         <TailPath path={call.path} title={name} />
-        <span className="dt-chain-waiting">
-          <WaitingIcon />
-          waiting
-        </span>
+        <WaitingMark cut={call.cut} />
       </span>
       <span className="dt-request-meta">
         <StatusSlot status={null} />
       </span>
     </div>
+  );
+}
+
+/** A waiting call's tooltip: a call cut short still waits for its answer (lib/live), an ended one for its trace. */
+function waitingTitle(name: string, cut: number | null): string {
+  if (cut !== null) return `${name}: still waiting. ${cutNote(cut)}`;
+  return `${name}: waiting for its trace. It shows here once the app that served it sends it; a service that records none is no longer waited for ${WAITING_MS / 1000} s after the call.`;
+}
+
+/** "waiting" for an ended call's trace; "no answer yet" for a call cut short. */
+function WaitingMark({ cut }: { cut: number | null }) {
+  if (cut !== null) return <NoAnswer at={cut} />;
+  return (
+    <span className="dt-chain-waiting">
+      <WaitingIcon />
+      waiting
+    </span>
   );
 }
 
@@ -560,7 +645,26 @@ function RowApp({ trace, shown }: { trace: TraceSummary; shown: boolean | undefi
  * it out), then the first finding. A browser view or action runs no SQL itself: its chain's, when it has one
  * (`chained`), else none.
  */
-function CompactMeta({ trace, chained = false }: { trace: TraceSummary; chained?: boolean }) {
+function CompactMeta({
+  trace,
+  chained = false,
+  pending = false,
+}: {
+  trace: TraceSummary;
+  chained?: boolean;
+  pending?: boolean | undefined;
+}) {
+  if (pending) {
+    return (
+      <>
+        <span className="dt-request-queries" data-zero="">
+          <DatabaseIcon size={12} />
+          <Pending what="SQL queries" />
+        </span>
+        <span className="dt-request-chips" />
+      </>
+    );
+  }
   const queries =
     trace.kind === "page" && !chained ? (
       <span />
@@ -583,16 +687,20 @@ function CompactMeta({ trace, chained = false }: { trace: TraceSummary; chained?
 }
 
 /** The wide list's numbers after the time: the queries, every finding, when it happened. */
-function FullMeta({ trace, chained }: { trace: TraceSummary; chained: boolean }) {
+function FullMeta({ trace, chained, pending }: { trace: TraceSummary; chained: boolean; pending: boolean }) {
   return (
     <>
-      <span>
-        {trace.kind === "page" && !chained ? "" : `${trace.queries} ${trace.queries === 1 ? "query" : "queries"}`}
-      </span>
-      <FullChips kinds={trace.issue_kinds} issues={trace.issues} />
+      <span>{pending ? <Pending what="SQL queries" /> : queriesText(trace, chained)}</span>
+      {pending ? <span /> : <FullChips kinds={trace.issue_kinds} issues={trace.issues} />}
       <span className="dt-request-time">{ago(trace.start)}</span>
     </>
   );
+}
+
+/** "3 queries"; nothing for a view or an action, which runs none itself, unless its chain's are counted. */
+function queriesText(trace: TraceSummary, chained: boolean): string {
+  if (trace.kind === "page" && !chained) return "";
+  return plural(trace.queries, "query", "queries");
 }
 
 /** Every finding by name; just their count while the kinds aren't known yet. */
@@ -641,8 +749,17 @@ function rowName(trace: TraceSummary): string {
  */
 export function traceLabel(
   trace: TraceSummary,
-  extra: { trigger?: string | undefined; target?: string | undefined; current?: boolean } = {},
+  extra: {
+    trigger?: string | undefined;
+    target?: string | undefined;
+    current?: boolean;
+    open?: boolean | undefined;
+    cut?: boolean | undefined;
+  } = {},
 ): string {
+  if (extra.open) {
+    return [rowName(trace), "running", extra.current ? "this page" : undefined].filter(Boolean).join(", ");
+  }
   const outcome =
     trace.task_state ??
     (trace.kind !== "page" && typeof trace.http_status === "number"
@@ -655,6 +772,7 @@ export function traceLabel(
     rowName(trace),
     outcome,
     duration(trace.duration),
+    extra.cut ? NO_ANSWER : undefined,
     trace.issues > 0 ? plural(trace.issues, "issue", "issues") : undefined,
     sent,
     extra.current ? "this page" : undefined,
@@ -725,8 +843,8 @@ function RowName({
   );
 }
 
-/** A view or an action recorded in the browser: its badge, the control, then its page. */
-function PageName({ name }: { name: string }) {
+/** A view or an action recorded in the browser: its badge, the control, then its page. One name wherever it shows. */
+export function PageName({ name }: { name: string }) {
   const { badge, label, page } = pageParts(name);
   return (
     <>

@@ -225,6 +225,7 @@ pub(crate) fn log_search(fts: bool) -> search::Schema {
         // A task's or a job's records, by its name: the trace that logged them was one.
         // Where it was logged: inside a call of a system or a kind of span, inside a span by its name.
         vec![
+            ("chain", Box::new(chain_ids)),
             ("task", named("task")),
             ("job", named("command")),
             ("in", inside(&["kind", "system"])),
@@ -241,6 +242,21 @@ pub(crate) fn log_search(fts: bool) -> search::Schema {
             }),
         )],
     )
+}
+
+/// A log's `chain:`, as the reader spells it out (`Reader::with_chains`): its traces' ids, comma-separated.
+fn chain_ids(term: &Term) -> search::Clause {
+    if term.op != ":" {
+        return Err(SearchError("chain supports only ':'".into()));
+    }
+    let ids: Vec<&str> = term.value.split(',').filter(|id| !id.is_empty()).collect();
+    if ids.is_empty() {
+        return Err(SearchError("chain expects a trace id".into()));
+    }
+    Ok((
+        format!("logs.trace_id IN ({})", vec!["?"; ids.len()].join(", ")),
+        ids.into_iter().map(|id| Sql::Text(id.to_owned())).collect(),
+    ))
 }
 
 /// A log's `has:dump`: the records a developer printed to look at (devtools' `debug()`), `log.kind` dump; `!=` the

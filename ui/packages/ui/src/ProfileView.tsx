@@ -40,6 +40,7 @@ import { serviceRuntime, traceRuntime } from "./lib/runtime";
 import { rangeLabel, type TimeRange } from "./lib/slice";
 import { cn } from "./lib/utils";
 import { useRemembered, VIEW_KEYS } from "./lib/viewMemory";
+import { namedWaits, type WaitFrame } from "./lib/waitCalls";
 import { timed, wallClock } from "./lib/waiting";
 import { litKey, litScope } from "./lit";
 import { AppChip } from "./primitives";
@@ -179,7 +180,15 @@ const KINDS = [
 ] as const;
 
 /** The Profile tab's content, when it is the tab open and the trace has a profile: its time, or its memory. */
-function ProfilePane({ trace, open }: { trace: Trace; open: boolean }) {
+function ProfilePane({
+  trace,
+  open,
+  onShowRow,
+}: {
+  trace: Trace;
+  open: boolean;
+  onShowRow?: ((row: string) => void) | undefined;
+}) {
   const range = useProfileRange(open);
   const [kind, setKind] = useKind();
   // Kept while the profile and the range are: the flame graph's zoom belongs to the profile it was made in.
@@ -189,7 +198,9 @@ function ProfilePane({ trace, open }: { trace: Trace; open: boolean }) {
     [profile, range, start, total, spans, attrs],
   );
   if (!(open && trace.profile && scope)) return null;
-  return <ProfileOf trace={trace} profile={trace.profile} scope={scope} kind={kind} onKind={setKind} />;
+  return (
+    <ProfileOf trace={trace} profile={trace.profile} scope={scope} kind={kind} onKind={setKind} onShowRow={onShowRow} />
+  );
 }
 
 /** The profile's time, or, where it measured its memory and that is the choice, its memory. */
@@ -199,13 +210,17 @@ function ProfileOf({
   scope,
   kind,
   onKind,
+  onShowRow,
 }: {
   trace: Trace;
   profile: Profile;
   scope: Scope;
   kind: Kind;
   onKind: (kind: Kind) => void;
+  onShowRow?: ((row: string) => void) | undefined;
 }) {
+  // Your code's waits named by what was in flight (lib/waitCalls); All frames keeps the frames that waited.
+  const named = useMemo(() => namedWaits(scope.profile, trace), [scope.profile, trace]);
   const memory = profile.memory;
   // One choice for both: Memory keeps what Time had, and back.
   const frames = useFrames(profile);
@@ -220,13 +235,14 @@ function ProfileOf({
     <ProfileView
       key={scope.title}
       profile={scope.profile}
+      own={named}
       frames={frames}
       measure={(samples) => duration(samples * scope.profile.interval_us)}
       noun="Time"
       kinds={kinds}
       head={<ProfileHead whole={profile} shown={scope.profile} trace={trace} scope={scope} />}
       list={({ view, palette, measure }) => (
-        <Functions rows={functions(view)} limit={30} palette={palette} time={measure} />
+        <Functions rows={functions(view)} limit={30} palette={palette} time={measure} onShowRow={onShowRow} />
       )}
     />
   );
@@ -481,6 +497,7 @@ interface Shown {
  */
 function ProfileView({
   profile,
+  own: ownProfile,
   frames: { own, onOwn: setOwn },
   head,
   measure,
@@ -489,6 +506,8 @@ function ProfileView({
   list,
 }: {
   profile: Profile;
+  /** What Your code reads, where it reads the profile otherwise (its waits named by what was in flight). */
+  own?: Profile | undefined;
   frames: Frames;
   head: ReactNode;
   measure: Measure;
@@ -497,7 +516,7 @@ function ProfileView({
   list: (shown: Shown) => ReactNode;
 }) {
   const [lit, setLit] = useState<ReadonlySet<string>>(new Set());
-  const view = useMemo(() => (own ? ownCode(profile) : allFrames(profile)), [profile, own]);
+  const view = useMemo(() => (own ? ownCode(ownProfile ?? profile) : allFrames(profile)), [profile, ownProfile, own]);
   // Your code's shares are its own and the framework's around it; every frame's, each package's.
   const packages = useMemo(() => packageTimes(view), [view]);
   const palette = useMemo(() => colors(packages.map((item) => item.name)), [packages]);
@@ -761,11 +780,14 @@ function Functions({
   limit,
   palette,
   time,
+  onShowRow,
 }: {
   rows: readonly FunctionRow[];
   limit: number;
   palette: Palette;
   time: Measure;
+  /** Opens the call tree at a wait's call. */
+  onShowRow?: ((row: string) => void) | undefined;
 }) {
   const { named, summaries } = apart(rows, limit);
   const most = Math.max(1, ...named.map((row) => row.self), ...summaries.map((row) => row.self));
@@ -794,12 +816,15 @@ function Functions({
       <Summaries
         rows={summaries.map((row) => ({
           name: row.frame.function,
+          kind: summaryOf(row.frame) ?? FRAMEWORK,
           amount: row.self,
           other: time(row.total),
+          call: onShowRow ? callOf(row.frame) : undefined,
         }))}
         palette={palette}
         most={most}
         measure={time}
+        onShowRow={onShowRow}
       />
     </section>
   );
@@ -808,8 +833,17 @@ function Functions({
 /** A summary row: what no function is, its amount, and the list's second number. */
 interface SummaryRow {
   name: string;
+  /** Its colour's: the framework & runtime's, or waiting's (hatched), whatever the wait is named. */
+  kind?: string | undefined;
   amount: number;
   other: string;
+  /** A wait's first call, where the call tree opens. */
+  call?: string | undefined;
+}
+
+/** A wait's first call (lib/waitCalls), for the call tree to open at. */
+function callOf(frame: Frame): string | undefined {
+  return (frame as WaitFrame).calls?.[0];
 }
 
 /**
@@ -821,17 +855,19 @@ function Summaries({
   palette,
   most,
   measure,
+  onShowRow,
 }: {
   rows: readonly SummaryRow[];
   palette: Palette;
   most: number;
   measure: Measure;
+  onShowRow?: ((row: string) => void) | undefined;
 }) {
   if (rows.length === 0) return null;
   return (
     <ol className="m-0 list-none border-t-2 bg-muted/20 p-0" aria-label="Not a function">
       {rows.map((row) => {
-        const tone = toneOf(palette, row.name);
+        const tone = toneOf(palette, row.kind ?? row.name);
         return (
           <li
             key={row.name}
@@ -840,7 +876,7 @@ function Summaries({
           >
             <div className="flex min-w-0 items-center gap-2">
               <span className={cn("size-2 shrink-0 rounded-sm", tone.dot)} />
-              <span className="text-xs italic">{row.name}</span>
+              <SummaryName name={row.name} call={row.call} onShowRow={onShowRow} />
             </div>
             <div className="grid gap-1">
               <span className="text-right text-xs tabular-nums">{row.amount ? measure(row.amount) : "—"}</span>
@@ -856,6 +892,29 @@ function Summaries({
         );
       })}
     </ol>
+  );
+}
+
+/** A summary's name; a wait's, a link to its call in the call tree where the trace's tree is at hand. */
+function SummaryName({
+  name,
+  call,
+  onShowRow,
+}: {
+  name: string;
+  call: string | undefined;
+  onShowRow: ((row: string) => void) | undefined;
+}) {
+  if (!(call && onShowRow)) return <span className="text-xs italic">{name}</span>;
+  return (
+    <button
+      type="button"
+      className="dt-link-button truncate text-left text-xs italic"
+      title="Open its call in the call tree"
+      onClick={() => onShowRow(call)}
+    >
+      {name}
+    </button>
   );
 }
 
@@ -1016,10 +1075,22 @@ function SiteLine({
  * The Profile tab: the trace's own profile, or, over a chain of calls or under a row of the call tree, each app's
  * profile in it (its traces' merged, a row's stretch of its own), never one flame across apps.
  */
-export function ProfileTab({ trace, open, chain }: { trace: Trace; open: boolean; chain: TraceScope }) {
+export function ProfileTab({
+  trace,
+  open,
+  chain,
+  onShowRow,
+}: {
+  trace: Trace;
+  open: boolean;
+  chain: TraceScope;
+  /** Opens the call tree at a row: a wait's call. */
+  onShowRow?: ((row: string) => void) | undefined;
+}) {
   const profiles = useMemo(() => scopedProfiles(chain.members, chain.scope), [chain.members, chain.scope]);
   const own = profiles.length === 1 && profiles[0]?.member.id === trace.id && profiles[0].range === null;
-  if (own || (profiles.length === 0 && !chain.scope)) return <ProfilePane trace={trace} open={open} />;
+  if (own || (profiles.length === 0 && !chain.scope))
+    return <ProfilePane trace={trace} open={open} onShowRow={onShowRow} />;
   if (!open) return null;
   return <ChainProfiles profiles={profiles} chain={chain} />;
 }

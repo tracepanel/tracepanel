@@ -126,6 +126,10 @@
       "type": "text",
       "help": "Trace id"
     },
+    "chain": {
+      "type": "text",
+      "help": "A trace and every trace down the chain of its calls, by the first's id: its Logs tab in the panel"
+    },
       "span_id": {
         "type": "text",
         "help": "The span it was logged in, by id"

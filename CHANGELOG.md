@@ -4,6 +4,52 @@
 
 ### Fixed
 
+- Work in flight shows as it runs. The pill shows the newest request
+  still in flight, browser-queued ones too, with a turning ring and its
+  time so far, not the last one that finished. An open view runs the
+  same way. Its hover card, the panel's list and the panel's pane show
+  the same ring and time, and the card draws again while it is open.
+- A call that never answered no longer looks slow. A view the browser
+  sent after its longest wait says "no answer yet" beside its time, in
+  the list, on the pill and in the call tree, its time never red, and
+  its call keeps its row while it is still waited for.
+- One count everywhere. A request's or a view's numbers are those of
+  its whole chain of calls, on the pill as in the list, "…" until they
+  are counted, never a 0 that jumps. A route change of an SPA starts a
+  new page: the pill no longer counts the last view's requests, and the
+  pill, the list and the switcher count the same ones.
+- The panel docked at the right follows a new view as the bottom dock
+  does. A trace on its way says so at once, not the trace before it,
+  and Follow new stays on a view as its requests come and as it ends.
+  The switcher names a view as the list does ("VIEW /authors").
+- A call tree with calls whose traces haven't arrived says more is on
+  its way, and fills in as they arrive.
+- The console's API answers with an ETag, a 304 when nothing changed,
+  and gzipped when large. A reload of a slow page fetched about 2.9 MB
+  of it for the panel, now about 55 KB. The panel loads a trace's chain
+  once at a time.
+- "Open in Logs" on a trace's Logs tab lists what the tab listed: the
+  records of its whole chain of calls (`chain:<id>`, its chip "chain of
+  VIEW /campaigns"), with the app, level and logger picked there. A
+  browser's view, whose own trace has no records, opened an empty page.
+- A stacked bar is one solid bar, its parts flush, its top rounded and
+  its base square, in every chart. A chart's tooltip names each part by
+  its colour's swatch, top first, in the text's own colour.
+- A profile's waits say what was in flight. Your code's hatched wait
+  boxes and its rows under the functions are named by the calls the
+  function waited on ("waiting · SQL snowflake", "waiting · HTTP GET
+  analytics.example.com"), else by the frame that waited ("waiting ·
+  sleep"), the same for a Python, a JVM, a Go and a Node profile. A row
+  opens its call in the call tree. All frames keeps the frames.
+- PostgreSQL plans nest right. A first-level node no longer sits at
+  the root's depth with its details two levels below it: each "->"
+  level adds one, and a node's details sit one level below it. MySQL's
+  EXPLAIN ANALYZE tree nests by its own indent too.
+- A WITH statement is named by what it does: a CTE that deletes is
+  "DELETE review (WITH)" in the call tree, the DB tab and the Database
+  page, not "WITH review". A WITH that only reads is "SELECT books
+  (WITH)". Its op filter is that verb too. A keyword in a string, a
+  quoted name or a comment doesn't count.
 - EXPLAIN of a query with CTEs (`WITH … SELECT`). The console now shows
   Explain for it wherever it shows one for a SELECT, and every SDK runs
   it. A WITH whose CTE changes data (`WITH gone AS (DELETE … RETURNING

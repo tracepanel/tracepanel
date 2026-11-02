@@ -43,7 +43,9 @@ async function announce(page: Page, id: unknown, path: string, open: boolean): P
   }, detail);
 }
 
-test("a view the panel follows before it is stored shows as on its way, then opens by itself", async ({ page }) => {
+test("a view the panel follows while it is open shows as running, then on its way, then opens by itself", async ({
+  page,
+}) => {
   await openApp(page, {}, { recording: true });
   await pill(page).click();
   const rows = panel(page).getByRole("region", { name: "Pages and requests in this browser tab" }).getByRole("button");
@@ -57,13 +59,21 @@ test("a view the panel follows before it is stored shows as on its way, then ope
   await expect(rows).toHaveCount(2);
   await expect(rows.nth(1)).toHaveAttribute("aria-current", "true");
   const main = panel(page).getByRole("main");
-  await expect(main.getByText("Trace on its way")).toBeVisible();
+  // Open: running, its time ticking, in its row and its pane alike (lib/live), at once, not the trace before it.
+  await expect(main.getByText("View still open")).toBeVisible();
+  await expect(rows.nth(1)).toHaveAttribute("data-state", "running");
+  const ticking = main.locator('[data-state="running"]');
+  const before = await ticking.innerText();
   // Longer than the panel's quick retries: still on its way, never "not found".
   await page.waitForTimeout(2500);
-  await expect(main.getByText("Trace on its way")).toBeVisible();
+  await expect(main.getByText("View still open")).toBeVisible();
+  await expect(ticking).not.toHaveText(before);
   await expect(main.getByText("Trace not found")).toHaveCount(0);
 
+  // Ended, not stored yet: on its way.
   await announce(page, doc["id"], path, false);
+  await expect(main.getByText("Trace on its way")).toBeVisible();
+  await expect(rows.nth(1)).not.toHaveAttribute("data-state", "running");
   await store(doc);
 
   await expect(main.getByRole("tab", { name: /^Call tree/ })).toBeVisible();

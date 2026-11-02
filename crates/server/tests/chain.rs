@@ -196,6 +196,100 @@ async fn a_traces_logs_come_from_its_chain_or_from_under_a_row() {
 }
 
 #[tokio::test]
+async fn the_logs_page_lists_a_chains_records_as_its_logs_tab_does() {
+    let dir = std::env::temp_dir().join(format!(
+        "tracepanel-server-chain-logs-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    let path = tracepanel_store_local::path_in(&dir);
+    // A view of its own, no records: what it called logged them (a gateway's traces, as an SPA's view has them).
+    Store::open(&path)
+        .unwrap()
+        .write(&[
+            trace(
+                "VIEW",
+                "library-web",
+                0,
+                None,
+                json!([
+                    span("root", None, "/campaigns", 0, 100, None),
+                    span("call", Some("root"), "POST /graphql", 10, 80, Some("v1")),
+                ]),
+                json!([]),
+            ),
+            trace(
+                "ROUTER",
+                "graphql-router",
+                10,
+                Some("v1"),
+                json!([
+                    span("r", None, "POST /graphql", 10, 70, None),
+                    span("fetch", Some("r"), "fetch audience", 20, 30, Some("r1")),
+                ]),
+                json!([
+                    log("r", 12, "info", "query planned"),
+                    log("fetch", 22, "warning", "slow fetch")
+                ]),
+            ),
+            trace(
+                "AUDIENCE",
+                "graphql-audience",
+                20,
+                Some("r1"),
+                json!([span("a", None, "POST /", 20, 30, None)]),
+                json!([log("a", 25, "error", "no audience")]),
+            ),
+        ])
+        .unwrap();
+    let router = tracepanel_server::router(Reader::new(&path), Activity::default());
+    let view = id("VIEW");
+    let messages = |body: &Value| -> Vec<String> {
+        body["logs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|log| log["message"].as_str().unwrap().into())
+            .collect()
+    };
+
+    let (_, tab) = get(&router, &format!("/api/traces/{view}/logs")).await;
+    let (status, chain) = get(&router, &format!("/api/logs?q=chain:{view}")).await;
+    let (_, own) = get(&router, &format!("/api/logs?q=trace:{view}")).await;
+    let (_, picked) = get(
+        &router,
+        &format!("/api/logs?q=chain:{view}%20service:graphql-router%20level:warning"),
+    )
+    .await;
+    let (_, series) = get(&router, &format!("/api/logs/series?q=chain:{view}")).await;
+    let (_, unknown) = get(&router, &format!("/api/logs?q=chain:{}", id("NONE"))).await;
+
+    let mut listed = messages(&tab);
+    listed.reverse();
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        messages(&chain),
+        ["no audience", "slow fetch", "query planned"]
+    );
+    assert_eq!(messages(&chain), listed);
+
+    assert_eq!(messages(&own), Vec::<String>::new());
+
+    assert_eq!(messages(&picked), ["slow fetch"]);
+
+    let counted: i64 = series["series"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|bucket| bucket["count"].as_i64().unwrap())
+        .sum();
+    assert_eq!(counted, 3);
+
+    assert_eq!(messages(&unknown), Vec::<String>::new());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[tokio::test]
 async fn a_chains_queries_and_issues_come_from_its_calls_and_one_n_plus_one_across_apps() {
     let dir = std::env::temp_dir().join(format!(
         "tracepanel-server-chain-calls-{}",

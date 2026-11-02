@@ -19,6 +19,7 @@ pub mod logs;
 pub mod migrations;
 pub mod otel;
 pub mod profiles;
+pub mod sql;
 pub mod storage;
 pub mod transport;
 mod waits;

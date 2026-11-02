@@ -21,6 +21,7 @@ import {
   type ListChains,
   Logo,
   memoryFromParams,
+  PageName,
   parseSlice,
   type Slice,
   sliceParams,
@@ -38,6 +39,7 @@ import {
 import { TooltipProvider } from "@tracepanel/ui/components/ui/tooltip";
 import { useCloseOnBlur } from "@tracepanel/ui/hooks/useCloseOnBlur";
 import { type ChainCounts, chainCounts } from "@tracepanel/ui/lib/chainCounts";
+import { chainCutAt } from "@tracepanel/ui/lib/live";
 import { rem } from "@tracepanel/ui/lib/utils";
 import {
   type ReactNode,
@@ -71,13 +73,14 @@ import { ShareAction } from "./ShareDialog";
 import { NAV, ThemeToggle } from "./Sidebar";
 import { ScopeProvider } from "./scope";
 import { graphqlOperation, requestPath } from "./sections";
+import { sharingLoads } from "./sharedLoads";
 import { tabOf } from "./TracePage";
-import { ARRIVING_MS, TraceScreen } from "./TraceScreen";
+import { ARRIVING_MS, type Running, TraceScreen } from "./TraceScreen";
 import { SwitchUser } from "./UserSwitcher";
 
 const base = location.href.split("#")[0] ?? location.href;
 const api = new URL("api/", base);
-const source: DataSource = withSnapshots(httpSource(api), api);
+const source: DataSource = sharingLoads(withSnapshots(httpSource(api), api));
 const embedded = window.parent !== window;
 
 function tellWidget(
@@ -301,6 +304,7 @@ function pageFromWidget(id: string, summary: EntrySummary): TraceSummary {
 /** Pages newest first, each followed by its own fetch/XHR requests in the order they happened. */
 function arrange(history: TabHistory, traces: readonly TraceSummary[]): TraceRow[] {
   const byId = new Map(traces.map((trace) => [trace.id, trace]));
+  const stored = new Set(byId.keys());
   for (const entry of history.entries) {
     const fallback = byId.has(entry.id) ? undefined : rowFromWidget(entry);
     if (fallback) byId.set(entry.id, fallback);
@@ -314,11 +318,16 @@ function arrange(history: TabHistory, traces: readonly TraceSummary[]): TraceRow
   }
   // What sent each request, as the widget saw it (htmx's trigger element and target).
   const sent = new Map(history.entries.map((entry) => [entry.id, entry.summary?.htmx]));
+  // In flight, as the widget says (a request the page waits for, a view still open), until the agent has it.
+  const open = new Set(
+    history.entries.filter((entry) => entry.summary?.open && !stored.has(entry.id)).map((entry) => entry.id),
+  );
   const row = (trace: TraceSummary, depth: 0 | 1): TraceRow => {
     const htmx = sent.get(trace.id);
+    const running = open.has(trace.id) ? { open: true } : {};
     // A boosted link loaded a page: its path names it, not the link's text.
-    if (!htmx || htmx.boosted) return { trace, depth };
-    return { trace, depth, trigger: htmx.trigger, target: htmx.target };
+    if (!htmx || htmx.boosted) return { trace, depth, ...running };
+    return { trace, depth, trigger: htmx.trigger, target: htmx.target, ...running };
   };
   const roots = [...(children.get(null) ?? [])].reverse();
   return roots.flatMap((root) => [row(root, 0), ...(children.get(root.id) ?? []).map((trace) => row(trace, 1))]);
@@ -345,8 +354,20 @@ function chronological(rows: readonly TraceRow[]): TraceRow[] {
   return pages.reverse().flat();
 }
 
-function isChildOf(history: TabHistory | null, row: TraceRow, pageId: string): boolean {
-  return history?.entries.some((entry) => entry.id === row.trace.id && entry.parent === pageId) ?? false;
+/**
+ * The rows of "this page", as the pill counts them: the page (or the SPA's view of its route), the actions done on
+ * it, and their requests (lib/live: one scope everywhere).
+ */
+function pageScope(history: TabHistory | null, rows: readonly TraceRow[]): TraceRow[] {
+  if (!history?.current) return [];
+  const scope = new Set(history.scope.length > 0 ? history.scope : [history.current]);
+  const parents = new Map(history.entries.map((entry) => [entry.id, entry.parent]));
+  return rows.filter((row) => scope.has(row.trace.id) || scope.has(parents.get(row.trace.id) ?? ""));
+}
+
+/** How many requests a list of rows holds: not the views and actions, not the runs under them. */
+function requestCount(rows: readonly TraceRow[]): number {
+  return rows.filter((row) => !row.run && row.trace.kind !== "page").length;
 }
 
 /** The task runs each request led to, by its id. */
@@ -391,12 +412,26 @@ function arrivingIn(rows: readonly TraceRow[], stored: ReadonlySet<string>, id: 
   const row = rows.find((item) => item.trace.id === id);
   if (!row) return undefined;
   if (stored.has(row.trace.id)) return false;
+  // Still running (a view open, a request the page waits for): on its way however long it takes.
+  if (row.open) return true;
   const ended = (row.trace.start + row.trace.duration) / 1000;
   return Date.now() - ended < ARRIVING_MS;
 }
 
+/** The ids the agent may have: not a request still in flight, which has the widget's id until its answer names its trace. */
+/** A row of the list still in flight (a view open, a request the page waits for): when it started, and what it is. */
+function runningIn(rows: readonly TraceRow[], id: string | null): Running | undefined {
+  const row = rows.find((item) => item.trace.id === id);
+  return row?.open ? { start: row.trace.start, view: row.trace.kind === "page" } : undefined;
+}
+
 function idsOf(history: TabHistory | null): string[] {
-  return history?.entries.map((entry) => entry.id) ?? [];
+  return history?.entries.filter((entry) => !inFlight(entry.id)).map((entry) => entry.id) ?? [];
+}
+
+/** A request in flight, by the id the widget gives it until its answer names its trace. */
+function inFlight(id: string | null): boolean {
+  return id?.startsWith("~") ?? false;
 }
 
 /* ---------- The chain under a row ---------- */
@@ -425,6 +460,30 @@ interface RowChains {
   loading: ReadonlySet<string>;
   /** What each row's whole chain did, as the pill and the trace's tabs count it: the row says the same. */
   counts: ReadonlyMap<string, ChainCounts>;
+  /** The rows whose chain has loaded once: the others' numbers are pending. Undefined where chains don't load. */
+  settled: ReadonlySet<string> | undefined;
+  /** Where each row's trace was cut with a call still unanswered (lib/live). */
+  cut: ReadonlyMap<string, number>;
+}
+
+/**
+ * A row's chain without its calls cut short (no answer yet) while the page still waits for a request of its own: that
+ * request's row, in flight under it, is the same call, said once (lib/live).
+ */
+function withoutFlying(
+  apps: ReadonlyMap<string, ChainEntry[]>,
+  history: TabHistory | null,
+): ReadonlyMap<string, ChainEntry[]> {
+  const waiting = new Set(
+    (history?.entries ?? []).filter((entry) => entry.summary?.open && inFlight(entry.id)).map((entry) => entry.parent),
+  );
+  if (waiting.size === 0) return apps;
+  return new Map(
+    [...apps].map(([id, entries]) => [
+      id,
+      waiting.has(id) ? entries.filter((entry) => entry.type !== "waiting" || entry.cut === null) : entries,
+    ]),
+  );
 }
 
 /** Each chain's counts, by its row's trace id. */
@@ -437,12 +496,24 @@ function countsOf(chains: ReadonlyMap<string, Chain>): ReadonlyMap<string, Chain
   return counts;
 }
 
+/** Where each row's own trace was cut, for those that were. */
+function cutsOf(chains: ReadonlyMap<string, Chain>): ReadonlyMap<string, number> {
+  const cuts = new Map<string, number>();
+  for (const [id, chain] of chains) {
+    const at = chainCutAt(chain);
+    if (at !== null) cuts.set(id, at);
+  }
+  return cuts;
+}
+
 /**
  * The apps each row's trace called, by its id. A view's or an action's too: its requests to an app with an SDK are
  * rows of their own (left out here), but a call through a proxy or a gateway (Apollo Router, over OTLP) answers with
- * no trace id for the widget to list, and only the chain says what served it. Read from the trace's chain, as its call tree and tabs read it (`source.chain`): loaded once a row is stored, again
- * when the row changes, and every two seconds while it is new (a service's trace can arrive after its caller's). Its
- * calls whose traces are on their way are rows too, until they arrive or stop being waited for (lib/chainRows).
+ * no trace id for the widget to list, and only the chain says what served it. Read from the trace's chain, as its
+ * call tree and tabs read it (`source.chain`): loaded once a row is stored, again when the row changes, and every two
+ * seconds while it is new (a service's trace can arrive after its caller's). One load of a row at a time: a row whose
+ * last load hasn't answered isn't asked again, and an answer that comes after the rows changed is kept all the same.
+ * Its calls whose traces are on their way are rows too, until they arrive or stop being waited for (lib/chainRows).
  */
 function useRowChains(rows: readonly TraceRow[], stored: ReadonlySet<string>): RowChains {
   const [chains, setChains] = useState<ReadonlyMap<string, Chain>>(() => new Map());
@@ -450,16 +521,22 @@ function useRowChains(rows: readonly TraceRow[], stored: ReadonlySet<string>): R
   const has = useRef(chains);
   has.current = chains;
   const loaded = useRef(new Map<string, string>());
+  // The rows whose load hasn't answered: not asked again until it has.
+  const asking = useRef(new Set<string>());
+  const mounted = useRef(true);
+  useEffect(
+    () => () => {
+      mounted.current = false;
+    },
+    [],
+  );
   const wanted = rows.filter((row) => stored.has(row.trace.id)).map((row) => row.trace);
   const key = wanted.map(rowKey).join(",");
   // biome-ignore lint/correctness/useExhaustiveDependencies: `key` says which rows and what they hold.
   useEffect(() => {
     const load = source.chain;
     if (!load) return;
-    let live = true;
     const timers = new Set<number>();
-    // The loads not answered yet: a load this effect ends before it answers is dropped, so it isn't loaded either.
-    const asked = new Set<string>();
     const keep = (id: string, chain: Chain) =>
       setChains((current) => {
         const before = current.get(id);
@@ -475,24 +552,28 @@ function useRowChains(rows: readonly TraceRow[], stored: ReadonlySet<string>): R
     const tick = () => {
       const now = Date.now();
       for (const trace of wanted) {
+        if (asking.current.has(trace.id)) continue;
         const fresh = now - (trace.start + trace.duration) / 1000 < CHAIN_FRESH_MS;
         if (loaded.current.get(trace.id) === rowKey(trace) && !fresh) continue;
         loaded.current.set(trace.id, rowKey(trace));
         // Its first load: placeholders under the row once it is slow, so the list says something is on its way.
         const first = !has.current.has(trace.id);
         const timer = first
-          ? window.setTimeout(() => live && setLoading((current) => new Set(current).add(trace.id)), CHAIN_SLOW_MS)
+          ? window.setTimeout(
+              () => mounted.current && setLoading((current) => new Set(current).add(trace.id)),
+              CHAIN_SLOW_MS,
+            )
           : undefined;
         if (timer !== undefined) timers.add(timer);
-        asked.add(trace.id);
+        asking.current.add(trace.id);
         const settle = () => {
-          asked.delete(trace.id);
+          asking.current.delete(trace.id);
           window.clearTimeout(timer);
           if (timer !== undefined) timers.delete(timer);
-          done(trace.id);
+          if (mounted.current) done(trace.id);
         };
         load(trace.id).then((chain) => {
-          if (live) keep(trace.id, chain);
+          if (mounted.current) keep(trace.id, chain);
           settle();
         }, settle);
       }
@@ -500,11 +581,8 @@ function useRowChains(rows: readonly TraceRow[], stored: ReadonlySet<string>): R
     tick();
     const timer = window.setInterval(() => document.visibilityState === "visible" && tick(), CHAIN_POLL_MS);
     return () => {
-      live = false;
       window.clearInterval(timer);
       for (const each of timers) window.clearTimeout(each);
-      // The rows changed while these loaded (another request came): their answers are dropped, the next effect asks again.
-      for (const id of asked) loaded.current.delete(id);
     };
   }, [key]);
   // The waiting calls go once they stop being waited for: the rows are built again then (`expired` counts the times).
@@ -530,7 +608,9 @@ function useRowChains(rows: readonly TraceRow[], stored: ReadonlySet<string>): R
     return () => window.clearTimeout(timer);
   }, [chains, expired]);
   const counts = useMemo(() => countsOf(chains), [chains]);
-  return { apps, loading, counts };
+  const cut = useMemo(() => cutsOf(chains), [chains]);
+  const settled = useMemo(() => (source.chain ? new Set(chains.keys()) : undefined), [chains]);
+  return { apps, loading, counts, settled, cut };
 }
 
 // The rows the user folded or opened, each a change from where it starts (an app's row open, a run open while its
@@ -592,26 +672,21 @@ function unlisted(runs: readonly TraceSummary[] = [], listed: Set<string>): Trac
   return fresh;
 }
 
-/** The tab's requests, not the runs nested under them. */
-function requestsOf(rows: readonly TraceRow[]): TraceRow[] {
-  return rows.filter((row) => !row.run);
-}
-
 /**
  * What Follow new opens for the newest row: the row itself, or, for a request a view or an action in the browser
- * made, that view or action once it is stored. Its call tree has all of its requests, and its group's next ones
- * leave it open.
+ * made, that view or action, stored yet or not (on its way, it says so until it is). Its call tree has all of its
+ * requests, so the selection stays on it as they come and as it ends: never the request, then the view again.
  */
-function followTarget(rows: readonly TraceRow[], stored: ReadonlySet<string>): string | undefined {
+function followTarget(rows: readonly TraceRow[]): string | undefined {
   const latest = rows.at(-1);
   if (latest?.depth !== 1) return latest?.trace.id;
-  return groupOrRequest(rows, stored, latest.trace.id);
+  return groupOrRequest(rows, latest.trace.id);
 }
 
-/** The view or action heading the newest rows, when the agent has it; else the request itself. */
-function groupOrRequest(rows: readonly TraceRow[], stored: ReadonlySet<string>, request: string): string {
+/** The view or action heading the newest rows; else the request itself. */
+function groupOrRequest(rows: readonly TraceRow[], request: string): string {
   const head = [...rows].reverse().find((row) => row.depth === 0);
-  return head?.trace.kind === "page" && stored.has(head.trace.id) ? head.trace.id : request;
+  return head?.trace.kind === "page" ? head.trace.id : request;
 }
 
 /** What served the page, as its mark and name; the versions in the tooltip ("Python 3.12 · Django 6.0"). */
@@ -696,10 +771,10 @@ function ClearButton({ onClear, label = "Clear requests" }: { onClear: () => voi
   );
 }
 
-/** As on the pill: a stack and the number of this tab's requests. */
+/** As on the pill: a stack and the number of this page's requests. */
 function RequestCount({ count }: { count: number }) {
   return (
-    <span className="switcher-count" title={`${count} ${count === 1 ? "request" : "requests"} in this tab`}>
+    <span className="switcher-count" title={`${count} ${count === 1 ? "request" : "requests"} on this page`}>
       <LayersIcon />
       {count}
     </span>
@@ -708,7 +783,9 @@ function RequestCount({ count }: { count: number }) {
 
 /** A trace as the panel names it in one line: a request by its method and path, a task or a job by its kind and name. */
 function TraceName({ trace }: { trace: TraceSummary }) {
-  if (trace.kind === "http" || trace.kind === "page") return <RequestName trace={trace} />;
+  // A view or an action as the list names it ("VIEW /authors"), not by the request line its trace may carry.
+  if (trace.kind === "page") return <PageName name={trace.name} />;
+  if (trace.kind === "http") return <RequestName trace={trace} />;
   return <KindAndName trace={trace} />;
 }
 
@@ -841,11 +918,14 @@ const PANEL_LINKS: TraceLinks = {
 
 function RequestSwitcher({
   rows,
+  pageCount,
   selectedId,
   currentId,
   onClear,
 }: {
   rows: readonly TraceRow[];
+  /** This page's requests, as the pill counts them. */
+  pageCount: number;
   selectedId: string | null;
   currentId: string | null;
   onClear: () => void;
@@ -885,7 +965,7 @@ function RequestSwitcher({
         onClick={() => setOpen(!open)}
       >
         {selected ? <TraceName trace={selected} /> : <span className="switcher-path">Requests</span>}
-        <RequestCount count={requestsOf(rows).length} />
+        <RequestCount count={pageCount} />
         <ChevronDownIcon />
       </button>
       {open ? (
@@ -1026,15 +1106,9 @@ function PageRequests({
   const fresh = useNewIds(rows.map((row) => row.trace.id));
   const list = useRef<HTMLElement>(null);
   const { unseen, jump } = useStickToBottom(list, rows.length, follow);
-  // Requests only: the runs under them are rows too, and the browser's views and actions, with their requests.
-  const ajax = requestsOf(rows).length - 1;
-  const requests = requestsOf(rows).filter((row) => row.trace.kind !== "page").length;
-  const count =
-    scope === "tab"
-      ? `· ${requests} ${requests === 1 ? "request" : "requests"}`
-      : ajax > 0
-        ? `+ ${ajax} ${ajax === 1 ? "request" : "requests"}`
-        : "· no AJAX requests yet";
+  // Requests only, as the pill counts them: not the runs under them, not the browser's views and actions.
+  const requests = requestCount(rows);
+  const count = `· ${requests} ${requests === 1 ? "request" : "requests"}`;
   return (
     <section
       ref={list}
@@ -1204,9 +1278,7 @@ function PanelApp({ route }: { route: Route }) {
   const rowChains = useRowChains(listed, stored);
   const [chainOpen, toggleChain] = useChainOpen();
   const currentId = history?.current ?? null;
-  const pageRows = currentId
-    ? rows.filter((row) => row.trace.id === currentId || isChildOf(history, row, currentId))
-    : [];
+  const pageRows = pageScope(history, rows);
   const selectedId =
     route.name === "trace" ? route.id : (currentId ?? rows.find((row) => row.depth === 0)?.trace.id ?? null);
   // A linked trace opened from another view: the way back to it, as it was.
@@ -1236,16 +1308,18 @@ function PanelApp({ route }: { route: Route }) {
     writeFollow(value);
   };
   const chains: ListChains = {
-    apps: rowChains.apps,
+    apps: withoutFlying(rowChains.apps, history),
     loading: rowChains.loading,
     counts: rowChains.counts,
+    settled: rowChains.settled,
+    cut: rowChains.cut,
     open: chainOpen,
     onToggle: toggleChain,
     onApp: (id, app) => go({ name: "trace", id, under: app.app, tab: underTab(app, tab) }),
   };
   const tabRows = inOrder(split, rows);
   const followRows = split ? tabRows : pageRows;
-  const latestChild = followRows.length > 1 ? followTarget(followRows, stored) : undefined;
+  const latestChild = followTarget(followRows);
   const followed = useRef(latestChild);
   // The history the panel opens with is what was already there, not a new request: the request a link asked for
   // (the pill's card) stays on screen. Only requests that arrive after it are followed.
@@ -1317,7 +1391,7 @@ function PanelApp({ route }: { route: Route }) {
       </Hint>
     </>
   );
-  const requestCount = `${tabRows.length} ${tabRows.length === 1 ? "request" : "requests"}`;
+  const tabCount = `${tabRows.length} ${tabRows.length === 1 ? "request" : "requests"}`;
   // Docked at the bottom with a request open, the panel has no bar of its own: the logo over the list and the trace's
   // toolbar make one row across it (as in browser devtools).
 
@@ -1339,6 +1413,7 @@ function PanelApp({ route }: { route: Route }) {
           {split ? null : (
             <RequestSwitcher
               rows={listed}
+              pageCount={requestCount(pageRows)}
               selectedId={selectedId}
               currentId={history?.current ?? null}
               onClear={() => setClearing(true)}
@@ -1347,7 +1422,7 @@ function PanelApp({ route }: { route: Route }) {
           <div className="bar-actions">{panelActions()}</div>
         </header>
       )}
-      {!split && pageRows.length > 1 ? (
+      {!split && (pageRows.length > 1 || pageRows.some((row) => row.open)) ? (
         <PageRequests
           rows={withRuns(pageRows, runs)}
           selectedId={selectedId}
@@ -1370,7 +1445,7 @@ function PanelApp({ route }: { route: Route }) {
                 follow={follow}
                 onFollow={onFollow}
                 onClear={() => setClearing(true)}
-                clearLabel={`Clear ${requestCount}`}
+                clearLabel={`Clear ${tabCount}`}
               />
             </span>
           </div>
@@ -1399,6 +1474,7 @@ function PanelApp({ route }: { route: Route }) {
               id={selectedId}
               source={source}
               arriving={arrivingIn(rows, stored, selectedId)}
+              running={runningIn(rows, selectedId)}
               variant={split ? "strip" : "compact"}
               // A link to a tab (the pill's card opens a finding on Issues) wins over the last tab used.
               initialTab={route.name === "trace" ? tabOf(route.tab) : undefined}

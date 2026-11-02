@@ -19,6 +19,7 @@ import { Hint } from "./Hint";
 import { useChain } from "./hooks/useChain";
 import { ChevronRightIcon, CloseIcon } from "./icons";
 import { keyed } from "./keys";
+import { NoAnswer } from "./LiveMarks";
 import { LlmConversation, withoutMessages } from "./LlmConversation";
 import { AllAttributes, LogRecordDetails } from "./LogRecordDetails";
 import { withoutAnsi } from "./lib/ansi";
@@ -29,6 +30,7 @@ import { callTemplate, callText, groupNoun } from "./lib/calls";
 import { isDump } from "./lib/dump";
 import { spanKindLabel } from "./lib/handler";
 import { foldKeys } from "./lib/keys";
+import { cutNote, isCut } from "./lib/live";
 import { pageParts } from "./lib/page";
 import { widthOf } from "./lib/percent";
 import { plural } from "./lib/plural";
@@ -1316,6 +1318,8 @@ function OwnTime({ span, ctx }: { span: Span; ctx: RowContext }) {
       </span>
     );
   }
+  // Cut short, no answer yet: its time is where it was cut, not how slow it was (lib/live): never amber or red.
+  if (isCut(span)) return <RowTime time={span.duration} slow={undefined} title={cutNote(span.duration)} />;
   const slow = span.parent_id === null ? undefined : slowness(span.duration, ctx.trace, ctx.categories.get(span.id));
   return <RowTime time={span.duration} slow={slow} title={timeTitle(span, ctx.trace)} />;
 }
@@ -1521,6 +1525,8 @@ function CallStatus({ node }: { node: SpanNode }) {
   if (!answers(node.span)) return null;
   const { status, tone } = callAnswer(node.span, node.served?.run);
   if (status !== null) return <StatusBadge status={status} />;
+  // Cut short with no trace served for it yet: still waiting, said so, as everywhere such a call shows (lib/live).
+  if (isCut(node.span) && !node.served) return <NoAnswer at={node.span.duration} />;
   if (tone !== "error") return null;
   const failure = node.span.attrs["error.type"];
   return (

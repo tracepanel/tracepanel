@@ -150,20 +150,26 @@ pub fn normalize(received: &mut Received) {
 
 /// Name and group the trace's queries without their comments, in its rows and in its document (what the console
 /// shows): an SDK names a statement by its first word and groups it by its whole text, a leading `/* … */` and its
-/// traceparent included. The statement itself keeps them. A trace without a commented query is left as it is.
+/// traceparent included. The statement itself keeps them. A WITH is named here too, by what it does (`span_name`),
+/// where an SDK names it `WITH`. A trace with neither is left as it is.
 pub fn uncomment(received: &mut Received) {
-    let commented = |kind: &str, attrs: &Attrs| {
-        kind == "sql"
-            && attrs
-                .get("db.statement")
-                .and_then(Value::as_str)
-                .is_some_and(|sql| sql.contains("/*") || sql.contains("--"))
+    // A query to name again: one with a comment, or a WITH its SDK named by its first word ("WITH c"). A WITH
+    // named already (the agent's own name, "SELECT c (WITH)") is left as it is: the document is read and written
+    // again only for the spans that need it.
+    let statement = |kind: &str, name: &str, attrs: &Attrs| {
+        if kind != "sql" {
+            return None;
+        }
+        let sql = attrs.get("db.statement").and_then(Value::as_str)?;
+        let commented = sql.contains("/*") || sql.contains("--");
+        let with = named_with(name) && named_with(after_comments(sql));
+        (commented || with).then(|| (sql.to_owned(), commented))
     };
     if !received
         .trace
         .spans
         .iter()
-        .any(|span| commented(&span.kind, &span.attrs))
+        .any(|span| statement(&span.kind, &span.name, &span.attrs).is_some())
     {
         return;
     }
@@ -179,16 +185,20 @@ pub fn uncomment(received: &mut Received) {
         let Some(attrs) = span.get("attrs").and_then(Value::as_object) else {
             continue;
         };
-        if !commented(span["kind"].as_str().unwrap_or_default(), attrs) {
+        let kind = span["kind"].as_str().unwrap_or_default();
+        let name = span["name"].as_str().unwrap_or_default();
+        let Some((sql, commented)) = statement(kind, name, attrs) else {
             continue;
-        }
-        let bare = uncommented(attrs["db.statement"].as_str().unwrap_or_default());
+        };
+        let bare = uncommented(&sql);
         // An older SDK's statement on one line: its `--` comment runs to the end, and nothing is left to name.
         if bare.is_empty() {
             continue;
         }
         span["name"] = Value::from(span_name(&bare));
-        span["attrs"]["db.fingerprint"] = Value::from(IN_LIST.replace_all(&bare, "IN (...)"));
+        if commented {
+            span["attrs"]["db.fingerprint"] = Value::from(IN_LIST.replace_all(&bare, "IN (...)"));
+        }
     }
     if let Ok(trace) = serde_json::from_value(doc.clone()) {
         received.trace = trace;
@@ -800,6 +810,13 @@ pub fn after_comments(sql: &str) -> &str {
     }
 }
 
+/// Whether a text starts with the word WITH (a statement, or a span its SDK named by its first word).
+fn named_with(text: &str) -> bool {
+    text.get(..4)
+        .is_some_and(|word| word.eq_ignore_ascii_case("WITH"))
+        && !text[4..].starts_with(|next: char| next.is_alphanumeric() || next == '_')
+}
+
 /// Whether a statement is a SELECT, after its leading comments.
 pub fn is_select(sql: &str) -> bool {
     after_comments(sql)
@@ -815,16 +832,31 @@ pub fn fingerprint(sql: &str) -> String {
 }
 
 /// A query's span name: its verb and its table, its schema and quotes left out (`SELECT users`, `SELECT COUNT
-/// orders`): the same rule in every SDK.
+/// orders`): the same rule in every SDK. A WITH is named by what it does (`sql::with`), then `(WITH)`: by the
+/// table its INSERT, UPDATE, DELETE or MERGE changes (`DELETE review (WITH)`), else the first table it reads
+/// (`SELECT books (WITH)`); a keyword in a string, a quoted name or a comment doesn't count.
 pub fn span_name(sql: &str) -> String {
-    let mut verb = sql
-        .split_whitespace()
-        .next()
-        .map_or_else(|| "SQL".to_owned(), str::to_uppercase);
-    if COUNT.is_match(sql) {
-        verb = "SELECT COUNT".into();
-    }
-    let table = TABLE.captures(sql).and_then(|found| {
+    let with = crate::sql::with(sql);
+    let (verb, from) = match &with {
+        Some(with) => {
+            let counts = with.verb == "SELECT" && COUNT.is_match(&sql[with.at..]);
+            let verb = if counts { "SELECT COUNT" } else { &with.verb };
+            (verb.to_owned(), with.table.map(|at| &sql[at..]))
+        }
+        None => {
+            let verb = sql
+                .split_whitespace()
+                .next()
+                .map_or_else(|| "SQL".to_owned(), str::to_uppercase);
+            let verb = if COUNT.is_match(sql) {
+                "SELECT COUNT".into()
+            } else {
+                verb
+            };
+            (verb, Some(sql))
+        }
+    };
+    let table = TABLE.captures(from.unwrap_or_default()).and_then(|found| {
         let part = PARTS.find_iter(&found[1]).last()?.as_str();
         let bare = part
             .strip_prefix(['"', '`', '['])
@@ -832,9 +864,14 @@ pub fn span_name(sql: &str) -> String {
             .unwrap_or(part);
         Some(bare.to_owned())
     });
-    match table {
+    let name = match table {
         Some(table) => format!("{verb} {table}"),
         None => verb,
+    };
+    if with.is_some() {
+        format!("{name} (WITH)")
+    } else {
+        name
     }
 }
 

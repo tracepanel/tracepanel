@@ -377,7 +377,7 @@ test("a trace's Logs tab counts its records and opens them in Logs", async ({ pa
 
   await panel.getByRole("link", { name: "Open in Logs" }).click();
 
-  await expect(page).toHaveURL(/#\/logs\?q=trace/);
+  await expect(page).toHaveURL(/#\/logs\?q=chain/);
 });
 
 test("more columns than room fit the page: none pushes it wider, and Message keeps some", async ({ page }) => {
