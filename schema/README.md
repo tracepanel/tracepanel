@@ -9,6 +9,7 @@ The contracts between the SDKs, the agent and the UI.
 | `search.json` | The fields of the search language, which `GET /api/search` serves |
 | `store.sql` | The store's tables. Its `-- version:` line names the store's file |
 | `explainable.json` | Which statements EXPLAIN runs, and why not: the cases the agent, the console and each SDK check their rule against |
+| `graphql-names.json` | A GraphQL request's name from its body (`GraphQL query Books`): the cases the agent and the widget check their rule against |
 | `waits.json` | A profile's waits named by what was in flight (`waiting · SQL postgresql`): the cases the console and the MCP server check their rule against |
 | `examples/` | Traces as the SDKs send them, with the issues each must get (`expected.json`). `crates/server/tests/examples.rs` checks the schema, the analysis and the API against them |
 

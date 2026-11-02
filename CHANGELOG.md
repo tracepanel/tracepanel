@@ -55,6 +55,14 @@
   whose start is a moment ahead of the browser's clock, reads "…" until
   it has run, then its time from its start, on the pill, in its card and
   in the list.
+- A GraphQL request keeps one name from running to done. One its server
+  answered with a 503 before the operation ran was "GraphQL query
+  Authors" while it ran and "POST /graphql" once it answered. The pill
+  and the list keep the operation the request carried, and the agent
+  names a trace after the GraphQL operation in its attributes or in the
+  body its SDK captured, where its server named it by the request line.
+  The widget and the agent share one rule for the body, with its cases
+  in `schema/graphql-names.json`.
 - PostgreSQL plans nest right. A first-level node no longer sits at
   the root's depth with its details two levels below it: each "->"
   level adds one, and a node's details sit one level below it. MySQL's
