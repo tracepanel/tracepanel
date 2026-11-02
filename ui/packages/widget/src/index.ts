@@ -1555,12 +1555,22 @@ export function mount(options: WidgetOptions = {}): Widget {
     return countedBy(info, facts);
   }
 
+  // A press on the pill holds its redraws until it ends: a redraw replaces what was pressed, and the browser then
+  // fires no click, so a click as a time ticked or a request's numbers came in opened nothing.
+  let pressed = false;
+  let heldDraw = false;
+
   /**
    * The pill describes one request, named, and every number on it is that request's: the newest still in flight,
    * else the latest done (the page when it loads, then each AJAX call), as the panel's Follow new shows it. On the
    * right, the rest of this page: how many requests, how many failed; the ring is the worst of them all.
    */
   function render(): void {
+    // Pressed: drawn once the press ends (pressing() below).
+    if (pressed) {
+      heldDraw = true;
+      return;
+    }
     const all = requests();
     const flying = flights();
     if (all.length === 0 && flying.length === 0) renderIdle();
@@ -1925,6 +1935,19 @@ export function mount(options: WidgetOptions = {}): Widget {
     open,
     fetch: nativeFetch,
   });
+
+  badge.addEventListener("pointerdown", (event) => {
+    if (event.isPrimary) pressed = true;
+  });
+  const released = () => {
+    if (!pressed) return;
+    pressed = false;
+    if (!heldDraw) return;
+    heldDraw = false;
+    // After the click the release makes.
+    window.setTimeout(render);
+  };
+  for (const type of ["pointerup", "pointercancel", "blur"]) window.addEventListener(type, released, true);
 
   // The panel opens on the request the pill shows.
   badge.addEventListener("click", () => {

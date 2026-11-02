@@ -8,8 +8,12 @@ import { SALES_REPORT } from "../seed.ts";
 
 const COMMON = ["App", "Runtime", "Started", "Trace ID"];
 
+/** The first tab's facts, once its trace has loaded: before it, the tab has none to read. */
 async function terms(scope: Page | FrameLocator): Promise<string[]> {
-  return scope.getByRole("tabpanel").first().locator("dl").first().getByRole("term").allInnerTexts();
+  const facts = scope.getByRole("tabpanel").first().locator("dl").first().getByRole("term");
+  // Every trace's facts say its ID: there, they are all there.
+  await expect(facts.filter({ hasText: /^Trace ID$/ })).toBeVisible();
+  return facts.allInnerTexts();
 }
 
 /** The common facts, in their one order, after any of the kind's own. */

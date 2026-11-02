@@ -519,7 +519,8 @@ function cutsOf(chains: ReadonlyMap<string, Chain>): ReadonlyMap<string, number>
  * rows of their own (left out here), but a call through a proxy or a gateway (Apollo Router, over OTLP) answers with
  * no trace id for the widget to list, and only the chain says what served it. Read from the trace's chain, as its
  * call tree and tabs read it (`source.chain`): loaded once a row is stored, again when the row changes, and every two
- * seconds while it is new (a service's trace can arrive after its caller's). One load of a row at a time: a row whose
+ * seconds while it is new or a call of it is still waited for (a service's trace can arrive after its caller's, a cut
+ * call's minutes later). One load of a row at a time: a row whose
  * last load hasn't answered isn't asked again, and an answer that comes after the rows changed is kept all the same.
  * Its calls whose traces are on their way are rows too, until they arrive or stop being waited for (lib/chainRows).
  */
@@ -562,7 +563,10 @@ function useRowChains(rows: readonly TraceRow[], stored: ReadonlySet<string>): R
       for (const trace of wanted) {
         if (asking.current.has(trace.id)) continue;
         const fresh = now - (trace.start + trace.duration) / 1000 < CHAIN_FRESH_MS;
-        if (loaded.current.get(trace.id) === rowKey(trace) && !fresh) continue;
+        // A call of it still waited for (one cut short is, for minutes): its trace may come any time.
+        const chain = has.current.get(trace.id);
+        const awaited = chain !== undefined && (waitingUntil(chain, now) ?? 0) > now;
+        if (loaded.current.get(trace.id) === rowKey(trace) && !fresh && !awaited) continue;
         loaded.current.set(trace.id, rowKey(trace));
         // Its first load: placeholders under the row once it is slow, so the list says something is on its way.
         const first = !has.current.has(trace.id);

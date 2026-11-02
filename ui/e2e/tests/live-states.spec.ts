@@ -153,6 +153,27 @@ test("an SPA's route change is a new page: the pill shows its view running, not 
   await expect(pill(page)).toHaveAccessibleName(/^tracepanel: view of \/app\/next, running for /);
 });
 
+test("a click on the pill opens the panel though the pill draws again under the press: no click is lost", async ({
+  page,
+}) => {
+  await openApp(page, {}, { recording: true });
+  await announce(page, "01M4E2ELIVE000000000000003", "/app/pressed", false);
+  await expect(pill(page)).toContainText("VIEW /app/pressed");
+
+  // Pressed on the view's name, which something coming in draws again before the press ends (the browser fires no
+  // click on a pressed element that went away).
+  const name = pill(page).locator(".name").first();
+  const box = await name.boundingBox();
+  if (!box) throw new Error("the pill's name isn't shown");
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await announce(page, "01M4E2ELIVE000000000000003", "/app/pressed", false);
+  await page.mouse.up();
+
+  await expect(pill(page)).toHaveAttribute("aria-expanded", "true");
+  await expect(list(page)).toBeVisible();
+});
+
 test("a view on its first frame reads … where its time will tick, never 0 µs: in the pill, its card and the list", async ({
   page,
 }) => {

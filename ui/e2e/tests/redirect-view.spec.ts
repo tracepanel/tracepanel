@@ -14,7 +14,18 @@ type Doc = Record<string, unknown>;
 const ms = 1_000;
 const OPERATIONS = ["Features", "TenantRoles", "Campaigns"];
 
-const id = (tag: number, n: number) => `01M4RED1RECT${String(tag).padStart(3, "0")}${String(n).padStart(11, "0")}`;
+/**
+ * Which run of the test this is (`--repeat-each`, a retry): its traces' ids and times its own, none an earlier run
+ * stored.
+ */
+const run = () => test.info().repeatEachIndex * 2 + test.info().retry;
+const digits = (value: number, width: number) => String(value).padStart(width, "0");
+
+const id = (tag: number, n: number) => `01M4RED1RECT${digits(tag, 3)}${digits(run(), 5)}${digits(n, 6)}`;
+/** The id of the browser's trace a test's views are in. */
+const traceOf = (tag: number) => `${digits(tag, 4)}${digits(run(), 5)}d0f4e3a8b5c7d9e1f2a3b4c`;
+/** The id of the view's call of its `n`th operation, which the gateway's trace names as its parent. */
+const callOf = (tag: number, n: number) => `${digits(tag, 3)}a${digits(run(), 5)}${digits(n, 7)}`;
 
 function span(name: string, parent: string | null, kind: string, label: string, start: number, duration: number): Doc {
   // biome-ignore lint/style/useNamingConvention: the trace format.
@@ -62,7 +73,7 @@ function operationCall(tag: number, n: number, start: number, duration: number, 
     "url.full": "http://127.0.0.1:4000/graphql",
     "server.address": "127.0.0.1",
     "server.port": 4000,
-    "w3c.span_id": `${String(tag).padStart(3, "0")}a${String(n).padStart(12, "0")}`,
+    "w3c.span_id": callOf(tag, n),
     "graphql.operation.type": "query",
     "graphql.operation.name": OPERATIONS[n],
     ...(cut ? { "http.unfinished": true } : { "http.response.status_code": 200 }),
@@ -90,7 +101,7 @@ function gatewayTrace(tag: number, n: number, start: number, w3c: string): Doc {
     attrs: {
       "service.name": "gateway",
       "w3c.trace_id": w3c,
-      "w3c.parent_span_id": `${String(tag).padStart(3, "0")}a${String(n).padStart(12, "0")}`,
+      "w3c.parent_span_id": callOf(tag, n),
       "http.method": "POST",
       "http.route": "/graphql",
       "http.status_code": 200,
@@ -112,24 +123,24 @@ async function ingest(traces: Doc[]): Promise<void> {
 
 const stored = async (traceId: string) => (await fetch(`${CONSOLE}api/traces/${traceId}`)).status;
 
-/** When the seeded views start: hours ago, each test's a minute apart. */
+/** When the seeded views start: hours ago, each test's a minute apart, each run of it half a second later. */
 const startOf = (tag: number) =>
-  Number(process.env[RUN_STARTED] ?? Date.now()) * ms - 2 * 3_600_000_000 + tag * 60_000_000;
+  Number(process.env[RUN_STARTED] ?? Date.now()) * ms - 2 * 3_600_000_000 + tag * 60_000_000 + run() * 500_000;
 
 /**
- * Stores what the browser sends for /sms redirecting to /sms/campaigns: the view it left (no call, no time), then the
- * one it sent to, a moment later, with its three operations at once and the gateway's traces of them. The ids of the
- * two views.
+ * Stores what the browser sends for /sms (`path`) redirecting to /sms/campaigns: the view it left (no call, no time),
+ * then the one it sent to, a moment later, with its three operations at once and the gateway's traces of them. The
+ * ids of the two views.
  */
-async function redirected(tag: number): Promise<{ from: string; to: string }> {
-  const w3c = `${String(tag).padStart(4, "0")}bb7e9d0f4e3a8b5c7d9e1f2a3b4c`;
+async function redirected(tag: number, path = "/sms"): Promise<{ from: string; to: string }> {
+  const w3c = traceOf(tag);
   const start = startOf(tag);
   const at = start + 3 * ms;
-  await ingest([view(id(tag, 0), "/sms", start, 0, [], `${w3c.slice(0, 31)}0`)]);
+  await ingest([view(id(tag, 0), path, start, 0, [], `${w3c.slice(0, 31)}0`)]);
   await expect.poll(() => stored(id(tag, 0))).toBe(200);
   const calls = OPERATIONS.map((_, n) => operationCall(tag, n, at + 10 * ms, 300 * ms, false));
   await ingest([
-    view(id(tag, 1), "/sms/campaigns", at, 400 * ms, calls, w3c),
+    view(id(tag, 1), `${path}/campaigns`, at, 400 * ms, calls, w3c),
     ...OPERATIONS.map((_, n) => gatewayTrace(tag, n, at + 20 * ms, w3c)),
   ]);
   await expect
@@ -158,19 +169,21 @@ const list = (page: Page) => panel(page).getByRole("region", { name: "Pages and 
 test("the view an SPA redirected from at once leaves the store; the view it sent to says where it came from", async ({
   page,
 }) => {
-  const { from, to } = await redirected(1);
+  // Paths of its own: the Pages list is the store's, where the other tests' /sms is a row until its next view comes.
+  const path = `/mail${run()}`;
+  const { from, to } = await redirected(1, path);
 
   await expect.poll(() => stored(from)).toBe(404);
 
   await page.goto(`/#/t/${to}`);
 
-  await expect(page.locator(".dt-trace-head")).toContainText("redirected from /sms");
+  await expect(page.locator(".dt-trace-head")).toContainText(`redirected from ${path}`);
 
   await page.goto("/#/pages?view=overview");
   const rows = page.getByRole("main").getByRole("table").last().getByRole("link");
 
-  await expect(rows.filter({ hasText: "/sms/campaigns" })).toHaveCount(1);
-  await expect(rows.filter({ hasText: /\/sms(?!\/)/ })).toHaveCount(0);
+  await expect(rows.filter({ hasText: `${path}/campaigns` })).toHaveCount(1);
+  await expect(rows.filter({ hasText: new RegExp(`${path}(?![/\\d])`) })).toHaveCount(0);
 });
 
 test("in the panel the redirect is no row: its view says where it came from, each operation a row of its own", async ({
@@ -246,9 +259,10 @@ test("a view cut with its calls unanswered keeps them waiting; their traces link
   page,
 }) => {
   const tag = 4;
-  const w3c = `${String(tag).padStart(4, "0")}bb7e9d0f4e3a8b5c7d9e1f2a3b4c`;
-  // Cut a moment ago, at its longest wait: sent at 15 s with its three calls still open, each "no answer yet".
-  const start = Date.now() * ms - 20_000 * ms;
+  const w3c = traceOf(tag);
+  // Cut at its longest wait (sent at 15 s with its three calls still open, each "no answer yet"), a while ago: past
+  // the time a row is asked again for being new, its calls still waited for.
+  const start = Date.now() * ms - 40_000 * ms;
   const calls = OPERATIONS.map((_, n) => operationCall(tag, n, start + 10 * ms, 15_000 * ms, true));
   await ingest([view(id(tag, 1), "/sms/campaigns", start, 15_270 * ms, calls, w3c)]);
   await expect.poll(() => stored(id(tag, 1))).toBe(200);

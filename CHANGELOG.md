@@ -9,6 +9,13 @@
   instead of cutting them ("no answer ye"). The words go whole or not
   at all, before the name gives way, as in the panel's list. The
   tooltip still says it.
+- A click on the pill opens the panel every time. The pill draws itself
+  again as its time ticks or a request's numbers come in, and a redraw
+  between the press and the release lost the click.
+- The panel's list shows a call cut short when its trace comes, however
+  late. It asked for a row's calls again only for 20 s after the row
+  ended, so a call answered later than that stayed "no answer yet"
+  until the panel was opened again.
 - An app's row in the panel's list ("FA text-campaigns" over its
   requests) opens the call tree, at the call where that app's part of
   the chain starts, instead of the tab picked last in another trace
