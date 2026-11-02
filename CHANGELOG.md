@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- A call with no answer yet, in the call tree of a narrow dock, shows
+  the hourglass alone when its words don't fit beside the call's name,
+  instead of cutting them ("no answer ye"). The words go whole or not
+  at all, before the name gives way, as in the panel's list. The
+  tooltip still says it.
 - An app's row in the panel's list ("FA text-campaigns" over its
   requests) opens the call tree, at the call where that app's part of
   the chain starts, instead of the tab picked last in another trace

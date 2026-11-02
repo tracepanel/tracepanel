@@ -3502,21 +3502,6 @@ div.dt-map-row[data-kind="code"] {
   height: 0.8125rem;
   color: var(--dt-text-3);
 }
-/* A row whose trace was cut, "no answer" beside its name: the name keeps its room, the words give way down to the
-   hourglass, so the row's time column stays a time's width. */
-.dt-request-main > .dt-no-answer {
-  /* Gives way before the name does, whatever the name's own shrinking. */
-  flex: 0 1000000 auto;
-  min-width: 0.75rem;
-}
-.dt-request-main > .dt-no-answer > svg {
-  flex: none;
-}
-.dt-request-main > .dt-no-answer > .dt-no-answer-text {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 /* A trace still running, in its pane's empty state: the ring as big as an empty state's icon, the time on its line.
    Both classes: .dt-running-time below would else win, inline, and the text would run on from the time. */
 .dt-running.dt-running-big {
@@ -3561,19 +3546,29 @@ div.dt-map-row[data-kind="code"] {
   color: var(--dt-text-2);
   white-space: nowrap;
 }
-/* No answer yet (a call cut short): the hourglass and its words, neutral, never a slow time's red. */
+/* No answer yet (a call cut short): the hourglass and its words, neutral, never a slow time's red. Beside a name (a
+   list's row, the call tree's) it gives way before the name does, whatever the name's own shrinking: its words go
+   whole, never cut mid-way, down to the hourglass (its tooltip and the row's label still say it). They wrap onto a
+   second line that isn't shown. */
 .dt-no-answer {
   display: inline-flex;
-  flex: none;
+  flex: 0 1000000 auto;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.25rem;
+  column-gap: 0.25rem;
+  min-width: 0.75rem;
+  max-height: 1lh;
+  overflow: hidden;
   color: var(--dt-text-3);
   font-size: var(--dt-size-xs);
   white-space: nowrap;
 }
 .dt-no-answer > svg {
+  flex: none;
   width: 0.75rem;
   height: 0.75rem;
+  /* Its line a line of text's height, the hourglass in its middle, with its words or without. */
+  margin-block: calc((1lh - 0.75rem) / 2);
 }
 /* A call no trace answered and none will (Untraced): muted, as a call's other notes; its reason in the tooltip. */
 .dt-not-traced {
