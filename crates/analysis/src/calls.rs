@@ -149,8 +149,8 @@ pub struct Operation {
     pub cost: Option<f64>,
 }
 
-/// A statement's verb, as the console filters it (`op:select`): its first word, upper case. A WITH's is what it does
-/// (`sql::with`): `op:delete` finds a CTE that deletes.
+/// A statement's verb, as the console filters it (`op:select`): its first word, upper case. A WITH takes the verb of
+/// what it does (`sql::with`): `op:delete` finds a CTE that deletes.
 pub fn sql_verb(statement: &str) -> String {
     if let Some(with) = crate::sql::with(statement) {
         return with.verb;
