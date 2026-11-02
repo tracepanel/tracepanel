@@ -39,9 +39,10 @@ import { IssueList } from "./IssueList";
 import { RunningMark } from "./LiveMarks";
 import { LogsPane } from "./LogList";
 import { groupNoun, onTheClock } from "./lib/calls";
+import { chainScope, whoseOwn } from "./lib/chainCounts";
 import type { ChainWaiting } from "./lib/chainRows";
 import { isTyping } from "./lib/keys";
-import { pageParts } from "./lib/page";
+import { pageParts, redirectedFrom, redirectNote } from "./lib/page";
 import { plural } from "./lib/plural";
 import { scopedIssues, scopedSpans } from "./lib/scope";
 import { type Slice, stretchText } from "./lib/slice";
@@ -250,14 +251,18 @@ function tabLabel(trace: Trace): string {
  * A system's tab, when the request called it: how many calls, and how long they took on the clock (calls side by
  * side, as a chain's 36 calls to another app run, counted once); what they add up to in its tooltip.
  */
-function callsTabs(calls: Partial<Record<CallsTabId, SystemCalls>>) {
+function callsTabs(calls: Partial<Record<CallsTabId, SystemCalls>>, trace: Trace) {
+  // The chain's count, its own among them in the count's tooltip: a view's 23 HTTP calls are its 3 and its apps' 20.
+  const own = callsByTab(trace);
   return CALLS_TABS.flatMap(({ id, label, icon: Icon }) => {
     const of = calls[id];
     if (!of) return [];
     const timed = of.total > 0;
     const detail = timed ? duration(onTheClock(of.spans)) : undefined;
     const detailTitle = timed ? `${duration(of.total)} total` : undefined;
-    return [{ id, label, icon: <Icon />, count: of.spans.length, detail, detailTitle }];
+    const mine = own[id]?.spans.length ?? 0;
+    const hint = mine < of.spans.length ? chainScope(id, of.spans.length, mine, whoseOwn(trace.kind)) : undefined;
+    return [{ id, label, icon: <Icon />, count: of.spans.length, detail, detailTitle, hint }];
   });
 }
 
@@ -318,7 +323,7 @@ function traceTabs({
       tone: "warn" as const,
     }),
     // What a request is most often opened for: its SQL, cache and HTTP calls, and its logs when it wrote any.
-    ...callsTabs(calls),
+    ...callsTabs(calls, trace),
     ...(logs > 0 ? [{ id: "logs" as const, label: "Logs", icon: <ScrollTextIcon />, count: logs }] : []),
     // Recorded only when asked for: where the time went in code.
     ...(profiled ? [{ id: "profile" as const, label: "Profile", icon: <FlameIcon /> }] : []),
@@ -643,6 +648,7 @@ function FullHeader({ trace, placed }: { trace: Trace; placed: { explore: ReactN
   const status = trace.attrs["http.status_code"];
   const path = trace.attrs["http.path"];
   const route = trace.attrs["http.route"];
+  const from = redirectedFrom(trace.attrs);
   return (
     <header className="dt-trace-head">
       <div className="flex items-center gap-3">
@@ -661,6 +667,7 @@ function FullHeader({ trace, placed }: { trace: Trace; placed: { explore: ReactN
               route <RoutePath path={route} />
             </p>
           ) : null}
+          {from ? <p className="dt-trace-route">{redirectNote(from)}</p> : null}
         </div>
         {placed.explore}
         {placed.actions ? <div className="flex shrink-0 items-center gap-0.5">{placed.actions}</div> : null}

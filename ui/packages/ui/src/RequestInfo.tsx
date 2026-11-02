@@ -8,6 +8,7 @@ import { grouped, LinkedTrace, tracesRow } from "./LinkedTrace";
 import { collectstaticFacts } from "./lib/collectstatic";
 import { handlerFullName, handlerWord } from "./lib/handler";
 import { migratePlan, planSummary } from "./lib/migrations";
+import { redirectedFrom, redirectNote } from "./lib/page";
 import { shownValue } from "./lib/pyliteral";
 import { traceRuntime } from "./lib/runtime";
 import { unreceived } from "./lib/signals";
@@ -287,12 +288,13 @@ const COMMAND_LINE = ["process.command_line", "process.command_args", "command.l
 
 /**
  * What handled it, under the head line, quietly: a request's view or handler (and its route when it isn't the URL),
- * a task's queue and worker, a job's command line, a page's URL.
+ * a task's queue and worker, a job's command line, a page's URL and the route the SPA redirected it from.
  */
 function codeOf(trace: Trace): ReactNode[] {
   const attrs = trace.attrs;
   const handler = text(attrs["code.view"]);
   const route = text(attrs["http.route"]);
+  const from = redirectedFrom(attrs);
   return [
     handler ? <HandlerName key="handler" trace={trace} name={handler} /> : null,
     route && route !== attrs["http.path"] ? <RoutePath key="route" path={route} /> : null,
@@ -300,6 +302,7 @@ function codeOf(trace: Trace): ReactNode[] {
       const value = text(attrs[key]);
       return value ? <span key={key}>{value}</span> : null;
     }),
+    from ? <span key="redirected">{redirectNote(from)}</span> : null,
   ].filter(Boolean);
 }
 

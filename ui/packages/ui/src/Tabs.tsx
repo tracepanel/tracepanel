@@ -21,6 +21,8 @@ export interface Tab<T extends string> {
   badge?: ReactNode;
   /** A small icon before the label. */
   icon?: ReactNode;
+  /** What its count covers, in the count's tooltip: a chain's calls, its own among them. */
+  hint?: string | undefined;
 }
 
 export interface TabsProps<T extends string> {
@@ -109,7 +111,7 @@ function TabBody<T extends string>({ tab }: { tab: Tab<T> }) {
 function TabCount<T extends string>({ tab }: { tab: Tab<T> }) {
   if (tab.count === undefined) return null;
   return (
-    <span className="dt-tab-count" data-tone={tab.tone}>
+    <span className="dt-tab-count" data-tone={tab.tone} title={tab.hint}>
       {tab.count}
     </span>
   );
