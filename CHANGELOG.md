@@ -51,6 +51,10 @@
   does, its traces merged too: "waiting · HTTP GET
   analytics.example.com", not "waiting". So does the MCP server's
   profile of an app in a chain.
+- A running ring never reads "0 µs". A view on its first frame, or one
+  whose start is a moment ahead of the browser's clock, reads "…" until
+  it has run, then its time from its start, on the pill, in its card and
+  in the list.
 - PostgreSQL plans nest right. A first-level node no longer sits at
   the root's depth with its details two levels below it: each "->"
   level adds one, and a node's details sit one level below it. MySQL's

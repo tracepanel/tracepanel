@@ -41,11 +41,11 @@ async function docked(page: Page, dock: "right" | "bottom"): Promise<void> {
 }
 
 /** The recording's announcement of a view of `path` (a route change of the SPA), open or ended. */
-async function announce(page: Page, id: string, path: string, open: boolean): Promise<void> {
+async function announce(page: Page, id: string, path: string, open: boolean, start = Date.now() * 1000): Promise<void> {
   await page.evaluate((detail) => dispatchEvent(new CustomEvent("tracepanel:page", { detail })), {
     id,
     name: path,
-    start: Date.now() * 1000,
+    start,
     duration: open ? 0 : 2_000_000,
     status: "ok",
     open,
@@ -119,6 +119,27 @@ test("an SPA's route change is a new page: the pill shows its view running, not 
   await expect(pill(page)).not.toContainText("/app/api/posts");
   await expect(pill(page).locator('.seg[data-state="running"]')).toHaveCount(1);
   await expect(pill(page)).toHaveAccessibleName(/^tracepanel: view of \/app\/next, running for /);
+});
+
+test("a view on its first frame reads … where its time will tick, never 0 µs: in the pill, its card and the list", async ({
+  page,
+}) => {
+  await openApp(page, { posts: await posts() }, { recording: true });
+  await expect(pill(page)).toHaveAccessibleName(/^tracepanel: view of \/app\//);
+
+  // Its start a moment ahead of this clock (the recording's clock rounds), as its first frame reads it, held there.
+  await announce(page, "01M4E2ELIVE000000000000003", "/app/ahead", true, Date.now() * 1000 + 600_000_000);
+
+  const running = pill(page).locator('.seg[data-state="running"]');
+  await expect(running).toHaveText("…");
+  await expect(pill(page)).toHaveAccessibleName(/^tracepanel: view of \/app\/ahead, running(\.|$)/);
+  await pill(page).hover();
+  const card = page.getByRole("dialog", { name: "This request at a glance" });
+  await expect(card.locator(".card-running")).toHaveText("…");
+  await pill(page).click();
+  const row = list(page).locator('.dt-request-row[data-state="running"]');
+  await expect(row.locator(".dt-running-time")).toHaveText("…");
+  await expect(row).not.toContainText("µs");
 });
 
 test("docked at the right, the panel follows a new view as the bottom dock does, named as the list names it", async ({
