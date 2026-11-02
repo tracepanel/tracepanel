@@ -22,6 +22,8 @@ export interface EntrySummary {
   open?: boolean | undefined;
   /** An open view whose calls have all answered: its time stops here (epoch µs, the last answer) until it ends. */
   until?: number | undefined;
+  /** A view the SPA was sent to at once from another route ("/sms-campaigns"), which left the list for it. */
+  redirectedFrom?: string | undefined;
 }
 
 export interface TabEntry {

@@ -325,9 +325,15 @@ function arrange(history: TabHistory, traces: readonly TraceSummary[]): TraceRow
       .filter((entry) => entry.summary?.open && !stored.has(entry.id))
       .map((entry) => [entry.id, entry.summary?.until]),
   );
+  // A view the SPA was sent to at once: where from, as the widget folded the view it left.
+  const redirected = new Map(history.entries.map((entry) => [entry.id, entry.summary?.redirectedFrom]));
   const row = (trace: TraceSummary, depth: 0 | 1): TraceRow => {
     const htmx = sent.get(trace.id);
-    const running = open.has(trace.id) ? { open: true, until: open.get(trace.id) } : {};
+    const from = redirected.get(trace.id);
+    const running = {
+      ...(open.has(trace.id) ? { open: true, until: open.get(trace.id) } : {}),
+      ...(from ? { redirectedFrom: from } : {}),
+    };
     // A boosted link loaded a page: its path names it, not the link's text.
     if (!htmx || htmx.boosted) return { trace, depth, ...running };
     return { trace, depth, trigger: htmx.trigger, target: htmx.target, ...running };

@@ -41,7 +41,7 @@ import { LogsPane } from "./LogList";
 import { groupNoun, onTheClock } from "./lib/calls";
 import type { ChainWaiting } from "./lib/chainRows";
 import { isTyping } from "./lib/keys";
-import { pageParts } from "./lib/page";
+import { pageParts, redirectedFrom, redirectNote } from "./lib/page";
 import { plural } from "./lib/plural";
 import { scopedIssues, scopedSpans } from "./lib/scope";
 import { type Slice, stretchText } from "./lib/slice";
@@ -643,6 +643,7 @@ function FullHeader({ trace, placed }: { trace: Trace; placed: { explore: ReactN
   const status = trace.attrs["http.status_code"];
   const path = trace.attrs["http.path"];
   const route = trace.attrs["http.route"];
+  const from = redirectedFrom(trace.attrs);
   return (
     <header className="dt-trace-head">
       <div className="flex items-center gap-3">
@@ -661,6 +662,7 @@ function FullHeader({ trace, placed }: { trace: Trace; placed: { explore: ReactN
               route <RoutePath path={route} />
             </p>
           ) : null}
+          {from ? <p className="dt-trace-route">{redirectNote(from)}</p> : null}
         </div>
         {placed.explore}
         {placed.actions ? <div className="flex shrink-0 items-center gap-0.5">{placed.actions}</div> : null}

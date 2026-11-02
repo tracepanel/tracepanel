@@ -4,6 +4,14 @@
 
 ### Fixed
 
+- A view an SPA redirects from at once (`/sms-campaigns` sending on to
+  `/sms-campaigns/campaigns` as it renders) is no longer a row of its
+  own, "VIEW /sms-campaigns 0 µs" with nothing under it. The view it
+  sent to says "redirected from /sms-campaigns" in the panel's list,
+  its head and the console's trace page. The console's Pages list and
+  counts leave it out. A view that called anything, failed, or lasted
+  until the next one came later than 100 ms stays, and so does a page's
+  load.
 - Apollo Router's answers to a browser's CORS preflights are no longer
   traces of their own ("router", a few hundred µs each, one per call of
   a view): its CORS layer answers them before it reads the request, so

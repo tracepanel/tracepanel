@@ -106,6 +106,8 @@ impl Store {
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |since| since.as_micros() as i64);
         for received in traces {
+            let folded = fold_redirect(&tx, self.fts, received)?;
+            let received = folded.as_ref().unwrap_or(received);
             write_trace(&tx, self.fts, &received.trace, &stamped(&received.doc, now))?;
         }
         self.written_since_prune += traces.len() as i64;
@@ -116,6 +118,72 @@ impl Store {
         }
         tx.commit()
     }
+}
+
+/// How soon after a view started the next one may start for it to be a redirect (µs): an SPA's route that sends on
+/// to another as it renders (`/sms-campaigns` to `/sms-campaigns/campaigns`) does it in a few milliseconds.
+pub const REDIRECT_US: i64 = 100_000;
+
+/// A view of the browser's that the SPA redirected from at once is no page of its own: a view the browser started on
+/// a route change (not a page's load, which has the load's time), that made no call, wrote no log and failed
+/// nothing, and that the next view of the same browser started within REDIRECT_US of. When that next view comes, it
+/// leaves the store, and the view says where it came from (`page.redirected_from`, the first of a chain of them). A
+/// view that did anything stays. The received trace with that attribute, if it folded one.
+fn fold_redirect(
+    db: &Connection,
+    fts: bool,
+    received: &Received,
+) -> rusqlite::Result<Option<Received>> {
+    let trace = &received.trace;
+    if trace.kind != "page" || trace.attrs.contains_key("page.action") {
+        return Ok(None);
+    }
+    let text = |key: &str| trace.attrs.get(key).and_then(Value::as_str);
+    let from: Option<(String, String)> = db
+        .prepare_cached(
+            "SELECT id, COALESCE(json_extract(attrs, '$.\"page.redirected_from\"'), \
+                 json_extract(attrs, '$.\"page.path\"'), name) FROM traces \
+             WHERE kind = 'page' AND service = ?1 AND id != ?2 AND start BETWEEN ?3 - ?4 AND ?3 \
+               AND start + duration <= ?3 AND status = 'ok' AND errors = 0 AND logs = 0 AND issues = 0 \
+               AND json_extract(attrs, '$.\"page.action\"') IS NULL \
+               AND json_extract(attrs, '$.\"page.trigger\"') IS NOT 'load' \
+               AND json_extract(attrs, '$.\"user_agent.original\"') IS ?5 \
+               AND json_array_length(doc, '$.spans') <= 1 \
+             ORDER BY start DESC LIMIT 1",
+        )?
+        .query_row(
+            params![
+                text("service.name").unwrap_or_default(),
+                trace.id,
+                trace.start,
+                REDIRECT_US,
+                text("user_agent.original"),
+            ],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map(Some)
+        .or_else(|error| match error {
+            rusqlite::Error::QueryReturnedNoRows => Ok(None),
+            error => Err(error),
+        })?;
+    let Some((id, path)) = from else {
+        return Ok(None);
+    };
+    // The trace as it would have come with the attribute: its doc, read again (a page's is small).
+    let mut doc: Value = serde_json::from_str(&received.doc).unwrap_or_default();
+    let Some(attrs) = doc.get_mut("attrs").and_then(Value::as_object_mut) else {
+        return Ok(None);
+    };
+    attrs.insert("page.redirected_from".into(), Value::from(path));
+    let Ok(trace) = serde_json::from_value(doc.clone()) else {
+        return Ok(None);
+    };
+    db.execute("DELETE FROM traces WHERE id = ?1", [&id])?;
+    delete_rows(db, fts, "trace_id = ?1", [&id])?;
+    Ok(Some(Received {
+        trace,
+        doc: doc.to_string(),
+    }))
 }
 
 /// The doc with when this agent received it (`received`, µs, by this machine's clock): the console compares it with

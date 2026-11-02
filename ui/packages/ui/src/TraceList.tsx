@@ -17,7 +17,7 @@ import {
 } from "./lib/chainRows";
 import { foldKeys } from "./lib/keys";
 import { cutNote, NO_ANSWER } from "./lib/live";
-import { pageParts } from "./lib/page";
+import { pageParts, redirectNote } from "./lib/page";
 import { plural } from "./lib/plural";
 import { traceRuntime } from "./lib/runtime";
 import { RowFlame } from "./ProfileHint";
@@ -47,6 +47,8 @@ export interface TraceRow {
   open?: boolean | undefined;
   /** An open view whose calls have all answered: its time stops at the last answer (epoch µs) until it ends. */
   until?: number | undefined;
+  /** A view the SPA was sent to at once from another route ("/sms-campaigns"): the list shows that one no more. */
+  redirectedFrom?: string | undefined;
 }
 
 export interface TraceListProps {
@@ -155,7 +157,7 @@ export function TraceList({
 
 /** One row of the list: its name, status and time, then its numbers (its chain's, `chained`). */
 function ListRow({
-  row: { trace, depth = 0, trigger, target, run, open, until },
+  row: { trace, depth = 0, trigger, target, run, open, until, redirectedFrom },
   fold,
   chained,
   pending,
@@ -191,14 +193,14 @@ function ListRow({
       data-kind={trace.kind === "page" ? "page" : undefined}
       {...liveProps(trace, open, cut)}
       aria-current={selected ? "true" : undefined}
-      aria-label={traceLabel(trace, { trigger, target, current, open, cut: cut !== null })}
+      aria-label={traceLabel(trace, { trigger, target, current, open, cut: cut !== null, redirectedFrom })}
       {...foldProps(fold)}
       data-new={fresh ? "" : undefined}
       onClick={() => onSelect(trace.id)}
     >
       <span className="dt-request-main">
         <RowCaret fold={fold} />
-        <RowName trace={trace} trigger={trigger} target={target} />
+        <RowName trace={trace} trigger={trigger} target={target} redirectedFrom={redirectedFrom} />
         <RowApp trace={trace} shown={services} />
         {current ? <ThisPage compact={compact} /> : null}
       </span>
@@ -777,10 +779,12 @@ export function traceLabel(
     current?: boolean;
     open?: boolean | undefined;
     cut?: boolean | undefined;
+    redirectedFrom?: string | undefined;
   } = {},
 ): string {
+  const from = extra.redirectedFrom ? redirectNote(extra.redirectedFrom) : undefined;
   if (extra.open) {
-    return [rowName(trace), "running", extra.current ? "this page" : undefined].filter(Boolean).join(", ");
+    return [rowName(trace), from, "running", extra.current ? "this page" : undefined].filter(Boolean).join(", ");
   }
   const outcome =
     trace.task_state ??
@@ -792,6 +796,7 @@ export function traceLabel(
   const sent = extra.trigger ? `sent by ${extra.trigger}${extra.target ? ` → ${extra.target}` : ""}` : undefined;
   return [
     rowName(trace),
+    from,
     outcome,
     duration(trace.duration),
     extra.cut ? NO_ANSWER : undefined,
@@ -846,12 +851,14 @@ function RowName({
   trace,
   trigger,
   target,
+  redirectedFrom,
 }: {
   trace: TraceSummary;
   trigger?: string | undefined;
   target?: string | undefined;
+  redirectedFrom?: string | undefined;
 }) {
-  if (trace.kind === "page") return <PageName name={trace.name} />;
+  if (trace.kind === "page") return <PageName name={trace.name} redirectedFrom={redirectedFrom} />;
   if (trace.kind === "http") return <RequestName trace={trace} trigger={trigger} target={target} />;
   return (
     <>
@@ -865,8 +872,11 @@ function RowName({
   );
 }
 
-/** A view or an action recorded in the browser: its badge, the control, then its page. One name wherever it shows. */
-export function PageName({ name }: { name: string }) {
+/**
+ * A view or an action recorded in the browser: its badge, the control, then its page. One name wherever it shows. A
+ * view the SPA was sent to at once says where from ("redirected from /sms-campaigns").
+ */
+export function PageName({ name, redirectedFrom }: { name: string; redirectedFrom?: string | undefined }) {
   const { badge, label, page } = pageParts(name);
   return (
     <>
@@ -874,6 +884,7 @@ export function PageName({ name }: { name: string }) {
       <span className="dt-request-path">
         {label}
         {page ? <span className="dt-request-trigger"> · {page}</span> : null}
+        {redirectedFrom ? <span className="dt-request-trigger"> · {redirectNote(redirectedFrom)}</span> : null}
       </span>
     </>
   );

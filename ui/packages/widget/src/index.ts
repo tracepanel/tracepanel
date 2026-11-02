@@ -5,6 +5,7 @@ import { duration } from "@tracepanel/ui/format";
 import type { ChainCounts } from "@tracepanel/ui/lib/chainCounts";
 import { graphqlName, namesOperation } from "@tracepanel/ui/lib/graphql";
 import { clockOf, cutNote, NO_ANSWER, PENDING, runningLabel, runningTime, TICK_MS } from "@tracepanel/ui/lib/live";
+import { REDIRECT_MS } from "@tracepanel/ui/lib/page";
 import { plural } from "@tracepanel/ui/lib/plural";
 import {
   BROWSER_ICON_SVG,
@@ -1003,6 +1004,8 @@ export interface EntrySummary {
   open?: boolean | undefined;
   /** An open view whose calls have all answered: its time stops here (epoch µs, the last answer) until it ends. */
   until?: number | undefined;
+  /** A view the SPA was sent to at once from another route ("/sms-campaigns"), which left the list for it. */
+  redirectedFrom?: string | undefined;
 }
 
 /** A traced request made in this browser tab: a page load (parent null) or a fetch/XHR of that page. */
@@ -1012,12 +1015,34 @@ export interface TabEntry {
   summary?: EntrySummary | undefined;
 }
 
-/** The tab's list with this view or action in it: a new row (an empty view of the same page leaves), or its own updated. */
-function withPage(tab: TabEntry[], announced: PageAnnouncement): TabEntry[] {
+/**
+ * The tab's list with this view or action in it: a new row (an empty view of the same page leaves, and so does a view
+ * the SPA redirected from at once, the new one saying so), or its own updated. `load`: the page's first view.
+ */
+function withPage(tab: TabEntry[], announced: PageAnnouncement, load: string | null): TabEntry[] {
   const entry = pageEntry(announced);
   const at = tab.findIndex((item) => item.id === announced.id);
-  if (at === -1) return [...dropEmptyView(tab, announced.name), entry];
+  if (at === -1) return foldRedirect(dropEmptyView(tab, announced.name), entry, load);
+  const from = tab[at]?.summary?.redirectedFrom;
+  if (from && entry.summary) entry.summary.redirectedFrom = from;
   return tab.map((item, index) => (index === at ? entry : item));
+}
+
+/**
+ * A new view after one the SPA redirected from at once: that one leaves the list, the new one says where it came from
+ * (the first of a chain of redirects). Such a view ended, made no call and failed nothing, and the new one started
+ * within REDIRECT_MS of it; the page's load (`load`, which has the load's time) and a view that did anything stay.
+ * The agent folds it in the store by the same measure.
+ */
+function foldRedirect(tab: TabEntry[], entry: TabEntry, load: string | null): TabEntry[] {
+  const last = tab.at(-1);
+  const before = last?.summary;
+  const next = entry.summary;
+  if (!(last && before && next && isView(last) && isView(entry) && last.id !== load)) return [...tab, entry];
+  const empty = !(before.open || before.failed) && !tab.some((item) => item.parent === last.id);
+  if (!empty || next.start - before.start > REDIRECT_MS * 1000) return [...tab, entry];
+  next.redirectedFrom = before.redirectedFrom ?? before.name;
+  return [...tab.slice(0, -1), entry];
 }
 
 /** A view or an action as the tab's list has it: a row of its own, running while open. */
@@ -1765,7 +1790,7 @@ export function mount(options: WidgetOptions = {}): Widget {
   function recordPage(announced: PageAnnouncement): void {
     if (announced.name.includes(" › ")) takeAction(announced);
     else takeView(announced);
-    tab = underLoadView(withPage(tab, announced), announced);
+    tab = underLoadView(withPage(tab, announced, loadView), announced);
     saveTab(tab);
     sendTab();
   }
