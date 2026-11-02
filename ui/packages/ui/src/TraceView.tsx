@@ -36,16 +36,19 @@ import { Hint } from "./Hint";
 import { useMenuOpen } from "./hooks/useCloseOnBlur";
 import { type TraceScope, useTraceScope } from "./hooks/useTraceChain";
 import { IssueList } from "./IssueList";
+import { RunningMark } from "./LiveMarks";
 import { LogsPane } from "./LogList";
 import { groupNoun, onTheClock } from "./lib/calls";
+import type { ChainWaiting } from "./lib/chainRows";
 import { isTyping } from "./lib/keys";
 import { pageParts } from "./lib/page";
+import { plural } from "./lib/plural";
 import { scopedIssues, scopedSpans } from "./lib/scope";
 import { type Slice, stretchText } from "./lib/slice";
 import { useViewMemory, VIEW_KEYS, type ViewMemory, type ViewMemoryHeld, ViewMemoryScope } from "./lib/viewMemory";
 import { linkProps, opensTraces, openTraceAt, type TraceLinks } from "./links";
 import { ProfileTab } from "./ProfileView";
-import { RoutePath, StatusBadge, TraceBadge } from "./primitives";
+import { RoutePath, StatusBadge, TraceBadge, WaitingIcon } from "./primitives";
 import { RequestInfo } from "./RequestInfo";
 import { UnderThis, underCounts } from "./ScopeBar";
 import { type SystemCalls, systemCalls, systemOfIssue } from "./systemCalls";
@@ -501,10 +504,35 @@ function TreePane({
           subject={subject}
         />
       )}
-      head={<TimeStrip trace={tree.trace} related={tree.related} onSelect={onSelect} />}
+      head={
+        <>
+          <OnItsWay waiting={chain.waiting} />
+          <TimeStrip trace={tree.trace} related={tree.related} onSelect={onSelect} />
+        </>
+      }
       onProfile={onProfile}
       onTraceProfile={tree.onTraceProfile ?? linkedProfiles(tree.links)}
     />
+  );
+}
+
+/**
+ * Over a call tree that isn't all there yet: its calls whose traces are on their way, said once, so a partial tree
+ * never reads as complete. Calls cut short (no answer yet) say so; the rows fill in as their traces arrive.
+ */
+function OnItsWay({ waiting }: { waiting: readonly ChainWaiting[] }) {
+  if (waiting.length === 0) return null;
+  const cut = waiting.filter((call) => call.cut !== null).length;
+  const calls = plural(waiting.length, "call", "calls");
+  const text =
+    cut === waiting.length
+      ? `${calls} with no answer yet: the tree fills in if ${waiting.length === 1 ? "its trace arrives" : "their traces arrive"}`
+      : `More on its way: the ${waiting.length === 1 ? "trace of 1 call hasn't" : `traces of ${calls} haven't`} arrived yet`;
+  return (
+    <p className="dt-on-its-way" role="status" data-state={cut === waiting.length ? "cut" : "running"}>
+      {cut === waiting.length ? <WaitingIcon /> : <RunningMark />}
+      {text}
+    </p>
   );
 }
 
