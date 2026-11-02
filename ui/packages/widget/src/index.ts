@@ -4,7 +4,7 @@ import TOKENS from "virtual:tracepanel-tokens";
 import { duration } from "@tracepanel/ui/format";
 import type { ChainCounts } from "@tracepanel/ui/lib/chainCounts";
 import { graphqlName, namesOperation } from "@tracepanel/ui/lib/graphql";
-import { cutNote, NO_ANSWER, PENDING, runningLabel, runningTime, TICK_MS } from "@tracepanel/ui/lib/live";
+import { clockOf, cutNote, NO_ANSWER, PENDING, runningLabel, runningTime, TICK_MS } from "@tracepanel/ui/lib/live";
 import { plural } from "@tracepanel/ui/lib/plural";
 import {
   BROWSER_ICON_SVG,
@@ -67,9 +67,14 @@ function followPages(onPage: (announced: PageAnnouncement) => void): void {
  * server page's load). While it is open, its time so far, ticking, by the ring every running thing turns (lib/live);
  * its numbers pending until its chain is counted; cut with a call unanswered, "no answer yet".
  */
-function addView(parent: HTMLElement, view: PageAnnouncement, facts: ChainFacts | null): void {
+function addView(
+  parent: HTMLElement,
+  view: PageAnnouncement,
+  facts: ChainFacts | null,
+  until: number | undefined,
+): void {
   addName(parent, { name: `VIEW ${view.name}` }, false);
-  if (view.open) addRunning(parent, view.start / 1000);
+  if (view.open) addRunning(parent, view.start / 1000, until);
   else addEnded(parent, view, facts);
 }
 
@@ -100,9 +105,14 @@ function addWaiting(parent: HTMLElement): void {
   segment(parent).append(idle);
 }
 
-function idleLabel(view: PageAnnouncement | null, runtime: string | undefined, counts: ChainCounts | null): string {
+function idleLabel(
+  view: PageAnnouncement | null,
+  runtime: string | undefined,
+  counts: ChainCounts | null,
+  until: number | undefined,
+): string {
   const shown = view
-    ? `view of ${view.name}${view.open ? `, ${runningLabel(view.start)}` : countsLine(counts)}`
+    ? `view of ${view.name}${view.open ? `, ${runningLabel(view.start, clockOf(until))}` : countsLine(counts)}`
     : "no requests yet";
   return `tracepanel: ${shown}${runtime ? `. Served by ${runtime}` : ""}`;
 }
@@ -759,24 +769,28 @@ function timeParts(ms: number): HTMLElement[] {
   return [value, unit];
 }
 
-/** A running thing's time so far (from `start`, epoch ms) as the pill writes a time: PENDING on its first frame. */
-function runningParts(start: number): HTMLElement[] {
-  const time = runningTime(start * 1000);
-  if (time !== PENDING) return timeParts(Math.max(0, Date.now() - start));
+/**
+ * A running thing's time so far (from `start`, epoch ms) as the pill writes a time: PENDING on its first frame;
+ * stopped at `until` (epoch µs: lib/live clockOf).
+ */
+function runningParts(start: number, until: number | undefined): HTMLElement[] {
+  const now = clockOf(until);
+  const time = runningTime(start * 1000, now);
+  if (time !== PENDING) return timeParts(Math.max(0, now - start));
   const value = document.createElement("b");
   value.textContent = PENDING;
   return [value];
 }
 
-/** In flight: the ring and the time so far (from `start`, epoch ms), ticking as the pill draws again. */
-function addRunning(parent: HTMLElement, start: number): void {
+/** In flight: the ring and the time so far (from `start`, epoch ms), ticking as the pill draws again, up to `until`. */
+function addRunning(parent: HTMLElement, start: number, until?: number): void {
   const seg = segment(parent);
   seg.dataset["state"] = "running";
   const ring = document.createElement("span");
   ring.className = "running";
   ring.setAttribute("aria-hidden", "true");
-  seg.append(ring, ...runningParts(start));
-  seg.title = runningLabel(start * 1000);
+  seg.append(ring, ...runningParts(start, until));
+  seg.title = runningLabel(start * 1000, clockOf(until));
 }
 
 /** Cut with a call unanswered: the hourglass and "no answer yet", its note in the tooltip. */
@@ -987,6 +1001,8 @@ export interface EntrySummary {
   failed?: boolean | undefined;
   /** In flight (lib/live): a request the page still waits for, a view still open. Its time ticks from `start`. */
   open?: boolean | undefined;
+  /** An open view whose calls have all answered: its time stops here (epoch µs, the last answer) until it ends. */
+  until?: number | undefined;
 }
 
 /** A traced request made in this browser tab: a page load (parent null) or a fetch/XHR of that page. */
@@ -1457,7 +1473,28 @@ export function mount(options: WidgetOptions = {}): Widget {
   /** What the panel lists: the tab's requests, then those in flight (never stored: a reload ends them). */
   function entries(): TabEntry[] {
     const parent = currentPage();
-    return [...tab, ...flights().map((flight) => flightEntry(flight, parent))];
+    return [...tab.map(withQuiet), ...flights().map((flight) => flightEntry(flight, parent))];
+  }
+
+  /**
+   * When an open view went quiet (epoch µs): its calls have all answered, none is in flight, and it waits a moment
+   * for its end, which comes with its last call's. Its time stops at that last answer, never past what it will be.
+   * Undefined while a call runs, or before it made one. The page's own document, listed under the view that loaded
+   * it, is no call of the view's.
+   */
+  function quietSince(id: string): number | undefined {
+    if (inFlight.length > 0) return undefined;
+    const own = page?.trace;
+    const ends = tab.flatMap((entry) =>
+      entry.parent === id && entry.id !== own && entry.summary ? [entry.summary.start + entry.summary.duration] : [],
+    );
+    return ends.length > 0 ? Math.max(...ends) : undefined;
+  }
+
+  /** A view still open, its time stopped where it went quiet (quietSince), as the panel's list shows it. */
+  function withQuiet(entry: TabEntry): TabEntry {
+    const until = entry.summary?.open && entry.summary.kind === "page" ? quietSince(entry.id) : undefined;
+    return until === undefined || !entry.summary ? entry : { ...entry, summary: { ...entry.summary, until } };
   }
 
   function sendTab(): void {
@@ -1534,11 +1571,12 @@ export function mount(options: WidgetOptions = {}): Widget {
   function renderIdle(): void {
     stats.textContent = "";
     const facts = viewFacts();
-    if (view) addView(stats, view, facts);
+    const until = view?.open ? quietSince(view.id) : undefined;
+    if (view) addView(stats, view, facts, until);
     else addWaiting(stats);
     fitBadge();
     badge.dataset["verdict"] = view?.status === "error" ? "error" : facts?.counts.issues ? "warn" : "ok";
-    badge.setAttribute("aria-label", idleLabel(view, runtime, facts?.counts ?? null));
+    badge.setAttribute("aria-label", idleLabel(view, runtime, facts?.counts ?? null, until));
   }
 
   // While something runs (a request in flight, a view open), the pill and the card draw again every TICK_MS: its
@@ -1611,6 +1649,8 @@ export function mount(options: WidgetOptions = {}): Widget {
     start: (flight) => {
       inFlight.push(flight);
       keepTicking();
+      // An open view's time runs again with its new call (quietSince), in the panel's list too.
+      if (view?.open) sendTab();
     },
     end: (flight, info) => {
       const at = inFlight.indexOf(flight);
@@ -1850,7 +1890,7 @@ export function mount(options: WidgetOptions = {}): Widget {
   const card = mountCard(root, badge, {
     requests,
     flights,
-    view: () => (view ? { view, facts: viewFacts() } : null),
+    view: () => (view ? { view, facts: viewFacts(), until: view.open ? quietSince(view.id) : undefined } : null),
     counted,
     page: ownPage,
     api: panelUrl,

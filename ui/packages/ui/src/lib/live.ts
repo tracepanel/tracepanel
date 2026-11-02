@@ -26,6 +26,15 @@ export function elapsed(start: number, now: number = Date.now()): number {
   return Math.max(0, now * 1000 - start);
 }
 
+/**
+ * The clock a running thing's time is read on (epoch ms): now, or `until` (epoch µs) once nothing of it runs any more
+ * (a view whose calls have all answered, waiting a moment for its end). Its time stops there: never past what it will
+ * be once it ends, so it never runs on and jumps back.
+ */
+export function clockOf(until: number | undefined, now: number = Date.now()): number {
+  return until === undefined ? now : Math.min(now, until / 1000);
+}
+
 /** Under this (µs), a running thing's time so far says PENDING: its first frame, never "0 µs". */
 const FIRST_FRAME_US = 100;
 

@@ -2,7 +2,7 @@
 // for after it loaded) before opening the panel.
 import { duration } from "@tracepanel/ui/format";
 import { breakdown, categoryLabel } from "@tracepanel/ui/lib/breakdown";
-import { cutNote, NO_ANSWER, PENDING, runningLabel, runningTime } from "@tracepanel/ui/lib/live";
+import { clockOf, cutNote, NO_ANSWER, PENDING, runningLabel, runningTime } from "@tracepanel/ui/lib/live";
 import { percent } from "@tracepanel/ui/lib/percent";
 import { plural } from "@tracepanel/ui/lib/plural";
 import { WAITED_SHARE, withWaiting } from "@tracepanel/ui/lib/waitingShare";
@@ -131,6 +131,8 @@ export const CARD_STYLE = `
 export interface CardView {
   view: { name: string; start: number; duration: number; open: boolean; status: "ok" | "error" };
   facts: ChainFacts | null;
+  /** Open, its calls all answered: where its time stops until it ends (epoch µs). */
+  until?: number | undefined;
 }
 
 export interface CardSource {
@@ -243,10 +245,10 @@ function requestLabel(info: TraceInfo, isPage: boolean, issues: number): HTMLEle
   return name;
 }
 
-/** A view's time in its card's head: running while it is open. */
-function viewTime(view: CardView["view"]): HTMLElement {
+/** A view's time in its card's head: running while it is open, stopped at `until`. */
+function viewTime(view: CardView["view"], until: number | undefined): HTMLElement {
   return view.open
-    ? runningCell(view.start / 1000, "card-time")
+    ? runningCell(view.start / 1000, "card-time", until)
     : element("span", "card-time", duration(view.duration));
 }
 
@@ -274,13 +276,14 @@ function countsOf({ queries, calls, issues }: ChainFacts["counts"]): (HTMLElemen
   return parts.flatMap((part, index) => [...(index ? [" · "] : []), element("b", undefined, part)]);
 }
 
-/** In flight: the ring and the time so far (from `start`, epoch ms), as the pill says it. */
-function runningCell(start: number, className: string): HTMLElement {
+/** In flight: the ring and the time so far (from `start`, epoch ms), as the pill says it; stopped at `until` (µs). */
+function runningCell(start: number, className: string, until?: number): HTMLElement {
   const cell = element("span", `${className} card-running`);
   const ring = element("span", "running");
   ring.setAttribute("aria-hidden", "true");
-  cell.append(ring, runningTime(start * 1000));
-  cell.title = runningLabel(start * 1000);
+  const now = clockOf(until);
+  cell.append(ring, runningTime(start * 1000, now));
+  cell.title = runningLabel(start * 1000, now);
   return cell;
 }
 
@@ -575,12 +578,12 @@ export function mountCard(
   }
 
   /** The page's view, before any request: running while open, its time, "no answer yet" when cut, its chain's numbers. */
-  function renderView({ view, facts }: CardView): void {
+  function renderView({ view, facts, until }: CardView): void {
     card.textContent = "";
     const row = element("div", "card-head");
     const name = element("span", "card-name");
     name.append(...nameWithMethod(`VIEW ${view.name}`));
-    row.append(name, viewTime(view));
+    row.append(name, viewTime(view, until));
     card.append(row, ...cutLine(facts?.cut ?? null), factsLine(view.open, facts));
   }
 

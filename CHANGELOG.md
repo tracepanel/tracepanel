@@ -15,6 +15,9 @@
   stored: where its time went and what to fix first, without hovering
   again. It kept the request's head alone, though the pill counted its
   issues.
+- An open view whose calls have all answered stops its time at the last
+  answer while it waits for its end: 6.0 s, then 6.1 s once it ends, not
+  6.8 s then 6.1 s. On the pill, its card, the panel's list and its pane.
 - Work in flight shows as it runs. The pill shows the newest request
   still in flight, browser-queued ones too, with a turning ring and its
   time so far, not the last one that finished. An open view runs the

@@ -318,13 +318,16 @@ function arrange(history: TabHistory, traces: readonly TraceSummary[]): TraceRow
   }
   // What sent each request, as the widget saw it (htmx's trigger element and target).
   const sent = new Map(history.entries.map((entry) => [entry.id, entry.summary?.htmx]));
-  // In flight, as the widget says (a request the page waits for, a view still open), until the agent has it.
-  const open = new Set(
-    history.entries.filter((entry) => entry.summary?.open && !stored.has(entry.id)).map((entry) => entry.id),
+  // In flight, as the widget says (a request the page waits for, a view still open), until the agent has it; a view
+  // whose calls have all answered with its time stopped at the last answer.
+  const open = new Map(
+    history.entries
+      .filter((entry) => entry.summary?.open && !stored.has(entry.id))
+      .map((entry) => [entry.id, entry.summary?.until]),
   );
   const row = (trace: TraceSummary, depth: 0 | 1): TraceRow => {
     const htmx = sent.get(trace.id);
-    const running = open.has(trace.id) ? { open: true } : {};
+    const running = open.has(trace.id) ? { open: true, until: open.get(trace.id) } : {};
     // A boosted link loaded a page: its path names it, not the link's text.
     if (!htmx || htmx.boosted) return { trace, depth, ...running };
     return { trace, depth, trigger: htmx.trigger, target: htmx.target, ...running };
@@ -422,7 +425,7 @@ function arrivingIn(rows: readonly TraceRow[], stored: ReadonlySet<string>, id: 
 /** A row of the list still in flight (a view open, a request the page waits for): when it started, and what it is. */
 function runningIn(rows: readonly TraceRow[], id: string | null): Running | undefined {
   const row = rows.find((item) => item.trace.id === id);
-  return row?.open ? { start: row.trace.start, view: row.trace.kind === "page" } : undefined;
+  return row?.open ? { start: row.trace.start, view: row.trace.kind === "page", until: row.until } : undefined;
 }
 
 function idsOf(history: TabHistory | null): string[] {
