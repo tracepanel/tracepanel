@@ -58,6 +58,7 @@ import { type MarkTarget, TimeStrip } from "./Timeline";
 import { SliceScope } from "./TimeSlice";
 import { HeadingTitle, heading, htmxOf, outcomeOf } from "./TraceHeading";
 import type { App, Chain, Issue, IssueKind, Related, Trace } from "./types";
+import { UntracedCalls } from "./Untraced";
 
 export type TabId = "request" | "app" | "tree" | "issues" | "sql" | "cache" | "http" | "logs" | "error" | "profile";
 
@@ -816,55 +817,58 @@ export function TraceView({
     openTab(target.tab);
   };
   const panel = (
-    <div role="tabpanel" className="dt-tabpanel">
-      <RequestPane open={active === "request"} trace={trace} related={related} links={links} panel={compact} />
-      <AppPane open={active === "app"} app={app} links={links} />
-      <TreePane
-        open={active === "tree"}
-        onSelect={openAt}
-        trace={trace}
-        issueBySpan={tabbed.issueBySpan}
-        related={related}
-        loadRelated={loadRelated}
-        links={links}
-        initialSpan={treeSpan}
-        explainOf={explainOf}
-        onTraceProfile={onTraceProfile}
-        profilesIn={held.profilesIn}
-        chain={chain}
-        openTab={(tab) => openTab(tab)}
-      />
-      <IssuesPane
-        open={active === "issues"}
-        chain={chain}
-        findings={findings}
-        links={links}
-        onShowSpans={(ids) => {
-          setFocus(new Set(ids));
-          setTreeSpan(ids[0]);
-          setActive(tabOfSpans(trace, ids));
-        }}
-        onShowRow={showRow}
-        spansNoun={spansNoun}
-      />
-      <LogsPane open={active === "logs"} chain={chain} trace={trace} links={links} onShowRow={showRow} />
-      <SpanLists
-        active={active}
-        chain={chain}
-        issueBySpan={tabbed.issueBySpan}
-        focus={focus}
-        onExplain={explain}
-        links={links}
-      />
-      <ProfileTab trace={trace} open={active === "profile"} chain={chain} onShowRow={showRow} />
-      {active === "error" ? (
-        <ErrorView
-          errors={trace.errors}
-          issues={trace.issues.filter((issue) => issue.kind === "error")}
+    // The calls no trace answered: said on their rows in the call tree and the calls tabs alike.
+    <UntracedCalls value={chain.untraced}>
+      <div role="tabpanel" className="dt-tabpanel">
+        <RequestPane open={active === "request"} trace={trace} related={related} links={links} panel={compact} />
+        <AppPane open={active === "app"} app={app} links={links} />
+        <TreePane
+          open={active === "tree"}
+          onSelect={openAt}
+          trace={trace}
+          issueBySpan={tabbed.issueBySpan}
+          related={related}
+          loadRelated={loadRelated}
+          links={links}
+          initialSpan={treeSpan}
+          explainOf={explainOf}
+          onTraceProfile={onTraceProfile}
+          profilesIn={held.profilesIn}
+          chain={chain}
+          openTab={(tab) => openTab(tab)}
+        />
+        <IssuesPane
+          open={active === "issues"}
+          chain={chain}
+          findings={findings}
+          links={links}
+          onShowSpans={(ids) => {
+            setFocus(new Set(ids));
+            setTreeSpan(ids[0]);
+            setActive(tabOfSpans(trace, ids));
+          }}
+          onShowRow={showRow}
+          spansNoun={spansNoun}
+        />
+        <LogsPane open={active === "logs"} chain={chain} trace={trace} links={links} onShowRow={showRow} />
+        <SpanLists
+          active={active}
+          chain={chain}
+          issueBySpan={tabbed.issueBySpan}
+          focus={focus}
+          onExplain={explain}
           links={links}
         />
-      ) : null}
-    </div>
+        <ProfileTab trace={trace} open={active === "profile"} chain={chain} onShowRow={showRow} />
+        {active === "error" ? (
+          <ErrorView
+            errors={trace.errors}
+            issues={trace.issues.filter((issue) => issue.kind === "error")}
+            links={links}
+          />
+        ) : null}
+      </div>
+    </UntracedCalls>
   );
   const exploreMenu = explore.length > 0 ? <ExploreMenu explore={explore} links={links} /> : null;
   const openTab = (id: TabId) => {

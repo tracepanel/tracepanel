@@ -3575,6 +3575,19 @@ div.dt-map-row[data-kind="code"] {
   width: 0.75rem;
   height: 0.75rem;
 }
+/* A call no trace answered and none will (Untraced): muted, as a call's other notes; its reason in the tooltip. */
+.dt-not-traced {
+  flex: none;
+  color: var(--dt-text-3);
+  font-size: var(--dt-size-xs);
+  font-style: italic;
+  white-space: nowrap;
+}
+.dt-not-traced-note {
+  margin: 0;
+  color: var(--dt-text-2);
+  font-size: var(--dt-size-sm);
+}
 /* A number not known yet. */
 .dt-pending {
   color: var(--dt-text-3);

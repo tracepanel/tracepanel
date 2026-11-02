@@ -14,6 +14,13 @@
   an email's text and an LLM call's tool parts, besides SQL, GraphQL
   documents and log messages. A body copies as it was stored, not as
   laid out. A cut one says it copies what was kept.
+- A call to a host that sends no traces (a gateway's remote subgraph)
+  says "not traced" on its row, in the call tree and the HTTP calls tab,
+  and its details say why: "Not traced: reviews.example.test sends no
+  traces to Tracepanel". It looked like a call that did nothing, beside
+  one whose subgraph showed how it ran. Said only once no trace came in
+  the few seconds a call's trace is waited for. The MCP server's
+  get_trace lists those hosts too.
 
 - A view an SPA redirects from at once (`/sms-campaigns` sending on to
   `/sms-campaigns/campaigns` as it renders) is no longer a row of its

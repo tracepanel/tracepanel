@@ -80,6 +80,7 @@ import { SqlCode } from "./SqlCode";
 import { TemplateContext, withoutContext } from "./TemplateContext";
 import { RangeBand, useHeldSlice, useRangeDrag } from "./TimeSlice";
 import type { Attrs, IssueKind, Log, Related, Span, Trace, TraceError, TraceSummary } from "./types";
+import { GroupNotTraced, NotTraced, NotTracedNote } from "./Untraced";
 
 /* ---------- tree ---------- */
 
@@ -1140,6 +1141,7 @@ function GroupName({
       <FromTemplate span={first} parent={parent} />
       <Times count={node.spans.length} />
       <GroupStatus answer={answer} />
+      <GroupNotTraced spans={node.spans} />
       <RowChips>{issue ? <IssueChip kind={issue} className={ISSUE_CHIP_SHRINKS} /> : null}</RowChips>
     </>
   );
@@ -1343,6 +1345,7 @@ function OwnRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps<
           <SpanFold ctx={ctx} node={node} parent={parent} fold={fold} />
           <SpanName span={span} />
           <CallStatus node={node} />
+          <NotTraced spanId={span.id} />
           <AliasChip value={aliasBeside(span)} />
           <FromTemplate span={span} parent={parent} />
           <SignalNotes span={span} parent={parent} under={childSpans(node)} />
@@ -2176,6 +2179,7 @@ function CallDetails({ node: { span }, trace, onExplain }: DetailsProps<"span">)
   return (
     <div className="grid gap-3 p-4">
       <SpanHead span={span} trace={trace} parent={parent} attrs={span.attrs} />
+      <NotTracedNote spanId={span.id} />
       {summary.length ? <Fields rows={summary} /> : null}
       <QueryPlan span={span} onExplain={onExplain} />
       <SpanAttributes span={span} attrs={span.attrs} titled={summary.length > 0} />

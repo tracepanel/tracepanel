@@ -14,6 +14,7 @@ import { callAnswer, type GroupAnswer, groupAnswer } from "./lib/callAnswer";
 import { callTemplate, groupNoun, onTheClock } from "./lib/calls";
 import { GroupStatus, IssueChip, MethodBadge, SectionHeading, StatusBadge, Times } from "./primitives";
 import type { IssueKind, Span } from "./types";
+import { GroupNotTraced, NotTraced } from "./Untraced";
 
 export interface CallsListProps {
   /** The request's calls to one system: HTTP calls, Redis commands, MongoDB commands… */
@@ -109,7 +110,10 @@ function Call({ span, index, focused }: { span: Span; index: number; focused: bo
           <Status span={span} />
         </span>
         <span className="grid min-w-0">
-          <code className="truncate font-mono">{url}</code>
+          <span className="flex min-w-0 items-center gap-2">
+            <code className="truncate font-mono">{url}</code>
+            <NotTraced spanId={span.id} />
+          </span>
           <code className="truncate font-mono text-muted-foreground">{origin}</code>
         </span>
       </span>
@@ -124,6 +128,7 @@ function GroupName({ group }: { group: Group }) {
       <Template template={group.template} />
       <Times count={group.spans.length} />
       {group.spans.length > 1 ? <GroupStatus answer={group.answer} /> : null}
+      <GroupNotTraced spans={group.spans} />
       {group.issue ? <IssueChip kind={group.issue} /> : null}
     </span>
   );
