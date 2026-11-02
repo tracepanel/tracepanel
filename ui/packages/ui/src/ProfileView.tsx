@@ -381,10 +381,21 @@ function scopeOf(profile: Profile, range: TimeRange | null, trace: Profiled): Sc
   return { profile: shown, title: "Profile of the whole trace", note, timed: false, cpu };
 }
 
-/** "110 samples, one every 10 ms": what the profile took; a CPU profile's, "of CPU time". */
+/**
+ * "110 samples, one every 10 ms": what the profile took; a CPU profile's, "of CPU time". One whose CPU time is an
+ * estimate (Go on macOS, whose kernel hands the profiler's samples out unevenly) says from how many samples.
+ */
 function samplesLine(profile: Profile, cpu: boolean): string {
+  if (profile.estimated_from !== undefined) {
+    return `CPU time estimated from ${plural(profile.estimated_from, "sample", "samples")}: macOS hands the profiler's samples out unevenly, so each is weighed; waiting isn't sampled`;
+  }
   const line = `${profile.samples.toLocaleString()} samples, one every ${duration(profile.interval_us)}`;
   return cpu ? `${line} of CPU time; waiting isn't sampled` : line;
+}
+
+/** "≈ " before a time the profile estimates rather than counts. */
+function about(profile: Profile): string {
+  return profile.estimated_from === undefined ? "" : "≈ ";
 }
 
 /** What the big number is of the trace's time: profiled (timed), sampled, or on the CPU (a CPU profile). */
@@ -425,6 +436,7 @@ function ProfileHead({ whole, shown, trace, scope }: { whole: Profile; shown: Pr
       <span className="text-xs text-muted-foreground">{scope.title}</span>
       <span className="text-2xl font-semibold tracking-tight tabular-nums">
         {/* A CPU profile's own samples: the time off the CPU added to it is the trace's, not sampled. */}
+        {about(whole)}
         {time(scope.cpu ? whole.samples : shown.samples)}
         <span className="ml-2 text-sm font-normal text-muted-foreground">
           {profiledWord(scope)} of the trace's {duration(trace.duration)}

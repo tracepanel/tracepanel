@@ -2184,6 +2184,8 @@ export interface components {
             samples: number;
             /** @description Samples not taken for this trace because its thread was running other traces too (an event loop with concurrent traces): time the profile can't attribute. */
             dropped?: number;
+            /** @description Where the counts are an estimate of CPU time in intervals rather than the samples taken (Go on macOS, whose kernel delivers the profiler's signals unevenly: each sample weighed against the process's CPU time), how many samples were taken. */
+            estimated_from?: number;
             /** @description How wide a time bucket of stacks[].at is, in microseconds, counted from the trace's start. */
             bucket_us?: number;
             /** @description The functions the stacks name, each once. */
@@ -2281,6 +2283,8 @@ export interface components {
                     samples: number;
                     /** @description Samples not taken for this trace because its thread was running other traces too (an event loop with concurrent traces): time the profile can't attribute. */
                     dropped?: number;
+                    /** @description Where the counts are an estimate of CPU time in intervals rather than the samples taken (Go on macOS, whose kernel delivers the profiler's signals unevenly: each sample weighed against the process's CPU time), how many samples were taken. */
+                    estimated_from?: number;
                     /** @description How wide a time bucket of stacks[].at is, in microseconds, counted from the trace's start. */
                     bucket_us?: number;
                     /** @description The functions the stacks name, each once. */

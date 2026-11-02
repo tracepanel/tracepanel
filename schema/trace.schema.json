@@ -117,6 +117,11 @@
           "minimum": 0,
           "description": "Samples not taken for this trace because its thread was running other traces too (an event loop with concurrent traces): time the profile can't attribute."
         },
+        "estimated_from": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Where the counts are an estimate of CPU time in intervals rather than the samples taken (Go on macOS, whose kernel delivers the profiler's signals unevenly: each sample weighed against the process's CPU time), how many samples were taken."
+        },
         "bucket_us": {
           "type": "integer",
           "minimum": 1,

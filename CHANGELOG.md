@@ -21,6 +21,12 @@
   and each line was a function of its own. The function list, the
   flame graph and the MCP server's profile now tell functions apart by
   their name and where they are defined.
+- A profile whose CPU time is an estimate says so. Go on macOS weighs
+  its samples against the process's CPU time (the kernel there hands
+  the profiler's signals out unevenly) and sends `estimated_from`, the
+  samples taken: the Profile tab shows its time as "≈ 30 ms", "CPU
+  time estimated from 12 samples", and the MCP server's profile says
+  its times are approximate.
 
 ## 0.10.3 (2026-11-01)
 
