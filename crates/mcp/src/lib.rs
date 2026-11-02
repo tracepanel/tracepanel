@@ -9,6 +9,7 @@ mod compact;
 mod off_cpu;
 mod profile;
 mod tools;
+mod waits;
 
 use rmcp::model::{
     CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, Implementation,

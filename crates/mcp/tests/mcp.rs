@@ -933,17 +933,17 @@ note: a sample every 1.0 ms: a function that ran for less may be missed or misco
 
 functions by self time (your code: library calls counted to the function of yours that made them):
   120 ms  60%  build_cards (yours) — reports/cards.py:40 · total 120 ms
-  50.0 ms  25%  sleep (waiting) — asyncio/tasks.py:640 · total 50.0 ms
+  50.0 ms  25%  waiting · sleep · total 50.0 ms
   30.0 ms  15%  sales (yours) — reports/views.py:24 · total 200 ms
 
 functions by total time:
   200 ms  100%  sales (yours) — reports/views.py:24 · self 30.0 ms
   120 ms  60%  build_cards (yours) — reports/cards.py:40 · self 120 ms
-  50.0 ms  25%  sleep (waiting) — asyncio/tasks.py:640 · self 50.0 ms
+  50.0 ms  25%  waiting · sleep · self 50.0 ms
 
 hottest paths (outermost first):
   120 ms  60%  sales (reports/views.py:24) → build_cards (reports/cards.py:40)
-  50.0 ms  25%  sales (reports/views.py:24) → sleep (asyncio/tasks.py:640)
+  50.0 ms  25%  sales (reports/views.py:24) → waiting · sleep
   30.0 ms  15%  sales (reports/views.py:24)"
                 .to_owned(),
             false
@@ -1108,7 +1108,7 @@ issues: 0 → 0 (0 fixed, 0 new, 0 still there)
 profile: 200 ms → 20.0 ms profiled, of which waiting 50.0 ms → 0.0 ms
 functions whose self time changed most:
   build_cards (reports/cards.py:40): 120 ms → 8.0 ms
-  sleep (asyncio/tasks.py:640): 50.0 ms → 0.0 ms
+  waiting · sleep: 50.0 ms → 0.0 ms
   sales (reports/views.py:18): 30.0 ms → 12.0 ms
 memory: peak 48 MB → 6.0 MB, net +1.2 MB → +10 KB
 allocation sites that changed most:

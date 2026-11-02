@@ -41,6 +41,12 @@
   analytics.example.com"), else by the frame that waited ("waiting ·
   sleep"), the same for a Python, a JVM, a Go and a Node profile. A row
   opens its call in the call tree. All frames keeps the frames.
+- The MCP server's `get_profile` names waits the same way: its function
+  lists and paths say "waiting · SQL postgresql" or "waiting · sleep"
+  where they said "sleep (waiting)" or "off the CPU", and a Go or Node
+  profile's time off the CPU that no call explains is "waiting (no
+  call)". The console and the MCP server share one rule, with its cases
+  in `schema/waits.json`.
 - PostgreSQL plans nest right. A first-level node no longer sits at
   the root's depth with its details two levels below it: each "->"
   level adds one, and a node's details sit one level below it. MySQL's
