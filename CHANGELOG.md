@@ -35,6 +35,12 @@
 - A stacked bar is one solid bar, its parts flush, its top rounded and
   its base square, in every chart. A chart's tooltip names each part by
   its colour's swatch, top first, in the text's own colour.
+- A profile's waits say what was in flight. Your code's hatched wait
+  boxes and its rows under the functions are named by the calls the
+  function waited on ("waiting · SQL snowflake", "waiting · HTTP GET
+  analytics.example.com"), else by the frame that waited ("waiting ·
+  sleep"), the same for a Python, a JVM, a Go and a Node profile. A row
+  opens its call in the call tree. All frames keeps the frames.
 - PostgreSQL plans nest right. A first-level node no longer sits at
   the root's depth with its details two levels below it: each "->"
   level adds one, and a node's details sit one level below it. MySQL's

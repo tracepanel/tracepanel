@@ -824,7 +824,7 @@ export function TraceView({
         onExplain={explain}
         links={links}
       />
-      <ProfileTab trace={trace} open={active === "profile"} chain={chain} />
+      <ProfileTab trace={trace} open={active === "profile"} chain={chain} onShowRow={showRow} />
       {active === "error" ? (
         <ErrorView
           errors={trace.errors}
