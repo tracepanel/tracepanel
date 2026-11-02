@@ -581,55 +581,6 @@ code,
   }
 }
 
-/* In flight (lib/live): a ring that turns while it runs, its time so far beside it; the widget's pill and card draw
-   the same ring. */
-.dt-running {
-  display: inline-block;
-  flex: none;
-  width: 0.6875rem;
-  height: 0.6875rem;
-  border: 1.5px solid color-mix(in srgb, var(--dt-accent) 28%, transparent);
-  border-top-color: var(--dt-accent);
-  border-radius: 999px;
-  vertical-align: -0.0625rem;
-  animation: dt-running 0.8s linear infinite;
-}
-@keyframes dt-running {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .dt-running {
-    animation: none;
-  }
-}
-.dt-running-time {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3125rem;
-  color: var(--dt-text-2);
-  white-space: nowrap;
-}
-/* No answer yet (a call cut short): the hourglass and its words, neutral, never a slow time's red. */
-.dt-no-answer {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 0.25rem;
-  color: var(--dt-text-3);
-  font-size: var(--dt-size-xs);
-  white-space: nowrap;
-}
-.dt-no-answer > svg {
-  width: 0.75rem;
-  height: 0.75rem;
-}
-/* A number not known yet. */
-.dt-pending {
-  color: var(--dt-text-3);
-}
-
 .dt-details-footer {
   display: flex;
   flex-wrap: wrap;
@@ -3563,4 +3514,53 @@ div.dt-map-row[data-kind="code"] {
   justify-content: center;
   margin-bottom: 0.375rem;
   font-variant-numeric: tabular-nums;
+}
+
+/* In flight (lib/live): a ring that turns while it runs, its time so far beside it; the widget's pill and card draw
+   the same ring. */
+.dt-running {
+  display: inline-block;
+  flex: none;
+  width: 0.6875rem;
+  height: 0.6875rem;
+  border: 1.5px solid color-mix(in srgb, var(--dt-accent) 28%, transparent);
+  border-top-color: var(--dt-accent);
+  border-radius: 999px;
+  vertical-align: -0.0625rem;
+  animation: dt-running 0.8s linear infinite;
+}
+@keyframes dt-running {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dt-running {
+    animation: none;
+  }
+}
+.dt-running-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
+  color: var(--dt-text-2);
+  white-space: nowrap;
+}
+/* No answer yet (a call cut short): the hourglass and its words, neutral, never a slow time's red. */
+.dt-no-answer {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--dt-text-3);
+  font-size: var(--dt-size-xs);
+  white-space: nowrap;
+}
+.dt-no-answer > svg {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+/* A number not known yet. */
+.dt-pending {
+  color: var(--dt-text-3);
 }

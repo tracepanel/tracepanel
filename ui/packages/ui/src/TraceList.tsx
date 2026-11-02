@@ -184,8 +184,7 @@ function ListRow({
       data-depth={depth}
       data-run={flag(run)}
       data-kind={trace.kind === "page" ? "page" : undefined}
-      data-tone={open ? undefined : toneOf(trace)}
-      data-state={open ? "running" : cut !== null ? "cut" : undefined}
+      {...liveProps(trace, open, cut)}
       aria-current={selected ? "true" : undefined}
       aria-label={traceLabel(trace, { trigger, target, current, open, cut: cut !== null })}
       {...foldProps(fold)}
@@ -198,17 +197,41 @@ function ListRow({
         <RowApp trace={trace} shown={services} />
         {current ? <ThisPage compact={compact} /> : null}
       </span>
-      <span className="dt-request-meta">
-        {/* No status of its own (a view, a task, a job): its slot kept, so the time lines up with a request's. */}
-        <StatusSlot status={trace.kind === "page" || open ? null : trace.http_status} />
-        <RowTime trace={trace} open={open} cut={cut} />
-        {compact ? (
-          <CompactMeta trace={trace} chained={chained} pending={pending} />
-        ) : (
-          <FullMeta trace={trace} chained={chained} pending={pending} />
-        )}
-      </span>
+      <RowMeta trace={trace} open={open} cut={cut} chained={chained} pending={pending} compact={compact} />
     </button>
+  );
+}
+
+/** A row's tone and its state (lib/live): running has no tone yet, a cut one says so. */
+function liveProps(trace: TraceSummary, open: boolean | undefined, cut: number | null) {
+  if (open) return { "data-state": "running" };
+  return { "data-tone": toneOf(trace), "data-state": cut === null ? undefined : "cut" };
+}
+
+/** A row's status, time and numbers: none of a status while it runs, its numbers pending until known. */
+function RowMeta({
+  trace,
+  open,
+  cut,
+  chained,
+  pending,
+  compact,
+}: {
+  trace: TraceSummary;
+  open: boolean | undefined;
+  cut: number | null;
+  chained: boolean;
+  pending: boolean;
+  compact: boolean | undefined;
+}) {
+  const Meta = compact ? CompactMeta : FullMeta;
+  return (
+    <span className="dt-request-meta">
+      {/* No status of its own (a view, a task, a job): its slot kept, so the time lines up with a request's. */}
+      <StatusSlot status={trace.kind === "page" || open ? null : trace.http_status} />
+      <RowTime trace={trace} open={open} cut={cut} />
+      <Meta trace={trace} chained={chained} pending={pending} />
+    </span>
   );
 }
 
@@ -349,30 +372,36 @@ function ChainWaitingRow({ call, level }: { call: ChainWaiting; level: number })
       className="dt-request-row"
       data-chain="waiting"
       aria-disabled="true"
-      title={
-        call.cut === null
-          ? `${name}: waiting for its trace. It shows here once the app that served it sends it; a service that records none is no longer waited for ${WAITING_MS / 1000} s after the call.`
-          : `${name}: still waiting. ${cutNote(call.cut)}`
-      }
+      title={waitingTitle(name, call.cut)}
       style={{ "--dt-chain-level": level } as CSSProperties}
     >
       <span className="dt-request-main">
         <span className="dt-map-caret" />
         {call.method ? <MethodBadge method={call.method} /> : null}
         <TailPath path={call.path} title={name} />
-        {call.cut === null ? (
-          <span className="dt-chain-waiting">
-            <WaitingIcon />
-            waiting
-          </span>
-        ) : (
-          <NoAnswer at={call.cut} />
-        )}
+        <WaitingMark cut={call.cut} />
       </span>
       <span className="dt-request-meta">
         <StatusSlot status={null} />
       </span>
     </div>
+  );
+}
+
+/** A waiting call's tooltip: a call cut short still waits for its answer (lib/live), an ended one for its trace. */
+function waitingTitle(name: string, cut: number | null): string {
+  if (cut !== null) return `${name}: still waiting. ${cutNote(cut)}`;
+  return `${name}: waiting for its trace. It shows here once the app that served it sends it; a service that records none is no longer waited for ${WAITING_MS / 1000} s after the call.`;
+}
+
+/** "waiting" for an ended call's trace; "no answer yet" for a call cut short. */
+function WaitingMark({ cut }: { cut: number | null }) {
+  if (cut !== null) return <NoAnswer at={cut} />;
+  return (
+    <span className="dt-chain-waiting">
+      <WaitingIcon />
+      waiting
+    </span>
   );
 }
 
@@ -658,19 +687,17 @@ function CompactMeta({
 function FullMeta({ trace, chained, pending }: { trace: TraceSummary; chained: boolean; pending: boolean }) {
   return (
     <>
-      <span>
-        {pending ? (
-          <Pending what="SQL queries" />
-        ) : trace.kind === "page" && !chained ? (
-          ""
-        ) : (
-          `${trace.queries} ${trace.queries === 1 ? "query" : "queries"}`
-        )}
-      </span>
+      <span>{pending ? <Pending what="SQL queries" /> : queriesText(trace, chained)}</span>
       {pending ? <span /> : <FullChips kinds={trace.issue_kinds} issues={trace.issues} />}
       <span className="dt-request-time">{ago(trace.start)}</span>
     </>
   );
+}
+
+/** "3 queries"; nothing for a view or an action, which runs none itself, unless its chain's are counted. */
+function queriesText(trace: TraceSummary, chained: boolean): string {
+  if (trace.kind === "page" && !chained) return "";
+  return plural(trace.queries, "query", "queries");
 }
 
 /** Every finding by name; just their count while the kinds aren't known yet. */

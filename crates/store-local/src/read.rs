@@ -929,8 +929,7 @@ impl Reader {
     /// trace not stored is its own chain.
     fn with_chains(&self, query: &str) -> Result<String, ReadError> {
         static CHAIN: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
-            regex::Regex::new(r"(^|\s)chain:([0-9A-Z]{26})(\s|$)")
-                .expect("a valid pattern")
+            regex::Regex::new(r"(^|\s)chain:([0-9A-Z]{26})(\s|$)").expect("a valid pattern")
         });
         let mut out = query.to_owned();
         for found in CHAIN.captures_iter(query) {

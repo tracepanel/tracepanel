@@ -243,18 +243,19 @@ function waitingAmong(traces: readonly Placed[], capped: boolean, now: number): 
   if (capped) return waiting;
   const answered = new Set(traces.map((each) => `${each.parent}/${each.via}`));
   for (const each of traces) {
-    if (!each.trace) continue;
-    const calls = each.trace.spans.filter(
-      (span) =>
-        carries(span) && !answered.has(`${each.id}/${span.id}`) && now - (span.start + span.duration) < waitedFor(span),
-    );
-    if (calls.length === 0) continue;
-    waiting.set(
-      each.id,
-      calls.map((span) => ({ row: waitingOf(span, each.id), host: hostOf(span) })),
-    );
+    const calls = unanswered(each, answered, now);
+    if (calls.length > 0) waiting.set(each.id, calls);
   }
   return waiting;
+}
+
+/** A trace's calls that carried it on and no trace answered yet, while they are still waited for (`now`, µs). */
+function unanswered(each: Placed, answered: ReadonlySet<string>, now: number): Pending[] {
+  const spans = each.trace?.spans ?? [];
+  return spans
+    .filter((span) => carries(span) && !answered.has(`${each.id}/${span.id}`))
+    .filter((span) => now - (span.start + span.duration) < waitedFor(span))
+    .map((span) => ({ row: waitingOf(span, each.id), host: hostOf(span) }));
 }
 
 /**

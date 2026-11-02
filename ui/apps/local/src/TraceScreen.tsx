@@ -231,6 +231,24 @@ function explainer(source: DataSource, traceId: string, service: string, explain
   return explains(service) ? (span: string, analyze: boolean) => source.explain(traceId, span, analyze) : undefined;
 }
 
+/**
+ * What the trace view gets for this trace: its Explore menu, EXPLAIN for its queries and those of the other traces of
+ * its chain (where their apps run it), and its actions with Share where it can be shared.
+ */
+function ownParts(
+  trace: Trace,
+  source: DataSource,
+  given: Pick<TraceScreenProps, "explore" | "actions" | "shareable"> & { explains: (service: string) => boolean },
+) {
+  const { explore, actions, shareable, explains } = given;
+  return {
+    explore: explore?.(trace),
+    onExplain: explainer(source, trace.id, serviceName(trace), explains),
+    explainIn: (traceId: string, service: string) => explainer(source, traceId, service, explains),
+    actions: withShare(trace, source, actions, shareable === true),
+  };
+}
+
 /** The loading bar: on the page inset as the trace's head will be, across the panel. */
 function TraceLoading({ variant }: { variant: TraceScreenProps["variant"] }) {
   // The trace's shape while it loads: its name, its tabs and the first rows where they will be, not a blank pane.
@@ -374,8 +392,12 @@ function shownFor(
   arriving: boolean,
 ): Loaded | undefined {
   if (loaded?.id === id) return loaded.value;
-  if (arriving) return "arriving";
-  return loaded ? (traceOf(loaded.value) ?? undefined) : undefined;
+  return arriving ? "arriving" : before(loaded);
+}
+
+/** The trace on screen before: it stays while the next one loads. */
+function before(loaded: { id: string; value: Loaded } | undefined): Trace | undefined {
+  return traceOf(loaded?.value) ?? undefined;
 }
 
 /** The trace pane while there is no trace to show: loading, on its way, or gone. */
@@ -407,20 +429,33 @@ function NoTrace({
 function TraceArriving({ variant, running }: { variant: TraceScreenProps["variant"]; running: Running | undefined }) {
   return (
     <div className={cn("grid", variant === "full" ? "" : "h-full")} role="status" aria-busy="true">
-      {running ? (
-        <Empty title={running.view ? "View still open" : "Request in flight"} icon={RunningIcon} page={true}>
-          <RunningTime start={running.start} className="dt-arriving-time" />
-          {running.view
-            ? "Its trace is sent once it ends: when its calls have answered, or 15 s after it started. Its requests are listed as they answer."
-            : "The page is still waiting for its answer. Its trace opens here once its app has written it."}
-        </Empty>
-      ) : (
-        <Empty title="Trace on its way" icon={WaitingIcon} page={true}>
-          The agent hasn't stored it yet: a view or an action in the browser is sent once it ends, a request once its
-          app has written it. It opens here as it arrives.
-        </Empty>
-      )}
+      {running ? <StillRunning running={running} /> : <OnItsWay />}
     </div>
+  );
+}
+
+/** Still running in the browser: a view open, a request the page waits for, its time ticking. */
+function StillRunning({ running }: { running: Running }) {
+  const { view, start } = running;
+  return (
+    <Empty title={view ? "View still open" : "Request in flight"} icon={RunningIcon} page={true}>
+      <RunningTime start={start} className="dt-arriving-time" />
+      {view ? VIEW_RUNS : REQUEST_RUNS}
+    </Empty>
+  );
+}
+
+const VIEW_RUNS =
+  "Its trace is sent once it ends: when its calls have answered, or 15 s after it started. Its requests are listed as they answer.";
+const REQUEST_RUNS = "The page is still waiting for its answer. Its trace opens here once its app has written it.";
+
+/** Ended, not stored yet. */
+function OnItsWay() {
+  return (
+    <Empty title="Trace on its way" icon={WaitingIcon} page={true}>
+      The agent hasn't stored it yet: a view or an action in the browser is sent once it ends, a request once its app
+      has written it. It opens here as it arrives.
+    </Empty>
   );
 }
 
@@ -429,50 +464,53 @@ function RunningIcon({ className }: { className?: string }) {
   return <span className={cn("dt-running dt-running-big", className)} role="img" aria-label="running" />;
 }
 
-export function TraceScreen({
-  id,
-  source,
-  explore,
-  onTabChange,
-  variant,
-  initialTab,
-  preferredTab,
-  actions,
-  links,
-  initialSpan,
-  back,
-  shareable,
-  onLoaded,
-  arriving,
-  running,
-  ...shown
-}: TraceScreenProps) {
+export function TraceScreen(props: TraceScreenProps) {
+  const { id, source, variant, onLoaded, arriving } = props;
   const loaded = useTrace(id, source, onLoaded, variant, arriving);
   const trace = traceOf(loaded);
   const related = useRelated(id, source, trace);
   // The panel (compact, or docked as a strip) has an App tab: the console's trace page doesn't.
   const app = useApp(source, serviceOf(trace, variant));
-  const { explains, profilesIn } = useAppsCan(source);
-  if (trace === null) return <NoTrace loaded={loaded} variant={variant} back={back} running={running} />;
+  const can = useAppsCan(source);
+  if (trace === null) return <NoTrace loaded={loaded} variant={variant} back={props.back} running={props.running} />;
+  return <LoadedTrace props={props} trace={trace} related={related(trace.id)} app={app} can={can} />;
+}
+
+/** The trace, loaded: its view, with what its apps can do and what links to it. */
+function LoadedTrace({
+  props: {
+    id: _id,
+    source,
+    explore,
+    actions,
+    shareable,
+    back: _back,
+    onLoaded: _onLoaded,
+    arriving: _arriving,
+    running: _running,
+    ...shown
+  },
+  trace,
+  related,
+  app,
+  can: { explains, profilesIn },
+}: {
+  props: TraceScreenProps;
+  trace: Trace;
+  related: Related | undefined;
+  app: App | null;
+  can: ReturnType<typeof useAppsCan>;
+}) {
   return (
     <TraceView
       key={trace.id}
       trace={trace}
-      explore={explore?.(trace)}
-      onTabChange={onTabChange}
-      onExplain={explainer(source, trace.id, serviceName(trace), explains)}
-      explainIn={(traceId, service) => explainer(source, traceId, service, explains)}
+      {...ownParts(trace, source, { explore, actions, shareable, explains })}
       profilesIn={profilesIn}
-      initialTab={initialTab}
-      preferredTab={preferredTab}
-      actions={withShare(trace, source, actions, shareable === true)}
       {...shown}
-      related={related(trace.id)}
+      related={related}
       loadRelated={relatedLoader(source)}
       loadChain={chainLoader(source)}
-      links={links}
-      initialSpan={initialSpan}
-      variant={variant}
       app={app}
     />
   );

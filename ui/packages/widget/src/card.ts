@@ -243,6 +243,37 @@ function requestLabel(info: TraceInfo, isPage: boolean, issues: number): HTMLEle
   return name;
 }
 
+/** A view's time in its card's head: running while it is open. */
+function viewTime(view: CardView["view"]): HTMLElement {
+  return view.open
+    ? runningCell(view.start / 1000, "card-time")
+    : element("span", "card-time", duration(view.duration));
+}
+
+/** Under a view's head, when its trace went out with a call unanswered: "no answer yet". */
+function cutLine(cut: number | null): HTMLElement[] {
+  if (cut === null) return [];
+  const wait = element("p", "card-wait");
+  wait.append(noAnswerMark(cut), "a call hadn't answered when its trace went out");
+  return [wait];
+}
+
+/** What a view's calls did down its chain, pending until counted; while it is open, that it is. */
+function factsLine(open: boolean, facts: ChainFacts | null): HTMLElement {
+  const line = element("p", "card-facts");
+  if (open) line.append("Still open: its trace is sent once it ends.");
+  else if (!facts) line.append(`Down its calls: ${PENDING}`);
+  else line.append("Down its calls: ", ...countsOf(facts.counts));
+  return line;
+}
+
+/** "3 queries · 19 HTTP calls · 2 issues", each number bold. */
+function countsOf({ queries, calls, issues }: ChainFacts["counts"]): (HTMLElement | string)[] {
+  const parts = [plural(queries, "query", "queries"), plural(calls, "HTTP call", "HTTP calls")];
+  if (issues) parts.push(plural(issues, "issue", "issues"));
+  return parts.flatMap((part, index) => [...(index ? [" · "] : []), element("b", undefined, part)]);
+}
+
 /** In flight: the ring and the time so far (from `start`, epoch ms), as the pill says it. */
 function runningCell(start: number, className: string): HTMLElement {
   const cell = element("span", `${className} card-running`);
@@ -540,29 +571,8 @@ export function mountCard(
     const row = element("div", "card-head");
     const name = element("span", "card-name");
     name.append(...nameWithMethod(`VIEW ${view.name}`));
-    row.append(name);
-    if (view.open) row.append(runningCell(view.start / 1000, "card-time"));
-    else row.append(element("span", "card-time", duration(view.duration)));
-    card.append(row);
-    if (facts?.cut != null) {
-      const wait = element("p", "card-wait");
-      wait.append(noAnswerMark(facts.cut), "a call hadn't answered when its trace went out");
-      card.append(wait);
-    }
-    const line = element("p", "card-facts");
-    if (view.open) line.append("Still open: its trace is sent once it ends.");
-    else if (!facts) line.append(`Down its calls: ${PENDING}`);
-    else {
-      const { queries, calls, issues } = facts.counts;
-      line.append(
-        "Down its calls: ",
-        element("b", undefined, plural(queries, "query", "queries")),
-        " · ",
-        element("b", undefined, plural(calls, "HTTP call", "HTTP calls")),
-        ...(issues ? [" · ", element("b", undefined, plural(issues, "issue", "issues"))] : []),
-      );
-    }
-    card.append(line);
+    row.append(name, viewTime(view));
+    card.append(row, ...cutLine(facts?.cut ?? null), factsLine(view.open, facts));
   }
 
   /** The request the pill shows (the newest in flight, else the latest), and the page's others. */
@@ -571,30 +581,48 @@ export function mountCard(
     return { info: all.at(-1), rest: all.slice(0, -1) };
   }
 
-  /** Draws what the pill shows now; for a request done, with its stored trace once loaded. */
+  /** Draws what the pill shows now: a request in flight, else the latest done, else the page's view. */
   function draw(): void {
     const flying = source.flights();
-    const all = source.requests();
     const flight = flying.at(-1);
-    if (flight) {
-      renderFlight(flight, all, flying.slice(0, -1));
-      return;
-    }
+    if (flight) renderFlight(flight, source.requests(), flying.slice(0, -1));
+    else if (current().info) drawRequest();
+    else drawView();
+  }
+
+  function drawView(): void {
+    const view = source.view();
+    if (view) renderView(view);
+  }
+
+  /** The latest request done; with its stored trace once loaded, drawn again then if it is still the card's. */
+  function drawRequest(): void {
     const { info, rest } = current();
-    if (!info) {
-      const view = source.view();
-      if (view) renderView(view);
-      return;
-    }
-    const id = info.trace;
-    const known = id ? resolved.get(id) : undefined;
-    render(info, rest, known ?? null, Boolean(id && source.api) && known === undefined);
-    if (!id || known !== undefined) return;
-    void load(id).then((trace) => {
-      resolved.set(id, trace);
-      // Still open on the same request (a boosted link may have moved on): draw it with its trace.
-      if (card.hasAttribute("data-open") && current().info?.trace === id && source.flights().length === 0) draw();
-    });
+    if (info) drawDone(info, rest);
+  }
+
+  function drawDone(info: TraceInfo, rest: readonly TraceInfo[]): void {
+    const id = info.trace ?? "";
+    const known = resolved.get(id);
+    const loading = known === undefined && canLoad(id);
+    render(info, rest, known ?? null, loading);
+    if (loading) void load(id).then((trace) => landed(id, trace));
+  }
+
+  /** Whether a request's stored trace can be asked for: it has one, and there is a console to ask. */
+  function canLoad(id: string): boolean {
+    return id !== "" && source.api !== null;
+  }
+
+  /** A trace loaded: kept, and drawn if the card is still open on its request. */
+  function landed(id: string, trace: Trace | null): void {
+    resolved.set(id, trace);
+    if (stillOn(id)) draw();
+  }
+
+  /** Whether the card is still open on the request `id`, none in flight in front of it. */
+  function stillOn(id: string): boolean {
+    return card.hasAttribute("data-open") && current().info?.trace === id && source.flights().length === 0;
   }
 
   function show(): void {

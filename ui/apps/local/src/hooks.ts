@@ -157,7 +157,7 @@ export function useCapabilities(source: DataSource): Capabilities | undefined {
 }
 
 /** How often the console asks again while the agent takes no OTLP: the agent tries its port every 10 seconds. */
-export const OTLP_REFRESH_MS = 10_000;
+const OTLP_REFRESH_MS = 10_000;
 
 /**
  * Where the agent takes OTLP, or why it doesn't. Asked again while it serves none: it takes the port over once its

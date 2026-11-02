@@ -42,12 +42,13 @@ pub async fn fresh(request: Request, next: Next) -> Response {
         parts.status = StatusCode::NOT_MODIFIED;
         return Response::from_parts(parts, Body::empty());
     }
-    if gzip && bytes.len() >= GZIP_FROM {
-        if let Some(packed) = gzipped(&bytes) {
-            headers.insert(header::CONTENT_ENCODING, HeaderValue::from_static("gzip"));
-            headers.remove(header::CONTENT_LENGTH);
-            return Response::from_parts(parts, Body::from(packed));
-        }
+    if gzip
+        && bytes.len() >= GZIP_FROM
+        && let Some(packed) = gzipped(&bytes)
+    {
+        headers.insert(header::CONTENT_ENCODING, HeaderValue::from_static("gzip"));
+        headers.remove(header::CONTENT_LENGTH);
+        return Response::from_parts(parts, Body::from(packed));
     }
     Response::from_parts(parts, Body::from(bytes))
 }

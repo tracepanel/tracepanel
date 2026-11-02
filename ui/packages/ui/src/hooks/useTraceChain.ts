@@ -33,13 +33,14 @@ function useTraceChain(
   load: ((traceId: string) => Promise<Chain>) | undefined,
 ): { members: Member[]; issues: readonly ScopeIssue[]; waiting: readonly ChainWaiting[] } {
   const [loaded, setLoaded] = useState<{ id: string; key: string; chain: Chain } | undefined>(undefined);
+  // When the chain was last asked for again while calls of it wait (ms); 0 before.
   const [asked, setAsked] = useState(0);
   const calls = callsOf(related);
   // Calls of its own whose traces its links don't bring yet: the chain is asked for at once, it may have them.
   const unlinked = useMemo(() => waitingIn([{ id: trace.id, parent: null, via: null, trace }]).length, [trace]);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: its links reloaded, the trace grew or a call still waits: the chain may have grown too.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: its links reloaded or the trace grew, the chain may have too.
   useEffect(() => {
-    if (!load || (calls === 0 && asked === 0 && unlinked === 0)) return;
+    if (!load || calls + asked + unlinked === 0) return;
     let live = true;
     load(trace.id).then(
       (chain) => {
@@ -57,13 +58,13 @@ function useTraceChain(
   }, [load, calls, trace.id, related, trace.spans.length, asked, unlinked]);
   const chain = loaded?.id === trace.id ? loaded.chain : undefined;
   const members = useMemo(() => membersOf(trace, related, chain?.traces), [trace, related, chain]);
-  // Read again at each ask: a call stops being waited for in time, with no new answer.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `asked`, each ask, is a new now.
-  const waiting = useMemo(() => waitingIn(members, chain?.capped ?? false), [members, chain, asked]);
+  // Read again at each ask, at its time: a call stops being waited for in time, with no new answer.
+  const capped = chain?.capped ?? false;
+  const waiting = useMemo(() => waitingIn(members, capped, asked || Date.now()), [members, capped, asked]);
   // More on its way: asked for again until it is all there (or no longer waited for).
   useEffect(() => {
     if (!load || waiting.length === 0) return;
-    const timer = window.setTimeout(() => setAsked((count) => count + 1), WAITING_ASK_MS);
+    const timer = window.setTimeout(() => setAsked(Date.now()), WAITING_ASK_MS);
     return () => window.clearTimeout(timer);
   }, [load, waiting]);
   return { members, issues: chain?.issues ?? NO_ISSUES, waiting };

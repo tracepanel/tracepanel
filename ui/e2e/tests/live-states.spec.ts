@@ -143,8 +143,7 @@ test("docked at the right, the panel follows a new view as the bottom dock does,
 const CUT_VIEW = "01M4C0TCA11000000000000002";
 
 function span(id: string, parent: string | null, kind: string, name: string, at: [number, number], attrs: Doc): Doc {
-  // biome-ignore lint/style/useNamingConvention: the trace format.
-  return { id, parent_id: parent, kind, name, start: at[0], duration: at[1], status: "ok", attrs };
+  return { id, ["parent_id"]: parent, kind, name, start: at[0], duration: at[1], status: "ok", attrs };
 }
 
 async function storeCutView(): Promise<void> {

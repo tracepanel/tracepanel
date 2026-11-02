@@ -31,6 +31,23 @@ function factsOf(chain: Chain): ChainFacts | null {
   return { counts, cut: chainCutAt(chain) };
 }
 
+/** An answer's facts, used when it had them: whether it did. */
+function took(facts: ChainFacts | null, use: (facts: ChainFacts) => void): boolean {
+  if (facts) use(facts);
+  return facts !== null;
+}
+
+/** One ask: the chain's facts, null while it isn't there, "stop" when the console can't be reached. */
+async function ask(
+  get: (url: URL) => Promise<unknown>,
+  url: URL,
+  unreachable: unknown,
+): Promise<ChainFacts | null | "stop"> {
+  const body = await get(url);
+  if (body === unreachable) return "stop";
+  return body ? factsOf(body as Chain) : null;
+}
+
 /**
  * Asks the console for the chain of `id` at each of CHAIN_ASKS_MS, while `wanted()` (the pill still shows it); `use`
  * takes each answer's facts. `done(answered)` once it stops: unreachable, no longer wanted, or the asks ran out.
@@ -45,19 +62,15 @@ export async function followChain(
   done: (answered: boolean) => void = () => undefined,
 ): Promise<void> {
   const url = new URL(`api/traces/${encodeURIComponent(id)}/chain`, api);
+  const asking = async () => (wanted() ? await ask(get, url, unreachable) : "stop");
   let waited = 0;
   let answered = false;
   for (const at of CHAIN_ASKS_MS) {
     await new Promise((resolve) => window.setTimeout(resolve, at - waited));
     waited = at;
-    if (!wanted()) break;
-    const body = await get(url);
-    if (body === unreachable) break;
-    const facts = body ? factsOf(body as Chain) : null;
-    if (facts) {
-      answered = true;
-      use(facts);
-    }
+    const facts = await asking();
+    if (facts === "stop") break;
+    answered = took(facts, use) || answered;
   }
   done(answered);
 }

@@ -68,13 +68,20 @@ function followPages(onPage: (announced: PageAnnouncement) => void): void {
  */
 function addView(parent: HTMLElement, view: PageAnnouncement, facts: ChainFacts | null): void {
   addName(parent, { name: `VIEW ${view.name}` }, false);
-  if (view.open) {
-    addRunning(parent, view.start / 1000);
-    return;
-  }
-  addTime(parent, view.duration / 1000, facts?.cut != null);
-  if (facts?.cut != null) addNoAnswer(parent, facts.cut);
-  // What its calls did in the apps they reached, as the panel's tabs count it: a request's numbers, for a view.
+  if (view.open) addRunning(parent, view.start / 1000);
+  else addEnded(parent, view, facts);
+}
+
+/** An ended view: its time (where it was cut, "no answer yet", if it was), then what its calls did. */
+function addEnded(parent: HTMLElement, view: PageAnnouncement, facts: ChainFacts | null): void {
+  const cut = facts?.cut ?? null;
+  addTime(parent, view.duration / 1000, cut !== null);
+  if (cut !== null) addNoAnswer(parent, cut);
+  addChainCounts(parent, facts);
+}
+
+/** What a view's calls did in the apps they reached, as the panel's tabs count it; pending until counted. */
+function addChainCounts(parent: HTMLElement, facts: ChainFacts | null): void {
   if (!facts) {
     addQueries(parent, null);
     return;
@@ -519,16 +526,22 @@ const GRAPHQL_OPERATION = /^\s*(query|mutation|subscription)\s+([_A-Za-z][_0-9A-
  * the pill names the request so while it runs, and the name doesn't change when it answers.
  */
 function graphqlName(body: unknown): string | undefined {
-  if (typeof body !== "string" || body.length > 100_000 || !body.includes('"query"')) return undefined;
-  try {
-    const parsed = JSON.parse(body) as { query?: unknown; operationName?: unknown };
-    const match = typeof parsed.query === "string" ? GRAPHQL_OPERATION.exec(parsed.query) : null;
-    if (!match) return undefined;
-    const name = typeof parsed.operationName === "string" && parsed.operationName ? parsed.operationName : match[2];
-    return `GraphQL ${match[1]} ${name}`;
-  } catch {
-    return undefined;
-  }
+  const parsed = graphqlBody(body);
+  const match = GRAPHQL_OPERATION.exec(String(parsed.query ?? ""));
+  return match ? `GraphQL ${match[1]} ${String(parsed.operationName || match[2])}` : undefined;
+}
+
+type GraphqlBody = { query?: unknown; operationName?: unknown };
+
+/** A request's body as GraphQL sends it (`{"query": …, "operationName": …}`); empty for any other. */
+function graphqlBody(body: unknown): GraphqlBody {
+  if (!maybeGraphql(body)) return {};
+  return safely(() => JSON.parse(body) as GraphqlBody, {});
+}
+
+/** A JSON body small enough to read, with a query in it. */
+function maybeGraphql(body: unknown): body is string {
+  return typeof body === "string" && body.length <= 100_000 && body.includes('"query"');
 }
 
 /** The console's own calls (the panel's, the browser recording's) are not the page's requests. */
@@ -622,14 +635,7 @@ function intercept(watch: Watcher): void {
     this.addEventListener("loadend", () => {
       const flight = sent.get(this) ?? NO_FLIGHT;
       sent.delete(this);
-      try {
-        const info = fromResponse(method.toUpperCase(), this.responseURL || String(url), this.status, (name) =>
-          this.getResponseHeader(name),
-        );
-        watch.end(flight, info ? { ...info, htmx: htmxRequests.get(this), page: pageOf(this) } : null);
-      } catch {
-        // Never break the page because of the widget.
-      }
+      safely(() => watch.end(flight, xhrInfo(this, method, String(url))), undefined);
     });
     return (originalOpen as (...args: unknown[]) => void).call(this, method, url, ...rest);
   } as typeof XMLHttpRequest.prototype.open;
@@ -644,6 +650,14 @@ function intercept(watch: Watcher): void {
     }, undefined);
     return originalSend.call(this, body);
   };
+}
+
+/** What an XMLHttpRequest's answer says, as the pill shows it; null for one tracepanel didn't see. */
+function xhrInfo(xhr: XMLHttpRequest, method: string, url: string): TraceInfo | null {
+  const info = fromResponse(method.toUpperCase(), xhr.responseURL || url, xhr.status, (name) =>
+    xhr.getResponseHeader(name),
+  );
+  return info ? { ...info, htmx: htmxRequests.get(xhr), page: pageOf(xhr) } : null;
 }
 
 /** For a request that answered with no flight followed (the console's own address, read again): nothing to land. */
@@ -737,17 +751,27 @@ function addStatus(parent: HTMLElement, status: number | null | undefined): void
  */
 function addTime(parent: HTMLElement, ms: number, cut = false): void {
   const seg = segment(parent);
-  if (!cut && ms >= 1000) seg.dataset["speed"] = "very-slow";
-  else if (!cut && ms >= 300) seg.dataset["speed"] = "slow";
+  const speed = cut ? undefined : speedOf(ms);
+  if (speed) seg.dataset["speed"] = speed;
   seg.innerHTML = ICONS.clock;
-  const value = document.createElement("b");
-  // As the panel's list and the card say it: "0.5 ms", "88 ms", "1.2 s".
+  seg.append(...timeParts(ms));
+}
+
+/** As on the panel's list: under 300 ms fine, under a second slow, beyond very slow. */
+function speedOf(ms: number): "slow" | "very-slow" | undefined {
+  if (ms >= 1000) return "very-slow";
+  return ms >= 300 ? "slow" : undefined;
+}
+
+/** A time as the panel's list and the card say it ("0.5 ms", "88 ms", "1.2 s"): its number bold, its unit after. */
+function timeParts(ms: number): HTMLElement[] {
   const [number = "", word = ""] = duration(ms * 1000).split(" ");
+  const value = document.createElement("b");
   value.textContent = number;
   const unit = document.createElement("span");
   unit.className = "unit";
   unit.textContent = word;
-  seg.append(value, unit);
+  return [value, unit];
 }
 
 /** In flight: the ring and the time so far (from `start`, epoch ms), ticking as the pill draws again. */
@@ -757,13 +781,7 @@ function addRunning(parent: HTMLElement, start: number): void {
   const ring = document.createElement("span");
   ring.className = "running";
   ring.setAttribute("aria-hidden", "true");
-  const [number = "", word = ""] = duration(Math.max(0, Date.now() - start) * 1000).split(" ");
-  const value = document.createElement("b");
-  value.textContent = number;
-  const unit = document.createElement("span");
-  unit.className = "unit";
-  unit.textContent = word;
-  seg.append(ring, value, unit);
+  seg.append(ring, ...timeParts(Math.max(0, Date.now() - start)));
   seg.title = runningLabel(start * 1000);
 }
 
@@ -984,6 +1002,48 @@ export interface TabEntry {
   summary?: EntrySummary | undefined;
 }
 
+/** The tab's list with this view or action in it: a new row (an empty view of the same page leaves), or its own updated. */
+function withPage(tab: TabEntry[], announced: PageAnnouncement): TabEntry[] {
+  const entry = pageEntry(announced);
+  const at = tab.findIndex((item) => item.id === announced.id);
+  if (at === -1) return [...dropEmptyView(tab, announced.name), entry];
+  return tab.map((item, index) => (index === at ? entry : item));
+}
+
+/** A view or an action as the tab's list has it: a row of its own, running while open. */
+function pageEntry(announced: PageAnnouncement): TabEntry {
+  return {
+    id: announced.id,
+    parent: null,
+    summary: {
+      name: announced.name,
+      status: null,
+      start: announced.start,
+      duration: announced.duration,
+      queries: 0,
+      issues: 0,
+      kind: "page",
+      failed: announced.status === "error",
+      open: announced.open || undefined,
+    },
+  };
+}
+
+/**
+ * A request's numbers by what its chain says (`facts`): pending while it isn't counted yet (undefined), its findings
+ * with them; its own where it called no app or the console can't say ("own"); else its whole chain's.
+ */
+function countedBy(info: TraceInfo, facts: ChainFacts | "own" | undefined): Counted {
+  if (facts === undefined) return { queries: null, issues: 0 };
+  if (facts === "own" || facts.counts.traces < 2) return ownCounts(info);
+  return { queries: facts.counts.queries, issues: facts.counts.issues };
+}
+
+/** A request's own numbers, as its Server-Timing says them. */
+function ownCounts(info: TraceInfo): Counted {
+  return { queries: info.queries ?? 0, issues: info.issues ?? 0 };
+}
+
 /** A request in flight as the panel lists it: under this page, its time ticking, until its answer names its trace. */
 function flightEntry(flight: Flight, parent: string | null): TabEntry {
   return {
@@ -1067,14 +1127,9 @@ const TAB_KEY = "tracepanel:tab";
 const TAB_LIMIT = 200;
 
 function isEntry(value: unknown): value is TabEntry {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "id" in value &&
-    typeof value.id === "string" &&
-    "parent" in value &&
-    (value.parent === null || typeof value.parent === "string")
-  );
+  if (typeof value !== "object" || value === null) return false;
+  const entry = value as { id?: unknown; parent?: unknown };
+  return typeof entry.id === "string" && (entry.parent === null || typeof entry.parent === "string");
 }
 
 const RUNTIME_KEY = "tracepanel:runtime";
@@ -1385,8 +1440,7 @@ export function mount(options: WidgetOptions = {}): Widget {
 
   /** The list's "this page" row: the page's own load, else its view in the browser (an SPA), as the pill shows. */
   function currentPage(): string | null {
-    if (pageCleared) return view?.id ?? null;
-    return pageInScope() ? firstOf(page?.trace, view?.id) : (view?.id ?? null);
+    return firstOf(ownPage()?.trace, view?.id);
   }
 
   /** Whether the page's own request is part of this page still: no route change since it loaded. */
@@ -1439,13 +1493,8 @@ export function mount(options: WidgetOptions = {}): Widget {
    * it, its own where it called no app or the console can't say; its queries pending until then.
    */
   function counted(info: TraceInfo): Counted {
-    const own = { queries: info.queries ?? 0, issues: info.issues ?? 0 };
-    if (!panelUrl || !info.trace) return own;
-    const facts = chained.get(info.trace);
-    // Not counted yet: pending, its findings with them (its own may be fewer than its chain's).
-    if (facts === undefined) return { queries: null, issues: 0 };
-    if (facts === "own" || facts.counts.traces < 2) return own;
-    return { queries: facts.counts.queries, issues: facts.counts.issues };
+    const facts = panelUrl && info.trace ? chained.get(info.trace) : "own";
+    return countedBy(info, facts);
   }
 
   /**
@@ -1502,22 +1551,27 @@ export function mount(options: WidgetOptions = {}): Widget {
   // time ticks, and a request past FLIGHT_SHOWN_MS shows.
   let ticking: number | undefined;
   function keepTicking(): void {
-    const running = inFlight.length > 0 || view?.open === true;
-    if (running && ticking === undefined) {
-      ticking = window.setInterval(() => {
-        const shownBefore = flights().length;
-        render();
-        // A request in flight shows up in the panel's list once it is past its moment.
-        if (
-          flights().length !== shownBefore ||
-          inFlight.some((flight) => Date.now() - flight.start < FLIGHT_SHOWN_MS + TICK_MS)
-        )
-          sendTab();
-      }, TICK_MS);
-    } else if (!running && ticking !== undefined) {
-      window.clearInterval(ticking);
-      ticking = undefined;
-    }
+    const running = somethingRuns();
+    if (running && ticking === undefined) ticking = window.setInterval(tick, TICK_MS);
+    if (!running) stopTicking();
+  }
+
+  function stopTicking(): void {
+    window.clearInterval(ticking);
+    ticking = undefined;
+  }
+
+  /** A request in flight, or a view still open. */
+  function somethingRuns(): boolean {
+    return inFlight.length > 0 || view?.open === true;
+  }
+
+  /** The pill and the card drawn again; a request in flight shows up in the panel's list once it is past its moment. */
+  function tick(): void {
+    const shownBefore = flights().length;
+    render();
+    const passing = inFlight.some((flight) => Date.now() - flight.start < FLIGHT_SHOWN_MS + TICK_MS);
+    if (flights().length !== shownBefore || passing) sendTab();
   }
 
   /**
@@ -1548,7 +1602,7 @@ export function mount(options: WidgetOptions = {}): Widget {
 
   /** Once a view ends: its chain, while the pill shows it (its own, no request of its own on the pill yet). */
   function followView(ended: PageAnnouncement): void {
-    followFacts(ended.id, () => view?.id === ended.id);
+    if (!ended.open) followFacts(ended.id, () => view?.id === ended.id);
   }
 
   /** A request just answered: its chain, while it is the pill's. */
@@ -1675,43 +1729,31 @@ export function mount(options: WidgetOptions = {}): Widget {
 
   /** A view or an action from the browser recording: a row of its own, its requests under it; updated as it ends. */
   function recordPage(announced: PageAnnouncement): void {
-    if (!announced.name.includes(" › ")) {
-      loadView ??= announced.id;
-      // Another route (or the same again): a new page for the pill, its count and the list's "this page".
-      if (view?.id !== announced.id) {
-        scope.clear();
-        if (announced.id !== loadView) later.length = 0;
-      }
-      view = announced;
-      render();
-      if (!announced.open) followView(announced);
-    } else if (view && announced.start >= view.start) {
-      // An action done on this page: its requests count on it.
-      scope.add(announced.id);
-    }
-    const entry: TabEntry = {
-      id: announced.id,
-      parent: null,
-      summary: {
-        name: announced.name,
-        status: null,
-        start: announced.start,
-        duration: announced.duration,
-        queries: 0,
-        issues: 0,
-        kind: "page",
-        failed: announced.status === "error",
-        open: announced.open || undefined,
-      },
-    };
-    const at = tab.findIndex((item) => item.id === announced.id);
-    tab =
-      at === -1
-        ? [...dropEmptyView(tab, announced.name), entry]
-        : tab.map((item, index) => (index === at ? entry : item));
-    tab = underLoadView(tab, announced);
+    if (announced.name.includes(" › ")) takeAction(announced);
+    else takeView(announced);
+    tab = underLoadView(withPage(tab, announced), announced);
     saveTab(tab);
     sendTab();
+  }
+
+  /** An action done on this page: its requests count on it. */
+  function takeAction(announced: PageAnnouncement): void {
+    if (view && announced.start >= view.start) scope.add(announced.id);
+  }
+
+  /** A view of the page: the pill's while it has no request; another route starts a new page (pill, count, list). */
+  function takeView(announced: PageAnnouncement): void {
+    loadView ??= announced.id;
+    if (view?.id !== announced.id) newPage(announced.id);
+    view = announced;
+    render();
+    followView(announced);
+  }
+
+  /** Another route (or the same again): this page's scope starts over, the last view's requests no longer its own. */
+  function newPage(id: string): void {
+    scope.clear();
+    if (id !== loadView) later.length = 0;
   }
 
   /**
@@ -1751,15 +1793,19 @@ export function mount(options: WidgetOptions = {}): Widget {
       later.push(info);
       followRequest(info);
     }
-    if (info.trace) {
-      tab = [...tab, { id: info.trace, parent: parentOf(info), summary: summaryOf(info) }];
-      saveTab(tab);
-    }
+    listRequest(info);
     // The latest request takes the pill (and keeps it until the next one), with a short pulse.
     pulse = true;
     render();
     pulse = false;
     sendTab();
+  }
+
+  /** A traced request in the tab's list, under what made it. */
+  function listRequest(info: TraceInfo): void {
+    if (!info.trace) return;
+    tab = [...tab, { id: info.trace, parent: parentOf(info), summary: summaryOf(info) }];
+    saveTab(tab);
   }
 
   /**

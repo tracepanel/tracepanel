@@ -522,18 +522,29 @@ function TreePane({
  */
 function OnItsWay({ waiting }: { waiting: readonly ChainWaiting[] }) {
   if (waiting.length === 0) return null;
-  const cut = waiting.filter((call) => call.cut !== null).length;
-  const calls = plural(waiting.length, "call", "calls");
-  const text =
-    cut === waiting.length
-      ? `${calls} with no answer yet: the tree fills in if ${waiting.length === 1 ? "its trace arrives" : "their traces arrive"}`
-      : `More on its way: the ${waiting.length === 1 ? "trace of 1 call hasn't" : `traces of ${calls} haven't`} arrived yet`;
-  return (
-    <p className="dt-on-its-way" role="status" data-state={cut === waiting.length ? "cut" : "running"}>
-      {cut === waiting.length ? <WaitingIcon /> : <RunningMark />}
-      {text}
+  return waiting.every((call) => call.cut !== null) ? (
+    <p className="dt-on-its-way" role="status" data-state="cut">
+      <WaitingIcon />
+      {noAnswerText(waiting.length)}
+    </p>
+  ) : (
+    <p className="dt-on-its-way" role="status" data-state="running">
+      <RunningMark />
+      {onItsWayText(waiting.length)}
     </p>
   );
+}
+
+/** "2 calls with no answer yet: the tree fills in if their traces arrive". */
+function noAnswerText(count: number): string {
+  const arrive = count === 1 ? "its trace arrives" : "their traces arrive";
+  return `${plural(count, "call", "calls")} with no answer yet: the tree fills in if ${arrive}`;
+}
+
+/** "More on its way: the traces of 3 calls haven't arrived yet". */
+function onItsWayText(count: number): string {
+  const which = count === 1 ? "trace of 1 call hasn't" : `traces of ${count} calls haven't`;
+  return `More on its way: the ${which} arrived yet`;
 }
 
 /**
