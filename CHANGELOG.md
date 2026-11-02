@@ -47,6 +47,10 @@
   profile's time off the CPU that no call explains is "waiting (no
   call)". The console and the MCP server share one rule, with its cases
   in `schema/waits.json`.
+- A chain's Profile tab names each app's waits as the trace's own tab
+  does, its traces merged too: "waiting · HTTP GET
+  analytics.example.com", not "waiting". So does the MCP server's
+  profile of an app in a chain.
 - PostgreSQL plans nest right. A first-level node no longer sits at
   the root's depth with its details two levels below it: each "->"
   level adds one, and a node's details sit one level below it. MySQL's
