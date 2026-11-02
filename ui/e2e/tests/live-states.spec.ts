@@ -152,13 +152,13 @@ async function storeCutView(): Promise<void> {
   const trace = {
     id: CUT_VIEW,
     kind: "page",
-    name: "/books/1",
+    name: "/cut/view",
     start,
     duration: 15_000_000,
     status: "ok",
     attrs: { "service.name": "library-web", "page.trigger": "navigation" },
     spans: [
-      span("r", null, "page", "/books/1", [start, 15_000_000], {}),
+      span("r", null, "page", "/cut/view", [start, 15_000_000], {}),
       span("c", "r", "http.client", "POST 127.0.0.1:8051/graphql", [start + 10_000, 14_990_000], {
         "http.request.method": "POST",
         "url.full": "http://127.0.0.1:8051/graphql",

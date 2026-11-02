@@ -87,10 +87,13 @@ export interface ListChains {
   cut?: ReadonlyMap<string, number> | undefined;
 }
 
-/** Whether a row's numbers aren't known yet: it runs, or its chain hasn't loaded once. */
+/**
+ * Whether a row's numbers aren't known yet: it runs, or its chain hasn't loaded once. A task run under a request
+ * is listed with its own numbers: no chain is loaded for it.
+ */
 function pendingIn(chains: ListChains | undefined, row: TraceRow): boolean {
   if (row.open) return true;
-  return chains?.settled !== undefined && !chains.settled.has(row.trace.id);
+  return !row.run && chains?.settled !== undefined && !chains.settled.has(row.trace.id);
 }
 
 /** A row's summary with what its chain did, when it has one: its own trace's numbers are part of it. */
