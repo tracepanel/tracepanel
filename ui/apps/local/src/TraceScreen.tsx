@@ -5,6 +5,7 @@ import {
   Empty,
   type ExploreItem,
   type Related,
+  Running as RunningTime,
   Skeleton,
   type Trace,
   TraceView,
@@ -90,6 +91,14 @@ export interface TraceScreenProps {
    * arriving and loads once it is stored. Unset: as its id says, a trace that started a moment ago may still arrive.
    */
   arriving?: boolean | undefined;
+  /** Still running in the browser (lib/live): a view still open, a request the page waits for. Its pane says so. */
+  running?: Running | undefined;
+}
+
+/** A trace still running in the browser: when it started (µs), and whether it is a view (or a request). */
+export interface Running {
+  start: number;
+  view: boolean;
 }
 
 // What each app said, as last loaded: the next trace of the same app opens with its App tab at once (the panel
@@ -294,6 +303,8 @@ function loadTrace({ id, source, retries, onItsWay, show }: Loading): () => void
       () => !cancelled && show(null),
     );
   };
+  // Known to be on its way (the list says so): it says so at once, not after the quick looks, while it is asked for.
+  if (onItsWay() && retries > 0) show("arriving");
   attempt(retries, TRACE_RETRY_MS);
   return () => {
     cancelled = true;
@@ -323,6 +334,11 @@ function useTrace(
   useEffect(() => {
     // Loaded already: the list catching up with the store is no reason to load it again.
     if (have) return;
+    // A request still in flight has the widget's id until its answer names its trace: nothing to ask for yet.
+    if (id.startsWith("~")) {
+      setLoaded({ id, value: "arriving" });
+      return;
+    }
     return loadTrace({
       id,
       source,
@@ -334,7 +350,7 @@ function useTrace(
       },
     });
   }, [id, source, variant, known]);
-  return shownFor(loaded, id);
+  return shownFor(loaded, id, arriving === true);
 }
 
 /** The panel follows requests as they happen, before the agent may have stored them; the page doesn't. */
@@ -349,12 +365,17 @@ function holds(loaded: { id: string; value: Loaded } | undefined, id: string): b
 
 /**
  * What the screen shows while it is asked for `id`: what came of it, else the trace before it, which stays on screen
- * while this one loads (that one gone or arriving says nothing of this one).
+ * while this one loads (that one gone or arriving says nothing of this one). One the list knows is on its way says so
+ * at once: the trace before it on screen would read as this one.
  */
-function shownFor(loaded: { id: string; value: Loaded } | undefined, id: string): Loaded | undefined {
-  if (!loaded) return undefined;
-  if (loaded.id === id) return loaded.value;
-  return traceOf(loaded.value) ?? undefined;
+function shownFor(
+  loaded: { id: string; value: Loaded } | undefined,
+  id: string,
+  arriving: boolean,
+): Loaded | undefined {
+  if (loaded?.id === id) return loaded.value;
+  if (arriving) return "arriving";
+  return loaded ? (traceOf(loaded.value) ?? undefined) : undefined;
 }
 
 /** The trace pane while there is no trace to show: loading, on its way, or gone. */
@@ -362,13 +383,15 @@ function NoTrace({
   loaded,
   variant,
   back,
+  running,
 }: {
   loaded: Loaded | undefined;
   variant: TraceScreenProps["variant"];
   back: ReactNode;
+  running: Running | undefined;
 }) {
   if (loaded === undefined) return <TraceLoading variant={variant} />;
-  if (loaded === "arriving") return <TraceArriving variant={variant} />;
+  if (loaded === "arriving") return <TraceArriving variant={variant} running={running} />;
   return (
     <Empty title="Trace not found" action={back} icon={SearchXIcon} page={true}>
       It is no longer in the local store: older traces are removed as new ones arrive, and the store starts fresh after
@@ -377,16 +400,33 @@ function NoTrace({
   );
 }
 
-/** A trace the list has and the agent hasn't stored yet: it opens here as it arrives. */
-function TraceArriving({ variant }: { variant: TraceScreenProps["variant"] }) {
+/**
+ * A trace the list has and the agent hasn't stored yet: it opens here as it arrives. Still running in the browser (a
+ * view open, a request the page waits for), it says so, its time ticking, as its row in the list does (lib/live).
+ */
+function TraceArriving({ variant, running }: { variant: TraceScreenProps["variant"]; running: Running | undefined }) {
   return (
     <div className={cn("grid", variant === "full" ? "" : "h-full")} role="status" aria-busy="true">
-      <Empty title="Trace on its way" icon={WaitingIcon} page={true}>
-        The agent hasn't stored it yet: a view or an action in the browser is sent once it ends, a request once its app
-        has written it. It opens here as it arrives.
-      </Empty>
+      {running ? (
+        <Empty title={running.view ? "View still open" : "Request in flight"} icon={RunningIcon} page={true}>
+          <RunningTime start={running.start} className="dt-arriving-time" />
+          {running.view
+            ? "Its trace is sent once it ends: when its calls have answered, or 15 s after it started. Its requests are listed as they answer."
+            : "The page is still waiting for its answer. Its trace opens here once its app has written it."}
+        </Empty>
+      ) : (
+        <Empty title="Trace on its way" icon={WaitingIcon} page={true}>
+          The agent hasn't stored it yet: a view or an action in the browser is sent once it ends, a request once its
+          app has written it. It opens here as it arrives.
+        </Empty>
+      )}
     </div>
   );
+}
+
+/** The empty state's icon for a trace still running: the ring every running thing turns. */
+function RunningIcon({ className }: { className?: string }) {
+  return <span className={cn("dt-running dt-running-big", className)} role="img" aria-label="running" />;
 }
 
 export function TraceScreen({
@@ -404,6 +444,7 @@ export function TraceScreen({
   shareable,
   onLoaded,
   arriving,
+  running,
   ...shown
 }: TraceScreenProps) {
   const loaded = useTrace(id, source, onLoaded, variant, arriving);
@@ -412,7 +453,7 @@ export function TraceScreen({
   // The panel (compact, or docked as a strip) has an App tab: the console's trace page doesn't.
   const app = useApp(source, serviceOf(trace, variant));
   const { explains, profilesIn } = useAppsCan(source);
-  if (trace === null) return <NoTrace loaded={loaded} variant={variant} back={back} />;
+  if (trace === null) return <NoTrace loaded={loaded} variant={variant} back={back} running={running} />;
   return (
     <TraceView
       key={trace.id}
