@@ -7,34 +7,33 @@ import { breakdown, type Category, categoryLabel, spanCategories, stretches } fr
 import { cutByPauses, GC, gcPauses } from "./lib/memory";
 import { percent } from "./lib/percent";
 import { plural } from "./lib/plural";
-import { type Quiet, quietSpans } from "./lib/quiet";
 import { cleared, isShown, rangeLabel, type Slice, togglePart } from "./lib/slice";
-import { waitedIn } from "./lib/waiting";
+import { WAITED_SHARE, withWaiting } from "./lib/waitingShare";
 import { litKey } from "./lit";
 import { largestFirst, ShareFace } from "./Shares";
 import { useHeldSlice } from "./TimeSlice";
 import type { Related, Trace } from "./types";
 
-/** What a share of the time is: a category of spans, or the collector's pauses. */
-export type ShareKind = Category | typeof GC;
+/** What a share of the time is: a category of spans, the collector's pauses, or the code's waits. */
+export type ShareKind = Category | typeof GC | typeof WAITED_SHARE;
 
 /** A share of the time, as the legend and the strip's tooltip say it. */
 export interface ShareOf {
   category: ShareKind;
   value: number;
   total: number;
-  /** How many spans count in it; the collector's, how many times it ran. */
+  /** How many spans count in it; the collector's, how many times it ran; none for waiting. */
   calls: number;
   label: string;
-  /** Of its time, how much its code waited (a sleep, a socket), where the profile says when its samples were taken. */
-  waiting: number;
 }
 
-/** "26 ms · 96% · 12 calls": how long, of the whole, how many spans (the collector's runs). */
+/** "26 ms · 96% · 12 calls": how long, of the whole, how many spans (the collector's runs); waiting, how long. */
 function shareNumbers(share: ShareOf): string {
+  const numbers = `${duration(share.value)} · ${percent(share.value, share.total)}`;
+  if (share.category === WAITED_SHARE) return `${numbers} · not computing: a sleep, a timer, a socket, a lock`;
   const counted =
     share.category === GC ? plural(share.calls, "collection", "collections") : plural(share.calls, "call", "calls");
-  return `${duration(share.value)} · ${percent(share.value, share.total)} · ${counted}`;
+  return `${numbers} · ${counted}`;
 }
 
 /** Numbers added up by category. */
@@ -44,31 +43,22 @@ function addUp<K>(items: readonly [K, number][]): Map<K, number> {
   return sums;
 }
 
-/** Quiet spans' numbers added up by their share. */
-function byCategory(
-  spans: readonly [string, Quiet][],
-  categories: ReadonlyMap<string, Category>,
-  value: (quiet: Quiet) => number,
-): Map<Category, number> {
-  return addUp(
-    spans.flatMap(([span, quiet]): [Category, number][] => {
-      const category = categories.get(span);
-      return category ? [[category, value(quiet)]] : [];
-    }),
-  );
-}
-
 /**
  * Where the wall-clock time went, per share: the stretches added up, the collector's pauses (a profile's) taken out
- * of the shares they stopped and counted as their own.
+ * of the shares they stopped and counted as their own, and the code's waits out of its own shares (withWaiting).
  */
 function timeParts(trace: Trace): [ShareKind, number][] {
+  return withWaiting<Category | typeof GC>(trace, byPause(trace));
+}
+
+/** The stretches added up, the collector's pauses taken out of the shares they stopped and counted as their own. */
+function byPause(trace: Trace): [Category | typeof GC, number][] {
   const pauses = gcPauses(trace.profile, trace.duration);
   if (pauses.length === 0) return breakdown(trace);
   return [
     ...addUp(
       stretches(trace).flatMap(({ from, to, category }) =>
-        cutByPauses(from, to, pauses).map(({ range, gc }): [ShareKind, number] => [
+        cutByPauses(from, to, pauses).map(({ range, gc }): [Category | typeof GC, number] => [
           gc ? GC : category,
           range[1] - range[0],
         ]),
@@ -81,12 +71,13 @@ function timeParts(trace: Trace): [ShareKind, number][] {
 type SpanShare = ShareOf & { category: Category };
 
 function ofSpans(share: ShareOf): share is SpanShare {
-  return share.category !== GC;
+  return share.category !== GC && share.category !== WAITED_SHARE;
 }
 
-/** A share's name: its category's, or the collector's. */
+/** A share's name: its category's, the collector's, or waiting's. */
 function shareLabel(category: ShareKind, trace: Trace): string {
-  return category === GC ? "GC" : categoryLabel(category, trace);
+  if (category === GC) return "GC";
+  return category === WAITED_SHARE ? "Waiting" : categoryLabel(category, trace);
 }
 
 /** Each share of the time with its numbers: how long, of how much, how many spans; largest first. */
@@ -99,21 +90,18 @@ export function sharesOf(trace: Trace): ShareOf[] {
   const categories = spanCategories(trace);
   const calls = addUp<ShareKind>([...categories.values()].map((category) => [category, 1]));
   calls.set(GC, trace.profile?.gc?.collections ?? 0);
-  const waiting: ReadonlyMap<ShareKind, number> = byCategory([...quietSpans(trace)], categories, ({ gaps }) =>
-    waitedIn(trace.profile, gaps, trace.start),
-  );
   const shares = parts.map(([category, value]) => ({
     category,
     value,
     total,
     calls: calls.get(category) ?? 0,
     label: shareLabel(category, trace),
-    waiting: waiting.get(category) ?? 0,
   }));
+  // Waiting last, as the Profile tab has it.
   return largestFirst(
     shares,
     (share) => share.value,
-    () => 0,
+    (share) => (share.category === WAITED_SHARE ? 1 : 0),
   );
 }
 
@@ -143,19 +131,18 @@ function keyboardOnly(event: FocusEvent<HTMLElement>): void {
   if (!event.currentTarget.matches(":focus-visible")) event.preventDefault();
 }
 
-/**
- * The numbers of a share, over it: its name, how long, of the whole, how many calls, and of its time how much its
- * code waited (the strip's hatched stretches), where a profile says.
- */
+/** A share's swatch: its colour; waiting's hatched, as the strip draws the waits. */
+function swatchClass(share: ShareOf): string {
+  return share.category === WAITED_SHARE ? "dt-swatch dt-hatched" : "dt-swatch";
+}
+
+/** The numbers of a share, over it: its name, how long, of the whole, how many calls. */
 export function ShareTip({ share }: { share: ShareOf }) {
   return (
     <>
-      <span className="dt-swatch" data-category={share.category} />
+      <span className={swatchClass(share)} data-category={share.category} />
       <span className="font-medium">{share.label}</span>
-      <span className="text-muted-foreground tabular-nums">
-        {shareNumbers(share)}
-        {share.waiting > 0 ? ` · of it ${duration(share.waiting)} waiting` : ""}
-      </span>
+      <span className="text-muted-foreground tabular-nums">{shareNumbers(share)}</span>
     </>
   );
 }
@@ -164,15 +151,18 @@ export function ShareTip({ share }: { share: ShareOf }) {
 export const TIP_CLASS =
   "flex items-center gap-2 rounded-lg border bg-popover px-3 py-2 text-sm whitespace-nowrap text-popover-foreground shadow-[var(--dt-popover-shadow)]";
 
-/** The collector's share: its colour, its numbers on hover; nothing to pick, the call tree has no rows of it. */
-function GcShare({ share }: { share: ShareOf }) {
+/**
+ * The collector's share, or waiting's: its colour, its numbers on hover; nothing to pick, the call tree has no rows
+ * of it.
+ */
+function FixedShare({ share }: { share: ShareOf }) {
   return (
     <li data-category={share.category}>
       <Tooltip delayDuration={150} disableHoverableContent={true}>
         <TooltipTrigger asChild>
           <span className="dt-share" data-fixed="" {...litKey(share.category, true)}>
             <ShareFace
-              swatch={<span className="dt-swatch" />}
+              swatch={<span className={swatchClass(share)} />}
               name={share.label}
               value={duration(share.value)}
               share={percent(share.value, share.total)}
@@ -286,7 +276,7 @@ export function TimeLegend({ trace, related }: { trace: Trace; related: Related 
         ofSpans(share) ? (
           <Share key={share.category} share={share} filters={filters} />
         ) : (
-          <GcShare key={share.category} share={share} />
+          <FixedShare key={share.category} share={share} />
         ),
       )}
       {others.map((filter) => (

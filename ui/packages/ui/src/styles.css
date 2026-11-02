@@ -2124,6 +2124,10 @@ details[data-focused] > .dt-sql-group {
 [data-category="gc"] {
   --dt-k: var(--dt-k-gc);
 }
+/* The code's waits: a share of the strip's time with no rows of its own, neutral, hatched as the strip draws them. */
+[data-category="waiting"] {
+  --dt-k: color-mix(in srgb, var(--dt-text-3) 50%, transparent);
+}
 .dt-breakdown-legend {
   display: flex;
   flex-wrap: wrap;

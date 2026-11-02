@@ -27,6 +27,15 @@
   samples taken: the Profile tab shows its time as "≈ 30 ms", "CPU
   time estimated from 12 samples", and the MCP server's profile says
   its times are approximate.
+- The call tree's legend splits waiting out of the code's time, as the
+  Profile tab does, in every language: a Python task that slept 311 ms
+  of 345 said "Your code 341 ms 99%" beside the strip's hatched
+  "waiting · 311 ms", and a Node.js task awaiting a 120 ms timer said
+  "Your code 136 ms 98%". Waiting is a share of its own, last, hatched
+  as the strip draws it. With a profile that says when its samples
+  were taken, the strip's hatched stretches add up to it. Without, the
+  profile's waiting (a Go or Node.js profile's time off the CPU) less
+  the calls' time does. The page's card says the same.
 
 ## 0.10.3 (2026-11-01)
 

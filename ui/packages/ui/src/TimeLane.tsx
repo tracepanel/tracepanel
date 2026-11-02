@@ -6,6 +6,7 @@ import { cutByPauses, GC, gcPauses } from "./lib/memory";
 import { quietSpans } from "./lib/quiet";
 import type { TimeRange } from "./lib/slice";
 import { quietPieces } from "./lib/waiting";
+import { WAITED_SHARE } from "./lib/waitingShare";
 import { litKey } from "./lit";
 import { type ShareOf, ShareTip, sharesOf, TIP_CLASS } from "./TimeLegend";
 import type { Trace } from "./types";
@@ -42,7 +43,8 @@ function hoverAt(event: PointerEvent<HTMLDivElement>): Hover | null {
   const over = (event.target as Element).closest<HTMLElement>("[data-category]");
   if (!over) return null;
   return {
-    category: over.dataset["category"] ?? "",
+    // A wait is waiting's share, whichever span's own time it is.
+    category: "waiting" in over.dataset ? WAITED_SHARE : (over.dataset["category"] ?? ""),
     x: event.clientX - event.currentTarget.getBoundingClientRect().left,
   };
 }
@@ -146,6 +148,12 @@ function quietLabel(lane: Lane, each: Drawn): string {
   return `waiting · ${duration(lane.totals.get(`${each.stretch.span}:true`) ?? 0)}`;
 }
 
+/** The share a piece of the lane counts in: the collector's, waiting's, or its category's. */
+function shareOf(each: Drawn): string {
+  if (each.gc) return GC;
+  return each.waiting ? WAITED_SHARE : each.stretch.category;
+}
+
 /** What a piece of the lane says of itself: its span when quiet, its stretch, whether it waited. */
 function pieceData(each: Drawn): Record<string, string | undefined> {
   if (!each.quiet) return {};
@@ -184,7 +192,7 @@ export function TimeLane({ trace, word, parts }: { trace: Trace; word: string; p
             className="dt-stretch"
             data-category={each.gc ? GC : each.stretch.category}
             data-faded={faded(each, parts)}
-            {...litKey(each.gc ? GC : each.stretch.category)}
+            {...litKey(shareOf(each))}
             {...pieceData(each)}
             style={{ ...place(each.stretch, total), ...ends(each.stretch, total) }}
           />
