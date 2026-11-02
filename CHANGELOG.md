@@ -4,6 +4,12 @@
 
 ### Fixed
 
+- An app's row in the panel's list ("FA text-campaigns" over its
+  requests) opens the call tree, at the call where that app's part of
+  the chain starts, instead of the tab picked last in another trace
+  (often DB). A trace's row still opens on the tab picked last, and now
+  says so in its tooltip: "Opens on DB, the tab you used last".
+
 - A view an SPA redirects from at once (`/sms-campaigns` sending on to
   `/sms-campaigns/campaigns` as it renders) is no longer a row of its
   own, "VIEW /sms-campaigns 0 µs" with nothing under it. The view it

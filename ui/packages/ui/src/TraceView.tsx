@@ -44,7 +44,7 @@ import type { ChainWaiting } from "./lib/chainRows";
 import { isTyping } from "./lib/keys";
 import { pageParts, redirectedFrom, redirectNote } from "./lib/page";
 import { plural } from "./lib/plural";
-import { scopedIssues, scopedSpans } from "./lib/scope";
+import { type Member, scopedIssues, scopedSpans } from "./lib/scope";
 import { type Slice, stretchText } from "./lib/slice";
 import { useViewMemory, VIEW_KEYS, type ViewMemory, type ViewMemoryHeld, ViewMemoryScope } from "./lib/viewMemory";
 import { linkProps, opensTraces, openTraceAt, type TraceLinks } from "./links";
@@ -715,11 +715,35 @@ function useTreeSpan(
   initialSpan: string | undefined,
 ): [string | undefined, (span: string | undefined) => void] {
   const [span, ask] = useState(initialSpan);
-  const select = (next: string | undefined) => {
-    if (next) memory.set(VIEW_KEYS.span, next);
-    ask(next);
-  };
+  const select = useCallback(
+    (next: string | undefined) => {
+      if (next) memory.set(VIEW_KEYS.span, next);
+      ask(next);
+    },
+    [memory],
+  );
   return [span, select];
+}
+
+/**
+ * Opened under an app of its chain (the panel's list, an app's row): the call tree's row where that app's part
+ * starts, the call its first trace served, selected once the chain has it. Not over a row the view already had (Back
+ * returns to the row left).
+ */
+function useUnderRow(
+  members: readonly Member[],
+  under: string | undefined,
+  memory: ViewMemoryHeld,
+  select: (span: string | undefined) => void,
+): void {
+  const asked = useRef(under !== undefined && memory.get(VIEW_KEYS.span) === undefined ? under : undefined);
+  useEffect(() => {
+    const app = asked.current;
+    const via = app ? members.slice(1).find((member) => member.app === app && member.via !== null)?.via : undefined;
+    if (!via) return;
+    asked.current = undefined;
+    select(via);
+  }, [members, select]);
 }
 
 export function TraceView({
@@ -759,6 +783,7 @@ export function TraceView({
 
   // The trace's chain of calls, and what of it the tabs list: all of it, or what is under a row of the call tree.
   const chain = useTraceScope(trace, related, loadChain, initialUnder);
+  useUnderRow(chain.members, initialUnder, memory, setTreeSpan);
   const tabbed = useChainTabs(trace, chain, findings);
   // A query's EXPLAIN by the app of its trace: the call tree's details and the DB tab alike.
   const explainOf = useCallback<ExplainOf>(

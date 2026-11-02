@@ -26,6 +26,11 @@ back keeps its state there, under its own key.
 - A flame, "Open its profile", or a code row of a call's trace opens that
   trace's **Profile**, at the stretch the code row stands for. A code row says
   so in its tooltip.
+- An app's row in the panel's list (that app's part of a row's chain, such
+  as "FA text-campaigns" over its requests) opens the row's trace on its
+  **call tree**, the call where that app's part starts selected (the rows on
+  the way opened), its other tabs under that app. Never the tab last picked:
+  the row means that app's part, not a trace to read.
 - A link that names a tab opens it: an issue's latest occurrence opens its
   Issues or Error tab, a log record its Logs tab or its row in the call tree,
   an email or an AWS call its row in the call tree, the latest call of a
@@ -44,6 +49,10 @@ The last tab picked is kept in this browser and shared by the panel and the
 console. Profile and App are never kept: they say little about most traces,
 so picking them doesn't carry over to the next trace. Back is not a fresh
 open: it returns to the tab you left (rule 1).
+
+A row of the panel's list says it in its tooltip when it opens on the tab
+last picked, as in "Opens on DB, the tab you used last (the call tree where
+it has none)". It says nothing while that tab is the call tree.
 
 ## 4. The console: the address is the view
 

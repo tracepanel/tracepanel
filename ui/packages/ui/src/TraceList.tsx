@@ -64,6 +64,11 @@ export interface TraceListProps {
   services?: boolean | undefined;
   /** Under a row whose trace called other apps (the narrow list): their traces, folded in a row per app. */
   chains?: ListChains | undefined;
+  /**
+   * What a trace's row says it opens on, in its tooltip, when that isn't the call tree: the tab picked last
+   * (NAVIGATION.md, rule 3). An app's row of a chain always opens the call tree.
+   */
+  opensOn?: ((trace: TraceSummary) => string | undefined) | undefined;
   onSelect: (id: string) => void;
 }
 
@@ -89,6 +94,8 @@ export interface ListChains {
   settled?: ReadonlySet<string> | undefined;
   /** By the row's trace id: where its trace was cut with a call still waiting for its answer (lib/live). */
   cut?: ReadonlyMap<string, number> | undefined;
+  /** What a trace's row says it opens on (TraceListProps), for the chain's trace rows. */
+  opensOn?: ((trace: TraceSummary) => string | undefined) | undefined;
 }
 
 /**
@@ -115,8 +122,10 @@ export function TraceList({
   compact,
   services,
   chains,
+  opensOn,
   onSelect,
 }: TraceListProps) {
+  const withOpens = chains && opensOn ? { ...chains, opensOn } : chains;
   return (
     <ul className="dt-requests" data-compact={compact ? "" : undefined}>
       {rows.map((row) => {
@@ -137,13 +146,14 @@ export function TraceList({
               fresh={newIds?.has(trace.id) ?? false}
               compact={compact}
               services={services}
+              opens={opensOn?.(trace)}
               onSelect={onSelect}
             />
-            {chains && fold?.open !== false ? (
+            {withOpens && fold?.open !== false ? (
               <RowChain
                 rowId={trace.id}
                 level={depth + 1}
-                chains={chains}
+                chains={withOpens}
                 selectedId={selectedId}
                 onSelect={onSelect}
               />
@@ -167,6 +177,7 @@ function ListRow({
   fresh,
   compact,
   services,
+  opens,
   onSelect,
 }: {
   row: TraceRow;
@@ -182,6 +193,8 @@ function ListRow({
   fresh: boolean;
   compact: boolean | undefined;
   services: boolean | undefined;
+  /** What it opens on, when it says (TraceListProps.opensOn). */
+  opens: string | undefined;
   onSelect: (id: string) => void;
 }) {
   return (
@@ -194,6 +207,7 @@ function ListRow({
       {...liveProps(trace, open, cut)}
       aria-current={selected ? "true" : undefined}
       aria-label={traceLabel(trace, { trigger, target, current, open, cut: cut !== null, redirectedFrom })}
+      title={opens}
       {...foldProps(fold)}
       data-new={fresh ? "" : undefined}
       onClick={() => onSelect(trace.id)}
@@ -439,7 +453,7 @@ function ChainAppRows({ app, rowId, level, chains, selectedId, onSelect }: Chain
         data-tone={toneOf(app.summary)}
         style={{ "--dt-chain-level": level } as CSSProperties}
         aria-expanded={open}
-        title={`${app.app}: ${traces} for this request's calls. Opens it with its tabs under ${app.app}.`}
+        title={`${app.app}: ${traces} for this request's calls. Opens its call tree where ${app.app}'s part starts, its tabs under ${app.app}.`}
         onClick={() => chains.onApp(rowId, app)}
         onKeyDown={foldKeys(open, toggle)}
       >
@@ -587,7 +601,7 @@ function ChainTraceRows({ row, rowId, level, chains, selectedId, onSelect }: Cha
         aria-current={row.id === selectedId ? "true" : undefined}
         aria-expanded={nested ? open : undefined}
         aria-label={traceLabel(row.summary)}
-        title={row.route}
+        title={[row.route, chains.opensOn?.(row.summary)].filter(Boolean).join("\n")}
         onClick={() => onSelect(row.id)}
         onKeyDown={foldKeys(nested ? open : undefined, toggle)}
       >

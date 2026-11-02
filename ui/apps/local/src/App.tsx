@@ -1,7 +1,6 @@
 import {
   ArrowLeftIcon,
   type Chain,
-  type ChainApp,
   type ChainEntry,
   ChevronDownIcon,
   ClearIcon,
@@ -651,15 +650,6 @@ function useChainOpen(): [ReadonlySet<string>, (key: string) => void] {
   return [open, toggle];
 }
 
-/** The tabs that list a chain under an app: the one the panel last used when it is one of them. */
-const SCOPED_TABS = new Set<TabId>(["sql", "http", "issues", "logs", "profile"]);
-
-/** The tab an app's row opens its trace on: the last one used if it lists a chain, else DB, else Logs. */
-function underTab(app: ChainApp, last: TabId | undefined): TabId {
-  if (last && SCOPED_TABS.has(last)) return last;
-  return app.summary.queries > 0 ? "sql" : "logs";
-}
-
 /**
  * Each row followed by the task runs it led to, one step deeper, as they are recorded, each with its own findings: the
  * request's row doesn't count them again. A run is listed once.
@@ -869,6 +859,15 @@ function tabName(tab: TabId | undefined, trace: TraceSummary | undefined): strin
   return tab ? TAB_NAMES[tab] : "Trace";
 }
 
+/** What a trace's row says it opens on, in its tooltip: the tab last picked (NAVIGATION.md, rule 3). */
+type OpensOn = ((trace: TraceSummary) => string | undefined) | undefined;
+
+/** The tab last picked, said on the rows a click opens fresh; nothing to say for the call tree, where they open anyway. */
+function opensOnTab(tab: TabId | undefined): OpensOn {
+  if (!tab || tab === "tree") return undefined;
+  return (trace) => `Opens on ${tabName(tab, trace)}, the tab you used last (the call tree where it has none)`;
+}
+
 /**
  * The way back to the view a linked trace was opened from, named for where it goes: that trace's tab and the trace,
  * as the list names it ("← Call tree · GQL query Books"). Esc goes there too. `bare` (docked right, the tabs need the
@@ -930,6 +929,7 @@ function RequestSwitcher({
   pageCount,
   selectedId,
   currentId,
+  opensOn,
   onClear,
 }: {
   rows: readonly TraceRow[];
@@ -937,6 +937,7 @@ function RequestSwitcher({
   pageCount: number;
   selectedId: string | null;
   currentId: string | null;
+  opensOn: OpensOn;
   onClear: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -993,6 +994,7 @@ function RequestSwitcher({
             services={manyApps(rows)}
             selectedId={selectedId}
             currentId={currentId}
+            opensOn={opensOn}
             onSelect={(id) => {
               setOpen(false);
               go({ name: "trace", id });
@@ -1085,6 +1087,12 @@ function useStickToBottom(
   return { unseen, jump };
 }
 
+/** The list of this page's requests, or the browser tab's: its class, its accessible name, its head's name. */
+const LIST_SCOPES = {
+  page: { className: "page-requests", label: "Requests made by this page", name: "This page" },
+  tab: { className: "page-requests panel-list", label: "Pages and requests in this browser tab", name: "This tab" },
+} as const;
+
 /**
  * The current page and every fetch/XHR it made, above the trace; docked at the bottom, every page and request of the
  * browser tab, beside the trace (`scope="tab"`).
@@ -1099,6 +1107,7 @@ function PageRequests({
   onFollow,
   onClear,
   chains,
+  opensOn,
 }: {
   scope?: "page" | "tab";
   /** false where the dock's toolbar row carries the count and the controls. */
@@ -1111,6 +1120,7 @@ function PageRequests({
   onClear: () => void;
   /** Under the rows that called other apps: those apps' traces. */
   chains?: ListChains | undefined;
+  opensOn: OpensOn;
 }) {
   const fresh = useNewIds(rows.map((row) => row.trace.id));
   const list = useRef<HTMLElement>(null);
@@ -1118,18 +1128,15 @@ function PageRequests({
   // Requests only, as the pill counts them: not the runs under them, not the browser's views and actions.
   const requests = requestCount(rows);
   const count = `· ${requests} ${requests === 1 ? "request" : "requests"}`;
+  const look = LIST_SCOPES[scope];
   return (
-    <section
-      ref={list}
-      className={scope === "tab" ? "page-requests panel-list" : "page-requests"}
-      aria-label={scope === "tab" ? "Pages and requests in this browser tab" : "Requests made by this page"}
-    >
+    <section ref={list} className={look.className} aria-label={look.label}>
       {head ? (
         <div className="page-requests-head">
           <ListControls
             count={
               <>
-                {scope === "tab" ? "This tab" : "This page"} <span className="page-requests-count">{count}</span>
+                {look.name} <span className="page-requests-count">{count}</span>
               </>
             }
             follow={follow}
@@ -1146,6 +1153,7 @@ function PageRequests({
         currentId={currentId}
         newIds={fresh}
         chains={chains}
+        opensOn={opensOn}
         onSelect={(id) => go({ name: "trace", id })}
       />
       {unseen > 0 ? (
@@ -1324,8 +1332,10 @@ function PanelApp({ route }: { route: Route }) {
     cut: rowChains.cut,
     open: chainOpen,
     onToggle: toggleChain,
-    onApp: (id, app) => go({ name: "trace", id, under: app.app, tab: underTab(app, tab) }),
+    // An app's row is that app's part of the chain: the call tree, at the row where its part starts (NAVIGATION.md).
+    onApp: (id, app) => go({ name: "trace", id, under: app.app, tab: "tree" }),
   };
+  const opensOn = opensOnTab(tab);
   const tabRows = inOrder(split, rows);
   const followRows = split ? tabRows : pageRows;
   const latestChild = followTarget(followRows);
@@ -1425,6 +1435,7 @@ function PanelApp({ route }: { route: Route }) {
               pageCount={requestCount(pageRows)}
               selectedId={selectedId}
               currentId={history?.current ?? null}
+              opensOn={opensOn}
               onClear={() => setClearing(true)}
             />
           )}
@@ -1436,6 +1447,7 @@ function PanelApp({ route }: { route: Route }) {
           rows={withRuns(pageRows, runs)}
           selectedId={selectedId}
           chains={chains}
+          opensOn={opensOn}
           follow={follow}
           onFollow={onFollow}
           onClear={() => setClearing(true)}
@@ -1467,6 +1479,7 @@ function PanelApp({ route }: { route: Route }) {
             selectedId={selectedId}
             currentId={currentId}
             chains={chains}
+            opensOn={opensOn}
             follow={follow}
             onFollow={onFollow}
             onClear={() => setClearing(true)}
