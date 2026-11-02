@@ -153,22 +153,23 @@ pub fn normalize(received: &mut Received) {
 /// traceparent included. The statement itself keeps them. A WITH is named here too, by what it does (`span_name`),
 /// where an SDK names it `WITH`. A trace with neither is left as it is.
 pub fn uncomment(received: &mut Received) {
-    let statement = |kind: &str, attrs: &Attrs| {
+    // A query to name again: one with a comment, or a WITH its SDK named by its first word ("WITH c"). A WITH
+    // named already (the agent's own name, "SELECT c (WITH)") is left as it is: the document is read and written
+    // again only for the spans that need it.
+    let statement = |kind: &str, name: &str, attrs: &Attrs| {
         if kind != "sql" {
             return None;
         }
         let sql = attrs.get("db.statement").and_then(Value::as_str)?;
         let commented = sql.contains("/*") || sql.contains("--");
-        let with = after_comments(sql)
-            .get(..4)
-            .is_some_and(|word| word.eq_ignore_ascii_case("WITH"));
+        let with = named_with(name) && named_with(after_comments(sql));
         (commented || with).then(|| (sql.to_owned(), commented))
     };
     if !received
         .trace
         .spans
         .iter()
-        .any(|span| statement(&span.kind, &span.attrs).is_some())
+        .any(|span| statement(&span.kind, &span.name, &span.attrs).is_some())
     {
         return;
     }
@@ -184,8 +185,9 @@ pub fn uncomment(received: &mut Received) {
         let Some(attrs) = span.get("attrs").and_then(Value::as_object) else {
             continue;
         };
-        let Some((sql, commented)) = statement(span["kind"].as_str().unwrap_or_default(), attrs)
-        else {
+        let kind = span["kind"].as_str().unwrap_or_default();
+        let name = span["name"].as_str().unwrap_or_default();
+        let Some((sql, commented)) = statement(kind, name, attrs) else {
             continue;
         };
         let bare = uncommented(&sql);
@@ -806,6 +808,13 @@ pub fn after_comments(sql: &str) -> &str {
         };
         rest = skipped.trim_start();
     }
+}
+
+/// Whether a text starts with the word WITH (a statement, or a span its SDK named by its first word).
+fn named_with(text: &str) -> bool {
+    text.get(..4)
+        .is_some_and(|word| word.eq_ignore_ascii_case("WITH"))
+        && !text[4..].starts_with(|next: char| next.is_alphanumeric() || next == '_')
 }
 
 /// Whether a statement is a SELECT, after its leading comments.

@@ -62,8 +62,33 @@ pub struct With {
     pub table: Option<usize>,
 }
 
+/// Whether a statement may be a WITH, cheaply, before reading its tokens: its first word past spaces and comments is
+/// WITH, or a MySQL `/*! … */` comes first (MySQL runs what is inside it). Every SQL span is named through `with`: most
+/// are no WITH, and are told so here without a token read.
+pub fn may_be_with(statement: &str) -> bool {
+    let mut rest = statement;
+    loop {
+        rest = rest.trim_start();
+        if let Some(after) = rest.strip_prefix("--") {
+            rest = after.split_once('\n').map_or("", |(_, next)| next);
+        } else if rest.starts_with("/*!") {
+            return true;
+        } else if let Some(after) = rest.strip_prefix("/*") {
+            rest = after.split_once("*/").map_or("", |(_, next)| next);
+        } else {
+            break;
+        }
+    }
+    rest.get(..4)
+        .is_some_and(|word| word.eq_ignore_ascii_case("WITH"))
+        && !rest[4..].starts_with(|next: char| next.is_alphanumeric() || next == '_')
+}
+
 /// What a WITH statement does. None for a statement that isn't a WITH, or one with no final statement.
 pub fn with(statement: &str) -> Option<With> {
+    if !may_be_with(statement) {
+        return None;
+    }
     let tokens = tokens(statement);
     let words = words(&tokens);
     if words.first() != Some(&"WITH") {
