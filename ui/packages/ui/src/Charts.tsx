@@ -77,6 +77,90 @@ function Tooltip({ hover }: { hover: Hover | null }) {
 
 type Plot = (width: number, setHover: (hover: Hover | null) => void) => ReactNode;
 
+/* ---------- one stacked bar, one tooltip legend: every bar chart's ---------- */
+
+/** How round a bar's top is: its outer corners only, its baseline end square. */
+const BAR_RADIUS = 2.5;
+
+/** One part of a stacked bar, bottom up: its height (px) and its colour (a fill class or a colour). */
+interface BarPart {
+  key: string;
+  height: number;
+  className?: string | undefined;
+  color?: string | undefined;
+  opacity?: number | undefined;
+}
+
+/** A rectangle with its top corners rounded and its bottom square: the top of a bar. */
+function roundedTop(x: number, y: number, width: number, height: number): string {
+  const r = Math.min(BAR_RADIUS, width / 2, height);
+  return `M${x},${y + height}V${y + r}Q${x},${y} ${x + r},${y}H${x + width - r}Q${x + width},${y} ${x + width},${y + r}V${y + height}Z`;
+}
+
+/**
+ * One solid bar of stacked parts, bottom up from `base`: flush, no gap between them, its top part rounded at the
+ * bar's top only, its baseline end square. Every bar of the console's charts, stacked or not, is drawn so.
+ */
+function StackedBar({
+  parts,
+  left,
+  width,
+  base,
+}: {
+  parts: readonly BarPart[];
+  left: number;
+  width: number;
+  base: number;
+}) {
+  const shown = parts.filter((part) => part.height > 0);
+  let top = base;
+  return shown.map((part, index) => {
+    top -= part.height;
+    const style = { ...(part.color ? { fill: part.color } : {}), ...(part.opacity ? { opacity: part.opacity } : {}) };
+    return index === shown.length - 1 ? (
+      <path
+        key={part.key}
+        d={roundedTop(left, top, width, part.height)}
+        className={part.className}
+        style={style}
+        data-part={part.key}
+      />
+    ) : (
+      <rect
+        key={part.key}
+        x={left}
+        y={top}
+        width={width}
+        height={part.height}
+        className={part.className}
+        style={style}
+        data-part={part.key}
+      />
+    );
+  });
+}
+
+/**
+ * A line of a chart's tooltip for a series: the swatch of its part of the bar, then its value and name in the text's
+ * own colour (the swatch says which it is). The lines go as the stack does, its top part first.
+ */
+function TipLine({
+  className,
+  color,
+  children,
+}: {
+  className?: string | undefined;
+  color?: string | undefined;
+  children: ReactNode;
+}) {
+  return (
+    <span data-tip-series="">
+      <i className={className} style={color ? { background: color } : undefined} aria-hidden="true" />
+      {children}
+    </span>
+  );
+}
+
 /** The chart itself, with its tooltip. */
 function FramePlot({ children }: { children: Plot }) {
   const [ref, width] = useWidth();
@@ -307,14 +391,9 @@ export function LatencyChart({ series }: { series: Series }) {
                     <b>
                       {clock(bucket.start)}–{clock(bucket.end)}
                     </b>
-                    <span>
-                      <i style={{ background: P50 }} />
-                      p50 {duration(bucket.p50 ?? 0)}
-                    </span>
-                    <span>
-                      <i style={{ background: P95 }} />
-                      p95 {duration(bucket.p95 ?? 0)}
-                    </span>
+                    {/* As the lines lie: p95 above p50. */}
+                    <TipLine color={P95}>p95 {duration(bucket.p95 ?? 0)}</TipLine>
+                    <TipLine color={P50}>p50 {duration(bucket.p50 ?? 0)}</TipLine>
                     <span className="text-muted-foreground">
                       {bucket.calls} {bucket.calls === 1 ? "call" : "calls"}
                     </span>
@@ -484,20 +563,21 @@ export function CallsChart({
                   onPointerEnter={() =>
                     setHover({
                       x: left + barW / 2,
-                      y: base - okH - errH,
+                      y: base - okH - (errors > 0 ? Math.max(errH, 2) : 0),
                       content: (
                         <>
                           <b>
                             {clock(bucket.start, true)}–{clock(bucket.end, true)}
                           </b>
-                          <span>
-                            {bucket.calls} {bucket.calls === 1 ? noun : plural}
-                          </span>
-                          {bucket.errors > 0 ? (
-                            <span className="text-error">
+                          {/* As the bar stacks them: its errors on top. */}
+                          {errors && bucket.errors > 0 ? (
+                            <TipLine className="bg-error">
                               {bucket.errors} {bucket.errors === 1 ? "error" : "errors"}
-                            </span>
+                            </TipLine>
                           ) : null}
+                          <TipLine color={CALLS}>
+                            {bucket.calls} {bucket.calls === 1 ? noun : plural}
+                          </TipLine>
                           {bucket.slow > 0 ? <span className="text-muted-foreground">{bucket.slow} slow</span> : null}
                         </>
                       ),
@@ -505,19 +585,15 @@ export function CallsChart({
                   }
                 >
                   <rect x={left - 2} y={PAD.top} width={barW + 4} height={plotH} fill="transparent" />
-                  {ok > 0 ? (
-                    <rect x={left} y={base - okH} width={barW} height={okH} rx={2} style={{ fill: CALLS }} />
-                  ) : null}
-                  {errors > 0 ? (
-                    <rect
-                      x={left}
-                      y={base - okH - errH - (ok > 0 ? 2 : 0)}
-                      width={barW}
-                      height={Math.max(errH, 2)}
-                      rx={2}
-                      className="fill-error"
-                    />
-                  ) : null}
+                  <StackedBar
+                    left={left}
+                    width={barW}
+                    base={base}
+                    parts={[
+                      { key: "ok", height: okH, color: CALLS },
+                      { key: "errors", height: errors > 0 ? Math.max(errH, 2) : 0, className: "fill-error" },
+                    ]}
+                  />
                 </g>
               );
             })}
@@ -593,17 +669,17 @@ function sliceTime(start: number, end: number): string {
   return from === to ? `${from} · ${duration(end - start)}` : `${from}–${to}`;
 }
 
-const TIP_TONE: Record<string, string> = { error: "text-error", warning: "text-warn" };
-
-/** A level's count in a slice's tooltip: "3 ERROR", in the level's colour when it is a warning or worse. */
+/** A level's count in a slice's tooltip: its swatch, then "3 error" in the text's colour. */
 function TipLevel({ level, count }: { level: string; count: number }) {
+  const item = LOG_LEVELS.find((each) => each.key === level);
   return (
-    <span className={TIP_TONE[level]}>
-      {count} {LOG_LEVELS.find((item) => item.key === level)?.label ?? level}
-    </span>
+    <TipLine className={item?.className}>
+      {count} {item?.label ?? level}
+    </TipLine>
   );
 }
 
+/** A slice's tooltip: its time, its records, then each level as the bar stacks them, its top (the worst) first. */
 function LogTip({ bucket }: { bucket: LogBucket }) {
   return (
     <>
@@ -611,9 +687,9 @@ function LogTip({ bucket }: { bucket: LogBucket }) {
       <span>
         {bucket.count} {bucket.count === 1 ? "record" : "records"}
       </span>
-      {stacked(bucket, new Set()).map(({ key, count }) =>
-        count > 0 ? <TipLevel key={key} level={key} count={count} /> : null,
-      )}
+      {stacked(bucket, new Set())
+        .reverse()
+        .map(({ key, count }) => (count > 0 ? <TipLevel key={key} level={key} count={count} /> : null))}
     </>
   );
 }
@@ -760,16 +836,19 @@ function LogBar({
   hitTop: number;
   hitHeight: number;
 }) {
-  let top = base;
   return (
     <g onPointerEnter={onHover}>
       <rect x={left - 2} y={hitTop} width={width + 4} height={hitHeight} fill="transparent" />
-      {levels.map(({ key, count }) => {
-        if (count === 0) return null;
-        const height = Math.max(count * scale, 2);
-        top -= height;
-        return <rect key={key} x={left} y={top} width={width} height={height} rx={1.5} className={FILL[key]} />;
-      })}
+      <StackedBar
+        left={left}
+        width={width}
+        base={base}
+        parts={levels.map(({ key, count }) => ({
+          key,
+          height: count > 0 ? Math.max(count * scale, 2) : 0,
+          className: FILL[key],
+        }))}
+      />
     </g>
   );
 }
@@ -822,26 +901,21 @@ export function Histogram({
                           <b>
                             {duration(bucket.from)} – {duration(bucket.to)}
                           </b>
-                          <span>
+                          <TipLine color={CALLS}>
                             {bucket.count} {bucket.count === 1 ? "call" : "calls"}
-                          </span>
+                          </TipLine>
                         </>
                       ),
                     })
                   }
                 >
                   <rect x={left - 1} y={PAD.top} width={slot} height={plotH} fill="transparent" />
-                  {bucket.count > 0 ? (
-                    <rect
-                      x={left}
-                      y={base - h}
-                      width={Math.max(slot - 2, 1)}
-                      height={h}
-                      rx={2}
-                      style={{ fill: CALLS }}
-                      opacity={0.75}
-                    />
-                  ) : null}
+                  <StackedBar
+                    left={left}
+                    width={Math.max(slot - 2, 1)}
+                    base={base}
+                    parts={[{ key: "calls", height: h, color: CALLS, opacity: 0.75 }]}
+                  />
                 </g>
               );
             })}

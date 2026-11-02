@@ -28,6 +28,13 @@
   and gzipped when large. A reload of a slow page fetched about 2.9 MB
   of it for the panel, now about 55 KB. The panel loads a trace's chain
   once at a time.
+- "Open in Logs" on a trace's Logs tab lists what the tab listed: the
+  records of its whole chain of calls (`chain:<id>`, its chip "chain of
+  VIEW /campaigns"), with the app, level and logger picked there. A
+  browser's view, whose own trace has no records, opened an empty page.
+- A stacked bar is one solid bar, its parts flush, its top rounded and
+  its base square, in every chart. A chart's tooltip names each part by
+  its colour's swatch, top first, in the text's own colour.
 - PostgreSQL plans nest right. A first-level node no longer sits at
   the root's depth with its details two levels below it: each "->"
   level adds one, and a node's details sit one level below it. MySQL's
