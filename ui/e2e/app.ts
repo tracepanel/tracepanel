@@ -24,14 +24,22 @@ export async function chooseTheme(page: Page, theme: "dark" | "light" | "system"
   await page.addInitScript((chosen) => localStorage.setItem("tracepanel:theme", chosen), theme);
 }
 
-/** The id of a stored trace, by its name. */
+/**
+ * The id of a stored trace, by its name: the newest page of the list first, then the older ones. The tests running
+ * beside this one store traces as they go, newer than the seed's, and push a seeded one off the first page.
+ */
 export async function traceId(name: string): Promise<string> {
-  const body = (await (await fetch(`${CONSOLE}api/traces?limit=100`)).json()) as {
-    traces: { id: string; name: string }[];
-  };
-  const found = body.traces.find((trace) => trace.name === name);
-  if (!found) throw new Error(`no stored trace named ${name}`);
-  return found.id;
+  let before: number | null | undefined;
+  do {
+    const page = (await (await fetch(`${CONSOLE}api/traces?limit=100${before ? `&before=${before}` : ""}`)).json()) as {
+      traces: { id: string; name: string }[];
+      next: number | null;
+    };
+    const found = page.traces.find((trace) => trace.name === name);
+    if (found) return found.id;
+    before = page.next;
+  } while (before);
+  throw new Error(`no stored trace named ${name}`);
 }
 
 function timing(call: Call): string {

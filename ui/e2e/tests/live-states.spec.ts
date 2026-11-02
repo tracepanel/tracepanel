@@ -1,7 +1,7 @@
 // One model of where a request, a view or a call is (lib/live), said the same way in the pill, its card, the panel's
 // list and the call tree: in flight (a ring, its time ticking), done, failed, and no answer yet (a call cut short,
 // its time never red). Slow answers are held here until the test lets them through.
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { CONSOLE } from "../agent.ts";
 import { type Call, laidOut, openApp, panel, pill, traceId } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
@@ -153,6 +153,27 @@ test("an SPA's route change is a new page: the pill shows its view running, not 
   await expect(pill(page)).toHaveAccessibleName(/^tracepanel: view of \/app\/next, running for /);
 });
 
+test("a click on the pill opens the panel though the pill draws again under the press: no click is lost", async ({
+  page,
+}) => {
+  await openApp(page, {}, { recording: true });
+  await announce(page, "01M4E2ELIVE000000000000003", "/app/pressed", false);
+  await expect(pill(page)).toContainText("VIEW /app/pressed");
+
+  // Pressed on the view's name, which something coming in draws again before the press ends (the browser fires no
+  // click on a pressed element that went away).
+  const name = pill(page).locator(".name").first();
+  const box = await name.boundingBox();
+  if (!box) throw new Error("the pill's name isn't shown");
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await announce(page, "01M4E2ELIVE000000000000003", "/app/pressed", false);
+  await page.mouse.up();
+
+  await expect(pill(page)).toHaveAttribute("aria-expanded", "true");
+  await expect(list(page)).toBeVisible();
+});
+
 test("a view on its first frame reads … where its time will tick, never 0 µs: in the pill, its card and the list", async ({
   page,
 }) => {
@@ -271,6 +292,30 @@ async function storeCutView(): Promise<void> {
   await expect.poll(async () => (await fetch(`${CONSOLE}api/traces/${CUT_VIEW}`)).status).toBe(200);
 }
 
+/**
+ * A "no answer" mark's words as they show: all of them on its line, none (wrapped onto the line not shown, the
+ * hourglass alone), or cut by the mark's or its row name's edge.
+ */
+function shownWords(mark: Locator): Promise<"all" | "none" | "cut"> {
+  return mark.evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    const words = element.querySelector(".dt-no-answer-text")?.getBoundingClientRect();
+    const name = element.parentElement?.getBoundingClientRect();
+    if (!(words && name)) return "cut";
+    if (words.top >= box.bottom) return "none";
+    return words.right <= Math.min(box.right, name.right) + 0.5 ? "all" : "cut";
+  });
+}
+
+/** Whether the mark's hourglass shows whole, inside its row's name. */
+function hourglassShown(mark: Locator): Promise<boolean> {
+  return mark.evaluate((element) => {
+    const icon = element.querySelector("svg")?.getBoundingClientRect();
+    const name = element.parentElement?.getBoundingClientRect();
+    return Boolean(icon && name && icon.width > 0 && icon.right <= name.right + 0.5 && icon.left >= name.left);
+  });
+}
+
 test("a call with no answer yet says so in the call tree, its time neutral, and the tree says it is partial", async ({
   page,
 }) => {
@@ -279,6 +324,9 @@ test("a call with no answer yet says so in the call tree, its time neutral, and 
 
   const row = page.locator('.dt-map-row[data-kind="http.client"]').filter({ hasText: "/graphql" });
   await expect(row.locator('[data-state="cut"]')).toHaveText("no answer yet");
+  // Room enough: its words all shown.
+  await laidOut(page);
+  expect(await shownWords(row.locator('[data-state="cut"]'))).toBe("all");
   await expect(row.locator(".dt-map-time")).toHaveText("15.0 s");
   // Not slow: it hadn't ended.
   await expect(row.locator(".dt-map-time")).not.toHaveAttribute("data-slow", /.+/);
@@ -376,6 +424,8 @@ for (const dock of ["right", "bottom"] as const) {
       return range.getBoundingClientRect().width;
     });
     expect(column).toBeLessThanOrEqual(text + 1);
+    // Its words whole or not at all, never cut mid-way.
+    expect(await shownWords(cut.locator('[data-state="cut"]'))).not.toBe("cut");
     for (const row of [cut, request]) {
       const clipped = await row
         .locator(".dt-request-path")
@@ -384,3 +434,27 @@ for (const dock of ["right", "bottom"] as const) {
     }
   });
 }
+
+test('docked at the right, as narrow as it goes, the call tree\'s "no answer yet" gives way to the hourglass, its words never cut', async ({
+  page,
+}) => {
+  await storeCutView();
+  await page.addInitScript(() => {
+    sessionStorage.setItem("tracepanel:panel", JSON.stringify({ open: true, dock: "right", width: 360 }));
+  });
+  await openApp(page, {}, { recording: true, view: CUT_VIEW });
+  const frame = panel(page);
+  // The view opens on its call tree.
+  await expect(frame.getByRole("tab", { name: /^Call tree/ })).toHaveAttribute("aria-selected", "true");
+  const row = frame.locator('.dt-map-row[data-kind="http.client"]').filter({ hasText: "/graphql" });
+  const mark = row.locator('[data-state="cut"]');
+  await expect(mark).toHaveText("no answer yet");
+  await expect(mark).toHaveAttribute("title", /.+/);
+
+  // No room for the words beside the call's name: they go, all of them, and the hourglass stays whole.
+  await laidOut(page);
+  expect(await shownWords(mark)).toBe("none");
+  expect(await hourglassShown(mark)).toBe(true);
+  // The words' room is the call's name's: the mark as wide as the hourglass.
+  expect(await mark.evaluate((element) => element.getBoundingClientRect().width)).toBeLessThanOrEqual(12.5);
+});
