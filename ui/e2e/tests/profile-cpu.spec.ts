@@ -9,6 +9,8 @@ import { expect, test } from "../fixtures.ts";
 
 const GO = "01M4PR0F11E00000000000C0G1";
 const NODE = "01M4PR0F11E00000000000C0N1";
+const NODE_WAITING = "01M4PR0F11E00000000000C0N2";
+const GO_MACOS = "01M4PR0F11E00000000000C0G2";
 
 /** A call out of the request (a query, a Redis command), `at` ms into it, made from `origin`, under span `parent`. */
 function call(id: string, kind: string, start: number, at: number, ms: number, origin: string, parent = "r"): object {
@@ -157,15 +159,75 @@ function nodeRequest(start: number): object {
   };
 }
 
+/**
+ * A Node request as tracepanel-js sends it, its route's handler not recorded: a query, then a function that awaits a
+ * 120 ms timer; 15 ms on the CPU of its 138 ms. (A request, not a task: the Tasks page's lists are other tests'.)
+ */
+function nodeWaiting(start: number): object {
+  const span = (id: string, parent: string | null, kind: string, at: number, ms: number) => ({
+    id,
+    parent_id: parent,
+    kind,
+    name: id,
+    start: start + at * 1000,
+    duration: ms * 1000,
+    status: "ok",
+    attrs: {},
+  });
+  return {
+    id: NODE_WAITING,
+    kind: "http",
+    name: "GET /api/catalog/products",
+    start,
+    duration: 138_000,
+    status: "ok",
+    attrs: {
+      "service.name": "next-shop",
+      "http.method": "GET",
+      "http.route": "/api/catalog/products",
+      "http.status_code": 200,
+      "telemetry.sdk.language": "nodejs",
+    },
+    spans: [
+      span("r", null, "http", 0, 138),
+      span("SELECT review", "r", "sql", 10, 3),
+      span("update search index", "r", "function", 16, 120),
+    ],
+    logs: [],
+    errors: [],
+    links: [],
+    issues: [],
+    profile: {
+      interval_us: 1000,
+      samples: 15,
+      frames: [frame("rank", null, "lib/rank.ts", 3, true)],
+      stacks: [{ frames: [0], count: 15 }],
+    },
+  };
+}
+
+/** The Go request as tracepanel-go sends it from macOS: its CPU time estimated from the 12 samples taken. */
+function goOnMacOs(start: number): object {
+  const request = goRequest(start) as { profile: object };
+  return { ...request, id: GO_MACOS, profile: { ...request.profile, estimated_from: 12 } };
+}
+
 async function seed(): Promise<void> {
   const start = Date.now() * 1000 - 4 * 3_600_000_000;
   const response = await fetch(`${CONSOLE}api/ingest`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify([goRequest(start), nodeRequest(start + 100_000)]),
+    body: JSON.stringify([
+      goRequest(start),
+      nodeRequest(start + 100_000),
+      nodeWaiting(start + 200_000),
+      goOnMacOs(start + 400_000),
+    ]),
   });
   expect(response.status).toBe(202);
-  await expect.poll(async () => (await fetch(`${CONSOLE}api/traces/${NODE}`)).status).toBe(200);
+  for (const id of [NODE, NODE_WAITING, GO_MACOS]) {
+    await expect.poll(async () => (await fetch(`${CONSOLE}api/traces/${id}`)).status).toBe(200);
+  }
 }
 
 function shares(page: Page) {
@@ -248,4 +310,35 @@ test("a Node request's queries waited in card under GET, as a Python profile has
   await expect.poll(() => boxes(page)).toEqual(["card", "waiting", "waiting"]);
   await box(page, "card").click();
   await expect.poll(() => boxes(page)).toEqual(["waiting"]);
+});
+
+test("the call tree's legend splits a CPU profile's time off the CPU out of the code's, as the Profile tab does", async ({
+  page,
+}) => {
+  await page.goto(`/#/t/${NODE_WAITING}?tab=tree`);
+  const legend = page.getByRole("list", { name: /^Where the time went/ });
+
+  // 138 ms: 3 in the query, 15 on the CPU, the 120 ms timer waited; not "Your code 135 ms".
+  await expect(legend.locator(":scope > li[data-category]")).toHaveText([
+    /^Your code\s*15 ms\s*11%$/,
+    /^Database\s*3 ms\s*2%$/,
+    /^Waiting\s*120 ms\s*87%$/,
+  ]);
+
+  await page.getByRole("tab", { name: /^Profile/ }).click();
+
+  await expect(page.getByRole("region", { name: "Time by package" }).getByRole("button").last()).toHaveText(
+    /^waiting\s*123 ms/,
+  );
+});
+
+test("a profile whose CPU time is an estimate (Go on macOS) says so", async ({ page }) => {
+  await page.goto(`/#/t/${GO_MACOS}?tab=profile`);
+
+  await expect(page.getByText("≈ 30 ms")).toBeVisible();
+  await expect(
+    page.getByText(
+      "CPU time estimated from 12 samples: macOS hands the profiler's samples out unevenly, so each is weighed; waiting isn't sampled",
+    ),
+  ).toBeVisible();
 });

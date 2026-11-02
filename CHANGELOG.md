@@ -21,6 +21,29 @@
   and each line was a function of its own. The function list, the
   flame graph and the MCP server's profile now tell functions apart by
   their name and where they are defined.
+- A profile whose CPU time is an estimate says so. Go on macOS weighs
+  its samples against the process's CPU time (the kernel there hands
+  the profiler's signals out unevenly) and sends `estimated_from`, the
+  samples taken: the Profile tab shows its time as "≈ 30 ms", "CPU
+  time estimated from 12 samples", and the MCP server's profile says
+  its times are approximate.
+- The call tree's legend splits waiting out of the code's time, as the
+  Profile tab does, in every language: a Python task that slept 311 ms
+  of 345 said "Your code 341 ms 99%" beside the strip's hatched
+  "waiting · 311 ms", and a Node.js task awaiting a 120 ms timer said
+  "Your code 136 ms 98%". Waiting is a share of its own, last, hatched
+  as the strip draws it. With a profile that says when its samples
+  were taken, the strip's hatched stretches add up to it. Without, the
+  profile's waiting (a Go or Node.js profile's time off the CPU) less
+  the calls' time does. The page's card says the same.
+- The Memory view says what its list adds up to apart from the peak. A
+  Django task's header said "251 KB peak" over a list of 25 KB in all,
+  "framework & runtime 25 KB 99%", with nothing to tell the two apart:
+  the peak is the level the memory reached, the list where what was
+  held then (or at the end) was allocated. It now says "The list:
+  25 KB held at the peak, by where it was allocated. Its shares are of
+  these", a Node.js app's "≈" and "(sampled)", as its heap sampler's
+  bytes are.
 
 ## 0.10.3 (2026-11-01)
 

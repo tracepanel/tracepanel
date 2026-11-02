@@ -125,6 +125,14 @@ function timeWaited(calls: readonly Waited[]): Map<string, { path: number[]; us:
 }
 
 /**
+ * How long a CPU profile's trace was off the CPU (µs): its time, less what was sampled or dropped for other traces.
+ * None where its code ran on the CPU for longer than the trace (goroutines at once).
+ */
+export function offCpu(profile: Profile, trace: Pick<Trace, "duration">): number {
+  return Math.max(0, trace.duration - (profile.samples + (profile.dropped ?? 0)) * profile.interval_us);
+}
+
+/**
  * A CPU profile read on the trace's clock: the time it wasn't on the CPU (not sampled, nor dropped for other traces;
  * the database, the network, a lock, a timer) waiting (WAITED), as a Python or a JVM profile has its waits. The
  * trace's calls say who waited for them: their time off the CPU is waiting under the function of yours that made
@@ -133,7 +141,7 @@ function timeWaited(calls: readonly Waited[]): Map<string, { path: number[]; us:
  * where its code ran on the CPU for longer than the trace (goroutines at once).
  */
 export function withOffCpu(profile: Profile, trace: Pick<Trace, "start" | "duration" | "spans">): Profile {
-  const off = trace.duration / profile.interval_us - profile.samples - (profile.dropped ?? 0);
+  const off = offCpu(profile, trace) / profile.interval_us;
   if (off < 1) return profile;
   const frames: Frame[] = [...profile.frames, WAITED];
   const waiting = frames.length - 1;
