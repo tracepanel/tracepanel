@@ -5,6 +5,7 @@
 
 mod explain;
 mod explainable;
+mod fresh;
 pub mod neighbors;
 
 use axum::Extension;
@@ -98,6 +99,8 @@ pub fn router(reader: Reader, activity: Activity) -> Router {
         ))
         // The apps connected now: EXPLAIN goes to the one that recorded the query.
         .layer(Extension(activity))
+        // Its reads with an ETag (a 304 when unchanged), gzipped when large.
+        .layer(axum::middleware::from_fn(fresh::fresh))
         .layer(axum::middleware::from_fn(local_pages))
 }
 
@@ -113,7 +116,7 @@ async fn local_pages(request: axum::extract::Request, next: axum::middleware::Ne
             .insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, origin);
         response
             .headers_mut()
-            .insert(header::VARY, HeaderValue::from_static("Origin"));
+            .append(header::VARY, HeaderValue::from_static("Origin"));
     }
     response
 }
