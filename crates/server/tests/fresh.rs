@@ -27,14 +27,21 @@ async fn an_unchanged_answer_is_a_304_and_a_large_one_goes_gzipped() {
         .await
         .unwrap();
     let mut text = String::new();
-    GzDecoder::new(&packed[..]).read_to_string(&mut text).unwrap();
+    GzDecoder::new(&packed[..])
+        .read_to_string(&mut text)
+        .unwrap();
 
     assert_eq!(status, StatusCode::OK);
     assert_eq!(headers[header::CONTENT_ENCODING], "gzip");
     assert_eq!(headers[header::CACHE_CONTROL], "no-cache");
     assert_eq!(headers[header::VARY], "Accept-Encoding");
     assert_eq!(text, tracepanel_server::LICENSES);
-    assert!(packed.len() < text.len() / 2, "{} of {}", packed.len(), text.len());
+    assert!(
+        packed.len() < text.len() / 2,
+        "{} of {}",
+        packed.len(),
+        text.len()
+    );
 
     let tag = headers[header::ETAG].clone();
     let again = Request::get("/api/licenses")

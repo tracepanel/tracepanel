@@ -29,6 +29,7 @@ import { SlowerQuick, type SlowLimit } from "./SlowerQuick";
 import { taskSystem } from "./sections";
 import { TimeRange } from "./TimeRange";
 import { parseAbsolute, shortTime } from "./time";
+import { useTraceName } from "./traceName";
 
 /* ---------- query model: filters as chips, free text in the input ---------- */
 
@@ -859,6 +860,27 @@ function useListShown() {
   };
 }
 
+/** A trace's id as a filter names it: `chain:` by the trace that heads it, "chain of VIEW /campaigns". */
+function ChipValue({ filter }: { filter: Filter }) {
+  const name = useTraceName(filter.key === "chain" ? filter.value : null);
+  if (name === null) {
+    return (
+      <>
+        <span className="text-brand">{filter.key}</span>
+        <span className="text-muted-foreground">{filter.op}</span>
+        <span>{chipValue(filter)}</span>
+      </>
+    );
+  }
+  return (
+    <>
+      <span className="text-brand">chain</span>
+      <span className="font-sans text-muted-foreground">&nbsp;of&nbsp;</span>
+      <span>{name}</span>
+    </>
+  );
+}
+
 function FilterChip({ filter, onEdit, onRemove }: { filter: Filter; onEdit: () => void; onRemove: () => void }) {
   return (
     <Badge
@@ -872,9 +894,7 @@ function FilterChip({ filter, onEdit, onRemove }: { filter: Filter; onEdit: () =
         className="flex cursor-text items-baseline rounded-sm"
         onClick={onEdit}
       >
-        <span className="text-brand">{filter.key}</span>
-        <span className="text-muted-foreground">{filter.op}</span>
-        <span>{chipValue(filter)}</span>
+        <ChipValue filter={filter} />
       </button>
       <button
         type="button"

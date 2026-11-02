@@ -14,12 +14,31 @@ import { AppChip } from "./primitives";
 import { CountChip, countBy, ScopeHeader, useChainApps } from "./ScopeBar";
 import type { Trace } from "./types";
 
-/** The way to the Logs page, to filter and search the trace's records with every other. */
-function OpenInLogs({ traceId, links }: { traceId: string; links: TraceLinks | undefined }) {
+/** A filter of the logs search, its value quoted when it has a space. */
+function term(key: string, value: string): string {
+  return `${key}:${/[\s"]/.test(value) ? `"${value.replaceAll('"', "")}"` : value}`;
+}
+
+/** The chips picked here as the Logs page's filters: its app, its level, its logger. */
+function pickedFilters(picks: Picks): string {
+  return [
+    picks.app === null ? null : term("service", picks.app),
+    picks.level === null ? null : term("level", picks.level),
+    picks.logger === null ? null : term("logger", picks.logger),
+  ]
+    .filter((each) => each !== null)
+    .join(" ");
+}
+
+/**
+ * The way to the Logs page, to filter and search the trace's records with every other: those this tab lists, its
+ * whole chain's, with the chips picked here.
+ */
+function OpenInLogs({ traceId, picks, links }: { traceId: string; picks: Picks; links: TraceLinks | undefined }) {
   if (!links?.logs) return null;
   return (
     <Button variant="outline" size="xs" asChild>
-      <a {...linkProps(links, links.logs(traceId))}>
+      <a {...linkProps(links, links.logs(traceId, pickedFilters(picks)))}>
         Open in Logs
         <ArrowRightIcon />
       </a>
@@ -233,7 +252,7 @@ export function LogList({
         onScope={onScope}
         apps={{ apps, runtimes, counts: appCounts, picked: picks.app, onPick: (app) => setPicks({ ...picks, app }) }}
         summary={recordCount(shown.length, logs.length)}
-        end={<OpenInLogs traceId={traceId} links={links} />}
+        end={<OpenInLogs traceId={traceId} picks={picks} links={links} />}
         filtersLabel="What the records add up to"
         filters={
           <LogAggregates

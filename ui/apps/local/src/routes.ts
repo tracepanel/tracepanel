@@ -275,7 +275,8 @@ export function consoleLinks(prefix = "", newTab = false): TraceLinks {
     issue: (fingerprint, kind) => `${prefix}${href(issueRoute(fingerprint, kind))}`,
     call: (key) => `${prefix}${href({ name: "traces", q: `call:${key}` })}`,
     search: (q) => `${prefix}${href({ name: "traces", q })}`,
-    logs: (traceId) => `${prefix}${href({ name: "logs", q: `trace:${traceId}` })}`,
+    logs: (traceId, filters) =>
+      `${prefix}${href({ name: "logs", q: [`chain:${traceId}`, filters].filter(Boolean).join(" ") })}`,
     app: (service) => `${prefix}${href({ name: "app", service })}`,
     newTab,
   };
