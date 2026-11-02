@@ -218,8 +218,12 @@ fn sqlite(rows: &[Vec<Value>]) -> Vec<Value> {
         .collect()
 }
 
-/// A plan as text (PostgreSQL, MySQL's ANALYZE, H2): "->" nodes indented 6 a level, their details 2 deeper.
+/// A plan as text (PostgreSQL, MySQL's ANALYZE, H2): a line sits one level below the nearest node above it that is
+/// indented less. Nodes are the "->" lines and the top ones; PostgreSQL indents a level by 6 and a node's details
+/// (Filter:, Hash Cond:) by 6 past its arrow, MySQL indents a level by 4.
 fn text_plan(rows: &[Vec<Value>]) -> Vec<Value> {
+    // The open nodes, outermost first: (indent, depth).
+    let mut nodes: Vec<(usize, usize)> = Vec::new();
     rows.iter()
         .flat_map(|row| {
             row.first()
@@ -234,11 +238,13 @@ fn text_plan(rows: &[Vec<Value>]) -> Vec<Value> {
             let indent = text.len() - text.trim_start().len();
             let node = trimmed.starts_with("->");
             let body = trimmed.trim_start_matches("->").trim().to_owned();
-            let depth = if node {
-                (indent + 2) / 6
-            } else {
-                (indent + 4) / 6
-            };
+            while nodes.last().is_some_and(|&(open, _)| open >= indent) {
+                nodes.pop();
+            }
+            let depth = nodes.last().map_or(0, |&(_, parent)| parent + 1);
+            if node || indent == 0 {
+                nodes.push((indent, depth));
+            }
             let warning = if let Some(rest) = body.split("Seq Scan on ").nth(1) {
                 let table = rest.split_whitespace().next().unwrap_or_default();
                 Some(format!("Sequential scan of {table}: no index is used"))
@@ -397,6 +403,89 @@ mod tests {
                 {"depth": 0, "text": "StmtText=SELECT * FROM books  NodeId=1", "warning": null},
                 {"depth": 0, "text": "StmtText=|--Table Scan  NodeId=2", "warning": null},
             ]})
+        );
+    }
+
+    fn vendor(system: &str, analyze: bool) -> Request {
+        let span = json!({"kind": "sql", "attrs": {"db.system": system, "db.statement": "SELECT * FROM books"}});
+        request(span.as_object().unwrap(), analyze).unwrap()
+    }
+
+    #[test]
+    fn a_postgresql_plan_nests_each_node_and_its_details() {
+        let text = [
+            "Sort  (cost=95.43..95.68 rows=100 width=72)",
+            "  Sort Key: a.name",
+            "  ->  Hash Join  (cost=48.25..92.11 rows=100 width=72)",
+            "        Hash Cond: (b.author_id = a.id)",
+            "        ->  Nested Loop  (cost=4.47..47.06 rows=100 width=44)",
+            "              ->  Bitmap Heap Scan on books b  (cost=4.18..12.64 rows=10 width=40)",
+            "                    Recheck Cond: (year > 2000)",
+            "                    ->  Bitmap Index Scan on books_year_idx  (cost=0.00..4.18 rows=10 width=0)",
+            "                          Index Cond: (year > 2000)",
+            "              ->  Index Scan using reviews_book_id_idx on reviews r  (cost=0.29..3.43 rows=1 width=12)",
+            "                    Index Cond: (book_id = b.id)",
+            "        ->  Hash  (cost=22.00..22.00 rows=1200 width=36)",
+            "              ->  Seq Scan on authors a  (cost=0.00..22.00 rows=1200 width=36)",
+            "                    Filter: active",
+        ];
+        let answer = json!({
+            "answer": 3,
+            "columns": ["QUERY PLAN"],
+            "rows": text.iter().map(|line| json!([line])).collect::<Vec<_>>(),
+        });
+
+        let explained = plan(&vendor("postgresql", false), &answer);
+
+        assert_eq!(
+            explained,
+            json!({"vendor": "postgresql", "alias": "default", "analyzed": false, "lines": [
+                {"depth": 0, "text": "Sort  (cost=95.43..95.68 rows=100 width=72)", "warning": null},
+                {"depth": 1, "text": "Sort Key: a.name", "warning": null},
+                {"depth": 1, "text": "Hash Join  (cost=48.25..92.11 rows=100 width=72)", "warning": null},
+                {"depth": 2, "text": "Hash Cond: (b.author_id = a.id)", "warning": null},
+                {"depth": 2, "text": "Nested Loop  (cost=4.47..47.06 rows=100 width=44)", "warning": null},
+                {"depth": 3, "text": "Bitmap Heap Scan on books b  (cost=4.18..12.64 rows=10 width=40)",
+                 "warning": null},
+                {"depth": 4, "text": "Recheck Cond: (year > 2000)", "warning": null},
+                {"depth": 4, "text": "Bitmap Index Scan on books_year_idx  (cost=0.00..4.18 rows=10 width=0)",
+                 "warning": null},
+                {"depth": 5, "text": "Index Cond: (year > 2000)", "warning": null},
+                {"depth": 3,
+                 "text": "Index Scan using reviews_book_id_idx on reviews r  (cost=0.29..3.43 rows=1 width=12)",
+                 "warning": null},
+                {"depth": 4, "text": "Index Cond: (book_id = b.id)", "warning": null},
+                {"depth": 2, "text": "Hash  (cost=22.00..22.00 rows=1200 width=36)", "warning": null},
+                {"depth": 3, "text": "Seq Scan on authors a  (cost=0.00..22.00 rows=1200 width=36)",
+                 "warning": "Sequential scan of authors: no index is used"},
+                {"depth": 4, "text": "Filter: active", "warning": null},
+            ]})
+        );
+    }
+
+    #[test]
+    fn a_mysql_tree_nests_by_four() {
+        let text = "-> Nested loop inner join  (cost=1.6 rows=2) (actual time=0.05..0.07 rows=2 loops=1)\n    \
+            -> Filter: (b.`year` > 2000)  (cost=0.45 rows=1) (actual time=0.03..0.04 rows=2 loops=1)\n        \
+            -> Table scan on b  (cost=0.45 rows=2) (actual time=0.03..0.03 rows=2 loops=1)\n    \
+            -> Index lookup on r using book_id (book_id=b.id)  (cost=0.35 rows=1) (actual time=0.01..0.01 rows=1 loops=2)";
+        let answer = json!({"answer": 3, "columns": ["EXPLAIN"], "rows": [[text]]});
+
+        let explained = plan(&vendor("mysql", true), &answer);
+
+        assert_eq!(
+            explained["lines"],
+            json!([
+                {"depth": 0, "text": "Nested loop inner join  (cost=1.6 rows=2) (actual time=0.05..0.07 rows=2 loops=1)",
+                 "warning": null},
+                {"depth": 1, "text": "Filter: (b.`year` > 2000)  (cost=0.45 rows=1) (actual time=0.03..0.04 rows=2 loops=1)",
+                 "warning": null},
+                {"depth": 2, "text": "Table scan on b  (cost=0.45 rows=2) (actual time=0.03..0.03 rows=2 loops=1)",
+                 "warning": null},
+                {"depth": 1,
+                 "text": "Index lookup on r using book_id (book_id=b.id)  (cost=0.35 rows=1) (actual time=0.01..0.01 rows=1 loops=2)",
+                 "warning": null},
+            ])
         );
     }
 
