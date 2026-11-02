@@ -2,11 +2,13 @@
 // for after it loaded) before opening the panel.
 import { duration } from "@tracepanel/ui/format";
 import { breakdown, categoryLabel } from "@tracepanel/ui/lib/breakdown";
+import { cutNote, NO_ANSWER, PENDING, runningLabel } from "@tracepanel/ui/lib/live";
 import { percent } from "@tracepanel/ui/lib/percent";
 import { plural } from "@tracepanel/ui/lib/plural";
 import { WAITED_SHARE, withWaiting } from "@tracepanel/ui/lib/waitingShare";
 import type { Issue, Trace } from "@tracepanel/ui/types";
-import type { TraceInfo } from "./index";
+import type { Counted, Flight, TraceInfo } from "./index";
+import type { ChainFacts } from "./viewChain";
 
 /** How long the pointer rests on the pill before the card shows, and how long it may leave before it hides. */
 const SHOW_MS = 250;
@@ -92,6 +94,10 @@ export const CARD_STYLE = `
     font: 500 12px "Geist Variable", "Geist", ui-sans-serif, system-ui, sans-serif; cursor: pointer;
   }
   .card-more:hover, .card-more:focus-visible { color: var(--dt-float-link-hover); text-decoration: underline; outline: none; }
+  .card-wait { display: flex; align-items: center; gap: 6px; margin: 10px 0 0; color: var(--dt-text-3); font-size: 12px; }
+  .card-facts { margin: 8px 0 0; color: var(--dt-text-3); font-size: 12px; }
+  .card-facts b { color: var(--dt-float-text); font-weight: 600; }
+  .card-running { display: inline-flex; align-items: center; gap: 5px; }
   .card-skeleton { height: 10px; margin: 8px 0; border-radius: 5px; background: linear-gradient(90deg, var(--dt-float-shimmer), var(--dt-float-shimmer-peak), var(--dt-float-shimmer)); background-size: 200% 100%; animation: card-shimmer 1.2s linear infinite; }
   @keyframes card-shimmer { to { background-position: -200% 0; } }
   /* Where the time went, in the console's span colours. */
@@ -121,9 +127,21 @@ export const CARD_STYLE = `
   @media (prefers-reduced-motion: reduce) { .card { transition: none; } .card-skeleton { animation: none; } }
 `;
 
+/** The page's view in the browser (an SPA's route), and what its chain says once counted. */
+export interface CardView {
+  view: { name: string; start: number; duration: number; open: boolean; status: "ok" | "error" };
+  facts: ChainFacts | null;
+}
+
 export interface CardSource {
   /** This page's requests, oldest first: the page (unless cleared) and its AJAX calls. The last is the pill's. */
   requests(): readonly TraceInfo[];
+  /** Its requests still in flight, oldest first: the newest is the pill's while there is one (lib/live). */
+  flights(): readonly Flight[];
+  /** Its view, when the browser recording has one: the card's head before any request. */
+  view(): CardView | null;
+  /** A request's numbers as the pill says them: its chain's, pending until counted. */
+  counted(info: TraceInfo): Counted;
   /** The page's own request among them (null once cleared): tagged "page" in the list. */
   page(): TraceInfo | null;
   /** The panel's API base, for the stored trace; null without one (only the headers are known). */
@@ -216,13 +234,34 @@ function speedOf(total: number): "slow" | "very-slow" | undefined {
 }
 
 /** A request's row name: method and path, "page" on the page itself, and its findings as an amber chip. */
-function requestLabel(info: TraceInfo, isPage: boolean): HTMLElement {
+function requestLabel(info: TraceInfo, isPage: boolean, issues: number): HTMLElement {
   const { method, path } = requestName(info);
   const name = element("span", "card-path", `${method} ${path}`);
   if (isPage) name.append(element("span", "card-tag", "page"));
   // What makes a fast 200 worth opening.
-  if (info.issues) name.append(element("span", "card-kind card-issues", plural(info.issues, "issue", "issues")));
+  if (issues) name.append(element("span", "card-kind card-issues", plural(issues, "issue", "issues")));
   return name;
+}
+
+/** In flight: the ring and the time so far (from `start`, epoch ms), as the pill says it. */
+function runningCell(start: number, className: string): HTMLElement {
+  const cell = element("span", `${className} card-running`);
+  const ring = element("span", "running");
+  ring.setAttribute("aria-hidden", "true");
+  cell.append(ring, duration(Math.max(0, Date.now() - start) * 1000));
+  cell.title = runningLabel(start * 1000);
+  return cell;
+}
+
+/** The hourglass and "no answer yet", as the pill's. */
+function noAnswerMark(at: number | null): HTMLElement {
+  const mark = element("span", "no-answer");
+  mark.dataset["state"] = "cut";
+  mark.innerHTML =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 22h14"/><path d="M5 2h14"/><path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"/><path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"/></svg>';
+  mark.append(NO_ANSWER);
+  mark.title = cutNote(at);
+  return mark;
 }
 
 /** Its time, amber or red when slow. */
@@ -248,8 +287,8 @@ function mostLine(label: string, category: string, value: number, total: number)
 }
 
 /** Worst first: failed, then with issues, then slowest. */
-function worstFirst(requests: readonly TraceInfo[]): TraceInfo[] {
-  const rank = (info: TraceInfo) => (failed(info) ? 2 : info.issues ? 1 : 0);
+function worstFirst(requests: readonly TraceInfo[], counted: (info: TraceInfo) => Counted): TraceInfo[] {
+  const rank = (info: TraceInfo) => (failed(info) ? 2 : counted(info).issues ? 1 : 0);
   return [...requests].sort((a, b) => rank(b) - rank(a) || (b.totalMs ?? 0) - (a.totalMs ?? 0));
 }
 
@@ -263,13 +302,19 @@ function alignWith(card: HTMLElement, badge: HTMLElement): void {
   card.style.width = `${Math.round(Math.max(box.width, MIN_CARD_WIDTH))}px`;
 }
 
-export function mountCard(root: ShadowRoot, badge: HTMLElement, source: CardSource): { hide: () => void } {
+export function mountCard(
+  root: ShadowRoot,
+  badge: HTMLElement,
+  source: CardSource,
+): { hide: () => void; refresh: () => void } {
   const card = element("div", "card");
   card.setAttribute("role", "dialog");
   card.setAttribute("aria-label", "This request at a glance");
   root.append(card);
   // One fetch per stored trace: hovering again shows it at once.
   const traces = new Map<string, Promise<Trace | null>>();
+  // Those loaded, for drawing again as the pill changes while the card is open.
+  const resolved = new Map<string, Trace | null>();
   let showTimer: number | undefined;
   let hideTimer: number | undefined;
 
@@ -284,7 +329,11 @@ export function mountCard(root: ShadowRoot, badge: HTMLElement, source: CardSour
         : Promise.resolve(null);
       traces.set(id, found);
       // A trace not stored yet (the agent is still writing it) is asked again on the next hover.
-      void found.then((trace) => trace ?? traces.delete(id));
+      void found.then((trace) => {
+        if (trace) return;
+        traces.delete(id);
+        resolved.delete(id);
+      });
     }
     return found;
   }
@@ -384,26 +433,56 @@ export function mountCard(root: ShadowRoot, badge: HTMLElement, source: CardSour
     return [section];
   }
 
-  function otherRequests(later: readonly TraceInfo[]): HTMLElement | null {
+  /**
+   * The page's other requests, worst first, those still in flight on top (their time ticking): the count in the
+   * caption is the rows below it (and "+N more" the rest). Each row says why it matters: its status, its time in
+   * amber or red when slow.
+   */
+  function otherRequests(later: readonly TraceInfo[], flying: readonly Flight[]): HTMLElement | null {
     const page = source.page();
-    if (later.length === 0) return null;
-    // Every one of them, worst first, so the count in the caption is the rows below it (and "+N more" the rest);
-    // each row says why it matters: its status, its time in amber or red when slow.
-    const sorted = worstFirst(later);
+    const count = later.length + flying.length;
+    if (count === 0) return null;
+    const sorted = worstFirst(later, source.counted);
     const section = element("section", "card-section");
-    section.append(element("p", "card-caption", `Other requests on this page · ${later.length}`));
-    for (const info of sorted.slice(0, OTHERS)) section.append(requestRow(info, info === page));
+    section.append(element("p", "card-caption", `Other requests on this page · ${count}`));
+    const flights = [...flying].reverse().slice(0, OTHERS);
+    for (const flight of flights) section.append(flightRow(flight));
+    for (const info of sorted.slice(0, OTHERS - flights.length)) section.append(requestRow(info, info === page));
     // The panel lists them all; it opens on the first one not shown here.
-    const next = sorted[OTHERS]?.trace;
-    if (next) section.append(moreLink(sorted.length - OTHERS, `#/t/${next}`));
+    const shown = Math.min(count, OTHERS);
+    const next = sorted[OTHERS - flights.length]?.trace;
+    if (count > shown) section.append(moreLink(count - shown, next ? `#/t/${next}` : "#/"));
     return section;
+  }
+
+  /** One of the page's requests still in flight: its name, the ring and its time so far. */
+  function flightRow(flight: Flight): HTMLElement {
+    const row = element("button", "card-row");
+    row.type = "button";
+    const info = { name: flight.name, method: flight.method, url: flight.url };
+    const { method, path } = requestName(info);
+    row.append(
+      element("span"),
+      element("span", "card-path flying", `${method} ${path}`),
+      runningCell(flight.start, "card-ms"),
+    );
+    row.title = `${method} ${path}: ${runningLabel(flight.start * 1000)}`;
+    row.addEventListener("click", () => {
+      hide(true);
+      source.open("#/");
+    });
+    return row;
   }
 
   /** One of the page's other requests: status, name, time; a click opens it in the panel. */
   function requestRow(info: TraceInfo, isPage: boolean): HTMLElement {
     const row = element("button", "card-row");
     row.type = "button";
-    row.append(statusChip(info.status) ?? element("span"), requestLabel(info, isPage), timeCell(info));
+    row.append(
+      statusChip(info.status) ?? element("span"),
+      requestLabel(info, isPage, source.counted(info).issues),
+      timeCell(info),
+    );
     const { method, path } = requestName(info);
     row.title = `${method} ${path}\nClick to open it in the panel`;
     const trace = info.trace;
@@ -435,31 +514,96 @@ export function mountCard(root: ShadowRoot, badge: HTMLElement, source: CardSour
     const fixes = trace ? findings(info, trace) : null;
     if (fixes) card.append(fixes);
     card.append(...taskFindings(info));
-    const after = otherRequests(later);
+    const after = otherRequests(later, source.flights());
     if (after) card.append(after);
   }
 
-  /** The request the pill shows (the latest), and the page's others. */
+  /** A request still in flight: its name, its time so far; it says it waits for its answer. */
+  function renderFlight(flight: Flight, later: readonly TraceInfo[], flying: readonly Flight[]): void {
+    card.textContent = "";
+    const row = element("div", "card-head");
+    const { method, path } = requestName({ name: flight.name, method: flight.method, url: flight.url });
+    const name = element("span", "card-name");
+    name.append(...nameWithMethod(`${method} ${path}`));
+    name.title = `${method} ${path}`;
+    row.append(name, runningCell(flight.start, "card-time"));
+    const wait = element("p", "card-wait");
+    wait.append("Waiting for its answer: its trace opens in the panel once its app has written it.");
+    card.append(row, wait);
+    const after = otherRequests(later, flying);
+    if (after) card.append(after);
+  }
+
+  /** The page's view, before any request: running while open, its time, "no answer yet" when cut, its chain's numbers. */
+  function renderView({ view, facts }: CardView): void {
+    card.textContent = "";
+    const row = element("div", "card-head");
+    const name = element("span", "card-name");
+    name.append(...nameWithMethod(`VIEW ${view.name}`));
+    row.append(name);
+    if (view.open) row.append(runningCell(view.start / 1000, "card-time"));
+    else row.append(element("span", "card-time", duration(view.duration)));
+    card.append(row);
+    if (facts?.cut != null) {
+      const wait = element("p", "card-wait");
+      wait.append(noAnswerMark(facts.cut), "a call hadn't answered when its trace went out");
+      card.append(wait);
+    }
+    const line = element("p", "card-facts");
+    if (view.open) line.append("Still open: its trace is sent once it ends.");
+    else if (!facts) line.append(`Down its calls: ${PENDING}`);
+    else {
+      const { queries, calls, issues } = facts.counts;
+      line.append(
+        "Down its calls: ",
+        element("b", undefined, plural(queries, "query", "queries")),
+        " · ",
+        element("b", undefined, plural(calls, "HTTP call", "HTTP calls")),
+        ...(issues ? [" · ", element("b", undefined, plural(issues, "issue", "issues"))] : []),
+      );
+    }
+    card.append(line);
+  }
+
+  /** The request the pill shows (the newest in flight, else the latest), and the page's others. */
   function current(): { info: TraceInfo | undefined; rest: readonly TraceInfo[] } {
     const all = source.requests();
     return { info: all.at(-1), rest: all.slice(0, -1) };
   }
 
+  /** Draws what the pill shows now; for a request done, with its stored trace once loaded. */
+  function draw(): void {
+    const flying = source.flights();
+    const all = source.requests();
+    const flight = flying.at(-1);
+    if (flight) {
+      renderFlight(flight, all, flying.slice(0, -1));
+      return;
+    }
+    const { info, rest } = current();
+    if (!info) {
+      const view = source.view();
+      if (view) renderView(view);
+      return;
+    }
+    const id = info.trace;
+    const known = id ? resolved.get(id) : undefined;
+    render(info, rest, known ?? null, Boolean(id && source.api) && known === undefined);
+    if (!id || known !== undefined) return;
+    void load(id).then((trace) => {
+      resolved.set(id, trace);
+      // Still open on the same request (a boosted link may have moved on): draw it with its trace.
+      if (card.hasAttribute("data-open") && current().info?.trace === id && source.flights().length === 0) draw();
+    });
+  }
+
   function show(): void {
     window.clearTimeout(hideTimer);
     if (source.panelOpen()) return;
-    const { info, rest } = current();
-    if (!info) return;
-    const id = info.trace;
-    render(info, rest, null, Boolean(id && source.api));
+    if (!source.requests().length && !source.flights().length && !source.view()) return;
+    draw();
     alignWith(card, badge);
     card.toggleAttribute("data-open", true);
-    if (!id) return;
-    void load(id).then((trace) => {
-      const now = current();
-      // Still open on the same request (a boosted link may have moved on): draw it with its trace.
-      if (card.hasAttribute("data-open") && now.info?.trace === id) render(now.info, now.rest, trace, false);
-    });
   }
 
   function hide(now = false): void {
@@ -489,5 +633,14 @@ export function mountCard(root: ShadowRoot, badge: HTMLElement, source: CardSour
   };
   badge.addEventListener("blur", blur);
   card.addEventListener("focusout", blur);
-  return { hide: () => hide(true) };
+  return {
+    hide: () => hide(true),
+    // The pill drew again (a request took off or landed, a time ticked, a count came): the open card follows it.
+    refresh: () => {
+      if (card.hasAttribute("data-open")) {
+        draw();
+        alignWith(card, badge);
+      }
+    },
+  };
 }
