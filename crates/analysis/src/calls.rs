@@ -214,7 +214,9 @@ pub fn operation(trace: &Trace, span: &Span) -> Option<Operation> {
         "http" => {
             let (method, host, path) = http_endpoint(span);
             operation.statement = text(attrs, "url.full");
-            (operation.target, operation.op, operation.template) = (host, method, path);
+            // A call to a GraphQL server by its operation (`GraphQL query Authors`): its path is every operation's.
+            let template = crate::graphql::carried(attrs).unwrap_or(path);
+            (operation.target, operation.op, operation.template) = (host, method, template);
         }
         "storage" => {
             operation.target = storage::target(span);
@@ -921,6 +923,52 @@ mod tests {
         let key = query_fingerprint("SELECT 1", "default");
         assert_eq!(key.len(), 16);
         assert_ne!(key, query_fingerprint("SELECT 1", "replica"));
+    }
+
+    #[test]
+    fn a_call_to_a_graphql_server_is_its_operation_on_its_host() {
+        let call = |attrs: Value| -> Span {
+            serde_json::from_value(serde_json::json!({
+                "id": "c", "kind": "http.client", "name": "POST 127.0.0.1:8051/graphql", "start": 0, "duration": 1,
+                "attrs": attrs,
+            }))
+            .unwrap()
+        };
+        let trace: Trace = serde_json::from_value(
+            serde_json::json!({"id": "t", "kind": "http", "name": "GET /", "start": 0}),
+        )
+        .unwrap();
+        let url = "http://127.0.0.1:8051/graphql";
+        let shapes = [
+            serde_json::json!({"http.request.method": "POST", "url.full": url,
+                "graphql.operation.type": "query", "graphql.operation.name": "Authors"}),
+            serde_json::json!({"http.request.method": "POST", "url.full": url, "graphql.operation": "query Authors"}),
+            serde_json::json!({"http.request.method": "POST", "url.full": url,
+                "http.request.body": r#"{"query":"query Authors { authors { name } }"}"#}),
+            serde_json::json!({"http.request.method": "POST", "url.full": url}),
+        ];
+
+        let found = shapes.map(|attrs| {
+            let operation = operation(&trace, &call(attrs)).unwrap();
+            (operation.target, operation.op, operation.template)
+        });
+
+        let on = |template: &str| {
+            (
+                "127.0.0.1".to_owned(),
+                "POST".to_owned(),
+                template.to_owned(),
+            )
+        };
+        assert_eq!(
+            found,
+            [
+                on("GraphQL query Authors"),
+                on("GraphQL query Authors"),
+                on("GraphQL query Authors"),
+                on("/graphql"),
+            ]
+        );
     }
 
     #[test]

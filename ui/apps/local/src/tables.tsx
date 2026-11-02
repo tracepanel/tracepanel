@@ -45,6 +45,7 @@ import {
 import { Badge } from "@tracepanel/ui/components/ui/badge";
 import { Button } from "@tracepanel/ui/components/ui/button";
 import { TableCell, TableRow } from "@tracepanel/ui/components/ui/table";
+import { namesOperation } from "@tracepanel/ui/lib/graphql";
 import { ESTIMATE, money, providerName, tokens } from "@tracepanel/ui/lib/llm";
 import { pageParts } from "@tracepanel/ui/lib/page";
 import { systemOfPage } from "@tracepanel/ui/lib/systems";
@@ -569,6 +570,16 @@ function OpName({ item }: { item: CallRow }) {
           {item.op} {item.template}
         </Cut>
         <AliasChip value={providerName(item.target)} />
+      </>
+    );
+  }
+  if (item.family === "http" && namesOperation(item.template)) {
+    // A call to a GraphQL server by its operation (the agent's template), its host beside it: its URL is every one's.
+    return (
+      <>
+        <MethodBadge method={item.op} />
+        <Cut>{item.template}</Cut>
+        <AliasChip value={item.target} />
       </>
     );
   }

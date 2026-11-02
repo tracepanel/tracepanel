@@ -55,8 +55,9 @@ fn text<'a>(attrs: &'a Attrs, key: &str) -> Option<&'a str> {
         .filter(|value| !value.is_empty())
 }
 
-/// The operation a request's trace carries: its SDK's attributes, else its captured body.
-fn carried(attrs: &Attrs) -> Option<String> {
+/// The operation a request's trace, or a call to a GraphQL server, carries: its SDK's attributes, else its captured
+/// body. One URL serves every operation: a call is named by it (`GraphQL query Authors`) wherever calls are listed.
+pub fn carried(attrs: &Attrs) -> Option<String> {
     if let (Some(kind), Some(name)) = (
         text(attrs, "graphql.operation.type"),
         text(attrs, "graphql.operation.name"),

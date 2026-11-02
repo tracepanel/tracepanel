@@ -20,6 +20,8 @@ export interface EntrySummary {
    * answer names its trace), or a view still open. Its time ticks from `start`.
    */
   open?: boolean | undefined;
+  /** An open view whose calls have all answered: its time stops here (epoch µs, the last answer) until it ends. */
+  until?: number | undefined;
 }
 
 export interface TabEntry {

@@ -106,6 +106,38 @@ test("the hover card of a request in flight says it waits, and follows it as it 
   await expect(card.locator(".status")).toHaveText("200");
 });
 
+test("the hover card open as a request answers fills in once its trace is stored, no hover needed", async ({
+  page,
+}) => {
+  const call = await posts();
+  await openApp(page, { slow: call });
+  const release = await holdSlow(page, call);
+  // The app writes its trace a moment after its answer: until then the agent hasn't got it.
+  let stored = false;
+  await page.route(`**/api/traces/${call.trace}`, (route) =>
+    stored ? route.continue() : route.fulfill({ status: 404 }),
+  );
+
+  await page.getByRole("button", { name: "Load slow" }).click();
+  await expect(pill(page).locator('.seg[data-state="running"]')).toHaveCount(1);
+  await pill(page).hover();
+  const card = page.getByRole("dialog", { name: "This request at a glance" });
+  await expect(card).toContainText("Waiting for its answer");
+  release();
+
+  // Answered, not stored: its head, and where its time went still loading.
+  await expect(card.locator(".status")).toHaveText("200");
+  await expect(card.locator(".card-skeleton")).toHaveCount(2);
+  await expect(card).not.toContainText("Fix first");
+
+  stored = true;
+
+  // Open all along: where its time went and what to fix first, as a card opened after it was stored shows them.
+  await expect(card.locator(".card-bar")).toBeVisible();
+  await expect(card).toContainText("Fix first");
+  await expect(card.locator(".card-skeleton")).toHaveCount(0);
+});
+
 test("an SPA's route change is a new page: the pill shows its view running, not the last view's requests", async ({
   page,
 }) => {
@@ -140,6 +172,44 @@ test("a view on its first frame reads … where its time will tick, never 0 µs:
   const row = list(page).locator('.dt-request-row[data-state="running"]');
   await expect(row.locator(".dt-running-time")).toHaveText("…");
   await expect(row).not.toContainText("µs");
+});
+
+test("an open view whose calls have all answered stops its time at the last answer while it waits for its end", async ({
+  page,
+}) => {
+  await docked(page, "bottom");
+  await openApp(page, { posts: await posts() }, { recording: true });
+  const id = "01M4E2ELIVE000000000000004";
+  const start = Date.now() * 1000 - 1_000_000;
+  await announce(page, id, "/app/quiet", true, start);
+  const row = list(page).locator(".dt-request-row", { hasText: "/app/quiet" });
+  const time = row.locator(".dt-running-time");
+  // Before its call: its time runs.
+  const first = await time.innerText();
+  await expect(time).not.toHaveText(first);
+
+  // The view's call, marked as the recording marks the calls of the view that made them.
+  await page.evaluate((view) => {
+    const send = window.fetch;
+    window.fetch = async (...args) => {
+      const response = await send(...args);
+      Object.defineProperty(response, Symbol.for("tracepanel.page"), { value: view });
+      return response;
+    };
+  }, id);
+  await page.getByRole("button", { name: "Load posts" }).click();
+  await expect(list(page).locator(".dt-request-row", { hasText: "/api/posts" })).toHaveCount(1);
+
+  // Answered, the view still open (it waits a moment for more): its time stays at the answer, ring and all.
+  await expect(row).toHaveAttribute("data-state", "running");
+  const stopped = await time.innerText();
+  await page.waitForTimeout(700);
+  await expect(time).toHaveText(stopped);
+
+  // Its end (2.0 s, as announced): its final time.
+  await announce(page, id, "/app/quiet", false, start);
+  await expect(row).not.toHaveAttribute("data-state", "running");
+  await expect(row).toContainText("2.0 s");
 });
 
 test("docked at the right, the panel follows a new view as the bottom dock does, named as the list names it", async ({

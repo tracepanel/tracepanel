@@ -39,3 +39,22 @@ export function graphqlName(body: unknown): string | undefined {
 export function namesOperation(name: string | undefined): boolean {
   return name?.startsWith("GraphQL ") === true;
 }
+
+/** An attribute's text, when it has one. */
+function textOf(value: unknown): string | undefined {
+  return typeof value === "string" && value !== "" ? value : undefined;
+}
+
+/**
+ * "GraphQL query Authors": the operation a call to a GraphQL server carries, as the agent names a request by it
+ * (graphql.rs): its SDK's attributes (`graphql.operation.type` and `.name`, else `graphql.operation`), else the body it
+ * sent. None for any other call. One URL serves every operation: the operation says which call it was.
+ */
+export function callOperation(attrs: Readonly<Record<string, unknown>>): string | undefined {
+  const kind = textOf(attrs["graphql.operation.type"]);
+  const name = textOf(attrs["graphql.operation.name"]);
+  if (kind && name) return `GraphQL ${kind} ${name}`;
+  const label = textOf(attrs["graphql.operation"]);
+  if (label) return `GraphQL ${label}`;
+  return graphqlName(attrs["http.request.body"]);
+}

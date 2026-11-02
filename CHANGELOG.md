@@ -4,6 +4,20 @@
 
 ### Fixed
 
+- A view's pane while it is open reads its time on a line of its own:
+  "1.8 s", then "Its trace is sent once it ends…", not "1.8 sIts trace".
+- A call to a GraphQL server is named by its operation ("GraphQL query
+  Authors"), as its request is, not by the URL every operation shares
+  ("POST 127.0.0.1:8051/graphql"): in the call tree, the HTTP calls tab,
+  the calls list, the hover card's findings and the MCP tools. The calls
+  group by it.
+- The hover card open as a request answers fills in once its trace is
+  stored: where its time went and what to fix first, without hovering
+  again. It kept the request's head alone, though the pill counted its
+  issues.
+- An open view whose calls have all answered stops its time at the last
+  answer while it waits for its end: 6.0 s, then 6.1 s once it ends, not
+  6.8 s then 6.1 s. On the pill, its card, the panel's list and its pane.
 - Work in flight shows as it runs. The pill shows the newest request
   still in flight, browser-queued ones too, with a turning ring and its
   time so far, not the last one that finished. An open view runs the

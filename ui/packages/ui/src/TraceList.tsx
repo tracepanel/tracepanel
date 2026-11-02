@@ -45,6 +45,8 @@ export interface TraceRow {
   target?: string | undefined;
   /** In flight (lib/live): a request the page waits for, a view still open. Its time ticks, its numbers are pending. */
   open?: boolean | undefined;
+  /** An open view whose calls have all answered: its time stops at the last answer (epoch µs) until it ends. */
+  until?: number | undefined;
 }
 
 export interface TraceListProps {
@@ -153,7 +155,7 @@ export function TraceList({
 
 /** One row of the list: its name, status and time, then its numbers (its chain's, `chained`). */
 function ListRow({
-  row: { trace, depth = 0, trigger, target, run, open },
+  row: { trace, depth = 0, trigger, target, run, open, until },
   fold,
   chained,
   pending,
@@ -200,7 +202,15 @@ function ListRow({
         <RowApp trace={trace} shown={services} />
         {current ? <ThisPage compact={compact} /> : null}
       </span>
-      <RowMeta trace={trace} open={open} cut={cut} chained={chained} pending={pending} compact={compact} />
+      <RowMeta
+        trace={trace}
+        open={open}
+        until={until}
+        cut={cut}
+        chained={chained}
+        pending={pending}
+        compact={compact}
+      />
     </button>
   );
 }
@@ -215,6 +225,7 @@ function liveProps(trace: TraceSummary, open: boolean | undefined, cut: number |
 function RowMeta({
   trace,
   open,
+  until,
   cut,
   chained,
   pending,
@@ -222,6 +233,7 @@ function RowMeta({
 }: {
   trace: TraceSummary;
   open: boolean | undefined;
+  until: number | undefined;
   cut: number | null;
   chained: boolean;
   pending: boolean;
@@ -232,7 +244,7 @@ function RowMeta({
     <span className="dt-request-meta">
       {/* No status of its own (a view, a task, a job): its slot kept, so the time lines up with a request's. */}
       <StatusSlot status={trace.kind === "page" || open ? null : trace.http_status} />
-      <RowTime trace={trace} open={open} cut={cut} />
+      <RowTime trace={trace} open={open} until={until} cut={cut} />
       <Meta trace={trace} chained={chained} pending={pending} />
     </span>
   );
@@ -242,8 +254,18 @@ function RowMeta({
  * A row's time: ticking while it runs; its time and "no answer" when its trace went out with a call unanswered (its
  * time is where it was cut, not how slow it was); else its time.
  */
-function RowTime({ trace, open, cut }: { trace: TraceSummary; open: boolean | undefined; cut: number | null }) {
-  if (open) return <Running start={trace.start} />;
+function RowTime({
+  trace,
+  open,
+  until,
+  cut,
+}: {
+  trace: TraceSummary;
+  open: boolean | undefined;
+  until: number | undefined;
+  cut: number | null;
+}) {
+  if (open) return <Running start={trace.start} until={until} />;
   if (cut === null) return <span>{duration(trace.duration)}</span>;
   return (
     <span className="dt-request-cut">

@@ -1,7 +1,7 @@
 // The marks of lib/live's states, one look wherever they show: the list's rows, the call tree, the trace's pane. The
 // widget draws the same in its own DOM (its pill and card, outside React): the ring and the hourglass, these words.
 import { useEffect, useState } from "react";
-import { cutNote, NO_ANSWER, PENDING, runningLabel, runningTime, TICK_MS } from "./lib/live";
+import { clockOf, cutNote, NO_ANSWER, PENDING, runningLabel, runningTime, TICK_MS } from "./lib/live";
 import { WaitingIcon } from "./primitives";
 
 /** Now (ms), ticking every `ms` while `active`; still otherwise. */
@@ -21,9 +21,17 @@ export function RunningMark({ title }: { title?: string | undefined }) {
   return <span className="dt-running" role="img" aria-label="running" title={title} />;
 }
 
-/** A running thing's time so far, ticking, after its ring: "⟳ 3.2 s". */
-export function Running({ start, className }: { start: number; className?: string | undefined }) {
-  const now = useNow(true);
+/** A running thing's time so far, ticking, after its ring: "⟳ 3.2 s"; stopped at `until` (lib/live clockOf). */
+export function Running({
+  start,
+  until,
+  className,
+}: {
+  start: number;
+  until?: number | undefined;
+  className?: string | undefined;
+}) {
+  const now = clockOf(until, useNow(true));
   const label = runningLabel(start, now);
   return (
     <span className={className ? `dt-running-time ${className}` : "dt-running-time"} data-state="running" title={label}>

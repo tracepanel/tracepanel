@@ -95,10 +95,14 @@ export interface TraceScreenProps {
   running?: Running | undefined;
 }
 
-/** A trace still running in the browser: when it started (µs), and whether it is a view (or a request). */
+/**
+ * A trace still running in the browser: when it started (µs), whether it is a view (or a request), and where its time
+ * stops while it waits for its end, its calls all answered (µs).
+ */
 export interface Running {
   start: number;
   view: boolean;
+  until?: number | undefined;
 }
 
 // What each app said, as last loaded: the next trace of the same app opens with its App tab at once (the panel
@@ -436,10 +440,10 @@ function TraceArriving({ variant, running }: { variant: TraceScreenProps["varian
 
 /** Still running in the browser: a view open, a request the page waits for, its time ticking. */
 function StillRunning({ running }: { running: Running }) {
-  const { view, start } = running;
+  const { view, start, until } = running;
   return (
     <Empty title={view ? "View still open" : "Request in flight"} icon={RunningIcon} page={true}>
-      <RunningTime start={start} className="dt-arriving-time" />
+      <RunningTime start={start} until={until} className="dt-arriving-time" />
       {view ? VIEW_RUNS : REQUEST_RUNS}
     </Empty>
   );

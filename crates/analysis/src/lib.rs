@@ -698,10 +698,15 @@ pub fn http_endpoint(span: &Span) -> (String, String, String) {
 fn http_call(span: &Span) -> Call<'_> {
     let (method, host, path) = http_endpoint(span);
     let url = text(&span.attrs, "url.full").unwrap_or_else(|| span.name.clone());
-    let group = format!("{method} {host}{path}");
+    let endpoint = format!("{method} {host}{path}");
+    // A GraphQL server's one URL serves every operation: its calls are the operation's (`GraphQL query Authors`).
+    let (group, title) = match graphql::carried(&span.attrs) {
+        Some(operation) => (format!("{endpoint} {operation}"), operation),
+        None => (endpoint.clone(), endpoint),
+    };
     Call {
         span,
-        title: group.clone(),
+        title,
         group,
         exact: format!("{method} {url}"),
         read: matches!(method.as_str(), "GET" | "HEAD" | "OPTIONS"),
@@ -1772,6 +1777,31 @@ mod tests {
                     3
                 ),
             ]
+        );
+    }
+
+    /// A call to a GraphQL server for `operation` (`query Author`), as tracepanel-js records one.
+    fn graphql_call(kind: &str, name: &str) -> (&'static str, &'static str, Value, i64) {
+        let attrs = serde_json::json!({
+            "http.request.method": "POST", "url.full": "http://127.0.0.1:8051/graphql",
+            "graphql.operation.type": kind, "graphql.operation.name": name, "code.origin": "src/api.ts:12 in load",
+        });
+        ("http.client", "POST 127.0.0.1:8051/graphql", attrs, 1000)
+    }
+
+    #[test]
+    fn a_call_to_a_graphql_server_is_named_by_its_operation() {
+        let mut slow = graphql_call("query", "Authors");
+        slow.3 = 750_000;
+        let trace = request(&[slow, graphql_call("mutation", "Save")]);
+
+        assert_eq!(
+            found(&trace),
+            [(
+                "slow-http".to_owned(),
+                "Slow HTTP call: 750 ms · GraphQL query Authors".to_owned(),
+                1
+            )]
         );
     }
 
