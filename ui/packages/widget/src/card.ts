@@ -4,6 +4,7 @@ import { duration } from "@tracepanel/ui/format";
 import { breakdown, categoryLabel } from "@tracepanel/ui/lib/breakdown";
 import { percent } from "@tracepanel/ui/lib/percent";
 import { plural } from "@tracepanel/ui/lib/plural";
+import { WAITED_SHARE, withWaiting } from "@tracepanel/ui/lib/waitingShare";
 import type { Issue, Trace } from "@tracepanel/ui/types";
 import type { TraceInfo } from "./index";
 
@@ -107,6 +108,13 @@ export const CARD_STYLE = `
   [data-category="llm"] { --k: var(--dt-k-llm); }
   [data-category="mail"] { --k: var(--dt-k-mail); }
   [data-category="signal"] { --k: var(--dt-k-signal); }
+  /* The code's waits: neutral and hatched, as the console's strip draws them. */
+  [data-category="waiting"] {
+    --k: color-mix(in srgb, var(--dt-text-3) 50%, transparent);
+    background-image: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--dt-text-3) 45%, transparent) 0 2px, transparent 2px 5px);
+  }
+  .card-most[data-category="waiting"] { background-image: none; }
+  .card-most[data-category="waiting"] i { background-image: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--dt-text-3) 45%, transparent) 0 2px, transparent 2px 5px); }
   .panel[data-open] ~ .card { display: none; }
   /* A card out of sight shimmers no more, still loading or not. */
   .card:not([data-open]) .card-skeleton { animation: none; }
@@ -297,7 +305,10 @@ export function mountCard(root: ShadowRoot, badge: HTMLElement, source: CardSour
 
   /** The bar of where the time went, and in words only the biggest part. */
   function timing(info: TraceInfo, trace: Trace): HTMLElement[] {
-    const parts = breakdown(trace);
+    // The code's waits split out of its own time, as the console's legend has them.
+    const parts = withWaiting(trace, breakdown(trace));
+    const labelOf = (category: (typeof parts)[number][0]) =>
+      category === WAITED_SHARE ? "Waiting" : categoryLabel(category, trace);
     const total = Math.max(
       parts.reduce((sum, [, value]) => sum + value, 0),
       1,
@@ -308,13 +319,13 @@ export function mountCard(root: ShadowRoot, badge: HTMLElement, source: CardSour
       const piece = element("span");
       piece.dataset["category"] = category;
       piece.style.flex = `${value / total} 1 0`;
-      piece.title = `${categoryLabel(category, trace)} ${duration(value)}`;
+      piece.title = `${labelOf(category)} ${duration(value)}`;
       bar.append(piece);
     }
     const [top] = [...parts].sort((a, b) => b[1] - a[1]);
     if (!top) return [bar];
     const [category, value] = top;
-    const label = categoryLabel(category, trace);
+    const label = labelOf(category);
     bar.setAttribute("aria-label", `Most time: ${label}, ${duration(value)}`);
     // A failed request's story is its error (under Fix first), not where its time went.
     return failed(info) ? [bar] : [bar, mostLine(label, category, value, total)];

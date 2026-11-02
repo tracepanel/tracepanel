@@ -212,7 +212,8 @@ function ProfileOf({
   // Only a profile that measured its memory has the choice.
   const kinds = memory ? <Segmented label="Profile of" segments={KINDS} value={kind} onChange={onKind} /> : null;
   if (memory && kind === "memory") {
-    const head = <MemoryHead memory={memory} what={{ ...WHOLE_TRACE, reason: profileReason(trace) }} />;
+    const what = { ...WHOLE_TRACE, reason: profileReason(trace), sampled: sampledSites(trace.attrs) };
+    const head = <MemoryHead memory={memory} what={what} />;
     return <MemoryPane profile={profile} memory={memory} kinds={kinds} head={head} frames={frames} />;
   }
   return (
@@ -299,6 +300,27 @@ interface MemoryWhat {
   note?: string | null;
   /** Why it was profiled ("Profiled: by the panel's cookie"), when its SDK says. */
   reason?: string | null;
+  /** Its sites are samples, each standing for many bytes (Node's heap sampler): their bytes an estimate. */
+  sampled?: boolean;
+}
+
+/** Node's sites are its heap sampler's: one allocation in about every 32 KB, each standing for that many bytes. */
+function sampledSites(attrs: Trace["attrs"]): boolean {
+  return attrs["telemetry.sdk.language"] === "nodejs";
+}
+
+/**
+ * "The list: 25 KB held at the peak, by where it was allocated. Its shares are of these": what the sites add up to,
+ * said apart from the peak, a different number (the peak is the level the memory reached; the sites, the largest
+ * places what was held then was allocated in). None without sites.
+ */
+function sitesLine(memory: Memory, what: MemoryWhat): string | null {
+  const held = (memory.sites ?? []).reduce((sum, site) => sum + Math.max(site.bytes, 0), 0);
+  if (held === 0) return null;
+  const end = what.traces > 1 ? "at the end of each trace" : "at the end of the trace";
+  const when = memory.sites_at === "end" ? `still held ${end}, not at its peak` : "held at the peak";
+  const amount = `${what.sampled ? "≈ " : ""}${bytes(held)}`;
+  return `The list: ${amount} ${when}, by where it was allocated${what.sampled ? " (sampled)" : ""}. Its shares are of these`;
 }
 
 const WHOLE_TRACE: MemoryWhat = { title: "Memory of the whole trace", traces: 1 };
@@ -322,21 +344,18 @@ function MemoryHead({ memory, what = WHOLE_TRACE }: { memory: Memory; what?: Mem
         </span>
       </span>
       <span className="text-xs text-muted-foreground tabular-nums">{keptLine(memory)}</span>
+      <NoteLine text={sitesLine(memory, what)} />
       <MemoryNotes memory={memory} what={what} />
     </div>
   );
 }
 
-/** What the numbers can't tell apart: a stretch they can't narrow, sites at the end, other traces counted. */
+/** What the numbers can't tell apart: a stretch they can't narrow, other traces counted. */
 function MemoryNotes({ memory, what }: { memory: Memory; what: MemoryWhat }) {
-  const end = what.traces > 1 ? "the end of each trace" : "the end of the trace";
   return (
     <>
       <NoteLine text={what.reason} />
       <NoteLine text={what.note} />
-      {memory.sites_at === "end" ? (
-        <span className="text-xs text-muted-foreground">Where it was at {end}, not its peak</span>
-      ) : null}
       {memory.shared ? (
         <span className="text-xs text-warn">Includes other traces that ran in the process meanwhile</span>
       ) : null}
@@ -381,10 +400,21 @@ function scopeOf(profile: Profile, range: TimeRange | null, trace: Profiled): Sc
   return { profile: shown, title: "Profile of the whole trace", note, timed: false, cpu };
 }
 
-/** "110 samples, one every 10 ms": what the profile took; a CPU profile's, "of CPU time". */
+/**
+ * "110 samples, one every 10 ms": what the profile took; a CPU profile's, "of CPU time". One whose CPU time is an
+ * estimate (Go on macOS, whose kernel hands the profiler's samples out unevenly) says from how many samples.
+ */
 function samplesLine(profile: Profile, cpu: boolean): string {
+  if (profile.estimated_from !== undefined) {
+    return `CPU time estimated from ${plural(profile.estimated_from, "sample", "samples")}: macOS hands the profiler's samples out unevenly, so each is weighed; waiting isn't sampled`;
+  }
   const line = `${profile.samples.toLocaleString()} samples, one every ${duration(profile.interval_us)}`;
   return cpu ? `${line} of CPU time; waiting isn't sampled` : line;
+}
+
+/** "≈ " before a time the profile estimates rather than counts. */
+function about(profile: Profile): string {
+  return profile.estimated_from === undefined ? "" : "≈ ";
 }
 
 /** What the big number is of the trace's time: profiled (timed), sampled, or on the CPU (a CPU profile). */
@@ -425,6 +455,7 @@ function ProfileHead({ whole, shown, trace, scope }: { whole: Profile; shown: Pr
       <span className="text-xs text-muted-foreground">{scope.title}</span>
       <span className="text-2xl font-semibold tracking-tight tabular-nums">
         {/* A CPU profile's own samples: the time off the CPU added to it is the trace's, not sampled. */}
+        {about(whole)}
         {time(scope.cpu ? whole.samples : shown.samples)}
         <span className="ml-2 text-sm font-normal text-muted-foreground">
           {profiledWord(scope)} of the trace's {duration(trace.duration)}
@@ -1232,6 +1263,7 @@ function AppMemorySection({ app, measured }: { app: AppProfile; measured: AppMem
               app: <AppChip name={app.app} runtime={appRuntime(app)} />,
               traces: measured.traces,
               note: measured.note,
+              sampled: app.traces.some((each) => sampledSites(each.member.trace.attrs)),
             }}
           />
         }

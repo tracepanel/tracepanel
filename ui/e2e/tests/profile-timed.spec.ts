@@ -41,19 +41,17 @@ test("the strip and its share's numbers split the code's own time; a click on th
 
   await expect(waiting).toHaveText("waiting · 1.5 s");
 
-  // Said once on the strip; the legend says it only on hover.
-  await page
-    .getByRole("list", { name: /^Where the time went/ })
-    .getByRole("button", { name: /^Your code/ })
-    .hover();
-
-  await expect(page.getByRole("tooltip", { name: /^Your code/ })).toContainText("of it 1.5 s waiting");
+  // The legend splits the wait out of the code's time as the Profile tab does: a share of its own, the last.
+  const legend = page.getByRole("list", { name: /^Where the time went/ });
+  await expect(legend.locator(":scope > li").first()).toContainText(/^Your code\s*\d+ ms/);
+  await expect(legend.locator('[data-category="waiting"]')).toHaveText(/^Waiting\s*1\.5 s\s*\d+%$/);
+  await expect(legend.locator('[data-category="code"]')).not.toContainText("1.5 s");
 
   const middle = await centre(waiting);
   await page.mouse.move(...middle);
 
-  // Its share's numbers only: the wait row in the tree names what it waited on and where.
-  await expect(page.locator(".dt-lane-tip")).toContainText("Your code");
+  // Its share's numbers only, waiting's: the wait row in the tree names what it waited on and where.
+  await expect(page.locator(".dt-lane-tip")).toContainText("Waiting");
   await expect(page.getByRole("tooltip").filter({ hasText: /Open the profile|tasks\.py/ })).toHaveCount(0);
 
   await page.mouse.click(...middle);

@@ -38,7 +38,12 @@ test("the Memory view: its peak, what it kept, where the memory was, and what it
   await expect(page.getByText("Memory of the whole trace")).toBeVisible();
   await expect(page.getByText("peak, above where it started")).toBeVisible();
   await expect(page.getByText("net +1.2 MB · 90 MB allocated in all")).toBeVisible();
-  await expect(page.getByText("Where it was at the end of the trace, not its peak")).toBeVisible();
+  // The list's bytes are a number of their own, not the peak's: said so, and its shares are of them.
+  await expect(
+    page.getByText(
+      /^The list: [\d.]+ MB still held at the end of the trace, not at its peak, by where it was allocated. Its shares are of these$/,
+    ),
+  ).toBeVisible();
   await expect(page.getByText("Includes other traces that ran in the process meanwhile")).toBeVisible();
 
   await page.getByRole("tab", { name: "All frames" }).click();
@@ -247,6 +252,11 @@ test("Your code's sites are its flame's: a library's bytes its caller's, none of
   const sites = page.getByRole("region", { name: "Allocation sites" });
 
   await expect(frames.getByRole("tab", { name: "Your code" })).toHaveAttribute("aria-selected", "true");
+  // The peak (53 KB) and the list's 13 KB are different numbers, each said for what it is.
+  await expect(page.getByText("peak, above where it started")).toBeVisible();
+  await expect(
+    page.getByText(/^The list: 13 KB held at the peak, by where it was allocated. Its shares are of these$/),
+  ).toBeVisible();
   // Memory isn't time: the bytes allocated under a frame that waits are its caller's, not waiting's.
   await expect(page.getByRole("region", { name: "Memory by package" }).getByRole("button")).toHaveText([
     /^your code\s*856 B/,

@@ -873,6 +873,11 @@ fn cpu(profile: &Profile, duration: i64, top: usize, merged: bool) -> String {
             }
         ));
     }
+    if let Some(taken) = profile.raw.get("estimated_from").and_then(Value::as_i64) {
+        out.push(format!(
+            "estimated: its CPU time is weighed from {taken} samples (macOS hands the profiler's samples out unevenly): the times are approximate"
+        ));
+    }
     out.extend(gc_line(profile.raw));
     let mut notes = format!(
         "note: a sample every {}: a function that ran for less may be missed or miscounted.",
@@ -1403,6 +1408,24 @@ allocation sites at the peak (1 of 1, 2.0 MB in all, largest first; ×: allocati
                 "CPU profile: 30.0 ms on the CPU of the trace's 99.0 ms · 30 samples, one every 1.0 ms of CPU time",
                 "waiting, off the CPU (the database, the network, a lock, a timer; not sampled): 69.0 ms (70%)",
             ]
+        );
+    }
+
+    /// The same request from macOS: its CPU time an estimate, weighed from the samples taken, said so.
+    #[test]
+    fn a_go_profile_from_macos_says_its_cpu_time_is_an_estimate() {
+        let doc = json!({"id": "G", "duration": 99_000, "attrs": {"telemetry.sdk.language": "go"}, "profile": {
+            "interval_us": 1000, "samples": 30, "dropped": 0, "estimated_from": 12,
+            "frames": [{"function": "editDistance", "module": "shop", "file": "similar.go", "line": 1, "in_app": true}],
+            "stacks": [{"frames": [0], "count": 30}],
+        }});
+
+        let read = profile(&doc, Kind::Cpu, 3).unwrap();
+
+        assert!(
+            read.lines().any(|line| line
+                == "estimated: its CPU time is weighed from 12 samples (macOS hands the profiler's samples out unevenly): the times are approximate"),
+            "{read}"
         );
     }
 
