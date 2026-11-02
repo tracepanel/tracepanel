@@ -36,6 +36,14 @@
   were taken, the strip's hatched stretches add up to it. Without, the
   profile's waiting (a Go or Node.js profile's time off the CPU) less
   the calls' time does. The page's card says the same.
+- The Memory view says what its list adds up to apart from the peak. A
+  Django task's header said "251 KB peak" over a list of 25 KB in all,
+  "framework & runtime 25 KB 99%", with nothing to tell the two apart:
+  the peak is the level the memory reached, the list where what was
+  held then (or at the end) was allocated. It now says "The list:
+  25 KB held at the peak, by where it was allocated. Its shares are of
+  these", a Node.js app's "≈" and "(sampled)", as its heap sampler's
+  bytes are.
 
 ## 0.10.3 (2026-11-01)
 

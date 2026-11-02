@@ -52,6 +52,9 @@ test("a chain's Memory view: each app whose traces measured it, added up, with w
   await expect(shop).toContainText("Memory of 2 traces");
   await expect(shop).toContainText("peak of one of them, above where it started");
   await expect(shop).toContainText("net +1.9 MB · 5.7 MB allocated in all");
+  await expect(shop).toContainText(
+    "The list: 2.9 MB held at the peak, by where it was allocated. Its shares are of these",
+  );
   await expect(shop.getByRole("region", { name: "Allocation sites" }).getByRole("listitem")).toHaveText([
     /get_author.*app\/main\.py:115.*2\.9 MB.*100%/,
   ]);
