@@ -3,7 +3,7 @@
 // its time never red). Slow answers are held here until the test lets them through.
 import type { Page } from "@playwright/test";
 import { CONSOLE } from "../agent.ts";
-import { type Call, openApp, panel, pill, traceId } from "../app.ts";
+import { type Call, laidOut, openApp, panel, pill, traceId } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
 
 type Doc = Record<string, unknown>;
@@ -306,3 +306,81 @@ test("a view cut with a call unanswered says no answer, in its row and on the pi
   await page.waitForTimeout(5_500);
   await expect(list(page).locator('.dt-request-row[data-chain="waiting"]')).toContainText("no answer yet");
 });
+
+// A request beside the cut view, its route as long as the narrow list holds whole: cut short if the time column took
+// the room of "no answer" too.
+const ROUTE = "/api/book/{id}/posts";
+const REQUEST = "01M4C0TA0N6000000000000002";
+
+async function storeRequest(): Promise<void> {
+  const start = Date.now() * 1000 - 10_000_000;
+  const attrs = { "service.name": "library-api", "http.method": "GET", "http.route": ROUTE };
+  const trace = {
+    id: REQUEST,
+    kind: "http",
+    name: `GET ${ROUTE}`,
+    start,
+    duration: 5_000,
+    status: "ok",
+    attrs: { ...attrs, "http.status_code": 200 },
+    spans: [span("r", null, "http", `GET ${ROUTE}`, [start, 5_000], attrs)],
+    logs: [],
+    errors: [],
+    links: [],
+    issues: [],
+  };
+  const response = await fetch(`${CONSOLE}api/ingest`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify([trace]),
+  });
+  expect(response.status).toBe(202);
+  await expect.poll(async () => (await fetch(`${CONSOLE}api/traces/${REQUEST}`)).status).toBe(200);
+}
+
+for (const dock of ["right", "bottom"] as const) {
+  test(`docked ${dock}, a cut row says "no answer" by its name: the time column stays a time's width, no name cut by it`, async ({
+    page,
+  }) => {
+    await storeCutView();
+    await storeRequest();
+    // At the right, as narrow as the panel goes; at the bottom, the list beside the trace is narrow already.
+    await page.addInitScript((side) => {
+      sessionStorage.setItem("tracepanel:panel", JSON.stringify({ open: true, dock: side, width: 360 }));
+    }, dock);
+    await openApp(
+      page,
+      { posts: { status: 200, trace: REQUEST, queries: 3, totalMs: 5, issues: 0 } },
+      { recording: true, view: CUT_VIEW },
+    );
+    // A click on the cut view's page: its request listed with it, so the dock lists the page's rows.
+    await page.getByRole("button", { name: "Do posts" }).click();
+    const rows = panel(page).locator(".page-requests");
+    const cut = rows.locator('.dt-request-row[data-kind="page"]').filter({ hasText: "/cut/view" });
+    const request = rows.locator(".dt-request-row").filter({ hasText: "/posts" });
+    const time = (row: typeof cut) => row.locator(".dt-request-meta > :nth-child(2)");
+
+    await expect(cut.locator('.dt-request-main > [data-state="cut"]')).toHaveText("no answer");
+    await expect(time(cut)).toHaveText("15.0 s");
+    await expect(time(request)).toHaveText("5 ms");
+
+    // The time column as wide as "15.0 s", not as the mark: the names keep the rest, whole.
+    await laidOut(page);
+    // The list's columns: name, status, time, queries, findings.
+    const column = await rows
+      .locator(".dt-requests")
+      .evaluate((grid) => Number.parseFloat(getComputedStyle(grid).gridTemplateColumns.split(" ")[2] ?? ""));
+    const text = await time(cut).evaluate((cell) => {
+      const range = document.createRange();
+      range.selectNodeContents(cell);
+      return range.getBoundingClientRect().width;
+    });
+    expect(column).toBeLessThanOrEqual(text + 1);
+    for (const row of [cut, request]) {
+      const clipped = await row
+        .locator(".dt-request-path")
+        .evaluate((name) => [name, ...name.querySelectorAll("*")].some((part) => part.scrollWidth > part.clientWidth));
+      expect(clipped).toBe(false);
+    }
+  });
+}

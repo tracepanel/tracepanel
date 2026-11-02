@@ -46,7 +46,7 @@ export function NoAnswer({ at, short = false }: { at: number | null; short?: boo
   return (
     <span className="dt-no-answer" data-state="cut" title={cutNote(at)}>
       <WaitingIcon />
-      {short ? "no answer" : NO_ANSWER}
+      <span className="dt-no-answer-text">{short ? "no answer" : NO_ANSWER}</span>
     </span>
   );
 }

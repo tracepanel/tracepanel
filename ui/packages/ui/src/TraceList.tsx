@@ -202,17 +202,11 @@ function ListRow({
         <RowCaret fold={fold} />
         <RowName trace={trace} trigger={trigger} target={target} redirectedFrom={redirectedFrom} />
         <RowApp trace={trace} shown={services} />
+        {/* Beside its name, as a waiting call's and the call tree's: the time column keeps a time's width. */}
+        {cut === null || open ? null : <NoAnswer at={cut} short={true} />}
         {current ? <ThisPage compact={compact} /> : null}
       </span>
-      <RowMeta
-        trace={trace}
-        open={open}
-        until={until}
-        cut={cut}
-        chained={chained}
-        pending={pending}
-        compact={compact}
-      />
+      <RowMeta trace={trace} open={open} until={until} chained={chained} pending={pending} compact={compact} />
     </button>
   );
 }
@@ -228,7 +222,6 @@ function RowMeta({
   trace,
   open,
   until,
-  cut,
   chained,
   pending,
   compact,
@@ -236,7 +229,6 @@ function RowMeta({
   trace: TraceSummary;
   open: boolean | undefined;
   until: number | undefined;
-  cut: number | null;
   chained: boolean;
   pending: boolean;
   compact: boolean | undefined;
@@ -246,35 +238,27 @@ function RowMeta({
     <span className="dt-request-meta">
       {/* No status of its own (a view, a task, a job): its slot kept, so the time lines up with a request's. */}
       <StatusSlot status={trace.kind === "page" || open ? null : trace.http_status} />
-      <RowTime trace={trace} open={open} until={until} cut={cut} />
+      <RowTime trace={trace} open={open} until={until} />
       <Meta trace={trace} chained={chained} pending={pending} />
     </span>
   );
 }
 
 /**
- * A row's time: ticking while it runs; its time and "no answer" when its trace went out with a call unanswered (its
- * time is where it was cut, not how slow it was); else its time.
+ * A row's time: ticking while it runs, else its time. A trace that went out with a call unanswered says "no answer"
+ * beside its name, never here: its time is where it was cut, and the column keeps a time's width for every row.
  */
 function RowTime({
   trace,
   open,
   until,
-  cut,
 }: {
   trace: TraceSummary;
   open: boolean | undefined;
   until: number | undefined;
-  cut: number | null;
 }) {
   if (open) return <Running start={trace.start} until={until} />;
-  if (cut === null) return <span>{duration(trace.duration)}</span>;
-  return (
-    <span className="dt-request-cut">
-      {duration(trace.duration)}
-      <NoAnswer at={cut} short={true} />
-    </span>
-  );
+  return <span>{duration(trace.duration)}</span>;
 }
 
 /** A row's chain folded or not: open until folded, as an app's row; null for a row whose trace called no app. */

@@ -22,6 +22,10 @@
   traces of their own ("router", a few hundred µs each, one per call of
   a view): its CORS layer answers them before it reads the request, so
   they say nothing a request did.
+- A row in the panel's list whose view went out with a call unanswered
+  says "no answer" beside its name, not beside its time. The time
+  column widened to "15.0 s no answer" for every row and cut the other
+  rows' names short in a narrow dock.
 
 ## 0.12.0 (2026-11-02)
 
