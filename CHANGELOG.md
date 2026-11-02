@@ -41,6 +41,28 @@
   analytics.example.com"), else by the frame that waited ("waiting ·
   sleep"), the same for a Python, a JVM, a Go and a Node profile. A row
   opens its call in the call tree. All frames keeps the frames.
+- The MCP server's `get_profile` names waits the same way: its function
+  lists and paths say "waiting · SQL postgresql" or "waiting · sleep"
+  where they said "sleep (waiting)" or "off the CPU", and a Go or Node
+  profile's time off the CPU that no call explains is "waiting (no
+  call)". The console and the MCP server share one rule, with its cases
+  in `schema/waits.json`.
+- A chain's Profile tab names each app's waits as the trace's own tab
+  does, its traces merged too: "waiting · HTTP GET
+  analytics.example.com", not "waiting". So does the MCP server's
+  profile of an app in a chain.
+- A running ring never reads "0 µs". A view on its first frame, or one
+  whose start is a moment ahead of the browser's clock, reads "…" until
+  it has run, then its time from its start, on the pill, in its card and
+  in the list.
+- A GraphQL request keeps one name from running to done. One its server
+  answered with a 503 before the operation ran was "GraphQL query
+  Authors" while it ran and "POST /graphql" once it answered. The pill
+  and the list keep the operation the request carried, and the agent
+  names a trace after the GraphQL operation in its attributes or in the
+  body its SDK captured, where its server named it by the request line.
+  The widget and the agent share one rule for the body, with its cases
+  in `schema/graphql-names.json`.
 - PostgreSQL plans nest right. A first-level node no longer sits at
   the root's depth with its details two levels below it: each "->"
   level adds one, and a node's details sit one level below it. MySQL's

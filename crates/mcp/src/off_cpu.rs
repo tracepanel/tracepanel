@@ -1,34 +1,12 @@
 //! Who waited, in a CPU profile (Go's, Node's): its time off the CPU has no stack, but the trace's calls out (a
 //! query, an HTTP call) say where the app made each (`code.origin`) and when. Each call's time is waiting under the
-//! function of the app's that made it, as a Python or a JVM profile has its waits under the function that waited;
-//! the console's Profile tab reads it the same way.
+//! function of the app's that made it, as a Python or a JVM profile has its waits under the function that waited,
+//! named by what it waited on (waits); the console's Profile tab reads it the same way.
 
 use crate::compact::{int, text};
+use crate::waits::{CALLS, call_label};
 use serde_json::Value;
 use std::collections::HashMap;
-
-/// The kinds of a call out of the app, as the console's call tree groups them: every system's, and the generic
-/// families' (`db`, `messaging`, `rpc`).
-const CALLS: [&str; 18] = [
-    "sql",
-    "redis",
-    "cache",
-    "mongodb",
-    "elasticsearch",
-    "cassandra",
-    "dynamodb",
-    "memcached",
-    "kafka",
-    "rabbitmq",
-    "sqs",
-    "grpc",
-    "http.client",
-    "storage",
-    "llm",
-    "db",
-    "messaging",
-    "rpc",
-];
 
 /// A profile's frame as a call's origin is matched to it.
 pub(crate) struct Place<'a> {
@@ -94,10 +72,18 @@ fn path_to(frames: &[Place], stacks: &[(&[usize], i64)], index: usize) -> Option
         .map(|(_, _, path)| path)
 }
 
+/// A call's stretch of the trace (µs since it started), the stack that waited for it, and what the call is.
+struct Waited {
+    from: i64,
+    to: i64,
+    path: Vec<usize>,
+    label: String,
+}
+
 /// Each call's stretch of the trace (µs since it started) and the stack that waited for it: the deepest sampled
 /// function of the app's above it in the trace, the one its origin names, else its callers' (a function's row, the
 /// handler's); a call without one is the trace's own waiting.
-fn calls(doc: &Value, frames: &[Place], stacks: &[(&[usize], i64)]) -> Vec<(i64, i64, Vec<usize>)> {
+fn calls(doc: &Value, frames: &[Place], stacks: &[(&[usize], i64)]) -> Vec<Waited> {
     let spans: Vec<&Value> = doc
         .get("spans")
         .and_then(Value::as_array)
@@ -131,48 +117,45 @@ fn calls(doc: &Value, frames: &[Place], stacks: &[(&[usize], i64)]) -> Vec<(i64,
             })?;
             let from = (int(span, "start") - start).max(0);
             let to = (int(span, "start") + int(span, "duration") - start).min(duration);
-            (to > from).then_some((from, to, path))
+            (to > from).then(|| Waited {
+                from,
+                to,
+                path,
+                label: call_label(span),
+            })
         })
         .collect()
 }
 
-/// Each waiter's time in the trace's calls (µs), by its stack, most first: calls at once share the time they
-/// overlap, so none is counted twice.
+/// Each waiter's time in the trace's calls (µs), by its stack and what it waited on (`SQL postgresql`), most first:
+/// calls at once share the time they overlap, so none is counted twice.
 pub(crate) fn waited(
     doc: &Value,
     frames: &[Place],
     stacks: &[(&[usize], i64)],
-) -> Vec<(Vec<usize>, f64)> {
+) -> Vec<(Vec<usize>, String, f64)> {
     let calls = calls(doc, frames, stacks);
-    let mut edges: Vec<i64> = calls
-        .iter()
-        .flat_map(|(from, to, _)| [*from, *to])
-        .collect();
+    let mut edges: Vec<i64> = calls.iter().flat_map(|call| [call.from, call.to]).collect();
     edges.sort_unstable();
     edges.dedup();
-    let mut order: Vec<Vec<usize>> = Vec::new();
-    let mut time: HashMap<Vec<usize>, f64> = HashMap::new();
+    let mut waited: Vec<(Vec<usize>, String, f64)> = Vec::new();
     for pair in edges.windows(2) {
         let (from, to) = (pair[0], pair[1]);
-        let open: Vec<&Vec<usize>> = calls
+        let open: Vec<&Waited> = calls
             .iter()
-            .filter(|(start, end, _)| *start <= from && *end >= to)
-            .map(|(_, _, path)| path)
+            .filter(|call| call.from <= from && call.to >= to)
             .collect();
-        for path in &open {
-            if !time.contains_key(*path) {
-                order.push((*path).clone());
+        for call in &open {
+            let share = (to - from) as f64 / open.len() as f64;
+            match waited
+                .iter_mut()
+                .find(|(path, label, _)| *path == call.path && *label == call.label)
+            {
+                Some((_, _, us)) => *us += share,
+                None => waited.push((call.path.clone(), call.label.clone(), share)),
             }
-            *time.entry((*path).clone()).or_default() += (to - from) as f64 / open.len() as f64;
         }
     }
-    let mut waited: Vec<(Vec<usize>, f64)> = order
-        .into_iter()
-        .map(|path| {
-            let us = time[&path];
-            (path, us)
-        })
-        .collect();
-    waited.sort_by(|a, b| b.1.total_cmp(&a.1));
+    waited.sort_by(|a, b| b.2.total_cmp(&a.2));
     waited
 }

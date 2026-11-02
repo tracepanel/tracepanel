@@ -3,7 +3,8 @@
 import TOKENS from "virtual:tracepanel-tokens";
 import { duration } from "@tracepanel/ui/format";
 import type { ChainCounts } from "@tracepanel/ui/lib/chainCounts";
-import { cutNote, NO_ANSWER, PENDING, runningLabel, TICK_MS } from "@tracepanel/ui/lib/live";
+import { graphqlName, namesOperation } from "@tracepanel/ui/lib/graphql";
+import { cutNote, NO_ANSWER, PENDING, runningLabel, runningTime, TICK_MS } from "@tracepanel/ui/lib/live";
 import { plural } from "@tracepanel/ui/lib/plural";
 import {
   BROWSER_ICON_SVG,
@@ -513,35 +514,19 @@ function listen(): void {
     },
     end: (flight, info) => {
       flying.delete(flight);
-      if (watcher) watcher.end(flight, info);
-      else if (info) pending.push(info);
+      const landed = info && namedAsItFlew(flight, info);
+      if (watcher) watcher.end(flight, landed);
+      else if (landed) pending.push(landed);
     },
   });
 }
 
-const GRAPHQL_OPERATION = /^\s*(query|mutation|subscription)\s+([_A-Za-z][_0-9A-Za-z]*)/;
-
 /**
- * A GraphQL request's operation, as its server's trace names it ("GraphQL query Books"), from the JSON body it sends:
- * the pill names the request so while it runs, and the name doesn't change when it answers.
+ * A request keeps the name it ran under once it answers: the GraphQL operation its body carried, where the answer
+ * names none (its server answered before the operation ran, a 503), as the agent names its trace (lib/graphql).
  */
-function graphqlName(body: unknown): string | undefined {
-  const parsed = graphqlBody(body);
-  const match = GRAPHQL_OPERATION.exec(String(parsed.query ?? ""));
-  return match ? `GraphQL ${match[1]} ${String(parsed.operationName || match[2])}` : undefined;
-}
-
-type GraphqlBody = { query?: unknown; operationName?: unknown };
-
-/** A request's body as GraphQL sends it (`{"query": …, "operationName": …}`); empty for any other. */
-function graphqlBody(body: unknown): GraphqlBody {
-  if (!maybeGraphql(body)) return {};
-  return safely(() => JSON.parse(body) as GraphqlBody, {});
-}
-
-/** A JSON body small enough to read, with a query in it. */
-function maybeGraphql(body: unknown): body is string {
-  return typeof body === "string" && body.length <= 100_000 && body.includes('"query"');
+function namedAsItFlew(flight: Flight, info: TraceInfo): TraceInfo {
+  return flight.name && !namesOperation(info.name) ? { ...info, name: flight.name } : info;
 }
 
 /** The console's own calls (the panel's, the browser recording's) are not the page's requests. */
@@ -774,6 +759,15 @@ function timeParts(ms: number): HTMLElement[] {
   return [value, unit];
 }
 
+/** A running thing's time so far (from `start`, epoch ms) as the pill writes a time: PENDING on its first frame. */
+function runningParts(start: number): HTMLElement[] {
+  const time = runningTime(start * 1000);
+  if (time !== PENDING) return timeParts(Math.max(0, Date.now() - start));
+  const value = document.createElement("b");
+  value.textContent = PENDING;
+  return [value];
+}
+
 /** In flight: the ring and the time so far (from `start`, epoch ms), ticking as the pill draws again. */
 function addRunning(parent: HTMLElement, start: number): void {
   const seg = segment(parent);
@@ -781,7 +775,7 @@ function addRunning(parent: HTMLElement, start: number): void {
   const ring = document.createElement("span");
   ring.className = "running";
   ring.setAttribute("aria-hidden", "true");
-  seg.append(ring, ...timeParts(Math.max(0, Date.now() - start)));
+  seg.append(ring, ...runningParts(start));
   seg.title = runningLabel(start * 1000);
 }
 

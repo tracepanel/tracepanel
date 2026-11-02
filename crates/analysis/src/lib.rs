@@ -13,6 +13,7 @@ use tracepanel_protocol::{Attrs, Issue, Span, Thresholds, Trace};
 
 pub mod aws;
 pub mod calls;
+pub mod graphql;
 mod limits;
 pub mod llm;
 pub mod logs;
@@ -1076,12 +1077,14 @@ pub(crate) fn rekind(
 }
 
 /// A received trace, made ready for the store: its OpenTelemetry spans mapped to tracepanel's kinds (an older SDK's
-/// storage and LLM calls, and migrations too), its queries named and grouped without their comments, its database
-/// drivers' own HTTP requests left out, its LLM calls priced, its profile's frames read alike from every SDK, its log
-/// records' ANSI colours dropped, then its issues found, in its rows and in its document, which the console shows.
+/// storage and LLM calls, and migrations too), its queries named and grouped without their comments, a GraphQL
+/// request named after the operation it carried, its database drivers' own HTTP requests left out, its LLM calls
+/// priced, its profile's frames read alike from every SDK, its log records' ANSI colours dropped, then its issues
+/// found, in its rows and in its document, which the console shows.
 pub fn apply(received: &mut tracepanel_protocol::Received, thresholds: &Thresholds) {
     otel::normalize(received);
     otel::uncomment(received);
+    graphql::normalize(received);
     storage::normalize(received);
     migrations::normalize(received);
     llm::normalize(received);

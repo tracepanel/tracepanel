@@ -2,7 +2,7 @@
 // for after it loaded) before opening the panel.
 import { duration } from "@tracepanel/ui/format";
 import { breakdown, categoryLabel } from "@tracepanel/ui/lib/breakdown";
-import { cutNote, NO_ANSWER, PENDING, runningLabel } from "@tracepanel/ui/lib/live";
+import { cutNote, NO_ANSWER, PENDING, runningLabel, runningTime } from "@tracepanel/ui/lib/live";
 import { percent } from "@tracepanel/ui/lib/percent";
 import { plural } from "@tracepanel/ui/lib/plural";
 import { WAITED_SHARE, withWaiting } from "@tracepanel/ui/lib/waitingShare";
@@ -279,7 +279,7 @@ function runningCell(start: number, className: string): HTMLElement {
   const cell = element("span", `${className} card-running`);
   const ring = element("span", "running");
   ring.setAttribute("aria-hidden", "true");
-  cell.append(ring, duration(Math.max(0, Date.now() - start) * 1000));
+  cell.append(ring, runningTime(start * 1000));
   cell.title = runningLabel(start * 1000);
   return cell;
 }

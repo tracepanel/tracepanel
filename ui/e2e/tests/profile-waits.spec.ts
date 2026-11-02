@@ -176,3 +176,57 @@ test("a JVM thread parked on Postgres says so, as a Python one does", async ({ p
     .poll(async () => (await boxes(page)).join(" | "))
     .toMatch(/^CampaignController\.list \| CampaignController\.render \| waiting · SQL postgresql$/);
 });
+
+const W3C = "7d2c3b8e0a1f5e4b9c6d8e0f2a3b4c5d";
+const VIEW = "01M4WA1TS00000000000000003";
+
+/** A browser's view that asked the Python handler twice: its two traces, the same app's, under its two calls. */
+function chainOfTwo(): Doc[] {
+  const served = [4, 5].map((n, at) => {
+    const doc = python();
+    doc["id"] = `01M4WA1TS0000000000000000${n}`;
+    doc["attrs"] = { ...(doc["attrs"] as Doc), "w3c.trace_id": W3C, "w3c.parent_span_id": `b00000000000000${at + 1}` };
+    return doc;
+  });
+  const start = (served[0]?.["start"] as number) - 10_000;
+  const call = (n: number) =>
+    span(`c${n}`, "p0", "http.client", "GET 127.0.0.1:8000/campaigns", [start + n * 1_000, 400_000], {
+      "http.request.method": "GET",
+      "url.full": "http://127.0.0.1:8000/campaigns",
+      "http.response.status_code": 200,
+      "w3c.span_id": `b00000000000000${n}`,
+    });
+  const view: Doc = {
+    id: VIEW,
+    kind: "page",
+    name: "/campaigns",
+    start,
+    duration: 800_000,
+    status: "ok",
+    attrs: { "service.name": "shop-web", "service.role": "browser", "w3c.trace_id": W3C },
+    spans: [span("p0", null, "page", "/campaigns", [start, 800_000], {}), call(1), call(2)],
+    logs: [],
+    errors: [],
+    links: [],
+    issues: [],
+  };
+  return [view, ...served];
+}
+
+test("a chain's merged profile of an app names its waits as each trace's own does", async ({ page }) => {
+  for (const doc of chainOfTwo()) await store(doc);
+  await expect
+    .poll(async () => ((await (await fetch(`${CONSOLE}api/traces/${VIEW}/chain`)).json()) as Doc)["traces"])
+    .toHaveLength(3);
+  await page.goto(`/#/t/${VIEW}?tab=profile`);
+  const shop = page.getByRole("region", { name: "Profile of shop", exact: true });
+
+  await expect(shop).toContainText("Profile of 2 traces");
+  await expect(
+    shop.getByRole("region", { name: "Functions" }).getByRole("list", { name: "Not a function" }).getByRole("listitem"),
+  ).toHaveText([
+    /^waiting · HTTP GET analytics\.example\.com\s*300 ms/,
+    /^waiting · SQL postgresql\s*120 ms/,
+    /^waiting · sleep\s*80 ms/,
+  ]);
+});

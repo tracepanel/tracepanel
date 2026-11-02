@@ -26,9 +26,22 @@ export function elapsed(start: number, now: number = Date.now()): number {
   return Math.max(0, now * 1000 - start);
 }
 
-/** "Running for 3.2 s": a running thing's time so far, in words. */
+/** Under this (µs), a running thing's time so far says PENDING: its first frame, never "0 µs". */
+const FIRST_FRAME_US = 100;
+
+/**
+ * A running thing's time so far, as its ring shows it: PENDING until it has run a tenth of a millisecond (a view's
+ * first frame, or a start a moment ahead of this clock), its time from its start after that. Never "0 µs".
+ */
+export function runningTime(start: number, now: number = Date.now()): string {
+  const us = elapsed(start, now);
+  return us < FIRST_FRAME_US ? PENDING : duration(us);
+}
+
+/** "Running for 3.2 s": a running thing's time so far, in words; "running" before it has one. */
 export function runningLabel(start: number, now: number = Date.now()): string {
-  return `running for ${duration(elapsed(start, now))}`;
+  const time = runningTime(start, now);
+  return time === PENDING ? "running" : `running for ${time}`;
 }
 
 /** Whether a call was cut short: its trace went out before it answered (see `unfinished`). */

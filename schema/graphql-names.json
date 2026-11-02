@@ -1,0 +1,58 @@
+[
+  {
+    "body": "{\"operationName\":\"Authors\",\"query\":\"query Authors { authors { id name } }\",\"variables\":{}}",
+    "name": "GraphQL query Authors"
+  },
+  {
+    "body": "{\"query\":\"query Books { books { id title } }\"}",
+    "name": "GraphQL query Books"
+  },
+  {
+    "body": "{\"query\":\"\\n  mutation AddReview($bookId: ID!) { addReview(bookId: $bookId) { id } }\",\"variables\":{\"bookId\":\"1\"}}",
+    "name": "GraphQL mutation AddReview"
+  },
+  {
+    "body": "{\"query\":\"subscription OnReview{ reviewAdded { id } }\"}",
+    "name": "GraphQL subscription OnReview"
+  },
+  {
+    "body": "{\"operationName\":\"Second\",\"query\":\"query First { a } query Second { b }\"}",
+    "name": "GraphQL query Second"
+  },
+  {
+    "body": "{\"operationName\":\"\",\"query\":\"query _private_1 { a }\"}",
+    "name": "GraphQL query _private_1"
+  },
+  {
+    "body": "{\"query\":\"{ books { id } }\"}",
+    "name": null
+  },
+  {
+    "body": "{\"query\":\"query { books { id } }\"}",
+    "name": null
+  },
+  {
+    "body": "{\"query\":\"queryBooks { books { id } }\"}",
+    "name": null
+  },
+  {
+    "body": "{\"query\":\"query 1Books { a }\"}",
+    "name": null
+  },
+  {
+    "body": "{\"query\": 42}",
+    "name": null
+  },
+  {
+    "body": "[{\"query\":\"query Books { books { id } }\"}]",
+    "name": null
+  },
+  {
+    "body": "{\"query\":\"query Books { books { id",
+    "name": null
+  },
+  {
+    "body": "month=10&query=query+Books",
+    "name": null
+  }
+]

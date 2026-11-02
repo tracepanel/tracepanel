@@ -7,7 +7,9 @@
 
 use crate::compact::{int, ms, text};
 use crate::off_cpu;
+use crate::waits::{self, Waiting};
 use serde_json::Value;
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 /// Under this share of samples in the project's own code, a profile reads as every frame: there is little of yours.
@@ -23,8 +25,6 @@ const CHANGES: usize = 8;
 /// The SDKs that sample the CPU alone, by their language: Go's runtime/pprof, Node's V8 profiler without its idle
 /// samples. Python's and the JVM's sample each thread on the clock, waiting or not.
 const CPU_ONLY: [&str; 2] = ["go", "nodejs"];
-/// A CPU profile's time off the CPU, read as waiting: the database, the network, a lock, a timer.
-const OFF_CPU: &str = "off the CPU";
 /// What the project's code reads the samples that ran none of it as: the server's, the runtime's, the SDKs'.
 const FRAMEWORK: &str = "(framework & runtime)";
 
@@ -57,8 +57,10 @@ impl Kind {
     }
 }
 
+#[derive(Clone)]
 struct Frame<'a> {
-    function: &'a str,
+    /// Its name; a wait's, named by what was in flight (waits: `waiting · SQL postgresql`).
+    function: Cow<'a, str>,
     module: &'a str,
     file: &'a str,
     line: i64,
@@ -77,10 +79,16 @@ impl Frame<'_> {
         format!("{}:{}", self.file, self.at_line.unwrap_or(self.line))
     }
 
+    /// A wait the profile named by what was in flight (`waiting · SQL postgresql`): its name says it waits.
+    fn named_wait(&self) -> bool {
+        self.waiting && self.file.is_empty() && self.function.starts_with("waiting ")
+    }
+
     /// A function in a list, whose it is and where: `build_cards (yours)`, then its file and line.
     fn named(&self) -> String {
-        let mut out = self.function.to_owned();
-        if self.waiting {
+        let mut out = self.function.to_string();
+        if self.named_wait() {
+        } else if self.waiting {
             out.push_str(" (waiting)");
         } else if self.in_app {
             out.push_str(" (yours)");
@@ -96,7 +104,7 @@ impl Frame<'_> {
     fn step(&self) -> String {
         let place = self.place();
         if place.is_empty() {
-            self.function.to_owned()
+            self.function.to_string()
         } else {
             format!("{} ({place})", self.function)
         }
@@ -116,10 +124,13 @@ impl Frame<'_> {
             .filter(|root| !root.is_empty())
         {
             Some(root) => format!("{root}.{}", self.function),
-            None => self.function.to_owned(),
+            None => self.function.to_string(),
         }
     }
 }
+
+/// A frame by all it says, its name owned: how an app's traces' frames are told apart as they merge.
+type FrameKey<'a> = (String, &'a str, &'a str, i64, Option<i64>, bool, bool);
 
 /// A stack seen: its frames, outermost first, as indexes; its samples, and the time they stand for.
 #[derive(Clone)]
@@ -140,18 +151,21 @@ struct Profile<'a> {
     raw: &'a Value,
     /// The frame the samples that ran none of the project's code read as, in its view (FRAMEWORK), last of `frames`.
     outside: usize,
-    /// A CPU profile's (CPU_ONLY) time on the CPU; the rest of the trace's time is waiting (OFF_CPU), under the
-    /// function of the project's that made each call it waited for.
+    /// A CPU profile's (CPU_ONLY) time on the CPU; the rest of the trace's time is waiting, under the function of
+    /// the project's that made each call it waited for, named by the call (waits).
     on_cpu: Option<f64>,
+    /// A timed profile's stacks as the project's code reads them: each wait named by the calls in flight while it
+    /// waited (waits), where `stacks` keeps the frame that waited. None where they are `stacks`.
+    named: Option<Vec<Stack>>,
     /// Each frame's index as its function's first: a Python coroutine's frame with the line it awaits at is the
     /// same function as its frame running, one row and one step.
     same: Vec<usize>,
 }
 
 /// A function as the console tells functions apart: its name, where it is defined, whether it waits.
-fn function_key<'a>(frame: &Frame<'a>) -> (&'a str, &'a str, &'a str, i64, bool, bool) {
+fn function_key<'f>(frame: &'f Frame) -> (&'f str, &'f str, &'f str, i64, bool, bool) {
     (
-        frame.function,
+        &frame.function,
         frame.module,
         frame.file,
         frame.line,
@@ -175,14 +189,39 @@ fn same_functions(frames: &[Frame]) -> Vec<usize> {
         .collect()
 }
 
-/// A CPU profile's `off` µs off the CPU as waiting stacks (OFF_CPU): each call's time under the function of the
-/// project's that made it (off_cpu), shared down to `off` where the calls took more (their time on the CPU is in the
-/// samples); the rest, no call's, one waiting stack of its own.
+/// A wait's frame, named by what it waited for (waits::wait_name).
+fn wait_frame<'a>(name: String) -> Frame<'a> {
+    Frame {
+        function: Cow::Owned(name),
+        module: "",
+        file: "",
+        line: 0,
+        at_line: None,
+        in_app: false,
+        waiting: true,
+    }
+}
+
+/// The index of the wait frame named `name`, added to `frames` the first time.
+fn wait_at(frames: &mut Vec<Frame>, name: String) -> usize {
+    if let Some(at) = frames
+        .iter()
+        .position(|frame| frame.named_wait() && frame.function == name)
+    {
+        return at;
+    }
+    frames.push(wait_frame(name));
+    frames.len() - 1
+}
+
+/// A CPU profile's `off` µs off the CPU as waiting stacks: each call's time under the function of the project's that
+/// made it (off_cpu), named by the call (`waiting · SQL postgresql`), shared down to `off` where the calls took more
+/// (their time on the CPU is in the samples); the rest, no call's, one waiting stack of its own (`waiting (no call)`).
 fn off_cpu_stacks(doc: &Value, frames: &mut Vec<Frame>, stacks: &mut Vec<Stack>, off: f64) {
     let places: Vec<off_cpu::Place> = frames
         .iter()
         .map(|frame| off_cpu::Place {
-            function: frame.function,
+            function: &frame.function,
             file: frame.file,
             in_app: frame.in_app,
         })
@@ -192,35 +231,102 @@ fn off_cpu_stacks(doc: &Value, frames: &mut Vec<Frame>, stacks: &mut Vec<Stack>,
         .map(|stack| (stack.frames.as_slice(), stack.count))
         .collect();
     let waiters = off_cpu::waited(doc, &places, &seen);
-    frames.push(Frame {
-        function: OFF_CPU,
-        module: "",
-        file: "",
-        line: 0,
-        at_line: None,
-        in_app: false,
-        waiting: true,
-    });
-    let waiting = frames.len() - 1;
-    let in_calls: f64 = waiters.iter().map(|(_, us)| us).sum();
+    let in_calls: f64 = waiters.iter().map(|(_, _, us)| us).sum();
     let scale = if in_calls > off { off / in_calls } else { 1.0 };
-    for (path, us) in waiters {
-        let mut frames = path;
-        frames.push(waiting);
+    for (path, label, us) in waiters {
+        let mut path = path;
+        path.push(wait_at(frames, waits::wait_name(Some(&label))));
         stacks.push(Stack {
-            frames,
+            frames: path,
             count: 0,
             us: us * scale,
         });
     }
     let rest = off - in_calls * scale;
     if rest > 0.0 {
+        let waiting = wait_at(frames, waits::wait_name(None));
         stacks.push(Stack {
             frames: vec![waiting],
             count: 0,
             us: rest,
         });
     }
+}
+
+/// A timed profile's stacks with each wait named by the calls in flight in the buckets it was seen in (waits): a
+/// stack whose innermost frame waited split by what it waited for, under the same frames. None where no stack
+/// waited.
+fn named_waits<'a>(
+    doc: &Value,
+    raw: &Value,
+    frames: &mut Vec<Frame<'a>>,
+    stacks: &[Stack],
+) -> Option<Vec<Stack>> {
+    let width = int(raw, "bucket_us");
+    let calls = waits::calls_of(doc);
+    let seen = seen_in(raw);
+    let mut named = Vec::with_capacity(stacks.len());
+    let mut any = false;
+    for (index, stack) in stacks.iter().enumerate() {
+        let leaf = stack.frames.last().and_then(|&at| frames.get(at));
+        let seen = seen.get(index).map_or(&[][..], Vec::as_slice);
+        let Some(leaf) = leaf.filter(|leaf| leaf.waiting && !leaf.in_app && !seen.is_empty())
+        else {
+            named.push(stack.clone());
+            continue;
+        };
+        any = true;
+        let names: Vec<&str> = stack
+            .frames
+            .iter()
+            .map(|&at| frames.get(at).map_or("", |frame| &*frame.function))
+            .collect();
+        let waiting = Waiting {
+            names: &names,
+            leaf: &leaf.function,
+            seen,
+            us: stack.us,
+        };
+        let parts = waits::parts(&waiting, &calls, width);
+        let outer = &stack.frames[..stack.frames.len() - 1];
+        let parts: Vec<(String, f64)> = parts
+            .into_iter()
+            .map(|(label, us)| (waits::wait_name(label.as_deref()), us))
+            .collect();
+        for (name, us) in parts {
+            let mut path = outer.to_vec();
+            path.push(wait_at(frames, name));
+            named.push(Stack {
+                frames: path,
+                count: stack.count,
+                us,
+            });
+        }
+    }
+    any.then_some(named)
+}
+
+/// When each of a profile's stacks was seen: its `[bucket, count]` pairs.
+fn seen_in(raw: &Value) -> Vec<Vec<(i64, i64)>> {
+    raw.get("stacks")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .map(|stack| {
+            stack
+                .get("at")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .map(|pair| {
+                    (
+                        pair[0].as_i64().unwrap_or(-1),
+                        pair[1].as_i64().unwrap_or(0),
+                    )
+                })
+                .collect()
+        })
+        .collect()
 }
 
 fn frames_of(value: &Value) -> Vec<usize> {
@@ -242,7 +348,7 @@ impl<'a> Profile<'a> {
             .into_iter()
             .flatten()
             .map(|frame| Frame {
-                function: text(frame, "function"),
+                function: Cow::Borrowed(text(frame, "function")),
                 module: text(frame, "module"),
                 file: text(frame, "file"),
                 line: int(frame, "line"),
@@ -253,7 +359,7 @@ impl<'a> Profile<'a> {
             .collect();
         let outside = frames.len();
         frames.push(Frame {
-            function: FRAMEWORK,
+            function: Cow::Borrowed(FRAMEWORK),
             module: "",
             file: "",
             line: 0,
@@ -274,6 +380,11 @@ impl<'a> Profile<'a> {
             })
             .collect();
         let timed = wall_clock(raw, int(doc, "duration"), &mut stacks);
+        let named = if timed {
+            named_waits(doc, raw, &mut frames, &stacks)
+        } else {
+            None
+        };
         let language = doc
             .get("attrs")
             .and_then(|attrs| attrs.get("telemetry.sdk.language"))
@@ -298,8 +409,58 @@ impl<'a> Profile<'a> {
             raw,
             outside,
             on_cpu,
+            named,
             same,
         })
+    }
+
+    /// Its time as its traces' (`parts`, one app's) added up, as the console merges an app's profiles: each one's
+    /// stacks as that trace reads them (its waits named by its own calls, its time off the CPU), their frames once.
+    fn take_time(&mut self, parts: Vec<Profile<'a>>) {
+        let mut frames: Vec<Frame<'a>> = Vec::new();
+        let mut index: HashMap<FrameKey<'a>, usize> = HashMap::new();
+        let mut intern = |frame: &Frame<'a>| {
+            let key = (
+                frame.function.to_string(),
+                frame.module,
+                frame.file,
+                frame.line,
+                frame.at_line,
+                frame.in_app,
+                frame.waiting,
+            );
+            *index.entry(key).or_insert_with(|| {
+                frames.push(frame.clone());
+                frames.len() - 1
+            })
+        };
+        let (mut stacks, mut named) = (Vec::new(), Vec::new());
+        let any_named = parts.iter().any(|part| part.named.is_some());
+        for part in &parts {
+            let at: Vec<usize> = part.frames.iter().map(&mut intern).collect();
+            let remapped = |stack: &Stack| Stack {
+                frames: stack
+                    .frames
+                    .iter()
+                    .filter_map(|&each| at.get(each).copied())
+                    .collect(),
+                ..stack.clone()
+            };
+            stacks.extend(part.stacks.iter().map(remapped));
+            named.extend(
+                part.named
+                    .as_ref()
+                    .unwrap_or(&part.stacks)
+                    .iter()
+                    .map(remapped),
+            );
+        }
+        let outside = self.frames[self.outside].clone();
+        self.outside = intern(&outside);
+        self.frames = frames;
+        self.stacks = stacks;
+        self.named = any_named.then_some(named);
+        self.same = same_functions(&self.frames);
     }
 
     fn frame(&self, index: usize) -> Option<&Frame<'a>> {
@@ -386,7 +547,9 @@ impl<'a> Profile<'a> {
     }
 
     fn own_code(&self) -> Vec<Stack> {
-        self.stacks
+        self.named
+            .as_ref()
+            .unwrap_or(&self.stacks)
             .iter()
             .map(|stack| Stack {
                 frames: self.functions_of(&self.own_frames(&stack.frames)),
@@ -464,26 +627,7 @@ impl<'a> Profile<'a> {
 /// bucket with none (its thread ran other traces then) as the bucket before it. Whether the profile is timed.
 fn wall_clock(raw: &Value, duration: i64, stacks: &mut [Stack]) -> bool {
     let width = int(raw, "bucket_us");
-    let seen_in: Vec<Vec<(i64, i64)>> = raw
-        .get("stacks")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .map(|stack| {
-            stack
-                .get("at")
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-                .map(|pair| {
-                    (
-                        pair[0].as_i64().unwrap_or(-1),
-                        pair[1].as_i64().unwrap_or(0),
-                    )
-                })
-                .collect()
-        })
-        .collect();
+    let seen_in = seen_in(raw);
     if width <= 0 || duration <= 0 || seen_in.iter().all(Vec::is_empty) {
         return false;
     }
@@ -643,7 +787,15 @@ pub(crate) fn app_profile(docs: &[&Value], kind: Kind, top: usize) -> Option<Str
     match measured.as_slice() {
         [] => None,
         [one] => read(one, kind, top, false).ok(),
-        several => read(&merged(several), kind, top, true).ok(),
+        several => {
+            let doc = merged(several);
+            if kind == Kind::Memory {
+                return read(&doc, kind, top, true).ok();
+            }
+            let mut profile = Profile::of(&doc)?;
+            profile.take_time(several.iter().filter_map(|doc| Profile::of(doc)).collect());
+            Some(cpu(&profile, int(&doc, "duration"), top, true))
+        }
     }
 }
 
@@ -1083,7 +1235,7 @@ fn self_times(profile: &Profile) -> (Vec<(String, f64)>, f64) {
             continue;
         };
         let key = if frame.file.is_empty() {
-            frame.function.to_owned()
+            frame.function.to_string()
         } else {
             format!("{} ({}:{})", frame.function, frame.file, frame.line)
         };
@@ -1317,7 +1469,7 @@ allocation sites at the peak (1 of 1, 2.0 MB in all, largest first; ×: allocati
                 stack
                     .frames
                     .iter()
-                    .map(|&index| profile.frames[index].function)
+                    .map(|&index| &*profile.frames[index].function)
                     .collect()
             })
             .collect();
@@ -1367,7 +1519,7 @@ allocation sites at the peak (1 of 1, 2.0 MB in all, largest first; ×: allocati
                 let names = stack
                     .frames
                     .iter()
-                    .map(|&index| profile.frames[index].function)
+                    .map(|&index| &*profile.frames[index].function)
                     .collect();
                 (names, stack.count)
             })
@@ -1429,6 +1581,68 @@ allocation sites at the peak (1 of 1, 2.0 MB in all, largest first; ×: allocati
         );
     }
 
+    /// The cases the console's Profile tab checks its waits against (`schema/waits.json`): each wait Your code
+    /// reads, by its name, with its own time in µs, most first.
+    #[test]
+    fn the_shared_waits() {
+        let cases: Vec<Value> =
+            serde_json::from_str(include_str!("../../../schema/waits.json")).unwrap();
+
+        for case in &cases {
+            let profile = Profile::of(&case["trace"]).unwrap();
+            let mut waits: Vec<(String, i64)> = functions(&profile.own_code())
+                .into_iter()
+                .filter_map(|(index, own, _)| {
+                    let frame = &profile.frames[index];
+                    (frame.waiting && own > 0.0)
+                        .then(|| (frame.function.to_string(), own.round() as i64))
+                })
+                .collect();
+            waits.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+
+            assert_eq!(json!(waits), case["waits"], "{}", case["name"]);
+        }
+    }
+
+    /// An app's traces in a chain, merged: each one's waits named by its own calls, added up by name.
+    #[test]
+    fn an_apps_merged_profile_names_its_waits_as_each_trace_does() {
+        let cases: Vec<Value> =
+            serde_json::from_str(include_str!("../../../schema/waits.json")).unwrap();
+        let (python, go) = (&cases[0]["trace"], &cases[3]["trace"]);
+
+        let timed = app_profile(&[python, python], Kind::Cpu, 5).unwrap();
+        let cpu = app_profile(&[go, go], Kind::Cpu, 5).unwrap();
+
+        let rows = |read: &str| {
+            read.lines()
+                .skip_while(|line| !line.starts_with("functions by self time"))
+                .skip(1)
+                .take_while(|line| !line.is_empty())
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            rows(&timed),
+            [
+                "  300 ms  60%  waiting · HTTP GET analytics.example.com · total 300 ms",
+                "  120 ms  24%  waiting · SQL postgresql · total 120 ms",
+                "  80.0 ms  16%  waiting · sleep · total 80.0 ms",
+            ]
+        );
+
+        assert_eq!(
+            rows(&cpu),
+            [
+                "  78.0 ms  39%  waiting (no call) · total 78.0 ms",
+                "  50.0 ms  25%  editDistance (yours) — similar.go:40 · total 50.0 ms",
+                "  40.0 ms  20%  waiting · SQL postgresql · total 40.0 ms",
+                "  20.0 ms  10%  waiting · HTTP GET prices.internal · total 20.0 ms",
+                "  10.0 ms  5%  (*App).listProducts (yours) — catalog.go:10 · total 120 ms",
+            ]
+        );
+    }
+
     /// A stack of the profile's view by its functions' names, with its time in µs.
     fn named(profile: &Profile, stacks: &[Stack]) -> Vec<(Vec<String>, i64)> {
         stacks
@@ -1437,7 +1651,7 @@ allocation sites at the peak (1 of 1, 2.0 MB in all, largest first; ×: allocati
                 let names = stack
                     .frames
                     .iter()
-                    .map(|&index| profile.frames[index].function.to_owned())
+                    .map(|&index| profile.frames[index].function.to_string())
                     .collect();
                 (names, stack.us.round() as i64)
             })
@@ -1453,7 +1667,7 @@ allocation sites at the peak (1 of 1, 2.0 MB in all, largest first; ×: allocati
     /// A Gin request's CPU profile with its calls: a query from listProducts, one from similar, a Redis command from
     /// count (never sampled, so under the handler above it, listProducts), one from warm (never sampled, right under
     /// the request: the request's own waiting, though its line in catalog.go comes after listProducts'), 30 ms of
-    /// the 69 off the CPU in none of the others.
+    /// the 69 off the CPU in none of the others. Each wait is named by its call, as the console names it.
     #[test]
     fn a_go_profiles_calls_wait_under_the_function_that_made_them() {
         let frame = |function: &str, file: &str, line: i64, in_app: bool| json!({"function": function, "module": "shop", "file": file, "line": line, "in_app": in_app});
@@ -1497,12 +1711,13 @@ allocation sites at the peak (1 of 1, 2.0 MB in all, largest first; ×: allocati
                     25_000
                 ),
                 (names(&["(*App).listProducts"]), 5_000),
-                (names(&["(*App).listProducts", "off the CPU"]), 29_000),
+                (names(&["(*App).listProducts", "waiting · SQL"]), 20_000),
                 (
-                    names(&["(*App).listProducts", "(*App).similar", "off the CPU"]),
+                    names(&["(*App).listProducts", "(*App).similar", "waiting · SQL"]),
                     10_000
                 ),
-                (names(&["off the CPU"]), 30_000),
+                (names(&["(*App).listProducts", "waiting · redis"]), 9_000),
+                (names(&["waiting (no call)"]), 30_000),
             ]
         );
     }
@@ -1527,7 +1742,7 @@ allocation sites at the peak (1 of 1, 2.0 MB in all, largest first; ×: allocati
             .into_iter()
             .map(|(index, _, total)| {
                 (
-                    profile.frames[index].function,
+                    &*profile.frames[index].function,
                     profile.frames[index].at_line,
                     total.round() as i64,
                 )

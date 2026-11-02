@@ -219,8 +219,6 @@ function ProfileOf({
   onKind: (kind: Kind) => void;
   onShowRow?: ((row: string) => void) | undefined;
 }) {
-  // Your code's waits named by what was in flight (lib/waitCalls); All frames keeps the frames that waited.
-  const named = useMemo(() => namedWaits(scope.profile, trace), [scope.profile, trace]);
   const memory = profile.memory;
   // One choice for both: Memory keeps what Time had, and back.
   const frames = useFrames(profile);
@@ -235,7 +233,7 @@ function ProfileOf({
     <ProfileView
       key={scope.title}
       profile={scope.profile}
-      own={named}
+      own={scope.own}
       frames={frames}
       measure={(samples) => duration(samples * scope.profile.interval_us)}
       noun="Time"
@@ -391,6 +389,8 @@ function useProfileRange(open: boolean): TimeRange | null {
 /** What the tab profiles: a stretch picked (when the profile says when its stacks were seen), else the whole trace. */
 interface Scope {
   profile: Profile;
+  /** What Your code reads: its waits named by what was in flight (lib/waitCalls); All frames keeps the frames. */
+  own: Profile;
   title: string;
   /** Why a stretch picked isn't what it shows: the profile doesn't say when. */
   note: string | null;
@@ -407,13 +407,15 @@ function scopeOf(profile: Profile, range: TimeRange | null, trace: Profiled): Sc
   // Timed, it reads in the trace's own time, as the time strip does; a range narrows it.
   if (timed(profile)) {
     const title = range ? `Profile of ${rangeLabel(range)}` : "Profile of the whole trace";
-    return { profile: wallClock(profile, trace.duration, range), title, note: null, timed: true, cpu: false };
+    const shown = wallClock(profile, trace.duration, range);
+    return { profile: shown, own: namedWaits(shown, trace), title, note: null, timed: true, cpu: false };
   }
   const note = range ? "Its samples aren't timed: the range picked can't narrow it." : null;
   // On the trace's clock: the time off the CPU waited, under the function of yours that made each call waited for.
   const cpu = onCpuOnly(trace);
+  // Its waits named so already (lib/offCpu): Your code and All frames read the same.
   const shown = cpu ? withOffCpu(profile, trace) : profile;
-  return { profile: shown, title: "Profile of the whole trace", note, timed: false, cpu };
+  return { profile: shown, own: shown, title: "Profile of the whole trace", note, timed: false, cpu };
 }
 
 /**
@@ -1196,13 +1198,22 @@ function appRuntime(app: AppProfile): string | undefined {
   return serviceRuntime(app.traces.map((each) => traceRuntime(each.member.trace.attrs))) ?? undefined;
 }
 
-/** An app's profile in the scope: one trace's (its stretch), or its traces' merged. */
+/**
+ * An app's profile in the scope: one trace's (its stretch), or its traces' merged, Your code's waits named by what
+ * was in flight in each trace, as a trace's own Profile tab names them.
+ */
 function appView(app: AppProfile): Scope {
-  const [one] = app.traces;
-  const scoped = (each: AppProfile["traces"][number]) => scopeOf(each.profile, each.range, each.member.trace);
-  if (app.traces.length === 1 && one) return scoped(one);
-  const profile = mergeProfiles(app.traces.map((each) => scoped(each).profile));
-  return { profile, title: `Profile of ${app.traces.length} traces`, note: null, timed: false, cpu: false };
+  const scopes = app.traces.map((each) => scopeOf(each.profile, each.range, each.member.trace));
+  const [one] = scopes;
+  if (scopes.length === 1 && one) return one;
+  return {
+    profile: mergeProfiles(scopes.map((each) => each.profile)),
+    own: mergeProfiles(scopes.map((each) => each.own)),
+    title: `Profile of ${app.traces.length} traces`,
+    note: null,
+    timed: false,
+    cpu: false,
+  };
 }
 
 /** What each app's profiles add up to, a row an app in aligned columns: the time's, or the memory's. */
@@ -1263,6 +1274,7 @@ function AppProfileSection({ app, view }: { app: AppProfile; view: Scope }) {
       <ProfileView
         key={view.title}
         profile={view.profile}
+        own={view.own}
         frames={frames}
         measure={(samples) => duration(samples * view.profile.interval_us)}
         noun="Time"
