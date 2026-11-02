@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- EXPLAIN of a query with CTEs (`WITH … SELECT`). The console now shows
+  Explain for it wherever it shows one for a SELECT, and every SDK runs
+  it. A WITH whose CTE changes data (`WITH gone AS (DELETE … RETURNING
+  id) SELECT …`) is not explained: the query's plan says so ("This
+  query changes data (DELETE inside WITH): it isn't explained.") instead
+  of the buttons. So is a `SELECT … INTO` and a second statement after
+  a `;`. A keyword in a string, a quoted name or a comment doesn't
+  count.
+- A query that locks rows (`FOR UPDATE`, `FOR SHARE`, `LOCK IN SHARE
+  MODE`) is explained, not analyzed: EXPLAIN ANALYZE runs it, and its
+  locks would wait for other transactions.
+- The console offers EXPLAIN ANALYZE by the query's `db.system`, as the
+  agent runs it, so a query an SDK records without `db.vendor` has it
+  too, MariaDB's among them.
+
+The agent, the console and the SDKs share one rule for this, with its
+cases in `schema/explainable.json`.
+
 ## 0.11.0 (2026-11-02)
 
 ### Fixed

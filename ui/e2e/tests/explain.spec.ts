@@ -73,3 +73,54 @@ test("a query opened in the call tree has the DB tab's Query plan", async ({ pag
 
   await expect(details.locator(".dt-plan-line")).toHaveCount(3);
 });
+
+/** The report's trace with its campaign_stats_1 query's statement as `statement`. */
+async function withStatement(page: Page, statement: string): Promise<string> {
+  const id = await traceId("PATCH /campaigns/{id}/report");
+  await page.route(`**/api/traces/${id}*`, async (route) => {
+    const trace = await (await route.fetch()).json();
+    for (const span of trace.spans) {
+      if (span.kind === "sql" && String(span.name).includes("campaign_stats_1")) span.attrs["db.statement"] = statement;
+    }
+    await route.fulfill({ json: trace });
+  });
+  return id;
+}
+
+test("a WITH that only reads is explained", async ({ page }) => {
+  await explainable(page);
+  const id = await withStatement(
+    page,
+    "WITH recent AS (SELECT * FROM campaign_stats_1 WHERE day > now() - interval '7 days') SELECT * FROM recent",
+  );
+  await page.goto(`/#/t/${id}?tab=sql`);
+  await page.getByText("SELECT campaign_stats_1").first().click();
+  await page.getByRole("button", { name: "Explain", exact: true }).click();
+
+  await expect(page.locator(".dt-plan-line")).toHaveCount(3);
+  await expect(page.getByRole("button", { name: "Explain analyze" })).toBeVisible();
+});
+
+test("a WITH that deletes says why it isn't explained, instead of the buttons", async ({ page }) => {
+  await explainable(page);
+  const id = await withStatement(
+    page,
+    "WITH gone AS (DELETE FROM campaign_stats_1 WHERE day < %s RETURNING id) SELECT count(*) FROM gone",
+  );
+  await page.goto(`/#/t/${id}?tab=sql`);
+  await page.getByText("SELECT campaign_stats_1").first().click();
+
+  await expect(page.getByText("This query changes data (DELETE inside WITH): it isn't explained.")).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Explain/ })).toHaveCount(0);
+});
+
+test("a query that locks rows is explained, not analyzed", async ({ page }) => {
+  await explainable(page);
+  const id = await withStatement(page, "SELECT * FROM campaign_stats_1 WHERE id = $1 FOR UPDATE");
+  await page.goto(`/#/t/${id}?tab=sql`);
+  await page.getByText("SELECT campaign_stats_1").first().click();
+
+  await expect(page.getByRole("button", { name: "Explain", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Explain analyze" })).toHaveCount(0);
+  await expect(page.getByText("This query locks rows (FOR UPDATE): it can be explained, not analyzed.")).toBeVisible();
+});

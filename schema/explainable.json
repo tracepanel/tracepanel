@@ -1,0 +1,232 @@
+[
+  {
+    "sql": "SELECT * FROM books",
+    "explain": null,
+    "analyze": null
+  },
+  {
+    "sql": "  select id from books",
+    "explain": null,
+    "analyze": null
+  },
+  {
+    "sql": "/* traceparent='00-1' */ -- a note\nSELECT * FROM books",
+    "explain": null,
+    "analyze": null
+  },
+  {
+    "sql": "WITH recent AS (SELECT * FROM books WHERE year > 2000) SELECT * FROM recent",
+    "explain": null,
+    "analyze": null
+  },
+  {
+    "sql": "with recursive tree(id, parent) as (select id, parent from nodes where parent is null union all select n.id, n.parent from nodes n join tree t on n.parent = t.id) select * from tree",
+    "explain": null,
+    "analyze": null
+  },
+  {
+    "sql": "WITH a AS (WITH b AS (SELECT 1 AS x) SELECT x FROM b), c AS (SELECT x FROM a) SELECT * FROM c",
+    "explain": null,
+    "analyze": null
+  },
+  {
+    "sql": "WITH a AS MATERIALIZED (SELECT 1), b AS NOT MATERIALIZED (SELECT 2) SELECT * FROM a, b",
+    "explain": null,
+    "analyze": null
+  },
+  {
+    "sql": "WITH RECURSIVE t(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM t WHERE n < 5) SEARCH DEPTH FIRST BY n SET ord SELECT * FROM t ORDER BY ord",
+    "explain": null,
+    "analyze": null
+  },
+  {
+    "sql": "WITH a AS (SELECT * FROM books WHERE id = $1) SELECT * FROM a",
+    "explain": null,
+    "analyze": null
+  },
+  {
+    "sql": "WITH a AS (SELECT 'DELETE FROM t; UPDATE t SET n = 1' AS note) SELECT * FROM a",
+    "explain": null,
+    "analyze": null
+  },
+  {
+    "sql": "WITH \"delete\" AS (SELECT 1 AS \"update\") SELECT \"update\" FROM \"delete\"",
+    "explain": null,
+    "analyze": null
+  },
+  {
+    "sql": "WITH `insert` AS (SELECT 1 AS `into`) SELECT `into` FROM `insert`",
+    "explain": null,
+    "analyze": null
+  },
+  {
+    "sql": "WITH [merge] AS (SELECT 1 AS [into]) SELECT [into] FROM [merge]",
+    "explain": null,
+    "analyze": null
+  },
+  {
+    "sql": "WITH a AS (SELECT 1 AS x /* DELETE FROM t */ -- UPDATE t\n) SELECT * FROM a",
+    "explain": null,
+    "analyze": null
+  },
+  {
+    "sql": "WITH a AS (SELECT $$DELETE FROM t$$ AS x, $tag$ INSERT INTO t $tag$ AS y) SELECT * FROM a",
+    "explain": null,
+    "analyze": null
+  },
+  {
+    "sql": "SELECT 'it''s DELETE' AS x, \"a \"\"UPDATE\"\"\" AS y",
+    "explain": null,
+    "analyze": null
+  },
+  {
+    "sql": "SELECT E'\\' DELETE' AS x",
+    "explain": null,
+    "analyze": null
+  },
+  {
+    "sql": "SELECT 'C:\\' AS path, updated_at FROM files",
+    "explain": null,
+    "analyze": null
+  },
+  {
+    "sql": "SELECT updated_at, deleted, insert_id, merged_into FROM t",
+    "explain": null,
+    "analyze": null
+  },
+  {
+    "sql": "SELECT 1;",
+    "explain": null,
+    "analyze": null
+  },
+  {
+    "sql": "SELECT 1; -- done",
+    "explain": null,
+    "analyze": null
+  },
+  {
+    "sql": "SELECT * FROM t FOR UPDATE",
+    "explain": null,
+    "analyze": "This query locks rows (FOR UPDATE): it can be explained, not analyzed."
+  },
+  {
+    "sql": "SELECT * FROM t FOR NO KEY UPDATE SKIP LOCKED",
+    "explain": null,
+    "analyze": "This query locks rows (FOR UPDATE): it can be explained, not analyzed."
+  },
+  {
+    "sql": "SELECT * FROM t FOR SHARE",
+    "explain": null,
+    "analyze": "This query locks rows (FOR SHARE): it can be explained, not analyzed."
+  },
+  {
+    "sql": "SELECT * FROM t FOR KEY SHARE NOWAIT",
+    "explain": null,
+    "analyze": "This query locks rows (FOR SHARE): it can be explained, not analyzed."
+  },
+  {
+    "sql": "SELECT * FROM t LOCK IN SHARE MODE",
+    "explain": null,
+    "analyze": "This query locks rows (LOCK IN SHARE MODE): it can be explained, not analyzed."
+  },
+  {
+    "sql": "WITH a AS (SELECT * FROM t) SELECT * FROM a FOR UPDATE",
+    "explain": null,
+    "analyze": "This query locks rows (FOR UPDATE): it can be explained, not analyzed."
+  },
+  {
+    "sql": "WITH gone AS (DELETE FROM t WHERE id = 1 RETURNING id) SELECT * FROM gone",
+    "explain": "This query changes data (DELETE inside WITH): it isn't explained.",
+    "analyze": "This query changes data (DELETE inside WITH): it isn't explained."
+  },
+  {
+    "sql": "WITH moved AS (UPDATE t SET n = n + 1 RETURNING *) SELECT count(*) FROM moved",
+    "explain": "This query changes data (UPDATE inside WITH): it isn't explained.",
+    "analyze": "This query changes data (UPDATE inside WITH): it isn't explained."
+  },
+  {
+    "sql": "WITH added AS (INSERT INTO t (n) VALUES (1) RETURNING id) SELECT id FROM added",
+    "explain": "This query changes data (INSERT inside WITH): it isn't explained.",
+    "analyze": "This query changes data (INSERT inside WITH): it isn't explained."
+  },
+  {
+    "sql": "WITH m AS (MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN DELETE RETURNING t.id) SELECT * FROM m",
+    "explain": "This query changes data (MERGE inside WITH): it isn't explained.",
+    "analyze": "This query changes data (MERGE inside WITH): it isn't explained."
+  },
+  {
+    "sql": "with a as (select 1), gone as (delete from t returning id) select * from gone",
+    "explain": "This query changes data (DELETE inside WITH): it isn't explained.",
+    "analyze": "This query changes data (DELETE inside WITH): it isn't explained."
+  },
+  {
+    "sql": "WITH old AS (SELECT id FROM t) DELETE FROM t WHERE id IN (SELECT id FROM old)",
+    "explain": "This query changes data (DELETE): it isn't explained.",
+    "analyze": "This query changes data (DELETE): it isn't explained."
+  },
+  {
+    "sql": "SELECT * INTO archive FROM books",
+    "explain": "This query changes data (SELECT INTO): it isn't explained.",
+    "analyze": "This query changes data (SELECT INTO): it isn't explained."
+  },
+  {
+    "sql": "WITH a AS (SELECT 1 AS x) SELECT x INTO b FROM a",
+    "explain": "This query changes data (SELECT INTO): it isn't explained.",
+    "analyze": "This query changes data (SELECT INTO): it isn't explained."
+  },
+  {
+    "sql": "SELECT id FROM t /*! INTO OUTFILE '/tmp/t.txt' */",
+    "explain": "This query changes data (SELECT INTO): it isn't explained.",
+    "analyze": "This query changes data (SELECT INTO): it isn't explained."
+  },
+  {
+    "sql": "SELECT 1 /* /* */ DELETE */",
+    "explain": "This query changes data (DELETE): it isn't explained.",
+    "analyze": "This query changes data (DELETE): it isn't explained."
+  },
+  {
+    "sql": "SELECT 1; DROP TABLE books",
+    "explain": "Only one statement can be explained at a time.",
+    "analyze": "Only one statement can be explained at a time."
+  },
+  {
+    "sql": "SELECT 1; DELETE FROM books",
+    "explain": "Only one statement can be explained at a time.",
+    "analyze": "Only one statement can be explained at a time."
+  },
+  {
+    "sql": "UPDATE books SET n = 1",
+    "explain": "Only SELECT statements can be explained.",
+    "analyze": "Only SELECT statements can be explained."
+  },
+  {
+    "sql": "/* SELECT */ UPDATE books SET n = 1",
+    "explain": "Only SELECT statements can be explained.",
+    "analyze": "Only SELECT statements can be explained."
+  },
+  {
+    "sql": "INSERT INTO t SELECT 1",
+    "explain": "Only SELECT statements can be explained.",
+    "analyze": "Only SELECT statements can be explained."
+  },
+  {
+    "sql": "EXPLAIN SELECT 1",
+    "explain": "Only SELECT statements can be explained.",
+    "analyze": "Only SELECT statements can be explained."
+  },
+  {
+    "sql": "WITH a AS (SELECT 1) VALUES (1)",
+    "explain": "Only SELECT statements can be explained.",
+    "analyze": "Only SELECT statements can be explained."
+  },
+  {
+    "sql": "WITH a AS (SELECT 1)",
+    "explain": "Only SELECT statements can be explained.",
+    "analyze": "Only SELECT statements can be explained."
+  },
+  {
+    "sql": "",
+    "explain": "Only SELECT statements can be explained.",
+    "analyze": "Only SELECT statements can be explained."
+  }
+]

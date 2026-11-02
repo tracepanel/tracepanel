@@ -3,6 +3,7 @@
 //! app's connection (`Apps::ask`), and reads the plan the rows make (one implementation for the SDKs that send only
 //! the rows), or takes the app's own lines when it sends them.
 
+use crate::explainable;
 use serde_json::{Map, Value, json};
 
 /// What to ask the app: the EXPLAIN to run, its parameters, and which database (the span's).
@@ -31,13 +32,9 @@ pub(crate) fn request(span: &Map<String, Value>, analyze: bool) -> Result<Reques
             .to_owned()
     };
     let statement = text("db.statement");
-    let first = after_comments(&statement)
-        .split_whitespace()
-        .next()
-        .unwrap_or_default()
-        .to_ascii_uppercase();
-    if first != "SELECT" && first != "WITH" {
-        return Err((422, "Only SELECT statements can be explained.".into()));
+    // An UPDATE is not explained, a SELECT is: the rest of what is refused says why.
+    if let Some(why) = explainable::refusal(&statement, false) {
+        return Err((422, why));
     }
     // A query with no placeholder has no parameters to record.
     let params = match attrs.get("db.params").and_then(Value::as_array) {
@@ -55,6 +52,9 @@ pub(crate) fn request(span: &Map<String, Value>, analyze: bool) -> Result<Reques
         "mysql" | "mariadb" if analyze => ("EXPLAIN ANALYZE ", true),
         _ => ("EXPLAIN ", false),
     };
+    if let Some(why) = explainable::refusal(&statement, analyzed) {
+        return Err((422, why));
+    }
     let alias = [text("db.alias")]
         .into_iter()
         .find(|alias| !alias.is_empty())
@@ -267,21 +267,6 @@ fn table(columns: &[String], rows: &[Vec<Value>]) -> Vec<Value> {
         .collect()
 }
 
-/// A statement from its first word on: its leading comments (an ORM's or sqlcommenter's tags) are not what it does.
-fn after_comments(statement: &str) -> &str {
-    let mut rest = statement.trim_start();
-    loop {
-        let skipped = if let Some(comment) = rest.strip_prefix("/*") {
-            comment.split_once("*/").map_or("", |(_, after)| after)
-        } else if let Some(comment) = rest.strip_prefix("--") {
-            comment.split_once('\n').map_or("", |(_, after)| after)
-        } else {
-            return rest;
-        };
-        rest = skipped.trim_start();
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -313,6 +298,61 @@ mod tests {
             update.err(),
             Some((422, "Only SELECT statements can be explained.".into()))
         );
+    }
+
+    fn postgres(statement: &str, analyze: bool) -> Result<Value, (u16, String)> {
+        let span =
+            json!({"kind": "sql", "attrs": {"db.system": "postgresql", "db.statement": statement}});
+        request(span.as_object().unwrap(), analyze)
+            .map(|request| request.body["explain"]["sql"].clone())
+    }
+
+    #[test]
+    fn a_with_that_only_reads_is_explained_and_analyzed() {
+        let statement = "WITH recent AS (SELECT * FROM books) SELECT * FROM recent";
+
+        assert_eq!(
+            (postgres(statement, false), postgres(statement, true)),
+            (
+                Ok(json!(format!("EXPLAIN {statement}"))),
+                Ok(json!(format!("EXPLAIN (ANALYZE, BUFFERS) {statement}")))
+            )
+        );
+    }
+
+    #[test]
+    fn a_with_that_changes_data_is_not_explained() {
+        let statement = "WITH gone AS (DELETE FROM books RETURNING id) SELECT * FROM gone";
+        let refused = Err((
+            422,
+            "This query changes data (DELETE inside WITH): it isn't explained.".to_owned(),
+        ));
+
+        assert_eq!(
+            (postgres(statement, false), postgres(statement, true)),
+            (refused.clone(), refused)
+        );
+    }
+
+    #[test]
+    fn a_select_that_locks_rows_is_explained_not_analyzed() {
+        let statement = "SELECT * FROM books FOR UPDATE";
+
+        assert_eq!(
+            (postgres(statement, false), postgres(statement, true)),
+            (
+                Ok(json!(format!("EXPLAIN {statement}"))),
+                Err((
+                    422,
+                    "This query locks rows (FOR UPDATE): it can be explained, not analyzed."
+                        .to_owned()
+                ))
+            )
+        );
+        // SQLite never runs it, asked to analyze or not: EXPLAIN QUERY PLAN only plans.
+        let span =
+            json!({"kind": "sql", "attrs": {"db.system": "sqlite", "db.statement": statement}});
+        assert!(request(span.as_object().unwrap(), true).is_ok());
     }
 
     #[test]

@@ -4,6 +4,7 @@
 //! framework: the app serves them itself and forwards the rest here (Django's `/__tracepanel__/`).
 
 mod explain;
+mod explainable;
 pub mod neighbors;
 
 use axum::Extension;
