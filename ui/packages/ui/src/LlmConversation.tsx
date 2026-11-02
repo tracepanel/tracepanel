@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { CopyBlock } from "./CopyButton";
 import { attrsWhere } from "./lib/values";
 import { SectionHeading } from "./primitives";
 import type { Attrs } from "./types";
@@ -98,25 +99,36 @@ function TextPart({ part }: { part: Part }) {
 
 /** A tool the model called, with its arguments: `→ get_weather({"city": "Oslo"})`. */
 function ToolCallPart({ part }: { part: Part }) {
+  const args = json(part.arguments ?? {});
   return (
-    <pre className="dt-llm-code">
-      <b>→ {String(part.name ?? "tool")}</b>({json(part.arguments ?? {})})
-    </pre>
+    <CopyBlock text={args} label="Copy the arguments">
+      <pre className="dt-llm-code">
+        <b>→ {String(part.name ?? "tool")}</b>({args})
+      </pre>
+    </CopyBlock>
   );
 }
 
 /** A tool's answer, sent back to the model. */
 function ToolResponsePart({ part }: { part: Part }) {
+  const answer = json(part.response ?? part.result ?? "");
   return (
-    <pre className="dt-llm-code">
-      <b>← {String(part.id ?? "tool")}</b> {json(part.response ?? part.result ?? "")}
-    </pre>
+    <CopyBlock text={answer} label="Copy the answer">
+      <pre className="dt-llm-code">
+        <b>← {String(part.id ?? "tool")}</b> {answer}
+      </pre>
+    </CopyBlock>
   );
 }
 
 /** Any other part (an image, a file, a provider's own), as its JSON. */
 function OtherPart({ part }: { part: Part }) {
-  return <pre className="dt-llm-code">{json(part)}</pre>;
+  const text = json(part);
+  return (
+    <CopyBlock text={text} label="Copy the part">
+      <pre className="dt-llm-code">{text}</pre>
+    </CopyBlock>
+  );
 }
 
 /** How each type of part reads, by the type as the conventions write it. */
@@ -152,7 +164,9 @@ function TurnView({ turn, open }: { turn: Turn; open: boolean }) {
       <div className="dt-llm-parts">
         {turn.cut !== undefined ? (
           <>
-            <pre className="dt-llm-code">{turn.cut}</pre>
+            <CopyBlock text={turn.cut} label="Copy the turn as kept (it was cut)">
+              <pre className="dt-llm-code">{turn.cut}</pre>
+            </CopyBlock>
             <p className="text-xs text-muted-foreground">Cut at the SDK's limit (max_body_kb): not whole JSON.</p>
           </>
         ) : (

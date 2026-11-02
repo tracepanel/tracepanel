@@ -3007,9 +3007,13 @@ div.dt-map-row[data-kind="code"] {
   border-radius: var(--dt-radius-sm);
   background: #fff;
 }
-.dt-mail-text {
+.dt-mail-text-box {
   margin: 0.625rem 0.875rem 0.875rem;
-  padding: 0.75rem;
+}
+.dt-mail-text {
+  margin: 0;
+  /* Room on the right for the copy button (CopyBlock). */
+  padding: 0.75rem 2.75rem 0.75rem 0.75rem;
   border-radius: var(--dt-radius-sm);
   background: var(--dt-ink);
   color: var(--dt-ink-text);
@@ -3259,7 +3263,9 @@ div.dt-map-row[data-kind="code"] {
 }
 .dt-llm-code {
   margin: 0;
-  padding: 0.375rem 0.5rem;
+  /* Room on the right for the copy button (CopyBlock). */
+  min-height: 2.75rem;
+  padding: 0.375rem 2.5rem 0.375rem 0.5rem;
   border-radius: 0.25rem;
   background: var(--dt-faint);
   font-family: var(--dt-mono);

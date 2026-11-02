@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { CopyBlock } from "./CopyButton";
 import { Badge } from "./components/ui/badge";
 import { duration } from "./format";
 import { type NameValue, NameValues } from "./NameValues";
@@ -62,7 +63,9 @@ function Message({ span }: { span: Span }) {
             // An empty sandbox: no scripts, no forms, no same-origin access for the email's markup.
             <iframe className="dt-mail-html" title="Email HTML" sandbox="" srcDoc={html} />
           ) : (
-            <pre className="dt-mail-text">{text ?? ""}</pre>
+            <CopyBlock text={text ?? ""} label="Copy the text" className="dt-mail-text-box">
+              <pre className="dt-mail-text">{text ?? ""}</pre>
+            </CopyBlock>
           )}
         </>
       ) : (

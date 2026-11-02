@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CopyButton } from "./CopyButton";
+import { TokenBlock } from "./CopyButton";
 import type { GraphqlTokenType } from "./graphql";
 
 type Token = { type: GraphqlTokenType; text: string };
@@ -24,27 +24,5 @@ export function GraphqlCode({ document }: { document: string }) {
       cancelled = true;
     };
   }, [document]);
-  return (
-    <div className="group/gql relative min-w-0 overflow-hidden rounded-md border bg-muted/60">
-      <pre className="m-0 max-h-[30rem] overflow-auto px-4 py-3 pr-12 font-mono text-sm leading-relaxed whitespace-pre-wrap text-foreground [overflow-wrap:anywhere]">
-        <code>
-          {shown.tokens.map((token, index) =>
-            token.type === "text" ? (
-              token.text
-            ) : (
-              // biome-ignore lint/suspicious/noArrayIndexKey: tokens of one document never reorder.
-              <span key={index} className={`dt-gql-${token.type}`}>
-                {token.text}
-              </span>
-            ),
-          )}
-        </code>
-      </pre>
-      <CopyButton
-        text={shown.text}
-        label="Copy query"
-        className="absolute top-2 right-2 opacity-0 transition-opacity group-hover/gql:opacity-100 focus-visible:opacity-100"
-      />
-    </div>
-  );
+  return <TokenBlock text={shown.text} tokens={shown.tokens} prefix="dt-gql-" label="Copy query" />;
 }

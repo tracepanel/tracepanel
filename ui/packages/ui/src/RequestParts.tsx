@@ -1,5 +1,6 @@
 import { type ReactNode, useContext, useState } from "react";
 import { AttributeGroups } from "./Attributes";
+import { CopyBlock } from "./CopyButton";
 import { bytes } from "./format";
 import { ChevronDownIcon } from "./icons";
 import { indentedJson, indentedPartialJson } from "./json";
@@ -118,7 +119,7 @@ function mediaType(header: unknown): string {
 }
 
 function bodyPart(id: string, label: string, body: BodyOf | null): Part[] {
-  return body ? [{ id, label, content: <Body body={body} /> }] : [];
+  return body ? [{ id, label, content: <Body body={body} name={label} /> }] : [];
 }
 
 function headersPart(attrs: Attrs): Part[] {
@@ -219,31 +220,41 @@ function Pairs({ pairs }: { pairs: readonly Pair[] }) {
 }
 
 /** A body's text, marked when it was cut; one kept by its size only says so. */
-function Body({ body }: { body: BodyOf }) {
+function Body({ body, name }: { body: BodyOf; name: string }) {
   if (body.text === null) return <BodyNote>{unkept(body.size, body.type)}</BodyNote>;
   return (
     <>
-      <BodyText body={body} text={body.text} />
+      <BodyText body={body} text={body.text} name={name} />
       {body.cut ? <BodyNote>{cutAt(body.text, body.size)}</BodyNote> : null}
     </>
   );
 }
 
-/** A whole form's fields as names and values; any other body as text. */
-function BodyText({ body, text }: { body: BodyOf; text: string }) {
+/**
+ * A whole form's fields as names and values; any other body as text, copied as it was stored (all of it, a cut one
+ * as far as it was kept, its tooltip says so).
+ */
+function BodyText({ body, text, name }: { body: BodyOf; text: string; name: string }) {
   const card = useContext(RowsLookContext) === "card";
   if (body.type === "application/x-www-form-urlencoded" && !body.cut) return <Pairs pairs={queryPairs(text)} />;
   return (
-    <pre
-      className={cn(
-        "dt-syntax m-0 max-h-96 overflow-auto p-3 font-mono text-xs whitespace-pre-wrap [overflow-wrap:anywhere]",
-        // On the page a body is the one boxed thing: code, as code is shown everywhere.
-        !card && "rounded-lg border bg-card",
-      )}
+    <CopyBlock
+      text={text}
+      label={copyLabel(body, name)}
+      // On the page a body is the one boxed thing: code, as code is shown everywhere.
+      className={cn(!card && "overflow-hidden rounded-lg border bg-card")}
     >
-      <Readable body={body} text={text} />
-    </pre>
+      <pre className="dt-syntax m-0 max-h-96 overflow-auto p-3 pr-11 font-mono text-xs whitespace-pre-wrap [overflow-wrap:anywhere]">
+        <Readable body={body} text={text} />
+      </pre>
+    </CopyBlock>
   );
+}
+
+/** What a body's copy button says: a cut one copies what was kept, and says so. */
+function copyLabel(body: BodyOf, name: string): string {
+  const what = name.toLowerCase();
+  return body.cut ? `Copy the ${what} as kept (it was cut)` : `Copy the ${what}`;
 }
 
 function BodyNote({ children }: { children: ReactNode }) {

@@ -9,6 +9,11 @@
   the chain starts, instead of the tab picked last in another trace
   (often DB). A trace's row still opens on the tab picked last, and now
   says so in its tooltip: "Opens on DB, the tab you used last".
+- Every block of code or text copies, with the same button in its
+  corner: a request's and a response's body, a query plan, an error,
+  an email's text and an LLM call's tool parts, besides SQL, GraphQL
+  documents and log messages. A body copies as it was stored, not as
+  laid out. A cut one says it copies what was kept.
 
 - A view an SPA redirects from at once (`/sms-campaigns` sending on to
   `/sms-campaigns/campaigns` as it renders) is no longer a row of its

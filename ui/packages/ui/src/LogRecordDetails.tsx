@@ -1,6 +1,6 @@
 // A log record's details, one look wherever it opens: the Logs page, a trace's Logs tab, the call tree's pane.
 import { type ReactNode, useMemo, useState } from "react";
-import { CopyButton } from "./CopyButton";
+import { CopyBlock, CopyButton } from "./CopyButton";
 import { DumpArgs } from "./Dump";
 import { ExceptionView } from "./ErrorView";
 import { localTime } from "./format";
@@ -72,20 +72,23 @@ function TextBlock({
   error?: boolean;
   copy?: boolean;
 }) {
-  return (
-    <div
-      className={cn("group/text relative rounded-md border bg-background", error && "border-error/30 bg-error-soft")}
+  const block = (
+    <pre
+      className={cn(
+        "m-0 px-3 py-2 pr-10 font-mono text-sm whitespace-pre-wrap [overflow-wrap:anywhere]",
+        error && "max-h-80 overflow-auto",
+      )}
     >
-      <pre
-        className={cn(
-          "m-0 px-3 py-2 pr-10 font-mono text-sm whitespace-pre-wrap [overflow-wrap:anywhere]",
-          error && "max-h-80 overflow-auto",
-        )}
-      >
-        {text}
-      </pre>
-      {copy ? <CopyButton text={text} label={label} className="absolute top-2 right-2" /> : null}
-    </div>
+      {text}
+    </pre>
+  );
+  const look = cn("rounded-md border bg-background", error && "border-error/30 bg-error-soft");
+  return copy ? (
+    <CopyBlock text={text} label={label} className={look}>
+      {block}
+    </CopyBlock>
+  ) : (
+    <div className={look}>{block}</div>
   );
 }
 

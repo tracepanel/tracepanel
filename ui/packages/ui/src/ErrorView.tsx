@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { CopyButton } from "./CopyButton";
 import { languageOf, tokenizeLines } from "./highlight";
 import { ChevronRightIcon } from "./icons";
 import { keyed } from "./keys";
@@ -163,9 +164,27 @@ function Chained({ error }: { error: ChainedError }) {
 }
 
 /** An error's head: its type and message, then what the place adds (handled or not, a link to its issue). */
-function ErrorHead({ type, message, children }: { type: string; message: string; children?: ReactNode }) {
+function ErrorHead({
+  type,
+  message,
+  copy,
+  children,
+}: {
+  type: string;
+  message: string;
+  /** The error as text, as a traceback prints it: its copy button in the head's corner. */
+  copy?: string | undefined;
+  children?: ReactNode;
+}) {
   return (
-    <header className="dt-error-head">
+    <header className="dt-error-head group/copy relative">
+      {copy ? (
+        <CopyButton
+          text={copy}
+          label="Copy the error"
+          className="absolute top-2 right-2 opacity-0 transition-opacity group-hover/copy:opacity-100 focus-visible:opacity-100"
+        />
+      ) : null}
       <p className="dt-error-type">{shortType(type)}</p>
       {message ? <p className="dt-error-message">{message}</p> : null}
       {children}
@@ -180,7 +199,7 @@ function ErrorHead({ type, message, children }: { type: string; message: string;
 export function ExceptionView({ exception }: { exception: ParsedException }) {
   return (
     <div>
-      <ErrorHead type={exception.type} message={exception.message}>
+      <ErrorHead type={exception.type} message={exception.message} copy={errorText(exception)}>
         <p className="dt-error-meta">{exception.frames.length} frames · most recent call last</p>
       </ErrorHead>
       <Frames frames={exception.frames} />
@@ -190,6 +209,25 @@ export function ExceptionView({ exception }: { exception: ParsedException }) {
       ))}
     </div>
   );
+}
+
+/** An error as text: its type and message, its frames most recent call last, then what it was raised from or while. */
+function errorText(error: {
+  type: string;
+  message: string;
+  frames: readonly Pick<Frame, "filename" | "lineno" | "function">[];
+  chain: readonly ChainedError[];
+}): string {
+  const lines = (each: { type: string; message: string; frames: typeof error.frames }) => [
+    each.message ? `${shortType(each.type)}: ${each.message}` : shortType(each.type),
+    ...each.frames.map((frame) => `    at ${frame.function} (${frame.filename}:${frame.lineno})`),
+  ];
+  const chained = error.chain.flatMap((inner) => [
+    "",
+    inner.relation === "cause" ? "Caused by:" : "Raised while handling:",
+    ...lines(inner),
+  ]);
+  return [...lines(error), ...chained].join("\n");
 }
 
 /** The way from an error to its issue: every time it happened. */
@@ -219,7 +257,7 @@ export function ErrorView({
     <>
       {keyed(errors, (error) => `${error.time}:${error.type}`).map(({ key, item: error }, index) => (
         <section key={key} className="dt-error">
-          <ErrorHead type={error.type} message={error.message}>
+          <ErrorHead type={error.type} message={error.message} copy={errorText(error)}>
             <p className="dt-error-meta">
               {error.handled ? "Handled" : "Unhandled"} · {error.frames.length} frames · most recent call last
             </p>

@@ -7,6 +7,7 @@ export { type DataColumn, type DataRows, DataTable } from "./DataTable";
 export { ErrorView } from "./ErrorView";
 export * from "./ExplainView";
 export { ago, dayTime, duration, type Tone, tone } from "./format";
+export { GraphqlCode } from "./GraphqlCode";
 export { Hint } from "./Hint";
 export { IssueGroupList } from "./IssueGroupList";
 export { IssueList } from "./IssueList";
