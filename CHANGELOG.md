@@ -22,10 +22,12 @@
   as it gains its status, its numbers and what it called. A call whose
   trace is on its way opens the view's call tree.
 - A view's calls to one host sit under one row from the moment they
-  leave: named by the host ("127.0.0.1:8043 ×5") until a trace of
-  theirs names the app that served them ("graphql-router ×5"), which
-  the same row then shows. The group used to appear only once the
-  traces came, taking the place of the rows that were there.
+  leave, named by the app that host was served by before
+  ("graphql-router ×5"), as the Services map links them. A host no app
+  has served yet is named by itself ("127.0.0.1:8043 ×5") until a trace
+  of its calls names the app, which the same row then shows, and a
+  trace's app wins over the one before. The group used to appear only
+  once the traces came, taking the place of the rows that were there.
 - A view whose calls all went through a gateway stays in the panel's
   list when the same page is opened again. With no traced request under
   it, it counted as an empty view and left the list for the new one.

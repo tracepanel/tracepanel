@@ -162,6 +162,8 @@ async function storeView(page: Page, tag: number): Promise<void> {
     each["attrs"] = {
       "http.request.method": "POST",
       "url.full": `${CONSOLE}gw/graphql`,
+      "server.address": new URL(CONSOLE).hostname,
+      "server.port": Number(new URL(CONSOLE).port),
       "w3c.span_id": callOf(tag, OPERATIONS.indexOf(call.op)),
       "graphql.operation.type": "query",
       "graphql.operation.name": call.op,
@@ -353,4 +355,29 @@ test("a row the agent never got says what is known, never a number on its way fo
 
   await expect(row).toContainText("2.0 s");
   await expect(row.locator(".dt-pending")).toHaveCount(0);
+});
+
+test("a view's calls to a host an app served before are under that app's name from in flight on", async ({ page }) => {
+  const tag = 5;
+  const { release, list } = await opened(page);
+  const open = (viewId: string, ops: readonly string[]) =>
+    page.evaluate(([each, names]) => (window as unknown as Opener).openView(each, [...names], 200), [
+      viewId,
+      ops,
+    ] as const);
+  await open(id(tag, 1), OPERATIONS);
+  for (const op of OPERATIONS) release(op);
+  await page.waitForFunction(() => (window as unknown as { view?: { open: boolean } }).view?.open === false);
+  await storeView(page, tag);
+  await storeGateway(page, tag);
+  const groups = list.locator('.dt-request-row[data-call="group"]');
+  await expect(groups.locator(".dt-app-chip")).toHaveText(["gateway"]);
+
+  // The next view's calls, still in flight: under the gateway's name already, as their traces will say.
+  await open(id(tag, 2), ["Profile", "Items"]);
+
+  const next = groups.nth(1);
+  await expect(next.locator(".dt-app-chip")).toHaveText("gateway");
+  await expect(next).toHaveAttribute("data-state", "running");
+  await expect(next.locator(".dt-map-times")).toHaveText("×2");
 });

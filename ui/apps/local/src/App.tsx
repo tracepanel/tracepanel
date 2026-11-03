@@ -25,6 +25,7 @@ import {
   memoryFromParams,
   PageName,
   parseSlice,
+  type ServiceMap,
   type Slice,
   sliceParams,
   type TabId,
@@ -615,7 +616,7 @@ function withViewCalls(
   rows: readonly TraceRow[],
   { calls, counters }: Pick<RowChains, "calls" | "counters">,
   apps: ReadonlyMap<string, ChainEntry[]>,
-  settled: ReadonlySet<string> | undefined,
+  { settled, known }: Pick<Grouping, "settled" | "known">,
 ): { rows: TraceRow[]; apps: ReadonlyMap<string, ChainEntry[]> } {
   const under = new Map(apps);
   const out: TraceRow[] = [];
@@ -628,7 +629,8 @@ function withViewCalls(
     const own = calls.get(head.trace.id);
     const placed = own ? placeCalls(head.trace.id, own, children, under) : children;
     const view = head.trace.id;
-    out.push(head, ...(head.trace.kind === "page" ? byHost(view, placed, settled, counters.get(view)) : placed));
+    const grouping = { view, settled, known, counter: counters.get(view) };
+    out.push(head, ...(head.trace.kind === "page" ? byHost(placed, grouping) : placed));
     at = end;
   }
   return { rows: out, apps: under };
@@ -664,12 +666,7 @@ function placeCalls(
  * from in flight on: the row is named by the host until a trace of theirs names the app ("graphql-router ×5"), and
  * the calls stay its rows, in their order, as they fill in. A task run stays under the request it came from.
  */
-function byHost(
-  view: string,
-  rows: readonly TraceRow[],
-  settled: ReadonlySet<string> | undefined,
-  counter: Counter | undefined,
-): TraceRow[] {
+function byHost(rows: readonly TraceRow[], grouping: Grouping): TraceRow[] {
   const units = unitsOf(rows);
   const hosts = new Map<string, TraceRow[][]>();
   for (const unit of units) {
@@ -682,7 +679,7 @@ function byHost(
     const members = hosts.get(host) ?? [];
     if (!host || members.length < 2) out.push(...unit);
     // Where the first of them is, once.
-    else if (members[0] === unit) out.push(...grouped(view, host, members, settled, counter));
+    else if (members[0] === unit) out.push(...grouped(host, members, grouping));
   }
   return out;
 }
@@ -699,20 +696,28 @@ function unitsOf(rows: readonly TraceRow[]): TraceRow[][] {
 }
 
 /** A host's calls under their row, a step deeper. */
-function grouped(
-  view: string,
-  host: string,
-  members: readonly TraceRow[][],
-  settled: ReadonlySet<string> | undefined,
-  counter: Counter | undefined,
-): TraceRow[] {
+function grouped(host: string, members: readonly TraceRow[][], grouping: Grouping): TraceRow[] {
   const calls = members.map((each) => each[0] as TraceRow);
-  const group = groupRow(view, host, calls, settled, counter);
+  const group = groupRow(host, calls, grouping);
   return [group, ...members.flat().map((row) => ({ ...row, depth: 2 as const }))];
 }
 
 /** What some of a view's calls' traces did, as its chain counts it. */
 type Counter = (ids: readonly string[]) => ChainCounts;
+
+/** The app a host's calls were served by before (useKnownApps), and what it runs on. */
+type KnownApp = { app: string; runtime: string | undefined };
+
+/**
+ * What a view's calls are grouped with: the view, the rows whose numbers are known, its chain's counts, and the app
+ * each host was served by before.
+ */
+interface Grouping {
+  view: string;
+  settled: ReadonlySet<string> | undefined;
+  counter: Counter | undefined;
+  known: ReadonlyMap<string, KnownApp>;
+}
 
 /**
  * What a group's calls did: as the view's chain counts their traces and all under them, once they are all its
@@ -744,13 +749,7 @@ function appOf(calls: readonly TraceRow[]): string | null {
 }
 
 /** The row over a view's calls to one host: their time on the clock, what they did, together. */
-function groupRow(
-  view: string,
-  host: string,
-  calls: readonly TraceRow[],
-  settled: ReadonlySet<string> | undefined,
-  counter: Counter | undefined,
-): TraceRow {
+function groupRow(host: string, calls: readonly TraceRow[], { view, settled, counter, known }: Grouping): TraceRow {
   const traces = calls.map((call) => call.trace);
   // The calls' own times, as the browser made them: in flight, answered and stored alike.
   const clocks = calls.map(
@@ -758,7 +757,10 @@ function groupRow(
   );
   const start = Math.min(...clocks.map((clock) => clock.start));
   const end = Math.max(...clocks.map((clock) => clock.end));
-  const app = appOf(calls);
+  // Their traces' app once one came (it wins); before, the app that host was served by last.
+  const served = appOf(calls);
+  const before = served === null ? known.get(host) : undefined;
+  const app = served ?? before?.app ?? null;
   const id = `${view}/calls/${host}`;
   const summary: TraceSummary = {
     ...(traces[0] as TraceSummary),
@@ -772,7 +774,7 @@ function groupRow(
     http_status: null,
     ...together(calls, counter),
   };
-  const runtime = calls.find((call) => call.runtime && call.trace.service === app)?.runtime;
+  const runtime = calls.find((call) => call.runtime && call.trace.service === app)?.runtime ?? before?.runtime;
   return {
     trace: summary,
     depth: 1,
@@ -781,6 +783,57 @@ function groupRow(
     ...(calls.some((call) => call.open) ? { open: true } : {}),
     counted: calls.every((call) => call.counted || settled?.has(call.trace.id) === true),
   };
+}
+
+/** How often the hosts' apps may be asked for again while the list has a host none is known for. */
+const KNOWN_ASK_MS = 2_000;
+
+/**
+ * The app each host was last served by, as the agent's service map links them (a call to 127.0.0.1:8043 was served by
+ * graphql-router): a view's calls to a host an app served before are grouped under its name from in flight on, not
+ * under the host until their traces come. Asked when the list has a host none is known for, and again as views come
+ * while it still has (at most every KNOWN_ASK_MS): their traces may have named it since. Their traces' app wins.
+ */
+function useKnownApps(rows: readonly TraceRow[]): ReadonlyMap<string, KnownApp> {
+  const [known, setKnown] = useState<ReadonlyMap<string, KnownApp>>(() => new Map());
+  const asked = useRef(0);
+  const unknown = [...new Set(rows.flatMap((row) => (row.host && !known.has(row.host) ? [row.host] : [])))]
+    .sort()
+    .join(",");
+  const views = rows.filter((row) => row.trace.kind === "page").length;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new view asks again for the hosts still unknown.
+  useEffect(() => {
+    if (!unknown) return;
+    let live = true;
+    const ask = () => {
+      asked.current = Date.now();
+      source.listServices("since:7d").then(
+        (map) => live && setKnown(knownApps(map)),
+        () => undefined,
+      );
+    };
+    // Asked a moment ago: once more when the moment has passed.
+    const timer = window.setTimeout(ask, Math.max(0, asked.current + KNOWN_ASK_MS - Date.now()));
+    return () => {
+      live = false;
+      window.clearTimeout(timer);
+    };
+  }, [unknown, views]);
+  return known;
+}
+
+/** Each HTTP host's app in a service map: the one seen last where several served it. */
+function knownApps(map: ServiceMap): ReadonlyMap<string, KnownApp> {
+  const apps = new Map(map.apps.map((app) => [app.service, app]));
+  const known = new Map<string, KnownApp & { seen: number }>();
+  for (const link of map.links) {
+    const host = /^http:[a-z]+\/(.+)$/.exec(link.peer ?? "")?.[1]?.replace(/:(80|443)$/, "");
+    const app = apps.get(link.to_service);
+    const seen = app?.last_seen ?? 0;
+    if (!host || (known.get(host)?.seen ?? -1) >= seen) continue;
+    known.set(host, { app: link.to_service, runtime: app?.runtime ?? undefined, seen });
+  }
+  return known;
 }
 
 /**
@@ -1627,7 +1680,8 @@ function PanelApp({ route }: { route: Route }) {
   const rowChains = useRowChains(listed, stored);
   // Each view's calls from its chain in the rows they were in flight (withViewCalls): the list shows these.
   const settled = settledIn(rowChains.settled, rows, stored);
-  const shown = withViewCalls(listed, rowChains, withoutFlying(rowChains.apps, history), settled);
+  const known = useKnownApps(listed);
+  const shown = withViewCalls(listed, rowChains, withoutFlying(rowChains.apps, history), { settled, known });
   const [chainOpen, toggleChain] = useChainOpen();
   const currentId = history?.current ?? null;
   const pageRows = pageScope(history, rows);
