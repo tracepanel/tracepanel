@@ -722,7 +722,9 @@ function withViewCalls(
     const own = calls.get(head.trace.id);
     const placed = own ? placeCalls(head.trace.id, own, children, under) : children;
     const view = head.trace.id;
-    const grouping = { view, settled, known, counter: counters.get(view) };
+    // Its chain has loaded (or can't, or chains don't load): the numbers it doesn't count are their own.
+    const loaded = settled === undefined || settled.has(view);
+    const grouping = { view, settled, known, counter: counters.get(view), loaded };
     out.push(head, ...(head.trace.kind === "page" ? byHost(placed, grouping) : placed));
     at = end;
   }
@@ -795,8 +797,11 @@ function grouped(host: string, members: readonly TraceRow[][], grouping: Groupin
   return [group, ...members.flat().map((row) => ({ ...row, depth: 2 as const }))];
 }
 
-/** What some of a view's calls' traces did, as its chain counts it; null when one of them isn't its chain's yet. */
-type Counter = (ids: readonly string[]) => ChainCounts | null;
+/**
+ * What some of a view's calls' traces did, as its chain counts it; "later" while one of them, of the view's trace
+ * (W3C), isn't its chain's yet and the chain still loads again; null when one of them won't be its chain's.
+ */
+type Counter = (ids: readonly string[]) => ChainCounts | "later" | null;
 
 /** The app a host's calls were served by before (useKnownApps), and what it runs on. */
 type KnownApp = { app: string; runtime: string | undefined };
@@ -810,27 +815,36 @@ interface Grouping {
   settled: ReadonlySet<string> | undefined;
   counter: Counter | undefined;
   known: ReadonlyMap<string, KnownApp>;
+  /** Its chain has loaded once, or can't: where it has no counter, its calls' own numbers are all there are. */
+  loaded: boolean;
+}
+
+/** A call answered by a trace of its own: its chain's row, or the list's (an app with an SDK named it). */
+function ownTrace(call: TraceRow): boolean {
+  return call.call === "trace" || !(call.call || call.open || inFlight(call.trace.id));
 }
 
 /**
- * What a group's calls did: as the view's chain counts their traces and all under them, once they are all its
- * traces (a finding of the chain's across them said once, as the tabs say it), whether its chain made them its rows
- * or they are the list's own (an app with an SDK answered them: its trace's id came with the answer); their own
- * numbers added up until then.
+ * What a group's calls did: as the view's chain counts their traces and all under them, once it has them all (a
+ * finding of the chain's across them said once, as the tabs say it), whether its chain made them its rows or they are
+ * the list's own (an app with an SDK answered them: its trace's id came with the answer); their own numbers added up
+ * when it won't. `known`: these are their numbers for good, never a sum the chain counts otherwise a moment later.
  */
-function together(calls: readonly TraceRow[], counter: Counter | undefined) {
-  const traces = calls.map((call) => call.trace);
-  const traced = calls.every((call) => call.call === "trace" || !(call.call || call.open || inFlight(call.trace.id)));
-  const counted = counter && traced ? counter(traces.map((trace) => trace.id)) : null;
-  if (counted) {
+function together(calls: readonly TraceRow[], { counter, loaded }: Pick<Grouping, "counter" | "loaded">) {
+  const traced = calls.filter(ownTrace);
+  const answered = calls.every((call) => ownTrace(call) || call.call === "untraced" || call.failed !== undefined);
+  const counted = answered && traced.length > 0 ? counter?.(traced.map((call) => call.trace.id)) : undefined;
+  if (counted && counted !== "later") {
     // biome-ignore lint/style/useNamingConvention: wire format.
-    return { queries: counted.queries, issues: counted.issues, issue_kinds: counted.kinds };
+    return { queries: counted.queries, issues: counted.issues, issue_kinds: counted.kinds, known: true };
   }
+  const traces = calls.map((call) => call.trace);
   return {
     queries: traces.reduce((sum, trace) => sum + trace.queries, 0),
     issues: traces.reduce((sum, trace) => sum + trace.issues, 0),
     // biome-ignore lint/style/useNamingConvention: wire format.
     issue_kinds: [...new Set(traces.flatMap((trace) => trace.issue_kinds ?? []))],
+    known: answered && (traced.length === 0 || (counter ? counted === null : loaded)),
   };
 }
 
@@ -845,7 +859,11 @@ function appOf(calls: readonly TraceRow[]): string | null {
 }
 
 /** The row over a view's calls to one host: their time on the clock, what they did, together. */
-function groupRow(host: string, calls: readonly TraceRow[], { view, settled, counter, known }: Grouping): TraceRow {
+function groupRow(
+  host: string,
+  calls: readonly TraceRow[],
+  { view, settled, counter, known, loaded }: Grouping,
+): TraceRow {
   const traces = calls.map((call) => call.trace);
   // The calls' own times, as the browser made them: in flight, answered and stored alike.
   const clocks = calls.map(
@@ -858,6 +876,7 @@ function groupRow(host: string, calls: readonly TraceRow[], { view, settled, cou
   const before = served === null ? known.get(host) : undefined;
   const app = served ?? before?.app ?? null;
   const id = `${view}/calls/${host}`;
+  const { known: said, ...numbers } = together(calls, { counter, loaded });
   const summary: TraceSummary = {
     ...(traces[0] as TraceSummary),
     id,
@@ -868,7 +887,7 @@ function groupRow(host: string, calls: readonly TraceRow[], { view, settled, cou
     status: traces.some((trace) => trace.status === "error") ? "error" : "ok",
     // biome-ignore lint/style/useNamingConvention: wire format.
     http_status: null,
-    ...together(calls, counter),
+    ...numbers,
   };
   const runtime = calls.find((call) => call.runtime && call.trace.service === app)?.runtime ?? before?.runtime;
   return {
@@ -884,11 +903,14 @@ function groupRow(host: string, calls: readonly TraceRow[], { view, settled, cou
       ...(calls.every((call) => call.call === "untraced" || call.failed !== undefined) ? { untraced: true } : {}),
     },
     ...(calls.some((call) => call.open) ? { open: true } : {}),
-    // A call no trace answered has no numbers to wait for: its group's are known without it.
-    counted: calls.every(
-      (call) =>
-        call.counted || call.call === "untraced" || call.failed !== undefined || settled?.has(call.trace.id) === true,
-    ),
+    // A call no trace answered has no numbers to wait for: its group's are known without it. Theirs added up are
+    // never said while the view's chain may still count them (a finding they share once).
+    counted:
+      said &&
+      calls.every(
+        (call) =>
+          call.counted || call.call === "untraced" || call.failed !== undefined || settled?.has(call.trace.id) === true,
+      ),
   };
 }
 
@@ -997,10 +1019,29 @@ function cutsOf(chains: ReadonlyMap<string, Chain>): ReadonlyMap<string, number>
   return cuts;
 }
 
-/** What some of a view's calls' traces did, as its chain counts it; null while one of them isn't its chain's yet. */
-function chainCounter(chain: Chain, view: string, listed: ReadonlySet<string>): Counter {
+/**
+ * What some of a view's calls' traces did, as its chain counts it (Counter): "later" while one of them is of the
+ * view's trace, as its own chain (`chains`) says, and the view's chain is loaded again (`fresh`): it comes with it.
+ */
+function chainCounter(
+  chain: Chain,
+  view: string,
+  listed: ReadonlySet<string>,
+  { chains, fresh }: { chains: ReadonlyMap<string, Chain>; fresh: () => boolean },
+): Counter {
   const known = new Set(chain.traces.map((each) => each.id));
-  return (ids) => (ids.every((each) => known.has(each)) ? callsCounted(chain, view, listed, ids) : null);
+  const w3c = w3cOf(chain, view);
+  return (ids) => {
+    if (ids.every((each) => known.has(each))) return callsCounted(chain, view, listed, ids);
+    const coming = ids.some((each) => !known.has(each) && w3c !== undefined && w3cOf(chains.get(each), each) === w3c);
+    return coming && fresh() ? "later" : null;
+  };
+}
+
+/** The W3C trace a trace of a chain was part of, as its trace says. */
+function w3cOf(chain: Chain | undefined, id: string): string | undefined {
+  const value = chain?.traces.find((each) => each.id === id)?.trace?.attrs?.["w3c.trace_id"];
+  return typeof value === "string" ? value : undefined;
 }
 
 // The rows' chains, kept for the browser tab's session: the panel loads again with each page, and a row that had its
@@ -1152,7 +1193,10 @@ function useRowChains(rows: readonly TraceRow[], stored: ReadonlySet<string>): R
       // A view's or an action's calls are its rows, one each, as they were in flight (chainCalls).
       if (views.has(id)) {
         calls.set(id, chainCalls(chain, id, rowsIn));
-        counters.set(id, chainCounter(chain, id, rowsIn));
+        const row = rows.find((each) => each.trace.id === id)?.trace;
+        // Loaded again while it is new (CHAIN_FRESH_MS), as the loads above have it.
+        const fresh = () => row !== undefined && Date.now() - (row.start + row.duration) / 1000 < CHAIN_FRESH_MS;
+        counters.set(id, chainCounter(chain, id, rowsIn, { chains, fresh }));
         continue;
       }
       const under = chainApps(chain, id, rowsIn);

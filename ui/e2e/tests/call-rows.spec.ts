@@ -242,6 +242,83 @@ async function storeView(
   await ingest([trace(viewId, "page", "/rows", viewStart, Number(view["duration"]), attrs, spans)]);
 }
 
+/**
+ * What served a call of view `tag`'s to an app with an SDK (a BFF, its trace's id came with its answer, bffOf), stored
+ * as if hours ago (its finding stays out of the way of the Issues list's newest): the BFF's trace, running no query,
+ * with a finding all of them share (the view's chain says it once), and the trace of the service it called, two.
+ */
+function served(tag: number, call: Made): Doc[] {
+  const bff = bffOf(tag, call.n);
+  const start = call.start + 2 * ms - 3 * 3_600_000_000;
+  const time = Math.max(4 * ms, call.end - call.start - 4 * ms);
+  const hop = `${digits(tag, 3)}d${digits(run(), 5)}${digits(call.n, 7)}`;
+  const own = trace(
+    bff,
+    "http",
+    "GraphQL query Book",
+    start,
+    time,
+    {
+      "service.name": "library-bff",
+      "http.method": "POST",
+      "http.route": "/graphql",
+      "http.status_code": 200,
+      "w3c.trace_id": traceOf(tag),
+      "w3c.parent_span_id": callOf(tag, call.n),
+    },
+    [
+      {
+        ...span(`b${call.n}`, `${bff}r`, "http.client", "GET 127.0.0.1/shelves/1", start + ms, time - 2 * ms),
+        attrs: { "http.request.method": "GET", "url.full": "http://127.0.0.1:4100/shelves/1", "w3c.span_id": hop },
+      },
+    ],
+  );
+  const found = { ...own, issues: [issue("n+1", "bff-n1", "N+1", `b${call.n}`)] };
+  const queries = [0, 1].map((q) =>
+    span(`q${q}`, `${id(tag, 40 + call.n)}r`, "sql", "SELECT books", start + 2 * ms, ms),
+  );
+  const api = trace(
+    id(tag, 40 + call.n),
+    "http",
+    "GET /shelves/1",
+    start + 2 * ms,
+    time - 4 * ms,
+    {
+      "service.name": "library-api",
+      "http.method": "GET",
+      "http.route": "/shelves/1",
+      "http.status_code": 200,
+      "w3c.trace_id": traceOf(tag),
+      "w3c.parent_span_id": hop,
+    },
+    queries,
+  );
+  return [found, api];
+}
+
+/** The id of the BFF's trace that answered view `tag`'s call `n`. */
+const bffOf = (tag: number, n: number) => id(tag, 20 + n);
+
+/** The BFF's answer to a call of view `tag`'s: its trace's id, its numbers still on their way. */
+const bffHeaders = (tag: number) => (n: number) => ({
+  "Tracepanel-Id": bffOf(tag, n),
+  "Tracepanel-Name": "GraphQL%20query%20Book",
+  "Server-Timing": 'db;dur=0;desc="0 queries", total;dur=30, tracepanel-issues;desc="pending"',
+});
+
+/** The loads of a view's chain held back from now on: the call returned lets them through, each answering as things are then. */
+async function holdChain(page: Page, viewId: string): Promise<() => Promise<void>> {
+  const held: Route[] = [];
+  const url = `**/api/traces/${viewId}/chain`;
+  await page.route(url, (route) => {
+    held.push(route);
+  });
+  return async () => {
+    await page.unroute(url);
+    for (const route of held) await route.continue();
+  };
+}
+
 /** A time as the list writes it, in µs: "850 ms", "1.2 s". */
 function micros(text: string): number {
   const match = /([\d.]+)\s*(µs|ms|s)\b/.exec(text);
@@ -722,70 +799,14 @@ test("the row over a view's calls to one app adds up their rows' numbers, its ch
   page,
 }) => {
   const tag = 12;
-  const bff = (n: number) => id(tag, 20 + n);
   // An app with an SDK (a BFF) answers each call, itself running no query; the service it calls runs two.
-  const { release, list } = await opened(page, {
-    headers: (n) => ({
-      "Tracepanel-Id": bff(n),
-      "Tracepanel-Name": "GraphQL%20query%20Book",
-      "Server-Timing": 'db;dur=0;desc="0 queries", total;dur=30, tracepanel-issues;desc="pending"',
-    }),
-  });
+  const { release, list } = await opened(page, { headers: bffHeaders(tag) });
   await open(page, id(tag, 1), ["Book", "Book"]);
   release(0);
   release(1);
   await viewEnded(page);
   const made = await page.evaluate(() => (window as unknown as { calls: Made[] }).calls);
-  const traces = made.flatMap((call) => {
-    // Stored as if hours ago: its finding stays out of the way of the Issues list's newest.
-    const start = call.start + 2 * ms - 3 * 3_600_000_000;
-    const time = Math.max(4 * ms, call.end - call.start - 4 * ms);
-    const hop = `${digits(tag, 3)}d${digits(run(), 5)}${digits(call.n, 7)}`;
-    const own = trace(
-      bff(call.n),
-      "http",
-      "GraphQL query Book",
-      start,
-      time,
-      {
-        "service.name": "library-bff",
-        "http.method": "POST",
-        "http.route": "/graphql",
-        "http.status_code": 200,
-        "w3c.trace_id": traceOf(tag),
-        "w3c.parent_span_id": callOf(tag, call.n),
-      },
-      [
-        {
-          ...span(`b${call.n}`, `${bff(call.n)}r`, "http.client", "GET 127.0.0.1/shelves/1", start + ms, time - 2 * ms),
-          attrs: { "http.request.method": "GET", "url.full": "http://127.0.0.1:4100/shelves/1", "w3c.span_id": hop },
-        },
-      ],
-    );
-    // The same finding in each: the view's chain says it once.
-    const found = { ...own, issues: [issue("n+1", "bff-n1", "N+1", `b${call.n}`)] };
-    const queries = [0, 1].map((q) =>
-      span(`q${q}`, `${id(tag, 40 + call.n)}r`, "sql", "SELECT books", start + 2 * ms, ms),
-    );
-    const api = trace(
-      id(tag, 40 + call.n),
-      "http",
-      "GET /shelves/1",
-      start + 2 * ms,
-      time - 4 * ms,
-      {
-        "service.name": "library-api",
-        "http.method": "GET",
-        "http.route": "/shelves/1",
-        "http.status_code": 200,
-        "w3c.trace_id": traceOf(tag),
-        "w3c.parent_span_id": hop,
-      },
-      queries,
-    );
-    return [found, api];
-  });
-  await ingest(traces);
+  await ingest(made.flatMap((call) => served(tag, call)));
   await storeView(page, tag, { origin: "http://bff.test:4000/" });
 
   // Each call's row counts what its trace and those under it ran: 2 queries, its finding.
@@ -898,4 +919,36 @@ test("after a reload the rows that had their numbers keep them while their chain
   await expect(before.locator(".dt-request-queries-n")).toHaveText("2");
   await expect(before.locator(".dt-pending")).toHaveCount(0);
   await expect(again.locator('.dt-request-row[data-kind="page"]').first().locator(".dt-pending")).toHaveCount(0);
+});
+
+test("the row over a view's calls to one app says no sum of theirs while the view's chain doesn't count them yet", async ({
+  page,
+}) => {
+  const tag = 15;
+  const viewId = id(tag, 1);
+  const { release, list, calls } = await opened(page, { headers: bffHeaders(tag) });
+  const ops = Array.from({ length: 4 }, () => "Book");
+  await open(page, viewId, ops);
+  for (const n of ops.keys()) release(n);
+  await viewEnded(page);
+  // The view's trace first: its chain loads, without its calls' traces.
+  const first = page.waitForResponse((response) => response.url().endsWith(`/api/traces/${viewId}/chain`));
+  await storeView(page, tag, { origin: "http://bff.test:4000/" });
+  await first;
+  // Its chain's next loads lag (a slow network) while the calls' traces come and their rows count them.
+  const letThrough = await holdChain(page, viewId);
+  const made = await page.evaluate(() => (window as unknown as { calls: Made[] }).calls);
+  await ingest(made.flatMap((call) => served(tag, call)));
+  await expect(calls.locator(".dt-request-queries-n")).toHaveText(["2", "2", "2", "2"]);
+  await expect(calls.locator(".dt-request-chips")).toHaveText(["1", "1", "1", "1"]);
+
+  // Their app's row: "…" until the view's chain counts them, never their own added up (no query, the finding 4 times).
+  const group = list.locator('.dt-request-row[data-call="group"]');
+  await expect(group.locator(".dt-pending")).toHaveCount(1);
+  await expect(group.locator(".dt-request-queries-n")).toHaveCount(0);
+  await expect(group.locator(".dt-request-chips")).toHaveText("");
+
+  await letThrough();
+  await expect(group.locator(".dt-request-queries-n")).toHaveText("8");
+  await expect(group.locator(".dt-request-chips")).toHaveText("1");
 });
