@@ -94,7 +94,12 @@
   nothing beside "GraphQL query Features → library-router"), at any
   width the panel docks at and however deep the call sits: the served
   trace's name gives way first, then the call's path, the app's name and
-  the call's kind, cut at their end before the status is.
+  the call's kind, cut at their end before the status is. A call no
+  trace answered keeps "not traced" whole beside its status the same
+  way, not "not tra", what is before them cut with an ellipsis, and as
+  narrow as the panel docked right an HTTP call's kind goes, its method
+  saying it, so its path keeps the room ("GET /openapi.json", not
+  "HTTP.… GET …").
 - A call under a request in the panel's list to a host that sends no
   traces (a third-party API the BFF calls) stays once it is no longer
   waited for and says "not traced", as the call tree does. Its row went

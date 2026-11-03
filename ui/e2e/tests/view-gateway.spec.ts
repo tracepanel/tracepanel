@@ -173,7 +173,9 @@ test("a view's calls fold under its row and open again; its call tree and first 
 test("in a narrow call tree a call's status is never cut, nested rows too: its name gives way first, then its app", async ({
   page,
 }) => {
-  const seeded = await gatewayView(5, ["query TextCampaignsCampaignsForTheWholeTenant", "query Features"]);
+  const seeded = await gatewayView(5, ["query TextCampaignsCampaignsForTheWholeTenant", "query Features"], {
+    untraced: "http://127.0.0.1:8160/openapi.json",
+  });
   // As narrow as the panel docked right gets.
   for (const width of [520, 420, 360]) {
     await page.setViewportSize({ width, height: 900 });
@@ -181,6 +183,10 @@ test("in a narrow call tree a call's status is never cut, nested rows too: its n
     const hops = page.locator('.dt-map-row[data-hop=""]');
     // The view's two calls, the gateway's to the subgraph, the subgraph's to the service.
     await expect(hops).toHaveCount(4);
+    const untraced = page
+      .locator('.dt-map-row[data-kind="http.client"]')
+      .filter({ has: page.locator(".dt-not-traced"), hasText: "openapi.json" });
+    await expect(untraced).toHaveCount(1);
     await laidOut(page);
     const clipped = await hops.evaluateAll((rows) =>
       rows.map((row) => {
@@ -199,6 +205,33 @@ test("in a narrow call tree a call's status is never cut, nested rows too: its n
     expect({ width, clipped }).toEqual({
       width,
       clipped: Array.from({ length: 4 }, () => ({ status: "200", whole: true, past: 0 })),
+    });
+    // A call no trace answered keeps its status and "not traced" whole the same way; what is before them gives way,
+    // cut with an ellipsis: its kind, its name.
+    const kept = await untraced.evaluate((row) => {
+      const name = row.querySelector(":scope > .dt-map-name");
+      const box = name?.getBoundingClientRect();
+      const whole = (selector: string) => {
+        const part = name?.querySelector(`:scope > ${selector}`);
+        const edge = part?.getBoundingClientRect();
+        return {
+          text: part?.textContent,
+          whole: part ? part.scrollWidth <= part.clientWidth : false,
+          past: box && edge ? Math.max(0, Math.round(edge.right - box.right)) : -1,
+        };
+      };
+      const cut = [...(name?.querySelectorAll(".dt-map-lead *") ?? [])]
+        .filter((part) => part.children.length === 0 && part.scrollWidth > part.clientWidth)
+        .map((part) => getComputedStyle(part).textOverflow);
+      return { status: whole(".dt-status"), mark: whole(".dt-not-traced"), cut: [...new Set(cut)] };
+    });
+    expect({ width, kept }).toEqual({
+      width,
+      kept: {
+        status: { text: "200", whole: true, past: 0 },
+        mark: { text: "not traced", whole: true, past: 0 },
+        cut: kept.cut.length ? ["ellipsis"] : [],
+      },
     });
   }
 });
