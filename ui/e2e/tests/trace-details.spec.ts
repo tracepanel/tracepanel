@@ -140,6 +140,6 @@ test("Share downloads one HTML file that shows the trace with no agent behind it
   await offline.goto(`file://${file}`);
 
   await expect(offline.getByRole("heading", { level: 2, name: "/api/posts" })).toBeVisible();
-  // Dark, as the console starts, with no theme chosen and on a light system.
-  await expect(offline.locator("html")).toHaveAttribute("data-theme", "dark");
+  // With no theme chosen, the system's of whoever opens it: here a light one.
+  await expect(offline.locator("html")).toHaveAttribute("data-theme", "light");
 });
