@@ -57,9 +57,11 @@
   deprecated mode or with `graphql.document` turned on, Hive Gateway)
   has it on its trace too, on its Request tab: the agent dropped it with
   the gateway's inner spans.
-- In a narrow call tree a call's status stays whole ("200", not "20"
-  beside "GraphQL query Features → library-router"): the call's path
-  gives way before it, after the app's name.
+- In a narrow call tree a call's status stays whole ("200", not "20" or
+  nothing beside "GraphQL query Features → library-router"), at any
+  width the panel docks at and however deep the call sits: the served
+  trace's name gives way first, then the call's path, the app's name and
+  the call's kind, cut at their end before the status is.
 - A call under a request in the panel's list to a host that sends no
   traces (a third-party API the BFF calls) stays once it is no longer
   waited for and says "not traced", as the call tree does. Its row went

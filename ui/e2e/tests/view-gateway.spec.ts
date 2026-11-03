@@ -4,7 +4,7 @@
 // row's numbers counted as the pill and the tabs count them: the view's row its whole chain, a call's row everything
 // under it.
 import type { Page } from "@playwright/test";
-import { openApp, panel, pill } from "../app.ts";
+import { laidOut, openApp, panel, pill } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
 import { gatewayView } from "../gateway.ts";
 
@@ -170,22 +170,35 @@ test("a view's calls fold under its row and open again; its call tree and first 
   await expect(frame.locator(".dt-map-row[data-root] .dt-kind").first()).toHaveText(/^view$/i);
 });
 
-test("in a narrow call tree a call's status is never cut: its name gives way first", async ({ page }) => {
+test("in a narrow call tree a call's status is never cut, nested rows too: its name gives way first, then its app", async ({
+  page,
+}) => {
   const seeded = await gatewayView(5, ["query TextCampaignsCampaignsForTheWholeTenant", "query Features"]);
-  // As narrow as the panel docked right, beside its details.
-  await page.setViewportSize({ width: 640, height: 900 });
-  await page.goto(`/#/t/${seeded.view}?tab=tree`);
-  const hops = page.locator('.dt-map-row[data-hop=""]');
-  // The view's two calls, the gateway's to the subgraph, the subgraph's to the service.
-  await expect(hops).toHaveCount(4);
-  const clipped = await hops.evaluateAll((rows) =>
-    rows.map((row) => {
-      const name = row.querySelector(":scope > .dt-map-name");
-      const badge = name?.querySelector(":scope > .dt-status");
-      const [box, edge] = [name?.getBoundingClientRect(), badge?.getBoundingClientRect()];
-      return { status: badge?.textContent, past: box && edge ? Math.max(0, Math.round(edge.right - box.right)) : -1 };
-    }),
-  );
-  // Each badge whole, inside the name's box: none of it past the edge where the box cuts what overflows.
-  expect(clipped).toEqual(Array.from({ length: 4 }, () => ({ status: "200", past: 0 })));
+  // As narrow as the panel docked right gets.
+  for (const width of [520, 420, 360]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/#/t/${seeded.view}?tab=tree`);
+    const hops = page.locator('.dt-map-row[data-hop=""]');
+    // The view's two calls, the gateway's to the subgraph, the subgraph's to the service.
+    await expect(hops).toHaveCount(4);
+    await laidOut(page);
+    const clipped = await hops.evaluateAll((rows) =>
+      rows.map((row) => {
+        const name = row.querySelector(":scope > .dt-map-name");
+        const badge = name?.querySelector(":scope > .dt-status");
+        const [box, edge] = [name?.getBoundingClientRect(), badge?.getBoundingClientRect()];
+        const whole = badge ? badge.scrollWidth <= badge.clientWidth : false;
+        return {
+          status: badge?.textContent,
+          whole,
+          past: box && edge ? Math.max(0, Math.round(edge.right - box.right)) : -1,
+        };
+      }),
+    );
+    // Each badge whole, inside the name's box: none of it past the edge where the box cuts what overflows.
+    expect({ width, clipped }).toEqual({
+      width,
+      clipped: Array.from({ length: 4 }, () => ({ status: "200", whole: true, past: 0 })),
+    });
+  }
 });

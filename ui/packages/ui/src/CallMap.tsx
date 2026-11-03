@@ -1348,8 +1348,10 @@ function OwnRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps<
     <div>
       <button type="button" {...spanButton(ctx, node, mark, fold)} data-root={span.parent_id === null ? "" : undefined}>
         <span className="dt-map-name" style={indent}>
-          <SpanFold ctx={ctx} node={node} parent={parent} fold={fold} />
-          <SpanName span={span} />
+          <CallLead call={answers(span)}>
+            <SpanFold ctx={ctx} node={node} parent={parent} fold={fold} />
+            <SpanName span={span} />
+          </CallLead>
           <CallStatus node={node} />
           <NotTraced spanId={span.id} />
           <AliasChip value={aliasBeside(span)} />
@@ -1474,14 +1476,16 @@ function HopRow({ node, served, place }: { node: SpanNode; served: ServedRun; pl
     <div>
       <button type="button" {...spanButton(ctx, node, mark, fold)} data-hop="">
         <span className="dt-map-name" style={indent}>
-          <SpanFold ctx={ctx} node={node} parent={parent} fold={fold} />
-          <OpText text={text} kind={span.kind} className="dt-map-hop-path" />
-          <span className="dt-map-hop" aria-hidden="true">
-            →
-          </span>
-          <span className="sr-only">served by</span>
-          <CallApp node={served} />
-          <ServedName text={text} name={served.run.name} />
+          <CallLead>
+            <SpanFold ctx={ctx} node={node} parent={parent} fold={fold} />
+            <OpText text={text} kind={span.kind} className="dt-map-hop-path" />
+            <span className="dt-map-hop" aria-hidden="true">
+              →
+            </span>
+            <span className="sr-only">served by</span>
+            <CallApp node={served} />
+            <ServedName text={text} name={served.run.name} />
+          </CallLead>
           {/* After what served it: the answer is the served trace's when the call says none. */}
           <CallStatus node={node} />
           <FromTemplate span={span} parent={parent} />
@@ -1517,6 +1521,15 @@ function HopIssue({ span, served, ctx }: { span: Span; served: ServedRun; ctx: R
   const issue = ctx.issueBySpan.get(span.id);
   if (!issue || served.run.issue_kinds.includes(issue)) return null;
   return <IssueChip kind={issue} className={ISSUE_CHIP_SHRINKS} />;
+}
+
+/**
+ * What a call's row says before its answer (its fold, kind, text, what served it): short of room, it gives way and is
+ * cut at its end, so the answer after it stays whole however narrow the tree and deep the row. A row with no answer
+ * to keep (`call` false: a query, a function) is as it was, its text cut first.
+ */
+function CallLead({ call = true, children }: { call?: boolean; children: ReactNode }) {
+  return call ? <span className="dt-map-lead">{children}</span> : children;
 }
 
 /** A row's look by how it went: a call by what it was answered (5xx or none red, 4xx amber), else its span's status. */
