@@ -516,12 +516,12 @@ function TreePane({
           subject={subject}
         />
       )}
-      head={(behind) => (
+      head={
         <>
-          <OnItsWay waiting={chain.waiting} behind={behind} />
+          <OnItsWay waiting={chain.waiting} />
           <TimeStrip trace={tree.trace} related={tree.related} onSelect={onSelect} />
         </>
-      )}
+      }
       onProfile={onProfile}
       onTraceProfile={tree.onTraceProfile ?? linkedProfiles(tree.links)}
     />
@@ -530,13 +530,14 @@ function TreePane({
 
 /**
  * Over a call tree that isn't all there yet: its calls whose traces are on their way, said once, so a partial tree
- * never reads as complete. Calls cut short (no answer yet) say so; the rows fill in as their traces arrive. `behind`:
- * the calls whose traces the agent has but the tree's links don't yet, on their way to it too.
+ * never reads as complete. Calls cut short (no answer yet) say so; the rows fill in as their traces arrive. A trace
+ * the agent has, which the tree is still loading, has arrived: the panel's list shows it, and the note doesn't count
+ * it ("the traces of 37 calls haven't arrived yet" beside the 37 rows).
  */
-function OnItsWay({ waiting, behind }: { waiting: readonly ChainWaiting[]; behind: number }) {
-  const count = waiting.length + behind;
+function OnItsWay({ waiting }: { waiting: readonly ChainWaiting[] }) {
+  const count = waiting.length;
   if (count === 0) return null;
-  return behind === 0 && waiting.every((call) => call.cut !== null) ? (
+  return waiting.every((call) => call.cut !== null) ? (
     <p className="dt-on-its-way" role="status" data-state="cut">
       <WaitingIcon />
       {noAnswerText(count)}

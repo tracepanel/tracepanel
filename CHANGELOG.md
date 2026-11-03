@@ -12,6 +12,17 @@
 
 ### Fixed
 
+- While the call tree loads traces the agent has (an opened call's, its
+  links slow to come), its note no longer says "More on its way: the
+  traces of 37 calls haven't arrived yet" beside the panel's list showing
+  all 37 with their numbers: they have arrived. The note counts the calls
+  whose traces haven't, once the trace's chain says so, never a call the
+  agent has the trace of ("the trace of 1 call hasn't arrived yet" beside
+  its row in the list, while the chain loaded). And a view whose calls
+  are rows under it in the list has no loading placeholder of its own
+  while its chain loads the first time: its placeholder over the call's
+  row, the call's under it, sandwiched a real row between two that said
+  nothing.
 - A view's call answered by an app whose trace the agent stored before
   the view's says so in its call tree ("GraphQL query Books → gateway",
   200), as the panel's list does, not "not traced": once the call ended

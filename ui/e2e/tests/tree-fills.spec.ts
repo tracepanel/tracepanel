@@ -1,6 +1,7 @@
 // A request whose call another app served, that app's trace stored a moment after the request's: the call tree on
 // screen gets it as soon as the agent has it ("served by" the app, under the call), not at the next refresh, and
-// "More on its way" stays over the tree until it does.
+// "More on its way" stays over the tree until it does. A trace the agent has, which the tree is still loading, has
+// arrived: the note doesn't count it.
 import { expect as pollExpect } from "@playwright/test";
 import { CONSOLE } from "../agent.ts";
 import { expect, test } from "../fixtures.ts";
@@ -91,10 +92,14 @@ test("a call's trace stored a moment later shows in the call tree at once, the n
   await expect(note).toHaveCount(0);
 
   const seen = await page.evaluate(() => (window as unknown as { seen: { note: boolean; served: boolean }[] }).seen);
-  expect(seen.filter((each) => !(each.note || each.served))).toEqual([]);
+  // Once the agent has it the note goes (the panel's list shows it), the tree a moment later as its links reload:
+  // never the note again, and no more than a moment with neither.
+  const first = seen.findIndex((each) => each.served);
+  expect(seen.slice(first).filter((each) => each.note || !each.served)).toEqual([]);
+  expect(seen.filter((each) => !(each.note || each.served)).length).toBeLessThan(20);
 });
 
-test("the note stays over the tree while an opened call trace's links are on their way, until the deepest trace shows", async ({
+test("while an opened call trace's links load, the note says nothing of traces the agent has: they have arrived", async ({
   page,
 }) => {
   const { repeatEachIndex, retry } = test.info();
@@ -125,7 +130,7 @@ test("the note stays over the tree while an opened call trace's links are on the
   ]);
   await pollExpect.poll(async () => (await fetch(`${CONSOLE}api/traces/${books}`)).status).toBe(200);
   await page.route(`**/api/traces/${bff}/related`, async (route) => {
-    await new Promise((resolve) => setTimeout(resolve, 2_000));
+    await new Promise((resolve) => setTimeout(resolve, 3_000));
     await route.continue();
   });
 
@@ -133,28 +138,18 @@ test("the note stays over the tree while an opened call trace's links are on the
   const note = page.locator(".dt-on-its-way");
   const bffRow = page.locator(".dt-map-row").filter({ hasText: "bff" });
   const booksRow = page.locator(".dt-map-row").filter({ hasText: "books" });
+  const toBooksRow = page.locator('.dt-map-row[data-kind="http.client"]').filter({ hasText: "4072" });
 
   await expect(bffRow.first()).toBeVisible();
-  await expect(note).toBeVisible();
-  await expect(booksRow).toHaveCount(0);
 
-  // What the page shows every 50 ms from here: the note, and whether the tree has the deepest trace.
-  await page.evaluate(() => {
-    const seen: { note: boolean; served: boolean }[] = [];
-    (window as unknown as { seen: typeof seen }).seen = seen;
-    window.setInterval(() => {
-      const rows = [...document.querySelectorAll(".dt-map-row")];
-      seen.push({
-        note: document.querySelector(".dt-on-its-way") !== null,
-        served: rows.some((row) => row.textContent?.includes("books")),
-      });
-    }, 50);
-  });
+  // The chain loaded, the agent has every trace of it: no note saying they haven't arrived (the panel's list shows
+  // them all), while the tree still loads the deepest one. The call to it says what it was answered, never "not
+  // traced".
+  await expect(note).toHaveCount(0, { timeout: 2_000 });
+  await expect(booksRow).toHaveCount(0);
+  await expect(toBooksRow.locator(".dt-status")).toHaveText("200");
+  await expect(toBooksRow.locator('[data-state="untraced"]')).toHaveCount(0);
 
   await expect(booksRow).toHaveCount(1, { timeout: 5_000 });
   await expect(note).toHaveCount(0);
-
-  const seen = await page.evaluate(() => (window as unknown as { seen: { note: boolean; served: boolean }[] }).seen);
-  expect(seen.length).toBeGreaterThan(10);
-  expect(seen.filter((each) => !(each.note || each.served))).toEqual([]);
 });

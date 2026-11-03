@@ -2856,11 +2856,8 @@ export function CallMap({
 }: {
   trace: Trace;
   issueBySpan: ReadonlyMap<string, IssueKind>;
-  /**
-   * Above the tree, in the panel: the trace's time and its legend, which pick the rows, given how many traces of the
-   * chain the tree's links don't have yet (`behind`: the tree is partial until they reload).
-   */
-  head?: ((behind: number) => ReactNode) | undefined;
+  /** Above the tree, in the panel: the trace's time and its legend, which pick the rows. */
+  head?: ReactNode;
   /** The trace's chain of calls, loaded on its own clock: the tree's links are asked again while they miss any of it. */
   expected?: CatchUp["expected"];
   /** Asks for `related` again: while it misses a call's trace the chain has. */
@@ -2914,7 +2911,7 @@ export function CallMap({
 
   return (
     <div className="dt-map" ref={map}>
-      {head?.(chain.behind)}
+      {head}
       <MapBody details={side ? details : null} onClose={close}>
         <TimedRows trace={trace} range={current.range} onRange={(range) => change({ ...current, range })}>
           <div className="dt-map-rows" ref={rows}>
