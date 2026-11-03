@@ -74,6 +74,48 @@ test("a query opened in the call tree has the DB tab's Query plan", async ({ pag
   await expect(details.locator(".dt-plan-line")).toHaveCount(3);
 });
 
+test("a query's details scrolled to their end stay where they are as Explain runs and its plan comes", async ({
+  page,
+}) => {
+  await explainable(page);
+  // The plan held until the test lets it through: the details as Explain runs, then with it.
+  let letThrough = () => undefined as void;
+  const held = new Promise<void>((resolve) => {
+    letThrough = resolve;
+  });
+  await page.route("**/api/explain?*", async (route) => {
+    await held;
+    await route.fallback();
+  });
+  // Low enough that the details scroll.
+  await page.setViewportSize({ width: 1440, height: 560 });
+  await page.goto(`/#/t/${await traceId("PATCH /campaigns/{id}/report")}?tab=tree`);
+  await page.locator(".dt-map-row").filter({ hasText: "SELECT campaign_stats_1" }).first().click();
+  const details = page.getByRole("complementary", { name: "Details" });
+  await expect(details.getByRole("heading", { name: "Query plan" })).toBeVisible();
+  const pane = page.locator("aside.dt-map-side");
+  expect(await pane.evaluate((side) => side.scrollHeight > side.clientHeight)).toBe(true);
+  await pane.evaluate((side) => side.scrollTo(0, side.scrollHeight));
+  // Where the statement and its database's rows are, against the pane.
+  const at = () =>
+    pane.evaluate((side) =>
+      ["pre, code", "dl"].map((selector) =>
+        Math.round(
+          (side.querySelector(selector) as HTMLElement).getBoundingClientRect().top - side.getBoundingClientRect().top,
+        ),
+      ),
+    );
+  const before = await at();
+
+  await details.getByRole("button", { name: "Explain", exact: true }).click();
+  await expect(details.getByRole("button", { name: "Explaining…" })).toBeVisible();
+  expect(await at()).toEqual(before);
+
+  letThrough();
+  await expect(details.locator(".dt-plan-line")).toHaveCount(3);
+  expect(await at()).toEqual(before);
+});
+
 /** The report's trace with its campaign_stats_1 query's statement as `statement`. */
 async function withStatement(page: Page, statement: string): Promise<string> {
   const id = await traceId("PATCH /campaigns/{id}/report");

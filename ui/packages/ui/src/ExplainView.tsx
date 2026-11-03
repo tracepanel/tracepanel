@@ -19,7 +19,8 @@ export interface ExplainViewProps {
 
 type State =
   | { status: "idle" }
-  | { status: "loading"; analyze: boolean }
+  // The plan said before, if any: it stays while the next one comes.
+  | { status: "loading"; analyze: boolean; before: ExplainPlan | null }
   | { status: "done"; plan: ExplainPlan }
   | { status: "failed"; message: string };
 
@@ -30,7 +31,7 @@ export function ExplainView({ load, vendor, analyzeRefusal }: ExplainViewProps) 
   const analyzes = ANALYZED.has(vendor);
   const canAnalyze = analyzes && !analyzeRefusal;
   const run = (analyze: boolean) => {
-    setState({ status: "loading", analyze });
+    setState((current) => ({ status: "loading", analyze, before: current.status === "done" ? current.plan : null }));
     load(analyze).then(
       (plan) => setState({ status: "done", plan }),
       (error: unknown) =>
@@ -38,7 +39,7 @@ export function ExplainView({ load, vendor, analyzeRefusal }: ExplainViewProps) 
     );
   };
   const loading = state.status === "loading";
-  const plan = state.status === "done" ? state.plan : null;
+  const plan = state.status === "done" ? state.plan : loading ? state.before : null;
   const warnings = plan ? plan.lines.filter((line) => line.warning).length : 0;
 
   return (
@@ -84,7 +85,10 @@ export function ExplainView({ load, vendor, analyzeRefusal }: ExplainViewProps) 
         ) : null}
       </div>
       {state.status === "failed" ? <p className="text-sm text-error">{state.message}</p> : null}
-      {state.status === "idle" ? <Idle canAnalyze={canAnalyze} why={analyzes ? analyzeRefusal : null} /> : null}
+      {/* Kept while its plan comes, the plan in its place then: what is above stays where it is, scrolled down too. */}
+      {state.status === "idle" || (loading && !plan) ? (
+        <Idle canAnalyze={canAnalyze} why={analyzes ? analyzeRefusal : null} />
+      ) : null}
       {plan ? (
         <CopyBlock text={planText(plan)} label="Copy the plan" className="rounded-md border bg-muted/60">
           <ol className="m-0 grid list-none py-1.5 pr-9">
