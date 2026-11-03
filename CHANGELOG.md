@@ -45,6 +45,11 @@
   the traced ones ("Other requests on this page · 2" under "5
   requests"). A view's call that got no answer counts on a page whose
   own load was traced, too.
+- The request picker of the panel docked narrow ("Pages and requests in
+  this browser tab") lists a view's calls as the panel's list does: under
+  their host's or app's row, "not traced" beside a call no trace
+  answered, "failed" in red for one that got no answer, and no numbers
+  for either. It said "200 · 54 ms · 0 queries" for each, as if traced.
 - A view's call that got no answer (a network error, an abort, status
   0) stays its row in the panel's list, from in flight to its view's
   trace stored, and says "failed" in red where its status would be, as

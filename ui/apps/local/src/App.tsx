@@ -1942,7 +1942,7 @@ function PanelApp({ route }: { route: Route }) {
           <Logo className="shrink-0 gap-1.5 text-md [&_svg]:size-6" />
           {split ? null : (
             <RequestSwitcher
-              rows={listed}
+              rows={shown.rows}
               pageCount={requestCount(pageRows)}
               selectedId={selectedId}
               currentId={history?.current ?? null}

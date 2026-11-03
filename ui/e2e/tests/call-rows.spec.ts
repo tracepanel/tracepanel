@@ -119,13 +119,15 @@ async function opened(
     dock?: "right" | "bottom";
     /** The panel closed: the pill and its hover card show. */
     closed?: boolean;
+    /** The panel's width docked right. */
+    width?: number;
   } = {},
 ) {
   const dock = options.dock ?? "right";
   await page.addInitScript(
-    ([side, shut]) =>
-      sessionStorage.setItem("tracepanel:panel", JSON.stringify({ open: !shut, dock: side, width: 760 })),
-    [dock, options.closed ?? false] as const,
+    ([side, shut, wide]) =>
+      sessionStorage.setItem("tracepanel:panel", JSON.stringify({ open: !shut, dock: side, width: wide })),
+    [dock, options.closed ?? false, options.width ?? 760] as const,
   );
   const release = await gateway(page, options.headers, options.fails);
   await page.route("**/rows/", (route) =>
@@ -684,4 +686,33 @@ test("the hover card lists the page's calls no trace answered, as the pill count
   await storeView(page, tag, { shift: -8_000_000 });
   await rows.nth(1).click();
   await expect(panel(page).locator('.dt-map-row[data-kind="http.client"]')).toContainText("×3");
+});
+
+test("the narrow dock's request picker says a call no trace answered and one that got none as the list does", async ({
+  page,
+}) => {
+  const tag = 11;
+  const { release } = await opened(page, { document: { trace: id(tag, 50) }, fails: [2], width: 360 });
+  await open(page, id(tag, 1), ["Spec", "Spec", "Spec"]);
+  for (const n of [0, 1, 2]) release(n);
+  await viewEnded(page);
+  await storeView(page, tag, { shift: -8_000_000 });
+  // The list under the picker has them so: two "not traced", one "failed".
+  const list = panel(page).getByRole("region", { name: "Requests made by this page" });
+  await expect(list.locator('.dt-request-row[data-call="untraced"]')).toHaveCount(2);
+  await expect(list.locator('.dt-request-row[data-call="failed"]')).toHaveCount(1);
+
+  await panel(page).locator(".switcher-button").click();
+  const picker = panel(page).locator(".switcher-popover");
+  const calls = picker.locator(".dt-request-row").filter({ hasText: "Spec" });
+  await expect(calls).toHaveCount(3);
+  await expect(picker.locator('.dt-request-row[data-call="untraced"]')).toHaveCount(2);
+  for (const row of await picker.locator('.dt-request-row[data-call="untraced"]').all()) {
+    await expect(row.locator(".dt-not-traced")).toHaveText("not traced");
+    await expect(row.locator(".dt-status")).toHaveText("200");
+  }
+  const failed = picker.locator('.dt-request-row[data-call="failed"]');
+  await expect(failed.locator(".dt-status")).toHaveText("failed");
+  // No numbers for calls that have no trace: no "0 queries".
+  await expect(calls.filter({ hasText: "queries" })).toHaveCount(0);
 });
