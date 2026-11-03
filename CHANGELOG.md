@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Added
+
+- A shared trace's snapshot file opens in the theme of whoever opens it
+  (their system's) and has the console's theme switch in its header:
+  Auto, Dark, Light. The pick is kept for the next snapshot in that
+  browser, and the file still opens with storage blocked, in the
+  system's theme.
+
 ### Fixed
 
 - In the panel's list, a view's calls through a gateway (an Apollo

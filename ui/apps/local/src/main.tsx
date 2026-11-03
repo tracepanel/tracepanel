@@ -4,7 +4,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { SnapshotApp } from "./SnapshotApp";
-import { watchTheme } from "./theme";
+import { defaultTheme, watchTheme } from "./theme";
 
 // Inside the widget the panel is the glass surface; the app itself stays transparent.
 if (window.parent !== window) {
@@ -19,12 +19,14 @@ if (window.parent !== window) {
   });
 }
 
+// A snapshot file carries its data: the console reads it instead of an API.
+const snapshot = readSnapshot();
+
+// A snapshot is opened by someone else, anywhere: unless they chose one, the theme their OS has.
+if (snapshot) defaultTheme("system");
 watchTheme();
 
 const container = document.getElementById("root");
 if (!container) throw new Error("tracepanel UI: missing #root");
-
-// A snapshot file carries its data: the console reads it instead of an API.
-const snapshot = readSnapshot();
 
 createRoot(container).render(<StrictMode>{snapshot ? <SnapshotApp snapshot={snapshot} /> : <App />}</StrictMode>);

@@ -5,12 +5,21 @@ export type ThemeChoice = "system" | "light" | "dark";
 const KEY = "tracepanel:theme";
 const DARK = "(prefers-color-scheme: dark)";
 
+/** The theme with no choice stored: the console's dark; a snapshot file follows the OS of whoever opens it. */
+let fallback: ThemeChoice = "dark";
+
+/** What the theme is with no choice stored (a snapshot: "system"). Set before the first applyTheme. */
+export function defaultTheme(choice: ThemeChoice): void {
+  fallback = choice;
+}
+
 function read(): ThemeChoice {
   try {
     const value = localStorage.getItem(KEY);
-    return value === "light" || value === "system" ? value : "dark";
+    return value === "light" || value === "system" || value === "dark" ? value : fallback;
   } catch {
-    return "dark";
+    // A file opened where storage is blocked: the choice lasts until reload.
+    return fallback;
   }
 }
 
