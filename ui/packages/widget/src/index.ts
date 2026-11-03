@@ -145,10 +145,18 @@ function isView(entry: TabEntry | undefined): boolean {
  * action), leaves the list. Reloads of an SPA's page would otherwise stack views with nothing under them. A route
  * change is a view of another page: it goes in after the last one, which stays, with or without requests.
  */
-function dropEmptyView(tab: TabEntry[], name: string): TabEntry[] {
+function dropEmptyView(tab: TabEntry[], name: string, called: ReadonlySet<string>): TabEntry[] {
   const last = tab.at(-1);
-  if (last && isViewOf(last, name) && !tab.some((item) => item.parent === last.id)) return tab.slice(0, -1);
+  if (last && isViewOf(last, name) && !madeCalls(tab, last.id, called)) return tab.slice(0, -1);
   return tab;
+}
+
+/**
+ * Whether a view or an action made calls: a traced request under it, or one that answered untraced or flies still
+ * (`called`: those that made such calls, which the tab doesn't list).
+ */
+function madeCalls(tab: readonly TabEntry[], id: string, called: ReadonlySet<string>): boolean {
+  return called.has(id) || tab.some((item) => item.parent === id);
 }
 
 /** Whether an entry is a view of the page `name` (a view, not an action on it). */
@@ -1059,10 +1067,15 @@ export interface TabEntry {
  * The tab's list with this view or action in it: a new row (an empty view of the same page leaves, and so does a view
  * the SPA redirected from at once, the new one saying so), or its own updated. `load`: the page's first view.
  */
-function withPage(tab: TabEntry[], announced: PageAnnouncement, load: string | null): TabEntry[] {
+function withPage(
+  tab: TabEntry[],
+  announced: PageAnnouncement,
+  load: string | null,
+  called: ReadonlySet<string>,
+): TabEntry[] {
   const entry = pageEntry(announced);
   const at = tab.findIndex((item) => item.id === announced.id);
-  if (at === -1) return foldRedirect(dropEmptyView(tab, announced.name), entry, load);
+  if (at === -1) return foldRedirect(dropEmptyView(tab, announced.name, called), entry, { load, called });
   const from = tab[at]?.summary?.redirectedFrom;
   if (from && entry.summary) entry.summary.redirectedFrom = from;
   return tab.map((item, index) => (index === at ? entry : item));
@@ -1075,12 +1088,16 @@ function withPage(tab: TabEntry[], announced: PageAnnouncement, load: string | n
  * did anything stay.
  * The agent folds it in the store by the same measure.
  */
-function foldRedirect(tab: TabEntry[], entry: TabEntry, load: string | null): TabEntry[] {
+function foldRedirect(
+  tab: TabEntry[],
+  entry: TabEntry,
+  { load, called }: { load: string | null; called: ReadonlySet<string> },
+): TabEntry[] {
   const last = tab.at(-1);
   const before = last?.summary;
   const next = entry.summary;
   if (!(last && before && next && isView(last) && isView(entry) && last.id !== load)) return [...tab, entry];
-  const empty = !(before.open || before.failed) && !tab.some((item) => item.parent === last.id);
+  const empty = !(before.open || before.failed) && !madeCalls(tab, last.id, called);
   const atOnce = next.start - before.start <= REDIRECT_MS * 1000 && before.start + before.duration <= next.start;
   if (!(empty && atOnce)) return [...tab, entry];
   next.redirectedFrom = before.redirectedFrom ?? before.name;
@@ -1930,7 +1947,12 @@ export function mount(options: WidgetOptions = {}): Widget {
   function recordPage(announced: PageAnnouncement): void {
     if (announced.name.includes(" › ")) takeAction(announced);
     else takeView(announced);
-    tab = underLoadView(withPage(tab, announced, loadView), announced);
+    // The views whose calls the tab doesn't list (through a gateway, untraced): not empty.
+    const called = new Set([
+      ...landed.map((call) => call.parent),
+      ...inFlight.flatMap((flight) => listedUnder.get(flight) ?? []),
+    ]);
+    tab = underLoadView(withPage(tab, announced, loadView, called), announced);
     saveTab(tab);
     sendTab();
   }

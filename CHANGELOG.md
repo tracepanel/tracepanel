@@ -26,6 +26,9 @@
   theirs names the app that served them ("graphql-router ×5"), which
   the same row then shows. The group used to appear only once the
   traces came, taking the place of the rows that were there.
+- A view whose calls all went through a gateway stays in the panel's
+  list when the same page is opened again. With no traced request under
+  it, it counted as an empty view and left the list for the new one.
 - A view's time in the panel's list, on the pill and in its card stops
   at its last call's answer when its calls went through a gateway. It
   ran on while the view waited for its end, then jumped back (6.5 s,
