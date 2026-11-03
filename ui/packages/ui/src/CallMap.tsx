@@ -16,7 +16,7 @@ import { DumpBadge, DumpLine } from "./Dump";
 import { duration, since } from "./format";
 import { GraphqlCode } from "./GraphqlCode";
 import { Hint } from "./Hint";
-import { useChain } from "./hooks/useChain";
+import { type CatchUp, useChain } from "./hooks/useChain";
 import { ChevronRightIcon, CloseIcon } from "./icons";
 import { keyed } from "./keys";
 import { NoAnswer } from "./LiveMarks";
@@ -2829,8 +2829,15 @@ export function CallMap({
 }: {
   trace: Trace;
   issueBySpan: ReadonlyMap<string, IssueKind>;
-  /** Above the tree, in the panel: the trace's time and its legend, which pick the rows. */
-  head?: ReactNode;
+  /**
+   * Above the tree, in the panel: the trace's time and its legend, which pick the rows, given how many traces of the
+   * chain the tree's links don't have yet (`behind`: the tree is partial until they reload).
+   */
+  head?: ((behind: number) => ReactNode) | undefined;
+  /** The trace's chain of calls, loaded on its own clock: the tree's links are asked again while they miss any of it. */
+  expected?: CatchUp["expected"];
+  /** Asks for `related` again: while it misses a call's trace the chain has. */
+  reloadRelated?: (() => void) | undefined;
   /** Opens the trace's profile, when it has one: its code rows lead there. */
   onProfile?: (() => void) | undefined;
   /** Opens another trace's profile by its id: a call's trace from another app, opened under its call. */
@@ -2854,7 +2861,10 @@ export function CallMap({
 }) {
   // The part of the time picked: the kinds of calls and the stretch of time the rows are kept for.
   const { slice: current, change, profileAt } = useHeldSlice();
-  const chain = useChain(trace.id, wiring.loadRelated, related);
+  const chain = useChain(trace.id, wiring.loadRelated, related, {
+    expected: wiring.expected,
+    reloadRoot: wiring.reloadRelated,
+  });
   const { tree, hidden } = useShownLogs(trace, related, current.logs, chain.loaded);
   const issues = useMemo(
     () => withCallIssues(issueBySpan, related, chain.loaded),
@@ -2877,7 +2887,7 @@ export function CallMap({
 
   return (
     <div className="dt-map" ref={map}>
-      {head}
+      {head?.(chain.behind)}
       <MapBody details={side ? details : null} onClose={close}>
         <TimedRows trace={trace} range={current.range} onRange={(range) => change({ ...current, range })}>
           <div className="dt-map-rows" ref={rows}>

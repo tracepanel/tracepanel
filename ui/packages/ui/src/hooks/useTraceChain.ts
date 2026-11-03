@@ -18,13 +18,17 @@ function callsOf(related: Related | undefined): number {
   return related ? related.calls.length + (related.remote_calls?.length ?? 0) : 0;
 }
 
-/** While calls of the chain wait for their traces, it is asked for again this often: they show as they arrive. */
-const WAITING_ASK_MS = 2_000;
+/**
+ * While calls of the chain wait for their traces, it is asked for again this often: they show as they arrive (a
+ * service's trace comes a second or so after its caller's). Calls cut short wait minutes for theirs: less often.
+ */
+const WAITING_ASK_MS = 1_000;
+const CUT_ASK_MS = 2_000;
 
 /**
  * The trace's chain of calls (the traces other apps served for its calls, theirs in turn), on its clock: loaded
  * whole once its links say it called anything, again as they reload (a service's trace arrives after its caller's),
- * and every WAITING_ASK_MS while a call of it waits for its trace. Until then, and without `load`, the trace and the
+ * and every WAITING_ASK_MS while a call of it waits for its trace (CUT_ASK_MS while only calls cut short do). Until then, and without `load`, the trace and the
  * calls' traces its links bring.
  */
 function useTraceChain(
@@ -75,7 +79,8 @@ function useTraceChain(
   // More on its way: asked for again until it is all there (or no longer waited for).
   useEffect(() => {
     if (!load || waiting.length === 0) return;
-    const timer = window.setTimeout(() => setAsked(Date.now()), WAITING_ASK_MS);
+    const cut = waiting.every((call) => call.cut !== null);
+    const timer = window.setTimeout(() => setAsked(Date.now()), cut ? CUT_ASK_MS : WAITING_ASK_MS);
     return () => window.clearTimeout(timer);
   }, [load, waiting]);
   return { members, issues: chain?.issues ?? NO_ISSUES, waiting, untraced };

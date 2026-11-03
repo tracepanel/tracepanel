@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { linksBehind } from "../lib/chainRows";
 import type { Related } from "../types";
 
 /**
@@ -19,15 +20,35 @@ interface Loaded {
   related: ReadonlyMap<string, Related>;
 }
 
+/** While the tree's links miss traces its chain has, they are asked for again this often, this many times at most. */
+const BEHIND_ASK_MS = 1_000;
+const BEHIND_ASKS = 5;
+
+/** The traces of the trace's chain of calls, where each hangs (`parent`: the trace whose call it served). */
+type Expected = readonly { id: string; parent: string | null; via: string | null }[];
+
+/**
+ * What the tree is to catch up with: the trace's chain (`expected`, loaded on its own clock), and the way to reload the
+ * tree's own links (`reloadRoot`; the opened traces' it reloads itself).
+ */
+export interface CatchUp {
+  expected?: Expected | undefined;
+  reloadRoot?: (() => void) | undefined;
+}
+
 /**
  * The links of the call traces a call tree opens, loaded one trace at a time as their rows open (`want`), with the
- * tree's own: when those reload (a trace's tasks and calls arrive later), the opened ones reload with them.
+ * tree's own (`related`): when those reload (a trace's tasks and calls arrive later), the opened ones reload with
+ * them. While the chain has traces those links don't name yet (`behind`: the agent stored them after the links
+ * loaded), the links missing them are asked for again, so the tree fills as soon as the chain does.
  */
 export function useChain(
   root: string,
   load: ((traceId: string) => Promise<Related>) | undefined,
-  reloadWith: unknown,
-): { loaded: ReadonlyMap<string, Related>; want: (traceId: string) => void } {
+  related: Related | undefined,
+  { expected, reloadRoot }: CatchUp = {},
+): { loaded: ReadonlyMap<string, Related>; want: (traceId: string) => void; behind: number } {
+  const reloadWith = related;
   const [loaded, setLoaded] = useState<Loaded>({ root, related: new Map() });
   // Each trace asked for, with the tree's own links it was asked with: those reloading ask again, once.
   const asked = useRef<Asked>({ root, ids: new Map(), json: new Map() });
@@ -76,7 +97,41 @@ export function useChain(
     }
   }, [reloadWith, fetchOne]);
 
-  return { loaded: loaded.root === root ? loaded.related : EMPTY, want };
+  const shown = loaded.root === root ? loaded.related : EMPTY;
+  const behind = useMemo(
+    () => linksBehind(expected ?? [], (traceId) => (traceId === root ? related : shown.get(traceId))),
+    [expected, root, related, shown],
+  );
+  useCatchUp(root, behind, reloadRoot, fetchOne);
+  return { loaded: shown, want, behind: behind.length };
+}
+
+/**
+ * Asks again for the links that miss traces of the chain (`behind`): at once, then every BEHIND_ASK_MS while they
+ * still miss the same ones, BEHIND_ASKS times at most (links that never name a trace the chain has don't poll on).
+ */
+function useCatchUp(
+  root: string,
+  behind: Expected,
+  reloadRoot: (() => void) | undefined,
+  fetchOne: (traceId: string) => void,
+): void {
+  const key = behind.map((each) => `${each.parent}/${each.id}`).join(",");
+  const [again, setAgain] = useState(0);
+  const asked = useRef({ key: "", count: 0 });
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `key` stands for `behind`; `again` asks once more.
+  useEffect(() => {
+    if (key === "") return;
+    if (asked.current.key !== key) asked.current = { key, count: 0 };
+    if (asked.current.count >= BEHIND_ASKS) return;
+    asked.current.count += 1;
+    for (const parent of new Set(behind.map((each) => each.parent))) {
+      if (parent === root) reloadRoot?.();
+      else if (parent !== null) fetchOne(parent);
+    }
+    const timer = window.setTimeout(() => setAgain((count) => count + 1), BEHIND_ASK_MS);
+    return () => window.clearTimeout(timer);
+  }, [key, again]);
 }
 
 const EMPTY: ReadonlyMap<string, Related> = new Map();
