@@ -1,5 +1,57 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- A shared trace's snapshot file opens in the theme of whoever opens it
+  (their system's) and has the console's theme switch in its header:
+  Auto, Dark, Light. The pick is kept for the next snapshot in that
+  browser, and the file still opens with storage blocked, in the
+  system's theme.
+
+### Fixed
+
+- In the panel's list, a view's calls through a gateway (an Apollo
+  Router sending its traces over OTLP) keep one row each, in the order
+  they started, from the moment they leave until their traces are
+  stored. A call that answered stays, its time stopped, while the view
+  still runs. Before, only the calls in flight showed, and an answered
+  one vanished until the view's trace came. The row keeps its name (the
+  GraphQL operation, never "POST /graphql"), its place and its identity
+  as it gains its status, its numbers and what it called. A call whose
+  trace is on its way opens the view's call tree.
+- A view's calls to one host sit under one row from the moment they
+  leave, named by the app that host was served by before
+  ("graphql-router ×5"), as the Services map links them. A host no app
+  has served yet is named by itself ("127.0.0.1:8043 ×5") until a trace
+  of its calls names the app, which the same row then shows, and a
+  trace's app wins over the one before. The group used to appear only
+  once the traces came, taking the place of the rows that were there.
+- A view whose calls all went through a gateway stays in the panel's
+  list when the same page is opened again. With no traced request under
+  it, it counted as an empty view and left the list for the new one.
+- A view's time in the panel's list, on the pill and in its card stops
+  at its last call's answer when its calls went through a gateway. It
+  ran on while the view waited for its end, then jumped back (6.5 s,
+  then 5.6 s): only the answers that named a trace stopped it.
+- A number on its way says "…" everywhere, and only while it is on its
+  way. A row of the panel's list whose trace never reached the agent
+  (the store was cleared since), or whose chain can't be loaded, says
+  what is known instead of "…" for good. A call whose trace hasn't come
+  yet, deeper in a chain, looks as its trace's row will (its status, its
+  time, its numbers "…"), not a dimmed row saying "waiting".
+- "not traced" shows its last letter whole in the call tree and the
+  HTTP calls tab ("not trace"), and so does "waiting for a worker…":
+  an italic word leans past its box, and a tight cell cut it off.
+- A GraphQL call shows the document it ran in its details in the
+  caller's call tree, not only in the server's trace: the document the
+  call sent (tracepanel-js's browser recording keeps it from its next
+  release), else the one of the trace that served it. A gateway that sends its
+  document over OTLP (Apollo Router's `supergraph` span in its
+  deprecated mode or with `graphql.document` turned on, Hive Gateway)
+  has it on its trace too, on its Request tab: the agent dropped it with
+  the gateway's inner spans.
 ## 0.13.0 (2026-11-03)
 
 ### Fixed

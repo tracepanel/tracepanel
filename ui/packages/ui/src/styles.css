@@ -857,7 +857,7 @@ tr[data-new] {
 .dt-requests[data-compact] .dt-request-row:is([data-depth="1"], [data-depth="2"], [data-chain]) {
   padding-left: calc(var(--dt-tree-base) + var(--dt-tree-level) * var(--dt-tree-step));
 }
-.dt-requests[data-compact] .dt-request-row:is([data-depth="1"], [data-run], [data-chain])::after {
+.dt-requests[data-compact] .dt-request-row:is([data-depth="1"], [data-run], [data-chain], [data-call])::after {
   left: calc(var(--dt-tree-base) + (var(--dt-tree-level) - 1) * var(--dt-tree-step) - 0.125rem);
   width: calc(var(--dt-tree-step) - 0.375rem);
   height: 1rem;
@@ -969,6 +969,18 @@ tr[data-new] {
 .dt-request-row[data-run][data-depth="2"]::after {
   left: 2.5rem;
 }
+/* A view's call under the row of its host's calls: a step deeper, the tree's corner as a view's request has it. */
+.dt-request-row[data-call][data-depth="2"]::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 2.5rem;
+  width: 0.5625rem;
+  height: 1.125rem;
+  border-bottom: 1px solid var(--dt-border-strong);
+  border-left: 1px solid var(--dt-border-strong);
+  border-bottom-left-radius: 0.25rem;
+}
 /* Under a row, the traces other apps served for its calls: an app's row, then its traces by route, each a step deeper
    (--dt-chain-level), a fold before the name as in the call tree. Quieter than the list's own rows. */
 .dt-request-row[data-chain] {
@@ -993,33 +1005,19 @@ tr[data-new] {
   border-left: 1px solid var(--dt-border-strong);
   border-bottom-left-radius: 0.25rem;
 }
-/* Not rows to open: a call whose trace is on its way, and the placeholder of a chain still loading. Dimmed, still. */
+/* Not rows to open: a call whose trace is on its way (as its trace's row will look, its numbers "…"), and the
+   placeholder of a chain still loading. Still. */
 .dt-request-row:is([data-chain="waiting"], [data-chain="loading"]) {
   cursor: default;
 }
 .dt-request-row:is([data-chain="waiting"], [data-chain="loading"]):hover {
   background: color-mix(in srgb, var(--dt-subtle) 45%, transparent);
 }
-.dt-request-row[data-chain="waiting"] > .dt-request-main {
-  opacity: 0.55;
-}
 /* The placeholder's bars, each in a path's line: the row is as tall as the one that takes its place. */
 .dt-chain-skeleton {
   display: inline-block;
   height: 0.875rem;
   vertical-align: middle;
-}
-.dt-chain-waiting {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 0.25rem;
-  color: var(--dt-text-3);
-  font-size: var(--dt-size-xs);
-}
-.dt-chain-waiting > svg {
-  width: 0.75rem;
-  height: 0.75rem;
 }
 .dt-request-row[data-chain] .dt-request-main {
   gap: 0.375rem;
@@ -2677,7 +2675,10 @@ div.dt-map-row[data-kind="code"] {
 .dt-map-row[data-dim] {
   opacity: 0.5;
 }
+/* Italic labels lean past their box: room on their right for the last letter, so a tight or clipped cell never cuts
+   it ("not traced", "waiting"). */
 .dt-map-waiting {
+  padding-inline-end: 0.2em;
   color: var(--dt-text-3);
   font-style: italic;
 }
@@ -3573,6 +3574,7 @@ div.dt-map-row[data-kind="code"] {
 /* A call no trace answered and none will (Untraced): muted, as a call's other notes; its reason in the tooltip. */
 .dt-not-traced {
   flex: none;
+  padding-inline-end: 0.2em;
   color: var(--dt-text-3);
   font-size: var(--dt-size-xs);
   font-style: italic;

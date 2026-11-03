@@ -2,6 +2,7 @@ import { dayTime, duration, Empty, type Snapshot, snapshotSource, type Trace } f
 import { TooltipProvider } from "@tracepanel/ui/components/ui/tooltip";
 import { useEffect, useMemo, useState } from "react";
 import { href, type Route, useRoute } from "./routes";
+import { ThemeToggle } from "./Sidebar";
 import { TracePage } from "./TracePage";
 
 type Shown = { id: string; from?: string | undefined; tab?: string | undefined; span?: string | undefined };
@@ -54,11 +55,15 @@ function SnapshotBar({ snapshot, away, named }: { snapshot: Snapshot; away: bool
       <span className="text-muted-foreground">
         Made {when} with Tracepanel {snapshot.agent}, {snapshot.values ? "with values" : "without values"}.
       </span>
-      {away ? (
-        <a className="ml-auto underline-offset-2 hover:underline" href={href({ name: "trace", id: snapshot.root })}>
-          Back to the shared trace
-        </a>
-      ) : null}
+      <span className="ml-auto flex items-center gap-3">
+        {away ? (
+          <a className="underline-offset-2 hover:underline" href={href({ name: "trace", id: snapshot.root })}>
+            Back to the shared trace
+          </a>
+        ) : null}
+        {/* The console's theme switch: the OS's theme until one is picked, the pick kept for the next snapshot. */}
+        <ThemeToggle compact={true} />
+      </span>
     </div>
   );
 }

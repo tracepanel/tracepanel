@@ -24,6 +24,15 @@ export interface EntrySummary {
   until?: number | undefined;
   /** A view the SPA was sent to at once from another route ("/sms-campaigns"), which left the list for it. */
   redirectedFrom?: string | undefined;
+  /**
+   * A call of a view or an action that answered without Tracepanel's headers (through a gateway): no trace of its own
+   * (its id stays the widget's); the view's trace has it, and its row stands until that trace does.
+   */
+  untraced?: boolean | undefined;
+  /** The id it had while in flight ("~…"): its row keeps that identity from in flight to stored. */
+  key?: string | undefined;
+  /** The host a request went to ("api.example.com:8443"): a view's calls are grouped by it. */
+  host?: string | undefined;
 }
 
 export interface TabEntry {

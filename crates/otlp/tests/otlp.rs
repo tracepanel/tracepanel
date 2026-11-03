@@ -1217,3 +1217,24 @@ fn an_event_of_another_sdk_is_a_log_record_of_its_scope() {
                 "message": "cache miss", "exception": null, "attrs": {"extra.key": "report:7"}}])
     );
 }
+
+/// The document a gateway's request ran is its trace's, where the gateway records it (Apollo Router's `supergraph`
+/// span in its deprecated mode, Hive Gateway's `graphql.operation`): the request's, never a subgraph call's own
+/// query. A gateway that records none (Apollo Router's spec-compliant mode by default) leaves the trace without.
+#[test]
+fn a_gateway_s_graphql_document_is_its_trace_s() {
+    let document = |received: &Received| -> Value {
+        let doc: Value = serde_json::from_str(&received.doc).unwrap();
+        doc["attrs"]["graphql.document"].clone()
+    };
+
+    assert_eq!(
+        document(&router("deprecated")),
+        json!("query Books { books { id title author { name } } }")
+    );
+    assert_eq!(document(&router("spec-compliant")), Value::Null);
+    assert_eq!(
+        document(&gateway("hive-gateway", |_| {})[0]),
+        json!("query Books{books{title author{name}}}")
+    );
+}

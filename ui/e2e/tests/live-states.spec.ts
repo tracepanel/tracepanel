@@ -349,10 +349,11 @@ test("a view cut with a call unanswered says no answer, in its row and on the pi
   const row = list(page).locator('.dt-request-row[data-kind="page"]').first();
   await expect(row).toHaveAttribute("data-state", "cut");
   await expect(row.locator('[data-state="cut"]')).toHaveText("no answer");
-  // Its call, still waiting: said so under it, and kept while it is.
-  await expect(list(page).locator('.dt-request-row[data-chain="waiting"]')).toContainText("no answer yet");
+  // Its call, still waiting: said so under it, as its own row is, and kept while it is.
+  const call = list(page).locator('.dt-request-row[data-call="waiting"]');
+  await expect(call.locator('[data-state="cut"]')).toHaveText("no answer");
   await page.waitForTimeout(5_500);
-  await expect(list(page).locator('.dt-request-row[data-chain="waiting"]')).toContainText("no answer yet");
+  await expect(call.locator('[data-state="cut"]')).toHaveText("no answer");
 });
 
 // A request beside the cut view, its route as long as the narrow list holds whole: cut short if the time column took

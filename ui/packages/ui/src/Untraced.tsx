@@ -12,7 +12,7 @@ function useUntraced(spanId: string): string | undefined {
 }
 
 /** What a call no trace answered says, in its tooltip and its details. */
-function untracedNote(host: string): string {
+export function untracedNote(host: string): string {
   return `Not traced: ${host} sends no traces to Tracepanel. The call carried the trace on, but no trace answered it, so what ran there isn't recorded.`;
 }
 

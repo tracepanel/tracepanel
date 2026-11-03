@@ -977,6 +977,33 @@ fn lift_operation(
     }
 }
 
+/// The GraphQL document a gateway's request ran, as the trace shows it (its Request tab, the call that reached it):
+/// from the span nearest its root that has one (Apollo Router's `supergraph` with `graphql.document`, Hive Gateway's
+/// `graphql.operation`), never from a call to a subgraph or a span under one, which carry the subgraph's query.
+fn gateway_document(root_id: u64, members: &[u64], bucket: &Bucket) -> Option<String> {
+    let depth = |mut id: u64| -> Option<usize> {
+        let mut steps = 0;
+        while id != root_id {
+            let span = &bucket.spans.get(&id)?.span;
+            if matches!(span.kind, 3 | 4) || steps > 64 {
+                return None;
+            }
+            id = id64(&span.parent_span_id)?;
+            steps += 1;
+        }
+        Some(steps)
+    };
+    members
+        .iter()
+        .filter_map(|id| {
+            let attrs = attributes(&bucket.spans[id].span.attributes);
+            let document = text(&attrs, &["graphql.document"])?.to_owned();
+            Some((depth(*id)?, document))
+        })
+        .min_by_key(|(steps, _)| *steps)
+        .map(|(_, document)| document)
+}
+
 /// One trace: the root as the trace (and as a span too when it is a call out), the rest as its spans.
 fn document(trace: u128, root: &Got, root_id: u64, members: &[u64], bucket: &Bucket) -> Value {
     let mut root_attrs = attributes(&root.span.attributes);
@@ -998,6 +1025,9 @@ fn document(trace: u128, root: &Got, root_id: u64, members: &[u64], bucket: &Buc
     let span_kind = if tower { 2 } else { root.span.kind };
     let (kind, role) = kind_of(span_kind, &root_attrs);
     let mut attrs = trace_attrs(root, &root_attrs, kind, role);
+    if let Some(document) = gateway_document(root_id, members, bucket) {
+        attrs.insert("graphql.document".into(), Value::from(document));
+    }
     // The framework, as the SDKs name it: from the instrumentation that recorded the trace's spans (OpenTelemetry's
     // Java agent records a Spring request from Tomcat, its controller from spring-webmvc).
     if let Some(framework) = members

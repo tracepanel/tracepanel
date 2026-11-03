@@ -261,11 +261,18 @@ await import(URL.createObjectURL(new Blob([js], { type: "text/javascript" })));`
 const GROUND = `:where(:root) { color-scheme: dark; background: #0a0c11; }
 :where(:root[data-theme="light"]) { color-scheme: light; background: #fff; }`;
 
-/** The console page's first script, which sets the theme before the first paint (dark unless light was chosen). */
-function themeScript(): string {
-  const code = document.getElementById("tracepanel-theme")?.textContent ?? "";
-  return code ? `<script>${code}</script>` : "";
-}
+/**
+ * The file's first script: the theme before the first paint, as the console's (theme.ts) sets it in a snapshot: the
+ * choice stored by its switch, else the OS's. Storage blocked (a file opened in a locked-down browser): the OS's.
+ */
+const THEME_SCRIPT = `<script>(() => {
+  let choice = null;
+  try {
+    choice = localStorage.getItem("tracepanel:theme");
+  } catch {}
+  const os = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  document.documentElement.dataset.theme = choice === "light" || choice === "dark" ? choice : os;
+})();</script>`;
 
 function page(title: string, icon: string, packedParts: string): string {
   const link = icon ? `<link rel="icon" href="${escapeHtml(icon)}" />` : "";
@@ -276,7 +283,7 @@ function page(title: string, icon: string, packedParts: string): string {
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>${escapeHtml(title)}</title>
     ${link}
-    ${themeScript()}
+    ${THEME_SCRIPT}
     <style>${GROUND}</style>
     <script type="application/json" id="tracepanel-snapshot">${packedParts}</script>
     <script type="module">${LOADER}</script>

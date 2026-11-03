@@ -8,6 +8,7 @@
 import type { Chain, ChainTrace, Related, Span, Trace, TraceSummary } from "../types";
 import { onTheClock } from "./calls";
 import { type ChainCounts, countsOf } from "./chainCounts";
+import { callOperation } from "./graphql";
 import { isCut } from "./live";
 
 /** One trace of an app, a row of its own: its method and actual path, its route in the tooltip. */
@@ -23,6 +24,12 @@ export interface ChainTraceRow {
   called: number;
   /** The apps it called in turn, and its calls whose traces are on their way. */
   apps: ChainEntry[];
+  /** The span of the call it answered, in the trace that made it (a view's calls, chainCalls). */
+  span?: string | undefined;
+  /** Where that call went: its host and port (a view's calls, chainCalls). */
+  host?: string | null | undefined;
+  /** When that call ended, on the chain's clock (µs; a view's calls, chainCalls). */
+  ended?: number | undefined;
 }
 
 /** Consecutive traces of one route (three or more): one row (×N, their time on the clock), each of them under it. */
@@ -45,8 +52,16 @@ export interface ChainRun {
 export interface ChainWaiting {
   type: "waiting";
   key: string;
+  /** The span of the call, in the trace that made it. */
+  span: string;
   method: string | null;
   path: string;
+  /** Its GraphQL operation, as the call's span names it ("GraphQL query Books"): the row is named so, as its trace's. */
+  operation: string | null;
+  /** The status its answer had, when the call's span says it. */
+  status: number | null;
+  /** Where it went: its host and port, when its span says it. */
+  host: string | null;
   /** When the call started and ended, on the chain's clock (µs). */
   start: number;
   end: number;
@@ -56,6 +71,8 @@ export interface ChainWaiting {
    * for a call that ended.
    */
   cut: number | null;
+  /** No trace answered it and none will (untracedIn): the host it went to. Only among a view's calls (chainCalls). */
+  untraced?: string | undefined;
 }
 
 export type ChainItem = ChainTraceRow | ChainRun | ChainWaiting;
@@ -201,7 +218,17 @@ function carries(span: Span): boolean {
   return CALL_KINDS.has(span.kind) && text(span.attrs, "w3c.span_id") !== null && !("messaging.system" in span.attrs);
 }
 
-/** A waiting call's row: its method and path as the span says them ("GET /authors/batch"). */
+/** The status of a call's answer, as its span says it. */
+function statusOf(span: Span): number | null {
+  const status = span.attrs["http.response.status_code"] ?? span.attrs["http.status_code"];
+  return typeof status === "number"
+    ? status
+    : typeof status === "string" && /^\d+$/.test(status)
+      ? Number(status)
+      : null;
+}
+
+/** A waiting call's row: its method and path as the span says them ("GET /authors/batch"), its GraphQL operation. */
 function waitingOf(span: Span, key: string): ChainWaiting {
   const method = text(span.attrs, "http.request.method") ?? text(span.attrs, "http.method");
   const [first = "", ...rest] = span.name.split(" ");
@@ -210,8 +237,12 @@ function waitingOf(span: Span, key: string): ChainWaiting {
   return {
     type: "waiting",
     key: `${key}/waiting/${span.id}`,
+    span: span.id,
     method: method ?? (named ? first : null),
     path: path || span.name,
+    operation: callOperation(span.attrs) ?? (span.name.startsWith("GraphQL ") ? span.name : null),
+    status: statusOf(span),
+    host: hostOf(span),
     start: span.start,
     end: span.start + span.duration,
     cut: isCut(span) ? span.duration : null,
@@ -454,6 +485,11 @@ export function chainApps(
   /** Now, in ms: the calls that ended a moment before it are waited for. */
   now: number = Date.now(),
 ): ChainEntry[] {
+  return appsUnder(new Set([root]), contextOf(chain, root, listed, now), root);
+}
+
+/** What the rows under a list row are read from: the chain's traces where they hang, those listed already left out. */
+function contextOf(chain: Chain, root: string, listed: ReadonlySet<string>, now: number): Context {
   const children = new Map<string, Served[]>();
   for (const each of chain.traces.filter(served)) {
     if (each.parent === null || each.id === root || listed.has(each.id)) continue;
@@ -461,11 +497,57 @@ export function chainApps(
   }
   const traces = new Map(chain.traces.filter(served).map((each) => [each.id, each]));
   const waiting = waitingCalls(chain, now * 1000);
-  return appsUnder(
-    new Set([root]),
-    { children, waiting, traces, counted: countedIn(chain, children, traces), seen: new Set([root]) },
-    root,
-  );
+  return { children, waiting, traces, counted: countedIn(chain, children, traces), seen: new Set([root]) };
+}
+
+/** One call a view or an action made, as its row: the trace that answered it, or the call while it has none. */
+export type ChainCall = ChainTraceRow | ChainWaiting;
+
+/**
+ * The calls a view or an action made, one row each in the order they started, whoever served them, as the browser
+ * made them and the list showed them in flight: the trace that answered each (named by its GraphQL operation or its
+ * request, what it called in turn under it), the call while its trace is on its way, or, once no trace will come,
+ * the call said "not traced". Not grouped by app: a gateway's calls stay the rows they were in flight. The calls
+ * whose traces are rows of the list already (`listed`) are left out.
+ */
+export function chainCalls(
+  chain: Chain,
+  root: string,
+  listed: ReadonlySet<string> = new Set(),
+  now: number = Date.now(),
+): ChainCall[] {
+  const context = contextOf(chain, root, listed, now);
+  const own = context.traces.get(root)?.trace ?? chain.traces.find((each) => each.id === root)?.trace;
+  const spans = new Map((own?.spans ?? []).map((span) => [span.id, span]));
+  const below = (context.children.get(root) ?? []).filter((each) => !context.seen.has(each.id));
+  for (const each of below) context.seen.add(each.id);
+  const answered: ChainCall[] = below.map((each) => {
+    // Keyed by its call, as the call's row was while its trace was on its way: one row from start to end.
+    const key = `${root}/call/${each.via ?? each.id}`;
+    const call = each.via ? spans.get(each.via) : undefined;
+    return {
+      type: "trace",
+      key,
+      span: each.via ?? undefined,
+      host: call ? hostOf(call) : null,
+      ended: call ? call.start + call.duration : undefined,
+      id: each.id,
+      trace: each.trace,
+      summary: together([each.trace], context.counted([each.id])),
+      route: routeOf(each.trace),
+      called: call?.start ?? each.trace.start,
+      apps: appsUnder(new Set([each.id]), context, key),
+    };
+  });
+  const waiting = (context.waiting.get(root) ?? []).map((each) => ({
+    ...each.row,
+    key: `${root}/call/${each.row.span}`,
+  }));
+  const untraced = [...untracedIn(chain.traces, chain.capped, now)].flatMap(([id, host]) => {
+    const span = spans.get(id);
+    return span ? [{ ...waitingOf(span, root), key: `${root}/call/${id}`, untraced: host }] : [];
+  });
+  return [...answered, ...waiting, ...untraced].sort((a, b) => startOf(a) - startOf(b));
 }
 
 /**
@@ -487,4 +569,47 @@ function countedIn(
     }
     return countsOf(members, chain.issues);
   };
+}
+
+/**
+ * A call whose trace is on its way (or none answered it) as the list names a request: its GraphQL operation, else its
+ * method and path; its status and time as its span says them. Its trace's row says the same, with its numbers.
+ */
+// biome-ignore-start lint/style/useNamingConvention: builds an API object; its field names are the wire format.
+export function waitingSummary(call: ChainWaiting): TraceSummary {
+  return {
+    id: call.key,
+    service: "",
+    kind: "http",
+    name: call.operation ?? `${call.method ?? ""} ${call.path}`.trim(),
+    start: call.start,
+    duration: call.cut ?? Math.max(0, call.end - call.start),
+    status: call.status !== null && call.status >= 500 ? "error" : "ok",
+    http_status: call.cut === null ? call.status : null,
+    method: call.method,
+    path: call.path,
+    route: null,
+    view: null,
+    user_id: null,
+    queries: 0,
+    db_time: 0,
+    issues: 0,
+    errors: 0,
+    logs: 0,
+    mails: 0,
+    issue_kinds: [],
+    db_aliases: [],
+    cache_aliases: [],
+    task_state: null,
+    htmx: null,
+  };
+}
+// biome-ignore-end lint/style/useNamingConvention: builds an API object; its field names are the wire format.
+
+/**
+ * What some of a view's calls' traces and everything under them did (`ids`, traces of the chain), as the tabs count
+ * it: the row over a view's calls to one host says the same as an app's row did.
+ */
+export function callsCounted(chain: Chain, root: string, listed: ReadonlySet<string>, ids: readonly string[]) {
+  return contextOf(chain, root, listed, Date.now()).counted(ids);
 }
