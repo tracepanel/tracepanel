@@ -1,9 +1,14 @@
 # Changelog
 
-## Unreleased
+## 0.13.0 (2026-11-03)
 
 ### Fixed
 
+- A view's call tree shows the apps it called as soon as their traces
+  are stored, about a second after the view, instead of up to 15 s
+  later at the page's next refresh. "More on its way" stays until the
+  tree has every one of them, also while a called app's own calls are
+  still loading.
 - A call with no answer yet, in the call tree of a narrow dock, shows
   the hourglass alone when its words don't fit beside the call's name,
   instead of cutting them ("no answer ye"). The words go whole or not
@@ -33,7 +38,6 @@
   one whose subgraph showed how it ran. Said only once no trace came in
   the few seconds a call's trace is waited for. The MCP server's
   get_trace lists those hosts too.
-
 - A view an SPA redirects from at once (`/sms-campaigns` sending on to
   `/sms-campaigns/campaigns` as it renders) is no longer a row of its
   own, "VIEW /sms-campaigns 0 µs" with nothing under it. The view it
