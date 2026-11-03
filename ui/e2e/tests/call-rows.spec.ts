@@ -514,4 +514,135 @@ test("a call that got no answer stays its row, failed as the call tree says it, 
   const row = panel(page).locator('.dt-map-row[data-kind="http.client"]').filter({ hasText: "Authors" });
   await expect(row.locator(".dt-status")).toHaveText("failed");
   await expect(row).toHaveAttribute("data-status", "error");
+  const books = panel(page).locator('.dt-map-row[data-kind="http.client"]').filter({ hasText: "Books" });
+  // And of the one its trace answered, stored before the view's: answered, by the gateway, as the list has it.
+  await expect(books.locator(".dt-status")).toHaveText("200");
+  await expect(books.locator(".dt-app-chip")).toHaveText("gateway");
+  await expect(books.locator('[data-state="untraced"]')).toHaveCount(0);
+});
+
+test("the pill counts a page's calls no trace answered, as its list does: its own load and its view's calls", async ({
+  page,
+}) => {
+  const tag = 7;
+  const { release, list } = await opened(page, { document: { trace: id(tag, 50) } });
+  const count = panel(page).locator(".switcher-count");
+  await open(page, id(tag, 1), ["Spec", "Spec"]);
+  release(0);
+  release(1);
+  await viewEnded(page);
+
+  // The page's load and the two calls Swagger UI made to its own host, which sends no trace for them: this page's.
+  await expect(list.locator('.dt-request-row[data-call="group"] .dt-map-times')).toHaveText("×2");
+  await expect(list.locator('.dt-request-row[data-depth="1"]').filter({ hasText: "/rows/" })).toHaveCount(1);
+  await expect(count).toHaveText("3");
+  await expect(pill(page)).toHaveAccessibleName(/\. 3 requests on this page\b/);
+  await expect(pill(page).locator(".seg.page b")).toHaveText("3");
+
+  // Its view's trace stored: the calls are its chain's rows, the counts the same.
+  await storeView(page, tag, { shift: -8_000_000 });
+  await expect(list.locator('.dt-request-row[data-call="untraced"]')).toHaveCount(2);
+  await expect(count).toHaveText("3");
+  await expect(pill(page).locator(".seg.page b")).toHaveText("3");
+});
+
+test("a view's calls to the host that served the page are named by the page's app, not the host", async ({ page }) => {
+  const tag = 8;
+  // The page's own load, which its server (a Next app) traced: the host the view's calls go to.
+  const now = Date.now() * ms;
+  await ingest([
+    trace(
+      id(tag, 50),
+      "http",
+      "GET /rows/",
+      now - 40 * ms,
+      30 * ms,
+      {
+        "service.name": "next-app",
+        "http.method": "GET",
+        "http.route": "/rows/",
+        "http.status_code": 200,
+      },
+      [],
+    ),
+  ]);
+  const { release, list } = await opened(page, { document: { trace: id(tag, 50) }, dock: "bottom" });
+  await open(page, id(tag, 1), ["Spec", "Spec"]);
+  release(0);
+  release(1);
+  await viewEnded(page);
+
+  const group = list.locator('.dt-request-row[data-call="group"]');
+  await expect(group.locator(".dt-map-times")).toHaveText("×2");
+  await expect(group.locator(".dt-app-chip")).toHaveText("next-app");
+  // Its calls stay what they are: no trace answered them.
+  await storeView(page, tag, { shift: -8_000_000 });
+  await expect(list.locator('.dt-request-row[data-call="untraced"]')).toHaveCount(2);
+  await expect(group.locator(".dt-app-chip")).toHaveText("next-app");
+});
+
+test("while a view's chain loads the first time, no placeholder stands between it and its calls' rows", async ({
+  page,
+}) => {
+  const tag = 9;
+  const callTrace = id(tag, 20);
+  // An app with an SDK answers the view's call: a row of its own, under the view.
+  const { release, list } = await opened(page, {
+    headers: () => ({
+      "Tracepanel-Id": callTrace,
+      "Tracepanel-Name": "GraphQL%20query%20Books",
+      "Server-Timing": 'db;dur=1;desc="0 queries", total;dur=30, tracepanel-issues;desc="0"',
+    }),
+  });
+  // The agent slow to answer each row's chain the first time.
+  let answer: () => void = () => undefined;
+  const answered = new Promise<void>((resolve) => {
+    answer = resolve;
+  });
+  await page.route("**/api/traces/*/chain", async (route) => {
+    await answered;
+    await route.continue();
+  });
+  await open(page, id(tag, 1), ["Books"]);
+  release(0);
+  await viewEnded(page);
+  const made = await page.evaluate(() => (window as unknown as { calls: Made[] }).calls[0] as Made);
+  await ingest([
+    trace(
+      callTrace,
+      "http",
+      "GraphQL query Books",
+      made.start + 5 * ms,
+      made.end - made.start - 10 * ms,
+      {
+        "service.name": "bff",
+        "http.method": "POST",
+        "http.route": "/graphql",
+        "http.status_code": 200,
+        "w3c.trace_id": traceOf(tag),
+        "w3c.parent_span_id": callOf(tag, 0),
+      },
+      [],
+    ),
+  ]);
+  // Calls to a host of their own: the app it is served by stays this test's (the Services map links them).
+  await storeView(page, tag, { origin: "http://bff.test:4000/" });
+
+  // The call's placeholder under the call, where what it called goes; none over it for its view.
+  const rows = list.locator(".dt-request-row");
+  const loading = list.locator('.dt-request-row[data-chain="loading"]');
+  await expect(loading).toHaveCount(1);
+  const shape = () =>
+    rows.evaluateAll((all) =>
+      all.map((row) => {
+        const { chain, kind } = (row as HTMLElement).dataset;
+        return chain === "loading" ? "loading" : kind === "page" ? "view" : "call";
+      }),
+    );
+  await expect.poll(shape).toEqual(["view", "call", "loading"]);
+
+  answer();
+
+  await expect(loading).toHaveCount(0);
+  await expect.poll(shape).toEqual(["view", "call"]);
 });

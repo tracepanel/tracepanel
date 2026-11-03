@@ -74,6 +74,8 @@ export interface TraceRow {
   cut?: number | null | undefined;
   /** For a call no trace answered: the host it went to. */
   host?: string | undefined;
+  /** The page's own load under its view: the host that served it (its app names a group of calls to that host). */
+  loadHost?: string | undefined;
   /**
    * The W3C span id the call carried on (its traceparent), when the widget saw it: its identity in its view's trace,
    * which the view's chain matches it by (never by its name or its place).
@@ -184,8 +186,8 @@ export function TraceList({
   const props = { chains, withOpens, selectedId, currentId, newIds, compact, services, opensOn, onSelect };
   return (
     <ul className="dt-requests" data-compact={compact ? "" : undefined}>
-      {shownRows(rows, chains).map(({ row, fold }) => (
-        <ListItem key={row.key ?? row.trace.id} row={row} fold={fold} {...props} />
+      {shownRows(rows, chains).map(({ row, fold, under }) => (
+        <ListItem key={row.key ?? row.trace.id} row={row} fold={fold} under={under} {...props} />
       ))}
     </ul>
   );
@@ -193,10 +195,10 @@ export function TraceList({
 
 /**
  * The rows on screen, each with its fold: those under a folded view, action or group of calls (deeper than it) hidden
- * until it opens again.
+ * until it opens again. `under`: a view, action or group with rows of its own right under it (its calls).
  */
 function shownRows(rows: readonly TraceRow[], chains: ListChains | undefined) {
-  const shown: { row: TraceRow; fold: RowFold | null | undefined }[] = [];
+  const shown: { row: TraceRow; fold: RowFold | null | undefined; under: boolean }[] = [];
   let hiddenBelow: number | null = null;
   for (const [at, row] of rows.entries()) {
     const depth = row.depth ?? 0;
@@ -205,7 +207,7 @@ function shownRows(rows: readonly TraceRow[], chains: ListChains | undefined) {
     const under = (row.trace.kind === "page" || row.group !== undefined) && (rows[at + 1]?.depth ?? 0) > depth;
     const fold = chains ? rowFold(chains, row.trace.id, row.folded, under) : undefined;
     if (fold?.open === false) hiddenBelow = depth;
-    shown.push({ row, fold });
+    shown.push({ row, fold, under });
   }
   return shown;
 }
@@ -214,6 +216,7 @@ function shownRows(rows: readonly TraceRow[], chains: ListChains | undefined) {
 function ListItem({
   row,
   fold,
+  under,
   chains,
   withOpens,
   selectedId,
@@ -226,6 +229,7 @@ function ListItem({
 }: Omit<TraceListProps, "rows"> & {
   row: TraceRow;
   fold: RowFold | null | undefined;
+  under: boolean;
   withOpens: ListChains | undefined;
 }) {
   const counts = chains?.counts?.get(row.trace.id);
@@ -267,6 +271,7 @@ function ListItem({
         <RowChain
           rowId={trace.id}
           level={(row.depth ?? 0) + 1}
+          rows={under}
           chains={withOpens}
           selectedId={selectedId}
           onSelect={onSelect}
@@ -569,10 +574,21 @@ function ChainRows({ rowId, apps, level, chains, selectedId, onSelect }: ChainRo
   );
 }
 
-/** Under a list's row: its chain's rows, or a placeholder while they load the first time. */
-function RowChain({ rowId, level, chains, selectedId, onSelect }: Omit<ChainRowsProps, "apps">) {
+/**
+ * Under a list's row: its chain's rows, or a placeholder while they load the first time. A view with its calls listed
+ * under it (`rows`) has none: they are what its chain is about, and a placeholder above them, the call's own below it,
+ * would sandwich a real row between two that say nothing.
+ */
+function RowChain({
+  rowId,
+  level,
+  rows,
+  chains,
+  selectedId,
+  onSelect,
+}: Omit<ChainRowsProps, "apps"> & { rows: boolean }) {
   const apps = chains.apps.get(rowId);
-  if (!apps && chains.loading?.has(rowId)) return <ChainLoading level={level} />;
+  if (!apps && chains.loading?.has(rowId)) return rows ? null : <ChainLoading level={level} />;
   return (
     <ChainRows rowId={rowId} apps={apps} level={level} chains={chains} selectedId={selectedId} onSelect={onSelect} />
   );

@@ -343,7 +343,7 @@ function waitedFor(trace: TraceSummary, summary: EntrySummary | undefined): Trac
 
 /** What the widget says of a row beyond its summary. */
 type WidgetFacts = Partial<
-  Pick<TraceRow, "open" | "until" | "redirectedFrom" | "key" | "opens" | "host" | "span" | "failed">
+  Pick<TraceRow, "open" | "until" | "redirectedFrom" | "key" | "opens" | "host" | "loadHost" | "span" | "failed">
 > & {
   htmx?: EntrySummary["htmx"];
 };
@@ -365,6 +365,7 @@ function widgetFacts(entry: TabEntry, stored: ReadonlySet<string>): WidgetFacts 
     ...(summary.untraced && entry.parent ? { opens: entry.parent } : {}),
     ...(open ? {} : failedFact(summary)),
     ...(summary.host ? { host: summary.host } : {}),
+    ...(summary.loadHost ? { loadHost: summary.loadHost } : {}),
     ...(summary.span ? { span: summary.span } : {}),
     ...(summary.htmx ? { htmx: summary.htmx } : {}),
   };
@@ -923,6 +924,23 @@ function useKnownApps(rows: readonly TraceRow[]): ReadonlyMap<string, KnownApp> 
     };
   }, [unknown, views]);
   return known;
+}
+
+/**
+ * The apps known to serve each host, with the page's own load's: the host that served the page's document is its
+ * trace's app's (a Next app that served /docs serves the /openapi.json its view asked for), as a service map's link
+ * names the app a host's calls reached. Its runtime is the page's, as the pill says it.
+ */
+function withLoads(
+  known: ReadonlyMap<string, KnownApp>,
+  rows: readonly TraceRow[],
+  runtime: string | undefined,
+): ReadonlyMap<string, KnownApp> {
+  const loads = rows.filter((row) => row.loadHost && row.trace.service);
+  if (loads.length === 0) return known;
+  const out = new Map(known);
+  for (const row of loads) out.set(row.loadHost as string, { app: row.trace.service, runtime });
+  return out;
 }
 
 /** Each HTTP host's app in a service map: the one seen last where several served it. */
@@ -1783,7 +1801,7 @@ function PanelApp({ route }: { route: Route }) {
   const rowChains = useRowChains(listed, stored);
   // Each view's calls from its chain in the rows they were in flight (withViewCalls): the list shows these.
   const settled = settledIn(rowChains.settled, rows, stored);
-  const known = useKnownApps(listed);
+  const known = withLoads(useKnownApps(listed), listed, history?.runtime ?? undefined);
   const shown = withViewCalls(listed, rowChains, withoutFlying(rowChains.apps, history), { settled, known });
   const [chainOpen, toggleChain] = useChainOpen();
   const currentId = history?.current ?? null;

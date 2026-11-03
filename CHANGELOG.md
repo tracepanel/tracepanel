@@ -12,6 +12,34 @@
 
 ### Fixed
 
+- While the call tree loads traces the agent has (an opened call's, its
+  links slow to come), its note no longer says "More on its way: the
+  traces of 37 calls haven't arrived yet" beside the panel's list showing
+  all 37 with their numbers: they have arrived. The note counts the calls
+  whose traces haven't, once the trace's chain says so, never a call the
+  agent has the trace of ("the trace of 1 call hasn't arrived yet" beside
+  its row in the list, while the chain loaded). And a view whose calls
+  are rows under it in the list has no loading placeholder of its own
+  while its chain loads the first time: its placeholder over the call's
+  row, the call's under it, sandwiched a real row between two that said
+  nothing.
+- A view's call answered by an app whose trace the agent stored before
+  the view's says so in its call tree ("GraphQL query Books → gateway",
+  200), as the panel's list does, not "not traced": once the call ended
+  more than 5 seconds before the view was stored, its trace was no longer
+  waited for, and the tree didn't look further than the view's links,
+  which can miss a trace stored first.
+- A view's calls to the host that served the page are grouped under the
+  page's app ("next-app ×2" over the two GET /openapi.json Swagger UI
+  asked for), not the host ("127.0.0.1:8160 ×2"): the app that traced
+  the page's own load serves that host, as a service map's link names
+  the app a router's calls reached.
+- The pill's count of a page's requests counts its view's calls no trace
+  answered, as the panel's list does (GET /docs and the two GET
+  /openapi.json Swagger UI asked for, untraced, are 3 requests, not 1),
+  and so does the panel docked at the right: the page's own load sits
+  under its view, whose calls were not this page's there, its list gone
+  and its count 1.
 - A view's call that got no answer (a network error, an abort, status
   0) stays its row in the panel's list, from in flight to its view's
   trace stored, and says "failed" in red where its status would be, as
@@ -57,9 +85,11 @@
   deprecated mode or with `graphql.document` turned on, Hive Gateway)
   has it on its trace too, on its Request tab: the agent dropped it with
   the gateway's inner spans.
-- In a narrow call tree a call's status stays whole ("200", not "20"
-  beside "GraphQL query Features → library-router"): the call's path
-  gives way before it, after the app's name.
+- In a narrow call tree a call's status stays whole ("200", not "20" or
+  nothing beside "GraphQL query Features → library-router"), at any
+  width the panel docks at and however deep the call sits: the served
+  trace's name gives way first, then the call's path, the app's name and
+  the call's kind, cut at their end before the status is.
 - A call under a request in the panel's list to a host that sends no
   traces (a third-party API the BFF calls) stays once it is no longer
   waited for and says "not traced", as the call tree does. Its row went

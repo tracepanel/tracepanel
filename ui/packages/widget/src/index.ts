@@ -959,12 +959,11 @@ function chip(className: string, icon: string, text: string): HTMLElement {
 }
 
 /**
- * The rest of the page, after the latest request's numbers: how many requests it made, in the same neutral style as
- * the other numbers, and how many of the others failed in red, as their own chip, so "16" never reads as 16
- * failures. No tooltip: the hover card lists them.
+ * The rest of the page, after the latest request's numbers: how many requests it made (`count`, as the panel's list
+ * has them: traced, untraced and in flight), in the same neutral style as the other numbers, and how many of the
+ * others failed in red, as their own chip, so "16" never reads as 16 failures. No tooltip: the hover card lists them.
  */
-function addPage(parent: HTMLElement, all: readonly TraceInfo[], flights: number): void {
-  const count = all.length + flights;
+function addPage(parent: HTMLElement, all: readonly TraceInfo[], count: number): void {
   const failed = othersFailed(all);
   const more = isFailure(all.at(-1));
   const seg = segment(parent);
@@ -996,8 +995,7 @@ function othersFailed(all: readonly TraceInfo[]): number {
 }
 
 /** "5 requests on this page, 1 other one failed", or nothing for a page alone. */
-function pageLine(all: readonly TraceInfo[], flights: number): string[] {
-  const count = all.length + flights;
+function pageLine(all: readonly TraceInfo[], count: number, flights: number): string[] {
   if (count < 2) return [];
   const failed = othersFailed(all);
   return [
@@ -1009,6 +1007,7 @@ function pageLine(all: readonly TraceInfo[], flights: number): string[] {
 function pillLabel(
   all: readonly TraceInfo[],
   flights: readonly Flight[],
+  count: number,
   runtime: string | undefined,
   counted: (info: TraceInfo) => Counted,
 ): string {
@@ -1017,7 +1016,7 @@ function pillLabel(
   const head = flight
     ? `${title(flightInfo(flight))}, ${runningLabel(flight.start * 1000)}`
     : line(shown, counted(shown));
-  const summary = [head, ...pageLine(all, flights.length), ...(runtime ? [`Served by ${runtime}`] : [])];
+  const summary = [head, ...pageLine(all, count, flights.length), ...(runtime ? [`Served by ${runtime}`] : [])];
   return `tracepanel: ${summary.join(". ")}`;
 }
 
@@ -1593,6 +1592,9 @@ export function mount(options: WidgetOptions = {}): Widget {
   const listedUnder = new WeakMap<Flight, string | null>();
   // The calls of views and actions that answered untraced: rows until their view's trace lists them.
   let landed: Landed[] = [];
+  // This page's calls that answered untraced or not at all, as many as the panel's list has rows for: the pill counts
+  // them among the page's requests, as the list does, however long ago they landed.
+  let untraced = 0;
   // Its trace was deleted from the store: the panel and the badge no longer show it.
   let pageCleared = false;
   let frame: HTMLIFrameElement | null = null;
@@ -1653,6 +1655,7 @@ export function mount(options: WidgetOptions = {}): Widget {
     const parent = answer.page ?? listedUnder.get(flight) ?? undefined;
     const recorded = tab.some((entry) => entry.id === parent && entry.summary?.kind === "page");
     if (!(parent && recorded && flight.id)) return;
+    if (ofThisPage({ page: parent })) untraced += 1;
     const now = Date.now();
     const open = new Set(tab.filter((entry) => entry.summary?.open).map((entry) => entry.id));
     landed = [
@@ -1694,6 +1697,16 @@ export function mount(options: WidgetOptions = {}): Widget {
     return until === undefined || !entry.summary ? entry : { ...entry, summary: { ...entry.summary, until } };
   }
 
+  /**
+   * What "this page" is, as the pill counts it: the page, the actions done on it, and the view its load is listed
+   * under (underLoadView), whose calls are this page's as much as the document is.
+   */
+  function pageScope(current: string | null): string[] {
+    if (!current) return [];
+    const load = view && view.id === loadView && current !== view.id ? [view.id] : [];
+    return [current, ...load, ...scope];
+  }
+
   function sendTab(): void {
     if (frame?.contentWindow && panelUrl) {
       const current = currentPage();
@@ -1702,7 +1715,7 @@ export function mount(options: WidgetOptions = {}): Widget {
           type: "tracepanel:tab",
           entries: entries(),
           current,
-          scope: current ? [current, ...scope] : [],
+          scope: pageScope(current),
           runtime: runtime ?? null,
         },
         panelUrl.origin,
@@ -1758,11 +1771,12 @@ export function mount(options: WidgetOptions = {}): Widget {
       const shown = all.at(-1) ?? {};
       addRequest(stats, shown, pulse, counted(shown));
     }
-    if (all.length + flying.length > 1) addPage(stats, all, flying.length);
+    const count = all.length + untraced + flying.length;
+    if (count > 1) addPage(stats, all, count);
     fitBadge();
     badge.dataset["verdict"] = verdict(all, counted);
     // No title: the hover card shows all of it (and more); screen readers get the summary.
-    badge.setAttribute("aria-label", pillLabel(all, flying, runtime, counted));
+    badge.setAttribute("aria-label", pillLabel(all, flying, count, runtime, counted));
   }
 
   /** What the view's chain says, once the console answered. */
@@ -1879,6 +1893,7 @@ export function mount(options: WidgetOptions = {}): Widget {
     page = info;
     pageCleared = false;
     later.length = 0;
+    untraced = 0;
     if (info.trace) {
       tab = [...tab, { id: info.trace, parent: null, summary: summaryOf(info) }];
       saveTab(tab);
@@ -2003,7 +2018,10 @@ export function mount(options: WidgetOptions = {}): Widget {
   /** Another route (or the same again): this page's scope starts over, the last view's requests no longer its own. */
   function newPage(id: string): void {
     scope.clear();
-    if (id !== loadView) later.length = 0;
+    if (id !== loadView) {
+      later.length = 0;
+      untraced = 0;
+    }
   }
 
   /**
@@ -2016,8 +2034,10 @@ export function mount(options: WidgetOptions = {}): Widget {
     loadView ??= announced.id;
     const own = page && !pageCleared ? page.trace : undefined;
     if (loadView !== announced.id || !own) return entries;
-    // The document is the load, not a call of the view's: never in a group of its calls to one host.
-    const asLoad = (summary: EntrySummary | undefined) => summary && { ...summary, host: undefined };
+    // The document is the load, not a call of the view's: never in a group of its calls to one host. Its host is
+    // still the one its app served: a group of the view's calls to it is named by that app.
+    const asLoad = (summary: EntrySummary | undefined) =>
+      summary && { ...summary, host: undefined, loadHost: summary.host ?? summary.loadHost };
     return entries.map((item) =>
       item.id === own && item.parent === null ? { ...item, parent: announced.id, summary: asLoad(item.summary) } : item,
     );
@@ -2071,6 +2091,7 @@ export function mount(options: WidgetOptions = {}): Widget {
     tab = all ? [] : tab.filter((entry) => entry.id === page?.trace);
     saveTab(tab);
     later.length = 0;
+    untraced = 0;
     render();
     sendTab();
   }

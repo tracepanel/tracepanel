@@ -2365,6 +2365,24 @@ details[data-focused] > .dt-sql-group {
   /* What doesn't fit is cut here, never laid over the bar and the time. */
   overflow: hidden;
 }
+/* A call's row before its answer (CallLead): it gives way first, as its text did, to about what its parts keep (the
+   path, a few letters of the app), then what is after the answer (the chips); past that it is cut at its end, the
+   answer's room kept, so the status stays whole at any width and depth. */
+.dt-map-lead {
+  display: flex;
+  flex: 1 1000 auto;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: min(15rem, 100% - 5rem);
+  overflow: hidden;
+}
+/* Its kind keeps its word until its text and app are at their least, then is cut to a few letters ("HTTP.C…"). */
+.dt-map-lead > .dt-map-kind {
+  flex-shrink: 1;
+  min-width: 2.75rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .dt-map-caret {
   display: grid;
   place-items: center;
@@ -3170,10 +3188,10 @@ div.dt-map-row[data-kind="code"] {
   background: color-mix(in srgb, var(--dt-k) 32%, transparent);
 }
 /* Its path keeps its width (cut past half the name's); the served trace's name after the app takes what is left.
-   Short of room, the app's name is cut first, then what the trace found goes (.dt-map-chips), then the path itself:
-   the answer's status after them is never cut. */
+   Short of room, the served trace's name gives way first, then the path, then the app's name, then the kind
+   (.dt-map-lead): the answer's status after them is never cut. */
 .dt-map-text.dt-map-hop-path {
-  flex: 0 1 auto;
+  flex: 0 10000 auto;
   max-width: 50%;
 }
 .dt-map-hop + .sr-only + .dt-app-chip {
@@ -3195,7 +3213,8 @@ div.dt-map-row[data-kind="code"] {
   flex-shrink: 100000;
   color: var(--dt-text-2);
 }
-.dt-map-text.dt-map-hop-name:empty {
+.dt-map-text.dt-map-hop-name:empty,
+.dt-map-lead > .dt-map-text.dt-map-hop-name {
   min-width: 0;
 }
 .dt-map-time[data-slow="warn"] {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { type ChainWaiting, untracedIn, waitingIn } from "../lib/chainRows";
+import { type ChainWaiting, unlinkedCalls, untracedIn, waitingIn } from "../lib/chainRows";
 import { type Member, membersOf, type ScopedLog, type SpanScope, scopedLogs } from "../lib/scope";
 import type { Chain, ChainTrace, Related, ScopeIssue, Trace } from "../types";
 
@@ -45,8 +45,10 @@ function useTraceChain(
   // When the chain was last asked for again while calls of it wait (ms); 0 before.
   const [asked, setAsked] = useState(0);
   const calls = callsOf(related);
-  // Calls of its own whose traces its links don't bring yet: the chain is asked for at once, it may have them.
-  const unlinked = useMemo(() => waitingIn([{ id: trace.id, parent: null, via: null, trace }]).length, [trace]);
+  // Calls of its own whose traces its links don't bring (yet, or not at all: a trace stored before this one, which its
+  // links didn't name when they loaded): the chain is asked for at once, it may have them. Never said "not traced"
+  // before it answered.
+  const unlinked = useMemo(() => unlinkedCalls(trace, related), [trace, related]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: its links reloaded or the trace grew, the chain may have too.
   useEffect(() => {
     if (!load || calls + asked + unlinked === 0) return;
@@ -69,9 +71,13 @@ function useTraceChain(
   const members = useMemo(() => membersOf(trace, related, chain?.traces), [trace, related, chain]);
   // Read again at each ask, at its time: a call stops being waited for in time, with no new answer.
   const capped = chain?.capped ?? false;
-  const waiting = useMemo(() => waitingIn(members, capped, asked || Date.now()), [members, capped, asked]);
-  // Said only once the chain is all there is to know: loaded, or none to load (no call any trace answered).
+  // Said only once the chain is all there is to know: loaded, or none to load (no call any trace answered). Before,
+  // a call's trace may be one the agent has (the panel's list shows it): neither on its way nor untraced.
   const settled = chain !== undefined || !load || calls + unlinked === 0;
+  const waiting = useMemo(
+    () => (settled ? waitingIn(members, capped, asked || Date.now()) : NO_WAITING),
+    [settled, members, capped, asked],
+  );
   const untraced = useMemo(
     () => (settled ? untracedIn(members, capped, asked || Date.now()) : NO_UNTRACED),
     [settled, members, capped, asked],
@@ -105,6 +111,7 @@ export interface TraceScope {
 
 const NO_ISSUES: readonly ScopeIssue[] = [];
 const NO_UNTRACED: ReadonlyMap<string, string> = new Map();
+const NO_WAITING: readonly ChainWaiting[] = [];
 
 /** What is under the trace of one app: its traces down the chain, whole (the panel's list opens a trace so). */
 function underApp(members: readonly Member[], app: string): SpanScope | null {

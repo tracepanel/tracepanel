@@ -14,14 +14,10 @@ interface Asked {
   json: Map<string, string>;
 }
 
-/**
- * The links loaded for the traces a tree opened, by trace id: those of the tree's trace (`root`); and the traces
- * opened whose links are still on their way (`loading`: asked, no answer yet).
- */
+/** The links loaded for the traces a tree opened, by trace id: those of the tree's trace (`root`). */
 interface Loaded {
   root: string;
   related: ReadonlyMap<string, Related>;
-  loading: ReadonlySet<string>;
 }
 
 /** While the tree's links miss traces its chain has, they are asked for again this often, this many times at most. */
@@ -43,18 +39,18 @@ export interface CatchUp {
 /**
  * The links of the call traces a call tree opens, loaded one trace at a time as their rows open (`want`), with the
  * tree's own (`related`): when those reload (a trace's tasks and calls arrive later), the opened ones reload with
- * them. While the chain has traces those links don't name yet (`behind`: the agent stored them after the links
- * loaded), the links missing them are asked for again, so the tree fills as soon as the chain does; the chain's traces
- * under an opened trace whose links haven't come yet are not in the tree either, and count in `behind` too.
+ * them. While the chain has traces those links don't name yet (the agent stored them after the links loaded), the
+ * links missing them are asked for again, so the tree fills as soon as the chain does. Those traces have arrived
+ * (the panel's list shows them): the tree is loading them, not waiting for them.
  */
 export function useChain(
   root: string,
   load: ((traceId: string) => Promise<Related>) | undefined,
   related: Related | undefined,
   { expected, reloadRoot }: CatchUp = {},
-): { loaded: ReadonlyMap<string, Related>; want: (traceId: string) => void; behind: number } {
+): { loaded: ReadonlyMap<string, Related>; want: (traceId: string) => void } {
   const reloadWith = related;
-  const [loaded, setLoaded] = useState<Loaded>({ root, related: new Map(), loading: new Set() });
+  const [loaded, setLoaded] = useState<Loaded>({ root, related: new Map() });
   // Each trace asked for, with the tree's own links it was asked with: those reloading ask again, once.
   const asked = useRef<Asked>({ root, ids: new Map(), json: new Map() });
   if (asked.current.root !== root) asked.current = { root, ids: new Map(), json: new Map() };
@@ -71,22 +67,13 @@ export function useChain(
           // Another trace is on screen by now, or nothing changed: the tree stays as it is.
           if (asked.current !== at || at.json.get(traceId) === json) return;
           at.json.set(traceId, json);
-          setLoaded((current) => {
-            const same = current.root === at.root;
-            return {
-              root: at.root,
-              related: new Map(same ? current.related : []).set(traceId, related),
-              loading: without(same ? current.loading : EMPTY_IDS, traceId),
-            };
-          });
+          setLoaded((current) => ({
+            root: at.root,
+            related: new Map(current.root === at.root ? current.related : []).set(traceId, related),
+          }));
         },
         // No links to wait for: the tree shows the trace's calls as they are.
-        () => {
-          if (asked.current !== at) return;
-          setLoaded((current) =>
-            current.root === at.root ? { ...current, loading: without(current.loading, traceId) } : current,
-          );
-        },
+        () => undefined,
       );
     },
     [load],
@@ -97,12 +84,6 @@ export function useChain(
       const { ids } = asked.current;
       if (ids.has(traceId) || ids.size >= CHAIN_TRACES_MAX) return;
       ids.set(traceId, current.current);
-      const { root: at } = asked.current;
-      setLoaded((loaded) =>
-        loaded.root === at
-          ? { ...loaded, loading: new Set(loaded.loading).add(traceId) }
-          : { root: at, related: new Map(), loading: new Set([traceId]) },
-      );
       fetchOne(traceId);
     },
     [fetchOne],
@@ -120,26 +101,12 @@ export function useChain(
 
   const ours = loaded.root === root;
   const shown = ours ? loaded.related : EMPTY;
-  const loading = ours ? loaded.loading : EMPTY_IDS;
   const behind = useMemo(
     () => linksBehind(expected ?? [], (traceId) => (traceId === root ? related : shown.get(traceId))),
     [expected, root, related, shown],
   );
-  // The chain's traces under an opened trace whose links are still on their way: not in the tree yet either.
-  const coming = useMemo(
-    () => (expected ?? []).filter((each) => each.parent !== null && loading.has(each.parent)).length,
-    [expected, loading],
-  );
   useCatchUp(root, behind, reloadRoot, fetchOne);
-  return { loaded: shown, want, behind: behind.length + coming };
-}
-
-/** The ids but one (the same set when it isn't among them). */
-function without(ids: ReadonlySet<string>, traceId: string): ReadonlySet<string> {
-  if (!ids.has(traceId)) return ids;
-  const left = new Set(ids);
-  left.delete(traceId);
-  return left;
+  return { loaded: shown, want };
 }
 
 /**
@@ -171,4 +138,3 @@ function useCatchUp(
 }
 
 const EMPTY: ReadonlyMap<string, Related> = new Map();
-const EMPTY_IDS: ReadonlySet<string> = new Set();
