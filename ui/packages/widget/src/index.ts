@@ -15,6 +15,7 @@ import {
   runtimeName,
   traceRuntime,
 } from "@tracepanel/ui/lib/runtime";
+import type { EntrySummary, HtmxInfo, TabEntry } from "@tracepanel/ui/lib/tabEntry";
 import { CARD_STYLE, mountCard, nameWithMethod } from "./card";
 import { type ChainFacts, factsKey, followChain } from "./viewChain";
 
@@ -180,15 +181,6 @@ function announcedPages(): PageAnnouncement[] {
 function pageOf(carrier: object): string | undefined {
   const page = (carrier as Record<symbol, unknown>)[PAGE];
   return typeof page === "string" ? page : undefined;
-}
-
-export interface HtmxInfo {
-  /** The element that sent it, as people see it: its label, its text, its id. */
-  trigger?: string | undefined;
-  /** Where htmx swaps the answer: "#rows-todo". */
-  target?: string | undefined;
-  /** A boosted link or form: a page load done by htmx. */
-  boosted?: boolean | undefined;
 }
 
 export interface WidgetOptions {
@@ -1076,53 +1068,6 @@ function addName(parent: HTMLElement, info: TraceInfo, pulse: boolean): void {
   name.title = title(info);
   if (pulse) name.dataset["pulse"] = "";
   segment(parent).append(name);
-}
-
-/** What the widget already knows from response headers: lets the panel show a request before it is stored. */
-export interface EntrySummary {
-  name: string;
-  status: number | null;
-  /** Unix epoch microseconds. */
-  start: number;
-  /** Microseconds. */
-  duration: number;
-  queries: number;
-  issues: number;
-  /** Which findings (n+1, duplicates…), once the agent has them: the panel's row names them before its trace loads. */
-  kinds?: string[] | undefined;
-  htmx?: HtmxInfo | undefined;
-  /** A view or an action recorded in the browser, not a request: its requests are listed under it. */
-  kind?: "page" | undefined;
-  failed?: boolean | undefined;
-  /** In flight (lib/live): a request the page still waits for, a view still open. Its time ticks from `start`. */
-  open?: boolean | undefined;
-  /** An open view whose calls have all answered: its time stops here (epoch µs, the last answer) until it ends. */
-  until?: number | undefined;
-  /** A view the SPA was sent to at once from another route ("/sms-campaigns"), which left the list for it. */
-  redirectedFrom?: string | undefined;
-  /**
-   * A call of a view or an action that answered without Tracepanel's headers (a gateway's, a service's over OTLP): no
-   * trace of its own to list; the view's trace has it, and its row stands until that trace does.
-   */
-  untraced?: boolean | undefined;
-  /** The id it had while in flight ("~…"): the panel keeps its row's identity from in flight to stored. */
-  key?: string | undefined;
-  /** The host a request went to ("api.example.com:8443"): the panel groups a view's calls by it. */
-  host?: string | undefined;
-  /**
-   * A request that flew: when the page made it and when its answer came (epoch µs), as the browser timed it. Its row's
-   * time is the time the page waited for it (never less than its server's), in flight, answered and stored alike.
-   */
-  clock?: { start: number; end: number } | undefined;
-  /** The W3C span id the call carried on, when known: the call's identity in its view's trace. */
-  span?: string | undefined;
-}
-
-/** A traced request made in this browser tab: a page load (parent null) or a fetch/XHR of that page. */
-export interface TabEntry {
-  id: string;
-  parent: string | null;
-  summary?: EntrySummary | undefined;
 }
 
 /**

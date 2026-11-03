@@ -1,52 +1,8 @@
 import { type Capabilities, type DataSource, NO_CAPABILITIES, type Otlp } from "@tracepanel/ui";
+import type { EntrySummary, TabEntry } from "@tracepanel/ui/lib/tabEntry";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-export interface EntrySummary {
-  name: string;
-  status: number | null;
-  start: number;
-  duration: number;
-  queries: number;
-  issues: number;
-  /** Which findings, once the widget has asked the agent: the row names them before its trace loads. */
-  kinds?: string[] | undefined;
-  /** Sent by htmx: the element that sent it, where the answer went, whether it loaded a page. */
-  htmx?: { trigger?: string | undefined; target?: string | undefined; boosted?: boolean | undefined } | undefined;
-  /** A view or an action recorded in the browser (tracepanel-js), not a request: its requests come under it. */
-  kind?: "page" | undefined;
-  failed?: boolean | undefined;
-  /**
-   * In flight (lib/live): a request the page still waits for (its id the widget's own, "~" and a number, until its
-   * answer names its trace), or a view still open. Its time ticks from `start`.
-   */
-  open?: boolean | undefined;
-  /** An open view whose calls have all answered: its time stops here (epoch µs, the last answer) until it ends. */
-  until?: number | undefined;
-  /** A view the SPA was sent to at once from another route ("/sms-campaigns"), which left the list for it. */
-  redirectedFrom?: string | undefined;
-  /**
-   * A call of a view or an action that answered without Tracepanel's headers (through a gateway): no trace of its own
-   * (its id stays the widget's); the view's trace has it, and its row stands until that trace does.
-   */
-  untraced?: boolean | undefined;
-  /** The id it had while in flight ("~…"): its row keeps that identity from in flight to stored. */
-  key?: string | undefined;
-  /** The host a request went to ("api.example.com:8443"): a view's calls are grouped by it. */
-  host?: string | undefined;
-  /**
-   * A request that flew: when the page made it and when its answer came (epoch µs), as the browser timed it. Its row
-   * says the time the page waited for it (never less than its server's), in flight, answered and stored alike.
-   */
-  clock?: { start: number; end: number } | undefined;
-  /** The W3C span id the call carried on, when the widget saw it: the call's identity in its view's trace. */
-  span?: string | undefined;
-}
-
-export interface TabEntry {
-  id: string;
-  parent: string | null;
-  summary?: EntrySummary | undefined;
-}
+export type { EntrySummary, TabEntry };
 
 function isSummary(value: unknown): value is EntrySummary {
   return (
