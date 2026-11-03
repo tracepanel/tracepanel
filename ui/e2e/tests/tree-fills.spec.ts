@@ -93,3 +93,68 @@ test("a call's trace stored a moment later shows in the call tree at once, the n
   const seen = await page.evaluate(() => (window as unknown as { seen: { note: boolean; served: boolean }[] }).seen);
   expect(seen.filter((each) => !(each.note || each.served))).toEqual([]);
 });
+
+test("the note stays over the tree while an opened call trace's links are on their way, until the deepest trace shows", async ({
+  page,
+}) => {
+  const { repeatEachIndex, retry } = test.info();
+  const run = repeatEachIndex * 10 + retry;
+  const request = `01M4F1116${String(run * 10 + 1).padStart(17, "0")}`;
+  const bff = `01M4F1116${String(run * 10 + 2).padStart(17, "0")}`;
+  const books = `01M4F1116${String(run * 10 + 3).padStart(17, "0")}`;
+  const w3c = `f1116${String(run).padStart(27, "0")}`;
+  const toBff = `f1116a${String(run).padStart(10, "0")}`;
+  const toBooks = `f1116b${String(run).padStart(10, "0")}`;
+  const start = Date.now() * ms - 600 * ms;
+  const callTo = (id: string, port: number, w3cSpan: string, at: number): Doc => ({
+    ...span(id, "rr", "http.client", `POST 127.0.0.1:${port}/graphql`, at, 250 * ms),
+    attrs: {
+      "http.request.method": "POST",
+      "url.full": `http://127.0.0.1:${port}/graphql`,
+      "http.response.status_code": 200,
+      "w3c.span_id": w3cSpan,
+    },
+  });
+  // The whole chain is stored at once: only the middle trace's links are slow to load.
+  await send([
+    trace(request, "router", w3c, start, {}, [callTo("c1", 4071, toBff, start + 50 * ms)]),
+    trace(bff, "bff", w3c, start + 60 * ms, { "w3c.parent_span_id": toBff }, [
+      callTo("c2", 4072, toBooks, start + 80 * ms),
+    ]),
+    trace(books, "books", w3c, start + 90 * ms, { "w3c.parent_span_id": toBooks }, []),
+  ]);
+  await pollExpect.poll(async () => (await fetch(`${CONSOLE}api/traces/${books}`)).status).toBe(200);
+  await page.route(`**/api/traces/${bff}/related`, async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+    await route.continue();
+  });
+
+  await page.goto(`/#/t/${request}?tab=tree`);
+  const note = page.locator(".dt-on-its-way");
+  const bffRow = page.locator(".dt-map-row").filter({ hasText: "bff" });
+  const booksRow = page.locator(".dt-map-row").filter({ hasText: "books" });
+
+  await expect(bffRow.first()).toBeVisible();
+  await expect(note).toBeVisible();
+  await expect(booksRow).toHaveCount(0);
+
+  // What the page shows every 50 ms from here: the note, and whether the tree has the deepest trace.
+  await page.evaluate(() => {
+    const seen: { note: boolean; served: boolean }[] = [];
+    (window as unknown as { seen: typeof seen }).seen = seen;
+    window.setInterval(() => {
+      const rows = [...document.querySelectorAll(".dt-map-row")];
+      seen.push({
+        note: document.querySelector(".dt-on-its-way") !== null,
+        served: rows.some((row) => row.textContent?.includes("books")),
+      });
+    }, 50);
+  });
+
+  await expect(booksRow).toHaveCount(1, { timeout: 5_000 });
+  await expect(note).toHaveCount(0);
+
+  const seen = await page.evaluate(() => (window as unknown as { seen: { note: boolean; served: boolean }[] }).seen);
+  expect(seen.length).toBeGreaterThan(10);
+  expect(seen.filter((each) => !(each.note || each.served))).toEqual([]);
+});
