@@ -1662,6 +1662,12 @@ export function mount(options: WidgetOptions = {}): Widget {
     ];
   }
 
+  /** Where a call that takes off is listed (the page now), and the view open as it does, which made it. */
+  function noteWhere(flight: Flight): void {
+    listedUnder.set(flight, currentPage());
+    if (view?.open) madeIn.set(flight, view.id);
+  }
+
   /** A call that answered untraced, kept as its view's row when the browser recording made it (Answer). */
   function land(flight: Flight, answer: Answer): void {
     const parent = answer.page ?? madeIn.get(flight) ?? listedUnder.get(flight) ?? undefined;
@@ -1883,8 +1889,7 @@ export function mount(options: WidgetOptions = {}): Widget {
   watcher = {
     start: (flight) => {
       inFlight.push(flight);
-      listedUnder.set(flight, currentPage());
-      if (view?.open) madeIn.set(flight, view.id);
+      noteWhere(flight);
       keepTicking();
       // An open view's time runs again with its new call (quietSince), in the panel's list too.
       if (view?.open) sendTab();

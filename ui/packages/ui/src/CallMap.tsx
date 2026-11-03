@@ -83,7 +83,7 @@ import { SqlCode } from "./SqlCode";
 import { TemplateContext, withoutContext } from "./TemplateContext";
 import { RangeBand, useHeldSlice, useRangeDrag } from "./TimeSlice";
 import type { Attrs, IssueKind, Log, Related, Span, Trace, TraceError, TraceSummary } from "./types";
-import { GroupNotTraced, NotTraced, NotTracedNote } from "./Untraced";
+import { GroupNotTraced, NotTraced, NotTracedNote, useUntraced } from "./Untraced";
 
 /* ---------- tree ---------- */
 
@@ -1348,7 +1348,7 @@ function OwnRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps<
     <div>
       <button type="button" {...spanButton(ctx, node, mark, fold)} data-root={span.parent_id === null ? "" : undefined}>
         <span className="dt-map-name" style={indent}>
-          <CallLead call={answers(span)}>
+          <CallLead call={answers(span)} span={span}>
             <SpanFold ctx={ctx} node={node} parent={parent} fold={fold} />
             <SpanName span={span} />
           </CallLead>
@@ -1476,7 +1476,7 @@ function HopRow({ node, served, place }: { node: SpanNode; served: ServedRun; pl
     <div>
       <button type="button" {...spanButton(ctx, node, mark, fold)} data-hop="">
         <span className="dt-map-name" style={indent}>
-          <CallLead>
+          <CallLead span={span}>
             <SpanFold ctx={ctx} node={node} parent={parent} fold={fold} />
             <OpText text={text} kind={span.kind} className="dt-map-hop-path" />
             <span className="dt-map-hop" aria-hidden="true">
@@ -1528,8 +1528,19 @@ function HopIssue({ span, served, ctx }: { span: Span; served: ServedRun; ctx: R
  * cut at its end, so the answer after it stays whole however narrow the tree and deep the row. A row with no answer
  * to keep (`call` false: a query, a function) is as it was, its text cut first.
  */
-function CallLead({ call = true, children }: { call?: boolean; children: ReactNode }) {
-  return call ? <span className="dt-map-lead">{children}</span> : children;
+function CallLead({ call = true, span, children }: { call?: boolean; span: Span; children: ReactNode }) {
+  // Said "not traced" after its status: what is before both gives way to all that is left.
+  const untraced = useUntraced(span.id) !== undefined;
+  if (!call) return children;
+  return (
+    <span
+      className="dt-map-lead"
+      data-http={span.kind === "http.client" ? "" : undefined}
+      data-untraced={untraced ? "" : undefined}
+    >
+      {children}
+    </span>
+  );
 }
 
 /** A row's look by how it went: a call by what it was answered (5xx or none red, 4xx amber), else its span's status. */

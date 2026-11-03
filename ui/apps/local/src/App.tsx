@@ -997,12 +997,25 @@ function cutsOf(chains: ReadonlyMap<string, Chain>): ReadonlyMap<string, number>
   return cuts;
 }
 
+/** What some of a view's calls' traces did, as its chain counts it; null while one of them isn't its chain's yet. */
+function chainCounter(chain: Chain, view: string, listed: ReadonlySet<string>): Counter {
+  const known = new Set(chain.traces.map((each) => each.id));
+  return (ids) => (ids.every((each) => known.has(each)) ? callsCounted(chain, view, listed, ids) : null);
+}
+
 // The rows' chains, kept for the browser tab's session: the panel loads again with each page, and a row that had its
 // numbers says them at once, not "…" until its chain comes again (slowly, on a slow network).
 const CHAINS_KEY = "tracepanel:chains";
 /** The most chains kept, the newest, and the most room they take (characters): the rest load again. */
 const CHAINS_KEPT = 24;
 const CHAINS_ROOM = 1_500_000;
+
+/** The rows' chains, starting with those the panel had before the page reloaded it, kept as they change. */
+function useKeptChains() {
+  const [chains, setChains] = useState<ReadonlyMap<string, Chain>>(readChains);
+  useEffect(() => saveChains(chains), [chains]);
+  return [chains, setChains] as const;
+}
 
 function readChains(): ReadonlyMap<string, Chain> {
   try {
@@ -1039,9 +1052,7 @@ function saveChains(chains: ReadonlyMap<string, Chain>): void {
  * Its calls whose traces are on their way are rows too, until they arrive or stop being waited for (lib/chainRows).
  */
 function useRowChains(rows: readonly TraceRow[], stored: ReadonlySet<string>): RowChains {
-  // The chains the panel had before the page reloaded it: its rows keep their numbers while they load again.
-  const [chains, setChains] = useState<ReadonlyMap<string, Chain>>(readChains);
-  useEffect(() => saveChains(chains), [chains]);
+  const [chains, setChains] = useKeptChains();
   const [loading, setLoading] = useState<ReadonlySet<string>>(() => new Set());
   const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set());
   const has = useRef(chains);
@@ -1141,9 +1152,7 @@ function useRowChains(rows: readonly TraceRow[], stored: ReadonlySet<string>): R
       // A view's or an action's calls are its rows, one each, as they were in flight (chainCalls).
       if (views.has(id)) {
         calls.set(id, chainCalls(chain, id, rowsIn));
-        const known = new Set(chain.traces.map((each) => each.id));
-        // Null while one of them isn't the chain's yet: their own numbers then.
-        counters.set(id, (ids) => (ids.every((each) => known.has(each)) ? callsCounted(chain, id, rowsIn, ids) : null));
+        counters.set(id, chainCounter(chain, id, rowsIn));
         continue;
       }
       const under = chainApps(chain, id, rowsIn);

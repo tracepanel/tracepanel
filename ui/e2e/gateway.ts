@@ -28,7 +28,7 @@ function call(id: string, parent: string, url: string, method: string, start: nu
 }
 
 /** A finding of a trace, on its span `span`. */
-function issue(kind: string, fingerprint: string, title: string, span: string): Doc {
+export function issue(kind: string, fingerprint: string, title: string, span: string): Doc {
   // biome-ignore-start lint/style/useNamingConvention: the trace format.
   return { fingerprint, fingerprint_version: 1, kind, title, culprit: null, hint: null, count: 1, span_ids: [span] };
   // biome-ignore-end lint/style/useNamingConvention: the trace format.

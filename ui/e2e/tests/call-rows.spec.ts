@@ -6,6 +6,7 @@ import type { Locator, Page, Route } from "@playwright/test";
 import { CONSOLE } from "../agent.ts";
 import { panel, pill } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
+import { issue } from "../gateway.ts";
 
 type Doc = Record<string, unknown>;
 
@@ -736,7 +737,8 @@ test("the row over a view's calls to one app adds up their rows' numbers, its ch
   await viewEnded(page);
   const made = await page.evaluate(() => (window as unknown as { calls: Made[] }).calls);
   const traces = made.flatMap((call) => {
-    const start = call.start + 2 * ms;
+    // Stored as if hours ago: its finding stays out of the way of the Issues list's newest.
+    const start = call.start + 2 * ms - 3 * 3_600_000_000;
     const time = Math.max(4 * ms, call.end - call.start - 4 * ms);
     const hop = `${digits(tag, 3)}d${digits(run(), 5)}${digits(call.n, 7)}`;
     const own = trace(
@@ -755,45 +757,33 @@ test("the row over a view's calls to one app adds up their rows' numbers, its ch
       },
       [
         {
-          ...span(`b${call.n}`, `${bff(call.n)}r`, "http.client", "GET 127.0.0.1/books/1", start + ms, time - 2 * ms),
-          attrs: { "http.request.method": "GET", "url.full": "http://127.0.0.1:4100/books/1", "w3c.span_id": hop },
+          ...span(`b${call.n}`, `${bff(call.n)}r`, "http.client", "GET 127.0.0.1/shelves/1", start + ms, time - 2 * ms),
+          attrs: { "http.request.method": "GET", "url.full": "http://127.0.0.1:4100/shelves/1", "w3c.span_id": hop },
         },
       ],
     );
-    // biome-ignore-start lint/style/useNamingConvention: the trace format.
-    own["issues"] = [
-      {
-        fingerprint: "bff-n1",
-        fingerprint_version: 1,
-        kind: "n+1",
-        title: "N+1",
-        culprit: null,
-        hint: null,
-        count: 1,
-        span_ids: [`b${call.n}`],
-      },
-    ];
-    // biome-ignore-end lint/style/useNamingConvention: the trace format.
+    // The same finding in each: the view's chain says it once.
+    const found = { ...own, issues: [issue("n+1", "bff-n1", "N+1", `b${call.n}`)] };
     const queries = [0, 1].map((q) =>
       span(`q${q}`, `${id(tag, 40 + call.n)}r`, "sql", "SELECT books", start + 2 * ms, ms),
     );
     const api = trace(
       id(tag, 40 + call.n),
       "http",
-      "GET /books/1",
+      "GET /shelves/1",
       start + 2 * ms,
       time - 4 * ms,
       {
         "service.name": "library-api",
         "http.method": "GET",
-        "http.route": "/books/1",
+        "http.route": "/shelves/1",
         "http.status_code": 200,
         "w3c.trace_id": traceOf(tag),
         "w3c.parent_span_id": hop,
       },
       queries,
     );
-    return [own, api];
+    return [found, api];
   });
   await ingest(traces);
   await storeView(page, tag, { origin: "http://bff.test:4000/" });
@@ -870,8 +860,8 @@ test("after a reload the rows that had their numbers keep them while their chain
     },
     [
       {
-        ...span("b0", `${bff}r`, "http.client", "GET 127.0.0.1/books", start + ms, time - 2 * ms),
-        attrs: { "http.request.method": "GET", "url.full": "http://127.0.0.1:4100/books", "w3c.span_id": hop },
+        ...span("b0", `${bff}r`, "http.client", "GET 127.0.0.1/shelf", start + ms, time - 2 * ms),
+        attrs: { "http.request.method": "GET", "url.full": "http://127.0.0.1:4100/shelf", "w3c.span_id": hop },
       },
     ],
   );
@@ -879,13 +869,13 @@ test("after a reload the rows that had their numbers keep them while their chain
   const api = trace(
     id(tag, 40),
     "http",
-    "GET /books",
+    "GET /shelf",
     start + 2 * ms,
     time - 4 * ms,
     {
       "service.name": "library-api",
       "http.method": "GET",
-      "http.route": "/books",
+      "http.route": "/shelf",
       "http.status_code": 200,
       "w3c.trace_id": traceOf(tag),
       "w3c.parent_span_id": hop,

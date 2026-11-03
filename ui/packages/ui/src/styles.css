@@ -2296,7 +2296,7 @@ details[data-focused] > .dt-sql-group {
 /* As narrow as the panel docked right, an HTTP call's kind goes: its method says it (GET in its colour), and its
    path and answer have the room. */
 @container map-rows (max-width: 26rem) {
-  .dt-map-row[data-kind="http.client"] .dt-map-lead > .dt-map-kind {
+  .dt-map-lead[data-http] > .dt-map-kind {
     display: none;
   }
 }
@@ -2385,10 +2385,10 @@ details[data-focused] > .dt-sql-group {
 }
 /* A call no trace answered says so after its status ("200 not traced"): both stay whole, what is before them gives
    way to all that is left, cut with an ellipsis. */
-.dt-map-name:has(> .dt-not-traced) > .dt-map-lead {
+.dt-map-lead[data-untraced] {
   min-width: 0;
 }
-.dt-map-name:has(> .dt-not-traced) > .dt-map-lead > .dt-map-text {
+.dt-map-lead[data-untraced] > .dt-map-text {
   min-width: 1.5rem;
 }
 /* Its kind keeps its word until its text and app are at their least, then is cut to a few letters ("HTTP.C…"). */

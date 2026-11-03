@@ -7,7 +7,7 @@ import { createContext, useContext } from "react";
 export const UntracedCalls = createContext<ReadonlyMap<string, string>>(new Map());
 
 /** The host a call went to when no trace answered it and none will; undefined for any other call. */
-function useUntraced(spanId: string): string | undefined {
+export function useUntraced(spanId: string): string | undefined {
   return useContext(UntracedCalls).get(spanId);
 }
 

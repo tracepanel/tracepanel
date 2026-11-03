@@ -336,16 +336,30 @@ function mostLine(label: string, category: string, value: number, total: number)
   return line;
 }
 
-/** One of the page's other requests in the card: a traced one, or a call no trace answered. */
-type Other = { info: TraceInfo; call?: UntracedCall | undefined };
+/**
+ * One of the page's other requests in the card: a traced one, or a call no trace answered (`call`), with what ranks
+ * it: failed, its findings.
+ */
+type Other = { info: TraceInfo; call?: UntracedCall | undefined; failed: boolean; issues: number };
 
 /** Worst first: failed, then with issues, then slowest. */
-function worstFirst(others: readonly Other[], counted: (info: TraceInfo) => Counted): Other[] {
-  const rank = ({ info, call }: Other) => {
-    if (call) return call.failed || failed(info) ? 2 : 0;
-    return failed(info) ? 2 : counted(info).issues ? 1 : 0;
-  };
+function worstFirst(others: readonly Other[]): Other[] {
+  const rank = (other: Other) => (other.failed ? 2 : other.issues ? 1 : 0);
   return [...others].sort((a, b) => rank(b) - rank(a) || (b.info.totalMs ?? 0) - (a.info.totalMs ?? 0));
+}
+
+/** Where a call no trace answered has its status: "failed" in red for one that got no answer. */
+function callStatus(call: UntracedCall): HTMLElement {
+  if (!call.failed) return statusChip(call.info.status) ?? element("span");
+  const chip = element("span", "status", "failed");
+  chip.dataset["tone"] = "server";
+  return chip;
+}
+
+/** A call no trace answered, in its tooltip: what it is, and that a click opens the call tree that has it. */
+function callTitle(call: UntracedCall, name: string): string {
+  const what = call.failed ? "failed, no answer came" : "not traced, its server sent no trace for this call";
+  return `${name}: ${what}\nClick to open the call tree that has it`;
 }
 
 /**
@@ -506,12 +520,14 @@ export function mountCard(
   function otherRequests(later: readonly TraceInfo[], flying: readonly Flight[]): HTMLElement | null {
     const page = source.page();
     const others: Other[] = [
-      ...later.map((info) => ({ info })),
-      ...source.untraced().map((call) => ({ info: call.info, call })),
+      ...later.map((info) => ({ info, failed: failed(info), issues: source.counted(info).issues })),
+      ...source
+        .untraced()
+        .map((call) => ({ info: call.info, call, failed: call.failed || failed(call.info), issues: 0 })),
     ];
     const count = others.length + flying.length;
     if (count === 0) return null;
-    const sorted = worstFirst(others, source.counted);
+    const sorted = worstFirst(others);
     const section = element("section", "card-section");
     section.append(element("p", "card-caption", `Other requests on this page · ${count}`));
     const flights = [...flying].reverse().slice(0, OTHERS);
@@ -579,12 +595,8 @@ export function mountCard(
     const { method, path } = requestName(call.info);
     const name = element("span", "card-path", `${method} ${path}`);
     if (!call.failed) name.append(element("span", "card-not-traced", "not traced"));
-    const status = call.failed ? element("span", "status", "failed") : statusChip(call.info.status);
-    if (call.failed && status) status.dataset["tone"] = "server";
-    row.append(status ?? element("span"), name, timeCell(call.info));
-    row.title = call.failed
-      ? `${method} ${path}: failed, no answer came\nClick to open the call tree that has it`
-      : `${method} ${path}: not traced, its server sent no trace for this call\nClick to open the call tree that has it`;
+    row.append(callStatus(call), name, timeCell(call.info));
+    row.title = callTitle(call, `${method} ${path}`);
     row.addEventListener("click", () => {
       hide(true);
       source.open(`#/t/${call.parent}`);
