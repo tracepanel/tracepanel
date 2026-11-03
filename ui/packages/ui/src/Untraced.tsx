@@ -11,9 +11,16 @@ function useUntraced(spanId: string): string | undefined {
   return useContext(UntracedCalls).get(spanId);
 }
 
+/**
+ * Why: whatever answered there records no traces, a service without Tracepanel or a file a traced app serves as it is
+ * (its SDK traces the app's routes, not its static files): "sends no traces" would be untrue of the latter.
+ */
+const UNTRACED_WHY =
+  "The call carried the trace on, but what answered it records none (a service without Tracepanel, or a static file its app serves), so what ran there isn't recorded.";
+
 /** What a call no trace answered says, in its tooltip and its details. */
 export function untracedNote(host: string): string {
-  return `Not traced: ${host} sends no traces to Tracepanel. The call carried the trace on, but no trace answered it, so what ran there isn't recorded.`;
+  return `Not traced: ${host} sent no trace for this call. ${UNTRACED_WHY}`;
 }
 
 /** On the row of a call no trace answered: muted, its reason in the tooltip. */
@@ -41,8 +48,7 @@ export function NotTracedNote({ spanId }: { spanId: string }) {
   if (host === undefined) return null;
   return (
     <p className="dt-not-traced-note" data-state="untraced">
-      Not traced: {host} sends no traces to Tracepanel. The call carried the trace on, but no trace answered it, so what
-      ran there isn't recorded.
+      Not traced: {host} sent no trace for this call. {UNTRACED_WHY}
     </p>
   );
 }

@@ -15,7 +15,7 @@ const ROUTER = "01M4NTRACE0000000000000001";
 const SUBGRAPH = "01M4NTRACE0000000000000002";
 const JUST_NOW = "01M4NTRACE0000000000000003";
 const W3C = "756e747261636564000000000000ab01";
-const NOTE = "Not traced: reviews.example.test sends no traces to Tracepanel.";
+const NOTE = "Not traced: reviews.example.test sent no trace for this call.";
 
 function span(id: string, parent: string | null, kind: string, name: string, start: number, duration: number): Doc {
   // biome-ignore lint/style/useNamingConvention: the trace format.

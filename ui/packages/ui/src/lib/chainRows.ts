@@ -30,6 +30,8 @@ export interface ChainTraceRow {
   host?: string | null | undefined;
   /** When that call ended, on the chain's clock (µs; a view's calls, chainCalls). */
   ended?: number | undefined;
+  /** The W3C span id that call carried on (a view's calls, chainCalls): the call's identity, as the browser sent it. */
+  w3c?: string | undefined;
 }
 
 /** Consecutive traces of one route (three or more): one row (×N, their time on the clock), each of them under it. */
@@ -71,8 +73,10 @@ export interface ChainWaiting {
    * for a call that ended.
    */
   cut: number | null;
-  /** No trace answered it and none will (untracedIn): the host it went to. Only among a view's calls (chainCalls). */
+  /** No trace answered it and none will (untracedIn): the host it went to. */
   untraced?: string | undefined;
+  /** The W3C span id the call carried on: its identity, as the browser sent it. */
+  w3c?: string | undefined;
 }
 
 export type ChainItem = ChainTraceRow | ChainRun | ChainWaiting;
@@ -218,6 +222,12 @@ function carries(span: Span): boolean {
   return CALL_KINDS.has(span.kind) && text(span.attrs, "w3c.span_id") !== null && !("messaging.system" in span.attrs);
 }
 
+/** Whether an answer came to a call: a status, not a failure before one (a network error, an abort, status 0). */
+function gotAnswer(span: Span): boolean {
+  const status = statusOf(span);
+  return status !== null && status > 0 && !("error.type" in span.attrs);
+}
+
 /** The status of a call's answer, as its span says it. */
 function statusOf(span: Span): number | null {
   const status = span.attrs["http.response.status_code"] ?? span.attrs["http.status_code"];
@@ -246,6 +256,7 @@ function waitingOf(span: Span, key: string): ChainWaiting {
     start: span.start,
     end: span.start + span.duration,
     cut: isCut(span) ? span.duration : null,
+    w3c: text(span.attrs, "w3c.span_id") ?? undefined,
   };
 }
 
@@ -317,8 +328,8 @@ function names(links: Related, traceId: string): boolean {
 /**
  * The calls of the chain no trace answered and none will: they carried the trace on, they ended (not cut short) and
  * were waited for as long as a call is, and no call of the chain to the same host was answered (an app that records
- * traces there would say what this one did). By span id, the host each went to: "not traced: <host> sends no traces
- * to Tracepanel". None when a limit left traces out of the chain: their calls' traces may be among those.
+ * traces there would say what this one did). By span id, the host each went to: "not traced: <host> sent no trace for
+ * this call". None when a limit left traces out of the chain: their calls' traces may be among those.
  */
 export function untracedIn(
   traces: readonly Placed[],
@@ -380,6 +391,8 @@ function inOrder<T extends ChainItem | ChainEntry>(rows: readonly T[], waiting: 
 interface Context {
   children: ReadonlyMap<string, Served[]>;
   waiting: ReadonlyMap<string, Pending[]>;
+  /** The calls no trace answered and none will (untracedIn), by span id: the host each went to. */
+  untraced: ReadonlyMap<string, string>;
   /** Each trace of the chain by its id. */
   traces: ReadonlyMap<string, Served>;
   /** What some traces and everything under them did, as the tabs count it. */
@@ -410,6 +423,15 @@ function appsUnder(parents: ReadonlySet<string>, context: Context, path: string)
     waiting
       .filter((each) => (each.host === null ? undefined : hosts.get(each.host)) === app)
       .map((each) => ({ ...each.row, key: `${path}/${each.row.key}` }));
+  // A call no trace answered once it was waited for: the same row, now "not traced" (never gone), where it was.
+  const lost = [...parents].flatMap((id) =>
+    (context.traces.get(id)?.trace.spans ?? []).flatMap((span) => {
+      const host = context.untraced.get(span.id);
+      if (host === undefined) return [];
+      const row = waitingOf(span, id);
+      return [{ ...row, key: `${path}/${row.key}`, untraced: host }];
+    }),
+  );
   const apps = [...byApp].map(([app, traces]): ChainApp => {
     const key = `${path}/${app}`;
     const rows = traces.map(
@@ -436,7 +458,7 @@ function appsUnder(parents: ReadonlySet<string>, context: Context, path: string)
       items: inOrder(runsOf(rows, key, rows.length <= RUN_OPEN_LIMIT, counted), waitingIn(app)),
     };
   });
-  return inOrder<ChainEntry>(apps, waitingIn(undefined));
+  return inOrder<ChainEntry>(apps, [...waitingIn(undefined), ...lost]);
 }
 
 /** The rows in order, three or more of one route in a row folded into a run (keyed by its first trace). */
@@ -497,7 +519,8 @@ function contextOf(chain: Chain, root: string, listed: ReadonlySet<string>, now:
   }
   const traces = new Map(chain.traces.filter(served).map((each) => [each.id, each]));
   const waiting = waitingCalls(chain, now * 1000);
-  return { children, waiting, traces, counted: countedIn(chain, children, traces), seen: new Set([root]) };
+  const untraced = untracedIn(chain.traces, chain.capped, now);
+  return { children, waiting, untraced, traces, counted: countedIn(chain, children, traces), seen: new Set([root]) };
 }
 
 /** One call a view or an action made, as its row: the trace that answered it, or the call while it has none. */
@@ -531,6 +554,7 @@ export function chainCalls(
       span: each.via ?? undefined,
       host: call ? hostOf(call) : null,
       ended: call ? call.start + call.duration : undefined,
+      w3c: call ? (text(call.attrs, "w3c.span_id") ?? undefined) : undefined,
       id: each.id,
       trace: each.trace,
       summary: together([each.trace], context.counted([each.id])),
@@ -543,11 +567,22 @@ export function chainCalls(
     ...each.row,
     key: `${root}/call/${each.row.span}`,
   }));
-  const untraced = [...untracedIn(chain.traces, chain.capped, now)].flatMap(([id, host]) => {
+  const untraced = [...context.untraced].flatMap(([id, host]) => {
     const span = spans.get(id);
     return span ? [{ ...waitingOf(span, root), key: `${root}/call/${id}`, untraced: host }] : [];
   });
-  return [...answered, ...waiting, ...untraced].sort((a, b) => startOf(a) - startOf(b));
+  // A call that was answered by a host that answered others, its trace later than it is waited for (a gateway sends
+  // its traces in batches): still its row, waiting, never gone until its trace comes. One with no answer has none.
+  // Its calls a trace answered (those listed as rows of their own too), waited for, or not traced.
+  const placed = new Set([
+    ...chain.traces.flatMap((each) => (each.parent === root && each.via ? [each.via] : [])),
+    ...waiting.map((call) => call.span),
+    ...untraced.map((call) => call.span),
+  ]);
+  const late = (own?.spans ?? [])
+    .filter((span) => carries(span) && gotAnswer(span) && !placed.has(span.id) && !chain.capped)
+    .map((span) => ({ ...waitingOf(span, root), key: `${root}/call/${span.id}` }));
+  return [...answered, ...waiting, ...untraced, ...late].sort((a, b) => startOf(a) - startOf(b));
 }
 
 /**

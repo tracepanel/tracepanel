@@ -15,6 +15,7 @@ import {
   runtimeName,
   traceRuntime,
 } from "@tracepanel/ui/lib/runtime";
+import type { EntrySummary, HtmxInfo, TabEntry } from "@tracepanel/ui/lib/tabEntry";
 import { CARD_STYLE, mountCard, nameWithMethod } from "./card";
 import { type ChainFacts, factsKey, followChain } from "./viewChain";
 
@@ -42,6 +43,13 @@ export interface TraceInfo {
   page?: string | undefined;
   /** The widget's id of the request while it flew ("~…"): its row in the panel's list keeps it as its key. */
   flight?: string | undefined;
+  /**
+   * When the page made it and when its answer came (epoch ms), as the browser timed it: the time the page waited for
+   * it, a call the browser queued behind others included. Its time is never less (waitedMs).
+   */
+  clock?: { start: number; end: number } | undefined;
+  /** The W3C span id the call carried on (its traceparent), as the browser recording sent it: the call's identity. */
+  span?: string | undefined;
 }
 
 /** A view or an action tracepanel-js records in the browser, as it announces them (tracepanel:page). */
@@ -173,15 +181,6 @@ function announcedPages(): PageAnnouncement[] {
 function pageOf(carrier: object): string | undefined {
   const page = (carrier as Record<symbol, unknown>)[PAGE];
   return typeof page === "string" ? page : undefined;
-}
-
-export interface HtmxInfo {
-  /** The element that sent it, as people see it: its label, its text, its id. */
-  trigger?: string | undefined;
-  /** Where htmx swaps the answer: "#rows-todo". */
-  target?: string | undefined;
-  /** A boosted link or form: a page load done by htmx. */
-  boosted?: boolean | undefined;
 }
 
 export interface WidgetOptions {
@@ -503,6 +502,13 @@ export interface Flight {
   name?: string | undefined;
   /** Epoch ms. */
   start: number;
+  /** When its answer came (epoch ms): the browser's end of the call, before anything else reads the answer. */
+  end?: number | undefined;
+  /**
+   * The W3C span id its traceparent carries, when the browser recording added one before this saw the call (it
+   * wrapped fetch and XMLHttpRequest after the widget): the call's identity in the view's trace.
+   */
+  span?: string | undefined;
 }
 
 /**
@@ -550,11 +556,28 @@ function listen(): void {
     },
     end: (flight, info, answer) => {
       flying.delete(flight);
-      const landed = info && { ...namedAsItFlew(flight, info), flight: flight.id || undefined };
+      const landed = info && waited(flight, namedAsItFlew(flight, info));
       if (watcher) watcher.end(flight, landed, answer);
       else if (landed) pending.push(landed);
     },
   });
+}
+
+/**
+ * A request that flew, as the page waited for it: its time from the call to its answer, as the browser timed it (a
+ * call the browser queued behind others waited longer than its server took), never less than its server's own time.
+ * The pill, its card and the panel's list say this one time while it runs, once it answers and once it is stored.
+ */
+function waited(flight: Flight, info: TraceInfo): TraceInfo {
+  if (!flight.id) return info;
+  const clock = { start: flight.start, end: flight.end ?? Date.now() };
+  return { ...info, flight: flight.id, clock, span: flight.span, totalMs: waitedMs(clock, info.totalMs) };
+}
+
+/** The time the page waited for a request (ms): its clock's, or its server's when that says more. */
+function waitedMs(clock: TraceInfo["clock"], server: number | undefined): number | undefined {
+  if (!clock) return server;
+  return Math.max(clock.end - clock.start, server ?? 0);
 }
 
 /**
@@ -571,7 +594,7 @@ function ownCall(url: string): boolean {
 }
 
 /** A request the page just made, in flight; null for the console's own. */
-function takeOff(method: string, url: string, body: unknown): Flight | null {
+function takeOff(method: string, url: string, body: unknown, traceparent?: string | null): Flight | null {
   const absolute = new URL(url, location.href).href;
   if (ownCall(absolute)) return null;
   flights += 1;
@@ -581,7 +604,19 @@ function takeOff(method: string, url: string, body: unknown): Flight | null {
     url: absolute,
     name: graphqlName(body),
     start: Date.now(),
+    span: spanOf(traceparent),
   };
+}
+
+/** The span id a W3C traceparent names ("00-<trace>-<span>-01"); none for no header or another shape. */
+function spanOf(traceparent: string | null | undefined): string | undefined {
+  return /^[\da-f]{2}-[\da-f]{32}-([\da-f]{16})-[\da-f]{2}$/i.exec(traceparent?.trim() ?? "")?.[1]?.toLowerCase();
+}
+
+/** The traceparent a fetch carries: on its Request, or in its init's headers. */
+function traceparentOf(input: globalThis.RequestInfo | URL, init: RequestInit | undefined): string | null {
+  if (init?.headers) return new Headers(init.headers).get("traceparent");
+  return input instanceof Request ? input.headers.get("traceparent") : null;
 }
 
 /** Runs `use` once the Response can carry its mark: now when it has it, else in the next task. */
@@ -617,7 +652,7 @@ function intercept(watch: Watcher): void {
     );
     const flight = safely(() => {
       const url = input instanceof Request ? input.url : String(input);
-      const started = takeOff(method, url, init?.body);
+      const started = takeOff(method, url, init?.body, traceparentOf(input, init));
       if (started) watch.start(started);
       return started;
     }, null);
@@ -627,9 +662,11 @@ function intercept(watch: Watcher): void {
     try {
       response = await originalFetch.call(this, input, init);
     } catch (error) {
+      if (flight) flight.end = Date.now();
       land(null, {});
       throw error;
     }
+    if (flight) flight.end = Date.now();
     try {
       const info = fromResponse(method, response.url, response.status, (name) => response.headers.get(name));
       // A recording that wrapped fetch after the widget (one started by the app's code, once the widget loaded)
@@ -650,6 +687,15 @@ function intercept(watch: Watcher): void {
 
   const originalOpen = XMLHttpRequest.prototype.open;
   const originalSend = XMLHttpRequest.prototype.send;
+  const originalSetHeader = XMLHttpRequest.prototype.setRequestHeader;
+  // The traceparent each one carries (the browser recording sets it before its send reaches this one).
+  const traceparents = new WeakMap<XMLHttpRequest, string>();
+  XMLHttpRequest.prototype.setRequestHeader = function (this: XMLHttpRequest, name: string, value: string) {
+    safely(() => {
+      if (name.toLowerCase() === "traceparent") traceparents.set(this, value);
+    }, undefined);
+    return originalSetHeader.call(this, name, value);
+  };
   // In flight from its send: the request it opened, with its body.
   const opened = new WeakMap<XMLHttpRequest, { method: string; url: string }>();
   const sent = new WeakMap<XMLHttpRequest, Flight>();
@@ -663,6 +709,7 @@ function intercept(watch: Watcher): void {
     this.addEventListener("loadend", () => {
       const flight = sent.get(this) ?? NO_FLIGHT;
       sent.delete(this);
+      if (flight !== NO_FLIGHT) flight.end = Date.now();
       safely(
         () =>
           watch.end(flight, xhrInfo(this, method, String(url)), {
@@ -677,7 +724,7 @@ function intercept(watch: Watcher): void {
   XMLHttpRequest.prototype.send = function (this: XMLHttpRequest, body?: Document | XMLHttpRequestBodyInit | null) {
     safely(() => {
       const request = opened.get(this);
-      const flight = request ? takeOff(request.method, request.url, body) : null;
+      const flight = request ? takeOff(request.method, request.url, body, traceparents.get(this)) : null;
       if (flight) {
         sent.set(this, flight);
         watch.start(flight);
@@ -1023,46 +1070,6 @@ function addName(parent: HTMLElement, info: TraceInfo, pulse: boolean): void {
   segment(parent).append(name);
 }
 
-/** What the widget already knows from response headers: lets the panel show a request before it is stored. */
-export interface EntrySummary {
-  name: string;
-  status: number | null;
-  /** Unix epoch microseconds. */
-  start: number;
-  /** Microseconds. */
-  duration: number;
-  queries: number;
-  issues: number;
-  /** Which findings (n+1, duplicates…), once the agent has them: the panel's row names them before its trace loads. */
-  kinds?: string[] | undefined;
-  htmx?: HtmxInfo | undefined;
-  /** A view or an action recorded in the browser, not a request: its requests are listed under it. */
-  kind?: "page" | undefined;
-  failed?: boolean | undefined;
-  /** In flight (lib/live): a request the page still waits for, a view still open. Its time ticks from `start`. */
-  open?: boolean | undefined;
-  /** An open view whose calls have all answered: its time stops here (epoch µs, the last answer) until it ends. */
-  until?: number | undefined;
-  /** A view the SPA was sent to at once from another route ("/sms-campaigns"), which left the list for it. */
-  redirectedFrom?: string | undefined;
-  /**
-   * A call of a view or an action that answered without Tracepanel's headers (a gateway's, a service's over OTLP): no
-   * trace of its own to list; the view's trace has it, and its row stands until that trace does.
-   */
-  untraced?: boolean | undefined;
-  /** The id it had while in flight ("~…"): the panel keeps its row's identity from in flight to stored. */
-  key?: string | undefined;
-  /** The host a request went to ("api.example.com:8443"): the panel groups a view's calls by it. */
-  host?: string | undefined;
-}
-
-/** A traced request made in this browser tab: a page load (parent null) or a fetch/XHR of that page. */
-export interface TabEntry {
-  id: string;
-  parent: string | null;
-  summary?: EntrySummary | undefined;
-}
-
 /**
  * The tab's list with this view or action in it: a new row (an empty view of the same page leaves, and so does a view
  * the SPA redirected from at once, the new one saying so), or its own updated. `load`: the page's first view.
@@ -1152,22 +1159,27 @@ function flightEntry(flight: Flight, parent: string | null): TabEntry {
       issues: 0,
       open: true,
       host: hostOf(flight.url),
+      span: flight.span,
     },
   };
 }
 
 function summaryOf(info: TraceInfo): EntrySummary {
   const duration = Math.round((info.totalMs ?? 0) * 1000);
+  // A request that flew starts where the page made it (a queued one before its server saw it); else it just ended.
+  const clock = info.clock && { start: info.clock.start * 1000, end: info.clock.end * 1000 };
   return {
     name: title(info),
     status: info.status ?? null,
-    start: Date.now() * 1000 - duration,
+    start: clock?.start ?? Date.now() * 1000 - duration,
     duration,
     queries: info.queries ?? 0,
     issues: info.issues ?? 0,
     htmx: info.htmx,
     key: info.flight,
     host: hostOf(info.url),
+    clock,
+    span: info.span,
   };
 }
 
@@ -1186,6 +1198,7 @@ function hostOf(url: string | undefined): string | undefined {
  * status, its time; its numbers come with the view's trace.
  */
 function landedEntry(call: Landed): TabEntry {
+  const end = call.flight.end ?? call.end;
   return {
     id: call.flight.id,
     parent: call.parent,
@@ -1193,12 +1206,14 @@ function landedEntry(call: Landed): TabEntry {
       name: title(flightInfo(call.flight)),
       status: call.status ?? null,
       start: call.flight.start * 1000,
-      duration: Math.max(0, call.end - call.flight.start) * 1000,
+      duration: Math.max(0, end - call.flight.start) * 1000,
       queries: 0,
       issues: 0,
       failed: call.status === undefined || call.status >= 500,
       untraced: true,
       host: hostOf(call.flight.url),
+      clock: { start: call.flight.start * 1000, end: end * 1000 },
+      span: call.flight.span,
     },
   };
 }
@@ -1384,13 +1399,19 @@ function listedTrace(body: unknown, id: string | undefined): ListedTrace | undef
  * A request's time once the agent stored it: the root span's, as the panel shows it. The header's is taken before the
  * response is sent, the span's after: near .5 ms the two would read a millisecond apart.
  */
-function storedMs(row: ListedTrace, header: number | undefined): number | undefined {
-  return row.duration === undefined ? header : row.duration / 1000;
+function storedMs(row: ListedTrace, info: TraceInfo): number | undefined {
+  return row.duration === undefined ? info.totalMs : waitedMs(info.clock, row.duration / 1000);
 }
 
-/** A tab entry's summary with what the agent found: its issues, their kinds and the stored time. */
+/**
+ * A tab entry's summary with what the agent found: its issues, their kinds and the stored time; for a request that
+ * flew, the time the page waited for it, which the stored time never shortens (waitedMs).
+ */
 function stored(summary: EntrySummary, row: ListedTrace): EntrySummary {
-  return { ...summary, issues: row.issues ?? 0, kinds: row.issue_kinds, duration: row.duration ?? summary.duration };
+  const server = row.duration ?? summary.duration;
+  const clock = summary.clock;
+  const duration = clock ? Math.max(clock.end - clock.start, server) : server;
+  return { ...summary, issues: row.issues ?? 0, kinds: row.issue_kinds, duration };
 }
 
 /**
@@ -1651,12 +1672,20 @@ export function mount(options: WidgetOptions = {}): Widget {
     const own = page?.trace;
     const ends = [
       ...tab.flatMap((entry) =>
-        entry.parent === id && entry.id !== own && entry.summary ? [entry.summary.start + entry.summary.duration] : [],
+        entry.parent === id && entry.id !== own && entry.summary ? [answeredAt(entry.summary)] : [],
       ),
       // Its calls that answered untraced (through a gateway): their answers count as much.
-      ...landed.filter((call) => call.parent === id).map((call) => call.end * 1000),
+      ...landed.filter((call) => call.parent === id).map((call) => (call.flight.end ?? call.end) * 1000),
     ];
     return ends.length > 0 ? Math.max(...ends) : undefined;
+  }
+
+  /**
+   * When a call's answer came (epoch µs): the browser's end of it where it flew (its stored time, taken after the
+   * answer was sent, ends later), else its start and its time.
+   */
+  function answeredAt(summary: EntrySummary): number {
+    return summary.clock?.end ?? summary.start + summary.duration;
   }
 
   /** A view still open, its time stopped where it went quiet (quietSince), as the panel's list shows it. */
@@ -1884,7 +1913,7 @@ export function mount(options: WidgetOptions = {}): Widget {
   function applyIssues(info: TraceInfo, row: ListedTrace): void {
     info.issues = row.issues ?? 0;
     info.issuesPending = false;
-    info.totalMs = storedMs(row, info.totalMs);
+    info.totalMs = storedMs(row, info);
     const entry = tab.find((item) => item.id === info.trace);
     if (entry?.summary) entry.summary = stored(entry.summary, row);
     saveTab(tab);
@@ -1987,7 +2016,11 @@ export function mount(options: WidgetOptions = {}): Widget {
     loadView ??= announced.id;
     const own = page && !pageCleared ? page.trace : undefined;
     if (loadView !== announced.id || !own) return entries;
-    return entries.map((item) => (item.id === own && item.parent === null ? { ...item, parent: announced.id } : item));
+    // The document is the load, not a call of the view's: never in a group of its calls to one host.
+    const asLoad = (summary: EntrySummary | undefined) => summary && { ...summary, host: undefined };
+    return entries.map((item) =>
+      item.id === own && item.parent === null ? { ...item, parent: announced.id, summary: asLoad(item.summary) } : item,
+    );
   }
 
   /** What a request is listed under: the view or action that made it, else the page it was made on. */

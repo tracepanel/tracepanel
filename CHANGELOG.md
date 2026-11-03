@@ -52,6 +52,47 @@
   deprecated mode or with `graphql.document` turned on, Hive Gateway)
   has it on its trace too, on its Request tab: the agent dropped it with
   the gateway's inner spans.
+- In a narrow call tree a call's status stays whole ("200", not "20"
+  beside "GraphQL query Features → library-router"): the call's path
+  gives way before it, after the app's name.
+- A call under a request in the panel's list to a host that sends no
+  traces (a third-party API the BFF calls) stays once it is no longer
+  waited for and says "not traced", as the call tree does. Its row went
+  five seconds after the call, leaving nothing in its place.
+- A page's own document (GET /docs, which its server traced) is no
+  longer one of its view's calls in the panel's list: it joined their
+  group ("next-app ×3" over GET /docs and the two GET /openapi.json
+  Swagger UI asked for). A group whose calls no trace answered says no
+  numbers instead of "…" for good, and "not traced" says what is true of
+  a file a traced app serves too (Next.js serves public/ files
+  untraced): that host sent no trace for the call.
+- The panel's count of a page's requests ("This page · 8 requests", and
+  the count beside its name in the panel's header) counts a view's calls
+  through a gateway too, in flight, answered and stored. Once they
+  answered it said 0, while the pill counted 40 HTTP calls down the
+  view's chain.
+- Calls of a view alike in name (eight of one GraphQL operation, two of
+  them queued by the browser) keep their own times in the panel's list
+  as the view's trace comes: each row is matched to its call by the span
+  id its traceparent carried where the widget sees it, else by when the
+  call started and ended, never by its name and place. Two rows traded
+  8.1 s for 4.1 s. A call whose trace comes later than it is waited for
+  (a gateway sends its traces in batches) keeps its row until it does:
+  it left the list for a moment.
+- A request's time is the time the page waited for it, the same on the
+  pill, in its card and in the panel's list while it runs, once it
+  answers and once its trace is stored: from the call to its answer as
+  the browser timed it, never less than its server's own time (its trace
+  still says that one). A call the browser queued behind others (six at
+  a time to one host) ticked to 11.9 s, then dropped to its server's
+  6.0 s.
+- A view's time in the panel's list stops at its last call's answer also
+  once that call's trace is stored: the answer's own end stops it, not
+  the stored trace's, which ends after the answer went out. It ran on to
+  4.1 s for a moment after a 503 at 4.0 s, then went back to 4.0 s. The
+  panel's list asks for a request that ended a moment ago every 0.4 s
+  until its trace is stored, so its "…" goes as soon as the pill's does,
+  not up to two seconds later.
 ## 0.13.0 (2026-11-03)
 
 ### Fixed

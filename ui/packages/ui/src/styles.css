@@ -3170,9 +3170,10 @@ div.dt-map-row[data-kind="code"] {
   background: color-mix(in srgb, var(--dt-k) 32%, transparent);
 }
 /* Its path keeps its width (cut past half the name's); the served trace's name after the app takes what is left.
-   Short of room, the app's name is cut first, then what the trace found goes (.dt-map-chips); the path stays. */
+   Short of room, the app's name is cut first, then what the trace found goes (.dt-map-chips), then the path itself:
+   the answer's status after them is never cut. */
 .dt-map-text.dt-map-hop-path {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   max-width: 50%;
 }
 .dt-map-hop + .sr-only + .dt-app-chip {

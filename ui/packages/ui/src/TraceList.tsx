@@ -59,6 +59,11 @@ export interface TraceRow {
   cut?: number | null | undefined;
   /** For a call no trace answered: the host it went to. */
   host?: string | undefined;
+  /**
+   * The W3C span id the call carried on (its traceparent), when the widget saw it: its identity in its view's trace,
+   * which the view's chain matches it by (never by its name or its place).
+   */
+  span?: string | undefined;
   /** What it called is folded under it until opened, as a chain's trace row is (a view's call). */
   folded?: boolean | undefined;
   /**
@@ -81,6 +86,8 @@ export interface CallGroup {
   app: string | null;
   runtime?: string | undefined;
   count: number;
+  /** No trace answered any of them and none will: no numbers to say. */
+  untraced?: boolean | undefined;
 }
 
 export interface TraceListProps {
@@ -395,7 +402,7 @@ function GroupRow({
       <span className="dt-request-meta">
         {group.count > 1 ? <Times count={group.count} /> : <StatusSlot status={null} />}
         <RowTime trace={trace} open={open} until={undefined} />
-        <CompactMeta trace={trace} pending={pending} />
+        <CompactMeta trace={trace} pending={pending} blank={group.untraced} />
       </span>
     </button>
   );
@@ -573,24 +580,28 @@ function ChainLoading({ level }: { level: number }) {
  */
 function ChainWaitingRow({ call, level }: { call: ChainWaiting; level: number }) {
   const summary = waitingSummary(call);
+  const name = rowName(summary);
+  // Once no trace will come: the same row, "not traced", as the call tree says it; no numbers to wait for.
+  const untraced = call.untraced;
   return (
     <div
       className="dt-request-row"
-      data-chain="waiting"
+      data-chain={untraced === undefined ? "waiting" : "untraced"}
       aria-disabled="true"
-      title={waitingTitle(rowName(summary), call.cut)}
+      title={untraced === undefined ? waitingTitle(name, call.cut) : `${name}: ${untracedNote(untraced)}`}
       style={{ "--dt-chain-level": level } as CSSProperties}
     >
       <span className="dt-request-main">
         <span className="dt-map-caret" />
         <RowName trace={summary} />
         {call.cut === null ? null : <NoAnswer at={call.cut} />}
+        {untraced === undefined ? null : <NotTracedMark host={untraced} />}
       </span>
       {/* As the row of its trace will be: its status and time, its numbers pending until that trace comes. */}
       <span className="dt-request-meta">
         <StatusSlot status={summary.http_status} />
         <span>{duration(summary.duration)}</span>
-        <CompactMeta trace={summary} pending={true} />
+        <CompactMeta trace={summary} pending={untraced === undefined} blank={untraced !== undefined} />
       </span>
     </div>
   );

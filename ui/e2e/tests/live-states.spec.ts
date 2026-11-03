@@ -411,7 +411,8 @@ for (const dock of ["right", "bottom"] as const) {
 
     await expect(cut.locator('.dt-request-main > [data-state="cut"]')).toHaveText("no answer");
     await expect(time(cut)).toHaveText("15.0 s");
-    await expect(time(request)).toHaveText("5 ms");
+    // The time the page waited for it: a few milliseconds.
+    await expect(time(request)).toHaveText(/^\d+ ms$/);
 
     // The time column as wide as "15.0 s", not as the mark: the names keep the rest, whole.
     await laidOut(page);

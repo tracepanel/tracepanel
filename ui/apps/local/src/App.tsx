@@ -314,6 +314,10 @@ function arrange(history: TabHistory, traces: readonly TraceSummary[]): TraceRow
     const fallback = byId.has(entry.id) ? undefined : rowFromWidget(entry);
     if (fallback) byId.set(entry.id, fallback);
   }
+  for (const entry of history.entries) {
+    const trace = byId.get(entry.id);
+    if (trace && stored.has(entry.id)) byId.set(entry.id, waitedFor(trace, entry.summary));
+  }
   const facts = new Map(history.entries.map((entry) => [entry.id, widgetFacts(entry, stored)]));
   const children = childrenOf(history, byId, facts);
   const row = (trace: TraceSummary, depth: 0 | 1): TraceRow => {
@@ -326,8 +330,19 @@ function arrange(history: TabHistory, traces: readonly TraceSummary[]): TraceRow
   return roots.flatMap((root) => [row(root, 0), ...(children.get(root.id) ?? []).map((trace) => row(trace, 1))]);
 }
 
+/**
+ * A stored request the page made, as the page waited for it: from the call to its answer, as the browser timed it (a
+ * call the browser queued behind others waited longer than its server took), never less than its trace's own time.
+ * Its row says the same time in flight, once answered and once stored, as the pill does; its trace says its own.
+ */
+function waitedFor(trace: TraceSummary, summary: EntrySummary | undefined): TraceSummary {
+  const clock = summary?.clock;
+  if (!clock) return trace;
+  return { ...trace, start: clock.start, duration: Math.max(clock.end - clock.start, trace.duration) };
+}
+
 /** What the widget says of a row beyond its summary. */
-type WidgetFacts = Partial<Pick<TraceRow, "open" | "until" | "redirectedFrom" | "key" | "opens" | "host">> & {
+type WidgetFacts = Partial<Pick<TraceRow, "open" | "until" | "redirectedFrom" | "key" | "opens" | "host" | "span">> & {
   htmx?: EntrySummary["htmx"];
 };
 
@@ -347,6 +362,7 @@ function widgetFacts(entry: TabEntry, stored: ReadonlySet<string>): WidgetFacts 
     ...(summary.key ? { key: summary.key } : {}),
     ...(summary.untraced && entry.parent ? { opens: entry.parent } : {}),
     ...(summary.host ? { host: summary.host } : {}),
+    ...(summary.span ? { span: summary.span } : {}),
     ...(summary.htmx ? { htmx: summary.htmx } : {}),
   };
 }
@@ -419,11 +435,12 @@ function pageScope(history: TabHistory | null, rows: readonly TraceRow[]): Trace
 }
 
 /**
- * How many requests a list of rows holds, as the pill counts them: not the views and actions, not the runs under them,
- * not a view's calls no trace of their own answered (through a gateway: its chain's).
+ * How many requests a list of rows holds: every call the page made, in flight, answered and stored alike, through a
+ * gateway too (a view's calls are its own HTTP calls in its chain's count), but not the views and actions, not the
+ * runs under them, not the row over a view's calls to one host.
  */
 function requestCount(rows: readonly TraceRow[]): number {
-  return rows.filter((row) => !(row.run || row.call || row.opens || row.group) && row.trace.kind !== "page").length;
+  return rows.filter((row) => !(row.run || row.group) && row.trace.kind !== "page").length;
 }
 
 /** The task runs each request led to, by its id. */
@@ -455,9 +472,30 @@ function useTabRows(history: TabHistory | null): { rows: TraceRow[]; stored: Rea
   const key = ids.join(",");
   // biome-ignore lint/correctness/useExhaustiveDependencies: `key` identifies the id list.
   const load = useCallback(() => loadTab(ids), [key]);
-  const { traces, runs } = usePolling(load) ?? NO_TRACES;
+  // The last answer's: whether a row that just ended is still on its way, so the list asks sooner.
+  const known = useRef<ReadonlySet<string>>(new Set());
+  const soon = (history?.entries ?? []).some((entry) => justEnded(entry, known.current));
+  const { traces, runs } = usePolling(load, soon ? ARRIVING_POLL_MS : TAB_POLL_MS) ?? NO_TRACES;
   const stored = useMemo(() => new Set(traces.map((trace) => trace.id)), [traces]);
+  known.current = stored;
   return { rows: history ? arrange(history, traces) : [], stored, runs };
+}
+
+/** How often the tab's rows are asked for. */
+const TAB_POLL_MS = 2_000;
+/**
+ * How often while a row that just ended isn't stored yet: an app sends its trace as its request ends, and the agent
+ * stores it within a moment; the row's numbers say "…" until the list knows (the pill, asking on its own, knows sooner).
+ */
+const ARRIVING_POLL_MS = 400;
+/** How long after its end a row not stored yet is asked for that often. */
+const ARRIVING_SOON_MS = 10_000;
+
+/** A request or an ended view of the tab the agent hasn't stored yet (`stored`), which ended a moment ago. */
+function justEnded(entry: TabEntry, stored: ReadonlySet<string>): boolean {
+  const summary = entry.summary;
+  if (!summary || summary.open || inFlight(entry.id) || summary.untraced || stored.has(entry.id)) return false;
+  return Date.now() - (summary.start + summary.duration) / 1000 < ARRIVING_SOON_MS;
 }
 
 /**
@@ -554,6 +592,16 @@ function callStart(call: ChainCall): number {
   return call.type === "trace" ? call.called : call.start;
 }
 
+/** When a call ended (µs), as the view's trace has it. */
+function callEnd(call: ChainCall): number {
+  return call.type === "trace" ? (call.ended ?? call.called + call.summary.duration) : call.end;
+}
+
+/** When a row the widget listed ended (µs): its answer, or now for one still in flight. */
+function flightEnd(flight: TraceRow): number {
+  return flight.open ? Date.now() * 1000 : flight.trace.start + flight.trace.duration;
+}
+
 /** What a call is named by, to match its row in flight: its GraphQL operation, else its method. */
 function callName(name: string): string {
   return name.startsWith("GraphQL ") ? name : (name.split(" ")[0] ?? "");
@@ -563,26 +611,54 @@ function callName(name: string): string {
 const SAME_CALL_US = 3_000_000;
 
 /**
- * The widget's row each of a view's calls was in flight (`flights`, "~…"): the same name, the nearest start. A call
- * keeps that row's identity (its key) as its chain's row takes over.
+ * The widget's row each of a view's calls was in flight (`flights`, "~…"): the same call, by the span id its
+ * traceparent carried where the widget saw it; else the same name and the nearest start and end, as the browser timed
+ * both (calls made at once, the browser queueing some, start together and end apart). A call keeps that row's
+ * identity (its key) as its chain's row takes over, never another call's.
  */
 function matchFlights(calls: readonly ChainCall[], flights: readonly TraceRow[]): Map<string, TraceRow> {
-  const free = new Set(flights);
-  const matched = new Map<string, TraceRow>();
-  for (const call of [...calls].sort((a, b) => callStart(a) - callStart(b))) {
-    const name = callName(call.type === "trace" ? call.summary.name : waitingSummary(call).name);
-    let best: TraceRow | undefined;
-    for (const flight of free) {
-      const gap = Math.abs(flight.trace.start - callStart(call));
-      if (callName(flight.trace.name) !== name || gap > SAME_CALL_US) continue;
-      if (!best || gap < Math.abs(best.trace.start - callStart(call))) best = flight;
-    }
-    if (best) {
-      free.delete(best);
-      matched.set(call.key, best);
-    }
+  const matched = bySpan(calls, flights);
+  const taken = new Set(matched.values());
+  const free = new Set(flights.filter((flight) => !taken.has(flight)));
+  for (const call of [...calls].sort((a, b) => callStart(a) - callStart(b) || callEnd(a) - callEnd(b))) {
+    if (matched.has(call.key)) continue;
+    const best = nearest(call, free);
+    if (!best) continue;
+    free.delete(best);
+    matched.set(call.key, best);
   }
   return matched;
+}
+
+/** Each call whose span id a row the widget listed carries: that row, by the call's key. */
+function bySpan(calls: readonly ChainCall[], flights: readonly TraceRow[]): Map<string, TraceRow> {
+  const rows = new Map(flights.flatMap((flight) => (flight.span ? [[flight.span, flight] as const] : [])));
+  return new Map(
+    calls.flatMap((call) => {
+      const flight = call.w3c ? rows.get(call.w3c) : undefined;
+      return flight ? [[call.key, flight] as const] : [];
+    }),
+  );
+}
+
+/**
+ * The free row nearest a call by when it started and ended, of its name and within SAME_CALL_US of its start; a row
+ * whose span id the widget knows is another call's when the call has one too.
+ */
+function nearest(call: ChainCall, free: ReadonlySet<TraceRow>): TraceRow | undefined {
+  const name = callName(call.type === "trace" ? call.summary.name : waitingSummary(call).name);
+  const apart = (flight: TraceRow) =>
+    Math.abs(flight.trace.start - callStart(call)) + Math.abs(flightEnd(flight) - callEnd(call));
+  const same = [...free].filter(
+    (flight) =>
+      !(flight.span && call.w3c) &&
+      callName(flight.trace.name) === name &&
+      Math.abs(flight.trace.start - callStart(call)) <= SAME_CALL_US,
+  );
+  return same.reduce<TraceRow | undefined>(
+    (best, flight) => (!best || apart(flight) < apart(best) ? flight : best),
+    undefined,
+  );
 }
 
 /** A view's call as a row of the list, one step under its view, the same row as it was in flight. */
@@ -591,18 +667,21 @@ function callRow(call: ChainCall, view: string, flight: TraceRow | undefined): T
   // The host its row was grouped by in flight, so its group stays the same row.
   const host = flight?.host ?? call.host;
   const to = host ? { host } : {};
+  // The time its row said once answered (the widget's clock): never less now, the view's trace timing it a hair apart.
+  const said = flight && !flight.open ? flight.trace.duration : 0;
   if (call.type === "trace") {
     const runtime = traceRuntime(call.trace.attrs);
     const clock = { start: call.called, end: call.ended ?? call.called + call.summary.duration };
     // Its time as the view made the call, as its row said in flight: the trace that served it says its own.
-    const trace = { ...call.summary, duration: clock.end - clock.start };
+    const trace = { ...call.summary, duration: Math.max(clock.end - clock.start, said) };
     return { trace, depth: 1, key, call: "trace", counted: true, folded: true, ...to, runtime, clock };
   }
   const summary = waitingSummary(call);
   // Its status as its answer said it, when the span doesn't.
   const status = summary.http_status ?? (call.cut === null ? (flight?.trace.http_status ?? null) : null);
+  const duration = call.cut === null ? Math.max(summary.duration, said) : summary.duration;
   // biome-ignore lint/style/useNamingConvention: wire format.
-  const trace = { ...summary, http_status: status };
+  const trace = { ...summary, duration, http_status: status };
   const state = call.untraced ? { call: "untraced" as const, host: call.untraced } : { call: "waiting" as const };
   return { trace, depth: 1, key, opens: view, cut: call.cut, ...to, ...state };
 }
@@ -779,9 +858,17 @@ function groupRow(host: string, calls: readonly TraceRow[], { view, settled, cou
     trace: summary,
     depth: 1,
     key: id,
-    group: { view, host, app, count: calls.length, ...(runtime ? { runtime } : {}) },
+    group: {
+      view,
+      host,
+      app,
+      count: calls.length,
+      ...(runtime ? { runtime } : {}),
+      ...(calls.every((call) => call.call === "untraced") ? { untraced: true } : {}),
+    },
     ...(calls.some((call) => call.open) ? { open: true } : {}),
-    counted: calls.every((call) => call.counted || settled?.has(call.trace.id) === true),
+    // A call no trace answered has no numbers to wait for: its group's are known without it.
+    counted: calls.every((call) => call.counted || call.call === "untraced" || settled?.has(call.trace.id) === true),
   };
 }
 
