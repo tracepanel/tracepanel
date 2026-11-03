@@ -388,3 +388,53 @@ test("a call's time is the time the page waited for it, while it runs, once answ
   expect(times.at(-1)?.call).toBeGreaterThan(1_200_000);
   await expect(pill(page)).toHaveAttribute("aria-label", /GraphQL query Slow → 200 · 1\.\d s/);
 });
+
+test("a view's time stops at its last call's answer, also once that call's longer trace is stored", async ({
+  page,
+}) => {
+  const tag = 5;
+  const callTrace = id(tag, 20);
+  // An app with an SDK answers at once (its 503 after its own wait), its trace ending a second after the answer went
+  // out: the view waits on for its end meanwhile.
+  const { release, list } = await opened(page, {
+    headers: () => ({
+      "Tracepanel-Id": callTrace,
+      "Tracepanel-Name": "GraphQL%20query%20Authors",
+      "Server-Timing": 'db;dur=1;desc="0 queries", total;dur=300, tracepanel-issues;desc="pending"',
+    }),
+  });
+  await open(page, id(tag, 1), ["Authors"], 2_500);
+  const view = list.locator('.dt-request-row[data-kind="page"]');
+  await expect(view).toBeVisible();
+  await page.waitForTimeout(300);
+  release(0);
+  await page.waitForFunction(() => (window as unknown as { calls: Made[] }).calls[0]?.end);
+  const made = await page.evaluate(() => (window as unknown as { calls: Made[] }).calls[0] as Made);
+  await ingest([
+    trace(
+      callTrace,
+      "http",
+      "GraphQL query Authors",
+      made.end - 300 * ms,
+      1_300 * ms,
+      { "service.name": "gateway", "http.method": "POST", "http.route": "/graphql", "http.status_code": 503 },
+      [],
+    ),
+  ]);
+  const times: number[] = [];
+  for (let at = 0; at < 30; at += 1) {
+    times.push(micros(await view.locator(".dt-request-meta").innerText()));
+    await page.waitForTimeout(100);
+  }
+  await viewEnded(page);
+  await storeView(page, tag);
+  await expect(view.locator(".dt-pending")).toHaveCount(0);
+  times.push(micros(await view.locator(".dt-request-meta").innerText()));
+
+  const shown = times.filter((each) => !Number.isNaN(each));
+  expect(shown.length).toBeGreaterThan(20);
+  for (const [n, each] of shown.entries())
+    expect(each, `sample ${n} of ${shown.join(", ")}`).toBeGreaterThanOrEqual(shown[n - 1] ?? 0);
+  // Never past its answer, not up to the stored trace's end.
+  expect(Math.max(...shown)).toBeLessThan(1_000_000);
+});

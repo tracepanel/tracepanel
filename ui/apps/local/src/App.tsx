@@ -472,9 +472,30 @@ function useTabRows(history: TabHistory | null): { rows: TraceRow[]; stored: Rea
   const key = ids.join(",");
   // biome-ignore lint/correctness/useExhaustiveDependencies: `key` identifies the id list.
   const load = useCallback(() => loadTab(ids), [key]);
-  const { traces, runs } = usePolling(load) ?? NO_TRACES;
+  // The last answer's: whether a row that just ended is still on its way, so the list asks sooner.
+  const known = useRef<ReadonlySet<string>>(new Set());
+  const soon = (history?.entries ?? []).some((entry) => justEnded(entry, known.current));
+  const { traces, runs } = usePolling(load, soon ? ARRIVING_POLL_MS : TAB_POLL_MS) ?? NO_TRACES;
   const stored = useMemo(() => new Set(traces.map((trace) => trace.id)), [traces]);
+  known.current = stored;
   return { rows: history ? arrange(history, traces) : [], stored, runs };
+}
+
+/** How often the tab's rows are asked for. */
+const TAB_POLL_MS = 2_000;
+/**
+ * How often while a row that just ended isn't stored yet: an app sends its trace as its request ends, and the agent
+ * stores it within a moment; the row's numbers say "…" until the list knows (the pill, asking on its own, knows sooner).
+ */
+const ARRIVING_POLL_MS = 400;
+/** How long after its end a row not stored yet is asked for that often. */
+const ARRIVING_SOON_MS = 10_000;
+
+/** A request or an ended view of the tab the agent hasn't stored yet (`stored`), which ended a moment ago. */
+function justEnded(entry: TabEntry, stored: ReadonlySet<string>): boolean {
+  const summary = entry.summary;
+  if (!summary || summary.open || inFlight(entry.id) || summary.untraced || stored.has(entry.id)) return false;
+  return Date.now() - (summary.start + summary.duration) / 1000 < ARRIVING_SOON_MS;
 }
 
 /**

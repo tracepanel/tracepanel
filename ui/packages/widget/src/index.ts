@@ -1727,12 +1727,20 @@ export function mount(options: WidgetOptions = {}): Widget {
     const own = page?.trace;
     const ends = [
       ...tab.flatMap((entry) =>
-        entry.parent === id && entry.id !== own && entry.summary ? [entry.summary.start + entry.summary.duration] : [],
+        entry.parent === id && entry.id !== own && entry.summary ? [answeredAt(entry.summary)] : [],
       ),
       // Its calls that answered untraced (through a gateway): their answers count as much.
-      ...landed.filter((call) => call.parent === id).map((call) => call.end * 1000),
+      ...landed.filter((call) => call.parent === id).map((call) => (call.flight.end ?? call.end) * 1000),
     ];
     return ends.length > 0 ? Math.max(...ends) : undefined;
+  }
+
+  /**
+   * When a call's answer came (epoch µs): the browser's end of it where it flew (its stored time, taken after the
+   * answer was sent, ends later), else its start and its time.
+   */
+  function answeredAt(summary: EntrySummary): number {
+    return summary.clock?.end ?? summary.start + summary.duration;
   }
 
   /** A view still open, its time stopped where it went quiet (quietSince), as the panel's list shows it. */
