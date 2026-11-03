@@ -39,7 +39,17 @@
   /openapi.json Swagger UI asked for, untraced, are 3 requests, not 1),
   and so does the panel docked at the right: the page's own load sits
   under its view, whose calls were not this page's there, its list gone
-  and its count 1.
+  and its count 1. The pill's hover card lists them too, as the list
+  does: "not traced" beside the name, or "failed" in red where the
+  status would be, a click opening the view's call tree. It listed only
+  the traced ones ("Other requests on this page · 2" under "5
+  requests"). A view's call that got no answer counts on a page whose
+  own load was traced, too.
+- The request picker of the panel docked narrow ("Pages and requests in
+  this browser tab") lists a view's calls as the panel's list does: under
+  their host's or app's row, "not traced" beside a call no trace
+  answered, "failed" in red for one that got no answer, and no numbers
+  for either. It said "200 · 54 ms · 0 queries" for each, as if traced.
 - A view's call that got no answer (a network error, an abort, status
   0) stays its row in the panel's list, from in flight to its view's
   trace stored, and says "failed" in red where its status would be, as
@@ -59,8 +69,18 @@
   ("graphql-router ×5"), as the Services map links them. A host no app
   has served yet is named by itself ("127.0.0.1:8043 ×5") until a trace
   of its calls names the app, which the same row then shows, and a
-  trace's app wins over the one before. The group used to appear only
+  trace's app wins over the one before. Its numbers are its rows' added up,
+  a finding they share said once, as the view's chain says it, also when
+  an app with an SDK answered the calls ("library-bff ×8" said 0 queries
+  and 16 issues over eight calls of 4 queries and 2 issues each, the
+  view 32 queries and 2 issues): it counted those calls' own numbers,
+  not what ran under them. The group used to appear only
   once the traces came, taking the place of the rows that were there.
+- The panel docked at the right keeps the selected row in sight below
+  the list's head as rows arrive: eight calls a view made at once
+  scrolled the list to its end by a row, and VIEW /parallel, the row the
+  panel showed, went under "This page". A row scrolled into view with
+  the keyboard stops below the head too.
 - A view whose calls all went through a gateway stays in the panel's
   list when the same page is opened again. With no traced request under
   it, it counted as an empty view and left the list for the new one.
@@ -68,6 +88,10 @@
   at its last call's answer when its calls went through a gateway. It
   ran on while the view waited for its end, then jumped back (6.5 s,
   then 5.6 s): only the answers that named a trace stopped it.
+- After the page reloads, the rows of the pages before it keep their
+  numbers while their chains load again (VIEW / and its GraphQL query
+  Books said "…" for seconds on a slow network): the panel keeps the
+  chains it had for the browser tab's session.
 - A number on its way says "…" everywhere, and only while it is on its
   way. A row of the panel's list whose trace never reached the agent
   (the store was cleared since), or whose chain can't be loaded, says
@@ -89,7 +113,12 @@
   nothing beside "GraphQL query Features → library-router"), at any
   width the panel docks at and however deep the call sits: the served
   trace's name gives way first, then the call's path, the app's name and
-  the call's kind, cut at their end before the status is.
+  the call's kind, cut at their end before the status is. A call no
+  trace answered keeps "not traced" whole beside its status the same
+  way, not "not tra", what is before them cut with an ellipsis, and as
+  narrow as the panel docked right an HTTP call's kind goes, its method
+  saying it, so its path keeps the room ("GET /openapi.json", not
+  "HTTP.… GET …").
 - A call under a request in the panel's list to a host that sends no
   traces (a third-party API the BFF calls) stays once it is no longer
   waited for and says "not traced", as the call tree does. Its row went

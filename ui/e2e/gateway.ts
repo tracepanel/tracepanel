@@ -28,7 +28,7 @@ function call(id: string, parent: string, url: string, method: string, start: nu
 }
 
 /** A finding of a trace, on its span `span`. */
-function issue(kind: string, fingerprint: string, title: string, span: string): Doc {
+export function issue(kind: string, fingerprint: string, title: string, span: string): Doc {
   // biome-ignore-start lint/style/useNamingConvention: the trace format.
   return { fingerprint, fingerprint_version: 1, kind, title, culprit: null, hint: null, count: 1, span_ids: [span] };
   // biome-ignore-end lint/style/useNamingConvention: the trace format.
@@ -64,9 +64,14 @@ export interface GatewayView {
 /**
  * Stores a view that asked the gateway for `operations` in turn (`tag` keeps its ids apart): each operation a remote
  * service answers, slowly (a slow HTTP call, the same one each time it is asked), but the last, which the local
- * subgraph serves, calling the REST service (three of one query, an N+1, and a log record).
+ * subgraph serves, calling the REST service (three of one query, an N+1, and a log record). `untraced`, a call the view
+ * made after them to a host that sends no trace (Swagger UI's GET /openapi.json): "not traced" in its call tree.
  */
-export async function gatewayView(tag: number, operations: readonly string[]): Promise<GatewayView> {
+export async function gatewayView(
+  tag: number,
+  operations: readonly string[],
+  { untraced }: { untraced?: string } = {},
+): Promise<GatewayView> {
   const id = (n: number) => `01M4GATEWAY${String(tag).padStart(3, "0")}${String(n).padStart(12, "0")}`;
   const w3c = `${String(tag).padStart(4, "0")}aa7e9d0f4e3a8b5c7d9e1f2a3b4c`;
   const hex = (kind: string, n: number) => `${kind}${String(n).padStart(15, "0")}`;
@@ -75,9 +80,12 @@ export async function gatewayView(tag: number, operations: readonly string[]): P
   const at = (n: number) => start + 20 * ms + n * 1_000 * ms;
   const view = trace(id(0), "page", "/app/", "shop-web", start, (operations.length + 1) * 1_000 * ms, {
     attrs: { "service.role": "browser", "page.path": "/app/", "w3c.trace_id": w3c },
-    spans: operations.map((_, n) =>
-      call(`v${n}`, `${id(0)}r`, "http://127.0.0.1:4000/graphql", "POST", at(n), 900 * ms, hex("a", n)),
-    ),
+    spans: [
+      ...operations.map((_, n) =>
+        call(`v${n}`, `${id(0)}r`, "http://127.0.0.1:4000/graphql", "POST", at(n), 900 * ms, hex("a", n)),
+      ),
+      ...(untraced ? [call("vu", `${id(0)}r`, untraced, "GET", at(last) + 950 * ms, 30 * ms, hex("d", 0))] : []),
+    ],
   });
   const gateway = operations.map((operation, n) => {
     const remote = n !== last;

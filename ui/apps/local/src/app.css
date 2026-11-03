@@ -427,6 +427,8 @@ a {
   flex: none;
   max-height: 34%;
   overflow-y: auto;
+  /* A row scrolled into view stops below the sticky head, never under it. */
+  scroll-padding-top: 2.5rem;
   border-bottom: 1px solid var(--dt-border);
   background: var(--dt-faint);
 }

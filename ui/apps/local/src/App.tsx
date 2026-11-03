@@ -795,8 +795,8 @@ function grouped(host: string, members: readonly TraceRow[][], grouping: Groupin
   return [group, ...members.flat().map((row) => ({ ...row, depth: 2 as const }))];
 }
 
-/** What some of a view's calls' traces did, as its chain counts it. */
-type Counter = (ids: readonly string[]) => ChainCounts;
+/** What some of a view's calls' traces did, as its chain counts it; null when one of them isn't its chain's yet. */
+type Counter = (ids: readonly string[]) => ChainCounts | null;
 
 /** The app a host's calls were served by before (useKnownApps), and what it runs on. */
 type KnownApp = { app: string; runtime: string | undefined };
@@ -814,12 +814,15 @@ interface Grouping {
 
 /**
  * What a group's calls did: as the view's chain counts their traces and all under them, once they are all its
- * traces (a finding of the chain's across them said once, as the tabs say it); their own numbers added up until then.
+ * traces (a finding of the chain's across them said once, as the tabs say it), whether its chain made them its rows
+ * or they are the list's own (an app with an SDK answered them: its trace's id came with the answer); their own
+ * numbers added up until then.
  */
 function together(calls: readonly TraceRow[], counter: Counter | undefined) {
   const traces = calls.map((call) => call.trace);
-  if (counter && calls.every((call) => call.call === "trace")) {
-    const counted = counter(traces.map((trace) => trace.id));
+  const traced = calls.every((call) => call.call === "trace" || !(call.call || call.open || inFlight(call.trace.id)));
+  const counted = counter && traced ? counter(traces.map((trace) => trace.id)) : null;
+  if (counted) {
     // biome-ignore lint/style/useNamingConvention: wire format.
     return { queries: counted.queries, issues: counted.issues, issue_kinds: counted.kinds };
   }
@@ -994,6 +997,50 @@ function cutsOf(chains: ReadonlyMap<string, Chain>): ReadonlyMap<string, number>
   return cuts;
 }
 
+/** What some of a view's calls' traces did, as its chain counts it; null while one of them isn't its chain's yet. */
+function chainCounter(chain: Chain, view: string, listed: ReadonlySet<string>): Counter {
+  const known = new Set(chain.traces.map((each) => each.id));
+  return (ids) => (ids.every((each) => known.has(each)) ? callsCounted(chain, view, listed, ids) : null);
+}
+
+// The rows' chains, kept for the browser tab's session: the panel loads again with each page, and a row that had its
+// numbers says them at once, not "…" until its chain comes again (slowly, on a slow network).
+const CHAINS_KEY = "tracepanel:chains";
+/** The most chains kept, the newest, and the most room they take (characters): the rest load again. */
+const CHAINS_KEPT = 24;
+const CHAINS_ROOM = 1_500_000;
+
+/** The rows' chains, starting with those the panel had before the page reloaded it, kept as they change. */
+function useKeptChains() {
+  const [chains, setChains] = useState<ReadonlyMap<string, Chain>>(readChains);
+  useEffect(() => saveChains(chains), [chains]);
+  return [chains, setChains] as const;
+}
+
+function readChains(): ReadonlyMap<string, Chain> {
+  try {
+    const saved: unknown = JSON.parse(sessionStorage.getItem(CHAINS_KEY) ?? "[]");
+    return new Map(Array.isArray(saved) ? (saved as [string, Chain][]) : []);
+  } catch {
+    return new Map();
+  }
+}
+
+function saveChains(chains: ReadonlyMap<string, Chain>): void {
+  try {
+    const kept = [...chains].slice(-CHAINS_KEPT);
+    let text = JSON.stringify(kept);
+    // Too big: the newest that fit.
+    while (text.length > CHAINS_ROOM && kept.length > 0) {
+      kept.shift();
+      text = JSON.stringify(kept);
+    }
+    sessionStorage.setItem(CHAINS_KEY, text);
+  } catch {
+    // Storage can be blocked or full: the rows then load their chains again, "…" until then.
+  }
+}
+
 /**
  * The apps each row's trace called, by its id. A view's or an action's too: its requests to an app with an SDK are
  * rows of their own (left out here), but a call through a proxy or a gateway (Apollo Router, over OTLP) answers with
@@ -1005,7 +1052,7 @@ function cutsOf(chains: ReadonlyMap<string, Chain>): ReadonlyMap<string, number>
  * Its calls whose traces are on their way are rows too, until they arrive or stop being waited for (lib/chainRows).
  */
 function useRowChains(rows: readonly TraceRow[], stored: ReadonlySet<string>): RowChains {
-  const [chains, setChains] = useState<ReadonlyMap<string, Chain>>(() => new Map());
+  const [chains, setChains] = useKeptChains();
   const [loading, setLoading] = useState<ReadonlySet<string>>(() => new Set());
   const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set());
   const has = useRef(chains);
@@ -1105,7 +1152,7 @@ function useRowChains(rows: readonly TraceRow[], stored: ReadonlySet<string>): R
       // A view's or an action's calls are its rows, one each, as they were in flight (chainCalls).
       if (views.has(id)) {
         calls.set(id, chainCalls(chain, id, rowsIn));
-        counters.set(id, (ids) => callsCounted(chain, id, rowsIn, ids));
+        counters.set(id, chainCounter(chain, id, rowsIn));
         continue;
       }
       const under = chainApps(chain, id, rowsIn);
@@ -1585,12 +1632,27 @@ function useStickToBottom(
     seen.current = count;
     const wasAtEnd =
       !element || height.current === 0 || height.current - element.scrollTop - element.clientHeight <= BOTTOM_SLACK;
-    if (wasAtEnd || follow) jump();
-    else if (added > 0) setUnseen((value) => value + added);
+    if (wasAtEnd || follow) {
+      if (element) element.scrollTop = endKeepingSelected(element);
+      setUnseen(0);
+    } else if (added > 0) setUnseen((value) => value + added);
     height.current = element?.scrollHeight ?? 0;
-  }, [count, follow, jump, list]);
+  }, [count, follow, list]);
 
   return { unseen, jump };
+}
+
+/**
+ * Where a list kept at its end scrolls to as rows arrive: its end, unless that would take the selected row up under
+ * its sticky head (a view whose calls all came at once): then as far as keeps that row in sight, below the head.
+ */
+function endKeepingSelected(element: HTMLElement): number {
+  const end = element.scrollHeight - element.clientHeight;
+  const selected = element.querySelector<HTMLElement>('.dt-request-row[aria-current="true"]');
+  if (!selected) return end;
+  const head = element.querySelector<HTMLElement>(".page-requests-head")?.offsetHeight ?? 0;
+  const top = selected.getBoundingClientRect().top - element.getBoundingClientRect().top + element.scrollTop;
+  return Math.max(0, Math.min(end, top - head));
 }
 
 /** The list of this page's requests, or the browser tab's: its class, its accessible name, its head's name. */
@@ -1942,7 +2004,7 @@ function PanelApp({ route }: { route: Route }) {
           <Logo className="shrink-0 gap-1.5 text-md [&_svg]:size-6" />
           {split ? null : (
             <RequestSwitcher
-              rows={listed}
+              rows={shown.rows}
               pageCount={requestCount(pageRows)}
               selectedId={selectedId}
               currentId={history?.current ?? null}

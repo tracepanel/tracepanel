@@ -89,6 +89,8 @@ export const CARD_STYLE = `
   .card-ms[data-speed="slow"] { color: var(--dt-warn); font-weight: 600; }
   .card-ms[data-speed="very-slow"] { color: var(--dt-error); font-weight: 600; }
   .card-tag { margin-left: 8px; padding: 0 6px; border-radius: 999px; background: var(--tint-violet); color: var(--dt-accent); font: 600 11px "Geist Variable", "Geist", ui-sans-serif, system-ui, sans-serif; }
+  /* A call no trace answered, as the panel's list says it: muted, beside its name. */
+  .card-not-traced { margin-left: 8px; color: var(--dt-text-3); font: italic 11.5px "Geist Variable", "Geist", ui-sans-serif, system-ui, sans-serif; }
   .card-more {
     margin: 4px 0 0; padding: 2px 0; border: 0; background: none; color: var(--dt-accent);
     font: 500 12px "Geist Variable", "Geist", ui-sans-serif, system-ui, sans-serif; cursor: pointer;
@@ -135,9 +137,23 @@ export interface CardView {
   until?: number | undefined;
 }
 
+/**
+ * One of the page's calls no trace answered (a gateway's, a service's that sends none), or that got no answer at all
+ * (`failed`): the panel's list has its row, the pill counts it, and so does the card.
+ */
+export interface UntracedCall {
+  /** Its name, status (none when it failed) and time, as the browser saw the call. */
+  info: TraceInfo;
+  /** The view or action that made it: its call tree has the call. */
+  parent: string;
+  failed: boolean;
+}
+
 export interface CardSource {
   /** This page's requests, oldest first: the page (unless cleared) and its AJAX calls. The last is the pill's. */
   requests(): readonly TraceInfo[];
+  /** Its calls no trace answered or that got no answer, oldest first: counted and listed with the others. */
+  untraced(): readonly UntracedCall[];
   /** Its requests still in flight, oldest first: the newest is the pill's while there is one (lib/live). */
   flights(): readonly Flight[];
   /** Its view, when the browser recording has one: the card's head before any request. */
@@ -320,10 +336,30 @@ function mostLine(label: string, category: string, value: number, total: number)
   return line;
 }
 
+/**
+ * One of the page's other requests in the card: a traced one, or a call no trace answered (`call`), with what ranks
+ * it: failed, its findings.
+ */
+type Other = { info: TraceInfo; call?: UntracedCall | undefined; failed: boolean; issues: number };
+
 /** Worst first: failed, then with issues, then slowest. */
-function worstFirst(requests: readonly TraceInfo[], counted: (info: TraceInfo) => Counted): TraceInfo[] {
-  const rank = (info: TraceInfo) => (failed(info) ? 2 : counted(info).issues ? 1 : 0);
-  return [...requests].sort((a, b) => rank(b) - rank(a) || (b.totalMs ?? 0) - (a.totalMs ?? 0));
+function worstFirst(others: readonly Other[]): Other[] {
+  const rank = (other: Other) => (other.failed ? 2 : other.issues ? 1 : 0);
+  return [...others].sort((a, b) => rank(b) - rank(a) || (b.info.totalMs ?? 0) - (a.info.totalMs ?? 0));
+}
+
+/** Where a call no trace answered has its status: "failed" in red for one that got no answer. */
+function callStatus(call: UntracedCall): HTMLElement {
+  if (!call.failed) return statusChip(call.info.status) ?? element("span");
+  const chip = element("span", "status", "failed");
+  chip.dataset["tone"] = "server";
+  return chip;
+}
+
+/** A call no trace answered, in its tooltip: what it is, and that a click opens the call tree that has it. */
+function callTitle(call: UntracedCall, name: string): string {
+  const what = call.failed ? "failed, no answer came" : "not traced, its server sent no trace for this call";
+  return `${name}: ${what}\nClick to open the call tree that has it`;
 }
 
 /**
@@ -483,18 +519,27 @@ export function mountCard(
    */
   function otherRequests(later: readonly TraceInfo[], flying: readonly Flight[]): HTMLElement | null {
     const page = source.page();
-    const count = later.length + flying.length;
+    const others: Other[] = [
+      ...later.map((info) => ({ info, failed: failed(info), issues: source.counted(info).issues })),
+      ...source
+        .untraced()
+        .map((call) => ({ info: call.info, call, failed: call.failed || failed(call.info), issues: 0 })),
+    ];
+    const count = others.length + flying.length;
     if (count === 0) return null;
-    const sorted = worstFirst(later, source.counted);
+    const sorted = worstFirst(others);
     const section = element("section", "card-section");
     section.append(element("p", "card-caption", `Other requests on this page · ${count}`));
     const flights = [...flying].reverse().slice(0, OTHERS);
     for (const flight of flights) section.append(flightRow(flight));
-    for (const info of sorted.slice(0, OTHERS - flights.length)) section.append(requestRow(info, info === page));
+    for (const { info, call } of sorted.slice(0, OTHERS - flights.length)) {
+      section.append(call ? callRow(call) : requestRow(info, info === page));
+    }
     // The panel lists them all; it opens on the first one not shown here.
     const shown = Math.min(count, OTHERS);
-    const next = sorted[OTHERS - flights.length]?.trace;
-    if (count > shown) section.append(moreLink(count - shown, next ? `#/t/${next}` : "#/"));
+    const next = sorted[OTHERS - flights.length];
+    const hash = next?.call ? `#/t/${next.call.parent}` : next?.info.trace ? `#/t/${next.info.trace}` : "#/";
+    if (count > shown) section.append(moreLink(count - shown, hash));
     return section;
   }
 
@@ -535,6 +580,27 @@ export function mountCard(
         source.open(`#/t/${trace}`);
       });
     }
+    return row;
+  }
+
+  /**
+   * A call no trace answered, as the panel's list has it: its status, its name, "not traced" muted beside it (its
+   * reason in the tooltip), its time; one that got no answer says "failed" in red where its status would be. A click
+   * opens the call tree of the view that made it, which has the call.
+   */
+  function callRow(call: UntracedCall): HTMLElement {
+    const row = element("button", "card-row");
+    row.type = "button";
+    row.dataset["call"] = call.failed ? "failed" : "untraced";
+    const { method, path } = requestName(call.info);
+    const name = element("span", "card-path", `${method} ${path}`);
+    if (!call.failed) name.append(element("span", "card-not-traced", "not traced"));
+    row.append(callStatus(call), name, timeCell(call.info));
+    row.title = callTitle(call, `${method} ${path}`);
+    row.addEventListener("click", () => {
+      hide(true);
+      source.open(`#/t/${call.parent}`);
+    });
     return row;
   }
 

@@ -16,7 +16,7 @@ import {
   traceRuntime,
 } from "@tracepanel/ui/lib/runtime";
 import type { EntrySummary, HtmxInfo, TabEntry } from "@tracepanel/ui/lib/tabEntry";
-import { CARD_STYLE, mountCard, nameWithMethod } from "./card";
+import { CARD_STYLE, mountCard, nameWithMethod, type UntracedCall } from "./card";
 import { type ChainFacts, factsKey, followChain } from "./viewChain";
 
 export interface TraceInfo {
@@ -1217,6 +1217,16 @@ function landedEntry(call: Landed): TabEntry {
   };
 }
 
+/** A call that answered untraced or not at all, as the hover card lists it among the page's other requests. */
+function untracedCall(call: Landed): UntracedCall {
+  const end = call.flight.end ?? call.end;
+  return {
+    info: { ...flightInfo(call.flight), status: call.status, totalMs: Math.max(0, end - call.flight.start) },
+    parent: call.parent,
+    failed: call.status === undefined,
+  };
+}
+
 /** A call of a view or an action that answered untraced: where it is listed, when it ended (epoch ms), its status. */
 interface Landed {
   flight: Flight;
@@ -1590,11 +1600,13 @@ export function mount(options: WidgetOptions = {}): Widget {
   const inFlight: Flight[] = [];
   // Where each was listed as it took off: the view or action that made it, even once another one opened.
   const listedUnder = new WeakMap<Flight, string | null>();
+  // The view open as it took off: a call that got no answer has no Response for the recording to mark with it.
+  const madeIn = new WeakMap<Flight, string>();
   // The calls of views and actions that answered untraced: rows until their view's trace lists them.
   let landed: Landed[] = [];
   // This page's calls that answered untraced or not at all, as many as the panel's list has rows for: the pill counts
-  // them among the page's requests, as the list does, however long ago they landed.
-  let untraced = 0;
+  // them among the page's requests, as the list does, however long ago they landed, and its hover card lists them.
+  let untraced: Landed[] = [];
   // Its trace was deleted from the store: the panel and the badge no longer show it.
   let pageCleared = false;
   let frame: HTMLIFrameElement | null = null;
@@ -1650,13 +1662,19 @@ export function mount(options: WidgetOptions = {}): Widget {
     ];
   }
 
+  /** Where a call that takes off is listed (the page now), and the view open as it does, which made it. */
+  function noteWhere(flight: Flight): void {
+    listedUnder.set(flight, currentPage());
+    if (view?.open) madeIn.set(flight, view.id);
+  }
+
   /** A call that answered untraced, kept as its view's row when the browser recording made it (Answer). */
   function land(flight: Flight, answer: Answer): void {
-    const parent = answer.page ?? listedUnder.get(flight) ?? undefined;
+    const parent = answer.page ?? madeIn.get(flight) ?? listedUnder.get(flight) ?? undefined;
     const recorded = tab.some((entry) => entry.id === parent && entry.summary?.kind === "page");
     if (!(parent && recorded && flight.id)) return;
-    if (ofThisPage({ page: parent })) untraced += 1;
     const now = Date.now();
+    if (ofThisPage({ page: parent })) untraced = [...untraced, { flight, parent, end: now, status: answer.status }];
     const open = new Set(tab.filter((entry) => entry.summary?.open).map((entry) => entry.id));
     landed = [
       ...landed.filter((call) => open.has(call.parent) || now - call.end < LANDED_KEEP_MS),
@@ -1771,7 +1789,7 @@ export function mount(options: WidgetOptions = {}): Widget {
       const shown = all.at(-1) ?? {};
       addRequest(stats, shown, pulse, counted(shown));
     }
-    const count = all.length + untraced + flying.length;
+    const count = all.length + untraced.length + flying.length;
     if (count > 1) addPage(stats, all, count);
     fitBadge();
     badge.dataset["verdict"] = verdict(all, counted);
@@ -1871,7 +1889,7 @@ export function mount(options: WidgetOptions = {}): Widget {
   watcher = {
     start: (flight) => {
       inFlight.push(flight);
-      listedUnder.set(flight, currentPage());
+      noteWhere(flight);
       keepTicking();
       // An open view's time runs again with its new call (quietSince), in the panel's list too.
       if (view?.open) sendTab();
@@ -1893,7 +1911,7 @@ export function mount(options: WidgetOptions = {}): Widget {
     page = info;
     pageCleared = false;
     later.length = 0;
-    untraced = 0;
+    untraced = [];
     if (info.trace) {
       tab = [...tab, { id: info.trace, parent: null, summary: summaryOf(info) }];
       saveTab(tab);
@@ -2020,7 +2038,7 @@ export function mount(options: WidgetOptions = {}): Widget {
     scope.clear();
     if (id !== loadView) {
       later.length = 0;
-      untraced = 0;
+      untraced = [];
     }
   }
 
@@ -2091,7 +2109,7 @@ export function mount(options: WidgetOptions = {}): Widget {
     tab = all ? [] : tab.filter((entry) => entry.id === page?.trace);
     saveTab(tab);
     later.length = 0;
-    untraced = 0;
+    untraced = [];
     render();
     sendTab();
   }
@@ -2130,6 +2148,7 @@ export function mount(options: WidgetOptions = {}): Widget {
   // Hover (or keyboard focus): the request at a glance, before opening the panel; drawn again as it changes.
   const card = mountCard(root, badge, {
     requests,
+    untraced: () => untraced.map(untracedCall),
     flights,
     view: () => (view ? { view, facts: viewFacts(), until: view.open ? quietSince(view.id) : undefined } : null),
     counted,
