@@ -2663,7 +2663,10 @@ div.dt-map-row[data-kind="code"] {
 .dt-map-row[data-dim] {
   opacity: 0.5;
 }
+/* Italic labels lean past their box: room on their right for the last letter, so a tight or clipped cell never cuts
+   it ("not traced", "waiting"). */
 .dt-map-waiting {
+  padding-inline-end: 0.2em;
   color: var(--dt-text-3);
   font-style: italic;
 }
@@ -3559,6 +3562,7 @@ div.dt-map-row[data-kind="code"] {
 /* A call no trace answered and none will (Untraced): muted, as a call's other notes; its reason in the tooltip. */
 .dt-not-traced {
   flex: none;
+  padding-inline-end: 0.2em;
   color: var(--dt-text-3);
   font-size: var(--dt-size-xs);
   font-style: italic;

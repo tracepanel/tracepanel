@@ -24,6 +24,9 @@
   what is known instead of "…" for good. A call whose trace hasn't come
   yet, deeper in a chain, looks as its trace's row will (its status, its
   time, its numbers "…"), not a dimmed row saying "waiting".
+- "not traced" shows its last letter whole in the call tree and the
+  HTTP calls tab ("not trace"), and so does "waiting for a worker…":
+  an italic word leans past its box, and a tight cell cut it off.
 ## 0.13.0 (2026-11-03)
 
 ### Fixed
