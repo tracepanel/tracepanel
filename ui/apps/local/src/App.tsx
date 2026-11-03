@@ -6,6 +6,7 @@ import {
   ChevronDownIcon,
   ClearIcon,
   CloseIcon,
+  callsCounted,
   chainApps,
   chainCalls,
   type DataSource,
@@ -42,6 +43,7 @@ import { TooltipProvider } from "@tracepanel/ui/components/ui/tooltip";
 import { useCloseOnBlur } from "@tracepanel/ui/hooks/useCloseOnBlur";
 import { type ChainCounts, chainCounts } from "@tracepanel/ui/lib/chainCounts";
 import { chainCutAt } from "@tracepanel/ui/lib/live";
+import { traceRuntime } from "@tracepanel/ui/lib/runtime";
 import { rem } from "@tracepanel/ui/lib/utils";
 import {
   type ReactNode,
@@ -326,6 +328,10 @@ function arrange(history: TabHistory, traces: readonly TraceSummary[]): TraceRow
     if (parent !== null)
       traces.sort((a, b) => a.start - b.start || madeAt(keys.get(a.id) ?? a.id) - madeAt(keys.get(b.id) ?? b.id));
   }
+  // Where each request went: a view's calls to one host are grouped.
+  const hosts = new Map(
+    history.entries.flatMap((entry) => (entry.summary?.host ? [[entry.id, entry.summary.host]] : [])),
+  );
   // The calls that answered untraced: no trace of their own; a click opens their view's, which has them.
   const untraced = new Map(
     history.entries.flatMap((entry) => (entry.summary?.untraced && entry.parent ? [[entry.id, entry.parent]] : [])),
@@ -346,11 +352,13 @@ function arrange(history: TabHistory, traces: readonly TraceSummary[]): TraceRow
     const from = redirected.get(trace.id);
     const key = keys.get(trace.id);
     const opens = untraced.get(trace.id);
+    const host = hosts.get(trace.id);
     const running = {
       ...(open.has(trace.id) ? { open: true, until: open.get(trace.id) } : {}),
       ...(from ? { redirectedFrom: from } : {}),
       ...(key ? { key } : {}),
       ...(opens ? { opens } : {}),
+      ...(host ? { host } : {}),
     };
     // A boosted link loaded a page: its path names it, not the link's text.
     if (!htmx || htmx.boosted) return { trace, depth, ...running };
@@ -409,7 +417,7 @@ function pageScope(history: TabHistory | null, rows: readonly TraceRow[]): Trace
  * not a view's calls no trace of their own answered (through a gateway: its chain's).
  */
 function requestCount(rows: readonly TraceRow[]): number {
-  return rows.filter((row) => !(row.run || row.call || row.opens) && row.trace.kind !== "page").length;
+  return rows.filter((row) => !(row.run || row.call || row.opens || row.group) && row.trace.kind !== "page").length;
 }
 
 /** The task runs each request led to, by its id. */
@@ -501,6 +509,8 @@ interface RowChains {
   apps: ReadonlyMap<string, ChainEntry[]>;
   /** By a view's or an action's id: its calls, one row each (chainCalls), once its chain loaded. */
   calls: ReadonlyMap<string, ChainCall[]>;
+  /** By a view's or an action's id: what some of its calls' traces did, as its chain counts it (callsCounted). */
+  counters: ReadonlyMap<string, Counter>;
   loading: ReadonlySet<string>;
   /** What each row's whole chain did, as the pill and the trace's tabs count it: the row says the same. */
   counts: ReadonlyMap<string, ChainCounts>;
@@ -572,8 +582,15 @@ function matchFlights(calls: readonly ChainCall[], flights: readonly TraceRow[])
 /** A view's call as a row of the list, one step under its view, the same row as it was in flight. */
 function callRow(call: ChainCall, view: string, flight: TraceRow | undefined): TraceRow {
   const key = flight?.key ?? flight?.trace.id ?? call.key;
+  // The host its row was grouped by in flight, so its group stays the same row.
+  const host = flight?.host ?? call.host;
+  const to = host ? { host } : {};
   if (call.type === "trace") {
-    return { trace: call.summary, depth: 1, key, call: "trace", counted: true, folded: true };
+    const runtime = traceRuntime(call.trace.attrs);
+    const clock = { start: call.called, end: call.ended ?? call.called + call.summary.duration };
+    // Its time as the view made the call, as its row said in flight: the trace that served it says its own.
+    const trace = { ...call.summary, duration: clock.end - clock.start };
+    return { trace, depth: 1, key, call: "trace", counted: true, folded: true, ...to, runtime, clock };
   }
   const summary = waitingSummary(call);
   // Its status as its answer said it, when the span doesn't.
@@ -581,7 +598,7 @@ function callRow(call: ChainCall, view: string, flight: TraceRow | undefined): T
   // biome-ignore lint/style/useNamingConvention: wire format.
   const trace = { ...summary, http_status: status };
   const state = call.untraced ? { call: "untraced" as const, host: call.untraced } : { call: "waiting" as const };
-  return { trace, depth: 1, key, opens: view, cut: call.cut, ...state };
+  return { trace, depth: 1, key, opens: view, cut: call.cut, ...to, ...state };
 }
 
 /**
@@ -591,10 +608,10 @@ function callRow(call: ChainCall, view: string, flight: TraceRow | undefined): T
  */
 function withViewCalls(
   rows: readonly TraceRow[],
-  calls: ReadonlyMap<string, ChainCall[]>,
+  { calls, counters }: Pick<RowChains, "calls" | "counters">,
   apps: ReadonlyMap<string, ChainEntry[]>,
+  settled: ReadonlySet<string> | undefined,
 ): { rows: TraceRow[]; apps: ReadonlyMap<string, ChainEntry[]> } {
-  if (calls.size === 0) return { rows: [...rows], apps };
   const under = new Map(apps);
   const out: TraceRow[] = [];
   let at = 0;
@@ -604,7 +621,9 @@ function withViewCalls(
     while (end < rows.length && (rows[end] as TraceRow).depth) end += 1;
     const children = rows.slice(at + 1, end);
     const own = calls.get(head.trace.id);
-    out.push(head, ...(own ? placeCalls(head.trace.id, own, children, under) : children));
+    const placed = own ? placeCalls(head.trace.id, own, children, under) : children;
+    const view = head.trace.id;
+    out.push(head, ...(head.trace.kind === "page" ? byHost(view, placed, settled, counters.get(view)) : placed));
     at = end;
   }
   return { rows: out, apps: under };
@@ -633,6 +652,118 @@ function placeCalls(
   }
   const made = (row: TraceRow) => madeAt(row.key ?? row.trace.id);
   return placed.sort((a, b) => a.at - b.at || made(a.row) - made(b.row)).map((each) => each.row);
+}
+
+/**
+ * A view's calls with those to one host (two or more) under one row (TraceRow.group), where the first of them is,
+ * from in flight on: the row is named by the host until a trace of theirs names the app ("graphql-router ×5"), and
+ * the calls stay its rows, in their order, as they fill in. A task run stays under the request it came from.
+ */
+function byHost(
+  view: string,
+  rows: readonly TraceRow[],
+  settled: ReadonlySet<string> | undefined,
+  counter: Counter | undefined,
+): TraceRow[] {
+  const units: TraceRow[][] = [];
+  for (const row of rows) {
+    const last = units.at(-1);
+    if (row.run && last) last.push(row);
+    else units.push([row]);
+  }
+  const hosts = new Map<string, TraceRow[][]>();
+  for (const unit of units) {
+    const host = unit[0]?.host;
+    if (host) hosts.set(host, [...(hosts.get(host) ?? []), unit]);
+  }
+  const out: TraceRow[] = [];
+  const grouped = new Set<string>();
+  for (const unit of units) {
+    const host = unit[0]?.host;
+    const members = host ? (hosts.get(host) ?? []) : [];
+    if (!host || members.length < 2) {
+      out.push(...unit);
+      continue;
+    }
+    if (grouped.has(host)) continue;
+    grouped.add(host);
+    const calls = members.map((each) => each[0] as TraceRow);
+    const group = groupRow(view, host, calls, settled, counter);
+    out.push(group, ...members.flat().map((row) => ({ ...row, depth: 2 as const })));
+  }
+  return out;
+}
+
+/** What some of a view's calls' traces did, as its chain counts it. */
+type Counter = (ids: readonly string[]) => ChainCounts;
+
+/**
+ * What a group's calls did: as the view's chain counts their traces and all under them, once they are all its
+ * traces (a finding of the chain's across them said once, as the tabs say it); their own numbers added up until then.
+ */
+function together(calls: readonly TraceRow[], counter: Counter | undefined) {
+  const traces = calls.map((call) => call.trace);
+  if (counter && calls.every((call) => call.call === "trace")) {
+    const counted = counter(traces.map((trace) => trace.id));
+    // biome-ignore lint/style/useNamingConvention: wire format.
+    return { queries: counted.queries, issues: counted.issues, issue_kinds: counted.kinds };
+  }
+  return {
+    queries: traces.reduce((sum, trace) => sum + trace.queries, 0),
+    issues: traces.reduce((sum, trace) => sum + trace.issues, 0),
+    // biome-ignore lint/style/useNamingConvention: wire format.
+    issue_kinds: [...new Set(traces.flatMap((trace) => trace.issue_kinds ?? []))],
+  };
+}
+
+/** The app most of a group's calls' traces name, once any does. */
+function appOf(calls: readonly TraceRow[]): string | null {
+  const counts = new Map<string, number>();
+  for (const call of calls) {
+    const traced = call.call === "trace" || !(call.call || inFlight(call.trace.id));
+    if (traced && call.trace.service) counts.set(call.trace.service, (counts.get(call.trace.service) ?? 0) + 1);
+  }
+  return [...counts].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+}
+
+/** The row over a view's calls to one host: their time on the clock, what they did, together. */
+function groupRow(
+  view: string,
+  host: string,
+  calls: readonly TraceRow[],
+  settled: ReadonlySet<string> | undefined,
+  counter: Counter | undefined,
+): TraceRow {
+  const traces = calls.map((call) => call.trace);
+  // The calls' own times, as the browser made them: in flight, answered and stored alike.
+  const clocks = calls.map(
+    (call) => call.clock ?? { start: call.trace.start, end: call.trace.start + call.trace.duration },
+  );
+  const start = Math.min(...clocks.map((clock) => clock.start));
+  const end = Math.max(...clocks.map((clock) => clock.end));
+  const app = appOf(calls);
+  const id = `${view}/calls/${host}`;
+  const summary: TraceSummary = {
+    ...(traces[0] as TraceSummary),
+    id,
+    service: app ?? "",
+    name: app ?? host,
+    start,
+    duration: end - start,
+    status: traces.some((trace) => trace.status === "error") ? "error" : "ok",
+    // biome-ignore lint/style/useNamingConvention: wire format.
+    http_status: null,
+    ...together(calls, counter),
+  };
+  const runtime = calls.find((call) => call.runtime && call.trace.service === app)?.runtime;
+  return {
+    trace: summary,
+    depth: 1,
+    key: id,
+    group: { view, host, app, count: calls.length, ...(runtime ? { runtime } : {}) },
+    ...(calls.some((call) => call.open) ? { open: true } : {}),
+    counted: calls.every((call) => call.counted || settled?.has(call.trace.id) === true),
+  };
 }
 
 /**
@@ -772,22 +903,24 @@ function useRowChains(rows: readonly TraceRow[], stored: ReadonlySet<string>): R
     .map((row) => row.trace.id)
     .join(",");
   // biome-ignore lint/correctness/useExhaustiveDependencies: `expired` moved on: the rows are built at the time now.
-  const { apps, calls } = useMemo(() => {
+  const { apps, calls, counters } = useMemo(() => {
     const rowsIn = new Set(listed.split(","));
     const views = new Set(pages.split(","));
     const apps = new Map<string, ChainEntry[]>();
     const calls = new Map<string, ChainCall[]>();
+    const counters = new Map<string, Counter>();
     for (const [id, chain] of chains) {
       if (!rowsIn.has(id)) continue;
       // A view's or an action's calls are its rows, one each, as they were in flight (chainCalls).
       if (views.has(id)) {
         calls.set(id, chainCalls(chain, id, rowsIn));
+        counters.set(id, (ids) => callsCounted(chain, id, rowsIn, ids));
         continue;
       }
       const under = chainApps(chain, id, rowsIn);
       if (under.length > 0) apps.set(id, under);
     }
-    return { apps, calls };
+    return { apps, calls, counters };
   }, [chains, listed, pages, expired]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: `expired` moved on: the next waiting call's end is asked.
   useEffect(() => {
@@ -800,7 +933,7 @@ function useRowChains(rows: readonly TraceRow[], stored: ReadonlySet<string>): R
   const counts = useMemo(() => countsOf(chains), [chains]);
   const cut = useMemo(() => cutsOf(chains), [chains]);
   const settled = useMemo(() => (source.chain ? new Set([...chains.keys(), ...failed]) : undefined), [chains, failed]);
-  return { apps, calls, loading, counts, settled, cut };
+  return { apps, calls, counters, loading, counts, settled, cut };
 }
 
 // The rows the user folded or opened, each a change from where it starts (an app's row open, a run open while its
@@ -1476,7 +1609,8 @@ function PanelApp({ route }: { route: Route }) {
   const listed = withRuns(rows, runs);
   const rowChains = useRowChains(listed, stored);
   // Each view's calls from its chain in the rows they were in flight (withViewCalls): the list shows these.
-  const shown = withViewCalls(listed, rowChains.calls, withoutFlying(rowChains.apps, history));
+  const settled = settledIn(rowChains.settled, rows, stored);
+  const shown = withViewCalls(listed, rowChains, withoutFlying(rowChains.apps, history), settled);
   const [chainOpen, toggleChain] = useChainOpen();
   const currentId = history?.current ?? null;
   const pageRows = pageScope(history, rows);
@@ -1513,12 +1647,12 @@ function PanelApp({ route }: { route: Route }) {
     apps: shown.apps,
     loading: rowChains.loading,
     counts: rowChains.counts,
-    settled: settledIn(rowChains.settled, rows, stored),
+    settled,
     cut: rowChains.cut,
     open: chainOpen,
     onToggle: toggleChain,
     // An app's row is that app's part of the chain: the call tree, at the row where its part starts (NAVIGATION.md).
-    onApp: (id, app) => go({ name: "trace", id, under: app.app, tab: "tree" }),
+    onApp: (id, app) => go({ name: "trace", id, under: app, tab: "tree" }),
   };
   const opensOn = opensOnTab(tab);
   const tabRows = inOrder(split, rows);

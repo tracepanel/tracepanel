@@ -11,9 +11,13 @@
   still runs. Before, only the calls in flight showed, and an answered
   one vanished until the view's trace came. The row keeps its name (the
   GraphQL operation, never "POST /graphql"), its place and its identity
-  as it gains its status, its numbers and what it called. No group of
-  the gateway's ("graphql-router ×5") takes the rows' place. A call
-  whose trace is on its way opens the view's call tree.
+  as it gains its status, its numbers and what it called. A call whose
+  trace is on its way opens the view's call tree.
+- A view's calls to one host sit under one row from the moment they
+  leave: named by the host ("127.0.0.1:8043 ×5") until a trace of
+  theirs names the app that served them ("graphql-router ×5"), which
+  the same row then shows. The group used to appear only once the
+  traces came, taking the place of the rows that were there.
 - A view's time in the panel's list, on the pill and in its card stops
   at its last call's answer when its calls went through a gateway. It
   ran on while the view waited for its end, then jumped back (6.5 s,

@@ -134,7 +134,7 @@ async function openView(page: Page): Promise<void> {
   await openApp(page, {}, { recording: true, view: VIEW });
 }
 
-test("a view whose calls went through a gateway has each call under it in the list, what it called under that", async ({
+test("a view whose calls went through a gateway has the gateway's row under it, each call under that, what it called under each", async ({
   page,
 }) => {
   await openView(page);
@@ -143,7 +143,10 @@ test("a view whose calls went through a gateway has each call under it in the li
   const calls = list.locator('.dt-request-row[data-call="trace"]');
 
   await expect(list.locator(".dt-request-row").first()).toContainText("/app/");
-  // The gateway's four, a row each as the view made them; no row of the gateway's over them.
+  // The gateway's four, under its row, a row each as the view made them.
+  const group = list.locator('.dt-request-row[data-call="group"]');
+  await expect(group.locator(".dt-app-chip")).toHaveText("gateway");
+  await expect(group.locator(".dt-map-times")).toHaveText("×4");
   await expect(calls).toHaveCount(4);
   await expect(list.locator('.dt-request-row[data-chain="app"]')).toHaveCount(0);
   // What the first called, folded under it until opened: the subgraph's trace.

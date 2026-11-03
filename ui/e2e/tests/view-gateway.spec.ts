@@ -29,6 +29,7 @@ async function listed(page: Page, view: string) {
     list,
     view: list.locator('.dt-request-row[data-kind="page"]').first(),
     calls,
+    group: list.locator('.dt-request-row[data-call="group"]'),
     apps: list.locator('.dt-request-row[data-chain="app"]'),
     runs: list.locator('.dt-request-row[data-chain="run"]'),
     traces: list.locator('.dt-request-row[data-chain="trace"]'),
@@ -39,12 +40,14 @@ test("different operations through one gateway are rows of their own, each named
   page,
 }) => {
   const seeded = await gatewayView(1, FIVE);
-  const { calls, apps, runs, traces } = await listed(page, seeded.view);
+  const { calls, group, apps, runs, traces } = await listed(page, seeded.view);
 
-  // The gateway's five, a row each under the view: no row of the gateway's over them.
+  // The gateway's five, a row each under the gateway's row.
+  await expect(group.locator(".dt-app-chip")).toHaveText("gateway");
+  await expect(group.locator(".dt-map-times")).toHaveText("×5");
   await expect(calls.locator(".dt-request-path")).toHaveText(FIVE);
   for (const row of await calls.all()) await expect(row.locator(".dt-kind")).toHaveText(/^gql$/i);
-  for (const row of await calls.all()) await expect(row).toHaveAttribute("data-depth", "1");
+  for (const row of await calls.all()) await expect(row).toHaveAttribute("data-depth", "2");
   await expect(runs).toHaveCount(0);
   // The subgraph's and the service's under the last.
   await expect(apps.locator(".dt-app-chip")).toHaveText(["subgraph", "shop"]);
@@ -85,7 +88,8 @@ test("one operation three times in a row is three rows, each as the view made it
   expect(await look(inRun)).toEqual({
     badge: "gql",
     name: "query Roles",
-    meta: expect.stringMatching(/^800 ms\s+0\s+1$/),
+    // The call's time, as the view made it (its trace took 800 ms of it).
+    meta: expect.stringMatching(/^900 ms\s+0\s+1$/),
   });
 });
 
@@ -93,7 +97,7 @@ test("the view's row counts its chain as the pill and the tabs do; a row with ro
   page,
 }) => {
   const seeded = await gatewayView(3, FIVE);
-  const { view, calls, apps, traces } = await listed(page, seeded.view);
+  const { view, group, calls, apps, traces } = await listed(page, seeded.view);
   const queries = (row: typeof view) => row.locator(".dt-request-queries-n");
   const issues = (row: typeof view) => row.locator(".dt-request-chips");
 
@@ -108,6 +112,9 @@ test("the view's row counts its chain as the pill and the tabs do; a row with ro
   await expect(panel(page).getByRole("tab", { name: /^DB/ })).toContainText("3");
   await expect(panel(page).getByRole("tab", { name: /^Issues/ })).toContainText("4");
 
+  // The gateway's row: all five and what is under them, its finding across them once.
+  await expect(queries(group)).toHaveText("3");
+  await expect(issues(group)).toHaveText("4");
   // Each call's row: its trace and what is under it; the rows under the last add up to its.
   await expect(queries(calls)).toHaveText(["0", "0", "0", "0", "3"]);
   await expect(issues(calls)).toHaveText(["1", "2", "1", "1", "2"]);
@@ -119,13 +126,26 @@ test("the view's row counts its chain as the pill and the tabs do; a row with ro
 
   await expect(panel(page).getByRole("tab", { name: /^DB/ })).toContainText("3");
   await expect(panel(page).getByRole("tab", { name: /^Issues/ })).toContainText("2");
+
+  // The gateway's row opens the view's call tree at its part, its tabs under it: they count what the row says.
+  await group.click();
+
+  await expect(panel(page).getByRole("tab", { name: /^Call tree/ })).toHaveAttribute("aria-selected", "true");
+
+  await panel(page)
+    .getByRole("tab", { name: /^Issues/ })
+    .click();
+
+  await expect(panel(page).locator(".dt-scope-chip")).toContainText("Under gateway");
+  await expect(panel(page).getByRole("tab", { name: /^Issues/ })).toContainText("4");
+  await expect(panel(page).getByRole("tab", { name: /^DB/ })).toContainText("3");
 });
 
 test("a view's calls fold under its row and open again; its call tree and first tab call it a view", async ({
   page,
 }) => {
   const seeded = await gatewayView(4, FIVE);
-  const { view, calls, apps } = await listed(page, seeded.view);
+  const { view, group, calls, apps } = await listed(page, seeded.view);
 
   await expect(view).toHaveAttribute("aria-expanded", "true");
   await view.locator("[data-toggle]").click();
@@ -138,6 +158,12 @@ test("a view's calls fold under its row and open again; its call tree and first 
 
   await expect(calls).toHaveCount(5);
   await expect(apps.first()).toBeVisible();
+
+  // The gateway's row folds its calls too.
+  await group.locator("[data-toggle]").click();
+  await expect(calls).toHaveCount(0);
+  await group.locator("[data-toggle]").click();
+  await expect(calls).toHaveCount(5);
   // The same name as the list's row: VIEW, not PAGE.
   const frame = panel(page);
   await expect(frame.getByRole("tab", { name: /^View/ })).toBeVisible();

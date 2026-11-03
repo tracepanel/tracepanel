@@ -31,6 +31,8 @@ export interface EntrySummary {
   untraced?: boolean | undefined;
   /** The id it had while in flight ("~…"): its row keeps that identity from in flight to stored. */
   key?: string | undefined;
+  /** The host a request went to ("api.example.com:8443"): a view's calls are grouped by it. */
+  host?: string | undefined;
 }
 
 export interface TabEntry {

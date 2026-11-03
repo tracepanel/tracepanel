@@ -1044,6 +1044,8 @@ export interface EntrySummary {
   untraced?: boolean | undefined;
   /** The id it had while in flight ("~…"): the panel keeps its row's identity from in flight to stored. */
   key?: string | undefined;
+  /** The host a request went to ("api.example.com:8443"): the panel groups a view's calls by it. */
+  host?: string | undefined;
 }
 
 /** A traced request made in this browser tab: a page load (parent null) or a fetch/XHR of that page. */
@@ -1132,6 +1134,7 @@ function flightEntry(flight: Flight, parent: string | null): TabEntry {
       queries: 0,
       issues: 0,
       open: true,
+      host: hostOf(flight.url),
     },
   };
 }
@@ -1147,7 +1150,18 @@ function summaryOf(info: TraceInfo): EntrySummary {
     issues: info.issues ?? 0,
     htmx: info.htmx,
     key: info.flight,
+    host: hostOf(info.url),
   };
+}
+
+/** The host a URL names, with its port ("127.0.0.1:8043"); none for no URL. */
+function hostOf(url: string | undefined): string | undefined {
+  if (!url) return undefined;
+  try {
+    return new URL(url, location.href).host;
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -1167,6 +1181,7 @@ function landedEntry(call: Landed): TabEntry {
       issues: 0,
       failed: call.status === undefined || call.status >= 500,
       untraced: true,
+      host: hostOf(call.flight.url),
     },
   };
 }
@@ -1587,7 +1602,10 @@ export function mount(options: WidgetOptions = {}): Widget {
     };
     return [
       ...tab.map(withQuiet),
-      ...landed.filter((call) => listed.has(call.parent)).map(landedEntry),
+      // Shown with those in flight, past the same moment: a quick one never comes before the calls made with it.
+      ...landed
+        .filter((call) => listed.has(call.parent) && Date.now() - call.flight.start >= FLIGHT_SHOWN_MS)
+        .map(landedEntry),
       ...flights().map((flight) => flightEntry(flight, parentOf(flight))),
     ];
   }
@@ -1745,7 +1763,9 @@ export function mount(options: WidgetOptions = {}): Widget {
   function tick(): void {
     const shownBefore = flights().length;
     render();
-    const passing = inFlight.some((flight) => Date.now() - flight.start < FLIGHT_SHOWN_MS + TICK_MS);
+    const passing = [...inFlight, ...landed.map((call) => call.flight)].some(
+      (flight) => Date.now() - flight.start < FLIGHT_SHOWN_MS + TICK_MS,
+    );
     if (flights().length !== shownBefore || passing) sendTab();
   }
 

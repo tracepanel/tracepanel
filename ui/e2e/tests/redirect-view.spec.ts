@@ -206,11 +206,10 @@ test("in the panel the redirect is no row: its view says where it came from, eac
     "aria-label",
     /^\/sms\/campaigns, redirected from \/sms, /,
   );
-  // Its three operations, at once: three rows under it, each by its own name, as they were in flight (no row of
-  // the gateway's over them).
+  // Its three operations, at once, under the gateway's row: three rows, each by its own name, as they were in flight.
+  await expect(list(page).locator('.dt-request-row[data-call="group"] .dt-map-times')).toHaveText("×3");
   await expect(traces.locator(".dt-request-path")).toHaveText(OPERATIONS.map((name) => `query ${name}`));
-  for (const row of await traces.all()) await expect(row).toHaveAttribute("data-depth", "1");
-  await expect(list(page).locator('.dt-request-row[data-chain="app"]')).toHaveCount(0);
+  for (const row of await traces.all()) await expect(row).toHaveAttribute("data-depth", "2");
 
   await views.filter({ hasText: "/sms/campaigns" }).click();
   const frame = panel(page);

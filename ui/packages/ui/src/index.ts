@@ -22,6 +22,7 @@ export {
   type ChainApp,
   type ChainCall,
   type ChainEntry,
+  callsCounted,
   chainApps,
   chainCalls,
   waitingSummary,
@@ -77,6 +78,6 @@ export {
 export { formatSql, tokenizeSql, uncommented } from "./sql";
 export { type Tab, Tabs } from "./Tabs";
 export { Timeline } from "./Timeline";
-export { type ListChains, PageName, TraceList, type TraceRow, traceLabel } from "./TraceList";
+export { type CallGroup, type ListChains, PageName, TraceList, type TraceRow, traceLabel } from "./TraceList";
 export { type ExploreItem, type TabId, TraceView, type TraceViewProps } from "./TraceView";
 export type * from "./types";

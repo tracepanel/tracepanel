@@ -61,6 +61,26 @@ export interface TraceRow {
   host?: string | undefined;
   /** What it called is folded under it until opened, as a chain's trace row is (a view's call). */
   folded?: boolean | undefined;
+  /**
+   * A view's calls to one host, as one row over them (`trace` adds them up): named by the host while no trace of
+   * theirs says which app served them, then by that app ("graphql-router ×5"). Its calls are the rows under it.
+   */
+  group?: CallGroup | undefined;
+  /** What served it runs on (a view's call), for its group's chip. */
+  runtime?: string | undefined;
+  /** When the call itself started and ended (µs), as the browser timed it: its group's time on the clock. */
+  clock?: { start: number; end: number } | undefined;
+}
+
+/** A view's calls to one host (TraceRow.group). */
+export interface CallGroup {
+  /** The view or action that made them. */
+  view: string;
+  host: string;
+  /** The app their traces name, once one came. */
+  app: string | null;
+  runtime?: string | undefined;
+  count: number;
 }
 
 export interface TraceListProps {
@@ -93,7 +113,7 @@ export interface ListChains {
   open: ReadonlySet<string>;
   onToggle: (key: string) => void;
   /** An app's row: the row's trace, its tabs listing what that app's traces did. */
-  onApp: (rowId: string, app: ChainApp) => void;
+  onApp: (rowId: string, app: string) => void;
   /**
    * By the row's trace id: what its whole chain did (lib/chainCounts), as the pill and the trace's tabs count it. The
    * row says it, a view's too, whose own trace ran nothing.
@@ -139,19 +159,35 @@ export function TraceList({
   onSelect,
 }: TraceListProps) {
   const withOpens = chains && opensOn ? { ...chains, opensOn } : chains;
-  // A view or an action folded: the rows under it (its calls) hidden until it opens again.
-  let hidden = false;
+  // A view, an action or a group of calls folded: the rows under it hidden until it opens again (those deeper).
+  let hiddenBelow: number | null = null;
   return (
     <ul className="dt-requests" data-compact={compact ? "" : undefined}>
       {rows.map((row, at) => {
-        if (row.depth && hidden) return null;
+        const depth = row.depth ?? 0;
+        if (hiddenBelow !== null && depth > hiddenBelow) return null;
+        hiddenBelow = null;
         const counts = chains?.counts?.get(row.trace.id);
         const trace = withChain(row.trace, counts);
-        const depth = row.depth ?? 0;
-        const calls = trace.kind === "page" && !depth && Boolean(rows[at + 1]?.depth);
-        const fold = chains ? rowFold(chains, trace.id, row.folded, calls) : undefined;
-        if (!depth) hidden = fold?.open === false;
+        const under = (row.trace.kind === "page" || row.group !== undefined) && (rows[at + 1]?.depth ?? 0) > depth;
+        const fold = chains ? rowFold(chains, trace.id, row.folded, under) : undefined;
+        if (fold?.open === false) hiddenBelow = depth;
         const key = row.key ?? trace.id;
+        if (row.group) {
+          return (
+            <li key={key}>
+              <GroupRow
+                row={{ ...row, trace }}
+                group={row.group}
+                fold={fold}
+                pending={pendingIn(chains, row)}
+                fresh={newIds?.has(key) ?? false}
+                onApp={chains?.onApp}
+                onSelect={onSelect}
+              />
+            </li>
+          );
+        }
         return (
           <li key={key}>
             <ListRow
@@ -271,6 +307,56 @@ function NotTracedMark({ host }: { host: string }) {
     <span className="dt-not-traced" data-state="untraced" title={untracedNote(host)}>
       not traced
     </span>
+  );
+}
+
+/**
+ * A view's calls to one host, one row over them, the shape of an app's row in a chain: its app's chip (the host until a
+ * trace of theirs names the app), how many, their time on the clock (ticking while one runs), what they did. A click
+ * opens the view's call tree, at that app's part once it is known.
+ */
+function GroupRow({
+  row: { trace, depth = 1, open },
+  group,
+  fold,
+  pending,
+  fresh,
+  onApp,
+  onSelect,
+}: {
+  row: TraceRow;
+  group: CallGroup;
+  fold: RowFold | null | undefined;
+  pending: boolean;
+  fresh: boolean;
+  onApp: ((rowId: string, app: string) => void) | undefined;
+  onSelect: (id: string) => void;
+}) {
+  const name = group.app ?? group.host;
+  const calls = plural(group.count, "call", "calls");
+  return (
+    <button
+      type="button"
+      className="dt-request-row"
+      data-depth={depth}
+      data-call="group"
+      {...liveProps(trace, open, null)}
+      aria-label={`${name}, ${calls}${open ? ", running" : `, ${duration(trace.duration)}`}`}
+      title={`${name}: ${calls} of this view${group.app ? ` to ${group.host}` : ""}. Opens its call tree${group.app ? ` where ${group.app}'s part starts` : ""}.`}
+      {...foldProps(fold)}
+      data-new={fresh ? "" : undefined}
+      onClick={() => (group.app && onApp ? onApp(group.view, group.app) : onSelect(group.view))}
+    >
+      <span className="dt-request-main">
+        <RowCaret fold={fold} />
+        <AppChip name={name} runtime={group.runtime} compact />
+      </span>
+      <span className="dt-request-meta">
+        {group.count > 1 ? <Times count={group.count} /> : <StatusSlot status={null} />}
+        <RowTime trace={trace} open={open} until={undefined} />
+        <CompactMeta trace={trace} pending={pending} />
+      </span>
+    </button>
   );
 }
 
@@ -499,7 +585,7 @@ function ChainAppRows({ app, rowId, level, chains, selectedId, onSelect }: Chain
         style={{ "--dt-chain-level": level } as CSSProperties}
         aria-expanded={open}
         title={`${app.app}: ${traces} for this request's calls. Opens its call tree where ${app.app}'s part starts, its tabs under ${app.app}.`}
-        onClick={() => chains.onApp(rowId, app)}
+        onClick={() => chains.onApp(rowId, app.app)}
         onKeyDown={foldKeys(open, toggle)}
       >
         <span className="dt-request-main">

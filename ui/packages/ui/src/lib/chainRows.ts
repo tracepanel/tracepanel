@@ -26,6 +26,10 @@ export interface ChainTraceRow {
   apps: ChainEntry[];
   /** The span of the call it answered, in the trace that made it (a view's calls, chainCalls). */
   span?: string | undefined;
+  /** Where that call went: its host and port (a view's calls, chainCalls). */
+  host?: string | null | undefined;
+  /** When that call ended, on the chain's clock (µs; a view's calls, chainCalls). */
+  ended?: number | undefined;
 }
 
 /** Consecutive traces of one route (three or more): one row (×N, their time on the clock), each of them under it. */
@@ -56,6 +60,8 @@ export interface ChainWaiting {
   operation: string | null;
   /** The status its answer had, when the call's span says it. */
   status: number | null;
+  /** Where it went: its host and port, when its span says it. */
+  host: string | null;
   /** When the call started and ended, on the chain's clock (µs). */
   start: number;
   end: number;
@@ -236,6 +242,7 @@ function waitingOf(span: Span, key: string): ChainWaiting {
     path: path || span.name,
     operation: callOperation(span.attrs) ?? (span.name.startsWith("GraphQL ") ? span.name : null),
     status: statusOf(span),
+    host: hostOf(span),
     start: span.start,
     end: span.start + span.duration,
     cut: isCut(span) ? span.duration : null,
@@ -517,15 +524,18 @@ export function chainCalls(
   const answered: ChainCall[] = below.map((each) => {
     // Keyed by its call, as the call's row was while its trace was on its way: one row from start to end.
     const key = `${root}/call/${each.via ?? each.id}`;
+    const call = each.via ? spans.get(each.via) : undefined;
     return {
       type: "trace",
       key,
       span: each.via ?? undefined,
+      host: call ? hostOf(call) : null,
+      ended: call ? call.start + call.duration : undefined,
       id: each.id,
       trace: each.trace,
       summary: together([each.trace], context.counted([each.id])),
       route: routeOf(each.trace),
-      called: (each.via ? spans.get(each.via)?.start : undefined) ?? each.trace.start,
+      called: call?.start ?? each.trace.start,
       apps: appsUnder(new Set([each.id]), context, key),
     };
   });
@@ -595,3 +605,11 @@ export function waitingSummary(call: ChainWaiting): TraceSummary {
   };
 }
 // biome-ignore-end lint/style/useNamingConvention: builds an API object; its field names are the wire format.
+
+/**
+ * What some of a view's calls' traces and everything under them did (`ids`, traces of the chain), as the tabs count
+ * it: the row over a view's calls to one host says the same as an app's row did.
+ */
+export function callsCounted(chain: Chain, root: string, listed: ReadonlySet<string>, ids: readonly string[]) {
+  return contextOf(chain, root, listed, Date.now()).counted(ids);
+}

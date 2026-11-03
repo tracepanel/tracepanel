@@ -99,7 +99,7 @@ async function opened(page: Page): Promise<{ release: (op: string) => void; list
   await page.goto("/calls/");
   const list = panel(page).getByRole("region", { name: "Pages and requests in this browser tab" });
   await expect(list).toBeVisible();
-  return { release, list, calls: list.locator('.dt-request-row[data-depth="1"]') };
+  return { release, list, calls: list.locator('.dt-request-row[data-depth="2"]') };
 }
 
 /** Each call's row: its name and whether it runs. */
@@ -161,7 +161,7 @@ async function storeView(page: Page, tag: number): Promise<void> {
     );
     each["attrs"] = {
       "http.request.method": "POST",
-      "url.full": "http://127.0.0.1/gw/graphql",
+      "url.full": `${CONSOLE}gw/graphql`,
       "w3c.span_id": callOf(tag, OPERATIONS.indexOf(call.op)),
       "graphql.operation.type": "query",
       "graphql.operation.name": call.op,
@@ -262,9 +262,16 @@ test("a call keeps its row, its name and its place from in flight to its stored 
   ] as const);
   const names = OPERATIONS.map((op) => `query ${op}`);
   await expect(calls.locator(".dt-request-path")).toHaveText(names);
+  // Over them from the start, the row of the host they went to: the same row the gateway's name takes later.
+  const group = list.locator('.dt-request-row[data-call="group"]');
+  await expect(group.locator(".dt-app-chip")).toHaveText(new URL(CONSOLE).host);
+  await expect(group.locator(".dt-map-times")).toHaveText("×3");
   // Each row marked: the same element must be there at the end, not a new row in its place.
   await calls.evaluateAll((rows) => {
     for (const [n, row] of rows.entries()) (row as HTMLElement).dataset["probe"] = String(n);
+  });
+  await group.evaluate((row) => {
+    (row as HTMLElement).dataset["probe"] = "group";
   });
   const probes = () => calls.evaluateAll((rows) => rows.map((row) => (row as HTMLElement).dataset["probe"] ?? "new"));
 
@@ -278,13 +285,17 @@ test("a call keeps its row, its name and its place from in flight to its stored 
   await expect(calls.locator(".dt-request-path")).toHaveText(names);
   expect(await probes()).toEqual(["0", "1", "2"]);
 
-  // The gateway's traces stored: the same rows, their numbers filled in; no group of the gateway's in their place.
+  // The gateway's traces stored: the same rows, their numbers filled in; no other group in their place.
   await storeGateway(page, tag);
   await expect(list.locator('.dt-request-row[data-call="trace"]')).toHaveCount(3);
   await expect(calls.locator(".dt-request-path")).toHaveText(names);
   await expect(calls.locator(".dt-request-queries-n")).toHaveText(["0", "0", "0"]);
   await expect(list.locator('.dt-request-row[data-chain="app"]')).toHaveCount(0);
   expect(await probes()).toEqual(["0", "1", "2"]);
+  // The host's row now says which app served them, the same row, the calls still under it.
+  await expect(group.locator(".dt-app-chip")).toHaveText("gateway");
+  await expect(group.locator(".dt-map-times")).toHaveText("×3");
+  expect(await group.getAttribute("data-probe")).toBe("group");
 });
 
 /** A time as the list writes it, in µs: "850 ms", "1.2 s". */
