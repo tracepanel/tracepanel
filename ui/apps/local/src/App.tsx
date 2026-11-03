@@ -997,6 +997,37 @@ function cutsOf(chains: ReadonlyMap<string, Chain>): ReadonlyMap<string, number>
   return cuts;
 }
 
+// The rows' chains, kept for the browser tab's session: the panel loads again with each page, and a row that had its
+// numbers says them at once, not "…" until its chain comes again (slowly, on a slow network).
+const CHAINS_KEY = "tracepanel:chains";
+/** The most chains kept, the newest, and the most room they take (characters): the rest load again. */
+const CHAINS_KEPT = 24;
+const CHAINS_ROOM = 1_500_000;
+
+function readChains(): ReadonlyMap<string, Chain> {
+  try {
+    const saved: unknown = JSON.parse(sessionStorage.getItem(CHAINS_KEY) ?? "[]");
+    return new Map(Array.isArray(saved) ? (saved as [string, Chain][]) : []);
+  } catch {
+    return new Map();
+  }
+}
+
+function saveChains(chains: ReadonlyMap<string, Chain>): void {
+  try {
+    const kept = [...chains].slice(-CHAINS_KEPT);
+    let text = JSON.stringify(kept);
+    // Too big: the newest that fit.
+    while (text.length > CHAINS_ROOM && kept.length > 0) {
+      kept.shift();
+      text = JSON.stringify(kept);
+    }
+    sessionStorage.setItem(CHAINS_KEY, text);
+  } catch {
+    // Storage can be blocked or full: the rows then load their chains again, "…" until then.
+  }
+}
+
 /**
  * The apps each row's trace called, by its id. A view's or an action's too: its requests to an app with an SDK are
  * rows of their own (left out here), but a call through a proxy or a gateway (Apollo Router, over OTLP) answers with
@@ -1008,7 +1039,9 @@ function cutsOf(chains: ReadonlyMap<string, Chain>): ReadonlyMap<string, number>
  * Its calls whose traces are on their way are rows too, until they arrive or stop being waited for (lib/chainRows).
  */
 function useRowChains(rows: readonly TraceRow[], stored: ReadonlySet<string>): RowChains {
-  const [chains, setChains] = useState<ReadonlyMap<string, Chain>>(() => new Map());
+  // The chains the panel had before the page reloaded it: its rows keep their numbers while they load again.
+  const [chains, setChains] = useState<ReadonlyMap<string, Chain>>(readChains);
+  useEffect(() => saveChains(chains), [chains]);
   const [loading, setLoading] = useState<ReadonlySet<string>>(() => new Set());
   const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set());
   const has = useRef(chains);

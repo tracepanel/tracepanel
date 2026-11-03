@@ -88,6 +88,10 @@
   at its last call's answer when its calls went through a gateway. It
   ran on while the view waited for its end, then jumped back (6.5 s,
   then 5.6 s): only the answers that named a trace stopped it.
+- After the page reloads, the rows of the pages before it keep their
+  numbers while their chains load again (VIEW / and its GraphQL query
+  Books said "…" for seconds on a slow network): the panel keeps the
+  chains it had for the browser tab's session.
 - A number on its way says "…" everywhere, and only while it is on its
   way. A row of the panel's list whose trace never reached the agent
   (the store was cleared since), or whose chain can't be loaded, says

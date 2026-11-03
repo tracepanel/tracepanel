@@ -834,3 +834,78 @@ test("the selected view stays in sight below the list's head as its calls fill t
   await expect(list.locator(".dt-running")).toHaveCount(0);
   await expect.poll(inSight).toBeGreaterThanOrEqual(0);
 });
+
+test("after a reload the rows that had their numbers keep them while their chains load again", async ({ page }) => {
+  const tag = 14;
+  const bff = id(tag, 20);
+  const { release, list } = await opened(page, {
+    headers: () => ({
+      "Tracepanel-Id": bff,
+      "Tracepanel-Name": "GraphQL%20query%20Books",
+      "Server-Timing": 'db;dur=0;desc="0 queries", total;dur=30, tracepanel-issues;desc="pending"',
+    }),
+    dock: "bottom",
+  });
+  await open(page, id(tag, 1), ["Books"]);
+  release(0);
+  await viewEnded(page);
+  const made = await page.evaluate(() => (window as unknown as { calls: Made[] }).calls[0] as Made);
+  const start = made.start + 2 * ms;
+  const time = Math.max(4 * ms, made.end - made.start - 4 * ms);
+  // The BFF ran no query; the service it called ran two.
+  const hop = `${digits(tag, 3)}d${digits(run(), 5)}${digits(0, 7)}`;
+  const own = trace(
+    bff,
+    "http",
+    "GraphQL query Books",
+    start,
+    time,
+    {
+      "service.name": "library-bff",
+      "http.method": "POST",
+      "http.route": "/graphql",
+      "http.status_code": 200,
+      "w3c.trace_id": traceOf(tag),
+      "w3c.parent_span_id": callOf(tag, 0),
+    },
+    [
+      {
+        ...span("b0", `${bff}r`, "http.client", "GET 127.0.0.1/books", start + ms, time - 2 * ms),
+        attrs: { "http.request.method": "GET", "url.full": "http://127.0.0.1:4100/books", "w3c.span_id": hop },
+      },
+    ],
+  );
+  const queries = [0, 1].map((q) => span(`q${q}`, `${id(tag, 40)}r`, "sql", "SELECT books", start + 2 * ms, ms));
+  const api = trace(
+    id(tag, 40),
+    "http",
+    "GET /books",
+    start + 2 * ms,
+    time - 4 * ms,
+    {
+      "service.name": "library-api",
+      "http.method": "GET",
+      "http.route": "/books",
+      "http.status_code": 200,
+      "w3c.trace_id": traceOf(tag),
+      "w3c.parent_span_id": hop,
+    },
+    queries,
+  );
+  await ingest([own, api]);
+  await storeView(page, tag, { origin: "http://bff.test:4000/" });
+  const call = list.locator(".dt-request-row").filter({ hasText: "query Books" });
+  await expect(call.locator(".dt-pending")).toHaveCount(0);
+  await expect(call.locator(".dt-request-queries-n")).toHaveText("2");
+
+  // The page loaded again on a slow network: the chains take their time to come again.
+  await page.route("**/api/traces/*/chain", () => undefined);
+  await page.reload();
+  const again = panel(page).getByRole("region", { name: "Pages and requests in this browser tab" });
+  const before = again.locator(".dt-request-row").filter({ hasText: "query Books" });
+  await expect(before).toBeVisible();
+  // Its numbers at once, as before the reload, not "…".
+  await expect(before.locator(".dt-request-queries-n")).toHaveText("2");
+  await expect(before.locator(".dt-pending")).toHaveCount(0);
+  await expect(again.locator('.dt-request-row[data-kind="page"]').first().locator(".dt-pending")).toHaveCount(0);
+});
