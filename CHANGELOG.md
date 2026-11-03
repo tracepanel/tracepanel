@@ -66,6 +66,11 @@
   numbers instead of "…" for good, and "not traced" says what is true of
   a file a traced app serves too (Next.js serves public/ files
   untraced): that host sent no trace for the call.
+- The panel's count of a page's requests ("This page · 8 requests", and
+  the count beside its name in the panel's header) counts a view's calls
+  through a gateway too, in flight, answered and stored. Once they
+  answered it said 0, while the pill counted 40 HTTP calls down the
+  view's chain.
 ## 0.13.0 (2026-11-03)
 
 ### Fixed

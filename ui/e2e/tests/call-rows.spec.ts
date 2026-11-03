@@ -242,3 +242,28 @@ test("a group of calls no trace answered says so with nothing on its way, and th
   await expect(group.locator(".dt-pending")).toHaveCount(0);
   await expect(list.locator('.dt-request-row[data-kind="page"] .dt-pending')).toHaveCount(0);
 });
+
+test("the page's count says every call its view made, through a gateway too, in flight, answered and stored", async ({
+  page,
+}) => {
+  const tag = 2;
+  const { release, list } = await opened(page);
+  const head = list.locator(".page-requests-count");
+  const chip = panel(page).locator(".switcher-count");
+  await open(page, id(tag, 1), ["Features", "TenantRoles", "Campaigns"]);
+
+  await expect(head).toHaveText("· 3 requests");
+  await expect(chip).toHaveText("3");
+
+  for (const n of [0, 1, 2]) release(n);
+  await viewEnded(page);
+  await expect(list.locator('.dt-request-row[data-depth="2"] .dt-running')).toHaveCount(0);
+  await expect(head).toHaveText("· 3 requests");
+  await expect(chip).toHaveText("3");
+
+  // Its trace stored: its calls are the chain's rows now, the count the same.
+  await storeView(page, tag);
+  await expect(list.locator('.dt-request-row[data-call="waiting"]')).toHaveCount(3);
+  await expect(head).toHaveText("· 3 requests");
+  await expect(chip).toHaveText("3");
+});

@@ -419,11 +419,12 @@ function pageScope(history: TabHistory | null, rows: readonly TraceRow[]): Trace
 }
 
 /**
- * How many requests a list of rows holds, as the pill counts them: not the views and actions, not the runs under them,
- * not a view's calls no trace of their own answered (through a gateway: its chain's).
+ * How many requests a list of rows holds: every call the page made, in flight, answered and stored alike, through a
+ * gateway too (a view's calls are its own HTTP calls in its chain's count), but not the views and actions, not the
+ * runs under them, not the row over a view's calls to one host.
  */
 function requestCount(rows: readonly TraceRow[]): number {
-  return rows.filter((row) => !(row.run || row.call || row.opens || row.group) && row.trace.kind !== "page").length;
+  return rows.filter((row) => !(row.run || row.group) && row.trace.kind !== "page").length;
 }
 
 /** The task runs each request led to, by its id. */
