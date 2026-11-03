@@ -148,7 +148,7 @@ test("a call that just ended is waited for first: not traced only once no trace 
   await expect(page.locator(".dt-on-its-way")).toBeVisible();
   await expect(row.locator('[data-state="untraced"]')).toHaveCount(0);
 
-  // Waited for 5 s after it ended: no trace came.
-  await expect(row.locator('[data-state="untraced"]')).toHaveText("not traced", { timeout: 10_000 });
+  // Waited for 10 s after it ended: no trace came.
+  await expect(row.locator('[data-state="untraced"]')).toHaveText("not traced", { timeout: 15_000 });
   await expect(page.locator(".dt-on-its-way")).toHaveCount(0);
 });

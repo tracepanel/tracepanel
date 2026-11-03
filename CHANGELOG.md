@@ -133,7 +133,15 @@
 - A call under a request in the panel's list to a host that sends no
   traces (a third-party API the BFF calls) stays once it is no longer
   waited for and says "not traced", as the call tree does. Its row went
-  five seconds after the call, leaving nothing in its place.
+  five seconds after the call, leaving nothing in its place. And "not
+  traced" is said for good, never a moment before the call's trace
+  shows: a call is waited for 10 seconds after the last call of the
+  chain to its host ended (an app over OTLP sends its spans in batches,
+  and the agent holds a gateway's spans of a page until its last
+  operation's came), not 5 seconds after its own, and judged by a chain
+  asked for after that, never an older one. Four of a page's GraphQL
+  operations through Apollo Router said "not traced" from 6.3 to 8.3 s,
+  then showed their traces.
 - A page's own document (GET /docs, which its server traced) is no
   longer one of its view's calls in the panel's list: it joined their
   group ("next-app ×3" over GET /docs and the two GET /openapi.json

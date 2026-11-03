@@ -663,7 +663,7 @@ function ChainWaitingRow({ call, level }: { call: ChainWaiting; level: number })
 /** A waiting call's tooltip: a call cut short still waits for its answer (lib/live), an ended one for its trace. */
 function waitingTitle(name: string, cut: number | null): string {
   if (cut !== null) return `${name}: still waiting. ${cutNote(cut)}`;
-  return `${name}: waiting for its trace. It shows here once the app that served it sends it; a service that records none is no longer waited for ${WAITING_MS / 1000} s after the call.`;
+  return `${name}: waiting for its trace. It shows here once the app that served it sends it; a service that records none is no longer waited for ${WAITING_MS / 1000} s after the last call to it.`;
 }
 
 type ChainLevelProps = Omit<ChainRowsProps, "apps">;

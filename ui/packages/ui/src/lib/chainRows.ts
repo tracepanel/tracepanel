@@ -107,10 +107,13 @@ export const RUN_MIN = 3;
  * How long after a call ended its trace is waited for. A call carried the trace on (its span says which span the
  * callee's trace names as its parent: `w3c.span_id`), but that alone doesn't say the service it reached records
  * traces: a third-party API, or an app without tracepanel, never sends one. An app's SDK sends a trace as its request
- * ends and the agent stores it within a second or two, so a call is waited for this long after it ended, then its row
- * goes; a trace that comes later still shows as it arrives (the list asks for the chain again while the row is new).
+ * ends; an app over OTLP sends its spans in batches (every 5 s by OpenTelemetry's default), and the agent holds one
+ * service's spans of a W3C trace until they stopped coming for a moment: a gateway's first operation of a page reaches
+ * the agent only after its last one ended (a few seconds after). So a call is waited for this long after the last call
+ * of the chain to its host ended (waitedUntil), then its row says "not traced", for good; a trace that comes later
+ * still shows as it arrives (the list asks for the chain again while the row is new).
  */
-export const WAITING_MS = 5_000;
+export const WAITING_MS = 10_000;
 /**
  * How long after it was cut a call with no answer yet is waited for: the app that serves it sends its trace once the
  * request ends, however long that takes (a handler that sleeps, a database that hangs). Not for ever: a call nothing
@@ -296,18 +299,41 @@ function waitingOf(span: Span, key: string): ChainWaiting {
   };
 }
 
-/** A waiting call with the host it went to, by the trace that made it. */
-type Pending = { row: ChainWaiting; host: string | null };
+/** A waiting call with the host it went to, by the trace that made it, and until when it is waited for (µs). */
+type Pending = { row: ChainWaiting; host: string | null; until: number };
 
-/** How long a call is waited for after it ended (µs): a call cut short, with no answer yet, much longer. */
-function waitedFor(span: Span): number {
-  return (isCut(span) ? CUT_WAITING_MS : WAITING_MS) * 1000;
+/**
+ * When the last call of the chain to each host ended (µs), of those that ended (not cut short): the agent holds a
+ * service's spans of one W3C trace until they all came, so a call's trace may come only after the last call to its
+ * host ended.
+ */
+function lastEnds(traces: readonly Placed[]): ReadonlyMap<string, number> {
+  const ends = new Map<string, number>();
+  for (const each of traces) {
+    for (const span of each.trace?.spans ?? []) {
+      const host = hostOf(span);
+      if (host === null || !carries(span) || isCut(span)) continue;
+      ends.set(host, Math.max(ends.get(host) ?? 0, span.start + span.duration));
+    }
+  }
+  return ends;
+}
+
+/**
+ * Until when a call's trace is waited for (µs): WAITING_MS after the last call of the chain to its host ended (`ends`,
+ * lastEnds), its own end at the earliest; a call cut short, with no answer yet, CUT_WAITING_MS after it was cut.
+ */
+function waitedUntil(span: Span, ends: ReadonlyMap<string, number>): number {
+  const end = span.start + span.duration;
+  if (isCut(span)) return end + CUT_WAITING_MS * 1000;
+  const host = hostOf(span);
+  return Math.max(end, host === null ? end : (ends.get(host) ?? end)) + WAITING_MS * 1000;
 }
 
 /**
  * The calls of the chain's traces whose traces haven't arrived (by the trace that made them): those that carried the
- * trace on, no trace of the chain names them, and they ended less than WAITING_MS ago (`now`, µs), or were cut short
- * less than CUT_WAITING_MS ago. None when a limit left traces out of the chain: those calls' traces aren't missing.
+ * trace on, no trace of the chain names them, and they are still waited for at `now` (µs, waitedUntil). None when a
+ * limit left traces out of the chain: those calls' traces aren't missing.
  */
 function waitingCalls(chain: Chain, now: number): Map<string, Pending[]> {
   return waitingAmong(chain.traces, chain.capped, now);
@@ -320,20 +346,26 @@ function waitingAmong(traces: readonly Placed[], capped: boolean, now: number): 
   const waiting = new Map<string, Pending[]>();
   if (capped) return waiting;
   const answered = new Set(traces.map((each) => `${each.parent}/${each.via}`));
+  const ends = lastEnds(traces);
   for (const each of traces) {
-    const calls = unanswered(each, answered, now);
+    const calls = unanswered(each, answered, now, ends);
     if (calls.length > 0) waiting.set(each.id, calls);
   }
   return waiting;
 }
 
 /** A trace's calls that carried it on and no trace answered yet, while they are still waited for (`now`, µs). */
-function unanswered(each: Placed, answered: ReadonlySet<string>, now: number): Pending[] {
+function unanswered(
+  each: Placed,
+  answered: ReadonlySet<string>,
+  now: number,
+  ends: ReadonlyMap<string, number>,
+): Pending[] {
   const spans = each.trace?.spans ?? [];
   return spans
     .filter((span) => carries(span) && !answered.has(`${each.id}/${span.id}`))
-    .filter((span) => now - (span.start + span.duration) < waitedFor(span))
-    .map((span) => ({ row: waitingOf(span, each.id), host: hostOf(span) }));
+    .map((span) => ({ row: waitingOf(span, each.id), host: hostOf(span), until: waitedUntil(span, ends) }))
+    .filter((call) => now < call.until);
 }
 
 /**
@@ -375,7 +407,9 @@ export function untracedIn(
   if (capped) return new Map();
   const calls = carriedCalls(traces);
   const known = new Set(calls.filter((call) => call.answered).map((call) => call.host));
-  const gone = (call: CarriedCall) => !(call.answered || known.has(call.host)) && waitedOut(call.span, now * 1000);
+  const ends = lastEnds(traces);
+  const gone = (call: CarriedCall) =>
+    !(call.answered || known.has(call.host) || isCut(call.span)) && now * 1000 >= waitedUntil(call.span, ends);
   return new Map(calls.filter(gone).flatMap((call) => (call.host === null ? [] : [[call.span.id, call.host]])));
 }
 
@@ -391,16 +425,9 @@ function carriedCalls(traces: readonly Placed[]): CarriedCall[] {
   );
 }
 
-/** A call that ended (not cut short) and was waited for as long as a call is (`at`, µs). */
-function waitedOut(span: Span, at: number): boolean {
-  return !isCut(span) && at - (span.start + span.duration) >= waitedFor(span);
-}
-
 /** When the first of the chain's waiting calls stops being waited for (ms), if any is. */
 export function waitingUntil(chain: Chain, now: number = Date.now()): number | null {
-  const ends = [...waitingCalls(chain, now * 1000).values()]
-    .flat()
-    .map((each) => each.row.end / 1000 + (each.row.cut === null ? WAITING_MS : CUT_WAITING_MS));
+  const ends = [...waitingCalls(chain, now * 1000).values()].flat().map((each) => each.until / 1000);
   return ends.length > 0 ? Math.min(...ends) : null;
 }
 
