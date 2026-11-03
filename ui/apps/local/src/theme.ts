@@ -27,7 +27,7 @@ function read(): ThemeChoice {
  * Sets html[data-theme] from the stored choice (dark when there is none), or from the OS when the choice is "system".
  * index.html's first script does the same before the first paint.
  */
-export function applyTheme(choice: ThemeChoice = read()): void {
+function applyTheme(choice: ThemeChoice = read()): void {
   const dark = choice === "dark" || (choice === "system" && window.matchMedia(DARK).matches);
   document.documentElement.dataset["theme"] = dark ? "dark" : "light";
   if (window.parent !== window) {

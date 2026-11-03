@@ -159,64 +159,98 @@ export function TraceList({
   onSelect,
 }: TraceListProps) {
   const withOpens = chains && opensOn ? { ...chains, opensOn } : chains;
-  // A view, an action or a group of calls folded: the rows under it hidden until it opens again (those deeper).
-  let hiddenBelow: number | null = null;
+  const props = { chains, withOpens, selectedId, currentId, newIds, compact, services, opensOn, onSelect };
   return (
     <ul className="dt-requests" data-compact={compact ? "" : undefined}>
-      {rows.map((row, at) => {
-        const depth = row.depth ?? 0;
-        if (hiddenBelow !== null && depth > hiddenBelow) return null;
-        hiddenBelow = null;
-        const counts = chains?.counts?.get(row.trace.id);
-        const trace = withChain(row.trace, counts);
-        const under = (row.trace.kind === "page" || row.group !== undefined) && (rows[at + 1]?.depth ?? 0) > depth;
-        const fold = chains ? rowFold(chains, trace.id, row.folded, under) : undefined;
-        if (fold?.open === false) hiddenBelow = depth;
-        const key = row.key ?? trace.id;
-        if (row.group) {
-          return (
-            <li key={key}>
-              <GroupRow
-                row={{ ...row, trace }}
-                group={row.group}
-                fold={fold}
-                pending={pendingIn(chains, row)}
-                fresh={newIds?.has(key) ?? false}
-                onApp={chains?.onApp}
-                onSelect={onSelect}
-              />
-            </li>
-          );
-        }
-        return (
-          <li key={key}>
-            <ListRow
-              row={{ ...row, trace }}
-              fold={fold}
-              chained={counts !== undefined && counts.traces > 1}
-              pending={pendingIn(chains, row)}
-              cut={row.cut ?? chains?.cut?.get(trace.id) ?? null}
-              selected={trace.id === selectedId}
-              current={trace.id === currentId}
-              fresh={newIds?.has(key) ?? false}
-              compact={compact}
-              services={services}
-              opens={opensOn?.(trace)}
-              onSelect={onSelect}
-            />
-            {withOpens && fold?.open !== false ? (
-              <RowChain
-                rowId={trace.id}
-                level={depth + 1}
-                chains={withOpens}
-                selectedId={selectedId}
-                onSelect={onSelect}
-              />
-            ) : null}
-          </li>
-        );
-      })}
+      {shownRows(rows, chains).map(({ row, fold }) => (
+        <ListItem key={row.key ?? row.trace.id} row={row} fold={fold} {...props} />
+      ))}
     </ul>
+  );
+}
+
+/**
+ * The rows on screen, each with its fold: those under a folded view, action or group of calls (deeper than it) hidden
+ * until it opens again.
+ */
+function shownRows(rows: readonly TraceRow[], chains: ListChains | undefined) {
+  const shown: { row: TraceRow; fold: RowFold | null | undefined }[] = [];
+  let hiddenBelow: number | null = null;
+  for (const [at, row] of rows.entries()) {
+    const depth = row.depth ?? 0;
+    if (hiddenBelow !== null && depth > hiddenBelow) continue;
+    hiddenBelow = null;
+    const under = (row.trace.kind === "page" || row.group !== undefined) && (rows[at + 1]?.depth ?? 0) > depth;
+    const fold = chains ? rowFold(chains, row.trace.id, row.folded, under) : undefined;
+    if (fold?.open === false) hiddenBelow = depth;
+    shown.push({ row, fold });
+  }
+  return shown;
+}
+
+/** One item of the list: a row (or a group's), and what its trace called under it. */
+function ListItem({
+  row,
+  fold,
+  chains,
+  withOpens,
+  selectedId,
+  currentId,
+  newIds,
+  compact,
+  services,
+  opensOn,
+  onSelect,
+}: Omit<TraceListProps, "rows"> & {
+  row: TraceRow;
+  fold: RowFold | null | undefined;
+  withOpens: ListChains | undefined;
+}) {
+  const counts = chains?.counts?.get(row.trace.id);
+  const trace = withChain(row.trace, counts);
+  const fresh = newIds?.has(row.key ?? trace.id) ?? false;
+  const pending = pendingIn(chains, row);
+  if (row.group) {
+    return (
+      <li>
+        <GroupRow
+          row={{ ...row, trace }}
+          group={row.group}
+          fold={fold}
+          pending={pending}
+          fresh={fresh}
+          onApp={chains?.onApp}
+          onSelect={onSelect}
+        />
+      </li>
+    );
+  }
+  return (
+    <li>
+      <ListRow
+        row={{ ...row, trace }}
+        fold={fold}
+        chained={counts !== undefined && counts.traces > 1}
+        pending={pending}
+        cut={row.cut ?? chains?.cut?.get(trace.id) ?? null}
+        selected={trace.id === selectedId}
+        current={trace.id === currentId}
+        fresh={fresh}
+        compact={compact}
+        services={services}
+        opens={opensOn?.(trace)}
+        onSelect={onSelect}
+      />
+      {withOpens && fold?.open !== false ? (
+        <RowChain
+          rowId={trace.id}
+          level={(row.depth ?? 0) + 1}
+          chains={withOpens}
+          selectedId={selectedId}
+          onSelect={onSelect}
+        />
+      ) : null}
+    </li>
   );
 }
 
@@ -272,9 +306,7 @@ function ListRow({
         <RowCaret fold={fold} />
         <RowName trace={trace} trigger={trigger} target={target} redirectedFrom={redirectedFrom} />
         <RowApp trace={trace} shown={services} />
-        {/* Beside its name, as a waiting call's and the call tree's: the time column keeps a time's width. */}
-        {cut === null || open ? null : <NoAnswer at={cut} short={true} />}
-        {call === "untraced" && host ? <NotTracedMark host={host} /> : null}
+        <RowMarks cut={open ? null : cut} untraced={call === "untraced" ? host : undefined} />
         {current ? <ThisPage compact={compact} /> : null}
       </span>
       <RowMeta
@@ -299,6 +331,15 @@ function callTitle(trace: TraceSummary, call: TraceRow["call"], cut: number | nu
   if (call === "waiting") return `${waitingTitle(name, cut)} Opens the view's call tree.`;
   if (call === "untraced" && host) return `${name}: ${untracedNote(host)} Opens the view's call tree.`;
   return undefined;
+}
+
+/**
+ * What a row says beside its name, as the call tree does: no answer yet (the time column keeps a time's width), or no
+ * trace answered it and none will.
+ */
+function RowMarks({ cut, untraced }: { cut: number | null; untraced: string | undefined }) {
+  if (cut !== null) return <NoAnswer at={cut} short={true} />;
+  return untraced ? <NotTracedMark host={untraced} /> : null;
 }
 
 /** A call no trace answered and none will, as the call tree says it: muted, its reason in the tooltip. */

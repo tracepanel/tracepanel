@@ -313,6 +313,52 @@ function arrange(history: TabHistory, traces: readonly TraceSummary[]): TraceRow
     const fallback = byId.has(entry.id) ? undefined : rowFromWidget(entry);
     if (fallback) byId.set(entry.id, fallback);
   }
+  const facts = new Map(history.entries.map((entry) => [entry.id, widgetFacts(entry, stored)]));
+  const children = childrenOf(history, byId, facts);
+  const row = (trace: TraceSummary, depth: 0 | 1): TraceRow => {
+    const { htmx, ...known } = facts.get(trace.id) ?? {};
+    // A boosted link loaded a page: its path names it, not the link's text.
+    if (!htmx || htmx.boosted) return { trace, depth, ...known };
+    return { trace, depth, trigger: htmx.trigger, target: htmx.target, ...known };
+  };
+  const roots = [...(children.get(null) ?? [])].reverse();
+  return roots.flatMap((root) => [row(root, 0), ...(children.get(root.id) ?? []).map((trace) => row(trace, 1))]);
+}
+
+/** What the widget says of a row beyond its summary. */
+type WidgetFacts = Partial<Pick<TraceRow, "open" | "until" | "redirectedFrom" | "key" | "opens" | "host">> & {
+  htmx?: EntrySummary["htmx"];
+};
+
+/**
+ * What the widget says of an entry: in flight (a request the page waits for, a view still open) until the agent has
+ * it, a view's time stopped at its calls' last answer; the view the SPA was sent from at once; the id it flew under
+ * (its row's identity from in flight to stored); the view a call that answered untraced opens (it has no trace of
+ * its own); the host it went to (a view's calls to one host are grouped); what sent it (htmx).
+ */
+function widgetFacts(entry: TabEntry, stored: ReadonlySet<string>): WidgetFacts {
+  const summary = entry.summary;
+  if (!summary) return {};
+  const open = summary.open && !stored.has(entry.id);
+  return {
+    ...(open ? { open: true, until: summary.until } : {}),
+    ...(summary.redirectedFrom ? { redirectedFrom: summary.redirectedFrom } : {}),
+    ...(summary.key ? { key: summary.key } : {}),
+    ...(summary.untraced && entry.parent ? { opens: entry.parent } : {}),
+    ...(summary.host ? { host: summary.host } : {}),
+    ...(summary.htmx ? { htmx: summary.htmx } : {}),
+  };
+}
+
+/**
+ * Each page's requests, in the order they started (made in the same millisecond, in the order they were made): a row
+ * keeps its place as it lands, answers, and is stored. Under `null`, the pages.
+ */
+function childrenOf(
+  history: TabHistory,
+  byId: ReadonlyMap<string, TraceSummary>,
+  facts: ReadonlyMap<string, WidgetFacts>,
+): Map<string | null, TraceSummary[]> {
   const children = new Map<string | null, TraceSummary[]>();
   for (const entry of history.entries) {
     const trace = byId.get(entry.id);
@@ -320,52 +366,11 @@ function arrange(history: TabHistory, traces: readonly TraceSummary[]): TraceRow
     const parent = entry.parent && byId.has(entry.parent) ? entry.parent : null;
     children.set(parent, [...(children.get(parent) ?? []), trace]);
   }
-  // Each row's identity from in flight to stored: the id it flew under.
-  const keys = new Map(history.entries.flatMap((entry) => (entry.summary?.key ? [[entry.id, entry.summary.key]] : [])));
-  // A page's requests in the order they started (made in the same millisecond, in the order they were made): a row
-  // keeps its place as it lands, answers, and is stored.
+  const made = (id: string) => madeAt(facts.get(id)?.key ?? id);
   for (const [parent, traces] of children) {
-    if (parent !== null)
-      traces.sort((a, b) => a.start - b.start || madeAt(keys.get(a.id) ?? a.id) - madeAt(keys.get(b.id) ?? b.id));
+    if (parent !== null) traces.sort((a, b) => a.start - b.start || made(a.id) - made(b.id));
   }
-  // Where each request went: a view's calls to one host are grouped.
-  const hosts = new Map(
-    history.entries.flatMap((entry) => (entry.summary?.host ? [[entry.id, entry.summary.host]] : [])),
-  );
-  // The calls that answered untraced: no trace of their own; a click opens their view's, which has them.
-  const untraced = new Map(
-    history.entries.flatMap((entry) => (entry.summary?.untraced && entry.parent ? [[entry.id, entry.parent]] : [])),
-  );
-  // What sent each request, as the widget saw it (htmx's trigger element and target).
-  const sent = new Map(history.entries.map((entry) => [entry.id, entry.summary?.htmx]));
-  // In flight, as the widget says (a request the page waits for, a view still open), until the agent has it; a view
-  // whose calls have all answered with its time stopped at the last answer.
-  const open = new Map(
-    history.entries
-      .filter((entry) => entry.summary?.open && !stored.has(entry.id))
-      .map((entry) => [entry.id, entry.summary?.until]),
-  );
-  // A view the SPA was sent to at once: where from, as the widget folded the view it left.
-  const redirected = new Map(history.entries.map((entry) => [entry.id, entry.summary?.redirectedFrom]));
-  const row = (trace: TraceSummary, depth: 0 | 1): TraceRow => {
-    const htmx = sent.get(trace.id);
-    const from = redirected.get(trace.id);
-    const key = keys.get(trace.id);
-    const opens = untraced.get(trace.id);
-    const host = hosts.get(trace.id);
-    const running = {
-      ...(open.has(trace.id) ? { open: true, until: open.get(trace.id) } : {}),
-      ...(from ? { redirectedFrom: from } : {}),
-      ...(key ? { key } : {}),
-      ...(opens ? { opens } : {}),
-      ...(host ? { host } : {}),
-    };
-    // A boosted link loaded a page: its path names it, not the link's text.
-    if (!htmx || htmx.boosted) return { trace, depth, ...running };
-    return { trace, depth, trigger: htmx.trigger, target: htmx.target, ...running };
-  };
-  const roots = [...(children.get(null) ?? [])].reverse();
-  return roots.flatMap((root) => [row(root, 0), ...(children.get(root.id) ?? []).map((trace) => row(trace, 1))]);
+  return children;
 }
 
 /** The how-manieth request of its page load a request the widget saw in flight was ("~…-7": 7); 0 for any other. */
@@ -665,33 +670,45 @@ function byHost(
   settled: ReadonlySet<string> | undefined,
   counter: Counter | undefined,
 ): TraceRow[] {
+  const units = unitsOf(rows);
+  const hosts = new Map<string, TraceRow[][]>();
+  for (const unit of units) {
+    const host = unit[0]?.host ?? "";
+    hosts.set(host, [...(hosts.get(host) ?? []), unit]);
+  }
+  const out: TraceRow[] = [];
+  for (const unit of units) {
+    const host = unit[0]?.host ?? "";
+    const members = hosts.get(host) ?? [];
+    if (!host || members.length < 2) out.push(...unit);
+    // Where the first of them is, once.
+    else if (members[0] === unit) out.push(...grouped(view, host, members, settled, counter));
+  }
+  return out;
+}
+
+/** Each request with the task runs it led to after it: they stay together. */
+function unitsOf(rows: readonly TraceRow[]): TraceRow[][] {
   const units: TraceRow[][] = [];
   for (const row of rows) {
     const last = units.at(-1);
     if (row.run && last) last.push(row);
     else units.push([row]);
   }
-  const hosts = new Map<string, TraceRow[][]>();
-  for (const unit of units) {
-    const host = unit[0]?.host;
-    if (host) hosts.set(host, [...(hosts.get(host) ?? []), unit]);
-  }
-  const out: TraceRow[] = [];
-  const grouped = new Set<string>();
-  for (const unit of units) {
-    const host = unit[0]?.host;
-    const members = host ? (hosts.get(host) ?? []) : [];
-    if (!host || members.length < 2) {
-      out.push(...unit);
-      continue;
-    }
-    if (grouped.has(host)) continue;
-    grouped.add(host);
-    const calls = members.map((each) => each[0] as TraceRow);
-    const group = groupRow(view, host, calls, settled, counter);
-    out.push(group, ...members.flat().map((row) => ({ ...row, depth: 2 as const })));
-  }
-  return out;
+  return units;
+}
+
+/** A host's calls under their row, a step deeper. */
+function grouped(
+  view: string,
+  host: string,
+  members: readonly TraceRow[][],
+  settled: ReadonlySet<string> | undefined,
+  counter: Counter | undefined,
+): TraceRow[] {
+  const calls = members.map((each) => each[0] as TraceRow);
+  const group = groupRow(view, host, calls, settled, counter);
+  return [group, ...members.flat().map((row) => ({ ...row, depth: 2 as const }))];
 }
 
 /** What some of a view's calls' traces did, as its chain counts it. */
