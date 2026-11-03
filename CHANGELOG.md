@@ -14,6 +14,10 @@
   as it gains its status, its numbers and what it called. No group of
   the gateway's ("graphql-router ×5") takes the rows' place. A call
   whose trace is on its way opens the view's call tree.
+- A view's time in the panel's list, on the pill and in its card stops
+  at its last call's answer when its calls went through a gateway. It
+  ran on while the view waited for its end, then jumped back (6.5 s,
+  then 5.6 s): only the answers that named a trace stopped it.
 ## 0.13.0 (2026-11-03)
 
 ### Fixed

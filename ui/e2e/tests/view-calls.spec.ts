@@ -286,3 +286,41 @@ test("a call keeps its row, its name and its place from in flight to its stored 
   await expect(list.locator('.dt-request-row[data-chain="app"]')).toHaveCount(0);
   expect(await probes()).toEqual(["0", "1", "2"]);
 });
+
+/** A time as the list writes it, in µs: "850 ms", "1.2 s". */
+function micros(text: string): number {
+  const match = /([\d.]+)\s*(µs|ms|s)/.exec(text);
+  if (!match) return Number.NaN;
+  const value = Number(match[1]);
+  return match[2] === "s" ? value * 1_000_000 : match[2] === "ms" ? value * 1_000 : value;
+}
+
+test("a view's time never runs past its end and back", async ({ page }) => {
+  const tag = 3;
+  const { release, list } = await opened(page);
+  await page.evaluate(([viewId, ops]) => (window as unknown as Opener).openView(viewId, ops, 1_500), [
+    id(tag, 1),
+    OPERATIONS,
+  ] as const);
+  const view = list.locator('.dt-request-row[data-kind="page"]');
+  const times: number[] = [];
+  const sample = async () => times.push(micros(await view.locator(".dt-request-meta").innerText()));
+  await expect(view).toBeVisible();
+
+  setTimeout(() => {
+    for (const op of OPERATIONS) release(op);
+  }, 700);
+  // Through its calls, the quiet after them, its end, and its trace stored.
+  for (let at = 0; at < 30; at += 1) {
+    await sample();
+    await page.waitForTimeout(100);
+  }
+  await storeView(page, tag);
+  await expect(view.locator(".dt-pending")).toHaveCount(0);
+  await sample();
+
+  const shown = times.filter((each) => !Number.isNaN(each));
+  expect(shown.length).toBeGreaterThan(20);
+  for (const [n, each] of shown.entries())
+    expect(each, `sample ${n} of ${shown.join(", ")}`).toBeGreaterThanOrEqual(shown[n - 1] ?? 0);
+});
