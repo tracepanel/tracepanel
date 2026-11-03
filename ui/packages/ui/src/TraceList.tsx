@@ -81,6 +81,8 @@ export interface CallGroup {
   app: string | null;
   runtime?: string | undefined;
   count: number;
+  /** No trace answered any of them and none will: no numbers to say. */
+  untraced?: boolean | undefined;
 }
 
 export interface TraceListProps {
@@ -395,7 +397,7 @@ function GroupRow({
       <span className="dt-request-meta">
         {group.count > 1 ? <Times count={group.count} /> : <StatusSlot status={null} />}
         <RowTime trace={trace} open={open} until={undefined} />
-        <CompactMeta trace={trace} pending={pending} />
+        <CompactMeta trace={trace} pending={pending} blank={group.untraced} />
       </span>
     </button>
   );

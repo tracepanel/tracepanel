@@ -59,6 +59,13 @@
   traces (a third-party API the BFF calls) stays once it is no longer
   waited for and says "not traced", as the call tree does. Its row went
   five seconds after the call, leaving nothing in its place.
+- A page's own document (GET /docs, which its server traced) is no
+  longer one of its view's calls in the panel's list: it joined their
+  group ("next-app ×3" over GET /docs and the two GET /openapi.json
+  Swagger UI asked for). A group whose calls no trace answered says no
+  numbers instead of "…" for good, and "not traced" says what is true of
+  a file a traced app serves too (Next.js serves public/ files
+  untraced): that host sent no trace for the call.
 ## 0.13.0 (2026-11-03)
 
 ### Fixed

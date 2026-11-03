@@ -319,8 +319,8 @@ function names(links: Related, traceId: string): boolean {
 /**
  * The calls of the chain no trace answered and none will: they carried the trace on, they ended (not cut short) and
  * were waited for as long as a call is, and no call of the chain to the same host was answered (an app that records
- * traces there would say what this one did). By span id, the host each went to: "not traced: <host> sends no traces
- * to Tracepanel". None when a limit left traces out of the chain: their calls' traces may be among those.
+ * traces there would say what this one did). By span id, the host each went to: "not traced: <host> sent no trace for
+ * this call". None when a limit left traces out of the chain: their calls' traces may be among those.
  */
 export function untracedIn(
   traces: readonly Placed[],

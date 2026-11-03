@@ -1987,7 +1987,11 @@ export function mount(options: WidgetOptions = {}): Widget {
     loadView ??= announced.id;
     const own = page && !pageCleared ? page.trace : undefined;
     if (loadView !== announced.id || !own) return entries;
-    return entries.map((item) => (item.id === own && item.parent === null ? { ...item, parent: announced.id } : item));
+    // The document is the load, not a call of the view's: never in a group of its calls to one host.
+    const asLoad = (summary: EntrySummary | undefined) => summary && { ...summary, host: undefined };
+    return entries.map((item) =>
+      item.id === own && item.parent === null ? { ...item, parent: announced.id, summary: asLoad(item.summary) } : item,
+    );
   }
 
   /** What a request is listed under: the view or action that made it, else the page it was made on. */

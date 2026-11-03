@@ -779,9 +779,17 @@ function groupRow(host: string, calls: readonly TraceRow[], { view, settled, cou
     trace: summary,
     depth: 1,
     key: id,
-    group: { view, host, app, count: calls.length, ...(runtime ? { runtime } : {}) },
+    group: {
+      view,
+      host,
+      app,
+      count: calls.length,
+      ...(runtime ? { runtime } : {}),
+      ...(calls.every((call) => call.call === "untraced") ? { untraced: true } : {}),
+    },
     ...(calls.some((call) => call.open) ? { open: true } : {}),
-    counted: calls.every((call) => call.counted || settled?.has(call.trace.id) === true),
+    // A call no trace answered has no numbers to wait for: its group's are known without it.
+    counted: calls.every((call) => call.counted || call.call === "untraced" || settled?.has(call.trace.id) === true),
   };
 }
 
