@@ -6,6 +6,7 @@ import {
   type RefObject,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -868,10 +869,13 @@ function chainedTrace(node: Linked): string | undefined {
   return node.whole?.id;
 }
 
-/** While a call's trace is open, the links of its own calls load: the traces they reached open under them. */
+/**
+ * While a call's trace is open, the links of its own calls load: the traces they reached open under them. Asked
+ * before the row paints: the tree counts them on their way from its first frame ("More on its way" never blinks).
+ */
 function useChainLoad(node: Linked, open: boolean | undefined, onChain: (traceId: string) => void): void {
   const whole = chainedTrace(node);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (open && whole) onChain(whole);
   }, [open, whole, onChain]);
 }
