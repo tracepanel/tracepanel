@@ -1,7 +1,6 @@
 // The widget on an app's page: the pill's states, the panel it opens, and the tab's list.
 import { readFileSync } from "node:fs";
 import type { BrowserContext, Locator, Page } from "@playwright/test";
-import { duration } from "../../packages/ui/src/format.ts";
 import { CONSOLE } from "../agent.ts";
 import { type Call, chooseTheme, OTHER_API, openApp, panel, pill, traceId } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
@@ -105,26 +104,31 @@ test("on a page that isn't UTF-8, the widget's text still reads right", async ({
   await openApp(page, { posts: await posts() }, { charset: "windows-1252" });
   await page.getByRole("button", { name: "Load posts" }).click();
 
-  await expect(pill(page)).toHaveAccessibleName(/GET \/app\/api\/posts → 200 · 5 ms/);
+  await expect(pill(page)).toHaveAccessibleName(/GET \/app\/api\/posts → 200 · [\d.]+ ms/);
 });
 
 test("once the agent stored the request, the pill shows its time as the panel does", async ({ page }) => {
   const call = { ...(await posts()), totalMs: 0.4, issues: "pending" as const };
-  const stored = (await (await fetch(`${CONSOLE}api/traces/${call.trace}`)).json()) as { duration: number };
   await openApp(page, { posts: call });
   await page.getByRole("button", { name: "Load posts" }).click();
+  // Its issues come from the agent: the request is stored by then.
+  await expect(pill(page)).toHaveAccessibleName(/1 issue/);
+  await pill(page).click();
+  const row = panel(page).locator(".dt-request-row").filter({ hasText: "/api/posts" });
+  const time = await row.locator(".dt-request-meta > :nth-child(2)").innerText();
 
-  await expect(pill(page)).toHaveAccessibleName(new RegExp(` · ${duration(stored.duration)} · `));
+  // The time the page waited for it, the same in both: never the header's 0.4 ms.
+  expect(time).toMatch(/^[\d.]+ ms$/);
+  expect(time).not.toBe("0.4 ms");
+  await expect(pill(page)).toHaveAccessibleName(new RegExp(` · ${time.replace(".", "\\.")} · `));
 });
 
 test("a request under a millisecond says so on the pill and in its hover card, as the panel's list does", async ({
   page,
 }) => {
-  const books: Call = { status: 200, trace: await traceId("GET /books"), queries: 0, totalMs: 0.45 };
-  const quick: Call = { ...(await posts()), totalMs: 0.3, issues: 0 };
-  await openApp(page, { books, posts: quick });
-  await page.getByRole("button", { name: "Load books" }).click();
-  await page.getByRole("button", { name: "Load posts" }).click();
+  // The page's own load, its server's time under a millisecond (the page didn't time it: its server did).
+  const quick = { ...(await posts()), totalMs: 0.3, issues: 0, runtime: "Go 1.27.1 · net/http" };
+  await openApp(page, {}, { server: quick });
 
   await expect(pill(page)).toHaveAccessibleName(/ · 0\.3 ms · /);
   await expect(pill(page)).toContainText(/0\.3\s*ms/);
@@ -133,7 +137,6 @@ test("a request under a millisecond says so on the pill and in its hover card, a
   const card = page.getByRole("dialog", { name: "This request at a glance" });
 
   await expect(card.locator(".card-head .card-time")).toHaveText("0.3 ms");
-  await expect(card.locator(".card-row").filter({ hasText: "/books" })).toContainText("0.5 ms");
   await expect(card).not.toContainText(/\b0 ms/);
 });
 
