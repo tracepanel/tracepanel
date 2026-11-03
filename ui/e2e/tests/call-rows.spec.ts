@@ -117,12 +117,15 @@ async function opened(
     headers?: (n: number) => Record<string, string>;
     fails?: readonly number[];
     dock?: "right" | "bottom";
+    /** The panel closed: the pill and its hover card show. */
+    closed?: boolean;
   } = {},
 ) {
   const dock = options.dock ?? "right";
   await page.addInitScript(
-    (side) => sessionStorage.setItem("tracepanel:panel", JSON.stringify({ open: true, dock: side, width: 760 })),
-    dock,
+    ([side, shut]) =>
+      sessionStorage.setItem("tracepanel:panel", JSON.stringify({ open: !shut, dock: side, width: 760 })),
+    [dock, options.closed ?? false] as const,
   );
   const release = await gateway(page, options.headers, options.fails);
   await page.route("**/rows/", (route) =>
@@ -645,4 +648,40 @@ test("while a view's chain loads the first time, no placeholder stands between i
 
   await expect(loading).toHaveCount(0);
   await expect.poll(shape).toEqual(["view", "call"]);
+});
+
+test("the hover card lists the page's calls no trace answered, as the pill counts them: not traced, failed", async ({
+  page,
+}) => {
+  const tag = 10;
+  const { release } = await opened(page, { document: { trace: id(tag, 50) }, fails: [2], closed: true });
+  await open(page, id(tag, 1), ["Spec", "Spec", "Spec"]);
+  release(0);
+  release(1);
+  release(2);
+  await viewEnded(page);
+  await expect(pill(page).locator(".seg.page b")).toHaveText("4");
+
+  // The page's load is the pill's; the card lists the other three, as the panel's list has them.
+  await pill(page).hover();
+  const card = page.getByRole("dialog", { name: "This request at a glance" });
+  await expect(card.locator(".card-caption")).toHaveText("Other requests on this page · 3");
+  const rows = card.locator(".card-row");
+  await expect(rows).toHaveCount(3);
+  // The one that got no answer first, "failed" in red where its status would be; the others "not traced".
+  await expect(rows.nth(0)).toHaveAttribute("data-call", "failed");
+  await expect(rows.nth(0).locator(".status")).toHaveText("failed");
+  await expect(rows.nth(0).locator(".status")).toHaveAttribute("data-tone", "server");
+  await expect(rows.nth(0).locator(".card-not-traced")).toHaveCount(0);
+  for (const n of [1, 2]) {
+    await expect(rows.nth(n)).toHaveAttribute("data-call", "untraced");
+    await expect(rows.nth(n).locator(".status")).toHaveText("200");
+    await expect(rows.nth(n).locator(".card-not-traced")).toHaveText("not traced");
+    await expect(rows.nth(n).locator(".card-path")).toContainText("GraphQL query Spec");
+  }
+
+  // A click opens the call tree of the view that made them, once its trace is stored.
+  await storeView(page, tag, { shift: -8_000_000 });
+  await rows.nth(1).click();
+  await expect(panel(page).locator('.dt-map-row[data-kind="http.client"]')).toContainText("×3");
 });

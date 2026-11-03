@@ -39,7 +39,12 @@
   /openapi.json Swagger UI asked for, untraced, are 3 requests, not 1),
   and so does the panel docked at the right: the page's own load sits
   under its view, whose calls were not this page's there, its list gone
-  and its count 1.
+  and its count 1. The pill's hover card lists them too, as the list
+  does: "not traced" beside the name, or "failed" in red where the
+  status would be, a click opening the view's call tree. It listed only
+  the traced ones ("Other requests on this page · 2" under "5
+  requests"). A view's call that got no answer counts on a page whose
+  own load was traced, too.
 - A view's call that got no answer (a network error, an abort, status
   0) stays its row in the panel's list, from in flight to its view's
   trace stored, and says "failed" in red where its status would be, as
