@@ -1021,3 +1021,41 @@ test("a view's row says no numbers of its chain's while a call's are still on th
   await expect(group.locator(".dt-request-queries-n")).toHaveText("4");
   await expect(view.locator(".dt-pending")).toHaveCount(0);
 });
+
+test("the pill says no numbers of a view's chain while a call's trace is on its way, as the view's row in the list", async ({
+  page,
+}) => {
+  const tag = 18;
+  const viewId = id(tag, 1);
+  // A gateway's calls (no trace id in their answers): only the view's chain says what served them.
+  const { release, list } = await opened(page);
+  await open(page, viewId, ["Book", "Book"]);
+  release(0);
+  release(1);
+  await viewEnded(page);
+  const made = await page.evaluate(() => (window as unknown as { calls: Made[] }).calls);
+  // One call's traces come with the view's, the other's later.
+  await ingest(served(tag, made[0] as Made));
+  const counted = page.waitForResponse(
+    async (response) =>
+      response.url().endsWith(`/api/traces/${viewId}/chain`) && (await response.text()).includes(bffOf(tag, 0)),
+  );
+  await storeView(page, tag, { origin: "http://bff.test:4000/" });
+  await counted;
+  const view = list.locator('.dt-request-row[data-kind="page"]');
+  await expect(list.locator('.dt-request-row[data-call="trace"]')).toHaveCount(1);
+  await expect(view.locator(".dt-pending")).toHaveCount(1);
+
+  // The pill asks for the view's chain too: its numbers "…" as long as the list's, not the 2 queries of one call.
+  const shown = pill(page);
+  for (let at = 0; at < 8; at += 1) {
+    await expect(shown.locator(".pending")).toHaveText("…");
+    await expect(shown).not.toHaveAttribute("aria-label", /quer/);
+    await page.waitForTimeout(250);
+  }
+
+  await ingest(served(tag, made[1] as Made));
+  await expect(view.locator(".dt-request-queries-n")).toHaveText("4");
+  await expect(shown).toHaveAttribute("aria-label", /4 queries/, { timeout: 5_000 });
+  await expect(shown.locator(".pending")).toHaveCount(0);
+});

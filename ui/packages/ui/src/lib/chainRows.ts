@@ -716,6 +716,17 @@ export function waitingSummary(call: ChainWaiting): TraceSummary {
 // biome-ignore-end lint/style/useNamingConvention: builds an API object; its field names are the wire format.
 
 /**
+ * Whether a view's or an action's calls (`root`'s, chainCalls) still wait for their traces as of `now` (ms): until
+ * each came, or is said not traced, what its chain adds up to is a part of it. The panel's list says "…" on the view's
+ * row meanwhile, and the pill the same.
+ */
+export function callsAwaited(chain: Chain, root: string, now: number = Date.now()): boolean {
+  return chainCalls(chain, root, new Set(), now).some(
+    (call) => call.type === "waiting" && call.untraced === undefined && call.failed === undefined,
+  );
+}
+
+/**
  * What some of a view's calls' traces and everything under them did (`ids`, traces of the chain), as the tabs count
  * it: the row over a view's calls to one host says the same as an app's row did.
  */

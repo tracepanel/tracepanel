@@ -280,13 +280,13 @@ function cutLine(cut: number | null): HTMLElement[] {
 function factsLine(open: boolean, facts: ChainFacts | null): HTMLElement {
   const line = element("p", "card-facts");
   if (open) line.append("Still open: its trace is sent once it ends.");
-  else if (!facts) line.append(`Down its calls: ${PENDING}`);
+  else if (!facts?.counts) line.append(`Down its calls: ${PENDING}`);
   else line.append("Down its calls: ", ...countsOf(facts.counts));
   return line;
 }
 
 /** "3 queries · 19 HTTP calls · 2 issues", each number bold. */
-function countsOf({ queries, calls, issues }: ChainFacts["counts"]): (HTMLElement | string)[] {
+function countsOf({ queries, calls, issues }: NonNullable<ChainFacts["counts"]>): (HTMLElement | string)[] {
   const parts = [plural(queries, "query", "queries"), plural(calls, "HTTP call", "HTTP calls")];
   if (issues) parts.push(plural(issues, "issue", "issues"));
   return parts.flatMap((part, index) => [...(index ? [" · "] : []), element("b", undefined, part)]);

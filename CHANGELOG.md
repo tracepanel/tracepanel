@@ -178,7 +178,10 @@
   4.1 s for a moment after a 503 at 4.0 s, then went back to 4.0 s. The
   panel's list asks for a request that ended a moment ago every 0.4 s
   until its trace is stored, so its "…" goes as soon as the pill's does,
-  not up to two seconds later.
+  not up to two seconds later. And the pill says "…" for a view's
+  numbers as long as its row in the list does, while a call of it still
+  waits for its trace, asking for its chain every second until then: it
+  said 19 queries, then 24, while the list's row said "…", then 24.
 ## 0.13.0 (2026-11-03)
 
 ### Fixed
