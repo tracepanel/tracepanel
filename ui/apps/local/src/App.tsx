@@ -795,8 +795,8 @@ function grouped(host: string, members: readonly TraceRow[][], grouping: Groupin
   return [group, ...members.flat().map((row) => ({ ...row, depth: 2 as const }))];
 }
 
-/** What some of a view's calls' traces did, as its chain counts it. */
-type Counter = (ids: readonly string[]) => ChainCounts;
+/** What some of a view's calls' traces did, as its chain counts it; null when one of them isn't its chain's yet. */
+type Counter = (ids: readonly string[]) => ChainCounts | null;
 
 /** The app a host's calls were served by before (useKnownApps), and what it runs on. */
 type KnownApp = { app: string; runtime: string | undefined };
@@ -814,12 +814,15 @@ interface Grouping {
 
 /**
  * What a group's calls did: as the view's chain counts their traces and all under them, once they are all its
- * traces (a finding of the chain's across them said once, as the tabs say it); their own numbers added up until then.
+ * traces (a finding of the chain's across them said once, as the tabs say it), whether its chain made them its rows
+ * or they are the list's own (an app with an SDK answered them: its trace's id came with the answer); their own
+ * numbers added up until then.
  */
 function together(calls: readonly TraceRow[], counter: Counter | undefined) {
   const traces = calls.map((call) => call.trace);
-  if (counter && calls.every((call) => call.call === "trace")) {
-    const counted = counter(traces.map((trace) => trace.id));
+  const traced = calls.every((call) => call.call === "trace" || !(call.call || call.open || inFlight(call.trace.id)));
+  const counted = counter && traced ? counter(traces.map((trace) => trace.id)) : null;
+  if (counted) {
     // biome-ignore lint/style/useNamingConvention: wire format.
     return { queries: counted.queries, issues: counted.issues, issue_kinds: counted.kinds };
   }
@@ -1105,7 +1108,9 @@ function useRowChains(rows: readonly TraceRow[], stored: ReadonlySet<string>): R
       // A view's or an action's calls are its rows, one each, as they were in flight (chainCalls).
       if (views.has(id)) {
         calls.set(id, chainCalls(chain, id, rowsIn));
-        counters.set(id, (ids) => callsCounted(chain, id, rowsIn, ids));
+        const known = new Set(chain.traces.map((each) => each.id));
+        // Null while one of them isn't the chain's yet: their own numbers then.
+        counters.set(id, (ids) => (ids.every((each) => known.has(each)) ? callsCounted(chain, id, rowsIn, ids) : null));
         continue;
       }
       const under = chainApps(chain, id, rowsIn);

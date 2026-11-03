@@ -716,3 +716,96 @@ test("the narrow dock's request picker says a call no trace answered and one tha
   // No numbers for calls that have no trace: no "0 queries".
   await expect(calls.filter({ hasText: "queries" })).toHaveCount(0);
 });
+
+test("the row over a view's calls to one app adds up their rows' numbers, its chain's findings said once", async ({
+  page,
+}) => {
+  const tag = 12;
+  const bff = (n: number) => id(tag, 20 + n);
+  // An app with an SDK (a BFF) answers each call, itself running no query; the service it calls runs two.
+  const { release, list } = await opened(page, {
+    headers: (n) => ({
+      "Tracepanel-Id": bff(n),
+      "Tracepanel-Name": "GraphQL%20query%20Book",
+      "Server-Timing": 'db;dur=0;desc="0 queries", total;dur=30, tracepanel-issues;desc="pending"',
+    }),
+  });
+  await open(page, id(tag, 1), ["Book", "Book"]);
+  release(0);
+  release(1);
+  await viewEnded(page);
+  const made = await page.evaluate(() => (window as unknown as { calls: Made[] }).calls);
+  const traces = made.flatMap((call) => {
+    const start = call.start + 2 * ms;
+    const time = Math.max(4 * ms, call.end - call.start - 4 * ms);
+    const hop = `${digits(tag, 3)}d${digits(run(), 5)}${digits(call.n, 7)}`;
+    const own = trace(
+      bff(call.n),
+      "http",
+      "GraphQL query Book",
+      start,
+      time,
+      {
+        "service.name": "library-bff",
+        "http.method": "POST",
+        "http.route": "/graphql",
+        "http.status_code": 200,
+        "w3c.trace_id": traceOf(tag),
+        "w3c.parent_span_id": callOf(tag, call.n),
+      },
+      [
+        {
+          ...span(`b${call.n}`, `${bff(call.n)}r`, "http.client", "GET 127.0.0.1/books/1", start + ms, time - 2 * ms),
+          attrs: { "http.request.method": "GET", "url.full": "http://127.0.0.1:4100/books/1", "w3c.span_id": hop },
+        },
+      ],
+    );
+    // biome-ignore-start lint/style/useNamingConvention: the trace format.
+    own["issues"] = [
+      {
+        fingerprint: "bff-n1",
+        fingerprint_version: 1,
+        kind: "n+1",
+        title: "N+1",
+        culprit: null,
+        hint: null,
+        count: 1,
+        span_ids: [`b${call.n}`],
+      },
+    ];
+    // biome-ignore-end lint/style/useNamingConvention: the trace format.
+    const queries = [0, 1].map((q) =>
+      span(`q${q}`, `${id(tag, 40 + call.n)}r`, "sql", "SELECT books", start + 2 * ms, ms),
+    );
+    const api = trace(
+      id(tag, 40 + call.n),
+      "http",
+      "GET /books/1",
+      start + 2 * ms,
+      time - 4 * ms,
+      {
+        "service.name": "library-api",
+        "http.method": "GET",
+        "http.route": "/books/1",
+        "http.status_code": 200,
+        "w3c.trace_id": traceOf(tag),
+        "w3c.parent_span_id": hop,
+      },
+      queries,
+    );
+    return [own, api];
+  });
+  await ingest(traces);
+  await storeView(page, tag, { origin: "http://bff.test:4000/" });
+
+  // Each call's row counts what its trace and those under it ran: 2 queries, its finding.
+  const calls = list.locator('.dt-request-row[data-depth="2"]').filter({ hasText: "Book" });
+  await expect(calls).toHaveCount(2);
+  await expect(calls.locator(".dt-request-queries-n")).toHaveText(["2", "2"]);
+  // Their app's row: the sum of its rows, the finding they share once, as the view's chain says it.
+  const group = list.locator('.dt-request-row[data-call="group"]');
+  await expect(group.locator(".dt-map-times")).toHaveText("×2");
+  await expect(group.locator(".dt-request-queries-n")).toHaveText("4");
+  await expect(group.locator(".dt-request-chips")).toHaveText("1");
+  await expect(calls.locator(".dt-request-chips")).toHaveText(["1", "1"]);
+});

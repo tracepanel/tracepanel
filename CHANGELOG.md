@@ -69,7 +69,12 @@
   ("graphql-router ×5"), as the Services map links them. A host no app
   has served yet is named by itself ("127.0.0.1:8043 ×5") until a trace
   of its calls names the app, which the same row then shows, and a
-  trace's app wins over the one before. The group used to appear only
+  trace's app wins over the one before. Its numbers are its rows' added up,
+  a finding they share said once, as the view's chain says it, also when
+  an app with an SDK answered the calls ("library-bff ×8" said 0 queries
+  and 16 issues over eight calls of 4 queries and 2 issues each, the
+  view 32 queries and 2 issues): it counted those calls' own numbers,
+  not what ran under them. The group used to appear only
   once the traces came, taking the place of the rows that were there.
 - A view whose calls all went through a gateway stays in the panel's
   list when the same page is opened again. With no traced request under
