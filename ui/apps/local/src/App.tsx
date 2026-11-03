@@ -342,7 +342,9 @@ function waitedFor(trace: TraceSummary, summary: EntrySummary | undefined): Trac
 }
 
 /** What the widget says of a row beyond its summary. */
-type WidgetFacts = Partial<Pick<TraceRow, "open" | "until" | "redirectedFrom" | "key" | "opens" | "host" | "span">> & {
+type WidgetFacts = Partial<
+  Pick<TraceRow, "open" | "until" | "redirectedFrom" | "key" | "opens" | "host" | "span" | "failed">
+> & {
   htmx?: EntrySummary["htmx"];
 };
 
@@ -361,10 +363,16 @@ function widgetFacts(entry: TabEntry, stored: ReadonlySet<string>): WidgetFacts 
     ...(summary.redirectedFrom ? { redirectedFrom: summary.redirectedFrom } : {}),
     ...(summary.key ? { key: summary.key } : {}),
     ...(summary.untraced && entry.parent ? { opens: entry.parent } : {}),
+    ...(open ? {} : failedFact(summary)),
     ...(summary.host ? { host: summary.host } : {}),
     ...(summary.span ? { span: summary.span } : {}),
     ...(summary.htmx ? { htmx: summary.htmx } : {}),
   };
+}
+
+/** A call that got no answer at all (a network error): "failed", as its view's trace will say it. */
+function failedFact(summary: EntrySummary): Pick<WidgetFacts, "failed"> {
+  return summary.untraced && summary.failed && summary.status === null ? { failed: "No answer" } : {};
 }
 
 /**
@@ -682,7 +690,12 @@ function callRow(call: ChainCall, view: string, flight: TraceRow | undefined): T
   const duration = call.cut === null ? Math.max(summary.duration, said) : summary.duration;
   // biome-ignore lint/style/useNamingConvention: wire format.
   const trace = { ...summary, duration, http_status: status };
-  const state = call.untraced ? { call: "untraced" as const, host: call.untraced } : { call: "waiting" as const };
+  const state =
+    call.failed !== undefined
+      ? { call: "failed" as const, failed: call.failed }
+      : call.untraced
+        ? { call: "untraced" as const, host: call.untraced }
+        : { call: "waiting" as const };
   return { trace, depth: 1, key, opens: view, cut: call.cut, ...to, ...state };
 }
 
@@ -864,11 +877,14 @@ function groupRow(host: string, calls: readonly TraceRow[], { view, settled, cou
       app,
       count: calls.length,
       ...(runtime ? { runtime } : {}),
-      ...(calls.every((call) => call.call === "untraced") ? { untraced: true } : {}),
+      ...(calls.every((call) => call.call === "untraced" || call.failed !== undefined) ? { untraced: true } : {}),
     },
     ...(calls.some((call) => call.open) ? { open: true } : {}),
     // A call no trace answered has no numbers to wait for: its group's are known without it.
-    counted: calls.every((call) => call.counted || call.call === "untraced" || settled?.has(call.trace.id) === true),
+    counted: calls.every(
+      (call) =>
+        call.counted || call.call === "untraced" || call.failed !== undefined || settled?.has(call.trace.id) === true,
+    ),
   };
 }
 

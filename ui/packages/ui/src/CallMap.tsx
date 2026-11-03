@@ -63,6 +63,7 @@ import { PropTable } from "./PropTable";
 import {
   AliasChip,
   AppChip,
+  FailedStatus,
   GroupStatus,
   ISSUE_CHIP_SHRINKS,
   IssueChip,
@@ -1537,11 +1538,7 @@ function CallStatus({ node }: { node: SpanNode }) {
   if (isCut(node.span) && !node.served) return <NoAnswer at={node.span.duration} />;
   if (tone !== "error") return null;
   const failure = node.span.attrs["error.type"];
-  return (
-    <span className="dt-status" data-tone="error" title={typeof failure === "string" ? failure : "No answer"}>
-      failed
-    </span>
-  );
+  return <FailedStatus failure={typeof failure === "string" ? failure : undefined} />;
 }
 
 /** A span row's button: its state, kind and share; a click selects it and opens it, the arrows fold it. */
