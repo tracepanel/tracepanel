@@ -222,6 +222,12 @@ function carries(span: Span): boolean {
   return CALL_KINDS.has(span.kind) && text(span.attrs, "w3c.span_id") !== null && !("messaging.system" in span.attrs);
 }
 
+/** Whether an answer came to a call: a status, not a failure before one (a network error, an abort, status 0). */
+function gotAnswer(span: Span): boolean {
+  const status = statusOf(span);
+  return status !== null && status > 0 && !("error.type" in span.attrs);
+}
+
 /** The status of a call's answer, as its span says it. */
 function statusOf(span: Span): number | null {
   const status = span.attrs["http.response.status_code"] ?? span.attrs["http.status_code"];
@@ -565,8 +571,8 @@ export function chainCalls(
     const span = spans.get(id);
     return span ? [{ ...waitingOf(span, root), key: `${root}/call/${id}`, untraced: host }] : [];
   });
-  // A call to a host that answered others, its trace later than it is waited for (a gateway sends its traces in
-  // batches): still its row, waiting, never gone until its trace comes.
+  // A call that was answered by a host that answered others, its trace later than it is waited for (a gateway sends
+  // its traces in batches): still its row, waiting, never gone until its trace comes. One with no answer has none.
   // Its calls a trace answered (those listed as rows of their own too), waited for, or not traced.
   const placed = new Set([
     ...chain.traces.flatMap((each) => (each.parent === root && each.via ? [each.via] : [])),
@@ -574,7 +580,7 @@ export function chainCalls(
     ...untraced.map((call) => call.span),
   ]);
   const late = (own?.spans ?? [])
-    .filter((span) => carries(span) && !placed.has(span.id) && !chain.capped)
+    .filter((span) => carries(span) && gotAnswer(span) && !placed.has(span.id) && !chain.capped)
     .map((span) => ({ ...waitingOf(span, root), key: `${root}/call/${span.id}` }));
   return [...answered, ...waiting, ...untraced, ...late].sort((a, b) => startOf(a) - startOf(b));
 }

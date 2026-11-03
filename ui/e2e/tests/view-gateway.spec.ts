@@ -18,13 +18,12 @@ async function listed(page: Page, view: string) {
   const list = panel(page).getByRole("region", { name: "Pages and requests in this browser tab" });
   const calls = list.locator('.dt-request-row[data-call="trace"]');
   await expect(calls.first()).toBeVisible();
-  // What the last operation called, opened down to the service.
-  const folded = list.locator('.dt-request-row:is([data-call="trace"], [data-chain="trace"])[aria-expanded="false"]');
-  for (let opened = 0; opened < 2; opened += 1) {
-    await expect(folded).toHaveCount(1);
-    await folded.locator("[data-toggle]").click();
-  }
-  await expect(folded).toHaveCount(0);
+  // What the last operation called, opened down to the service (the others' remote calls, not traced, stay folded).
+  await calls.last().locator("[data-toggle]").click();
+  const subgraph = list.locator('.dt-request-row[data-chain="trace"][aria-expanded="false"]');
+  await expect(subgraph).toHaveCount(1);
+  await subgraph.locator("[data-toggle]").click();
+  await expect(subgraph).toHaveCount(0);
   return {
     list,
     view: list.locator('.dt-request-row[data-kind="page"]').first(),
