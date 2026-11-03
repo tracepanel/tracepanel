@@ -71,8 +71,10 @@ export interface ChainWaiting {
    * for a call that ended.
    */
   cut: number | null;
-  /** No trace answered it and none will (untracedIn): the host it went to. Only among a view's calls (chainCalls). */
+  /** No trace answered it and none will (untracedIn): the host it went to. */
   untraced?: string | undefined;
+  /** The W3C span id the call carried on: its identity, as the browser sent it. */
+  w3c?: string | undefined;
 }
 
 export type ChainItem = ChainTraceRow | ChainRun | ChainWaiting;
@@ -380,6 +382,8 @@ function inOrder<T extends ChainItem | ChainEntry>(rows: readonly T[], waiting: 
 interface Context {
   children: ReadonlyMap<string, Served[]>;
   waiting: ReadonlyMap<string, Pending[]>;
+  /** The calls no trace answered and none will (untracedIn), by span id: the host each went to. */
+  untraced: ReadonlyMap<string, string>;
   /** Each trace of the chain by its id. */
   traces: ReadonlyMap<string, Served>;
   /** What some traces and everything under them did, as the tabs count it. */
@@ -410,6 +414,15 @@ function appsUnder(parents: ReadonlySet<string>, context: Context, path: string)
     waiting
       .filter((each) => (each.host === null ? undefined : hosts.get(each.host)) === app)
       .map((each) => ({ ...each.row, key: `${path}/${each.row.key}` }));
+  // A call no trace answered once it was waited for: the same row, now "not traced" (never gone), where it was.
+  const lost = [...parents].flatMap((id) =>
+    (context.traces.get(id)?.trace.spans ?? []).flatMap((span) => {
+      const host = context.untraced.get(span.id);
+      if (host === undefined) return [];
+      const row = waitingOf(span, id);
+      return [{ ...row, key: `${path}/${row.key}`, untraced: host }];
+    }),
+  );
   const apps = [...byApp].map(([app, traces]): ChainApp => {
     const key = `${path}/${app}`;
     const rows = traces.map(
@@ -436,7 +449,7 @@ function appsUnder(parents: ReadonlySet<string>, context: Context, path: string)
       items: inOrder(runsOf(rows, key, rows.length <= RUN_OPEN_LIMIT, counted), waitingIn(app)),
     };
   });
-  return inOrder<ChainEntry>(apps, waitingIn(undefined));
+  return inOrder<ChainEntry>(apps, [...waitingIn(undefined), ...lost]);
 }
 
 /** The rows in order, three or more of one route in a row folded into a run (keyed by its first trace). */
@@ -497,7 +510,8 @@ function contextOf(chain: Chain, root: string, listed: ReadonlySet<string>, now:
   }
   const traces = new Map(chain.traces.filter(served).map((each) => [each.id, each]));
   const waiting = waitingCalls(chain, now * 1000);
-  return { children, waiting, traces, counted: countedIn(chain, children, traces), seen: new Set([root]) };
+  const untraced = untracedIn(chain.traces, chain.capped, now);
+  return { children, waiting, untraced, traces, counted: countedIn(chain, children, traces), seen: new Set([root]) };
 }
 
 /** One call a view or an action made, as its row: the trace that answered it, or the call while it has none. */

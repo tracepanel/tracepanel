@@ -55,6 +55,10 @@
 - In a narrow call tree a call's status stays whole ("200", not "20"
   beside "GraphQL query Features → library-router"): the call's path
   gives way before it, after the app's name.
+- A call under a request in the panel's list to a host that sends no
+  traces (a third-party API the BFF calls) stays once it is no longer
+  waited for and says "not traced", as the call tree does. Its row went
+  five seconds after the call, leaving nothing in its place.
 ## 0.13.0 (2026-11-03)
 
 ### Fixed

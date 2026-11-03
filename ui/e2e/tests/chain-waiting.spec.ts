@@ -1,7 +1,7 @@
 // The panel's list says what is still coming under a row whose trace called other apps: placeholders while the
 // row's chain loads the first time (a slow one), and each call whose trace the agent hasn't got yet, where that
 // trace's row will be and as it will look (its status and time, its numbers "…"), until it arrives (or, from a
-// service that records none, for a few seconds).
+// service that records none, for a few seconds: then the same row says "not traced").
 import type { Locator, Page } from "@playwright/test";
 import { openApp, panel, pill } from "../app.ts";
 import { type ArrivingCall, arriving } from "../chain.ts";
@@ -79,7 +79,7 @@ test("calls whose traces haven't arrived wait under the request, their numbers p
   await expect(waiting).toHaveCount(0);
 });
 
-test("a call to a service that sends no trace waits a few seconds after it ended, then its row goes", async ({
+test("a call to a service that sends no trace waits a few seconds after it ended, then its row says not traced", async ({
   page,
 }) => {
   // A third-party API (its trace never comes), called 3.5 s ago: waited for 5 s after the call.
@@ -87,12 +87,21 @@ test("a call to a service that sends no trace waits a few seconds after it ended
   const { rows, waiting } = await listed(page, bff, now);
 
   await expect.poll(() => under(rows)).toEqual(["waiting GET /rates"]);
+  const row = rows.nth(1);
+  await row.evaluate((element) => {
+    (element as HTMLElement).dataset["probe"] = "kept";
+  });
 
-  // 5.6 s after the call ended.
+  // 5.6 s after the call ended: no trace came, none will. The same row stays, as the call tree says it.
   await page.clock.setFixedTime(now + 2_000);
 
   await expect(waiting).toHaveCount(0, { timeout: 4_000 });
-  expect(await under(rows)).toEqual([]);
+  expect(await under(rows)).toEqual(["untraced GET /rates"]);
+  await expect(row).toHaveAttribute("data-probe", "kept");
+  await expect(row.locator('[data-state="untraced"]')).toHaveText("not traced");
+  await expect(row).toHaveAttribute("title", /^GET \/rates: Not traced: api\.example\.com /);
+  // No numbers to wait for.
+  await expect(row.locator(".dt-pending")).toHaveCount(0);
 });
 
 test("while a request's chain loads the first time, a placeholder row stands where its apps' rows go", async ({

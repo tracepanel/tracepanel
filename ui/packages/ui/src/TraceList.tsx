@@ -573,24 +573,28 @@ function ChainLoading({ level }: { level: number }) {
  */
 function ChainWaitingRow({ call, level }: { call: ChainWaiting; level: number }) {
   const summary = waitingSummary(call);
+  const name = rowName(summary);
+  // Once no trace will come: the same row, "not traced", as the call tree says it; no numbers to wait for.
+  const untraced = call.untraced;
   return (
     <div
       className="dt-request-row"
-      data-chain="waiting"
+      data-chain={untraced === undefined ? "waiting" : "untraced"}
       aria-disabled="true"
-      title={waitingTitle(rowName(summary), call.cut)}
+      title={untraced === undefined ? waitingTitle(name, call.cut) : `${name}: ${untracedNote(untraced)}`}
       style={{ "--dt-chain-level": level } as CSSProperties}
     >
       <span className="dt-request-main">
         <span className="dt-map-caret" />
         <RowName trace={summary} />
         {call.cut === null ? null : <NoAnswer at={call.cut} />}
+        {untraced === undefined ? null : <NotTracedMark host={untraced} />}
       </span>
       {/* As the row of its trace will be: its status and time, its numbers pending until that trace comes. */}
       <span className="dt-request-meta">
         <StatusSlot status={summary.http_status} />
         <span>{duration(summary.duration)}</span>
-        <CompactMeta trace={summary} pending={true} />
+        <CompactMeta trace={summary} pending={untraced === undefined} blank={untraced !== undefined} />
       </span>
     </div>
   );
