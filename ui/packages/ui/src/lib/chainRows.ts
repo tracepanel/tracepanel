@@ -75,6 +75,11 @@ export interface ChainWaiting {
   cut: number | null;
   /** No trace answered it and none will (untracedIn): the host it went to. */
   untraced?: string | undefined;
+  /**
+   * It got no answer (a connection error, a timeout, an abort; status 0): what failed ("TypeError"), "No answer" where
+   * its span says nothing more. No trace is waited for: its row says "failed", as the call tree does.
+   */
+  failed?: string | undefined;
   /** The W3C span id the call carried on: its identity, as the browser sent it. */
   w3c?: string | undefined;
 }
@@ -226,6 +231,27 @@ function carries(span: Span): boolean {
 function gotAnswer(span: Span): boolean {
   const status = statusOf(span);
   return status !== null && status > 0 && !("error.type" in span.attrs);
+}
+
+/**
+ * A call that got no answer and failed (a network error, an abort, status 0), not one cut short: what failed, as the
+ * call tree's "failed" says it in its tooltip. Null for a call that was answered, or hasn't ended.
+ */
+function failureOf(span: Span): string | null {
+  if (!(callOut(span) && noAnswer(span))) return null;
+  return text(span.attrs, "error.type") ?? "No answer";
+}
+
+/** A call to a service (not a message: it runs any time later). */
+function callOut(span: Span): boolean {
+  return CALL_KINDS.has(span.kind) && !("messaging.system" in span.attrs);
+}
+
+/** A call that ended with no answer: failed before a status came (status 0, an error), not cut short. */
+function noAnswer(span: Span): boolean {
+  const status = statusOf(span);
+  if (isCut(span) || (status ?? 0) > 0) return false;
+  return span.status === "error" || status === 0 || "error.type" in span.attrs;
 }
 
 /** The status of a call's answer, as its span says it. */
@@ -563,26 +589,36 @@ export function chainCalls(
       apps: appsUnder(new Set([each.id]), context, key),
     };
   });
-  const waiting = (context.waiting.get(root) ?? []).map((each) => ({
-    ...each.row,
-    key: `${root}/call/${each.row.span}`,
-  }));
+  // Its calls that got no answer and no trace answered: a row each, "failed", from the first load on (never waiting
+  // for a trace, never "not traced", never gone), as the call tree says them.
+  const served = new Set(chain.traces.flatMap((each) => (each.parent === root && each.via ? [each.via] : [])));
+  const failed = (own?.spans ?? []).flatMap((span) => {
+    const failure = failureOf(span);
+    if (failure === null || served.has(span.id)) return [];
+    return [{ ...waitingOf(span, root), key: `${root}/call/${span.id}`, failed: failure }];
+  });
+  const failedIds = new Set(failed.map((call) => call.span));
+  const waiting = (context.waiting.get(root) ?? [])
+    .filter((each) => !failedIds.has(each.row.span))
+    .map((each) => ({ ...each.row, key: `${root}/call/${each.row.span}` }));
   const untraced = [...context.untraced].flatMap(([id, host]) => {
     const span = spans.get(id);
-    return span ? [{ ...waitingOf(span, root), key: `${root}/call/${id}`, untraced: host }] : [];
+    if (!span || failedIds.has(id)) return [];
+    return [{ ...waitingOf(span, root), key: `${root}/call/${id}`, untraced: host }];
   });
   // A call that was answered by a host that answered others, its trace later than it is waited for (a gateway sends
   // its traces in batches): still its row, waiting, never gone until its trace comes. One with no answer has none.
   // Its calls a trace answered (those listed as rows of their own too), waited for, or not traced.
   const placed = new Set([
-    ...chain.traces.flatMap((each) => (each.parent === root && each.via ? [each.via] : [])),
+    ...served,
+    ...failedIds,
     ...waiting.map((call) => call.span),
     ...untraced.map((call) => call.span),
   ]);
   const late = (own?.spans ?? [])
     .filter((span) => carries(span) && gotAnswer(span) && !placed.has(span.id) && !chain.capped)
     .map((span) => ({ ...waitingOf(span, root), key: `${root}/call/${span.id}` }));
-  return [...answered, ...waiting, ...untraced, ...late].sort((a, b) => startOf(a) - startOf(b));
+  return [...answered, ...waiting, ...untraced, ...failed, ...late].sort((a, b) => startOf(a) - startOf(b));
 }
 
 /**
@@ -619,8 +655,9 @@ export function waitingSummary(call: ChainWaiting): TraceSummary {
     name: call.operation ?? `${call.method ?? ""} ${call.path}`.trim(),
     start: call.start,
     duration: call.cut ?? Math.max(0, call.end - call.start),
-    status: call.status !== null && call.status >= 500 ? "error" : "ok",
-    http_status: call.cut === null ? call.status : null,
+    status: call.failed !== undefined || (call.status !== null && call.status >= 500) ? "error" : "ok",
+    // No status for a call cut short, nor for one that got no answer (status 0): it says "failed".
+    http_status: call.cut === null && call.failed === undefined ? call.status : null,
     method: call.method,
     path: call.path,
     route: null,

@@ -36,6 +36,18 @@ export function MethodBadge({
   );
 }
 
+/**
+ * A call that got no answer (a connection error, a timeout, an abort), where its status code would be: "failed" in red,
+ * what failed in its tooltip. One look wherever such a call shows: the call tree, the panel's list.
+ */
+export function FailedStatus({ failure }: { failure?: string | undefined }) {
+  return (
+    <span className="dt-status" data-tone="error" title={failure ?? "No answer"}>
+      failed
+    </span>
+  );
+}
+
 export function StatusBadge({ status }: { status: number | null | undefined }) {
   if (status === null || status === undefined) return null;
   const tone = status >= 500 ? "error" : status >= 400 ? "warn" : status >= 300 ? "info" : "ok";

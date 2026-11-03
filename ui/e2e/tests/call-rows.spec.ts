@@ -52,7 +52,9 @@ const RECORDING = `<script>
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: "query " + op + " { items { id } }", operationName: op }),
-      }).then((response) => response.text()).then(() => {
+      }).then((response) => response.text()).catch(() => {
+        call.failed = true;
+      }).then(() => {
         call.end = now();
         left -= 1;
         if (left > 0) return;
@@ -82,13 +84,19 @@ type Opener = { openView: (viewId: string, ops: string[], quietMs: number) => vo
 
 /**
  * The gateway's answers, each held until the test lets the call through (by its number): no Tracepanel headers, or
- * `headers(n)`'s (an app with an SDK).
+ * `headers(n)`'s (an app with an SDK); a call numbered in `fails` gets no answer (a network error).
  */
-async function gateway(page: Page, headers?: (n: number) => Record<string, string>): Promise<(n: number) => void> {
+async function gateway(
+  page: Page,
+  headers?: (n: number) => Record<string, string>,
+  fails: readonly number[] = [],
+): Promise<(n: number) => void> {
   const held = new Map<number, Route>();
   const released = new Set<number>();
   const answer = (route: Route, n: number) =>
-    route.fulfill({ status: 200, contentType: "application/json", body: "{}", headers: headers?.(n) ?? {} });
+    fails.includes(n)
+      ? route.abort("failed")
+      : route.fulfill({ status: 200, contentType: "application/json", body: "{}", headers: headers?.(n) ?? {} });
   await page.route("**/gw/graphql?n=*", async (route) => {
     const n = Number(new URL(route.request().url()).searchParams.get("n"));
     if (released.has(n)) await answer(route, n);
@@ -107,6 +115,7 @@ async function opened(
   options: {
     document?: { trace: string };
     headers?: (n: number) => Record<string, string>;
+    fails?: readonly number[];
     dock?: "right" | "bottom";
   } = {},
 ) {
@@ -115,7 +124,7 @@ async function opened(
     (side) => sessionStorage.setItem("tracepanel:panel", JSON.stringify({ open: true, dock: side, width: 760 })),
     dock,
   );
-  const release = await gateway(page, options.headers);
+  const release = await gateway(page, options.headers, options.fails);
   await page.route("**/rows/", (route) =>
     route.fulfill({ contentType: "text/html", body: pageHtml(options.document) }),
   );
@@ -169,16 +178,22 @@ async function ingest(traces: Doc[]): Promise<void> {
   expect(response.status).toBe(202);
 }
 
-type Made = { n: number; op: string; start: number; end: number };
+type Made = { n: number; op: string; start: number; end: number; failed?: boolean };
 
 /**
  * What the recording sends once the view ended: the view, its calls as the page made them, in `order` (the spans of a
- * trace come in no order of the list's), each moved by `shift` (µs) and starting at `start` when given.
+ * trace come in no order of the list's), each moved by `shift` (µs) and starting at `start` when given, to `origin`
+ * (the console's, where the page made them, unless said).
  */
 async function storeView(
   page: Page,
   tag: number,
-  { order, shift = 0, start }: { order?: (calls: Made[]) => Made[]; shift?: number; start?: number } = {},
+  {
+    order,
+    shift = 0,
+    start,
+    origin = CONSOLE,
+  }: { order?: (calls: Made[]) => Made[]; shift?: number; start?: number; origin?: string } = {},
 ): Promise<void> {
   const { view, calls } = await page.evaluate(() => {
     const w = window as unknown as { view: Doc; calls: Made[] };
@@ -197,14 +212,16 @@ async function storeView(
     );
     each["attrs"] = {
       "http.request.method": "POST",
-      "url.full": `${CONSOLE}gw/graphql?n=${call.n}`,
-      "server.address": new URL(CONSOLE).hostname,
-      "server.port": Number(new URL(CONSOLE).port),
+      "url.full": `${origin}gw/graphql?n=${call.n}`,
+      "server.address": new URL(origin).hostname,
+      "server.port": Number(new URL(origin).port),
       "w3c.span_id": callOf(tag, call.n),
       "graphql.operation.type": "query",
       "graphql.operation.name": call.op,
-      "http.response.status_code": 200,
+      // No answer: the error the browser's fetch threw, the span failed, as the browser recording records it.
+      ...(call.failed ? { "error.type": "TypeError" } : { "http.response.status_code": 200 }),
     };
+    if (call.failed) each["status"] = "error";
     return each;
   });
   const attrs = {
@@ -437,4 +454,64 @@ test("a view's time stops at its last call's answer, also once that call's longe
     expect(each, `sample ${n} of ${shown.join(", ")}`).toBeGreaterThanOrEqual(shown[n - 1] ?? 0);
   // Never past its answer, not up to the stored trace's end.
   expect(Math.max(...shown)).toBeLessThan(1_000_000);
+});
+
+test("a call that got no answer stays its row, failed as the call tree says it, in flight, answered and stored", async ({
+  page,
+}) => {
+  const tag = 6;
+  // Two calls to the gateway: the first answered (its trace comes over OTLP), the second gets no answer at all.
+  const { release, list, calls } = await opened(page, { fails: [1] });
+  await open(page, id(tag, 1), ["Books", "Authors"]);
+  const failed = calls.filter({ hasText: "Authors" });
+  await expect(calls).toHaveCount(2);
+  await expect(failed.locator(".dt-running")).toHaveCount(1);
+
+  release(0);
+  release(1);
+  await viewEnded(page);
+  await expect(calls.locator(".dt-running")).toHaveCount(0);
+  await expect(calls).toHaveCount(2);
+  await expect(failed.locator(".dt-status")).toHaveText("failed");
+  await expect(failed.locator(".dt-status")).toHaveAttribute("title", "No answer");
+  await expect(failed).toHaveAttribute("data-tone", "error");
+
+  // The view's trace stored, long enough ago that no trace is waited for any more, and the gateway's trace of the
+  // first call: the host is known to answer with traces, and the failed call still stays, "failed", nothing pending.
+  const shift = -8_000_000;
+  const made = await page.evaluate(() => (window as unknown as { calls: Made[] }).calls[0] as Made);
+  await ingest([
+    trace(
+      id(tag, 20),
+      "http",
+      "GraphQL query Books",
+      made.start + shift + 5 * ms,
+      made.end - made.start - 10 * ms,
+      {
+        "service.name": "gateway",
+        "http.method": "POST",
+        "http.route": "/graphql",
+        "http.status_code": 200,
+        "w3c.trace_id": traceOf(tag),
+        "w3c.parent_span_id": callOf(tag, 0),
+      },
+      [],
+    ),
+  ]);
+  // Calls to a host of their own: the app it is served by stays this test's (the Services map links them).
+  await storeView(page, tag, { shift, origin: "http://gateway.test:4000/" });
+  // Both its calls, under the gateway's row: the one its trace answered, the one that failed.
+  await expect(list.locator('.dt-request-row[data-call="trace"]')).toHaveCount(1);
+  await expect(list.locator('.dt-request-row[data-call="group"] .dt-map-times')).toHaveText("×2");
+  await expect(calls).toHaveCount(2);
+  await expect(failed).toHaveAttribute("data-call", "failed");
+  await expect(failed.locator(".dt-status")).toHaveText("failed");
+  await expect(failed.locator(".dt-status")).toHaveAttribute("title", "TypeError");
+  await expect(failed).toHaveAttribute("data-tone", "error");
+  await expect(failed.locator(".dt-pending")).toHaveCount(0);
+  // Its view's call tree says the same of it.
+  await failed.click();
+  const row = panel(page).locator('.dt-map-row[data-kind="http.client"]').filter({ hasText: "Authors" });
+  await expect(row.locator(".dt-status")).toHaveText("failed");
+  await expect(row).toHaveAttribute("data-status", "error");
 });

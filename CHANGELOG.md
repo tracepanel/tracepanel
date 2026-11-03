@@ -12,6 +12,11 @@
 
 ### Fixed
 
+- A view's call that got no answer (a network error, an abort, status
+  0) stays its row in the panel's list, from in flight to its view's
+  trace stored, and says "failed" in red where its status would be, as
+  the call tree says it, what failed in its tooltip. Once the view's
+  trace loaded, it left the list. It has no numbers to wait for.
 - In the panel's list, a view's calls through a gateway (an Apollo
   Router sending its traces over OTLP) keep one row each, in the order
   they started, from the moment they leave until their traces are

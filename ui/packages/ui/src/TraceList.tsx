@@ -22,7 +22,17 @@ import { pageParts, redirectNote } from "./lib/page";
 import { plural } from "./lib/plural";
 import { traceRuntime } from "./lib/runtime";
 import { RowFlame } from "./ProfileHint";
-import { AppChip, IssueChip, KindBadge, MethodBadge, StatusSlot, TailPath, TaskName, Times } from "./primitives";
+import {
+  AppChip,
+  FailedStatus,
+  IssueChip,
+  KindBadge,
+  MethodBadge,
+  StatusSlot,
+  TailPath,
+  TaskName,
+  Times,
+} from "./primitives";
 import type { IssueKind, TraceSummary } from "./types";
 import { untracedNote } from "./Untraced";
 
@@ -50,9 +60,14 @@ export interface TraceRow {
   opens?: string | undefined;
   /**
    * One of a view's or an action's calls as its chain has it (lib/chainRows, chainCalls): the trace that answered it,
-   * the call while its trace is on its way, or the call no trace answered ("not traced").
+   * the call while its trace is on its way, the call no trace answered ("not traced"), or the call that got no answer.
    */
-  call?: "trace" | "waiting" | "untraced" | undefined;
+  call?: "trace" | "waiting" | "untraced" | "failed" | undefined;
+  /**
+   * A call that got no answer (a connection error, a timeout, an abort): what failed ("No answer" where nothing says
+   * more). Its status says "failed", as the call tree's does, answered and stored alike; no numbers to wait for.
+   */
+  failed?: string | undefined;
   /** Its numbers counted with everything under it, as the trace's tabs count them: known, never pending. */
   counted?: boolean | undefined;
   /** Cut short with no answer yet: its time so far (µs), as a call's row of a view's chain says it. */
@@ -143,7 +158,7 @@ export interface ListChains {
  */
 function pendingIn(chains: ListChains | undefined, row: TraceRow): boolean {
   if (row.open) return true;
-  if (row.counted || row.call === "untraced") return false;
+  if (row.counted || row.call === "untraced" || row.failed !== undefined) return false;
   return !row.run && chains?.settled !== undefined && !chains.settled.has(row.trace.id);
 }
 
@@ -263,7 +278,7 @@ function ListItem({
 
 /** One row of the list: its name, status and time, then its numbers (its chain's, `chained`). */
 function ListRow({
-  row: { trace, depth = 0, trigger, target, run, open, until, redirectedFrom, opens: target_, call, host },
+  row: { trace, depth = 0, trigger, target, run, open, until, redirectedFrom, opens: target_, call, host, failed },
   fold,
   chained,
   pending,
@@ -304,7 +319,7 @@ function ListRow({
       {...liveProps(trace, open, cut)}
       aria-current={selected ? "true" : undefined}
       aria-label={traceLabel(trace, { trigger, target, current, open, cut: cut !== null, redirectedFrom })}
-      title={callTitle(trace, call, cut, host) ?? opens}
+      title={callTitle(trace, call, cut, host, failed) ?? opens}
       {...foldProps(fold)}
       data-new={fresh ? "" : undefined}
       onClick={() => onSelect(target_ ?? trace.id)}
@@ -322,19 +337,32 @@ function ListRow({
         until={until}
         chained={chained}
         pending={pending}
-        blank={call === "untraced"}
+        blank={numberless(call, failed)}
+        failed={failed}
         compact={compact}
       />
     </button>
   );
 }
 
+/** A call no trace answered, or one that got no answer: no numbers to say. */
+function numberless(call: TraceRow["call"], failed: string | undefined): boolean {
+  return call === "untraced" || failed !== undefined;
+}
+
 /**
  * What a view's call with no trace to open says in its tooltip: its trace on its way, or none coming; a click opens
  * the view's call tree, which has the call.
  */
-function callTitle(trace: TraceSummary, call: TraceRow["call"], cut: number | null, host: string | undefined) {
+function callTitle(
+  trace: TraceSummary,
+  call: TraceRow["call"],
+  cut: number | null,
+  host: string | undefined,
+  failed: string | undefined,
+) {
   const name = rowName(trace);
+  if (failed !== undefined) return `${name}: failed, no answer came (${failed}). Opens the view's call tree.`;
   if (call === "waiting") return `${waitingTitle(name, cut)} Opens the view's call tree.`;
   if (call === "untraced" && host) return `${name}: ${untracedNote(host)} Opens the view's call tree.`;
   return undefined;
@@ -422,6 +450,7 @@ function RowMeta({
   chained,
   pending,
   blank,
+  failed,
   compact,
 }: {
   trace: TraceSummary;
@@ -431,13 +460,19 @@ function RowMeta({
   pending: boolean;
   /** No numbers to say: a call no trace answered. */
   blank?: boolean | undefined;
+  /** A call that got no answer: what failed, its status "failed" (TraceRow.failed). */
+  failed?: string | undefined;
   compact: boolean | undefined;
 }) {
   const Meta = compact ? CompactMeta : FullMeta;
   return (
     <span className="dt-request-meta">
       {/* No status of its own (a view, a task, a job): its slot kept, so the time lines up with a request's. */}
-      <StatusSlot status={trace.kind === "page" || open ? null : trace.http_status} />
+      {failed !== undefined && !open ? (
+        <FailedStatus failure={failed} />
+      ) : (
+        <StatusSlot status={trace.kind === "page" || open ? null : trace.http_status} />
+      )}
       <RowTime trace={trace} open={open} until={until} />
       <Meta trace={trace} chained={chained} pending={pending} blank={blank} />
     </span>

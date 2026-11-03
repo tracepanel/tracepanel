@@ -143,11 +143,16 @@ test("a view whose calls went through a gateway has the gateway's row under it, 
   const calls = list.locator('.dt-request-row[data-call="trace"]');
 
   await expect(list.locator(".dt-request-row").first()).toContainText("/app/");
-  // The gateway's four, under its row, a row each as the view made them.
+  // The view's six calls to the gateway, under its row, a row each as the view made them: the four it served, and the
+  // two that got no answer, "failed" as the call tree says them.
   const group = list.locator('.dt-request-row[data-call="group"]');
   await expect(group.locator(".dt-app-chip")).toHaveText("gateway");
-  await expect(group.locator(".dt-map-times")).toHaveText("×4");
+  await expect(group.locator(".dt-map-times")).toHaveText("×6");
   await expect(calls).toHaveCount(4);
+  const failed = list.locator('.dt-request-row[data-call="failed"]');
+  await expect(failed.locator(".dt-status")).toHaveText(["failed", "failed"]);
+  await expect(failed.nth(0).locator(".dt-status")).toHaveAttribute("title", "TypeError");
+  await expect(failed.nth(1).locator(".dt-status")).toHaveAttribute("title", "No answer");
   await expect(list.locator('.dt-request-row[data-chain="app"]')).toHaveCount(0);
   // What the first called, folded under it until opened: the subgraph's trace.
   await calls.first().locator("[data-toggle]").click();
