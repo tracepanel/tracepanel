@@ -70,6 +70,8 @@ export interface TraceRow {
   failed?: string | undefined;
   /** Its numbers counted with everything under it, as the trace's tabs count them: known, never pending. */
   counted?: boolean | undefined;
+  /** A view whose calls' numbers are still on their way: its own pending, never a part of them (its time stays). */
+  awaiting?: boolean | undefined;
   /** Cut short with no answer yet: its time so far (µs), as a call's row of a view's chain says it. */
   cut?: number | null | undefined;
   /** For a call no trace answered: the host it went to. */
@@ -159,7 +161,7 @@ export interface ListChains {
  * is listed with its own numbers: no chain is loaded for it.
  */
 function pendingIn(chains: ListChains | undefined, row: TraceRow): boolean {
-  if (row.open) return true;
+  if (row.open || row.awaiting) return true;
   if (row.counted || row.call === "untraced" || row.failed !== undefined) return false;
   return !row.run && chains?.settled !== undefined && !chains.settled.has(row.trace.id);
 }

@@ -74,7 +74,12 @@
   an app with an SDK answered the calls ("library-bff ×8" said 0 queries
   and 16 issues over eight calls of 4 queries and 2 issues each, the
   view 32 queries and 2 issues): it counted those calls' own numbers,
-  not what ran under them. The group used to appear only
+  not what ran under them. Until the view's chain counts them it says
+  "…", as a router's group does, never their own numbers added up for
+  the moment ("12.1 s · 0 · 16" for under a second, then "32 · 2"), and
+  the view's row says "…" too while a call's numbers are still on their
+  way, its time as it is: it said what had come so far ("24 · 1", then
+  "32 · 1"). The group used to appear only
   once the traces came, taking the place of the rows that were there.
 - The panel docked at the right keeps the selected row in sight below
   the list's head as rows arrive: eight calls a view made at once
@@ -88,6 +93,12 @@
   at its last call's answer when its calls went through a gateway. It
   ran on while the view waited for its end, then jumped back (6.5 s,
   then 5.6 s): only the answers that named a trace stopped it.
+- A query's details stay where they are as Explain runs: scrolled to
+  their end, they moved down by a line on the click (the hint under the
+  buttons went while the plan was on its way, the pane scrolling up by
+  its height), and stayed moved once the plan came. The hint stays until
+  the plan takes its place, and a plan explained again stays until the
+  new one comes.
 - After the page reloads, the rows of the pages before it keep their
   numbers while their chains load again (VIEW / and its GraphQL query
   Books said "…" for seconds on a slow network): the panel keeps the
