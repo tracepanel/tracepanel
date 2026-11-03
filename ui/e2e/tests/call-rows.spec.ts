@@ -809,3 +809,28 @@ test("the row over a view's calls to one app adds up their rows' numbers, its ch
   await expect(group.locator(".dt-request-chips")).toHaveText("1");
   await expect(calls.locator(".dt-request-chips")).toHaveText(["1", "1"]);
 });
+
+test("the selected view stays in sight below the list's head as its calls fill the list docked right", async ({
+  page,
+}) => {
+  const tag = 13;
+  const { release, list } = await opened(page);
+  const ops = Array.from({ length: 8 }, () => "Book");
+  await open(page, id(tag, 1), ops);
+  const view = list.locator('.dt-request-row[data-kind="page"]');
+  await expect(list.locator('.dt-request-row[data-depth="2"]')).toHaveCount(8);
+  await expect(view).toHaveAttribute("aria-current", "true");
+  // The list overflows: eight calls and their app's row under the view.
+  expect(await list.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+  const inSight = () =>
+    view.evaluate((row) => {
+      const section = row.closest("section") as HTMLElement;
+      const head = section.querySelector(".page-requests-head") as HTMLElement;
+      return Math.round(row.getBoundingClientRect().top - head.getBoundingClientRect().bottom);
+    });
+  await expect.poll(inSight).toBeGreaterThanOrEqual(0);
+  for (const n of ops.keys()) release(n);
+  await viewEnded(page);
+  await expect(list.locator(".dt-running")).toHaveCount(0);
+  await expect.poll(inSight).toBeGreaterThanOrEqual(0);
+});

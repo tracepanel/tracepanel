@@ -76,6 +76,11 @@
   view 32 queries and 2 issues): it counted those calls' own numbers,
   not what ran under them. The group used to appear only
   once the traces came, taking the place of the rows that were there.
+- The panel docked at the right keeps the selected row in sight below
+  the list's head as rows arrive: eight calls a view made at once
+  scrolled the list to its end by a row, and VIEW /parallel, the row the
+  panel showed, went under "This page". A row scrolled into view with
+  the keyboard stops below the head too.
 - A view whose calls all went through a gateway stays in the panel's
   list when the same page is opened again. With no traced request under
   it, it counted as an empty view and left the list for the new one.

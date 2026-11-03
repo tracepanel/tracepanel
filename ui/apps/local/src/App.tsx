@@ -1590,12 +1590,27 @@ function useStickToBottom(
     seen.current = count;
     const wasAtEnd =
       !element || height.current === 0 || height.current - element.scrollTop - element.clientHeight <= BOTTOM_SLACK;
-    if (wasAtEnd || follow) jump();
-    else if (added > 0) setUnseen((value) => value + added);
+    if (wasAtEnd || follow) {
+      if (element) element.scrollTop = endKeepingSelected(element);
+      setUnseen(0);
+    } else if (added > 0) setUnseen((value) => value + added);
     height.current = element?.scrollHeight ?? 0;
-  }, [count, follow, jump, list]);
+  }, [count, follow, list]);
 
   return { unseen, jump };
+}
+
+/**
+ * Where a list kept at its end scrolls to as rows arrive: its end, unless that would take the selected row up under
+ * its sticky head (a view whose calls all came at once): then as far as keeps that row in sight, below the head.
+ */
+function endKeepingSelected(element: HTMLElement): number {
+  const end = element.scrollHeight - element.clientHeight;
+  const selected = element.querySelector<HTMLElement>('.dt-request-row[aria-current="true"]');
+  if (!selected) return end;
+  const head = element.querySelector<HTMLElement>(".page-requests-head")?.offsetHeight ?? 0;
+  const top = selected.getBoundingClientRect().top - element.getBoundingClientRect().top + element.scrollTop;
+  return Math.max(0, Math.min(end, top - head));
 }
 
 /** The list of this page's requests, or the browser tab's: its class, its accessible name, its head's name. */
