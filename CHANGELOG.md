@@ -12,6 +12,11 @@
 
 ### Fixed
 
+- A view's calls to the host that served the page are grouped under the
+  page's app ("next-app ×2" over the two GET /openapi.json Swagger UI
+  asked for), not the host ("127.0.0.1:8160 ×2"): the app that traced
+  the page's own load serves that host, as a service map's link names
+  the app a router's calls reached.
 - The pill's count of a page's requests counts its view's calls no trace
   answered, as the panel's list does (GET /docs and the two GET
   /openapi.json Swagger UI asked for, untraced, are 3 requests, not 1),

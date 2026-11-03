@@ -540,3 +540,38 @@ test("the pill counts a page's calls no trace answered, as its list does: its ow
   await expect(count).toHaveText("3");
   await expect(pill(page).locator(".seg.page b")).toHaveText("3");
 });
+
+test("a view's calls to the host that served the page are named by the page's app, not the host", async ({ page }) => {
+  const tag = 8;
+  // The page's own load, which its server (a Next app) traced: the host the view's calls go to.
+  const now = Date.now() * ms;
+  await ingest([
+    trace(
+      id(tag, 50),
+      "http",
+      "GET /rows/",
+      now - 40 * ms,
+      30 * ms,
+      {
+        "service.name": "next-app",
+        "http.method": "GET",
+        "http.route": "/rows/",
+        "http.status_code": 200,
+      },
+      [],
+    ),
+  ]);
+  const { release, list } = await opened(page, { document: { trace: id(tag, 50) }, dock: "bottom" });
+  await open(page, id(tag, 1), ["Spec", "Spec"]);
+  release(0);
+  release(1);
+  await viewEnded(page);
+
+  const group = list.locator('.dt-request-row[data-call="group"]');
+  await expect(group.locator(".dt-map-times")).toHaveText("×2");
+  await expect(group.locator(".dt-app-chip")).toHaveText("next-app");
+  // Its calls stay what they are: no trace answered them.
+  await storeView(page, tag, { shift: -8_000_000 });
+  await expect(list.locator('.dt-request-row[data-call="untraced"]')).toHaveCount(2);
+  await expect(group.locator(".dt-app-chip")).toHaveText("next-app");
+});

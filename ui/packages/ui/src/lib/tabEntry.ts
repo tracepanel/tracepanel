@@ -39,6 +39,11 @@ export interface EntrySummary {
   /** The host a request went to ("api.example.com:8443"): a view's calls are grouped by it. */
   host?: string | undefined;
   /**
+   * The page's own load under its view (its document, no call of the view's, so no `host`): the host that served it.
+   * The app its trace names is that host's, which names a group of the view's calls to it.
+   */
+  loadHost?: string | undefined;
+  /**
    * A request that flew: when the page made it and when its answer came (epoch µs), as the browser timed it. Its row
    * says the time the page waited for it (never less than its server's), in flight, answered and stored alike.
    */

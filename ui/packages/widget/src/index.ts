@@ -2034,8 +2034,10 @@ export function mount(options: WidgetOptions = {}): Widget {
     loadView ??= announced.id;
     const own = page && !pageCleared ? page.trace : undefined;
     if (loadView !== announced.id || !own) return entries;
-    // The document is the load, not a call of the view's: never in a group of its calls to one host.
-    const asLoad = (summary: EntrySummary | undefined) => summary && { ...summary, host: undefined };
+    // The document is the load, not a call of the view's: never in a group of its calls to one host. Its host is
+    // still the one its app served: a group of the view's calls to it is named by that app.
+    const asLoad = (summary: EntrySummary | undefined) =>
+      summary && { ...summary, host: undefined, loadHost: summary.host ?? summary.loadHost };
     return entries.map((item) =>
       item.id === own && item.parent === null ? { ...item, parent: announced.id, summary: asLoad(item.summary) } : item,
     );

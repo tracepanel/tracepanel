@@ -74,6 +74,8 @@ export interface TraceRow {
   cut?: number | null | undefined;
   /** For a call no trace answered: the host it went to. */
   host?: string | undefined;
+  /** The page's own load under its view: the host that served it (its app names a group of calls to that host). */
+  loadHost?: string | undefined;
   /**
    * The W3C span id the call carried on (its traceparent), when the widget saw it: its identity in its view's trace,
    * which the view's chain matches it by (never by its name or its place).
