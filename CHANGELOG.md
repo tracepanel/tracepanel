@@ -18,6 +18,12 @@
   at its last call's answer when its calls went through a gateway. It
   ran on while the view waited for its end, then jumped back (6.5 s,
   then 5.6 s): only the answers that named a trace stopped it.
+- A number on its way says "…" everywhere, and only while it is on its
+  way. A row of the panel's list whose trace never reached the agent
+  (the store was cleared since), or whose chain can't be loaded, says
+  what is known instead of "…" for good. A call whose trace hasn't come
+  yet, deeper in a chain, looks as its trace's row will (its status, its
+  time, its numbers "…"), not a dimmed row saying "waiting".
 ## 0.13.0 (2026-11-03)
 
 ### Fixed

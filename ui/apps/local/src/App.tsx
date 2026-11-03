@@ -635,6 +635,23 @@ function placeCalls(
   return placed.sort((a, b) => a.at - b.at || made(a.row) - made(b.row)).map((each) => each.row);
 }
 
+/**
+ * The rows whose numbers are known: their chain loaded (or can't be), or a row the agent doesn't have and won't any
+ * more (not stored, not on its way): its own numbers are all there are, never "…" for good. Undefined where chains
+ * don't load.
+ */
+function settledIn(
+  loaded: ReadonlySet<string> | undefined,
+  rows: readonly TraceRow[],
+  stored: ReadonlySet<string>,
+): ReadonlySet<string> | undefined {
+  if (!loaded) return undefined;
+  const gone = rows.filter(
+    (row) => !(stored.has(row.trace.id) || inFlight(row.trace.id) || arrivingIn(rows, stored, row.trace.id)),
+  );
+  return gone.length === 0 ? loaded : new Set([...loaded, ...gone.map((row) => row.trace.id)]);
+}
+
 /** Each chain's counts, by its row's trace id. */
 function countsOf(chains: ReadonlyMap<string, Chain>): ReadonlyMap<string, ChainCounts> {
   const counts = new Map<string, ChainCounts>();
@@ -668,6 +685,7 @@ function cutsOf(chains: ReadonlyMap<string, Chain>): ReadonlyMap<string, number>
 function useRowChains(rows: readonly TraceRow[], stored: ReadonlySet<string>): RowChains {
   const [chains, setChains] = useState<ReadonlyMap<string, Chain>>(() => new Map());
   const [loading, setLoading] = useState<ReadonlySet<string>>(() => new Set());
+  const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set());
   const has = useRef(chains);
   has.current = chains;
   const loaded = useRef(new Map<string, string>());
@@ -725,10 +743,18 @@ function useRowChains(rows: readonly TraceRow[], stored: ReadonlySet<string>): R
           if (timer !== undefined) timers.delete(timer);
           if (mounted.current) done(trace.id);
         };
-        load(trace.id).then((chain) => {
-          if (mounted.current) keep(trace.id, chain);
-          settle();
-        }, settle);
+        load(trace.id).then(
+          (chain) => {
+            if (mounted.current) keep(trace.id, chain);
+            settle();
+          },
+          () => {
+            // No chain to say more (the trace rotated out, the agent can't): its own numbers are all there are.
+            if (mounted.current)
+              setFailed((current) => (current.has(trace.id) ? current : new Set(current).add(trace.id)));
+            settle();
+          },
+        );
       }
     };
     tick();
@@ -773,7 +799,7 @@ function useRowChains(rows: readonly TraceRow[], stored: ReadonlySet<string>): R
   }, [chains, expired]);
   const counts = useMemo(() => countsOf(chains), [chains]);
   const cut = useMemo(() => cutsOf(chains), [chains]);
-  const settled = useMemo(() => (source.chain ? new Set(chains.keys()) : undefined), [chains]);
+  const settled = useMemo(() => (source.chain ? new Set([...chains.keys(), ...failed]) : undefined), [chains, failed]);
   return { apps, calls, loading, counts, settled, cut };
 }
 
@@ -1487,7 +1513,7 @@ function PanelApp({ route }: { route: Route }) {
     apps: shown.apps,
     loading: rowChains.loading,
     counts: rowChains.counts,
-    settled: rowChains.settled,
+    settled: settledIn(rowChains.settled, rows, stored),
     cut: rowChains.cut,
     open: chainOpen,
     onToggle: toggleChain,

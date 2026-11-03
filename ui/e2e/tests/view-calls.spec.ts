@@ -324,3 +324,22 @@ test("a view's time never runs past its end and back", async ({ page }) => {
   for (const [n, each] of shown.entries())
     expect(each, `sample ${n} of ${shown.join(", ")}`).toBeGreaterThanOrEqual(shown[n - 1] ?? 0);
 });
+
+test("a row the agent never got says what is known, never a number on its way for good", async ({ page }) => {
+  // A view this tab listed two minutes ago whose trace never reached the agent (the store was cleared since).
+  const gone = id(4, 1);
+  const start = (Date.now() - 120_000) * ms;
+  await page.addInitScript(
+    ({ gone, start }) => {
+      if (sessionStorage.getItem("tracepanel:tab")) return;
+      const summary = { name: "/gone", status: null, start, duration: 2_000_000, queries: 0, issues: 0, kind: "page" };
+      sessionStorage.setItem("tracepanel:tab", JSON.stringify([{ id: gone, parent: null, summary }]));
+    },
+    { gone, start },
+  );
+  const { list } = await opened(page);
+  const row = list.locator('.dt-request-row[data-kind="page"]').filter({ hasText: "/gone" });
+
+  await expect(row).toContainText("2.0 s");
+  await expect(row.locator(".dt-pending")).toHaveCount(0);
+});

@@ -1,6 +1,7 @@
 // The panel's list says what is still coming under a row whose trace called other apps: placeholders while the
-// row's chain loads the first time (a slow one), and each call whose trace the agent hasn't got yet, dimmed, where
-// that trace's row will be, until it arrives (or, from a service that records none, for a few seconds).
+// row's chain loads the first time (a slow one), and each call whose trace the agent hasn't got yet, where that
+// trace's row will be and as it will look (its status and time, its numbers "…"), until it arrives (or, from a
+// service that records none, for a few seconds).
 import type { Locator, Page } from "@playwright/test";
 import { openApp, panel, pill } from "../app.ts";
 import { type ArrivingCall, arriving } from "../chain.ts";
@@ -43,7 +44,7 @@ const calls: ArrivingCall[] = [
   { url: "http://localhost:8901/library/authors/batch" },
 ];
 
-test("calls whose traces haven't arrived wait under the request, dimmed, each replaced by its trace's row", async ({
+test("calls whose traces haven't arrived wait under the request, their numbers pending, each replaced by its trace's row", async ({
   page,
 }) => {
   const { bff, now, serve } = await arriving(1, calls);
@@ -52,7 +53,8 @@ test("calls whose traces haven't arrived wait under the request, dimmed, each re
   // Neither arrived: both calls wait, by their method and path, in the order they were made.
   await expect.poll(() => under(rows)).toEqual(["waiting GET /library/books", "waiting GET /library/authors/batch"]);
   await expect(waiting.first()).toHaveAttribute("aria-disabled", "true");
-  await expect(waiting.first()).toContainText("waiting");
+  // As its trace's row will be: its time, its numbers on their way.
+  await expect(waiting.first().locator(".dt-pending")).toHaveText("…");
   await expect(waiting.first()).toHaveAttribute("title", /^GET \/library\/books: waiting for its trace/);
 
   await serve(0);

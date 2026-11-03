@@ -14,6 +14,7 @@ import {
   type ChainTraceRow,
   type ChainWaiting,
   WAITING_MS,
+  waitingSummary,
 } from "./lib/chainRows";
 import { foldKeys } from "./lib/keys";
 import { cutNote, NO_ANSWER } from "./lib/live";
@@ -21,17 +22,7 @@ import { pageParts, redirectNote } from "./lib/page";
 import { plural } from "./lib/plural";
 import { traceRuntime } from "./lib/runtime";
 import { RowFlame } from "./ProfileHint";
-import {
-  AppChip,
-  IssueChip,
-  KindBadge,
-  MethodBadge,
-  StatusSlot,
-  TailPath,
-  TaskName,
-  Times,
-  WaitingIcon,
-} from "./primitives";
+import { AppChip, IssueChip, KindBadge, MethodBadge, StatusSlot, TailPath, TaskName, Times } from "./primitives";
 import type { IssueKind, TraceSummary } from "./types";
 import { untracedNote } from "./Untraced";
 
@@ -454,23 +445,25 @@ function ChainLoading({ level }: { level: number }) {
  * row takes its place once the agent has it; a call to a service that sends none is waited for WAITING_MS.
  */
 function ChainWaitingRow({ call, level }: { call: ChainWaiting; level: number }) {
-  const name = `${call.method ? `${call.method} ` : ""}${call.path}`;
+  const summary = waitingSummary(call);
   return (
     <div
       className="dt-request-row"
       data-chain="waiting"
       aria-disabled="true"
-      title={waitingTitle(name, call.cut)}
+      title={waitingTitle(rowName(summary), call.cut)}
       style={{ "--dt-chain-level": level } as CSSProperties}
     >
       <span className="dt-request-main">
         <span className="dt-map-caret" />
-        {call.method ? <MethodBadge method={call.method} /> : null}
-        <TailPath path={call.path} title={name} />
-        <WaitingMark cut={call.cut} />
+        <RowName trace={summary} />
+        {call.cut === null ? null : <NoAnswer at={call.cut} />}
       </span>
+      {/* As the row of its trace will be: its status and time, its numbers pending until that trace comes. */}
       <span className="dt-request-meta">
-        <StatusSlot status={null} />
+        <StatusSlot status={summary.http_status} />
+        <span>{duration(summary.duration)}</span>
+        <CompactMeta trace={summary} pending={true} />
       </span>
     </div>
   );
@@ -480,17 +473,6 @@ function ChainWaitingRow({ call, level }: { call: ChainWaiting; level: number })
 function waitingTitle(name: string, cut: number | null): string {
   if (cut !== null) return `${name}: still waiting. ${cutNote(cut)}`;
   return `${name}: waiting for its trace. It shows here once the app that served it sends it; a service that records none is no longer waited for ${WAITING_MS / 1000} s after the call.`;
-}
-
-/** "waiting" for an ended call's trace; "no answer yet" for a call cut short. */
-function WaitingMark({ cut }: { cut: number | null }) {
-  if (cut !== null) return <NoAnswer at={cut} />;
-  return (
-    <span className="dt-chain-waiting">
-      <WaitingIcon />
-      waiting
-    </span>
-  );
 }
 
 type ChainLevelProps = Omit<ChainRowsProps, "apps">;
