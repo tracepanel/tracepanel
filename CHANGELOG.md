@@ -168,7 +168,10 @@
   the browser timed it, never less than its server's own time (its trace
   still says that one). A call the browser queued behind others (six at
   a time to one host) ticked to 11.9 s, then dropped to its server's
-  6.0 s.
+  6.0 s. The row over a view's calls to one host ("library-router ×5")
+  says their time on the same clock from in flight to stored, never
+  less: it went from 5.2 s to 5.1 s as their traces came, the view's
+  trace timing the calls a hair apart from the page.
 - A view's time in the panel's list stops at its last call's answer also
   once that call's trace is stored: the answer's own end stops it, not
   the stored trace's, which ends after the answer went out. It ran on to

@@ -540,6 +540,40 @@ test("a view's time stops at its last call's answer, also once that call's longe
   expect(Math.max(...shown)).toBeLessThan(1_000_000);
 });
 
+test("the row over a view's calls to one host never says a shorter time as their traces come", async ({ page }) => {
+  const tag = 17;
+  const { release, list } = await opened(page);
+  await open(page, id(tag, 1), ["Book", "Book"]);
+  const group = list.locator('.dt-request-row[data-call="group"]');
+  await expect(group).toBeVisible();
+  release(0);
+  await page.waitForTimeout(600);
+  release(1);
+  await viewEnded(page);
+  const times: number[] = [];
+  const sample = async () => times.push(micros(await group.locator(".dt-request-meta").innerText()));
+  await sample();
+  // The view's trace times its calls a hair apart from the page (here from 0.3 s later): the group's time as the
+  // page waited stays, while its calls wait for their traces and once those come.
+  const viewStart = await page.evaluate(() => (window as unknown as { view: { start: number } }).view.start);
+  // Served by an app at a host of its own: the console's host stays served by no app (the other tests group by it).
+  await storeView(page, tag, { start: viewStart + 300 * ms, origin: "http://bff.test:4000/" });
+  await expect(list.locator('.dt-request-row[data-call="waiting"]')).toHaveCount(2);
+  for (let at = 0; at < 5; at += 1) {
+    await sample();
+    await page.waitForTimeout(100);
+  }
+  const made = await page.evaluate(() => (window as unknown as { calls: Made[] }).calls);
+  await ingest(made.flatMap((call) => served(tag, call)));
+  await expect(list.locator('.dt-request-row[data-call="trace"]')).toHaveCount(2, { timeout: 8_000 });
+  await sample();
+
+  const shown = times.filter((each) => !Number.isNaN(each));
+  expect(shown.length).toBe(7);
+  for (const [n, each] of shown.entries())
+    expect(each, `sample ${n} of ${shown.join(", ")}`).toBeGreaterThanOrEqual(shown[n - 1] ?? 0);
+});
+
 test("a call that got no answer stays its row, failed as the call tree says it, in flight, answered and stored", async ({
   page,
 }) => {

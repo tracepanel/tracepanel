@@ -680,10 +680,20 @@ function callRow(call: ChainCall, view: string, flight: TraceRow | undefined): T
   const said = flight && !flight.open ? flight.trace.duration : 0;
   if (call.type === "trace") {
     const runtime = traceRuntime(call.trace.attrs);
-    const clock = { start: call.called, end: call.ended ?? call.called + call.summary.duration };
+    const ended = call.ended ?? call.called + call.summary.duration;
     // Its time as the view made the call, as its row said in flight: the trace that served it says its own.
-    const trace = { ...call.summary, duration: Math.max(clock.end - clock.start, said) };
-    return { trace, depth: 1, key, call: "trace", counted: true, folded: true, ...to, runtime, clock };
+    const trace = { ...call.summary, duration: Math.max(ended - call.called, said) };
+    return {
+      trace,
+      depth: 1,
+      key,
+      call: "trace",
+      counted: true,
+      folded: true,
+      ...to,
+      runtime,
+      clock: clockOf(call, flight, trace.duration),
+    };
   }
   const summary = waitingSummary(call);
   // Its status as its answer said it, when the span doesn't.
@@ -691,13 +701,24 @@ function callRow(call: ChainCall, view: string, flight: TraceRow | undefined): T
   const duration = call.cut === null ? Math.max(summary.duration, said) : summary.duration;
   // biome-ignore lint/style/useNamingConvention: wire format.
   const trace = { ...summary, duration, http_status: status };
+  const clock = call.cut === null ? { clock: clockOf(call, flight, duration) } : {};
   const state =
     call.failed !== undefined
       ? { call: "failed" as const, failed: call.failed }
       : call.untraced
         ? { call: "untraced" as const, host: call.untraced }
         : { call: "waiting" as const };
-  return { trace, depth: 1, key, opens: view, cut: call.cut, ...to, ...state };
+  return { trace, depth: 1, key, opens: view, cut: call.cut, ...to, ...clock, ...state };
+}
+
+/**
+ * A view's call on its group's clock: from when its row started in flight (the widget's clock, as its group's time
+ * ran then), else the view's trace's, for as long as its row says. Its group's time never drops as the view's trace
+ * times its calls a hair apart from the widget.
+ */
+function clockOf(call: ChainCall, flight: TraceRow | undefined, duration: number): { start: number; end: number } {
+  const start = flight?.trace.start ?? callStart(call);
+  return { start, end: start + duration };
 }
 
 /**
