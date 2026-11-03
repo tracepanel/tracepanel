@@ -71,6 +71,14 @@
   through a gateway too, in flight, answered and stored. Once they
   answered it said 0, while the pill counted 40 HTTP calls down the
   view's chain.
+- Calls of a view alike in name (eight of one GraphQL operation, two of
+  them queued by the browser) keep their own times in the panel's list
+  as the view's trace comes: each row is matched to its call by the span
+  id its traceparent carried where the widget sees it, else by when the
+  call started and ended, never by its name and place. Two rows traded
+  8.1 s for 4.1 s. A call whose trace comes later than it is waited for
+  (a gateway sends its traces in batches) keeps its row until it does:
+  it left the list for a moment.
 ## 0.13.0 (2026-11-03)
 
 ### Fixed

@@ -42,6 +42,8 @@ export interface TraceInfo {
   page?: string | undefined;
   /** The widget's id of the request while it flew ("~…"): its row in the panel's list keeps it as its key. */
   flight?: string | undefined;
+  /** The W3C span id the call carried on (its traceparent), as the browser recording sent it: the call's identity. */
+  span?: string | undefined;
 }
 
 /** A view or an action tracepanel-js records in the browser, as it announces them (tracepanel:page). */
@@ -503,6 +505,11 @@ export interface Flight {
   name?: string | undefined;
   /** Epoch ms. */
   start: number;
+  /**
+   * The W3C span id its traceparent carries, when the browser recording added one before this saw the call (it
+   * wrapped fetch and XMLHttpRequest after the widget): the call's identity in the view's trace.
+   */
+  span?: string | undefined;
 }
 
 /**
@@ -550,7 +557,7 @@ function listen(): void {
     },
     end: (flight, info, answer) => {
       flying.delete(flight);
-      const landed = info && { ...namedAsItFlew(flight, info), flight: flight.id || undefined };
+      const landed = info && { ...namedAsItFlew(flight, info), flight: flight.id || undefined, span: flight.span };
       if (watcher) watcher.end(flight, landed, answer);
       else if (landed) pending.push(landed);
     },
@@ -571,7 +578,7 @@ function ownCall(url: string): boolean {
 }
 
 /** A request the page just made, in flight; null for the console's own. */
-function takeOff(method: string, url: string, body: unknown): Flight | null {
+function takeOff(method: string, url: string, body: unknown, traceparent?: string | null): Flight | null {
   const absolute = new URL(url, location.href).href;
   if (ownCall(absolute)) return null;
   flights += 1;
@@ -581,7 +588,19 @@ function takeOff(method: string, url: string, body: unknown): Flight | null {
     url: absolute,
     name: graphqlName(body),
     start: Date.now(),
+    span: spanOf(traceparent),
   };
+}
+
+/** The span id a W3C traceparent names ("00-<trace>-<span>-01"); none for no header or another shape. */
+function spanOf(traceparent: string | null | undefined): string | undefined {
+  return /^[\da-f]{2}-[\da-f]{32}-([\da-f]{16})-[\da-f]{2}$/i.exec(traceparent?.trim() ?? "")?.[1]?.toLowerCase();
+}
+
+/** The traceparent a fetch carries: on its Request, or in its init's headers. */
+function traceparentOf(input: globalThis.RequestInfo | URL, init: RequestInit | undefined): string | null {
+  if (init?.headers) return new Headers(init.headers).get("traceparent");
+  return input instanceof Request ? input.headers.get("traceparent") : null;
 }
 
 /** Runs `use` once the Response can carry its mark: now when it has it, else in the next task. */
@@ -617,7 +636,7 @@ function intercept(watch: Watcher): void {
     );
     const flight = safely(() => {
       const url = input instanceof Request ? input.url : String(input);
-      const started = takeOff(method, url, init?.body);
+      const started = takeOff(method, url, init?.body, traceparentOf(input, init));
       if (started) watch.start(started);
       return started;
     }, null);
@@ -650,6 +669,15 @@ function intercept(watch: Watcher): void {
 
   const originalOpen = XMLHttpRequest.prototype.open;
   const originalSend = XMLHttpRequest.prototype.send;
+  const originalSetHeader = XMLHttpRequest.prototype.setRequestHeader;
+  // The traceparent each one carries (the browser recording sets it before its send reaches this one).
+  const traceparents = new WeakMap<XMLHttpRequest, string>();
+  XMLHttpRequest.prototype.setRequestHeader = function (this: XMLHttpRequest, name: string, value: string) {
+    safely(() => {
+      if (name.toLowerCase() === "traceparent") traceparents.set(this, value);
+    }, undefined);
+    return originalSetHeader.call(this, name, value);
+  };
   // In flight from its send: the request it opened, with its body.
   const opened = new WeakMap<XMLHttpRequest, { method: string; url: string }>();
   const sent = new WeakMap<XMLHttpRequest, Flight>();
@@ -677,7 +705,7 @@ function intercept(watch: Watcher): void {
   XMLHttpRequest.prototype.send = function (this: XMLHttpRequest, body?: Document | XMLHttpRequestBodyInit | null) {
     safely(() => {
       const request = opened.get(this);
-      const flight = request ? takeOff(request.method, request.url, body) : null;
+      const flight = request ? takeOff(request.method, request.url, body, traceparents.get(this)) : null;
       if (flight) {
         sent.set(this, flight);
         watch.start(flight);
@@ -1054,6 +1082,8 @@ export interface EntrySummary {
   key?: string | undefined;
   /** The host a request went to ("api.example.com:8443"): the panel groups a view's calls by it. */
   host?: string | undefined;
+  /** The W3C span id the call carried on, when known: the call's identity in its view's trace. */
+  span?: string | undefined;
 }
 
 /** A traced request made in this browser tab: a page load (parent null) or a fetch/XHR of that page. */
@@ -1152,6 +1182,7 @@ function flightEntry(flight: Flight, parent: string | null): TabEntry {
       issues: 0,
       open: true,
       host: hostOf(flight.url),
+      span: flight.span,
     },
   };
 }
@@ -1168,6 +1199,7 @@ function summaryOf(info: TraceInfo): EntrySummary {
     htmx: info.htmx,
     key: info.flight,
     host: hostOf(info.url),
+    span: info.span,
   };
 }
 
@@ -1199,6 +1231,7 @@ function landedEntry(call: Landed): TabEntry {
       failed: call.status === undefined || call.status >= 500,
       untraced: true,
       host: hostOf(call.flight.url),
+      span: call.flight.span,
     },
   };
 }

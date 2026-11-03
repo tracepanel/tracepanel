@@ -30,6 +30,8 @@ export interface ChainTraceRow {
   host?: string | null | undefined;
   /** When that call ended, on the chain's clock (µs; a view's calls, chainCalls). */
   ended?: number | undefined;
+  /** The W3C span id that call carried on (a view's calls, chainCalls): the call's identity, as the browser sent it. */
+  w3c?: string | undefined;
 }
 
 /** Consecutive traces of one route (three or more): one row (×N, their time on the clock), each of them under it. */
@@ -248,6 +250,7 @@ function waitingOf(span: Span, key: string): ChainWaiting {
     start: span.start,
     end: span.start + span.duration,
     cut: isCut(span) ? span.duration : null,
+    w3c: text(span.attrs, "w3c.span_id") ?? undefined,
   };
 }
 
@@ -545,6 +548,7 @@ export function chainCalls(
       span: each.via ?? undefined,
       host: call ? hostOf(call) : null,
       ended: call ? call.start + call.duration : undefined,
+      w3c: call ? (text(call.attrs, "w3c.span_id") ?? undefined) : undefined,
       id: each.id,
       trace: each.trace,
       summary: together([each.trace], context.counted([each.id])),
@@ -557,11 +561,22 @@ export function chainCalls(
     ...each.row,
     key: `${root}/call/${each.row.span}`,
   }));
-  const untraced = [...untracedIn(chain.traces, chain.capped, now)].flatMap(([id, host]) => {
+  const untraced = [...context.untraced].flatMap(([id, host]) => {
     const span = spans.get(id);
     return span ? [{ ...waitingOf(span, root), key: `${root}/call/${id}`, untraced: host }] : [];
   });
-  return [...answered, ...waiting, ...untraced].sort((a, b) => startOf(a) - startOf(b));
+  // A call to a host that answered others, its trace later than it is waited for (a gateway sends its traces in
+  // batches): still its row, waiting, never gone until its trace comes.
+  // Its calls a trace answered (those listed as rows of their own too), waited for, or not traced.
+  const placed = new Set([
+    ...chain.traces.flatMap((each) => (each.parent === root && each.via ? [each.via] : [])),
+    ...waiting.map((call) => call.span),
+    ...untraced.map((call) => call.span),
+  ]);
+  const late = (own?.spans ?? [])
+    .filter((span) => carries(span) && !placed.has(span.id) && !chain.capped)
+    .map((span) => ({ ...waitingOf(span, root), key: `${root}/call/${span.id}` }));
+  return [...answered, ...waiting, ...untraced, ...late].sort((a, b) => startOf(a) - startOf(b));
 }
 
 /**

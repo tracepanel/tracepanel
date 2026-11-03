@@ -33,6 +33,8 @@ export interface EntrySummary {
   key?: string | undefined;
   /** The host a request went to ("api.example.com:8443"): a view's calls are grouped by it. */
   host?: string | undefined;
+  /** The W3C span id the call carried on, when the widget saw it: the call's identity in its view's trace. */
+  span?: string | undefined;
 }
 
 export interface TabEntry {

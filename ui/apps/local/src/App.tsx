@@ -347,6 +347,7 @@ function widgetFacts(entry: TabEntry, stored: ReadonlySet<string>): WidgetFacts 
     ...(summary.key ? { key: summary.key } : {}),
     ...(summary.untraced && entry.parent ? { opens: entry.parent } : {}),
     ...(summary.host ? { host: summary.host } : {}),
+    ...(summary.span ? { span: summary.span } : {}),
     ...(summary.htmx ? { htmx: summary.htmx } : {}),
   };
 }
@@ -555,6 +556,16 @@ function callStart(call: ChainCall): number {
   return call.type === "trace" ? call.called : call.start;
 }
 
+/** When a call ended (µs), as the view's trace has it. */
+function callEnd(call: ChainCall): number {
+  return call.type === "trace" ? (call.ended ?? call.called + call.summary.duration) : call.end;
+}
+
+/** When a row the widget listed ended (µs): its answer, or now for one still in flight. */
+function flightEnd(flight: TraceRow): number {
+  return flight.open ? Date.now() * 1000 : flight.trace.start + flight.trace.duration;
+}
+
 /** What a call is named by, to match its row in flight: its GraphQL operation, else its method. */
 function callName(name: string): string {
   return name.startsWith("GraphQL ") ? name : (name.split(" ")[0] ?? "");
@@ -564,24 +575,37 @@ function callName(name: string): string {
 const SAME_CALL_US = 3_000_000;
 
 /**
- * The widget's row each of a view's calls was in flight (`flights`, "~…"): the same name, the nearest start. A call
- * keeps that row's identity (its key) as its chain's row takes over.
+ * The widget's row each of a view's calls was in flight (`flights`, "~…"): the same call, by the span id its
+ * traceparent carried where the widget saw it; else the same name and the nearest start and end, as the browser timed
+ * both (calls made at once, the browser queueing some, start together and end apart). A call keeps that row's
+ * identity (its key) as its chain's row takes over, never another call's.
  */
 function matchFlights(calls: readonly ChainCall[], flights: readonly TraceRow[]): Map<string, TraceRow> {
   const free = new Set(flights);
   const matched = new Map<string, TraceRow>();
-  for (const call of [...calls].sort((a, b) => callStart(a) - callStart(b))) {
+  const take = (call: ChainCall, flight: TraceRow) => {
+    free.delete(flight);
+    matched.set(call.key, flight);
+  };
+  const bySpan = new Map(flights.flatMap((flight) => (flight.span ? [[flight.span, flight] as const] : [])));
+  for (const call of calls) {
+    const flight = call.w3c ? bySpan.get(call.w3c) : undefined;
+    if (flight) take(call, flight);
+  }
+  const apart = (call: ChainCall, flight: TraceRow) =>
+    Math.abs(flight.trace.start - callStart(call)) + Math.abs(flightEnd(flight) - callEnd(call));
+  for (const call of [...calls].sort((a, b) => callStart(a) - callStart(b) || callEnd(a) - callEnd(b))) {
+    if (matched.has(call.key)) continue;
     const name = callName(call.type === "trace" ? call.summary.name : waitingSummary(call).name);
     let best: TraceRow | undefined;
     for (const flight of free) {
+      // A row the widget knows the span of is that call's, no other's.
+      if (flight.span && call.w3c) continue;
       const gap = Math.abs(flight.trace.start - callStart(call));
       if (callName(flight.trace.name) !== name || gap > SAME_CALL_US) continue;
-      if (!best || gap < Math.abs(best.trace.start - callStart(call))) best = flight;
+      if (!best || apart(call, flight) < apart(call, best)) best = flight;
     }
-    if (best) {
-      free.delete(best);
-      matched.set(call.key, best);
-    }
+    if (best) take(call, best);
   }
   return matched;
 }

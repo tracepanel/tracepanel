@@ -2,12 +2,14 @@
 // own call (calls alike in name, the browser queueing some, never trade their times), the page's count says how many
 // it made whoever answered them, the page's own document is no call of its view's, a group of calls no trace
 // answered has nothing left to wait for, and a call's time is the time the page waited for it, which never goes down.
-import type { Page, Route } from "@playwright/test";
+import type { Locator, Page, Route } from "@playwright/test";
 import { CONSOLE } from "../agent.ts";
 import { panel } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
 
 type Doc = Record<string, unknown>;
+
+const ms = 1_000;
 
 const run = () => test.info().repeatEachIndex * 2 + test.info().retry;
 const digits = (value: number, width: number) => String(value).padStart(width, "0");
@@ -217,6 +219,24 @@ async function storeView(
   await ingest([trace(viewId, "page", "/rows", viewStart, Number(view["duration"]), attrs, spans)]);
 }
 
+/** A time as the list writes it, in µs: "850 ms", "1.2 s". */
+function micros(text: string): number {
+  const match = /([\d.]+)\s*(µs|ms|s)\b/.exec(text);
+  if (!match) return Number.NaN;
+  const value = Number(match[1]);
+  return match[2] === "s" ? value * 1_000_000 : match[2] === "ms" ? value * 1_000 : value;
+}
+
+/** Each call's row: its time, and whether it is the element it was (`data-probe`). */
+function rowsOf(calls: Locator) {
+  return calls.evaluateAll((rows) =>
+    rows.map((row) => ({
+      time: row.querySelector(".dt-request-meta")?.textContent?.match(/[\d.]+\s*(?:µs|ms|s)\b/)?.[0] ?? "",
+      probe: (row as HTMLElement).dataset["probe"] ?? "new",
+    })),
+  );
+}
+
 test("a group of calls no trace answered says so with nothing on its way, and the page's document stays out of it", async ({
   page,
 }) => {
@@ -266,4 +286,41 @@ test("the page's count says every call its view made, through a gateway too, in 
   await expect(list.locator('.dt-request-row[data-call="waiting"]')).toHaveCount(3);
   await expect(head).toHaveText("· 3 requests");
   await expect(chip).toHaveText("3");
+});
+
+test("calls alike in name and start keep their own times and rows from in flight to their view's trace", async ({
+  page,
+}) => {
+  const tag = 1;
+  const { release, calls } = await opened(page);
+  // Four of one operation at once: the browser answers two at once, the other two a while later (it queued them).
+  await open(page, id(tag, 1), ["Book", "Book", "Book", "Book"]);
+  await expect(calls).toHaveCount(4);
+  await calls.evaluateAll((rows) => {
+    for (const [n, row] of rows.entries()) (row as HTMLElement).dataset["probe"] = String(n);
+  });
+  release(0);
+  release(2);
+  await page.waitForTimeout(1_200);
+  release(1);
+  release(3);
+  await viewEnded(page);
+  await expect(calls.locator(".dt-running")).toHaveCount(0);
+  const answered = await rowsOf(calls);
+  expect(answered.map((row) => row.probe)).toEqual(["0", "1", "2", "3"]);
+  const [quick, late] = [micros(answered[0]?.time ?? ""), micros(answered[1]?.time ?? "")];
+  expect(late - quick).toBeGreaterThan(900_000);
+
+  // The view's trace stored, its spans listing the late calls first and all of them from one start: each row still
+  // its own call, its own time.
+  await storeView(page, tag, {
+    order: (made) => [...made].sort((a, b) => b.end - a.end),
+    start: (await page.evaluate(() => (window as unknown as { view: { start: number } }).view.start)) + 5 * ms,
+  });
+  await expect(panel(page).locator('.dt-request-row[data-call="waiting"]')).toHaveCount(4);
+  const stored = await rowsOf(calls);
+  expect(stored.map((row) => row.probe)).toEqual(["0", "1", "2", "3"]);
+  for (const [n, row] of stored.entries()) {
+    expect(Math.abs(micros(row.time) - micros(answered[n]?.time ?? "")), `row ${n}: ${row.time}`).toBeLessThan(150_000);
+  }
 });
