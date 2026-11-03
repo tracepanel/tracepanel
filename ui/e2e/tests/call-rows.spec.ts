@@ -515,3 +515,28 @@ test("a call that got no answer stays its row, failed as the call tree says it, 
   await expect(row.locator(".dt-status")).toHaveText("failed");
   await expect(row).toHaveAttribute("data-status", "error");
 });
+
+test("the pill counts a page's calls no trace answered, as its list does: its own load and its view's calls", async ({
+  page,
+}) => {
+  const tag = 7;
+  const { release, list } = await opened(page, { document: { trace: id(tag, 50) } });
+  const count = panel(page).locator(".switcher-count");
+  await open(page, id(tag, 1), ["Spec", "Spec"]);
+  release(0);
+  release(1);
+  await viewEnded(page);
+
+  // The page's load and the two calls Swagger UI made to its own host, which sends no trace for them: this page's.
+  await expect(list.locator('.dt-request-row[data-call="group"] .dt-map-times')).toHaveText("×2");
+  await expect(list.locator('.dt-request-row[data-depth="1"]').filter({ hasText: "/rows/" })).toHaveCount(1);
+  await expect(count).toHaveText("3");
+  await expect(pill(page)).toHaveAccessibleName(/\. 3 requests on this page\b/);
+  await expect(pill(page).locator(".seg.page b")).toHaveText("3");
+
+  // Its view's trace stored: the calls are its chain's rows, the counts the same.
+  await storeView(page, tag, { shift: -8_000_000 });
+  await expect(list.locator('.dt-request-row[data-call="untraced"]')).toHaveCount(2);
+  await expect(count).toHaveText("3");
+  await expect(pill(page).locator(".seg.page b")).toHaveText("3");
+});

@@ -12,6 +12,12 @@
 
 ### Fixed
 
+- The pill's count of a page's requests counts its view's calls no trace
+  answered, as the panel's list does (GET /docs and the two GET
+  /openapi.json Swagger UI asked for, untraced, are 3 requests, not 1),
+  and so does the panel docked at the right: the page's own load sits
+  under its view, whose calls were not this page's there, its list gone
+  and its count 1.
 - A view's call that got no answer (a network error, an abort, status
   0) stays its row in the panel's list, from in flight to its view's
   trace stored, and says "failed" in red where its status would be, as
