@@ -31,6 +31,14 @@
 - "not traced" shows its last letter whole in the call tree and the
   HTTP calls tab ("not trace"), and so does "waiting for a worker…":
   an italic word leans past its box, and a tight cell cut it off.
+- A GraphQL call shows the document it ran in its details in the
+  caller's call tree, not only in the server's trace: the document the
+  call sent (tracepanel-js's browser recording keeps it from its next
+  release), else the one of the trace that served it. A gateway that sends its
+  document over OTLP (Apollo Router's `supergraph` span in its
+  deprecated mode or with `graphql.document` turned on, Hive Gateway)
+  has it on its trace too, on its Request tab: the agent dropped it with
+  the gateway's inner spans.
 ## 0.13.0 (2026-11-03)
 
 ### Fixed

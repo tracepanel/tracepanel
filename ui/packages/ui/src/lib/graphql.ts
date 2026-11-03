@@ -58,3 +58,16 @@ export function callOperation(attrs: Readonly<Record<string, unknown>>): string 
   if (label) return `GraphQL ${label}`;
   return graphqlName(attrs["http.request.body"]);
 }
+
+/**
+ * The document a GraphQL call ran, wherever it was recorded: on the call (`graphql.document`), on the trace that
+ * served it (a gateway's: the agent lifts it there), else in the body the call sent. One document for the call, in
+ * the caller's details as in the server's.
+ */
+export function callDocument(
+  attrs: Readonly<Record<string, unknown>>,
+  served?: Readonly<Record<string, unknown>> | undefined,
+): string | undefined {
+  const sent = graphqlBody(attrs["http.request.body"]).query;
+  return textOf(attrs["graphql.document"]) ?? textOf(served?.["graphql.document"]) ?? textOf(sent);
+}

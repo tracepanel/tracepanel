@@ -29,6 +29,7 @@ import { answers, callAnswer, cutLength, type GroupAnswer, groupAnswer, unfinish
 import { callFields, templatePlace } from "./lib/callFields";
 import { callTemplate, callText, groupNoun } from "./lib/calls";
 import { isDump } from "./lib/dump";
+import { callDocument } from "./lib/graphql";
 import { spanKindLabel } from "./lib/handler";
 import { foldKeys } from "./lib/keys";
 import { cutNote, isCut } from "./lib/live";
@@ -2182,7 +2183,7 @@ function CallDetails({ node: { span }, trace, onExplain }: DetailsProps<"span">)
   const summary = summaryRows(span, true, parent);
   return (
     <div className="grid gap-3 p-4">
-      <SpanHead span={span} trace={trace} parent={parent} attrs={span.attrs} />
+      <SpanHead span={span} trace={trace} parent={parent} attrs={withDocument(span.attrs)} />
       <NotTracedNote spanId={span.id} />
       {summary.length ? <Fields rows={summary} /> : null}
       <QueryPlan span={span} onExplain={onExplain} />
@@ -2209,7 +2210,7 @@ function HopDetails({
     <div className="grid gap-5 p-4">
       <section className="grid gap-3" aria-label="Call">
         <SectionHeading>Call</SectionHeading>
-        <SpanHead span={span} trace={trace} parent={parent} attrs={span.attrs} />
+        <SpanHead span={span} trace={trace} parent={parent} attrs={withDocument(span.attrs, served.whole?.attrs)} />
         {summary.length ? <Fields rows={summary} /> : null}
         <SpanAttributes span={span} attrs={span.attrs} titled={summary.length > 0} />
         <AsReceived span={span} />
@@ -2217,6 +2218,18 @@ function HopDetails({
       <ServedBy served={served} trace={trace} links={links} onTraceProfile={onTraceProfile} />
     </div>
   );
+}
+
+/**
+ * A call's attributes with the GraphQL document it ran, wherever that was recorded (lib/graphql callDocument): its
+ * details show it as the server's do.
+ */
+function withDocument(attrs: Attrs, served?: Attrs | undefined): Attrs {
+  const document = callDocument(attrs, served);
+  if (!document) return attrs;
+  const shown: Attrs = { ...attrs };
+  (shown as Record<string, unknown>)["graphql.document"] = document;
+  return shown;
 }
 
 /** What served a merged call: its app, its trace's name and findings, the ways to it and to its profile. */
