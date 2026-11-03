@@ -40,7 +40,6 @@ export function ExplainView({ load, vendor, analyzeRefusal }: ExplainViewProps) 
   };
   const loading = state.status === "loading";
   const plan = state.status === "done" ? state.plan : loading ? state.before : null;
-  const warnings = plan ? plan.lines.filter((line) => line.warning).length : 0;
 
   return (
     <section className="grid gap-2">
@@ -64,53 +63,60 @@ export function ExplainView({ load, vendor, analyzeRefusal }: ExplainViewProps) 
             </Button>
           ) : null}
         </div>
-        {plan ? (
-          <>
-            <span className="text-sm text-muted-foreground">
-              {plan.vendor} · {plan.alias}
-              {plan.analyzed ? " · analyzed" : ""}
-            </span>
-            {warnings ? (
-              <Badge variant="outline" className="border-warn/30 bg-warn-soft text-warn">
-                <TriangleAlertIcon />
-                {warnings} {warnings === 1 ? "warning" : "warnings"}
-              </Badge>
-            ) : (
-              <Badge variant="outline" className="border-ok/30 bg-ok-soft text-ok">
-                <CircleCheckIcon />
-                Uses indexes
-              </Badge>
-            )}
-          </>
-        ) : null}
+        {plan ? <PlanFacts plan={plan} /> : null}
       </div>
       {state.status === "failed" ? <p className="text-sm text-error">{state.message}</p> : null}
       {/* Kept while its plan comes, the plan in its place then: what is above stays where it is, scrolled down too. */}
       {state.status === "idle" || (loading && !plan) ? (
         <Idle canAnalyze={canAnalyze} why={analyzes ? analyzeRefusal : null} />
       ) : null}
-      {plan ? (
-        <CopyBlock text={planText(plan)} label="Copy the plan" className="rounded-md border bg-muted/60">
-          <ol className="m-0 grid list-none py-1.5 pr-9">
-            {keyed(plan.lines, (line) => `${line.depth}:${line.text}`).map(({ key, item: line }) => (
-              <li
-                key={key}
-                className="grid gap-0.5 py-1 pr-3"
-                style={{ paddingLeft: `${0.75 + line.depth * 1.25}rem` }}
-              >
-                <PlanText text={line.text} warning={Boolean(line.warning)} />
-                {line.warning ? (
-                  <span className="flex items-center gap-1.5 text-sm text-text-2">
-                    <TriangleAlertIcon className="size-3.5 text-warn" />
-                    {line.warning}
-                  </span>
-                ) : null}
-              </li>
-            ))}
-          </ol>
-        </CopyBlock>
-      ) : null}
+      {plan ? <PlanLines plan={plan} /> : null}
     </section>
+  );
+}
+
+/** Beside the buttons: the plan's database and connection, and whether it warns. */
+function PlanFacts({ plan }: { plan: ExplainPlan }) {
+  const warnings = plan.lines.filter((line) => line.warning).length;
+  return (
+    <>
+      <span className="text-sm text-muted-foreground">
+        {plan.vendor} · {plan.alias}
+        {plan.analyzed ? " · analyzed" : ""}
+      </span>
+      {warnings ? (
+        <Badge variant="outline" className="border-warn/30 bg-warn-soft text-warn">
+          <TriangleAlertIcon />
+          {warnings} {warnings === 1 ? "warning" : "warnings"}
+        </Badge>
+      ) : (
+        <Badge variant="outline" className="border-ok/30 bg-ok-soft text-ok">
+          <CircleCheckIcon />
+          Uses indexes
+        </Badge>
+      )}
+    </>
+  );
+}
+
+/** A plan's lines, each indented by its level, its warning under it. */
+function PlanLines({ plan }: { plan: ExplainPlan }) {
+  return (
+    <CopyBlock text={planText(plan)} label="Copy the plan" className="rounded-md border bg-muted/60">
+      <ol className="m-0 grid list-none py-1.5 pr-9">
+        {keyed(plan.lines, (line) => `${line.depth}:${line.text}`).map(({ key, item: line }) => (
+          <li key={key} className="grid gap-0.5 py-1 pr-3" style={{ paddingLeft: `${0.75 + line.depth * 1.25}rem` }}>
+            <PlanText text={line.text} warning={Boolean(line.warning)} />
+            {line.warning ? (
+              <span className="flex items-center gap-1.5 text-sm text-text-2">
+                <TriangleAlertIcon className="size-3.5 text-warn" />
+                {line.warning}
+              </span>
+            ) : null}
+          </li>
+        ))}
+      </ol>
+    </CopyBlock>
   );
 }
 

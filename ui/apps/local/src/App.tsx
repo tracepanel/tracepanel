@@ -722,14 +722,18 @@ function withViewCalls(
     const own = calls.get(head.trace.id);
     const placed = own ? placeCalls(head.trace.id, own, children, under) : children;
     const view = head.trace.id;
-    // Its chain has loaded (or can't, or chains don't load): the numbers it doesn't count are their own.
-    const loaded = settled === undefined || settled.has(view);
-    const grouping = { view, settled, known, counter: counters.get(view), loaded };
-    const page = head.trace.kind === "page";
-    out.push(page && own ? awaiting(head, placed, grouping) : head, ...(page ? byHost(placed, grouping) : placed));
+    const grouping = { view, settled, known, counter: counters.get(view), loaded: loadedIn(settled, view) };
+    if (head.trace.kind === "page")
+      out.push(own ? awaiting(head, placed, grouping) : head, ...byHost(placed, grouping));
+    else out.push(head, ...placed);
     at = end;
   }
   return { rows: out, apps: under };
+}
+
+/** Whether a row's chain has loaded (or can't, or chains don't load): the numbers it doesn't count are their own. */
+function loadedIn(settled: ReadonlySet<string> | undefined, id: string): boolean {
+  return settled === undefined || settled.has(id);
 }
 
 /**

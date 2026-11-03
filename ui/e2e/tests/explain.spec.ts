@@ -79,7 +79,7 @@ test("a query's details scrolled to their end stay where they are as Explain run
 }) => {
   await explainable(page);
   // The plan held until the test lets it through: the details as Explain runs, then with it.
-  let letThrough = () => undefined as void;
+  let letThrough: () => void = () => undefined;
   const held = new Promise<void>((resolve) => {
     letThrough = resolve;
   });
