@@ -725,10 +725,28 @@ function withViewCalls(
     // Its chain has loaded (or can't, or chains don't load): the numbers it doesn't count are their own.
     const loaded = settled === undefined || settled.has(view);
     const grouping = { view, settled, known, counter: counters.get(view), loaded };
-    out.push(head, ...(head.trace.kind === "page" ? byHost(placed, grouping) : placed));
+    const page = head.trace.kind === "page";
+    out.push(page && own ? awaiting(head, placed, grouping) : head, ...(page ? byHost(placed, grouping) : placed));
     at = end;
   }
   return { rows: out, apps: under };
+}
+
+/**
+ * A view's row, its numbers pending (its time as it is) while one of its calls' are, or its chain doesn't count all
+ * of its calls' traces yet: its whole chain's numbers then, never a part of them that grows.
+ */
+function awaiting(head: TraceRow, placed: readonly TraceRow[], grouping: Grouping): TraceRow {
+  // Its calls: not a task run one of them led to, nor the page's own load (its document), no call of the view's.
+  const calls = placed.filter((row) => !(row.run || row.loadHost));
+  const { settled } = grouping;
+  const pending = calls.some(
+    (call) =>
+      call.open ||
+      call.call === "waiting" ||
+      !(call.counted || call.call === "untraced" || call.failed !== undefined || settled?.has(call.trace.id) !== false),
+  );
+  return pending || !together(calls, grouping).known ? { ...head, awaiting: true } : head;
 }
 
 /** A view's rows under it with its calls from its chain in the widget's rows' places, in the order they started. */

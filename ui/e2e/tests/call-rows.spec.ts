@@ -952,3 +952,37 @@ test("the row over a view's calls to one app says no sum of theirs while the vie
   await expect(group.locator(".dt-request-queries-n")).toHaveText("8");
   await expect(group.locator(".dt-request-chips")).toHaveText("1");
 });
+
+test("a view's row says no numbers of its chain's while a call's are still on their way, only its time", async ({
+  page,
+}) => {
+  const tag = 16;
+  const viewId = id(tag, 1);
+  const { release, list, calls } = await opened(page, { headers: bffHeaders(tag) });
+  await open(page, viewId, ["Book", "Book"]);
+  release(0);
+  release(1);
+  await viewEnded(page);
+  const made = await page.evaluate(() => (window as unknown as { calls: Made[] }).calls);
+  // One call's traces come with the view's, the other's later.
+  await ingest(served(tag, made[0] as Made));
+  const counted = page.waitForResponse(
+    async (response) =>
+      response.url().endsWith(`/api/traces/${viewId}/chain`) && (await response.text()).includes(bffOf(tag, 0)),
+  );
+  await storeView(page, tag, { origin: "http://bff.test:4000/" });
+  await counted;
+  await expect(calls.locator(".dt-request-queries-n")).toHaveText(["2"]);
+
+  // The view's chain counts one call's: the view's row says "…" as their group's does, its time as it is.
+  const view = list.locator('.dt-request-row[data-kind="page"]');
+  const group = list.locator('.dt-request-row[data-call="group"]');
+  await expect(group.locator(".dt-pending")).toHaveCount(1);
+  await expect(view.locator(".dt-pending")).toHaveCount(1);
+  await expect(view.locator(".dt-request-queries-n")).toHaveCount(0);
+
+  await ingest(served(tag, made[1] as Made));
+  await expect(view.locator(".dt-request-queries-n")).toHaveText("4");
+  await expect(group.locator(".dt-request-queries-n")).toHaveText("4");
+  await expect(view.locator(".dt-pending")).toHaveCount(0);
+});
