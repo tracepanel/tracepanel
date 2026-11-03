@@ -667,18 +667,21 @@ function callRow(call: ChainCall, view: string, flight: TraceRow | undefined): T
   // The host its row was grouped by in flight, so its group stays the same row.
   const host = flight?.host ?? call.host;
   const to = host ? { host } : {};
+  // The time its row said once answered (the widget's clock): never less now, the view's trace timing it a hair apart.
+  const said = flight && !flight.open ? flight.trace.duration : 0;
   if (call.type === "trace") {
     const runtime = traceRuntime(call.trace.attrs);
     const clock = { start: call.called, end: call.ended ?? call.called + call.summary.duration };
     // Its time as the view made the call, as its row said in flight: the trace that served it says its own.
-    const trace = { ...call.summary, duration: clock.end - clock.start };
+    const trace = { ...call.summary, duration: Math.max(clock.end - clock.start, said) };
     return { trace, depth: 1, key, call: "trace", counted: true, folded: true, ...to, runtime, clock };
   }
   const summary = waitingSummary(call);
   // Its status as its answer said it, when the span doesn't.
   const status = summary.http_status ?? (call.cut === null ? (flight?.trace.http_status ?? null) : null);
+  const duration = call.cut === null ? Math.max(summary.duration, said) : summary.duration;
   // biome-ignore lint/style/useNamingConvention: wire format.
-  const trace = { ...summary, http_status: status };
+  const trace = { ...summary, duration, http_status: status };
   const state = call.untraced ? { call: "untraced" as const, host: call.untraced } : { call: "waiting" as const };
   return { trace, depth: 1, key, opens: view, cut: call.cut, ...to, ...state };
 }
