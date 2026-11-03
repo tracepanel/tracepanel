@@ -197,7 +197,7 @@ test("in the panel the redirect is no row: its view says where it came from, eac
   await announce(page, { id: to, name: "/sms/campaigns", start: start + 3 * ms, duration: 400 * ms });
   await pill(page).click();
   const views = list(page).locator('.dt-request-row[data-kind="page"]');
-  const traces = list(page).locator('.dt-request-row[data-chain="trace"]');
+  const traces = list(page).locator('.dt-request-row[data-call="trace"]');
 
   // The page's load, then the view it was sent to: none of /sms alone.
   await expect(views).toHaveCount(2);
@@ -206,9 +206,11 @@ test("in the panel the redirect is no row: its view says where it came from, eac
     "aria-label",
     /^\/sms\/campaigns, redirected from \/sms, /,
   );
-  // Its three operations, at once: three rows, each by its own name.
-  await expect(list(page).locator('.dt-request-row[data-chain="app"] .dt-map-times')).toHaveText("×3");
+  // Its three operations, at once: three rows under it, each by its own name, as they were in flight (no row of
+  // the gateway's over them).
   await expect(traces.locator(".dt-request-path")).toHaveText(OPERATIONS.map((name) => `query ${name}`));
+  for (const row of await traces.all()) await expect(row).toHaveAttribute("data-depth", "1");
+  await expect(list(page).locator('.dt-request-row[data-chain="app"]')).toHaveCount(0);
 
   await views.filter({ hasText: "/sms/campaigns" }).click();
   const frame = panel(page);
@@ -268,16 +270,16 @@ test("a view cut with its calls unanswered keeps them waiting; their traces link
   await expect.poll(() => stored(id(tag, 1))).toBe(200);
   await openApp(page, {}, { recording: true, view: id(tag, 1) });
   await pill(page).click();
-  const waiting = list(page).locator('.dt-request-row[data-chain="waiting"]');
+  const waiting = list(page).locator('.dt-request-row[data-call="waiting"]');
 
   await expect(waiting).toHaveCount(3);
-  for (const row of await waiting.all()) await expect(row).toContainText("no answer yet");
+  for (const row of await waiting.all()) await expect(row.locator('[data-state="cut"]')).toHaveText("no answer");
 
   // Later the gateway answers them all: its traces take the waiting rows' places.
   await ingest(OPERATIONS.map((_, n) => gatewayTrace(tag, n, start + 19_000 * ms, w3c)));
 
   await expect(waiting).toHaveCount(0);
-  await expect(list(page).locator('.dt-request-row[data-chain="trace"] .dt-request-path')).toHaveText(
+  await expect(list(page).locator('.dt-request-row[data-call="trace"] .dt-request-path')).toHaveText(
     OPERATIONS.map((name) => `query ${name}`),
   );
 });

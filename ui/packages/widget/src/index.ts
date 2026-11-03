@@ -40,6 +40,8 @@ export interface TraceInfo {
   htmx?: HtmxInfo | undefined;
   /** The page's view or the action on it that made the call, as tracepanel-js records them in the browser. */
   page?: string | undefined;
+  /** The widget's id of the request while it flew ("~…"): its row in the panel's list keeps it as its key. */
+  flight?: string | undefined;
 }
 
 /** A view or an action tracepanel-js records in the browser, as it announces them (tracepanel:page). */
@@ -495,10 +497,23 @@ export interface Flight {
   start: number;
 }
 
-/** What follows the page's requests: each as it starts, and as it ends with what its answer said (null: untraced). */
+/**
+ * What an answer Tracepanel didn't see said (no Server-Timing: a gateway's, a service's that records over OTLP): its
+ * status (none when it failed to arrive), and the view or action that made the call, when the browser recording
+ * marked it.
+ */
+export interface Answer {
+  status?: number | undefined;
+  page?: string | undefined;
+}
+
+/**
+ * What follows the page's requests: each as it starts, and as it ends with what its answer said (null: untraced, with
+ * what is known of it).
+ */
 interface Watcher {
   start(flight: Flight): void;
-  end(flight: Flight, info: TraceInfo | null): void;
+  end(flight: Flight, info: TraceInfo | null, answer?: Answer): void;
 }
 
 /**
@@ -513,6 +528,8 @@ const nativeFetch = window.fetch.bind(window);
 let watcher: Watcher | null = null;
 let listening = false;
 let flights = 0;
+// Flights are numbered per page load: a row the panel kept from an earlier page never shares its key with a new one.
+const LOAD = Math.random().toString(36).slice(2, 8);
 
 function listen(): void {
   if (listening) return;
@@ -523,10 +540,10 @@ function listen(): void {
       flying.add(flight);
       watcher?.start(flight);
     },
-    end: (flight, info) => {
+    end: (flight, info, answer) => {
       flying.delete(flight);
-      const landed = info && namedAsItFlew(flight, info);
-      if (watcher) watcher.end(flight, landed);
+      const landed = info && { ...namedAsItFlew(flight, info), flight: flight.id || undefined };
+      if (watcher) watcher.end(flight, landed, answer);
       else if (landed) pending.push(landed);
     },
   });
@@ -550,7 +567,13 @@ function takeOff(method: string, url: string, body: unknown): Flight | null {
   const absolute = new URL(url, location.href).href;
   if (ownCall(absolute)) return null;
   flights += 1;
-  return { id: `~${flights}`, method: method.toUpperCase(), url: absolute, name: graphqlName(body), start: Date.now() };
+  return {
+    id: `~${LOAD}-${flights}`,
+    method: method.toUpperCase(),
+    url: absolute,
+    name: graphqlName(body),
+    start: Date.now(),
+  };
 }
 
 /** Runs `use` once the Response can carry its mark: now when it has it, else in the next task. */
@@ -590,12 +613,13 @@ function intercept(watch: Watcher): void {
       if (started) watch.start(started);
       return started;
     }, null);
-    const land = (info: TraceInfo | null) => flight && safely(() => watch.end(flight, info), undefined);
+    const land = (info: TraceInfo | null, answer?: Answer) =>
+      flight && safely(() => watch.end(flight, info, answer), undefined);
     let response: Response;
     try {
       response = await originalFetch.call(this, input, init);
     } catch (error) {
-      land(null);
+      land(null, {});
       throw error;
     }
     try {
@@ -608,7 +632,7 @@ function intercept(watch: Watcher): void {
             ? land({ ...info, page: pageOf(response) })
             : watch.end(NO_FLIGHT, { ...info, page: pageOf(response) }),
         );
-      else land(null);
+      else afterMark(response, () => land(null, { status: response.status, page: pageOf(response) }));
     } catch {
       // Never break the page because of the widget.
       land(null);
@@ -631,7 +655,14 @@ function intercept(watch: Watcher): void {
     this.addEventListener("loadend", () => {
       const flight = sent.get(this) ?? NO_FLIGHT;
       sent.delete(this);
-      safely(() => watch.end(flight, xhrInfo(this, method, String(url))), undefined);
+      safely(
+        () =>
+          watch.end(flight, xhrInfo(this, method, String(url)), {
+            status: this.status || undefined,
+            page: pageOf(this),
+          }),
+        undefined,
+      );
     });
     return (originalOpen as (...args: unknown[]) => void).call(this, method, url, ...rest);
   } as typeof XMLHttpRequest.prototype.open;
@@ -1006,6 +1037,13 @@ export interface EntrySummary {
   until?: number | undefined;
   /** A view the SPA was sent to at once from another route ("/sms-campaigns"), which left the list for it. */
   redirectedFrom?: string | undefined;
+  /**
+   * A call of a view or an action that answered without Tracepanel's headers (a gateway's, a service's over OTLP): no
+   * trace of its own to list; the view's trace has it, and its row stands until that trace does.
+   */
+  untraced?: boolean | undefined;
+  /** The id it had while in flight ("~…"): the panel keeps its row's identity from in flight to stored. */
+  key?: string | undefined;
 }
 
 /** A traced request made in this browser tab: a page load (parent null) or a fetch/XHR of that page. */
@@ -1108,8 +1146,43 @@ function summaryOf(info: TraceInfo): EntrySummary {
     queries: info.queries ?? 0,
     issues: info.issues ?? 0,
     htmx: info.htmx,
+    key: info.flight,
   };
 }
+
+/**
+ * A call that answered untraced (Answer), as the panel lists it under the view or action that made it: its name, its
+ * status, its time; its numbers come with the view's trace.
+ */
+function landedEntry(call: Landed): TabEntry {
+  return {
+    id: call.flight.id,
+    parent: call.parent,
+    summary: {
+      name: title(flightInfo(call.flight)),
+      status: call.status ?? null,
+      start: call.flight.start * 1000,
+      duration: Math.max(0, call.end - call.flight.start) * 1000,
+      queries: 0,
+      issues: 0,
+      failed: call.status === undefined || call.status >= 500,
+      untraced: true,
+    },
+  };
+}
+
+/** A call of a view or an action that answered untraced: where it is listed, when it ended (epoch ms), its status. */
+interface Landed {
+  flight: Flight;
+  parent: string;
+  end: number;
+  status: number | undefined;
+}
+
+/** How long a call that answered untraced stays listed after it ended, its view closed: its trace has it by then. */
+const LANDED_KEEP_MS = 120_000;
+/** The most of them kept. */
+const LANDED_MAX = 200;
 
 const PANEL_KEY = "tracepanel:panel";
 
@@ -1463,6 +1536,10 @@ export function mount(options: WidgetOptions = {}): Widget {
   const later: TraceInfo[] = [];
   // The page's requests still in flight, oldest first (lib/live).
   const inFlight: Flight[] = [];
+  // Where each was listed as it took off: the view or action that made it, even once another one opened.
+  const listedUnder = new WeakMap<Flight, string | null>();
+  // The calls of views and actions that answered untraced: rows until their view's trace lists them.
+  let landed: Landed[] = [];
   // Its trace was deleted from the store: the panel and the badge no longer show it.
   let pageCleared = false;
   let frame: HTMLIFrameElement | null = null;
@@ -1497,10 +1574,35 @@ export function mount(options: WidgetOptions = {}): Widget {
     return inFlight.filter((flight) => flight.start >= since - 50 && now - flight.start >= FLIGHT_SHOWN_MS);
   }
 
-  /** What the panel lists: the tab's requests, then those in flight (never stored: a reload ends them). */
+  /**
+   * What the panel lists: the tab's requests, the calls that answered untraced, then those in flight (the last two
+   * never stored: a reload ends them). A call stays under the view or action it was made in.
+   */
   function entries(): TabEntry[] {
-    const parent = currentPage();
-    return [...tab.map(withQuiet), ...flights().map((flight) => flightEntry(flight, parent))];
+    const current = currentPage();
+    const listed = new Set(tab.map((entry) => entry.id));
+    const parentOf = (flight: Flight) => {
+      const at = listedUnder.get(flight);
+      return at && listed.has(at) ? at : current;
+    };
+    return [
+      ...tab.map(withQuiet),
+      ...landed.filter((call) => listed.has(call.parent)).map(landedEntry),
+      ...flights().map((flight) => flightEntry(flight, parentOf(flight))),
+    ];
+  }
+
+  /** A call that answered untraced, kept as its view's row when the browser recording made it (Answer). */
+  function land(flight: Flight, answer: Answer): void {
+    const parent = answer.page ?? listedUnder.get(flight) ?? undefined;
+    const recorded = tab.some((entry) => entry.id === parent && entry.summary?.kind === "page");
+    if (!(parent && recorded && flight.id)) return;
+    const now = Date.now();
+    const open = new Set(tab.filter((entry) => entry.summary?.open).map((entry) => entry.id));
+    landed = [
+      ...landed.filter((call) => open.has(call.parent) || now - call.end < LANDED_KEEP_MS),
+      { flight, parent, end: now, status: answer.status },
+    ].slice(-LANDED_MAX);
   }
 
   /**
@@ -1685,15 +1787,17 @@ export function mount(options: WidgetOptions = {}): Widget {
   watcher = {
     start: (flight) => {
       inFlight.push(flight);
+      listedUnder.set(flight, currentPage());
       keepTicking();
       // An open view's time runs again with its new call (quietSince), in the panel's list too.
       if (view?.open) sendTab();
     },
-    end: (flight, info) => {
+    end: (flight, info, answer) => {
       const at = inFlight.indexOf(flight);
       if (at !== -1) inFlight.splice(at, 1);
       if (info) record(info);
       else {
+        if (answer) land(flight, answer);
         render();
         sendTab();
       }

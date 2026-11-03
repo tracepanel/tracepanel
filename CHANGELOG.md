@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- In the panel's list, a view's calls through a gateway (an Apollo
+  Router sending its traces over OTLP) keep one row each, in the order
+  they started, from the moment they leave until their traces are
+  stored. A call that answered stays, its time stopped, while the view
+  still runs. Before, only the calls in flight showed, and an answered
+  one vanished until the view's trace came. The row keeps its name (the
+  GraphQL operation, never "POST /graphql"), its place and its identity
+  as it gains its status, its numbers and what it called. No group of
+  the gateway's ("graphql-router ×5") takes the rows' place. A call
+  whose trace is on its way opens the view's call tree.
 ## 0.13.0 (2026-11-03)
 
 ### Fixed

@@ -33,6 +33,7 @@ import {
   WaitingIcon,
 } from "./primitives";
 import type { IssueKind, TraceSummary } from "./types";
+import { untracedNote } from "./Untraced";
 
 export interface TraceRow {
   trace: TraceSummary;
@@ -49,6 +50,26 @@ export interface TraceRow {
   until?: number | undefined;
   /** A view the SPA was sent to at once from another route ("/sms-campaigns"): the list shows that one no more. */
   redirectedFrom?: string | undefined;
+  /**
+   * The row's identity while its trace id changes: a request keeps the id it flew under ("~…"), a view's call its
+   * call's, so it stays one row, in its place, from in flight to stored (never a new row, nor a flash).
+   */
+  key?: string | undefined;
+  /** A call with no trace of its own to open (its trace on its way, or none): a click opens this one, its view's. */
+  opens?: string | undefined;
+  /**
+   * One of a view's or an action's calls as its chain has it (lib/chainRows, chainCalls): the trace that answered it,
+   * the call while its trace is on its way, or the call no trace answered ("not traced").
+   */
+  call?: "trace" | "waiting" | "untraced" | undefined;
+  /** Its numbers counted with everything under it, as the trace's tabs count them: known, never pending. */
+  counted?: boolean | undefined;
+  /** Cut short with no answer yet: its time so far (µs), as a call's row of a view's chain says it. */
+  cut?: number | null | undefined;
+  /** For a call no trace answered: the host it went to. */
+  host?: string | undefined;
+  /** What it called is folded under it until opened, as a chain's trace row is (a view's call). */
+  folded?: boolean | undefined;
 }
 
 export interface TraceListProps {
@@ -104,6 +125,7 @@ export interface ListChains {
  */
 function pendingIn(chains: ListChains | undefined, row: TraceRow): boolean {
   if (row.open) return true;
+  if (row.counted || row.call === "untraced") return false;
   return !row.run && chains?.settled !== undefined && !chains.settled.has(row.trace.id);
 }
 
@@ -126,24 +148,30 @@ export function TraceList({
   onSelect,
 }: TraceListProps) {
   const withOpens = chains && opensOn ? { ...chains, opensOn } : chains;
+  // A view or an action folded: the rows under it (its calls) hidden until it opens again.
+  let hidden = false;
   return (
     <ul className="dt-requests" data-compact={compact ? "" : undefined}>
-      {rows.map((row) => {
+      {rows.map((row, at) => {
+        if (row.depth && hidden) return null;
         const counts = chains?.counts?.get(row.trace.id);
         const trace = withChain(row.trace, counts);
         const depth = row.depth ?? 0;
-        const fold = chains ? rowFold(chains, trace.id) : undefined;
+        const calls = trace.kind === "page" && !depth && Boolean(rows[at + 1]?.depth);
+        const fold = chains ? rowFold(chains, trace.id, row.folded, calls) : undefined;
+        if (!depth) hidden = fold?.open === false;
+        const key = row.key ?? trace.id;
         return (
-          <li key={trace.id}>
+          <li key={key}>
             <ListRow
               row={{ ...row, trace }}
               fold={fold}
               chained={counts !== undefined && counts.traces > 1}
               pending={pendingIn(chains, row)}
-              cut={chains?.cut?.get(trace.id) ?? null}
+              cut={row.cut ?? chains?.cut?.get(trace.id) ?? null}
               selected={trace.id === selectedId}
               current={trace.id === currentId}
-              fresh={newIds?.has(trace.id) ?? false}
+              fresh={newIds?.has(key) ?? false}
               compact={compact}
               services={services}
               opens={opensOn?.(trace)}
@@ -167,7 +195,7 @@ export function TraceList({
 
 /** One row of the list: its name, status and time, then its numbers (its chain's, `chained`). */
 function ListRow({
-  row: { trace, depth = 0, trigger, target, run, open, until, redirectedFrom },
+  row: { trace, depth = 0, trigger, target, run, open, until, redirectedFrom, opens: target_, call, host },
   fold,
   chained,
   pending,
@@ -204,13 +232,14 @@ function ListRow({
       data-depth={depth}
       data-run={flag(run)}
       data-kind={trace.kind === "page" ? "page" : undefined}
+      data-call={call}
       {...liveProps(trace, open, cut)}
       aria-current={selected ? "true" : undefined}
       aria-label={traceLabel(trace, { trigger, target, current, open, cut: cut !== null, redirectedFrom })}
-      title={opens}
+      title={callTitle(trace, call, cut, host) ?? opens}
       {...foldProps(fold)}
       data-new={fresh ? "" : undefined}
-      onClick={() => onSelect(trace.id)}
+      onClick={() => onSelect(target_ ?? trace.id)}
     >
       <span className="dt-request-main">
         <RowCaret fold={fold} />
@@ -218,10 +247,39 @@ function ListRow({
         <RowApp trace={trace} shown={services} />
         {/* Beside its name, as a waiting call's and the call tree's: the time column keeps a time's width. */}
         {cut === null || open ? null : <NoAnswer at={cut} short={true} />}
+        {call === "untraced" && host ? <NotTracedMark host={host} /> : null}
         {current ? <ThisPage compact={compact} /> : null}
       </span>
-      <RowMeta trace={trace} open={open} until={until} chained={chained} pending={pending} compact={compact} />
+      <RowMeta
+        trace={trace}
+        open={open}
+        until={until}
+        chained={chained}
+        pending={pending}
+        blank={call === "untraced"}
+        compact={compact}
+      />
     </button>
+  );
+}
+
+/**
+ * What a view's call with no trace to open says in its tooltip: its trace on its way, or none coming; a click opens
+ * the view's call tree, which has the call.
+ */
+function callTitle(trace: TraceSummary, call: TraceRow["call"], cut: number | null, host: string | undefined) {
+  const name = rowName(trace);
+  if (call === "waiting") return `${waitingTitle(name, cut)} Opens the view's call tree.`;
+  if (call === "untraced" && host) return `${name}: ${untracedNote(host)} Opens the view's call tree.`;
+  return undefined;
+}
+
+/** A call no trace answered and none will, as the call tree says it: muted, its reason in the tooltip. */
+function NotTracedMark({ host }: { host: string }) {
+  return (
+    <span className="dt-not-traced" data-state="untraced" title={untracedNote(host)}>
+      not traced
+    </span>
   );
 }
 
@@ -238,6 +296,7 @@ function RowMeta({
   until,
   chained,
   pending,
+  blank,
   compact,
 }: {
   trace: TraceSummary;
@@ -245,6 +304,8 @@ function RowMeta({
   until: number | undefined;
   chained: boolean;
   pending: boolean;
+  /** No numbers to say: a call no trace answered. */
+  blank?: boolean | undefined;
   compact: boolean | undefined;
 }) {
   const Meta = compact ? CompactMeta : FullMeta;
@@ -253,7 +314,7 @@ function RowMeta({
       {/* No status of its own (a view, a task, a job): its slot kept, so the time lines up with a request's. */}
       <StatusSlot status={trace.kind === "page" || open ? null : trace.http_status} />
       <RowTime trace={trace} open={open} until={until} />
-      <Meta trace={trace} chained={chained} pending={pending} />
+      <Meta trace={trace} chained={chained} pending={pending} blank={blank} />
     </span>
   );
 }
@@ -297,10 +358,12 @@ function RowCaret({ fold }: { fold: RowFold | null | undefined }) {
   return fold ? <ChainCaret onToggle={fold.onToggle} /> : <span className="dt-map-caret" />;
 }
 
-function rowFold(chains: ListChains, id: string): RowFold | null {
-  if (!chains.apps.get(id)?.length) return null;
+/** Open until folded; a row that starts folded (`folded`, a view's call), folded until opened. */
+function rowFold(chains: ListChains, id: string, folded = false, calls = false): RowFold | null {
+  // A view's or an action's rows under it are its calls; anyone else's, its chain's.
+  if (!(calls || chains.apps.get(id)?.length)) return null;
   const key = `row:${id}`;
-  return { open: !chains.open.has(key), onToggle: () => chains.onToggle(key) };
+  return { open: chains.open.has(key) === folded, onToggle: () => chains.onToggle(key) };
 }
 
 /** The page open in the browser tab: narrow, a dot, so the path keeps its room (the row is also highlighted). */
@@ -671,11 +734,21 @@ function CompactMeta({
   trace,
   chained = false,
   pending = false,
+  blank = false,
 }: {
   trace: TraceSummary;
   chained?: boolean;
   pending?: boolean | undefined;
+  blank?: boolean | undefined;
 }) {
+  if (blank) {
+    return (
+      <>
+        <span />
+        <span className="dt-request-chips" />
+      </>
+    );
+  }
   if (pending) {
     return (
       <>
@@ -709,10 +782,20 @@ function CompactMeta({
 }
 
 /** The wide list's numbers after the time: the queries, every finding, when it happened. */
-function FullMeta({ trace, chained, pending }: { trace: TraceSummary; chained: boolean; pending: boolean }) {
+function FullMeta({
+  trace,
+  chained,
+  pending,
+  blank,
+}: {
+  trace: TraceSummary;
+  chained: boolean;
+  pending: boolean;
+  blank?: boolean | undefined;
+}) {
   return (
     <>
-      <span>{pending ? <Pending what="SQL queries" /> : queriesText(trace, chained)}</span>
+      <span>{blank ? null : pending ? <Pending what="SQL queries" /> : queriesText(trace, chained)}</span>
       {pending ? <span /> : <FullChips kinds={trace.issue_kinds} issues={trace.issues} />}
       <span className="dt-request-time">{ago(trace.start)}</span>
     </>

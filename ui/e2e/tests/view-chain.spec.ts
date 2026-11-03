@@ -134,15 +134,21 @@ async function openView(page: Page): Promise<void> {
   await openApp(page, {}, { recording: true, view: VIEW });
 }
 
-test("a view whose calls went through a gateway has the apps down its chain under it in the list", async ({ page }) => {
+test("a view whose calls went through a gateway has each call under it in the list, what it called under that", async ({
+  page,
+}) => {
   await openView(page);
   await pill(page).click();
   const list = panel(page).getByRole("region", { name: "Pages and requests in this browser tab" });
-  const apps = list.locator('.dt-request-row[data-chain="app"]');
+  const calls = list.locator('.dt-request-row[data-call="trace"]');
 
   await expect(list.locator(".dt-request-row").first()).toContainText("/app/");
-  await expect(apps.locator(".dt-app-chip")).toHaveText(["gateway"]);
-  await expect(apps.first().locator(".dt-map-times")).toHaveText("×4");
+  // The gateway's four, a row each as the view made them; no row of the gateway's over them.
+  await expect(calls).toHaveCount(4);
+  await expect(list.locator('.dt-request-row[data-chain="app"]')).toHaveCount(0);
+  // What the first called, folded under it until opened: the subgraph's trace.
+  await calls.first().locator("[data-toggle]").click();
+  await expect(list.locator('.dt-request-row[data-chain="app"] .dt-app-chip')).toHaveText(["subgraph"]);
 });
 
 test("the pill of a view counts what its chain did, as the panel's tabs count it", async ({ page }) => {

@@ -1,11 +1,13 @@
 import {
   ArrowLeftIcon,
   type Chain,
+  type ChainCall,
   type ChainEntry,
   ChevronDownIcon,
   ClearIcon,
   CloseIcon,
   chainApps,
+  chainCalls,
   type DataSource,
   DockBottomIcon,
   DockRightIcon,
@@ -32,6 +34,7 @@ import {
   type TraceRow,
   type TraceSummary,
   type ViewMemory,
+  waitingSummary,
   waitingUntil,
   withSnapshots,
 } from "@tracepanel/ui";
@@ -242,7 +245,7 @@ function fromWidget(entry: TabEntry): TraceSummary | undefined {
     name: summary.name,
     start: summary.start,
     duration: summary.duration,
-    status: (summary.status ?? 200) >= 500 ? "error" : "ok",
+    status: summary.failed || (summary.status ?? 200) >= 500 ? "error" : "ok",
     http_status: summary.status,
     queries: summary.queries,
     issues: summary.issues,
@@ -315,6 +318,18 @@ function arrange(history: TabHistory, traces: readonly TraceSummary[]): TraceRow
     const parent = entry.parent && byId.has(entry.parent) ? entry.parent : null;
     children.set(parent, [...(children.get(parent) ?? []), trace]);
   }
+  // Each row's identity from in flight to stored: the id it flew under.
+  const keys = new Map(history.entries.flatMap((entry) => (entry.summary?.key ? [[entry.id, entry.summary.key]] : [])));
+  // A page's requests in the order they started (made in the same millisecond, in the order they were made): a row
+  // keeps its place as it lands, answers, and is stored.
+  for (const [parent, traces] of children) {
+    if (parent !== null)
+      traces.sort((a, b) => a.start - b.start || madeAt(keys.get(a.id) ?? a.id) - madeAt(keys.get(b.id) ?? b.id));
+  }
+  // The calls that answered untraced: no trace of their own; a click opens their view's, which has them.
+  const untraced = new Map(
+    history.entries.flatMap((entry) => (entry.summary?.untraced && entry.parent ? [[entry.id, entry.parent]] : [])),
+  );
   // What sent each request, as the widget saw it (htmx's trigger element and target).
   const sent = new Map(history.entries.map((entry) => [entry.id, entry.summary?.htmx]));
   // In flight, as the widget says (a request the page waits for, a view still open), until the agent has it; a view
@@ -329,9 +344,13 @@ function arrange(history: TabHistory, traces: readonly TraceSummary[]): TraceRow
   const row = (trace: TraceSummary, depth: 0 | 1): TraceRow => {
     const htmx = sent.get(trace.id);
     const from = redirected.get(trace.id);
+    const key = keys.get(trace.id);
+    const opens = untraced.get(trace.id);
     const running = {
       ...(open.has(trace.id) ? { open: true, until: open.get(trace.id) } : {}),
       ...(from ? { redirectedFrom: from } : {}),
+      ...(key ? { key } : {}),
+      ...(opens ? { opens } : {}),
     };
     // A boosted link loaded a page: its path names it, not the link's text.
     if (!htmx || htmx.boosted) return { trace, depth, ...running };
@@ -339,6 +358,12 @@ function arrange(history: TabHistory, traces: readonly TraceSummary[]): TraceRow
   };
   const roots = [...(children.get(null) ?? [])].reverse();
   return roots.flatMap((root) => [row(root, 0), ...(children.get(root.id) ?? []).map((trace) => row(trace, 1))]);
+}
+
+/** The how-manieth request of its page load a request the widget saw in flight was ("~…-7": 7); 0 for any other. */
+function madeAt(key: string): number {
+  const match = /^~.*-(\d+)$/.exec(key);
+  return match ? Number(match[1]) : 0;
 }
 
 /** Whether the requests come from more than one app: then each row names its own. */
@@ -370,12 +395,21 @@ function pageScope(history: TabHistory | null, rows: readonly TraceRow[]): Trace
   if (!history?.current) return [];
   const scope = new Set(history.scope.length > 0 ? history.scope : [history.current]);
   const parents = new Map(history.entries.map((entry) => [entry.id, entry.parent]));
-  return rows.filter((row) => scope.has(row.trace.id) || scope.has(parents.get(row.trace.id) ?? ""));
+  // A view's calls from its chain: under the row above them.
+  let head: string | null = null;
+  return rows.filter((row) => {
+    if (!row.depth) head = row.trace.id;
+    const parent = parents.get(row.trace.id) ?? (row.depth ? head : null);
+    return scope.has(row.trace.id) || scope.has(parent ?? "");
+  });
 }
 
-/** How many requests a list of rows holds: not the views and actions, not the runs under them. */
+/**
+ * How many requests a list of rows holds, as the pill counts them: not the views and actions, not the runs under them,
+ * not a view's calls no trace of their own answered (through a gateway: its chain's).
+ */
 function requestCount(rows: readonly TraceRow[]): number {
-  return rows.filter((row) => !row.run && row.trace.kind !== "page").length;
+  return rows.filter((row) => !(row.run || row.call || row.opens) && row.trace.kind !== "page").length;
 }
 
 /** The task runs each request led to, by its id. */
@@ -465,6 +499,8 @@ const CHAIN_SLOW_MS = 250;
 /** The rows under the list's rows: the apps each one's trace called, and the rows whose first load is slow. */
 interface RowChains {
   apps: ReadonlyMap<string, ChainEntry[]>;
+  /** By a view's or an action's id: its calls, one row each (chainCalls), once its chain loaded. */
+  calls: ReadonlyMap<string, ChainCall[]>;
   loading: ReadonlySet<string>;
   /** What each row's whole chain did, as the pill and the trace's tabs count it: the row says the same. */
   counts: ReadonlyMap<string, ChainCounts>;
@@ -492,6 +528,111 @@ function withoutFlying(
       waiting.has(id) ? entries.filter((entry) => entry.type !== "waiting" || entry.cut === null) : entries,
     ]),
   );
+}
+
+/** A view's call, as its row: its place (when it started, µs) and the row. */
+type Placed = { at: number; row: TraceRow };
+
+/** When a call started (µs): the call's own start, not its trace's. */
+function callStart(call: ChainCall): number {
+  return call.type === "trace" ? call.called : call.start;
+}
+
+/** What a call is named by, to match its row in flight: its GraphQL operation, else its method. */
+function callName(name: string): string {
+  return name.startsWith("GraphQL ") ? name : (name.split(" ")[0] ?? "");
+}
+
+/** How far apart (µs) a call's start in the browser's trace and in the widget can be to be the same call. */
+const SAME_CALL_US = 3_000_000;
+
+/**
+ * The widget's row each of a view's calls was in flight (`flights`, "~…"): the same name, the nearest start. A call
+ * keeps that row's identity (its key) as its chain's row takes over.
+ */
+function matchFlights(calls: readonly ChainCall[], flights: readonly TraceRow[]): Map<string, TraceRow> {
+  const free = new Set(flights);
+  const matched = new Map<string, TraceRow>();
+  for (const call of [...calls].sort((a, b) => callStart(a) - callStart(b))) {
+    const name = callName(call.type === "trace" ? call.summary.name : waitingSummary(call).name);
+    let best: TraceRow | undefined;
+    for (const flight of free) {
+      const gap = Math.abs(flight.trace.start - callStart(call));
+      if (callName(flight.trace.name) !== name || gap > SAME_CALL_US) continue;
+      if (!best || gap < Math.abs(best.trace.start - callStart(call))) best = flight;
+    }
+    if (best) {
+      free.delete(best);
+      matched.set(call.key, best);
+    }
+  }
+  return matched;
+}
+
+/** A view's call as a row of the list, one step under its view, the same row as it was in flight. */
+function callRow(call: ChainCall, view: string, flight: TraceRow | undefined): TraceRow {
+  const key = flight?.key ?? flight?.trace.id ?? call.key;
+  if (call.type === "trace") {
+    return { trace: call.summary, depth: 1, key, call: "trace", counted: true, folded: true };
+  }
+  const summary = waitingSummary(call);
+  // Its status as its answer said it, when the span doesn't.
+  const status = summary.http_status ?? (call.cut === null ? (flight?.trace.http_status ?? null) : null);
+  // biome-ignore lint/style/useNamingConvention: wire format.
+  const trace = { ...summary, http_status: status };
+  const state = call.untraced ? { call: "untraced" as const, host: call.untraced } : { call: "waiting" as const };
+  return { trace, depth: 1, key, opens: view, cut: call.cut, ...state };
+}
+
+/**
+ * The list with each view's calls from its chain (chainCalls), once it loaded: in place of the widget's rows of them
+ * (in flight "~…", or answered untraced), each in its row's place, keeping its key; a call still in flight keeps its
+ * running row. The rows under each call (what its trace called) by its trace's id, in `apps`.
+ */
+function withViewCalls(
+  rows: readonly TraceRow[],
+  calls: ReadonlyMap<string, ChainCall[]>,
+  apps: ReadonlyMap<string, ChainEntry[]>,
+): { rows: TraceRow[]; apps: ReadonlyMap<string, ChainEntry[]> } {
+  if (calls.size === 0) return { rows: [...rows], apps };
+  const under = new Map(apps);
+  const out: TraceRow[] = [];
+  let at = 0;
+  while (at < rows.length) {
+    const head = rows[at] as TraceRow;
+    let end = at + 1;
+    while (end < rows.length && (rows[end] as TraceRow).depth) end += 1;
+    const children = rows.slice(at + 1, end);
+    const own = calls.get(head.trace.id);
+    out.push(head, ...(own ? placeCalls(head.trace.id, own, children, under) : children));
+    at = end;
+  }
+  return { rows: out, apps: under };
+}
+
+/** A view's rows under it with its calls from its chain in the widget's rows' places, in the order they started. */
+function placeCalls(
+  view: string,
+  calls: readonly ChainCall[],
+  children: readonly TraceRow[],
+  under: Map<string, ChainEntry[]>,
+): TraceRow[] {
+  const flights = children.filter((row) => row.trace.id.startsWith("~"));
+  const matched = matchFlights(calls, flights);
+  const running = new Set(flights.filter((row) => row.open));
+  const placed: Placed[] = children
+    .filter((row) => !row.trace.id.startsWith("~") || running.has(row))
+    .map((row) => ({ at: row.trace.start, row }));
+  for (const call of calls) {
+    const flight = matched.get(call.key);
+    // Still in flight in the widget (cut short in the view's trace): its running row says it.
+    if (flight && running.has(flight)) continue;
+    if (call.type === "trace" && call.apps.length > 0) under.set(call.id, call.apps);
+    // In the place its row had: by when the widget saw it start.
+    placed.push({ at: flight?.trace.start ?? callStart(call), row: callRow(call, view, flight) });
+  }
+  const made = (row: TraceRow) => madeAt(row.key ?? row.trace.id);
+  return placed.sort((a, b) => a.at - b.at || made(a.row) - made(b.row)).map((each) => each.row);
 }
 
 /** Each chain's counts, by its row's trace id. */
@@ -600,17 +741,28 @@ function useRowChains(rows: readonly TraceRow[], stored: ReadonlySet<string>): R
   // The waiting calls go once they stop being waited for: the rows are built again then (`expired` counts the times).
   const [expired, setExpired] = useState(0);
   const listed = rows.map((row) => row.trace.id).join(",");
+  const pages = rows
+    .filter((row) => row.trace.kind === "page")
+    .map((row) => row.trace.id)
+    .join(",");
   // biome-ignore lint/correctness/useExhaustiveDependencies: `expired` moved on: the rows are built at the time now.
-  const apps = useMemo(() => {
+  const { apps, calls } = useMemo(() => {
     const rowsIn = new Set(listed.split(","));
+    const views = new Set(pages.split(","));
     const apps = new Map<string, ChainEntry[]>();
+    const calls = new Map<string, ChainCall[]>();
     for (const [id, chain] of chains) {
       if (!rowsIn.has(id)) continue;
+      // A view's or an action's calls are its rows, one each, as they were in flight (chainCalls).
+      if (views.has(id)) {
+        calls.set(id, chainCalls(chain, id, rowsIn));
+        continue;
+      }
       const under = chainApps(chain, id, rowsIn);
       if (under.length > 0) apps.set(id, under);
     }
-    return apps;
-  }, [chains, listed, expired]);
+    return { apps, calls };
+  }, [chains, listed, pages, expired]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: `expired` moved on: the next waiting call's end is asked.
   useEffect(() => {
     const ends = [...chains.values()].map((chain) => waitingUntil(chain)).filter((end) => end !== null);
@@ -622,7 +774,7 @@ function useRowChains(rows: readonly TraceRow[], stored: ReadonlySet<string>): R
   const counts = useMemo(() => countsOf(chains), [chains]);
   const cut = useMemo(() => cutsOf(chains), [chains]);
   const settled = useMemo(() => (source.chain ? new Set(chains.keys()) : undefined), [chains]);
-  return { apps, loading, counts, settled, cut };
+  return { apps, calls, loading, counts, settled, cut };
 }
 
 // The rows the user folded or opened, each a change from where it starts (an app's row open, a run open while its
@@ -1126,7 +1278,7 @@ function PageRequests({
   chains?: ListChains | undefined;
   opensOn: OpensOn;
 }) {
-  const fresh = useNewIds(rows.map((row) => row.trace.id));
+  const fresh = useNewIds(rows.map((row) => row.key ?? row.trace.id));
   const list = useRef<HTMLElement>(null);
   const { unseen, jump } = useStickToBottom(list, rows.length, follow);
   // Requests only, as the pill counts them: not the runs under them, not the browser's views and actions.
@@ -1297,9 +1449,12 @@ function PanelApp({ route }: { route: Route }) {
   const { rows, stored, runs } = useTabRows(history);
   const listed = withRuns(rows, runs);
   const rowChains = useRowChains(listed, stored);
+  // Each view's calls from its chain in the rows they were in flight (withViewCalls): the list shows these.
+  const shown = withViewCalls(listed, rowChains.calls, withoutFlying(rowChains.apps, history));
   const [chainOpen, toggleChain] = useChainOpen();
   const currentId = history?.current ?? null;
   const pageRows = pageScope(history, rows);
+  const pageShown = pageScope(history, shown.rows);
   const selectedId =
     route.name === "trace" ? route.id : (currentId ?? rows.find((row) => row.depth === 0)?.trace.id ?? null);
   // A linked trace opened from another view: the way back to it, as it was.
@@ -1329,7 +1484,7 @@ function PanelApp({ route }: { route: Route }) {
     writeFollow(value);
   };
   const chains: ListChains = {
-    apps: withoutFlying(rowChains.apps, history),
+    apps: shown.apps,
     loading: rowChains.loading,
     counts: rowChains.counts,
     settled: rowChains.settled,
@@ -1446,9 +1601,9 @@ function PanelApp({ route }: { route: Route }) {
           <div className="bar-actions">{panelActions()}</div>
         </header>
       )}
-      {!split && (pageRows.length > 1 || pageRows.some((row) => row.open)) ? (
+      {!split && (pageShown.length > 1 || pageShown.some((row) => row.open)) ? (
         <PageRequests
-          rows={withRuns(pageRows, runs)}
+          rows={pageShown}
           selectedId={selectedId}
           chains={chains}
           opensOn={opensOn}
@@ -1479,7 +1634,7 @@ function PanelApp({ route }: { route: Route }) {
           <PageRequests
             scope="tab"
             head={!toolbarInTrace}
-            rows={inOrder(split, listed)}
+            rows={inOrder(split, shown.rows)}
             selectedId={selectedId}
             currentId={currentId}
             chains={chains}

@@ -31,6 +31,10 @@ back keeps its state there, under its own key.
   **call tree**, the call where that app's part starts selected (the rows on
   the way opened), its other tabs under that app. Never the tab last picked:
   the row means that app's part, not a trace to read.
+- A call of a view or an action in the panel's list (a GraphQL operation through a
+  gateway) opens the trace that answered it, on its call tree; while that trace is
+  on its way, or when none answers it ("not traced"), the view's call tree, which
+  has the call.
 - A link that names a tab opens it: an issue's latest occurrence opens its
   Issues or Error tab, a log record its Logs tab or its row in the call tree,
   an email or an AWS call its row in the call tree, the latest call of a
