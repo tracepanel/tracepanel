@@ -680,10 +680,20 @@ function callRow(call: ChainCall, view: string, flight: TraceRow | undefined): T
   const said = flight && !flight.open ? flight.trace.duration : 0;
   if (call.type === "trace") {
     const runtime = traceRuntime(call.trace.attrs);
-    const clock = { start: call.called, end: call.ended ?? call.called + call.summary.duration };
+    const ended = call.ended ?? call.called + call.summary.duration;
     // Its time as the view made the call, as its row said in flight: the trace that served it says its own.
-    const trace = { ...call.summary, duration: Math.max(clock.end - clock.start, said) };
-    return { trace, depth: 1, key, call: "trace", counted: true, folded: true, ...to, runtime, clock };
+    const trace = { ...call.summary, duration: Math.max(ended - call.called, said) };
+    return {
+      trace,
+      depth: 1,
+      key,
+      call: "trace",
+      counted: true,
+      folded: true,
+      ...to,
+      runtime,
+      clock: clockOf(call, flight, trace.duration),
+    };
   }
   const summary = waitingSummary(call);
   // Its status as its answer said it, when the span doesn't.
@@ -691,13 +701,24 @@ function callRow(call: ChainCall, view: string, flight: TraceRow | undefined): T
   const duration = call.cut === null ? Math.max(summary.duration, said) : summary.duration;
   // biome-ignore lint/style/useNamingConvention: wire format.
   const trace = { ...summary, duration, http_status: status };
+  const clock = call.cut === null ? { clock: clockOf(call, flight, duration) } : {};
   const state =
     call.failed !== undefined
       ? { call: "failed" as const, failed: call.failed }
       : call.untraced
         ? { call: "untraced" as const, host: call.untraced }
         : { call: "waiting" as const };
-  return { trace, depth: 1, key, opens: view, cut: call.cut, ...to, ...state };
+  return { trace, depth: 1, key, opens: view, cut: call.cut, ...to, ...clock, ...state };
+}
+
+/**
+ * A view's call on its group's clock: from when its row started in flight (the widget's clock, as its group's time
+ * ran then), else the view's trace's, for as long as its row says. Its group's time never drops as the view's trace
+ * times its calls a hair apart from the widget.
+ */
+function clockOf(call: ChainCall, flight: TraceRow | undefined, duration: number): { start: number; end: number } {
+  const start = flight?.trace.start ?? callStart(call);
+  return { start, end: start + duration };
 }
 
 /**
@@ -1073,23 +1094,34 @@ const CHAINS_KEY = "tracepanel:chains";
 const CHAINS_KEPT = 24;
 const CHAINS_ROOM = 1_500_000;
 
+/** A row's chain as kept: with when it was asked for (ms), as its calls are judged (asOf). */
+type KeptChain = Chain & { asOf?: number | undefined };
+
+/**
+ * When a kept chain was asked for (ms): its calls are waited for, or not traced, as of then. Now for one kept before
+ * the time was.
+ */
+function asOf(chain: KeptChain): number {
+  return chain.asOf ?? Date.now();
+}
+
 /** The rows' chains, starting with those the panel had before the page reloaded it, kept as they change. */
 function useKeptChains() {
-  const [chains, setChains] = useState<ReadonlyMap<string, Chain>>(readChains);
+  const [chains, setChains] = useState<ReadonlyMap<string, KeptChain>>(readChains);
   useEffect(() => saveChains(chains), [chains]);
   return [chains, setChains] as const;
 }
 
-function readChains(): ReadonlyMap<string, Chain> {
+function readChains(): ReadonlyMap<string, KeptChain> {
   try {
     const saved: unknown = JSON.parse(sessionStorage.getItem(CHAINS_KEY) ?? "[]");
-    return new Map(Array.isArray(saved) ? (saved as [string, Chain][]) : []);
+    return new Map(Array.isArray(saved) ? (saved as [string, KeptChain][]) : []);
   } catch {
     return new Map();
   }
 }
 
-function saveChains(chains: ReadonlyMap<string, Chain>): void {
+function saveChains(chains: ReadonlyMap<string, KeptChain>): void {
   try {
     const kept = [...chains].slice(-CHAINS_KEPT);
     let text = JSON.stringify(kept);
@@ -1137,10 +1169,14 @@ function useRowChains(rows: readonly TraceRow[], stored: ReadonlySet<string>): R
     const load = source.chain;
     if (!load) return;
     const timers = new Set<number>();
-    const keep = (id: string, chain: Chain) =>
+    // Kept with when it was asked for (`at`): the same chain again moves its time on while a call of it was still
+    // waited for then, its calls judged as of it (asOf), never by a later clock with an older chain.
+    const keep = (id: string, chain: Chain, at: number) =>
       setChains((current) => {
         const before = current.get(id);
-        return before && chainKey(before) === chainKey(chain) ? current : new Map(current).set(id, chain);
+        if (before && chainKey(before) === chainKey(chain) && waitingUntil(before, asOf(before)) === null)
+          return current;
+        return new Map(current).set(id, { ...chain, asOf: at });
       });
     const done = (id: string) =>
       setLoading((current) => {
@@ -1156,7 +1192,7 @@ function useRowChains(rows: readonly TraceRow[], stored: ReadonlySet<string>): R
         const fresh = now - (trace.start + trace.duration) / 1000 < CHAIN_FRESH_MS;
         // A call of it still waited for (one cut short is, for minutes): its trace may come any time.
         const chain = has.current.get(trace.id);
-        const awaited = chain !== undefined && (waitingUntil(chain, now) ?? 0) > now;
+        const awaited = chain !== undefined && waitingUntil(chain, asOf(chain)) !== null;
         if (loaded.current.get(trace.id) === rowKey(trace) && !fresh && !awaited) continue;
         loaded.current.set(trace.id, rowKey(trace));
         // Its first load: placeholders under the row once it is slow, so the list says something is on its way.
@@ -1169,6 +1205,7 @@ function useRowChains(rows: readonly TraceRow[], stored: ReadonlySet<string>): R
           : undefined;
         if (timer !== undefined) timers.add(timer);
         asking.current.add(trace.id);
+        const at = Date.now();
         const settle = () => {
           asking.current.delete(trace.id);
           window.clearTimeout(timer);
@@ -1177,7 +1214,7 @@ function useRowChains(rows: readonly TraceRow[], stored: ReadonlySet<string>): R
         };
         load(trace.id).then(
           (chain) => {
-            if (mounted.current) keep(trace.id, chain);
+            if (mounted.current) keep(trace.id, chain, at);
             settle();
           },
           () => {
@@ -1196,14 +1233,14 @@ function useRowChains(rows: readonly TraceRow[], stored: ReadonlySet<string>): R
       for (const each of timers) window.clearTimeout(each);
     };
   }, [key]);
-  // The waiting calls go once they stop being waited for: the rows are built again then (`expired` counts the times).
-  const [expired, setExpired] = useState(0);
   const listed = rows.map((row) => row.trace.id).join(",");
   const pages = rows
     .filter((row) => row.trace.kind === "page")
     .map((row) => row.trace.id)
     .join(",");
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `expired` moved on: the rows are built at the time now.
+  // Built as of when each chain was asked for (asOf): its waiting calls go once a chain asked for after they stopped
+  // being waited for says no trace came.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `listed` and `pages` say which rows there are.
   const { apps, calls, counters } = useMemo(() => {
     const rowsIn = new Set(listed.split(","));
     const views = new Set(pages.split(","));
@@ -1214,26 +1251,18 @@ function useRowChains(rows: readonly TraceRow[], stored: ReadonlySet<string>): R
       if (!rowsIn.has(id)) continue;
       // A view's or an action's calls are its rows, one each, as they were in flight (chainCalls).
       if (views.has(id)) {
-        calls.set(id, chainCalls(chain, id, rowsIn));
+        calls.set(id, chainCalls(chain, id, rowsIn, asOf(chain)));
         const row = rows.find((each) => each.trace.id === id)?.trace;
         // Loaded again while it is new (CHAIN_FRESH_MS), as the loads above have it.
         const fresh = () => row !== undefined && Date.now() - (row.start + row.duration) / 1000 < CHAIN_FRESH_MS;
         counters.set(id, chainCounter(chain, id, rowsIn, { chains, fresh }));
         continue;
       }
-      const under = chainApps(chain, id, rowsIn);
+      const under = chainApps(chain, id, rowsIn, asOf(chain));
       if (under.length > 0) apps.set(id, under);
     }
     return { apps, calls, counters };
-  }, [chains, listed, pages, expired]);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `expired` moved on: the next waiting call's end is asked.
-  useEffect(() => {
-    const ends = [...chains.values()].map((chain) => waitingUntil(chain)).filter((end) => end !== null);
-    if (ends.length === 0) return;
-    const wait = Math.max(0, Math.min(...ends) - Date.now()) + 50;
-    const timer = window.setTimeout(() => setExpired((count) => count + 1), wait);
-    return () => window.clearTimeout(timer);
-  }, [chains, expired]);
+  }, [chains, listed, pages]);
   const counts = useMemo(() => countsOf(chains), [chains]);
   const cut = useMemo(() => cutsOf(chains), [chains]);
   const settled = useMemo(() => (source.chain ? new Set([...chains.keys(), ...failed]) : undefined), [chains, failed]);

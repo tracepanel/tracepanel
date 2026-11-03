@@ -1,7 +1,7 @@
 // The panel's list says what is still coming under a row whose trace called other apps: placeholders while the
 // row's chain loads the first time (a slow one), and each call whose trace the agent hasn't got yet, where that
 // trace's row will be and as it will look (its status and time, its numbers "…"), until it arrives (or, from a
-// service that records none, for a few seconds: then the same row says "not traced").
+// service that records none, for a few seconds after the last call to it: then the same row says "not traced").
 import type { Locator, Page } from "@playwright/test";
 import { openApp, panel, pill } from "../app.ts";
 import { type ArrivingCall, arriving } from "../chain.ts";
@@ -82,8 +82,8 @@ test("calls whose traces haven't arrived wait under the request, their numbers p
 test("a call to a service that sends no trace waits a few seconds after it ended, then its row says not traced", async ({
   page,
 }) => {
-  // A third-party API (its trace never comes), called 3.5 s ago: waited for 5 s after the call.
-  const { bff, now } = await arriving(2, [{ url: "https://api.example.com/rates", ago: 3_500_000 }]);
+  // A third-party API (its trace never comes), called 8.5 s ago: waited for 10 s after the call.
+  const { bff, now } = await arriving(2, [{ url: "https://api.example.com/rates", ago: 8_500_000 }]);
   const { rows, waiting } = await listed(page, bff, now);
 
   await expect.poll(() => under(rows)).toEqual(["waiting GET /rates"]);
@@ -92,7 +92,7 @@ test("a call to a service that sends no trace waits a few seconds after it ended
     (element as HTMLElement).dataset["probe"] = "kept";
   });
 
-  // 5.6 s after the call ended: no trace came, none will. The same row stays, as the call tree says it.
+  // 10.6 s after the call ended: no trace came, none will. The same row stays, as the call tree says it.
   await page.clock.setFixedTime(now + 2_000);
 
   await expect(waiting).toHaveCount(0, { timeout: 4_000 });
@@ -102,6 +102,31 @@ test("a call to a service that sends no trace waits a few seconds after it ended
   await expect(row).toHaveAttribute("title", /^GET \/rates: Not traced: api\.example\.com /);
   // No numbers to wait for.
   await expect(row.locator(".dt-pending")).toHaveCount(0);
+});
+
+test("a gateway's early call waits as long as its last one: its trace comes with theirs, never not traced first", async ({
+  page,
+}) => {
+  // Two operations through one gateway over OTLP: the agent holds its spans of the W3C trace until the last one's came,
+  // so the first one's trace, ended 7 s ago, comes only after the second's, ended a moment ago.
+  const gateway = "http://localhost:8902/graphql";
+  const { bff, now, serve } = await arriving(4, [{ url: gateway, ago: 7_000_000 }, { url: gateway }]);
+  const { rows, waiting } = await listed(page, bff, now);
+
+  await expect.poll(() => under(rows)).toEqual(["waiting GET /graphql", "waiting GET /graphql"]);
+  await expect(rows.locator('[data-state="untraced"]')).toHaveCount(0);
+
+  // The list asks again: still both waited for, 9 s after the first ended.
+  await page.clock.setFixedTime(now + 2_000);
+  await page.waitForTimeout(2_500);
+  expect(await under(rows)).toEqual(["waiting GET /graphql", "waiting GET /graphql"]);
+  await expect(waiting).toHaveCount(2);
+
+  // Its trace comes: the row it was, never "not traced" before.
+  await serve(0);
+  await expect
+    .poll(() => under(rows), { timeout: 5_000 })
+    .toEqual(["app shop", "trace GET /graphql", "waiting GET /graphql"]);
 });
 
 test("while a request's chain loads the first time, a placeholder row stands where its apps' rows go", async ({

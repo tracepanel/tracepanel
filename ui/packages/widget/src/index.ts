@@ -99,13 +99,14 @@ function addEnded(parent: HTMLElement, view: PageAnnouncement, facts: ChainFacts
 
 /** What a view's calls did in the apps they reached, as the panel's tabs count it; pending until counted. */
 function addChainCounts(parent: HTMLElement, facts: ChainFacts | null): void {
-  if (!facts) {
+  const counts = facts?.counts;
+  if (!counts) {
     addQueries(parent, null);
     return;
   }
-  addQueries(parent, facts.counts.queries);
-  addCalls(parent, facts.counts.calls, facts.counts.ownCalls);
-  if (facts.counts.issues) addIssues(parent, facts.counts.issues, "warn");
+  addQueries(parent, counts.queries);
+  addCalls(parent, counts.calls, counts.ownCalls);
+  if (counts.issues) addIssues(parent, counts.issues, "warn");
 }
 
 /** Nothing on this page yet: its server didn't trace it and nothing records it in the browser. */
@@ -1134,8 +1135,8 @@ function pageEntry(announced: PageAnnouncement): TabEntry {
  * with them; its own where it called no app or the console can't say ("own"); else its whole chain's.
  */
 function countedBy(info: TraceInfo, facts: ChainFacts | "own" | undefined): Counted {
-  if (facts === undefined) return { queries: null, issues: 0 };
-  if (facts === "own" || facts.counts.traces < 2) return ownCounts(info);
+  if (facts === undefined || (facts !== "own" && facts.counts === null)) return { queries: null, issues: 0 };
+  if (facts === "own" || facts.counts === null || facts.counts.traces < 2) return ownCounts(info);
   return { queries: facts.counts.queries, issues: facts.counts.issues };
 }
 
@@ -1814,7 +1815,7 @@ export function mount(options: WidgetOptions = {}): Widget {
     if (view) addView(stats, view, facts, until);
     else addWaiting(stats);
     fitBadge();
-    badge.dataset["verdict"] = view?.status === "error" ? "error" : facts?.counts.issues ? "warn" : "ok";
+    badge.dataset["verdict"] = view?.status === "error" ? "error" : facts?.counts?.issues ? "warn" : "ok";
     badge.setAttribute("aria-label", idleLabel(view, runtime, facts?.counts ?? null, until));
   }
 
@@ -1851,13 +1852,13 @@ export function mount(options: WidgetOptions = {}): Widget {
    * Once a view or a request ends: what its calls did down its chain, asked from the console while the pill shows it.
    * Its numbers are pending until the first answer; with none (unreachable, never stored) its own are all there are.
    */
-  function followFacts(id: string, wanted: () => boolean): void {
+  function followFacts(id: string, wanted: () => boolean, view = false): void {
     if (!panelUrl) return;
     void followChain(
       fetchJson,
       panelUrl,
       id,
-      wanted,
+      { wanted, view },
       (facts) => {
         const before = chained.get(id);
         if (before && before !== "own" && factsKey(before) === factsKey(facts)) return;
@@ -1875,7 +1876,7 @@ export function mount(options: WidgetOptions = {}): Widget {
 
   /** Once a view ends: its chain, while the pill shows it (its own, no request of its own on the pill yet). */
   function followView(ended: PageAnnouncement): void {
-    if (!ended.open) followFacts(ended.id, () => view?.id === ended.id);
+    if (!ended.open) followFacts(ended.id, () => view?.id === ended.id, true);
   }
 
   /** A request just answered: its chain, while it is the pill's. */

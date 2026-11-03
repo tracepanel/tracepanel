@@ -329,7 +329,8 @@ test("a view's time never runs past its end and back", async ({ page }) => {
     await page.waitForTimeout(100);
   }
   await storeView(page, tag);
-  await expect(view.locator(".dt-pending")).toHaveCount(0);
+  // Its calls no trace answered: waited for, then said not traced, its numbers known.
+  await expect(view.locator(".dt-pending")).toHaveCount(0, { timeout: 15_000 });
   await sample();
 
   const shown = times.filter((each) => !Number.isNaN(each));

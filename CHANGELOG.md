@@ -133,7 +133,15 @@
 - A call under a request in the panel's list to a host that sends no
   traces (a third-party API the BFF calls) stays once it is no longer
   waited for and says "not traced", as the call tree does. Its row went
-  five seconds after the call, leaving nothing in its place.
+  five seconds after the call, leaving nothing in its place. And "not
+  traced" is said for good, never a moment before the call's trace
+  shows: a call is waited for 10 seconds after the last call of the
+  chain to its host ended (an app over OTLP sends its spans in batches,
+  and the agent holds a gateway's spans of a page until its last
+  operation's came), not 5 seconds after its own, and judged by a chain
+  asked for after that, never an older one. Four of a page's GraphQL
+  operations through Apollo Router said "not traced" from 6.3 to 8.3 s,
+  then showed their traces.
 - A page's own document (GET /docs, which its server traced) is no
   longer one of its view's calls in the panel's list: it joined their
   group ("next-app ×3" over GET /docs and the two GET /openapi.json
@@ -160,14 +168,20 @@
   the browser timed it, never less than its server's own time (its trace
   still says that one). A call the browser queued behind others (six at
   a time to one host) ticked to 11.9 s, then dropped to its server's
-  6.0 s.
+  6.0 s. The row over a view's calls to one host ("library-router ×5")
+  says their time on the same clock from in flight to stored, never
+  less: it went from 5.2 s to 5.1 s as their traces came, the view's
+  trace timing the calls a hair apart from the page.
 - A view's time in the panel's list stops at its last call's answer also
   once that call's trace is stored: the answer's own end stops it, not
   the stored trace's, which ends after the answer went out. It ran on to
   4.1 s for a moment after a 503 at 4.0 s, then went back to 4.0 s. The
   panel's list asks for a request that ended a moment ago every 0.4 s
   until its trace is stored, so its "…" goes as soon as the pill's does,
-  not up to two seconds later.
+  not up to two seconds later. And the pill says "…" for a view's
+  numbers as long as its row in the list does, while a call of it still
+  waits for its trace, asking for its chain every second until then: it
+  said 19 queries, then 24, while the list's row said "…", then 24.
 ## 0.13.0 (2026-11-03)
 
 ### Fixed

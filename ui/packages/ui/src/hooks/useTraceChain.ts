@@ -41,7 +41,9 @@ function useTraceChain(
   waiting: readonly ChainWaiting[];
   untraced: ReadonlyMap<string, string>;
 } {
-  const [loaded, setLoaded] = useState<{ id: string; key: string; chain: Chain } | undefined>(undefined);
+  // The chain as last loaded, and when it was asked for (ms): its calls are judged as of then, never by a later clock
+  // with an older chain (a trace that came since would be missed: "not traced", then traced).
+  const [loaded, setLoaded] = useState<{ id: string; key: string; chain: Chain; at: number } | undefined>(undefined);
   // When the chain was last asked for again while calls of it wait (ms); 0 before.
   const [asked, setAsked] = useState(0);
   const calls = callsOf(related);
@@ -53,13 +55,15 @@ function useTraceChain(
   useEffect(() => {
     if (!load || calls + asked + unlinked === 0) return;
     let live = true;
+    const at = Date.now();
     load(trace.id).then(
       (chain) => {
         if (!live) return;
         const key = `${signature(chain.traces)}|${chain.issues.length}`;
-        setLoaded((current) =>
-          current?.id === trace.id && current.key === key ? current : { id: trace.id, key, chain },
-        );
+        setLoaded((current) => {
+          if (current?.id !== trace.id || current.key !== key) return { id: trace.id, key, chain, at };
+          return current.at >= at ? current : { ...current, at };
+        });
       },
       () => undefined,
     );
@@ -69,26 +73,28 @@ function useTraceChain(
   }, [load, calls, trace.id, related, trace.spans.length, asked, unlinked]);
   const chain = loaded?.id === trace.id ? loaded.chain : undefined;
   const members = useMemo(() => membersOf(trace, related, chain?.traces), [trace, related, chain]);
-  // Read again at each ask, at its time: a call stops being waited for in time, with no new answer.
+  // Read again at each answer, as of when it was asked: a call stops being waited for in time, with no new trace.
   const capped = chain?.capped ?? false;
+  const at = chain !== undefined && loaded ? loaded.at : asked;
   // Said only once the chain is all there is to know: loaded, or none to load (no call any trace answered). Before,
   // a call's trace may be one the agent has (the panel's list shows it): neither on its way nor untraced.
   const settled = chain !== undefined || !load || calls + unlinked === 0;
   const waiting = useMemo(
-    () => (settled ? waitingIn(members, capped, asked || Date.now()) : NO_WAITING),
-    [settled, members, capped, asked],
+    () => (settled ? waitingIn(members, capped, at || Date.now()) : NO_WAITING),
+    [settled, members, capped, at],
   );
   const untraced = useMemo(
-    () => (settled ? untracedIn(members, capped, asked || Date.now()) : NO_UNTRACED),
-    [settled, members, capped, asked],
+    () => (settled ? untracedIn(members, capped, at || Date.now()) : NO_UNTRACED),
+    [settled, members, capped, at],
   );
-  // More on its way: asked for again until it is all there (or no longer waited for).
+  // More on its way: asked for again until it is all there (or no longer waited for), an ask that failed too.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: each ask (`asked`) schedules the next while calls wait.
   useEffect(() => {
     if (!load || waiting.length === 0) return;
     const cut = waiting.every((call) => call.cut !== null);
     const timer = window.setTimeout(() => setAsked(Date.now()), cut ? CUT_ASK_MS : WAITING_ASK_MS);
     return () => window.clearTimeout(timer);
-  }, [load, waiting]);
+  }, [load, waiting, asked]);
   return { members, issues: chain?.issues ?? NO_ISSUES, waiting, untraced };
 }
 
