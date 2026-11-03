@@ -227,6 +227,16 @@ function carries(span: Span): boolean {
   return CALL_KINDS.has(span.kind) && text(span.attrs, "w3c.span_id") !== null && !("messaging.system" in span.attrs);
 }
 
+/**
+ * How many of a trace's calls carried it on with no trace its links name as their answer: the chain may have those
+ * traces all the same (stored before the trace, which its links didn't name when they loaded), so it is asked for,
+ * however long ago the calls ended.
+ */
+export function unlinkedCalls(trace: Trace, related: Related | undefined): number {
+  const linked = new Set(Object.values(related?.via ?? {}));
+  return trace.spans.filter((span) => carries(span) && !linked.has(span.id)).length;
+}
+
 /** Whether an answer came to a call: a status, not a failure before one (a network error, an abort, status 0). */
 function gotAnswer(span: Span): boolean {
   const status = statusOf(span);

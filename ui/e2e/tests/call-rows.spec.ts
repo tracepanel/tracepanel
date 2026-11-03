@@ -514,6 +514,11 @@ test("a call that got no answer stays its row, failed as the call tree says it, 
   const row = panel(page).locator('.dt-map-row[data-kind="http.client"]').filter({ hasText: "Authors" });
   await expect(row.locator(".dt-status")).toHaveText("failed");
   await expect(row).toHaveAttribute("data-status", "error");
+  const books = panel(page).locator('.dt-map-row[data-kind="http.client"]').filter({ hasText: "Books" });
+  // And of the one its trace answered, stored before the view's: answered, by the gateway, as the list has it.
+  await expect(books.locator(".dt-status")).toHaveText("200");
+  await expect(books.locator(".dt-app-chip")).toHaveText("gateway");
+  await expect(books.locator('[data-state="untraced"]')).toHaveCount(0);
 });
 
 test("the pill counts a page's calls no trace answered, as its list does: its own load and its view's calls", async ({

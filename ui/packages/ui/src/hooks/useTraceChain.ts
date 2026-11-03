@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { type ChainWaiting, untracedIn, waitingIn } from "../lib/chainRows";
+import { type ChainWaiting, unlinkedCalls, untracedIn, waitingIn } from "../lib/chainRows";
 import { type Member, membersOf, type ScopedLog, type SpanScope, scopedLogs } from "../lib/scope";
 import type { Chain, ChainTrace, Related, ScopeIssue, Trace } from "../types";
 
@@ -45,8 +45,10 @@ function useTraceChain(
   // When the chain was last asked for again while calls of it wait (ms); 0 before.
   const [asked, setAsked] = useState(0);
   const calls = callsOf(related);
-  // Calls of its own whose traces its links don't bring yet: the chain is asked for at once, it may have them.
-  const unlinked = useMemo(() => waitingIn([{ id: trace.id, parent: null, via: null, trace }]).length, [trace]);
+  // Calls of its own whose traces its links don't bring (yet, or not at all: a trace stored before this one, which its
+  // links didn't name when they loaded): the chain is asked for at once, it may have them. Never said "not traced"
+  // before it answered.
+  const unlinked = useMemo(() => unlinkedCalls(trace, related), [trace, related]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: its links reloaded or the trace grew, the chain may have too.
   useEffect(() => {
     if (!load || calls + asked + unlinked === 0) return;

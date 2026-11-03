@@ -12,6 +12,12 @@
 
 ### Fixed
 
+- A view's call answered by an app whose trace the agent stored before
+  the view's says so in its call tree ("GraphQL query Books → gateway",
+  200), as the panel's list does, not "not traced": once the call ended
+  more than 5 seconds before the view was stored, its trace was no longer
+  waited for, and the tree didn't look further than the view's links,
+  which can miss a trace stored first.
 - A view's calls to the host that served the page are grouped under the
   page's app ("next-app ×2" over the two GET /openapi.json Swagger UI
   asked for), not the host ("127.0.0.1:8160 ×2"): the app that traced
