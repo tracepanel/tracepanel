@@ -52,6 +52,9 @@
   deprecated mode or with `graphql.document` turned on, Hive Gateway)
   has it on its trace too, on its Request tab: the agent dropped it with
   the gateway's inner spans.
+- In a narrow call tree a call's status stays whole ("200", not "20"
+  beside "GraphQL query Features → library-router"): the call's path
+  gives way before it, after the app's name.
 ## 0.13.0 (2026-11-03)
 
 ### Fixed

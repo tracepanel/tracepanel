@@ -170,3 +170,23 @@ test("a view's calls fold under its row and open again; its call tree and first 
   await frame.getByRole("tab", { name: /^Call tree/ }).click();
   await expect(frame.locator(".dt-map-row[data-root] .dt-kind").first()).toHaveText(/^view$/i);
 });
+
+test("in a narrow call tree a call's status is never cut: its name gives way first", async ({ page }) => {
+  const seeded = await gatewayView(5, ["query TextCampaignsCampaignsForTheWholeTenant", "query Features"]);
+  // As narrow as the panel docked right, beside its details.
+  await page.setViewportSize({ width: 640, height: 900 });
+  await page.goto(`/#/t/${seeded.view}?tab=tree`);
+  const hops = page.locator('.dt-map-row[data-hop=""]');
+  // The view's two calls, the gateway's to the subgraph, the subgraph's to the service.
+  await expect(hops).toHaveCount(4);
+  const clipped = await hops.evaluateAll((rows) =>
+    rows.map((row) => {
+      const name = row.querySelector(":scope > .dt-map-name");
+      const badge = name?.querySelector(":scope > .dt-status");
+      const [box, edge] = [name?.getBoundingClientRect(), badge?.getBoundingClientRect()];
+      return { status: badge?.textContent, past: box && edge ? Math.max(0, Math.round(edge.right - box.right)) : -1 };
+    }),
+  );
+  // Each badge whole, inside the name's box: none of it past the edge where the box cuts what overflows.
+  expect(clipped).toEqual(Array.from({ length: 4 }, () => ({ status: "200", past: 0 })));
+});
