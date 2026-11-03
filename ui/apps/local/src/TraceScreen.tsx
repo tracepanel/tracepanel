@@ -14,7 +14,7 @@ import {
 } from "@tracepanel/ui";
 import { cn } from "@tracepanel/ui/lib/utils";
 import { SearchXIcon } from "lucide-react";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { useServiceCapability } from "./hooks";
 import { track, useRefresh } from "./refresh";
 import { withShare } from "./ShareDialog";
@@ -162,10 +162,15 @@ function awaitsRun(trace: Trace | null, related: Related | undefined, now: numbe
 
 /**
  * Traces linked to this one, reloaded while it is open (tasks a request enqueued finish later): on the page's clock,
- * and every second while a task it enqueued a moment ago waits for its run, so the run shows as it arrives. Kept with
- * the id they are for: while the next trace loads, the one on screen doesn't get the next one's links.
+ * every second while a task it enqueued a moment ago waits for its run, so the run shows as it arrives, and when the
+ * view asks (`again`: its chain has a call's trace its links don't yet). Kept with the id they are for: while the
+ * next trace loads, the one on screen doesn't get the next one's links.
  */
-function useRelated(id: string, source: DataSource, trace: Trace | null): (traceId: string) => Related | undefined {
+function useRelated(
+  id: string,
+  source: DataSource,
+  trace: Trace | null,
+): { relatedOf: (traceId: string) => Related | undefined; again: () => void } {
   const [related, setRelated] = useState<{ id: string; related: Related } | undefined>(undefined);
   const [asked, setAsked] = useState(0);
   const { cycle, tick } = useRefresh();
@@ -188,7 +193,8 @@ function useRelated(id: string, source: DataSource, trace: Trace | null): (trace
     const timer = window.setTimeout(() => setAsked((count) => count + 1), ENQUEUED_ASK_MS);
     return () => window.clearTimeout(timer);
   }, [waiting, current]);
-  return (traceId) => (related?.id === traceId ? related.related : undefined);
+  const again = useCallback(() => setAsked((count) => count + 1), []);
+  return { relatedOf: (traceId) => (related?.id === traceId ? related.related : undefined), again };
 }
 
 const loaders = new WeakMap<DataSource, (traceId: string) => Promise<Related>>();
@@ -472,12 +478,12 @@ export function TraceScreen(props: TraceScreenProps) {
   const { id, source, variant, onLoaded, arriving } = props;
   const loaded = useTrace(id, source, onLoaded, variant, arriving);
   const trace = traceOf(loaded);
-  const related = useRelated(id, source, trace);
+  const { relatedOf, again } = useRelated(id, source, trace);
   // The panel (compact, or docked as a strip) has an App tab: the console's trace page doesn't.
   const app = useApp(source, serviceOf(trace, variant));
   const can = useAppsCan(source);
   if (trace === null) return <NoTrace loaded={loaded} variant={variant} back={props.back} running={props.running} />;
-  return <LoadedTrace props={props} trace={trace} related={related(trace.id)} app={app} can={can} />;
+  return <LoadedTrace props={props} trace={trace} related={relatedOf(trace.id)} reload={again} app={app} can={can} />;
 }
 
 /** The trace, loaded: its view, with what its apps can do and what links to it. */
@@ -496,12 +502,14 @@ function LoadedTrace({
   },
   trace,
   related,
+  reload,
   app,
   can: { explains, profilesIn },
 }: {
   props: TraceScreenProps;
   trace: Trace;
   related: Related | undefined;
+  reload: () => void;
   app: App | null;
   can: ReturnType<typeof useAppsCan>;
 }) {
@@ -513,6 +521,7 @@ function LoadedTrace({
       profilesIn={profilesIn}
       {...shown}
       related={related}
+      reloadRelated={reload}
       loadRelated={relatedLoader(source)}
       loadChain={chainLoader(source)}
       app={app}

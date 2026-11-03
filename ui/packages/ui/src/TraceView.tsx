@@ -391,6 +391,11 @@ export interface TraceViewProps {
   lead?: ReactNode;
   /** Traces linked to this one (Celery enqueues). */
   related?: Related | undefined;
+  /**
+   * Asks for `related` again: the call tree does while the trace's chain has a call's trace its links don't yet (the
+   * agent stored it a moment after this one), so it shows as soon as it is there.
+   */
+  reloadRelated?: (() => void) | undefined;
   /** Another trace's links: the call tree opens the chain of calls through them, a level at a time. */
   loadRelated?: ((traceId: string) => Promise<Related>) | undefined;
   /** The trace's whole chain of calls, on its clock: the tabs list and add it up (Logs). */
@@ -504,18 +509,19 @@ function TreePane({
   return (
     <CallMap
       {...tree}
+      expected={chain.members}
       under={(under, subject) => (
         <UnderThis
           counts={underCounts(chain.members, under, chain.chainIssues, chain.setScope, openTab)}
           subject={subject}
         />
       )}
-      head={
+      head={(behind) => (
         <>
-          <OnItsWay waiting={chain.waiting} />
+          <OnItsWay waiting={chain.waiting} behind={behind} />
           <TimeStrip trace={tree.trace} related={tree.related} onSelect={onSelect} />
         </>
-      }
+      )}
       onProfile={onProfile}
       onTraceProfile={tree.onTraceProfile ?? linkedProfiles(tree.links)}
     />
@@ -524,19 +530,21 @@ function TreePane({
 
 /**
  * Over a call tree that isn't all there yet: its calls whose traces are on their way, said once, so a partial tree
- * never reads as complete. Calls cut short (no answer yet) say so; the rows fill in as their traces arrive.
+ * never reads as complete. Calls cut short (no answer yet) say so; the rows fill in as their traces arrive. `behind`:
+ * the calls whose traces the agent has but the tree's links don't yet, on their way to it too.
  */
-function OnItsWay({ waiting }: { waiting: readonly ChainWaiting[] }) {
-  if (waiting.length === 0) return null;
-  return waiting.every((call) => call.cut !== null) ? (
+function OnItsWay({ waiting, behind }: { waiting: readonly ChainWaiting[]; behind: number }) {
+  const count = waiting.length + behind;
+  if (count === 0) return null;
+  return behind === 0 && waiting.every((call) => call.cut !== null) ? (
     <p className="dt-on-its-way" role="status" data-state="cut">
       <WaitingIcon />
-      {noAnswerText(waiting.length)}
+      {noAnswerText(count)}
     </p>
   ) : (
     <p className="dt-on-its-way" role="status" data-state="running">
       <RunningMark />
-      {onItsWayText(waiting.length)}
+      {onItsWayText(count)}
     </p>
   );
 }
@@ -759,6 +767,7 @@ export function TraceView({
   actions,
   lead,
   related,
+  reloadRelated,
   loadRelated,
   loadChain,
   links,
@@ -828,6 +837,7 @@ export function TraceView({
           trace={trace}
           issueBySpan={tabbed.issueBySpan}
           related={related}
+          reloadRelated={reloadRelated}
           loadRelated={loadRelated}
           links={links}
           initialSpan={treeSpan}

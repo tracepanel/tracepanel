@@ -5,7 +5,7 @@
 // (`GET /traces/{id}/chain`), so the list says the same counts, under the same limits. A call whose trace hasn't
 // reached the agent yet is a row too, waiting, where that trace's row will be (`ChainWaiting`).
 
-import type { Chain, ChainTrace, Span, Trace, TraceSummary } from "../types";
+import type { Chain, ChainTrace, Related, Span, Trace, TraceSummary } from "../types";
 import { onTheClock } from "./calls";
 import { type ChainCounts, countsOf } from "./chainCounts";
 import { isCut } from "./live";
@@ -264,6 +264,23 @@ function unanswered(each: Placed, answered: ReadonlySet<string>, now: number): P
  */
 export function waitingIn(traces: readonly Placed[], capped = false, now: number = Date.now()): ChainWaiting[] {
   return [...waitingAmong(traces, capped, now * 1000).values()].flat().map((each) => each.row);
+}
+
+/**
+ * The traces of the chain (`traces`) a call tree's links don't name yet: the agent stored them after the links of the
+ * trace whose call they served were loaded (`linksOf`, the tree's root's or an opened call's trace's; none where the
+ * tree has no links of that trace, as for a row it hasn't opened). Until those links reload, the tree is partial.
+ */
+export function linksBehind(traces: readonly Placed[], linksOf: (traceId: string) => Related | undefined): Placed[] {
+  return traces.filter((each) => {
+    const links = each.parent === null ? undefined : linksOf(each.parent);
+    return links !== undefined && !names(links, each.id);
+  });
+}
+
+/** Whether a trace's links name another trace: a trace its calls reached, here or in another project. */
+function names(links: Related, traceId: string): boolean {
+  return traceId in links.via || (links.remote_calls ?? []).some((call) => call.trace.id === traceId);
 }
 
 /**
