@@ -33,6 +33,11 @@ export interface EntrySummary {
   key?: string | undefined;
   /** The host a request went to ("api.example.com:8443"): a view's calls are grouped by it. */
   host?: string | undefined;
+  /**
+   * A request that flew: when the page made it and when its answer came (epoch µs), as the browser timed it. Its row
+   * says the time the page waited for it (never less than its server's), in flight, answered and stored alike.
+   */
+  clock?: { start: number; end: number } | undefined;
   /** The W3C span id the call carried on, when the widget saw it: the call's identity in its view's trace. */
   span?: string | undefined;
 }

@@ -79,6 +79,13 @@
   8.1 s for 4.1 s. A call whose trace comes later than it is waited for
   (a gateway sends its traces in batches) keeps its row until it does:
   it left the list for a moment.
+- A request's time is the time the page waited for it, the same on the
+  pill, in its card and in the panel's list while it runs, once it
+  answers and once its trace is stored: from the call to its answer as
+  the browser timed it, never less than its server's own time (its trace
+  still says that one). A call the browser queued behind others (six at
+  a time to one host) ticked to 11.9 s, then dropped to its server's 6.0
+  s.
 ## 0.13.0 (2026-11-03)
 
 ### Fixed

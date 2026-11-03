@@ -42,6 +42,11 @@ export interface TraceInfo {
   page?: string | undefined;
   /** The widget's id of the request while it flew ("~…"): its row in the panel's list keeps it as its key. */
   flight?: string | undefined;
+  /**
+   * When the page made it and when its answer came (epoch ms), as the browser timed it: the time the page waited for
+   * it, a call the browser queued behind others included. Its time is never less (waitedMs).
+   */
+  clock?: { start: number; end: number } | undefined;
   /** The W3C span id the call carried on (its traceparent), as the browser recording sent it: the call's identity. */
   span?: string | undefined;
 }
@@ -505,6 +510,8 @@ export interface Flight {
   name?: string | undefined;
   /** Epoch ms. */
   start: number;
+  /** When its answer came (epoch ms): the browser's end of the call, before anything else reads the answer. */
+  end?: number | undefined;
   /**
    * The W3C span id its traceparent carries, when the browser recording added one before this saw the call (it
    * wrapped fetch and XMLHttpRequest after the widget): the call's identity in the view's trace.
@@ -557,11 +564,28 @@ function listen(): void {
     },
     end: (flight, info, answer) => {
       flying.delete(flight);
-      const landed = info && { ...namedAsItFlew(flight, info), flight: flight.id || undefined, span: flight.span };
+      const landed = info && waited(flight, namedAsItFlew(flight, info));
       if (watcher) watcher.end(flight, landed, answer);
       else if (landed) pending.push(landed);
     },
   });
+}
+
+/**
+ * A request that flew, as the page waited for it: its time from the call to its answer, as the browser timed it (a
+ * call the browser queued behind others waited longer than its server took), never less than its server's own time.
+ * The pill, its card and the panel's list say this one time while it runs, once it answers and once it is stored.
+ */
+function waited(flight: Flight, info: TraceInfo): TraceInfo {
+  if (!flight.id) return info;
+  const clock = { start: flight.start, end: flight.end ?? Date.now() };
+  return { ...info, flight: flight.id, clock, span: flight.span, totalMs: waitedMs(clock, info.totalMs) };
+}
+
+/** The time the page waited for a request (ms): its clock's, or its server's when that says more. */
+function waitedMs(clock: TraceInfo["clock"], server: number | undefined): number | undefined {
+  if (!clock) return server;
+  return Math.max(clock.end - clock.start, server ?? 0);
 }
 
 /**
@@ -646,9 +670,11 @@ function intercept(watch: Watcher): void {
     try {
       response = await originalFetch.call(this, input, init);
     } catch (error) {
+      if (flight) flight.end = Date.now();
       land(null, {});
       throw error;
     }
+    if (flight) flight.end = Date.now();
     try {
       const info = fromResponse(method, response.url, response.status, (name) => response.headers.get(name));
       // A recording that wrapped fetch after the widget (one started by the app's code, once the widget loaded)
@@ -691,6 +717,7 @@ function intercept(watch: Watcher): void {
     this.addEventListener("loadend", () => {
       const flight = sent.get(this) ?? NO_FLIGHT;
       sent.delete(this);
+      if (flight !== NO_FLIGHT) flight.end = Date.now();
       safely(
         () =>
           watch.end(flight, xhrInfo(this, method, String(url)), {
@@ -1082,6 +1109,11 @@ export interface EntrySummary {
   key?: string | undefined;
   /** The host a request went to ("api.example.com:8443"): the panel groups a view's calls by it. */
   host?: string | undefined;
+  /**
+   * A request that flew: when the page made it and when its answer came (epoch µs), as the browser timed it. Its row's
+   * time is the time the page waited for it (never less than its server's), in flight, answered and stored alike.
+   */
+  clock?: { start: number; end: number } | undefined;
   /** The W3C span id the call carried on, when known: the call's identity in its view's trace. */
   span?: string | undefined;
 }
@@ -1189,16 +1221,19 @@ function flightEntry(flight: Flight, parent: string | null): TabEntry {
 
 function summaryOf(info: TraceInfo): EntrySummary {
   const duration = Math.round((info.totalMs ?? 0) * 1000);
+  // A request that flew starts where the page made it (a queued one before its server saw it); else it just ended.
+  const clock = info.clock && { start: info.clock.start * 1000, end: info.clock.end * 1000 };
   return {
     name: title(info),
     status: info.status ?? null,
-    start: Date.now() * 1000 - duration,
+    start: clock?.start ?? Date.now() * 1000 - duration,
     duration,
     queries: info.queries ?? 0,
     issues: info.issues ?? 0,
     htmx: info.htmx,
     key: info.flight,
     host: hostOf(info.url),
+    clock,
     span: info.span,
   };
 }
@@ -1218,6 +1253,7 @@ function hostOf(url: string | undefined): string | undefined {
  * status, its time; its numbers come with the view's trace.
  */
 function landedEntry(call: Landed): TabEntry {
+  const end = call.flight.end ?? call.end;
   return {
     id: call.flight.id,
     parent: call.parent,
@@ -1225,12 +1261,13 @@ function landedEntry(call: Landed): TabEntry {
       name: title(flightInfo(call.flight)),
       status: call.status ?? null,
       start: call.flight.start * 1000,
-      duration: Math.max(0, call.end - call.flight.start) * 1000,
+      duration: Math.max(0, end - call.flight.start) * 1000,
       queries: 0,
       issues: 0,
       failed: call.status === undefined || call.status >= 500,
       untraced: true,
       host: hostOf(call.flight.url),
+      clock: { start: call.flight.start * 1000, end: end * 1000 },
       span: call.flight.span,
     },
   };
@@ -1417,13 +1454,19 @@ function listedTrace(body: unknown, id: string | undefined): ListedTrace | undef
  * A request's time once the agent stored it: the root span's, as the panel shows it. The header's is taken before the
  * response is sent, the span's after: near .5 ms the two would read a millisecond apart.
  */
-function storedMs(row: ListedTrace, header: number | undefined): number | undefined {
-  return row.duration === undefined ? header : row.duration / 1000;
+function storedMs(row: ListedTrace, info: TraceInfo): number | undefined {
+  return row.duration === undefined ? info.totalMs : waitedMs(info.clock, row.duration / 1000);
 }
 
-/** A tab entry's summary with what the agent found: its issues, their kinds and the stored time. */
+/**
+ * A tab entry's summary with what the agent found: its issues, their kinds and the stored time; for a request that
+ * flew, the time the page waited for it, which the stored time never shortens (waitedMs).
+ */
 function stored(summary: EntrySummary, row: ListedTrace): EntrySummary {
-  return { ...summary, issues: row.issues ?? 0, kinds: row.issue_kinds, duration: row.duration ?? summary.duration };
+  const server = row.duration ?? summary.duration;
+  const clock = summary.clock;
+  const duration = clock ? Math.max(clock.end - clock.start, server) : server;
+  return { ...summary, issues: row.issues ?? 0, kinds: row.issue_kinds, duration };
 }
 
 /**
@@ -1917,7 +1960,7 @@ export function mount(options: WidgetOptions = {}): Widget {
   function applyIssues(info: TraceInfo, row: ListedTrace): void {
     info.issues = row.issues ?? 0;
     info.issuesPending = false;
-    info.totalMs = storedMs(row, info.totalMs);
+    info.totalMs = storedMs(row, info);
     const entry = tab.find((item) => item.id === info.trace);
     if (entry?.summary) entry.summary = stored(entry.summary, row);
     saveTab(tab);

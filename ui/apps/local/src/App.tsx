@@ -314,6 +314,10 @@ function arrange(history: TabHistory, traces: readonly TraceSummary[]): TraceRow
     const fallback = byId.has(entry.id) ? undefined : rowFromWidget(entry);
     if (fallback) byId.set(entry.id, fallback);
   }
+  for (const entry of history.entries) {
+    const trace = byId.get(entry.id);
+    if (trace && stored.has(entry.id)) byId.set(entry.id, waitedFor(trace, entry.summary));
+  }
   const facts = new Map(history.entries.map((entry) => [entry.id, widgetFacts(entry, stored)]));
   const children = childrenOf(history, byId, facts);
   const row = (trace: TraceSummary, depth: 0 | 1): TraceRow => {
@@ -326,8 +330,19 @@ function arrange(history: TabHistory, traces: readonly TraceSummary[]): TraceRow
   return roots.flatMap((root) => [row(root, 0), ...(children.get(root.id) ?? []).map((trace) => row(trace, 1))]);
 }
 
+/**
+ * A stored request the page made, as the page waited for it: from the call to its answer, as the browser timed it (a
+ * call the browser queued behind others waited longer than its server took), never less than its trace's own time.
+ * Its row says the same time in flight, once answered and once stored, as the pill does; its trace says its own.
+ */
+function waitedFor(trace: TraceSummary, summary: EntrySummary | undefined): TraceSummary {
+  const clock = summary?.clock;
+  if (!clock) return trace;
+  return { ...trace, start: clock.start, duration: Math.max(clock.end - clock.start, trace.duration) };
+}
+
 /** What the widget says of a row beyond its summary. */
-type WidgetFacts = Partial<Pick<TraceRow, "open" | "until" | "redirectedFrom" | "key" | "opens" | "host">> & {
+type WidgetFacts = Partial<Pick<TraceRow, "open" | "until" | "redirectedFrom" | "key" | "opens" | "host" | "span">> & {
   htmx?: EntrySummary["htmx"];
 };
 

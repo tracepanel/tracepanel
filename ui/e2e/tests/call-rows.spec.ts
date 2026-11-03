@@ -4,7 +4,7 @@
 // answered has nothing left to wait for, and a call's time is the time the page waited for it, which never goes down.
 import type { Locator, Page, Route } from "@playwright/test";
 import { CONSOLE } from "../agent.ts";
-import { panel } from "../app.ts";
+import { panel, pill } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
 
 type Doc = Record<string, unknown>;
@@ -323,4 +323,68 @@ test("calls alike in name and start keep their own times and rows from in flight
   for (const [n, row] of stored.entries()) {
     expect(Math.abs(micros(row.time) - micros(answered[n]?.time ?? "")), `row ${n}: ${row.time}`).toBeLessThan(150_000);
   }
+});
+
+test("a call's time is the time the page waited for it, while it runs, once answered and once stored", async ({
+  page,
+}) => {
+  const tag = 4;
+  const callTrace = id(tag, 20);
+  // An app with an SDK answers, its own time 200 ms, the browser having queued it for more than a second.
+  const { release, list } = await opened(page, {
+    headers: () => ({
+      "Tracepanel-Id": callTrace,
+      "Tracepanel-Name": "GraphQL%20query%20Slow",
+      "Server-Timing": 'db;dur=1;desc="2 queries", total;dur=200, tracepanel-issues;desc="pending"',
+    }),
+  });
+  await open(page, id(tag, 1), ["Slow"], 1_500);
+  // Its one call: a row of its own under the view.
+  const row = list.locator('.dt-request-row[data-depth="1"]').filter({ hasText: "Slow" });
+  const view = list.locator('.dt-request-row[data-kind="page"]');
+  const times: { call: number; view: number }[] = [];
+  const sample = async () => {
+    const [call, viewTime] = await Promise.all([
+      row.locator(".dt-request-meta").innerText(),
+      view.locator(".dt-request-meta").innerText(),
+    ]);
+    times.push({ call: micros(call), view: micros(viewTime) });
+  };
+  await expect(row).toBeVisible();
+  setTimeout(() => release(0), 1_300);
+  for (let at = 0; at < 18; at += 1) {
+    await sample();
+    await page.waitForTimeout(100);
+  }
+  // Its trace stored, its own time 200 ms, and, ended after its answer went out, longer than the header said.
+  const made = await page.evaluate(() => (window as unknown as { calls: Made[] }).calls[0] as Made);
+  await ingest([
+    trace(
+      callTrace,
+      "http",
+      "GraphQL query Slow",
+      made.end - 250 * ms,
+      350 * ms,
+      { "service.name": "gateway", "http.method": "POST", "http.route": "/graphql", "http.status_code": 200 },
+      [],
+    ),
+  ]);
+  for (let at = 0; at < 25; at += 1) {
+    await sample();
+    await page.waitForTimeout(100);
+  }
+  await viewEnded(page);
+  await storeView(page, tag);
+  await expect(row.locator(".dt-pending")).toHaveCount(0);
+  await sample();
+
+  for (const key of ["call", "view"] as const) {
+    const shown = times.map((each) => each[key]).filter((each) => !Number.isNaN(each));
+    expect(shown.length, key).toBeGreaterThan(20);
+    for (const [n, each] of shown.entries())
+      expect(each, `${key} sample ${n} of ${shown.join(", ")}`).toBeGreaterThanOrEqual(shown[n - 1] ?? 0);
+  }
+  // Answered and stored, the call says the time the page waited: well over its server's 200 ms; the pill too.
+  expect(times.at(-1)?.call).toBeGreaterThan(1_200_000);
+  await expect(pill(page)).toHaveAttribute("aria-label", /GraphQL query Slow → 200 · 1\.\d s/);
 });
