@@ -1274,5 +1274,226 @@
         8000
       ]
     ]
+  },
+  {
+    "name": "Node: a task's function span with no calls, idle on the event loop: its buckets waiting's, its app code Your code",
+    "trace": {
+      "start": 1790000000000000,
+      "duration": 137000,
+      "attrs": {
+        "telemetry.sdk.language": "nodejs"
+      },
+      "spans": [
+        {
+          "id": "r",
+          "parent_id": null,
+          "kind": "task.run",
+          "name": "rank-products",
+          "start": 1790000000000000,
+          "duration": 137000,
+          "status": "ok",
+          "attrs": {}
+        },
+        {
+          "id": "q",
+          "parent_id": "r",
+          "kind": "sql",
+          "name": "SELECT review",
+          "start": 1790000000012000,
+          "duration": 3000,
+          "status": "ok",
+          "attrs": {
+            "db.system": "postgresql",
+            "code.origin": "worker.ts:11 in rankProducts"
+          }
+        },
+        {
+          "id": "f",
+          "parent_id": "r",
+          "kind": "function",
+          "name": "update search index",
+          "start": 1790000000016000,
+          "duration": 121000,
+          "status": "ok",
+          "attrs": {
+            "code.origin": "worker.ts:16 in rankProducts"
+          }
+        }
+      ],
+      "profile": {
+        "interval_us": 1000,
+        "samples": 102,
+        "dropped": 0,
+        "bucket_us": 10000,
+        "frames": [
+          {
+            "function": "event loop",
+            "module": null,
+            "file": "",
+            "line": 0,
+            "in_app": false,
+            "waiting": true
+          },
+          {
+            "function": "processJob",
+            "module": null,
+            "file": "bullmq/dist/cjs/classes/worker.js",
+            "line": 575,
+            "in_app": false
+          },
+          {
+            "function": "rankProducts",
+            "module": null,
+            "file": "worker.ts",
+            "line": 10,
+            "in_app": true
+          },
+          {
+            "function": "Socket.connect",
+            "module": null,
+            "file": "node:net",
+            "line": 1580,
+            "in_app": false
+          }
+        ],
+        "stacks": [
+          {
+            "frames": [
+              0
+            ],
+            "count": 97,
+            "at": [
+              [
+                0,
+                5
+              ],
+              [
+                1,
+                6
+              ],
+              [
+                2,
+                8
+              ],
+              [
+                3,
+                8
+              ],
+              [
+                4,
+                6
+              ],
+              [
+                5,
+                3
+              ],
+              [
+                6,
+                8
+              ],
+              [
+                7,
+                8
+              ],
+              [
+                8,
+                8
+              ],
+              [
+                9,
+                8
+              ],
+              [
+                10,
+                8
+              ],
+              [
+                11,
+                8
+              ],
+              [
+                12,
+                9
+              ],
+              [
+                13,
+                4
+              ]
+            ]
+          },
+          {
+            "frames": [
+              1
+            ],
+            "count": 2,
+            "at": [
+              [
+                0,
+                2
+              ]
+            ]
+          },
+          {
+            "frames": [
+              1,
+              2,
+              3
+            ],
+            "count": 2,
+            "at": [
+              [
+                0,
+                2
+              ]
+            ]
+          },
+          {
+            "frames": [
+              1,
+              2
+            ],
+            "count": 1,
+            "at": [
+              [
+                1,
+                1
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    "waits": [
+      [
+        "waiting · event loop",
+        129000
+      ],
+      [
+        "SQL postgresql",
+        3000
+      ],
+      [
+        "Framework & middleware",
+        2000
+      ]
+    ],
+    "shares": [
+      [
+        "Waiting",
+        129000
+      ],
+      [
+        "Database",
+        3000
+      ],
+      [
+        "Your code",
+        3000
+      ],
+      [
+        "Framework & middleware",
+        2000
+      ]
+    ]
   }
 ]

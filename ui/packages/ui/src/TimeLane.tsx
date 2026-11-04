@@ -81,7 +81,7 @@ interface Drawn {
   gc: boolean;
 }
 
-/** The lane: its pieces, and how long each quiet span's code waited and computed (`span:waiting`). */
+/** The lane: its pieces, and how long each span's code waited, by span (whether or not it made calls). */
 interface Lane {
   trace: Trace;
   drawn: Drawn[];
@@ -130,9 +130,8 @@ function meets(last: Drawn, next: Drawn): boolean {
 function laneOf(trace: Trace): Lane {
   const drawn = drawnOf(trace);
   const totals = new Map<string, number>();
-  for (const { stretch, waiting } of drawn.filter((each) => each.quiet)) {
-    const key = `${stretch.span}:${waiting}`;
-    totals.set(key, (totals.get(key) ?? 0) + length(stretch));
+  for (const { stretch } of drawn.filter((each) => each.waiting)) {
+    totals.set(stretch.span, (totals.get(stretch.span) ?? 0) + length(stretch));
   }
   return { trace, drawn, totals };
 }
@@ -157,7 +156,7 @@ function length(stretch: Stretch): number {
 
 /** "waiting · 1.5 s": how long a span's code waited, in all. */
 function quietLabel(lane: Lane, each: Drawn): string {
-  return `waiting · ${duration(lane.totals.get(`${each.stretch.span}:true`) ?? 0)}`;
+  return `waiting · ${duration(lane.totals.get(each.stretch.span) ?? 0)}`;
 }
 
 /** The share a piece of the lane counts in: the collector's, waiting's, or its category's. */
@@ -166,14 +165,18 @@ function shareOf(each: Drawn): string {
   return each.waiting ? WAITED_SHARE : each.stretch.category;
 }
 
-/** What a piece of the lane says of itself: its span when quiet, its stretch, whether it waited. */
+/**
+ * What a piece of the lane says of itself: whether it waited (hatched, as the legend's Waiting, in any span's own
+ * time, a leaf's with no calls too); its span and its stretch when quiet.
+ */
 function pieceData(each: Drawn): Record<string, string | undefined> {
-  if (!each.quiet) return {};
+  const waiting = each.waiting ? "" : undefined;
+  if (!each.quiet) return { "data-waiting": waiting };
   return {
     "data-quiet": each.stretch.span,
     "data-from": String(each.stretch.from),
     "data-to": String(each.stretch.to),
-    "data-waiting": each.waiting ? "" : undefined,
+    "data-waiting": waiting,
   };
 }
 

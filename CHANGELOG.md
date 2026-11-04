@@ -66,6 +66,12 @@
 - The files on PyPI carry their PEP 740 attestations, as the release
   says: they were signed but not uploaded, so PyPI showed no provenance
   for tracepanel-agent.
+- The time strip paints a span's waits as its legend counts them, in any
+  span: a Node task waiting on its event loop inside a function span
+  with no calls of its own was painted Your code's purple while its
+  legend said "Waiting 125 ms 91%", and the gap was said
+  "waiting · 0 µs". Its waits are hatched now, said for how long each
+  span waited, and hovering them shows Waiting's numbers.
 
 ## 0.13.1 (2026-11-03)
 
