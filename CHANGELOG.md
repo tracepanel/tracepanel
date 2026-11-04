@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- The files on PyPI carry their PEP 740 attestations, as the release
+  says: they were signed but not uploaded, so PyPI showed no provenance
+  for tracepanel-agent.
+
 ## 0.13.1 (2026-11-03)
 
 ### Added
