@@ -2909,11 +2909,7 @@ button.wf-crumb:hover {
   outline-offset: 1px;
   z-index: 1;
 }
-/* Docked right, the names keep their room: a database alias and an app's name go (their dot stays). */
-.wf-panel[data-dock="right"] .dt-map[data-waterfall] .dt-alias,
-.wf-panel[data-dock="right"] .dt-map[data-waterfall] .dt-app-name {
-  display: none;
-}
+
 /* ---------- round 6 ---------- */
 /* Docked right: names 60%, time 40%; an issue chip says its kind on hover only; no app chip (no room for its name). */
 .wf-panel[data-dock="right"] {
@@ -3098,11 +3094,7 @@ button.wf-crumb:hover {
 .wf-rows {
   container: wf-rows / inline-size;
 }
-@container wf-rows (max-width: 52rem) {
-  .dt-map[data-waterfall] .dt-alias {
-    display: none;
-  }
-}
+
 /* Docked right: the timeline keeps 12rem at least, for its axis to read. */
 .wf-panel[data-dock="right"] {
   --wf-cols: minmax(0, min(var(--wf-names, 52%), calc(100% - 12rem))) minmax(12rem, 1fr);
@@ -3212,10 +3204,6 @@ button.wf-crumb:hover {
     mask:
       url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3'/%3E%3Cpath d='M12 9v4'/%3E%3Cpath d='M12 17h.01'/%3E%3C/svg%3E")
       center / contain no-repeat;
-  }
-  .dt-map[data-waterfall] .dt-alias,
-  .dt-map[data-waterfall] .dt-app-name {
-    display: none;
   }
 }
 /* A group: its repeats' stretch faint, their starts as ticks over it. */
@@ -3625,4 +3613,142 @@ button.wf-crumb:hover {
   position: absolute;
   top: 8px;
   right: 8px;
+}
+/* ---------- round 12 ---------- */
+/* The details never wider than their pane: code and tables scroll in themselves. */
+.wf-details,
+.wf-details-body,
+.dt-wf-details,
+.dt-wf-details > *,
+.dt-wf-own,
+.dt-wf-own > * {
+  min-width: 0;
+  max-width: 100%;
+}
+.wf-details {
+  overflow-x: hidden;
+}
+.dt-wf-details :is(pre, table, .dt-code, [class*="source"], [class*="frame"]) {
+  max-width: 100%;
+  overflow-x: auto;
+}
+/* Chips: never squeezed under one icon's width; a service chip gives way first. */
+.dt-map[data-waterfall] .dt-map-name [data-slot="badge"] {
+  flex-shrink: 0;
+}
+.dt-map[data-waterfall] .dt-run-chips {
+  display: inline-flex;
+  gap: 4px;
+}
+.dt-map[data-waterfall] .dt-app-chip {
+  flex: 0 1 auto;
+  min-width: 18px;
+  overflow: hidden;
+}
+/* The sticky root row over the rows' time labels. */
+.wf-rows .dt-map[data-waterfall][data-trace] > .dt-map-rows > div > .dt-map-row:first-child {
+  z-index: 3;
+}
+/* The band's open entry: filled and underlined; the others a step back. */
+.wf-band-block:not([aria-current="true"]) {
+  opacity: 0.72;
+}
+.wf-band-block[aria-current="true"] {
+  opacity: 1;
+  filter: brightness(1.35) saturate(1.2);
+  box-shadow: inset 0 -2px 0 var(--dt-accent);
+}
+/* The keys sheet: arrows on one line; the legend's marks. */
+.wf-shortcuts kbd {
+  white-space: nowrap;
+}
+.wf-legend-mark {
+  color: var(--dt-text-2);
+  font: 500 11px var(--dt-mono);
+}
+.wf-legend-hatch {
+  display: inline-block;
+  width: 28px;
+  height: 8px;
+  border-radius: 2px;
+  background: repeating-linear-gradient(
+    -45deg,
+    color-mix(in srgb, var(--dt-k-view) 55%, transparent) 0 3px,
+    transparent 3px 6px
+  );
+}
+/* ---------- round 12, B ---------- */
+/* A folded entry's time on one line. */
+.wf-other-time {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.wf-other .dt-map-text {
+  min-width: 0;
+}
+/* Chips are never hidden or cut: an alias and an app chip shrink to their text's start, the name gives way first. */
+.dt-map[data-waterfall] :is(.dt-alias, .dt-app-chip) {
+  flex: 0 1 auto;
+  min-width: 2.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dt-map[data-waterfall] .dt-map-text {
+  flex: 1 1 0;
+}
+/* The band's blocks: their label clips inside, their hit area reaches out (24px). */
+.wf-band-block {
+  overflow: visible;
+}
+.wf-band-block > .wf-band-text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wf-band[data-lanes="2"] .wf-band-block::before {
+  inset: -2px max(-4px, calc((24px - 100%) / -2));
+}
+/* Small targets: copy buttons and the sheet's divider hit at 24px. */
+.wf-panel .dt-wf-details button[aria-label^="Copy"] {
+  position: relative;
+}
+.wf-panel .dt-wf-details button[aria-label^="Copy"]::after {
+  content: "";
+  position: absolute;
+  inset: max(-4px, calc((24px - 100%) / -2));
+}
+.wf-splitter[aria-orientation="horizontal"]::before {
+  content: "";
+  position: absolute;
+  right: 0;
+  left: 0;
+  top: calc(50% - 12px);
+  height: 24px;
+}
+/* Graphics at 3:1: a group's stretch and a call's wait, both themes. */
+.dt-map[data-waterfall] .dt-map-bar[data-range] {
+  background: color-mix(in srgb, var(--dt-k) 80%, transparent);
+}
+.dt-map[data-waterfall] .dt-map-bar[data-call] {
+  background: color-mix(in srgb, var(--dt-k-http) 60%, transparent);
+}
+:root[data-theme="light"] .dt-map[data-waterfall] .dt-map-bar[data-call] {
+  background: color-mix(in srgb, var(--dt-k-http) 72%, transparent);
+}
+/* A call's lead (its name and what served it) gives way before its chips: chips whole, the name cut. */
+.dt-map[data-waterfall] .dt-map-lead {
+  min-width: min(7rem, 100% - 5rem);
+}
+/* A row's name and chips on one line: nothing wraps under the row's height (out of sight). */
+.dt-map[data-waterfall] .dt-map-name {
+  flex-wrap: nowrap;
+}
+/* The old tree hid the chips that didn't fit by wrapping them under the row: here they stay on its line, whole. */
+.dt-map[data-waterfall] .dt-map-chips {
+  flex-wrap: nowrap;
+  height: auto;
+}
+.dt-map[data-waterfall] .dt-map-chips::before {
+  display: none;
 }

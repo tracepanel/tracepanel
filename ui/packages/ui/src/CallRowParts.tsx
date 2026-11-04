@@ -268,7 +268,8 @@ export function OwnTime({ span, ctx }: { span: Span; ctx: RowContext }) {
 /** A bar's hover: what it is, its kind, its time, its share of the trace. */
 export function barTitle(name: string, kind: string, time: number, total: number): string {
   const share = total > 0 ? Math.round((time / total) * 100) : 0;
-  return `${name}\n${kind} · ${duration(time)} · ${share < 1 ? "<1" : share}% of the trace`;
+  const of = share > 100 ? "longer than the trace" : `${share < 1 ? "<1" : share}% of the trace`;
+  return `${name}\n${kind} · ${duration(time)} · ${of}`;
 }
 
 /** A span's bar; a call cut short runs to where it was cut, fading out there, never a 0-width mark. */

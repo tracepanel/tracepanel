@@ -27,7 +27,7 @@ import {
 } from "@tracepanel/ui";
 import { isTyping } from "@tracepanel/ui/lib/keys";
 import { readItem, writeItem } from "@tracepanel/ui/lib/storage";
-import { ChevronRightIcon, KeyboardIcon, ListEndIcon } from "lucide-react";
+import { ChevronRightIcon, FlameIcon, KeyboardIcon, ListEndIcon } from "lucide-react";
 import {
   type ReactNode,
   type RefObject,
@@ -184,10 +184,13 @@ function useTreeKeys(
       const focused = all.find((row) => row === document.activeElement);
       const current = focused ?? all.find((row) => row.getAttribute("aria-current") === "true") ?? all[0];
       for (const row of all) {
+        // Its level as drawn: the depth its name is indented by, else its nesting.
+        const depth = row.querySelector<HTMLElement>(".dt-map-name")?.style.getPropertyValue("--dt-depth");
         let level = 1;
         for (let at = row.parentElement; at && at !== root; at = at.parentElement) {
           if (at.firstElementChild?.classList.contains("dt-map-row") && at.firstElementChild !== row) level += 1;
         }
+        if (depth) level = Number(depth) + 1;
         const set = (name: string, value: string) => row.getAttribute(name) !== value && row.setAttribute(name, value);
         set("role", "treeitem");
         set("aria-level", row.dataset["treeLevel"] ?? String(level));
@@ -199,6 +202,15 @@ function useTreeKeys(
     const observer = new MutationObserver(mark);
     observer.observe(root, { subtree: true, childList: true, attributes: true, attributeFilter: ["aria-current"] });
     let follow = 0;
+    // The selection follows the focus, a moment after it settles: the details track the keys.
+    const followTo = (row: HTMLElement | undefined) => {
+      window.clearTimeout(follow);
+      follow = window.setTimeout(() => {
+        const key = row?.dataset["key"];
+        const trace = row?.closest<HTMLElement>("[data-trace]")?.dataset["trace"];
+        if (key && trace) select(trace, key);
+      }, 120);
+    };
     // A code row clicked stays marked while its span's details show; any other row clicked lets it go.
     const onClick = (event: MouseEvent) => {
       const row = (event.target as Element).closest<HTMLElement>(".dt-map-row");
@@ -232,7 +244,12 @@ function useTreeKeys(
         const ends = span.map((row) => Number.parseFloat(row.style.getPropertyValue("--bar-end")) || 0);
         const lo = Math.min(...starts);
         const hi = Math.max(...ends);
-        if (hi > lo) pick({ from: (lo / 100) * axis.duration, to: (hi / 100) * axis.duration });
+        if (hi > lo) {
+          // A stretch takes the details, as a drag's does: the row selected lets go.
+          const trace = next?.closest<HTMLElement>("[data-trace]")?.dataset["trace"];
+          if (trace) select(trace, null);
+          pick({ from: (lo / 100) * axis.duration, to: (hi / 100) * axis.duration });
+        }
         mark();
         return;
       }
@@ -240,8 +257,10 @@ function useTreeKeys(
       const row = all[at];
       if (event.key === "ArrowRight" && row?.getAttribute("aria-expanded") === "true") {
         event.preventDefault();
-        all[at + 1]?.focus();
+        const child = all[at + 1];
+        child?.focus();
         mark();
+        followTo(child);
         return;
       }
       // ← on a row that isn't open: to its parent, the nearest row above at a lower level.
@@ -255,6 +274,7 @@ function useTreeKeys(
           event.preventDefault();
           parent.focus();
           mark();
+          followTo(parent);
         }
         return;
       }
@@ -269,13 +289,7 @@ function useTreeKeys(
       const next = all[Math.min(Math.max(to, 0), all.length - 1)];
       next?.focus();
       mark();
-      // The selection follows the focus, a moment after it settles: the details track the keys.
-      window.clearTimeout(follow);
-      follow = window.setTimeout(() => {
-        const key = next?.dataset["key"];
-        const trace = next?.closest<HTMLElement>("[data-trace]")?.dataset["trace"];
-        if (key && trace) select(trace, key);
-      }, 120);
+      followTo(next);
     };
     root.addEventListener("keydown", onKey);
     return () => {
@@ -434,7 +448,9 @@ const BADGES: readonly [string, string][] = [
   ["task", "a task run in a worker"],
   ["code", "your code between spans (untraced)"],
   ["wait", "time waiting (I/O, a lock, sleep)"],
+  ["fw", "the framework's own work (middleware, routing)"],
   ["info", "a log record, by its level (debug, warn, error)"],
+  ["dump", "a value dumped from the code"],
 ];
 
 const SHORTCUTS: readonly [string, string][] = [
@@ -461,7 +477,7 @@ function Shortcuts({ onClose }: { onClose: () => void }) {
         aria-modal="true"
         aria-label="Keys and badges"
         tabIndex={-1}
-        ref={(element) => element?.focus()}
+        ref={(element) => element?.querySelector<HTMLElement>(".wf-shortcuts-close")?.focus()}
         // Tab stays in the sheet: its one control is Close.
         onKeyDown={(event) => {
           if (event.key !== "Tab") return;
@@ -504,6 +520,36 @@ function Shortcuts({ onClose }: { onClose: () => void }) {
               <StatusBadge status={500} />
             </dt>
             <dd>how a request or call was answered</dd>
+          </div>
+          <div>
+            <dt>
+              <span className="wf-legend-mark">×24</span>
+            </dt>
+            <dd>the same call repeated, folded into one row (its starts as ticks)</dd>
+          </div>
+          <div>
+            <dt>
+              <span className="wf-legend-hatch" aria-hidden="true" />
+            </dt>
+            <dd>hatched: untraced code or waiting, between spans</dd>
+          </div>
+          <div>
+            <dt>
+              <FlameIcon className="size-3.5 text-muted-foreground" aria-hidden="true" />
+            </dt>
+            <dd>a profile: select the row, its details have it</dd>
+          </div>
+          <div>
+            <dt>
+              <span className="wf-legend-mark">{"// 10.2 s"}</span>
+            </dt>
+            <dd>idle time before the first span, left off the axis</dd>
+          </div>
+          <div>
+            <dt>
+              <span className="wf-legend-mark">● library</span>
+            </dt>
+            <dd>the app that served a call, or a query's database</dd>
           </div>
         </dl>
       </div>
@@ -1088,9 +1134,9 @@ function TabTimeline({
   const start = Math.min(...all.map((row) => row.trace.start));
   const end = Math.max(...all.map((row) => row.trace.start + shown(row)));
   const axis = { start, duration: Math.max(end - start, 1) };
-  // One lane: a page behind, its requests over it, a failed one on top (see the band's CSS).
-  const lanes = new Map<TraceRow, number>();
-  const twoDeep = false;
+  // One lane; a second where blocks overlap (concurrent requests), 28px either way.
+  const lanes = twoLanes(all, (row) => [row.trace.start, row.trace.start + shown(row)]);
+  const twoDeep = [...lanes.values()].some((lane) => lane > 0);
   return (
     <div className="wf-band" data-lanes={twoDeep ? "2" : "1"}>
       <div className="wf-band-track" ref={track}>
@@ -1163,13 +1209,26 @@ function TabTimeline({
               }}
               onClick={() => onOpen(row)}
             >
-              {fits ? label : null}
+              {fits ? <span className="wf-band-text">{label}</span> : null}
             </button>,
           ];
         })}
       </div>
     </div>
   );
+}
+
+/** Two lanes for the band: a block that overlaps one in the first goes to the second. */
+function twoLanes(rows: readonly TraceRow[], extent: (row: TraceRow) => [number, number]): Map<TraceRow, number> {
+  const lanes = new Map<TraceRow, number>();
+  let first = Number.NEGATIVE_INFINITY;
+  for (const row of [...rows].sort((a, b) => a.trace.start - b.trace.start)) {
+    const [from, to] = extent(row);
+    const lane = first <= from ? 0 : 1;
+    lanes.set(row, lane);
+    if (lane === 0) first = to;
+  }
+  return lanes;
 }
 
 /**
@@ -1222,7 +1281,6 @@ function EntryRow({
         type="button"
         className="dt-map-row wf-other"
         data-kind={row.trace.kind === "page" ? "page" : "http"}
-        aria-expanded={false}
         data-tree-level={depth + 1}
         data-hovered={hovered ? "" : undefined}
         title={`Open ${row.trace.name}`}

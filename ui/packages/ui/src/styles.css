@@ -4032,3 +4032,63 @@ div.dt-map-row[data-kind="code"] {
   max-width: 100%;
   overflow-x: auto;
 }
+/* ---------- the details' categories: text tabs as the head's kinds ---------- */
+.dt-wf-tabs {
+  display: flex;
+  gap: 14px;
+  height: 32px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--dt-border);
+}
+.dt-wf-tabs > [role="tab"] {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--dt-text-3);
+  font-size: 12px;
+}
+.dt-wf-tabs > [role="tab"]:hover {
+  color: var(--dt-text-2);
+}
+.dt-wf-tabs > [role="tab"][aria-selected="true"] {
+  color: var(--dt-text);
+}
+.dt-wf-tabs > [role="tab"][aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--dt-accent);
+}
+.dt-wf-tab-count {
+  color: var(--dt-text-3);
+  font-variant-numeric: tabular-nums;
+}
+/* The split in the head: one line, its bar and its shares beside each other. */
+.dt-wf-details > .dt-wf-section:has(> .dt-wf-split-stack) {
+  padding-top: 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--dt-border);
+}
+/* Issue cards in their tab: compact, the hint on one line until clicked. */
+.dt-wf-issues {
+  padding: 10px 14px;
+}
+.dt-wf-issues .dt-issue-hint {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  cursor: pointer;
+}
+.dt-wf-issues .dt-issue-card:focus-within .dt-issue-hint,
+.dt-wf-issues .dt-issue-hint:hover {
+  -webkit-line-clamp: unset;
+}
+.dt-wf-query-name {
+  text-align: left;
+}

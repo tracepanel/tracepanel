@@ -205,6 +205,11 @@ function useFirstError(host: WaterfallHost, tree: readonly Node[], trace: Trace)
     if (!key) return;
     done.current = trace.id;
     host.select(trace.id, key);
+    // Into view, under the sticky head.
+    window.setTimeout(
+      () => document.querySelector(`.dt-map-row[data-key="${CSS.escape(key)}"]`)?.scrollIntoView({ block: "center" }),
+      120,
+    );
   }, [host, tree, trace]);
 }
 
