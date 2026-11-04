@@ -227,8 +227,61 @@ const ROW = 'button.dt-map-row[data-kind="code"]';
 
 const said = (shares) => JSON.stringify(shares.map((share) => [share.name, share.value, share.percent]));
 
+/** The step a time is written at, from how it reads: "1.6 s" a tenth of a second, "8 ms" a ms, "0.8 ms", "27 µs". */
+function stepOf(text) {
+  if (/ s$/.test(text)) return 100_000;
+  if (/ µs$/.test(text)) return 1;
+  return /\.\d ms$/.test(text) ? 100 : 1000;
+}
+
+/**
+ * Database is the time in queries, as the DB tab adds it up. Where each query runs alone (none beside it, none inside
+ * it: concurrent queries add up past the time they took), the strip's Database and the DB tab's time are one time,
+ * each written at its own step. What's wrong, if anything.
+ */
+async function databaseBroken(page, base, id, strip) {
+  const tab = page.getByRole("tab", { name: /^DB\b/ });
+  if ((await tab.count()) === 0) return null;
+  // Its time is the tab's last piece of text ("DB", its count, then its time): read apart, not run together.
+  const pieces = await tab
+    .first()
+    .evaluate((element) =>
+      [...element.querySelectorAll("*")]
+        .filter((each) => each.children.length === 0)
+        .map((each) => each.textContent?.trim() ?? ""),
+    );
+  const said = pieces.filter((piece) => /^[\d.,]+ (?:µs|ms|s)$/.test(piece)).at(-1);
+  const share = strip.find((each) => each.name === "Database");
+  if (!said) return null;
+  const trace = await (await fetch(new URL(`api/traces/${id}`, base))).json();
+  const spans = trace.spans ?? [];
+  const byId = new Map(spans.map((span) => [span.id, span]));
+  const above = (span, other) => {
+    for (let at = byId.get(span.parent_id); at; at = byId.get(at.parent_id)) if (at === other) return true;
+    return false;
+  };
+  const queries = spans.filter((span) => span.kind === "sql" && span.duration > 0);
+  const alone = queries.every(
+    (query) =>
+      !spans.some(
+        (other) =>
+          other.parent_id === query.id ||
+          (other !== query &&
+            !above(query, other) &&
+            other.start < query.start + query.duration &&
+            query.start < other.start + other.duration),
+      ),
+  );
+  if (!(alone && queries.length)) return null;
+  READ.databases += 1;
+  if (!share) return `the DB tab says ${said}, the strip has no Database`;
+  const value = share.value.startsWith("<") ? 0 : us(share.value);
+  const within = (stepOf(said) + stepOf(share.value.replace(/^</, ""))) / 2;
+  return Math.abs(value - us(said)) <= within ? null : `the strip's Database ${share.value}, the DB tab's ${said}`;
+}
+
 /** What the sweep read: traces, Profile heads, code and wait rows. */
-const READ = { heads: 0, rows: 0, apart: 0 };
+const READ = { heads: 0, rows: 0, apart: 0, databases: 0 };
 /** Traces not read, each with why: none is left out silently. */
 const SKIPPED = [];
 
@@ -271,6 +324,8 @@ async function sweep(page, base, { id, profiled, readable, spanned }, mcp) {
   );
   const wrong = hundred(strip);
   if (wrong) problem(`strip: ${wrong} ${said(strip)}`);
+  const database = await databaseBroken(page, base, id, strip);
+  if (database) problem(database);
   if (!profiled) return problems;
   const rows = readable
     ? await page
@@ -374,7 +429,7 @@ try {
   }
   const profiled = traces.filter((trace) => trace.profiled).length;
   console.log(
-    `${traces.length} traces (${profiled} profiled), ${READ.heads} profile heads (${READ.apart} of a chain's traces get_profile doesn't add up together), ${READ.rows} code and wait rows: ${problems.length} disagreements`,
+    `${traces.length} traces (${profiled} profiled), ${READ.heads} profile heads (${READ.apart} of a chain's traces get_profile doesn't add up together), ${READ.rows} code and wait rows, ${READ.databases} Database shares against their DB tab: ${problems.length} disagreements`,
   );
   if (SKIPPED.length) console.log(`${SKIPPED.length} not compared:`);
   for (const skipped of SKIPPED) console.log(`  not compared: ${skipped}`);
