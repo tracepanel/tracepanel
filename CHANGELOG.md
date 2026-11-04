@@ -10,9 +10,11 @@
   opens, an app's sums in a chain, and the MCP server's get_profile. The
   Profile tab's bar read 36% where the strip read 37%, its percents added
   up to 87–99%, a stretch's bar to 93%. Now each share's time is rounded
-  once, to the step its smallest share is said in, so none is dropped (a
-  chain's "Framework & middleware 28 ms" no longer rounds away in 3.6 s),
-  the times add up to the total and the percents to 100%. A Go request
+  once, to the coarsest step that drops none of them (a chain's
+  "Framework & middleware 28 ms" no longer rounds away in 3.6 s), and
+  every time of it is written at that step, so the times as read add up
+  to the total as read ("3 ms · 1 ms · 1 ms" of 5 ms, not "3 ms · 0.8 ms
+  · 1 ms") and the percents to 100%. A Go request
   over before its profiler's first sample opens its Profile tab on the
   strip's shares, its own code Not profiled, and its code rows open their
   stretches. What a profile covers is the time less its Not profiled
