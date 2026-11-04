@@ -45,6 +45,13 @@
   saw each stack is placed the same way. A request's root span counts
   its framework's time once: a stretch of it read twice the framework's
   share and no waiting.
+- Your app's code is Your code whichever span it runs under: a request's
+  root span or a middleware's own time is split by its stacks as a
+  handler's is, your code's samples Your code, the framework's
+  "Framework & middleware", the idle ones Waiting. A Next.js listing whose
+  helper ran after its route handler's span ended read "Framework &
+  middleware 18 ms" and no Your code. The framework's share has one name
+  in every trace, "Framework & middleware": a task's read "Framework".
 - The Profile tab's All frames list says which of its functions waited,
   as Your code's list does ("waiting ·
   AsyncIOBackend.run_sync_in_worker_thread", muted): their time is the
