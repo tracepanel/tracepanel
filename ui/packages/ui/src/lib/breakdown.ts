@@ -45,8 +45,6 @@ export function categoryLabel(category: Category): string {
 
 const BY_KIND: Record<string, Category> = {
   sql: "sql",
-  // Opening a connection to the database (logging in, a TLS handshake): the database's time, not the code's.
-  "sql.connect": "sql",
   redis: "redis",
   cache: "cache",
   "http.client": "http",
@@ -119,9 +117,12 @@ function ownerFinder(byId: ReadonlyMap<string, Span>): (span: Span) => Category 
   };
 }
 
-/** A span's own category: none for a transaction, whose code is its owner's. */
+/**
+ * A span's own category: none for a transaction, whose code is its owner's, nor for opening a connection (a pool's
+ * wait, a login), its owner's too: Database is the time in queries, as the DB tab adds it up.
+ */
 function ownCategory(span: Span, byId: ReadonlyMap<string, Span>, handled: boolean): Category | null {
-  return span.kind === "transaction" ? null : categoryOf(span, byId, handled);
+  return span.kind === "transaction" || span.kind === "sql.connect" ? null : categoryOf(span, byId, handled);
 }
 
 function parentOf(span: Span, byId: ReadonlyMap<string, Span>): Span | undefined {

@@ -3592,5 +3592,589 @@
         }
       }
     ]
+  },
+  {
+    "name": "Python: a connection's wait and a transaction's own time split by the stacks, Database only the query's 8 ms (a pause in it the database's)",
+    "trace": {
+      "start": 1790000000000000,
+      "duration": 80000,
+      "attrs": {
+        "telemetry.sdk.language": "python"
+      },
+      "spans": [
+        {
+          "id": "r",
+          "parent_id": null,
+          "kind": "http",
+          "name": "GET /authors/12",
+          "start": 1790000000000000,
+          "duration": 80000,
+          "status": "ok",
+          "attrs": {}
+        },
+        {
+          "id": "v",
+          "parent_id": "r",
+          "kind": "view",
+          "name": "app.main.get_author",
+          "start": 1790000000000000,
+          "duration": 80000,
+          "status": "ok",
+          "attrs": {}
+        },
+        {
+          "id": "c",
+          "parent_id": "v",
+          "kind": "sql.connect",
+          "name": "connect postgresql",
+          "start": 1790000000010000,
+          "duration": 40000,
+          "status": "ok",
+          "attrs": {
+            "db.system": "postgresql"
+          }
+        },
+        {
+          "id": "t",
+          "parent_id": "v",
+          "kind": "transaction",
+          "name": "transaction library",
+          "start": 1790000000050000,
+          "duration": 23000,
+          "status": "ok",
+          "attrs": {}
+        },
+        {
+          "id": "q",
+          "parent_id": "t",
+          "kind": "sql",
+          "name": "SELECT author",
+          "start": 1790000000055000,
+          "duration": 8000,
+          "status": "ok",
+          "attrs": {
+            "db.system": "postgresql"
+          }
+        }
+      ],
+      "profile": {
+        "interval_us": 1000,
+        "samples": 80,
+        "dropped": 0,
+        "bucket_us": 1000,
+        "frames": [
+          {
+            "function": "run",
+            "module": "uvicorn.server",
+            "file": "uvicorn/server.py",
+            "line": 60,
+            "in_app": false
+          },
+          {
+            "function": "get_author",
+            "module": "app.main",
+            "file": "app/main.py",
+            "line": 110,
+            "in_app": true
+          },
+          {
+            "function": "waiter.acquire",
+            "module": "",
+            "file": "",
+            "line": 0,
+            "in_app": false,
+            "waiting": true
+          },
+          {
+            "function": "select",
+            "module": "selectors",
+            "file": "selectors.py",
+            "line": 468,
+            "in_app": false,
+            "waiting": true
+          }
+        ],
+        "stacks": [
+          {
+            "frames": [
+              0,
+              1
+            ],
+            "count": 17,
+            "at": [
+              [
+                0,
+                1
+              ],
+              [
+                1,
+                1
+              ],
+              [
+                2,
+                1
+              ],
+              [
+                3,
+                1
+              ],
+              [
+                4,
+                1
+              ],
+              [
+                5,
+                1
+              ],
+              [
+                6,
+                1
+              ],
+              [
+                7,
+                1
+              ],
+              [
+                8,
+                1
+              ],
+              [
+                9,
+                1
+              ],
+              [
+                73,
+                1
+              ],
+              [
+                74,
+                1
+              ],
+              [
+                75,
+                1
+              ],
+              [
+                76,
+                1
+              ],
+              [
+                77,
+                1
+              ],
+              [
+                78,
+                1
+              ],
+              [
+                79,
+                1
+              ]
+            ]
+          },
+          {
+            "frames": [
+              0,
+              1,
+              2
+            ],
+            "count": 40,
+            "at": [
+              [
+                10,
+                1
+              ],
+              [
+                11,
+                1
+              ],
+              [
+                12,
+                1
+              ],
+              [
+                13,
+                1
+              ],
+              [
+                14,
+                1
+              ],
+              [
+                15,
+                1
+              ],
+              [
+                16,
+                1
+              ],
+              [
+                17,
+                1
+              ],
+              [
+                18,
+                1
+              ],
+              [
+                19,
+                1
+              ],
+              [
+                20,
+                1
+              ],
+              [
+                21,
+                1
+              ],
+              [
+                22,
+                1
+              ],
+              [
+                23,
+                1
+              ],
+              [
+                24,
+                1
+              ],
+              [
+                25,
+                1
+              ],
+              [
+                26,
+                1
+              ],
+              [
+                27,
+                1
+              ],
+              [
+                28,
+                1
+              ],
+              [
+                29,
+                1
+              ],
+              [
+                30,
+                1
+              ],
+              [
+                31,
+                1
+              ],
+              [
+                32,
+                1
+              ],
+              [
+                33,
+                1
+              ],
+              [
+                34,
+                1
+              ],
+              [
+                35,
+                1
+              ],
+              [
+                36,
+                1
+              ],
+              [
+                37,
+                1
+              ],
+              [
+                38,
+                1
+              ],
+              [
+                39,
+                1
+              ],
+              [
+                40,
+                1
+              ],
+              [
+                41,
+                1
+              ],
+              [
+                42,
+                1
+              ],
+              [
+                43,
+                1
+              ],
+              [
+                44,
+                1
+              ],
+              [
+                45,
+                1
+              ],
+              [
+                46,
+                1
+              ],
+              [
+                47,
+                1
+              ],
+              [
+                48,
+                1
+              ],
+              [
+                49,
+                1
+              ]
+            ]
+          },
+          {
+            "frames": [
+              0,
+              1,
+              3
+            ],
+            "count": 23,
+            "at": [
+              [
+                50,
+                1
+              ],
+              [
+                51,
+                1
+              ],
+              [
+                52,
+                1
+              ],
+              [
+                53,
+                1
+              ],
+              [
+                54,
+                1
+              ],
+              [
+                55,
+                1
+              ],
+              [
+                56,
+                1
+              ],
+              [
+                57,
+                1
+              ],
+              [
+                58,
+                1
+              ],
+              [
+                59,
+                1
+              ],
+              [
+                60,
+                1
+              ],
+              [
+                61,
+                1
+              ],
+              [
+                62,
+                1
+              ],
+              [
+                63,
+                1
+              ],
+              [
+                64,
+                1
+              ],
+              [
+                65,
+                1
+              ],
+              [
+                66,
+                1
+              ],
+              [
+                67,
+                1
+              ],
+              [
+                68,
+                1
+              ],
+              [
+                69,
+                1
+              ],
+              [
+                70,
+                1
+              ],
+              [
+                71,
+                1
+              ],
+              [
+                72,
+                1
+              ]
+            ]
+          }
+        ],
+        "gc": {
+          "collections": 2,
+          "pause_us": 3000,
+          "pauses": [
+            [
+              58000,
+              2000,
+              0
+            ],
+            [
+              75000,
+              1000,
+              0
+            ]
+          ]
+        }
+      }
+    },
+    "waits": [
+      [
+        "waiting · waiter.acquire",
+        40000
+      ],
+      [
+        "waiting · select",
+        15000
+      ],
+      [
+        "SQL postgresql",
+        8000
+      ],
+      [
+        "GC",
+        1000
+      ]
+    ],
+    "shares": [
+      [
+        "Waiting",
+        55000
+      ],
+      [
+        "Your code",
+        16000
+      ],
+      [
+        "Database",
+        8000
+      ],
+      [
+        "GC",
+        1000
+      ]
+    ],
+    "split": {
+      "of": "the whole trace",
+      "windows": null,
+      "total": 80000,
+      "time": "80 ms",
+      "shares": [
+        [
+          "Your code",
+          16000,
+          "16 ms",
+          "20%"
+        ],
+        [
+          "Database",
+          8000,
+          "8 ms",
+          "10%"
+        ],
+        [
+          "GC",
+          1000,
+          "1 ms",
+          "1%"
+        ],
+        [
+          "Waiting",
+          55000,
+          "55 ms",
+          "69%"
+        ]
+      ],
+      "profiled": 80000,
+      "covered": "80 ms",
+      "samples": 80,
+      "sampled": "80 samples, one every 1 ms"
+    },
+    "stretches": [
+      {
+        "windows": [
+          [
+            50000,
+            55000
+          ],
+          [
+            63000,
+            73000
+          ]
+        ],
+        "split": {
+          "of": "50 ms – 55 ms, 63 ms – 73 ms",
+          "windows": [
+            [
+              50000,
+              55000
+            ],
+            [
+              63000,
+              73000
+            ]
+          ],
+          "total": 15000,
+          "time": "15 ms",
+          "shares": [
+            [
+              "Waiting",
+              15000,
+              "15 ms",
+              "100%"
+            ]
+          ],
+          "profiled": 15000,
+          "covered": "15 ms",
+          "samples": 15,
+          "sampled": "15 samples, one every 1 ms"
+        }
+      }
+    ]
   }
 ]

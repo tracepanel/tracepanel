@@ -135,7 +135,8 @@ export function segmentsOf(trace: Shared): Segment[] {
     // Only the trace's own time: a span that ends after it (its exporter's clock) counts up to its end.
     const [from, to] = [Math.max(stretch.from, 0), Math.min(stretch.to, trace.duration)];
     if (to <= from) return [];
-    return cutByPauses(from, to, pauses).flatMap(({ range, gc }) =>
+    // A query's time is the database's whole, the collector's pauses during it too: the DB tab's time.
+    return cutByPauses(from, to, stretch.category === "sql" ? [] : pauses).flatMap(({ range, gc }) =>
       profile
         ? byBucket(range, profile.bucket_us).flatMap(([part, bucket]) =>
             bucketSegments(base, part, gc, profile, buckets.get(bucket), bucket, unsampled),

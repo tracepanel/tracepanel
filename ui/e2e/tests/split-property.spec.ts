@@ -8,10 +8,16 @@ import { duration } from "../../packages/ui/src/format.ts";
 import { WAITING } from "../../packages/ui/src/lib/profile.ts";
 import { parseStretch, stretchText, type Windows } from "../../packages/ui/src/lib/slice.ts";
 import { appSplit, type Split, splitOf, wholeWindows } from "../../packages/ui/src/lib/split.ts";
-import { NOT_PROFILED, type Shared, spanSegments, splitByProfile } from "../../packages/ui/src/lib/timeShares.ts";
+import {
+  NOT_PROFILED,
+  type Shared,
+  segmentsOf,
+  spanSegments,
+  splitByProfile,
+} from "../../packages/ui/src/lib/timeShares.ts";
 import { windowProfile } from "../../packages/ui/src/lib/windowProfile.ts";
 import { sharesOf } from "../../packages/ui/src/TimeLegend.tsx";
-import type { Trace } from "../../packages/ui/src/types.ts";
+import type { Span, Trace } from "../../packages/ui/src/types.ts";
 import { expect, test } from "../fixtures.ts";
 
 /** A seeded generator (mulberry32): the same traces every run, any failure the same again. */
@@ -30,7 +36,17 @@ type Random = () => number;
 const int = (next: Random, from: number, to: number) => from + Math.floor(next() * (to - from + 1));
 const pick = <T>(next: Random, items: readonly T[]): T => items[Math.floor(next() * items.length)] as T;
 
-const KINDS = ["sql", "redis", "http.client", "template", "view", "function", "cache"] as const;
+const KINDS = [
+  "sql",
+  "redis",
+  "http.client",
+  "template",
+  "view",
+  "function",
+  "cache",
+  "sql.connect",
+  "transaction",
+] as const;
 
 /** Spans under `parent` in [from, to): a few, apart or overlapping, some with spans of their own. */
 function children(next: Random, parent: string, from: number, to: number, depth: number, out: unknown[]): void {
@@ -198,6 +214,46 @@ function broken(split: Split): string[] {
   return problems;
 }
 
+/**
+ * Database is the time in queries, as the DB tab adds them up: where each query runs alone (no span of its own
+ * inside, none beside it but those it runs under), the Database share's time before it is said is their durations'
+ * sum, the collector's pauses during them included. What breaks that, if anything.
+ */
+const QUERIES = { checked: 0 };
+
+function queriesBroken(trace: Trace): string[] {
+  const spans = trace.spans;
+  const byId = new Map(spans.map((span) => [span.id, span]));
+  const above = (span: Span, other: Span): boolean => {
+    for (let at = byId.get(String(span.parent_id)); at; at = byId.get(String(at.parent_id)))
+      if (at === other) return true;
+    return false;
+  };
+  const queries = spans.filter((span) => span.kind === "sql" && span.duration > 0);
+  const alone = queries.every(
+    (query) =>
+      !spans.some((other) => other.parent_id === query.id) &&
+      !spans.some(
+        (other) =>
+          other !== query &&
+          !above(query, other) &&
+          other.start < query.start + query.duration &&
+          query.start < other.start + other.duration,
+      ),
+  );
+  if (!(alone && queries.length)) return [];
+  QUERIES.checked += 1;
+  const expected = queries.reduce(
+    (sum, query) =>
+      sum + Math.max(Math.min(query.start + query.duration, trace.duration) - Math.max(query.start, 0), 0),
+    0,
+  );
+  const database = segmentsOf(trace)
+    .filter((segment) => segment.share === "sql")
+    .reduce((sum, segment) => sum + segment.to - segment.from, 0);
+  return Math.abs(database - expected) < 1e-6 ? [] : [`Database ${database} µs, its queries ${expected} µs`];
+}
+
 /** A span's own stretches as its code row opens them: in whole µs, as the link carries them. */
 function rowWindows(trace: Shared, span: string): Windows {
   return wholeWindows(spanSegments(trace, span).map((segment): [number, number] => [segment.from, segment.to]));
@@ -209,7 +265,7 @@ test("any trace's split adds up: times to the total, percents to 100%, what is c
   for (let run = 0; run < 400; run++) {
     const trace = traceOf(next);
     const split = splitOf(trace);
-    problems.push(...broken(split));
+    problems.push(...broken(split), ...queriesBroken(trace));
 
     // The legend and the Profile tab's bar: the split's shares, as it says them.
     const legend = sharesOf(trace).map((share) => [share.label, share.time, share.percent]);
@@ -237,6 +293,8 @@ test("any trace's split adds up: times to the total, percents to 100%, what is c
   }
 
   expect(problems).toEqual([]);
+  // Enough traces whose queries run alone for the Database rule to be read.
+  expect(QUERIES.checked).toBeGreaterThan(5);
 });
 
 test("an app's traces in a chain add up before they are said: its shares to its total, its percents to 100%", () => {

@@ -549,7 +549,7 @@ pub(crate) mod tests {
         }
     }
 
-    const KINDS: [&str; 7] = [
+    const KINDS: [&str; 9] = [
         "sql",
         "redis",
         "http.client",
@@ -557,6 +557,8 @@ pub(crate) mod tests {
         "view",
         "function",
         "cache",
+        "sql.connect",
+        "transaction",
     ];
 
     /// Spans under `parent` in [from, to): a few, apart or overlapping, some with spans of their own.
@@ -809,6 +811,71 @@ pub(crate) mod tests {
         problems
     }
 
+    /// Database is the time in queries, as the DB tab adds them up: where each query runs alone (no span inside it,
+    /// none beside it but those it runs under), the Database share's time before it is said is their durations' sum,
+    /// the collector's pauses during them included. What breaks that, if anything; whether it could be read.
+    fn queries_broken(doc: &Value) -> (bool, Vec<String>) {
+        let spans: Vec<&Value> = doc["spans"].as_array().unwrap().iter().collect();
+        let field = |span: &Value, key: &str| span[key].as_f64().unwrap_or(0.0);
+        let by_id: std::collections::HashMap<&str, &Value> = spans
+            .iter()
+            .map(|span| (span["id"].as_str().unwrap(), *span))
+            .collect();
+        let above = |span: &Value, other: &Value| {
+            let mut at = span["parent_id"].as_str().and_then(|id| by_id.get(id));
+            while let Some(parent) = at {
+                if std::ptr::eq(*parent, other) {
+                    return true;
+                }
+                at = parent["parent_id"].as_str().and_then(|id| by_id.get(id));
+            }
+            false
+        };
+        let queries: Vec<&Value> = spans
+            .iter()
+            .copied()
+            .filter(|span| span["kind"] == "sql" && field(span, "duration") > 0.0)
+            .collect();
+        let alone = queries.iter().all(|query| {
+            let (start, end) = (
+                field(query, "start"),
+                field(query, "start") + field(query, "duration"),
+            );
+            !spans.iter().any(|other| {
+                other["parent_id"] == query["id"]
+                    || (!std::ptr::eq(*other, *query)
+                        && !above(query, other)
+                        && field(other, "start") < end
+                        && start < field(other, "start") + field(other, "duration"))
+            })
+        });
+        if !(alone && !queries.is_empty()) {
+            return (false, Vec::new());
+        }
+        let duration = field(doc, "duration");
+        let expected: f64 = queries
+            .iter()
+            .map(|query| {
+                let end = (field(query, "start") + field(query, "duration")).min(duration);
+                (end - field(query, "start").max(0.0)).max(0.0)
+            })
+            .sum();
+        let kinds = doc
+            .get("profile")
+            .map_or_else(Vec::new, shares::stack_kinds);
+        let database: f64 = shares::segments(doc, &kinds)
+            .iter()
+            .filter(|segment| segment.share == "sql")
+            .map(|segment| segment.to - segment.from)
+            .sum();
+        let problems = if (database - expected).abs() < 1e-6 {
+            Vec::new()
+        } else {
+            vec![format!("Database {database} µs, its queries {expected} µs")]
+        };
+        (true, problems)
+    }
+
     /// A span's own stretches as its code row opens them: in whole µs, those that meet as one.
     fn row_windows(doc: &Value, span: &str) -> Windows {
         let kinds = doc
@@ -835,9 +902,13 @@ pub(crate) mod tests {
     fn any_traces_split_adds_up() {
         let mut next = Random::new(20_261_104);
         let mut problems = Vec::new();
+        let mut queries = 0;
         for _ in 0..400 {
             let doc = random_trace(&mut next);
             problems.extend(broken(&split(&doc, None)));
+            let (read, broke) = queries_broken(&doc);
+            queries += usize::from(read);
+            problems.extend(broke);
             for span in doc["spans"].as_array().unwrap() {
                 let windows = row_windows(&doc, span["id"].as_str().unwrap());
                 if !windows.is_empty() {
@@ -854,6 +925,8 @@ pub(crate) mod tests {
         }
 
         assert_eq!(problems, Vec::<String>::new());
+        // Enough traces whose queries run alone for the Database rule to be read.
+        assert!(queries > 5, "{queries}");
     }
 
     fn windows(value: &Value) -> Windows {

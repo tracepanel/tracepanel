@@ -277,7 +277,13 @@ pub(crate) fn segments<'a>(doc: &'a Value, kinds: &[StackKind]) -> Vec<Segment<'
         if to <= from {
             continue;
         }
-        for ((from, to), gc) in cut_by_pauses(from, to, &pauses) {
+        // A query's time is the database's whole, the collector's pauses during it too: the DB tab's time.
+        let paused: &[(f64, f64)] = if stretch.category == "sql" {
+            &[]
+        } else {
+            &pauses
+        };
+        for ((from, to), gc) in cut_by_pauses(from, to, paused) {
             let plain = if gc { GC } else { stretch.category };
             if width <= 0.0 {
                 let share = if unsampled && !gc && OWN_CODE.contains(&stretch.category) {
