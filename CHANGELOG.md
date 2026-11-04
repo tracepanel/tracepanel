@@ -25,7 +25,12 @@
   A stretch whose ends read the same says them apart ("170.2 ms – 170.5
   ms"). The hover card's "Most time" percent is of the time beside it, or
   says it is of the server's. get_profile lists Not profiled as a share,
-  not as a function, and says its times as the console does.
+  not as a function, and says its times as the console does. Database
+  is the time in queries, the DB tab's time: opening a connection (a
+  pool's wait, a login) is its caller's time, split by its stacks as a
+  transaction's own time is (a FastAPI request read "Database 47 ms" of
+  "1 query 8 ms": 39 ms waiting for a connection), and a collector's
+  pause during a query stays the query's.
 - A failed read of the store or a broken trace now answers with an error in
   the panel and the console. It read as no trace, so a call could say "not
   traced".
