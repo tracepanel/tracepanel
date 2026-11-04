@@ -3630,13 +3630,9 @@ div.dt-map-row[data-kind="code"] {
 
 /* The bars take most of the width: the names a little over a third, the time column fixed. */
 .dt-map[data-waterfall] .dt-map-row {
-  grid-template-columns: minmax(0, 40fr) minmax(0, 60fr) 4.5rem;
+  grid-template-columns: var(--wf-cols, minmax(0, 40fr) minmax(0, 60fr) 4.5rem);
+  gap: var(--wf-col-gap, 0.625rem);
   min-height: 1.625rem;
-}
-@container map-rows (max-width: 44rem) {
-  .dt-map[data-waterfall] .dt-map-row {
-    grid-template-columns: minmax(0, 50fr) minmax(0, 50fr) 4rem;
-  }
 }
 .dt-map[data-waterfall] .dt-map-time {
   text-align: right;

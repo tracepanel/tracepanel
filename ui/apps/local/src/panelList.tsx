@@ -30,7 +30,7 @@ import { consoleLinks, go } from "./routes";
 import { graphqlOperation, requestPath } from "./sections";
 
 /** Follow new: open each request as it arrives. */
-function FollowToggle({ follow, onFollow }: { follow: boolean; onFollow: (value: boolean) => void }) {
+export function FollowToggle({ follow, onFollow }: { follow: boolean; onFollow: (value: boolean) => void }) {
   const byPointer = useRef(false);
   return (
     <label
@@ -99,7 +99,13 @@ export function ListToggles({
 }
 
 /** Clear, where the requests are listed, as in the browser's Network tab. */
-function ClearButton({ onClear, label = "Clear requests" }: { onClear: () => void; label?: string | undefined }) {
+export function ClearButton({
+  onClear,
+  label = "Clear requests",
+}: {
+  onClear: () => void;
+  label?: string | undefined;
+}) {
   return (
     <Hint title={label} detail="Empties this tab's list. The requests stay in the console.">
       <button type="button" className="icon-button" aria-label={label} onClick={onClear}>

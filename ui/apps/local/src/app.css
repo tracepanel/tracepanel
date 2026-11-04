@@ -2066,35 +2066,68 @@ body {
 
 /* ---------- The panel, redesign A (a prototype) ---------- */
 
+/*
+ * One grid from the toolbar down: the names' column (40%), the time column (60%), the time (4.5rem). The toolbar's
+ * identity sits over the names, its tools start where the time column starts (--wf-time-x, measured), its actions
+ * end the row. Spacing: 0.25rem inside a group, 0.75rem between groups; every control 1.875rem tall.
+ */
 .wf-panel {
-  --wf-names: 40fr;
-  --wf-bars: 60fr;
+  --wf-control: 1.875rem;
+  --wf-in: 0.25rem;
+  --wf-between: 0.75rem;
+  --wf-cols: minmax(0, var(--wf-names, 40fr)) minmax(0, 60fr) 4.5rem;
+  --wf-col-gap: 0.625rem;
 }
 .wf-bar {
-  display: flex;
+  display: grid;
   flex: none;
+  grid-template-columns: var(--wf-time-x, 40%) minmax(0, 1fr) auto;
+  grid-template-areas: "identity tools actions";
   align-items: center;
-  gap: 0.375rem;
-  height: 2.75rem;
-  padding: 0 0.5rem 0 0.75rem;
+  min-height: 2.875rem;
+  padding: 0.5rem 0.5rem 0.5rem 0;
   border-bottom: 1px solid var(--dt-border);
 }
-.wf-bar-fill {
-  flex: 1;
+.wf-zone {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.wf-zone-identity {
+  grid-area: identity;
+  gap: var(--wf-in);
+  padding: 0 var(--wf-between) 0 0.75rem;
+  overflow: hidden;
+}
+.wf-zone-tools {
+  grid-area: tools;
+  gap: var(--wf-between);
+}
+.wf-zone-actions {
+  grid-area: actions;
+  gap: var(--wf-in);
+  padding-left: var(--wf-between);
+}
+.wf-zone-actions .toggle {
+  height: var(--wf-control);
+  padding: 0 0.5rem 0 0.25rem;
+  white-space: nowrap;
+}
+.wf-zone-actions .wf-console {
+  margin: 0 var(--wf-in);
 }
 .wf-crumbs {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: var(--wf-in);
   min-width: 0;
-  overflow: hidden;
 }
 .wf-crumb {
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
   min-width: 0;
-  height: 1.75rem;
+  height: var(--wf-control);
   padding: 0 0.375rem;
   border-radius: 0.375rem;
   font-family: var(--dt-mono);
@@ -2114,57 +2147,100 @@ button.wf-crumb:hover {
 .wf-crumb-sep {
   color: var(--dt-text-3);
 }
+/* The facets: one segmented control, one border, equal segments. */
 .wf-facets {
-  display: flex;
-  gap: 0.25rem;
+  display: inline-flex;
+  flex: none;
+  height: var(--wf-control);
+  border: 1px solid var(--dt-border-strong);
+  border-radius: 0.375rem;
+  overflow: hidden;
 }
 .wf-facet {
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
-  height: 1.875rem;
+  height: 100%;
   padding: 0 0.625rem;
-  border: 1px solid var(--dt-border-strong);
-  border-radius: 0.375rem;
   font-size: var(--dt-size-sm);
   color: var(--dt-text-2);
   white-space: nowrap;
 }
+.wf-facet + .wf-facet {
+  border-left: 1px solid var(--dt-border-strong);
+}
 .wf-facet svg {
   width: 0.875rem;
   height: 0.875rem;
+  color: var(--dt-text-3);
 }
 .wf-facet b {
   color: var(--dt-text);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
 }
 .wf-facet[data-facet="issues"] b {
   color: var(--dt-warn);
 }
 .wf-facet-time {
   color: var(--dt-text-3);
-  font-size: var(--dt-size-xs);
+  font-variant-numeric: tabular-nums;
 }
 .wf-facet:hover {
   background: var(--dt-hover);
 }
 .wf-facet[aria-pressed="true"] {
-  border-color: var(--dt-accent);
   background: var(--dt-accent-bg);
+  color: var(--dt-text);
 }
 .wf-facet[data-facet="issues"][aria-pressed="true"] {
-  border-color: var(--dt-warn-border);
   background: var(--dt-warn-bg);
 }
-.wf-filter {
-  display: inline-flex;
+/* The call column's head: the filter of the rows under it, then Follow and Clear, which act on the same rows. */
+.wf-call-head {
+  display: flex;
+  align-items: center;
+  gap: var(--wf-in);
+  min-width: 0;
+  padding-left: 0.3125rem;
+}
+.wf-call-head > .icon-button {
+  flex: none;
+  width: 1.375rem;
+  height: 1.375rem;
+  text-transform: none;
+}
+.wf-call-head > .icon-button svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+.wf-follow[aria-pressed="true"] {
+  background: var(--dt-accent-bg);
+  color: var(--dt-accent);
+}
+.wf-call-head > .wf-filter {
+  display: flex;
+  flex: 1;
   align-items: center;
   gap: 0.375rem;
-  width: 12rem;
-  height: 1.875rem;
-  padding: 0 0.375rem 0 0.5rem;
-  border: 1px solid var(--dt-border-strong);
-  border-radius: 0.375rem;
+  min-width: 0;
+  height: 1.375rem;
+  padding: 0 0.25rem;
+  border: 1px solid transparent;
+  border-radius: 0.3125rem;
   color: var(--dt-text-3);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  cursor: text;
+}
+.wf-call-head > .wf-filter:hover {
+  border-color: var(--dt-border);
+}
+.wf-call-head > .wf-filter:focus-within,
+.wf-call-head > .wf-filter:has(input:not(:placeholder-shown)) {
+  border-color: var(--dt-accent);
+  background: var(--dt-bg);
 }
 .wf-filter svg {
   width: 0.875rem;
@@ -2176,8 +2252,19 @@ button.wf-crumb:hover {
   min-width: 0;
   background: none;
   color: var(--dt-text);
-  font-size: var(--dt-size-sm);
+  font-size: var(--dt-size-xs);
   outline: none;
+}
+.wf-filter input::placeholder {
+  color: var(--dt-text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+.wf-filter input:focus::placeholder {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
 }
 .wf-filter kbd {
   padding: 0 0.3rem;
@@ -2185,24 +2272,46 @@ button.wf-crumb:hover {
   border-radius: 0.25rem;
   font-size: var(--dt-size-xs);
 }
-.wf-overview {
-  display: grid;
-  flex: none;
-  grid-template-columns: minmax(0, var(--wf-names)) minmax(0, var(--wf-bars)) 4.5rem;
+.wf-menu-row {
+  display: flex;
   align-items: center;
-  gap: 0.625rem;
-  height: 1.75rem;
-  padding: 0 1rem;
-  border-bottom: 1px solid var(--dt-border);
-  font-size: var(--dt-size-xs);
-  color: var(--dt-text-3);
+  justify-content: space-between;
+  gap: var(--wf-between);
+  padding: 0.25rem 0.5rem;
+  font-size: var(--dt-size-sm);
+  color: var(--dt-text-2);
 }
-.wf-overview-label {
+/* The rows' columns, for the strips over them: the overview and the axis. */
+.wf-grid {
+  display: grid;
+  grid-template-columns: var(--wf-cols);
+  gap: var(--wf-col-gap);
+  align-items: center;
+  padding: 0 1rem 0 0;
+}
+.wf-grid > :first-child:not(.wf-call-head) {
+  padding-left: 1rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.wf-overview-label b {
+.wf-grid > :last-child {
+  text-align: right;
+  white-space: nowrap;
+}
+.wf-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--dt-panel);
+}
+.wf-overview {
+  height: 1.75rem;
+  border-bottom: 1px solid var(--dt-border);
+  font-size: var(--dt-size-xs);
+  color: var(--dt-text-3);
+}
+.wf-overview b {
   color: var(--dt-text);
 }
 .wf-overview-track {
@@ -2232,8 +2341,30 @@ button.wf-crumb:hover {
   pointer-events: none;
 }
 .wf-overview-total {
-  text-align: right;
   color: var(--dt-text-2);
+  font-variant-numeric: tabular-nums;
+}
+.wf-head {
+  height: 1.625rem;
+  border-bottom: 1px solid var(--dt-border);
+  color: var(--dt-text-3);
+  font-size: var(--dt-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.wf-ticks {
+  position: relative;
+  align-self: stretch;
+}
+.wf-ticks > span {
+  position: absolute;
+  top: 0.375rem;
+  padding-left: 0.25rem;
+  border-left: 1px solid var(--dt-border);
+  font-weight: 500;
+  text-transform: none;
+  white-space: nowrap;
 }
 .wf-main {
   display: grid;
@@ -2242,18 +2373,27 @@ button.wf-crumb:hover {
   min-height: 0;
 }
 .wf-panel[data-dock="bottom"] .wf-main[data-details] {
-  grid-template-columns: minmax(0, 1fr) minmax(22rem, 30%);
+  grid-template-columns: minmax(0, 1fr) var(--wf-details, minmax(22rem, 30%));
 }
 .wf-panel[data-dock="right"] .wf-main[data-details] {
-  grid-template-rows: minmax(0, 1fr) minmax(0, 55%);
+  grid-template-rows: minmax(0, 1fr) var(--wf-details, minmax(0, 55%));
+}
+.wf-waterfall {
+  position: relative;
+  min-height: 0;
+  display: grid;
 }
 .wf-scroll {
   min-height: 0;
   overflow-y: auto;
 }
-.wf-details {
-  min-height: 0;
+.wf-details-body {
+  height: 100%;
   overflow-y: auto;
+}
+.wf-details {
+  position: relative;
+  min-height: 0;
   border-left: 1px solid var(--dt-border);
   background: var(--dt-paper);
 }
@@ -2264,40 +2404,6 @@ button.wf-crumb:hover {
 }
 .wf-details[hidden] {
   display: none;
-}
-.wf-head {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  display: grid;
-  grid-template-columns: minmax(0, var(--wf-names)) minmax(0, var(--wf-bars)) 4.5rem;
-  gap: 0.625rem;
-  height: 1.625rem;
-  align-items: center;
-  padding: 0 1rem;
-  border-bottom: 1px solid var(--dt-border);
-  background: var(--dt-panel);
-  color: var(--dt-text-3);
-  font-size: var(--dt-size-xs);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-.wf-head > :last-child {
-  text-align: right;
-}
-.wf-ticks {
-  position: relative;
-  height: 100%;
-}
-.wf-ticks > span {
-  position: absolute;
-  top: 0.375rem;
-  padding-left: 0.25rem;
-  border-left: 1px solid var(--dt-border);
-  font-weight: 500;
-  text-transform: none;
-  white-space: nowrap;
 }
 .wf-rows .dt-map-rows {
   border: 0;
@@ -2317,24 +2423,85 @@ button.wf-crumb:hover {
 .wf-rows[data-facet="logs"] .dt-map-row:is([data-kind="log"], [data-kind="error"]) {
   opacity: 1;
 }
-/* Docked right: the facets and the filter take a second row under the crumbs. */
+/* Docked right: two rows, who and what to do above, the facets and the filter under them. */
 .wf-panel[data-dock="right"] .wf-bar {
-  flex-wrap: wrap;
-  height: auto;
-  padding-block: 0.375rem;
-  row-gap: 0.375rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "identity actions"
+    "tools tools";
+  row-gap: 0.5rem;
 }
-.wf-panel[data-dock="right"] .wf-bar-fill {
-  flex-basis: 0;
+.wf-panel[data-dock="right"] .wf-zone-tools {
+  padding: 0 0 0 0.75rem;
 }
-.wf-panel[data-dock="right"] .wf-facets {
-  order: 10;
-}
-.wf-panel[data-dock="right"] .wf-filter {
-  order: 11;
-  flex: 1;
-  width: auto;
-}
-.wf-panel[data-dock="right"] .wf-facet-time {
+.wf-panel[data-dock="right"] .wf-facet-time,
+.wf-panel[data-dock="right"] .wf-facet-label {
   display: none;
+}
+/* The tools give way as their column narrows: the facets' times first, then their names (the icons stay). */
+.wf-zone-tools {
+  container: wf-tools / inline-size;
+  overflow: hidden;
+}
+@container wf-tools (max-width: 36rem) {
+  .wf-facet-time {
+    display: none;
+  }
+}
+@container wf-tools (max-width: 28rem) {
+  .wf-facet-label {
+    display: none;
+  }
+}
+/* The dividers: a thin line that brightens on hover, focus and drag; a wider hit area around it. */
+.wf-splitter {
+  position: absolute;
+  z-index: 4;
+  touch-action: none;
+  outline: none;
+}
+.wf-splitter::after {
+  content: "";
+  position: absolute;
+  background: transparent;
+  transition: background 0.12s;
+}
+.wf-splitter:hover::after,
+.wf-splitter:focus-visible::after,
+.wf-splitter[data-dragging]::after {
+  background: var(--dt-accent);
+}
+.wf-splitter[aria-orientation="vertical"] {
+  top: 0;
+  bottom: 0;
+  width: 0.625rem;
+  cursor: col-resize;
+}
+.wf-splitter[aria-orientation="vertical"]::after {
+  top: 0;
+  bottom: 0;
+  left: calc(50% - 1px);
+  width: 2px;
+}
+.wf-splitter[aria-orientation="horizontal"] {
+  left: 0;
+  right: 0;
+  height: 0.625rem;
+  cursor: row-resize;
+}
+.wf-splitter[aria-orientation="horizontal"]::after {
+  left: 0;
+  right: 0;
+  top: calc(50% - 1px);
+  height: 2px;
+}
+/* Over the gap between the names and the bars: where the time column starts, less half the gap. */
+.wf-splitter-names {
+  left: calc(var(--wf-time-x, 40%) - var(--wf-col-gap) / 2 - 0.3125rem);
+}
+.wf-splitter-side {
+  left: -0.3125rem;
+}
+.wf-splitter-sheet {
+  top: -0.3125rem;
 }

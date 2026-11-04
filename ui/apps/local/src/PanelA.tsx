@@ -24,22 +24,33 @@ import {
   DropdownMenuTrigger,
 } from "@tracepanel/ui/components/ui/dropdown-menu";
 import { isTyping } from "@tracepanel/ui/lib/keys";
-import { writeItem } from "@tracepanel/ui/lib/storage";
+import { readItem, writeItem } from "@tracepanel/ui/lib/storage";
 import {
   ArrowUpRightIcon,
   DatabaseIcon,
   EllipsisIcon,
+  ListEndIcon,
   ScrollTextIcon,
   SearchIcon,
   TriangleAlertIcon,
 } from "lucide-react";
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ReactNode,
+  type RefObject,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useFollowNew } from "./App";
 import { ClearDialog } from "./ClearDialog";
 import { useTabHistory } from "./hooks";
+import { ProfileToggle } from "./ProfileToggle";
 import { useTabRows } from "./panelChains";
 import { tellWidget, useDock } from "./panelLayout";
-import { DockButton, ListToggles, PANEL_LINKS, readFollow, writeFollow } from "./panelList";
+import { ClearButton, DockButton, PANEL_LINKS, readFollow, writeFollow } from "./panelList";
 import { arrivingIn, followTarget, inOrder, runningIn, withRuns } from "./panelRows";
 import { base, source } from "./panelSource";
 import { go, href, type Route } from "./routes";
@@ -59,6 +70,21 @@ function pageOf(rows: readonly TraceRow[], id: string | null): TraceRow[] {
   let end = head + 1;
   while (end < rows.length && rows[end]?.depth) end += 1;
   return rows.slice(head, end).filter((row) => !(row.run || row.group));
+}
+
+/** How far apart (µs) the page and its first request may be on two clocks before the page is placed by its requests. */
+const CLOCKS_APART = 60_000_000;
+
+/**
+ * The page's rows on one clock: its requests as the browser timed them; the page itself as its trace says, unless that
+ * is on another clock far from them (an app's, set apart from the browser's): then it ends where its first request
+ * starts.
+ */
+function onBrowserClock(page: TraceRow[]): TraceRow[] {
+  const [head, ...rest] = page;
+  const first = rest.length ? Math.min(...rest.map((row) => row.trace.start)) : null;
+  if (!head || first === null || Math.abs(first - (head.trace.start + head.trace.duration)) < CLOCKS_APART) return page;
+  return [{ ...head, trace: { ...head.trace, start: first - head.trace.duration } }, ...rest];
 }
 
 /**
@@ -198,7 +224,7 @@ function Overview({
   });
   const requests = page.filter((row) => row.depth).length;
   return (
-    <div className="wf-overview">
+    <div className="wf-overview wf-grid">
       <span className="wf-overview-label">
         <b>This page</b>
         {requests ? ` · ${requests} ${requests === 1 ? "request" : "requests"}` : ""}
@@ -226,11 +252,59 @@ function Overview({
   );
 }
 
-function AxisHead({ axis }: { axis: Axis }) {
+/** Follow new requests: each new row is selected as it arrives. An icon toggle, beside the rows it acts on. */
+function FollowButton({ follow, onFollow }: { follow: boolean; onFollow: (value: boolean) => void }) {
   return (
-    <div className="wf-head">
-      <span>Call</span>
-      <span className="wf-ticks" aria-hidden="true">
+    <Hint title="Follow new requests" detail="Select each new request as it arrives.">
+      <button
+        type="button"
+        className="icon-button wf-follow"
+        aria-label="Follow new requests"
+        aria-pressed={follow}
+        onClick={() => onFollow(!follow)}
+      >
+        <ListEndIcon />
+      </button>
+    </Hint>
+  );
+}
+
+/**
+ * Where the waterfall's time column starts, across the panel: the toolbar's tools start there, so the facets sit
+ * over the bars and the crumbs over the names.
+ */
+function useTimeColumn(panel: RefObject<HTMLDivElement | null>, ticks: RefObject<HTMLSpanElement | null>): void {
+  useLayoutEffect(() => {
+    const root = panel.current;
+    if (!root) return;
+    const measure = () => {
+      const column = ticks.current?.getBoundingClientRect();
+      if (!column) return;
+      root.style.setProperty("--wf-time-x", `${Math.round(column.left - root.getBoundingClientRect().left)}px`);
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(root);
+    const scroll = root.querySelector(".wf-scroll");
+    if (scroll) observer.observe(scroll);
+    if (ticks.current) observer.observe(ticks.current);
+    measure();
+    return () => observer.disconnect();
+  });
+}
+
+function AxisHead({
+  axis,
+  ticksRef,
+  filter,
+}: {
+  axis: Axis;
+  ticksRef: RefObject<HTMLSpanElement | null>;
+  filter: ReactNode;
+}) {
+  return (
+    <div className="wf-head wf-grid">
+      {filter}
+      <span className="wf-ticks" aria-hidden="true" ref={ticksRef}>
         {ticks(axis).map((tick) => (
           <span key={tick.at} style={{ left: `${tick.at * 100}%` }}>
             {tick.label}
@@ -251,10 +325,17 @@ function MoreMenu({ traceId }: { traceId: string | null }) {
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
-        <div className="flex items-center gap-1 px-1 py-1">
-          <ShareAction traceId={traceId} source={source} compact={true} />
-          <ThemeToggle compact={true} />
-          <SwitchUser source={source} onSwitched={() => tellWidget("tracepanel:reload")} />
+        <div className="wf-menu-row">
+          <span>Profile requests</span>
+          <ProfileToggle source={source} />
+        </div>
+        <div className="wf-menu-row">
+          <span>Share · theme · user</span>
+          <span className="flex items-center gap-1">
+            <ShareAction traceId={traceId} source={source} compact={true} />
+            <ThemeToggle compact={true} />
+            <SwitchUser source={source} onSwitched={() => tellWidget("tracepanel:reload")} />
+          </span>
         </div>
         <DropdownMenuItem
           onSelect={() => {
@@ -266,6 +347,176 @@ function MoreMenu({ traceId }: { traceId: string | null }) {
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+/* ---------- the dividers: the names' column, the details pane ---------- */
+
+const NAMES_KEY = "tracepanel:wf-names";
+const DETAILS_KEY = "tracepanel:wf-details";
+
+function rem(value: number): number {
+  return value * Number.parseFloat(getComputedStyle(document.documentElement).fontSize || "16");
+}
+
+function storedSize(key: string, dock: string): number | null {
+  const value = Number(readItem(`${key}:${dock}`));
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+/** A size the reader dragged, per dock, kept in this browser; null: the default. */
+function useSize(key: string, dock: string): [number | null, (value: number | null, save: boolean) => void] {
+  const [size, setSize] = useState<{ dock: string; value: number | null }>(() => ({
+    dock,
+    value: storedSize(key, dock),
+  }));
+  const value = size.dock === dock ? size.value : storedSize(key, dock);
+  const set = useCallback(
+    (next: number | null, save: boolean) => {
+      setSize({ dock, value: next });
+      if (save) writeItem(`${key}:${dock}`, next === null ? null : String(Math.round(next)));
+    },
+    [key, dock],
+  );
+  return [value, set];
+}
+
+/**
+ * A divider to drag, or to move with the arrow keys; a double click puts it back. `at` turns a pointer's position into
+ * the size, `clamp` keeps the size where nothing collapses.
+ */
+function Splitter({
+  orientation,
+  label,
+  className,
+  value,
+  fallback,
+  at,
+  clamp,
+  onSize,
+  grows = 1,
+}: {
+  orientation: "vertical" | "horizontal";
+  label: string;
+  className: string;
+  value: number | null;
+  /** The size it has while none was dragged, read from the page. */
+  fallback: () => number;
+  at: (event: PointerEvent) => number;
+  clamp: (value: number) => number;
+  onSize: (value: number | null, save: boolean) => void;
+  /** 1: right or down grows it; -1: left or up does. */
+  grows?: 1 | -1;
+}) {
+  const current = () => value ?? fallback();
+  return (
+    // biome-ignore lint/a11y/useSemanticElements: a focusable, draggable separator has no native element.
+    <div
+      className={`wf-splitter ${className}`}
+      role="separator"
+      aria-orientation={orientation}
+      aria-label={label}
+      aria-valuenow={value === null ? undefined : Math.round(value)}
+      tabIndex={0}
+      title="Drag to resize · double-click to reset"
+      onPointerDown={(event) => {
+        event.preventDefault();
+        const handle = event.currentTarget;
+        handle.setPointerCapture(event.pointerId);
+        handle.dataset["dragging"] = "";
+        const onMove = (move: PointerEvent) => onSize(clamp(at(move)), false);
+        const onUp = (up: PointerEvent) => {
+          handle.removeEventListener("pointermove", onMove);
+          handle.removeEventListener("pointerup", onUp);
+          handle.removeEventListener("pointercancel", onUp);
+          delete handle.dataset["dragging"];
+          onSize(clamp(at(up)), true);
+        };
+        handle.addEventListener("pointermove", onMove);
+        handle.addEventListener("pointerup", onUp);
+        handle.addEventListener("pointercancel", onUp);
+      }}
+      onDoubleClick={() => onSize(null, true)}
+      onKeyDown={(event) => {
+        const step = event.shiftKey ? 80 : 20;
+        const back = orientation === "vertical" ? "ArrowLeft" : "ArrowUp";
+        const forth = orientation === "vertical" ? "ArrowRight" : "ArrowDown";
+        if (event.key === back) onSize(clamp(current() - step * grows), true);
+        else if (event.key === forth) onSize(clamp(current() + step * grows), true);
+        else if (event.key === "Home" || event.key === "Enter") onSize(null, true);
+        else return;
+        event.preventDefault();
+      }}
+    />
+  );
+}
+
+/** The names' column's width (px) as dragged, and the divider over the waterfall that drags it. */
+function NamesSplitter({
+  value,
+  onSize,
+  scroll,
+}: {
+  value: number | null;
+  onSize: (value: number | null, save: boolean) => void;
+  scroll: RefObject<HTMLDivElement | null>;
+}) {
+  const width = () => scroll.current?.clientWidth ?? window.innerWidth;
+  const left = () => scroll.current?.getBoundingClientRect().left ?? 0;
+  return (
+    <Splitter
+      orientation="vertical"
+      label="Resize the call column"
+      className="wf-splitter-names"
+      value={value}
+      fallback={() => (width() - rem(1) - rem(4.5) - 2 * rem(0.625)) * 0.4}
+      at={(event) => event.clientX - left() - rem(0.3125)}
+      clamp={(next) => Math.min(Math.max(next, rem(12)), width() - rem(4.5) - rem(10))}
+      onSize={onSize}
+    />
+  );
+}
+
+/** The details pane's width (bottom dock) or the sheet's height (right dock), and the divider at its edge. */
+function DetailsSplitter({
+  dock,
+  value,
+  onSize,
+  main,
+}: {
+  dock: string;
+  value: number | null;
+  onSize: (value: number | null, save: boolean) => void;
+  main: RefObject<HTMLDivElement | null>;
+}) {
+  const box = () => main.current?.getBoundingClientRect() ?? new DOMRect(0, 0, window.innerWidth, window.innerHeight);
+  if (dock === "right") {
+    return (
+      <Splitter
+        orientation="horizontal"
+        label="Resize the details"
+        className="wf-splitter-sheet"
+        value={value}
+        fallback={() => box().height * 0.55}
+        at={(event) => box().bottom - event.clientY}
+        clamp={(next) => Math.min(Math.max(next, rem(8)), box().height - rem(6))}
+        onSize={onSize}
+        grows={-1}
+      />
+    );
+  }
+  return (
+    <Splitter
+      orientation="vertical"
+      label="Resize the details"
+      className="wf-splitter-side"
+      value={value}
+      fallback={() => Math.max(rem(22), box().width * 0.3)}
+      at={(event) => box().right - event.clientX}
+      clamp={(next) => Math.min(Math.max(next, rem(18)), box().width - rem(28))}
+      onSize={onSize}
+      grows={-1}
+    />
   );
 }
 
@@ -341,12 +592,19 @@ export function PanelA({ route }: { route: Route }) {
   const selectedId =
     route.name === "trace" ? route.id : (currentId ?? rows.find((row) => row.depth === 0)?.trace.id ?? null);
   const dock = useDock();
+  const [names, setNames] = useSize(NAMES_KEY, dock);
+  const [detailsSize, setDetailsSize] = useSize(DETAILS_KEY, dock);
   const [follow, setFollow] = useState(readFollow);
   const [clearing, setClearing] = useState(false);
   const [details, setDetails] = useState<HTMLElement | null>(null);
   const filterRef = useRef<HTMLInputElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const ticksRef = useRef<HTMLSpanElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const mainRef = useRef<HTMLDivElement>(null);
+  useTimeColumn(panelRef, ticksRef);
 
-  const page = useMemo(() => pageOf(listed, selectedId), [listed, selectedId]);
+  const page = useMemo(() => onBrowserClock(pageOf(listed, selectedId)), [listed, selectedId]);
   const top = topRows(page);
   const axisKey = page.map((row) => `${row.trace.id}:${row.trace.start}:${row.trace.duration}`).join(",");
   // biome-ignore lint/correctness/useExhaustiveDependencies: `axisKey` says when the page's time changed.
@@ -384,88 +642,121 @@ export function PanelA({ route }: { route: Route }) {
 
   return (
     <WaterfallContext.Provider value={host}>
-      <div className="panel wf-panel" data-dock={dock}>
+      <div
+        className="panel wf-panel"
+        data-dock={dock}
+        ref={panelRef}
+        style={
+          {
+            ...(names === null ? {} : { "--wf-names": `${Math.round(names)}px` }),
+            ...(detailsSize === null ? {} : { "--wf-details": `${Math.round(detailsSize)}px` }),
+          } as React.CSSProperties
+        }
+      >
         <header className="wf-bar">
-          <Logo className="shrink-0 gap-1.5 text-md [&>span]:hidden [&_svg]:size-5" />
-          <Crumbs head={top[0]} zoom={host.zoom} onOut={zoomOut} />
-          <span className="wf-bar-fill" />
-          <Facets facts={sums} facet={host.facet} onFacet={setFacet} />
-          <label className="wf-filter">
-            <SearchIcon />
-            <input
-              ref={filterRef}
-              type="search"
-              placeholder="Filter calls"
-              value={host.filter}
-              onChange={(event) => setFilter(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Escape") {
-                  event.preventDefault();
-                  setFilter("");
-                  event.currentTarget.blur();
-                }
-              }}
-            />
-            <kbd>/</kbd>
-          </label>
-          <span className="flex shrink-0 items-center gap-0.5">
-            <ListToggles follow={follow} onFollow={onFollow} onClear={() => setClearing(true)} />
-          </span>
-          <Hint title="Open in the console" detail="This request in the full console, in a new tab.">
-            <a
-              className="wf-console inline-flex h-7.5 items-center gap-1.5 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary-hover [&_svg]:size-3.5"
-              href={consoleAt()}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Console
-              <ExternalIcon />
-            </a>
-          </Hint>
-          <MoreMenu traceId={selectedId} />
-          <DockButton dock={dock} />
-          <Hint title="Close" keys="Esc">
-            <button
-              type="button"
-              className="icon-button"
-              aria-label="Close"
-              onClick={() => tellWidget("tracepanel:close")}
-            >
-              <CloseIcon />
-            </button>
-          </Hint>
+          <div className="wf-zone wf-zone-identity">
+            <Logo className="shrink-0 gap-1.5 text-md [&>span]:hidden [&_svg]:size-5" />
+            <Crumbs head={top[0]} zoom={host.zoom} onOut={zoomOut} />
+          </div>
+          <div className="wf-zone wf-zone-tools">
+            <Facets facts={sums} facet={host.facet} onFacet={setFacet} />
+          </div>
+          <div className="wf-zone wf-zone-actions">
+            <Hint title="Open in the console" detail="This request in the full console, in a new tab.">
+              <a
+                className="wf-console inline-flex h-7.5 items-center gap-1.5 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary-hover [&_svg]:size-3.5"
+                href={consoleAt()}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Console
+                <ExternalIcon />
+              </a>
+            </Hint>
+            <MoreMenu traceId={selectedId} />
+            <DockButton dock={dock} />
+            <Hint title="Close" keys="Esc">
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="Close"
+                onClick={() => tellWidget("tracepanel:close")}
+              >
+                <CloseIcon />
+              </button>
+            </Hint>
+          </div>
         </header>
-        {axis ? <Overview page={page} axis={axis} zoom={host.zoom} onZoom={zoomToRow} /> : null}
-        <div className="wf-main" data-details={host.selected ? "" : undefined}>
-          <div className="wf-scroll">
-            {host.axis ? <AxisHead axis={host.axis} /> : null}
-            <div className="wf-rows" data-facet={host.facet ?? undefined} data-filter={host.filter ? "" : undefined}>
-              {selectedId && top.length === 0 ? (
-                <WaterfallTrace id={selectedId} rows={rows} stored={stored} depth={0} fold={false} />
-              ) : null}
-              {top.map((row, at) =>
-                host.zoom && host.zoom.key === "" && host.zoom.trace !== row.trace.id ? null : (
-                  <WaterfallTrace
-                    key={row.key ?? row.trace.id}
-                    id={row.trace.id}
-                    rows={rows}
-                    stored={stored}
-                    depth={at === 0 || host.zoom ? 0 : 1}
-                    fold={at > 0 && !host.zoom}
+        <div className="wf-main" data-details={host.selected ? "" : undefined} ref={mainRef}>
+          <div className="wf-waterfall">
+            <NamesSplitter value={names} onSize={setNames} scroll={scrollRef} />
+            <div className="wf-scroll" ref={scrollRef}>
+              <div className="wf-sticky">
+                {axis ? <Overview page={page} axis={axis} zoom={host.zoom} onZoom={zoomToRow} /> : null}
+                {host.axis ? (
+                  <AxisHead
+                    axis={host.axis}
+                    ticksRef={ticksRef}
+                    filter={
+                      <span className="wf-call-head">
+                        <label className="wf-filter" title="Filter the rows below (/)">
+                          <SearchIcon />
+                          <input
+                            ref={filterRef}
+                            type="search"
+                            placeholder="Filter calls"
+                            aria-label="Filter calls"
+                            value={host.filter}
+                            onChange={(event) => setFilter(event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Escape") {
+                                event.preventDefault();
+                                setFilter("");
+                                event.currentTarget.blur();
+                              }
+                            }}
+                          />
+                          <kbd>/</kbd>
+                        </label>
+                        <FollowButton follow={follow} onFollow={onFollow} />
+                        <ClearButton onClear={() => setClearing(true)} label="Clear the list" />
+                      </span>
+                    }
                   />
-                ),
-              )}
-              {history && !selectedId ? (
-                <p className="wf-hint">No requests yet: requests from this browser tab appear here.</p>
-              ) : null}
-              {selectedId ? (
-                <p className="wf-hint">
-                  z zooms the axis to the selected row · Backspace zooms out · new requests append here
-                </p>
-              ) : null}
+                ) : null}
+              </div>
+              <div className="wf-rows" data-facet={host.facet ?? undefined} data-filter={host.filter ? "" : undefined}>
+                {selectedId && top.length === 0 ? (
+                  <WaterfallTrace id={selectedId} rows={rows} stored={stored} depth={0} fold={false} />
+                ) : null}
+                {top.map((row, at) =>
+                  host.zoom && host.zoom.key === "" && host.zoom.trace !== row.trace.id ? null : (
+                    <WaterfallTrace
+                      key={row.key ?? row.trace.id}
+                      id={row.trace.id}
+                      rows={rows}
+                      stored={stored}
+                      anchor={row.trace.start}
+                      depth={at === 0 || host.zoom ? 0 : 1}
+                      fold={top.length > 1 && !host.zoom}
+                    />
+                  ),
+                )}
+                {history && !selectedId ? (
+                  <p className="wf-hint">No requests yet: requests from this browser tab appear here.</p>
+                ) : null}
+                {selectedId ? (
+                  <p className="wf-hint">
+                    z zooms the axis to the selected row · Backspace zooms out · new requests append here
+                  </p>
+                ) : null}
+              </div>
             </div>
           </div>
-          <aside className="wf-details" ref={setDetails} aria-label="Details" hidden={!host.selected} />
+          <aside className="wf-details" aria-label="Details" hidden={!host.selected}>
+            <DetailsSplitter dock={dock} value={detailsSize} onSize={setDetailsSize} main={mainRef} />
+            <div className="wf-details-body" ref={setDetails} />
+          </aside>
         </div>
         <ClearDialog
           mode="panel"
@@ -489,12 +780,14 @@ function WaterfallTrace({
   stored,
   depth,
   fold,
+  anchor,
 }: {
   id: string;
   rows: readonly TraceRow[];
   stored: ReadonlySet<string>;
   depth: number;
   fold: boolean;
+  anchor?: number | undefined;
 }) {
   return (
     <TraceScreen
@@ -503,7 +796,7 @@ function WaterfallTrace({
       arriving={arrivingIn(rows, stored, id)}
       running={runningIn(rows, id)}
       variant="waterfall"
-      waterfall={{ depth, foldRoot: fold }}
+      waterfall={{ depth, foldRoot: fold, anchor }}
       links={PANEL_LINKS}
     />
   );

@@ -61,7 +61,7 @@ import { SliceScope } from "./TimeSlice";
 import { HeadingTitle, heading, htmxOf, outcomeOf } from "./TraceHeading";
 import type { App, Chain, Issue, IssueKind, Related, Trace } from "./types";
 import { UntracedCalls } from "./Untraced";
-import { useWaterfall } from "./Waterfall";
+import { useWaterfall, WaterfallContext, type WaterfallHost } from "./Waterfall";
 
 export type TabId = "request" | "app" | "tree" | "issues" | "sql" | "cache" | "http" | "logs" | "error" | "profile";
 
@@ -378,7 +378,7 @@ export interface TraceViewProps {
    */
   variant?: "full" | "compact" | "strip" | "waterfall" | undefined;
   /** In the waterfall: how deep its rows start, its root row folded (a page's request under the page). */
-  waterfall?: { depth: number; foldRoot: boolean } | undefined;
+  waterfall?: { depth: number; foldRoot: boolean; anchor?: number | undefined } | undefined;
   /** The Explore menu; hidden when empty. */
   explore?: readonly ExploreItem[] | undefined;
   /** Called when the reader picks another tab (its bar, its keys, a tile that leads to one). */
@@ -714,6 +714,21 @@ function ViewScopes({
   );
 }
 
+/**
+ * The waterfall's axis on this trace's clock: the page lists a request where the browser timed it (its row's start,
+ * `anchor`), its trace has its app's clock; the bars are drawn shifted by the difference. A zoom to one of its rows is
+ * on its own clock already.
+ */
+function useOnPageClock(trace: Trace, anchor: number | undefined): WaterfallHost | null {
+  const host = useWaterfall();
+  return useMemo(() => {
+    if (!host?.axis || anchor === undefined || host.zoom?.key) return host;
+    const shift = anchor - trace.start;
+    if (shift === 0) return host;
+    return { ...host, axis: { start: host.axis.start - shift, duration: host.axis.duration } };
+  }, [host, anchor, trace.start]);
+}
+
 /** What this trace adds to the waterfall's facets: its findings, queries, HTTP calls and records. */
 function ReportFacts({
   trace,
@@ -822,6 +837,7 @@ export function TraceView({
   ...held
 }: TraceViewProps) {
   const compact = variant === "compact" || variant === "strip";
+  const onClock = useOnPageClock(trace, waterfall?.anchor);
   const findings = useMemo(() => findingsOf(trace), [trace]);
   const [active, setActive] = useState<TabId>(() => firstTab(trace, initialTab, preferredTab, app));
   useTabShown(active, onTabShown);
@@ -936,30 +952,32 @@ export function TraceView({
     return (
       <ViewScopes memory={memory} slice={held.initialSlice} onSlice={held.onSliceChange}>
         <UntracedCalls value={chain.untraced}>
-          <article className="dt-trace" data-variant="waterfall" data-trace={trace.id}>
-            <ReportFacts trace={trace} findings={tabbed.findings} calls={tabbed.calls} logs={chain.logs.length} />
-            <CallMap
-              trace={trace}
-              issueBySpan={tabbed.issueBySpan}
-              related={related}
-              reloadRelated={reloadRelated}
-              loadRelated={loadRelated}
-              links={links}
-              initialSpan={treeSpan}
-              explainOf={explainOf}
-              onTraceProfile={onTraceProfile ?? linkedProfiles(links)}
-              profilesIn={held.profilesIn}
-              expected={chain.members}
-              under={(under, subject) => (
-                <UnderThis
-                  counts={underCounts(chain.members, under, chain.chainIssues, chain.setScope, openTab)}
-                  subject={subject}
-                />
-              )}
-              depth={waterfall?.depth}
-              foldRoot={waterfall?.foldRoot}
-            />
-          </article>
+          <WaterfallContext.Provider value={onClock}>
+            <article className="dt-trace" data-variant="waterfall" data-trace={trace.id}>
+              <ReportFacts trace={trace} findings={tabbed.findings} calls={tabbed.calls} logs={chain.logs.length} />
+              <CallMap
+                trace={trace}
+                issueBySpan={tabbed.issueBySpan}
+                related={related}
+                reloadRelated={reloadRelated}
+                loadRelated={loadRelated}
+                links={links}
+                initialSpan={treeSpan}
+                explainOf={explainOf}
+                onTraceProfile={onTraceProfile ?? linkedProfiles(links)}
+                profilesIn={held.profilesIn}
+                expected={chain.members}
+                under={(under, subject) => (
+                  <UnderThis
+                    counts={underCounts(chain.members, under, chain.chainIssues, chain.setScope, openTab)}
+                    subject={subject}
+                  />
+                )}
+                depth={waterfall?.depth}
+                foldRoot={waterfall?.foldRoot}
+              />
+            </article>
+          </WaterfallContext.Provider>
         </UntracedCalls>
       </ViewScopes>
     );
