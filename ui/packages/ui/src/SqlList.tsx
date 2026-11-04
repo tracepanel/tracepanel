@@ -7,6 +7,8 @@ import {
   DetailsTitle,
   type Explain,
   groupTitle,
+  type ListTime,
+  listTime,
   QueryPlan,
   type RowTime,
   rowTime,
@@ -15,7 +17,6 @@ import {
 import type { DataColumn } from "./DataTable";
 import { duration } from "./format";
 import { callFields, templatePlace } from "./lib/callFields";
-import { onTheClock } from "./lib/calls";
 import { queryFingerprint } from "./lib/fingerprint";
 import { linkProps, type TraceLinks } from "./links";
 import { type NameValue, NameValues, RowsLookContext } from "./NameValues";
@@ -34,6 +35,8 @@ export interface SqlListProps {
   links?: TraceLinks | undefined;
   /** Grouped by statement, or each query in the order it ran: the switch at the end of the tab's summary line. */
   mode: SqlMode;
+  /** The queries' time on the clock, as the header and the tab write it. */
+  clock: string;
 }
 
 /** "All requests with this query", where the host can list them. */
@@ -222,7 +225,7 @@ export const SQL_MODES: readonly Segment<SqlMode>[] = [
   { id: "timeline", label: "In order" },
 ];
 
-function groupColumns(scope: number): DataColumn<Group>[] {
+function groupColumns(groups: readonly Group[], scope: ListTime): DataColumn<Group>[] {
   return [
     {
       id: "query",
@@ -238,11 +241,16 @@ function groupColumns(scope: number): DataColumn<Group>[] {
         />
       ),
     },
-    ...timeColumns<Group>((group) => group.time, scope, QUERY),
+    ...timeColumns<Group>((group) => group.time, groups, scope, QUERY),
   ];
 }
 
-function orderColumns(start: number, scope: number, issueBySpan: ReadonlyMap<string, IssueKind>): DataColumn<Placed>[] {
+function orderColumns(
+  placed: readonly Placed[],
+  start: number,
+  scope: ListTime,
+  issueBySpan: ReadonlyMap<string, IssueKind>,
+): DataColumn<Placed>[] {
   return [
     {
       id: "index",
@@ -276,7 +284,7 @@ function orderColumns(start: number, scope: number, issueBySpan: ReadonlyMap<str
       className: "text-muted-foreground",
       cell: ({ span }) => `+${duration(Math.max(span.start - start, 0))}`,
     },
-    ...timeColumns<Placed>((item) => rowTime([item.span]), scope, QUERY),
+    ...timeColumns<Placed>((item) => rowTime([item.span]), placed, scope, QUERY),
   ];
 }
 
@@ -286,10 +294,10 @@ interface Placed {
   index: number;
 }
 
-export function SqlList({ spans, issueBySpan, focus, onExplain, links, mode }: SqlListProps) {
+export function SqlList({ spans, issueBySpan, focus, onExplain, links, mode, clock }: SqlListProps) {
   const groups = useMemo(() => groupSpans(spans, issueBySpan), [spans, issueBySpan]);
   const placed = useMemo(() => spans.map((span, index) => ({ span, index })), [spans]);
-  const scope = useMemo(() => onTheClock(spans), [spans]);
+  const scope = useMemo(() => listTime(spans, clock), [spans, clock]);
   const start = Math.min(...spans.map((span) => span.start));
 
   if (spans.length === 0) return <p className="dt-note">No database queries in this request.</p>;
@@ -299,7 +307,7 @@ export function SqlList({ spans, issueBySpan, focus, onExplain, links, mode }: S
       {mode === "grouped" ? (
         <CallTable
           table="trace-sql"
-          columns={groupColumns(scope)}
+          columns={groupColumns(groups, scope)}
           items={groups}
           focus={focus}
           row={{
@@ -319,7 +327,7 @@ export function SqlList({ spans, issueBySpan, focus, onExplain, links, mode }: S
       ) : (
         <CallTable
           table="trace-sql-order"
-          columns={orderColumns(start, scope, issueBySpan)}
+          columns={orderColumns(placed, start, scope, issueBySpan)}
           items={placed}
           focus={focus}
           openFocused={false}

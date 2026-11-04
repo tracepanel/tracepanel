@@ -178,18 +178,21 @@ test("a code row names the function of yours that ran most by its real caller, a
   await expect(codeRows(page).locator(".dt-map-text")).toHaveText(["editDistance in (*App).similar"]);
 });
 
-test("calls side by side: the tab, the list and the head say their time on the clock, the sum in a tooltip", async ({
+test("calls side by side: the tab, the list and the head say their time on the clock, the sum apart as a sum", async ({
   page,
 }) => {
   await seed();
   await page.goto(`/#/t/${PARALLEL}?tab=http`);
   const tab = page.getByRole("tab", { name: /^HTTP calls/ });
+  const sum = "30 ms added up, side by side (each counts its own)";
 
   await expect(tab.locator(".dt-tab-detail")).toHaveText("10 ms");
-  await expect(tab.locator(".dt-tab-detail")).toHaveAttribute("title", "30 ms total");
+  await expect(tab.locator(".dt-tab-detail")).toHaveAttribute("title", sum);
   const summary = page.locator(".dt-scope-summary-text");
-  await expect(summary).toHaveText(/^3 HTTP calls · 1 unique · 10 ms on the clock · slowest \d+ ms$/);
-  await expect(summary.locator('[title="30 ms total"]')).toHaveText("10 ms");
+  await expect(summary).toHaveText(/^3 HTTP calls · 1 unique · 10 ms on the clock · 30 ms added up · slowest \d+ ms$/);
+  await expect(summary.locator(`[title="${sum}"]`)).toHaveText("· 30 ms added up");
   await expect(page.locator(".dt-trace-facts")).toContainText("3 HTTP calls 10 ms");
-  await expect(page.locator(".dt-trace-facts")).toHaveAttribute("title", "3 HTTP calls: 30 ms total");
+  await expect(page.locator(".dt-trace-facts")).toHaveAttribute("title", `3 HTTP calls: ${sum}`);
+  // Its Share column is of their sum, said so: each a third, adding up to 100%.
+  await expect(page.getByRole("columnheader", { name: "Share of sum" })).toBeVisible();
 });

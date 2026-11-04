@@ -420,38 +420,38 @@
         "shares": [
           [
             "External calls",
-            500000,
-            "0.5 s",
+            510000,
+            "510 ms",
             "41%"
           ],
           [
             "Not profiled",
             300000,
-            "0.3 s",
+            "300 ms",
             "24%"
           ],
           [
             "Database",
-            200000,
-            "0.2 s",
+            220000,
+            "220 ms",
             "17%"
           ],
           [
             "Redis",
-            100000,
-            "0.1 s",
+            60000,
+            "60 ms",
             "5%"
           ],
           [
             "Your code",
-            0,
-            "<0.1 s",
+            20000,
+            "20 ms",
             "2%"
           ],
           [
             "Waiting",
-            200000,
-            "0.2 s",
+            140000,
+            "140 ms",
             "11%"
           ]
         ],
@@ -2248,6 +2248,10 @@
       [
         "SQL postgresql",
         2000
+      ],
+      [
+        "Not profiled",
+        600
       ]
     ],
     "shares": [
@@ -2257,7 +2261,7 @@
       ],
       [
         "Not profiled",
-        0
+        600
       ]
     ],
     "split": {
@@ -2274,8 +2278,8 @@
         ],
         [
           "Not profiled",
-          0,
-          "<1 ms",
+          600,
+          "0.6 ms",
           "25%"
         ]
       ],
@@ -2537,6 +2541,10 @@
       [
         "Framework & middleware",
         6000
+      ],
+      [
+        "Not profiled",
+        27
       ]
     ],
     "shares": [
@@ -2562,7 +2570,7 @@
       ],
       [
         "Not profiled",
-        0
+        27
       ]
     ],
     "split": {
@@ -2597,8 +2605,8 @@
         ],
         [
           "Not profiled",
-          0,
-          "<1 ms",
+          27,
+          "27 µs",
           "<1%"
         ],
         [
@@ -2862,7 +2870,7 @@
       ],
       [
         "GC",
-        1000
+        600
       ]
     ],
     "shares": [
@@ -2884,7 +2892,7 @@
       ],
       [
         "GC",
-        1000
+        600
       ]
     ],
     "split": {
@@ -2913,8 +2921,8 @@
         ],
         [
           "GC",
-          1000,
-          "1 ms",
+          600,
+          "0.6 ms",
           "4%"
         ],
         [
@@ -2964,8 +2972,8 @@
             ],
             [
               "Framework & middleware",
-              1000,
-              "1 ms",
+              800,
+              "0.8 ms",
               "22%"
             ]
           ],
@@ -3015,7 +3023,7 @@
     ]
   },
   {
-    "name": "A code row's 5 ms in shares of 3.15, 0.75 and 1.1 ms: said at one step that keeps every share, 3 + 1 + 1 = 5 ms as read",
+    "name": "A code row's 5 ms in shares of 3.15, 0.75 and 1.1 ms: those a step or more long said at its step, 3 + 1 ms; the 0.75 ms one as the console writes its time anywhere, 0.8 ms",
     "trace": {
       "start": 1790000000000000,
       "duration": 5000,
@@ -3495,12 +3503,12 @@
     },
     "waits": [
       [
-        "Framework & middleware",
+        "waiting · select",
         1000
       ],
       [
-        "waiting · select",
-        1000
+        "Framework & middleware",
+        800
       ]
     ],
     "shares": [
@@ -3509,12 +3517,12 @@
         3000
       ],
       [
-        "Framework & middleware",
+        "Waiting",
         1000
       ],
       [
-        "Waiting",
-        1000
+        "Framework & middleware",
+        800
       ]
     ],
     "split": {
@@ -3531,8 +3539,8 @@
         ],
         [
           "Framework & middleware",
-          1000,
-          "1 ms",
+          800,
+          "0.8 ms",
           "15%"
         ],
         [
@@ -3574,8 +3582,8 @@
             ],
             [
               "Framework & middleware",
-              1000,
-              "1 ms",
+              800,
+              "0.8 ms",
               "15%"
             ],
             [
@@ -4176,5 +4184,1128 @@
         }
       }
     ]
+  },
+  {
+    "name": "Python: a task's two queries, 0.584 ms of its 310 ms: Database said 0.6 ms, as the header and the DB tab say it, not 1 ms",
+    "trace": {
+      "start": 1790000000000000,
+      "duration": 309975,
+      "attrs": {
+        "telemetry.sdk.language": "python"
+      },
+      "spans": [
+        {
+          "id": "r",
+          "parent_id": null,
+          "kind": "task",
+          "name": "shop.tasks.refresh_tracking",
+          "start": 1790000000000000,
+          "duration": 309975,
+          "status": "ok",
+          "attrs": {}
+        },
+        {
+          "id": "q1",
+          "parent_id": "r",
+          "kind": "sql",
+          "name": "UPDATE order",
+          "start": 1790000000120000,
+          "duration": 300,
+          "status": "ok",
+          "attrs": {
+            "db.system": "postgresql"
+          }
+        },
+        {
+          "id": "q2",
+          "parent_id": "r",
+          "kind": "sql",
+          "name": "UPDATE order",
+          "start": 1790000000240000,
+          "duration": 284,
+          "status": "ok",
+          "attrs": {
+            "db.system": "postgresql"
+          }
+        }
+      ],
+      "profile": {
+        "interval_us": 10000,
+        "samples": 31,
+        "dropped": 0,
+        "bucket_us": 10000,
+        "frames": [
+          {
+            "function": "refresh_tracking",
+            "module": "shop.tasks",
+            "file": "shop/tasks.py",
+            "line": 40,
+            "in_app": true
+          }
+        ],
+        "stacks": [
+          {
+            "frames": [
+              0
+            ],
+            "count": 31,
+            "at": [
+              [
+                0,
+                1
+              ],
+              [
+                1,
+                1
+              ],
+              [
+                2,
+                1
+              ],
+              [
+                3,
+                1
+              ],
+              [
+                4,
+                1
+              ],
+              [
+                5,
+                1
+              ],
+              [
+                6,
+                1
+              ],
+              [
+                7,
+                1
+              ],
+              [
+                8,
+                1
+              ],
+              [
+                9,
+                1
+              ],
+              [
+                10,
+                1
+              ],
+              [
+                11,
+                1
+              ],
+              [
+                12,
+                1
+              ],
+              [
+                13,
+                1
+              ],
+              [
+                14,
+                1
+              ],
+              [
+                15,
+                1
+              ],
+              [
+                16,
+                1
+              ],
+              [
+                17,
+                1
+              ],
+              [
+                18,
+                1
+              ],
+              [
+                19,
+                1
+              ],
+              [
+                20,
+                1
+              ],
+              [
+                21,
+                1
+              ],
+              [
+                22,
+                1
+              ],
+              [
+                23,
+                1
+              ],
+              [
+                24,
+                1
+              ],
+              [
+                25,
+                1
+              ],
+              [
+                26,
+                1
+              ],
+              [
+                27,
+                1
+              ],
+              [
+                28,
+                1
+              ],
+              [
+                29,
+                1
+              ],
+              [
+                30,
+                1
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    "waits": [
+      [
+        "SQL postgresql",
+        600
+      ]
+    ],
+    "shares": [
+      [
+        "Your code",
+        309000
+      ],
+      [
+        "Database",
+        600
+      ]
+    ],
+    "split": {
+      "of": "the whole trace",
+      "windows": null,
+      "total": 310000,
+      "time": "310 ms",
+      "shares": [
+        [
+          "Your code",
+          309000,
+          "309 ms",
+          ">99%"
+        ],
+        [
+          "Database",
+          600,
+          "0.6 ms",
+          "<1%"
+        ]
+      ],
+      "profiled": 310000,
+      "covered": "310 ms",
+      "samples": 31,
+      "sampled": "31 samples, one every 10 ms"
+    }
+  },
+  {
+    "name": "Go: queries 25.514 ms of an 88.4 ms request, rounded with the rest by largest remainder: Database 25 ms, and the header and the DB tab say 25 ms too",
+    "trace": {
+      "start": 1790000000000000,
+      "duration": 88411,
+      "attrs": {
+        "telemetry.sdk.language": "go"
+      },
+      "spans": [
+        {
+          "id": "r",
+          "parent_id": null,
+          "kind": "http",
+          "name": "GET /api/catalog/products",
+          "start": 1790000000000000,
+          "duration": 88411,
+          "status": "ok",
+          "attrs": {}
+        },
+        {
+          "id": "q1",
+          "parent_id": "r",
+          "kind": "sql",
+          "name": "SELECT product",
+          "start": 1790000000002000,
+          "duration": 10000,
+          "status": "ok",
+          "attrs": {
+            "db.system": "postgresql"
+          }
+        },
+        {
+          "id": "q2",
+          "parent_id": "r",
+          "kind": "sql",
+          "name": "SELECT COUNT product",
+          "start": 1790000000020000,
+          "duration": 10000,
+          "status": "ok",
+          "attrs": {
+            "db.system": "postgresql"
+          }
+        },
+        {
+          "id": "q3",
+          "parent_id": "r",
+          "kind": "sql",
+          "name": "SELECT review",
+          "start": 1790000000040000,
+          "duration": 5514,
+          "status": "ok",
+          "attrs": {
+            "db.system": "postgresql"
+          }
+        }
+      ],
+      "profile": {
+        "interval_us": 1000,
+        "samples": 89,
+        "dropped": 0,
+        "bucket_us": 1000,
+        "frames": [
+          {
+            "function": "main.(*App).listProducts",
+            "module": "main",
+            "file": "catalog.go",
+            "line": 10,
+            "in_app": true
+          }
+        ],
+        "stacks": [
+          {
+            "frames": [
+              0
+            ],
+            "count": 89,
+            "at": [
+              [
+                0,
+                1
+              ],
+              [
+                1,
+                1
+              ],
+              [
+                2,
+                1
+              ],
+              [
+                3,
+                1
+              ],
+              [
+                4,
+                1
+              ],
+              [
+                5,
+                1
+              ],
+              [
+                6,
+                1
+              ],
+              [
+                7,
+                1
+              ],
+              [
+                8,
+                1
+              ],
+              [
+                9,
+                1
+              ],
+              [
+                10,
+                1
+              ],
+              [
+                11,
+                1
+              ],
+              [
+                12,
+                1
+              ],
+              [
+                13,
+                1
+              ],
+              [
+                14,
+                1
+              ],
+              [
+                15,
+                1
+              ],
+              [
+                16,
+                1
+              ],
+              [
+                17,
+                1
+              ],
+              [
+                18,
+                1
+              ],
+              [
+                19,
+                1
+              ],
+              [
+                20,
+                1
+              ],
+              [
+                21,
+                1
+              ],
+              [
+                22,
+                1
+              ],
+              [
+                23,
+                1
+              ],
+              [
+                24,
+                1
+              ],
+              [
+                25,
+                1
+              ],
+              [
+                26,
+                1
+              ],
+              [
+                27,
+                1
+              ],
+              [
+                28,
+                1
+              ],
+              [
+                29,
+                1
+              ],
+              [
+                30,
+                1
+              ],
+              [
+                31,
+                1
+              ],
+              [
+                32,
+                1
+              ],
+              [
+                33,
+                1
+              ],
+              [
+                34,
+                1
+              ],
+              [
+                35,
+                1
+              ],
+              [
+                36,
+                1
+              ],
+              [
+                37,
+                1
+              ],
+              [
+                38,
+                1
+              ],
+              [
+                39,
+                1
+              ],
+              [
+                40,
+                1
+              ],
+              [
+                41,
+                1
+              ],
+              [
+                42,
+                1
+              ],
+              [
+                43,
+                1
+              ],
+              [
+                44,
+                1
+              ],
+              [
+                45,
+                1
+              ],
+              [
+                46,
+                1
+              ],
+              [
+                47,
+                1
+              ],
+              [
+                48,
+                1
+              ],
+              [
+                49,
+                1
+              ],
+              [
+                50,
+                1
+              ],
+              [
+                51,
+                1
+              ],
+              [
+                52,
+                1
+              ],
+              [
+                53,
+                1
+              ],
+              [
+                54,
+                1
+              ],
+              [
+                55,
+                1
+              ],
+              [
+                56,
+                1
+              ],
+              [
+                57,
+                1
+              ],
+              [
+                58,
+                1
+              ],
+              [
+                59,
+                1
+              ],
+              [
+                60,
+                1
+              ],
+              [
+                61,
+                1
+              ],
+              [
+                62,
+                1
+              ],
+              [
+                63,
+                1
+              ],
+              [
+                64,
+                1
+              ],
+              [
+                65,
+                1
+              ],
+              [
+                66,
+                1
+              ],
+              [
+                67,
+                1
+              ],
+              [
+                68,
+                1
+              ],
+              [
+                69,
+                1
+              ],
+              [
+                70,
+                1
+              ],
+              [
+                71,
+                1
+              ],
+              [
+                72,
+                1
+              ],
+              [
+                73,
+                1
+              ],
+              [
+                74,
+                1
+              ],
+              [
+                75,
+                1
+              ],
+              [
+                76,
+                1
+              ],
+              [
+                77,
+                1
+              ],
+              [
+                78,
+                1
+              ],
+              [
+                79,
+                1
+              ],
+              [
+                80,
+                1
+              ],
+              [
+                81,
+                1
+              ],
+              [
+                82,
+                1
+              ],
+              [
+                83,
+                1
+              ],
+              [
+                84,
+                1
+              ],
+              [
+                85,
+                1
+              ],
+              [
+                86,
+                1
+              ],
+              [
+                87,
+                1
+              ],
+              [
+                88,
+                1
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    "waits": [
+      [
+        "SQL postgresql",
+        25000
+      ]
+    ],
+    "shares": [
+      [
+        "Your code",
+        63000
+      ],
+      [
+        "Database",
+        25000
+      ]
+    ],
+    "split": {
+      "of": "the whole trace",
+      "windows": null,
+      "total": 88000,
+      "time": "88 ms",
+      "shares": [
+        [
+          "Your code",
+          63000,
+          "63 ms",
+          "71%"
+        ],
+        [
+          "Database",
+          25000,
+          "25 ms",
+          "29%"
+        ]
+      ],
+      "profiled": 88000,
+      "covered": "88 ms",
+      "samples": 89,
+      "sampled": "89 samples, one every 1 ms"
+    }
+  },
+  {
+    "name": "Node: the collector's 0.477 ms of a 24 ms request: GC said 0.5 ms on the bar, and its row in the functions says the same",
+    "trace": {
+      "start": 1790000000000000,
+      "duration": 24339,
+      "attrs": {
+        "telemetry.sdk.language": "nodejs"
+      },
+      "spans": [
+        {
+          "id": "r",
+          "parent_id": null,
+          "kind": "http",
+          "name": "GET /api/catalog/products",
+          "start": 1790000000000000,
+          "duration": 24339,
+          "status": "ok",
+          "attrs": {}
+        },
+        {
+          "id": "q",
+          "parent_id": "r",
+          "kind": "sql",
+          "name": "SELECT product",
+          "start": 1790000000004000,
+          "duration": 7369,
+          "status": "ok",
+          "attrs": {
+            "db.system": "postgresql"
+          }
+        }
+      ],
+      "profile": {
+        "interval_us": 1000,
+        "samples": 24,
+        "dropped": 0,
+        "bucket_us": 1000,
+        "frames": [
+          {
+            "function": "processTicksAndRejections",
+            "module": "node:internal/process/task_queues",
+            "file": "node:internal/process/task_queues",
+            "line": 95,
+            "in_app": false
+          },
+          {
+            "function": "listProducts",
+            "module": "app/routes",
+            "file": "app/routes.ts",
+            "line": 12,
+            "in_app": true
+          }
+        ],
+        "stacks": [
+          {
+            "frames": [
+              0
+            ],
+            "count": 14,
+            "at": [
+              [
+                0,
+                1
+              ],
+              [
+                1,
+                1
+              ],
+              [
+                2,
+                1
+              ],
+              [
+                3,
+                1
+              ],
+              [
+                12,
+                1
+              ],
+              [
+                13,
+                1
+              ],
+              [
+                14,
+                1
+              ],
+              [
+                15,
+                1
+              ],
+              [
+                16,
+                1
+              ],
+              [
+                17,
+                1
+              ],
+              [
+                18,
+                1
+              ],
+              [
+                19,
+                1
+              ],
+              [
+                20,
+                1
+              ],
+              [
+                21,
+                1
+              ]
+            ]
+          },
+          {
+            "frames": [
+              0,
+              1
+            ],
+            "count": 3,
+            "at": [
+              [
+                22,
+                1
+              ],
+              [
+                23,
+                1
+              ],
+              [
+                24,
+                1
+              ]
+            ]
+          }
+        ],
+        "gc": {
+          "collections": 1,
+          "pause_us": 477,
+          "pauses": [
+            [
+              2288,
+              477,
+              0
+            ]
+          ]
+        }
+      }
+    },
+    "waits": [
+      [
+        "Framework & middleware",
+        14000
+      ],
+      [
+        "SQL postgresql",
+        7000
+      ],
+      [
+        "GC",
+        500
+      ]
+    ],
+    "shares": [
+      [
+        "Framework & middleware",
+        14000
+      ],
+      [
+        "Database",
+        7000
+      ],
+      [
+        "Your code",
+        2000
+      ],
+      [
+        "GC",
+        500
+      ]
+    ],
+    "split": {
+      "of": "the whole trace",
+      "windows": null,
+      "total": 24000,
+      "time": "24 ms",
+      "shares": [
+        [
+          "Framework & middleware",
+          14000,
+          "14 ms",
+          "58%"
+        ],
+        [
+          "Database",
+          7000,
+          "7 ms",
+          "30%"
+        ],
+        [
+          "Your code",
+          2000,
+          "2 ms",
+          "10%"
+        ],
+        [
+          "GC",
+          500,
+          "0.5 ms",
+          "2%"
+        ]
+      ],
+      "profiled": 24000,
+      "covered": "24 ms",
+      "samples": 24,
+      "sampled": "24 samples, one every 1 ms"
+    }
+  },
+  {
+    "name": "Java: Your code 5.26 ms, Database 5.02 ms, Waiting 5.32 ms of 15.6 ms: the percents tie at 34% as they round, the times by largest remainder, Waiting the most time",
+    "trace": {
+      "start": 1790000000000000,
+      "duration": 15601,
+      "attrs": {
+        "telemetry.sdk.language": "java"
+      },
+      "spans": [
+        {
+          "id": "r",
+          "parent_id": null,
+          "kind": "http",
+          "name": "GET /api/catalog/products",
+          "start": 1790000000000000,
+          "duration": 15601,
+          "status": "ok",
+          "attrs": {}
+        },
+        {
+          "id": "q",
+          "parent_id": "r",
+          "kind": "sql",
+          "name": "SELECT product",
+          "start": 1790000000005259,
+          "duration": 5020,
+          "status": "ok",
+          "attrs": {
+            "db.system": "postgresql"
+          }
+        }
+      ],
+      "profile": {
+        "interval_us": 1000,
+        "samples": 12,
+        "dropped": 0,
+        "bucket_us": 1000,
+        "frames": [
+          {
+            "function": "run",
+            "module": "java.lang.Thread",
+            "file": "Thread.java",
+            "line": 1583,
+            "in_app": false
+          },
+          {
+            "function": "listProducts",
+            "module": "com.acme.CatalogController",
+            "file": "CatalogController.java",
+            "line": 40,
+            "in_app": true
+          },
+          {
+            "function": "park",
+            "module": "jdk.internal.misc.Unsafe",
+            "file": "Unsafe.java",
+            "line": 1,
+            "in_app": false,
+            "waiting": true
+          }
+        ],
+        "stacks": [
+          {
+            "frames": [
+              0,
+              1
+            ],
+            "count": 6,
+            "at": [
+              [
+                0,
+                1
+              ],
+              [
+                1,
+                1
+              ],
+              [
+                2,
+                1
+              ],
+              [
+                3,
+                1
+              ],
+              [
+                4,
+                1
+              ],
+              [
+                5,
+                1
+              ]
+            ]
+          },
+          {
+            "frames": [
+              0,
+              1,
+              2
+            ],
+            "count": 6,
+            "at": [
+              [
+                10,
+                1
+              ],
+              [
+                11,
+                1
+              ],
+              [
+                12,
+                1
+              ],
+              [
+                13,
+                1
+              ],
+              [
+                14,
+                1
+              ],
+              [
+                15,
+                1
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    "waits": [
+      [
+        "waiting · park",
+        6000
+      ],
+      [
+        "SQL postgresql",
+        5000
+      ]
+    ],
+    "shares": [
+      [
+        "Waiting",
+        6000
+      ],
+      [
+        "Database",
+        5000
+      ],
+      [
+        "Your code",
+        5000
+      ]
+    ],
+    "split": {
+      "of": "the whole trace",
+      "windows": null,
+      "total": 16000,
+      "time": "16 ms",
+      "shares": [
+        [
+          "Your code",
+          5000,
+          "5 ms",
+          "34%"
+        ],
+        [
+          "Database",
+          5000,
+          "5 ms",
+          "32%"
+        ],
+        [
+          "Waiting",
+          6000,
+          "6 ms",
+          "34%"
+        ]
+      ],
+      "profiled": 16000,
+      "covered": "16 ms",
+      "samples": 12,
+      "sampled": "12 samples, one every 1 ms"
+    }
   }
 ]

@@ -353,12 +353,15 @@ fn say(stacks: Vec<Stack>, frames: &[Frame], split: &Split, interval: f64) -> Ve
     }
     let mut out = Vec::new();
     for (share, list) in groups {
-        let target = split.by_label(share).map_or(0.0, |said| said.us);
+        // At the share's own step: a share said finer than the split (`0.6 ms`) keeps its rows, said as it is.
+        let said = split.by_label(share);
+        let target = said.map_or(0.0, |said| said.us);
+        let step = said.map_or(split.step, |said| said.step);
         let values: Vec<f64> = list
             .iter()
             .map(|stack| (stack.us / interval) * interval)
             .collect();
-        let parts = shares::apportion(&values, split.step, (target / split.step).round() as i64);
+        let parts = shares::apportion(&values, step, (target / step).round() as i64);
         for (stack, us) in list.into_iter().zip(parts) {
             if us > 0.0 {
                 out.push(Stack {

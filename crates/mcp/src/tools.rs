@@ -248,7 +248,10 @@ fn find_traces(server: &Server, args: &Value) -> Result<String, Refusal> {
     let now = search::now_us();
     Ok(lines(
         format!("traces ({}, newest first):", page.items.len()),
-        page.items.iter().map(|row| trace_line(row, now)).collect(),
+        page.items
+            .iter()
+            .map(|row| trace_line(row, now, &|id| document(server, id).ok()))
+            .collect(),
         "No traces match.",
     ))
 }
@@ -266,7 +269,14 @@ fn document(server: &Server, id: &str) -> Result<Value, Refusal> {
 
 fn shown(server: &Server, doc: &Value, focus: Focus) -> Result<String, Refusal> {
     let related = server.reader.related(compact::text(doc, "id"))?;
-    let mut answer = compact::trace(doc, &related, focus, server.values, search::now_us());
+    let mut answer = compact::trace(
+        doc,
+        &related,
+        focus,
+        server.values,
+        search::now_us(),
+        &|id| document(server, id).ok(),
+    );
     let chain = server
         .reader
         .chain(compact::text(doc, "id"), true, &no_remote)?;
@@ -483,7 +493,12 @@ fn get_issue(server: &Server, args: &Value) -> Result<String, Refusal> {
         .and_then(Value::as_array)
         .into_iter()
         .flatten()
-        .map(|row| format!("  {}", trace_line(row, now)))
+        .map(|row| {
+            format!(
+                "  {}",
+                trace_line(row, now, &|id| document(server, id).ok())
+            )
+        })
         .collect();
     Ok(format!(
         "{}\nfirst seen {}\n\nlatest traces:\n{}",

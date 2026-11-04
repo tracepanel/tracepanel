@@ -1,5 +1,6 @@
 // Outgoing calls (HTTP, cache) shown like queries: one row per call, and a template that groups the calls a loop
 // makes (`GET api.example.com/users/{id}`), as a statement's fingerprint groups its queries.
+import { duration } from "../format";
 import type { Span } from "../types";
 import { callOperation } from "./graphql";
 import { sendTemplate } from "./signals";
@@ -126,4 +127,12 @@ export function onTheClock(spans: readonly Pick<Span, "start" | "duration">[]): 
     reach = end;
   }
   return total;
+}
+
+/**
+ * What calls that ran side by side add up to, said apart from their time on the clock: "12 ms added up, side by side
+ * (each counts its own)". None where they ran one after another: the sum is then their time on the clock, said once.
+ */
+export function addedUp(total: number, clock: number): string | undefined {
+  return total > clock ? `${duration(total)} added up, side by side (each counts its own)` : undefined;
 }

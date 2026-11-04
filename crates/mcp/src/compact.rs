@@ -6,6 +6,7 @@
 //! frames without their local variables. With it, variables whose names look secret are still masked.
 
 use crate::profile;
+use crate::split;
 use serde_json::Value;
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
@@ -152,12 +153,38 @@ fn listed_head(row: &Value) -> String {
     }
 }
 
-/// One line per trace: id, what it was, how long, its SQL and issues, when.
-pub(crate) fn trace_line(row: &Value, now: i64) -> String {
-    let mut parts = vec![listed_head(row), ms(int(row, "duration"))];
+/// A stored trace by its id, where the store has it: what a list line reads its SQL time from.
+pub(crate) type Docs<'a> = &'a dyn Fn(&str) -> Option<Value>;
+
+/// `74 SQL (54 ms · 57 ms added up)`: the trace's queries and their time as the console's header says it (the time
+/// strip's Database: on the clock), what they add up to apart where they ran side by side. None without queries.
+pub(crate) fn sql_said(doc: &Value) -> Option<String> {
+    let queries: Vec<&Value> = sql_spans(doc).collect();
+    if queries.is_empty() {
+        return None;
+    }
+    let (time, added) = split::calls_time(doc, &queries);
+    let added = added.map_or(String::new(), |added| format!(" · {added}"));
+    Some(format!("{} SQL ({time}{added})", queries.len()))
+}
+
+/// One line per trace: id, what it was, how long, its SQL and issues, when. Its time and its queries' as the
+/// console's header says them, from the trace as stored (`docs`); a trace the store no longer has, its queries'
+/// time added up, said so.
+pub(crate) fn trace_line(row: &Value, now: i64, docs: Docs) -> String {
+    let mut parts = vec![
+        listed_head(row),
+        split::duration(int(row, "duration") as f64),
+    ];
     let queries = int(row, "queries");
-    if queries > 0 {
-        parts.push(format!("{queries} SQL ({})", ms(int(row, "db_time"))));
+    let doc = (queries > 0).then(|| docs(text(row, "id"))).flatten();
+    match doc.as_ref().and_then(sql_said) {
+        Some(said) => parts.push(said),
+        None if queries > 0 => parts.push(format!(
+            "{queries} SQL ({} added up)",
+            split::duration(int(row, "db_time") as f64)
+        )),
+        None => {}
     }
     let kinds: Vec<&str> = row
         .get("issue_kinds")
@@ -462,12 +489,12 @@ pub(crate) fn trace_head(doc: &Value) -> String {
             head
         }
     };
-    head.push_str(&format!(" · {}", ms(int(doc, "duration"))));
-    let (count, time) = sql_spans(doc).fold((0, 0), |(count, time), span| {
-        (count + 1, time + int(span, "duration"))
-    });
-    if count > 0 {
-        head.push_str(&format!(" · {count} SQL ({})", ms(time)));
+    head.push_str(&format!(
+        " · {}",
+        split::duration(int(doc, "duration") as f64)
+    ));
+    if let Some(said) = sql_said(doc) {
+        head.push_str(&format!(" · {said}"));
     }
     if !text(attrs, "code.view").is_empty() {
         head.push_str(&format!(" · view {}", text(attrs, "code.view")));
@@ -675,10 +702,13 @@ fn sql_section(doc: &Value, values: bool) -> String {
     let total = |key: &str| -> i64 { groups[key].iter().map(|span| int(span, "duration")).sum() };
     order.sort_by_key(|key| std::cmp::Reverse(total(key)));
     let count: usize = groups.values().map(Vec::len).sum();
+    // Their time on the clock as the console's header and DB tab say it, what they add up to apart.
+    let queries: Vec<&Value> = sql_spans(doc).collect();
+    let (time, added) = split::calls_time(doc, &queries);
+    let added = added.map_or(String::new(), |added| format!(" · {added}"));
     let mut out = format!(
-        "SQL: {count} queries, {} statements, {}",
-        order.len(),
-        ms(order.iter().map(|key| total(key)).sum())
+        "SQL: {count} queries, {} statements, {time}{added}",
+        order.len()
     );
     for key in order {
         let spans = &groups[key];
@@ -923,7 +953,7 @@ fn tree_section(doc: &Value, focus: Focus) -> String {
     out
 }
 
-fn related_section(related: &Value, now: i64) -> Option<String> {
+fn related_section(related: &Value, now: i64, docs: Docs) -> Option<String> {
     let mut out = Vec::new();
     for (key, what) in [
         ("enqueued_by", "enqueued by"),
@@ -931,7 +961,7 @@ fn related_section(related: &Value, now: i64) -> Option<String> {
         ("sent_by", "sent by"),
     ] {
         if related.get(key).is_some_and(Value::is_object) {
-            out.push(format!("{what}: {}", trace_line(&related[key], now)));
+            out.push(format!("{what}: {}", trace_line(&related[key], now, docs)));
         }
     }
     for (key, what) in [
@@ -949,21 +979,21 @@ fn related_section(related: &Value, now: i64) -> Option<String> {
                 items
                     .iter()
                     .take(20)
-                    .map(|item| format!("  {}", trace_line(item, now))),
+                    .map(|item| format!("  {}", trace_line(item, now, docs))),
             );
         }
     }
-    out.extend(workflow_lines(&related["workflow"], now));
+    out.extend(workflow_lines(&related["workflow"], now, docs));
     (!out.is_empty()).then(|| out.join("\n"))
 }
 
 /// A task run's workflow: its root, the runs before and after it, its group's other tasks.
-fn workflow_lines(workflow: &Value, now: i64) -> Vec<String> {
+fn workflow_lines(workflow: &Value, now: i64, docs: Docs) -> Vec<String> {
     let mut out = Vec::new();
     if workflow["root"].is_object() {
         out.push(format!(
             "workflow root: {}",
-            trace_line(&workflow["root"], now)
+            trace_line(&workflow["root"], now, docs)
         ));
     }
     let group = &workflow["group"];
@@ -984,7 +1014,7 @@ fn workflow_lines(workflow: &Value, now: i64) -> Vec<String> {
                 items
                     .iter()
                     .take(20)
-                    .map(|item| format!("  {}", trace_line(item, now))),
+                    .map(|item| format!("  {}", trace_line(item, now, docs))),
             );
         }
     }
@@ -1018,7 +1048,14 @@ fn profile_reason(doc: &Value) -> Option<String> {
 }
 
 /// One trace, compact: the head, its issues, then what `focus` asks for, errors, loud logs and related traces.
-pub(crate) fn trace(doc: &Value, related: &Value, focus: Focus, values: bool, now: i64) -> String {
+pub(crate) fn trace(
+    doc: &Value,
+    related: &Value,
+    focus: Focus,
+    values: bool,
+    now: i64,
+    docs: Docs,
+) -> String {
     let mut head = format!("{}  {}", text(doc, "id"), trace_head(doc));
     let profiled = profile::kinds(doc);
     if !profiled.is_empty() {
@@ -1040,16 +1077,22 @@ pub(crate) fn trace(doc: &Value, related: &Value, focus: Focus, values: bool, no
         Focus::Sql => parts.push(sql_section(doc, values)),
         Focus::Logs => parts.push(logs_section(doc, true).unwrap_or_else(|| "logs: none".into())),
     }
-    parts.extend(related_section(related, now));
+    parts.extend(related_section(related, now, docs));
     parts.join("\n\n")
 }
 
 /// What changed between two runs of the same thing: time, SQL, statements and issues.
 pub(crate) fn compare(before: &Value, after: &Value) -> String {
-    let sql = |doc: &Value| -> (i64, i64) {
-        sql_spans(doc).fold((0, 0), |(count, time), span| {
-            (count + 1, time + int(span, "duration"))
-        })
+    // The queries and their time as the header says it (on the clock, the strip's Database).
+    let sql = |doc: &Value| -> (i64, String) {
+        let queries: Vec<&Value> = sql_spans(doc).collect();
+        let count = queries.len() as i64;
+        let time = if count > 0 {
+            split::calls_time(doc, &queries).0
+        } else {
+            split::duration(0.0)
+        };
+        (count, time)
     };
     let change = |old: i64, new: i64| -> String {
         if old == 0 {
@@ -1065,15 +1108,15 @@ pub(crate) fn compare(before: &Value, after: &Value) -> String {
         String::new(),
         format!(
             "time: {} → {}{}",
-            ms(int(before, "duration")),
-            ms(int(after, "duration")),
+            split::duration(int(before, "duration") as f64),
+            split::duration(int(after, "duration") as f64),
             change(int(before, "duration"), int(after, "duration"))
         ),
         format!(
             "SQL: {before_sql} → {after_sql} queries{}, {} → {}",
             change(before_sql, after_sql),
-            ms(before_db),
-            ms(after_db)
+            before_db,
+            after_db
         ),
     ];
     if text(before, "status") != text(after, "status") {
