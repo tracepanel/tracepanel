@@ -226,15 +226,33 @@
     },
     "waits": [
       [
-        "waiting · HTTP GET analytics.example.com",
+        "HTTP GET analytics.example.com",
         150000
       ],
       [
-        "waiting · SQL postgresql",
+        "SQL postgresql",
         60000
       ],
       [
         "waiting · sleep",
+        40000
+      ]
+    ],
+    "shares": [
+      [
+        "External calls",
+        150000
+      ],
+      [
+        "Your code",
+        100000
+      ],
+      [
+        "Database",
+        60000
+      ],
+      [
+        "Waiting",
         40000
       ]
     ]
@@ -397,13 +415,23 @@
     },
     "waits": [
       [
-        "waiting · SQL postgresql",
+        "SQL postgresql",
+        60000
+      ]
+    ],
+    "shares": [
+      [
+        "Your code",
+        300000
+      ],
+      [
+        "Database",
         60000
       ]
     ]
   },
   {
-    "name": "Python: a query and a Redis command at once share the wait; a call another function made names it when the stack's made none",
+    "name": "Python: a query and a Redis command at once: each moment the latest call's, a wait with no call running waiting's",
     "trace": {
       "start": 1790000000000000,
       "duration": 200000,
@@ -587,16 +615,42 @@
     },
     "waits": [
       [
-        "waiting · HTTP POST mail.internal",
-        80000
-      ],
-      [
-        "waiting · SQL postgresql",
+        "HTTP POST mail.internal",
         60000
       ],
       [
-        "waiting · redis",
+        "redis",
+        60000
+      ],
+      [
+        "SQL postgresql",
         40000
+      ],
+      [
+        "waiting · wait",
+        20000
+      ]
+    ],
+    "shares": [
+      [
+        "External calls",
+        60000
+      ],
+      [
+        "Redis",
+        60000
+      ],
+      [
+        "Database",
+        40000
+      ],
+      [
+        "Waiting",
+        20000
+      ],
+      [
+        "Your code",
+        20000
       ]
     ]
   },
@@ -717,7 +771,8 @@
         "waiting · HTTP GET prices.internal",
         10000
       ]
-    ]
+    ],
+    "shares": []
   },
   {
     "name": "Node: off the CPU with no call made: no call's",
@@ -766,6 +821,7 @@
         "waiting (no call)",
         30000
       ]
-    ]
+    ],
+    "shares": []
   }
 ]

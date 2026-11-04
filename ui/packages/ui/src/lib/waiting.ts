@@ -1,7 +1,6 @@
 // When a trace's profile says when each stack was seen (its `at` buckets): the stacks of each bucket of the trace's
-// time (bucketStacks, what lib/timeShares splits the trace's time by), the profile of the whole trace by them alone
-// (wallClock: the MCP server's get_profile's rule, schema/waits.json), and what a profile waited on. Plain data, no
-// React.
+// time (bucketStacks, what lib/timeShares splits the trace's time by), whose code row a bucket is, and what a profile
+// waited on. Plain data, no React.
 import type { Frame, Profile, Stack } from "./profile";
 import type { TimeRange, Windows } from "./slice";
 
@@ -11,17 +10,6 @@ export type Timed = Profile & Required<Pick<Profile, "bucket_us">>;
 /** A profile that says when its stacks were seen: its bucket width, and buckets on its stacks. */
 export function timed(profile: Profile | undefined): profile is Timed {
   return Boolean(profile?.bucket_us && profile.stacks.some((stack) => stack.at?.length));
-}
-
-/** A bucket's stretch of the trace, in microseconds since it started, cut at the trace's end. */
-function bucketSpan(profile: Timed, bucket: number, duration: number): TimeRange {
-  return [bucket * profile.bucket_us, Math.min((bucket + 1) * profile.bucket_us, duration)];
-}
-
-/** How much of a stretch the windows cover (all of it with none: the whole trace). */
-function covered(span: TimeRange, windows: Windows | null): number {
-  if (windows === null) return Math.max(span[1] - span[0], 0);
-  return windows.reduce((sum, [from, to]) => sum + Math.max(Math.min(span[1], to) - Math.max(span[0], from), 0), 0);
 }
 
 /** The stacks seen in each bucket, by stack, and how often (the ticks a sample stands for). */
@@ -41,7 +29,7 @@ function seenIn(profile: Profile): Map<number, Map<number, number>> {
 /**
  * Each bucket of the trace's time and the stacks it goes to: those seen in it; in one without samples (its thread ran
  * other traces, the sampler waited), those of the bucket before. Before the first sample, none: not profiled. The
- * MCP server's get_profile has the same rule (wall_clock in crates/mcp/src/profile.rs).
+ * MCP server's get_profile has the same rule (bucket_stacks in crates/mcp/src/shares.rs).
  */
 export function bucketStacks(profile: Timed, duration: number): Map<number, ReadonlyMap<number, number>> {
   const seen = seenIn(profile);
@@ -52,36 +40,6 @@ export function bucketStacks(profile: Timed, duration: number): Map<number, Read
     if (before) buckets.set(bucket, before);
   }
   return buckets;
-}
-
-/**
- * The one rule a profile's samples become time by: each bucket's time on the trace's clock, as much of it as the
- * windows cover (all of it with none), shared among the stacks of the bucket (bucketStacks) by how often each was
- * seen. A stretch's stacks then add up to the stretch's time, never to more: a 7 ms stretch is 7 ms, however many
- * samples its 10 ms bucket holds. µs per stack, by its index.
- */
-export function stackTimes(profile: Timed, duration: number, windows: Windows | null): Map<number, number> {
-  const times = new Map<number, number>();
-  for (const [bucket, stacks] of bucketStacks(profile, duration)) {
-    const time = covered(bucketSpan(profile, bucket, duration), windows);
-    if (time <= 0) continue;
-    const total = [...stacks.values()].reduce((sum, count) => sum + count, 0);
-    for (const [index, count] of stacks) times.set(index, (times.get(index) ?? 0) + (time * count) / total);
-  }
-  return times;
-}
-
-/**
- * The profile of the trace's time, or of the windows: each stack's time by stackTimes, counted in samples of the
- * profile's interval, so its numbers read as the time strip's and the call tree's.
- */
-export function wallClock(profile: Timed, duration: number, windows: Windows | null): Profile {
-  const times = stackTimes(profile, duration, windows);
-  const stacks = profile.stacks.flatMap((stack, index): Stack[] => {
-    const us = times.get(index) ?? 0;
-    return us > 0 ? [{ ...stack, count: us / profile.interval_us }] : [];
-  });
-  return { ...profile, stacks, samples: stacks.reduce((sum, stack) => sum + stack.count, 0) };
 }
 
 /**

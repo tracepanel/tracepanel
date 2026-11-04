@@ -24,7 +24,12 @@
   saying "10 ms profiled of these stretches' 10 ms". A wait row that
   holds several waits says so ("waiter.acquire and 3 more waits in
   get_author"). The Profile tab's legend names its shares as the strip
-  does ("Your code", "Waiting").
+  does ("Your code", "Waiting"). Times are said rounded so the parts add
+  up to the whole: each share, and each function's own time within it,
+  rounded by largest remainder to the step the total is said in, so a 10
+  ms row's profile lists 7 ms and 3 ms, not 7 ms and 4 ms. The MCP
+  server's get_profile splits a timed profile the same way and says its
+  time by share, a query's time as the database's.
 - The Profile tab's All frames list says which of its functions waited,
   as Your code's list does ("waiting ·
   AsyncIOBackend.run_sync_in_worker_thread", muted): their time is the

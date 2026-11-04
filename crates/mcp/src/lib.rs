@@ -8,6 +8,7 @@
 mod compact;
 mod off_cpu;
 mod profile;
+mod shares;
 mod tools;
 mod waits;
 
