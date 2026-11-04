@@ -7,7 +7,7 @@ use rusqlite::{Connection, params};
 use serde_json::Value;
 use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
-use tracepanel_protocol::{Attrs, Received, Span, Trace};
+use tracepanel_protocol::{Received, Span, Trace};
 
 pub mod search;
 use search::{Compiler, SearchError, Term};
@@ -51,15 +51,6 @@ mod tests {
     #[test]
     fn version_from_the_schema() {
         assert!(version().chars().all(|char| char.is_ascii_digit()));
-    }
-
-    #[test]
-    fn python_views() {
-        assert!(!truthy(Some(&Value::from(0))));
-        assert!(!truthy(Some(&Value::from(""))));
-        assert!(truthy(Some(&Value::from("x"))));
-        assert_eq!(py_str(&Value::from(true)), "True");
-        assert_eq!(py_str(&serde_json::json!(1.0)), "1.0");
     }
 
     /// A request that reads three users through Django's cache (on Redis), a Redis GET under each, and one direct

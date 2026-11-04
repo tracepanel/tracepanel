@@ -359,7 +359,7 @@ pub(crate) fn write_trace(
         .map(|span| or_default(&span.attrs, "cache.alias", "default"))
         .collect();
     let task_state = if truthy(attrs.get("task.state")) {
-        Sql::Text(py_str(&attrs["task.state"]).to_lowercase())
+        Sql::Text(py_str(attrs.get("task.state")).to_lowercase())
     } else {
         Sql::Null
     };
@@ -529,7 +529,7 @@ pub(crate) fn write_trace(
             .iter()
             .filter_map(|key| span.attrs.get(*key).and_then(Value::as_array))
             .flatten()
-            .map(py_str)
+            .map(|id| py_str(Some(id)))
             .collect();
         db.prepare_cached(
             "INSERT INTO mails (trace_id, span_id, time, subject, sender, recipients, sent, html)
@@ -632,12 +632,16 @@ pub(crate) fn link_tasks(db: &Connection, trace: &Trace) -> rusqlite::Result<()>
         db.prepare_cached(
             "INSERT INTO task_enqueues (task_id, trace_id, span_id) VALUES (?1, ?2, ?3)",
         )?
-        .execute(params![py_str(&span.attrs["task.id"]), trace.id, span.id])?;
+        .execute(params![
+            py_str(span.attrs.get("task.id")),
+            trace.id,
+            span.id
+        ])?;
     }
     let enqueued_by = trace.links.iter().any(|link| link.kind == "enqueued_by");
     if trace.kind == "task" && truthy(trace.attrs.get("task.id")) && !enqueued_by {
         db.prepare_cached("INSERT INTO task_runs (task_id, trace_id) VALUES (?1, ?2)")?
-            .execute(params![py_str(&trace.attrs["task.id"]), trace.id])?;
+            .execute(params![py_str(trace.attrs.get("task.id")), trace.id])?;
     }
     db.prepare_cached(
         "INSERT INTO links (trace_id, kind, linked_trace, linked_span)
@@ -661,14 +665,14 @@ pub(crate) fn index_workflow(db: &Connection, trace: &Trace) -> rusqlite::Result
     let attrs = &trace.attrs;
     let one = |key: &str| {
         truthy(attrs.get(key))
-            .then(|| py_str(&attrs[key]))
+            .then(|| py_str(attrs.get(key)))
             .into_iter()
     };
     let depends_on = match attrs.get("task.depends_on") {
         Some(Value::Array(ids)) => ids
             .iter()
             .filter(|id| truthy(Some(id)))
-            .map(py_str)
+            .map(|id| py_str(Some(id)))
             .collect(),
         _ => one("task.depends_on").collect::<Vec<_>>(),
     };
