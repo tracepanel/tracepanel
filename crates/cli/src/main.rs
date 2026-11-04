@@ -18,9 +18,9 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{Receiver, SyncSender, TrySendError, sync_channel};
 use std::time::Duration;
-use tracepanel_protocol::{Activity, Batch, Listener, Received};
+use tracepanel_protocol::{Activity, Batch, Listener, Received, Sink};
 use tracepanel_sender::Sender;
-use tracepanel_server::neighbors::OtlpHolder;
+use tracepanel_server::neighbors::{OtlpHolder, Registration};
 use tracepanel_store_local::{self as store_local, Store};
 
 /// Frames waiting for the writer; a full queue drops frames rather than slowing the senders down.
@@ -260,9 +260,7 @@ async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
         return Err(AlreadyRuns(dir).into());
     }
     // The addresses of an agent that didn't exit cleanly (killed, a reboot): nobody answers there.
-    let _ = std::fs::remove_file(&addr_file);
-    let _ = std::fs::remove_file(&console_file);
-    let _ = std::fs::remove_file(&otlp_file);
+    remove_all(&[&addr_file, &console_file, &otlp_file]);
     let store = Store::open(&store_path)?;
     let listener = bind(&dir, listen.as_deref()).await?;
     let address = listener.address()?;
@@ -290,77 +288,31 @@ async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
     let writer =
         std::thread::spawn(move || write(store, &frames, record.as_deref(), sender, &about));
     let sender = queue.clone();
-    let sink = Arc::new(move |batch: Batch| enqueue(&sender, batch));
+    let sink: Sink = Arc::new(move |batch: Batch| enqueue(&sender, batch));
 
     let otlp_wanted = otlp_address(otlp.as_deref(), std::env::var(OTLP_ENV).ok().as_deref());
-    let mut otlp_missed = None;
-    let mut otlp_url = None;
     // The agent says whose it is on its OTLP port: another project's agent that wants the same one names it.
     let project = tracepanel_server::neighbors::project(&dir.to_string_lossy());
-    let otlp = match &otlp_wanted {
-        Some(addr) => match tokio::net::TcpListener::bind(addr).await {
-            Ok(listener) => {
-                otlp_url = Some(format!("http://{}", took_otlp(&listener, &otlp_file)?));
-                Some(tokio::spawn(tracepanel_otlp::serve(
-                    listener,
-                    sink.clone(),
-                    activity.clone(),
-                    project,
-                )))
-            }
-            Err(error) => {
-                let taken = error.kind() == std::io::ErrorKind::AddrInUse;
-                let missed = tracepanel_server::Otlp {
-                    address: addr.clone(),
-                    serving: false,
-                    error: Some(error.to_string()),
-                    taken,
-                    free: if taken { free_after(addr).await } else { None },
-                };
-                tracepanel_server::otlp(missed.clone());
-                otlp_missed = Some(missed);
-                // Its holder may go (another project's agent stopped): this one takes the port then.
-                Some(tokio::spawn(retry_otlp(
-                    addr.clone(),
-                    otlp_file.clone(),
-                    sink.clone(),
-                    activity.clone(),
-                    project,
-                )))
-            }
-        },
-        None => None,
+    let OtlpStart {
+        task: otlp,
+        url: otlp_url,
+        missed: otlp_missed,
+    } = match &otlp_wanted {
+        Some(addr) => start_otlp(addr, &otlp_file, &sink, &activity, project).await?,
+        None => OtlpStart::default(),
     };
     let server = tokio::spawn({
         let activity = activity.clone();
         let sink = sink.clone();
         async move { tracepanel_protocol::serve(listener, sink, activity).await }
     });
-    // This agent's entry among its neighbours, while it serves a console: removed as it goes.
-    let mut registration = None;
-    let console = match serve {
+    let (console, registration) = match serve {
         Some(addr) => {
-            let listener = tokio::net::TcpListener::bind(&addr).await?;
-            let reader = store_local::Reader::new(&store_path);
-            let url = format!("http://{}/", listener.local_addr()?);
-            // Where an app's own console (Django's /__tracepanel__/) sends its API calls.
-            std::fs::write(&console_file, format!("{url}\n"))?;
-            // Where the agents of other projects on this machine find it, to ask which of its traces served their
-            // apps' calls.
-            let token = tracepanel_server::neighbors::token();
-            tracepanel_server::identify(token.clone(), url.clone());
-            registration = tracepanel_server::neighbors::register(&dir, &url, &token).ok();
-            Some((
-                url,
-                tokio::spawn(serve_console(
-                    listener,
-                    reader,
-                    activity.clone(),
-                    sink.clone(),
-                )),
-            ))
+            let started = start_console(&addr, &dir, &store_path, &console_file, &activity, &sink);
+            let (url, task, registration) = started.await?;
+            (Some((url, task)), registration)
         }
-        None => None,
+        None => (None, None),
     };
     std::fs::write(&addr_file, format!("{address}\n"))?;
     println!("tracepanel-agent {}", env!("CARGO_PKG_VERSION"));
@@ -380,22 +332,8 @@ async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
         None => println!("Ctrl-C stops it"),
     }
     if let Some(missed) = otlp_missed {
-        // Once the SDKs have the address: asking the neighbours takes a moment.
-        let own = console
-            .as_ref()
-            .map(|(url, _)| url.clone())
-            .unwrap_or_default();
-        let holder = if missed.taken {
-            let address = missed.address.clone();
-            tokio::task::spawn_blocking(move || {
-                tracepanel_server::neighbors::holding_otlp(&address, &own)
-            })
-            .await
-            .unwrap_or(OtlpHolder::Other)
-        } else {
-            OtlpHolder::Other
-        };
-        eprintln!("tracepanel-agent: {}", otlp_missed_line(&missed, &holder));
+        let own = console.as_ref().map(|(url, _)| url.clone());
+        say_otlp_missed(missed, own.unwrap_or_default()).await;
     }
 
     tokio::select! {
@@ -413,9 +351,7 @@ async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
     let _ = queue.send(Message::Stop);
     let _ = writer.join();
     drop(registration);
-    let _ = std::fs::remove_file(&addr_file);
-    let _ = std::fs::remove_file(&console_file);
-    let _ = std::fs::remove_file(&otlp_file);
+    remove_all(&[&addr_file, &console_file, &otlp_file]);
     if let Some(socket) = address.strip_prefix("unix:") {
         let _ = std::fs::remove_file(socket);
     }
@@ -457,6 +393,116 @@ fn socket_path(dir: &Path) -> PathBuf {
         .map(|byte| format!("{byte:02x}"))
         .collect();
     std::env::temp_dir().join(format!("tracepanel-{hex}.sock"))
+}
+
+/// Removes these files, the ones that are there.
+fn remove_all(files: &[&Path]) {
+    for file in files {
+        let _ = std::fs::remove_file(file);
+    }
+}
+
+type OtlpTask = tokio::task::JoinHandle<std::io::Result<()>>;
+type ConsoleTask = tokio::task::JoinHandle<()>;
+
+/// What came of the OTLP port the agent wants.
+#[derive(Default)]
+struct OtlpStart {
+    /// Serving it, or waiting for it to free.
+    task: Option<OtlpTask>,
+    url: Option<String>,
+    /// Why it isn't served yet.
+    missed: Option<tracepanel_server::Otlp>,
+}
+
+/// Binds the OTLP port and serves it. Where that fails, says so in the console and keeps trying.
+async fn start_otlp(
+    addr: &str,
+    otlp_file: &Path,
+    sink: &Sink,
+    activity: &Activity,
+    project: String,
+) -> std::io::Result<OtlpStart> {
+    match tokio::net::TcpListener::bind(addr).await {
+        Ok(listener) => Ok(OtlpStart {
+            url: Some(format!("http://{}", took_otlp(&listener, otlp_file)?)),
+            task: Some(tokio::spawn(tracepanel_otlp::serve(
+                listener,
+                sink.clone(),
+                activity.clone(),
+                project,
+            ))),
+            missed: None,
+        }),
+        Err(error) => {
+            let taken = error.kind() == std::io::ErrorKind::AddrInUse;
+            let missed = tracepanel_server::Otlp {
+                address: addr.to_owned(),
+                serving: false,
+                error: Some(error.to_string()),
+                taken,
+                free: if taken { free_after(addr).await } else { None },
+            };
+            tracepanel_server::otlp(missed.clone());
+            // Its holder may go (another project's agent stopped): this one takes the port then.
+            let task = tokio::spawn(retry_otlp(
+                addr.to_owned(),
+                otlp_file.to_owned(),
+                sink.clone(),
+                activity.clone(),
+                project,
+            ));
+            Ok(OtlpStart {
+                task: Some(task),
+                url: None,
+                missed: Some(missed),
+            })
+        }
+    }
+}
+
+/// Says why OTLP isn't served. Once the SDKs have the address: asking the neighbours takes a moment.
+async fn say_otlp_missed(missed: tracepanel_server::Otlp, own: String) {
+    let holder = if missed.taken {
+        let address = missed.address.clone();
+        tokio::task::spawn_blocking(move || {
+            tracepanel_server::neighbors::holding_otlp(&address, &own)
+        })
+        .await
+        .unwrap_or(OtlpHolder::Other)
+    } else {
+        OtlpHolder::Other
+    };
+    eprintln!("tracepanel-agent: {}", otlp_missed_line(&missed, &holder));
+}
+
+/// Serves the console on `addr`, and writes where to find it: its URL, its task, and this agent's entry among its
+/// neighbours, removed as it goes.
+async fn start_console(
+    addr: &str,
+    dir: &Path,
+    store_path: &Path,
+    console_file: &Path,
+    activity: &Activity,
+    sink: &Sink,
+) -> std::io::Result<(String, ConsoleTask, Option<Registration>)> {
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    let reader = store_local::Reader::new(store_path);
+    let url = format!("http://{}/", listener.local_addr()?);
+    // Where an app's own console (Django's /__tracepanel__/) sends its API calls.
+    std::fs::write(console_file, format!("{url}\n"))?;
+    // Where the agents of other projects on this machine find it, to ask which of its traces answered their
+    // apps' calls.
+    let token = tracepanel_server::neighbors::token();
+    tracepanel_server::identify(token.clone(), url.clone());
+    let registration = tracepanel_server::neighbors::register(dir, &url, &token).ok();
+    let task = tokio::spawn(serve_console(
+        listener,
+        reader,
+        activity.clone(),
+        sink.clone(),
+    ));
+    Ok((url, task, registration))
 }
 
 /// The listener SDKs connect to: `tcp:HOST:PORT`, else a unix socket where there are any, else TCP on a free port.
