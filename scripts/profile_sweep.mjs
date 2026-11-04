@@ -215,6 +215,8 @@ const said = (shares) => JSON.stringify(shares.map((share) => [share.name, share
 
 /** What the sweep read: traces, Profile heads, code and wait rows. */
 const READ = { heads: 0, rows: 0, apart: 0 };
+/** Traces not read, each with why: none is left out silently. */
+const SKIPPED = [];
 
 /**
  * Each place a trace's views disagree; without a profile, its strip's percents alone. A profile whose samples aren't
@@ -223,12 +225,25 @@ const READ = { heads: 0, rows: 0, apart: 0 };
 async function sweep(page, base, { id, profiled, readable }, mcp) {
   const problems = [];
   const problem = (what) => problems.push(`${id} ${what}`);
+  // The trace's page, its call tree open: its strip shows, or the console didn't open it as a trace (an id that
+  // isn't a ULID, as a test's made-up one, goes back to the list): then it is skipped, said why.
   const open = async () => {
     await page.goto("about:blank");
     await page.goto(`${base}#/t/${id}?tab=tree`);
-    await page.waitForSelector(STRIP, { timeout: 8000 });
+    await page.waitForFunction(
+      ([strip, hash]) => document.querySelector(strip) !== null || !location.hash.startsWith(hash),
+      [STRIP, `#/t/${id}`],
+      { timeout: 8000 },
+    );
+    return page.url().includes(`#/t/${id}`);
   };
-  await open();
+  if (!(await open())) {
+    const why = `the console doesn't open it as a trace (it went to ${new URL(page.url()).hash || "/"})`;
+    // A profiled one must open: its profile is what is checked.
+    if (profiled) problem(why);
+    else SKIPPED.push(`${id}: ${why}`);
+    return problems;
+  }
   const strip = await page.locator(STRIP).evaluate((root) =>
     [...root.querySelectorAll(":scope > li > .dt-share")].map((share) => ({
       name: [...share.childNodes]
@@ -335,6 +350,8 @@ try {
   console.log(
     `${traces.length} traces (${profiled} profiled), ${READ.heads} profile heads (${READ.apart} of a chain's traces get_profile doesn't add up together), ${READ.rows} code and wait rows: ${problems.length} disagreements`,
   );
+  if (SKIPPED.length) console.log(`${SKIPPED.length} skipped:`);
+  for (const skipped of SKIPPED) console.log(`  skipped ${skipped}`);
   for (const problem of problems) console.log(`  ${problem}`);
   process.exitCode = problems.length ? 1 : 0;
 } catch (error) {
