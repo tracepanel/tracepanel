@@ -199,9 +199,10 @@ const KIND_NAMES = { sql: "queries", http: "HTTP calls", logs: "log records" } a
 function useFirstError(host: WaterfallHost, tree: readonly Node[], trace: Trace): void {
   const done = useRef<string | null>(null);
   useEffect(() => {
-    // Its own errors or its callees': the first error record in its spans.
+    // Its own errors or its callees': the deepest error record (the cause, not the callers' rethrows); else, with
+    // issues, its root on its Issues.
     if (done.current === trace.id || host.selected) return;
-    const key = firstError(tree);
+    const key = deepestError(tree) ?? (trace.issues.length > 0 ? tree[0]?.key : undefined);
     if (!key) return;
     done.current = trace.id;
     host.select(trace.id, key);
@@ -213,13 +214,16 @@ function useFirstError(host: WaterfallHost, tree: readonly Node[], trace: Trace)
   }, [host, tree, trace]);
 }
 
-function firstError(nodes: readonly Node[]): string | undefined {
-  for (const node of nodes) {
-    if (node.type === "error") return node.key;
-    const found = firstError(childrenOf(node));
-    if (found) return found;
-  }
-  return undefined;
+function deepestError(nodes: readonly Node[]): string | undefined {
+  let best: { key: string; depth: number } | undefined;
+  const walk = (each: readonly Node[], depth: number) => {
+    for (const node of each) {
+      if (node.type === "error" && (!best || depth > best.depth)) best = { key: node.key, depth };
+      walk(childrenOf(node), depth + 1);
+    }
+  };
+  walk(nodes, 0);
+  return best?.key;
 }
 
 /**
@@ -297,7 +301,6 @@ function WaterfallRows({
   useFirstError(host, tree, trace);
   const explains = found ? explainable(found.trace) : false;
   const windows = windowsIn(host, trace);
-  const facts = host.facts.get(trace.id);
   return (
     <div className="dt-map" data-waterfall="" data-trace={trace.id}>
       <div className="dt-map-rows">
@@ -309,7 +312,6 @@ function WaterfallRows({
             <WaterfallDetails
               node={found.node}
               trace={found.trace}
-              totals={found.node.type === "span" && found.node.span.parent_id === null ? facts : undefined}
               profile={profileFor(found.node, found.trace, profileOf)}
               explainable={explains}
               profileScope={
@@ -317,16 +319,11 @@ function WaterfallRows({
                   ? `this call · ${appName(found.node.served) ?? "its app"}`
                   : "the whole trace"
               }
-              onOpen={
-                found.node.type === "span" &&
-                found.node.served &&
-                ctx.collapsed.has(found.node.key) !== found.node.served.opened
-                  ? undefined
-                  : found.node.type === "span" && found.node.served
-                    ? () => ctx.onToggle(found.node.key)
-                    : undefined
-              }
-              onClose={() => host.select(trace.id, null)}
+              onClose={() => {
+                host.select(trace.id, null);
+                // Back on the row the details were of.
+                document.querySelector<HTMLElement>(`.dt-map-row[data-key="${CSS.escape(found.node.key)}"]`)?.focus();
+              }}
               onShow={(key) => host.select(trace.id, key)}
             >
               {details}

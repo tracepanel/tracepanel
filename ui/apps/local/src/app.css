@@ -2415,29 +2415,6 @@ button.wf-crumb:hover {
   margin: 0;
 }
 /* The kinds the filter keeps, inside its field after the text. */
-.wf-kinds {
-  display: inline-flex;
-  flex: none;
-  gap: 1px;
-  padding: 1px;
-  border-radius: 0.3125rem;
-  background: var(--dt-muted-bg);
-}
-.wf-kind {
-  height: 1.25rem;
-  padding: 0 0.4375rem;
-  border-radius: 0.25rem;
-  color: var(--dt-text-3);
-  font-size: var(--dt-size-xs);
-  font-weight: 500;
-}
-.wf-kind:hover {
-  color: var(--dt-text);
-}
-.wf-kind[aria-checked="true"] {
-  background: var(--dt-accent-bg);
-  color: var(--dt-text);
-}
 /* ⚠ 12 ‹ ›: the issues, one after the other. */
 .wf-issues {
   display: inline-flex;
@@ -2502,26 +2479,6 @@ button.wf-crumb:hover {
   grid-template-areas: "identity actions";
 }
 /* The kinds of spans to keep: one segmented control at the names' left edge; Follow and Clear at the row's end. */
-.wf-call-head > .wf-kinds {
-  height: 1.75rem;
-  padding: 2px;
-  border: 1px solid var(--dt-border);
-  border-radius: var(--dt-radius-sm);
-  background: var(--dt-subtle);
-  text-transform: none;
-  letter-spacing: 0;
-}
-.wf-call-head > .wf-kinds .wf-kind {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3125rem;
-  height: 100%;
-  padding: 0 0.5rem;
-}
-.wf-kind-count {
-  color: var(--dt-warn);
-  font-variant-numeric: tabular-nums;
-}
 .wf-call-head > .wf-follow {
   margin-left: auto;
 }
@@ -2554,8 +2511,7 @@ button.wf-crumb:hover {
   font-size: max(11.5px, var(--dt-size-sm));
 }
 .dt-map[data-waterfall] .dt-kind,
-.wf-head,
-.wf-kind {
+.wf-head {
   font-size: max(11px, var(--dt-size-xs));
 }
 /* A visible focus ring on everything in the panel the keyboard reaches. */
@@ -2650,25 +2606,6 @@ button.wf-crumb:hover {
 .wf-call-head {
   container: wf-call / inline-size;
 }
-.wf-kind-select {
-  display: none;
-  height: 1.75rem;
-  padding: 0 0.375rem;
-  border: 1px solid var(--dt-border);
-  border-radius: var(--dt-radius-sm);
-  background: var(--dt-subtle);
-  color: var(--dt-text);
-  font-size: max(11px, var(--dt-size-xs));
-  text-transform: none;
-}
-@container wf-call (max-width: 17rem) {
-  .wf-call-head > .wf-kinds {
-    display: none;
-  }
-  .wf-kind-select {
-    display: inline-block;
-  }
-}
 
 /* ---------- round 5: the approved mockup as the visual spec (panel-redesign-a) ---------- */
 
@@ -2736,27 +2673,6 @@ button.wf-crumb:hover {
 .wf-call-head {
   gap: 2px;
   padding-left: 10px;
-}
-.wf-call-head > .wf-kinds {
-  height: 26px;
-  padding: 2px;
-  gap: 2px;
-  border: 1px solid var(--dt-border-strong);
-  border-radius: 8px;
-  background: none;
-}
-.wf-call-head > .wf-kinds .wf-kind {
-  height: 20px;
-  padding: 0 10px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 400;
-  letter-spacing: 0;
-  color: var(--dt-text-3);
-}
-.wf-call-head > .wf-kinds .wf-kind[aria-checked="true"] {
-  background: var(--dt-faint);
-  color: var(--dt-text);
 }
 .wf-call-head > .icon-button:last-child {
   margin-left: 0;
@@ -3019,41 +2935,6 @@ button.wf-crumb:hover {
 }
 
 /* Kinds: plain text tabs on the head's baseline; the active one in the text's colour, underlined with the accent. */
-.wf-call-head > .wf-kinds {
-  height: 100%;
-  align-self: stretch;
-  padding: 0;
-  gap: 14px;
-  border: 0;
-  border-radius: 0;
-  background: none;
-}
-.wf-call-head > .wf-kinds .wf-kind {
-  position: relative;
-  height: 100%;
-  padding: 0;
-  border-radius: 0;
-  background: none;
-  color: var(--dt-text-3);
-  font-size: 12px;
-}
-.wf-call-head > .wf-kinds .wf-kind:hover {
-  color: var(--dt-text-2);
-}
-.wf-call-head > .wf-kinds .wf-kind[aria-checked="true"] {
-  background: none;
-  color: var(--dt-text);
-}
-.wf-call-head > .wf-kinds .wf-kind[aria-checked="true"]::after {
-  content: "";
-  position: absolute;
-  right: 0;
-  bottom: -1px;
-  left: 0;
-  height: 2px;
-  border-radius: 1px;
-  background: var(--dt-accent);
-}
 .wf-head {
   align-items: stretch;
 }
@@ -3234,10 +3115,6 @@ button.wf-crumb:hover {
   padding-left: calc(12px + var(--dt-depth, 0) * 10px) !important;
 }
 /* Kind tabs: 24px wide to hit at least. */
-.wf-call-head > .wf-kinds .wf-kind {
-  min-width: 24px;
-  text-align: center;
-}
 /* The band: two lanes of 12px when blocks overlap; a failed one on top. */
 .wf-band[data-lanes="2"] {
   padding-block: 3px;
@@ -3751,4 +3628,179 @@ button.wf-crumb:hover {
 }
 .dt-map[data-waterfall] .dt-map-chips::before {
   display: none;
+}
+/* The wordmark beside the mark, as the old panel; gone only in a narrow dock. */
+@media (max-width: 520px) {
+  .wf-logo > span {
+    display: none;
+  }
+}
+/* A page's block: behind its requests, faint, the view's colour at its edge. */
+.wf-band-block[data-depth="0"] {
+  z-index: 0;
+  background: color-mix(in srgb, var(--dt-k-view) 14%, transparent);
+}
+/* ---------- the band, folded ---------- */
+.wf-band {
+  padding: 4px 12px;
+}
+.wf-band-track {
+  height: 24px;
+}
+.wf-band[data-lanes="2"] .wf-band-track {
+  height: 25px;
+}
+.wf-band-block,
+.wf-band-block[data-depth="0"],
+.wf-band[data-lanes="2"] .wf-band-block {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 24px;
+  padding: 0 6px 0 8px;
+  overflow: visible;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--dt-k-request) 22%, var(--dt-panel));
+  box-shadow: inset 2px 0 0 var(--wf-tone, var(--dt-k-http));
+  outline: 1px solid var(--dt-border-strong);
+  outline-offset: -1px;
+  color: var(--dt-text);
+  font: 500 11px / 1 var(--dt-mono);
+  opacity: 1;
+  filter: none;
+}
+.wf-band[data-lanes="2"] .wf-band-block {
+  height: 12px;
+  font-size: 9.5px;
+}
+.wf-band-block[data-depth="0"] {
+  background: color-mix(in srgb, var(--dt-k-view) 16%, var(--dt-panel));
+}
+.wf-band-block[data-tone="ok"] {
+  --wf-tone: var(--dt-ok);
+}
+.wf-band-block[data-tone="warn"] {
+  --wf-tone: var(--dt-warn);
+}
+.wf-band-block[data-tone="error"] {
+  --wf-tone: var(--dt-error);
+}
+.wf-band-block[data-issues]::after,
+.wf-band-block[data-capped]::after {
+  display: none;
+}
+.wf-band-block[aria-current="true"] {
+  outline: 1.5px solid var(--dt-accent);
+  box-shadow: inset 2px 0 0 var(--wf-tone, var(--dt-k-http));
+  z-index: 3;
+}
+.wf-band-block:hover,
+.wf-band-block[data-hovered] {
+  background: color-mix(in srgb, var(--dt-k-request) 34%, var(--dt-panel));
+  z-index: 4;
+}
+.wf-band-issue {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  color: var(--dt-warn);
+}
+.wf-band-break {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  width: 6px;
+  background: repeating-linear-gradient(-60deg, transparent 0 3px, var(--dt-text-3) 3px 4px);
+  opacity: 0.6;
+}
+/* ---------- one head row: Follow and Clear; the open entry's ticks over the tab's entries ---------- */
+.wf-head {
+  min-height: 38px;
+}
+.wf-time-cell {
+  position: relative;
+  align-self: stretch;
+  display: grid;
+  grid-template-rows: 1fr auto;
+}
+.wf-time-cell > .wf-ticks {
+  min-height: 22px;
+}
+.wf-time-cell > .wf-band {
+  padding: 0 var(--wf-track-gutter) 3px var(--wf-track-pad);
+  border: 0;
+}
+.wf-time-cell .wf-band-track,
+.wf-time-cell .wf-band[data-lanes="2"] .wf-band-track {
+  height: 9px;
+}
+.wf-time-cell .wf-band-block,
+.wf-time-cell .wf-band-block[data-depth="0"],
+.wf-time-cell .wf-band[data-lanes="2"] .wf-band-block {
+  height: 8px;
+  padding: 0;
+  border-radius: 2px;
+  font-size: 0;
+}
+.wf-time-cell .wf-band-block[data-depth="0"] {
+  z-index: 0;
+}
+.wf-time-cell .wf-band-text,
+.wf-time-cell .wf-band-issue {
+  display: none;
+}
+.wf-time-cell .wf-band-block[data-chip] {
+  width: 6px !important;
+}
+.wf-time-cell .wf-band-block::before {
+  inset: -8px -2px;
+}
+.wf-time-cell .wf-band-break {
+  top: 0;
+  bottom: 0;
+}
+.wf-call-head > .wf-follow {
+  margin-left: 0;
+}
+/* ---------- distill ---------- */
+/* A query's database is its details' (Query tab): not said again on every SQL row. */
+.dt-map[data-waterfall] .dt-alias {
+  display: none;
+}
+/* ---------- round 13, B ---------- */
+/* The head's overview: two thin lanes where entries overlap, fills at 3:1. */
+.wf-time-cell .wf-band-block,
+.wf-time-cell .wf-band-block[data-depth="0"],
+.wf-time-cell .wf-band[data-lanes="2"] .wf-band-block {
+  height: 4px;
+}
+.wf-time-cell .wf-band[data-lanes="1"] .wf-band-block {
+  height: 8px;
+}
+.wf-time-cell .wf-band-block {
+  background: color-mix(in srgb, var(--dt-k-http) 70%, transparent);
+  box-shadow: none;
+  outline: 0;
+}
+.wf-time-cell .wf-band-block[data-depth="0"] {
+  background: color-mix(in srgb, var(--dt-k-view) 60%, transparent);
+}
+.wf-time-cell .wf-band-block[data-tone="error"] {
+  background: var(--dt-error);
+}
+.wf-time-cell .wf-band-block[data-tone="warn"] {
+  background: var(--dt-warn);
+}
+.wf-time-cell .wf-band-block[aria-current="true"] {
+  outline: 1.5px solid var(--dt-accent);
+  outline-offset: 1px;
+}
+/* Dividers above the rows and the details: their whole hit area answers. */
+.wf-splitter {
+  z-index: 6;
+}
+/* Carets at 3:1 in light. */
+:root[data-theme="light"] .dt-map[data-waterfall] .dt-map-caret {
+  opacity: 1;
+  color: var(--dt-text-3);
 }

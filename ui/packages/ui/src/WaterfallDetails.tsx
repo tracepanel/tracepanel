@@ -15,7 +15,7 @@ import type { Windows } from "./lib/slice";
 import { splitOf } from "./lib/split";
 import { KindBadge, StatusBadge } from "./primitives";
 import type { Issue, Span, Trace } from "./types";
-import { crumbOf, type WaterfallFacts } from "./Waterfall";
+import { crumbOf } from "./Waterfall";
 
 /** Every span under a row, in its trace and in the traces served for its calls. */
 function spansUnder(node: Node, trace: Trace): Span[] {
@@ -185,19 +185,6 @@ function shareColor(share: string): string {
   return `var(--dt-k-${share}, var(--dt-k-request))`;
 }
 
-/** A request's totals in one line, the non-zero ones only: "74 queries · 54 ms · 2 HTTP calls · 1 log record". */
-function TotalsLine({ facts }: { facts: WaterfallFacts }) {
-  const parts = [
-    facts.db.count ? `${plural(facts.db.count, "query", "queries")}${facts.db.time ? ` · ${facts.db.time}` : ""}` : "",
-    facts.http.count
-      ? `${plural(facts.http.count, "HTTP call", "HTTP calls")}${facts.http.time ? ` · ${facts.http.time}` : ""}`
-      : "",
-    facts.logs ? plural(facts.logs, "log record", "log records") : "",
-  ].filter(Boolean);
-  if (parts.length === 0) return null;
-  return <p className="dt-wf-totals-line">{parts.join(" · ")}</p>;
-}
-
 /**
  * The selected row's details, by what it is: its headline; a request's split (one bar) or a call's wait, network and
  * app time; its issues as cards with their fix; a request's non-zero totals; a call's way into its callee's spans; the
@@ -209,27 +196,21 @@ export function WaterfallDetails({
   trace,
   onClose,
   onShow,
-  totals,
   profile,
   profileScope,
   explainable,
-  onOpen,
   children,
 }: {
   node: Node;
   trace: Trace;
   onClose: () => void;
   onShow: (key: string) => void;
-  /** A trace's root row: its totals. */
-  totals?: WaterfallFacts | undefined;
   /** The row's trace's profile, where it has one: its bar and flame. */
   profile?: ReactNode;
   /** What the profile is of: "the whole trace", "this call (library-api)". */
   profileScope?: string | undefined;
   /** Whether the row's app runs EXPLAIN (its query's details then have it). */
   explainable?: boolean | undefined;
-  /** A call whose callee's spans are folded: opens them under its row. */
-  onOpen?: (() => void) | undefined;
   children: ReactNode;
 }) {
   const spans = spansUnder(node, trace);
@@ -307,15 +288,8 @@ export function WaterfallDetails({
   return (
     <div className="dt-wf-details">
       <Headline node={node} trace={trace} onClose={onClose} />
-      {root ? <SplitBar trace={trace} /> : <HopSplit node={node} />}
-      {totals ? <TotalsLine facts={totals} /> : null}
-      {onOpen ? (
-        <p className="dt-wf-totals-line">
-          <button type="button" className="dt-wf-link" onClick={onOpen}>
-            Show its spans
-          </button>
-        </p>
-      ) : null}
+      {/* The profile tab says the split itself: the head's then gives way. */}
+      {root ? shown?.id === "profile" ? null : <SplitBar trace={trace} /> : <HopSplit node={node} />}
       {categories.length > 1 ? (
         <div className="dt-wf-tabs" role="tablist" aria-label="Details">
           {categories.map((each) => (
@@ -351,6 +325,17 @@ export function WaterfallDetails({
 
 /** The tab each kind of span was last looked at on: kept while moving between spans of that kind. */
 const CATEGORY_OF = new Map<string, string>();
+
+/** Opens the next details of a span of this kind on this tab: a code row opens its span's Profile. */
+export function preferCategory(kind: string, id: string): void {
+  CATEGORY_OF.set(kind, id);
+}
+
+/** A span's badge word, as its row says it (a span's kind in short). */
+export function spanWord(span: Span, trace: Trace): string {
+  const kind = spanKindLabel(span.kind, trace.attrs);
+  return SHORT_KINDS[kind] ?? kind;
+}
 
 function useCategory(kind: string, categories: readonly { id: string }[]): [string, (id: string) => void] {
   const [, redraw] = useState(0);

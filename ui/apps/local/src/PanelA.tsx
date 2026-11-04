@@ -27,7 +27,7 @@ import {
 } from "@tracepanel/ui";
 import { isTyping } from "@tracepanel/ui/lib/keys";
 import { readItem, writeItem } from "@tracepanel/ui/lib/storage";
-import { ChevronRightIcon, FlameIcon, KeyboardIcon, ListEndIcon } from "lucide-react";
+import { ChevronRightIcon, FlameIcon, KeyboardIcon, ListEndIcon, TriangleAlertIcon } from "lucide-react";
 import {
   type ReactNode,
   type RefObject,
@@ -137,13 +137,15 @@ const BREAK_ROOM = 72;
 /** An element's width, followed as it resizes. */
 function useWidth(ref: RefObject<HTMLElement | null>): number {
   const [width, setWidth] = useState(0);
+  // Each render: the element may mount after the first (a band hidden until there are two entries).
+  const element = ref.current;
   useEffect(() => {
-    const element = ref.current;
     if (!element) return;
+    setWidth(element.clientWidth);
     const observer = new ResizeObserver(() => setWidth(element.clientWidth));
     observer.observe(element);
     return () => observer.disconnect();
-  }, [ref]);
+  }, [element]);
   return width;
 }
 
@@ -182,7 +184,11 @@ function useTreeKeys(
       const all = rows();
       // One row in the Tab order: the focused one while focus is in the tree, else the selected one, else the first.
       const focused = all.find((row) => row === document.activeElement);
-      const current = focused ?? all.find((row) => row.getAttribute("aria-current") === "true") ?? all[0];
+      const current =
+        focused ??
+        all.find((row) => row.getAttribute("aria-current") === "true") ??
+        all.find((row) => row.closest("[data-trace]")) ??
+        all[0];
       for (const row of all) {
         // Its level as drawn: the depth its name is indented by, else its nesting.
         const depth = row.querySelector<HTMLElement>(".dt-map-name")?.style.getPropertyValue("--dt-depth");
@@ -212,6 +218,13 @@ function useTreeKeys(
       }, 120);
     };
     // A code row clicked stays marked while its span's details show; any other row clicked lets it go.
+    // A click on the selected row (the sticky root, most often) keeps it selected and open: folding is the caret's.
+    const onCapture = (event: MouseEvent) => {
+      const target = event.target as Element;
+      const row = target.closest<HTMLElement>(".dt-map-row");
+      if (row?.getAttribute("aria-current") === "true" && !target.closest(".dt-map-caret")) event.stopPropagation();
+    };
+    root.addEventListener("click", onCapture, true);
     const onClick = (event: MouseEvent) => {
       const row = (event.target as Element).closest<HTMLElement>(".dt-map-row");
       if (!row) return;
@@ -296,6 +309,7 @@ function useTreeKeys(
       observer.disconnect();
       root.removeEventListener("keydown", onKey);
       root.removeEventListener("click", onClick);
+      root.removeEventListener("click", onCapture, true);
     };
   });
 }
@@ -361,10 +375,13 @@ function AxisHead({
   ticksRef,
   filter,
   skipped,
+  overview,
 }: {
   axis: Axis;
   ticksRef: RefObject<HTMLSpanElement | null>;
   filter: ReactNode;
+  /** The tab's entries, a thin track under the ticks: one line for both times. */
+  overview: ReactNode;
   /** The page's idle start left off the axis (µs): a break mark says how long. */
   skipped: number;
 }) {
@@ -372,63 +389,26 @@ function AxisHead({
   return (
     <div className="wf-head wf-grid">
       {filter}
-      <span className="wf-ticks" aria-hidden="true" ref={ticksRef} title="Drag to pick a stretch of time">
-        {skipped > 0 ? (
-          <span className="wf-break" title={`${duration(skipped)} before the first span, left off the axis`}>
-            <svg viewBox="0 0 10 12" width="10" height="12" aria-hidden="true">
-              <path d="M2 11 6 1M5 11 9 1" stroke="currentColor" strokeWidth="1.4" fill="none" />
-            </svg>
-            {duration(skipped)}
-          </span>
-        ) : null}
-        {ticks(axis, skipped, width < 200 ? 2 : width < 360 ? 3 : 5).map((tick) => (
-          // The break mark takes the axis's start: no label under it.
-          <span key={tick.at} style={{ left: `${tick.at * 100}%` }}>
-            {skipped > 0 && tick.at * width < BREAK_ROOM ? "" : tick.label}
-          </span>
-        ))}
+      <span className="wf-time-cell">
+        <span className="wf-ticks" aria-hidden="true" ref={ticksRef} title="Drag to pick a stretch of time">
+          {skipped > 0 ? (
+            <span className="wf-break" title={`${duration(skipped)} before the first span, left off the axis`}>
+              <svg viewBox="0 0 10 12" width="10" height="12" aria-hidden="true">
+                <path d="M2 11 6 1M5 11 9 1" stroke="currentColor" strokeWidth="1.4" fill="none" />
+              </svg>
+              {duration(skipped)}
+            </span>
+          ) : null}
+          {ticks(axis, skipped, width < 200 ? 2 : width < 360 ? 3 : 5).map((tick) => (
+            // The break mark takes the axis's start: no label under it.
+            <span key={tick.at} style={{ left: `${tick.at * 100}%` }}>
+              {skipped > 0 && tick.at * width < BREAK_ROOM ? "" : tick.label}
+            </span>
+          ))}
+        </span>
+        {overview}
       </span>
     </div>
-  );
-}
-
-const KINDS: { id: RowKind; label: string }[] = [
-  { id: "sql", label: "SQL" },
-  { id: "http", label: "HTTP" },
-  { id: "logs", label: "Logs" },
-];
-
-/** The kinds of spans the waterfall keeps: All, or one kind. No counts: the root row's details have the totals. */
-function KindChips({ kind, onKind }: { kind: RowKind | null; onKind: (kind: RowKind | null) => void }) {
-  return (
-    <span className="wf-kinds" role="radiogroup" aria-label="Kind of spans">
-      {[{ id: null, label: "All" } as const, ...KINDS].map((each) => (
-        // biome-ignore lint/a11y/useSemanticElements: chips in a field, not a form's radio buttons.
-        <button
-          key={each.label}
-          type="button"
-          role="radio"
-          aria-checked={kind === each.id}
-          // One stop in the Tab order: the kind kept; ← → move between them.
-          tabIndex={kind === each.id ? 0 : -1}
-          className="wf-kind"
-          onClick={() => onKind(each.id)}
-          onKeyDown={(event) => {
-            const ids = [null, ...KINDS.map((one) => one.id)];
-            const at = ids.indexOf(kind);
-            const by = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
-            if (!by) return;
-            event.preventDefault();
-            const next = ids[(at + by + ids.length) % ids.length] ?? null;
-            onKind(next);
-            const group = event.currentTarget.parentElement;
-            requestAnimationFrame(() => group?.querySelector<HTMLElement>('[aria-checked="true"]')?.focus());
-          }}
-        >
-          {each.label}
-        </button>
-      ))}
-    </span>
   );
 }
 
@@ -782,7 +762,6 @@ function usePanelKeys(
         button?.setAttribute("aria-pressed", "false");
         if (button) button.textContent = "Full width";
       } else if (now.range) does.clearRange();
-      else if (now.kind) does.clearKind();
       else if (now.selected) does.deselect();
       // Never the panel itself: its close button and the pill close it.
     };
@@ -893,7 +872,8 @@ export function PanelA({ route }: { route: Route }) {
       >
         <header className="wf-bar">
           <div className="wf-zone wf-zone-identity">
-            <Logo className="shrink-0 gap-1.5 text-md [&>span]:hidden [&_svg]:size-5" />
+            {/* As the old panel's: the mark and the wordmark; the wordmark goes only where the dock is narrow. */}
+            <Logo className="wf-logo shrink-0 gap-1.5 text-md [&_svg]:size-5" />
           </div>
           <div className="wf-zone wf-zone-actions">
             <SwitchUser source={source} onSwitched={() => tellWidget("tracepanel:reload")} />
@@ -940,7 +920,7 @@ export function PanelA({ route }: { route: Route }) {
             className="wf-waterfall"
             onPointerDown={(event) => {
               const target = event.target as Element;
-              if (ticksRef.current && target.closest(".dt-map-track, .wf-ticks")) {
+              if (ticksRef.current && target.closest(".dt-map-track, .wf-ticks") && !target.closest(".wf-band")) {
                 drag.start(event, ticksRef.current);
                 // The drag keeps the pointer's default (focus) from happening: the row is focused, the keys stay here.
                 // Focused for the keys, without the keyboard's ring: a pointer put it there.
@@ -960,32 +940,22 @@ export function PanelA({ route }: { route: Route }) {
               }}
             >
               <div className="wf-sticky">
-                <TabTimeline
-                  rows={listed}
-                  openKey={openKey}
-                  onOpen={openEntry}
-                  hoveredKey={hoveredKey}
-                  onHover={setHoveredKey}
-                />
                 {host.axis ? (
                   <AxisHead
                     skipped={skipped}
                     axis={host.axis}
                     ticksRef={ticksRef}
+                    overview={
+                      <TabTimeline
+                        rows={listed}
+                        openKey={openKey}
+                        onOpen={openEntry}
+                        hoveredKey={hoveredKey}
+                        onHover={setHoveredKey}
+                      />
+                    }
                     filter={
                       <span className="wf-call-head">
-                        <KindChips kind={host.kind} onKind={setKind} />
-                        <select
-                          className="wf-kind-select"
-                          aria-label="Kind of spans"
-                          value={host.kind ?? ""}
-                          onChange={(event) => setKind((event.target.value || null) as RowKind | null)}
-                        >
-                          <option value="">All</option>
-                          <option value="sql">SQL</option>
-                          <option value="http">HTTP</option>
-                          <option value="logs">Logs</option>
-                        </select>
                         <FollowButton follow={follow} onFollow={onFollow} />
                         <ClearButton onClear={() => setClearing(true)} label="Clear the list" />
                       </span>
@@ -1043,12 +1013,6 @@ export function PanelA({ route }: { route: Route }) {
           </div>
           <aside className="wf-details" aria-label="Details" hidden={!(host.selected || host.range)}>
             <DetailsSplitter dock={dock} value={detailsSize} onSize={setDetailsSize} main={mainRef} />
-            {host.range && !host.selected ? (
-              <p className="wf-range-head">
-                Stretch {duration(skipped + host.range.from)} – {duration(skipped + host.range.to)} ·{" "}
-                {duration(host.range.to - host.range.from)}
-              </p>
-            ) : null}
             <div className="wf-details-body" ref={setDetails} />
           </aside>
         </div>
@@ -1105,8 +1069,9 @@ function onOneClock(rows: readonly TraceRow[]): TraceRow[] {
 }
 
 /**
- * The tab's timeline: every page and request as a block on one shared axis, in the time column. Hover says what it
- * is; a click opens it below (its own axis); the open one is outlined.
+ * The tab's timeline: every page and request as a labelled block on one axis whose idle gaps are folded into narrow
+ * breaks (a tab's entries are seconds or minutes apart: on a plain axis they would be specks). Hover says what it is;
+ * a click opens it below on its own axis; the open one is outlined.
  */
 function TabTimeline({
   rows,
@@ -1122,81 +1087,59 @@ function TabTimeline({
   onHover: (key: string | null) => void;
 }) {
   const track = useRef<HTMLDivElement>(null);
-  const width = useWidth(track);
+  const width = useWidth(track) || 600;
   const all = onOneClock(uniqueTraces(rows));
   if (all.length < 2) return null;
   const now = Date.now() * 1000;
+  const running = (row: TraceRow) => row.open || row.trace.id.startsWith("~");
   const lasted = (row: TraceRow) =>
-    row.open || row.trace.id.startsWith("~") ? Math.max(now - row.trace.start, row.trace.duration) : row.trace.duration;
-  const starts = all.map((row) => row.trace.start);
-  const cap = capOf(all.map(lasted), Math.max(...starts) - Math.min(...starts));
-  const shown = (row: TraceRow) => Math.min(lasted(row), cap);
-  const start = Math.min(...all.map((row) => row.trace.start));
-  const end = Math.max(...all.map((row) => row.trace.start + shown(row)));
-  const axis = { start, duration: Math.max(end - start, 1) };
-  // One lane; a second where blocks overlap (concurrent requests), 28px either way.
-  const lanes = twoLanes(all, (row) => [row.trace.start, row.trace.start + shown(row)]);
-  const twoDeep = [...lanes.values()].some((lane) => lane > 0);
+    running(row) ? Math.max(now - row.trace.start, row.trace.duration) : row.trace.duration;
+  const spans = all.map((row) => ({ row, from: row.trace.start, to: row.trace.start + Math.max(lasted(row), 1) }));
+  const scale = foldedScale(spans, width);
+  const placed = spans.map(({ row, from, to }) => {
+    const label = `${row.trace.name} · ${duration(lasted(row))}`;
+    const x = scale.x(from);
+    const drawn = Math.max(scale.x(to) - x, 2);
+    // Too narrow for its name: a chip as wide as its label, at its place.
+    const chip = drawn < 40;
+    const w = chip ? labelWidth(label) + (row.trace.issues ? 14 : 0) : drawn;
+    return { row, x, w, label, chip };
+  });
+  const lane = bandLanes(placed);
+  const twoDeep = [...lane.values()].some((each) => each > 0);
   return (
     <div className="wf-band" data-lanes={twoDeep ? "2" : "1"}>
       <div className="wf-band-track" ref={track}>
-        {all.map((row) => {
-          const left = ((row.trace.start - axis.start) / axis.duration) * 100;
-          // At least 16px to hit; never past the band's end.
-          const least = width > 0 ? (16 / width) * 100 : 0.4;
-          const share = Math.min(Math.max((shown(row) / axis.duration) * 100, least), 100 - Math.min(left, 99.6));
-          const capped = lasted(row) > cap;
-          const label = `${shortName(row)} ${duration(lasted(row))}`;
-          const fits = (share / 100) * width >= labelWidth(label);
-          const running = row.open || row.trace.id.startsWith("~");
+        {scale.breaks.map((each) => (
+          <span
+            key={each.at}
+            className="wf-band-break"
+            style={{ left: `${each.at}px` }}
+            title={`${duration(each.us)} with nothing running`}
+          />
+        ))}
+        {placed.map(({ row, x, w, label, chip }) => {
+          const open = entryKey(row) === openKey;
+          const status = row.trace.http_status ? ` · ${row.trace.http_status}` : "";
           const issues = row.trace.issues
             ? ` · ${row.trace.issues} ${row.trace.issues === 1 ? "issue" : "issues"}`
             : "";
-          const status = row.trace.http_status ? ` · ${row.trace.http_status}` : "";
-          const open = entryKey(row) === openKey;
-          // The room right of the block, to the next block's start (px).
-          const nextLeft = Math.min(
-            100,
-            ...all
-              .map((each) => ((each.trace.start - axis.start) / axis.duration) * 100)
-              .filter((each) => each > left + share),
-          );
-          const room = ((nextLeft - (left + share)) / 100) * width;
-          // The open block's name is always said: inside it when it fits, else beside it.
-          const beside =
-            open && !fits && room > labelWidth(label) ? (
-              <span
-                key={`${entryKey(row)}:label`}
-                className="wf-band-label-beside"
-                style={{ left: `calc(${left + share}% + 6px)` }}
-              >
-                {label}
-              </span>
-            ) : null;
-          return [
-            beside,
+          return (
             <button
               type="button"
               key={entryKey(row)}
               className="wf-band-block"
-              data-kind={row.trace.kind}
               data-depth={row.depth ?? 0}
-              data-failed={row.trace.status === "error" ? "" : undefined}
-              data-capped={capped ? "" : undefined}
-              aria-current={entryKey(row) === openKey ? "true" : undefined}
+              data-chip={chip ? "" : undefined}
+              data-tone={bandTone(row)}
+              aria-current={open ? "true" : undefined}
               data-hovered={hoveredKey === entryKey(row) ? "" : undefined}
-              data-issues={row.trace.issues > 0 ? "" : undefined}
+              aria-label={`Open ${row.trace.name}${status} · ${duration(lasted(row))}${issues}`}
+              title={`${row.trace.name}${status} · ${duration(lasted(row))}${issues}`}
+              style={{ left: `${x}px`, width: `${Math.min(w, width - x)}px`, top: `${(lane.get(row) ?? 0) * 5}px` }}
+              tabIndex={open ? 0 : -1}
               onMouseEnter={() => onHover(entryKey(row))}
               onMouseLeave={() => onHover(null)}
-              aria-label={`Open ${row.trace.name}${status} · ${duration(lasted(row))}${issues}`}
-              title={
-                running
-                  ? `${row.trace.name} · running for ${duration(lasted(row))}`
-                  : `${row.trace.name}${status} · ${duration(row.trace.duration)}${issues}${capped ? " (drawn shorter)" : ""}`
-              }
-              style={{ left: `${Math.min(left, 99.6)}%`, width: `${share}%`, top: `${(lanes.get(row) ?? 0) * 11}px` }}
-              // One Tab stop for the band, the open block; left and right arrows move between blocks.
-              tabIndex={open ? 0 : -1}
               onKeyDown={(event) => {
                 const by = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
                 if (!by) return;
@@ -1205,52 +1148,88 @@ function TabTimeline({
                   ...(event.currentTarget.parentElement?.querySelectorAll<HTMLElement>(".wf-band-block") ?? []),
                 ];
                 const at = blocks.indexOf(event.currentTarget);
-                blocks[Math.min(Math.max(at + by, 0), blocks.length - 1)]?.focus();
+                const next = blocks[Math.min(Math.max(at + by, 0), blocks.length - 1)];
+                // The Tab stop moves with the focus.
+                for (const block of blocks) block.tabIndex = block === next ? 0 : -1;
+                next?.focus();
               }}
               onClick={() => onOpen(row)}
             >
-              {fits ? <span className="wf-band-text">{label}</span> : null}
-            </button>,
-          ];
+              {row.trace.issues ? <TriangleAlertIcon className="wf-band-issue" aria-hidden="true" /> : null}
+              <span className="wf-band-text">{label}</span>
+            </button>
+          );
         })}
       </div>
     </div>
   );
 }
 
-/** Two lanes for the band: a block that overlaps one in the first goes to the second. */
-function twoLanes(rows: readonly TraceRow[], extent: (row: TraceRow) => [number, number]): Map<TraceRow, number> {
-  const lanes = new Map<TraceRow, number>();
-  let first = Number.NEGATIVE_INFINITY;
-  for (const row of [...rows].sort((a, b) => a.trace.start - b.trace.start)) {
-    const [from, to] = extent(row);
-    const lane = first <= from ? 0 : 1;
-    lanes.set(row, lane);
-    if (lane === 0) first = to;
-  }
-  return lanes;
+/** How an entry went, for its block's edge: failed, answered 4xx, or fine. */
+function bandTone(row: TraceRow): string {
+  if (row.trace.status === "error" || (row.trace.http_status ?? 0) >= 500) return "error";
+  if ((row.trace.http_status ?? 0) >= 400) return "warn";
+  return "ok";
 }
 
+const BREAK_PX = 18;
+
 /**
- * The longest a block is drawn in the band: an outlier (a 31 s request among 200 ms ones) about as long as the next
- * longest (a quarter more), so the others keep their room; it says so with a break mark at its end.
+ * A time scale for the band with its idle gaps folded: a gap longer than the longest entry (or than a fifth of the
+ * whole) is a narrow break; the active stretches share the rest of the width by their time.
  */
-function capOf(durations: readonly number[], startsSpan: number): number {
-  const sorted = [...durations].sort((a, b) => b - a);
-  const [first = 0, second = 0] = sorted;
-  if (!(second > 0 && first > second * 2)) return Number.POSITIVE_INFINITY;
-  // No longer than the next longest, nor than a third of the time the entries started over.
-  return Math.max(Math.min(second * 1.25, Math.max(startsSpan / 3, second)), 1);
+function foldedScale(spans: readonly { from: number; to: number }[], width: number) {
+  const sorted = [...spans].sort((a, b) => a.from - b.from);
+  const longest = Math.max(...sorted.map((each) => each.to - each.from));
+  const start = sorted[0]?.from ?? 0;
+  const end = Math.max(...sorted.map((each) => each.to));
+  const limit = Math.min(longest, (end - start) / 5);
+  // The active stretches: entries merged where they meet or the gap between them is short.
+  const pieces: { from: number; to: number }[] = [];
+  for (const each of sorted) {
+    const last = pieces.at(-1);
+    if (last && each.from - last.to <= limit) last.to = Math.max(last.to, each.to);
+    else pieces.push({ from: each.from, to: each.to });
+  }
+  const active = pieces.reduce((all, piece) => all + (piece.to - piece.from), 0) || 1;
+  const room = Math.max(width - (pieces.length - 1) * BREAK_PX, 40);
+  const lefts: number[] = [];
+  let at = 0;
+  for (const [index, piece] of pieces.entries()) {
+    if (index > 0) at += BREAK_PX;
+    lefts.push(at);
+    at += ((piece.to - piece.from) / active) * room;
+  }
+  const breaks = pieces.slice(1).map((piece, index) => ({
+    at: (lefts[index + 1] ?? 0) - BREAK_PX / 2 - 3,
+    us: piece.from - (pieces[index]?.to ?? piece.from),
+  }));
+  const x = (t: number): number => {
+    let index = 0;
+    for (const [at, each] of pieces.entries()) if (each.from <= t) index = at;
+    const piece = pieces[index];
+    if (!piece) return 0;
+    const left = lefts[index] ?? 0;
+    return left + ((Math.min(t, piece.to) - piece.from) / active) * room;
+  };
+  return { x, breaks };
+}
+
+/** Two lanes: a block that overlaps one in the first (its label included) goes to the second. */
+function bandLanes(placed: readonly { row: TraceRow; x: number; w: number }[]): Map<TraceRow, number> {
+  const lanes = new Map<TraceRow, number>();
+  let first = Number.NEGATIVE_INFINITY;
+  for (const each of [...placed].sort((a, b) => a.x - b.x)) {
+    const lane = first <= each.x ? 0 : 1;
+    lanes.set(each.row, lane);
+    if (lane === 0) first = each.x + each.w + 2;
+  }
+  return lanes;
 }
 
 /** An entry's identity in the list: several entries may share a trace (fetches carrying the page's trace). */
 function entryKey(row: TraceRow): string {
   return row.key ?? `${row.trace.id}:${row.trace.start}`;
-}
-
-/** A block's name: the trace's, as its row says it. */
-function shortName(row: TraceRow): string {
-  return row.trace.name;
 }
 
 /** About how wide a label is in the band's 10.5px type (px). */

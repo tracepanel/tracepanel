@@ -25,6 +25,7 @@ import { RowFlame } from "./ProfileHint";
 import { KindBadge, TaskName } from "./primitives";
 import type { Span, Trace } from "./types";
 import { useAxis } from "./Waterfall";
+import { preferCategory, spanWord } from "./WaterfallDetails";
 
 /** A code row shows unless other shares are picked, or a range it doesn't overlap. */
 function codeShown(quiet: Quiet, category: Category, ctx: RowContext): boolean {
@@ -293,7 +294,10 @@ function CodePartRow({ span, ctx, depth, part }: { span: Span; ctx: RowContext; 
           ? "Open the profile at this stretch"
           : "Open the profile of the trace that served this call, at this stretch"
       }
-      onClick={() => open(stretchesOf(part.pieces))}
+      onClick={() => {
+        preferCategory(spanWord(span, ctx.trace), "profile");
+        open(stretchesOf(part.pieces));
+      }}
     >
       {inside}
     </button>

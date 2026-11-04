@@ -4079,11 +4079,7 @@ div.dt-map-row[data-kind="code"] {
   padding: 10px 14px;
 }
 .dt-wf-issues .dt-issue-hint {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 1;
-  cursor: pointer;
+  display: block;
 }
 .dt-wf-issues .dt-issue-card:focus-within .dt-issue-hint,
 .dt-wf-issues .dt-issue-hint:hover {
@@ -4091,4 +4087,8 @@ div.dt-map-row[data-kind="code"] {
 }
 .dt-wf-query-name {
   text-align: left;
+}
+/* An error record's tag in the error's tone, as everywhere else. */
+.dt-map[data-waterfall] .dt-map-row[data-level="error"] .dt-kind {
+  color: var(--dt-error);
 }
