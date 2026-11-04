@@ -1,6 +1,6 @@
 import { FlameIcon } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
-import type { CodeOwner, RowContext } from "./CallRows";
+import type { CodeOwner, RowContext } from "./CallRowParts";
 import { partOfCategory } from "./callTree";
 import { duration } from "./format";
 import { Hint } from "./Hint";

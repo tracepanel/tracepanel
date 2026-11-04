@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { AsReceived } from "./AsReceived";
-import { appName, Inside, type Linked, OpenRun, RUN_WORDS, runRows, type TraceProfileOpener } from "./CallRows";
+import { Inside, RUN_WORDS, runRows, type TraceProfileOpener } from "./CallRowParts";
+import { appName, type Linked, OpenRun } from "./CallRows";
 import { type Explain, QueryPlan } from "./CallTable";
 import type { Node, Remote, ServedRun } from "./callTree";
 import { duration } from "./format";
