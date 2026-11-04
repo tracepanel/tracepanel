@@ -271,7 +271,7 @@ const KINDS = [
 ] as const;
 
 /** The Profile tab's content, when it is the tab open and the trace has a profile: its time, or its memory. */
-function ProfilePane({
+export function ProfilePane({
   trace,
   open,
   onShowRow,

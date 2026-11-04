@@ -51,7 +51,7 @@ import { type Slice, stretchText } from "./lib/slice";
 import { callsTime } from "./lib/split";
 import { useViewMemory, VIEW_KEYS, type ViewMemory, type ViewMemoryHeld, ViewMemoryScope } from "./lib/viewMemory";
 import { linkProps, opensTraces, openTraceAt, type TraceLinks } from "./links";
-import { ProfileTab } from "./ProfileView";
+import { ProfilePane, ProfileTab } from "./ProfileView";
 import { RoutePath, StatusBadge, TraceBadge, WaitingIcon } from "./primitives";
 import { RequestInfo } from "./RequestInfo";
 import { UnderThis, underCounts } from "./ScopeBar";
@@ -986,14 +986,19 @@ export function TraceView({
                 depth={waterfall?.depth}
                 foldRoot={waterfall?.foldRoot}
                 onProfile={trace.profile ? () => onClock?.select(trace.id, rootOf(trace)) : undefined}
-                profileOf={(each) => (
-                  <ProfileTab
-                    trace={each}
-                    open={true}
-                    chain={chain}
-                    onShowRow={(row) => onClock?.select(trace.id, row)}
-                  />
-                )}
+                profileOf={(each) =>
+                  // This trace's: its chain's profiles (as its Profile tab); a callee's: that trace's own.
+                  each.id === trace.id ? (
+                    <ProfileTab
+                      trace={each}
+                      open={true}
+                      chain={chain}
+                      onShowRow={(row) => onClock?.select(trace.id, row)}
+                    />
+                  ) : (
+                    <ProfilePane trace={each} open={true} />
+                  )
+                }
               />
             </article>
           </WaterfallContext.Provider>

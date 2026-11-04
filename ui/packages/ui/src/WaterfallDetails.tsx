@@ -79,11 +79,21 @@ function HopSplit({ node }: { node: Node }) {
 function Headline({ node, trace, onClose }: { node: Node; trace: Trace; onClose: () => void }) {
   const crumb = crumbOf(node);
   const status = statusOf(node, trace);
-  const time = node.type === "span" ? node.span.duration : node.type === "task" ? node.run.duration : null;
+  const time =
+    node.type === "span"
+      ? node.span.duration
+      : node.type === "task"
+        ? node.run.duration
+        : node.type === "group"
+          ? node.spans.reduce((all, span) => all + span.duration, 0)
+          : null;
   return (
     <header className="dt-wf-details-head">
       <TraceBadge word={crumb.badge} />
-      <h3 title={crumb.label}>{crumb.label}</h3>
+      <h3 title={crumb.label}>
+        {crumb.label}
+        {node.type === "group" ? <span className="dt-wf-head-count"> ×{node.spans.length}</span> : null}
+      </h3>
       <StatusBadge status={status} />
       {time !== null ? <span className="dt-wf-head-time">{duration(time)}</span> : null}
       <button type="button" className="icon-button" aria-label="Close the details" onClick={onClose}>
@@ -160,6 +170,7 @@ export function WaterfallDetails({
   onShow,
   totals,
   profile,
+  profileScope,
   onOpen,
   children,
 }: {
@@ -171,6 +182,8 @@ export function WaterfallDetails({
   totals?: WaterfallFacts | undefined;
   /** The row's trace's profile, where it has one: its bar and flame. */
   profile?: ReactNode;
+  /** What the profile is of: "the whole trace", "this call (library-api)". */
+  profileScope?: string | undefined;
   /** A call whose callee's spans are folded: opens them under its row. */
   onOpen?: (() => void) | undefined;
   children: ReactNode;
@@ -199,11 +212,16 @@ export function WaterfallDetails({
       {profile ? (
         <section className="dt-wf-section dt-wf-profile">
           <header className="flex items-center justify-between">
-            <h4>Profile</h4>
+            <h4>Profile · {profileScope ?? "the whole trace"}</h4>
             <button
               type="button"
               className="dt-wf-link"
-              onClick={(event) => event.currentTarget.closest(".wf-main")?.toggleAttribute("data-wide")}
+              aria-pressed={false}
+              onClick={(event) => {
+                const wide = event.currentTarget.closest(".wf-main")?.toggleAttribute("data-wide") ?? false;
+                event.currentTarget.setAttribute("aria-pressed", String(wide));
+                event.currentTarget.textContent = wide ? "Back to the spans" : "Full width";
+              }}
             >
               Full width
             </button>

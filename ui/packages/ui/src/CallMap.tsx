@@ -248,6 +248,11 @@ function WaterfallRows({
               trace={found.trace}
               totals={found.node.type === "span" && found.node.span.parent_id === null ? facts : undefined}
               profile={profileFor(found.node, found.trace, profileOf)}
+              profileScope={
+                found.node.type === "span" && found.node.served?.whole?.profile
+                  ? `this call (${appName(found.node.served) ?? "its app"})`
+                  : "the whole trace"
+              }
               onOpen={
                 found.node.type === "span" &&
                 found.node.served &&

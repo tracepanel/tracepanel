@@ -2582,10 +2582,6 @@ button.wf-crumb:hover {
   width: 0.875rem;
   height: 0.875rem;
 }
-.wf-action[aria-pressed="true"] {
-  border-color: color-mix(in srgb, #f97316 45%, var(--dt-border-strong));
-  background: color-mix(in srgb, #f97316 12%, transparent);
-}
 .wf-action-state {
   color: var(--dt-text-3);
   font-size: var(--dt-size-xs);
@@ -2705,23 +2701,7 @@ button.wf-crumb:hover {
 .wf-panel[data-dock="right"] .wf-zone-tools {
   display: none;
 }
-.wf-panel[data-dock="right"] .wf-head {
-  grid-template-rows: auto 1.5rem;
-  height: auto;
-  row-gap: 0;
-}
-.wf-panel[data-dock="right"] .wf-call-head {
-  grid-column: 1 / -1;
-  padding: 0.25rem 0 0.25rem 0.3125rem;
-}
-.wf-panel[data-dock="right"] .wf-ticks {
-  grid-column: 2;
-  grid-row: 2;
-}
-.wf-panel[data-dock="right"] .wf-head > :last-child {
-  grid-column: 3;
-  grid-row: 2;
-}
+
 .wf-call-head > .wf-filter {
   overflow: hidden;
 }
@@ -3038,11 +3018,8 @@ button.wf-crumb:hover {
 .dt-map[data-waterfall] .dt-map-row:is([data-kind="view"], [data-kind="page"]) .dt-kind {
   color: var(--dt-k-view);
 }
-.dt-map[data-waterfall] .dt-map-row[data-kind="function"] .dt-kind {
-  color: #b5a9ff;
-}
-.dt-map[data-waterfall] .dt-map-row[data-kind^="graphql"] .dt-kind {
-  color: #c8a8ff;
+.dt-map[data-waterfall] .dt-map-row:is([data-kind="function"], [data-kind^="graphql"]) .dt-kind {
+  color: var(--dt-k-view);
 }
 /* Markers: 17px pills, the tone's ground. */
 .dt-map[data-waterfall] .dt-map-name [data-slot="badge"],
@@ -3346,4 +3323,71 @@ button.wf-crumb:hover {
 /* The band: three lanes at most, 14px each. */
 .wf-band-track {
   height: calc(min(var(--wf-lanes, 1), 4) * 18px + 14px);
+}
+/* ---------- round 7: critique fixes ---------- */
+/* The name wins the row's room: the chips beside it give way first, the db alias goes when narrow. */
+.dt-map[data-waterfall] .dt-map-text {
+  flex: 1 1 auto;
+  min-width: 6ch;
+}
+.dt-map[data-waterfall] .dt-map-name > :not(.dt-map-caret, .dt-map-kind, .dt-map-lead, .dt-map-text, .dt-status) {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.wf-rows {
+  container: wf-rows / inline-size;
+}
+@container wf-rows (max-width: 52rem) {
+  .dt-map[data-waterfall] .dt-alias {
+    display: none;
+  }
+}
+/* Docked right: the timeline keeps 12rem at least, for its axis to read. */
+.wf-panel[data-dock="right"] {
+  --wf-cols: minmax(0, min(var(--wf-names, 52%), calc(100% - 12rem))) minmax(12rem, 1fr);
+}
+.wf-ticks > span {
+  min-width: 0;
+  overflow: hidden;
+}
+/* A time inside a long bar: on the panel's ground, readable on any bar. */
+.dt-map[data-waterfall] .dt-map-row[data-inside] > .dt-map-time {
+  background: var(--dt-panel);
+  color: var(--dt-text-2);
+}
+/* A trace with a profile says so on its root row. */
+.dt-wf-has-profile {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  color: var(--dt-text-3);
+}
+.dt-wf-head-count {
+  color: var(--dt-text-3);
+  font-weight: 400;
+}
+/* The head on the rows' columns exactly: no right padding of its own (the rows have none). */
+.wf-head.wf-grid {
+  padding-right: 0;
+}
+/* A row's time above its bar and track: never painted under them. */
+.dt-map[data-waterfall] .dt-map-row > .dt-map-time {
+  position: relative;
+  z-index: 2;
+}
+/* Light: the kind labels a step darker than their bars, for 4.5:1 at their size. */
+:root[data-theme="light"] .dt-map[data-waterfall] .dt-kind {
+  color: #4b5160;
+}
+:root[data-theme="light"] .dt-map[data-waterfall] .dt-map-row:is([data-kind="sql"], [data-category="sql"]) .dt-kind {
+  color: #2b46b0;
+}
+:root[data-theme="light"] .dt-map[data-waterfall] .dt-map-row[data-kind="http.client"] .dt-kind {
+  color: #136a32;
+}
+:root[data-theme="light"]
+  .dt-map[data-waterfall]
+  .dt-map-row:is([data-kind="view"], [data-kind="page"], [data-kind="function"], [data-kind^="graphql"])
+  .dt-kind {
+  color: #5b2fc9;
 }

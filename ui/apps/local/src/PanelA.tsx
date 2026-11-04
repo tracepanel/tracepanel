@@ -157,7 +157,9 @@ function useTreeKeys(scroll: RefObject<HTMLDivElement | null>): void {
     const rows = () => [...root.querySelectorAll<HTMLElement>(".dt-map-row")].filter((row) => row.offsetParent);
     const mark = () => {
       const all = rows();
-      const current = all.find((row) => row.getAttribute("aria-current") === "true") ?? all[0];
+      // One row in the Tab order: the focused one while focus is in the tree, else the selected one, else the first.
+      const focused = all.find((row) => row === document.activeElement);
+      const current = focused ?? all.find((row) => row.getAttribute("aria-current") === "true") ?? all[0];
       for (const row of all) {
         let level = 1;
         for (let at = row.parentElement; at && at !== root; at = at.parentElement) {
@@ -165,9 +167,9 @@ function useTreeKeys(scroll: RefObject<HTMLDivElement | null>): void {
         }
         const set = (name: string, value: string) => row.getAttribute(name) !== value && row.setAttribute(name, value);
         set("role", "treeitem");
-        set("aria-level", String(level));
+        set("aria-level", row.dataset["level"] ?? String(level));
         set("aria-selected", String(row.getAttribute("aria-current") === "true"));
-        set("tabindex", row === current || row === document.activeElement ? "0" : "-1");
+        set("tabindex", row === current ? "0" : "-1");
       }
     };
     mark();
@@ -177,6 +179,13 @@ function useTreeKeys(scroll: RefObject<HTMLDivElement | null>): void {
       const all = rows();
       const at = all.indexOf(event.target as HTMLElement);
       if (at === -1) return;
+      const row = all[at];
+      if (event.key === "ArrowRight" && row?.getAttribute("aria-expanded") === "true") {
+        event.preventDefault();
+        all[at + 1]?.focus();
+        mark();
+        return;
+      }
       const to = new Map([
         ["ArrowDown", at + 1],
         ["ArrowUp", at - 1],
@@ -197,8 +206,8 @@ function useTreeKeys(scroll: RefObject<HTMLDivElement | null>): void {
 }
 
 /** Where the axis says its times: about five ticks at a round step. */
-function ticks(axis: Axis, offset = 0): { at: number; label: string }[] {
-  const raw = axis.duration / 5;
+function ticks(axis: Axis, offset = 0, count = 5): { at: number; label: string }[] {
+  const raw = axis.duration / count;
   const power = 10 ** Math.floor(Math.log10(raw));
   const step = [1, 2, 2.5, 5, 10].map((each) => each * power).find((each) => each >= raw) ?? raw;
   const out: { at: number; label: string }[] = [];
@@ -280,7 +289,7 @@ function AxisHead({
             {duration(skipped)}
           </span>
         ) : null}
-        {ticks(axis, skipped).map((tick) => (
+        {ticks(axis, skipped, width < 200 ? 2 : width < 360 ? 3 : 5).map((tick) => (
           // The break mark takes the axis's start: no label under it.
           <span key={tick.at} style={{ left: `${tick.at * 100}%` }}>
             {skipped > 0 && tick.at * width < BREAK_ROOM ? "" : tick.label}
@@ -417,7 +426,8 @@ function Splitter({
       role="separator"
       aria-orientation={orientation}
       aria-label={label}
-      aria-valuenow={value === null ? undefined : Math.round(value)}
+      aria-valuenow={Math.round(value ?? 0) || undefined}
+      aria-valuemin={0}
       tabIndex={0}
       title="Drag to resize · double-click to reset"
       onPointerDown={(event) => {
@@ -600,8 +610,19 @@ export function PanelA({ route }: { route: Route }) {
   useTimeColumn(panelRef, ticksRef);
 
   const entries = entriesOf(listed, selectedId);
-  const opened = entries.find((entry) => entry.row.trace.id === selectedId) ?? entries.at(-1);
+  // The entry picked (several can share a trace: fetches that carry the page's trace), else the first of the trace on
+  // screen, else the newest.
+  const [picked, setPicked] = useState<string | null>(null);
+  const opened =
+    entries.find((entry) => entryKey(entry.row) === picked && entry.row.trace.id === selectedId) ??
+    entries.find((entry) => entry.row.trace.id === selectedId) ??
+    entries.at(-1);
+  const openKey = opened ? entryKey(opened.row) : null;
   const openId = opened?.row.trace.id ?? selectedId;
+  const openEntry = useCallback((row: TraceRow) => {
+    setPicked(entryKey(row));
+    go({ name: "trace", id: row.trace.id });
+  }, []);
   // The axis is the open entry's own time: its spans fill the width.
   const axisKey = opened ? `${opened.row.trace.id}:${opened.row.trace.start}:${opened.row.trace.duration}` : "";
   // biome-ignore lint/correctness/useExhaustiveDependencies: `axisKey` says when the open entry's time changed.
@@ -675,7 +696,7 @@ export function PanelA({ route }: { route: Route }) {
             <ShareAction traceId={selectedId} source={source} compact={true} />
             <ThemeToggle compact={true} />
             <DockButton dock={dock} />
-            <Hint title="Close" keys="Esc">
+            <Hint title="Close">
               <button
                 type="button"
                 className="icon-button"
@@ -706,7 +727,7 @@ export function PanelA({ route }: { route: Route }) {
               }}
             >
               <div className="wf-sticky">
-                <TabTimeline rows={listed} openId={openId} />
+                <TabTimeline rows={listed} openKey={openKey} onOpen={openEntry} />
                 {host.axis ? (
                   <AxisHead
                     skipped={skipped}
@@ -738,13 +759,13 @@ export function PanelA({ route }: { route: Route }) {
                   <WaterfallTrace id={selectedId} rows={rows} stored={stored} depth={0} fold={false} />
                 ) : null}
                 {entries.map(({ row, depth }) =>
-                  row.trace.id !== openId ? (
-                    <EntryRow key={row.key ?? row.trace.id} row={row} depth={depth} />
+                  entryKey(row) !== openKey ? (
+                    <EntryRow key={entryKey(row)} row={row} depth={depth} onOpen={openEntry} />
                   ) : row.open || row.trace.id.startsWith("~") ? (
-                    <InFlightRow key={row.key ?? row.trace.id} row={row} axis={host.axis} depth={depth} />
+                    <InFlightRow key={entryKey(row)} row={row} axis={host.axis} depth={depth} />
                   ) : (
                     <WaterfallTrace
-                      key={row.key ?? row.trace.id}
+                      key={entryKey(row)}
                       id={row.trace.id}
                       rows={rows}
                       stored={stored}
@@ -826,7 +847,15 @@ function onOneClock(rows: readonly TraceRow[]): TraceRow[] {
  * The tab's timeline: every page and request as a block on one shared axis, in the time column. Hover says what it
  * is; a click opens it below (its own axis); the open one is outlined.
  */
-function TabTimeline({ rows, openId }: { rows: readonly TraceRow[]; openId: string | null }) {
+function TabTimeline({
+  rows,
+  openKey,
+  onOpen,
+}: {
+  rows: readonly TraceRow[];
+  openKey: string | null;
+  onOpen: (row: TraceRow) => void;
+}) {
   const track = useRef<HTMLDivElement>(null);
   const width = useWidth(track);
   const all = onOneClock(rows);
@@ -840,7 +869,11 @@ function TabTimeline({ rows, openId }: { rows: readonly TraceRow[]; openId: stri
       <div className="wf-band-track" ref={track}>
         {all.map((row) => {
           const left = ((row.trace.start - axis.start) / axis.duration) * 100;
-          const share = Math.max((row.trace.duration / axis.duration) * 100, 0.3);
+          const running = row.open || row.trace.id.startsWith("~");
+          const lasted = running
+            ? Math.max(Date.now() * 1000 - row.trace.start, row.trace.duration)
+            : row.trace.duration;
+          const share = Math.min(Math.max((lasted / axis.duration) * 100, 0.3), 100 - Math.min(left, 99.7));
           const label = `${shortName(row)} ${duration(row.trace.duration)}`;
           const fits = px(row.trace.duration) >= labelWidth(label);
           const issues = row.trace.issues
@@ -850,21 +883,24 @@ function TabTimeline({ rows, openId }: { rows: readonly TraceRow[]; openId: stri
           return (
             <button
               type="button"
-              key={row.key ?? row.trace.id}
+              key={entryKey(row)}
               className="wf-band-block"
               data-kind={row.trace.kind}
               data-depth={row.depth ?? 0}
               data-failed={row.trace.status === "error" ? "" : undefined}
-              aria-current={row.trace.id === openId ? "true" : undefined}
+              aria-current={entryKey(row) === openKey ? "true" : undefined}
               aria-label={`Open ${row.trace.name}`}
-              title={`${row.trace.name}${status} · ${duration(row.trace.duration)}${issues}`}
-              tabIndex={-1}
+              title={
+                running
+                  ? `${row.trace.name} · running for ${duration(lasted)}`
+                  : `${row.trace.name}${status} · ${duration(row.trace.duration)}${issues}`
+              }
               style={{
                 left: `${Math.min(left, 99.7)}%`,
                 width: `${share}%`,
                 top: `${(lanes.get(row) ?? 0) * 18}px`,
               }}
-              onClick={() => go({ name: "trace", id: row.trace.id })}
+              onClick={() => onOpen(row)}
             >
               {fits ? label : null}
             </button>
@@ -880,6 +916,11 @@ function TabTimeline({ rows, openId }: { rows: readonly TraceRow[]; openId: stri
       </div>
     </div>
   );
+}
+
+/** An entry's identity in the list: several entries may share a trace (fetches carrying the page's trace). */
+function entryKey(row: TraceRow): string {
+  return row.key ?? `${row.trace.id}:${row.trace.start}`;
 }
 
 /** A block's short name: a request's method and path, a page's name. */
@@ -909,7 +950,7 @@ function packLanes(rows: readonly TraceRow[], axis: Axis, px: (us: number) => nu
 }
 
 /** A page or request of the tab, folded to one line (name, status, time): a click opens it here, on its own time. */
-function EntryRow({ row, depth }: { row: TraceRow; depth: number }) {
+function EntryRow({ row, depth, onOpen }: { row: TraceRow; depth: number; onOpen: (row: TraceRow) => void }) {
   const name = row.trace.kind === "page" ? row.trace.name : (row.trace.path ?? row.trace.name);
   const running = row.open || row.trace.id.startsWith("~");
   return (
@@ -918,8 +959,9 @@ function EntryRow({ row, depth }: { row: TraceRow; depth: number }) {
         type="button"
         className="dt-map-row wf-other"
         aria-expanded={false}
+        data-level={depth + 1}
         title={`Open ${row.trace.name}`}
-        onClick={() => go({ name: "trace", id: row.trace.id })}
+        onClick={() => onOpen(row)}
       >
         <span className="dt-map-name" style={{ paddingLeft: `${0.75 + depth * 1.125}rem` }}>
           <ChevronRightIcon className="wf-other-caret" aria-hidden="true" />

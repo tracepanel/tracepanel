@@ -1,3 +1,4 @@
+import { FlameIcon } from "lucide-react";
 import { type CSSProperties, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { CodeRow, indentOf } from "./CallCode";
 import {
@@ -638,8 +639,17 @@ function GroupKind({ kind }: { kind: string }) {
 function RootStatus({ trace }: { trace: Trace }) {
   const host = useWaterfall();
   const status = trace.attrs["http.status_code"];
-  if (!host || typeof status !== "number") return null;
-  return <StatusBadge status={status} />;
+  if (!host) return null;
+  return (
+    <>
+      {trace.profile ? (
+        <FlameIcon className="dt-wf-has-profile" aria-label="Has a profile" role="img">
+          <title>Has a profile: select this row to see it</title>
+        </FlameIcon>
+      ) : null}
+      {typeof status === "number" ? <StatusBadge status={status} /> : null}
+    </>
+  );
 }
 
 /* ---------- a call and the trace served for it, one row ---------- */

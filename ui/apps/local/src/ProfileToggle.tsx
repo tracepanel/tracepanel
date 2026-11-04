@@ -110,7 +110,10 @@ export function ProfileToggle({ source, labeled = false }: { source: DataSource;
 /** Where no connected app profiles on request: the icon still there, off, saying why. */
 function ProfileUnavailable() {
   return (
-    <Hint title="Profile: not available" detail="No app connected here profiles requests on demand.">
+    <Hint
+      title="Recording profiles: not available here"
+      detail="No app connected to this agent profiles requests on demand. A trace that has a profile shows it in its details."
+    >
       <button type="button" className="icon-button" aria-disabled="true" aria-label="Profiling isn't available">
         <FlameIcon className="size-4" />
       </button>
@@ -167,7 +170,7 @@ function ProfileButton({
             fixed && "cursor-default",
           )}
           aria-label={NAMES[mode]}
-          aria-pressed={labeled ? mode !== "off" : undefined}
+          aria-pressed={fixed ? undefined : mode !== "off"}
           aria-disabled={fixed || undefined}
           onClick={(event) => {
             if (fixed) return;
