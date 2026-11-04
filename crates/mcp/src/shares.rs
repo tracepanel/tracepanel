@@ -16,12 +16,11 @@ pub(crate) const GC: &str = "gc";
 pub(crate) const WAITING: &str = "waiting";
 
 /// A share's name, as the console's legend says it: "Database", "GC", "Framework & middleware".
-pub(crate) fn label(share: &str, trace_kind: &str) -> &'static str {
+pub(crate) fn label(share: &str) -> &'static str {
     match share {
         GC => "GC",
         WAITING => "Waiting",
-        "django" if trace_kind == "http" || trace_kind.is_empty() => "Framework & middleware",
-        "django" => "Framework",
+        "django" => "Framework & middleware",
         "code" => "Your code",
         "signal" => "Signals",
         "template" => "Templates",
@@ -143,24 +142,36 @@ fn scaled(stacks: &[(usize, f64)], length: f64) -> Vec<(usize, f64)> {
         .collect()
 }
 
-/// A span's own code in a bucket in its parts: what ran the project's code (its category's), what ran only the
-/// framework's (a view's: the framework's share), what waited; in turn one way in even buckets and the other in odd.
+/// The categories a stack's own time is split by what it ran: the project's code's, or the framework's.
+const BY_STACK: [&str; 2] = ["code", "django"];
+
+/// A span's own code in a bucket in its parts: what waited; in a handler's or a framework's span (a request's root,
+/// a middleware), what ran the project's code (Your code) and what ran only the framework's, whichever span it ran
+/// under; in a signal's or a template's, its category's. In turn one way in even buckets and the other in odd.
 fn own_parts(
     kinds: &[StackKind],
     category: &'static str,
     stacks: &[(usize, f64)],
     bucket: i64,
 ) -> Vec<(&'static str, Vec<(usize, f64)>)> {
+    let mut order: Vec<&'static str> = Vec::new();
+    for share in [category, "code", "django", WAITING] {
+        if !order.contains(&share) {
+            order.push(share);
+        }
+    }
     let mut groups: Vec<(&'static str, Vec<(usize, f64)>)> =
-        vec![(category, vec![]), ("django", vec![]), (WAITING, vec![])];
+        order.into_iter().map(|share| (share, vec![])).collect();
     for &(index, count) in stacks {
         let kind = kinds.get(index);
         let share = if kind.is_some_and(|kind| kind.waits) {
             WAITING
-        } else if category == "code" && !kind.is_some_and(|kind| kind.yours) {
-            "django"
-        } else {
+        } else if !BY_STACK.contains(&category) {
             category
+        } else if kind.is_some_and(|kind| kind.yours) {
+            "code"
+        } else {
+            "django"
         };
         if let Some(group) = groups.iter_mut().find(|(each, _)| *each == share) {
             group.1.push((index, count));
@@ -286,11 +297,11 @@ fn bucket_segments<'a>(
 
 /// The frame a segment's time goes under, where its share isn't the code's own or a wait: a call's (named by it:
 /// `SQL postgresql`), the collector's, the framework's; with its share's name.
-pub(crate) fn share_frame(segment: &Segment, trace_kind: &str) -> Option<(String, &'static str)> {
+pub(crate) fn share_frame(segment: &Segment) -> Option<(String, &'static str)> {
     if segment.share == "code" || segment.share == WAITING {
         return None;
     }
-    let share = label(segment.share, trace_kind);
+    let share = label(segment.share);
     let call = segment.share != GC && !OWN_CODE.contains(&segment.share);
     let function = if call {
         waits::call_label(segment.span)

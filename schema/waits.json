@@ -928,10 +928,6 @@
       [
         "HTTP GET prices.internal",
         10000
-      ],
-      [
-        "Framework & middleware",
-        8000
       ]
     ],
     "shares": [
@@ -940,20 +936,16 @@
         41000
       ],
       [
-        "Database",
-        20000
+        "Your code",
+        28000
       ],
       [
-        "Your code",
+        "Database",
         20000
       ],
       [
         "External calls",
         10000
-      ],
-      [
-        "Framework & middleware",
-        8000
       ]
     ]
   },
@@ -1118,6 +1110,168 @@
       [
         "Framework & middleware",
         5000
+      ]
+    ]
+  },
+  {
+    "name": "Node: app code in the request's root span after its handler's span ended is Your code, the router's the framework's",
+    "trace": {
+      "start": 1790000000000000,
+      "duration": 40000,
+      "attrs": {
+        "telemetry.sdk.language": "nodejs"
+      },
+      "spans": [
+        {
+          "id": "r",
+          "parent_id": null,
+          "kind": "http",
+          "name": "GET /api/catalog/products",
+          "start": 1790000000000000,
+          "duration": 40000,
+          "status": "ok",
+          "attrs": {}
+        },
+        {
+          "id": "v",
+          "parent_id": "r",
+          "kind": "view",
+          "name": "GET",
+          "start": 1790000000000000,
+          "duration": 5000,
+          "status": "ok",
+          "attrs": {}
+        },
+        {
+          "id": "q",
+          "parent_id": "r",
+          "kind": "sql",
+          "name": "SELECT products",
+          "start": 1790000000010000,
+          "duration": 10000,
+          "status": "ok",
+          "attrs": {
+            "db.system": "postgresql",
+            "code.origin": "lib/catalog.ts:33 in card"
+          }
+        }
+      ],
+      "profile": {
+        "interval_us": 1000,
+        "samples": 40,
+        "dropped": 0,
+        "bucket_us": 10000,
+        "frames": [
+          {
+            "function": "handle",
+            "module": null,
+            "file": "next/dist/server/base-server.js",
+            "line": 900,
+            "in_app": false
+          },
+          {
+            "function": "card",
+            "module": null,
+            "file": "lib/catalog.ts",
+            "line": 31,
+            "in_app": true
+          },
+          {
+            "function": "event loop",
+            "module": null,
+            "file": "",
+            "line": 0,
+            "in_app": false,
+            "waiting": true
+          }
+        ],
+        "stacks": [
+          {
+            "frames": [
+              0,
+              1
+            ],
+            "count": 13,
+            "at": [
+              [
+                0,
+                7
+              ],
+              [
+                2,
+                6
+              ]
+            ]
+          },
+          {
+            "frames": [
+              0
+            ],
+            "count": 8,
+            "at": [
+              [
+                0,
+                3
+              ],
+              [
+                3,
+                5
+              ]
+            ]
+          },
+          {
+            "frames": [
+              2
+            ],
+            "count": 19,
+            "at": [
+              [
+                1,
+                10
+              ],
+              [
+                2,
+                4
+              ],
+              [
+                3,
+                5
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    "waits": [
+      [
+        "SQL postgresql",
+        10000
+      ],
+      [
+        "waiting · event loop",
+        9000
+      ],
+      [
+        "Framework & middleware",
+        8000
+      ]
+    ],
+    "shares": [
+      [
+        "Your code",
+        13000
+      ],
+      [
+        "Database",
+        10000
+      ],
+      [
+        "Waiting",
+        9000
+      ],
+      [
+        "Framework & middleware",
+        8000
       ]
     ]
   }

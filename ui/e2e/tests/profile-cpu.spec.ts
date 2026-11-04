@@ -207,19 +207,17 @@ async function boxes(page: Page): Promise<string[]> {
 
 /** The Go request's 99 ms by share: its 30 ms on the CPU spread over the 55 ms of code that is no
  * call's (a bucket shared with a call shares its samples with it). */
-const GO_SHARES = ["Database 30 ms", "Framework & middleware 8 ms", "Redis 14 ms", "Waiting 30 ms", "Your code 17 ms"];
+const GO_SHARES = ["Database 30 ms", "Framework & middleware 2 ms", "Redis 14 ms", "Waiting 30 ms", "Your code 23 ms"];
 const GO_ROWS = [
   /^SQL postgresql\s*30 ms\s*30 ms$/,
   /^redis\s*14 ms\s*14 ms$/,
-  /^Framework & middleware\s*8 ms\s*8 ms$/,
+  /^Framework & middleware\s*2 ms\s*2 ms$/,
   /^waiting · off CPU\s*30 ms\s*30 ms$/,
 ];
 /** Its flame graph in Your code: the functions, each call's time under a frame of its share's, the off-CPU wait. */
 const GO_BOXES = [
   "(*App).listProducts",
   "(*App).similar",
-  "Framework & middleware",
-  "Framework & middleware",
   "Framework & middleware",
   "SQL postgresql",
   "SQL postgresql",

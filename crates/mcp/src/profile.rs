@@ -273,7 +273,6 @@ fn split_stacks<'a>(
     base: &[Vec<usize>],
     named: bool,
 ) -> Vec<Stack> {
-    let kind = text(doc, "kind");
     let interval = doc
         .pointer("/profile/interval_us")
         .and_then(Value::as_i64)
@@ -285,8 +284,8 @@ fn split_stacks<'a>(
         let Some(stacks) = &segment.stacks else {
             continue;
         };
-        let share = shares::share_frame(segment, kind)
-            .map(|(function, share)| share_at(frames, function, share));
+        let share =
+            shares::share_frame(segment).map(|(function, share)| share_at(frames, function, share));
         for &(at, us) in stacks {
             let Some(path) = base.get(at) else { continue };
             let mut path = path.clone();
@@ -410,10 +409,9 @@ impl<'a> Profile<'a> {
                 })
                 .collect();
             let segments = shares::segments(doc, &kinds);
-            let kind = text(doc, "kind");
             split = shares::share_times(&segments)
                 .into_iter()
-                .map(|(share, us)| (shares::label(share, kind), us))
+                .map(|(share, us)| (shares::label(share), us))
                 .collect();
             stacks = split_stacks(doc, &segments, &mut frames, &base, false);
             Some(split_stacks(doc, &segments, &mut frames, &base, true))
@@ -1598,7 +1596,7 @@ allocation sites at the peak (1 of 1, 2.0 MB in all, largest first; ×: allocati
             [
                 "CPU profile: 99.0 ms profiled of the trace's 99.0 ms · 99 samples, one every 1.0 ms",
                 "spread: its 30 samples are CPU time, placed by the agent evenly over the project's code's time (its profiler keeps no sample's time); the rest of that time is waiting off the CPU, not sampled",
-                "time by share (as the time strip says it): Your code 20.0 ms (20%) · Database 20.0 ms (20%) · External calls 10.0 ms (10%) · Framework & middleware 8.0 ms (8%) · Waiting 41.0 ms (41%)",
+                "time by share (as the time strip says it): Your code 28.0 ms (28%) · Database 20.0 ms (20%) · External calls 10.0 ms (10%) · Waiting 41.0 ms (41%)",
                 "waiting, off the CPU (a lock, a channel, a timer, a call; not sampled): 41.0 ms (41%)",
             ]
         );
@@ -1684,10 +1682,10 @@ allocation sites at the peak (1 of 1, 2.0 MB in all, largest first; ×: allocati
             rows(&cpu),
             [
                 "  82.0 ms  41%  waiting · off CPU · total 82.0 ms",
+                "  48.0 ms  24%  editDistance (yours) — similar.go:40 · total 52.0 ms",
                 "  40.0 ms  20%  SQL postgresql (Database) · total 40.0 ms",
-                "  32.0 ms  16%  editDistance (yours) — similar.go:40 · total 50.0 ms",
                 "  20.0 ms  10%  HTTP GET prices.internal (External calls) · total 20.0 ms",
-                "  16.0 ms  8%  Framework & middleware · total 16.0 ms",
+                "  8.0 ms  4%  (*App).listProducts (yours) — catalog.go:10 · total 60.0 ms",
             ]
         );
     }

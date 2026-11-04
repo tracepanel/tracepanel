@@ -36,16 +36,11 @@ const CATEGORY_LABELS: Record<Category, string> = {
 };
 
 /**
- * A category as the trace says it: the framework's time is a request's middleware too. The code's own time is "Your
- * code" in every kind of trace: a view's or a handler's, a task's, a job's.
+ * A category's name, one in every kind of trace (a request's, a task's, a job's): the code's own time is "Your
+ * code", the framework's "Framework & middleware".
  */
-export function categoryLabel(category: Category, trace: Pick<Trace, "attrs"> & { kind?: string }): string {
-  return category === "django" ? frameworkLabel(trace.kind) : CATEGORY_LABELS[category];
-}
-
-/** Middleware is a request's: a task's, a job's or a consumer's own time is its framework's. */
-function frameworkLabel(kind: string | undefined): string {
-  return (kind ?? "http") === "http" ? CATEGORY_LABELS.django : "Framework";
+export function categoryLabel(category: Category): string {
+  return CATEGORY_LABELS[category];
 }
 
 const BY_KIND: Record<string, Category> = {

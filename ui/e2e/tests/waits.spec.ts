@@ -40,7 +40,7 @@ function waitsOf(trace: Profiled): [string, number][] {
 function sharesOf(trace: Profiled): [string, number][] {
   if (!timed(trace.profile)) return [];
   return [...shareTimes(trace as Shared)]
-    .map(([share, us]): [string, number] => [shareLabel(share, trace), Math.round(us)])
+    .map(([share, us]): [string, number] => [shareLabel(share), Math.round(us)])
     .sort(byTime);
 }
 

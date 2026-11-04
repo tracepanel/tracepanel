@@ -75,9 +75,9 @@ function ofSpans(share: ShareOf): share is SpanShare {
 }
 
 /** A share's name: its category's, the collector's, or waiting's. */
-function shareLabel(category: ShareKind, trace: Trace): string {
+function shareLabel(category: ShareKind): string {
   if (category === GC) return "GC";
-  return category === WAITED_SHARE ? "Waiting" : categoryLabel(category, trace);
+  return category === WAITED_SHARE ? "Waiting" : categoryLabel(category);
 }
 
 /** Each share of the time with its numbers: how long, of how much, how many spans; largest first. */
@@ -95,7 +95,7 @@ export function sharesOf(trace: Trace): ShareOf[] {
     value,
     total,
     calls: calls.get(category) ?? 0,
-    label: shareLabel(category, trace),
+    label: shareLabel(category),
   }));
   // Waiting last, as the Profile tab has it.
   return largestFirst(

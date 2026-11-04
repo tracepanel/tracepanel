@@ -321,16 +321,16 @@ test("a Node task's code is its own frames: the runtime's and OpenTelemetry's ar
   await page.goto(`/#/t/${NODE}?tab=profile`);
 
   await expect(page.getByRole("tab", { name: "Your code", selected: true })).toBeVisible();
-  await expect.poll(() => boxes(page)).toEqual(["Framework", "editDistance", "rankProducts"]);
-  await expect(shares(page)).toHaveText([/^Your code\s*6 ms/, /^Framework\s*4 ms/]);
+  await expect.poll(() => boxes(page)).toEqual(["Framework & middleware", "editDistance", "rankProducts"]);
+  await expect(shares(page)).toHaveText([/^Your code\s*6 ms/, /^Framework & middleware\s*4 ms/]);
   // The framework & runtime is no function: under the functions, apart, though it took more than rankProducts.
-  await expect.poll(() => functionNames(page)).toEqual(["editDistance", "rankProducts", "[Framework]"]);
+  await expect.poll(() => functionNames(page)).toEqual(["editDistance", "rankProducts", "[Framework & middleware]"]);
 
   await page.getByRole("tab", { name: "All frames" }).click();
 
   await expect.poll(() => boxes(page)).toContain("processTicksAndRejections");
   // Read on the trace's clock (a Node profile is): the runtime's time in the task is the framework's share.
-  await expect(shares(page)).toHaveText([/^Your code\s*6 ms/, /^Framework\s*4 ms/]);
+  await expect(shares(page)).toHaveText([/^Your code\s*6 ms/, /^Framework & middleware\s*4 ms/]);
 });
 
 test("a Next.js route's code is its handler's: pg's time is its helper's, OpenTelemetry's span never yours", async ({
