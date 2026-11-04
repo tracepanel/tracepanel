@@ -199,6 +199,15 @@ function useZoomKey(host: WaterfallHost, tree: Node[], trace: Trace, selected: s
   }, []);
 }
 
+/** Below this share of the axis, a request picked zooms the axis to it. */
+const ZOOM_SHARE = 0.15;
+
+/** A request: a call another app served, a trace's own root, a task's run. */
+function isRequest(node: Node): boolean {
+  if (node.type === "task") return true;
+  return node.type === "span" && (node.served !== undefined || node.span.parent_id === null);
+}
+
 function zoomTo(host: WaterfallHost, trace: Trace, node: Node): void {
   const axis = stretchOf(node);
   if (!axis) return;
@@ -227,10 +236,18 @@ function WaterfallRows({
   const marks = useMemo(() => (host.filter ? filterMarks(shown, host.filter) : ctx.marks), [shown, host.filter, ctx]);
   if (shown.length === 0) return null;
   const found = selected ? findNode(tree, selected, trace) : undefined;
+  // A request picked that is a sliver of the axis: the axis follows it, as the page's one waterfall reads a request.
+  const onSelect = (key: string) => {
+    ctx.onSelect(key);
+    if (key === selected) return;
+    const node = findNode(tree, key, trace)?.node;
+    const stretch = node && isRequest(node) ? stretchOf(node) : null;
+    if (stretch && host.axis && stretch.duration < host.axis.duration * ZOOM_SHARE) zoomTo(host, trace, node as Node);
+  };
   return (
     <div className="dt-map" data-waterfall="">
       <div className="dt-map-rows">
-        <Rows nodes={shown} depth={host.zoom ? 0 : depth} ctx={{ ...ctx, marks }} />
+        <Rows nodes={shown} depth={host.zoom ? 0 : depth} ctx={{ ...ctx, marks, onSelect }} />
       </div>
       {found && host.details
         ? createPortal(

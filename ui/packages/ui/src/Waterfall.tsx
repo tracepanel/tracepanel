@@ -84,6 +84,7 @@ const KIND_BADGES: Record<string, string> = {
   sql: "SQL",
   "http.client": "HTTP",
   "http.server": "REQ",
+  http: "REQ",
   view: "VIEW",
   function: "FN",
   graphql: "GQL",

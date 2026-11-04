@@ -61,6 +61,7 @@ import {
   ISSUE_CHIP_SHRINKS,
   IssueChip,
   KindBadge,
+  StatusBadge,
   TaskName,
   TemplateChip,
   Times,
@@ -69,7 +70,7 @@ import { RunChips } from "./RunChips";
 import { SignalNotes } from "./SignalNotes";
 import type { IssueKind, Span, Trace, TraceSummary } from "./types";
 import { GroupNotTraced, NotTraced, useUntraced } from "./Untraced";
-import { useAxis } from "./Waterfall";
+import { useAxis, useWaterfall } from "./Waterfall";
 
 /** The selected row's details, under it: where the click was, not past the end of a long tree. */
 function RowDetails({ id, ctx }: { id: string; ctx: RowContext }) {
@@ -564,6 +565,7 @@ function OwnRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps<
             <SpanName span={span} />
           </CallLead>
           <CallStatus node={node} />
+          {span.parent_id === null ? <RootStatus trace={ctx.trace} /> : null}
           <NotTraced spanId={span.id} />
           <AliasChip value={aliasBeside(span)} />
           <FromTemplate span={span} parent={parent} />
@@ -591,6 +593,14 @@ function OwnRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps<
       ) : null}
     </div>
   );
+}
+
+/** In the waterfall, a request's root row says how it was answered, as a call's row does. */
+function RootStatus({ trace }: { trace: Trace }) {
+  const host = useWaterfall();
+  const status = trace.attrs["http.status_code"];
+  if (!host || typeof status !== "number") return null;
+  return <StatusBadge status={status} />;
 }
 
 /* ---------- a call and the trace served for it, one row ---------- */

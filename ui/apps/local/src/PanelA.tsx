@@ -164,6 +164,7 @@ function Facets({
             <button
               type="button"
               className="wf-facet"
+              aria-label={`${each.label} ${count}${time ? `, ${time}` : ""}`}
               data-facet={each.id}
               aria-pressed={facet === each.id}
               onClick={() => onFacet(facet === each.id ? null : each.id)}
@@ -238,6 +239,7 @@ function Overview({
             type="button"
             key={row.key ?? row.trace.id}
             className="wf-overview-bar"
+            tabIndex={-1}
             data-kind={row.trace.kind}
             data-depth={row.depth ?? 0}
             title={`${row.trace.name} · ${duration(row.trace.duration)}`}
@@ -280,7 +282,11 @@ function useTimeColumn(panel: RefObject<HTMLDivElement | null>, ticks: RefObject
     const measure = () => {
       const column = ticks.current?.getBoundingClientRect();
       if (!column) return;
-      root.style.setProperty("--wf-time-x", `${Math.round(column.left - root.getBoundingClientRect().left)}px`);
+      const x = `${Math.round(column.left - root.getBoundingClientRect().left)}px`;
+      // The divider follows the column always; the toolbar only with the details closed, so a row picked (which
+      // opens them) never moves the toolbar.
+      root.style.setProperty("--wf-split-x", x);
+      if (!root.querySelector(".wf-main[data-details]")) root.style.setProperty("--wf-time-x", x);
     };
     const observer = new ResizeObserver(measure);
     observer.observe(root);
@@ -689,7 +695,6 @@ export function PanelA({ route }: { route: Route }) {
         </header>
         <div className="wf-main" data-details={host.selected ? "" : undefined} ref={mainRef}>
           <div className="wf-waterfall">
-            <NamesSplitter value={names} onSize={setNames} scroll={scrollRef} />
             <div className="wf-scroll" ref={scrollRef}>
               <div className="wf-sticky">
                 {axis ? <Overview page={page} axis={axis} zoom={host.zoom} onZoom={zoomToRow} /> : null}
@@ -752,6 +757,7 @@ export function PanelA({ route }: { route: Route }) {
                 ) : null}
               </div>
             </div>
+            <NamesSplitter value={names} onSize={setNames} scroll={scrollRef} />
           </div>
           <aside className="wf-details" aria-label="Details" hidden={!host.selected}>
             <DetailsSplitter dock={dock} value={detailsSize} onSize={setDetailsSize} main={mainRef} />

@@ -15,7 +15,7 @@ import { type Quiet, quietSpans } from "./lib/quiet";
 import type { Slice, Windows } from "./lib/slice";
 import { FailedStatus, KindBadge, StateBadge, StatusBadge, TaskName } from "./primitives";
 import type { IssueKind, Span, Trace, TraceSummary } from "./types";
-import { type Axis, useAxis } from "./Waterfall";
+import { type Axis, useAxis, useWaterfall } from "./Waterfall";
 
 export interface RowContext {
   trace: Trace;
@@ -338,13 +338,31 @@ export function SpanFold({
   parent: Span | undefined;
   fold: boolean | undefined;
 }) {
+  const kind = rowKind(node.span, ctx.trace, parent);
+  // The waterfall says a kind in short, as its mockup does: the names keep the room.
+  const short = useWaterfall() ? (SHORT_KINDS[kind] ?? kind) : kind;
   return (
     <>
       <Caret open={fold} onToggle={() => ctx.onToggle(node.key)} />
-      <KindBadge kind={rowKind(node.span, ctx.trace, parent)} muted={true} className="dt-map-kind" />
+      <KindBadge kind={short} muted={true} className="dt-map-kind" />
     </>
   );
 }
+
+const SHORT_KINDS: Record<string, string> = {
+  request: "req",
+  function: "fn",
+  transaction: "tx",
+  template: "tpl",
+  handler: "hdl",
+  framework: "fw",
+  receiver: "rcv",
+  signal: "sig",
+  graphql: "gql",
+  "http.client": "http",
+  "task.enqueue": "enq",
+  middleware: "mw",
+};
 
 /** A row's kind as its badge says it: a browser's view or action as its list names it (view, click, bg). */
 function rowKind(span: Span, trace: Trace, parent: Span | undefined): string {

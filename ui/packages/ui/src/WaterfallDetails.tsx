@@ -112,14 +112,9 @@ export function WaterfallDetails({
       <header className="dt-wf-details-head">
         <TraceBadge word={crumb.badge} />
         <h3 title={crumb.label}>{crumb.label}</h3>
-        <button
-          type="button"
-          className="icon-button"
-          aria-label="Zoom to this row"
-          title="Zoom to this row (z)"
-          onClick={onZoom}
-        >
+        <button type="button" className="dt-wf-zoom" title="Zoom the axis to this row (z)" onClick={onZoom}>
           <ScanSearchIcon />
+          Zoom
         </button>
         <button type="button" className="icon-button" aria-label="Close the details" onClick={onClose}>
           <CloseIcon />
