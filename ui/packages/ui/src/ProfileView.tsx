@@ -587,7 +587,8 @@ function ProfileHead({ whole, shown, trace, scope }: { whole: Profile; shown: Pr
       <span className="text-xs text-muted-foreground">{scope.title}</span>
       <span className="text-2xl font-semibold tracking-tight tabular-nums">
         {about(whole)}
-        {time(shown.samples)}
+        {/* What it profiled, its stacks said in whole steps, never said as more than what it is of. */}
+        {time(Math.min(shown.samples, sharesOf(scope, trace)))}
         <span className="ml-2 text-sm font-normal text-muted-foreground">
           {profiledWord(scope)} of {ofWhat(scope, trace)}
         </span>
@@ -1452,7 +1453,9 @@ function AppProfileSection({ app, view }: { app: AppProfile; view: Scope }) {
               {view.title}
             </span>
             <span className="text-2xl font-semibold tracking-tight tabular-nums">
-              {duration(view.profile.samples * view.profile.interval_us)}
+              {duration(
+                Math.min(view.profile.samples, trace ? sharesOf(view, trace) : Infinity) * view.profile.interval_us,
+              )}
               <span className="ml-2 text-sm font-normal text-muted-foreground">
                 profiled{trace ? ` of ${ofWhat(view, trace)}` : ""}
               </span>

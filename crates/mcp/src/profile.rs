@@ -5,7 +5,7 @@
 //! of its spent, it spent; the samples that ran none of it one "framework & runtime"), and a site is named by the line
 //! of the project's code that led to it.
 
-use crate::compact::{int, ms, text};
+use crate::compact::{count, int, ms, text};
 use crate::shares;
 use crate::waits;
 use serde_json::Value;
@@ -1009,19 +1009,25 @@ fn gc_line(raw: &Value) -> Option<String> {
 fn cpu(profile: &Profile, duration: i64, top: usize, merged: bool) -> String {
     let total = profile.total();
     // Timed, its shares are the trace's time as the strip says it: their percentages are of the trace's, so a
-    // profile of part of it (a BFF's last 5 ms of 35) says 80% for 28 ms, not 560%.
+    // profile of part of it (a BFF's last 5 ms of 35) says 80% for 28 ms, not 560%. What it profiled, rounded to the
+    // step its stacks are said in, is never said as more than the trace's.
     let of = if profile.timed {
         total.max(duration as f64)
     } else {
         total
     };
+    let profiled = if profile.timed {
+        total.min(duration as f64)
+    } else {
+        total
+    };
     let mut out = vec![format!(
-        "CPU profile: {} {} of the {} {} · {} samples, one every {}",
-        us(total),
+        "CPU profile: {} {} of the {} {} · {}, one every {}",
+        us(profiled),
         if profile.timed { "profiled" } else { "sampled" },
         if merged { "traces'" } else { "trace's" },
         ms(duration),
-        profile.samples,
+        count(profile.samples, "sample", "samples"),
         ms(profile.interval),
     )];
     if let Some(on_cpu) = profile.on_cpu {
@@ -1609,7 +1615,8 @@ allocation sites at the peak (1 of 1, 2.0 MB in all, largest first; ×: allocati
         );
     }
 
-    /// A profile of only the trace's last 5 ms (`schema/waits.json`): what it profiled of the trace's time, the trace's time by share as the strip says it, each of the trace's time (28 ms of 35 is 81%).
+    /// A profile of only the trace's last 5 ms (`schema/waits.json`): what it profiled of the trace's time, its one
+    /// sample said so, the trace's time by share as the strip says it, each of the trace's time (28 ms of 35 is 81%).
     #[test]
     fn a_profile_of_part_of_a_trace_says_its_shares_of_the_trace() {
         let cases: Vec<Value> =
@@ -1622,9 +1629,31 @@ allocation sites at the peak (1 of 1, 2.0 MB in all, largest first; ×: allocati
         assert_eq!(
             lines,
             [
-                "CPU profile: 5.0 ms profiled of the trace's 34.7 ms · 1 samples, one every 1.0 ms",
+                "CPU profile: 5.0 ms profiled of the trace's 34.7 ms · 1 sample, one every 1.0 ms",
                 "time by share (as the time strip says it): External calls 28.0 ms (81%) · Your code 3.0 ms (9%) · Framework & middleware 3.0 ms (9%) · GC 1.0 ms (3%)",
             ]
+        );
+    }
+
+    /// A profile that covers all of a trace of 41.6 ms, its stacks said in whole ms (42): never more than the trace.
+    #[test]
+    fn a_profile_is_never_said_longer_than_its_trace() {
+        let doc = json!({"id": "N", "start": 0, "duration": 41_600, "attrs": {"telemetry.sdk.language": "nodejs"},
+        "spans": [{"id": "r", "parent_id": null, "kind": "http", "name": "GET /", "start": 0, "duration": 41_600,
+                   "status": "ok", "attrs": {}}],
+        "profile": {
+            "interval_us": 1000, "samples": 42, "dropped": 0, "bucket_us": 10000,
+            "frames": [{"function": "handler", "module": null, "file": "app.ts", "line": 1, "in_app": true}],
+            "stacks": [{"frames": [0], "count": 42, "at": [[0, 10], [1, 10], [2, 10], [3, 10], [4, 2]]}],
+        }});
+
+        let read = profile(&doc, Kind::Cpu, 3).unwrap();
+
+        assert_eq!(
+            read.lines().next(),
+            Some(
+                "CPU profile: 41.6 ms profiled of the trace's 41.6 ms · 42 samples, one every 1.0 ms"
+            ),
         );
     }
 
