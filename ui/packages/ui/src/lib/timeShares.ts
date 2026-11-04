@@ -143,14 +143,59 @@ function taken(segment: Segment, windows: Windows | null): number {
   );
 }
 
-/** The time of each share (µs), of the whole trace or of the windows: what the strip's legend adds up. */
+/**
+ * The step a time is said in (format's duration): a tenth of a second from a second on, a millisecond from one, a
+ * tenth of one, else a microsecond.
+ */
+export function displayStep(us: number): number {
+  if (Math.round(us / 1000) >= 1000) return 100_000;
+  if (us >= 1000) return 1000;
+  return us >= 100 ? 100 : 1;
+}
+
+/**
+ * Times rounded to `step` so they add up to `target` steps: each rounded down, the steps left given to those that
+ * lost most (largest remainder), the first of them on a tie. What parts of a total are said as, so the parts said add
+ * up to the total said.
+ */
+export function apportion(values: readonly number[], step: number, target: number): number[] {
+  const floors = values.map((value) => Math.floor(value / step + 1e-9));
+  let left = target - floors.reduce((sum, steps) => sum + steps, 0);
+  const order = values
+    .map((_, at) => at)
+    .sort((a, b) => remainder(values, b, step) - remainder(values, a, step) || a - b);
+  for (const at of order) {
+    if (left <= 0) break;
+    floors[at] = (floors[at] ?? 0) + 1;
+    left -= 1;
+  }
+  return floors.map((steps) => steps * step);
+}
+
+function remainder(values: readonly number[], at: number, step: number): number {
+  const value = (values[at] ?? 0) / step;
+  return value - Math.floor(value + 1e-9);
+}
+
+/** Times as said: rounded to the step their total is said in, adding up to that total as said. */
+export function rounded<K>(times: ReadonlyMap<K, number>): Map<K, number> {
+  const total = [...times.values()].reduce((sum, us) => sum + us, 0);
+  const step = displayStep(total);
+  const parts = apportion([...times.values()], step, Math.round(total / step));
+  return new Map([...times.keys()].map((key, at) => [key, parts[at] ?? 0]));
+}
+
+/**
+ * The time of each share (µs), of the whole trace or of the windows, as said: rounded so the shares add up to their
+ * total (rounded). What the strip's legend and the Profile tab's bar say.
+ */
 export function shareTimes(trace: Shared, windows: Windows | null = null): Map<Share, number> {
   const times = new Map<Share, number>();
   for (const segment of segmentsOf(trace)) {
     const time = taken(segment, windows);
     if (time > 0) times.set(segment.share, (times.get(segment.share) ?? 0) + time);
   }
-  return times;
+  return rounded(times);
 }
 
 /** The segments of a span's own time: what its code rows are, its waits and the rest, GC's left to GC. */
@@ -209,14 +254,52 @@ function frameTable(profile: Profile): { frames: Frame[]; frameAt: (frame: Frame
   return { frames, frameAt };
 }
 
-/** A stack seen for `count` samples in a bucket, added to the stacks by its frames. */
-function addStack(stacks: Map<string, Stack>, path: number[], count: number, bucket: number): void {
+/** A stack's time in a profile of windows, before it is rounded: its share's, by bucket (µs). */
+interface Timing {
+  frames: number[];
+  share: Share;
+  us: number;
+  at: Map<number, number>;
+}
+
+/** A stack seen for `us` in a bucket, added to the stacks by its frames. */
+function addStack(stacks: Map<string, Timing>, path: number[], share: Share, us: number, bucket: number): void {
   const key = path.join(",");
-  const found = stacks.get(key);
-  if (found) {
-    found.count += count;
-    found.at = [...(found.at ?? []), [bucket, count]];
-  } else stacks.set(key, { frames: path, count, at: [[bucket, count]] });
+  const found = stacks.get(key) ?? { frames: path, share, us: 0, at: new Map<number, number>() };
+  found.us += us;
+  found.at.set(bucket, (found.at.get(bucket) ?? 0) + us);
+  stacks.set(key, found);
+}
+
+/**
+ * The stacks as said (in samples of `interval`): the shares rounded as shareTimes rounds them, each share's stacks
+ * rounded to add up to it, so every sum of them said (a share, a function's own time, all of it) adds up as said.
+ */
+function roundedStacks(timings: readonly Timing[], interval: number): Stack[] {
+  const byShare = new Map<Share, Timing[]>();
+  for (const timing of timings) byShare.set(timing.share, [...(byShare.get(timing.share) ?? []), timing]);
+  const shares = rounded(new Map([...byShare].map(([share, list]) => [share, sum(list.map((each) => each.us))])));
+  const total = [...shares.values()].reduce((all, us) => all + us, 0);
+  const step = displayStep(total);
+  return [...byShare].flatMap(([share, list]) => {
+    const parts = apportion(
+      list.map((each) => each.us),
+      step,
+      Math.round((shares.get(share) ?? 0) / step),
+    );
+    return list.flatMap((each, at): Stack[] => {
+      const us = parts[at] ?? 0;
+      if (us <= 0) return [];
+      const scale = us / each.us / interval;
+      return [
+        { frames: each.frames, count: us / interval, at: [...each.at].map(([bucket, seen]) => [bucket, seen * scale]) },
+      ];
+    });
+  });
+}
+
+function sum(values: readonly number[]): number {
+  return values.reduce((all, value) => all + value, 0);
 }
 
 /**
@@ -247,21 +330,21 @@ export function windowProfile(trace: Shared & { profile: Timed }, windows: Windo
   const { profile } = trace;
   const byId = new Map(trace.spans.map((span) => [span.id, span]));
   const { frames, frameAt } = frameTable(profile);
-  const stacks = new Map<string, Stack>();
+  const timings = new Map<string, Timing>();
   for (const segment of segmentsOf(trace)) {
     const time = taken(segment, windows);
     if (time <= 0 || !segment.stacks) continue;
     const frame = frameOf(segment, trace, byId);
     const share = frame ? frameAt(frame) : null;
     const bucket = Math.floor(segment.from / profile.bucket_us);
-    const part = time / (segment.to - segment.from) / profile.interval_us;
+    const part = time / (segment.to - segment.from);
     for (const [at, us] of segment.stacks) {
       const path = pathIn(profile, profile.stacks[at] as Stack, share, named, frameAt);
-      addStack(stacks, path, us * part, bucket);
+      addStack(timings, path, segment.share, us * part, bucket);
     }
   }
-  const list = [...stacks.values()];
-  return { ...profile, frames, stacks: list, samples: list.reduce((sum, stack) => sum + stack.count, 0) };
+  const list = roundedStacks([...timings.values()], profile.interval_us);
+  return { ...profile, frames, stacks: list, samples: sum(list.map((stack) => stack.count)) };
 }
 
 /** Whether the trace's time can be split by its profile: a timed one. */

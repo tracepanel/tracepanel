@@ -7,7 +7,7 @@ import type { Category } from "./breakdown";
 import { GC } from "./memory";
 import { offCpu } from "./offCpu";
 import { onCpuOnly, type Profile, WAITING } from "./profile";
-import { type Segment, segmentsOf } from "./timeShares";
+import { rounded, type Segment, segmentsOf } from "./timeShares";
 import { timed, waits } from "./waiting";
 
 /** The waiting share: neutral and hatched, as the strip draws the code's waits. */
@@ -65,9 +65,10 @@ function timedShares<K extends string>(
     const share = gc ? segment.share : shareWithoutGc(segment);
     times.set(share, (times.get(share) ?? 0) + segment.to - segment.from);
   }
-  const waiting = times.get(WAITED_SHARE) ?? 0;
-  times.delete(WAITED_SHARE);
-  const split = [...times].filter(([, value]) => value > 0) as [K, number][];
+  const said = rounded(times);
+  const waiting = said.get(WAITED_SHARE) ?? 0;
+  said.delete(WAITED_SHARE);
+  const split = [...said].filter(([, value]) => value > 0) as [K, number][];
   return waiting >= 1 ? [...split, [WAITED_SHARE, waiting]] : split;
 }
 

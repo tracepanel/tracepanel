@@ -2,9 +2,12 @@
 // view whose transaction runs a query, the event loop waiting while a worker thread runs the endpoint, a collector's
 // pause, a bucket the cleanup alone was seen in. The time strip's legend, the Profile tab's bar and list and the call
 // tree's code rows all read it: for the same stretch they say the same shares, a code row's time is its profile's.
+
+import { duration } from "../../packages/ui/src/format.ts";
 import { allFrames, functions, ownCode, type Profile, packageTimes } from "../../packages/ui/src/lib/profile.ts";
 import { parseStretch, stretchText, type Windows, windowsLabel } from "../../packages/ui/src/lib/slice.ts";
 import {
+  apportion,
   type Shared,
   shareTimes,
   spanSegments,
@@ -181,9 +184,10 @@ test("a code row's time is its profile's, and a function that ran only there is 
   const waits = windowsOfSegments(own.filter((segment) => segment.share === "waiting"));
   const row = (windows: Windows) => windows.reduce((sum, [from, to]) => sum + to - from, 0);
 
-  expect(total(bar(windowProfile(traced, code, true)))).toBeCloseTo(row(code), 6);
-  expect(total(bar(windowProfile(traced, waits, true)))).toBeCloseTo(row(waits), 6);
-  expect(bar(windowProfile(traced, waits, true))).toEqual({ waiting: Math.round(row(waits)) });
+  // As said: the row's time and its profile's.
+  expect(duration(total(bar(windowProfile(traced, code, true))))).toBe(duration(row(code)));
+  expect(duration(total(bar(windowProfile(traced, waits, true))))).toBe(duration(row(waits)));
+  expect(Object.keys(bar(windowProfile(traced, waits, true)))).toEqual(["waiting"]);
   // get_db's cleanup (90–100 ms) ran in the view's own code only: 10 ms in its row's profile and in the whole list.
   expect(list(windowProfile(traced, code, true))["get_db"]).toBe(10_000);
   expect(list(windowProfile(traced, null, true))["get_db"]).toBe(10_000);
@@ -215,6 +219,43 @@ test("All frames' shares add up to the trace: the query's time the database's, t
   expect(shares["Database"]).toBe(33_000);
   expect(shares["GC"]).toBe(2000);
   expect(shares["waiting"]).toBe(54_000);
+});
+
+/** A time as said ("7 ms", "1.6 s"), back in µs. */
+function said(us: number): number {
+  const [value = "0", unit] = duration(us).split(" ");
+  return Number(value) * (unit === "s" ? 1_000_000 : unit === "ms" ? 1000 : 1);
+}
+
+test("the parts said add up to the total said: shares, the list's own times, the strip's legend", () => {
+  // A code row's profile as get_db's was: get_db 6.9 ms and get_author 3.56 ms of 10.46 ms read 7 + 4 = 11 of 10.
+  expect(apportion([6900, 3560], 1000, 10)).toEqual([7000, 3000]);
+  expect(apportion([500, 500, 500], 1000, 2)).toEqual([1000, 1000, 0]);
+
+  const traced = trace(93_000);
+  const windowsTried: (Windows | null)[] = [
+    null,
+    [
+      [34_275, 37_837],
+      [93_103, 100_000],
+    ],
+    [[93_000, 100_000]],
+    [
+      [1000, 2500],
+      [41_000, 47_300],
+    ],
+  ];
+  for (const windows of windowsTried) {
+    const profile = windowProfile(traced, windows, true);
+    const whole = said(profile.samples * profile.interval_us);
+    const shares = Object.values(bar(profile)).map(said);
+    const own = Object.values(list(profile)).map(said);
+    const strips = [...shareTimes(traced, windows).values()].map(said);
+
+    expect(shares.reduce((sum, us) => sum + us, 0)).toBe(whole);
+    expect(own.reduce((sum, us) => sum + us, 0)).toBe(whole);
+    expect(strips.reduce((sum, us) => sum + us, 0)).toBe(whole);
+  }
 });
 
 test("a profile's stretches go into a link and come back the same, and its title names them", () => {
