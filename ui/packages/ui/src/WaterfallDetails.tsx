@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { SHORT_KINDS } from "./CallRowParts";
 import { appName } from "./CallRows";
 import type { Node } from "./callTree";
+import { ErrorView } from "./ErrorView";
 import { duration } from "./format";
 import { IssueList } from "./IssueList";
 import { CloseIcon } from "./icons";
@@ -130,6 +131,27 @@ function statusOf(node: Node, trace: Trace): number | null {
   return typeof own === "number" ? own : null;
 }
 
+/**
+ * What broke, first: a request's (or its callee's) exception, where it was raised and its stack; an error record's
+ * own. The old Error tab's view, in the details.
+ */
+function ErrorCard({ node, trace }: { node: Node; trace: Trace }) {
+  const errors =
+    node.type === "error"
+      ? [node.error]
+      : node.type === "span" && node.served?.whole
+        ? node.served.whole.errors
+        : node.type === "span" && node.span.parent_id === null
+          ? trace.errors
+          : [];
+  if (errors.length === 0) return null;
+  return (
+    <section className="dt-wf-section dt-wf-error">
+      <ErrorView errors={errors} />
+    </section>
+  );
+}
+
 /** Where a request's time went, from split.ts: one bar of its shares, their times and percents under it. */
 function SplitBar({ trace }: { trace: Trace }) {
   const split = splitOf(trace);
@@ -216,6 +238,7 @@ export function WaterfallDetails({
   return (
     <div className="dt-wf-details">
       <Headline node={node} trace={trace} onClose={onClose} />
+      <ErrorCard node={node} trace={trace} />
       {/* The profile says the split itself (its bar and legend): not twice. */}
       {root ? profile ? null : <SplitBar trace={trace} /> : <HopSplit node={node} />}
       {found.length > 0 ? (
@@ -261,7 +284,8 @@ export function WaterfallDetails({
           this agent.
         </p>
       ) : null}
-      <section className="dt-wf-own">{children}</section>
+      {/* An error record's own details are its card above. */}
+      {node.type === "error" ? null : <section className="dt-wf-own">{children}</section>}
     </div>
   );
 }

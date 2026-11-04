@@ -2922,25 +2922,6 @@ button.wf-crumb:hover {
 .wf-panel[data-dock="right"] .dt-map[data-waterfall] .dt-app-chip {
   display: none;
 }
-/* The chip's utilities (a higher layer) set its width: the icon-only chip's wins here. */
-.wf-panel[data-dock="right"] .dt-map[data-waterfall] .dt-map-name [data-slot="badge"][data-kind] {
-  min-width: 0 !important;
-  width: 17px !important;
-  padding: 0 !important;
-  justify-content: center;
-}
-.wf-panel[data-dock="right"] .dt-map[data-waterfall] .dt-map-name [data-slot="badge"][data-kind] > span {
-  display: none;
-}
-.wf-panel[data-dock="right"] .dt-map[data-waterfall] .dt-map-name [data-slot="badge"][data-kind]::before {
-  content: "";
-  width: 10px;
-  height: 10px;
-  background: currentColor;
-  mask:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3'/%3E%3Cpath d='M12 9v4'/%3E%3Cpath d='M12 17h.01'/%3E%3C/svg%3E")
-    center / contain no-repeat;
-}
 /* ---------- round 7: durations on the timeline, the band as the tab's overview, kinds as text tabs ---------- */
 
 /* Two columns: the names, and the timeline (a row's time after its bar's end). */
@@ -3410,4 +3391,122 @@ button.wf-crumb:hover {
 /* Every chip container keeps its chips whole (run chips too). */
 .dt-map[data-waterfall] .dt-run-chips {
   flex: none;
+}
+/* ---------- round 10 ---------- */
+/* The keys sheet fits the panel: it scrolls, two columns where there is room. */
+.wf-shortcuts {
+  width: min(44rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+}
+.wf-shortcuts h3 + dl {
+  margin-bottom: 0.75rem;
+}
+@media (min-width: 720px) {
+  .wf-shortcuts dl {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 1.5rem;
+  }
+}
+.wf-shortcuts dl > div {
+  align-items: center;
+}
+.wf-shortcuts dt {
+  flex: none;
+}
+.wf-shortcuts dd {
+  color: var(--dt-text-2);
+  text-align: right;
+}
+/* The band: the open block's name beside it, cut to its room; an issue as a dot, the kind's fill kept. */
+.wf-band-label-beside {
+  max-width: 30%;
+  overflow: hidden;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--dt-panel);
+  text-overflow: ellipsis;
+}
+.wf-band-block[data-issues] {
+  box-shadow: inset 2px 0 0 var(--dt-k-http);
+}
+.wf-band-block[data-depth="0"][data-issues] {
+  box-shadow: inset 2px 0 0 var(--dt-k-view);
+}
+.wf-band-block[data-issues]::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--dt-warn);
+}
+/* A bar begun before the axis (the idle start left off): its left end broken, as the axis's. */
+.dt-map[data-waterfall] .dt-map-bar[data-before] {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  mask: linear-gradient(90deg, transparent 0 3px, black 3px);
+}
+/* Code and wait pieces: their hatch a step stronger instead of an edge (tiny pieces stayed specks). */
+.dt-map[data-waterfall] .dt-map-bar[data-quiet] {
+  min-width: 2px;
+  box-shadow: none;
+  opacity: 1;
+}
+.dt-map[data-waterfall] .dt-map-bar[data-quiet][data-waiting] {
+  box-shadow: none;
+}
+/* The stretch's head in the details, on the pane's padding. */
+.wf-range-head {
+  padding: 12px 14px 0;
+  color: var(--dt-text-2);
+  font-size: 12px;
+}
+/* A code row clicked: marked while its span's details show. */
+.dt-map[data-waterfall] .dt-map-row[data-kind="code"][data-picked] {
+  box-shadow: inset 2px 0 0 var(--dt-accent);
+  background: color-mix(in srgb, var(--dt-selected) 60%, transparent);
+}
+/* An error card first in the details. */
+.dt-wf-error {
+  padding-top: 12px;
+}
+/* ---------- round 10, B ---------- */
+/* A gutter at the track's right end for the times of bars that run to it: they never sit on a bar. */
+.wf-panel {
+  --wf-track-gutter: 52px;
+}
+.dt-map[data-waterfall] .dt-map-track,
+.wf-ticks {
+  margin-right: var(--wf-track-gutter);
+}
+.dt-map[data-waterfall] .dt-map-row > .dt-map-time {
+  margin-left: calc(
+    (100% - var(--wf-track-pad) - var(--wf-track-gutter)) *
+    var(--bar-end, 0) /
+    100 +
+    var(--wf-track-pad) +
+    6px
+  );
+}
+/* Graphics at 3:1: a request's neutral bar, a group's stretch. */
+.wf-panel {
+  --dt-k-request: rgb(140 147 166 / 0.8);
+}
+:root[data-theme="light"] .wf-panel {
+  --dt-k-request: rgb(99 99 110 / 0.62);
+}
+.dt-map[data-waterfall] .dt-map-bar[data-range] {
+  background: color-mix(in srgb, var(--dt-k) 60%, transparent);
+}
+/* The band in 28px. */
+.wf-band {
+  padding: 6px 12px 5px;
+}
+/* The names' divider in the middle of the gutter between the names and the track. */
+.wf-splitter-names {
+  left: calc(var(--wf-split-x, 40%) - var(--wf-track-pad) / 2 - 0.3125rem);
 }

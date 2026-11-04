@@ -120,7 +120,13 @@ export function Bar({
   const past = place.past ?? (cut ? "" : undefined);
   return (
     <span className="dt-map-track" aria-hidden="true" title={title}>
-      <span className="dt-map-bar" data-point={point ? "" : undefined} data-past={past} style={place.style} />
+      <span
+        className="dt-map-bar"
+        data-point={point ? "" : undefined}
+        data-past={past}
+        data-before={"before" in place ? place.before : undefined}
+        style={place.style}
+      />
     </span>
   );
 }
@@ -138,7 +144,11 @@ const PAST_MIN = 6;
  * Where a bar sits on the request's timeline. One that runs past its end (a task runs longer than the request that
  * enqueued it, or starts after it answered) runs to the right edge and fades out there (`past`).
  */
-export function barPlace(trace: Axis, begin: number, span: number): { style: CSSProperties; past: "" | undefined } {
+export function barPlace(
+  trace: Axis,
+  begin: number,
+  span: number,
+): { style: CSSProperties; past: "" | undefined; before?: "" | undefined } {
   // Begun before the axis does (the waterfall's axis starts where the work does): the part on the axis.
   const start = Math.max(begin, trace.start);
   const length = Math.max(span - (start - begin), 0);
@@ -146,7 +156,11 @@ export function barPlace(trace: Axis, begin: number, span: number): { style: CSS
   const left = Math.min(Math.max(((start - trace.start) / total) * 100, 0), 100 - PAST_MIN);
   const past = start + length > trace.start + total;
   const width = past ? 100 - left : Math.max((length / total) * 100, 0.4);
-  return { style: { left: `${left}%`, width: `${width}%` }, past: past ? "" : undefined };
+  return {
+    style: { left: `${left}%`, width: `${width}%` },
+    past: past ? "" : undefined,
+    before: begin < trace.start ? "" : undefined,
+  };
 }
 
 /**

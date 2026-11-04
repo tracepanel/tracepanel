@@ -638,6 +638,16 @@ function OwnRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps<
   );
 }
 
+/** In the waterfall, a call whose callee has a profile says so on its row. */
+function ServedProfile({ served }: { served: ServedRun }) {
+  if (!(useWaterfall() && served.whole?.profile)) return null;
+  return (
+    <FlameIcon className="dt-wf-has-profile" aria-label="Has a profile" role="img">
+      <title>Has a profile: select this row to see it</title>
+    </FlameIcon>
+  );
+}
+
 /** A group's kind badge: in short in the waterfall, as a span's is. */
 function GroupKind({ kind }: { kind: string }) {
   const short = useWaterfall() ? (SHORT_KINDS[kind] ?? kind) : kind;
@@ -696,7 +706,7 @@ function HopBar({
       aria-hidden="true"
       title={`${barTitle(span.name, span.kind, span.duration, trace.duration)}\nserver ${duration(run.duration)} · ${run.name}`}
     >
-      <span className="dt-map-bar" data-call="" data-past={call.past} style={call.style} />
+      <span className="dt-map-bar" data-call="" data-past={call.past} data-before={call.before} style={call.style} />
       <span className="dt-map-bar" data-server="" style={server.style} />
     </span>
   );
@@ -734,6 +744,7 @@ function HopRow({ node, served, place }: { node: SpanNode; served: ServedRun; pl
           <CallStatus node={node} />
           <FromTemplate span={span} parent={parent} />
           <HiddenLogs count={ctx.hiddenLogs.get(span.id)} onShow={ctx.onShowLogs} />
+          <ServedProfile served={served} />
           <RowChips>
             <HopIssue span={span} served={served} ctx={ctx} />
             <RunChips trace={served.run} />

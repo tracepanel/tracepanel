@@ -75,8 +75,12 @@ export function Segmented<T extends string>({
             if (next === undefined) return;
             event.preventDefault();
             onChange(next);
-            const list = event.currentTarget.parentElement;
-            requestAnimationFrame(() => list?.querySelector<HTMLElement>('[aria-selected="true"]')?.focus());
+            // The list may be drawn again for the new view: found again by its name, its selected tab focused.
+            const name = event.currentTarget.parentElement?.getAttribute("aria-label") ?? "";
+            const root = event.currentTarget.ownerDocument;
+            requestAnimationFrame(() =>
+              root.querySelector<HTMLElement>(`[role="tablist"][aria-label="${name}"] [aria-selected="true"]`)?.focus(),
+            );
           }}
           className={segmentClass(segment.id === value)}
         >

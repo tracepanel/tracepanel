@@ -10,6 +10,7 @@ import {
   ExternalIcon,
   Hint,
   IssueChip,
+  KindBadge,
   Logo,
   RangeBand,
   type RowKind,
@@ -111,9 +112,9 @@ function useBarLabels(scroll: RefObject<HTMLDivElement | null>): void {
         }
         if (start > end) start = end;
         // Near the right edge the time goes before the bar; a bar across most of the axis carries it inside.
-        // One rule: after the bar; near the right edge, inside its end.
+        // One rule: after the bar's end, in the track's gutter at the right edge if it must.
         const flip = false;
-        const inside = end > 82;
+        const inside = false;
         const want = `${end.toFixed(2)}|${start.toFixed(2)}|${flip}|${inside}`;
         if (row.dataset["bars"] === want) continue;
         row.dataset["bars"] = want;
@@ -196,6 +197,14 @@ function useTreeKeys(
     mark();
     const observer = new MutationObserver(mark);
     observer.observe(root, { subtree: true, childList: true, attributes: true, attributeFilter: ["aria-current"] });
+    // A code row clicked stays marked while its span's details show; any other row clicked lets it go.
+    const onClick = (event: MouseEvent) => {
+      const row = (event.target as Element).closest<HTMLElement>(".dt-map-row");
+      if (!row) return;
+      for (const each of root.querySelectorAll("[data-picked]")) each.removeAttribute("data-picked");
+      if (row.dataset["kind"] === "code") row.setAttribute("data-picked", "");
+    };
+    root.addEventListener("click", onClick);
     const onKey = (event: KeyboardEvent) => {
       const all = rows();
       const at = all.indexOf(event.target as HTMLElement);
@@ -255,6 +264,7 @@ function useTreeKeys(
     return () => {
       observer.disconnect();
       root.removeEventListener("keydown", onKey);
+      root.removeEventListener("click", onClick);
     };
   });
 }
@@ -391,19 +401,21 @@ function KindChips({ kind, onKind }: { kind: RowKind | null; onKind: (kind: RowK
 
 /** The short words of the kind badges, said in full. */
 const BADGES: readonly [string, string][] = [
-  ["REQ", "a request the app served"],
-  ["VIEW", "a page view in the browser"],
-  ["GET · POST", "an HTTP call, by its method"],
-  ["HDL", "the handler (view) that answered"],
-  ["FN", "a function"],
-  ["GQL", "a GraphQL operation or step"],
-  ["SQL", "a query"],
-  ["TX", "a database transaction"],
-  ["TPL", "a template rendered"],
-  ["ENQ", "a task enqueued"],
-  ["TASK", "a task run in a worker"],
-  ["CODE", "your code between spans (untraced)"],
-  ["WAIT", "time waiting (I/O, a lock, sleep)"],
+  ["req", "a request the app served"],
+  ["view", "a page view in the browser"],
+  ["GET", "an HTTP call, by its method (POST, PUT…)"],
+  ["hdl", "the handler (view) that answered"],
+  ["fn", "a function"],
+  ["gql", "a GraphQL operation or step"],
+  ["sql", "a query"],
+  ["tx", "a database transaction"],
+  ["tpl", "a template rendered"],
+  ["redis", "a Redis command"],
+  ["enq", "a task enqueued"],
+  ["task", "a task run in a worker"],
+  ["code", "your code between spans (untraced)"],
+  ["wait", "time waiting (I/O, a lock, sleep)"],
+  ["info", "a log record, by its level (debug, warn, error)"],
 ];
 
 const SHORTCUTS: readonly [string, string][] = [
@@ -417,12 +429,24 @@ const SHORTCUTS: readonly [string, string][] = [
 
 /** ? : the keys, in a small sheet over the panel. */
 function Shortcuts({ onClose }: { onClose: () => void }) {
+  // Back where it was opened from, when it closes.
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    return () => opener?.focus();
+  }, []);
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: a click beside the sheet closes it; Esc does too.
     // biome-ignore lint/a11y/useKeyWithClickEvents: Esc closes it.
-    <div className="wf-shortcuts-backdrop" onClick={onClose}>
-      <div className="wf-shortcuts" role="dialog" aria-label="Keys and badges">
-        <h3>Keyboard shortcuts</h3>
+    <div className="wf-shortcuts-backdrop" onClick={(event) => event.target === event.currentTarget && onClose()}>
+      <div
+        className="wf-shortcuts"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Keys and badges"
+        tabIndex={-1}
+        ref={(element) => element?.focus()}
+      >
+        <h3>Keys</h3>
         <dl>
           {SHORTCUTS.map(([what, key]) => (
             <div key={what}>
@@ -438,11 +462,23 @@ function Shortcuts({ onClose }: { onClose: () => void }) {
           {BADGES.map(([word, what]) => (
             <div key={word}>
               <dt>
-                <kbd>{word}</kbd>
+                <KindBadge kind={word} muted={true} className="dt-map-kind" />
               </dt>
               <dd>{what}</dd>
             </div>
           ))}
+          <div>
+            <dt>
+              <IssueChip kind="n+1" />
+            </dt>
+            <dd>an issue in the span: N+1, slow query, slow HTTP call…</dd>
+          </div>
+          <div>
+            <dt>
+              <StatusBadge status={500} />
+            </dt>
+            <dd>how a request or call was answered</dd>
+          </div>
         </dl>
       </div>
     </div>
@@ -828,7 +864,14 @@ export function PanelA({ route }: { route: Route }) {
             className="wf-waterfall"
             onPointerDown={(event) => {
               const target = event.target as Element;
-              if (ticksRef.current && target.closest(".dt-map-track, .wf-ticks")) drag.start(event, ticksRef.current);
+              if (ticksRef.current && target.closest(".dt-map-track, .wf-ticks")) {
+                drag.start(event, ticksRef.current);
+                // The drag keeps the pointer's default (focus) from happening: the row is focused, the keys stay here.
+                // Focused for the keys, without the keyboard's ring: a pointer put it there.
+                target
+                  .closest<HTMLElement>(".dt-map-row")
+                  ?.focus({ preventScroll: true, focusVisible: false } as FocusOptions);
+              }
             }}
           >
             {/* biome-ignore lint/a11y/useKeyWithClickEvents: Esc lets the stretch go from the keyboard. */}
@@ -952,6 +995,13 @@ function pagesOf(rows: readonly TraceRow[]): TraceRow[][] {
   return pages;
 }
 
+/** A folded entry's badge word, as its root row's: a view, a task, a request. */
+function rootWord(row: TraceRow): string {
+  if (row.trace.kind === "page") return "view";
+  if (row.trace.kind === "task") return "task";
+  return "req";
+}
+
 function badgeWord(row: TraceRow): string {
   return row.trace.kind === "page" ? "VIEW" : (row.trace.method ?? row.trace.kind.toUpperCase());
 }
@@ -1020,15 +1070,21 @@ function TabTimeline({
             : "";
           const status = row.trace.http_status ? ` · ${row.trace.http_status}` : "";
           const open = entryKey(row) === openKey;
+          // The room right of the block, to the next block's start (px).
+          const nextLeft = Math.min(
+            100,
+            ...all
+              .map((each) => ((each.trace.start - axis.start) / axis.duration) * 100)
+              .filter((each) => each > left + share),
+          );
+          const room = ((nextLeft - (left + share)) / 100) * width;
           // The open block's name is always said: inside it when it fits, else beside it.
           const beside =
-            open && !fits ? (
+            open && !fits && room > labelWidth(label) ? (
               <span
                 key={`${entryKey(row)}:label`}
                 className="wf-band-label-beside"
-                style={
-                  left + share < 70 ? { left: `calc(${left + share}% + 6px)` } : { right: `calc(${100 - left}% + 6px)` }
-                }
+                style={{ left: `calc(${left + share}% + 6px)` }}
               >
                 {label}
               </span>
@@ -1055,6 +1111,18 @@ function TabTimeline({
                   : `${row.trace.name}${status} · ${duration(row.trace.duration)}${issues}${capped ? " (drawn shorter)" : ""}`
               }
               style={{ left: `${Math.min(left, 99.6)}%`, width: `${share}%`, top: `${(lanes.get(row) ?? 0) * 11}px` }}
+              // One Tab stop for the band, the open block; left and right arrows move between blocks.
+              tabIndex={open ? 0 : -1}
+              onKeyDown={(event) => {
+                const by = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+                if (!by) return;
+                event.preventDefault();
+                const blocks = [
+                  ...(event.currentTarget.parentElement?.querySelectorAll<HTMLElement>(".wf-band-block") ?? []),
+                ];
+                const at = blocks.indexOf(event.currentTarget);
+                blocks[Math.min(Math.max(at + by, 0), blocks.length - 1)]?.focus();
+              }}
               onClick={() => onOpen(row)}
             >
               {fits ? label : null}
@@ -1083,10 +1151,9 @@ function entryKey(row: TraceRow): string {
   return row.key ?? `${row.trace.id}:${row.trace.start}`;
 }
 
-/** A block's short name: a request's method and path, a page's name. */
+/** A block's name: the trace's, as its row says it. */
 function shortName(row: TraceRow): string {
-  if (row.trace.kind === "page") return row.trace.name;
-  return `${row.trace.method ?? ""} ${row.trace.path ?? row.trace.name}`.trim();
+  return row.trace.name;
 }
 
 /** About how wide a label is in the band's 10.5px type (px). */
@@ -1108,13 +1175,15 @@ function EntryRow({
   hovered: boolean;
   onHover: (key: string | null) => void;
 }) {
-  const name = row.trace.kind === "page" ? row.trace.name : (row.trace.path ?? row.trace.name);
+  // Named and badged as its open root row is: one entity, one look.
+  const name = row.trace.name;
   const running = row.open || row.trace.id.startsWith("~");
   return (
     <div className="dt-map" data-waterfall="">
       <button
         type="button"
         className="dt-map-row wf-other"
+        data-kind={row.trace.kind === "page" ? "page" : "http"}
         aria-expanded={false}
         data-tree-level={depth + 1}
         data-hovered={hovered ? "" : undefined}
@@ -1125,7 +1194,7 @@ function EntryRow({
       >
         <span className="dt-map-name" style={{ paddingLeft: `${0.75 + depth * 1.125}rem` }}>
           <ChevronRightIcon className="wf-other-caret" aria-hidden="true" />
-          <TraceBadge word={badgeWord(row)} />
+          <KindBadge kind={rootWord(row)} muted={true} className="dt-map-kind" />
           <span className="dt-map-text" title={row.trace.name}>
             {name}
           </span>
@@ -1143,7 +1212,10 @@ function EntryRow({
             <span className="wf-other-time">{duration(row.trace.duration)}</span>
           )}
         </span>
-        <span className="dt-map-track" />
+        <span className="dt-map-track">
+          {/* Still running: a pale bar across, growing as its time ticks. */}
+          {running ? <span className="dt-map-bar wf-inflight-bar" style={{ left: "0%", width: "100%" }} /> : null}
+        </span>
       </button>
     </div>
   );

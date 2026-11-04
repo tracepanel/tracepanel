@@ -114,7 +114,12 @@ function ProfileUnavailable() {
       title="Recording profiles: not available here"
       detail="No app connected to this agent profiles requests on demand. A trace that has a profile shows it in its details."
     >
-      <button type="button" className="icon-button" aria-disabled="true" aria-label="Profiling isn't available">
+      <button
+        type="button"
+        className="icon-button"
+        aria-disabled="true"
+        aria-label="Recording profiles: not supported here"
+      >
         <FlameIcon className="size-4" />
       </button>
     </Hint>
