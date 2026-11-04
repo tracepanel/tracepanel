@@ -38,7 +38,7 @@ import {
 } from "./lib/profile";
 import { serviceRuntime, traceRuntime } from "./lib/runtime";
 import { type Windows, windowsLabel, windowsTime } from "./lib/slice";
-import { type Shared, windowProfile } from "./lib/timeShares";
+import { profiledTime, type Shared, windowProfile } from "./lib/timeShares";
 import { cn } from "./lib/utils";
 import { useRemembered, VIEW_KEYS } from "./lib/viewMemory";
 import type { WaitFrame } from "./lib/waitCalls";
@@ -149,6 +149,11 @@ const SHARE_TONES: Readonly<Record<string, Tone>> = {
     fill: "[--dt-k:var(--dt-k-django)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
     dot: "[--dt-k:var(--dt-k-django)] bg-(--dt-k)",
     lit: "[--dt-lit:var(--dt-k-django)]",
+  },
+  unprofiled: {
+    fill: "[--dt-k:var(--dt-k-unprofiled)] bg-(--dt-k) hover:bg-muted-foreground/25",
+    dot: "[--dt-k:var(--dt-k-unprofiled)] bg-(--dt-k)",
+    lit: "[--dt-lit:var(--color-muted-foreground)]",
   },
   gc: {
     fill: "[--dt-k:var(--dt-k-gc)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
@@ -318,7 +323,7 @@ function ProfileOf({
       measure={(samples) => duration(samples * scope.profile.interval_us)}
       noun="Time"
       kinds={kinds}
-      head={<ProfileHead whole={profile} shown={scope.profile} trace={trace} scope={scope} />}
+      head={<ProfileHead whole={profile} trace={trace} scope={scope} />}
       of={sharesOf(scope, trace)}
       list={({ view, palette, measure }) => (
         <Functions rows={functions(view)} limit={30} palette={palette} time={measure} onShowRow={onShowRow} />
@@ -479,6 +484,11 @@ interface Scope {
   note: string | null;
   /** In the trace's own time (the profile says when its samples were taken), not in samples. */
   timed: boolean;
+  /**
+   * What it sampled, in samples: timed, the time its samples cover (a call's or the collector's time before its first
+   * sample is that share's in its bar all the same, its code's "not profiled"); else what it took.
+   */
+  profiled: number;
 }
 
 /** A trace as its profile's scope reads it: its clock, its calls (who waited), its SDK's language. */
@@ -489,18 +499,27 @@ function scopeOf(trace: Profiled, profile: Profile, range: Windows | null): Scop
   // stretches narrow it to their time.
   if (timed(profile)) {
     const title = range ? `Profile of ${windowsLabel(range)}` : "Profile of the whole trace";
-    const shared = trace.profile === profile ? trace : { ...trace, profile };
+    const shared = (trace.profile === profile ? trace : { ...trace, profile }) as Shared & { profile: Timed };
     return {
-      profile: windowProfile(shared as Shared & { profile: Timed }, range),
-      own: windowProfile(shared as Shared & { profile: Timed }, range, true),
+      profile: windowProfile(shared, range),
+      own: windowProfile(shared, range, true),
       title,
       windows: range,
       note: null,
       timed: true,
+      profiled: profiledTime(shared, range) / profile.interval_us,
     };
   }
   const note = range ? "Its samples aren't timed: the range picked can't narrow it." : null;
-  return { profile, own: profile, title: "Profile of the whole trace", windows: null, note, timed: false };
+  return {
+    profile,
+    own: profile,
+    title: "Profile of the whole trace",
+    windows: null,
+    note,
+    timed: false,
+    profiled: profile.samples,
+  };
 }
 
 /** What a CPU profile placed on the trace's clock (`spread`, Go's) says of its waits: they weren't sampled. */
@@ -580,15 +599,15 @@ function Dropped({ whole, timed: filled }: { whole: Profile; timed: boolean }) {
  * What the profile covers: how long it sampled of the trace's time, and, where samples weren't taken (the trace's
  * thread ran other traces too), how long and why.
  */
-function ProfileHead({ whole, shown, trace, scope }: { whole: Profile; shown: Profile; trace: Trace; scope: Scope }) {
+function ProfileHead({ whole, trace, scope }: { whole: Profile; trace: Trace; scope: Scope }) {
   const time = (samples: number) => duration(samples * whole.interval_us);
   return (
     <div className="grid gap-0.5">
       <span className="text-xs text-muted-foreground">{scope.title}</span>
       <span className="text-2xl font-semibold tracking-tight tabular-nums">
         {about(whole)}
-        {/* What it profiled, its stacks said in whole steps, never said as more than what it is of. */}
-        {time(Math.min(shown.samples, sharesOf(scope, trace)))}
+        {/* What it profiled, never said as more than what it is of. */}
+        {time(Math.min(scope.profiled, sharesOf(scope, trace)))}
         <span className="ml-2 text-sm font-normal text-muted-foreground">
           {profiledWord(scope)} of {ofWhat(scope, trace)}
         </span>
@@ -1381,6 +1400,7 @@ function appView(app: AppProfile): Scope {
     windows: null,
     note: null,
     timed: false,
+    profiled: scopes.reduce((sum, each) => sum + each.profiled, 0),
   };
 }
 
@@ -1458,9 +1478,7 @@ function AppProfileSection({ app, view }: { app: AppProfile; view: Scope }) {
               {view.title}
             </span>
             <span className="text-2xl font-semibold tracking-tight tabular-nums">
-              {duration(
-                Math.min(view.profile.samples, trace ? sharesOf(view, trace) : Infinity) * view.profile.interval_us,
-              )}
+              {duration(Math.min(view.profiled, trace ? sharesOf(view, trace) : Infinity) * view.profile.interval_us)}
               <span className="ml-2 text-sm font-normal text-muted-foreground">
                 profiled{trace ? ` of ${ofWhat(view, trace)}` : ""}
               </span>

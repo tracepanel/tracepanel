@@ -119,6 +119,7 @@ export const CARD_STYLE = `
   [data-category="mail"] { --k: var(--dt-k-mail); }
   [data-category="signal"] { --k: var(--dt-k-signal); }
   [data-category="gc"] { --k: var(--dt-k-gc); }
+  [data-category="unprofiled"] { --k: var(--dt-k-unprofiled); }
   /* The code's waits: neutral and hatched, as the console's strip draws them. */
   [data-category="waiting"] {
     --k: color-mix(in srgb, var(--dt-text-3) 50%, transparent);

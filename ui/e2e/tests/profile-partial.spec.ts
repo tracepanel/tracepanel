@@ -1,7 +1,7 @@
 // A Node BFF's profiles as the Profile tab reads them: one that covers only the trace's last 5 ms says what it
-// profiled of the trace's time and its shares of the trace's, as the strip does; over a chain of two apps, a code
-// row's stretches open the BFF's profile of them, Your code first, and the sums name where most of its time went as
-// Your code's list does.
+// profiled of the trace's time, its bar the strip's (a call's time from its span, its code's time before the first
+// sample not profiled); over a chain of two apps, a code row's stretches open the BFF's profile of them, Your code
+// first, and the sums name where most of its time went as Your code's list does.
 import { readFileSync } from "node:fs";
 import type { Page } from "@playwright/test";
 import { CONSOLE } from "../agent.ts";
@@ -161,14 +161,24 @@ test.beforeAll(async () => {
     .toHaveLength(2);
 });
 
-test("a profile of the trace's last 5 ms says so, its shares of the trace's time as the strip says them", async ({
+test("a profile of the trace's last 5 ms says so, its bar the strip's: the call's from its span, the rest not profiled", async ({
   page,
 }) => {
-  await page.goto(`/#/t/${PARTIAL}?tab=profile`);
-  await page.getByRole("tab", { name: "Your code" }).click();
+  await page.goto(`/#/t/${PARTIAL}?tab=tree`);
+  const strip = await legend(page).allInnerTexts();
+  await page.getByRole("tab", { name: /^Profile/ }).click();
 
-  await expect(page.getByText("profiled of the trace's 35 ms")).toBeVisible();
-  await expect(legend(page)).toHaveText([/^Framework & middleware\s*3 ms\s*9%$/, /^External calls\s*2 ms\s*6%$/]);
+  await expect(page.getByText(/^5 ms\s*profiled of the trace's 35 ms$/)).toBeVisible();
+  await expect(legend(page)).toHaveText([
+    /^External calls\s*28 ms\s*80%$/,
+    /^Not profiled\s*3 ms\s*9%$/,
+    /^Framework & middleware\s*3 ms\s*8%$/,
+    /^GC\s*1 ms\s*3%$/,
+  ]);
+  // The strip's legend, share for share (its chips aside).
+  expect(strip.slice(0, 4).map((text) => text.replace(/\s+/g, ""))).toEqual(
+    (await legend(page).allInnerTexts()).map((text) => text.replace(/\s+/g, "")),
+  );
 });
 
 test("over a chain, a code row's stretches open the BFF's profile of them, not the whole trace's", async ({ page }) => {

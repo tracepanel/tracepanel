@@ -6,7 +6,7 @@ import type { Trace } from "../types";
 import { breakdown, type Category, stretches } from "./breakdown";
 import { cutByPauses, GC, gcPauses } from "./memory";
 import { WAITING } from "./profile";
-import { rounded, type Segment, segmentsOf } from "./timeShares";
+import { type NOT_PROFILED, rounded, type Segment, segmentsOf } from "./timeShares";
 import { timed } from "./waiting";
 
 /** The waiting share: neutral and hatched, as the strip draws the code's waits. */
@@ -71,6 +71,6 @@ function byPause(trace: Trace): [Category | typeof GC, number][] {
  * Profile tab's bar, the widget's card): the stretches added up, the collector's pauses (a profile's) taken out of the
  * shares they stopped and counted as their own, and the code's waits out of its own shares (withWaiting).
  */
-export function timeParts(trace: Trace): [Category | typeof GC | typeof WAITED_SHARE, number][] {
-  return withWaiting<Category | typeof GC>(trace, byPause(trace));
+export function timeParts(trace: Trace): [Category | typeof GC | typeof NOT_PROFILED | typeof WAITED_SHARE, number][] {
+  return withWaiting<Category | typeof GC | typeof NOT_PROFILED>(trace, byPause(trace));
 }

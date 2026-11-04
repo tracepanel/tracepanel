@@ -141,8 +141,10 @@ const boxes = (page: Page) =>
 test("a Python handler's waits say what was in flight: its query, its HTTP call, a sleep", async ({ page }) => {
   await page.goto(`/#/t/${PYTHON}?tab=profile`);
 
+  // Its first 100 ms, before the profile's first sample, its code's not profiled, as the strip says it.
   await expect(summaries(page)).toHaveText([
     /^HTTP GET analytics\.example\.com\s*150 ms/,
+    /^Not profiled\s*100 ms/,
     /^SQL postgresql\s*60 ms/,
     /^waiting · sleep\s*40 ms/,
   ]);
@@ -171,10 +173,10 @@ test("a Python handler's waits say what was in flight: its query, its HTTP call,
 test("a JVM thread parked on Postgres says so, as a Python one does", async ({ page }) => {
   await page.goto(`/#/t/${JVM}?tab=profile`);
 
-  await expect(summaries(page)).toHaveText([/^SQL postgresql\s*60 ms/]);
-  // Under the function that waited, named by its query.
+  await expect(summaries(page)).toHaveText([/^Not profiled\s*200 ms/, /^SQL postgresql\s*60 ms/]);
+  // Under the function that waited, named by its query (beside its first 200 ms, not profiled).
   await expect
-    .poll(async () => (await boxes(page)).join(" | "))
+    .poll(async () => (await boxes(page)).filter((box) => box !== "Not profiled").join(" | "))
     .toMatch(/^CampaignController\.list \| CampaignController\.render \| SQL postgresql$/);
 });
 
@@ -225,5 +227,10 @@ test("a chain's merged profile of an app names its waits as each trace's own doe
   await expect(shop).toContainText("Profile of 2 traces");
   await expect(
     shop.getByRole("region", { name: "Functions" }).getByRole("list", { name: "Not a function" }).getByRole("listitem"),
-  ).toHaveText([/^HTTP GET analytics\.example\.com\s*300 ms/, /^SQL postgresql\s*120 ms/, /^waiting · sleep\s*80 ms/]);
+  ).toHaveText([
+    /^HTTP GET analytics\.example\.com\s*300 ms/,
+    /^Not profiled\s*200 ms/,
+    /^SQL postgresql\s*120 ms/,
+    /^waiting · sleep\s*80 ms/,
+  ]);
 });

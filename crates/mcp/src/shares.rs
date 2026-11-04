@@ -14,12 +14,16 @@ use tracepanel_analysis::stretches::{OWN_CODE, Stretch, spans_of, stretches};
 pub(crate) const GC: &str = "gc";
 /// The code's waits: a share of their own.
 pub(crate) const WAITING: &str = "waiting";
+/// A span's own code a timed profile has no samples of (before its first sample): a share of its own, neither the
+/// project's code's nor the framework's.
+pub(crate) const NOT_PROFILED: &str = "unprofiled";
 
 /// A share's name, as the console's legend says it: "Database", "GC", "Framework & middleware".
 pub(crate) fn label(share: &str) -> &'static str {
     match share {
         GC => "GC",
         WAITING => "Waiting",
+        NOT_PROFILED => "Not profiled",
         "django" => "Framework & middleware",
         "code" => "Your code",
         "signal" => "Signals",
@@ -252,10 +256,16 @@ fn bucket_segments<'a>(
 ) -> Vec<Segment<'a>> {
     let plain = if gc { GC } else { stretch.category };
     let Some(stacks) = stacks else {
+        // A span's own code the profile didn't sample is said so; a call's or the collector's time is theirs.
+        let share = if !gc && OWN_CODE.contains(&stretch.category) {
+            NOT_PROFILED
+        } else {
+            plain
+        };
         return vec![Segment {
             from,
             to,
-            share: plain,
+            share,
             span,
             stacks: None,
         }];
@@ -302,7 +312,8 @@ pub(crate) fn share_frame(segment: &Segment) -> Option<(String, &'static str)> {
         return None;
     }
     let share = label(segment.share);
-    let call = segment.share != GC && !OWN_CODE.contains(&segment.share);
+    let call =
+        segment.share != GC && segment.share != NOT_PROFILED && !OWN_CODE.contains(&segment.share);
     let function = if call {
         waits::call_label(segment.span)
     } else {

@@ -230,6 +230,10 @@
         150000
       ],
       [
+        "Not profiled",
+        100000
+      ],
+      [
         "SQL postgresql",
         60000
       ],
@@ -244,7 +248,7 @@
         150000
       ],
       [
-        "Your code",
+        "Not profiled",
         100000
       ],
       [
@@ -415,14 +419,22 @@
     },
     "waits": [
       [
+        "Not profiled",
+        200000
+      ],
+      [
         "SQL postgresql",
         60000
       ]
     ],
     "shares": [
       [
+        "Not profiled",
+        200000
+      ],
+      [
         "Your code",
-        300000
+        100000
       ],
       [
         "Database",
@@ -1638,12 +1650,20 @@
     },
     "waits": [
       [
+        "HTTP GET 127.0.0.1",
+        28000
+      ],
+      [
         "Framework & middleware",
         3000
       ],
       [
-        "HTTP GET 127.0.0.1",
-        2000
+        "Not profiled",
+        3000
+      ],
+      [
+        "GC",
+        1000
       ]
     ],
     "shares": [
@@ -1656,7 +1676,7 @@
         3000
       ],
       [
-        "Your code",
+        "Not profiled",
         3000
       ],
       [

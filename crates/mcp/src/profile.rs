@@ -175,6 +175,9 @@ struct Profile<'a> {
     same: Vec<usize>,
     /// A timed profile's trace by share (shares: Database, Your code, GC, Waiting), as said, with their names.
     shares: Vec<(&'static str, f64)>,
+    /// What it sampled (µs): timed, the time its samples cover (its stacks have the rest under its shares' frames);
+    /// else its stacks' time.
+    profiled: f64,
 }
 
 /// A function as the console tells functions apart: its name, where it is defined, whether it waits, its share.
@@ -281,11 +284,20 @@ fn split_stacks<'a>(
     let mut order: Vec<(Vec<usize>, &'static str)> = Vec::new();
     let mut times: HashMap<Vec<usize>, f64> = HashMap::new();
     for segment in segments {
-        let Some(stacks) = &segment.stacks else {
-            continue;
-        };
         let share =
             shares::share_frame(segment).map(|(function, share)| share_at(frames, function, share));
+        let Some(stacks) = &segment.stacks else {
+            // Time the profile has no samples of is its share's all the same (a call's, the collector's, not
+            // profiled), as the strip says it: under that share's frame alone.
+            if let Some(share) = share {
+                let path = vec![share];
+                if !times.contains_key(&path) {
+                    order.push((path.clone(), segment.share));
+                }
+                *times.entry(path).or_default() += segment.to - segment.from;
+            }
+            continue;
+        };
         for &(at, us) in stacks {
             let Some(path) = base.get(at) else { continue };
             let mut path = path.clone();
@@ -393,6 +405,7 @@ impl<'a> Profile<'a> {
             .collect();
         let timed = timed(raw);
         let mut split = Vec::new();
+        let mut profiled = None;
         let named = if timed {
             let base: Vec<Vec<usize>> = stacks.iter().map(|stack| stack.frames.clone()).collect();
             let kinds: Vec<shares::StackKind> = base
@@ -409,6 +422,13 @@ impl<'a> Profile<'a> {
                 })
                 .collect();
             let segments = shares::segments(doc, &kinds);
+            profiled = Some(
+                segments
+                    .iter()
+                    .filter(|segment| segment.stacks.is_some())
+                    .map(|segment| segment.to - segment.from)
+                    .sum(),
+            );
             split = shares::share_times(&segments)
                 .into_iter()
                 .map(|(share, us)| (shares::label(share), us))
@@ -437,6 +457,7 @@ impl<'a> Profile<'a> {
                 .sum()
         });
         let same = same_functions(&frames);
+        let profiled = profiled.unwrap_or_else(|| stacks.iter().map(|stack| stack.us).sum());
         Some(Self {
             frames,
             stacks,
@@ -450,6 +471,7 @@ impl<'a> Profile<'a> {
             named,
             same,
             shares: split,
+            profiled,
         })
     }
 
@@ -477,6 +499,7 @@ impl<'a> Profile<'a> {
         let (mut stacks, mut named) = (Vec::new(), Vec::new());
         let any_named = parts.iter().any(|part| part.named.is_some());
         let mut split: Vec<(&'static str, f64)> = Vec::new();
+        self.profiled = parts.iter().map(|part| part.profiled).sum();
         for part in &parts {
             for &(share, us) in &part.shares {
                 match split.iter_mut().find(|(each, _)| *each == share) {
@@ -1008,20 +1031,20 @@ fn gc_line(raw: &Value) -> Option<String> {
 
 fn cpu(profile: &Profile, duration: i64, top: usize, merged: bool) -> String {
     let total = profile.total();
-    // Timed, its shares are the trace's time as the strip says it: their percentages are of the trace's, so a
-    // profile of part of it (a BFF's last 5 ms of 35) says 80% for 28 ms, not 560%. What it profiled, rounded to the
-    // step its stacks are said in, is never said as more than the trace's.
+    // Timed, its stacks are the trace's time as the strip splits it, its time before its first sample under its
+    // shares' frames: their percentages are of the trace's (a BFF's 28 ms of 35 is 80%, not 560% of the 5 ms it
+    // sampled). What it sampled is never said as more than the trace's.
     let of = if profile.timed {
         total.max(duration as f64)
     } else {
         total
     };
+    let mut waiting_said = None;
     let profiled = if profile.timed {
-        total.min(duration as f64)
+        profile.profiled.min(duration as f64)
     } else {
         total
     };
-    let mut waiting_said = None;
     let mut out = vec![format!(
         "CPU profile: {} {} of the {} {} · {}, one every {}",
         us(profiled),
@@ -1627,8 +1650,9 @@ allocation sites at the peak (1 of 1, 2.0 MB in all, largest first; ×: allocati
         );
     }
 
-    /// A profile of only the trace's last 5 ms (`schema/waits.json`): what it profiled of the trace's time, its one
-    /// sample said so, the trace's time by share as the strip says it, each of the trace's time (28 ms of 35 is 81%).
+    /// A profile of only the trace's last 5 ms (`schema/waits.json`): what it sampled of the trace's time, its one
+    /// sample said so; the trace's time by share as the strip says it, the call's 28 ms from its span, the code's time
+    /// before the first sample not profiled, percents of the trace's that add up to 100%.
     #[test]
     fn a_profile_of_part_of_a_trace_says_its_shares_of_the_trace() {
         let cases: Vec<Value> =
@@ -1641,8 +1665,8 @@ allocation sites at the peak (1 of 1, 2.0 MB in all, largest first; ×: allocati
         assert_eq!(
             lines,
             [
-                "CPU profile: 5.0 ms profiled of the trace's 34.7 ms · 1 sample, one every 1.0 ms",
-                "time by share (as the time strip says it): External calls 28.0 ms (80%) · Your code 3.0 ms (9%) · Framework & middleware 3.0 ms (8%) · GC 1.0 ms (3%)",
+                "CPU profile: 4.7 ms profiled of the trace's 34.7 ms · 1 sample, one every 1.0 ms",
+                "time by share (as the time strip says it): External calls 28.0 ms (80%) · Not profiled 3.0 ms (9%) · Framework & middleware 3.0 ms (8%) · GC 1.0 ms (3%)",
             ]
         );
     }
@@ -1739,9 +1763,10 @@ allocation sites at the peak (1 of 1, 2.0 MB in all, largest first; ×: allocati
         assert_eq!(
             rows(&timed),
             [
-                "  300 ms  60%  HTTP GET analytics.example.com (External calls) · total 300 ms",
-                "  120 ms  24%  SQL postgresql (Database) · total 120 ms",
-                "  80.0 ms  16%  waiting · sleep · total 80.0 ms",
+                "  300 ms  43%  HTTP GET analytics.example.com (External calls) · total 300 ms",
+                "  200 ms  29%  Not profiled · total 200 ms",
+                "  120 ms  17%  SQL postgresql (Database) · total 120 ms",
+                "  80.0 ms  11%  waiting · sleep · total 80.0 ms",
             ]
         );
 

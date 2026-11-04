@@ -94,6 +94,8 @@
   --dt-k-migration: #bef264;
   --dt-k-signal: #facc15;
   --dt-k-gc: #fb7185;
+  /* A span's own code a timed profile has no samples of: neutral, fainter than the framework's. */
+  --dt-k-unprofiled: rgb(140 147 166 / 0.16);
 
   --dt-mark: rgb(140 147 166 / 0.32);
   --dt-db: #8b7bff;
@@ -230,6 +232,7 @@
   --dt-k-migration: #4d7c0f;
   --dt-k-signal: #ca8a04;
   --dt-k-gc: #e11d48;
+  --dt-k-unprofiled: rgb(99 99 110 / 0.14);
 
   --dt-mark: rgb(99 99 110 / 0.26);
   --dt-db: #6d5ce7;
@@ -2115,6 +2118,10 @@ details[data-focused] > .dt-sql-group {
 /* The collector's pauses: a share of the strip's time with no rows of its own. */
 [data-category="gc"] {
   --dt-k: var(--dt-k-gc);
+}
+/* A span's own code the profile didn't sample: a share of the strip's time with no rows of its own. */
+[data-category="unprofiled"] {
+  --dt-k: var(--dt-k-unprofiled);
 }
 /* The code's waits: a share of the strip's time with no rows of its own, neutral, hatched as the strip draws them. */
 [data-category="waiting"] {

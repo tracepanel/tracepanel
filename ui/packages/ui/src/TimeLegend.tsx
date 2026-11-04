@@ -3,11 +3,12 @@ import { buildTree, chipCounts, FILTERS, type FilterId, partOfCategory, withShow
 import { Tooltip, TooltipContent, TooltipTrigger } from "./components/ui/tooltip";
 import { duration } from "./format";
 import { CloseIcon } from "./icons";
-import { type Category, categoryLabel, spanCategories } from "./lib/breakdown";
+import { type Category, spanCategories } from "./lib/breakdown";
 import { GC } from "./lib/memory";
 import { percents } from "./lib/percent";
 import { plural } from "./lib/plural";
 import { cleared, isShown, rangeLabel, type Slice, togglePart } from "./lib/slice";
+import { NOT_PROFILED, shareLabel } from "./lib/timeShares";
 import { timeParts, WAITED_SHARE } from "./lib/waitingShare";
 import { litKey } from "./lit";
 import { largestFirst, ShareFace } from "./Shares";
@@ -15,7 +16,7 @@ import { useHeldSlice } from "./TimeSlice";
 import type { Related, Trace } from "./types";
 
 /** What a share of the time is: a category of spans, the collector's pauses, or the code's waits. */
-export type ShareKind = Category | typeof GC | typeof WAITED_SHARE;
+export type ShareKind = Category | typeof GC | typeof WAITED_SHARE | typeof NOT_PROFILED;
 
 /** A share of the time, as the legend and the strip's tooltip say it. */
 export interface ShareOf {
@@ -33,6 +34,7 @@ export interface ShareOf {
 function shareNumbers(share: ShareOf): string {
   const numbers = `${duration(share.value)} · ${share.percent}`;
   if (share.category === WAITED_SHARE) return `${numbers} · not computing: a sleep, a timer, a socket, a lock`;
+  if (share.category === NOT_PROFILED) return `${numbers} · its code's time before the profile's first sample`;
   const counted =
     share.category === GC ? plural(share.calls, "collection", "collections") : plural(share.calls, "call", "calls");
   return `${numbers} · ${counted}`;
@@ -49,13 +51,7 @@ function addUp<K>(items: readonly [K, number][]): Map<K, number> {
 type SpanShare = ShareOf & { category: Category };
 
 function ofSpans(share: ShareOf): share is SpanShare {
-  return share.category !== GC && share.category !== WAITED_SHARE;
-}
-
-/** A share's name: its category's, the collector's, or waiting's. */
-function shareLabel(category: ShareKind): string {
-  if (category === GC) return "GC";
-  return category === WAITED_SHARE ? "Waiting" : categoryLabel(category);
+  return share.category !== GC && share.category !== WAITED_SHARE && share.category !== NOT_PROFILED;
 }
 
 /** Each share of the time with its numbers: how long, of how much, how many spans; largest first. */

@@ -12,8 +12,14 @@ import type { TimeRange, Windows } from "./slice";
 import { callLabel, waitFrame } from "./waitCalls";
 import { bucketStacks, type Timed, timed, waits } from "./waiting";
 
-/** A share of the trace's time: a category of spans, the collector's pauses, or the code's waits. */
-export type Share = Category | typeof GC | typeof WAITING;
+/**
+ * A span's own code where a timed profile has no samples to split it by (before its first sample): its own share,
+ * neither your code's nor the framework's. Other spans' time (a call's, the collector's) is theirs all the same.
+ */
+export const NOT_PROFILED = "unprofiled";
+
+/** A share of the trace's time: a category of spans, the collector's pauses, the code's waits, or its unprofiled time. */
+export type Share = Category | typeof GC | typeof WAITING | typeof NOT_PROFILED;
 
 /** The categories whose time is the code's own: a profile splits it into its waits and what ran. */
 const OWN_CODE: ReadonlySet<string> = new Set<Category>(["code", "django", "signal", "template"]);
@@ -84,7 +90,11 @@ function bucketSegments(
   bucket: number,
 ): Segment[] {
   const plain: Share = gc ? GC : base.category;
-  if (!(profile && stacks?.size)) return [{ ...base, from, to, share: plain, stacks: null }];
+  if (!(profile && stacks?.size)) {
+    // With a timed profile, a span's own code it didn't sample is said so: not your code's, nor the framework's.
+    const share = profile && !gc && OWN_CODE.has(base.category) ? NOT_PROFILED : plain;
+    return [{ ...base, from, to, share, stacks: null }];
+  }
   if (gc || !OWN_CODE.has(base.category)) {
     return [{ ...base, from, to, share: plain, stacks: scaled([...stacks], to - from) }];
   }
@@ -197,6 +207,7 @@ export function windowsOfSegments(segments: readonly Segment[]): Windows {
 export function shareLabel(share: Share): string {
   if (share === GC) return "GC";
   if (share === WAITING) return "Waiting";
+  if (share === NOT_PROFILED) return "Not profiled";
   return categoryLabel(share);
 }
 
@@ -205,7 +216,8 @@ function frameOf(segment: Segment, byId: ReadonlyMap<string, Span>): ShareFrame 
   if (segment.share === "code" || segment.share === WAITING) return null;
   const share = shareLabel(segment.share);
   const span = byId.get(segment.span);
-  const call = segment.share !== GC && !OWN_CODE.has(segment.share) && span ? span : null;
+  const call =
+    segment.share !== GC && segment.share !== NOT_PROFILED && !OWN_CODE.has(segment.share) && span ? span : null;
   return {
     function: call ? callLabel(call) : share,
     module: null,
@@ -312,10 +324,16 @@ export function windowProfile(trace: Shared & { profile: Timed }, windows: Windo
   const timings = new Map<string, Timing>();
   for (const segment of segmentsOf(trace)) {
     const time = taken(segment, windows);
-    if (time <= 0 || !segment.stacks) continue;
+    if (time <= 0) continue;
     const frame = frameOf(segment, byId);
     const share = frame ? frameAt(frame) : null;
     const bucket = Math.floor(segment.from / profile.bucket_us);
+    // Time the profile has no samples of is its share's all the same (a call's, the collector's, not profiled), as
+    // the strip says it: under that share's frame alone.
+    if (!segment.stacks) {
+      if (share !== null) addStack(timings, [share], segment.share, time, bucket);
+      continue;
+    }
     const part = time / (segment.to - segment.from);
     for (const [at, us] of segment.stacks) {
       const path = pathIn(profile, profile.stacks[at] as Stack, share, named, frameAt);
@@ -324,6 +342,11 @@ export function windowProfile(trace: Shared & { profile: Timed }, windows: Windo
   }
   const list = roundedStacks([...timings.values()], profile.interval_us);
   return { ...profile, frames, stacks: list, samples: sum(list.map((stack) => stack.count)) };
+}
+
+/** How much of the trace's time (or the windows') a timed profile sampled: the segments it has stacks for (µs). */
+export function profiledTime(trace: Shared, windows: Windows | null): number {
+  return segmentsOf(trace).reduce((sum, segment) => sum + (segment.stacks ? taken(segment, windows) : 0), 0);
 }
 
 /** Whether the trace's time can be split by its profile: a timed one. */

@@ -2,9 +2,10 @@
 // what each adds up to. The Profile tab of a chain of calls draws them one under another on the chain's clock.
 
 import { type Memory, type Site, sitePlaces } from "./memory";
-import { FRAMEWORK, type Frame, functions, ownCode, type Profile, type Stack } from "./profile";
+import { FRAMEWORK, type Frame, functions, ownCode, type Profile, type Stack, shareFrame } from "./profile";
 import { type Member, type SpanScope, scopedParts } from "./scope";
 import type { Windows } from "./slice";
+import { NOT_PROFILED } from "./timeShares";
 
 /** A profiled trace of a scope, and the stretches of it the scope takes (none: all of it), from the trace's start. */
 export interface ScopedProfile {
@@ -184,7 +185,10 @@ export function profileSums(profile: Profile): { time: number; waiting: number; 
     .reduce((sum, stack) => sum + stack.count, 0);
   // As Your code's list has it: its own functions, a call's, the collector's or the framework's time under that
   // share's name (a BFF's "HTTP GET 127.0.0.1", not a 1 ms runtime frame under it); a wait is none.
-  const top = functions(ownCode(profile)).find((row) => !row.frame.waiting)?.frame.function;
+  // Time the profile didn't sample (its code's before its first sample) is no function's either.
+  const top = functions(ownCode(profile)).find(
+    (row) => !(row.frame.waiting || shareFrame(row.frame)?.category === NOT_PROFILED),
+  )?.frame.function;
   return {
     time: profile.samples * profile.interval_us,
     waiting: waiting * profile.interval_us,
