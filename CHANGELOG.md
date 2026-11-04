@@ -66,6 +66,53 @@
 - The files on PyPI carry their PEP 740 attestations, as the release
   says: they were signed but not uploaded, so PyPI showed no provenance
   for tracepanel-agent.
+- The time strip paints a span's waits as its legend counts them, in any
+  span: a Node task waiting on its event loop inside a function span
+  with no calls of its own was painted Your code's purple while its
+  legend said "Waiting 125 ms 91%", and the gap was said
+  "waiting · 0 µs". Its waits are hatched now, said for how long each
+  span waited, and hovering them shows Waiting's numbers.
+- The Profile tab opens on Your code whenever your code ran enough of
+  the time the profile computed, its waits left out: a Node task idle on
+  its event loop for 91% of its time opened on All frames ("node:internal
+  1 ms, node:net 1 ms"), so its bar didn't read as the strip's until
+  switched.
+- The widget's hover card says where the time went as the strip's legend
+  does: the collector's pauses are GC's own share there too, with the
+  same names and the same rounding. A Django page's card read "Most
+  time: Your code 157 ms · 53%" where its strip and Profile tab read
+  "Your code 154 ms · 52%" and "GC 2 ms".
+- The time strip's axis counts in round steps, evenly spaced, each said
+  with the decimals its step needs: a 3 ms trace's axis read "0, 0.8 ms,
+  2 ms, 2 ms, 3 ms", now "0, 0.5 ms, 1.0 ms, 1.5 ms, 2.0 ms, 2.5 ms". A
+  137 ms one reads "0, 25 ms, 50 ms … 125 ms".
+- A profile of only part of a trace reads as the strip does. A Node BFF's
+  request profiled only in its last 5 ms showed "Framework & middleware
+  3 ms 60%" and "External calls 2 ms" on its Profile tab, and "External
+  calls 28.0 ms (560%)" in get_profile. A call's time, a query's and the
+  collector's pauses are their spans' wherever the profile has samples
+  or not, and a span's own code before the first sample is its own
+  share, "Not profiled". The strip, the Profile tab's bar and get_profile
+  all read "External calls 28 ms 80% · Not profiled 3 ms 9% · Framework &
+  middleware 3 ms 8% · GC 1 ms 3%", and the tab and an app's profile
+  over a chain say "5 ms profiled of the trace's 35 ms".
+- A code or wait row of a trace that calls other apps opens the profile
+  of its own stretches, as in a trace of one app: a Node BFF's "event
+  loop" wait row of 70 ms opened the whole trace's 176 ms, each app's.
+- What a profile covered is never said as more than the trace: get_profile
+  said "42.0 ms profiled of the trace's 41.6 ms", its stacks rounded to
+  whole milliseconds, and "1 samples". It says "41.6 ms profiled of the
+  trace's 41.6 ms" and "1 sample", and the Profile tab caps it the same way.
+- A timed profile's Profile tab opens on Your code, whose bar is the
+  strip's, however little of the time was your code's: a Node BFF's
+  opened on All frames. The profiles of a chain say where most of an
+  app's time went as Your code's list does ("HTTP GET 127.0.0.1"), not a
+  runtime function of 1 ms ("defaultPrepareStackTrace").
+- The percentages of a trace's time add up to 100%: in the strip's
+  legend, the Profile tab's bar, the widget's card and get_profile, each
+  share's is rounded by largest remainder, as their times are. A Node
+  task's legend read 5% + 2% + 1% + 91% = 99% for 7, 3, 2 and 125 ms of
+  137 ms. It reads 5%, 2%, 2%, 91%.
 
 ## 0.13.1 (2026-11-03)
 

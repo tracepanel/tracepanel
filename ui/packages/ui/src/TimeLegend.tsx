@@ -3,25 +3,28 @@ import { buildTree, chipCounts, FILTERS, type FilterId, partOfCategory, withShow
 import { Tooltip, TooltipContent, TooltipTrigger } from "./components/ui/tooltip";
 import { duration } from "./format";
 import { CloseIcon } from "./icons";
-import { breakdown, type Category, categoryLabel, spanCategories, stretches } from "./lib/breakdown";
-import { cutByPauses, GC, gcPauses } from "./lib/memory";
-import { percent } from "./lib/percent";
+import { type Category, spanCategories } from "./lib/breakdown";
+import { GC } from "./lib/memory";
+import { percents } from "./lib/percent";
 import { plural } from "./lib/plural";
 import { cleared, isShown, rangeLabel, type Slice, togglePart } from "./lib/slice";
-import { WAITED_SHARE, withWaiting } from "./lib/waitingShare";
+import { NOT_PROFILED, shareLabel } from "./lib/timeShares";
+import { timeParts, WAITED_SHARE } from "./lib/waitingShare";
 import { litKey } from "./lit";
 import { largestFirst, ShareFace } from "./Shares";
 import { useHeldSlice } from "./TimeSlice";
 import type { Related, Trace } from "./types";
 
 /** What a share of the time is: a category of spans, the collector's pauses, or the code's waits. */
-export type ShareKind = Category | typeof GC | typeof WAITED_SHARE;
+export type ShareKind = Category | typeof GC | typeof WAITED_SHARE | typeof NOT_PROFILED;
 
 /** A share of the time, as the legend and the strip's tooltip say it. */
 export interface ShareOf {
   category: ShareKind;
   value: number;
   total: number;
+  /** Its percent of the total, as said: the legend's add up to 100% (percents). */
+  percent: string;
   /** How many spans count in it; the collector's, how many times it ran; none for waiting. */
   calls: number;
   label: string;
@@ -29,8 +32,9 @@ export interface ShareOf {
 
 /** "26 ms · 96% · 12 calls": how long, of the whole, how many spans (the collector's runs); waiting, how long. */
 function shareNumbers(share: ShareOf): string {
-  const numbers = `${duration(share.value)} · ${percent(share.value, share.total)}`;
+  const numbers = `${duration(share.value)} · ${share.percent}`;
   if (share.category === WAITED_SHARE) return `${numbers} · not computing: a sleep, a timer, a socket, a lock`;
+  if (share.category === NOT_PROFILED) return `${numbers} · its code's time before the profile's first sample`;
   const counted =
     share.category === GC ? plural(share.calls, "collection", "collections") : plural(share.calls, "call", "calls");
   return `${numbers} · ${counted}`;
@@ -43,41 +47,11 @@ function addUp<K>(items: readonly [K, number][]): Map<K, number> {
   return sums;
 }
 
-/**
- * Where the wall-clock time went, per share: the stretches added up, the collector's pauses (a profile's) taken out
- * of the shares they stopped and counted as their own, and the code's waits out of its own shares (withWaiting).
- */
-function timeParts(trace: Trace): [ShareKind, number][] {
-  return withWaiting<Category | typeof GC>(trace, byPause(trace));
-}
-
-/** The stretches added up, the collector's pauses taken out of the shares they stopped and counted as their own. */
-function byPause(trace: Trace): [Category | typeof GC, number][] {
-  const pauses = gcPauses(trace.profile, trace.duration);
-  if (pauses.length === 0) return breakdown(trace);
-  return [
-    ...addUp(
-      stretches(trace).flatMap(({ from, to, category }) =>
-        cutByPauses(from, to, pauses).map(({ range, gc }): [Category | typeof GC, number] => [
-          gc ? GC : category,
-          range[1] - range[0],
-        ]),
-      ),
-    ),
-  ];
-}
-
 /** A share of spans' time: one that picks its rows. */
 type SpanShare = ShareOf & { category: Category };
 
 function ofSpans(share: ShareOf): share is SpanShare {
-  return share.category !== GC && share.category !== WAITED_SHARE;
-}
-
-/** A share's name: its category's, the collector's, or waiting's. */
-function shareLabel(category: ShareKind): string {
-  if (category === GC) return "GC";
-  return category === WAITED_SHARE ? "Waiting" : categoryLabel(category);
+  return share.category !== GC && share.category !== WAITED_SHARE && share.category !== NOT_PROFILED;
 }
 
 /** Each share of the time with its numbers: how long, of how much, how many spans; largest first. */
@@ -90,10 +64,15 @@ export function sharesOf(trace: Trace): ShareOf[] {
   const categories = spanCategories(trace);
   const calls = addUp<ShareKind>([...categories.values()].map((category) => [category, 1]));
   calls.set(GC, trace.profile?.gc?.collections ?? 0);
-  const shares = parts.map(([category, value]) => ({
+  const said = percents(
+    parts.map(([, value]) => value),
+    total,
+  );
+  const shares = parts.map(([category, value], at) => ({
     category,
     value,
     total,
+    percent: said[at] ?? "0%",
     calls: calls.get(category) ?? 0,
     label: shareLabel(category),
   }));
@@ -165,7 +144,7 @@ function FixedShare({ share }: { share: ShareOf }) {
               swatch={<span className={swatchClass(share)} />}
               name={share.label}
               value={duration(share.value)}
-              share={percent(share.value, share.total)}
+              share={share.percent}
             />
           </span>
         </TooltipTrigger>
@@ -195,7 +174,7 @@ function Share({ share, filters }: { share: SpanShare; filters: SliceState }) {
               swatch={<span className="dt-swatch" />}
               name={share.label}
               value={duration(share.value)}
-              share={percent(share.value, share.total)}
+              share={share.percent}
             />
           </button>
         </TooltipTrigger>

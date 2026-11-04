@@ -230,6 +230,10 @@
         150000
       ],
       [
+        "Not profiled",
+        100000
+      ],
+      [
         "SQL postgresql",
         60000
       ],
@@ -244,7 +248,7 @@
         150000
       ],
       [
-        "Your code",
+        "Not profiled",
         100000
       ],
       [
@@ -415,14 +419,22 @@
     },
     "waits": [
       [
+        "Not profiled",
+        200000
+      ],
+      [
         "SQL postgresql",
         60000
       ]
     ],
     "shares": [
       [
+        "Not profiled",
+        200000
+      ],
+      [
         "Your code",
-        300000
+        100000
       ],
       [
         "Database",
@@ -1272,6 +1284,404 @@
       [
         "Framework & middleware",
         8000
+      ]
+    ]
+  },
+  {
+    "name": "Node: a task's function span with no calls, idle on the event loop: its buckets waiting's, its app code Your code",
+    "trace": {
+      "start": 1790000000000000,
+      "duration": 137000,
+      "attrs": {
+        "telemetry.sdk.language": "nodejs"
+      },
+      "spans": [
+        {
+          "id": "r",
+          "parent_id": null,
+          "kind": "task.run",
+          "name": "rank-products",
+          "start": 1790000000000000,
+          "duration": 137000,
+          "status": "ok",
+          "attrs": {}
+        },
+        {
+          "id": "q",
+          "parent_id": "r",
+          "kind": "sql",
+          "name": "SELECT review",
+          "start": 1790000000012000,
+          "duration": 3000,
+          "status": "ok",
+          "attrs": {
+            "db.system": "postgresql",
+            "code.origin": "worker.ts:11 in rankProducts"
+          }
+        },
+        {
+          "id": "f",
+          "parent_id": "r",
+          "kind": "function",
+          "name": "update search index",
+          "start": 1790000000016000,
+          "duration": 121000,
+          "status": "ok",
+          "attrs": {
+            "code.origin": "worker.ts:16 in rankProducts"
+          }
+        }
+      ],
+      "profile": {
+        "interval_us": 1000,
+        "samples": 102,
+        "dropped": 0,
+        "bucket_us": 10000,
+        "frames": [
+          {
+            "function": "event loop",
+            "module": null,
+            "file": "",
+            "line": 0,
+            "in_app": false,
+            "waiting": true
+          },
+          {
+            "function": "processJob",
+            "module": null,
+            "file": "bullmq/dist/cjs/classes/worker.js",
+            "line": 575,
+            "in_app": false
+          },
+          {
+            "function": "rankProducts",
+            "module": null,
+            "file": "worker.ts",
+            "line": 10,
+            "in_app": true
+          },
+          {
+            "function": "Socket.connect",
+            "module": null,
+            "file": "node:net",
+            "line": 1580,
+            "in_app": false
+          }
+        ],
+        "stacks": [
+          {
+            "frames": [
+              0
+            ],
+            "count": 97,
+            "at": [
+              [
+                0,
+                5
+              ],
+              [
+                1,
+                6
+              ],
+              [
+                2,
+                8
+              ],
+              [
+                3,
+                8
+              ],
+              [
+                4,
+                6
+              ],
+              [
+                5,
+                3
+              ],
+              [
+                6,
+                8
+              ],
+              [
+                7,
+                8
+              ],
+              [
+                8,
+                8
+              ],
+              [
+                9,
+                8
+              ],
+              [
+                10,
+                8
+              ],
+              [
+                11,
+                8
+              ],
+              [
+                12,
+                9
+              ],
+              [
+                13,
+                4
+              ]
+            ]
+          },
+          {
+            "frames": [
+              1
+            ],
+            "count": 2,
+            "at": [
+              [
+                0,
+                2
+              ]
+            ]
+          },
+          {
+            "frames": [
+              1,
+              2,
+              3
+            ],
+            "count": 2,
+            "at": [
+              [
+                0,
+                2
+              ]
+            ]
+          },
+          {
+            "frames": [
+              1,
+              2
+            ],
+            "count": 1,
+            "at": [
+              [
+                1,
+                1
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    "waits": [
+      [
+        "waiting · event loop",
+        129000
+      ],
+      [
+        "SQL postgresql",
+        3000
+      ],
+      [
+        "Framework & middleware",
+        2000
+      ]
+    ],
+    "shares": [
+      [
+        "Waiting",
+        129000
+      ],
+      [
+        "Database",
+        3000
+      ],
+      [
+        "Your code",
+        3000
+      ],
+      [
+        "Framework & middleware",
+        2000
+      ]
+    ]
+  },
+  {
+    "name": "Node: a profile of only the trace's last 5 ms (one sample, after its call): the trace's time by share is the strip's, the profile's the time it covers",
+    "trace": {
+      "start": 1790000000000000,
+      "duration": 34731,
+      "attrs": {
+        "telemetry.sdk.language": "nodejs"
+      },
+      "spans": [
+        {
+          "id": "r",
+          "parent_id": null,
+          "kind": "http",
+          "name": "GraphQL query TenantRoles",
+          "start": 1790000000000000,
+          "duration": 34731,
+          "status": "ok",
+          "attrs": {}
+        },
+        {
+          "id": "g",
+          "parent_id": "r",
+          "kind": "graphql",
+          "name": "query TenantRoles",
+          "start": 1790000000001000,
+          "duration": 31223,
+          "status": "ok",
+          "attrs": {
+            "graphql.operation.type": "query",
+            "graphql.operation.name": "TenantRoles"
+          }
+        },
+        {
+          "id": "p",
+          "parent_id": "g",
+          "kind": "graphql",
+          "name": "parse",
+          "start": 1790000000002000,
+          "duration": 317,
+          "status": "ok",
+          "attrs": {}
+        },
+        {
+          "id": "v",
+          "parent_id": "g",
+          "kind": "graphql",
+          "name": "validate",
+          "start": 1790000000002000,
+          "duration": 624,
+          "status": "ok",
+          "attrs": {}
+        },
+        {
+          "id": "f",
+          "parent_id": "g",
+          "kind": "function",
+          "name": "Query.authors",
+          "start": 1790000000003000,
+          "duration": 29895,
+          "status": "ok",
+          "attrs": {
+            "code.function": "Query.authors"
+          }
+        },
+        {
+          "id": "h",
+          "parent_id": "f",
+          "kind": "http.client",
+          "name": "GET 127.0.0.1/authors",
+          "start": 1790000000003000,
+          "duration": 28823,
+          "status": "ok",
+          "attrs": {
+            "http.request.method": "GET",
+            "url.full": "http://127.0.0.1:8052/authors",
+            "server.address": "127.0.0.1",
+            "server.port": 8052,
+            "http.response.status_code": 200
+          }
+        }
+      ],
+      "profile": {
+        "interval_us": 1000,
+        "samples": 1,
+        "dropped": 0,
+        "bucket_us": 10000,
+        "frames": [
+          {
+            "function": "processTicksAndRejections",
+            "module": null,
+            "file": "node:internal/process/task_queues",
+            "line": 72,
+            "in_app": false
+          },
+          {
+            "function": "finalizeAndReportTiming",
+            "module": null,
+            "file": "node:internal/deps/undici/undici",
+            "line": 14144,
+            "in_app": false
+          }
+        ],
+        "stacks": [
+          {
+            "frames": [
+              0,
+              1
+            ],
+            "count": 1,
+            "at": [
+              [
+                3,
+                1
+              ]
+            ]
+          }
+        ],
+        "gc": {
+          "collections": 3,
+          "pause_us": 1192,
+          "pauses": [
+            [
+              5461,
+              376,
+              0
+            ],
+            [
+              12704,
+              457,
+              0
+            ],
+            [
+              20792,
+              359,
+              0
+            ]
+          ]
+        }
+      }
+    },
+    "waits": [
+      [
+        "HTTP GET 127.0.0.1",
+        28000
+      ],
+      [
+        "Framework & middleware",
+        3000
+      ],
+      [
+        "Not profiled",
+        3000
+      ],
+      [
+        "GC",
+        1000
+      ]
+    ],
+    "shares": [
+      [
+        "External calls",
+        28000
+      ],
+      [
+        "Framework & middleware",
+        3000
+      ],
+      [
+        "Not profiled",
+        3000
+      ],
+      [
+        "GC",
+        1000
       ]
     ]
   }

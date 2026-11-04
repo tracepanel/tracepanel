@@ -2,12 +2,13 @@
 // project's own code, every frame).
 import type { Trace } from "../types";
 import { packageOf as modulePackage } from "./packages";
+import { timed } from "./waiting";
 
 export type Profile = NonNullable<Trace["profile"]>;
 export type Frame = Profile["frames"][number];
 export type Stack = Profile["stacks"][number];
 
-/** Under this share of samples in the project's own code, a profile opens on every frame: there is little of yours. */
+/** Under this share of the samples that computed in the project's own code, a profile opens on every frame. */
 const OWN_ENOUGH = 0.1;
 /** Frames kept above the first of the project's own, out of what every stack starts with: the middleware around it. */
 const CONTEXT = 3;
@@ -207,12 +208,17 @@ export function allFrames(profile: Profile): Profile {
   );
 }
 
-/** Whether your code ran enough of the time for the profile to open on it. */
+/**
+ * Whether the profile opens on Your code. A timed one always does: its Your code is the time strip's split (lib/
+ * timeShares), whatever share is largest (a Node BFF's calls, its event loop). Else where your code ran enough of the
+ * time it computed: its waits are no one's code, and a profile that only waited opens on Your code too, which says so.
+ */
 export function mostlyYours(profile: Profile): boolean {
-  const yours = profile.stacks
-    .filter((stack) => stack.frames.some((index) => profile.frames[index]?.in_app))
-    .reduce((sum, stack) => sum + stack.count, 0);
-  return yours >= profile.samples * OWN_ENOUGH;
+  if (timed(profile)) return true;
+  const ran = profile.stacks.filter((stack) => profile.frames[stack.frames.at(-1) ?? -1]?.waiting !== true);
+  const computed = ran.reduce((sum, stack) => sum + stack.count, 0);
+  const yours = ran.filter((stack) => runsYours(profile, stack)).reduce((sum, stack) => sum + stack.count, 0);
+  return computed === 0 || yours >= computed * OWN_ENOUGH;
 }
 
 /** A function as the stacks reached it: its samples (here and below), its own, and the functions it called. */

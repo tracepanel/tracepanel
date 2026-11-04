@@ -3,9 +3,10 @@
 // tab has it (lib/timeShares). One rule for every bar of the trace's time (the time strip's legend, the page's card).
 // Plain data, no React.
 import type { Trace } from "../types";
-import { GC } from "./memory";
+import { breakdown, type Category, stretches } from "./breakdown";
+import { cutByPauses, GC, gcPauses } from "./memory";
 import { WAITING } from "./profile";
-import { rounded, type Segment, segmentsOf } from "./timeShares";
+import { type NOT_PROFILED, rounded, type Segment, segmentsOf } from "./timeShares";
 import { timed } from "./waiting";
 
 /** The waiting share: neutral and hatched, as the strip draws the code's waits. */
@@ -49,4 +50,27 @@ export function withWaiting<K extends string>(
 ): [K | typeof WAITED_SHARE, number][] {
   if (timed(trace.profile)) return timedShares(trace, parts);
   return parts.filter(([, value]) => value > 0).map(([category, value]): [K, number] => [category, value]);
+}
+
+/** The stretches added up, the collector's pauses taken out of the shares they stopped and counted as their own. */
+function byPause(trace: Trace): [Category | typeof GC, number][] {
+  const pauses = gcPauses(trace.profile, trace.duration);
+  if (pauses.length === 0) return breakdown(trace);
+  const sums = new Map<Category | typeof GC, number>();
+  for (const { from, to, category } of stretches(trace)) {
+    for (const { range, gc } of cutByPauses(from, to, pauses)) {
+      const share = gc ? GC : category;
+      sums.set(share, (sums.get(share) ?? 0) + range[1] - range[0]);
+    }
+  }
+  return [...sums];
+}
+
+/**
+ * Where the wall-clock time went, per share, as every bar of a trace's time says it (the strip's legend, the
+ * Profile tab's bar, the widget's card): the stretches added up, the collector's pauses (a profile's) taken out of the
+ * shares they stopped and counted as their own, and the code's waits out of its own shares (withWaiting).
+ */
+export function timeParts(trace: Trace): [Category | typeof GC | typeof NOT_PROFILED | typeof WAITED_SHARE, number][] {
+  return withWaiting<Category | typeof GC | typeof NOT_PROFILED>(trace, byPause(trace));
 }

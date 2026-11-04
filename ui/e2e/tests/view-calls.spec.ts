@@ -3,7 +3,7 @@
 // time stopped, while the view still runs; in flight, answered, waiting for its trace and stored, it keeps its name
 // (its operation), its place and its row, and only fills in; the view's time never runs past its end and back.
 import type { Locator, Page, Route } from "@playwright/test";
-import { CONSOLE } from "../agent.ts";
+import { CONSOLE, PORT } from "../agent.ts";
 import { panel } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
 
@@ -89,14 +89,23 @@ async function gateway(page: Page): Promise<(op: string) => void> {
   };
 }
 
-/** The page with the panel open at the bottom, its view about to open. */
-async function opened(page: Page): Promise<{ release: (op: string) => void; list: Locator; calls: Locator }> {
+/**
+ * A host of its own for a test's calls (and its repeats'): the agent's service map remembers which app served a host,
+ * so a host another test's calls went to would be named by that app from the start. A *.localhost name is the agent.
+ */
+const ownHost = (tag: number) => `http://calls-${tag}-${run()}.localhost:${PORT}/`;
+
+/** The page with the panel open at the bottom, its view about to open; served from `origin` (its calls' host). */
+async function opened(
+  page: Page,
+  origin = CONSOLE,
+): Promise<{ release: (op: string) => void; list: Locator; calls: Locator }> {
   await page.addInitScript(() =>
     sessionStorage.setItem("tracepanel:panel", JSON.stringify({ open: true, dock: "bottom" })),
   );
   const release = await gateway(page);
   await page.route("**/calls/", (route) => route.fulfill({ contentType: "text/html", body: PAGE }));
-  await page.goto("/calls/");
+  await page.goto(new URL("calls/", origin).href);
   const list = panel(page).getByRole("region", { name: "Pages and requests in this browser tab" });
   await expect(list).toBeVisible();
   return { release, list, calls: list.locator('.dt-request-row[data-depth="2"]') };
@@ -143,8 +152,8 @@ async function ingest(traces: Doc[]): Promise<void> {
   expect(response.status).toBe(202);
 }
 
-/** What the recording sends once the view ended: the view, its calls as the page made them. */
-async function storeView(page: Page, tag: number): Promise<void> {
+/** What the recording sends once the view ended: the view, its calls as the page made them (to `origin`). */
+async function storeView(page: Page, tag: number, origin = CONSOLE): Promise<void> {
   const { view, calls } = await page.evaluate(() => {
     const w = window as unknown as { view: Doc; calls: { op: string; start: number; end: number }[] };
     return { view: w.view, calls: w.calls };
@@ -161,9 +170,9 @@ async function storeView(page: Page, tag: number): Promise<void> {
     );
     each["attrs"] = {
       "http.request.method": "POST",
-      "url.full": `${CONSOLE}gw/graphql`,
-      "server.address": new URL(CONSOLE).hostname,
-      "server.port": Number(new URL(CONSOLE).port),
+      "url.full": `${origin}gw/graphql`,
+      "server.address": new URL(origin).hostname,
+      "server.port": Number(new URL(origin).port),
       "w3c.span_id": callOf(tag, OPERATIONS.indexOf(call.op)),
       "graphql.operation.type": "query",
       "graphql.operation.name": call.op,
@@ -182,8 +191,8 @@ async function storeView(page: Page, tag: number): Promise<void> {
   await ingest([trace(viewId, "page", "/campaigns", Number(view["start"]), Number(view["duration"]), attrs, spans)]);
 }
 
-/** The gateway's traces of the view's calls. */
-async function storeGateway(page: Page, tag: number): Promise<void> {
+/** The gateway's traces of the view's calls, as the app `app`. */
+async function storeGateway(page: Page, tag: number, app = "gateway"): Promise<void> {
   const calls = await page.evaluate(
     () => (window as unknown as { calls: { op: string; start: number; end: number }[] }).calls,
   );
@@ -197,7 +206,7 @@ async function storeGateway(page: Page, tag: number): Promise<void> {
         call.start + 2 * ms,
         call.end - call.start - 4 * ms,
         {
-          "service.name": "gateway",
+          "service.name": app,
           "w3c.trace_id": traceOf(tag),
           "w3c.parent_span_id": callOf(tag, n),
           "http.method": "POST",
@@ -257,7 +266,9 @@ test("a call keeps its row, its name and its place from in flight to its stored 
   page,
 }) => {
   const tag = 2;
-  const { release, list, calls } = await opened(page);
+  const origin = ownHost(tag);
+  const app = `gateway-${tag}-${run()}`;
+  const { release, list, calls } = await opened(page, origin);
   await page.evaluate(([viewId, ops]) => (window as unknown as Opener).openView(viewId, ops, 200), [
     id(tag, 1),
     OPERATIONS,
@@ -266,7 +277,7 @@ test("a call keeps its row, its name and its place from in flight to its stored 
   await expect(calls.locator(".dt-request-path")).toHaveText(names);
   // Over them from the start, the row of the host they went to: the same row the gateway's name takes later.
   const group = list.locator('.dt-request-row[data-call="group"]');
-  await expect(group.locator(".dt-app-chip")).toHaveText(new URL(CONSOLE).host);
+  await expect(group.locator(".dt-app-chip")).toHaveText(new URL(origin).host);
   await expect(group.locator(".dt-map-times")).toHaveText("×3");
   // Each row marked: the same element must be there at the end, not a new row in its place.
   await calls.evaluateAll((rows) => {
@@ -282,20 +293,20 @@ test("a call keeps its row, its name and its place from in flight to its stored 
   await page.waitForFunction(() => (window as unknown as { view?: { open: boolean } }).view?.open === false);
 
   // The view's trace stored: each call's row now its chain's, waiting for its trace, the same row.
-  await storeView(page, tag);
+  await storeView(page, tag, origin);
   await expect(list.locator('.dt-request-row[data-call="waiting"]')).toHaveCount(3);
   await expect(calls.locator(".dt-request-path")).toHaveText(names);
   expect(await probes()).toEqual(["0", "1", "2"]);
 
   // The gateway's traces stored: the same rows, their numbers filled in; no other group in their place.
-  await storeGateway(page, tag);
+  await storeGateway(page, tag, app);
   await expect(list.locator('.dt-request-row[data-call="trace"]')).toHaveCount(3);
   await expect(calls.locator(".dt-request-path")).toHaveText(names);
   await expect(calls.locator(".dt-request-queries-n")).toHaveText(["0", "0", "0"]);
   await expect(list.locator('.dt-request-row[data-chain="app"]')).toHaveCount(0);
   expect(await probes()).toEqual(["0", "1", "2"]);
   // The host's row now says which app served them, the same row, the calls still under it.
-  await expect(group.locator(".dt-app-chip")).toHaveText("gateway");
+  await expect(group.locator(".dt-app-chip")).toHaveText(app);
   await expect(group.locator(".dt-map-times")).toHaveText("×3");
   expect(await group.getAttribute("data-probe")).toBe("group");
 });

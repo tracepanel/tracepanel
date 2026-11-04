@@ -1,11 +1,11 @@
 // The pill's hover card: the request at a glance (where its time went, what to fix first, what the page asked
 // for after it loaded) before opening the panel.
 import { duration } from "@tracepanel/ui/format";
-import { breakdown, categoryLabel } from "@tracepanel/ui/lib/breakdown";
 import { clockOf, cutNote, NO_ANSWER, PENDING, runningLabel, runningTime } from "@tracepanel/ui/lib/live";
-import { percent } from "@tracepanel/ui/lib/percent";
+import { percents } from "@tracepanel/ui/lib/percent";
 import { plural } from "@tracepanel/ui/lib/plural";
-import { WAITED_SHARE, withWaiting } from "@tracepanel/ui/lib/waitingShare";
+import { shareLabel } from "@tracepanel/ui/lib/timeShares";
+import { timeParts } from "@tracepanel/ui/lib/waitingShare";
 import type { Issue, Trace } from "@tracepanel/ui/types";
 import type { TraceInfo } from "./index";
 import type { Flight } from "./network";
@@ -118,6 +118,8 @@ export const CARD_STYLE = `
   [data-category="llm"] { --k: var(--dt-k-llm); }
   [data-category="mail"] { --k: var(--dt-k-mail); }
   [data-category="signal"] { --k: var(--dt-k-signal); }
+  [data-category="gc"] { --k: var(--dt-k-gc); }
+  [data-category="unprofiled"] { --k: var(--dt-k-unprofiled); }
   /* The code's waits: neutral and hatched, as the console's strip draws them. */
   [data-category="waiting"] {
     --k: color-mix(in srgb, var(--dt-text-3) 50%, transparent);
@@ -326,15 +328,10 @@ function timeCell(info: TraceInfo): HTMLElement {
 }
 
 /** "Most time: Your code 4.6 ms · 78%": the bar's biggest part in words. */
-function mostLine(label: string, category: string, value: number, total: number): HTMLElement {
+function mostLine(label: string, category: string, value: number, share: string): HTMLElement {
   const line = element("p", "card-most");
   line.dataset["category"] = category;
-  line.append(
-    element("i"),
-    `Most time: ${label} `,
-    element("b", undefined, duration(value)),
-    ` · ${percent(value, total)}`,
-  );
+  line.append(element("i"), `Most time: ${label} `, element("b", undefined, duration(value)), ` · ${share}`);
   return line;
 }
 
@@ -435,10 +432,10 @@ export function mountCard(
 
   /** The bar of where the time went, and in words only the biggest part. */
   function timing(info: TraceInfo, trace: Trace): HTMLElement[] {
-    // The code's waits split out of its own time, as the console's legend has them.
-    const parts = withWaiting(trace, breakdown(trace));
-    const labelOf = (category: (typeof parts)[number][0]) =>
-      category === WAITED_SHARE ? "Waiting" : categoryLabel(category);
+    // The one split of the trace's time (lib/timeShares), as the strip's legend and the Profile tab's bar say it:
+    // the collector's pauses GC's, the code's waits Waiting's, the same names, rounded the same way.
+    const parts = timeParts(trace);
+    const labelOf = shareLabel;
     const total = Math.max(
       parts.reduce((sum, [, value]) => sum + value, 0),
       1,
@@ -452,13 +449,19 @@ export function mountCard(
       piece.title = `${labelOf(category)} ${duration(value)}`;
       bar.append(piece);
     }
-    const [top] = [...parts].sort((a, b) => b[1] - a[1]);
+    // Said as the legend says them: percents that add up to 100%.
+    const said = percents(
+      parts.map(([, value]) => value),
+      total,
+    );
+    const at = parts.reduce((best, part, index) => (part[1] > (parts[best]?.[1] ?? 0) ? index : best), 0);
+    const top = parts[at];
     if (!top) return [bar];
     const [category, value] = top;
     const label = labelOf(category);
     bar.setAttribute("aria-label", `Most time: ${label}, ${duration(value)}`);
     // A failed request's story is its error (under Fix first), not where its time went.
-    return failed(info) ? [bar] : [bar, mostLine(label, category, value, total)];
+    return failed(info) ? [bar] : [bar, mostLine(label, category, value, said[at] ?? "0%")];
   }
 
   function findings(info: TraceInfo, trace: Trace): HTMLElement | null {

@@ -14,12 +14,16 @@ use tracepanel_analysis::stretches::{OWN_CODE, Stretch, spans_of, stretches};
 pub(crate) const GC: &str = "gc";
 /// The code's waits: a share of their own.
 pub(crate) const WAITING: &str = "waiting";
+/// A span's own code a timed profile has no samples of (before its first sample): a share of its own, neither the
+/// project's code's nor the framework's.
+pub(crate) const NOT_PROFILED: &str = "unprofiled";
 
 /// A share's name, as the console's legend says it: "Database", "GC", "Framework & middleware".
 pub(crate) fn label(share: &str) -> &'static str {
     match share {
         GC => "GC",
         WAITING => "Waiting",
+        NOT_PROFILED => "Not profiled",
         "django" => "Framework & middleware",
         "code" => "Your code",
         "signal" => "Signals",
@@ -252,10 +256,16 @@ fn bucket_segments<'a>(
 ) -> Vec<Segment<'a>> {
     let plain = if gc { GC } else { stretch.category };
     let Some(stacks) = stacks else {
+        // A span's own code the profile didn't sample is said so; a call's or the collector's time is theirs.
+        let share = if !gc && OWN_CODE.contains(&stretch.category) {
+            NOT_PROFILED
+        } else {
+            plain
+        };
         return vec![Segment {
             from,
             to,
-            share: plain,
+            share,
             span,
             stacks: None,
         }];
@@ -302,7 +312,8 @@ pub(crate) fn share_frame(segment: &Segment) -> Option<(String, &'static str)> {
         return None;
     }
     let share = label(segment.share);
-    let call = segment.share != GC && !OWN_CODE.contains(&segment.share);
+    let call =
+        segment.share != GC && segment.share != NOT_PROFILED && !OWN_CODE.contains(&segment.share);
     let function = if call {
         waits::call_label(segment.span)
     } else {
@@ -352,6 +363,37 @@ pub(crate) fn apportion(values: &[f64], step: f64, target: i64) -> Vec<f64> {
         .collect()
 }
 
+/// The shares of `whole` that `parts` are, as whole percents that add up as the parts do (100% for parts that make
+/// the whole), rounded by largest remainder as the console's legend says them: 7, 3, 2 and 125 ms of 137 read 5%,
+/// 2%, 2%, 91%. A share neither none nor all never reads either: `<1%`, `>99%`.
+pub(crate) fn percents(parts: &[f64], whole: f64) -> Vec<String> {
+    if whole <= 0.0 {
+        return parts.iter().map(|_| "0%".to_owned()).collect();
+    }
+    let exact: Vec<f64> = parts
+        .iter()
+        .map(|part| part.max(0.0) * 100.0 / whole)
+        .collect();
+    let said = apportion(&exact, 1.0, exact.iter().sum::<f64>().round() as i64);
+    parts
+        .iter()
+        .zip(said)
+        .map(|(&part, said)| {
+            if part <= 0.0 {
+                "0%".to_owned()
+            } else if part >= whole {
+                "100%".to_owned()
+            } else if said <= 0.0 {
+                "<1%".to_owned()
+            } else if said >= 100.0 {
+                ">99%".to_owned()
+            } else {
+                format!("{said:.0}%")
+            }
+        })
+        .collect()
+}
+
 /// Times as said: rounded to the step their total is said in, adding up to that total as said.
 pub(crate) fn rounded<K: Clone>(times: &[(K, f64)]) -> Vec<(K, f64)> {
     let total: f64 = times.iter().map(|(_, us)| us).sum();
@@ -380,7 +422,17 @@ pub(crate) fn share_times(segments: &[Segment]) -> Vec<(&'static str, f64)> {
 
 #[cfg(test)]
 mod tests {
-    use super::{apportion, rounded};
+    use super::{apportion, percents, rounded};
+
+    #[test]
+    fn percents_said_add_up_to_100() {
+        // A Node task's legend: 7, 3, 2 and 125 ms of 137 ms read 5%, 2%, 1%, 91% rounded each (99% in all).
+        assert_eq!(
+            percents(&[7_000.0, 3_000.0, 2_000.0, 125_000.0], 137_000.0),
+            ["5%", "2%", "2%", "91%"]
+        );
+        assert_eq!(percents(&[1.0, 388.0], 389.0), ["<1%", ">99%"]);
+    }
 
     #[test]
     fn parts_said_add_up_to_the_total_said() {

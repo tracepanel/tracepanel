@@ -5,7 +5,7 @@
 //! of its spent, it spent; the samples that ran none of it one "framework & runtime"), and a site is named by the line
 //! of the project's code that led to it.
 
-use crate::compact::{int, ms, text};
+use crate::compact::{count, int, ms, text};
 use crate::shares;
 use crate::waits;
 use serde_json::Value;
@@ -175,6 +175,9 @@ struct Profile<'a> {
     same: Vec<usize>,
     /// A timed profile's trace by share (shares: Database, Your code, GC, Waiting), as said, with their names.
     shares: Vec<(&'static str, f64)>,
+    /// What it sampled (µs): timed, the time its samples cover (its stacks have the rest under its shares' frames);
+    /// else its stacks' time.
+    profiled: f64,
 }
 
 /// A function as the console tells functions apart: its name, where it is defined, whether it waits, its share.
@@ -281,11 +284,20 @@ fn split_stacks<'a>(
     let mut order: Vec<(Vec<usize>, &'static str)> = Vec::new();
     let mut times: HashMap<Vec<usize>, f64> = HashMap::new();
     for segment in segments {
-        let Some(stacks) = &segment.stacks else {
-            continue;
-        };
         let share =
             shares::share_frame(segment).map(|(function, share)| share_at(frames, function, share));
+        let Some(stacks) = &segment.stacks else {
+            // Time the profile has no samples of is its share's all the same (a call's, the collector's, not
+            // profiled), as the strip says it: under that share's frame alone.
+            if let Some(share) = share {
+                let path = vec![share];
+                if !times.contains_key(&path) {
+                    order.push((path.clone(), segment.share));
+                }
+                *times.entry(path).or_default() += segment.to - segment.from;
+            }
+            continue;
+        };
         for &(at, us) in stacks {
             let Some(path) = base.get(at) else { continue };
             let mut path = path.clone();
@@ -393,6 +405,7 @@ impl<'a> Profile<'a> {
             .collect();
         let timed = timed(raw);
         let mut split = Vec::new();
+        let mut profiled = None;
         let named = if timed {
             let base: Vec<Vec<usize>> = stacks.iter().map(|stack| stack.frames.clone()).collect();
             let kinds: Vec<shares::StackKind> = base
@@ -409,6 +422,13 @@ impl<'a> Profile<'a> {
                 })
                 .collect();
             let segments = shares::segments(doc, &kinds);
+            profiled = Some(
+                segments
+                    .iter()
+                    .filter(|segment| segment.stacks.is_some())
+                    .map(|segment| segment.to - segment.from)
+                    .sum(),
+            );
             split = shares::share_times(&segments)
                 .into_iter()
                 .map(|(share, us)| (shares::label(share), us))
@@ -437,6 +457,7 @@ impl<'a> Profile<'a> {
                 .sum()
         });
         let same = same_functions(&frames);
+        let profiled = profiled.unwrap_or_else(|| stacks.iter().map(|stack| stack.us).sum());
         Some(Self {
             frames,
             stacks,
@@ -450,6 +471,7 @@ impl<'a> Profile<'a> {
             named,
             same,
             shares: split,
+            profiled,
         })
     }
 
@@ -477,6 +499,7 @@ impl<'a> Profile<'a> {
         let (mut stacks, mut named) = (Vec::new(), Vec::new());
         let any_named = parts.iter().any(|part| part.named.is_some());
         let mut split: Vec<(&'static str, f64)> = Vec::new();
+        self.profiled = parts.iter().map(|part| part.profiled).sum();
         for part in &parts {
             for &(share, us) in &part.shares {
                 match split.iter_mut().find(|(each, _)| *each == share) {
@@ -1008,13 +1031,27 @@ fn gc_line(raw: &Value) -> Option<String> {
 
 fn cpu(profile: &Profile, duration: i64, top: usize, merged: bool) -> String {
     let total = profile.total();
+    // Timed, its stacks are the trace's time as the strip splits it, its time before its first sample under its
+    // shares' frames: their percentages are of the trace's (a BFF's 28 ms of 35 is 80%, not 560% of the 5 ms it
+    // sampled). What it sampled is never said as more than the trace's.
+    let of = if profile.timed {
+        total.max(duration as f64)
+    } else {
+        total
+    };
+    let mut waiting_said = None;
+    let profiled = if profile.timed {
+        profile.profiled.min(duration as f64)
+    } else {
+        total
+    };
     let mut out = vec![format!(
-        "CPU profile: {} {} of the {} {} · {} samples, one every {}",
-        us(total),
+        "CPU profile: {} {} of the {} {} · {}, one every {}",
+        us(profiled),
         if profile.timed { "profiled" } else { "sampled" },
         if merged { "traces'" } else { "trace's" },
         ms(duration),
-        profile.samples,
+        count(profile.samples, "sample", "samples"),
         ms(profile.interval),
     )];
     if let Some(on_cpu) = profile.on_cpu {
@@ -1030,10 +1067,19 @@ fn cpu(profile: &Profile, duration: i64, top: usize, merged: bool) -> String {
                 .cmp(&(b.0 == "Waiting"))
                 .then(b.1.total_cmp(&a.1))
         });
+        said.retain(|(_, us)| *us > 0.0);
+        // Of what they add up to, as the legend says them: percents that add up to 100%.
+        let whole: f64 = said.iter().map(|(_, us)| us).sum();
+        let percents = shares::percents(&said.iter().map(|(_, us)| *us).collect::<Vec<_>>(), whole);
         let parts: Vec<String> = said
             .iter()
-            .filter(|(_, us)| *us > 0.0)
-            .map(|(name, time)| format!("{name} {} ({})", us(*time), share(*time, total)))
+            .zip(percents)
+            .map(|((name, time), percent)| {
+                if *name == "Waiting" {
+                    waiting_said = Some(percent.clone());
+                }
+                format!("{name} {} ({percent})", us(*time))
+            })
             .collect();
         out.push(format!(
             "time by share (as the time strip says it): {}",
@@ -1052,7 +1098,9 @@ fn cpu(profile: &Profile, duration: i64, top: usize, merged: bool) -> String {
         } else {
             " (a sleep, a socket, a lock, the event loop: not computing)"
         };
-        let mut line = format!("waiting{what}: {} ({})", us(waited), share(waited, total));
+        // Its percent as its share says it, where it has one.
+        let percent = waiting_said.unwrap_or_else(|| share(waited, of));
+        let mut line = format!("waiting{what}: {} ({percent})", us(waited));
         if let Some(name) = profile.wait_name().filter(|_| profile.on_cpu.is_none()) {
             line.push_str(&format!(", most in {name}"));
         }
@@ -1596,9 +1644,52 @@ allocation sites at the peak (1 of 1, 2.0 MB in all, largest first; ×: allocati
             [
                 "CPU profile: 99.0 ms profiled of the trace's 99.0 ms · 99 samples, one every 1.0 ms",
                 "spread: its 30 samples are CPU time, placed by the agent evenly over the project's code's time (its profiler keeps no sample's time); the rest of that time is waiting off the CPU, not sampled",
-                "time by share (as the time strip says it): Your code 28.0 ms (28%) · Database 20.0 ms (20%) · External calls 10.0 ms (10%) · Waiting 41.0 ms (41%)",
-                "waiting, off the CPU (a lock, a channel, a timer, a call; not sampled): 41.0 ms (41%)",
+                "time by share (as the time strip says it): Your code 28.0 ms (28%) · Database 20.0 ms (20%) · External calls 10.0 ms (10%) · Waiting 41.0 ms (42%)",
+                "waiting, off the CPU (a lock, a channel, a timer, a call; not sampled): 41.0 ms (42%)",
             ]
+        );
+    }
+
+    /// A profile of only the trace's last 5 ms (`schema/waits.json`): what it sampled of the trace's time, its one
+    /// sample said so; the trace's time by share as the strip says it, the call's 28 ms from its span, the code's time
+    /// before the first sample not profiled, percents of the trace's that add up to 100%.
+    #[test]
+    fn a_profile_of_part_of_a_trace_says_its_shares_of_the_trace() {
+        let cases: Vec<Value> =
+            serde_json::from_str(include_str!("../../../schema/waits.json")).unwrap();
+        let doc = &cases[7]["trace"];
+
+        let read = profile(doc, Kind::Cpu, 3).unwrap();
+        let lines: Vec<&str> = read.lines().take(2).collect();
+
+        assert_eq!(
+            lines,
+            [
+                "CPU profile: 4.7 ms profiled of the trace's 34.7 ms · 1 sample, one every 1.0 ms",
+                "time by share (as the time strip says it): External calls 28.0 ms (80%) · Not profiled 3.0 ms (9%) · Framework & middleware 3.0 ms (8%) · GC 1.0 ms (3%)",
+            ]
+        );
+    }
+
+    /// A profile that covers all of a trace of 41.6 ms, its stacks said in whole ms (42): never more than the trace.
+    #[test]
+    fn a_profile_is_never_said_longer_than_its_trace() {
+        let doc = json!({"id": "N", "start": 0, "duration": 41_600, "attrs": {"telemetry.sdk.language": "nodejs"},
+        "spans": [{"id": "r", "parent_id": null, "kind": "http", "name": "GET /", "start": 0, "duration": 41_600,
+                   "status": "ok", "attrs": {}}],
+        "profile": {
+            "interval_us": 1000, "samples": 42, "dropped": 0, "bucket_us": 10000,
+            "frames": [{"function": "handler", "module": null, "file": "app.ts", "line": 1, "in_app": true}],
+            "stacks": [{"frames": [0], "count": 42, "at": [[0, 10], [1, 10], [2, 10], [3, 10], [4, 2]]}],
+        }});
+
+        let read = profile(&doc, Kind::Cpu, 3).unwrap();
+
+        assert_eq!(
+            read.lines().next(),
+            Some(
+                "CPU profile: 41.6 ms profiled of the trace's 41.6 ms · 42 samples, one every 1.0 ms"
+            ),
         );
     }
 
@@ -1672,9 +1763,10 @@ allocation sites at the peak (1 of 1, 2.0 MB in all, largest first; ×: allocati
         assert_eq!(
             rows(&timed),
             [
-                "  300 ms  60%  HTTP GET analytics.example.com (External calls) · total 300 ms",
-                "  120 ms  24%  SQL postgresql (Database) · total 120 ms",
-                "  80.0 ms  16%  waiting · sleep · total 80.0 ms",
+                "  300 ms  43%  HTTP GET analytics.example.com (External calls) · total 300 ms",
+                "  200 ms  29%  Not profiled · total 200 ms",
+                "  120 ms  17%  SQL postgresql (Database) · total 120 ms",
+                "  80.0 ms  11%  waiting · sleep · total 80.0 ms",
             ]
         );
 

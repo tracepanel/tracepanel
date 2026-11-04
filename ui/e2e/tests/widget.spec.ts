@@ -683,3 +683,33 @@ test("the pill's hover card stands on the pill: its left and right edges are the
   expect(Math.abs(box.x - under.x)).toBeLessThan(1.5);
   expect(Math.abs(box.x + box.width - (under.x + under.width))).toBeLessThan(1.5);
 });
+
+test("the hover card says where the time went as the strip's legend does: GC its own share, the same numbers", async ({
+  page,
+}) => {
+  const id = await traceId("GET /reports/sales");
+  await page.goto(`/#/t/${id}?tab=tree`);
+  const legend = page.locator(".dt-breakdown-legend").first().locator("li").filter({ hasText: / ms/ });
+  // "GC 12 ms" for "GC 12 ms 6%": each share's name and time, largest first.
+  const shares = (await legend.allInnerTexts()).map((text) =>
+    text
+      .replace(/\s+/g, " ")
+      .replace(/ \d+%$/, "")
+      .trim(),
+  );
+  expect(shares.some((share) => share.startsWith("GC "))).toBe(true);
+  const top = (await legend.first().innerText()).replace(/\s+/g, " ").trim();
+
+  await openApp(page, { sales: { status: 200, trace: id, queries: 1, totalMs: 100 } });
+  await page.getByRole("button", { name: "Load sales" }).click();
+  await pill(page).hover();
+  const card = page.getByRole("dialog", { name: "This request at a glance" });
+  await expect(card.locator(".card-bar")).toBeVisible();
+  const pieces = await card
+    .locator(".card-bar span")
+    .evaluateAll((spans) => spans.map((span) => (span as HTMLElement).title));
+
+  expect([...pieces].sort()).toEqual([...shares].sort());
+  // "Your code 30 ms 15%" in the legend: "Most time: Your code 30 ms · 15%" on the card.
+  await expect(card.locator(".card-most")).toHaveText(`Most time: ${top.replace(/ (\d+%)$/, " · $1")}`);
+});
