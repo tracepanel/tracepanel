@@ -6,7 +6,7 @@ import {
   type RefObject,
   useRef,
 } from "react";
-import { partOfCategory } from "./CallMap";
+import { partOfCategory } from "./callTree";
 import { duration } from "./format";
 import { keyed } from "./keys";
 import { withoutAnsi } from "./lib/ansi";
