@@ -18,6 +18,8 @@ export interface WaterfallFacts {
   logs: number;
   /** Where its work starts (µs, on the page's clock): the axis may start there. */
   work: number;
+  /** Where its last span ends (µs, on the page's clock): the axis reaches it. */
+  end: number;
 }
 
 /** The kinds of rows the filter can keep. */

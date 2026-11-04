@@ -761,10 +761,13 @@ function ReportFacts({
   const firsts =
     trace.kind === "page" ? trace.spans.filter((span) => span.parent_id !== null).map((span) => span.start) : [];
   const work = (firsts.length ? Math.min(...firsts) : trace.start) + ((anchor ?? trace.start) - trace.start);
-  const key = `${findings.length}|${db.count}|${db.time}|${http.count}|${http.time}|${logs}|${work}`;
+  // Where its spans end, on the page's clock: a call that outlived the request stretches the axis to it.
+  const end =
+    Math.max(...trace.spans.map((span) => span.start + span.duration)) + ((anchor ?? trace.start) - trace.start);
+  const key = `${findings.length}|${db.count}|${db.time}|${http.count}|${http.time}|${logs}|${work}|${end}`;
   // biome-ignore lint/correctness/useExhaustiveDependencies: `key` says when the facts changed.
   useEffect(() => {
-    report?.(trace.id, { issues: findings.length, db, http, logs, work });
+    report?.(trace.id, { issues: findings.length, db, http, logs, work, end });
   }, [key, report, trace.id]);
   useEffect(() => () => report?.(trace.id, null), [report, trace.id]);
   return null;

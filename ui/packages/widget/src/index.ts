@@ -991,9 +991,7 @@ export function mount(options: WidgetOptions = {}): Widget {
     if (panel.hasAttribute("data-open")) close();
     else open(shown?.trace ? `#/t/${shown.trace}` : "#/");
   });
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") close();
-  });
+  // Esc never closes the panel (its own Esc steps back inside it): the pill and the close button do.
   window.addEventListener("message", (event: MessageEvent<unknown>) => {
     // The panel asks for the tab's traces once its app has loaded.
     const data = event.data;

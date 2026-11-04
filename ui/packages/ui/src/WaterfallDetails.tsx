@@ -267,8 +267,8 @@ export function WaterfallDetails({
           },
         ]
       : []),
-    // An error record's own details are its Error tab.
-    ...(node.type === "error"
+    // An error record's own details are its Error tab; a group's are its issues and its rows.
+    ...(node.type === "error" || node.type === "group"
       ? []
       : [
           {
@@ -295,7 +295,7 @@ export function WaterfallDetails({
     <div className="dt-wf-details">
       <Headline node={node} trace={trace} onClose={onClose} />
       {/* The profile tab says the split itself: the head's then gives way. */}
-      {root ? shown?.id === "profile" ? null : <SplitBar trace={trace} /> : <HopSplit node={node} />}
+      {root ? profile ? null : <SplitBar trace={trace} /> : <HopSplit node={node} />}
       {categories.length > 1 ? (
         <div className="dt-wf-tabs" role="tablist" aria-label="Details">
           {categories.map((each) => (

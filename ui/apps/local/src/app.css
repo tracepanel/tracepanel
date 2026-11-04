@@ -3489,3 +3489,80 @@ button.wf-crumb:hover {
 .dt-map[data-waterfall] .dt-map-bar[data-quiet] {
   min-width: 3px;
 }
+/* ---------- round 15 ---------- */
+/* A 2xx answer says nothing a row needs: only other statuses show. */
+.dt-map[data-waterfall] .dt-map-name .dt-status[data-tone="ok"] {
+  display: none;
+}
+/* The names take up to half the waterfall. */
+.wf-panel {
+  --wf-cols: minmax(0, min(var(--wf-names, 48%), 46rem, calc(100% - 14rem))) minmax(12rem, 1fr);
+}
+/* Chips go to their icon only where the name cell is very tight. */
+@container wf-name (max-width: 14rem) {
+  .dt-map[data-waterfall] .dt-app-name {
+    display: none;
+  }
+}
+/* A service chip says its app; its framework glyph is too small to say anything. */
+.dt-map[data-waterfall] .dt-app-chip > :not(.dt-app-name) {
+  display: none;
+}
+/* The strip: a failed or 4xx entry in its tone. */
+.wf-time-cell .wf-band-block[data-tone="error"] {
+  background: var(--dt-error);
+}
+.wf-time-cell .wf-band-block[data-tone="warn"] {
+  background: var(--dt-warn);
+}
+.wf-time-cell > .wf-band {
+  margin-top: 2px;
+}
+/* Wait and code hatching quieter. */
+.dt-map[data-waterfall] .dt-map-row[data-kind="code"] .dt-map-bar {
+  opacity: 0.8;
+}
+/* ---------- round 15, B ---------- */
+/* Graphics at 3:1: code and wait hatching, the neutral bars, the strip in light. */
+.dt-map[data-waterfall] .dt-map-row[data-kind="code"] .dt-map-bar {
+  opacity: 1;
+}
+.dt-map[data-waterfall] .dt-map-bar[data-quiet] {
+  background-color: color-mix(in srgb, var(--dt-k-view) 30%, transparent);
+}
+.wf-panel {
+  --dt-k-request: rgb(140 147 166 / 0.72);
+  --dt-k-django: rgb(140 147 166 / 0.72);
+}
+:root[data-theme="light"] .wf-time-cell .wf-band-block {
+  background: var(--dt-k-http);
+}
+:root[data-theme="light"] .wf-time-cell .wf-band-block[data-depth="0"] {
+  background: var(--dt-k-view);
+}
+/* A bar that runs past the axis ends in a mark: it goes on. */
+.dt-map[data-waterfall] .dt-map-bar[data-past]::after {
+  content: "";
+  position: absolute;
+  top: -2px;
+  right: -6px;
+  border-top: 6px solid transparent;
+  border-bottom: 6px solid transparent;
+  border-left: 6px solid var(--dt-k);
+}
+/* The issue cards' links: the shared ring on focus. */
+.wf-panel .dt-wf-details .dt-issue-card :is(button, a):focus-visible {
+  box-shadow: 0 0 0 2px var(--dt-accent) !important;
+  border-radius: 3px;
+}
+/* Names keep 14ch before they truncate; a folded entry's time has its room. */
+.dt-map[data-waterfall] .dt-map-text {
+  min-width: min(14ch, 100%);
+}
+.wf-other-time {
+  min-width: 6ch;
+  text-align: right;
+}
+.wf-time-cell .wf-band-block {
+  min-width: 10px;
+}

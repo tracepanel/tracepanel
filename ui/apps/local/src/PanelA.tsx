@@ -66,7 +66,8 @@ function entriesOf(rows: readonly TraceRow[], open: string | null): { row: Trace
     if (!head) continue;
     out.push({ row: head, depth: 0 });
     if (head.trace.kind === "page" && head.trace.id === open) continue;
-    for (const row of rest) out.push({ row, depth: 1 });
+    // The tab's entries side by side: a page's requests are not its calls (no nesting that would say so).
+    for (const row of rest) out.push({ row, depth: 0 });
   }
   return out;
 }
@@ -811,10 +812,21 @@ export function PanelA({ route }: { route: Route }) {
   // biome-ignore lint/correctness/useExhaustiveDependencies: `axisKey` says when the open entry's time changed.
   const whole = useMemo(() => (opened ? pageAxis([opened.row]) : null), [axisKey]);
   const [works, setWorks] = useState<number | null>(null);
-  const { axis, skipped } = useMemo(() => withoutIdleStart(whole, works), [whole, works]);
+  const [ends, setEnds] = useState<number | null>(null);
+  // The open entry's time, out to its last span's end where a call outlived it.
+  const reach = useMemo(
+    () =>
+      whole && ends !== null && ends > whole.start + whole.duration
+        ? { start: whole.start, duration: ends - whole.start }
+        : whole,
+    [whole, ends],
+  );
+  const { axis, skipped } = useMemo(() => withoutIdleStart(reach, works), [reach, works]);
   const { host, setKind, setRange, setSelected } = useHost(axis, details);
   const firstWork = Math.min(...[...host.facts.values()].map((each) => each.work));
+  const lastEnd = Math.max(...[...host.facts.values()].map((each) => each.end));
   useEffect(() => setWorks(Number.isFinite(firstWork) ? firstWork : null), [firstWork]);
+  useEffect(() => setEnds(Number.isFinite(lastEnd) ? lastEnd : null), [lastEnd]);
   // A kind picked: its first row into view.
   useEffect(() => {
     if (!host.kind) return;
@@ -832,8 +844,14 @@ export function PanelA({ route }: { route: Route }) {
     {
       clearRange: () => {
         setRange(null);
-        if (before.current) setSelected(before.current);
+        const back = before.current;
         before.current = null;
+        if (!back) return;
+        setSelected(back);
+        // The focus goes back with it: the next key starts from that row.
+        requestAnimationFrame(() =>
+          document.querySelector<HTMLElement>(`.dt-map-row[data-key="${CSS.escape(back.key)}"]`)?.focus(),
+        );
       },
       clearKind: () => setKind(null),
       deselect: () => setSelected(null),
@@ -1076,7 +1094,8 @@ function onOneClock(rows: readonly TraceRow[]): TraceRow[] {
     const first = rest.length ? Math.min(...rest.map((row) => row.trace.start)) : null;
     const end = head.trace.start + head.trace.duration;
     if (first === null || Math.abs(first - end) < CLOCKS_APART) return [head, ...rest];
-    return [{ ...head, trace: { ...head.trace, start: first - head.trace.duration } }, ...rest];
+    // Its key as listed (its start moved here would make another).
+    return [{ ...head, key: entryKey(head), trace: { ...head.trace, start: first - head.trace.duration } }, ...rest];
   });
 }
 
@@ -1126,14 +1145,19 @@ function TabTimeline({
             onMouseEnter={() => onHover(entryKey(row))}
             onMouseLeave={() => onHover(null)}
             onKeyDown={(event) => {
-              const by = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
-              if (!by) return;
-              event.preventDefault();
               const blocks = [
                 ...(event.currentTarget.parentElement?.querySelectorAll<HTMLElement>(".wf-band-block") ?? []),
               ];
               const at = blocks.indexOf(event.currentTarget);
-              const next = blocks[Math.min(Math.max(at + by, 0), blocks.length - 1)];
+              const to = new Map([
+                ["ArrowRight", at + 1],
+                ["ArrowLeft", at - 1],
+                ["Home", 0],
+                ["End", blocks.length - 1],
+              ]).get(event.key);
+              if (to === undefined) return;
+              event.preventDefault();
+              const next = blocks[Math.min(Math.max(to, 0), blocks.length - 1)];
               for (const block of blocks) block.tabIndex = block === next ? 0 : -1;
               next?.focus();
             }}

@@ -168,7 +168,8 @@ function hostSelection(host: WaterfallHost, traceId: string) {
   const selected = host.selected?.trace === traceId ? host.selected.key : null;
   return {
     selected,
-    select: (key: string) => host.select(traceId, selected === key ? null : key),
+    // A click selects; it never lets go (the close button and Esc do).
+    select: (key: string) => host.select(traceId, key),
     close: () => host.select(traceId, null),
   };
 }
@@ -218,7 +219,8 @@ function deepestError(nodes: readonly Node[]): string | undefined {
   let best: { key: string; depth: number } | undefined;
   const walk = (each: readonly Node[], depth: number) => {
     for (const node of each) {
-      if (node.type === "error" && (!best || depth > best.depth)) best = { key: node.key, depth };
+      const failed = node.type === "error" || (node.type === "log" && /error|critical|fatal/i.test(node.log.level));
+      if (failed && (!best || depth > best.depth)) best = { key: node.key, depth };
       walk(childrenOf(node), depth + 1);
     }
   };
