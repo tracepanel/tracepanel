@@ -413,3 +413,60 @@ async fn a_chains_queries_and_issues_come_from_its_calls_and_one_n_plus_one_acro
     assert_eq!(chain["issues"][0]["trace_id"], json!(bff));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A trace the store can't give back is a failure, not a call nobody traced: the panel would say "not traced".
+#[tokio::test]
+async fn a_called_trace_that_cant_be_read_fails_the_answer() {
+    let dir = std::env::temp_dir().join(format!(
+        "tracepanel-server-chain-broken-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    let path = tracepanel_store_local::path_in(&dir);
+    Store::open(&path)
+        .unwrap()
+        .write(&[
+            trace(
+                "VIEW",
+                "web",
+                0,
+                None,
+                json!([
+                    span("root", None, "GET /", 0, 100, None),
+                    span("call", Some("root"), "GET /a", 10, 20, Some("c1")),
+                ]),
+                json!([]),
+            ),
+            trace(
+                "API",
+                "api",
+                10,
+                Some("c1"),
+                json!([span("a1", None, "GET /a", 10, 20, None)]),
+                json!([]),
+            ),
+        ])
+        .unwrap();
+    let router = tracepanel_server::router(Reader::new(&path), Activity::default());
+    let uri = format!("/api/traces/{}/related", id("VIEW"));
+
+    let (status, body) = get(&router, &uri).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["call_traces"][id("API")]["id"], id("API"));
+
+    rusqlite::Connection::open(&path)
+        .unwrap()
+        .execute(
+            "UPDATE traces SET doc = 'not json' WHERE id = ?1",
+            [id("API")],
+        )
+        .unwrap();
+
+    let (status, body) = get(&router, &uri).await;
+
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(body["error"], "expected ident at line 1 column 2");
+
+    let _ = std::fs::remove_dir_all(&dir);
+}

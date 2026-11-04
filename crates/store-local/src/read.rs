@@ -934,7 +934,7 @@ impl Reader {
         let mut out = query.to_owned();
         for found in CHAIN.captures_iter(query) {
             let id = &found[2];
-            let ids = match self.chain(id, true, &|_| Vec::new())? {
+            let ids = match self.chain(id, true, &|_| Ok(Vec::new()))? {
                 Some(chain) => chain
                     .members
                     .iter()

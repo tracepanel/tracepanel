@@ -38,7 +38,7 @@ pub use read::{Page, ReadError, Reader};
 pub use rusqlite::Error;
 pub use scope::{
     CALL_TRACES, CHAIN_LEVELS, CHAIN_TRACES, Chain, Member, Remote, SCOPE_LOGS, Scope, Selection,
-    Served, call_summary, chain_issues, log_summary, no_remote,
+    Served, ServedCalls, call_summary, chain_issues, log_summary, no_remote,
 };
 pub use stats::{SLOW_REQUEST_US, stats};
 pub use tracepanel_analysis::calls::{call_key, query_fingerprint};
@@ -581,16 +581,16 @@ mod tests {
             serde_json::from_str(&w3c_trace("AUDIT", "audit", 1_000, None, None).doc).unwrap();
         let row = serde_json::json!({"span_id": "LEDGER-call", "trace": {"id": "AUDIT"},
                                      "console": "http://127.0.0.1:7071/", "project": "audit"});
-        let remote = |owner: &str| -> Vec<Served> {
+        let remote = |owner: &str| -> ServedCalls {
             if owner != "LEDGER" {
-                return Vec::new();
+                return Ok(Vec::new());
             }
-            vec![Served {
+            Ok(vec![Served {
                 via: "LEDGER-call".to_owned(),
                 doc: audit.clone(),
                 project: "audit".to_owned(),
                 row: row.clone(),
-            }]
+            }])
         };
 
         let shared = reader.snapshot("SHOP", false, &remote).unwrap().unwrap();
