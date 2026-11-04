@@ -3,6 +3,7 @@
 // header says what it called in one line, no tiles. In the call tree a span whose code ran long without calls says
 // so in a row of its own, and a transaction says how long it was open and how much of that was SQL.
 import type { FrameLocator, Locator, Page } from "@playwright/test";
+import { CONSOLE } from "../agent.ts";
 import { openApp, panel, pill, traceId } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
 import { HELD_REPORT } from "../seed.ts";
@@ -300,3 +301,50 @@ test("an app that can't profile: the tree's code row is a plain row, nothing off
 
   await expect(frame.locator('.dt-map-row[data-kind="code"]')).not.toContainText("Profile");
 });
+
+/** A task of `duration` µs (a JVM's, 3 ms), stored under `id`: one span, nothing else. */
+async function storeTask(id: string, duration: number): Promise<void> {
+  const start = Date.now() * 1000 - 7 * 3_600_000_000;
+  const root = { id: "r", ["parent_id"]: null, kind: "task.run", name: "warm-cache", start, duration, status: "ok" };
+  const doc = {
+    id,
+    kind: "task",
+    name: "warm-cache",
+    start,
+    duration,
+    status: "ok",
+    attrs: { "service.name": "orders", "task.name": "warm-cache", "telemetry.sdk.language": "java" },
+    spans: [{ ...root, attrs: {} }],
+    logs: [],
+    errors: [],
+    links: [],
+    issues: [],
+  };
+  const response = await fetch(`${CONSOLE}api/ingest`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify([doc]),
+  });
+  expect(response.status).toBe(202);
+  await expect.poll(async () => (await fetch(`${CONSOLE}api/traces/${id}`)).status).toBe(200);
+}
+
+for (const [duration, id, said] of [
+  [2_987, "01M4WA1TS0000000000000AX01", ["0", "0.5 ms", "1.0 ms", "1.5 ms", "2.0 ms", "2.5 ms"]],
+  [136_776, "01M4WA1TS0000000000000AX02", ["0", "25 ms", "50 ms", "75 ms", "100 ms", "125 ms"]],
+] as const) {
+  test(`the axis of a ${duration} µs trace counts in round steps, evenly spaced, no two the same`, async ({ page }) => {
+    await storeTask(id, duration);
+    await page.goto(`/#/t/${id}?tab=tree`);
+    const ticks = page.locator(".dt-timeline-axis span:not(.dt-timeline-unit)");
+
+    await expect(ticks).toHaveText([...said]);
+    // Each where its time is: the same distance apart, the first at the axis' start.
+    const lefts = await ticks.evaluateAll((spans) =>
+      spans.map((span) => Number.parseFloat((span as HTMLElement).style.left)),
+    );
+    const gaps = lefts.slice(1).map((left, n) => left - (lefts[n] ?? 0));
+    expect(lefts[0]).toBe(0);
+    for (const gap of gaps) expect(Math.abs(gap - (gaps[0] ?? 0))).toBeLessThan(0.01);
+  });
+}

@@ -154,7 +154,47 @@ function saysMore(lane: Lane): boolean {
   return lane.marks.length > 0 && (lane.always || lane.marks.some((mark) => mark.tone !== "neutral"));
 }
 
-const TICKS = [0, 0.25, 0.5, 0.75, 1];
+/** A tick of the time axis: where it is (a share of the trace's time) and what it says. */
+interface Tick {
+  at: number;
+  label: string;
+}
+
+/** The round steps an axis counts in, of a power of ten. */
+const STEPS = [1, 2, 2.5, 5, 10];
+
+/** At least this many steps across the axis: 3 to 6 of them, whatever the time. */
+const MIN_STEPS = 3;
+
+/**
+ * The time axis' ticks: from 0 by the largest round step (1, 2, 2.5 or 5 of a power of ten) that fits MIN_STEPS
+ * times, none past its end; all said in one unit with the decimals the step needs ("0.5 ms", "1.0 ms"), so they read
+ * evenly spaced and no two the same.
+ */
+function axisTicks(duration: number): Tick[] {
+  const total = Math.max(duration, 1);
+  const power = 10 ** Math.floor(Math.log10(total / MIN_STEPS));
+  const fits = [...STEPS, ...STEPS.map((each) => each / 10)]
+    .map((each) => each * power)
+    .filter((each) => total / each >= MIN_STEPS - 1e-9);
+  const step = Math.max(Math.max(...fits), 1);
+  const [unit, scale] = step >= 100_000 && total >= 1_000_000 ? ["s", 1e6] : step >= 100 ? ["ms", 1e3] : ["µs", 1];
+  const said = step / scale;
+  let decimals = 0;
+  while (decimals < 3 && Math.abs(Math.round(said * 10 ** decimals) - said * 10 ** decimals) > 1e-6) decimals += 1;
+  const ticks: Tick[] = [];
+  for (let n = 0; n * step <= total * (1 + 1e-9); n += 1) {
+    ticks.push({ at: (n * step) / total, label: n === 0 ? "0" : `${(n * said).toFixed(decimals)} ${unit}` });
+  }
+  return ticks;
+}
+
+/** The axis' ticks between its ends: where the lanes draw their grid lines. */
+function gridTicks(duration: number): number[] {
+  return axisTicks(duration)
+    .map((tick) => tick.at)
+    .filter((at) => at > 0 && at < 0.999);
+}
 
 /** The trace's own lane, named as what it is: a request, a task, a job, a WebSocket, a page. */
 const LANE_WORDS: Record<string, string> = {
@@ -218,8 +258,8 @@ function LaneRow({
         {lane.marks.length === 1 ? lane.noun[0] : lane.noun[1]}
       </span>
       <div className="dt-lane-track">
-        {TICKS.slice(1, -1).map((tick) => (
-          <span key={tick} className="dt-lane-grid" style={{ left: `${tick * 100}%` }} />
+        {gridTicks(trace.duration).map((at) => (
+          <span key={at} className="dt-lane-grid" style={{ left: `${at * 100}%` }} />
         ))}
         {lane.marks.map((mark) => (
           <MarkOn
@@ -306,9 +346,10 @@ function LanesBody({
     >
       <div className="dt-timeline-axis" aria-hidden="true">
         <span className="dt-timeline-unit">time</span>
-        {TICKS.map((tick) => (
-          <span key={tick} style={{ left: `${tick * 100}%` }}>
-            {tick === 0 ? "0" : duration(trace.duration * tick)}
+        {/* Each label as far along itself as its tick is along the axis: the first starts there, the last ends. */}
+        {axisTicks(trace.duration).map((tick) => (
+          <span key={tick.at} style={{ left: `${tick.at * 100}%`, transform: `translateX(${-tick.at * 100}%)` }}>
+            {tick.label}
           </span>
         ))}
       </div>

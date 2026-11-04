@@ -1244,12 +1244,6 @@ tr[data-new] {
   font-size: 0.625rem;
   line-height: 1rem;
 }
-.dt-timeline-axis .dt-timeline-unit + span {
-  transform: none;
-}
-.dt-timeline-axis span:last-child {
-  transform: translateX(-100%);
-}
 .dt-lane {
   display: grid;
   grid-template-columns: var(--dt-lane-label) minmax(0, 1fr);

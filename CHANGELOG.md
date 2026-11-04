@@ -82,6 +82,10 @@
   same names and the same rounding. A Django page's card read "Most
   time: Your code 157 ms · 53%" where its strip and Profile tab read
   "Your code 154 ms · 52%" and "GC 2 ms".
+- The time strip's axis counts in round steps, evenly spaced, each said
+  with the decimals its step needs: a 3 ms trace's axis read "0, 0.8 ms,
+  2 ms, 2 ms, 3 ms", now "0, 0.5 ms, 1.0 ms, 1.5 ms, 2.0 ms, 2.5 ms". A
+  137 ms one reads "0, 25 ms, 50 ms … 125 ms".
 
 ## 0.13.1 (2026-11-03)
 
