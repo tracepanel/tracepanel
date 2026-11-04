@@ -276,7 +276,8 @@ async function databaseBroken(page, base, id, strip) {
   READ.databases += 1;
   if (!share) return `the DB tab says ${said}, the strip has no Database`;
   const value = share.value.startsWith("<") ? 0 : us(share.value);
-  const within = (stepOf(said) + stepOf(share.value.replace(/^</, ""))) / 2;
+  // Each written at its own step: the tab's rounds to the nearest; the share, by largest remainder, within one of its.
+  const within = stepOf(share.value.replace(/^</, "")) + stepOf(said) / 2;
   return Math.abs(value - us(said)) <= within ? null : `the strip's Database ${share.value}, the DB tab's ${said}`;
 }
 
