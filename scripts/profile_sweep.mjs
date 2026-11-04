@@ -50,12 +50,19 @@ function tracesIn(dir) {
     .prepare(
       `select id, json_type(doc, '$.profile') = 'object' as profiled,
         coalesce(json_extract(doc, '$.profile.bucket_us'), 0) > 0
-          or coalesce(json_array_length(json_extract(doc, '$.profile.stacks')), 0) = 0 as readable
+          or coalesce(json_array_length(json_extract(doc, '$.profile.stacks')), 0) = 0 as readable,
+        (select max(json_extract(value, '$.start') + json_extract(value, '$.duration')) - min(json_extract(value, '$.start'))
+           from json_each(doc, '$.spans')) >= duration as spanned
        from traces order by start desc limit ?`,
     )
     .all(LIMIT);
   db.close();
-  return rows.map((row) => ({ ...row, profiled: Boolean(row.profiled), readable: Boolean(row.readable) }));
+  return rows.map((row) => ({
+    ...row,
+    profiled: Boolean(row.profiled),
+    readable: Boolean(row.readable),
+    spanned: Boolean(row.spanned),
+  }));
 }
 
 /** The agent on the copy, serving the console on a free port: its URL once it says it. */
@@ -129,7 +136,8 @@ function us(text) {
 
 /** Shares whose times, as written, don't add up to the total written: what's wrong, if anything. */
 function addsUp(shares, total) {
-  const sum = shares.reduce((all, share) => all + us(share.value), 0);
+  // A share under the split's step ("<1 ms") counts as none.
+  const sum = shares.reduce((all, share) => all + (share.value.startsWith("<") ? 0 : us(share.value)), 0);
   return shares.length === 0 || sum === us(total) ? null : `times as written add up to ${sum} µs, not ${total}`;
 }
 
@@ -228,7 +236,7 @@ const SKIPPED = [];
  * Each place a trace's views disagree; without a profile, its strip's percents alone. A profile whose samples aren't
  * timed opens whole from a code row (it can't be narrowed, and says so): its rows aren't read.
  */
-async function sweep(page, base, { id, profiled, readable }, mcp) {
+async function sweep(page, base, { id, profiled, readable, spanned }, mcp) {
   const problems = [];
   const problem = (what) => problems.push(`${id} ${what}`);
   // The trace's page, its call tree open: its strip shows, or the console didn't open it as a trace (an id that
@@ -277,6 +285,7 @@ async function sweep(page, base, { id, profiled, readable }, mcp) {
   }
   await tab.first().click();
   const shown = await heads(page);
+  const header = (await page.locator(".dt-trace-time").first().textContent())?.trim() ?? "";
   if (shown.length === 0) problem("the Profile tab shows no profile");
   const answer = mcpParts(id, mcp.get(id) ?? "");
   if (/\n {2}\S.*Not profiled/.test(answer.text.split("\nfunctions by self time").slice(1).join("")))
@@ -291,6 +300,13 @@ async function sweep(page, base, { id, profiled, readable }, mcp) {
     else if (us(cover[1]) > us(cover[2])) problem(`${what} head says more profiled than its time: ${head.cover}`);
     const sum = cover && addsUp(head.bar, cover[2]);
     if (sum) problem(`${what} bar: ${sum} ${said(head.bar)}`);
+    // The whole trace's time as its page's header says it.
+    // Its spans' time, where they cover the trace (a made-up trace's may not: said, not counted).
+    if (cover && head.title === "Profile of the whole trace" && idsKey(head.traces ?? [id]) === id && cover[2] !== header) {
+      const says = `head says ${cover[2]} of the trace, its page's header ${header}`;
+      if (spanned) problem(`${what} ${says}`);
+      else SKIPPED.push(`${id}: its spans don't cover its time, so its ${says} (not counted)`);
+    }
     // The trace's own profile: the strip's shares, to the letter.
     const traces = head.traces ?? [id];
     const own = idsKey(traces) === id;
@@ -360,8 +376,8 @@ try {
   console.log(
     `${traces.length} traces (${profiled} profiled), ${READ.heads} profile heads (${READ.apart} of a chain's traces get_profile doesn't add up together), ${READ.rows} code and wait rows: ${problems.length} disagreements`,
   );
-  if (SKIPPED.length) console.log(`${SKIPPED.length} skipped:`);
-  for (const skipped of SKIPPED) console.log(`  skipped ${skipped}`);
+  if (SKIPPED.length) console.log(`${SKIPPED.length} not compared:`);
+  for (const skipped of SKIPPED) console.log(`  not compared: ${skipped}`);
   for (const problem of problems) console.log(`  ${problem}`);
   process.exitCode = problems.length ? 1 : 0;
 } catch (error) {
