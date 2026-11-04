@@ -8,6 +8,7 @@
 mod compact;
 mod profile;
 mod shares;
+mod split;
 mod tools;
 mod waits;
 

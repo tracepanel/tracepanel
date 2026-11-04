@@ -981,29 +981,29 @@ async fn a_cpu_profile_by_function_and_path() {
         tool(&server, "get_profile", json!({"id": SLOW, "top": 3})).await,
         (
             "01M4PR0F11E0000000000000S0  GET /reports/sales → 200 · 200 ms
-CPU profile: 200 ms profiled of the trace's 200 ms · 190 samples, one every 1.0 ms
-time by share (as the time strip says it): Your code 147 ms (74%) · GC 3.0 ms (1%) · Waiting 50.0 ms (25%)
-waiting (a sleep, a socket, a lock, the event loop: not computing): 50.0 ms (25%), most in asyncio.sleep in sales at reports/views.py:24
-not sampled: 10.0 ms (other traces ran on the same thread), filled in from the samples around it
+CPU profile: 200 ms profiled of the trace's 200 ms · 190 samples, one every 1 ms
+time by share (as the time strip says it): Your code 147 ms (74%) · GC 3 ms (1%) · Waiting 50 ms (25%)
+waiting (a sleep, a socket, a lock, the event loop: not computing): 50 ms (25%), most in asyncio.sleep in sales at reports/views.py:24
+not sampled: 10 ms (other traces ran on the same thread), filled in from the samples around it
 GC: 2 collections, 3.0 ms paused
-note: a sample every 1.0 ms: a function that ran for less may be missed or miscounted. Its memory was counted too, which slows the code down: these times are higher than without it.
+note: a sample every 1 ms: a function that ran for less may be missed or miscounted. Its memory was counted too, which slows the code down: these times are higher than without it.
 
 functions by self time (your code: library calls counted to the function of yours that made them):
   119 ms  60%  build_cards (yours) — reports/cards.py:40 · total 120 ms
-  50.0 ms  25%  waiting · sleep · total 50.0 ms
-  28.0 ms  14%  sales (yours) — reports/views.py:24 · total 200 ms
+  50 ms  25%  waiting · sleep · total 50 ms
+  28 ms  14%  sales (yours) — reports/views.py:24 · total 200 ms
 
 functions by total time:
-  200 ms  100%  sales (yours) — reports/views.py:24 · self 28.0 ms
+  200 ms  100%  sales (yours) — reports/views.py:24 · self 28 ms
   120 ms  60%  build_cards (yours) — reports/cards.py:40 · self 119 ms
-  50.0 ms  25%  waiting · sleep · self 50.0 ms
+  50 ms  25%  waiting · sleep · self 50 ms
 
 hottest paths (outermost first):
   119 ms  60%  sales (reports/views.py:24) → build_cards (reports/cards.py:40)
-  50.0 ms  25%  sales (reports/views.py:24) → waiting · sleep
-  28.0 ms  14%  sales (reports/views.py:24)
-  2.0 ms  1%  sales (reports/views.py:24) → GC
-  1.0 ms  0%  sales (reports/views.py:24) → build_cards (reports/cards.py:40) → GC"
+  50 ms  25%  sales (reports/views.py:24) → waiting · sleep
+  28 ms  14%  sales (reports/views.py:24)
+  2 ms  1%  sales (reports/views.py:24) → GC
+  1 ms  1%  sales (reports/views.py:24) → build_cards (reports/cards.py:40) → GC"
                 .to_owned(),
             false
         )
@@ -1082,19 +1082,20 @@ allocation sites at the end (1 of 1, 3.0 MB in all, largest first; ×: allocatio
     assert_eq!(
         tool(&server, "get_profile", json!({"id": JS})).await.0,
         "01M4PR0F11E0000000000000J0  GET /reports/sales → 200 · 14.0 ms
-CPU profile: 12.0 ms sampled of the trace's 14.0 ms · 12 samples, one every 1.0 ms
+CPU profile: 14 ms profiled of the trace's 14 ms · 12 samples, one every 1 ms
+time by share (as the time strip says it): Your code 13 ms (93%) · GC 1 ms (7%)
 GC: 1 collection, 1.5 ms paused
-note: a sample every 1.0 ms: a function that ran for less may be missed or miscounted. Its memory was counted too, which slows the code down: these times are higher than without it.
+note: a sample every 1 ms: a function that ran for less may be missed or miscounted. Its memory was counted too, which slows the code down: these times are higher than without it.
 
 functions by self time (your code: library calls counted to the function of yours that made them):
-  12.0 ms  100%  buildCards (yours) — src/cards.ts:30 · total 12.0 ms
+  12 ms  100%  buildCards (yours) — src/cards.ts:30 · total 12 ms
 
 functions by total time:
-  12.0 ms  100%  sales (yours) — src/reports.ts:12 · self 0.0 ms
-  12.0 ms  100%  buildCards (yours) — src/cards.ts:30 · self 12.0 ms
+  12 ms  100%  sales (yours) — src/reports.ts:12 · self 0 µs
+  12 ms  100%  buildCards (yours) — src/cards.ts:30 · self 12 ms
 
 hottest paths (outermost first):
-  12.0 ms  100%  sales (src/reports.ts:12) → buildCards (src/cards.ts:30)"
+  12 ms  100%  sales (src/reports.ts:12) → buildCards (src/cards.ts:30)"
     );
 }
 
@@ -1205,10 +1206,11 @@ async fn a_profile_too_short_for_a_sample() {
         tool(&server, "get_profile", json!({"id": QUICK})).await,
         (
             "01M4PR0F11E0000000000000Q0  GET /reports/sales → 200 · 2.9 ms
-CPU profile: 0.0 ms sampled of the trace's 2.9 ms · 0 samples, one every 1.0 ms
-note: a sample every 1.0 ms: a function that ran for less may be missed or miscounted.
+CPU profile: 0 µs profiled of the trace's 3 ms · 0 samples, one every 1 ms
+time by share (as the time strip says it): Not profiled 3 ms (100%)
+note: a sample every 1 ms: a function that ran for less may be missed or miscounted.
 
-No samples: the trace was over before the profiler saw its code (one sample every 1.0 ms)."
+No samples: the trace was over before the profiler saw its code (one sample every 1 ms); its time by share is its spans'."
                 .to_owned(),
             false
         )
@@ -1462,20 +1464,21 @@ this trace: no cpu profile; those of its chain follow.
 chain: cpu profiles of 2 traces down its calls, each app's apart (never one profile across apps):
 
 library-api · 2 traces added up · {api1}, {api2}
-CPU profile: 40.0 ms sampled of the traces' 2.0 ms · 40 samples, one every 1.0 ms
-note: a sample every 1.0 ms: a function that ran for less may be missed or miscounted. Its memory was counted too, which slows the code down: these times are higher than without it.
+CPU profile: 0.2 ms profiled of the traces' 0.2 ms · 40 samples, one every 1 ms
+time by share (as the time strip says it): Database 0.2 ms (91%) · Your code 20 µs (9%)
+note: a sample every 1 ms: a function that ran for less may be missed or miscounted. Its memory was counted too, which slows the code down: these times are higher than without it.
 
 functions by self time (your code: library calls counted to the function of yours that made them):
-  24.0 ms  60%  sales (yours) — reports/views.py:24 · total 40.0 ms
-  16.0 ms  40%  build_cards (yours) — reports/cards.py:40 · total 16.0 ms
+  24 ms  60%  sales (yours) — reports/views.py:24 · total 40 ms
+  16 ms  40%  build_cards (yours) — reports/cards.py:40 · total 16 ms
 
 functions by total time:
-  40.0 ms  100%  sales (yours) — reports/views.py:24 · self 24.0 ms
-  16.0 ms  40%  build_cards (yours) — reports/cards.py:40 · self 16.0 ms
+  40 ms  100%  sales (yours) — reports/views.py:24 · self 24 ms
+  16 ms  40%  build_cards (yours) — reports/cards.py:40 · self 16 ms
 
 hottest paths (outermost first):
-  24.0 ms  60%  sales (reports/views.py:24)
-  16.0 ms  40%  sales (reports/views.py:24) → build_cards (reports/cards.py:40)"
+  24 ms  60%  sales (reports/views.py:24)
+  16 ms  40%  sales (reports/views.py:24) → build_cards (reports/cards.py:40)"
         )
     );
 
