@@ -22,6 +22,7 @@ pub mod otel;
 pub mod profiles;
 pub mod sql;
 pub mod storage;
+pub mod stretches;
 pub mod transport;
 mod waits;
 
