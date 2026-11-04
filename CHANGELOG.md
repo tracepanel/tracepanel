@@ -72,6 +72,11 @@
   legend said "Waiting 125 ms 91%", and the gap was said
   "waiting · 0 µs". Its waits are hatched now, said for how long each
   span waited, and hovering them shows Waiting's numbers.
+- The Profile tab opens on Your code whenever your code ran enough of
+  the time the profile computed, its waits left out: a Node task idle on
+  its event loop for 91% of its time opened on All frames ("node:internal
+  1 ms, node:net 1 ms"), so its bar didn't read as the strip's until
+  switched.
 
 ## 0.13.1 (2026-11-03)
 

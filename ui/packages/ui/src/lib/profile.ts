@@ -7,7 +7,7 @@ export type Profile = NonNullable<Trace["profile"]>;
 export type Frame = Profile["frames"][number];
 export type Stack = Profile["stacks"][number];
 
-/** Under this share of samples in the project's own code, a profile opens on every frame: there is little of yours. */
+/** Under this share of the samples that computed in the project's own code, a profile opens on every frame. */
 const OWN_ENOUGH = 0.1;
 /** Frames kept above the first of the project's own, out of what every stack starts with: the middleware around it. */
 const CONTEXT = 3;
@@ -207,12 +207,16 @@ export function allFrames(profile: Profile): Profile {
   );
 }
 
-/** Whether your code ran enough of the time for the profile to open on it. */
+/**
+ * Whether your code ran enough of the time it computed for the profile to open on it, as the time strip splits it
+ * (lib/timeShares): its waits are no one's code (a Node task idle on its event loop is still yours to read), and a
+ * profile that only waited opens on Your code too, which says so.
+ */
 export function mostlyYours(profile: Profile): boolean {
-  const yours = profile.stacks
-    .filter((stack) => stack.frames.some((index) => profile.frames[index]?.in_app))
-    .reduce((sum, stack) => sum + stack.count, 0);
-  return yours >= profile.samples * OWN_ENOUGH;
+  const ran = profile.stacks.filter((stack) => profile.frames[stack.frames.at(-1) ?? -1]?.waiting !== true);
+  const computed = ran.reduce((sum, stack) => sum + stack.count, 0);
+  const yours = ran.filter((stack) => runsYours(profile, stack)).reduce((sum, stack) => sum + stack.count, 0);
+  return computed === 0 || yours >= computed * OWN_ENOUGH;
 }
 
 /** A function as the stacks reached it: its samples (here and below), its own, and the functions it called. */

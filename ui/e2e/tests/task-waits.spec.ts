@@ -110,3 +110,13 @@ test("a leaf span's wait is painted as the legend counts it: hatched, said for h
   const total = said.reduce((all, match) => all + Number(match?.[1] ?? Number.NaN), 0);
   expect(Math.abs(total - shareMs(legend, "Waiting"))).toBeLessThanOrEqual(1);
 });
+
+test("its Profile tab opens on Your code, its bar the strip's legend", async ({ page }) => {
+  await page.goto(`/#/t/${TASK}?tab=tree`);
+  const strip = (await page.locator(".dt-breakdown-legend").first().innerText()).replace(/\s+/g, " ");
+  await page.getByRole("tab", { name: /^Profile/ }).click();
+
+  await expect(page.getByRole("tab", { name: "Your code" })).toHaveAttribute("aria-selected", "true");
+  const bar = page.locator(".dt-breakdown-legend").filter({ visible: true }).first();
+  await expect.poll(async () => (await bar.innerText()).replace(/\s+/g, " ")).toBe(strip.replace(/ Functions 1$/, ""));
+});
