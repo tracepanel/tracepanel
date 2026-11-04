@@ -63,7 +63,8 @@ function ownParts(
         : category;
     groups.set(share, [...(groups.get(share) ?? []), [index, count]]);
   }
-  const order: Share[] = [category, "django", WAITING];
+  // Once each: a framework's span (a request's root, a middleware) is the framework's share already.
+  const order: Share[] = [...new Set<Share>([category, "django", WAITING])];
   const parts = order.flatMap((share): [Share, [number, number][]][] => {
     const group = groups.get(share);
     return group ? [[share, group]] : [];
