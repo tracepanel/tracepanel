@@ -1,7 +1,7 @@
 // The waterfall's one details pane (redesign A, a prototype): what the selected span is, by its kind (see
 // WaterfallDetails), and what a stretch of time dragged across the bars holds (RangeDetails).
 import type { ReactNode } from "react";
-import { SHORT_KINDS } from "./CallRowParts";
+import { hopText, SHORT_KINDS } from "./CallRowParts";
 import { appName } from "./CallRows";
 import type { Node } from "./callTree";
 import { ErrorView } from "./ErrorView";
@@ -79,6 +79,16 @@ function HopSplit({ node }: { node: Node }) {
 }
 
 /** The row's headline: its kind, its name, how it was answered, how long it took. */
+/** The row's name, as its row says it; a call's without the method its badge says. */
+function headName(node: Node, fallback: string): string {
+  if (node.type === "error") return node.error.type.replace(/^builtins\./, "");
+  if (node.type === "log") return node.log.logger || node.log.level;
+  if (node.type !== "span") return fallback;
+  if (node.served || node.span.kind === "http.client") return hopText(node.span).replace(/^[A-Z]+ /, "");
+  if (node.span.parent_id === null && /^[A-Z]+ \//.test(node.span.name)) return node.span.name;
+  return fallback;
+}
+
 /** The row's badge word, as its row says it: a call's method, a span's kind in short, a record's level. */
 function badgeWord(node: Node, trace: Trace): string {
   if (node.type === "log") return node.log.level;
@@ -110,8 +120,8 @@ function Headline({ node, trace, onClose }: { node: Node; trace: Trace; onClose:
   return (
     <header className="dt-wf-details-head">
       <KindBadge kind={badgeWord(node, trace)} muted={true} className="dt-map-kind" />
-      <h3 title={crumb.label}>
-        {crumb.label}
+      <h3 title={headName(node, crumb.label)}>
+        {headName(node, crumb.label)}
         {node.type === "group" ? <span className="dt-wf-head-count"> ×{node.spans.length}</span> : null}
       </h3>
       <StatusBadge status={status} />

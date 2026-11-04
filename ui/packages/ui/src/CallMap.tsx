@@ -193,6 +193,30 @@ function waterfallMarks(tree: readonly Node[], host: WaterfallHost): Map<string,
   return marks;
 }
 
+const KIND_NAMES = { sql: "queries", http: "HTTP calls", logs: "log records" } as const;
+
+/** A failed entry opens on what broke: its first error record selected, its error card first in the details. */
+function useFirstError(host: WaterfallHost, tree: readonly Node[], trace: Trace): void {
+  const done = useRef<string | null>(null);
+  useEffect(() => {
+    // Its own errors or its callees': the first error record in its spans.
+    if (done.current === trace.id || host.selected) return;
+    const key = firstError(tree);
+    if (!key) return;
+    done.current = trace.id;
+    host.select(trace.id, key);
+  }, [host, tree, trace]);
+}
+
+function firstError(nodes: readonly Node[]): string | undefined {
+  for (const node of nodes) {
+    if (node.type === "error") return node.key;
+    const found = firstError(childrenOf(node));
+    if (found) return found;
+  }
+  return undefined;
+}
+
 /**
  * A code row of a call's trace opens that trace's profile: in the waterfall, the call's row is selected, its details
  * have the callee's profile.
@@ -255,15 +279,25 @@ function WaterfallRows({
   details: ReactNode;
   selected: string | null;
 }) {
-  const marks = useMemo(() => waterfallMarks(tree, host) ?? ctx.marks, [tree, host, ctx.marks]);
+  const kept = useMemo(() => waterfallMarks(tree, host) ?? ctx.marks, [tree, host, ctx.marks]);
+  // A kind with nothing here: the root stays, dimmed, and a line says so.
+  const none = host.kind !== null && kept !== undefined && ![...kept.values()].includes("match");
+  const marks = useMemo(() => {
+    if (!(none && kept)) return kept;
+    const all = new Map(kept);
+    for (const node of tree) all.set(node.key, "path");
+    return all;
+  }, [none, kept, tree]);
   const found = selected ? findNode(tree, selected, trace) : undefined;
+  useFirstError(host, tree, trace);
   const explains = found ? explainable(found.trace) : false;
   const windows = windowsIn(host, trace);
   const facts = host.facts.get(trace.id);
   return (
-    <div className="dt-map" data-waterfall="">
+    <div className="dt-map" data-waterfall="" data-trace={trace.id}>
       <div className="dt-map-rows">
         <Rows nodes={tree} depth={depth} ctx={{ ...ctx, marks, onTraceProfile: hopProfile(tree, ctx) }} />
+        {none ? <p className="dt-wf-none">No {KIND_NAMES[host.kind ?? "sql"]} in this request.</p> : null}
       </div>
       {found && host.details
         ? createPortal(

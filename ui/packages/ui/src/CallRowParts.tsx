@@ -546,5 +546,7 @@ export function rowState(ctx: RowContext, key: string, mark: Mark | undefined) {
   return {
     "data-dim": mark === "path" ? "" : undefined,
     "aria-current": ctx.selected === key ? ("true" as const) : undefined,
+    // The row's key, for the waterfall's keys to select it as focus moves.
+    "data-key": key,
   };
 }

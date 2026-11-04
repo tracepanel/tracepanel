@@ -170,6 +170,7 @@ function useTreeKeys(
   scroll: RefObject<HTMLDivElement | null>,
   pick: (stretch: { from: number; to: number } | null) => void,
   axis: Axis | null,
+  select: (trace: string, key: string | null) => void,
 ): void {
   // The row the Shift keys started on: kept across renders (each stretch picked renders).
   const anchorRef = useRef<HTMLElement | null>(null);
@@ -197,12 +198,20 @@ function useTreeKeys(
     mark();
     const observer = new MutationObserver(mark);
     observer.observe(root, { subtree: true, childList: true, attributes: true, attributeFilter: ["aria-current"] });
+    let follow = 0;
     // A code row clicked stays marked while its span's details show; any other row clicked lets it go.
     const onClick = (event: MouseEvent) => {
       const row = (event.target as Element).closest<HTMLElement>(".dt-map-row");
       if (!row) return;
       for (const each of root.querySelectorAll("[data-picked]")) each.removeAttribute("data-picked");
-      if (row.dataset["kind"] === "code") row.setAttribute("data-picked", "");
+      if (row.dataset["kind"] === "code") {
+        row.setAttribute("data-picked", "");
+        // Its span's details: their profile in view, the code's stretch in it.
+        window.setTimeout(
+          () => document.querySelector(".dt-wf-profile")?.scrollIntoView({ block: "start", behavior: "smooth" }),
+          150,
+        );
+      }
     };
     root.addEventListener("click", onClick);
     const onKey = (event: KeyboardEvent) => {
@@ -257,8 +266,16 @@ function useTreeKeys(
       ]).get(event.key);
       if (to === undefined) return;
       event.preventDefault();
-      all[Math.min(Math.max(to, 0), all.length - 1)]?.focus();
+      const next = all[Math.min(Math.max(to, 0), all.length - 1)];
+      next?.focus();
       mark();
+      // The selection follows the focus, a moment after it settles: the details track the keys.
+      window.clearTimeout(follow);
+      follow = window.setTimeout(() => {
+        const key = next?.dataset["key"];
+        const trace = next?.closest<HTMLElement>("[data-trace]")?.dataset["trace"];
+        if (key && trace) select(trace, key);
+      }, 120);
     };
     root.addEventListener("keydown", onKey);
     return () => {
@@ -308,6 +325,8 @@ function useTimeColumn(panel: RefObject<HTMLDivElement | null>, ticks: RefObject
       if (!column) return;
       const x = `${Math.round(column.left - root.getBoundingClientRect().left)}px`;
       root.style.setProperty("--wf-time-w", `${Math.round(column.width)}px`);
+      const sticky = root.querySelector<HTMLElement>(".wf-sticky");
+      if (sticky) root.style.setProperty("--wf-sticky-h", `${Math.round(sticky.offsetHeight)}px`);
       // The divider follows the column always; the toolbar only with the details closed, so a row picked (which
       // opens them) never moves the toolbar.
       root.style.setProperty("--wf-split-x", x);
@@ -419,9 +438,9 @@ const BADGES: readonly [string, string][] = [
 ];
 
 const SHORTCUTS: readonly [string, string][] = [
-  ["Keep one kind of spans", "All · SQL · HTTP · Logs"],
+  ["Select the focused row", "Enter"],
   ["Pick a stretch of time", "drag across the bars"],
-  ["Let the stretch, the kind, the row go", "Esc"],
+  ["Clear the stretch, then the kind, then the selection", "Esc"],
   ["Move between rows · open · close · to the parent", "↑ ↓ → ←"],
   ["Pick a stretch from the selected row", "Shift + ↑ ↓"],
   ["This list", "?"],
@@ -429,11 +448,9 @@ const SHORTCUTS: readonly [string, string][] = [
 
 /** ? : the keys, in a small sheet over the panel. */
 function Shortcuts({ onClose }: { onClose: () => void }) {
-  // Back where it was opened from, when it closes.
-  useEffect(() => {
-    const opener = document.activeElement as HTMLElement | null;
-    return () => opener?.focus();
-  }, []);
+  // Back where it was opened from, when it closes: taken as it opens, before it takes the focus.
+  const [opener] = useState(() => document.activeElement as HTMLElement | null);
+  useEffect(() => () => opener?.focus(), [opener]);
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: a click beside the sheet closes it; Esc does too.
     // biome-ignore lint/a11y/useKeyWithClickEvents: Esc closes it.
@@ -445,7 +462,16 @@ function Shortcuts({ onClose }: { onClose: () => void }) {
         aria-label="Keys and badges"
         tabIndex={-1}
         ref={(element) => element?.focus()}
+        // Tab stays in the sheet: its one control is Close.
+        onKeyDown={(event) => {
+          if (event.key !== "Tab") return;
+          event.preventDefault();
+          event.currentTarget.querySelector<HTMLElement>(".wf-shortcuts-close")?.focus();
+        }}
       >
+        <button type="button" className="icon-button wf-shortcuts-close" aria-label="Close" onClick={onClose}>
+          <CloseIcon />
+        </button>
         <h3>Keys</h3>
         <dl>
           {SHORTCUTS.map(([what, key]) => (
@@ -763,7 +789,7 @@ export function PanelA({ route }: { route: Route }) {
   const { host, setKind, setRange, setSelected } = useHost(axis, details);
   const firstWork = Math.min(...[...host.facts.values()].map((each) => each.work));
   useEffect(() => setWorks(Number.isFinite(firstWork) ? firstWork : null), [firstWork]);
-  useTreeKeys(scrollRef, setRange, axis);
+  useTreeKeys(scrollRef, setRange, axis, host.select);
   // A kind picked: its first row into view.
   useEffect(() => {
     if (!host.kind) return;
@@ -791,7 +817,11 @@ export function PanelA({ route }: { route: Route }) {
     setRange(null);
     setSelected(null);
   }, [openId]);
-  const drag = useRangeDrag(axis?.duration ?? 1, (picked) => setRange({ from: picked[0], to: picked[1] }));
+  // A stretch picked takes the details: the row selected lets go.
+  const drag = useRangeDrag(axis?.duration ?? 1, (picked) => {
+    setSelected(null);
+    setRange({ from: picked[0], to: picked[1] });
+  });
   const shownRange = drag.draft ? { from: drag.draft[0], to: drag.draft[1] } : host.range;
 
   const latest = followTarget(inOrder(true, rows));
@@ -953,6 +983,14 @@ export function PanelA({ route }: { route: Route }) {
             {shownRange && axis ? (
               <div className="wf-range-layer">
                 <RangeBand range={[shownRange.from, shownRange.to]} total={axis.duration} />
+                <span
+                  className="wf-range-label"
+                  style={{ left: `${(shownRange.from / axis.duration) * 100}%` }}
+                  aria-live="polite"
+                >
+                  {duration(skipped + shownRange.from)} – {duration(skipped + shownRange.to)} ·{" "}
+                  {duration(shownRange.to - shownRange.from)}
+                </span>
               </div>
             ) : null}
             <NamesSplitter value={names} onSize={setNames} scroll={scrollRef} />
@@ -1213,7 +1251,7 @@ function EntryRow({
           )}
         </span>
         <span className="dt-map-track">
-          {/* Still running: a pale bar across, growing as its time ticks. */}
+          {/* Still running: a pale bar across, its time ticking by its name. */}
           {running ? <span className="dt-map-bar wf-inflight-bar" style={{ left: "0%", width: "100%" }} /> : null}
         </span>
       </button>

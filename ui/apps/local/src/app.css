@@ -3467,7 +3467,8 @@ button.wf-crumb:hover {
 }
 /* A code row clicked: marked while its span's details show. */
 .dt-map[data-waterfall] .dt-map-row[data-kind="code"][data-picked] {
-  box-shadow: inset 2px 0 0 var(--dt-accent);
+  outline: 1px solid color-mix(in srgb, var(--dt-accent) 55%, transparent);
+  outline-offset: -1px;
   background: color-mix(in srgb, var(--dt-selected) 60%, transparent);
 }
 /* An error card first in the details. */
@@ -3509,4 +3510,119 @@ button.wf-crumb:hover {
 /* The names' divider in the middle of the gutter between the names and the track. */
 .wf-splitter-names {
   left: calc(var(--wf-split-x, 40%) - var(--wf-track-pad) / 2 - 0.3125rem);
+}
+/* ---------- round 11 ---------- */
+/* The stretch: under the sticky head (the band's axis is another), its numbers on its edge. */
+.wf-range-layer {
+  top: var(--wf-sticky-h, 0px);
+}
+.wf-range-label {
+  position: absolute;
+  top: 2px;
+  z-index: 4;
+  padding: 0 5px;
+  border-radius: 3px;
+  background: var(--dt-accent-strong);
+  color: #fff;
+  font: 500 10.5px / 16px var(--dt-mono);
+  white-space: nowrap;
+  transform: translateX(2px);
+}
+/* The open entry's root row stays in view under the head while its spans scroll. */
+.wf-rows .dt-map[data-waterfall][data-trace] > .dt-map-rows > div > .dt-map-row:first-child {
+  position: sticky;
+  top: var(--wf-sticky-h, 0px);
+  z-index: 1;
+  background: var(--dt-panel);
+}
+.wf-rows .dt-map[data-waterfall][data-trace] > .dt-map-rows > div > .dt-map-row:first-child[aria-current="true"] {
+  background: color-mix(in srgb, var(--dt-accent) 13%, var(--dt-panel));
+}
+/* The keys sheet: each description next to its key or badge, within the panel. */
+.wf-shortcuts dl > div {
+  justify-content: flex-start;
+}
+.wf-shortcuts dd {
+  text-align: left;
+}
+.wf-shortcuts dl > div > dt {
+  min-width: 8.5rem;
+}
+.wf-shortcuts {
+  max-height: calc(100% - 1rem);
+}
+.wf-shortcuts-backdrop {
+  position: absolute;
+}
+/* The band's blocks: a request neutral, a page view violet, a failed one red; the kind's edge on the left. */
+.wf-band-block {
+  background: color-mix(in srgb, var(--dt-k-request) 35%, transparent);
+}
+/* ---------- round 11, B ---------- */
+/* Chips never clipped: their box doesn't shrink or hide them; the name gives way. */
+.dt-map[data-waterfall] .dt-map-chips {
+  flex-shrink: 0;
+  overflow: visible;
+}
+/* Graphics at 3:1: the neutral bars (request, framework), a call's wait, the band's blocks, the code hatch. */
+.wf-panel {
+  --dt-k-request: rgb(140 147 166 / 0.62);
+  --dt-k-django: rgb(140 147 166 / 0.62);
+}
+:root[data-theme="light"] .wf-panel {
+  --dt-k-request: rgb(99 99 110 / 0.82);
+  --dt-k-django: rgb(99 99 110 / 0.82);
+}
+.dt-map[data-waterfall] .dt-map-bar[data-call] {
+  background: color-mix(in srgb, var(--dt-k-http) 45%, transparent);
+}
+.wf-band-block {
+  outline: 1px solid color-mix(in srgb, var(--dt-k-request) 100%, transparent);
+  outline-offset: -1px;
+}
+.wf-band-block[data-depth="0"] {
+  outline-color: color-mix(in srgb, var(--dt-k-view) 75%, transparent);
+}
+.wf-band-block[data-failed] {
+  outline-color: var(--dt-error);
+}
+.dt-map[data-waterfall] .dt-map-bar[data-quiet] {
+  border-top: 1px solid color-mix(in srgb, var(--dt-k-view) 85%, transparent);
+}
+.dt-map[data-waterfall] .dt-map-bar[data-quiet][data-waiting] {
+  border-top-color: var(--dt-text-3);
+}
+/* 24px to hit: the names' divider, the band's blocks, the details' small links. */
+.wf-splitter-names {
+  left: calc(var(--wf-split-x, 40%) - (var(--wf-track-pad) + var(--wf-col-gap)) / 2 - 0.3125rem);
+}
+.wf-splitter[aria-orientation="vertical"]::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(50% - 12px);
+  width: 24px;
+}
+.wf-band-block {
+  min-width: 6px;
+}
+.wf-band-block::before {
+  inset: -4px max(-4px, calc((24px - 100%) / -2));
+}
+.wf-panel .dt-wf-details :is(button, a):not(.icon-button) {
+  position: relative;
+}
+.wf-panel .dt-wf-details :is(button, a):not(.icon-button)::after {
+  content: "";
+  position: absolute;
+  inset: -5px -2px;
+}
+.wf-shortcuts {
+  position: relative;
+}
+.wf-shortcuts-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
 }

@@ -4010,3 +4010,25 @@ div.dt-map-row[data-kind="code"] {
   color: var(--dt-text-3);
   font-size: var(--dt-size-sm);
 }
+.dt-wf-none {
+  padding: 6px 14px;
+  color: var(--dt-text-3);
+  font-size: 12px;
+}
+/* The details' head never runs past the pane: the title gives way, the time and close stay. */
+.dt-wf-details {
+  min-width: 0;
+}
+.dt-wf-details-head h3 {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dt-wf-details-head > :not(h3) {
+  flex-shrink: 0;
+}
+.dt-wf-details :is(pre, .dt-code, [data-code]) {
+  max-width: 100%;
+  overflow-x: auto;
+}
