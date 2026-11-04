@@ -3976,3 +3976,8 @@ div.dt-map-row[data-kind="code"] {
 .dt-wf-details .dt-issue-card :is(button, a):hover {
   text-decoration: underline;
 }
+/* Where a query was called from is its issue card's when it has one: not said again under it. */
+.dt-wf-details:has(.dt-issue-card) [data-group-origin] {
+  /* Over the paragraph's `flex` utility, a layer above this file's. */
+  display: none !important;
+}

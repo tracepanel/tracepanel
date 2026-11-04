@@ -364,11 +364,16 @@ function LeafText({ node, text }: { node: Extract<Node, { type: "log" | "error" 
   return <span className="dt-map-text">{text}</span>;
 }
 
+const LOG_PREFIX =
+  /^\s*\d{4}-\d\d-\d\d[T ][\d:.]+(?:Z|[+-]\d\d:?\d\d)?\s+(?:\[?(?:TRC|DBG|INF|WRN|ERR|FTL|TRACE|DEBUG|INFO|WARN|WARNING|ERROR|FATAL)\]?\s+)?/;
+
 /**
  * A browser console's format: `%c` and the CSS it takes as arguments ("font-weight: bold") are how it looked, not
  * what it said.
  */
-function withoutConsoleFormat(text: string): string {
+function withoutConsoleFormat(given: string): string {
+  // A logger's own prefix (its timestamp and level) is the record's details': its row says the level in its badge.
+  const text = given.replace(LOG_PREFIX, "");
   if (!text.includes("%c")) return text;
   return text
     .replace(/%c/g, "")

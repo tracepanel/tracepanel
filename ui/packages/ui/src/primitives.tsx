@@ -75,7 +75,13 @@ export function IssueChip({
   className?: string | undefined;
 }) {
   return (
-    <Badge variant={kind === "error" ? "error" : "warn"} size="compact" data-kind={kind} className={className}>
+    <Badge
+      variant={kind === "error" ? "error" : "warn"}
+      size="compact"
+      data-kind={kind}
+      className={className}
+      title={ISSUE_LABELS[kind]}
+    >
       <span className="truncate">{ISSUE_LABELS[kind]}</span>
       {count !== undefined && count > 1 ? <span className="opacity-75">{count}</span> : null}
     </Badge>

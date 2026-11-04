@@ -77,6 +77,22 @@ function pageAxis(rows: readonly TraceRow[]): Axis | null {
   return { start, duration: Math.max(end - start, 1) };
 }
 
+/** The room the break mark takes at the axis's start (px): no tick label under it. */
+const BREAK_ROOM = 72;
+
+/** An element's width, followed as it resizes. */
+function useWidth(ref: RefObject<HTMLElement | null>): number {
+  const [width, setWidth] = useState(0);
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    const observer = new ResizeObserver(() => setWidth(element.clientWidth));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [ref]);
+  return width;
+}
+
 /** A leading idle stretch longer than this share of the page is left off the axis, behind a break mark. */
 const IDLE_SHARE = 0.2;
 
@@ -213,6 +229,7 @@ function AxisHead({
   /** The page's idle start left off the axis (µs): a break mark says how long. */
   skipped: number;
 }) {
+  const width = useWidth(ticksRef);
   return (
     <div className="wf-head wf-grid">
       {filter}
@@ -226,8 +243,9 @@ function AxisHead({
           </span>
         ) : null}
         {ticks(axis, skipped).map((tick) => (
+          // The break mark takes the axis's start: no label under it.
           <span key={tick.at} style={{ left: `${tick.at * 100}%` }}>
-            {tick.label}
+            {skipped > 0 && tick.at * width < BREAK_ROOM ? "" : tick.label}
           </span>
         ))}
       </span>
