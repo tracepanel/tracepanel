@@ -13,6 +13,7 @@ import {
 import { readItem, writeItem } from "@tracepanel/ui/lib/storage";
 import type { EntrySummary, HtmxInfo, TabEntry } from "@tracepanel/ui/lib/tabEntry";
 import { CARD_STYLE, mountCard } from "./card";
+import { createDock } from "./dock";
 import {
   countedBy,
   flightEntry,
@@ -36,21 +37,7 @@ import {
   setWatcher,
   waitedMs,
 } from "./network";
-import {
-  DEFAULT_HEIGHT,
-  DEFAULT_WIDTH,
-  type Dock,
-  learnedRuntime,
-  learnRuntime,
-  loadPanel,
-  loadTab,
-  MIN_HEIGHT,
-  MIN_WIDTH,
-  type PanelState,
-  savePanel,
-  saveTab,
-  withRedirects,
-} from "./persist";
+import { learnedRuntime, learnRuntime, loadPanel, loadTab, savePanel, saveTab, withRedirects } from "./persist";
 import {
   addCalls,
   addFlight,
@@ -410,81 +397,13 @@ export function mount(options: WidgetOptions = {}): Widget {
   const panel = query<HTMLElement>(root, ".panel");
   const panelUrl = options.api ? new URL(options.api, location.href) : null;
   const handle = query<HTMLElement>(root, ".resize");
-  let width = DEFAULT_WIDTH;
-  let height = DEFAULT_HEIGHT;
-  let dock: Dock = "right";
-
-  function setWidth(value: number): void {
-    width = Math.round(Math.min(Math.max(value, MIN_WIDTH), window.innerWidth - 40));
-    host.style.setProperty("--tracepanel-width", `${width}px`);
-    fitBadge();
-  }
-
-  /** Whether the badge fits left of the right-docked panel, measured unfolded (no paint in between). */
-  function fitBadge(): void {
-    host.removeAttribute("data-crowded");
-    host.toggleAttribute("data-crowded", window.innerWidth - width < badge.offsetWidth + 32);
-  }
-  window.addEventListener("resize", fitBadge);
-
-  // The page's own bottom padding, kept while the panel docked at the bottom takes its place, as devtools do.
-  // Room under the page for the panel docked at the bottom, so its end scrolls into view above it: a block placed
-  // where the page's scrolling ends. Padding or a block after the content is lost on pages whose root is as tall as
-  // the window and whose content overflows it (Django's admin).
-  const room = document.createElement("div");
-  room.setAttribute("aria-hidden", "true");
-  room.dataset["tracepanelRoom"] = "";
-  room.style.cssText = "position:absolute;left:0;top:0;width:1px;margin:0;padding:0;pointer-events:none";
-
-  /** Moves the room to where the page's own scrolling ends: measured with the room out of the way, at the top. */
-  function placeRoom(): void {
-    room.style.top = "0";
-    room.style.top = `${document.documentElement.scrollHeight}px`;
-  }
-
-  function makeRoom(): void {
-    const covering = dock === "bottom" && panel.hasAttribute("data-open");
-    if (!covering) {
-      room.remove();
-      return;
-    }
-    room.style.height = `${Math.min(height, window.innerHeight)}px`;
-    if (!room.isConnected) document.body.append(room);
-    placeRoom();
-  }
-
-  // The page grows (a list loads more, a section opens): near its end, the room follows it.
-  let placing = false;
-  window.addEventListener(
-    "scroll",
-    () => {
-      if (placing || !room.isConnected) return;
-      placing = true;
-      requestAnimationFrame(() => {
-        placing = false;
-        if (window.scrollY + window.innerHeight * 2 > document.documentElement.scrollHeight) placeRoom();
-      });
-    },
-    { passive: true },
-  );
-  window.addEventListener("resize", () => room.isConnected && placeRoom(), { passive: true });
-
-  function setHeight(value: number): void {
-    height = Math.round(Math.min(Math.max(value, MIN_HEIGHT), window.innerHeight - 40));
-    host.style.setProperty("--tracepanel-height", `${height}px`);
-    makeRoom();
-  }
-
-  function setDock(value: Dock): void {
-    dock = value;
-    host.dataset["dock"] = value;
-    frame?.contentWindow?.postMessage({ type: "tracepanel:dock", dock }, "*");
-    makeRoom();
-  }
-
-  function panelState(): PanelState {
-    return { open: panel.hasAttribute("data-open"), dock, width, height };
-  }
+  const dock = createDock({
+    host,
+    panel,
+    badge,
+    handle,
+    tellDock: (value) => frame?.contentWindow?.postMessage({ type: "tracepanel:dock", dock: value }, "*"),
+  });
 
   // The page's own request is the headline; later fetch/XHR requests are counted, not shown instead.
   // A boosted link (hx-boost) replaces it without a page load.
@@ -685,7 +604,7 @@ export function mount(options: WidgetOptions = {}): Widget {
     }
     const count = all.length + untraced.length + flying.length;
     if (count > 1) addPage(stats, all, count);
-    fitBadge();
+    dock.fitBadge();
     badge.dataset["verdict"] = verdict(all, counted);
     // No title: the hover card shows all of it (and more); screen readers get the summary.
     badge.setAttribute("aria-label", pillLabel(all, flying, count, runtime, counted));
@@ -707,7 +626,7 @@ export function mount(options: WidgetOptions = {}): Widget {
     const until = view?.open ? quietSince(view.id) : undefined;
     if (view) addView(stats, view, facts, until);
     else addWaiting(stats);
-    fitBadge();
+    dock.fitBadge();
     badge.dataset["verdict"] = view?.status === "error" ? "error" : facts?.counts?.issues ? "warn" : "ok";
     badge.setAttribute("aria-label", idleLabel(view, runtime, facts?.counts ?? null, until));
   }
@@ -1021,16 +940,16 @@ export function mount(options: WidgetOptions = {}): Widget {
     }
     panel.toggleAttribute("data-open", true);
     badge.setAttribute("aria-expanded", "true");
-    makeRoom();
-    savePanel(panelState());
+    dock.makeRoom();
+    savePanel(dock.state());
     tellShown();
   }
 
   function close(): void {
     panel.toggleAttribute("data-open", false);
     badge.setAttribute("aria-expanded", "false");
-    makeRoom();
-    savePanel(panelState());
+    dock.makeRoom();
+    savePanel(dock.state());
     tellShown();
   }
 
@@ -1094,8 +1013,8 @@ export function mount(options: WidgetOptions = {}): Widget {
       else if (data.type === "tracepanel:close") close();
       else if (data.type === "tracepanel:clear") clear("all" in data && data.all === true);
       else {
-        setDock(dock === "right" ? "bottom" : "right");
-        savePanel(panelState());
+        dock.toggle();
+        savePanel(dock.state());
       }
       return;
     }
@@ -1122,7 +1041,7 @@ export function mount(options: WidgetOptions = {}): Widget {
       "type" in data &&
       data.type === "tracepanel:ready"
     ) {
-      frame.contentWindow?.postMessage({ type: "tracepanel:dock", dock }, "*");
+      frame.contentWindow?.postMessage({ type: "tracepanel:dock", dock: dock.state().dock }, "*");
       tellShown();
       sendTab();
     }
@@ -1144,43 +1063,8 @@ export function mount(options: WidgetOptions = {}): Widget {
 
   // Reopen the panel after a navigation if it was open, without the slide-in animation.
   const saved = loadPanel();
-  setWidth(saved.width ?? DEFAULT_WIDTH);
-  setHeight(saved.height ?? DEFAULT_HEIGHT);
-  setDock(saved.dock);
+  dock.restore(saved);
 
-  // Window-level listeners (no pointer capture): the iframe ignores the pointer while resizing.
-  // One size change per frame, however fast the pointer events come.
-  let resizeTo: { x: number; y: number } | null = null;
-  const applyResize = (): void => {
-    if (!resizeTo) return;
-    if (dock === "bottom") setHeight(window.innerHeight - resizeTo.y);
-    else setWidth(window.innerWidth - resizeTo.x);
-    resizeTo = null;
-  };
-  const onResizeMove = (event: PointerEvent): void => {
-    if (!resizeTo) requestAnimationFrame(applyResize);
-    resizeTo = { x: event.clientX, y: event.clientY };
-  };
-  const stopResize = (): void => {
-    applyResize();
-    window.removeEventListener("pointermove", onResizeMove);
-    window.removeEventListener("pointerup", stopResize);
-    window.removeEventListener("pointercancel", stopResize);
-    panel.removeAttribute("data-resizing");
-    savePanel(panelState());
-  };
-  handle.addEventListener("pointerdown", (event: PointerEvent) => {
-    event.preventDefault();
-    panel.toggleAttribute("data-resizing", true);
-    window.addEventListener("pointermove", onResizeMove);
-    window.addEventListener("pointerup", stopResize);
-    window.addEventListener("pointercancel", stopResize);
-  });
-  handle.addEventListener("dblclick", () => {
-    if (dock === "bottom") setHeight(DEFAULT_HEIGHT);
-    else setWidth(DEFAULT_WIDTH);
-    savePanel(panelState());
-  });
   if (saved.open) {
     panel.toggleAttribute("data-instant", true);
     open();
