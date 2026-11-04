@@ -21,7 +21,7 @@ import { useTabHistory } from "./hooks";
 import { readLastTab, writeLastTab } from "./lastTab";
 import { forgetUnless, goBackInPanel, restoringFor, setCurrentView, useBackStep } from "./panelBack";
 import { useChainOpen, useKnownApps, useRowChains, useTabRows } from "./panelChains";
-import { SplitHandle, tellWidget, useDock, useSplit } from "./panelLayout";
+import { type Dock, SplitHandle, tellWidget, useDock, useSplit } from "./panelLayout";
 import {
   BackTo,
   currentTrace,
@@ -49,11 +49,6 @@ import { SwitchUser } from "./UserSwitcher";
 import { settledIn, withLoads, withoutFlying, withViewCalls } from "./viewCalls";
 
 const embedded = window.parent !== window;
-
-/** Its children, when `when` holds. */
-function Shown({ when, children }: { when: boolean; children: ReactNode }) {
-  return when ? children : null;
-}
 
 /** The trace on screen in the console, as the panel shows it (its tab, the part of its time picked), or its home. */
 function consoleHref(id: string | null, shown: Omit<Extract<Route, { name: "trace" }>, "name" | "id">): string {
@@ -161,6 +156,111 @@ function usePanelView(route: Route, id: string | null, slice: Readonly<Record<st
   };
 }
 
+/** ⌘K, as in the console: a trace opens here, anything else in the console, in a new tab. */
+function useSearchKey(setSearching: (change: (open: boolean) => boolean) => void): void {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() !== "k" || !(event.metaKey || event.ctrlKey)) return;
+      event.preventDefault();
+      setSearching((open) => !open);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [setSearching]);
+}
+
+/**
+ * Follow new: opens each request that arrives. The history the panel opens with is what was already there, not a new
+ * request: the request a link asked for (the pill's card) stays on screen. Only requests that arrive after it are
+ * followed.
+ */
+function useFollowNew(follow: boolean, latest: string | undefined, loaded: boolean): void {
+  const followed = useRef(latest);
+  const seeded = useRef(loaded);
+  useEffect(() => {
+    if (!seeded.current) {
+      if (!loaded) return;
+      seeded.current = true;
+      followed.current = latest;
+      return;
+    }
+    if (follow && latest && latest !== followed.current) go({ name: "trace", id: latest });
+    followed.current = latest;
+  }, [follow, latest, loaded]);
+}
+
+/**
+ * Esc anywhere in the panel closes it, as on the page; a menu or list open in it takes the Esc first, and a linked
+ * trace goes back to the view it was opened from, as the Back button does.
+ */
+function useEscapeCloses(): void {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      if (!goBackInPanel(currentTrace())) tellWidget("tracepanel:close");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+}
+
+/**
+ * One row of quiet icons: what is done to this trace or this panel; who you are sits with the list. Explore, when the
+ * trace's toolbar holds the row, is the first of the icons after Console.
+ */
+function PanelActions({
+  user,
+  consoleAt,
+  explore,
+  traceId,
+  dock,
+}: {
+  user: ReactNode;
+  consoleAt: () => string;
+  explore: ReactNode;
+  traceId: string | null;
+  dock: Dock;
+}) {
+  return (
+    <>
+      {user}
+      <Hint
+        title="Open in the console"
+        detail="This request in the full console, in a new tab: every request, issue and query."
+      >
+        <a
+          // Filled in both themes: the panel's one way out to the console, the same button dark or light. The solid
+          // primary (the brand's strong violet, 5:1 with white: AA), not the light accent (2.2:1, which read as
+          // blurred), as tall as the icons beside it; no filter or glow, which soften its text.
+          className="mr-1 inline-flex h-7.5 items-center gap-1.5 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover [&_svg]:size-3.5"
+          href={consoleAt()}
+          // The view on screen as it is at the click: a tab or a row picked since the panel last drew.
+          onClick={(event) => {
+            event.currentTarget.href = consoleAt();
+          }}
+          onMouseDown={(event) => {
+            event.currentTarget.href = consoleAt();
+          }}
+          target="_blank"
+          rel="noreferrer"
+        >
+          Console
+          <ExternalIcon />
+        </a>
+      </Hint>
+      {explore}
+      <ShareAction traceId={traceId} source={source} compact={true} />
+      <ThemeToggle compact={true} />
+      <DockButton dock={dock} />
+      <Hint title="Close" keys="Esc">
+        <button type="button" className="icon-button" aria-label="Close" onClick={() => tellWidget("tracepanel:close")}>
+          <CloseIcon />
+        </button>
+      </Hint>
+    </>
+  );
+}
+
 function PanelApp({ route }: { route: Route }) {
   const history = useTabHistory();
   const { rows, stored, runs } = useTabRows(history);
@@ -188,16 +288,7 @@ function PanelApp({ route }: { route: Route }) {
   const view = usePanelView(route, selectedId, sliced.params);
   const [clearing, setClearing] = useState(false);
   const [searching, setSearching] = useState(false);
-  // ⌘K, as in the console: a trace opens here, anything else in the console, in a new tab.
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key.toLowerCase() !== "k" || !(event.metaKey || event.ctrlKey)) return;
-      event.preventDefault();
-      setSearching((open) => !open);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  useSearchKey(setSearching);
   const onFollow = (value: boolean) => {
     setFollow(value);
     writeFollow(value);
@@ -217,76 +308,22 @@ function PanelApp({ route }: { route: Route }) {
   const tabRows = inOrder(split, rows);
   const followRows = split ? tabRows : pageRows;
   const latestChild = followTarget(followRows);
-  const followed = useRef(latestChild);
-  // The history the panel opens with is what was already there, not a new request: the request a link asked for
-  // (the pill's card) stays on screen. Only requests that arrive after it are followed.
-  const seeded = useRef(history !== null);
-  useEffect(() => {
-    if (!seeded.current) {
-      if (history === null) return;
-      seeded.current = true;
-      followed.current = latestChild;
-      return;
-    }
-    if (follow && latestChild && latestChild !== followed.current) go({ name: "trace", id: latestChild });
-    followed.current = latestChild;
-  }, [follow, latestChild, history]);
-
-  // Esc anywhere in the panel closes it, as on the page; a menu or list open in it takes the Esc first, and a linked
-  // trace goes back to the view it was opened from, as the Back button does.
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || event.defaultPrevented) return;
-      if (!goBackInPanel(currentTrace())) tellWidget("tracepanel:close");
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  useFollowNew(follow, latestChild, history !== null);
+  useEscapeCloses();
 
   const selectedKind = listed.find((row) => row.trace.id === selectedId)?.trace.kind;
   const consoleAt = () =>
     `${base}${consoleHref(selectedId, { ...view.address(), from: sectionFor(selectedKind), ...sliced.params })}`;
   const toolbarInTrace = split && selectedId !== null;
   const switchUser = <SwitchUser source={source} onSwitched={() => tellWidget("tracepanel:reload")} />;
-  // One row of quiet icons: what is done to this trace or this panel; who you are sits with the list. Explore, when
-  // the trace's toolbar holds the row, is the first of the icons after Console.
   const panelActions = (explore?: ReactNode) => (
-    <>
-      <Shown when={!toolbarInTrace}>{switchUser}</Shown>
-      <Hint
-        title="Open in the console"
-        detail="This request in the full console, in a new tab: every request, issue and query."
-      >
-        <a
-          // Filled in both themes: the panel's one way out to the console, the same button dark or light. The solid
-          // primary (the brand's strong violet, 5:1 with white: AA), not the light accent (2.2:1, which read as
-          // blurred), as tall as the icons beside it; no filter or glow, which soften its text.
-          className="mr-1 inline-flex h-7.5 items-center gap-1.5 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover [&_svg]:size-3.5"
-          href={consoleAt()}
-          // The view on screen as it is at the click: a tab or a row picked since the panel last drew.
-          onClick={(event) => {
-            event.currentTarget.href = consoleAt();
-          }}
-          onMouseDown={(event) => {
-            event.currentTarget.href = consoleAt();
-          }}
-          target="_blank"
-          rel="noreferrer"
-        >
-          Console
-          <ExternalIcon />
-        </a>
-      </Hint>
-      {explore}
-      <ShareAction traceId={selectedId} source={source} compact={true} />
-      <ThemeToggle compact={true} />
-      <DockButton dock={dock} />
-      <Hint title="Close" keys="Esc">
-        <button type="button" className="icon-button" aria-label="Close" onClick={() => tellWidget("tracepanel:close")}>
-          <CloseIcon />
-        </button>
-      </Hint>
-    </>
+    <PanelActions
+      user={toolbarInTrace ? null : switchUser}
+      consoleAt={consoleAt}
+      explore={explore}
+      traceId={selectedId}
+      dock={dock}
+    />
   );
   const tabCount = `${tabRows.length} ${tabRows.length === 1 ? "request" : "requests"}`;
   // Docked at the bottom with a request open, the panel has no bar of its own: the logo over the list and the trace's
