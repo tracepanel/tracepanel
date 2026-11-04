@@ -272,7 +272,12 @@ pub(crate) fn segments<'a>(doc: &'a Value, kinds: &[StackKind]) -> Vec<Segment<'
     let mut out = Vec::new();
     for stretch in stretches(doc, &spans) {
         let span = by_id[stretch.span];
-        for ((from, to), gc) in cut_by_pauses(stretch.from, stretch.to, &pauses) {
+        // Only the trace's own time: a span that ends after it (its exporter's clock) counts up to its end.
+        let (from, to) = (stretch.from.max(0.0), stretch.to.min(duration));
+        if to <= from {
+            continue;
+        }
+        for ((from, to), gc) in cut_by_pauses(from, to, &pauses) {
             let plain = if gc { GC } else { stretch.category };
             if width <= 0.0 {
                 let share = if unsampled && !gc && OWN_CODE.contains(&stretch.category) {
