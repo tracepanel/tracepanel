@@ -126,7 +126,9 @@ function CodeBars({
   return (
     <span className="dt-map-track" aria-hidden="true">
       {part.pieces
-        .filter((piece) => piece.to - piece.from >= total * 0.004)
+        // A piece too short to see is left out (a hundredth of a percent of the axis, as the old tree's 0.4% of its
+        // own trace hid the short pieces of a call's trace on a page's longer axis).
+        .filter((piece) => piece.to - piece.from >= total * 0.0001)
         .map((piece) => {
           // A piece begun before the axis does: the part on it.
           const from = Math.max(piece.from + offset, 0);

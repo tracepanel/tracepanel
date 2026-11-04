@@ -362,7 +362,11 @@ function LeafBadge({ kind, level }: { kind: string; level: string }) {
 /** A leaf's text: a dump's call site and first value, coloured; any other's message or error. */
 function LeafText({ node, text }: { node: Extract<Node, { type: "log" | "error" }>; text: string }) {
   if (node.type === "log" && isDump(node.log)) return <DumpLine log={node.log} className="dt-map-text" />;
-  return <span className="dt-map-text">{text}</span>;
+  return (
+    <span className="dt-map-text" title={text}>
+      {text}
+    </span>
+  );
 }
 
 const LOG_PREFIX =

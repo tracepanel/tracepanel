@@ -59,7 +59,7 @@ export const PANEL_A_KEY = "tracepanel:panel-a";
  */
 function entriesOf(rows: readonly TraceRow[], open: string | null): { row: TraceRow; depth: number }[] {
   const out: { row: TraceRow; depth: number }[] = [];
-  for (const group of pagesOf(rows)) {
+  for (const group of pagesOf(uniqueTraces(rows))) {
     const [head, ...rest] = group;
     if (!head) continue;
     out.push({ row: head, depth: 0 });
@@ -67,6 +67,19 @@ function entriesOf(rows: readonly TraceRow[], open: string | null): { row: Trace
     for (const row of rest) out.push({ row, depth: 1 });
   }
   return out;
+}
+
+/**
+ * Each trace once: fetches that carry the page's trace (or a gateway's retries) list the same trace again; its spans
+ * are the one entry's.
+ */
+function uniqueTraces(rows: readonly TraceRow[]): TraceRow[] {
+  const seen = new Set<string>();
+  return rows.filter((row) => {
+    if (seen.has(row.trace.id)) return false;
+    seen.add(row.trace.id);
+    return true;
+  });
 }
 
 /** The page's time: from its first start to its last end. */
@@ -97,8 +110,9 @@ function useBarLabels(scroll: RefObject<HTMLDivElement | null>): void {
         }
         if (start > end) start = end;
         // Near the right edge the time goes before the bar; a bar across most of the axis carries it inside.
-        const flip = end > 82 && start > 18;
-        const inside = end > 82 && !flip;
+        // One rule: after the bar; near the right edge, inside its end.
+        const flip = false;
+        const inside = end > 82;
         const want = `${end.toFixed(2)}|${start.toFixed(2)}|${flip}|${inside}`;
         if (row.dataset["bars"] === want) continue;
         row.dataset["bars"] = want;
@@ -167,7 +181,7 @@ function useTreeKeys(scroll: RefObject<HTMLDivElement | null>): void {
         }
         const set = (name: string, value: string) => row.getAttribute(name) !== value && row.setAttribute(name, value);
         set("role", "treeitem");
-        set("aria-level", row.dataset["level"] ?? String(level));
+        set("aria-level", row.dataset["treeLevel"] ?? String(level));
         set("aria-selected", String(row.getAttribute("aria-current") === "true"));
         set("tabindex", row === current ? "0" : "-1");
       }
@@ -184,6 +198,20 @@ function useTreeKeys(scroll: RefObject<HTMLDivElement | null>): void {
         event.preventDefault();
         all[at + 1]?.focus();
         mark();
+        return;
+      }
+      // ← on a row that isn't open: to its parent, the nearest row above at a lower level.
+      if (event.key === "ArrowLeft" && row?.getAttribute("aria-expanded") !== "true") {
+        const level = Number(row?.getAttribute("aria-level") ?? 1);
+        const parent = all
+          .slice(0, at)
+          .reverse()
+          .find((each) => Number(each.getAttribute("aria-level") ?? 1) < level);
+        if (parent) {
+          event.preventDefault();
+          parent.focus();
+          mark();
+        }
         return;
       }
       const to = new Map([
@@ -317,8 +345,21 @@ function KindChips({ kind, onKind }: { kind: RowKind | null; onKind: (kind: RowK
           type="button"
           role="radio"
           aria-checked={kind === each.id}
+          // One stop in the Tab order: the kind kept; ← → move between them.
+          tabIndex={kind === each.id ? 0 : -1}
           className="wf-kind"
           onClick={() => onKind(each.id)}
+          onKeyDown={(event) => {
+            const ids = [null, ...KINDS.map((one) => one.id)];
+            const at = ids.indexOf(kind);
+            const by = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+            if (!by) return;
+            event.preventDefault();
+            const next = ids[(at + by + ids.length) % ids.length] ?? null;
+            onKind(next);
+            const group = event.currentTarget.parentElement;
+            requestAnimationFrame(() => group?.querySelector<HTMLElement>('[aria-checked="true"]')?.focus());
+          }}
         >
           {each.label}
         </button>
@@ -332,7 +373,6 @@ const SHORTCUTS: readonly [string, string][] = [
   ["Pick a stretch of time", "drag across the bars"],
   ["Let the stretch, the kind, the row go", "Esc"],
   ["Move between rows · open · close", "↑ ↓ → ←"],
-  ["Pick a stretch from the keyboard", "not yet"],
   ["Search", "⌘K"],
   ["This list", "?"],
 ];
@@ -858,22 +898,27 @@ function TabTimeline({
 }) {
   const track = useRef<HTMLDivElement>(null);
   const width = useWidth(track);
-  const all = onOneClock(rows);
+  const all = onOneClock(uniqueTraces(rows));
   if (all.length < 2) return null;
   const now = Date.now() * 1000;
   const lasted = (row: TraceRow) =>
     row.open || row.trace.id.startsWith("~") ? Math.max(now - row.trace.start, row.trace.duration) : row.trace.duration;
-  const cap = capOf(all.map(lasted));
+  const starts = all.map((row) => row.trace.start);
+  const cap = capOf(all.map(lasted), Math.max(...starts) - Math.min(...starts));
   const shown = (row: TraceRow) => Math.min(lasted(row), cap);
   const start = Math.min(...all.map((row) => row.trace.start));
   const end = Math.max(...all.map((row) => row.trace.start + shown(row)));
   const axis = { start, duration: Math.max(end - start, 1) };
+  const lanes = twoLanes(all, (row) => [row.trace.start, row.trace.start + shown(row)]);
+  const twoDeep = [...lanes.values()].some((lane) => lane > 0);
   return (
-    <div className="wf-band">
+    <div className="wf-band" data-lanes={twoDeep ? "2" : "1"}>
       <div className="wf-band-track" ref={track}>
         {all.map((row) => {
           const left = ((row.trace.start - axis.start) / axis.duration) * 100;
-          const share = Math.min(Math.max((shown(row) / axis.duration) * 100, 0.4), 100 - Math.min(left, 99.6));
+          // At least 16px to hit; never past the band's end.
+          const least = width > 0 ? (16 / width) * 100 : 0.4;
+          const share = Math.min(Math.max((shown(row) / axis.duration) * 100, least), 100 - Math.min(left, 99.6));
           const capped = lasted(row) > cap;
           const label = `${shortName(row)} ${duration(lasted(row))}`;
           const fits = (share / 100) * width >= labelWidth(label);
@@ -898,7 +943,7 @@ function TabTimeline({
                   ? `${row.trace.name} · running for ${duration(lasted(row))}`
                   : `${row.trace.name}${status} · ${duration(row.trace.duration)}${issues}${capped ? " (drawn shorter)" : ""}`
               }
-              style={{ left: `${Math.min(left, 99.6)}%`, width: `${share}%` }}
+              style={{ left: `${Math.min(left, 99.6)}%`, width: `${share}%`, top: `${(lanes.get(row) ?? 0) * 11}px` }}
               onClick={() => onOpen(row)}
             >
               {fits ? label : null}
@@ -910,14 +955,29 @@ function TabTimeline({
   );
 }
 
+/** Two lanes for the band: a block that overlaps one in the first goes to the second (the requests under a page). */
+function twoLanes(rows: readonly TraceRow[], extent: (row: TraceRow) => [number, number]): Map<TraceRow, number> {
+  const lanes = new Map<TraceRow, number>();
+  const ends = [Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY];
+  for (const row of [...rows].sort((a, b) => a.trace.start - b.trace.start)) {
+    const [from, to] = extent(row);
+    const lane = (ends[0] ?? 0) <= from ? 0 : 1;
+    lanes.set(row, lane);
+    ends[lane] = Math.max(ends[lane] ?? 0, to);
+  }
+  return lanes;
+}
+
 /**
  * The longest a block is drawn in the band: an outlier (a 31 s request among 200 ms ones) about as long as the next
  * longest (a quarter more), so the others keep their room; it says so with a break mark at its end.
  */
-function capOf(durations: readonly number[]): number {
+function capOf(durations: readonly number[], startsSpan: number): number {
   const sorted = [...durations].sort((a, b) => b - a);
   const [first = 0, second = 0] = sorted;
-  return second > 0 && first > second * 2 ? second * 1.25 : Number.POSITIVE_INFINITY;
+  if (!(second > 0 && first > second * 2)) return Number.POSITIVE_INFINITY;
+  // No longer than the next longest, nor than a third of the time the entries started over.
+  return Math.max(Math.min(second * 1.25, Math.max(startsSpan / 3, second)), 1);
 }
 
 /** An entry's identity in the list: several entries may share a trace (fetches carrying the page's trace). */
@@ -946,7 +1006,7 @@ function EntryRow({ row, depth, onOpen }: { row: TraceRow; depth: number; onOpen
         type="button"
         className="dt-map-row wf-other"
         aria-expanded={false}
-        data-level={depth + 1}
+        data-tree-level={depth + 1}
         title={`Open ${row.trace.name}`}
         onClick={() => onOpen(row)}
       >
@@ -958,7 +1018,10 @@ function EntryRow({ row, depth, onOpen }: { row: TraceRow; depth: number; onOpen
           </span>
           <StatusBadge status={row.trace.http_status} />
         </span>
-        <span className="dt-map-track" />
+        <span className="dt-map-track">
+          {/* Still running: a pale bar across, its time ticking on it. */}
+          {running ? <span className="dt-map-bar wf-inflight-bar" style={{ left: "0%", width: "100%" }} /> : null}
+        </span>
         {running ? (
           <Running start={row.trace.start} until={row.until} className="dt-map-time" />
         ) : (

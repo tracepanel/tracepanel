@@ -3468,3 +3468,54 @@ button.wf-crumb:hover {
   width: 1px;
   min-width: 1px;
 }
+/* ---------- round 8, B's fixes ---------- */
+/* The sticky band and head above the rows' time labels; the rows keep their stacking to themselves. */
+.wf-sticky {
+  z-index: 3;
+}
+.wf-rows {
+  isolation: isolate;
+}
+/* Links out of the details (open the served trace, its profile): the accent, 4.5:1. */
+.dt-wf-details .dt-map-open {
+  color: var(--dt-accent);
+}
+/* Docked right the tree indents 10px a level, not 16: names keep their room at depth. */
+.wf-panel[data-dock="right"] .dt-map[data-waterfall] .dt-map-name[style] {
+  padding-left: calc(12px + var(--dt-depth, 0) * 10px) !important;
+}
+/* Kind tabs: 24px wide to hit at least. */
+.wf-call-head > .wf-kinds .wf-kind {
+  min-width: 24px;
+  text-align: center;
+}
+/* The band: two lanes of 12px when blocks overlap; a failed one on top. */
+.wf-band[data-lanes="2"] {
+  padding-block: 3px;
+}
+.wf-band[data-lanes="2"] .wf-band-track {
+  height: 21px;
+}
+.wf-band[data-lanes="2"] .wf-band-block {
+  height: 10px;
+  font-size: 9px;
+  line-height: 10px;
+}
+.wf-band-block[data-failed] {
+  z-index: 2;
+}
+/* The details' kind tag looks as the row's does, in both themes. */
+.dt-wf-details-head :is(.dt-kind, .dt-method) {
+  min-width: 30px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font: 600 9.5px / 14px var(--dt-mono);
+  letter-spacing: 0.03em;
+  text-align: center;
+  background: var(--dt-faint);
+}
+/* A selected row's bar keeps its colour: the row's ground says it is selected. */
+.dt-map[data-waterfall] .dt-map-row[aria-current="true"] .dt-map-bar {
+  filter: none;
+  opacity: 1;
+}
