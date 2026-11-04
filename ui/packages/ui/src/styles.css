@@ -4005,3 +4005,8 @@ div.dt-map-row[data-kind="code"] {
 :root[data-theme="light"] .wf-panel {
   --muted-foreground: #5d6475;
 }
+.dt-wf-note {
+  margin: 0 14px 8px;
+  color: var(--dt-text-3);
+  font-size: var(--dt-size-sm);
+}

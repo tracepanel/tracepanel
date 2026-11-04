@@ -193,6 +193,26 @@ function waterfallMarks(tree: readonly Node[], host: WaterfallHost): Map<string,
   return marks;
 }
 
+/**
+ * A code row of a call's trace opens that trace's profile: in the waterfall, the call's row is selected, its details
+ * have the callee's profile.
+ */
+function hopProfile(tree: readonly Node[], ctx: RowContext): RowContext["onTraceProfile"] {
+  return (traceId) => {
+    const key = hopOf(tree, traceId);
+    if (key) ctx.onSelect(key);
+  };
+}
+
+function hopOf(nodes: readonly Node[], traceId: string): string | undefined {
+  for (const node of nodes) {
+    if (node.type === "span" && node.served?.run.id === traceId) return node.key;
+    const found = hopOf(childrenOf(node), traceId);
+    if (found) return found;
+  }
+  return undefined;
+}
+
 /** A row's profile in its details: its trace's (a root, a function, a handler), or a call's callee's. */
 function profileFor(node: Node, trace: Trace, profileOf: ((trace: Trace) => ReactNode) | undefined): ReactNode {
   if (node.type === "span" && node.served?.whole?.profile) return profileOf?.(node.served.whole);
@@ -222,7 +242,10 @@ function WaterfallRows({
   details,
   selected,
   profileOf,
+  explainable,
 }: {
+  /** Whether the app of the selected row's trace runs EXPLAIN: else its query's details say so. */
+  explainable: (trace: Trace) => boolean;
   profileOf: ((trace: Trace) => ReactNode) | undefined;
   host: WaterfallHost;
   tree: Node[];
@@ -234,12 +257,13 @@ function WaterfallRows({
 }) {
   const marks = useMemo(() => waterfallMarks(tree, host) ?? ctx.marks, [tree, host, ctx.marks]);
   const found = selected ? findNode(tree, selected, trace) : undefined;
+  const explains = found ? explainable(found.trace) : false;
   const windows = windowsIn(host, trace);
   const facts = host.facts.get(trace.id);
   return (
     <div className="dt-map" data-waterfall="">
       <div className="dt-map-rows">
-        <Rows nodes={tree} depth={depth} ctx={{ ...ctx, marks }} />
+        <Rows nodes={tree} depth={depth} ctx={{ ...ctx, marks, onTraceProfile: hopProfile(tree, ctx) }} />
       </div>
       {found && host.details
         ? createPortal(
@@ -248,6 +272,7 @@ function WaterfallRows({
               trace={found.trace}
               totals={found.node.type === "span" && found.node.span.parent_id === null ? facts : undefined}
               profile={profileFor(found.node, found.trace, profileOf)}
+              explainable={explains}
               profileScope={
                 found.node.type === "span" && found.node.served?.whole?.profile
                   ? `this call · ${appName(found.node.served) ?? "its app"}`
@@ -683,6 +708,7 @@ export function CallMap({
         details={details}
         selected={selected}
         profileOf={wiring.profileOf}
+        explainable={(each) => wiring.explainOf?.(each) !== undefined}
       />
     );
   }

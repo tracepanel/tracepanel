@@ -1,15 +1,17 @@
 // The waterfall's one details pane (redesign A, a prototype): what the selected span is, by its kind (see
 // WaterfallDetails), and what a stretch of time dragged across the bars holds (RangeDetails).
 import type { ReactNode } from "react";
+import { SHORT_KINDS } from "./CallRowParts";
 import { appName } from "./CallRows";
 import type { Node } from "./callTree";
 import { duration } from "./format";
 import { IssueList } from "./IssueList";
 import { CloseIcon } from "./icons";
+import { spanKindLabel } from "./lib/handler";
 import { plural } from "./lib/plural";
 import type { Windows } from "./lib/slice";
 import { splitOf } from "./lib/split";
-import { StatusBadge, TraceBadge } from "./primitives";
+import { KindBadge, StatusBadge } from "./primitives";
 import type { Issue, Span, Trace } from "./types";
 import { crumbOf, type WaterfallFacts } from "./Waterfall";
 
@@ -76,6 +78,23 @@ function HopSplit({ node }: { node: Node }) {
 }
 
 /** The row's headline: its kind, its name, how it was answered, how long it took. */
+/** The row's badge word, as its row says it: a call's method, a span's kind in short, a record's level. */
+function badgeWord(node: Node, trace: Trace): string {
+  if (node.type === "log") return node.log.level;
+  if (node.type === "error") return "error";
+  if (node.type === "task") return "task";
+  if (node.type === "waiting") return "task";
+  const span = node.type === "group" ? node.spans[0] : node.span;
+  if (!span) return "";
+  if (span.kind === "http.client" || (node.type === "span" && node.served)) {
+    const method = span.attrs["http.request.method"] ?? span.attrs["http.method"];
+    return typeof method === "string" ? method : (span.name.split(" ")[0] ?? "");
+  }
+  if (span.kind === "page") return crumbOf(node).badge;
+  const kind = spanKindLabel(span.kind, trace.attrs);
+  return SHORT_KINDS[kind] ?? kind;
+}
+
 function Headline({ node, trace, onClose }: { node: Node; trace: Trace; onClose: () => void }) {
   const crumb = crumbOf(node);
   const status = statusOf(node, trace);
@@ -89,7 +108,7 @@ function Headline({ node, trace, onClose }: { node: Node; trace: Trace; onClose:
           : null;
   return (
     <header className="dt-wf-details-head">
-      <TraceBadge word={crumb.badge} />
+      <KindBadge kind={badgeWord(node, trace)} muted={true} className="dt-map-kind" />
       <h3 title={crumb.label}>
         {crumb.label}
         {node.type === "group" ? <span className="dt-wf-head-count"> ×{node.spans.length}</span> : null}
@@ -171,6 +190,7 @@ export function WaterfallDetails({
   totals,
   profile,
   profileScope,
+  explainable,
   onOpen,
   children,
 }: {
@@ -184,6 +204,8 @@ export function WaterfallDetails({
   profile?: ReactNode;
   /** What the profile is of: "the whole trace", "this call (library-api)". */
   profileScope?: string | undefined;
+  /** Whether the row's app runs EXPLAIN (its query's details then have it). */
+  explainable?: boolean | undefined;
   /** A call whose callee's spans are folded: opens them under its row. */
   onOpen?: (() => void) | undefined;
   children: ReactNode;
@@ -233,9 +255,20 @@ export function WaterfallDetails({
           {profile}
         </section>
       ) : null}
+      {isQuery(node) && !explainable ? (
+        <p className="dt-wf-note">
+          Explain: not available here. The app that ran this query runs EXPLAIN on its database when it is connected to
+          this agent.
+        </p>
+      ) : null}
       <section className="dt-wf-own">{children}</section>
     </div>
   );
+}
+
+function isQuery(node: Node): boolean {
+  if (node.type === "group") return node.spans[0]?.kind === "sql";
+  return node.type === "span" && node.span.kind === "sql";
 }
 
 /** What a stretch dragged across the bars holds, of one trace: where its time went (split.ts), and its calls. */
@@ -254,9 +287,7 @@ export function RangeDetails({ trace, windows }: { trace: Trace; windows: Window
         <h3 title={trace.name}>{trace.name}</h3>
       </header>
       <section className="dt-wf-section">
-        <h4 className="normal-case tracking-normal">
-          {split.of} · {split.time}
-        </h4>
+        <h4>Where its {split.time} went</h4>
         <ul className="dt-wf-queries">
           {split.shares.map((share) => (
             <li key={share.share}>
@@ -275,7 +306,7 @@ export function RangeDetails({ trace, windows }: { trace: Trace; windows: Window
             {calls.length} {calls.length === 1 ? "span" : "spans"} in this stretch
           </h4>
           <p className="text-sm text-muted-foreground">
-            {[...byKind].map(([kind, count]) => `${count} ${kind}`).join(" · ")}
+            {[...byKind].map(([kind, count]) => kindCount(kind, count)).join(" · ")}
           </p>
         </section>
       ) : null}
@@ -286,4 +317,22 @@ export function RangeDetails({ trace, windows }: { trace: Trace; windows: Window
 /** A query or a group of them: its issue's spans are the row itself and its repeats. */
 function pointsHere(node: Node): boolean {
   return node.type === "group" || (node.type === "span" && node.span.kind === "sql");
+}
+
+const KIND_NOUNS: Record<string, [string, string]> = {
+  sql: ["query", "queries"],
+  "http.client": ["HTTP call", "HTTP calls"],
+  function: ["function", "functions"],
+  graphql: ["GraphQL step", "GraphQL steps"],
+  view: ["handler", "handlers"],
+  template: ["template", "templates"],
+  redis: ["Redis command", "Redis commands"],
+  cache: ["cache call", "cache calls"],
+  "task.enqueue": ["task enqueued", "tasks enqueued"],
+};
+
+/** "33 HTTP calls", "1 query": a kind of spans counted in words. */
+function kindCount(kind: string, count: number): string {
+  const [one, many] = KIND_NOUNS[kind] ?? [kind, kind];
+  return plural(count, one, many);
 }

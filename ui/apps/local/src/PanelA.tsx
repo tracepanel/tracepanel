@@ -9,6 +9,7 @@ import {
   duration,
   ExternalIcon,
   Hint,
+  IssueChip,
   Logo,
   RangeBand,
   type RowKind,
@@ -25,7 +26,7 @@ import {
 } from "@tracepanel/ui";
 import { isTyping } from "@tracepanel/ui/lib/keys";
 import { readItem, writeItem } from "@tracepanel/ui/lib/storage";
-import { ChevronRightIcon, ListEndIcon } from "lucide-react";
+import { ChevronRightIcon, KeyboardIcon, ListEndIcon } from "lucide-react";
 import {
   type ReactNode,
   type RefObject,
@@ -164,7 +165,13 @@ function withoutIdleStart(whole: Axis | null, work: number | null): { axis: Axis
  * in the Tab order (the selected one, else the first); ↑ ↓ move, Home and End go to the ends; → and ← open and close
  * (the rows' own), Enter selects.
  */
-function useTreeKeys(scroll: RefObject<HTMLDivElement | null>): void {
+function useTreeKeys(
+  scroll: RefObject<HTMLDivElement | null>,
+  pick: (stretch: { from: number; to: number } | null) => void,
+  axis: Axis | null,
+): void {
+  // The row the Shift keys started on: kept across renders (each stretch picked renders).
+  const anchorRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
     const root = scroll.current?.querySelector<HTMLElement>(".wf-rows");
     if (!root) return;
@@ -193,6 +200,25 @@ function useTreeKeys(scroll: RefObject<HTMLDivElement | null>): void {
       const all = rows();
       const at = all.indexOf(event.target as HTMLElement);
       if (at === -1) return;
+      // Shift + ↑ ↓: a stretch from the row the keys started on to the one reached, their bars' extent.
+      if (event.shiftKey && (event.key === "ArrowDown" || event.key === "ArrowUp") && axis) {
+        event.preventDefault();
+        anchorRef.current ??= all[at] ?? null;
+        const anchor = anchorRef.current;
+        const next = all[Math.min(Math.max(at + (event.key === "ArrowDown" ? 1 : -1), 0), all.length - 1)];
+        next?.focus();
+        const from = anchor ? all.indexOf(anchor) : at;
+        const to = next ? all.indexOf(next) : at;
+        const span = all.slice(Math.min(from, to), Math.max(from, to) + 1);
+        const starts = span.map((row) => Number.parseFloat(row.style.getPropertyValue("--bar-start")) || 0);
+        const ends = span.map((row) => Number.parseFloat(row.style.getPropertyValue("--bar-end")) || 0);
+        const lo = Math.min(...starts);
+        const hi = Math.max(...ends);
+        if (hi > lo) pick({ from: (lo / 100) * axis.duration, to: (hi / 100) * axis.duration });
+        mark();
+        return;
+      }
+      if (!event.shiftKey) anchorRef.current = null;
       const row = all[at];
       if (event.key === "ArrowRight" && row?.getAttribute("aria-expanded") === "true") {
         event.preventDefault();
@@ -251,14 +277,9 @@ function ticks(axis: Axis, offset = 0, count = 5): { at: number; label: string }
 function FollowButton({ follow, onFollow }: { follow: boolean; onFollow: (value: boolean) => void }) {
   return (
     <Hint title="Follow new requests" detail="Select each new request as it arrives.">
-      <button
-        type="button"
-        className="icon-button wf-follow"
-        aria-label="Follow new requests"
-        aria-pressed={follow}
-        onClick={() => onFollow(!follow)}
-      >
-        <ListEndIcon />
+      <button type="button" className="wf-follow" aria-pressed={follow} onClick={() => onFollow(!follow)}>
+        <ListEndIcon aria-hidden="true" />
+        Follow
       </button>
     </Hint>
   );
@@ -368,12 +389,29 @@ function KindChips({ kind, onKind }: { kind: RowKind | null; onKind: (kind: RowK
   );
 }
 
+/** The short words of the kind badges, said in full. */
+const BADGES: readonly [string, string][] = [
+  ["REQ", "a request the app served"],
+  ["VIEW", "a page view in the browser"],
+  ["GET · POST", "an HTTP call, by its method"],
+  ["HDL", "the handler (view) that answered"],
+  ["FN", "a function"],
+  ["GQL", "a GraphQL operation or step"],
+  ["SQL", "a query"],
+  ["TX", "a database transaction"],
+  ["TPL", "a template rendered"],
+  ["ENQ", "a task enqueued"],
+  ["TASK", "a task run in a worker"],
+  ["CODE", "your code between spans (untraced)"],
+  ["WAIT", "time waiting (I/O, a lock, sleep)"],
+];
+
 const SHORTCUTS: readonly [string, string][] = [
-  ["Keep one kind of spans", "the head's segments"],
+  ["Keep one kind of spans", "All · SQL · HTTP · Logs"],
   ["Pick a stretch of time", "drag across the bars"],
   ["Let the stretch, the kind, the row go", "Esc"],
-  ["Move between rows · open · close", "↑ ↓ → ←"],
-  ["Search", "⌘K"],
+  ["Move between rows · open · close · to the parent", "↑ ↓ → ←"],
+  ["Pick a stretch from the selected row", "Shift + ↑ ↓"],
   ["This list", "?"],
 ];
 
@@ -383,7 +421,7 @@ function Shortcuts({ onClose }: { onClose: () => void }) {
     // biome-ignore lint/a11y/noStaticElementInteractions: a click beside the sheet closes it; Esc does too.
     // biome-ignore lint/a11y/useKeyWithClickEvents: Esc closes it.
     <div className="wf-shortcuts-backdrop" onClick={onClose}>
-      <div className="wf-shortcuts" role="dialog" aria-label="Keyboard shortcuts">
+      <div className="wf-shortcuts" role="dialog" aria-label="Keys and badges">
         <h3>Keyboard shortcuts</h3>
         <dl>
           {SHORTCUTS.map(([what, key]) => (
@@ -392,6 +430,17 @@ function Shortcuts({ onClose }: { onClose: () => void }) {
               <dd>
                 <kbd>{key}</kbd>
               </dd>
+            </div>
+          ))}
+        </dl>
+        <h3>Badges</h3>
+        <dl>
+          {BADGES.map(([word, what]) => (
+            <div key={word}>
+              <dt>
+                <kbd>{word}</kbd>
+              </dt>
+              <dd>{what}</dd>
             </div>
           ))}
         </dl>
@@ -619,8 +668,12 @@ function usePanelKeys(
       if (event.key !== "Escape" || event.defaultPrevented) return;
       const wide = document.querySelector(".wf-main[data-wide]");
       if (now.shortcuts) does.shortcuts(false);
-      else if (wide) wide.removeAttribute("data-wide");
-      else if (now.range) does.clearRange();
+      else if (wide) {
+        wide.removeAttribute("data-wide");
+        const button = wide.querySelector<HTMLElement>('.dt-wf-profile [aria-pressed="true"]');
+        button?.setAttribute("aria-pressed", "false");
+        if (button) button.textContent = "Full width";
+      } else if (now.range) does.clearRange();
       else if (now.kind) does.clearKind();
       else if (now.selected) does.deselect();
       // Never the panel itself: its close button and the pill close it.
@@ -653,6 +706,8 @@ export function PanelA({ route }: { route: Route }) {
   // The entry picked (several can share a trace: fetches that carry the page's trace), else the first of the trace on
   // screen, else the newest.
   const [picked, setPicked] = useState<string | null>(null);
+  // The entry under the pointer, in the band or the list: the other shows it too.
+  const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   const opened =
     entries.find((entry) => entryKey(entry.row) === picked && entry.row.trace.id === selectedId) ??
     entries.find((entry) => entry.row.trace.id === selectedId) ??
@@ -672,7 +727,17 @@ export function PanelA({ route }: { route: Route }) {
   const { host, setKind, setRange, setSelected } = useHost(axis, details);
   const firstWork = Math.min(...[...host.facts.values()].map((each) => each.work));
   useEffect(() => setWorks(Number.isFinite(firstWork) ? firstWork : null), [firstWork]);
-  useTreeKeys(scrollRef);
+  useTreeKeys(scrollRef, setRange, axis);
+  // A kind picked: its first row into view.
+  useEffect(() => {
+    if (!host.kind) return;
+    const timer = window.setTimeout(() => {
+      scrollRef.current
+        ?.querySelector(".wf-rows .dt-map-row:not([data-dim]):not(.wf-other)")
+        ?.scrollIntoView({ block: "nearest" });
+    }, 50);
+    return () => window.clearTimeout(timer);
+  }, [host.kind]);
   useBarLabels(scrollRef);
   const [shortcuts, setShortcuts] = useState(false);
   usePanelKeys(
@@ -718,7 +783,6 @@ export function PanelA({ route }: { route: Route }) {
           <div className="wf-zone wf-zone-identity">
             <Logo className="shrink-0 gap-1.5 text-md [&>span]:hidden [&_svg]:size-5" />
           </div>
-          <div className="wf-zone wf-zone-tools" />
           <div className="wf-zone wf-zone-actions">
             <SwitchUser source={source} onSwitched={() => tellWidget("tracepanel:reload")} />
             <ProfileToggle source={source} />
@@ -734,6 +798,16 @@ export function PanelA({ route }: { route: Route }) {
               </a>
             </Hint>
             <ShareAction traceId={selectedId} source={source} compact={true} />
+            <Hint title="Keys and badges" keys="?">
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="Keys and badges"
+                onClick={() => setShortcuts(true)}
+              >
+                <KeyboardIcon />
+              </button>
+            </Hint>
             <ThemeToggle compact={true} />
             <DockButton dock={dock} />
             <Hint title="Close">
@@ -767,7 +841,13 @@ export function PanelA({ route }: { route: Route }) {
               }}
             >
               <div className="wf-sticky">
-                <TabTimeline rows={listed} openKey={openKey} onOpen={openEntry} />
+                <TabTimeline
+                  rows={listed}
+                  openKey={openKey}
+                  onOpen={openEntry}
+                  hoveredKey={hoveredKey}
+                  onHover={setHoveredKey}
+                />
                 {host.axis ? (
                   <AxisHead
                     skipped={skipped}
@@ -800,7 +880,14 @@ export function PanelA({ route }: { route: Route }) {
                 ) : null}
                 {entries.map(({ row, depth }) =>
                   entryKey(row) !== openKey ? (
-                    <EntryRow key={entryKey(row)} row={row} depth={depth} onOpen={openEntry} />
+                    <EntryRow
+                      key={entryKey(row)}
+                      row={row}
+                      depth={depth}
+                      onOpen={openEntry}
+                      hovered={hoveredKey === entryKey(row)}
+                      onHover={setHoveredKey}
+                    />
                   ) : row.open || row.trace.id.startsWith("~") ? (
                     <InFlightRow key={entryKey(row)} row={row} axis={host.axis} depth={depth} />
                   ) : (
@@ -891,10 +978,14 @@ function TabTimeline({
   rows,
   openKey,
   onOpen,
+  hoveredKey,
+  onHover,
 }: {
   rows: readonly TraceRow[];
   openKey: string | null;
   onOpen: (row: TraceRow) => void;
+  hoveredKey: string | null;
+  onHover: (key: string | null) => void;
 }) {
   const track = useRef<HTMLDivElement>(null);
   const width = useWidth(track);
@@ -909,8 +1000,9 @@ function TabTimeline({
   const start = Math.min(...all.map((row) => row.trace.start));
   const end = Math.max(...all.map((row) => row.trace.start + shown(row)));
   const axis = { start, duration: Math.max(end - start, 1) };
-  const lanes = twoLanes(all, (row) => [row.trace.start, row.trace.start + shown(row)]);
-  const twoDeep = [...lanes.values()].some((lane) => lane > 0);
+  // One lane: a page behind, its requests over it, a failed one on top (see the band's CSS).
+  const lanes = new Map<TraceRow, number>();
+  const twoDeep = false;
   return (
     <div className="wf-band" data-lanes={twoDeep ? "2" : "1"}>
       <div className="wf-band-track" ref={track}>
@@ -927,7 +1019,22 @@ function TabTimeline({
             ? ` · ${row.trace.issues} ${row.trace.issues === 1 ? "issue" : "issues"}`
             : "";
           const status = row.trace.http_status ? ` · ${row.trace.http_status}` : "";
-          return (
+          const open = entryKey(row) === openKey;
+          // The open block's name is always said: inside it when it fits, else beside it.
+          const beside =
+            open && !fits ? (
+              <span
+                key={`${entryKey(row)}:label`}
+                className="wf-band-label-beside"
+                style={
+                  left + share < 70 ? { left: `calc(${left + share}% + 6px)` } : { right: `calc(${100 - left}% + 6px)` }
+                }
+              >
+                {label}
+              </span>
+            ) : null;
+          return [
+            beside,
             <button
               type="button"
               key={entryKey(row)}
@@ -937,7 +1044,11 @@ function TabTimeline({
               data-failed={row.trace.status === "error" ? "" : undefined}
               data-capped={capped ? "" : undefined}
               aria-current={entryKey(row) === openKey ? "true" : undefined}
-              aria-label={`Open ${row.trace.name}`}
+              data-hovered={hoveredKey === entryKey(row) ? "" : undefined}
+              data-issues={row.trace.issues > 0 ? "" : undefined}
+              onMouseEnter={() => onHover(entryKey(row))}
+              onMouseLeave={() => onHover(null)}
+              aria-label={`Open ${row.trace.name}${status} · ${duration(lasted(row))}${issues}`}
               title={
                 running
                   ? `${row.trace.name} · running for ${duration(lasted(row))}`
@@ -947,25 +1058,12 @@ function TabTimeline({
               onClick={() => onOpen(row)}
             >
               {fits ? label : null}
-            </button>
-          );
+            </button>,
+          ];
         })}
       </div>
     </div>
   );
-}
-
-/** Two lanes for the band: a block that overlaps one in the first goes to the second (the requests under a page). */
-function twoLanes(rows: readonly TraceRow[], extent: (row: TraceRow) => [number, number]): Map<TraceRow, number> {
-  const lanes = new Map<TraceRow, number>();
-  const ends = [Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY];
-  for (const row of [...rows].sort((a, b) => a.trace.start - b.trace.start)) {
-    const [from, to] = extent(row);
-    const lane = (ends[0] ?? 0) <= from ? 0 : 1;
-    lanes.set(row, lane);
-    ends[lane] = Math.max(ends[lane] ?? 0, to);
-  }
-  return lanes;
 }
 
 /**
@@ -997,7 +1095,19 @@ function labelWidth(label: string): number {
 }
 
 /** A page or request of the tab, folded to one line (name, status, time): a click opens it here, on its own time. */
-function EntryRow({ row, depth, onOpen }: { row: TraceRow; depth: number; onOpen: (row: TraceRow) => void }) {
+function EntryRow({
+  row,
+  depth,
+  onOpen,
+  hovered,
+  onHover,
+}: {
+  row: TraceRow;
+  depth: number;
+  onOpen: (row: TraceRow) => void;
+  hovered: boolean;
+  onHover: (key: string | null) => void;
+}) {
   const name = row.trace.kind === "page" ? row.trace.name : (row.trace.path ?? row.trace.name);
   const running = row.open || row.trace.id.startsWith("~");
   return (
@@ -1007,8 +1117,11 @@ function EntryRow({ row, depth, onOpen }: { row: TraceRow; depth: number; onOpen
         className="dt-map-row wf-other"
         aria-expanded={false}
         data-tree-level={depth + 1}
+        data-hovered={hovered ? "" : undefined}
         title={`Open ${row.trace.name}`}
         onClick={() => onOpen(row)}
+        onMouseEnter={() => onHover(entryKey(row))}
+        onMouseLeave={() => onHover(null)}
       >
         <span className="dt-map-name" style={{ paddingLeft: `${0.75 + depth * 1.125}rem` }}>
           <ChevronRightIcon className="wf-other-caret" aria-hidden="true" />
@@ -1016,17 +1129,21 @@ function EntryRow({ row, depth, onOpen }: { row: TraceRow; depth: number; onOpen
           <span className="dt-map-text" title={row.trace.name}>
             {name}
           </span>
+          {/* Folded, it still says what is wrong in it: its issues' kinds, as an open row's chips. */}
+          {row.trace.issue_kinds
+            .filter((kind) => kind !== "error")
+            .map((kind) => (
+              <IssueChip key={kind} kind={kind} />
+            ))}
           <StatusBadge status={row.trace.http_status} />
+          {/* Its own time, by its name: the time area is the open entry's axis, not this one's. */}
+          {running ? (
+            <Running start={row.trace.start} until={row.until} className="wf-other-time" />
+          ) : (
+            <span className="wf-other-time">{duration(row.trace.duration)}</span>
+          )}
         </span>
-        <span className="dt-map-track">
-          {/* Still running: a pale bar across, its time ticking on it. */}
-          {running ? <span className="dt-map-bar wf-inflight-bar" style={{ left: "0%", width: "100%" }} /> : null}
-        </span>
-        {running ? (
-          <Running start={row.trace.start} until={row.until} className="dt-map-time" />
-        ) : (
-          <span className="dt-map-time">{duration(row.trace.duration)}</span>
-        )}
+        <span className="dt-map-track" />
       </button>
     </div>
   );

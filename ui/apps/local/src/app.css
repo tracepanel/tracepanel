@@ -2100,10 +2100,6 @@ body {
   padding: 0 var(--wf-between) 0 0.75rem;
   overflow: hidden;
 }
-.wf-zone-tools {
-  grid-area: tools;
-  gap: var(--wf-between);
-}
 .wf-zone-actions {
   grid-area: actions;
   gap: var(--wf-in);
@@ -2157,46 +2153,6 @@ button.wf-crumb:hover {
   border-radius: var(--dt-radius-sm);
   overflow: hidden;
 }
-.wf-facet {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  height: 100%;
-  padding: 0 0.625rem;
-  font-size: var(--dt-size-sm);
-  color: var(--dt-text-2);
-  white-space: nowrap;
-}
-.wf-facet + .wf-facet {
-  border-left: 1px solid var(--dt-border-strong);
-}
-.wf-facet svg {
-  width: 0.875rem;
-  height: 0.875rem;
-  color: var(--dt-text-3);
-}
-.wf-facet b {
-  color: var(--dt-text);
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-}
-.wf-facet[data-facet="issues"] b {
-  color: var(--dt-warn);
-}
-.wf-facet-time {
-  color: var(--dt-text-3);
-  font-variant-numeric: tabular-nums;
-}
-.wf-facet:hover {
-  background: var(--dt-hover);
-}
-.wf-facet[aria-pressed="true"] {
-  background: var(--dt-accent-bg);
-  color: var(--dt-text);
-}
-.wf-facet[data-facet="issues"][aria-pressed="true"] {
-  background: var(--dt-warn-bg);
-}
 /* The call column's head: the filter of the rows under it, then Follow and Clear, which act on the same rows. */
 .wf-call-head {
   display: flex;
@@ -2233,52 +2189,6 @@ button.wf-crumb:hover {
   background: var(--dt-accent-bg);
   color: var(--dt-accent);
 }
-.wf-call-head > .wf-filter {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  gap: 0.375rem;
-  min-width: 0;
-  height: 1.75rem;
-  padding: 0 0.25rem 0 0.375rem;
-  border: 1px solid var(--dt-border);
-  border-radius: var(--dt-radius-sm);
-  background: var(--dt-subtle);
-  color: var(--dt-text-3);
-  font-weight: 500;
-  letter-spacing: 0;
-  text-transform: none;
-  cursor: text;
-}
-.wf-call-head > .wf-filter:hover {
-  border-color: var(--dt-border);
-}
-.wf-call-head > .wf-filter:focus-within,
-.wf-call-head > .wf-filter:has(input:not(:placeholder-shown)) {
-  border-color: var(--dt-accent);
-  background: var(--dt-bg);
-}
-.wf-filter svg {
-  width: 0.875rem;
-  height: 0.875rem;
-  flex: none;
-}
-.wf-filter input {
-  flex: 1;
-  min-width: 0;
-  background: none;
-  color: var(--dt-text);
-  font-size: var(--dt-size-xs);
-  outline: none;
-}
-.wf-filter input::placeholder {
-  color: var(--dt-text-3);
-}
-.wf-filter kbd {
-  color: var(--dt-text-3);
-  font-family: var(--dt-mono);
-  font-size: var(--dt-size-xs);
-}
 .wf-menu-row {
   display: flex;
   align-items: center;
@@ -2311,55 +2221,6 @@ button.wf-crumb:hover {
   top: 0;
   z-index: 2;
   background: var(--dt-panel);
-}
-.wf-overview {
-  height: 1.75rem;
-  border-bottom: 1px solid var(--dt-border);
-  font-size: var(--dt-size-xs);
-  color: var(--dt-text-3);
-}
-.wf-overview b {
-  color: var(--dt-text);
-}
-.wf-overview-track {
-  position: relative;
-  height: 1rem;
-  cursor: zoom-out;
-}
-.wf-overview-bar {
-  position: absolute;
-  top: 0.3125rem;
-  height: 0.375rem;
-  border-radius: 2px;
-  background: color-mix(in srgb, var(--dt-k-view) 55%, transparent);
-  cursor: zoom-in;
-}
-.wf-overview-bar[data-depth="1"] {
-  top: 0.25rem;
-  height: 0.5rem;
-  background: var(--dt-k-http);
-}
-/* The bars are thin; their hit area isn't. */
-.wf-overview-bar::before {
-  content: "";
-  position: absolute;
-  inset: -0.5rem -0.25rem;
-}
-.wf-overview-bar:focus-visible {
-  filter: brightness(1.6);
-  box-shadow: 0 0 0 2px var(--dt-accent);
-}
-.wf-overview-window {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  border: 1px solid var(--dt-text-2);
-  border-radius: 3px;
-  pointer-events: none;
-}
-.wf-overview-total {
-  color: var(--dt-text-2);
-  font-variant-numeric: tabular-nums;
 }
 .wf-head {
   height: 2.125rem;
@@ -2452,13 +2313,6 @@ button.wf-crumb:hover {
     "tools tools";
   row-gap: 0.5rem;
 }
-.wf-panel[data-dock="right"] .wf-zone-tools {
-  padding: 0 0 0 0.75rem;
-}
-.wf-panel[data-dock="right"] .wf-facet-time,
-.wf-panel[data-dock="right"] .wf-facet-label {
-  display: none;
-}
 /* The tools give way as their column narrows: the facets' times first, then their names (the icons stay). */
 .wf-zone-tools {
   container: wf-tools / inline-size;
@@ -2537,30 +2391,6 @@ button.wf-crumb:hover {
   background: var(--dt-muted-bg);
   cursor: zoom-out;
 }
-.wf-minimap-bar {
-  position: absolute;
-  top: 0.0625rem;
-  bottom: 0.0625rem;
-  border-radius: 1px;
-  background: color-mix(in srgb, var(--dt-k-view) 45%, transparent);
-  pointer-events: none;
-}
-.wf-minimap-bar[data-depth="1"] {
-  background: color-mix(in srgb, var(--dt-k-http) 70%, transparent);
-}
-.wf-minimap-window {
-  position: absolute;
-  top: -0.125rem;
-  bottom: -0.125rem;
-  min-width: 0.375rem;
-  border: 1px solid var(--dt-text-2);
-  border-radius: 2px;
-  background: rgb(255 255 255 / 0.06);
-  cursor: grab;
-}
-.wf-minimap-window:active {
-  cursor: grabbing;
-}
 /* The toolbar's labelled actions: Profile, Share; as tall as Console and the icons. */
 .wf-action {
   display: inline-flex;
@@ -2573,18 +2403,6 @@ button.wf-crumb:hover {
   color: var(--dt-text-2);
   font-size: var(--dt-size-sm);
   white-space: nowrap;
-}
-.wf-action:hover {
-  background: var(--dt-hover);
-  color: var(--dt-text);
-}
-.wf-action svg {
-  width: 0.875rem;
-  height: 0.875rem;
-}
-.wf-action-state {
-  color: var(--dt-text-3);
-  font-size: var(--dt-size-xs);
 }
 .wf-anchor {
   position: absolute;
@@ -2620,9 +2438,6 @@ button.wf-crumb:hover {
   background: var(--dt-accent-bg);
   color: var(--dt-text);
 }
-.wf-call-head > .wf-filter input {
-  min-width: 4rem;
-}
 /* ⚠ 12 ‹ ›: the issues, one after the other. */
 .wf-issues {
   display: inline-flex;
@@ -2635,18 +2450,6 @@ button.wf-crumb:hover {
   font-size: var(--dt-size-xs);
   text-transform: none;
   letter-spacing: 0;
-}
-.wf-issues > svg {
-  width: 0.875rem;
-  height: 0.875rem;
-}
-.wf-issues b {
-  margin: 0 0.125rem 0 0.25rem;
-  font-variant-numeric: tabular-nums;
-}
-.wf-issues .icon-button {
-  width: 1.5rem;
-  height: 1.75rem;
 }
 /* The stretch dragged: shaded across the time column, over every row. */
 .wf-range-layer {
@@ -2697,13 +2500,6 @@ button.wf-crumb:hover {
 /* Docked right: one toolbar row; the call head takes its own row over the axis. */
 .wf-panel[data-dock="right"] .wf-bar {
   grid-template-areas: "identity actions";
-}
-.wf-panel[data-dock="right"] .wf-zone-tools {
-  display: none;
-}
-
-.wf-call-head > .wf-filter {
-  overflow: hidden;
 }
 /* The kinds of spans to keep: one segmented control at the names' left edge; Follow and Clear at the row's end. */
 .wf-call-head > .wf-kinds {
@@ -2822,11 +2618,6 @@ button.wf-crumb:hover {
 .wf-main[data-wide] .wf-splitter-side,
 .wf-main[data-wide] .wf-splitter-sheet {
   display: none;
-}
-.wf-range-head {
-  padding: 0.75rem 1rem 0;
-  color: var(--dt-text-2);
-  font-size: var(--dt-size-sm);
 }
 .wf-break {
   display: inline-flex;
@@ -3076,17 +2867,6 @@ button.wf-crumb:hover {
 .wf-band {
   height: 28px;
   border-bottom: 1px solid var(--dt-border);
-}
-.wf-band-label {
-  color: var(--dt-text-3);
-  font-size: 10.5px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-.wf-band-total {
-  color: var(--dt-text-3);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
 }
 .wf-band-track {
   position: relative;
@@ -3518,4 +3298,116 @@ button.wf-crumb:hover {
 .dt-map[data-waterfall] .dt-map-row[aria-current="true"] .dt-map-bar {
   filter: none;
   opacity: 1;
+}
+/* ---------- round 9 ---------- */
+/* A folded entry's own time beside its name; its issue chips, as an open row's. */
+.wf-other-time {
+  flex: none;
+  color: var(--dt-text-2);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+.wf-other .dt-status {
+  margin-left: auto;
+}
+.wf-other[data-hovered],
+.wf-band-block[data-hovered] {
+  background-color: var(--dt-hover);
+  outline: 1px solid var(--dt-border-strong);
+}
+.wf-band-block[data-issues] {
+  box-shadow: inset 0 -2px 0 var(--dt-warn);
+}
+/* A kind kept: code and wait pieces dim with the rows it doesn't keep. */
+.wf-rows[data-filter] .dt-map-row[data-kind="code"] {
+  opacity: 0.38;
+}
+/* ---------- round 9, B ---------- */
+/* Follow: an icon and its word, pressed when on. */
+.wf-call-head > .wf-follow {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  margin-left: auto;
+  padding: 0 8px;
+  border-radius: 6px;
+  color: var(--dt-text-3);
+  font-size: 12px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.wf-call-head > .wf-follow svg {
+  width: 14px;
+  height: 14px;
+}
+.wf-call-head > .wf-follow:hover {
+  background: var(--dt-hover);
+  color: var(--dt-text);
+}
+/* Tabs (the profile's): the accent's ring on focus, as every other control. */
+.wf-panel [role="tab"]:focus-visible {
+  outline: 2px solid var(--dt-accent) !important;
+  outline-offset: -2px !important;
+}
+/* The profile's own title under the section's says it again. */
+.dt-wf-profile [data-split-head] > span:first-child {
+  display: none;
+}
+/* Issue chips whole: they never shrink; tight, they are their icon (see wf-name). */
+.dt-map[data-waterfall] .dt-map-chips {
+  flex: none;
+}
+@container wf-name (max-width: 20rem) {
+  .dt-map[data-waterfall] .dt-map-name [data-slot="badge"][data-kind] {
+    min-width: 0 !important;
+    width: 17px !important;
+    padding: 0 !important;
+    justify-content: center;
+  }
+  .dt-map[data-waterfall] .dt-map-name [data-slot="badge"][data-kind] > span {
+    display: none;
+  }
+  .dt-map[data-waterfall] .dt-map-name [data-slot="badge"][data-kind]::before {
+    content: "";
+    width: 10px;
+    height: 10px;
+    background: currentColor;
+    mask:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3'/%3E%3Cpath d='M12 9v4'/%3E%3Cpath d='M12 17h.01'/%3E%3C/svg%3E")
+      center / contain no-repeat;
+  }
+}
+/* Code and wait pieces: an edge of the view's colour, 3:1 at least on the ground. */
+.dt-map[data-waterfall] .dt-map-bar[data-quiet] {
+  min-width: 3px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dt-k-view) 70%, transparent);
+}
+.dt-map[data-waterfall] .dt-map-bar[data-quiet][data-waiting] {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dt-text-3) 80%, transparent);
+}
+/* 24px to hit for the details' small links and the band's blocks. */
+.wf-panel :is(.dt-link-button, .dt-share, .dt-map-open) {
+  position: relative;
+}
+.wf-panel :is(.dt-link-button, .dt-share, .dt-map-open)::after {
+  content: "";
+  position: absolute;
+  inset: -5px -2px;
+}
+.wf-band-block::before {
+  inset: -6px -2px;
+}
+.wf-band-label-beside {
+  position: absolute;
+  top: 0;
+  z-index: 3;
+  color: var(--dt-text-2);
+  font: 500 10.5px / 16px var(--dt-mono);
+  white-space: nowrap;
+  pointer-events: none;
+}
+/* Every chip container keeps its chips whole (run chips too). */
+.dt-map[data-waterfall] .dt-run-chips {
+  flex: none;
 }

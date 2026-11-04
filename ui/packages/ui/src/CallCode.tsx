@@ -298,9 +298,17 @@ function CodePartRow({ span, ctx, depth, part }: { span: Span; ctx: RowContext; 
       {inside}
     </button>
   ) : (
-    <div className="dt-map-row" data-kind="code" data-category={codeCategory(span, ctx)}>
+    // Without a profile, its span's: a click selects the span whose own time it is.
+    <button
+      type="button"
+      className="dt-map-row"
+      data-kind="code"
+      data-category={codeCategory(span, ctx)}
+      title="Your code between this span's children: the span's details"
+      onClick={() => ctx.onSelect(span.id)}
+    >
       {inside}
-    </div>
+    </button>
   );
 }
 

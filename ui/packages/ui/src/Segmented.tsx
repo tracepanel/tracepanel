@@ -56,7 +56,28 @@ export function Segmented<T extends string>({
           role="tab"
           key={segment.id}
           aria-selected={segment.id === value}
+          // One stop in the Tab order, the selected tab; ← → Home End move between them.
+          tabIndex={segment.id === value ? 0 : -1}
           onClick={() => onChange(segment.id)}
+          onKeyDown={(event) => {
+            const ids = segments.map((each) => each.id);
+            const at = ids.indexOf(value);
+            const next =
+              event.key === "ArrowRight"
+                ? ids[(at + 1) % ids.length]
+                : event.key === "ArrowLeft"
+                  ? ids[(at - 1 + ids.length) % ids.length]
+                  : event.key === "Home"
+                    ? ids[0]
+                    : event.key === "End"
+                      ? ids.at(-1)
+                      : undefined;
+            if (next === undefined) return;
+            event.preventDefault();
+            onChange(next);
+            const list = event.currentTarget.parentElement;
+            requestAnimationFrame(() => list?.querySelector<HTMLElement>('[aria-selected="true"]')?.focus());
+          }}
           className={segmentClass(segment.id === value)}
         >
           {segment.label}
