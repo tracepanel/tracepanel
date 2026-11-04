@@ -19,7 +19,7 @@ pub const OWN_CODE: [&str; 4] = ["code", "django", "signal", "template"];
 /// A span kind's category, where it has one of its own (the console's `BY_KIND`).
 pub fn by_kind(kind: &str) -> Option<&'static str> {
     Some(match kind {
-        "sql" | "sql.connect" => "sql",
+        "sql" => "sql",
         "redis" => "redis",
         "cache" => "cache",
         "http.client" | "grpc" | "rpc" => "http",
@@ -101,7 +101,8 @@ impl<'a> Owners<'a> {
     }
 
     fn own_category(&self, span: &Span<'a>) -> Option<&'static str> {
-        if span.kind == "transaction" {
+        // A transaction's code, and the wait for a connection, are their owner's: Database is time in queries.
+        if span.kind == "transaction" || span.kind == "sql.connect" {
             return None;
         }
         if span.kind == "function"

@@ -710,6 +710,9 @@ test("the hover card says where the time went as the strip's legend does: GC its
     .evaluateAll((spans) => spans.map((span) => (span as HTMLElement).title));
 
   expect([...pieces].sort()).toEqual([...shares].sort());
-  // "Your code 30 ms 15%" in the legend: "Most time: Your code 30 ms · 15%" on the card.
-  await expect(card.locator(".card-most")).toHaveText(`Most time: ${top.replace(/ (\d+%)$/, " · $1")}`);
+  // "Your code 30 ms 71%" in the legend: "Most time: Your code 30 ms · 71%" on the card, of the server's time where
+  // the card's head says the browser's (100 ms, it waited longer).
+  await expect(card.locator(".card-most")).toHaveText(
+    `Most time: ${top.replace(/ (\d+%)$/, " · $1")} of the server's 42 ms`,
+  );
 });

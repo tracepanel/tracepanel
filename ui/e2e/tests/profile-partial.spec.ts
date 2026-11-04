@@ -168,7 +168,8 @@ test("a profile of the trace's last 5 ms says so, its bar the strip's: the call'
   const strip = await legend(page).allInnerTexts();
   await page.getByRole("tab", { name: /^Profile/ }).click();
 
-  await expect(page.getByText(/^5 ms\s*profiled of the trace's 35 ms$/)).toBeVisible();
+  // What it covers: the trace's time less its code's before the first sample (Not profiled).
+  await expect(page.getByText(/^32 ms\s*profiled of the trace's 35 ms$/)).toBeVisible();
   await expect(legend(page)).toHaveText([
     /^External calls\s*28 ms\s*80%$/,
     /^Not profiled\s*3 ms\s*9%$/,

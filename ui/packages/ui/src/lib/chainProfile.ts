@@ -178,21 +178,16 @@ export function mergeMemories(profiles: readonly Profile[]): MemoryOf | undefine
   return { profile: { interval_us: 1, samples: 0, frames, stacks: [], memory }, memory };
 }
 
-/** What a profile adds up to: its time waiting (its innermost frame waits), and where most of its time went. */
-export function profileSums(profile: Profile): { waiting: number; top: string | undefined } {
-  const waiting = profile.stacks
-    .filter((stack) => profile.frames[stack.frames[stack.frames.length - 1] ?? -1]?.waiting)
-    .reduce((sum, stack) => sum + stack.count, 0);
-  // As Your code's list has it: its own functions, a call's, the collector's or the framework's time under that
-  // share's name (a BFF's "HTTP GET 127.0.0.1", not a 1 ms runtime frame under it); a wait is none.
-  // Time the profile didn't sample (its code's before its first sample) is no function's either.
+/**
+ * Where most of a profile's time went, as Your code's list has it: its own functions, a call's, the collector's or
+ * the framework's time under that share's name (a BFF's "HTTP GET 127.0.0.1", not a 1 ms runtime frame under it); a
+ * wait is none, nor time the profile didn't sample (its code's before its first sample).
+ */
+export function mostTimeIn(profile: Profile): string | undefined {
   const top = functions(ownCode(profile)).find(
     (row) => !(row.frame.waiting || shareFrame(row.frame)?.category === NOT_PROFILED),
   )?.frame.function;
-  return {
-    waiting: waiting * profile.interval_us,
-    top: top === FRAMEWORK ? "Framework & runtime" : top,
-  };
+  return top === FRAMEWORK ? "Framework & runtime" : top;
 }
 
 /** What a memory adds up to: its peak, what it kept, the function that allocated most (its largest site's). */

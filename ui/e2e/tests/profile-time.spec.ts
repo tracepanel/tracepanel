@@ -1,4 +1,4 @@
-// The one rule a trace's time is split by (lib/timeShares), over a trace shaped like a FastAPI sync endpoint's: a
+// The one rule a trace's time is split by (lib/timeShares, said by lib/split), over a trace shaped like a FastAPI sync endpoint's: a
 // view whose transaction runs a query, the event loop waiting while a worker thread runs the endpoint, a collector's
 // pause, a bucket the cleanup alone was seen in. The time strip's legend, the Profile tab's bar and list and the call
 // tree's code rows all read it: for the same stretch they say the same shares, a code row's time is its profile's.
@@ -7,14 +7,10 @@ import { duration } from "../../packages/ui/src/format.ts";
 import { apportion } from "../../packages/ui/src/lib/percent.ts";
 import { allFrames, functions, ownCode, type Profile, packageTimes } from "../../packages/ui/src/lib/profile.ts";
 import { parseStretch, stretchText, type Windows, windowsLabel } from "../../packages/ui/src/lib/slice.ts";
-import {
-  type Shared,
-  shareTimes,
-  spanSegments,
-  windowProfile,
-  windowsOfSegments,
-} from "../../packages/ui/src/lib/timeShares.ts";
+import { splitOf } from "../../packages/ui/src/lib/split.ts";
+import { type Shared, spanSegments, windowsOfSegments } from "../../packages/ui/src/lib/timeShares.ts";
 import type { Timed } from "../../packages/ui/src/lib/waiting.ts";
+import { windowProfile } from "../../packages/ui/src/lib/windowProfile.ts";
 import { expect, test } from "../fixtures.ts";
 
 const frame = (fn: string, module: string, file: string, extra: { inApp?: boolean; waiting?: boolean } = {}) => ({
@@ -131,7 +127,7 @@ const PROFILE_NAMES: Record<string, string> = {
 /** The strip's legend over the windows: each share's time (µs), by the Profile tab's name for it. */
 function strip(traced: Shared, windows: Windows | null): Record<string, number> {
   return Object.fromEntries(
-    [...shareTimes(traced, windows)].map(([share, us]) => [PROFILE_NAMES[share] ?? share, Math.round(us)]),
+    splitOf(traced, windows).shares.map((share) => [PROFILE_NAMES[share.share] ?? share.share, share.us]),
   );
 }
 
@@ -185,8 +181,9 @@ test("a code row's time is its profile's, and a function that ran only there is 
   const row = (windows: Windows) => windows.reduce((sum, [from, to]) => sum + to - from, 0);
 
   // As said: the row's time and its profile's.
-  expect(duration(total(bar(windowProfile(traced, code, true))))).toBe(duration(row(code)));
-  expect(duration(total(bar(windowProfile(traced, waits, true))))).toBe(duration(row(waits)));
+  expect(duration(total(bar(windowProfile(traced, code, true))))).toBe(duration(splitOf(traced, code).total));
+  expect(duration(splitOf(traced, code).total)).toBe(duration(row(code)));
+  expect(duration(total(bar(windowProfile(traced, waits, true))))).toBe(duration(splitOf(traced, waits).total));
   expect(Object.keys(bar(windowProfile(traced, waits, true)))).toEqual(["waiting"]);
   // get_db's cleanup (90–100 ms) ran in the view's own code only: 10 ms in its row's profile and in the whole list.
   expect(list(windowProfile(traced, code, true))["get_db"]).toBe(10_000);
@@ -221,12 +218,6 @@ test("All frames' shares add up to the trace: the query's time the database's, t
   expect(shares["waiting"]).toBe(54_000);
 });
 
-/** A time as said ("7 ms", "1.6 s"), back in µs. */
-function said(us: number): number {
-  const [value = "0", unit] = duration(us).split(" ");
-  return Number(value) * (unit === "s" ? 1_000_000 : unit === "ms" ? 1000 : 1);
-}
-
 test("the parts said add up to the total said: shares, the list's own times, the strip's legend", () => {
   // A code row's profile as get_db's was: get_db 6.9 ms and get_author 3.56 ms of 10.46 ms read 7 + 4 = 11 of 10.
   expect(apportion([6900, 3560], 1000, 10)).toEqual([7000, 3000]);
@@ -247,14 +238,13 @@ test("the parts said add up to the total said: shares, the list's own times, the
   ];
   for (const windows of windowsTried) {
     const profile = windowProfile(traced, windows, true);
-    const whole = said(profile.samples * profile.interval_us);
-    const shares = Object.values(bar(profile)).map(said);
-    const own = Object.values(list(profile)).map(said);
-    const strips = [...shareTimes(traced, windows).values()].map(said);
+    const split = splitOf(traced, windows);
+    const whole = Math.round(profile.samples * profile.interval_us);
 
-    expect(shares.reduce((sum, us) => sum + us, 0)).toBe(whole);
-    expect(own.reduce((sum, us) => sum + us, 0)).toBe(whole);
-    expect(strips.reduce((sum, us) => sum + us, 0)).toBe(whole);
+    expect(whole).toBe(split.total);
+    expect(total(bar(profile))).toBe(split.total);
+    expect(total(list(profile))).toBe(split.total);
+    expect(split.shares.reduce((sum, share) => sum + share.us, 0)).toBe(split.total);
   }
 });
 

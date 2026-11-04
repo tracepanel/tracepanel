@@ -2,15 +2,25 @@ import { FlameIcon } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 import type { CodeOwner, RowContext } from "./CallRowParts";
 import { partOfCategory } from "./callTree";
-import { duration } from "./format";
 import { Hint } from "./Hint";
 import type { Category } from "./lib/breakdown";
 import { widthOf } from "./lib/percent";
 import { hottestOwn, type Profile, WAITING } from "./lib/profile";
 import type { Quiet } from "./lib/quiet";
-import { overlaps, windowsTime } from "./lib/slice";
-import { spanSegments, splitByProfile, windowProfile } from "./lib/timeShares";
-import { bucketOwners, ownedWindows, type Piece, type Timed, waitName, waitPlace, windowsOf } from "./lib/waiting";
+import { overlaps, type Windows } from "./lib/slice";
+import { splitOf, wholeWindows } from "./lib/split";
+import { spanSegments, splitByProfile } from "./lib/timeShares";
+import {
+  bucketOwners,
+  ownedWindows,
+  type Piece,
+  type Timed,
+  timed,
+  waitName,
+  waitPlace,
+  windowsOf,
+} from "./lib/waiting";
+import { windowProfile } from "./lib/windowProfile";
 import { RowFlame } from "./ProfileHint";
 import { KindBadge, TaskName } from "./primitives";
 import type { Span, Trace } from "./types";
@@ -30,11 +40,13 @@ interface CodePart {
   waiting: boolean;
   pieces: Piece[];
   total: number;
+  /** Its time written, as its stretch's profile writes it (lib/split). */
+  time: string;
 }
 
-/** The time of a code row's pieces: the stretches the profile it opens is of (its head says how much is profiled). */
-function piecesTime(pieces: readonly Piece[]): number {
-  return windowsTime(windowsOf(pieces));
+/** The stretches a code row opens the profile at: its pieces in whole µs, as the link carries them. */
+function stretchesOf(pieces: readonly Piece[]): Windows {
+  return wholeWindows(windowsOf(pieces));
 }
 
 /** A span's own time in pieces: its segments, those that meet with the same part (waited or ran) as one. */
@@ -54,10 +66,21 @@ function codeParts(span: string, quiet: Quiet, trace: Trace): CodePart[] {
   const pieces = ownPieces(trace, span);
   const parts = [true, false].flatMap((waiting): CodePart[] => {
     const own = pieces.filter((piece) => piece.waiting === waiting);
-    const total = piecesTime(own);
-    return total > 0 ? [{ waiting, pieces: own, total }] : [];
+    const { total, time } = piecesTime(trace, own);
+    return total > 0 ? [{ waiting, pieces: own, total, time }] : [];
   });
-  return parts.every((part) => partShows(part, quiet, trace)) ? parts : [oneOf(parts, pieces)];
+  return parts.every((part) => partShows(part, quiet, trace)) ? parts : [oneOf(trace, parts, pieces)];
+}
+
+/**
+ * The time of a code row's pieces: its stretches' split's (lib/split), what the profile it opens says of them, its
+ * head and its bar.
+ */
+function piecesTime(trace: Trace, pieces: readonly Piece[]): { total: number; time: string } {
+  const stretches = stretchesOf(pieces);
+  if (!stretches.length) return { total: 0, time: "" };
+  const split = splitOf(trace, stretches);
+  return { total: split.total, time: split.time };
 }
 
 /** A wait or a stretch of code on a row of its own: as long as the code's own time is said at all, of the time. */
@@ -77,9 +100,9 @@ function partShows(part: CodePart, quiet: Quiet, trace: Trace): boolean {
 }
 
 /** The parts as one row: what most of it was (waited or computed), all of its time, every piece on its bar. */
-function oneOf(parts: readonly CodePart[], pieces: Piece[]): CodePart {
+function oneOf(trace: Trace, parts: readonly CodePart[], pieces: Piece[]): CodePart {
   const most = [...parts].sort((a, b) => b.total - a.total)[0];
-  return { waiting: most?.waiting ?? false, pieces, total: piecesTime(pieces) };
+  return { waiting: most?.waiting ?? false, pieces, ...piecesTime(trace, pieces) };
 }
 
 /** Where its code ran with nothing recorded inside, hatched in its share's colour; pieces too thin to see left out. */
@@ -149,7 +172,9 @@ function ownersOf(code: CodeOwner, profile: Timed): Map<number, string> {
 function partProfile(part: CodePart, code: CodeOwner, span: string): Profile | undefined {
   const trace = code.trace;
   if (!splitByProfile(trace)) return trace.profile;
-  return windowProfile(trace, ownedWindows(trace.profile, part.pieces, ownersOf(code, trace.profile), span));
+  const { profile } = trace;
+  const windows = timed(profile) ? ownedWindows(profile, part.pieces, ownersOf(code, profile), span) : null;
+  return windowProfile(trace, windows ? wholeWindows(windows) : stretchesOf(part.pieces));
 }
 
 /** Where a wait row waited, said quietly after its name: "handlers.py:108", where the profile says. */
@@ -199,7 +224,7 @@ function CodeRowParts({ span, ctx, depth, part }: { span: Span; ctx: RowContext;
         <RowFlame trace={owner} />
       </span>
       <CodeBars part={part} category={category} trace={ctx.trace} owner={owner} />
-      <span className="dt-map-time">{duration(part.total)}</span>
+      <span className="dt-map-time">{part.time}</span>
     </>
   );
 }
@@ -257,7 +282,7 @@ function CodePartRow({ span, ctx, depth, part }: { span: Span; ctx: RowContext; 
           ? "Open the profile at this stretch"
           : "Open the profile of the trace that served this call, at this stretch"
       }
-      onClick={() => open(windowsOf(part.pieces))}
+      onClick={() => open(stretchesOf(part.pieces))}
     >
       {inside}
     </button>

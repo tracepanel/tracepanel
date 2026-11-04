@@ -4,6 +4,33 @@
 
 ### Fixed
 
+- Every view of a trace's time says it from one result, worked out once
+  for the trace or a stretch of it: the time strip's legend, the hover
+  card, the Profile tab's head and bar, a code row and the stretch it
+  opens, an app's sums in a chain, and the MCP server's get_profile. The
+  Profile tab's bar read 36% where the strip read 37%, its percents added
+  up to 87–99%, a stretch's bar to 93%. Now the total is written as the
+  page's header writes a time (123 ms, 1.6 s), and each share is rounded
+  once to that step, by largest remainder, so the shares as read add up
+  to the total as read ("3 ms · 1 ms · 1 ms" of 5 ms, not "3 ms · 0.8 ms
+  · 1 ms") and the percents to 100%. A share too short for the step
+  still shows, as "<1 ms" or "<0.1 s" with its percent, where it was
+  rounded away (a chain's "Framework & middleware" in 3.6 s). A Go request
+  over before its profiler's first sample opens its Profile tab on the
+  strip's shares, its own code Not profiled, and its code rows open their
+  stretches. What a profile covers is the time less its Not profiled
+  share ("123 ms profiled of the trace's 123 ms", 27 µs Not profiled),
+  never more than the trace. The sample count is one line wherever it is
+  said, a stretch's its own ("4 samples, one every 1 ms", "1 sample").
+  A stretch whose ends read the same says them apart ("170.2 ms – 170.5
+  ms"). The hover card's "Most time" percent is of the time beside it, or
+  says it is of the server's. get_profile lists Not profiled as a share,
+  not as a function, and says its times as the console does. Database
+  is the time in queries, the DB tab's time: opening a connection (a
+  pool's wait, a login) is its caller's time, split by its stacks as a
+  transaction's own time is (a FastAPI request read "Database 47 ms" of
+  "1 query 8 ms": 39 ms waiting for a connection), and a collector's
+  pause during a query stays the query's.
 - A failed read of the store or a broken trace now answers with an error in
   the panel and the console. It read as no trace, so a call could say "not
   traced".

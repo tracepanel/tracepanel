@@ -21,15 +21,17 @@ function request(language: string, handler: string, fn: string | null): Doc {
     "http.status_code": 200,
     "code.view": handler,
   });
-  // Hours ago, older than the seed's traces: no list opens on these.
-  doc["start"] = Date.now() * 1000 - 3 * 3_600_000_000;
+  // Hours ago, older than the seed's traces: no list opens on these. Its spans with it, on its clock.
+  const start = Date.now() * 1000 - 3 * 3_600_000_000;
+  doc["start"] = start;
+  for (const span of doc["spans"] as Doc[]) span["start"] = start + Number(span["start"]);
   (doc["spans"] as Doc[]).push({
     id: `${doc["id"]}V`,
     // biome-ignore lint/style/useNamingConvention: a span as the SDKs send it.
     parent_id: `${doc["id"]}R`,
     kind: "view",
     name: handler,
-    start: 1_000,
+    start: start + 1_000,
     duration: 40_000,
     status: "ok",
     attrs: fn ? { "code.function": fn } : {},

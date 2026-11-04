@@ -65,9 +65,21 @@ export function overlaps(range: TimeRange, start: number, length: number): boole
   return start <= range[1] && start + Math.max(length, 0) >= range[0];
 }
 
-/** "11 ms – 1.6 s": where the range starts and ends, as the page says times. */
+/**
+ * "11 ms – 1.6 s": where the range starts and ends, as the page says times; where both would read the same, in the
+ * end's unit with as many decimals as tell them apart ("170.2 ms – 170.9 ms").
+ */
 export function rangeLabel(range: TimeRange): string {
-  return `${range[0] === 0 ? "0" : duration(range[0])} – ${duration(range[1])}`;
+  const [from, to] = range;
+  const [start, end] = [from === 0 ? "0" : duration(from), duration(to)];
+  if (start !== end) return `${start} – ${end}`;
+  // Whole µs apart at the most: as many decimals as the unit has µs.
+  const [unit, size, most] = to >= 1_000_000 ? ["s", 1_000_000, 6] : to >= 1000 ? ["ms", 1000, 3] : ["µs", 1, 0];
+  for (let decimals = Math.min(1, most); decimals <= most; decimals++) {
+    const [a, b] = [(from / size).toFixed(decimals), (to / size).toFixed(decimals)];
+    if (a !== b || decimals === most) return `${a} ${unit} – ${b} ${unit}`;
+  }
+  return `${start} – ${end}`;
 }
 
 const PART = /^[a-z]+$/;

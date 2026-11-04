@@ -26,8 +26,8 @@ import { type Category, spanCategories } from "./lib/breakdown";
 import { quietSpans } from "./lib/quiet";
 import type { SpanScope } from "./lib/scope";
 import type { Slice, TimeRange, Windows } from "./lib/slice";
+import { splitByProfile } from "./lib/timeShares";
 import { useRemembered, VIEW_KEYS } from "./lib/viewMemory";
-import { timed } from "./lib/waiting";
 import type { TraceLinks } from "./links";
 import { SideResize, useSideWidth } from "./SideResize";
 import { RangeBand, useHeldSlice, useRangeDrag } from "./TimeSlice";
@@ -422,7 +422,10 @@ function useShownLogs(trace: Trace, related: Related | undefined, all: boolean, 
   return { tree, hidden };
 }
 
-/** The profile opened at stretches of the trace (a code row's), where it says when its samples were taken. */
+/**
+ * The profile opened at stretches of the trace (a code row's), where its time can be split by it: it says when its
+ * samples were taken, or it has none (the spans say it all, its code not profiled).
+ */
 function profileOpener(
   open: (() => void) | undefined,
   trace: Trace,
@@ -431,7 +434,7 @@ function profileOpener(
   if (!open) return undefined;
   return (windows) => {
     // The Profile tab's own stretch: the call tree's range is a drag's only.
-    if (timed(trace.profile)) profileAt(windows);
+    if (splitByProfile(trace)) profileAt(windows);
     open();
   };
 }

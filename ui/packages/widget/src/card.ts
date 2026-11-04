@@ -2,10 +2,8 @@
 // for after it loaded) before opening the panel.
 import { duration } from "@tracepanel/ui/format";
 import { clockOf, cutNote, NO_ANSWER, PENDING, runningLabel, runningTime } from "@tracepanel/ui/lib/live";
-import { percents } from "@tracepanel/ui/lib/percent";
 import { plural } from "@tracepanel/ui/lib/plural";
-import { shareLabel } from "@tracepanel/ui/lib/timeShares";
-import { timeParts } from "@tracepanel/ui/lib/waitingShare";
+import { type SaidShare, splitOf } from "@tracepanel/ui/lib/split";
 import type { Issue, Trace } from "@tracepanel/ui/types";
 import type { TraceInfo } from "./index";
 import type { Flight } from "./network";
@@ -328,10 +326,21 @@ function timeCell(info: TraceInfo): HTMLElement {
 }
 
 /** "Most time: Your code 4.6 ms · 78%": the bar's biggest part in words. */
-function mostLine(label: string, category: string, value: number, share: string): HTMLElement {
+/**
+ * "Most time: Database 40 ms · 67%": the largest share and its percent of the time the card's head says. Where the
+ * head says the browser's time (it waited longer than the server took), what the percent is of: "67% of the
+ * server's 60 ms".
+ */
+function mostLine(share: SaidShare, head: string, server: string): HTMLElement {
   const line = element("p", "card-most");
-  line.dataset["category"] = category;
-  line.append(element("i"), `Most time: ${label} `, element("b", undefined, duration(value)), ` · ${share}`);
+  line.dataset["category"] = share.share;
+  const of = head === server ? "" : ` of the server's ${server}`;
+  line.append(
+    element("i"),
+    `Most time: ${share.label} `,
+    element("b", undefined, share.time),
+    ` · ${share.percent}${of}`,
+  );
   return line;
 }
 
@@ -425,43 +434,34 @@ export function mountCard(
     row.append(name);
     const chip = statusChip(info.status);
     if (chip) row.append(chip);
-    // The pill's number, said as the panel's list says it (0.5 ms): the three never disagree.
-    row.append(element("span", "card-time", duration((info.totalMs ?? (trace?.duration ?? 0) / 1000) * 1000)));
+    row.append(element("span", "card-time", headTime(info, trace)));
     return row;
+  }
+
+  /** The pill's number, said as the panel's list says it (0.5 ms): the three never disagree. */
+  function headTime(info: TraceInfo, trace: Trace | null): string {
+    return duration((info.totalMs ?? (trace?.duration ?? 0) / 1000) * 1000);
   }
 
   /** The bar of where the time went, and in words only the biggest part. */
   function timing(info: TraceInfo, trace: Trace): HTMLElement[] {
-    // The one split of the trace's time (lib/timeShares), as the strip's legend and the Profile tab's bar say it:
-    // the collector's pauses GC's, the code's waits Waiting's, the same names, rounded the same way.
-    const parts = timeParts(trace);
-    const labelOf = shareLabel;
-    const total = Math.max(
-      parts.reduce((sum, [, value]) => sum + value, 0),
-      1,
-    );
+    // The trace's split (lib/split), as the strip's legend and the Profile tab's bar say it: the same shares, times
+    // and percents, said once.
+    const split = splitOf(trace);
     const bar = element("div", "card-bar");
     bar.setAttribute("role", "img");
-    for (const [category, value] of parts) {
+    for (const share of split.shares) {
       const piece = element("span");
-      piece.dataset["category"] = category;
-      piece.style.flex = `${value / total} 1 0`;
-      piece.title = `${labelOf(category)} ${duration(value)}`;
+      piece.dataset["category"] = share.share;
+      piece.style.flex = `${share.us / Math.max(split.total, 1)} 1 0`;
+      piece.title = `${share.label} ${share.time}`;
       bar.append(piece);
     }
-    // Said as the legend says them: percents that add up to 100%.
-    const said = percents(
-      parts.map(([, value]) => value),
-      total,
-    );
-    const at = parts.reduce((best, part, index) => (part[1] > (parts[best]?.[1] ?? 0) ? index : best), 0);
-    const top = parts[at];
+    const top = [...split.shares].sort((a, b) => b.us - a.us)[0];
     if (!top) return [bar];
-    const [category, value] = top;
-    const label = labelOf(category);
-    bar.setAttribute("aria-label", `Most time: ${label}, ${duration(value)}`);
+    bar.setAttribute("aria-label", `Most time: ${top.label}, ${top.time}`);
     // A failed request's story is its error (under Fix first), not where its time went.
-    return failed(info) ? [bar] : [bar, mostLine(label, category, value, said[at] ?? "0%")];
+    return failed(info) ? [bar] : [bar, mostLine(top, headTime(info, trace), split.time)];
   }
 
   function findings(info: TraceInfo, trace: Trace): HTMLElement | null {

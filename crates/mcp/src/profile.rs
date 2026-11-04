@@ -5,8 +5,9 @@
 //! of its spent, it spent; the samples that ran none of it one "framework & runtime"), and a site is named by the line
 //! of the project's code that led to it.
 
-use crate::compact::{count, int, ms, text};
+use crate::compact::{int, ms, text};
 use crate::shares;
+use crate::split::{self, Split, duration};
 use crate::waits;
 use serde_json::Value;
 use std::borrow::Cow;
@@ -173,11 +174,12 @@ struct Profile<'a> {
     /// Each frame's index as its function's first: a Python coroutine's frame with the line it awaits at is the
     /// same function as its frame running, one row and one step.
     same: Vec<usize>,
-    /// A timed profile's trace by share (shares: Database, Your code, GC, Waiting), as said, with their names.
-    shares: Vec<(&'static str, f64)>,
-    /// What it sampled (µs): timed, the time its samples cover (its stacks have the rest under its shares' frames);
-    /// else its stacks' time.
-    profiled: f64,
+    /// Where the trace's time went, as the console says it (split): its shares, what the profile covers, its samples.
+    split: Split,
+    /// Read by the trace's time split (split.rs): a timed profile's, or one with no samples, its stacks the split's.
+    readable: bool,
+    /// Its CPU time an estimate (Go on macOS): an app's, where any of its traces' is.
+    estimated: bool,
 }
 
 /// A function as the console tells functions apart: its name, where it is defined, whether it waits, its share.
@@ -265,23 +267,16 @@ fn wait_at(frames: &mut Vec<Frame>, name: String) -> usize {
     frames.len() - 1
 }
 
-/// A timed profile's stacks as the trace's time splits (shares, the console's rule): each segment's stacks for its
-/// time, a call's, the collector's or the framework's under a frame of that share; `named` (the project's code's
-/// view), a wait's frame named by the frame that waited (`waiting · waiter.acquire`). Each share's time rounded as it
-/// is said, its stacks to add up to it, so every sum said of them adds up as said.
+/// A profile's stacks as the trace's time splits (shares, the console's rule), unrounded: each segment's stacks for
+/// its time, a call's, the collector's or the framework's under a frame of that share; `named` (the project's code's
+/// view), a wait's frame named by the frame that waited (`waiting · waiter.acquire`). `say` rounds them.
 fn split_stacks<'a>(
-    doc: &Value,
     segments: &[shares::Segment],
     frames: &mut Vec<Frame<'a>>,
     base: &[Vec<usize>],
     named: bool,
 ) -> Vec<Stack> {
-    let interval = doc
-        .pointer("/profile/interval_us")
-        .and_then(Value::as_i64)
-        .unwrap_or(1)
-        .max(1) as f64;
-    let mut order: Vec<(Vec<usize>, &'static str)> = Vec::new();
+    let mut order: Vec<Vec<usize>> = Vec::new();
     let mut times: HashMap<Vec<usize>, f64> = HashMap::new();
     for segment in segments {
         let share =
@@ -292,7 +287,7 @@ fn split_stacks<'a>(
             if let Some(share) = share {
                 let path = vec![share];
                 if !times.contains_key(&path) {
-                    order.push((path.clone(), segment.share));
+                    order.push(path.clone());
                 }
                 *times.entry(path).or_default() += segment.to - segment.from;
             }
@@ -315,33 +310,59 @@ fn split_stacks<'a>(
                 path.push(wait_at(frames, waits::wait_name(label.as_deref())));
             }
             if !times.contains_key(&path) {
-                order.push((path.clone(), segment.share));
+                order.push(path.clone());
             }
             *times.entry(path).or_default() += us;
         }
     }
-    let mut by_share: Vec<(&'static str, f64)> = Vec::new();
-    for (path, share) in &order {
-        match by_share.iter_mut().find(|(each, _)| each == share) {
-            Some(found) => found.1 += times[path],
-            None => by_share.push((share, times[path])),
+    order
+        .into_iter()
+        .map(|path| {
+            let us = times[&path];
+            Stack {
+                frames: path,
+                count: 0,
+                us,
+            }
+        })
+        .collect()
+}
+
+/// The share a stack of a split's profile is time of, by its name: its share's frame's, a wait's, else your code's.
+fn share_of_stack(frames: &[Frame], stack: &Stack) -> &'static str {
+    let leaf = stack.frames.last().and_then(|&leaf| frames.get(leaf));
+    match leaf {
+        Some(Frame {
+            share: Some(share), ..
+        }) => share,
+        Some(frame) if frame.waiting => shares::label(shares::WAITING),
+        _ => shares::label("code"),
+    }
+}
+
+/// A split's stacks as the split says them (the console's `sayProfile`): each share's stacks rounded to add up to
+/// that share's said time, so every sum of them said (a share, a function's own time, all of it) is the split's.
+fn say(stacks: Vec<Stack>, frames: &[Frame], split: &Split, interval: f64) -> Vec<Stack> {
+    let mut groups: Vec<(&'static str, Vec<Stack>)> = Vec::new();
+    for stack in stacks {
+        let share = share_of_stack(frames, &stack);
+        match groups.iter_mut().find(|(each, _)| *each == share) {
+            Some(found) => found.1.push(stack),
+            None => groups.push((share, vec![stack])),
         }
     }
-    let said = shares::rounded(&by_share);
-    let step = shares::display_step(said.iter().map(|(_, us)| us).sum());
     let mut out = Vec::new();
-    for (share, total) in said {
-        let paths: Vec<&Vec<usize>> = order
+    for (share, list) in groups {
+        let target = split.by_label(share).map_or(0.0, |said| said.us);
+        let values: Vec<f64> = list
             .iter()
-            .filter(|(_, each)| *each == share)
-            .map(|(path, _)| path)
+            .map(|stack| (stack.us / interval) * interval)
             .collect();
-        let values: Vec<f64> = paths.iter().map(|path| times[*path]).collect();
-        let parts = shares::apportion(&values, step, (total / step).round() as i64);
-        for (path, us) in paths.into_iter().zip(parts) {
+        let parts = shares::apportion(&values, split.step, (target / split.step).round() as i64);
+        for (stack, us) in list.into_iter().zip(parts) {
             if us > 0.0 {
                 out.push(Stack {
-                    frames: path.clone(),
+                    frames: stack.frames,
                     count: (us / interval).round() as i64,
                     us,
                 });
@@ -363,6 +384,21 @@ fn frames_of(value: &Value) -> Vec<usize> {
 
 impl<'a> Profile<'a> {
     fn of(doc: &'a Value) -> Option<Self> {
+        let mut profile = Self::read(doc)?;
+        if profile.readable {
+            let interval = profile.interval as f64;
+            let stacks = std::mem::take(&mut profile.stacks);
+            profile.stacks = say(stacks, &profile.frames, &profile.split, interval);
+            if let Some(named) = profile.named.take() {
+                profile.named = Some(say(named, &profile.frames, &profile.split, interval));
+            }
+        }
+        Some(profile)
+    }
+
+    /// The profile with its stacks as the split has them, unrounded (`of` rounds them; an app's traces are added up
+    /// first, then rounded once).
+    fn read(doc: &'a Value) -> Option<Self> {
         let raw = doc.get("profile").filter(|profile| profile.is_object())?;
         let mut frames: Vec<Frame> = raw
             .get("frames")
@@ -403,38 +439,13 @@ impl<'a> Profile<'a> {
                 us: (int(stack, "count") * interval) as f64,
             })
             .collect();
-        let timed = timed(raw);
-        let mut split = Vec::new();
-        let mut profiled = None;
-        let named = if timed {
+        let timed = shares::timed(raw);
+        let readable = timed || shares::empty(raw);
+        let named = if readable {
             let base: Vec<Vec<usize>> = stacks.iter().map(|stack| stack.frames.clone()).collect();
-            let kinds: Vec<shares::StackKind> = base
-                .iter()
-                .map(|path| {
-                    let leaf = path.last().and_then(|&leaf| frames.get(leaf));
-                    shares::StackKind {
-                        waits: leaf.is_some_and(|leaf| leaf.waiting),
-                        yours: path
-                            .iter()
-                            .any(|&at| frames.get(at).is_some_and(|frame| frame.in_app))
-                            && !leaf.is_some_and(Frame::tracing),
-                    }
-                })
-                .collect();
-            let segments = shares::segments(doc, &kinds);
-            profiled = Some(
-                segments
-                    .iter()
-                    .filter(|segment| segment.stacks.is_some())
-                    .map(|segment| segment.to - segment.from)
-                    .sum(),
-            );
-            split = shares::share_times(&segments)
-                .into_iter()
-                .map(|(share, us)| (shares::label(share), us))
-                .collect();
-            stacks = split_stacks(doc, &segments, &mut frames, &base, false);
-            Some(split_stacks(doc, &segments, &mut frames, &base, true))
+            let segments = shares::segments(doc, &shares::stack_kinds(raw));
+            stacks = split_stacks(&segments, &mut frames, &base, false);
+            Some(split_stacks(&segments, &mut frames, &base, true))
         } else {
             None
         };
@@ -457,7 +468,6 @@ impl<'a> Profile<'a> {
                 .sum()
         });
         let same = same_functions(&frames);
-        let profiled = profiled.unwrap_or_else(|| stacks.iter().map(|stack| stack.us).sum());
         Some(Self {
             frames,
             stacks,
@@ -470,14 +480,15 @@ impl<'a> Profile<'a> {
             on_cpu,
             named,
             same,
-            shares: split,
-            profiled,
+            split: split::split(doc, None),
+            readable,
+            estimated: raw.get("estimated_from").is_some(),
         })
     }
 
     /// Its time as its traces' (`parts`, one app's) added up, as the console merges an app's profiles: each one's
     /// stacks as that trace reads them (its waits named by its own calls, its time off the CPU), their frames once.
-    fn take_time(&mut self, parts: Vec<Profile<'a>>) {
+    fn take_time(&mut self, parts: Vec<Profile<'a>>, split: Split) {
         let mut frames: Vec<Frame<'a>> = Vec::new();
         let mut index: HashMap<FrameKey<'a>, usize> = HashMap::new();
         let mut intern = |frame: &Frame<'a>| {
@@ -498,15 +509,9 @@ impl<'a> Profile<'a> {
         };
         let (mut stacks, mut named) = (Vec::new(), Vec::new());
         let any_named = parts.iter().any(|part| part.named.is_some());
-        let mut split: Vec<(&'static str, f64)> = Vec::new();
-        self.profiled = parts.iter().map(|part| part.profiled).sum();
+        let readable = parts.iter().all(|part| part.readable);
+        self.estimated = parts.iter().any(|part| part.estimated);
         for part in &parts {
-            for &(share, us) in &part.shares {
-                match split.iter_mut().find(|(each, _)| *each == share) {
-                    Some(found) => found.1 += us,
-                    None => split.push((share, us)),
-                }
-            }
             let at: Vec<usize> = part.frames.iter().map(&mut intern).collect();
             let remapped = |stack: &Stack| Stack {
                 frames: stack
@@ -531,7 +536,21 @@ impl<'a> Profile<'a> {
         self.stacks = stacks;
         self.named = any_named.then_some(named);
         self.same = same_functions(&self.frames);
-        self.shares = shares::rounded(&split);
+        self.readable = readable;
+        if readable {
+            let interval = self.interval as f64;
+            self.stacks = say(
+                std::mem::take(&mut self.stacks),
+                &self.frames,
+                &split,
+                interval,
+            );
+            self.named = self
+                .named
+                .take()
+                .map(|named| say(named, &self.frames, &split, interval));
+        }
+        self.split = split;
     }
 
     fn frame(&self, index: usize) -> Option<&Frame<'a>> {
@@ -554,8 +573,12 @@ impl<'a> Profile<'a> {
         self.frame(index).is_some_and(|frame| frame.in_app)
     }
 
-    /// Whether the project's code ran enough of the time for the profile to read as it.
+    /// Whether the profile reads as the project's code: always where its stacks are the trace's time split (its Your
+    /// code is the time strip's split, whatever share is largest); else where that code ran enough of the time.
     fn mostly_yours(&self) -> bool {
+        if self.readable {
+            return true;
+        }
         let yours: i64 = self
             .stacks
             .iter()
@@ -697,32 +720,19 @@ impl<'a> Profile<'a> {
     }
 }
 
-/// Whether a profile says when its stacks were seen: its buckets' width, and buckets on its stacks.
-fn timed(raw: &Value) -> bool {
-    int(raw, "bucket_us") > 0
-        && raw
-            .get("stacks")
-            .and_then(Value::as_array)
-            .into_iter()
-            .flatten()
-            .any(|stack| {
-                stack
-                    .get("at")
-                    .and_then(Value::as_array)
-                    .is_some_and(|at| !at.is_empty())
-            })
-}
-
-/// `32%`, `<1%`.
+/// Share of `part` in `whole` as the console writes one (its `percent`): `32%`; neither none nor all never reads as
+/// either: `<1%`, `>99%`.
 fn share(part: f64, whole: f64) -> String {
-    if whole <= 0.0 {
+    if whole <= 0.0 || part <= 0.0 {
         return "0%".into();
     }
-    let percent = part * 100.0 / whole;
-    if percent > 0.0 && percent < 0.5 {
-        "<1%".into()
-    } else {
-        format!("{percent:.0}%")
+    if part >= whole {
+        return "100%".into();
+    }
+    match ((part / whole) * 100.0).round() {
+        0.0 => "<1%".into(),
+        100.0 => ">99%".into(),
+        rounded => format!("{rounded:.0}%"),
     }
 }
 
@@ -846,8 +856,20 @@ pub(crate) fn app_profile(docs: &[&Value], kind: Kind, top: usize) -> Option<Str
                 return read(&doc, kind, top, true).ok();
             }
             let mut profile = Profile::of(&doc)?;
-            profile.take_time(several.iter().filter_map(|doc| Profile::of(doc)).collect());
-            Some(cpu(&profile, int(&doc, "duration"), top, true))
+            let split = split::app_split(
+                &several
+                    .iter()
+                    .map(|doc| (*doc, None))
+                    .collect::<Vec<split::Part>>(),
+            );
+            profile.take_time(
+                several
+                    .iter()
+                    .filter_map(|doc| Profile::read(doc))
+                    .collect(),
+                split,
+            );
+            Some(cpu(&profile, top, true))
         }
     }
 }
@@ -858,7 +880,7 @@ fn read(doc: &Value, kind: Kind, top: usize, merged: bool) -> Result<String, Str
         return Err(format!("Trace {id} has no profile. {HOW}"));
     };
     match kind {
-        Kind::Cpu => Ok(cpu(&profile, int(doc, "duration"), top, merged)),
+        Kind::Cpu => Ok(cpu(&profile, top, merged)),
         Kind::Memory => match profile
             .raw
             .get("memory")
@@ -1029,78 +1051,46 @@ fn gc_line(raw: &Value) -> Option<String> {
     })
 }
 
-fn cpu(profile: &Profile, duration: i64, top: usize, merged: bool) -> String {
-    let total = profile.total();
-    // Timed, its stacks are the trace's time as the strip splits it, its time before its first sample under its
-    // shares' frames: their percentages are of the trace's (a BFF's 28 ms of 35 is 80%, not 560% of the 5 ms it
-    // sampled). What it sampled is never said as more than the trace's.
-    let of = if profile.timed {
-        total.max(duration as f64)
+fn cpu(profile: &Profile, top: usize, merged: bool) -> String {
+    let split = &profile.split;
+    // Readable by the split, its stacks are the trace's time as the strip splits it: every number is the split's,
+    // what the console says (split.rs). Else (samples not timed) of what it sampled.
+    let total = if profile.readable {
+        split.total
     } else {
-        total
+        profile.total()
     };
-    let mut waiting_said = None;
-    let profiled = if profile.timed {
-        profile.profiled.min(duration as f64)
-    } else {
-        total
-    };
+    let what = if merged { "the traces'" } else { "the trace's" };
+    // An estimate, as the console's head says it: "≈ 103 ms".
+    let about = if profile.estimated { "≈ " } else { "" };
     let mut out = vec![format!(
-        "CPU profile: {} {} of the {} {} · {}, one every {}",
-        us(profiled),
-        if profile.timed { "profiled" } else { "sampled" },
-        if merged { "traces'" } else { "trace's" },
-        ms(duration),
-        count(profile.samples, "sample", "samples"),
-        ms(profile.interval),
+        "CPU profile: {about}{} profiled of {} · {}",
+        split.covered,
+        if merged {
+            split.of_what()
+        } else {
+            format!("{what} {}", split.time)
+        },
+        split.sampled.as_deref().unwrap_or_default(),
     )];
-    if let Some(on_cpu) = profile.on_cpu {
-        out.push(format!(
-            "spread: its {on_cpu} samples are CPU time, placed by the agent evenly over the project's code's time (its profiler keeps no sample's time); the rest of that time is waiting off the CPU, not sampled"
-        ));
-    }
-    if !profile.shares.is_empty() {
-        let mut said = profile.shares.clone();
-        // Most first, waiting last: as the console's legend has them.
-        said.sort_by(|a, b| {
-            (a.0 == "Waiting")
-                .cmp(&(b.0 == "Waiting"))
-                .then(b.1.total_cmp(&a.1))
-        });
-        said.retain(|(_, us)| *us > 0.0);
-        // Of what they add up to, as the legend says them: percents that add up to 100%.
-        let whole: f64 = said.iter().map(|(_, us)| us).sum();
-        let percents = shares::percents(&said.iter().map(|(_, us)| *us).collect::<Vec<_>>(), whole);
-        let parts: Vec<String> = said
+    if !split.shares.is_empty() {
+        let parts: Vec<String> = split
+            .shares
             .iter()
-            .zip(percents)
-            .map(|((name, time), percent)| {
-                if *name == "Waiting" {
-                    waiting_said = Some(percent.clone());
-                }
-                format!("{name} {} ({percent})", us(*time))
-            })
+            .map(|share| format!("{} {} ({})", share.label, share.time, share.percent))
             .collect();
         out.push(format!(
             "time by share (as the time strip says it): {}",
             parts.join(" · ")
         ));
     }
-    let waited: f64 = profile
-        .stacks
-        .iter()
-        .filter(|stack| profile.waits(stack))
-        .map(|stack| stack.us)
-        .sum();
-    if waited > 0.0 {
+    if let Some(waiting) = split.by_label(shares::label(shares::WAITING)) {
         let what = if profile.on_cpu.is_some() {
             ", off the CPU (a lock, a channel, a timer, a call; not sampled)"
         } else {
             " (a sleep, a socket, a lock, the event loop: not computing)"
         };
-        // Its percent as its share says it, where it has one.
-        let percent = waiting_said.unwrap_or_else(|| share(waited, of));
-        let mut line = format!("waiting{what}: {} ({percent})", us(waited));
+        let mut line = format!("waiting{what}: {} ({})", waiting.time, waiting.percent);
         if let Some(name) = profile.wait_name().filter(|_| profile.on_cpu.is_none()) {
             line.push_str(&format!(", most in {name}"));
         }
@@ -1109,7 +1099,7 @@ fn cpu(profile: &Profile, duration: i64, top: usize, merged: bool) -> String {
     if profile.dropped > 0 {
         out.push(format!(
             "not sampled: {} (other traces ran on the same thread){}",
-            ms(profile.dropped * profile.interval),
+            duration((profile.dropped * profile.interval) as f64),
             if profile.timed {
                 ", filled in from the samples around it"
             } else {
@@ -1117,15 +1107,13 @@ fn cpu(profile: &Profile, duration: i64, top: usize, merged: bool) -> String {
             }
         ));
     }
-    if let Some(taken) = profile.raw.get("estimated_from").and_then(Value::as_i64) {
-        out.push(format!(
-            "estimated: its CPU time is weighed from {taken} samples (macOS hands the profiler's samples out unevenly): the times are approximate"
-        ));
+    if profile.estimated {
+        out.push("estimated: macOS hands the profiler's samples out unevenly, so each is weighed: the times are approximate".into());
     }
     out.extend(gc_line(profile.raw));
     let mut notes = format!(
         "note: a sample every {}: a function that ran for less may be missed or miscounted.",
-        ms(profile.interval)
+        duration(profile.interval as f64)
     );
     if profile.raw.get("memory").is_some_and(Value::is_object) {
         notes.push_str(
@@ -1133,29 +1121,54 @@ fn cpu(profile: &Profile, duration: i64, top: usize, merged: bool) -> String {
         );
     }
     out.push(notes);
-    if profile.stacks.iter().all(|stack| stack.count == 0) {
+    if split.samples == 0 && profile.stacks.iter().all(|stack| stack.frames.len() <= 1) {
         out.push(format!(
-            "\nNo samples: the trace was over before the profiler saw its code (one sample every {}).",
-            ms(profile.interval)
+            "\nNo samples: the trace was over before the profiler saw its code (one sample every {}); its time by share is its spans'.",
+            duration(profile.interval as f64)
         ));
         return out.join("\n");
     }
 
     let (view, seen_as) = profile.view();
+    // Not profiled is a share of the time (the code's before the first sample), no function: the share line says it.
+    let function = |index: usize| {
+        profile
+            .frame(index)
+            .filter(|frame| frame.share != Some(shares::label(shares::NOT_PROFILED)))
+    };
+    let view: Vec<Stack> = view
+        .into_iter()
+        .filter(|stack| {
+            stack
+                .frames
+                .last()
+                .is_some_and(|&leaf| function(leaf).is_some())
+        })
+        .collect();
     let rows = functions(&view);
+    // A row that is a share's whole time (GC, the framework's, a wait) says that share's percent, as the share line.
+    let percent_of = |frame: &Frame, own: f64| {
+        let named = frame
+            .share
+            .or_else(|| frame.waiting.then(|| shares::label(shares::WAITING)));
+        named
+            .and_then(|name| split.by_label(name))
+            .filter(|said| profile.readable && said.us == own)
+            .map_or_else(|| share(own, total), |said| said.percent.clone())
+    };
     let mut by_self = vec![format!("\nfunctions by self time ({seen_as}):")];
     by_self.extend(
         rows.iter()
             .filter(|(_, own, _)| *own > 0.0)
             .take(top)
             .filter_map(|&(index, own, all)| {
-                let frame = profile.frame(index)?;
+                let frame = function(index)?;
                 Some(format!(
                     "  {}  {}  {} · total {}",
-                    us(own),
-                    share(own, total),
+                    duration(own),
+                    percent_of(frame, own),
                     frame.named(),
-                    us(all)
+                    duration(all)
                 ))
             }),
     );
@@ -1170,13 +1183,13 @@ fn cpu(profile: &Profile, duration: i64, top: usize, merged: bool) -> String {
     });
     out.push("\nfunctions by total time:".into());
     out.extend(by_total.iter().take(top).filter_map(|&(index, own, all)| {
-        let frame = profile.frame(index)?;
+        let frame = function(index)?;
         Some(format!(
             "  {}  {}  {} · self {}",
-            us(all),
+            duration(all),
             share(all, total),
             frame.named(),
-            us(own)
+            duration(own)
         ))
     }));
 
@@ -1192,7 +1205,11 @@ fn cpu(profile: &Profile, duration: i64, top: usize, merged: bool) -> String {
         if skip > 0 {
             path = format!("… {skip} outer frames → {path}");
         }
-        out.push(format!("  {}  {}  {path}", us(time), share(time, total)));
+        out.push(format!(
+            "  {}  {}  {path}",
+            duration(time),
+            share(time, total)
+        ));
     }
     out.join("\n")
 }
@@ -1489,7 +1506,8 @@ mod tests {
     /// A trace of one app with its memory: a site in build_cards, its peak and where the sites were taken.
     fn traced(peak: i64, at: &str) -> Value {
         let frame = |function: &str, file: &str, line: i64| json!({"function": function, "module": "", "file": file, "line": line, "in_app": true});
-        json!({"id": "T", "duration": 20_000, "profile": {
+        json!({"id": "T", "start": 0, "duration": 20_000, "spans": [{"id": "r", "parent_id": null, "kind": "view",
+            "name": "sales", "start": 0, "duration": 20_000, "status": "ok", "attrs": {}}], "profile": {
             "interval_us": 1000, "samples": 2,
             "frames": [frame("sales", "reports/views.py", 18), frame("build_cards", "reports/cards.py", 40)],
             "stacks": [{"frames": [0, 1], "count": 2}],
@@ -1524,7 +1542,7 @@ allocation sites at the peak (1 of 1, 2.0 MB in all, largest first; ×: allocati
 
         assert!(
             answer.starts_with(
-                "CPU profile: 4.0 ms sampled of the traces' 40.0 ms · 4 samples, one every 1.0 ms"
+                "CPU profile: 40 ms profiled of the traces' 40 ms · 4 samples, one every 1 ms\ntime by share (as the time strip says it): Your code 40 ms (100%)"
             ),
             "{answer}"
         );
@@ -1642,17 +1660,17 @@ allocation sites at the peak (1 of 1, 2.0 MB in all, largest first; ×: allocati
         assert_eq!(
             lines,
             [
-                "CPU profile: 99.0 ms profiled of the trace's 99.0 ms · 99 samples, one every 1.0 ms",
-                "spread: its 30 samples are CPU time, placed by the agent evenly over the project's code's time (its profiler keeps no sample's time); the rest of that time is waiting off the CPU, not sampled",
-                "time by share (as the time strip says it): Your code 28.0 ms (28%) · Database 20.0 ms (20%) · External calls 10.0 ms (10%) · Waiting 41.0 ms (42%)",
-                "waiting, off the CPU (a lock, a channel, a timer, a call; not sampled): 41.0 ms (42%)",
+                "CPU profile: 99 ms profiled of the trace's 99 ms · 30 samples of CPU time, one every 1 ms, spread evenly over your code's time, the rest of it waiting off the CPU (not sampled)",
+                "time by share (as the time strip says it): Your code 28 ms (28%) · Database 20 ms (20%) · External calls 10 ms (10%) · Waiting 41 ms (42%)",
+                "waiting, off the CPU (a lock, a channel, a timer, a call; not sampled): 41 ms (42%)",
+                "note: a sample every 1 ms: a function that ran for less may be missed or miscounted.",
             ]
         );
     }
 
-    /// A profile of only the trace's last 5 ms (`schema/waits.json`): what it sampled of the trace's time, its one
-    /// sample said so; the trace's time by share as the strip says it, the call's 28 ms from its span, the code's time
-    /// before the first sample not profiled, percents of the trace's that add up to 100%.
+    /// A profile of only the trace's last 5 ms (`schema/waits.json`): the trace's time by share as the strip says it,
+    /// the call's 28 ms from its span, the code's time before the first sample not profiled, percents that add up to
+    /// 100%; what the profile covers all of it but that, its one sample said so.
     #[test]
     fn a_profile_of_part_of_a_trace_says_its_shares_of_the_trace() {
         let cases: Vec<Value> =
@@ -1665,13 +1683,14 @@ allocation sites at the peak (1 of 1, 2.0 MB in all, largest first; ×: allocati
         assert_eq!(
             lines,
             [
-                "CPU profile: 4.7 ms profiled of the trace's 34.7 ms · 1 sample, one every 1.0 ms",
-                "time by share (as the time strip says it): External calls 28.0 ms (80%) · Not profiled 3.0 ms (9%) · Framework & middleware 3.0 ms (8%) · GC 1.0 ms (3%)",
+                "CPU profile: 32 ms profiled of the trace's 35 ms · 1 sample, one every 1 ms",
+                "time by share (as the time strip says it): External calls 28 ms (80%) · Not profiled 3 ms (9%) · Framework & middleware 3 ms (8%) · GC 1 ms (3%)",
             ]
         );
     }
 
-    /// A profile that covers all of a trace of 41.6 ms, its stacks said in whole ms (42): never more than the trace.
+    /// A profile that covers all of a trace of 41.6 ms: its one share said in whole ms, as the console says the trace's
+    /// time (42 ms), what it covers never more than that.
     #[test]
     fn a_profile_is_never_said_longer_than_its_trace() {
         let doc = json!({"id": "N", "start": 0, "duration": 41_600, "attrs": {"telemetry.sdk.language": "nodejs"},
@@ -1687,16 +1706,16 @@ allocation sites at the peak (1 of 1, 2.0 MB in all, largest first; ×: allocati
 
         assert_eq!(
             read.lines().next(),
-            Some(
-                "CPU profile: 41.6 ms profiled of the trace's 41.6 ms · 42 samples, one every 1.0 ms"
-            ),
+            Some("CPU profile: 42 ms profiled of the trace's 42 ms · 42 samples, one every 1 ms"),
         );
     }
 
     /// The same request from macOS: its CPU time an estimate, weighed from the samples taken, said so.
     #[test]
     fn a_go_profile_from_macos_says_its_cpu_time_is_an_estimate() {
-        let doc = json!({"id": "G", "duration": 99_000, "attrs": {"telemetry.sdk.language": "go"}, "profile": {
+        let doc = json!({"id": "G", "start": 0, "duration": 99_000, "attrs": {"telemetry.sdk.language": "go"},
+        "spans": [{"id": "r", "parent_id": null, "kind": "http", "name": "GET /", "start": 0, "duration": 99_000,
+                   "status": "ok", "attrs": {}}], "profile": {
             "interval_us": 1000, "samples": 30, "dropped": 0, "estimated_from": 12,
             "frames": [{"function": "editDistance", "module": "shop", "file": "similar.go", "line": 1, "in_app": true}],
             "stacks": [{"frames": [0], "count": 30}],
@@ -1704,10 +1723,13 @@ allocation sites at the peak (1 of 1, 2.0 MB in all, largest first; ×: allocati
 
         let read = profile(&doc, Kind::Cpu, 3).unwrap();
 
-        assert!(
-            read.lines().any(|line| line
-                == "estimated: its CPU time is weighed from 12 samples (macOS hands the profiler's samples out unevenly): the times are approximate"),
-            "{read}"
+        assert_eq!(
+            read.lines().take(3).collect::<Vec<_>>(),
+            [
+                "CPU profile: ≈ 99 ms profiled of the trace's 99 ms · CPU time estimated from 12 samples (macOS hands the profiler's samples out unevenly, so each is weighed)",
+                "time by share (as the time strip says it): Your code 99 ms (100%)",
+                "estimated: macOS hands the profiler's samples out unevenly, so each is weighed: the times are approximate",
+            ],
         );
     }
 
@@ -1731,15 +1753,75 @@ allocation sites at the peak (1 of 1, 2.0 MB in all, largest first; ×: allocati
                 .collect();
             waits.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
             let mut split: Vec<(&str, i64)> = profile
+                .split
                 .shares
                 .iter()
-                .map(|(share, us)| (*share, us.round() as i64))
+                .map(|share| (share.label, share.us.round() as i64))
                 .collect();
             split.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)));
 
             assert_eq!(json!(waits), case["waits"], "{}", case["name"]);
             assert_eq!(json!(split), case["shares"], "{}", case["name"]);
         }
+    }
+
+    /// get_profile over random traces (split.rs's): its head, its time by share and its waiting line are the split's
+    /// (the console's) to the letter; Not profiled is a share, never a function or a path.
+    #[test]
+    fn get_profile_says_the_split_of_any_trace() {
+        let mut next = crate::split::tests::Random::new(77);
+        let mut problems = Vec::new();
+        for _ in 0..300 {
+            let doc = crate::split::tests::random_trace(&mut next);
+            let Ok(read) = profile(&doc, Kind::Cpu, 10) else {
+                continue;
+            };
+            let split = crate::split::split(&doc, None);
+            let about = if doc["profile"].get("estimated_from").is_some() {
+                "≈ "
+            } else {
+                ""
+            };
+            let head = format!(
+                "CPU profile: {about}{} profiled of the trace's {} · {}",
+                split.covered,
+                split.time,
+                split.sampled.clone().unwrap_or_default()
+            );
+            let shares: Vec<String> = split
+                .shares
+                .iter()
+                .map(|share| format!("{} {} ({})", share.label, share.time, share.percent))
+                .collect();
+            let lines: Vec<&str> = read.lines().collect();
+            if lines.first() != Some(&head.as_str()) {
+                problems.push(format!("head {:?} != {head}", lines.first()));
+            }
+            let line = format!(
+                "time by share (as the time strip says it): {}",
+                shares.join(" · ")
+            );
+            if !shares.is_empty() && lines.get(1) != Some(&line.as_str()) {
+                problems.push(format!("shares {:?} != {line}", lines.get(1)));
+            }
+            if let Some(waiting) = split.by_label("Waiting") {
+                let said = format!(": {} ({})", waiting.time, waiting.percent);
+                if !lines
+                    .iter()
+                    .any(|line| line.starts_with("waiting") && line.contains(&said))
+                {
+                    problems.push(format!("waiting {said} not in {read}"));
+                }
+            }
+            let listed = read
+                .split_once("\nfunctions by self time")
+                .map_or("", |(_, rest)| rest);
+            if listed.contains("Not profiled") {
+                problems.push(format!("Not profiled listed as a function: {read}"));
+            }
+        }
+
+        assert_eq!(problems, Vec::<String>::new());
     }
 
     /// An app's traces in a chain, merged: each one's calls and waits as it reads them, added up by name.
@@ -1764,20 +1846,19 @@ allocation sites at the peak (1 of 1, 2.0 MB in all, largest first; ×: allocati
             rows(&timed),
             [
                 "  300 ms  43%  HTTP GET analytics.example.com (External calls) · total 300 ms",
-                "  200 ms  29%  Not profiled · total 200 ms",
                 "  120 ms  17%  SQL postgresql (Database) · total 120 ms",
-                "  80.0 ms  11%  waiting · sleep · total 80.0 ms",
+                "  80 ms  11%  waiting · sleep · total 80 ms",
             ]
         );
 
         assert_eq!(
             rows(&cpu),
             [
-                "  82.0 ms  41%  waiting · off CPU · total 82.0 ms",
-                "  48.0 ms  24%  editDistance (yours) — similar.go:40 · total 52.0 ms",
-                "  40.0 ms  20%  SQL postgresql (Database) · total 40.0 ms",
-                "  20.0 ms  10%  HTTP GET prices.internal (External calls) · total 20.0 ms",
-                "  8.0 ms  4%  (*App).listProducts (yours) — catalog.go:10 · total 60.0 ms",
+                "  82 ms  42%  waiting · off CPU · total 82 ms",
+                "  47 ms  24%  editDistance (yours) — similar.go:40 · total 50 ms",
+                "  40 ms  20%  SQL postgresql (Database) · total 40 ms",
+                "  20 ms  10%  HTTP GET prices.internal (External calls) · total 20 ms",
+                "  9 ms  5%  (*App).listProducts (yours) — catalog.go:10 · total 60 ms",
             ]
         );
     }

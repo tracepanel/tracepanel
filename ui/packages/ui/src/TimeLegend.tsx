@@ -1,29 +1,30 @@
 import { type FocusEvent, type ReactNode, useMemo } from "react";
 import { buildTree, chipCounts, FILTERS, type FilterId, partOfCategory, withShownLogs } from "./callTree";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./components/ui/tooltip";
-import { duration } from "./format";
 import { CloseIcon } from "./icons";
 import { type Category, spanCategories } from "./lib/breakdown";
 import { GC } from "./lib/memory";
-import { percents } from "./lib/percent";
 import { plural } from "./lib/plural";
+import { WAITING } from "./lib/profile";
 import { cleared, isShown, rangeLabel, type Slice, togglePart } from "./lib/slice";
-import { NOT_PROFILED, shareLabel } from "./lib/timeShares";
-import { timeParts, WAITED_SHARE } from "./lib/waitingShare";
+import { splitOf } from "./lib/split";
+import { NOT_PROFILED } from "./lib/timeShares";
 import { litKey } from "./lit";
-import { largestFirst, ShareFace } from "./Shares";
+import { ShareFace } from "./Shares";
 import { useHeldSlice } from "./TimeSlice";
 import type { Related, Trace } from "./types";
 
 /** What a share of the time is: a category of spans, the collector's pauses, or the code's waits. */
-export type ShareKind = Category | typeof GC | typeof WAITED_SHARE | typeof NOT_PROFILED;
+export type ShareKind = Category | typeof GC | typeof WAITING | typeof NOT_PROFILED;
 
 /** A share of the time, as the legend and the strip's tooltip say it. */
 export interface ShareOf {
   category: ShareKind;
+  /** Its time (µs) and that time written, as the trace's split says it (lib/split). */
   value: number;
+  time: string;
   total: number;
-  /** Its percent of the total, as said: the legend's add up to 100% (percents). */
+  /** Its percent of the total, as the split says it: they add up to 100%. */
   percent: string;
   /** How many spans count in it; the collector's, how many times it ran; none for waiting. */
   calls: number;
@@ -32,56 +33,39 @@ export interface ShareOf {
 
 /** "26 ms · 96% · 12 calls": how long, of the whole, how many spans (the collector's runs); waiting, how long. */
 function shareNumbers(share: ShareOf): string {
-  const numbers = `${duration(share.value)} · ${share.percent}`;
-  if (share.category === WAITED_SHARE) return `${numbers} · not computing: a sleep, a timer, a socket, a lock`;
+  const numbers = `${share.time} · ${share.percent}`;
+  if (share.category === WAITING) return `${numbers} · not computing: a sleep, a timer, a socket, a lock`;
   if (share.category === NOT_PROFILED) return `${numbers} · its code's time before the profile's first sample`;
   const counted =
     share.category === GC ? plural(share.calls, "collection", "collections") : plural(share.calls, "call", "calls");
   return `${numbers} · ${counted}`;
 }
 
-/** Numbers added up by category. */
-function addUp<K>(items: readonly [K, number][]): Map<K, number> {
-  const sums = new Map<K, number>();
-  for (const [category, value] of items) sums.set(category, (sums.get(category) ?? 0) + value);
-  return sums;
-}
-
 /** A share of spans' time: one that picks its rows. */
 type SpanShare = ShareOf & { category: Category };
 
 function ofSpans(share: ShareOf): share is SpanShare {
-  return share.category !== GC && share.category !== WAITED_SHARE && share.category !== NOT_PROFILED;
+  return share.category !== GC && share.category !== WAITING && share.category !== NOT_PROFILED;
 }
 
-/** Each share of the time with its numbers: how long, of how much, how many spans; largest first. */
+/**
+ * Each share of the time with its numbers, as the trace's split says them (lib/split): how long, of how much, how
+ * many spans; largest first, waiting last.
+ */
 export function sharesOf(trace: Trace): ShareOf[] {
-  const parts = timeParts(trace);
-  const total = Math.max(
-    parts.reduce((sum, [, value]) => sum + value, 0),
-    1,
-  );
-  const categories = spanCategories(trace);
-  const calls = addUp<ShareKind>([...categories.values()].map((category) => [category, 1]));
+  const split = splitOf(trace);
+  const calls = new Map<ShareKind, number>();
+  for (const category of spanCategories(trace).values()) calls.set(category, (calls.get(category) ?? 0) + 1);
   calls.set(GC, trace.profile?.gc?.collections ?? 0);
-  const said = percents(
-    parts.map(([, value]) => value),
-    total,
-  );
-  const shares = parts.map(([category, value], at) => ({
-    category,
-    value,
-    total,
-    percent: said[at] ?? "0%",
-    calls: calls.get(category) ?? 0,
-    label: shareLabel(category),
+  return split.shares.map((share) => ({
+    category: share.share,
+    value: share.us,
+    time: share.time,
+    total: split.total,
+    percent: share.percent,
+    calls: calls.get(share.share) ?? 0,
+    label: share.label,
   }));
-  // Waiting last, as the Profile tab has it.
-  return largestFirst(
-    shares,
-    (share) => share.value,
-    (share) => (share.category === WAITED_SHARE ? 1 : 0),
-  );
 }
 
 interface SliceState {
@@ -112,7 +96,7 @@ function keyboardOnly(event: FocusEvent<HTMLElement>): void {
 
 /** A share's swatch: its colour; waiting's hatched, as the strip draws the waits. */
 function swatchClass(share: ShareOf): string {
-  return share.category === WAITED_SHARE ? "dt-swatch dt-hatched" : "dt-swatch";
+  return share.category === WAITING ? "dt-swatch dt-hatched" : "dt-swatch";
 }
 
 /** The numbers of a share, over it: its name, how long, of the whole, how many calls. */
@@ -143,7 +127,7 @@ function FixedShare({ share }: { share: ShareOf }) {
             <ShareFace
               swatch={<span className={swatchClass(share)} />}
               name={share.label}
-              value={duration(share.value)}
+              value={share.time}
               share={share.percent}
             />
           </span>
@@ -173,7 +157,7 @@ function Share({ share, filters }: { share: SpanShare; filters: SliceState }) {
             <ShareFace
               swatch={<span className="dt-swatch" />}
               name={share.label}
-              value={duration(share.value)}
+              value={share.time}
               share={share.percent}
             />
           </button>

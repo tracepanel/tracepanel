@@ -8,38 +8,35 @@ test.beforeEach(async ({ page }) => {
   await page.goto(`/#/t/${await traceId("GET /reports/sales")}?tab=profile`);
 });
 
-test("the time in code, your code's, then each package's share", async ({ page }) => {
+test("the time in code: the strip's shares, in Your code and in All frames", async ({ page }) => {
   const packages = page.getByRole("region", { name: "Time by package" });
+  const shares = [/^Your code\s*30 ms\s*71%$/, /^GC\s*12 ms\s*29%$/];
 
-  await expect(page.getByText("sampled of the trace's", { exact: false })).toBeVisible();
+  await expect(page.getByText("profiled of the trace's", { exact: false })).toBeVisible();
   await expect(page.getByText("100 samples, one every 1 ms")).toBeVisible();
-  await expect(packages.getByRole("button")).toHaveText([/^Your code\s*100 ms\s*100%$/]);
+  await expect(packages.getByRole("button")).toHaveText(shares);
 
   await page.getByRole("tab", { name: "All frames" }).click();
 
-  await expect(packages.getByRole("button")).toHaveText([
-    /^django\.db\s*60 ms\s*60%$/,
-    /^django\.template\s*30 ms\s*30%$/,
-    /^Your code\s*10 ms\s*10%$/,
-  ]);
+  await expect(packages.getByRole("button")).toHaveText(shares);
 });
 
-test("packages light together, and one click shows every package again", async ({ page }) => {
+test("shares light together, and one click shows every package again", async ({ page }) => {
   await page.getByRole("tab", { name: "All frames" }).click();
   const packages = page.getByRole("region", { name: "Time by package" });
-  const db = packages.getByRole("button", { name: /^django\.db/ });
-  const template = packages.getByRole("button", { name: /^django\.template/ });
+  const yours = packages.getByRole("button", { name: /^Your code/ });
+  const gc = packages.getByRole("button", { name: /^GC/ });
 
-  await db.click();
-  await template.click();
+  await yours.click();
+  await gc.click();
 
-  await expect(db).toHaveAttribute("aria-pressed", "true");
-  await expect(template).toHaveAttribute("aria-pressed", "true");
+  await expect(yours).toHaveAttribute("aria-pressed", "true");
+  await expect(gc).toHaveAttribute("aria-pressed", "true");
 
   await page.getByRole("button", { name: "Show every package" }).click();
 
-  await expect(db).toHaveAttribute("aria-pressed", "false");
-  await expect(template).toHaveAttribute("aria-pressed", "false");
+  await expect(yours).toHaveAttribute("aria-pressed", "false");
+  await expect(gc).toHaveAttribute("aria-pressed", "false");
 });
 
 test("a box of the flame graph tells its function, where it is and its time", async ({ page }) => {

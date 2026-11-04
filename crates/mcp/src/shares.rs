@@ -188,32 +188,113 @@ fn own_parts(
     groups
 }
 
+/// What each stack of a profile is to the split: whether it waits, whether it ran the project's code (a frame of
+/// its on it, and not tracing's own code at its tip): the console's `waits` and `runsYours`.
+pub(crate) fn stack_kinds(raw: &Value) -> Vec<StackKind> {
+    let frames = raw
+        .get("frames")
+        .and_then(Value::as_array)
+        .map_or(&[][..], Vec::as_slice);
+    let in_app = |frame: &Value| frame.get("in_app").and_then(Value::as_bool) == Some(true);
+    raw.get("stacks")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .map(|stack| {
+            let path: Vec<&Value> = stack
+                .get("frames")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(|at| frames.get(at.as_u64()? as usize))
+                .collect();
+            let leaf = path.last();
+            let tracing = leaf.is_some_and(|leaf| {
+                !in_app(leaf)
+                    && tracepanel_analysis::profiles::tracing(
+                        leaf.get("module").and_then(Value::as_str).unwrap_or(""),
+                        leaf.get("file").and_then(Value::as_str).unwrap_or(""),
+                    )
+            });
+            StackKind {
+                waits: leaf
+                    .is_some_and(|leaf| leaf.get("waiting").and_then(Value::as_bool) == Some(true)),
+                yours: path.iter().any(|frame| in_app(frame)) && !tracing,
+            }
+        })
+        .collect()
+}
+
+/// Whether a profile says when its stacks were seen: its buckets' width, and buckets on its stacks (the console's
+/// `timed`).
+pub(crate) fn timed(raw: &Value) -> bool {
+    int(raw, "bucket_us") > 0
+        && raw
+            .get("stacks")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .any(|stack| {
+                stack
+                    .get("at")
+                    .and_then(Value::as_array)
+                    .is_some_and(|at| !at.is_empty())
+            })
+}
+
+/// A profile with no samples at all (a Go request shorter than its profiler's tick): it says when nothing ran.
+pub(crate) fn empty(raw: &Value) -> bool {
+    raw.get("stacks")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .all(|stack| int(stack, "count") <= 0)
+}
+
 /// The trace's time in segments, in order (the console's `segmentsOf`): each span's stretches, the collector's
-/// pauses cut out as GC's, and, with a timed profile, each bucket of a span's own code in its parts.
+/// pauses cut out as GC's, and, with a timed profile, each bucket of a span's own code in its parts. With a profile
+/// that has no samples, a span's own code is not profiled; the spans say the rest.
 pub(crate) fn segments<'a>(doc: &'a Value, kinds: &[StackKind]) -> Vec<Segment<'a>> {
-    let Some(raw) = doc.get("profile") else {
-        return Vec::new();
-    };
+    let raw = doc.get("profile").filter(|raw| raw.is_object());
     let duration = int(doc, "duration") as f64;
-    let width = int(raw, "bucket_us") as f64;
+    let width = match raw {
+        Some(raw) if timed(raw) => int(raw, "bucket_us") as f64,
+        _ => 0.0,
+    };
+    let unsampled = width > 0.0 || raw.is_some_and(empty);
     let spans = spans_of(doc);
     let by_id: HashMap<&str, &Value> = spans.iter().map(|span| (span.id, span.raw)).collect();
-    let buckets = if width > 0.0 {
-        bucket_stacks(raw, duration, width)
-    } else {
-        BTreeMap::new()
+    let buckets = match raw {
+        Some(raw) if width > 0.0 => bucket_stacks(raw, duration, width),
+        _ => BTreeMap::new(),
     };
-    let pauses = gc_pauses(raw, duration);
+    let pauses = raw.map_or_else(Vec::new, |raw| gc_pauses(raw, duration));
     let mut out = Vec::new();
     for stretch in stretches(doc, &spans) {
         let span = by_id[stretch.span];
-        for ((from, to), gc) in cut_by_pauses(stretch.from, stretch.to, &pauses) {
+        // Only the trace's own time: a span that ends after it (its exporter's clock) counts up to its end.
+        let (from, to) = (stretch.from.max(0.0), stretch.to.min(duration));
+        if to <= from {
+            continue;
+        }
+        // A query's time is the database's whole, the collector's pauses during it too: the DB tab's time.
+        let paused: &[(f64, f64)] = if stretch.category == "sql" {
+            &[]
+        } else {
+            &pauses
+        };
+        for ((from, to), gc) in cut_by_pauses(from, to, paused) {
             let plain = if gc { GC } else { stretch.category };
             if width <= 0.0 {
+                let share = if unsampled && !gc && OWN_CODE.contains(&stretch.category) {
+                    NOT_PROFILED
+                } else {
+                    plain
+                };
                 out.push(Segment {
                     from,
                     to,
-                    share: plain,
+                    share,
                     span,
                     stacks: None,
                 });
@@ -322,20 +403,6 @@ pub(crate) fn share_frame(segment: &Segment) -> Option<(String, &'static str)> {
     Some((function, share))
 }
 
-/// The step a time is said in (the console's duration): a tenth of a second from a second on, a millisecond from
-/// one, a tenth of one, else a microsecond.
-pub(crate) fn display_step(us: f64) -> f64 {
-    if (us / 1000.0).round() >= 1000.0 {
-        100_000.0
-    } else if us >= 1000.0 {
-        1000.0
-    } else if us >= 100.0 {
-        100.0
-    } else {
-        1.0
-    }
-}
-
 /// Times rounded to `step` so they add up to `target` steps: each rounded down, the steps left to those that lost
 /// most (largest remainder), the first of them on a tie.
 pub(crate) fn apportion(values: &[f64], step: f64, target: i64) -> Vec<f64> {
@@ -372,7 +439,7 @@ pub(crate) fn percents(parts: &[f64], whole: f64) -> Vec<String> {
     }
     let exact: Vec<f64> = parts
         .iter()
-        .map(|part| part.max(0.0) * 100.0 / whole)
+        .map(|part| (part.max(0.0) / whole) * 100.0)
         .collect();
     let said = apportion(&exact, 1.0, exact.iter().sum::<f64>().round() as i64);
     parts
@@ -394,35 +461,9 @@ pub(crate) fn percents(parts: &[f64], whole: f64) -> Vec<String> {
         .collect()
 }
 
-/// Times as said: rounded to the step their total is said in, adding up to that total as said.
-pub(crate) fn rounded<K: Clone>(times: &[(K, f64)]) -> Vec<(K, f64)> {
-    let total: f64 = times.iter().map(|(_, us)| us).sum();
-    let step = display_step(total);
-    let values: Vec<f64> = times.iter().map(|(_, us)| *us).collect();
-    let parts = apportion(&values, step, (total / step).round() as i64);
-    times
-        .iter()
-        .zip(parts)
-        .map(|((key, _), us)| (key.clone(), us))
-        .collect()
-}
-
-/// The trace's time by share (µs), as said: what the console's time strip legend and Profile tab bar say.
-pub(crate) fn share_times(segments: &[Segment]) -> Vec<(&'static str, f64)> {
-    let mut times: Vec<(&'static str, f64)> = Vec::new();
-    for segment in segments {
-        let time = segment.to - segment.from;
-        match times.iter_mut().find(|(share, _)| *share == segment.share) {
-            Some(found) => found.1 += time,
-            None => times.push((segment.share, time)),
-        }
-    }
-    rounded(&times)
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{apportion, percents, rounded};
+    use super::{apportion, percents};
 
     #[test]
     fn percents_said_add_up_to_100() {
@@ -438,9 +479,5 @@ mod tests {
     fn parts_said_add_up_to_the_total_said() {
         // A code row's profile: 6.9 ms and 3.56 ms of 10.46 ms read 7 + 4 = 11 of 10, rounded each.
         assert_eq!(apportion(&[6900.0, 3560.0], 1000.0, 10), [7000.0, 3000.0]);
-        assert_eq!(
-            rounded(&[("a", 33_400.0), ("b", 14_300.0), ("c", 60_300.0)]),
-            [("a", 34_000.0), ("b", 14_000.0), ("c", 60_000.0)]
-        );
     }
 }

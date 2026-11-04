@@ -209,12 +209,13 @@ export function allFrames(profile: Profile): Profile {
 }
 
 /**
- * Whether the profile opens on Your code. A timed one always does: its Your code is the time strip's split (lib/
- * timeShares), whatever share is largest (a Node BFF's calls, its event loop). Else where your code ran enough of the
+ * Whether the profile opens on Your code. A timed one always does, and one of the time strip's split (lib/split: an
+ * app's traces' merged, one with no samples): its Your code is the split, whatever share is largest (a Node BFF's
+ * calls, its event loop). Else where your code ran enough of the
  * time it computed: its waits are no one's code, and a profile that only waited opens on Your code too, which says so.
  */
 export function mostlyYours(profile: Profile): boolean {
-  if (timed(profile)) return true;
+  if (timed(profile) || profile.frames.some((frame) => shareFrame(frame) !== null)) return true;
   const ran = profile.stacks.filter((stack) => profile.frames[stack.frames.at(-1) ?? -1]?.waiting !== true);
   const computed = ran.reduce((sum, stack) => sum + stack.count, 0);
   const yours = ran.filter((stack) => runsYours(profile, stack)).reduce((sum, stack) => sum + stack.count, 0);

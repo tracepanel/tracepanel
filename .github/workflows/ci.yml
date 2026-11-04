@@ -86,7 +86,7 @@ jobs:
           touched rust '^(crates/|Cargo\.(toml|lock)$|rust-toolchain\.toml$|schema/)'
           # ui/, the build it makes (ui-dist/), and what checks it: the API it is typed from (openapi.yaml and the trace schema
           # it refers to), its build script, hooks.
-          touched ui '^(ui/|ui-dist/|schema/(openapi|trace\.schema)\.(yaml|json)$|scripts/(ui|notices)\.(sh|py)$|lefthook\.yml$)'
+          touched ui '^(ui/|ui-dist/|schema/(openapi|trace\.schema)\.(yaml|json)$|scripts/((ui|notices)\.(sh|py)|profile_sweep\.mjs)$|lefthook\.yml$)'
           # The pages, and the comments scripts/lint_docs.py reads (the crates' and the scripts').
           touched docs '(\.md$|^crates/.*\.rs$|^scripts/.*\.py$)'
 
@@ -232,6 +232,11 @@ jobs:
 
       - name: The console in a browser
         run: pnpm --filter @tracepanel/e2e e2e
+
+      # Over the store the tests leave: every view of each profiled trace's time (the strip, the Profile tab, its code
+      # rows' stretches) against the MCP server's get_profile, to the letter. It runs its own agent on a copy.
+      - name: Every view of a profile says the same
+        run: node ../scripts/profile_sweep.mjs --agent ../target/debug/tracepanel-agent --store e2e/.store
 
       - if: failure()
         uses: actions/upload-artifact@v7

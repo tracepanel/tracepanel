@@ -345,7 +345,8 @@ test("a Next.js route's code is its handler's: pg's time is its helper's, OpenTe
   await page.getByRole("tab", { name: "All frames" }).click();
 
   await expect.poll(() => boxes(page)).toContain("onStart");
-  await expect(shares(page)).toHaveText([/^Framework & middleware\s*5 ms/, /^next\s*3 ms/, /^pg-pool\s*2 ms/]);
+  // The strip's shares in either view: the bar is the trace's time, not its frames'.
+  await expect(shares(page)).toHaveText([/^Your code\s*5 ms/, /^Framework & middleware\s*5 ms/]);
 });
 
 test("a JVM request's code is its packages': Spring's, the JDK's and Hibernate's proxies are not yours, a park waits", async ({
@@ -355,7 +356,8 @@ test("a JVM request's code is its packages': Spring's, the JDK's and Hibernate's
 
   // A park is waiting, as every language's is: no JDK frame in Your code, in the flame nor in the list.
   await expect.poll(() => boxes(page)).toEqual(["CatalogController.listProducts", "waiting", "waiting"]);
-  await expect(shares(page)).toHaveText([/^Your code\s*4 ms/, /^Waiting\s*6 ms/]);
+  // Its samples aren't timed: its bar is the strip's, spans' (its waits in the flame and the list).
+  await expect(shares(page)).toHaveText([/^Your code\s*10 ms\s*100%$/]);
   await expect(boxesNamed(page, "waiting").first()).toHaveClass(/dt-hatched/);
   await expect.poll(() => functionNames(page)).toEqual(["CatalogController.listProducts", "[waiting]"]);
 
@@ -365,7 +367,7 @@ test("a JVM request's code is its packages': Spring's, the JDK's and Hibernate's
   await expect.poll(() => boxes(page)).toContain("Brand$HibernateProxy.getName");
   await expect.poll(() => boxes(page)).toContain("VirtualThread.park");
   await expect(boxesNamed(page, "VirtualThread.park")).toHaveClass(/dt-hatched/);
-  await expect(shares(page)).toHaveText([/^org\.springframework\s*4 ms/, /^Waiting\s*6 ms/]);
+  await expect(shares(page)).toHaveText([/^Your code\s*10 ms\s*100%$/]);
 });
 
 test("a Python task's waits are waiting under the function of yours that waited, as a JVM's park is", async ({
@@ -377,7 +379,7 @@ test("a Python task's waits are waiting under the function of yours that waited,
   // refresh_tracking awaiting the ORM's thread is the same function as refresh_tracking awaiting track_parcel: one
   // box, one row.
   await expect.poll(() => boxes(page)).toEqual(["refresh_tracking", "track_parcel", "waiting", "waiting"]);
-  await expect(shares(page)).toHaveText([/^Your code\s*1 ms/, /^Waiting\s*9 ms/]);
+  await expect(shares(page)).toHaveText([/^Your code\s*10 ms\s*100%$/]);
   await expect(boxesNamed(page, "waiting").first()).toHaveClass(/dt-hatched/);
   await expect.poll(() => functionNames(page)).toEqual(["track_parcel", "refresh_tracking", "[waiting]"]);
 
