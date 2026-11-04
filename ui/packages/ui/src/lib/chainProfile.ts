@@ -178,8 +178,8 @@ export function mergeMemories(profiles: readonly Profile[]): MemoryOf | undefine
   return { profile: { interval_us: 1, samples: 0, frames, stacks: [], memory }, memory };
 }
 
-/** What a profile adds up to: its time, of it waiting (its innermost frame waits), its function that ran most. */
-export function profileSums(profile: Profile): { time: number; waiting: number; top: string | undefined } {
+/** What a profile adds up to: its time waiting (its innermost frame waits), and where most of its time went. */
+export function profileSums(profile: Profile): { waiting: number; top: string | undefined } {
   const waiting = profile.stacks
     .filter((stack) => profile.frames[stack.frames[stack.frames.length - 1] ?? -1]?.waiting)
     .reduce((sum, stack) => sum + stack.count, 0);
@@ -190,7 +190,6 @@ export function profileSums(profile: Profile): { time: number; waiting: number; 
     (row) => !(row.frame.waiting || shareFrame(row.frame)?.category === NOT_PROFILED),
   )?.frame.function;
   return {
-    time: profile.samples * profile.interval_us,
     waiting: waiting * profile.interval_us,
     top: top === FRAMEWORK ? "Framework & runtime" : top,
   };

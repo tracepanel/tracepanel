@@ -1432,22 +1432,23 @@ function ProfileSums({ apps, views }: { apps: readonly AppProfile[]; views: Read
   return (
     <SumsTable label="What the profiles add up to" columns={TIME_SUMS}>
       {apps.map((app) => (
-        <ProfileSumRow key={app.app} app={app} profile={views.get(app.app)?.profile} />
+        <ProfileSumRow key={app.app} app={app} view={views.get(app.app)} />
       ))}
     </SumsTable>
   );
 }
 
 /** One app's row: its chip, its profiled time, of it waiting, the function most time went in. */
-function ProfileSumRow({ app, profile }: { app: AppProfile; profile: Profile | undefined }) {
-  if (!profile) return null;
-  const sums = profileSums(profile);
+function ProfileSumRow({ app, view }: { app: AppProfile; view: Scope | undefined }) {
+  if (!view) return null;
+  const sums = profileSums(view.profile);
   return (
     <tr>
       <td>
         <AppChip name={app.app} runtime={appRuntime(app)} compact />
       </td>
-      <td>{duration(sums.time)}</td>
+      {/* What its samples cover, as its section's head says it: not the time its bar has from spans. */}
+      <td>{duration(view.profiled * view.profile.interval_us)}</td>
       <td>{sums.waiting > 0 ? duration(sums.waiting) : "—"}</td>
       <td>{sums.top ? <code title={sums.top}>{sums.top}</code> : "—"}</td>
     </tr>
