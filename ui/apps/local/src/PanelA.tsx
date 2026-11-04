@@ -12,8 +12,12 @@ import {
   Logo,
   RangeBand,
   type RowKind,
+  Running,
+  StatusBadge,
   type Stretch,
+  TraceBadge,
   type TraceRow,
+  useNow,
   useRangeDrag,
   WaterfallContext,
   type WaterfallFacts,
@@ -21,7 +25,7 @@ import {
 } from "@tracepanel/ui";
 import { isTyping } from "@tracepanel/ui/lib/keys";
 import { readItem, writeItem } from "@tracepanel/ui/lib/storage";
-import { ListEndIcon } from "lucide-react";
+import { ChevronRightIcon, ListEndIcon } from "lucide-react";
 import {
   type ReactNode,
   type RefObject,
@@ -49,41 +53,20 @@ import { SwitchUser } from "./UserSwitcher";
 
 export const PANEL_A_KEY = "tracepanel:panel-a";
 
-/** The rows of the page the trace on screen is on: its page row and the requests under it. */
-function pageOf(rows: readonly TraceRow[], id: string | null): TraceRow[] {
-  const at = rows.findIndex((row) => row.trace.id === id);
-  if (at === -1) return [];
-  let head = at;
-  while (head > 0 && rows[head]?.depth) head -= 1;
-  let end = head + 1;
-  while (end < rows.length && rows[end]?.depth) end += 1;
-  return rows.slice(head, end).filter((row) => !(row.run || row.group));
-}
-
-/** How far apart (µs) the page and its first request may be on two clocks before the page is placed by its requests. */
-const CLOCKS_APART = 60_000_000;
-
 /**
- * The page's rows on one clock: its requests as the browser timed them; the page itself as its trace says, unless that
- * is on another clock far from them (an app's, set apart from the browser's): then it ends where its first request
- * starts.
+ * The waterfall's top level: every page and request of the tab, oldest first, a request under its page. A browser's
+ * view has its requests in its own spans: open, they are not listed again under it.
  */
-function onBrowserClock(page: TraceRow[]): TraceRow[] {
-  const [head, ...rest] = page;
-  const first = rest.length ? Math.min(...rest.map((row) => row.trace.start)) : null;
-  if (!head || first === null || Math.abs(first - (head.trace.start + head.trace.duration)) < CLOCKS_APART) return page;
-  return [{ ...head, trace: { ...head.trace, start: first - head.trace.duration } }, ...rest];
-}
-
-/**
- * The waterfall's top rows: the page, then its requests under it. A browser's view has its requests in its own call
- * tree (its chain), so they are not listed again.
- */
-function topRows(page: readonly TraceRow[]): TraceRow[] {
-  const [head, ...rest] = page;
-  if (!head) return [];
-  if (head.trace.kind === "page") return [head, ...rest.filter((row) => row.trace.kind === "page")];
-  return [head, ...rest];
+function entriesOf(rows: readonly TraceRow[], open: string | null): { row: TraceRow; depth: number }[] {
+  const out: { row: TraceRow; depth: number }[] = [];
+  for (const group of pagesOf(rows)) {
+    const [head, ...rest] = group;
+    if (!head) continue;
+    out.push({ row: head, depth: 0 });
+    if (head.trace.kind === "page" && head.trace.id === open) continue;
+    for (const row of rest) out.push({ row, depth: 1 });
+  }
+  return out;
 }
 
 /** The page's time: from its first start to its last end. */
@@ -236,7 +219,10 @@ function AxisHead({
       <span className="wf-ticks" aria-hidden="true" ref={ticksRef} title="Drag to pick a stretch of time">
         {skipped > 0 ? (
           <span className="wf-break" title={`${duration(skipped)} before the first span, left off the axis`}>
-            ⫽ {duration(skipped)}
+            <svg viewBox="0 0 10 12" width="10" height="12" aria-hidden="true">
+              <path d="M2 11 6 1M5 11 9 1" stroke="currentColor" strokeWidth="1.4" fill="none" />
+            </svg>
+            {duration(skipped)}
           </span>
         ) : null}
         {ticks(axis, skipped).map((tick) => (
@@ -526,7 +512,9 @@ function usePanelKeys(
         }
       }
       if (event.key !== "Escape" || event.defaultPrevented) return;
+      const wide = document.querySelector(".wf-main[data-wide]");
       if (now.shortcuts) does.shortcuts(false);
+      else if (wide) wide.removeAttribute("data-wide");
       else if (now.range) does.clearRange();
       else if (now.kind) does.clearKind();
       else if (now.selected) does.deselect();
@@ -556,11 +544,13 @@ export function PanelA({ route }: { route: Route }) {
   const mainRef = useRef<HTMLDivElement>(null);
   useTimeColumn(panelRef, ticksRef);
 
-  const page = useMemo(() => onBrowserClock(pageOf(listed, selectedId)), [listed, selectedId]);
-  const top = topRows(page);
-  const axisKey = page.map((row) => `${row.trace.id}:${row.trace.start}:${row.trace.duration}`).join(",");
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `axisKey` says when the page's time changed.
-  const whole = useMemo(() => pageAxis(page), [axisKey]);
+  const entries = entriesOf(listed, selectedId);
+  const opened = entries.find((entry) => entry.row.trace.id === selectedId) ?? entries.at(-1);
+  const openId = opened?.row.trace.id ?? selectedId;
+  // The axis is the open entry's own time: its spans fill the width.
+  const axisKey = opened ? `${opened.row.trace.id}:${opened.row.trace.start}:${opened.row.trace.duration}` : "";
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `axisKey` says when the open entry's time changed.
+  const whole = useMemo(() => (opened ? pageAxis([opened.row]) : null), [axisKey]);
   const [works, setWorks] = useState<number | null>(null);
   const { axis, skipped } = useMemo(() => withoutIdleStart(whole, works), [whole, works]);
   const { host, setKind, setRange, setSelected } = useHost(axis, details);
@@ -582,7 +572,7 @@ export function PanelA({ route }: { route: Route }) {
   useEffect(() => {
     setRange(null);
     setSelected(null);
-  }, [top[0]?.trace.id]);
+  }, [openId]);
   const drag = useRangeDrag(axis?.duration ?? 1, (picked) => setRange({ from: picked[0], to: picked[1] }));
   const shownRange = drag.draft ? { from: drag.draft[0], to: drag.draft[1] } : host.range;
 
@@ -614,7 +604,7 @@ export function PanelA({ route }: { route: Route }) {
           <div className="wf-zone wf-zone-tools" />
           <div className="wf-zone wf-zone-actions">
             <SwitchUser source={source} onSwitched={() => tellWidget("tracepanel:reload")} />
-            <ProfileToggle source={source} labeled={true} />
+            <ProfileToggle source={source} />
             <Hint title="Open in the console" detail="This request in the full console, in a new tab.">
               <a
                 className="wf-console inline-flex h-7.5 items-center gap-1.5 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary-hover [&_svg]:size-3.5"
@@ -660,6 +650,7 @@ export function PanelA({ route }: { route: Route }) {
               }}
             >
               <div className="wf-sticky">
+                <TabTimeline rows={listed} openId={openId} />
                 {host.axis ? (
                   <AxisHead
                     skipped={skipped}
@@ -668,6 +659,17 @@ export function PanelA({ route }: { route: Route }) {
                     filter={
                       <span className="wf-call-head">
                         <KindChips kind={host.kind} onKind={setKind} />
+                        <select
+                          className="wf-kind-select"
+                          aria-label="Kind of spans"
+                          value={host.kind ?? ""}
+                          onChange={(event) => setKind((event.target.value || null) as RowKind | null)}
+                        >
+                          <option value="">All</option>
+                          <option value="sql">SQL</option>
+                          <option value="http">HTTP</option>
+                          <option value="logs">Logs</option>
+                        </select>
                         <FollowButton follow={follow} onFollow={onFollow} />
                         <ClearButton onClear={() => setClearing(true)} label="Clear the list" />
                       </span>
@@ -676,20 +678,26 @@ export function PanelA({ route }: { route: Route }) {
                 ) : null}
               </div>
               <div className="wf-rows" role="tree" aria-label="Spans" data-filter={host.kind ? "" : undefined}>
-                {selectedId && top.length === 0 ? (
+                {selectedId && !opened ? (
                   <WaterfallTrace id={selectedId} rows={rows} stored={stored} depth={0} fold={false} />
                 ) : null}
-                {top.map((row, at) => (
-                  <WaterfallTrace
-                    key={row.key ?? row.trace.id}
-                    id={row.trace.id}
-                    rows={rows}
-                    stored={stored}
-                    anchor={row.trace.start}
-                    depth={at === 0 ? 0 : 1}
-                    fold={top.length > 1}
-                  />
-                ))}
+                {entries.map(({ row, depth }) =>
+                  row.trace.id !== openId ? (
+                    <EntryRow key={row.key ?? row.trace.id} row={row} depth={depth} />
+                  ) : row.open || row.trace.id.startsWith("~") ? (
+                    <InFlightRow key={row.key ?? row.trace.id} row={row} axis={host.axis} depth={depth} />
+                  ) : (
+                    <WaterfallTrace
+                      key={row.key ?? row.trace.id}
+                      id={row.trace.id}
+                      rows={rows}
+                      stored={stored}
+                      anchor={row.trace.start}
+                      depth={depth}
+                      fold={false}
+                    />
+                  ),
+                )}
                 {history && !selectedId ? (
                   <p className="wf-hint">No requests yet: requests from this browser tab appear here.</p>
                 ) : null}
@@ -726,6 +734,139 @@ export function PanelA({ route }: { route: Route }) {
         />
       </div>
     </WaterfallContext.Provider>
+  );
+}
+
+/** The tab's pages, oldest first, each with its requests: the waterfall's top level. */
+function pagesOf(rows: readonly TraceRow[]): TraceRow[][] {
+  const pages: TraceRow[][] = [];
+  for (const row of inOrder(true, rows)) {
+    if (row.run || row.group) continue;
+    if (!row.depth || pages.length === 0) pages.push([row]);
+    else pages.at(-1)?.push(row);
+  }
+  return pages;
+}
+
+function badgeWord(row: TraceRow): string {
+  return row.trace.kind === "page" ? "VIEW" : (row.trace.method ?? row.trace.kind.toUpperCase());
+}
+
+/** How far apart (µs) a page and its first request may be before the page is placed by its requests (two clocks). */
+const CLOCKS_APART = 60_000_000;
+
+/** Every page and request of the tab on one clock: a page far from its requests (an app's clock) ends where they start. */
+function onOneClock(rows: readonly TraceRow[]): TraceRow[] {
+  return pagesOf(rows).flatMap(([head, ...rest]) => {
+    if (!head) return [];
+    const first = rest.length ? Math.min(...rest.map((row) => row.trace.start)) : null;
+    const end = head.trace.start + head.trace.duration;
+    if (first === null || Math.abs(first - end) < CLOCKS_APART) return [head, ...rest];
+    return [{ ...head, trace: { ...head.trace, start: first - head.trace.duration } }, ...rest];
+  });
+}
+
+/**
+ * The tab's timeline: every page and request as a block on one shared axis, in the time column. Hover says what it
+ * is; a click opens it below (its own axis); the open one is outlined.
+ */
+function TabTimeline({ rows, openId }: { rows: readonly TraceRow[]; openId: string | null }) {
+  const all = onOneClock(rows);
+  const axis = pageAxis(all);
+  if (!axis || all.length === 0) return null;
+  return (
+    <div className="wf-band wf-grid">
+      <span className="wf-band-label">Tab</span>
+      <span className="wf-band-track">
+        {all.map((row) => {
+          const left = ((row.trace.start - axis.start) / axis.duration) * 100;
+          const width = Math.max((row.trace.duration / axis.duration) * 100, 0.3);
+          const issues = row.trace.issues
+            ? ` · ${row.trace.issues} ${row.trace.issues === 1 ? "issue" : "issues"}`
+            : "";
+          const status = row.trace.http_status ? ` · ${row.trace.http_status}` : "";
+          return (
+            <button
+              type="button"
+              key={row.key ?? row.trace.id}
+              className="wf-band-block"
+              data-kind={row.trace.kind}
+              data-depth={row.depth ?? 0}
+              data-failed={row.trace.status === "error" ? "" : undefined}
+              aria-current={row.trace.id === openId ? "true" : undefined}
+              aria-label={`Open ${row.trace.name}`}
+              title={`${row.trace.name}${status} · ${duration(row.trace.duration)}${issues}`}
+              tabIndex={-1}
+              style={{ left: `${Math.min(left, 99.7)}%`, width: `${width}%` }}
+              onClick={() => go({ name: "trace", id: row.trace.id })}
+            />
+          );
+        })}
+      </span>
+      <span className="wf-band-total">{duration(axis.duration)}</span>
+    </div>
+  );
+}
+
+/** A page or request of the tab, folded to one line (name, status, time): a click opens it here, on its own time. */
+function EntryRow({ row, depth }: { row: TraceRow; depth: number }) {
+  const name = row.trace.kind === "page" ? row.trace.name : (row.trace.path ?? row.trace.name);
+  const running = row.open || row.trace.id.startsWith("~");
+  return (
+    <div className="dt-map" data-waterfall="">
+      <button
+        type="button"
+        className="dt-map-row wf-other"
+        aria-expanded={false}
+        title={`Open ${row.trace.name}`}
+        onClick={() => go({ name: "trace", id: row.trace.id })}
+      >
+        <span className="dt-map-name" style={{ paddingLeft: `${0.75 + depth * 1.125}rem` }}>
+          <ChevronRightIcon className="wf-other-caret" aria-hidden="true" />
+          <TraceBadge word={badgeWord(row)} />
+          <span className="dt-map-text" title={row.trace.name}>
+            {name}
+          </span>
+          <StatusBadge status={row.trace.http_status} />
+        </span>
+        <span className="dt-map-track" />
+        {running ? (
+          <Running start={row.trace.start} until={row.until} className="dt-map-time" />
+        ) : (
+          <span className="dt-map-time">{duration(row.trace.duration)}</span>
+        )}
+      </button>
+    </div>
+  );
+}
+
+/** A request the page still waits for: its name, a bar growing to now, its time ticking. */
+function InFlightRow({ row, axis, depth }: { row: TraceRow; axis: Axis | null; depth: number }) {
+  const now = useNow(true) * 1000;
+  const start = row.trace.start;
+  const end = Math.max(start, row.until ?? now);
+  const place = axis
+    ? {
+        left: `${Math.min(Math.max(((start - axis.start) / axis.duration) * 100, 0), 100)}%`,
+        width: `${Math.max(Math.min(((end - start) / axis.duration) * 100, 100), 0.4)}%`,
+      }
+    : undefined;
+  return (
+    <div className="dt-map" data-waterfall="">
+      <div className="dt-map-row wf-inflight" data-kind="http.client">
+        <span className="dt-map-name" style={{ paddingLeft: `${0.75 + depth * 1.125}rem` }}>
+          <span className="dt-map-caret" />
+          <TraceBadge word={badgeWord(row)} />
+          <span className="dt-map-text" title={row.trace.name}>
+            {row.trace.path ?? row.trace.name}
+          </span>
+        </span>
+        <span className="dt-map-track" title={`${row.trace.name}\nstill in flight`}>
+          <span className="dt-map-bar wf-inflight-bar" style={place} />
+        </span>
+        <Running start={start} until={row.until} className="dt-map-time" />
+      </div>
+    </div>
   );
 }
 

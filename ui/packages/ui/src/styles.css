@@ -3795,3 +3795,184 @@ div.dt-map-row[data-kind="code"] {
 .dt-map[data-waterfall] .dt-request-queries {
   display: none;
 }
+.dt-wf-link {
+  color: var(--dt-accent);
+  font-size: var(--dt-size-xs);
+}
+.dt-wf-link:hover {
+  text-decoration: underline;
+}
+.dt-wf-queries li:has(.dt-wf-link) {
+  grid-template-columns: minmax(0, 1fr) 5rem 3.5rem auto;
+}
+/* The row's own details, as the old side pane laid them out: one column of names for every list. */
+.dt-wf-details {
+  --dt-name-col: min(15rem, 45%);
+  overflow-wrap: anywhere;
+}
+.dt-wf-disclosure {
+  border-bottom: 0;
+}
+.dt-wf-disclosure-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: var(--dt-text-2);
+  font-size: var(--dt-size-sm);
+  font-weight: 500;
+}
+.dt-wf-disclosure-head:hover {
+  color: var(--dt-text);
+}
+.dt-wf-disclosure-head svg {
+  width: 0.875rem;
+  height: 0.875rem;
+  transition: transform 0.12s;
+}
+.dt-wf-disclosure-head[aria-expanded="true"] svg {
+  transform: rotate(90deg);
+}
+.dt-wf-disclosure > .dt-wf-own {
+  margin: 0 -1rem;
+}
+.dt-wf-head-time {
+  flex: none;
+  color: var(--dt-text-2);
+  font-family: var(--dt-mono);
+  font-size: var(--dt-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+.dt-wf-split-stack {
+  display: flex;
+  height: 0.5rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--dt-muted-bg);
+}
+.dt-wf-split-stack > span {
+  height: 100%;
+}
+.dt-wf-split-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  font-size: var(--dt-size-sm);
+  color: var(--dt-text-2);
+}
+.dt-wf-split-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+.dt-wf-split-legend i {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 2px;
+}
+.dt-wf-split-legend b {
+  color: var(--dt-text);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.dt-wf-split-legend span {
+  color: var(--dt-text-3);
+}
+.dt-wf-totals-line {
+  padding: 0.625rem 1rem;
+  border-bottom: 1px solid var(--dt-border);
+  color: var(--dt-text-2);
+  font-size: var(--dt-size-sm);
+}
+
+/* ---------- round 5: the details pane as the mockup composed it ---------- */
+.dt-wf-details-head {
+  padding: 12px 14px 10px;
+  gap: 8px;
+  border-bottom: 1px solid var(--dt-border);
+}
+.dt-wf-details-head h3 {
+  font: 500 14px var(--dt-mono);
+}
+.dt-wf-split {
+  padding: 10px 14px 12px;
+  font-size: 12px;
+  color: var(--dt-text-3);
+}
+.dt-wf-split-bar {
+  height: 6px;
+  border-radius: 3px;
+}
+.dt-wf-section {
+  padding: 10px 14px;
+  gap: 6px;
+  border-bottom: 0;
+}
+.dt-wf-section h4 {
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+}
+.dt-wf-details .dt-issue-cards {
+  display: grid;
+  gap: 6px;
+}
+.dt-wf-details .dt-issue-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 5px;
+  padding: 8px 10px;
+  border: 1px solid var(--dt-warn-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--dt-warn-bg) 45%, transparent);
+  box-shadow: none;
+}
+.dt-wf-details .dt-issue-card[data-kind="error"] {
+  border-color: var(--dt-error-border);
+  background: color-mix(in srgb, var(--dt-error-bg) 45%, transparent);
+}
+.dt-wf-details .dt-issue-icon {
+  display: none;
+}
+.dt-wf-details .dt-issue-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.dt-wf-details .dt-issue-where {
+  font: 11px var(--dt-mono);
+  color: var(--dt-text-3);
+}
+.dt-wf-details .dt-issue-hint {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--dt-text-2);
+}
+.dt-wf-totals-line {
+  padding: 8px 14px;
+  border-bottom: 0;
+  font-size: 12px;
+}
+.dt-wf-split-legend {
+  font-size: 12px;
+}
+.dt-wf-own {
+  padding: 0 0 12px;
+}
+.dt-wf-details .dt-issue-cards {
+  padding: 0;
+}
+/* Utilities (a layer above this file's) style the footer's buttons: the card's links win over them here. */
+.dt-wf-details .dt-issue-card :is(button, a) {
+  height: auto !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: none !important;
+  box-shadow: none !important;
+  color: var(--dt-accent) !important;
+  font-size: 11.5px !important;
+  font-weight: 400 !important;
+}
+.dt-wf-details .dt-issue-card :is(button, a):hover {
+  text-decoration: underline;
+}

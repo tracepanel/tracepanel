@@ -1,14 +1,15 @@
-// The waterfall's one details pane (redesign A, a prototype): the selected row's name, where its time went (the
-// caller's wait, the app's time, the network), the issues in it as cards, its queries, then the row's own details.
+// The waterfall's one details pane (redesign A, a prototype): what the selected span is, by its kind (see
+// WaterfallDetails), and what a stretch of time dragged across the bars holds (RangeDetails).
 import type { ReactNode } from "react";
 import { appName } from "./CallRows";
 import type { Node } from "./callTree";
 import { duration } from "./format";
 import { IssueList } from "./IssueList";
 import { CloseIcon } from "./icons";
+import { plural } from "./lib/plural";
 import type { Windows } from "./lib/slice";
 import { splitOf } from "./lib/split";
-import { TraceBadge } from "./primitives";
+import { StatusBadge, TraceBadge } from "./primitives";
 import type { Issue, Span, Trace } from "./types";
 import { crumbOf, type WaterfallFacts } from "./Waterfall";
 
@@ -52,19 +53,6 @@ function servedIssues(node: Node): Issue[] {
   return [];
 }
 
-/** The row's queries, by statement: how many, how long all told. */
-function queriesOf(spans: readonly Span[]): { name: string; count: number; us: number; first: string }[] {
-  const by = new Map<string, { name: string; count: number; us: number; first: string }>();
-  for (const span of spans) {
-    if (span.kind !== "sql") continue;
-    const entry = by.get(span.name) ?? { name: span.name, count: 0, us: 0, first: span.id };
-    entry.count += 1;
-    entry.us += span.duration;
-    by.set(span.name, entry);
-  }
-  return [...by.values()].sort((a, b) => b.us - a.us);
-}
-
 /** A call another app served: the caller's wait, the app's own time, the rest the network and queues. */
 function HopSplit({ node }: { node: Node }) {
   if (node.type !== "span" || !node.served) return null;
@@ -87,6 +75,84 @@ function HopSplit({ node }: { node: Node }) {
   );
 }
 
+/** The row's headline: its kind, its name, how it was answered, how long it took. */
+function Headline({ node, trace, onClose }: { node: Node; trace: Trace; onClose: () => void }) {
+  const crumb = crumbOf(node);
+  const status = statusOf(node, trace);
+  const time = node.type === "span" ? node.span.duration : node.type === "task" ? node.run.duration : null;
+  return (
+    <header className="dt-wf-details-head">
+      <TraceBadge word={crumb.badge} />
+      <h3 title={crumb.label}>{crumb.label}</h3>
+      <StatusBadge status={status} />
+      {time !== null ? <span className="dt-wf-head-time">{duration(time)}</span> : null}
+      <button type="button" className="icon-button" aria-label="Close the details" onClick={onClose}>
+        <CloseIcon />
+      </button>
+    </header>
+  );
+}
+
+function statusOf(node: Node, trace: Trace): number | null {
+  if (node.type === "task") return node.run.http_status;
+  if (node.type !== "span") return null;
+  if (node.served) return node.served.run.http_status;
+  const own = node.span.parent_id === null ? trace.attrs["http.status_code"] : node.span.attrs["http.status_code"];
+  return typeof own === "number" ? own : null;
+}
+
+/** Where a request's time went, from split.ts: one bar of its shares, their times and percents under it. */
+function SplitBar({ trace }: { trace: Trace }) {
+  const split = splitOf(trace);
+  if (split.shares.length === 0) return null;
+  return (
+    <section className="dt-wf-section">
+      <span className="dt-wf-split-stack" aria-hidden="true">
+        {split.shares.map((share) => (
+          <span
+            key={share.share}
+            style={{
+              width: share.percent.startsWith("<") ? "0.5%" : share.percent,
+              background: shareColor(share.share),
+            }}
+          />
+        ))}
+      </span>
+      <ul className="dt-wf-split-legend">
+        {split.shares.map((share) => (
+          <li key={share.share}>
+            <i style={{ background: shareColor(share.share) }} />
+            {share.label} <b>{share.time}</b> <span>{share.percent}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function shareColor(share: string): string {
+  return `var(--dt-k-${share}, var(--dt-k-request))`;
+}
+
+/** A request's totals in one line, the non-zero ones only: "74 queries · 54 ms · 2 HTTP calls · 1 log record". */
+function TotalsLine({ facts }: { facts: WaterfallFacts }) {
+  const parts = [
+    facts.db.count ? `${plural(facts.db.count, "query", "queries")}${facts.db.time ? ` · ${facts.db.time}` : ""}` : "",
+    facts.http.count
+      ? `${plural(facts.http.count, "HTTP call", "HTTP calls")}${facts.http.time ? ` · ${facts.http.time}` : ""}`
+      : "",
+    facts.logs ? plural(facts.logs, "log record", "log records") : "",
+  ].filter(Boolean);
+  if (parts.length === 0) return null;
+  return <p className="dt-wf-totals-line">{parts.join(" · ")}</p>;
+}
+
+/**
+ * The selected row's details, by what it is: its headline; a request's split (one bar) or a call's wait, network and
+ * app time; its issues as cards with their fix; a request's non-zero totals; a call's way into its callee's spans; the
+ * profile where there is one; then what only this row has (a statement and its plan, a template's context, a record,
+ * a request's headers and body), as the old call tree's details said it. Never a zero, never the row's facts twice.
+ */
 export function WaterfallDetails({
   node,
   trace,
@@ -94,98 +160,59 @@ export function WaterfallDetails({
   onShow,
   totals,
   profile,
+  onOpen,
   children,
 }: {
   node: Node;
   trace: Trace;
   onClose: () => void;
   onShow: (key: string) => void;
-  /** A trace's root row: its totals, said here once (the toolbar has none). */
+  /** A trace's root row: its totals. */
   totals?: WaterfallFacts | undefined;
   /** The row's trace's profile, where it has one: its bar and flame. */
   profile?: ReactNode;
+  /** A call whose callee's spans are folded: opens them under its row. */
+  onOpen?: (() => void) | undefined;
   children: ReactNode;
 }) {
-  const crumb = crumbOf(node);
   const spans = spansUnder(node, trace);
   const found = issuesUnder(node, trace, spans);
-  const queries = queriesOf(spans);
-  const queryTime = queries.reduce((all, query) => all + query.us, 0);
-  const longest = Math.max(...queries.map((query) => query.us), 1);
+  const root = node.type === "span" && node.span.parent_id === null;
   return (
     <div className="dt-wf-details">
-      <header className="dt-wf-details-head">
-        <TraceBadge word={crumb.badge} />
-        <h3 title={crumb.label}>{crumb.label}</h3>
-        <button type="button" className="icon-button" aria-label="Close the details" onClick={onClose}>
-          <CloseIcon />
-        </button>
-      </header>
+      <Headline node={node} trace={trace} onClose={onClose} />
+      {/* The profile says the split itself (its bar and legend): not twice. */}
+      {root ? profile ? null : <SplitBar trace={trace} /> : <HopSplit node={node} />}
       {found.length > 0 ? (
         <section className="dt-wf-section">
-          <h4>
-            {found.length} {found.length === 1 ? "issue" : "issues"} under this span
-          </h4>
           <IssueList issues={found} onShowSpans={(ids) => ids[0] && onShow(String(ids[0]))} />
         </section>
       ) : null}
-      <HopSplit node={node} />
-      {profile ? <section className="dt-wf-section">{profile}</section> : null}
-      {totals ? <Totals facts={{ ...totals, issues: found.length }} /> : null}
-      {queries.length > 0 ? (
-        <section className="dt-wf-section">
-          <h4>
-            {queries.reduce((all, query) => all + query.count, 0)} queries · {duration(queryTime)}
-          </h4>
-          <ul className="dt-wf-queries">
-            {queries.slice(0, 8).map((query) => (
-              <li key={query.name}>
-                <span className="dt-wf-query-name" title={query.name}>
-                  {query.name}
-                  {query.count > 1 ? <span className="text-muted-foreground"> ×{query.count}</span> : null}
-                </span>
-                <span className="dt-wf-query-bar" aria-hidden="true">
-                  <span style={{ width: `${(query.us / longest) * 100}%` }} />
-                </span>
-                <span className="dt-wf-query-time">{duration(query.us)}</span>
-                <button type="button" className="dt-wf-link" onClick={() => onShow(query.first)}>
-                  Explain
-                </button>
-              </li>
-            ))}
-          </ul>
+      {totals ? <TotalsLine facts={totals} /> : null}
+      {onOpen ? (
+        <p className="dt-wf-totals-line">
+          <button type="button" className="dt-wf-link" onClick={onOpen}>
+            Show its spans
+          </button>
+        </p>
+      ) : null}
+      {profile ? (
+        <section className="dt-wf-section dt-wf-profile">
+          <header className="flex items-center justify-between">
+            <h4>Profile</h4>
+            <button
+              type="button"
+              className="dt-wf-link"
+              onClick={(event) => event.currentTarget.closest(".wf-main")?.toggleAttribute("data-wide")}
+            >
+              Full width
+            </button>
+          </header>
+          {profile}
         </section>
       ) : null}
-      <details className="dt-wf-more">
-        <summary>
-          {node.type === "span" && (node.served || node.span.parent_id === null) ? "Request details" : "Details"}
-        </summary>
-        <section className="dt-wf-own">{children}</section>
-      </details>
+      <section className="dt-wf-own">{children}</section>
     </div>
-  );
-}
-
-/** A trace's totals, in its root row's details: its queries and HTTP calls with their time, its records, its issues. */
-function Totals({ facts }: { facts: WaterfallFacts }) {
-  const rows: [string, string][] = [
-    ["Issues", String(facts.issues)],
-    ["Queries", facts.db.count ? `${facts.db.count}${facts.db.time ? ` · ${facts.db.time}` : ""}` : "0"],
-    ["HTTP calls", facts.http.count ? `${facts.http.count}${facts.http.time ? ` · ${facts.http.time}` : ""}` : "0"],
-    ["Log records", String(facts.logs)],
-  ];
-  return (
-    <section className="dt-wf-section">
-      <h4>In this trace</h4>
-      <dl className="dt-wf-totals">
-        {rows.map(([label, value]) => (
-          <div key={label}>
-            <dt>{label}</dt>
-            <dd>{value}</dd>
-          </div>
-        ))}
-      </dl>
-    </section>
   );
 }
 

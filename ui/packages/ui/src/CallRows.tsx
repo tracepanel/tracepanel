@@ -23,6 +23,7 @@ import {
   type RowContext,
   RowTime,
   rowState,
+  SHORT_KINDS,
   SpanFold,
   SpanName,
   sameRoute,
@@ -448,7 +449,7 @@ function GroupName({
   const first = node.spans[0];
   return (
     <>
-      <KindBadge kind={spanKindLabel(first?.kind, ctx.trace.attrs)} muted={true} className="dt-map-kind" />
+      <GroupKind kind={spanKindLabel(first?.kind, ctx.trace.attrs)} />
       <OpText text={callTemplate(first)} kind={first?.kind} />
       <AliasChip value={aliasOf(first)} />
       <FromTemplate span={first} parent={parent} />
@@ -620,6 +621,12 @@ function OwnRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps<
       ) : null}
     </div>
   );
+}
+
+/** A group's kind badge: in short in the waterfall, as a span's is. */
+function GroupKind({ kind }: { kind: string }) {
+  const short = useWaterfall() ? (SHORT_KINDS[kind] ?? kind) : kind;
+  return <KindBadge kind={short} muted={true} className="dt-map-kind" title={short === kind ? undefined : kind} />;
 }
 
 /** In the waterfall, a request's root row says how it was answered, as a call's row does. */

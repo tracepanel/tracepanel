@@ -2075,7 +2075,8 @@ body {
   --wf-control: 1.875rem;
   --wf-in: 0.25rem;
   --wf-between: 0.75rem;
-  --wf-cols: minmax(0, var(--wf-names, 40fr)) minmax(0, 60fr) 4.5rem;
+  /* The names give way first: never so wide that the bars drop under 10rem; the time column is fixed. */
+  --wf-cols: minmax(0, min(var(--wf-names, 40%), calc(100% - 15.5rem))) minmax(10rem, 1fr) 4.5rem;
   --wf-col-gap: 0.625rem;
 }
 .wf-bar {
@@ -2747,4 +2748,412 @@ button.wf-crumb:hover {
 }
 .wf-call-head > .wf-follow {
   margin-left: auto;
+}
+/* ---------- critique round: rows, focus, contrast, docks ---------- */
+
+/* The status pill: one column at the right of the names, after the name and its chips. */
+.dt-map[data-waterfall] .dt-map-name > .dt-status {
+  order: 99;
+  margin-left: auto;
+}
+/* A 5xx is said by its red status; the Error chip beside it again is not. */
+.dt-map[data-waterfall] .dt-map-row:has(.dt-status[data-tone="error"]) .dt-map-name [data-kind="error"] {
+  display: none;
+}
+/* The flame is the details' Profile: not on the rows. */
+.dt-map[data-waterfall] .dt-map-flame {
+  display: none;
+}
+/* Bars tall enough to see and hit. */
+.dt-map[data-waterfall] .dt-map-track {
+  height: 0.875rem;
+}
+.dt-map[data-waterfall] .dt-map-bar {
+  top: 3px;
+  bottom: auto;
+  height: 8px;
+}
+/* Text no smaller than 11px. */
+.dt-map[data-waterfall] .dt-map-row {
+  font-size: max(11.5px, var(--dt-size-sm));
+}
+.dt-map[data-waterfall] .dt-kind,
+.wf-head,
+.wf-kind {
+  font-size: max(11px, var(--dt-size-xs));
+}
+/* A visible focus ring on everything in the panel the keyboard reaches. */
+.wf-panel :is(button, a, [role="treeitem"], [role="radio"], [role="separator"], select):focus-visible {
+  outline: 2px solid var(--dt-accent) !important;
+  outline-offset: -2px !important;
+}
+/* Light: muted text dark enough to read (4.5:1 on white). */
+:root[data-theme="light"] .wf-panel {
+  --dt-text-3: #5d6475;
+}
+/* Light renders a status as dark does: a filled pill of its tone. */
+:root[data-theme="light"] .wf-panel .dt-status {
+  display: inline-block;
+  padding: 1px 0.375rem;
+  border-radius: 0.25rem;
+}
+:root[data-theme="light"] .wf-panel .dt-status::before {
+  display: none;
+}
+/* Other pages of the tab, one line each: a click opens one. */
+.wf-other .dt-map-name {
+  padding-left: 0.75rem;
+}
+.wf-other-caret {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  color: var(--dt-text-3);
+}
+.wf-other-count {
+  color: var(--dt-text-3);
+  font-size: var(--dt-size-xs);
+}
+.wf-other {
+  color: var(--dt-text-2);
+}
+/* A request in flight: its bar grows, pale, to now. */
+.wf-inflight-bar {
+  background: color-mix(in srgb, var(--dt-k-http) 45%, transparent);
+  animation: wf-pulse 1.2s ease-in-out infinite alternate;
+}
+@keyframes wf-pulse {
+  to {
+    opacity: 0.55;
+  }
+}
+/* Docked right: the bars keep at least 45%; the names truncate first. */
+.wf-panel[data-dock="right"] {
+  --wf-cols: minmax(0, min(var(--wf-names, 50%), calc(100% - 45% - 5rem))) minmax(45%, 1fr) 4rem;
+}
+/* The profile in the details, full width over the waterfall; Esc returns. */
+.wf-main[data-wide] .wf-waterfall {
+  display: none;
+}
+.wf-panel[data-dock] .wf-main[data-wide] {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+.wf-main[data-wide] .wf-splitter-side,
+.wf-main[data-wide] .wf-splitter-sheet {
+  display: none;
+}
+.wf-range-head {
+  padding: 0.75rem 1rem 0;
+  color: var(--dt-text-2);
+  font-size: var(--dt-size-sm);
+}
+.wf-break {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  position: absolute;
+  top: 0.375rem;
+  left: 0;
+  z-index: 1;
+  padding: 0 0.25rem;
+  background: var(--dt-panel);
+  color: var(--dt-text-3);
+  font-weight: 500;
+  text-transform: none;
+}
+:root[data-theme="light"] .wf-panel .dt-status {
+  background: var(--dt-ok-bg);
+  font-weight: 600;
+}
+:root[data-theme="light"] .wf-panel .dt-status[data-tone="info"] {
+  background: var(--dt-info-bg);
+}
+:root[data-theme="light"] .wf-panel .dt-status[data-tone="warn"] {
+  background: var(--dt-warn-bg);
+}
+:root[data-theme="light"] .wf-panel .dt-status[data-tone="error"] {
+  background: var(--dt-error-bg);
+}
+/* The kinds as a select where the call head is too narrow for the segments. */
+.wf-call-head {
+  container: wf-call / inline-size;
+}
+.wf-kind-select {
+  display: none;
+  height: 1.75rem;
+  padding: 0 0.375rem;
+  border: 1px solid var(--dt-border);
+  border-radius: var(--dt-radius-sm);
+  background: var(--dt-subtle);
+  color: var(--dt-text);
+  font-size: max(11px, var(--dt-size-xs));
+  text-transform: none;
+}
+@container wf-call (max-width: 17rem) {
+  .wf-call-head > .wf-kinds {
+    display: none;
+  }
+  .wf-kind-select {
+    display: inline-block;
+  }
+}
+
+/* ---------- round 5: the approved mockup as the visual spec (panel-redesign-a) ---------- */
+
+.wf-panel {
+  --wf-row: 26px;
+  --wf-track-pad: 10px;
+  background: var(--dt-panel);
+}
+/* Toolbar: 40px, the chrome's tone, icons 26px. */
+.wf-bar {
+  min-height: 40px;
+  padding: 0 10px 0 12px;
+  background: var(--dt-chrome);
+}
+.wf-zone-identity {
+  padding-left: 0;
+}
+.wf-zone-actions {
+  gap: 2px;
+}
+.wf-zone-actions .icon-button,
+.wf-call-head > .icon-button {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+}
+.wf-zone-actions .icon-button svg,
+.wf-call-head > .icon-button svg {
+  width: 15px;
+  height: 15px;
+}
+.wf-zone-actions .wf-console {
+  height: 26px;
+  margin: 0 6px;
+  padding: 0 10px;
+  border-radius: 7px;
+  font-size: 12px;
+}
+/* Profile: a quiet icon among the icons, the accent's tint while on. */
+.wf-zone-actions .icon-button[aria-pressed="true"],
+.wf-zone-actions .icon-button.text-orange-500 {
+  background: var(--dt-accent-bg);
+  color: var(--dt-accent);
+}
+.wf-zone-actions .icon-button[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: default;
+}
+/* Head: 24px... with the kinds as one segmented control, 22px segments. */
+.wf-head {
+  height: auto;
+  min-height: 34px;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+}
+.wf-ticks {
+  margin: 0 var(--wf-track-pad);
+}
+.wf-ticks > span {
+  top: 0;
+  bottom: 0;
+  padding: 10px 0 0 4px;
+  border-left-color: color-mix(in srgb, var(--dt-text-3) 13%, transparent);
+}
+.wf-call-head {
+  gap: 2px;
+  padding-left: 10px;
+}
+.wf-call-head > .wf-kinds {
+  height: 26px;
+  padding: 2px;
+  gap: 2px;
+  border: 1px solid var(--dt-border-strong);
+  border-radius: 8px;
+  background: none;
+}
+.wf-call-head > .wf-kinds .wf-kind {
+  height: 20px;
+  padding: 0 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--dt-text-3);
+}
+.wf-call-head > .wf-kinds .wf-kind[aria-checked="true"] {
+  background: var(--dt-faint);
+  color: var(--dt-text);
+}
+.wf-call-head > .icon-button:last-child {
+  margin-left: 0;
+}
+.wf-call-head > .icon-button:last-child::before {
+  display: none;
+}
+.wf-follow[aria-pressed="true"] {
+  background: var(--dt-accent-bg);
+  color: var(--dt-accent);
+}
+
+/* Rows: 26px, 12.5px; the selected one tinted with the accent's edge. */
+.dt-map[data-waterfall] .dt-map-row {
+  min-height: var(--wf-row);
+  height: var(--wf-row);
+  padding-right: 12px;
+  font-size: 12.5px;
+  border-bottom: 0;
+}
+.dt-map[data-waterfall] .dt-map-row[aria-current="true"] {
+  background: var(--dt-selected);
+  box-shadow: inset 2px 0 0 var(--dt-accent);
+}
+.dt-map[data-waterfall] .dt-map-row[data-dim] {
+  opacity: 0.38;
+}
+.dt-map[data-waterfall] .dt-map-name {
+  gap: 6px;
+}
+.dt-map[data-waterfall] .dt-map-text {
+  font-family: var(--dt-mono);
+}
+/* Kind badge: 9.5px mono on the faint ground, 30px at least, centred. */
+.dt-map[data-waterfall] .dt-kind {
+  min-width: 30px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font: 600 9.5px / 14px var(--dt-mono);
+  letter-spacing: 0.03em;
+  background: var(--dt-faint);
+  color: var(--dt-text-3);
+}
+.dt-map[data-waterfall] .dt-map-row:is([data-kind="sql"], [data-category="sql"]) .dt-kind {
+  color: var(--dt-k-sql);
+}
+.dt-map[data-waterfall] .dt-map-row[data-kind="http.client"] .dt-kind {
+  color: var(--dt-k-http);
+}
+.dt-map[data-waterfall] .dt-map-row:is([data-kind="view"], [data-kind="page"]) .dt-kind {
+  color: var(--dt-k-view);
+}
+.dt-map[data-waterfall] .dt-map-row[data-kind="function"] .dt-kind {
+  color: #b5a9ff;
+}
+.dt-map[data-waterfall] .dt-map-row[data-kind^="graphql"] .dt-kind {
+  color: #c8a8ff;
+}
+/* Markers: 17px pills, the tone's ground. */
+.dt-map[data-waterfall] .dt-map-name [data-slot="badge"],
+.dt-map[data-waterfall] .dt-map-name .badge {
+  height: 17px;
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 10.5px;
+}
+.dt-map[data-waterfall] .dt-status {
+  padding: 1px 5px;
+  border-radius: 4px;
+  font: 600 10.5px / 14px var(--dt-mono);
+}
+/* Bars: 8px, 9px from the row's top, inside a 10px margin, as the axis is. */
+.dt-map[data-waterfall] .dt-map-track {
+  align-self: stretch;
+  height: auto;
+  margin: 0 var(--wf-track-pad);
+}
+.dt-map[data-waterfall] .dt-map-bar {
+  top: 9px;
+  bottom: auto;
+  height: 8px;
+  border-radius: 2px;
+}
+.dt-map[data-waterfall] .dt-map-bar[data-call] {
+  top: 8px;
+  height: 10px;
+}
+.dt-map[data-waterfall] .dt-map-bar[data-tick] {
+  top: 7px;
+  height: 12px;
+  width: 2px;
+  border-radius: 1px;
+}
+.dt-map[data-waterfall] .dt-map-time {
+  font-size: 12px;
+  color: var(--dt-text-2);
+}
+.dt-map[data-waterfall] .dt-map-time[data-slow] {
+  color: var(--dt-warn);
+  font-weight: 600;
+}
+
+/* Details: 420px on the chrome's tone; a headline, then sections 10px 14px apart. */
+.wf-panel[data-dock="bottom"] .wf-main[data-details] {
+  grid-template-columns: minmax(0, 1fr) var(--wf-details, 420px);
+}
+.wf-details {
+  background: var(--dt-chrome);
+}
+/* The tab's timeline: one band on the shared grid, every page and request a block; a click opens one. */
+.wf-band {
+  height: 28px;
+  border-bottom: 1px solid var(--dt-border);
+}
+.wf-band-label {
+  color: var(--dt-text-3);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.wf-band-total {
+  color: var(--dt-text-3);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.wf-band-track {
+  position: relative;
+  height: 14px;
+  margin: 0 var(--wf-track-pad);
+  border-radius: 3px;
+  background: var(--dt-faint);
+}
+.wf-band-block {
+  position: absolute;
+  top: 3px;
+  height: 8px;
+  min-width: 3px;
+  border-radius: 2px;
+  background: var(--dt-k-http);
+  opacity: 0.75;
+  cursor: pointer;
+}
+.wf-band-block[data-depth="0"] {
+  top: 1px;
+  height: 12px;
+  background: color-mix(in srgb, var(--dt-k-view) 45%, transparent);
+}
+.wf-band-block[data-failed] {
+  background: var(--dt-error);
+}
+.wf-band-block:hover {
+  opacity: 1;
+  filter: brightness(1.25);
+  z-index: 2;
+}
+.wf-band-block::before {
+  content: "";
+  position: absolute;
+  inset: -6px -2px;
+}
+.wf-band-block[aria-current="true"] {
+  opacity: 1;
+  outline: 1.5px solid var(--dt-accent);
+  outline-offset: 1px;
+  z-index: 1;
+}
+/* Docked right, the names keep their room: a database alias and an app's name go (their dot stays). */
+.wf-panel[data-dock="right"] .dt-map[data-waterfall] .dt-alias,
+.wf-panel[data-dock="right"] .dt-map[data-waterfall] .dt-app-name {
+  display: none;
 }

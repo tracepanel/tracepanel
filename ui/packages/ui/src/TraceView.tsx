@@ -756,7 +756,10 @@ function ReportFacts({
   const db = of("sql");
   const http = of("http");
   // Where its work starts, on the page's clock: its first span under its root (a page's first request).
-  const firsts = trace.spans.filter((span) => span.parent_id !== null).map((span) => span.start);
+  // Only a browser's view waits long before its work (the page loading, the user reading): a request's or a task's
+  // wait is its own work's, kept on the axis.
+  const firsts =
+    trace.kind === "page" ? trace.spans.filter((span) => span.parent_id !== null).map((span) => span.start) : [];
   const work = (firsts.length ? Math.min(...firsts) : trace.start) + ((anchor ?? trace.start) - trace.start);
   const key = `${findings.length}|${db.count}|${db.time}|${http.count}|${http.time}|${logs}|${work}`;
   // biome-ignore lint/correctness/useExhaustiveDependencies: `key` says when the facts changed.

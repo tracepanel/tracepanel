@@ -374,7 +374,7 @@ export function SpanFold({
   );
 }
 
-const SHORT_KINDS: Record<string, string> = {
+export const SHORT_KINDS: Record<string, string> = {
   request: "req",
   function: "fn",
   transaction: "tx",

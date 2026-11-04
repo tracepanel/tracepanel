@@ -95,7 +95,7 @@ const KIND_BADGES: Record<string, string> = {
 };
 
 function kindBadge(kind: string): string {
-  return KIND_BADGES[kind] ?? kind.toUpperCase().slice(0, 5);
+  return KIND_BADGES[kind] ?? (kind.split(".")[0] ?? kind).toUpperCase().slice(0, 5);
 }
 
 /** Every row a test keeps, and the rows on the way to them (dimmed, for context). */

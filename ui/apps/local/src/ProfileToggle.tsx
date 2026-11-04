@@ -91,7 +91,7 @@ export function ProfileToggle({ source, labeled = false }: { source: DataSource;
   const capabilities = useCapabilities(source);
   const [stored, choose] = useProfiling();
   if (!capabilities?.profile) {
-    if (stored === "off") return null;
+    if (stored === "off") return <ProfileUnavailable />;
     return (
       <ProfileButton
         choice={{ modes: ["off", stored], floor: "off" }}
@@ -105,6 +105,17 @@ export function ProfileToggle({ source, labeled = false }: { source: DataSource;
   const { profile_memory: memory, profile_all: all, profile_memory_all: memoryAll } = capabilities;
   const choice = withStored(choiceOf(memory, all, memoryAll), stored);
   return <ProfileButton choice={choice} stored={stored} choose={choose} labeled={labeled} />;
+}
+
+/** Where no connected app profiles on request: the icon still there, off, saying why. */
+function ProfileUnavailable() {
+  return (
+    <Hint title="Profiling isn't available for this app">
+      <button type="button" className="icon-button" aria-disabled="true" aria-label="Profiling isn't available">
+        <FlameIcon className="size-4" />
+      </button>
+    </Hint>
+  );
 }
 
 /** What a labelled toggle says beside "Profile" while it is on. */
@@ -191,6 +202,7 @@ function hint(mode: Mode, next: Mode | null, floor: Mode, elsewhere: boolean): {
   const forced = floor !== "off";
   const name = forced && mode === floor ? FORCED[floor] : NAMES[mode];
   if (!next) return { title: name, detail: SETTINGS };
+  if (mode === "off") return { title: "Profile next requests" };
   return { title: `${name} · click: ${forced && next === floor ? BACK : CLICKS[next]}` };
 }
 

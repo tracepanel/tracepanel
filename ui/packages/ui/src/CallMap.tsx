@@ -193,6 +193,12 @@ function waterfallMarks(tree: readonly Node[], host: WaterfallHost): Map<string,
   return marks;
 }
 
+/** The rows whose details have the profile: a request's root, a function's, a handler's. */
+function profiled(node: Node): boolean {
+  if (node.type !== "span") return false;
+  return node.span.parent_id === null || ["function", "view", "code"].includes(node.span.kind);
+}
+
 /** The stretch dragged, on this trace's clock: µs since the trace started. */
 function windowsIn(host: WaterfallHost, trace: Trace): Windows | null {
   if (!(host.range && host.axis)) return null;
@@ -235,7 +241,16 @@ function WaterfallRows({
               node={found.node}
               trace={found.trace}
               totals={found.node.type === "span" && found.node.span.parent_id === null ? facts : undefined}
-              profile={found.trace.profile ? profileOf?.(found.trace) : undefined}
+              profile={found.trace.profile && profiled(found.node) ? profileOf?.(found.trace) : undefined}
+              onOpen={
+                found.node.type === "span" &&
+                found.node.served &&
+                ctx.collapsed.has(found.node.key) !== found.node.served.opened
+                  ? undefined
+                  : found.node.type === "span" && found.node.served
+                    ? () => ctx.onToggle(found.node.key)
+                    : undefined
+              }
               onClose={() => host.select(trace.id, null)}
               onShow={(key) => host.select(trace.id, key)}
             >
