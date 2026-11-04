@@ -36,25 +36,24 @@ import { cutNote, isCut } from "./lib/live";
 import { pageParts } from "./lib/page";
 import { widthOf } from "./lib/percent";
 import { plural } from "./lib/plural";
-import { hottestOwn, type Profile } from "./lib/profile";
+import { hottestOwn, type Profile, WAITING } from "./lib/profile";
 import { type Quiet, quietSpans } from "./lib/quiet";
 import { traceRuntime } from "./lib/runtime";
 import { type SpanScope, shifted } from "./lib/scope";
 import { isReceiver, raised } from "./lib/signals";
 import { isShown, overlaps, type Slice, type TimeRange, type Windows, windowsTime } from "./lib/slice";
 import { CALL_KINDS, DATASTORES, MESSAGING, RPC } from "./lib/systems";
+import { spanSegments, splitByProfile, windowProfile } from "./lib/timeShares";
 import { attrsWhere } from "./lib/values";
 import { useRemembered, VIEW_KEYS } from "./lib/viewMemory";
 import {
   bucketOwners,
   ownedWindows,
   type Piece,
-  quietPieces,
   type Timed,
   timed,
   waitName,
   waitPlace,
-  wallClock,
   windowsOf,
 } from "./lib/waiting";
 import { type TraceLinks, traceLinkProps } from "./links";
@@ -1646,8 +1645,8 @@ function codeShown(quiet: Quiet, category: Category, ctx: RowContext): boolean {
 }
 
 /**
- * A code row's pieces of time: where it waited, or where it computed (µs since the trace started), and their time,
- * as the profile they open (stackTimes) says it.
+ * A code row's pieces of time: where it waited, or where its code ran (µs since the trace started; the trace's
+ * segments, lib/timeShares), and their time: the time of the profile they open.
  */
 interface CodePart {
   waiting: boolean;
@@ -1660,11 +1659,21 @@ function piecesTime(pieces: readonly Piece[]): number {
   return windowsTime(windowsOf(pieces));
 }
 
+/** A span's own time in pieces: its segments, those that meet with the same part (waited or ran) as one. */
+function ownPieces(trace: Trace, span: string): Piece[] {
+  const pieces: Piece[] = [];
+  for (const segment of spanSegments(trace, span)) {
+    const waiting = segment.share === WAITING;
+    const last = pieces.at(-1);
+    if (last && last.waiting === waiting && Math.abs(last.to - segment.from) < 0.5) last.to = segment.to;
+    else pieces.push({ from: segment.from, to: segment.to, waiting });
+  }
+  return pieces;
+}
+
 /** A span's own code in its parts: what it waited in and what it computed in, each when there is any. */
-function codeParts(quiet: Quiet, trace: Trace): CodePart[] {
-  const pieces = quiet.gaps.flatMap(([from, to]) =>
-    quietPieces(trace.profile, trace.duration, from - trace.start, to - trace.start),
-  );
+function codeParts(span: string, quiet: Quiet, trace: Trace): CodePart[] {
+  const pieces = ownPieces(trace, span);
   const parts = [true, false].flatMap((waiting): CodePart[] => {
     const own = pieces.filter((piece) => piece.waiting === waiting);
     const total = piecesTime(own);
@@ -1758,9 +1767,9 @@ function ownersOf(code: CodeOwner, profile: Timed): Map<number, string> {
  * than another row's. The whole trace's where the profile doesn't say when.
  */
 function partProfile(part: CodePart, code: CodeOwner, span: string): Profile | undefined {
-  const profile = code.trace.profile;
-  if (!timed(profile)) return profile;
-  return wallClock(profile, code.trace.duration, ownedWindows(profile, part.pieces, ownersOf(code, profile), span));
+  const trace = code.trace;
+  if (!splitByProfile(trace)) return trace.profile;
+  return windowProfile(trace, ownedWindows(trace.profile, part.pieces, ownersOf(code, trace.profile), span));
 }
 
 /** Where a wait row waited, said quietly after its name: "handlers.py:108", where the profile says. */
@@ -1842,7 +1851,7 @@ function UntracedHint({ name, code, children }: { name: string; code: CodeOwner;
  */
 function CodeRow({ span, ctx, depth }: { span: Span; ctx: RowContext; depth: number }) {
   if (!hasCodeRow(span, ctx)) return null;
-  const parts = codeParts(ctx.code.quiet.get(span.id) as Quiet, ctx.code.trace);
+  const parts = codeParts(span.id, ctx.code.quiet.get(span.id) as Quiet, ctx.code.trace);
   return (
     <>
       {parts.map((part) => (

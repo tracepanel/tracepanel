@@ -1,10 +1,9 @@
-// When a trace's profile says when each stack was seen (its `at` buckets): the time of a stretch of the trace (or of
-// several) and where it went, and which parts of a stretch the code waited in (a sleep, a socket, the event loop)
-// rather than computed. One rule turns samples into time (`stackTimes`): the Profile tab's totals, bar and list, the
-// call tree's code rows and the time strip's waits all read it, so a row and the profile it opens say the same time.
-// Plain data, no React.
+// When a trace's profile says when each stack was seen (its `at` buckets): the stacks of each bucket of the trace's
+// time (bucketStacks, what lib/timeShares splits the trace's time by), the profile of the whole trace by them alone
+// (wallClock: the MCP server's get_profile's rule, schema/waits.json), and what a profile waited on. Plain data, no
+// React.
 import type { Frame, Profile, Stack } from "./profile";
-import { type TimeRange, type Windows, windowsTime } from "./slice";
+import type { TimeRange, Windows } from "./slice";
 
 /** A profile with its buckets' width: one that may say when its stacks were seen. */
 export type Timed = Profile & Required<Pick<Profile, "bucket_us">>;
@@ -44,7 +43,7 @@ function seenIn(profile: Profile): Map<number, Map<number, number>> {
  * other traces, the sampler waited), those of the bucket before. Before the first sample, none: not profiled. The
  * MCP server's get_profile has the same rule (wall_clock in crates/mcp/src/profile.rs).
  */
-function bucketStacks(profile: Timed, duration: number): Map<number, ReadonlyMap<number, number>> {
+export function bucketStacks(profile: Timed, duration: number): Map<number, ReadonlyMap<number, number>> {
   const seen = seenIn(profile);
   const buckets = new Map<number, ReadonlyMap<number, number>>();
   let before: ReadonlyMap<number, number> | undefined;
@@ -155,40 +154,6 @@ export interface Piece {
   waiting: boolean;
 }
 
-/** Whether a bucket's stacks (bucketStacks) mostly waited: more of its samples waited than didn't. */
-function mostlyWaiting(profile: Profile, stacks: ReadonlyMap<number, number> | undefined): boolean {
-  let [waiting, other] = [0, 0];
-  for (const [index, count] of stacks ?? []) {
-    const stack = profile.stacks[index];
-    if (stack && waits(profile, stack)) waiting += count;
-    else other += count;
-  }
-  return waiting > other;
-}
-
-/** A piece after the last: like it, it makes it longer. */
-function grow(pieces: Piece[], next: Piece): void {
-  const last = pieces.at(-1);
-  if (last && last.waiting === next.waiting && last.to === next.from) last.to = next.to;
-  else pieces.push(next);
-}
-
-/**
- * A stretch of the trace (µs since it started) in the parts its code waited in and those it didn't, bucket by
- * bucket, each bucket by its stacks as stackTimes shares its time.
- */
-export function piecesOf(profile: Timed, duration: number, from: number, to: number): Piece[] {
-  const buckets = bucketStacks(profile, duration);
-  const pieces: Piece[] = [];
-  const width = profile.bucket_us;
-  for (let bucket = Math.floor(from / width); bucket * width < to; bucket++) {
-    const waiting = mostlyWaiting(profile, buckets.get(bucket));
-    const next = { from: Math.max(bucket * width, from), to: Math.min((bucket + 1) * width, to), waiting };
-    if (next.to > next.from) grow(pieces, next);
-  }
-  return pieces;
-}
-
 /** "asyncio.sleep": a library function by its package and name. */
 function called(frame: Frame): string {
   const root = (frame.module ?? "").split(".")[0];
@@ -261,23 +226,7 @@ export function waitPlace(profile: Profile): string | null {
   return own ? line(own) : null;
 }
 
-/** A stretch of a span's own code in pieces: waited in or computed in; one computed piece where the profile can't say. */
-export function quietPieces(profile: Profile | undefined, duration: number, from: number, to: number): Piece[] {
-  return timed(profile) ? piecesOf(profile, duration, from, to) : [{ from, to, waiting: false }];
-}
-
 /** The windows of pieces. */
 export function windowsOf(pieces: readonly Piece[]): Windows {
   return pieces.map((piece) => [piece.from, piece.to]);
-}
-
-/** How long a span's own code waited, of its gaps (in the trace's clock), as the call tree's wait rows say it. */
-export function waitedIn(
-  profile: Profile | undefined,
-  duration: number,
-  gaps: readonly [number, number][],
-  start: number,
-): number {
-  const pieces = gaps.flatMap(([from, to]) => quietPieces(profile, duration, from - start, to - start));
-  return windowsTime(windowsOf(pieces.filter((piece) => piece.waiting)));
 }

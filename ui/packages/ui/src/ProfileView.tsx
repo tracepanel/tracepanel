@@ -32,6 +32,7 @@ import {
   packageOf,
   packageTimes,
   profileReason,
+  shareFrame,
   summaryOf,
   tree,
   WAITING,
@@ -39,10 +40,11 @@ import {
 } from "./lib/profile";
 import { serviceRuntime, traceRuntime } from "./lib/runtime";
 import { type Windows, windowsLabel, windowsTime } from "./lib/slice";
+import { type Shared, windowProfile } from "./lib/timeShares";
 import { cn } from "./lib/utils";
 import { useRemembered, VIEW_KEYS } from "./lib/viewMemory";
-import { namedWaits, type WaitFrame } from "./lib/waitCalls";
-import { timed, wallClock } from "./lib/waiting";
+import type { WaitFrame } from "./lib/waitCalls";
+import { type Timed, timed } from "./lib/waiting";
 import { litKey, litScope } from "./lit";
 import { AppChip } from "./primitives";
 import { ScopeHeader } from "./ScopeBar";
@@ -85,6 +87,78 @@ const REST: Tone = {
   lit: "[--dt-lit:var(--color-muted-foreground)]",
 };
 
+/**
+ * A share of the trace's time that no package is (a call's, the collector's, the framework's: lib/timeShares), in
+ * its category's colour, as the time strip and the call tree draw it.
+ */
+const SHARE_TONES: Readonly<Record<string, Tone>> = {
+  sql: {
+    fill: "[--dt-k:var(--dt-k-sql)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
+    dot: "[--dt-k:var(--dt-k-sql)] bg-(--dt-k)",
+    lit: "[--dt-lit:var(--dt-k-sql)]",
+  },
+  cache: {
+    fill: "[--dt-k:var(--dt-k-cache)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
+    dot: "[--dt-k:var(--dt-k-cache)] bg-(--dt-k)",
+    lit: "[--dt-lit:var(--dt-k-cache)]",
+  },
+  redis: {
+    fill: "[--dt-k:var(--dt-k-redis)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
+    dot: "[--dt-k:var(--dt-k-redis)] bg-(--dt-k)",
+    lit: "[--dt-lit:var(--dt-k-redis)]",
+  },
+  http: {
+    fill: "[--dt-k:var(--dt-k-http)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
+    dot: "[--dt-k:var(--dt-k-http)] bg-(--dt-k)",
+    lit: "[--dt-lit:var(--dt-k-http)]",
+  },
+  datastore: {
+    fill: "[--dt-k:var(--dt-k-datastore)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
+    dot: "[--dt-k:var(--dt-k-datastore)] bg-(--dt-k)",
+    lit: "[--dt-lit:var(--dt-k-datastore)]",
+  },
+  messaging: {
+    fill: "[--dt-k:var(--dt-k-messaging)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
+    dot: "[--dt-k:var(--dt-k-messaging)] bg-(--dt-k)",
+    lit: "[--dt-lit:var(--dt-k-messaging)]",
+  },
+  storage: {
+    fill: "[--dt-k:var(--dt-k-storage)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
+    dot: "[--dt-k:var(--dt-k-storage)] bg-(--dt-k)",
+    lit: "[--dt-lit:var(--dt-k-storage)]",
+  },
+  llm: {
+    fill: "[--dt-k:var(--dt-k-llm)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
+    dot: "[--dt-k:var(--dt-k-llm)] bg-(--dt-k)",
+    lit: "[--dt-lit:var(--dt-k-llm)]",
+  },
+  mail: {
+    fill: "[--dt-k:var(--dt-k-mail)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
+    dot: "[--dt-k:var(--dt-k-mail)] bg-(--dt-k)",
+    lit: "[--dt-lit:var(--dt-k-mail)]",
+  },
+  template: {
+    fill: "[--dt-k:var(--dt-k-template)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
+    dot: "[--dt-k:var(--dt-k-template)] bg-(--dt-k)",
+    lit: "[--dt-lit:var(--dt-k-template)]",
+  },
+  signal: {
+    fill: "[--dt-k:var(--dt-k-signal)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
+    dot: "[--dt-k:var(--dt-k-signal)] bg-(--dt-k)",
+    lit: "[--dt-lit:var(--dt-k-signal)]",
+  },
+  django: {
+    fill: "[--dt-k:var(--dt-k-django)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
+    dot: "[--dt-k:var(--dt-k-django)] bg-(--dt-k)",
+    lit: "[--dt-lit:var(--dt-k-django)]",
+  },
+  gc: {
+    fill: "[--dt-k:var(--dt-k-gc)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
+    dot: "[--dt-k:var(--dt-k-gc)] bg-(--dt-k)",
+    lit: "[--dt-lit:var(--dt-k-gc)]",
+  },
+};
+
 type Palette = Map<string, Tone>;
 type Share = { name: string; samples: number };
 
@@ -95,14 +169,25 @@ const KINDS_OF_TIME = new Set([YOUR_CODE, FRAMEWORK, WAITING]);
  * Your code, then the packages that took most, one color each; the rest share one gray as "other". The framework
  * and the runtime around your code (Your code's one share for them) are that gray too, by their own name.
  */
-function colors(names: readonly string[]): Palette {
-  const others = names.filter((name) => !KINDS_OF_TIME.has(name)).slice(0, PALETTE.length);
+function colors(names: readonly string[], shares: ReadonlyMap<string, string> = new Map()): Palette {
+  const others = names.filter((name) => !(KINDS_OF_TIME.has(name) || shares.has(name))).slice(0, PALETTE.length);
   return new Map([
     [YOUR_CODE, YOURS],
     [FRAMEWORK, REST],
     [WAITING, WAITS],
+    ...[...shares].map(([name, category]): [string, Tone] => [name, SHARE_TONES[category] ?? REST]),
     ...others.map((name, at): [string, Tone] => [name, PALETTE[at] ?? REST]),
   ]);
+}
+
+/** The shares of the trace's time a profile's frames stand for (ShareFrame), by name, with their category. */
+function sharesIn(profile: Profile): Map<string, string> {
+  const shares = new Map<string, string>();
+  for (const frame of profile.frames) {
+    const share = shareFrame(frame);
+    if (share) shares.set(share.share, share.category);
+  }
+  return shares;
 }
 
 function toneOf(palette: Palette, name: string): Tone {
@@ -192,12 +277,8 @@ function ProfilePane({
 }) {
   const range = useProfileRange(open);
   const [kind, setKind] = useKind();
-  // Kept while the profile and the range are: the flame graph's zoom belongs to the profile it was made in.
-  const { profile, start, duration: total, spans, attrs } = trace;
-  const scope = useMemo(
-    () => (profile ? scopeOf(profile, range, { start, duration: total, spans, attrs }) : null),
-    [profile, range, start, total, spans, attrs],
-  );
+  // Kept while the trace and the range are: the flame graph's zoom belongs to the profile it was made in.
+  const scope = useMemo(() => (trace.profile ? scopeOf(trace, trace.profile, range) : null), [trace, range]);
   if (!(open && trace.profile && scope)) return null;
   return (
     <ProfileOf trace={trace} profile={trace.profile} scope={scope} kind={kind} onKind={setKind} onShowRow={onShowRow} />
@@ -404,17 +485,17 @@ interface Scope {
 }
 
 /** A trace as its profile's scope reads it: its clock, its calls (who waited), its SDK's language. */
-type Profiled = Pick<Trace, "start" | "duration" | "spans" | "attrs">;
+type Profiled = Pick<Trace, "start" | "duration" | "spans" | "attrs"> & { kind?: string; profile?: Profile };
 
-function scopeOf(profile: Profile, range: Windows | null, trace: Profiled): Scope {
-  // Timed, it reads in the trace's own time, as the time strip and the call tree do (lib/waiting's stackTimes):
+function scopeOf(trace: Profiled, profile: Profile, range: Windows | null): Scope {
+  // Timed, it reads in the trace's own time and shares, as the time strip and the call tree do (lib/timeShares):
   // stretches narrow it to their time.
   if (timed(profile)) {
     const title = range ? `Profile of ${windowsLabel(range)}` : "Profile of the whole trace";
-    const shown = wallClock(profile, trace.duration, range);
+    const shared = trace.profile === profile ? trace : { ...trace, profile };
     return {
-      profile: shown,
-      own: namedWaits(shown, trace),
+      profile: windowProfile(shared as Shared & { profile: Timed }, range),
+      own: windowProfile(shared as Shared & { profile: Timed }, range, true),
       title,
       windows: range,
       note: null,
@@ -542,7 +623,14 @@ function ProfileView({
   const view = useMemo(() => (own ? ownCode(ownProfile ?? profile) : allFrames(profile)), [profile, ownProfile, own]);
   // Your code's shares are its own and the framework's around it; every frame's, each package's.
   const packages = useMemo(() => packageTimes(view), [view]);
-  const palette = useMemo(() => colors(packages.map((item) => item.name)), [packages]);
+  const palette = useMemo(
+    () =>
+      colors(
+        packages.map((item) => item.name),
+        sharesIn(view),
+      ),
+    [packages, view],
+  );
   return (
     <div className="@container grid gap-6 p-4">
       <header className="flex flex-wrap items-end justify-between gap-3">
@@ -585,9 +673,16 @@ function summed(packages: readonly Share[], palette: Palette): Share[] {
   return other ? [...named, { name: "other", samples: other }] : named;
 }
 
+/**
+ * A share's name in the bar's legend, as the time strip's legend says its shares: "Your code", "Waiting".
+ */
+function shareName(name: string): string {
+  return KINDS_OF_TIME.has(name) ? `${name.charAt(0).toUpperCase()}${name.slice(1)}` : name;
+}
+
 /** Waiting after every package, the framework and the runtime before it, and the rest folded together before them. */
 function rankOf(share: Share): number {
-  if (share.name === WAITING) return 3;
+  if (share.name === WAITING) return 4;
   if (share.name === FRAMEWORK) return 2;
   return share.name === "other" ? 1 : 0;
 }
@@ -617,7 +712,7 @@ function Packages({
     key: name,
     size: samples,
     className: cn(toneOf(palette, name).dot, toneOf(palette, name).lit),
-    title: `${name}: ${time(samples)}`,
+    title: `${shareName(name)}: ${time(samples)}`,
     faded: faded(lit, name),
   }));
   return (
@@ -636,7 +731,7 @@ function Packages({
             >
               <ShareFace
                 swatch={<span className={cn("dt-dot", toneOf(palette, name).dot)} />}
-                name={name}
+                name={shareName(name)}
                 value={time(samples)}
                 share={percent(samples, total)}
               />
@@ -1252,7 +1347,7 @@ function appRuntime(app: AppProfile): string | undefined {
  * was in flight in each trace, as a trace's own Profile tab names them.
  */
 function appView(app: AppProfile): Scope {
-  const scopes = app.traces.map((each) => scopeOf(each.profile, each.windows, each.member.trace));
+  const scopes = app.traces.map((each) => scopeOf(each.member.trace, each.profile, each.windows));
   const [one] = scopes;
   if (scopes.length === 1 && one) return one;
   return {

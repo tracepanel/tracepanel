@@ -2,7 +2,7 @@
 // what each adds up to. The Profile tab of a chain of calls draws them one under another on the chain's clock.
 
 import { type Memory, type Site, sitePlaces } from "./memory";
-import { type Frame, functions, type Profile, type Stack } from "./profile";
+import { type Frame, functions, type Profile, type Stack, shareFrame } from "./profile";
 import { type Member, type SpanScope, scopedParts } from "./scope";
 import type { Windows } from "./slice";
 
@@ -182,7 +182,8 @@ export function profileSums(profile: Profile): { time: number; waiting: number; 
   const waiting = profile.stacks
     .filter((stack) => profile.frames[stack.frames[stack.frames.length - 1] ?? -1]?.waiting)
     .reduce((sum, stack) => sum + stack.count, 0);
-  const top = functions(profile).find((row) => !row.frame.waiting)?.frame.function;
+  // A function's: a wait, a call's or the collector's time (a share's frame) is none.
+  const top = functions(profile).find((row) => !(row.frame.waiting || shareFrame(row.frame)))?.frame.function;
   return { time: profile.samples * profile.interval_us, waiting: waiting * profile.interval_us, top };
 }
 

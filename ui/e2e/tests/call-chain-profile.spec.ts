@@ -183,7 +183,7 @@ test("the flame on a call's trace opens that trace at its Profile tab, the way b
   await expect(page.getByRole("tab", { name: /^Profile/ })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByText("Profile of the whole trace")).toBeVisible();
   await expect(page.getByRole("region", { name: "Time by package" }).getByRole("button")).toHaveText([
-    /^your code\s*1\d ms\s*100%$/,
+    /^Your code\s*1\d ms\s*100%$/,
   ]);
 });
 

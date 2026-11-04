@@ -83,7 +83,7 @@ test("the Profile tab's package bar lights a package in its own colour with its 
   await expect(packages.locator(".dt-share[data-lit]")).toHaveText([/^django\.template/]);
   for (const { ring, fill } of await rings(packages.locator(".dt-share-bar > span[data-lit]"))) expect(ring).toBe(fill);
 
-  await packages.getByRole("button", { name: /^your code/ }).hover();
+  await packages.getByRole("button", { name: /^Your code/ }).hover();
 
   await expect(segments.last()).toHaveAttribute("data-lit", "");
   await expect(packages.locator(".dt-share-bar > span[data-lit]")).toHaveCount(1);

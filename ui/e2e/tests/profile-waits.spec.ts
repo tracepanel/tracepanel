@@ -1,6 +1,7 @@
-// What a function of yours waited for, by the calls in flight: Your code's hatched waits and its summary rows name
-// them ("waiting · SQL postgresql", "waiting · HTTP GET analytics.example.com"), the rest by the frame that waited
-// ("waiting · sleep"); a row opens its call in the call tree; All frames keeps the frames that waited. A Python-shaped
+// What a function of yours waited for: the time of a call it made is the call's (the database's, as the time strip
+// has it), its row and box named by the call ("SQL postgresql", "HTTP GET analytics.example.com"), in its colour; a
+// wait with no call running is waiting's, named by the frame that waited ("waiting · sleep"); a row opens its call in
+// the call tree; All frames keeps the frames that waited, the call under them. A Python-shaped
 // profile (a FastAPI handler on Postgres) and a JVM-shaped one (a virtual thread parked on Postgres), timed.
 import type { Page } from "@playwright/test";
 import { CONSOLE } from "../agent.ts";
@@ -141,18 +142,18 @@ test("a Python handler's waits say what was in flight: its query, its HTTP call,
   await page.goto(`/#/t/${PYTHON}?tab=profile`);
 
   await expect(summaries(page)).toHaveText([
-    /^waiting · HTTP GET analytics\.example\.com\s*150 ms/,
-    /^waiting · SQL postgresql\s*60 ms/,
+    /^HTTP GET analytics\.example\.com\s*150 ms/,
+    /^SQL postgresql\s*60 ms/,
     /^waiting · sleep\s*40 ms/,
   ]);
-  // Hatched, as every wait, under the function that waited.
-  await expect.poll(() => boxes(page)).toContain("waiting · SQL postgresql");
+  // In the database's colour, as the strip draws the query, under the function that made it.
+  await expect.poll(() => boxes(page)).toContain("SQL postgresql");
   await expect(
-    page.getByRole("region", { name: "Flame graph" }).getByRole("button", { name: /^waiting · SQL postgresql/ }),
-  ).toHaveClass(/dt-hatched/);
+    page.getByRole("region", { name: "Flame graph" }).getByRole("button", { name: /^SQL postgresql/ }),
+  ).toHaveClass(/dt-k-sql/);
 
   // A row opens its call in the call tree.
-  await summaries(page).getByRole("button", { name: "waiting · SQL postgresql" }).click();
+  await summaries(page).getByRole("button", { name: "SQL postgresql" }).click();
   await expect(page.getByRole("tab", { name: /^Call tree/ })).toHaveAttribute("aria-selected", "true");
   await expect(
     page.locator(
@@ -170,11 +171,11 @@ test("a Python handler's waits say what was in flight: its query, its HTTP call,
 test("a JVM thread parked on Postgres says so, as a Python one does", async ({ page }) => {
   await page.goto(`/#/t/${JVM}?tab=profile`);
 
-  await expect(summaries(page)).toHaveText([/^waiting · SQL postgresql\s*60 ms/]);
+  await expect(summaries(page)).toHaveText([/^SQL postgresql\s*60 ms/]);
   // Under the function that waited, named by its query.
   await expect
     .poll(async () => (await boxes(page)).join(" | "))
-    .toMatch(/^CampaignController\.list \| CampaignController\.render \| waiting · SQL postgresql$/);
+    .toMatch(/^CampaignController\.list \| CampaignController\.render \| SQL postgresql$/);
 });
 
 const W3C = "7d2c3b8e0a1f5e4b9c6d8e0f2a3b4c5d";
@@ -224,9 +225,5 @@ test("a chain's merged profile of an app names its waits as each trace's own doe
   await expect(shop).toContainText("Profile of 2 traces");
   await expect(
     shop.getByRole("region", { name: "Functions" }).getByRole("list", { name: "Not a function" }).getByRole("listitem"),
-  ).toHaveText([
-    /^waiting · HTTP GET analytics\.example\.com\s*300 ms/,
-    /^waiting · SQL postgresql\s*120 ms/,
-    /^waiting · sleep\s*80 ms/,
-  ]);
+  ).toHaveText([/^HTTP GET analytics\.example\.com\s*300 ms/, /^SQL postgresql\s*120 ms/, /^waiting · sleep\s*80 ms/]);
 });

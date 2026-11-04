@@ -51,7 +51,7 @@ test("the Memory view: its peak, what it kept, where the memory was, and what it
   await expect(page.getByRole("region", { name: "Memory by package" }).getByRole("button")).toHaveText([
     /^django\.db\s*30 MB\s*71%$/,
     /^django\.template\s*8\.0 MB\s*19%$/,
-    /^your code\s*4\.0 MB\s*10%$/,
+    /^Your code\s*4\.0 MB\s*10%$/,
   ]);
 
   const sites = page.getByRole("region", { name: "Allocation sites" }).getByRole("listitem");
@@ -160,7 +160,7 @@ test("Your code or All frames is one choice for Time and Memory, its first from 
 
   await expect(page.getByRole("region", { name: "Memory by package" }).getByRole("button")).toHaveText([
     /^redis\s*12 KB/,
-    /^your code\s*900 B/,
+    /^Your code\s*900 B/,
   ]);
 
   await kinds.getByRole("tab", { name: "Time" }).click();
@@ -259,8 +259,8 @@ test("Your code's sites are its flame's: a library's bytes its caller's, none of
   ).toBeVisible();
   // Memory isn't time: the bytes allocated under a frame that waits are its caller's, not waiting's.
   await expect(page.getByRole("region", { name: "Memory by package" }).getByRole("button")).toHaveText([
-    /^your code\s*856 B/,
-    /^framework & runtime\s*13 KB/,
+    /^Your code\s*856 B/,
+    /^Framework & runtime\s*13 KB/,
   ]);
   await expect(sites.getByRole("listitem")).toHaveText([
     /^track_parcel\s*shop\/tasks\.py:20\s*520 B\s*4%$/,

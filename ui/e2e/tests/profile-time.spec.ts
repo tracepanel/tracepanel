@@ -1,22 +1,18 @@
-// The one rule a profile's samples become time by (lib/waiting's stackTimes), over a profile shaped like a FastAPI
-// sync endpoint's: the event loop waiting while a worker thread runs the endpoint, a sample that stands for ticks the
-// sampler missed, a bucket the cleanup alone was seen in. Every number the Profile tab and the call tree say reads
-// it: a stretch's profile is the stretch's time, the shares and the functions add up to it, a code row's time is the
-// profile it opens.
+// The one rule a trace's time is split by (lib/timeShares), over a trace shaped like a FastAPI sync endpoint's: a
+// view whose transaction runs a query, the event loop waiting while a worker thread runs the endpoint, a collector's
+// pause, a bucket the cleanup alone was seen in. The time strip's legend, the Profile tab's bar and list and the call
+// tree's code rows all read it: for the same stretch they say the same shares, a code row's time is its profile's.
+import { allFrames, functions, ownCode, type Profile, packageTimes } from "../../packages/ui/src/lib/profile.ts";
+import { parseStretch, stretchText, type Windows, windowsLabel } from "../../packages/ui/src/lib/slice.ts";
 import {
-  allFrames,
-  functions,
-  ownCode,
-  type Profile,
-  packageOf,
-  packageTimes,
-} from "../../packages/ui/src/lib/profile.ts";
-import { parseStretch, stretchText, windowsLabel, windowsTime } from "../../packages/ui/src/lib/slice.ts";
-import { namedWaits } from "../../packages/ui/src/lib/waitCalls.ts";
-import { piecesOf, stackTimes, type Timed, waitName, wallClock, windowsOf } from "../../packages/ui/src/lib/waiting.ts";
+  type Shared,
+  shareTimes,
+  spanSegments,
+  windowProfile,
+  windowsOfSegments,
+} from "../../packages/ui/src/lib/timeShares.ts";
+import type { Timed } from "../../packages/ui/src/lib/waiting.ts";
 import { expect, test } from "../fixtures.ts";
-
-const DURATION = 108_000;
 
 const frame = (fn: string, module: string, file: string, extra: { inApp?: boolean; waiting?: boolean } = {}) => ({
   function: fn,
@@ -29,8 +25,8 @@ const frame = (fn: string, module: string, file: string, extra: { inApp?: boolea
 });
 
 /**
- * GET /authors/{id}: the loop awaits the worker thread (0, 1), which runs get_author (3) waiting for the pool's
- * connection (5) and on its socket (6); the dependency's exit waits (7), the worker runs get_db's cleanup (10, 11).
+ * The loop waits for the worker (0, 1), which runs get_author (3) waiting for the pool's connection (5) and on its
+ * socket (6); the dependency's exit waits (7); the worker runs get_db's cleanup (10, 11), alone in 90–100 ms.
  */
 const PROFILE: Timed = {
   // biome-ignore lint/style/useNamingConvention: the trace format.
@@ -55,15 +51,7 @@ const PROFILE: Timed = {
     frame("Connection.rollback", "psycopg.connection", "psycopg/connection.py"),
   ],
   stacks: [
-    // The loop waiting for the worker before it ran the endpoint, and a sample at 75 ms standing for 32 ticks.
-    {
-      frames: [0, 1],
-      count: 36,
-      at: [
-        [0, 4],
-        [7, 32],
-      ],
-    },
+    { frames: [0, 1], count: 4, at: [[0, 4]] },
     {
       frames: [0, 2, 3, 4, 5],
       count: 25,
@@ -75,114 +63,158 @@ const PROFILE: Timed = {
     },
     {
       frames: [0, 2, 3, 4, 6],
-      count: 16,
+      count: 30,
       at: [
         [3, 4],
-        [7, 2],
-        [8, 5],
-        [10, 5],
+        [4, 8],
+        [5, 9],
+        [6, 9],
       ],
     },
     {
       frames: [7],
-      count: 22,
+      count: 30,
       at: [
         [0, 6],
+        [7, 8],
         [8, 5],
         [10, 11],
       ],
     },
-    // The cleanup, alone in its bucket (90–100 ms).
     { frames: [8, 9, 10, 11], count: 6, at: [[9, 6]] },
   ],
+  // biome-ignore lint/style/useNamingConvention: the trace format.
+  gc: { collections: 1, pause_us: 2000, pauses: [[12_000, 2000, 0]] },
 };
 
-const TRACE = { start: 0, spans: [] };
+const span = (id: string, parent: string | null, kind: string, name: string, start: number, duration: number) => ({
+  id,
+  // biome-ignore lint/style/useNamingConvention: the trace format.
+  parent_id: parent,
+  kind,
+  name,
+  start,
+  duration,
+  status: "ok",
+  attrs: kind === "sql" ? { "db.system": "postgresql" } : {},
+});
 
-/** A profile's time, as the Profile tab says it (µs). */
-const timeOf = (profile: Profile) => profile.samples * profile.interval_us;
+/** GET /authors/6: its view, a transaction (38 ms to `ends`) and its query (45–78 ms). */
+function trace(ends: number): Shared & { profile: Timed } {
+  return {
+    kind: "http",
+    start: 0,
+    duration: 108_000,
+    attrs: {},
+    spans: [
+      span("r", null, "http", "GET /authors/{author_id}", 0, 108_000),
+      span("v", "r", "view", "app.main.get_author", 0, 108_000),
+      span("t", "v", "transaction", "transaction", 38_000, ends - 38_000),
+      span("q", "t", "sql", "SELECT author", 45_000, 33_000),
+    ],
+    profile: PROFILE,
+  } as unknown as Shared & { profile: Timed };
+}
 
-/** The functions as Your code lists them: each one's own time (µs), by name. */
-function ownFunctions(profile: Profile): Record<string, number> {
+/** The strip's shares, by the Profile tab's names. */
+const PROFILE_NAMES: Record<string, string> = {
+  code: "your code",
+  waiting: "waiting",
+  sql: "Database",
+  gc: "GC",
+  django: "Framework & middleware",
+};
+
+/** The strip's legend over the windows: each share's time (µs), by the Profile tab's name for it. */
+function strip(traced: Shared, windows: Windows | null): Record<string, number> {
   return Object.fromEntries(
-    functions(ownCode(namedWaits(profile, TRACE))).map((row) => [
-      row.frame.function,
-      Math.round(row.self * profile.interval_us),
-    ]),
+    [...shareTimes(traced, windows)].map(([share, us]) => [PROFILE_NAMES[share] ?? share, Math.round(us)]),
   );
 }
 
-test("a 7 ms stretch is 7 ms, however many samples its 10 ms bucket holds", () => {
-  const stretch = wallClock(PROFILE, DURATION, [[93_000, 100_000]]);
+/** The Profile tab's bar over the windows, Your code's: each share's time (µs). */
+function bar(profile: Profile): Record<string, number> {
+  return Object.fromEntries(
+    packageTimes(ownCode(profile)).map((share) => [share.name, Math.round(share.samples * profile.interval_us)]),
+  );
+}
 
-  expect(timeOf(stretch)).toBe(7000);
-  expect(Object.entries(ownFunctions(stretch))).toEqual([["get_db", 7000]]);
-  expect(Object.fromEntries(stackTimes(PROFILE, DURATION, [[93_000, 100_000]]))).toEqual({ 4: 7000 });
-});
+/** The Profile tab's list, Your code's: each function's own time (µs), by name. */
+function list(profile: Profile): Record<string, number> {
+  return Object.fromEntries(
+    functions(ownCode(profile))
+      .filter((row) => row.self > 0)
+      .map((row) => [row.frame.function, Math.round(row.self * profile.interval_us)]),
+  );
+}
 
-test("the whole trace's shares and functions add up to its time, each function in a share", () => {
-  const whole = wallClock(PROFILE, DURATION, null);
-  const own = ownCode(namedWaits(whole, TRACE));
-  const shares = packageTimes(own);
-  const rows = functions(own);
+const total = (shares: Record<string, number>) => Object.values(shares).reduce((sum, us) => sum + us, 0);
 
-  expect(timeOf(whole)).toBe(DURATION);
-  expect(shares.map((share) => share.name)).toEqual(["waiting", "your code"]);
-  expect(shares.reduce((sum, share) => sum + share.samples, 0) * 1000).toBeCloseTo(DURATION, 6);
-  expect(rows.reduce((sum, row) => sum + row.self, 0) * 1000).toBeCloseTo(DURATION, 6);
-  expect(rows.every((row) => shares.some((share) => share.name === packageOf(row.frame)))).toBe(true);
-  // The worker thread's machinery is no function of yours: its time is your code's that ran in it, or waiting.
-  expect(rows.map((row) => row.frame.function).sort()).toEqual([
-    "get_author",
-    "get_db",
-    "waiting · AsyncIOBackend.run_sync_in_worker_thread",
-    "waiting · _AsyncGeneratorContextManager.__aexit__",
-    "waiting · waiter.acquire",
-  ]);
-});
+test("the strip's legend and the Profile tab's bar say the same shares, for the whole trace or any stretch", () => {
+  const traced = trace(90_000);
 
-test("every frame's own time is in one of All frames' shares, the waits' in waiting's, adding up to the trace", () => {
-  const all = allFrames(wallClock(PROFILE, DURATION, null));
-  const shares = Object.fromEntries(packageTimes(all).map((share) => [share.name, Math.round(share.samples * 1000)]));
-  const byShare: Record<string, number> = {};
-  for (const row of functions(all).filter((each) => each.self > 0)) {
-    const share = packageOf(row.frame);
-    byShare[share] = (byShare[share] ?? 0) + Math.round(row.self * 1000);
+  for (const windows of [
+    null,
+    [[30_000, 60_000]],
+    [
+      [5000, 15_000],
+      [80_000, 108_000],
+    ],
+  ] as (Windows | null)[]) {
+    const profile = windowProfile(traced, windows, true);
+
+    expect(bar(profile)).toEqual(strip(traced, windows));
+    expect(total(list(profile))).toBeCloseTo(total(strip(traced, windows)), -1);
   }
-
-  // The loop's wait for the worker thread (run_sync_in_worker_thread) is waiting's, as waiter.acquire is.
-  expect(shares).toEqual({ psycopg: 34_088, waiting: 73_912 });
-  expect(byShare).toEqual(shares);
-});
-
-test("a code row's time is the time of the profile it opens, its waiting and your code's adding up to it", () => {
-  // get_author's own code: before the query and after it, the query's span (38–93 ms) between.
-  const pieces = [...piecesOf(PROFILE, DURATION, 0, 38_000), ...piecesOf(PROFILE, DURATION, 100_000, 108_000)];
-  const waits = windowsOf(pieces.filter((piece) => piece.waiting));
-  const row = windowsTime(waits);
-  const opened = wallClock(PROFILE, DURATION, waits);
-  const shares = packageTimes(ownCode(namedWaits(opened, TRACE)));
-
-  expect(waits).toEqual([
-    [0, 38_000],
-    [100_000, 108_000],
-  ]);
-  expect(row).toBe(46_000);
-  expect(timeOf(opened)).toBe(row);
-  expect(shares.map((share) => ({ ...share, samples: Math.round(share.samples * 1000) }))).toEqual([
-    { name: "waiting", samples: 40_300 },
-    { name: "your code", samples: 5700 },
+  expect(Object.entries(strip(traced, null)).sort()).toEqual([
+    ["Database", 33_000],
+    ["GC", 2000],
+    ["waiting", 54_000],
+    ["your code", 19_000],
   ]);
 });
 
-test("a wait row holding several waits says so; the whole trace lists each on its own", () => {
-  const pieces = [...piecesOf(PROFILE, DURATION, 0, 38_000), ...piecesOf(PROFILE, DURATION, 100_000, 108_000)];
-  const opened = wallClock(PROFILE, DURATION, windowsOf(pieces.filter((piece) => piece.waiting)));
-  const whole = ownFunctions(wallClock(PROFILE, DURATION, null));
+test("a code row's time is its profile's, and a function that ran only there is as long in the whole trace's list", () => {
+  const traced = trace(90_000);
+  const own = spanSegments(traced, "v");
+  const code = windowsOfSegments(own.filter((segment) => segment.share !== "waiting"));
+  const waits = windowsOfSegments(own.filter((segment) => segment.share === "waiting"));
+  const row = (windows: Windows) => windows.reduce((sum, [from, to]) => sum + to - from, 0);
 
-  expect(waitName(opened)).toEqual({ name: "waiter.acquire and 1 more wait in get_author", yours: true });
-  // The row's 46 ms are all its waits; waiter.acquire alone, over the whole trace, is less.
-  expect(whole["waiting · waiter.acquire"]).toBeLessThan(46_000);
+  expect(total(bar(windowProfile(traced, code, true)))).toBeCloseTo(row(code), 6);
+  expect(total(bar(windowProfile(traced, waits, true)))).toBeCloseTo(row(waits), 6);
+  expect(bar(windowProfile(traced, waits, true))).toEqual({ waiting: Math.round(row(waits)) });
+  // get_db's cleanup (90–100 ms) ran in the view's own code only: 10 ms in its row's profile and in the whole list.
+  expect(list(windowProfile(traced, code, true))["get_db"]).toBe(10_000);
+  expect(list(windowProfile(traced, null, true))["get_db"]).toBe(10_000);
+});
+
+test("a bucket a span's end splits counts in both spans' rows by the same rule, adding up to the whole", () => {
+  const traced = trace(93_000);
+  const rowOf = (id: string) =>
+    windowsOfSegments(spanSegments(traced, id).filter((segment) => segment.share !== "waiting"));
+
+  // The transaction ends at 93 ms: 3 ms of the cleanup are its own code's, 7 ms the view's.
+  expect(list(windowProfile(traced, rowOf("v"), true))["get_db"]).toBe(7000);
+  expect(list(windowProfile(traced, rowOf("t"), true))["get_db"]).toBe(3000);
+  expect(list(windowProfile(traced, null, true))["get_db"]).toBe(10_000);
+});
+
+test("a 7 ms stretch is 7 ms, however many samples its 10 ms bucket holds", () => {
+  const stretch = windowProfile(trace(90_000), [[93_000, 100_000]], true);
+
+  expect(stretch.samples * stretch.interval_us).toBeCloseTo(7000, 6);
+  expect(Object.entries(list(stretch))).toEqual([["get_db", 7000]]);
+});
+
+test("All frames' shares add up to the trace: the query's time the database's, the pause GC's, by package the rest", () => {
+  const all = allFrames(windowProfile(trace(90_000), null));
+  const shares = Object.fromEntries(packageTimes(all).map((share) => [share.name, Math.round(share.samples * 1000)]));
+
+  expect(total(shares)).toBe(108_000);
+  expect(shares["Database"]).toBe(33_000);
+  expect(shares["GC"]).toBe(2000);
+  expect(shares["waiting"]).toBe(54_000);
 });
 
 test("a profile's stretches go into a link and come back the same, and its title names them", () => {

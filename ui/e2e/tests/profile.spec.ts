@@ -13,14 +13,14 @@ test("the time in code, your code's, then each package's share", async ({ page }
 
   await expect(page.getByText("sampled of the trace's", { exact: false })).toBeVisible();
   await expect(page.getByText("100 samples, one every 1 ms")).toBeVisible();
-  await expect(packages.getByRole("button")).toHaveText([/^your code\s*100 ms\s*100%$/]);
+  await expect(packages.getByRole("button")).toHaveText([/^Your code\s*100 ms\s*100%$/]);
 
   await page.getByRole("tab", { name: "All frames" }).click();
 
   await expect(packages.getByRole("button")).toHaveText([
     /^django\.db\s*60 ms\s*60%$/,
     /^django\.template\s*30 ms\s*30%$/,
-    /^your code\s*10 ms\s*10%$/,
+    /^Your code\s*10 ms\s*10%$/,
   ]);
 });
 
