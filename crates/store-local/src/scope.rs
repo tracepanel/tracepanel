@@ -5,6 +5,39 @@
 use super::*;
 use std::collections::HashSet;
 
+/// The fields of a stored trace, span or log the scope reads, each named once. Documents stay JSON: the API hands them
+/// on whole, fields of a newer SDK's included.
+mod field {
+    use serde_json::Value;
+
+    pub(super) fn id(doc: &Value) -> &str {
+        doc["id"].as_str().unwrap_or_default()
+    }
+
+    /// The span above it; none for a trace's root.
+    pub(super) fn parent_id(span: &Value) -> Option<&str> {
+        span["parent_id"].as_str()
+    }
+
+    pub(super) fn start(doc: &Value) -> i64 {
+        doc["start"].as_i64().unwrap_or_default()
+    }
+
+    pub(super) fn duration(doc: &Value) -> i64 {
+        doc["duration"].as_i64().unwrap_or_default()
+    }
+
+    /// A log's time.
+    pub(super) fn time(log: &Value) -> i64 {
+        log["time"].as_i64().unwrap_or_default()
+    }
+
+    /// A text attribute of a trace or a span.
+    pub(super) fn attr<'a>(doc: &'a Value, key: &str) -> Option<&'a str> {
+        doc["attrs"][key].as_str()
+    }
+}
+
 /// The most traces down the chain, the trace itself being level 0: deeper calls are left out (as the call tree's).
 pub const CHAIN_LEVELS: usize = 6;
 /// The most traces in one chain.
@@ -32,14 +65,14 @@ pub struct Member {
 
 impl Member {
     pub fn id(&self) -> &str {
-        self.doc["id"].as_str().unwrap_or_default()
+        field::id(&self.doc)
     }
 
     /// The app that served it: its project's name, else its service.
     pub fn app(&self) -> &str {
         self.project
             .as_deref()
-            .or_else(|| self.doc["attrs"]["service.name"].as_str())
+            .or_else(|| field::attr(&self.doc, "service.name"))
             .unwrap_or_default()
     }
 
@@ -48,13 +81,13 @@ impl Member {
     }
 
     fn span(&self, id: &str) -> Option<&Value> {
-        self.spans().find(|span| span["id"] == id)
+        self.spans().find(|span| field::id(span) == id)
     }
 
     fn root(&self) -> Option<&str> {
         self.spans()
-            .find(|span| span["parent_id"].is_null())
-            .and_then(|span| span["id"].as_str())
+            .find(|span| field::parent_id(span).is_none())
+            .map(field::id)
     }
 }
 
@@ -94,16 +127,16 @@ pub fn no_remote(_: &str) -> ServedCalls {
 
 /// Where a span starts and ends.
 fn extent(span: &Value) -> (i64, i64) {
-    let start = span["start"].as_i64().unwrap_or_default();
-    (start, start + span["duration"].as_i64().unwrap_or_default())
+    let start = field::start(span);
+    (start, start + field::duration(span))
 }
 
 /// How far a call's trace moves to sit centred in the call: two apps' clocks disagree by a little, often more than
 /// the way there and back takes (the call tree draws it the same).
 fn shift_into(call: &Value, served: &Value) -> i64 {
     let (start, end) = extent(call);
-    let duration = served["duration"].as_i64().unwrap_or_default();
-    start + (end - start - duration).max(0) / 2 - served["start"].as_i64().unwrap_or_default()
+    let duration = field::duration(served);
+    start + (end - start - duration).max(0) / 2 - field::start(served)
 }
 
 /// A trace document with every time in it moved by `by` µs.
@@ -192,7 +225,7 @@ impl Reader {
                 found.push((served.via, served.doc, Some((served.project, served.row))));
             }
             for (via, doc, remote) in found {
-                let child = doc["id"].as_str().unwrap_or_default().to_owned();
+                let child = field::id(&doc).to_owned();
                 if !seen.insert(child) {
                     continue;
                 }
@@ -254,7 +287,7 @@ fn subtree(member: &Member, top: &str) -> HashSet<String> {
     while grew {
         grew = false;
         for span in member.spans() {
-            let (Some(id), Some(parent)) = (span["id"].as_str(), span["parent_id"].as_str()) else {
+            let (id, Some(parent)) = (field::id(span), field::parent_id(span)) else {
                 continue;
             };
             if ids.contains(parent) && ids.insert(id.to_owned()) {
@@ -306,13 +339,13 @@ impl Chain {
                     continue;
                 }
             };
-            let id = span["id"].as_str().unwrap_or_default();
+            let id = field::id(span);
             let window = extent(span);
             windows.push(window);
             let (ids, outside) = if selection.only {
                 let children: Vec<(i64, i64)> = member
                     .spans()
-                    .filter(|child| child["parent_id"] == id)
+                    .filter(|child| field::parent_id(child) == Some(id))
                     .map(extent)
                     .collect();
                 (HashSet::from([id.to_owned()]), children)
@@ -394,7 +427,7 @@ impl Scope<'_> {
             }) => match log["span_id"].as_str() {
                 Some(span) if self.chain.members[at].span(span).is_some() => ids.contains(span),
                 _ => {
-                    let time = log["time"].as_i64().unwrap_or_default();
+                    let time = field::time(log);
                     windows.iter().any(|window| within(time, *window))
                         && !outside.iter().any(|window| within(time, *window))
                 }
@@ -438,7 +471,7 @@ impl Scope<'_> {
                     })
             })
             .collect();
-        logs.sort_by_key(|log| log["time"].as_i64().unwrap_or_default());
+        logs.sort_by_key(field::time);
         logs.truncate(SCOPE_LOGS);
         logs
     }
@@ -576,10 +609,8 @@ impl Scope<'_> {
                 let Some(trace) = parsed(member) else {
                     return Vec::new();
                 };
-                let docs: HashMap<&str, &Value> = member
-                    .spans()
-                    .filter_map(|span| Some((span["id"].as_str()?, span)))
-                    .collect();
+                let docs: HashMap<&str, &Value> =
+                    member.spans().map(|span| (field::id(span), span)).collect();
                 trace
                     .spans
                     .iter()
@@ -601,7 +632,7 @@ impl Scope<'_> {
                     .collect()
             })
             .collect();
-        calls.sort_by_key(|call| call["start"].as_i64().unwrap_or_default());
+        calls.sort_by_key(field::start);
         calls
     }
 
@@ -767,11 +798,11 @@ fn statements(member: &Member) -> HashMap<String, (String, String, i64)> {
 
 /// Where a call was made from: its GraphQL field (a resolver's step above it), else its line of code.
 fn call_place(member: &Member, call: &Value) -> (Option<String>, Option<String>) {
-    let parent = call["parent_id"].as_str().and_then(|id| member.span(id));
+    let parent = field::parent_id(call).and_then(|id| member.span(id));
     let field = parent
-        .and_then(|span| span["attrs"]["graphql.field"].as_str())
+        .and_then(|span| field::attr(span, "graphql.field"))
         .map(str::to_owned);
-    let origin = call["attrs"]["code.origin"].as_str().map(str::to_owned);
+    let origin = field::attr(call, "code.origin").map(str::to_owned);
     (field, origin)
 }
 
@@ -793,13 +824,13 @@ pub fn chain_issues(chain: &Chain) -> Vec<(usize, Value)> {
                 continue;
             };
             // A resolver's calls (one `Book.author` step per book) repeat across its steps, not under one span.
-            let step = call["parent_id"].as_str().and_then(|id| member.span(id));
-            let parent = match step.and_then(|step| step["attrs"]["graphql.field"].as_str()) {
+            let step = field::parent_id(call).and_then(|id| member.span(id));
+            let parent = match step.and_then(|step| field::attr(step, "graphql.field")) {
                 Some(field) => format!(
                     "{field}@{}",
-                    step.map_or("", |step| step["parent_id"].as_str().unwrap_or_default())
+                    step.and_then(field::parent_id).unwrap_or_default()
                 ),
-                None => call["parent_id"].as_str().unwrap_or_default().to_owned(),
+                None => field::parent_id(call).unwrap_or_default().to_owned(),
             };
             let template = child.doc["attrs"]["http.route"]
                 .as_str()

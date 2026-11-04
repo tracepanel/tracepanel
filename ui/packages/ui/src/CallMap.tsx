@@ -1,6 +1,7 @@
 import { type CSSProperties, type ReactNode, type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import { Details } from "./CallDetails";
-import { appName, hopText, type ProfilesIn, Rows, type TraceProfileOpener, UnderSlot } from "./CallRows";
+import { hopText, type ProfilesIn, type TraceProfileOpener, UnderSlot } from "./CallRowParts";
+import { appName, Rows } from "./CallRows";
 import type { ExplainOf } from "./CallTable";
 import {
   buildTree,

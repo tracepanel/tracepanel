@@ -20,7 +20,7 @@ import { type ComponentProps, type ReactNode, useCallback, useEffect, useMemo, u
 import { AppDetails, appSaidAnything } from "./AppDetails";
 import { appWarnings, warningsTone } from "./AppWarnings";
 import { CallMap } from "./CallMap";
-import type { ProfilesIn, TraceProfileOpener } from "./CallRows";
+import type { ProfilesIn, TraceProfileOpener } from "./CallRowParts";
 import type { Explain, ExplainOf } from "./CallTable";
 import { ScopedCalls, ScopedIssues } from "./ChainTabs";
 import { Button } from "./components/ui/button";
