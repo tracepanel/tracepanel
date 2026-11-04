@@ -1,4 +1,5 @@
 import { type CSSProperties, type KeyboardEvent, type PointerEvent, useState } from "react";
+import { readItem, writeItem } from "./lib/storage";
 
 const WIDTH_KEY = "tracepanel:side-width";
 /** The details stay readable, and so does the tree beside them. */
@@ -11,21 +12,12 @@ const KEY_STEPS = new Map([
 ]);
 
 function stored(): number | undefined {
-  try {
-    const width = Number(localStorage.getItem(WIDTH_KEY));
-    return width > 0 ? width : undefined;
-  } catch {
-    return undefined;
-  }
+  const width = Number(readItem(WIDTH_KEY));
+  return width > 0 ? width : undefined;
 }
 
 function store(width: number | undefined): void {
-  try {
-    if (width) localStorage.setItem(WIDTH_KEY, String(Math.round(width)));
-    else localStorage.removeItem(WIDTH_KEY);
-  } catch {
-    // Private windows and blocked storage: the width lasts until the page reloads.
-  }
+  writeItem(WIDTH_KEY, width ? String(Math.round(width)) : null);
 }
 
 function fitted(width: number, total: number): number {

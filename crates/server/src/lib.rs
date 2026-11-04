@@ -21,7 +21,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tracepanel_protocol::{Activity, Batch, Sink, Thresholds};
 use tracepanel_store_local::{
-    Chain, ReadError, Reader, Selection, Served, call_summary, chain_issues, log_summary,
+    Chain, ReadError, Reader, Selection, Served, ServedCalls, call_summary, chain_issues,
+    log_summary,
 };
 
 /// The console's UI, built from `ui/` into `ui-dist/` (`scripts/ui.sh`): what the browser loads, not the notices.
@@ -303,9 +304,10 @@ async fn related(State(reader): State<Shared>, Path(id): Path<String>) -> Respon
         Err(failure) => return failure.into_response(),
     };
     // Calls no trace here answered: the agents of the other projects on this machine may have served them.
-    let unanswered = read(&reader, move |reader| Ok(reader.unanswered_calls(&calls)?))
-        .await
-        .unwrap_or_default();
+    let unanswered = match read(&reader, move |reader| Ok(reader.unanswered_calls(&calls)?)).await {
+        Ok(unanswered) => unanswered,
+        Err(failure) => return failure.into_response(),
+    };
     let mut remote = remote_calls(unanswered).await;
     let ids: Vec<String> = related["calls"]
         .as_array()
@@ -314,7 +316,10 @@ async fn related(State(reader): State<Shared>, Path(id): Path<String>) -> Respon
         .filter_map(|call| call["id"].as_str().map(str::to_owned))
         .take(CALL_TRACES_LIMIT)
         .collect();
-    let mut whole = whole_traces(&reader, ids).await;
+    let mut whole = match whole_traces(&reader, ids).await {
+        Ok(whole) => whole,
+        Err(failure) => return failure.into_response(),
+    };
     // A neighbour's whole trace goes with the others, out of the list of calls.
     for doc in remote
         .iter_mut()
@@ -331,16 +336,16 @@ async fn related(State(reader): State<Shared>, Path(id): Path<String>) -> Respon
 
 /// Other projects' traces for the calls of a trace that no trace here answered, as the chain takes them: (the call's
 /// span, the trace, the project). Blocking: asks the other agents on this machine.
-fn neighbours_served(reader: &Reader, id: &str) -> Vec<Served> {
+fn neighbours_served(reader: &Reader, id: &str) -> ServedCalls {
     let Some((_, console)) = IDENTITY.get() else {
-        return Vec::new();
+        return Ok(Vec::new());
     };
-    let unanswered = reader.unanswered_calls(id).unwrap_or_default();
+    let unanswered = reader.unanswered_calls(id)?;
     if unanswered.is_empty() {
-        return Vec::new();
+        return Ok(Vec::new());
     }
     let neighbours = neighbors::neighbours(console);
-    unanswered
+    Ok(unanswered
         .iter()
         .filter_map(|(w3c_trace, w3c_span, span)| {
             neighbours.iter().find_map(|neighbour| {
@@ -356,7 +361,7 @@ fn neighbours_served(reader: &Reader, id: &str) -> Vec<Served> {
                 })
             })
         })
-        .collect()
+        .collect())
 }
 
 /// The scope asked for: `scope=trace` the trace alone, else (`chain`, the default) with the traces down its calls;
@@ -505,20 +510,29 @@ async fn trace_issues(
     }
 }
 
-/// These traces whole, by id: the ones this store has.
-async fn whole_traces(reader: &Shared, ids: Vec<String>) -> serde_json::Map<String, Value> {
+/// These traces whole, by id: the ones this store has. A failed read or a broken document is a failure, not a trace
+/// that isn't there.
+async fn whole_traces(
+    reader: &Shared,
+    ids: Vec<String>,
+) -> Result<serde_json::Map<String, Value>, Failure> {
     let docs = read(reader, move |reader| {
-        Ok(ids
-            .iter()
-            .filter_map(|id| reader.get_trace(id).ok().flatten())
-            .collect::<Vec<_>>())
+        let mut docs = Vec::with_capacity(ids.len());
+        for id in &ids {
+            docs.extend(reader.get_trace(id)?);
+        }
+        Ok(docs)
     })
-    .await
-    .unwrap_or_default();
-    docs.iter()
-        .filter_map(|doc| serde_json::from_str::<Value>(doc).ok())
-        .filter_map(|doc| Some((doc["id"].as_str()?.to_owned(), doc)))
-        .collect()
+    .await?;
+    let mut whole = serde_json::Map::with_capacity(docs.len());
+    for doc in &docs {
+        let doc: Value = serde_json::from_str(doc)
+            .map_err(|error| Failure(StatusCode::INTERNAL_SERVER_ERROR, error.to_string()))?;
+        if let Some(id) = doc["id"].as_str().map(str::to_owned) {
+            whole.insert(id, doc);
+        }
+    }
+    Ok(whole)
 }
 
 /// How many of a trace's calls come whole, for the call tree to open under the call: a fan-out beyond it shows rows.

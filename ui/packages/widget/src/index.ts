@@ -1,11 +1,6 @@
-// Corner badge, fetch and XHR capture, slide-out panel (iframe inside Shadow DOM).
-
 import TOKENS from "virtual:tracepanel-tokens";
-import { duration } from "@tracepanel/ui/format";
-import { type ChainCounts, chainScope } from "@tracepanel/ui/lib/chainCounts";
-import { graphqlName, namesOperation } from "@tracepanel/ui/lib/graphql";
-import { clockOf, cutNote, NO_ANSWER, PENDING, runningLabel, runningTime, TICK_MS } from "@tracepanel/ui/lib/live";
-import { REDIRECT_MS } from "@tracepanel/ui/lib/page";
+import type { ChainCounts } from "@tracepanel/ui/lib/chainCounts";
+import { clockOf, runningLabel, TICK_MS } from "@tracepanel/ui/lib/live";
 import { plural } from "@tracepanel/ui/lib/plural";
 import {
   BROWSER_ICON_SVG,
@@ -15,8 +10,65 @@ import {
   runtimeName,
   traceRuntime,
 } from "@tracepanel/ui/lib/runtime";
+import { readItem, writeItem } from "@tracepanel/ui/lib/storage";
 import type { EntrySummary, HtmxInfo, TabEntry } from "@tracepanel/ui/lib/tabEntry";
-import { CARD_STYLE, mountCard, nameWithMethod, type UntracedCall } from "./card";
+import { CARD_STYLE, mountCard } from "./card";
+import {
+  countedBy,
+  flightEntry,
+  LANDED_KEEP_MS,
+  LANDED_MAX,
+  type Landed,
+  landedEntry,
+  summaryOf,
+  untracedCall,
+  withPage,
+} from "./entries";
+import {
+  type Answer,
+  type Flight,
+  flying,
+  listen,
+  nativeFetch,
+  PENDING_ISSUES,
+  pending,
+  query,
+  setWatcher,
+  waitedMs,
+} from "./network";
+import {
+  DEFAULT_HEIGHT,
+  DEFAULT_WIDTH,
+  type Dock,
+  learnedRuntime,
+  learnRuntime,
+  loadPanel,
+  loadTab,
+  MIN_HEIGHT,
+  MIN_WIDTH,
+  type PanelState,
+  savePanel,
+  saveTab,
+  withRedirects,
+} from "./persist";
+import {
+  addCalls,
+  addFlight,
+  addIssues,
+  addName,
+  addNoAnswer,
+  addPage,
+  addQueries,
+  addRequest,
+  addRunning,
+  addTime,
+  type Counted,
+  pillLabel,
+  segment,
+  tasksPart,
+  verdict,
+} from "./pill";
+import { STYLE } from "./style";
 import { type ChainFacts, factsKey, followChain } from "./viewChain";
 
 export interface TraceInfo {
@@ -53,7 +105,7 @@ export interface TraceInfo {
 }
 
 /** A view or an action tracepanel-js records in the browser, as it announces them (tracepanel:page). */
-interface PageAnnouncement {
+export interface PageAnnouncement {
   id: string;
   name: string;
   start: number;
@@ -62,8 +114,6 @@ interface PageAnnouncement {
   open: boolean;
 }
 
-// tracepanel-js's browser recording marks each Response and XMLHttpRequest with the view or action that made it.
-const PAGE = Symbol.for("tracepanel.page");
 // The views and actions it announced before the widget listened.
 const ANNOUNCED = Symbol.for("tracepanel.pages");
 
@@ -144,44 +194,10 @@ function firstOf(...ids: (string | undefined)[]): string | null {
   return ids.find((id) => id !== undefined) ?? null;
 }
 
-/** A view's name has no action after its path: "/books", not "/books › click "Save"". */
-function isView(entry: TabEntry | undefined): boolean {
-  return entry?.summary?.kind === "page" && !entry.summary.name.includes(" › ");
-}
-
-/**
- * Before a new view goes in: the last one, when it is of the same page and nothing came after it (no request, no
- * action), leaves the list. Reloads of an SPA's page would otherwise stack views with nothing under them. A route
- * change is a view of another page: it goes in after the last one, which stays, with or without requests.
- */
-function dropEmptyView(tab: TabEntry[], name: string, called: ReadonlySet<string>): TabEntry[] {
-  const last = tab.at(-1);
-  if (last && isViewOf(last, name) && !madeCalls(tab, last.id, called)) return tab.slice(0, -1);
-  return tab;
-}
-
-/**
- * Whether a view or an action made calls: a traced request under it, or one that answered untraced or flies still
- * (`called`: those that made such calls, which the tab doesn't list).
- */
-function madeCalls(tab: readonly TabEntry[], id: string, called: ReadonlySet<string>): boolean {
-  return called.has(id) || tab.some((item) => item.parent === id);
-}
-
-/** Whether an entry is a view of the page `name` (a view, not an action on it). */
-function isViewOf(entry: TabEntry, name: string): boolean {
-  return isView(entry) && entry.summary?.name === name;
-}
-
 /** What the browser recording announced before the widget listened, oldest first. */
 function announcedPages(): PageAnnouncement[] {
   const announced = (globalThis as unknown as Record<symbol, Map<string, PageAnnouncement> | undefined>)[ANNOUNCED];
   return announced ? [...announced.values()] : [];
-}
-
-function pageOf(carrier: object): string | undefined {
-  const page = (carrier as Record<symbol, unknown>)[PAGE];
-  return typeof page === "string" ? page : undefined;
 }
 
 export interface WidgetOptions {
@@ -202,27 +218,19 @@ export interface Widget {
 }
 
 const THEME_KEY = "tracepanel:theme";
+
 const DARK = "(prefers-color-scheme: dark)";
 
 /** The panel's theme choice ("light", "dark", "system"), kept in this page's storage for the badge. */
 function storeTheme(choice: string): void {
-  try {
-    if (choice === "light" || choice === "dark" || choice === "system") localStorage.setItem(THEME_KEY, choice);
-  } catch {
-    // Blocked storage: the badge stays dark.
-  }
+  if (choice === "light" || choice === "dark" || choice === "system") writeItem(THEME_KEY, choice);
 }
 
 /** Follows the console's theme choice (dark when there is none), or the OS when it is Auto. */
 
 function watchTheme(host: HTMLElement): () => void {
   const apply = () => {
-    let choice: string | null = null;
-    try {
-      choice = localStorage.getItem(THEME_KEY);
-    } catch {
-      // Blocked storage: dark.
-    }
+    const choice = readItem(THEME_KEY);
     const light = choice === "light" || (choice === "system" && !window.matchMedia(DARK).matches);
     host.dataset["theme"] = light ? "light" : "dark";
   };
@@ -233,1136 +241,17 @@ function watchTheme(host: HTMLElement): () => void {
   return apply;
 }
 
-const STYLE = `
-  :host { all: initial; }
-  /* The tones the pill and the card tint with, from the tokens: a verdict's amber and coral, the accent's violet.
-     The light theme's tints are lighter and take their hue from the stronger ink. */
-  :host {
-    --amber: rgb(from var(--dt-warn-bg) r g b / 1);
-    --coral: rgb(from var(--dt-error-bg) r g b / 1);
-    --violet: var(--dt-violet);
-    --tint-ok: rgb(from var(--dt-ok-bg) r g b / 0.13);
-    --tint-info: rgb(from var(--dt-info-bg) r g b / 0.15);
-    --tint-warn: rgb(from var(--amber) r g b / 0.15);
-    --tint-error: rgb(from var(--coral) r g b / 0.16);
-    --tint-violet: rgb(from var(--violet) r g b / 0.16);
-    --ring-warn: rgb(from var(--amber) r g b / 0.16);
-    --ring-error: rgb(from var(--coral) r g b / 0.3);
-    --edge-error: rgb(from var(--coral) r g b / 0.9);
-    --k-django: rgb(from var(--dt-k-django) r g b / 0.4);
-  }
-  :host([data-theme="light"]) {
-    --coral: var(--dt-error);
-    --violet: var(--dt-accent);
-    --tint-ok: rgb(from var(--dt-ok-bg) r g b / 0.12);
-    --tint-info: rgb(from var(--dt-info-bg) r g b / 0.09);
-    --tint-warn: rgb(from var(--amber) r g b / 0.1);
-    --tint-error: rgb(from var(--coral) r g b / 0.09);
-    --tint-violet: rgb(from var(--violet) r g b / 0.1);
-    --ring-warn: rgb(from var(--amber) r g b / 0.13);
-    --ring-error: rgb(from var(--coral) r g b / 0.22);
-    --edge-error: rgb(from var(--coral) r g b / 0.85);
-    --k-django: rgb(from var(--dt-k-django) r g b / 0.3);
-  }
-  /* A dark pill in the corner: the request's verdict at a glance. Its ring is the verdict: none when all is well,
-     amber when something wants a look, coral when it failed. */
-  .badge {
-    position: fixed; right: 16px; bottom: 16px; z-index: 2147483647;
-    display: flex; align-items: center; gap: 0; max-width: calc(100vw - 32px);
-    height: 40px; padding: 0 6px 0 9px; border: 1px solid var(--dt-float-border); border-radius: 999px;
-    background: var(--dt-float); color: var(--dt-float-text);
-    box-shadow: var(--dt-float-shadow);
-    font: 500 12.5px/1 "Geist Variable", "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-    font-variant-numeric: tabular-nums; cursor: pointer;
-    transition: right 180ms ease-out, box-shadow 180ms ease-out, border-color 120ms ease-out;
-  }
-  .badge[data-verdict="warn"] { border-color: rgb(from var(--amber) r g b / 0.45); box-shadow: 0 0 0 4px var(--ring-warn), var(--dt-float-drop); }
-  /* A failure is the one thing not to miss: a solid coral edge and a stronger halo. */
-  .badge[data-verdict="error"] { border-color: var(--edge-error); box-shadow: 0 0 0 4px var(--ring-error), var(--dt-float-drop); }
-  /* Hover answers in place: the border, in the verdict's colour, gets stronger; the pill stays where it is. */
-  .badge:hover { border-color: var(--dt-float-border-hover); }
-  .badge[data-verdict="warn"]:hover { border-color: rgb(from var(--amber) r g b / 0.85); }
-  .badge[data-verdict="error"]:hover { border-color: var(--coral); }
-  /* From the keyboard: the accent, thin, as everywhere in the UI (not the logo's lime, which read as a verdict). */
-  .badge:focus-visible { outline: none; filter: brightness(1.25); }
-  .brand { display: flex; align-items: center; padding-right: 8px; }
-  .brand svg { width: 21px; height: 21px; }
-  .logo-1 { fill: var(--dt-accent-strong); }
-  .logo-2 { fill: var(--dt-violet); }
-  .logo-3 { fill: var(--dt-lime); }
-  .runtime { align-self: center; display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 4px 7px; border-radius: 999px; background: var(--dt-float-chip); color: var(--dt-text-2); font-size: 10.5px; font-weight: 600; letter-spacing: 0.01em; }
-  .brand .runtime svg { width: 12px; height: 12px; }
-  .monogram { display: inline-grid; place-items: center; width: 12px; height: 12px; container-type: size; border-radius: 25%; background: color-mix(in srgb, currentColor 16%, transparent); font-weight: 700; line-height: 1; letter-spacing: -0.02em; }
-  .monogram::before { content: attr(data-letters); font-size: 56cqh; }
-  .monogram[data-letters="J"]::before { font-size: 72cqh; }
-  .runtime:empty { display: none; }
-  .stats { display: inline-flex; align-items: center; min-width: 0; height: 100%; }
-  .seg { display: inline-flex; align-items: center; gap: 5px; height: 21px; padding: 0 8.5px; white-space: nowrap; }
-  .seg + .seg { border-left: 1px solid var(--dt-float-divider); }
-  .seg svg { width: 12.5px; height: 12.5px; color: var(--dt-text-3); flex: none; }
-  .seg b { color: var(--dt-float-strong); font-weight: 600; }
-  .unit { color: var(--dt-text-3); }
-  /* In the light theme every icon in the pill is grey, a finding's and a failure's too. */
-  :host([data-theme="light"]) .seg svg { color: var(--dt-text-3); }
-  .status { padding: 3px 7px; border-radius: 999px; font: 600 11px "Geist Mono Variable", "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace; background: var(--tint-ok); color: var(--dt-ok); }
-  .status[data-tone="redirect"] { background: var(--tint-info); color: var(--dt-info); }
-  .status[data-tone="client"] { background: var(--tint-warn); color: var(--dt-warn); }
-  .status[data-tone="server"] { background: var(--tint-error); color: var(--dt-error); }
-  /* In the light theme a status is a dot of its tone before the code, as in the console's lists and the panel. */
-  :host([data-theme="light"]) .status { display: inline-flex; align-items: center; gap: 5px; padding: 0; background: none; font-weight: 500; }
-  :host([data-theme="light"]) .status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-  .seg[data-speed="slow"] b { color: var(--dt-warn); }
-  .seg[data-speed="very-slow"] b { color: var(--dt-error); }
-  /* lib/live's states, as the panel draws them: in flight, a ring that turns and the time so far; no answer yet, the
-     hourglass and its words; a number not known yet, "…". */
-  .running { display: inline-block; flex: none; width: 11px; height: 11px; box-sizing: border-box; border: 1.5px solid rgb(from var(--dt-accent) r g b / 0.28); border-top-color: var(--dt-accent); border-radius: 50%; animation: running 0.8s linear infinite; }
-  @keyframes running { to { transform: rotate(360deg); } }
-  .seg[data-state="running"] b { color: var(--dt-float-strong); }
-  .no-answer { display: inline-flex; align-items: center; gap: 4px; color: var(--dt-text-3); font-size: 11.5px; white-space: nowrap; }
-  .seg .no-answer svg { width: 12px; height: 12px; color: currentColor; }
-  .pending { color: var(--dt-text-3); }
-  .flying { color: var(--dt-text-2); }
-  .issues { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; background: var(--tint-warn); color: var(--dt-warn); font-weight: 600; font-size: 11.5px; }
-  .seg .issues svg { color: currentColor; }
-  /* Its tasks': the Tasks icon, then the same chips as its own failures and issues. */
-  .tasks { gap: 5px; }
-  .tasks .failed { margin-left: 0; }
-  .issues[data-tone="error"] { background: var(--tint-error); color: var(--dt-error); }
-  /* The page's count: a step back from the latest request's numbers; its failures stand out on their own. */
-  .page .unit { margin-left: -1px; }
-  .failed { display: inline-flex; align-items: center; gap: 4px; margin-left: 3px; padding: 3px 8px; border-radius: 999px; background: var(--tint-error); color: var(--dt-error); font-weight: 600; font-size: 11.5px; }
-  .seg .failed svg { width: 12px; height: 12px; color: currentColor; }
-  .name {
-    max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-radius: 6px;
-    font: 500 12px "Geist Mono Variable", "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace; color: var(--dt-float-strong);
-  }
-  .name[data-pulse] { animation: pulse 700ms ease-out; }
-  .idle { color: var(--dt-float-muted); font-size: 12px; white-space: nowrap; }
-  @keyframes pulse {
-    from { box-shadow: 0 0 0 0 rgb(from var(--dt-violet) r g b / 0.6); }
-    to { box-shadow: 0 0 0 8px rgb(from var(--dt-violet) r g b / 0); }
-  }
-  .panel {
-    position: fixed; top: 0; right: 0; bottom: 0; z-index: 2147483646;
-    width: min(var(--tracepanel-width, 600px), 100vw); border-left: 1px solid var(--dt-float-edge);
-    background: var(--dt-panel);
-    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-    box-shadow: var(--dt-float-panel-shadow);
-    transform: translateX(100%); visibility: hidden;
-    transition: transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1), width 200ms ease-out, visibility 0s 200ms;
-  }
-  .panel[data-open] { transform: none; visibility: visible; transition: transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1), width 200ms ease-out; }
-  .panel[data-open] ~ .badge { right: calc(min(var(--tracepanel-width, 600px), 100vw) + 16px); }
-  /* No room beside the panel (a narrow window): the panel shows the request, the badge folds to its logo,
-     its ring still the verdict. */
-  :host([data-crowded]:not([data-dock="bottom"])) .panel[data-open] ~ .badge { width: 40px; padding: 0; justify-content: center; }
-  :host([data-crowded]:not([data-dock="bottom"])) .panel[data-open] ~ .badge :is(.stats, .runtime) { display: none; }
-  :host([data-crowded]:not([data-dock="bottom"])) .panel[data-open] ~ .badge .brand { padding: 0; }
-  /* The theme (the console's Dark / Light / Auto choice, shared through localStorage) is the :host's data-theme. */
-  .panel iframe { width: 100%; height: 100%; border: 0; display: block; background: transparent; color-scheme: dark; }
-  :host([data-theme="light"]) .panel iframe { color-scheme: light; }
-  .panel[data-instant], .panel[data-instant] ~ .badge, .panel[data-resizing], .panel[data-resizing] ~ .badge { transition: none; }
-  .panel[data-resizing] iframe { pointer-events: none; }
-  /* 10px to grab, centred on the panel's 1px edge. What shows is that edge, a step stronger under the pointer and
-     while dragging: never thicker, never the brand's colour (as the console's sidebar and split panes). */
-  .resize { position: absolute; top: 0; bottom: 0; left: -6px; width: 10px; cursor: ew-resize; z-index: 1; }
-  .resize::after { content: ""; position: absolute; top: 0; bottom: 0; left: 5px; width: 1px; background: transparent; transition: background 120ms; }
-  .resize:hover::after, .panel[data-resizing] .resize::after { background: var(--dt-divider-active); }
-  /* Docked at the bottom, like browser devtools: full width, the height is dragged from the top edge. */
-  :host([data-dock="bottom"]) .panel {
-    top: auto; left: 0; width: 100vw; height: min(var(--tracepanel-height, 360px), 100vh);
-    border-left: 0; border-top: 1px solid var(--dt-float-edge);
-    box-shadow: var(--dt-float-panel-shadow-bottom);
-    transform: translateY(100%);
-    transition: transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1), height 200ms ease-out, visibility 0s 200ms;
-  }
-  :host([data-dock="bottom"]) .panel[data-open] { transform: none; transition: transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1), height 200ms ease-out; }
-  :host([data-dock="bottom"]) .panel[data-open] ~ .badge { right: 16px; bottom: calc(min(var(--tracepanel-height, 360px), 100vh) + 12px); }
-  :host([data-dock="bottom"]) .resize { top: -6px; bottom: auto; left: 0; right: 0; width: auto; height: 10px; cursor: ns-resize; }
-  :host([data-dock="bottom"]) .resize::after { top: 5px; bottom: auto; left: 0; right: 0; width: auto; height: 1px; }
-  /* While dragging, the size follows the pointer: no transition (these selectors outrank the dock rules). */
-  :host .panel[data-resizing], :host .panel[data-resizing][data-open], :host .panel[data-resizing] ~ .badge,
-  :host([data-dock="bottom"]) .panel[data-resizing][data-open] { transition: none; }
-  @media (prefers-reduced-motion: reduce) { .panel, .badge, .resize::after { transition: none; } .name[data-pulse] { animation: none; } .running { animation: none; } }
-`;
-
-const PENDING_ISSUES = "pending";
 // A request in flight shows on the pill (and in the list) once it has run this long: a quick one never blinks.
 const FLIGHT_SHOWN_MS = 150;
+
 // Asking the console what the pill's request's task runs found: they run after it, in a worker, so the asks are
 // spread over the next seconds, while it is still the pill's.
 const RUN_ASKS_MS = [1000, 2000, 4000, 8000, 15000];
+
 // Asking the console for a request's issues: it may not have stored the request yet.
 const ISSUE_TRIES = 6;
+
 const ISSUE_RETRY_MS = 300;
-
-/** Parses the Server-Timing header written by tracepanel. Returns null for responses tracepanel didn't see. */
-export function parseServerTiming(header: string | null): TraceInfo | null {
-  if (!header) return null;
-  const info: TraceInfo = {};
-  let seen = false;
-  for (const metric of header.split(",")) {
-    const [name, ...params] = metric.trim().split(";");
-    const values = new Map(
-      params.map((param) => {
-        const [key = "", value = ""] = param.trim().split("=");
-        return [key, value.replace(/^"|"$/g, "")];
-      }),
-    );
-    if (name === "db") {
-      info.dbMs = Number(values.get("dur"));
-      info.queries = Number.parseInt(values.get("desc") ?? "", 10);
-      seen = true;
-    } else if (name === "total") {
-      info.totalMs = Number(values.get("dur"));
-    } else if (name === "tracepanel-issues") {
-      const desc = values.get("desc") ?? "";
-      if (desc === PENDING_ISSUES) info.issuesPending = true;
-      else info.issues = Number.parseInt(desc, 10);
-    }
-  }
-  return seen ? info : null;
-}
-
-function fromResponse(
-  method: string,
-  url: string,
-  status: number,
-  headers: (name: string) => string | null,
-): TraceInfo | null {
-  const info = parseServerTiming(headers("Server-Timing"));
-  if (!info) return null;
-  const name = headers("Tracepanel-Name");
-  return {
-    ...info,
-    name: name ? decodeURIComponent(name) : undefined,
-    method,
-    url,
-    status,
-    trace: headers("Tracepanel-Id") ?? undefined,
-    issues: info.issues ?? 0,
-  };
-}
-
-const LABEL_MAX = 40;
-
-/** An element as people know it: its aria-label, its text, its id, else its tag. */
-function describe(element: Element | null | undefined): string | undefined {
-  if (!element) return undefined;
-  const text = (element.getAttribute("aria-label") ?? element.textContent ?? "").replace(/\s+/g, " ").trim();
-  if (text) return text.length > LABEL_MAX ? `${text.slice(0, LABEL_MAX - 1)}…` : text;
-  return element.id ? `#${element.id}` : element.tagName.toLowerCase();
-}
-
-function selector(element: Element | null | undefined): string | undefined {
-  if (!element) return undefined;
-  return element.id ? `#${element.id}` : element.tagName.toLowerCase();
-}
-
-/** What htmx says about each of its requests (htmx:beforeSend), until the request ends. */
-const htmxRequests = new WeakMap<XMLHttpRequest, HtmxInfo>();
-
-function watchHtmx(): void {
-  document.addEventListener("htmx:beforeSend", (event) => {
-    try {
-      const detail = (event as CustomEvent).detail as {
-        xhr?: XMLHttpRequest;
-        elt?: Element;
-        target?: Element;
-        boosted?: boolean;
-        requestConfig?: { headers?: Record<string, string> };
-      };
-      if (!detail.xhr) return;
-      htmxRequests.set(detail.xhr, {
-        trigger: describe(detail.elt),
-        target: selector(detail.target),
-        boosted: detail.boosted === true || detail.requestConfig?.headers?.["HX-Boosted"] === "true",
-      });
-    } catch {
-      // Never break the page because of the widget.
-    }
-  });
-}
-
-function query<T extends Element>(root: ParentNode, selector: string): T {
-  const element = root.querySelector<T>(selector);
-  if (!element) throw new Error(`tracepanel widget: missing ${selector}`);
-  return element;
-}
-
-/**
- * A request of the page still in flight (lib/live): from the moment the page made it (a call the browser queues
- * behind others is in flight too) until its answer came. Its id is the widget's own ("~" and a number) until the
- * answer names its trace.
- */
-export interface Flight {
-  id: string;
-  method: string;
-  url: string;
-  /** A GraphQL operation, read from the request's body as its trace will name it ("GraphQL query Books"). */
-  name?: string | undefined;
-  /** Epoch ms. */
-  start: number;
-  /** When its answer came (epoch ms): the browser's end of the call, before anything else reads the answer. */
-  end?: number | undefined;
-  /**
-   * The W3C span id its traceparent carries, when the browser recording added one before this saw the call (it
-   * wrapped fetch and XMLHttpRequest after the widget): the call's identity in the view's trace.
-   */
-  span?: string | undefined;
-}
-
-/**
- * What an answer Tracepanel didn't see said (no Server-Timing: a gateway's, a service's that records over OTLP): its
- * status (none when it failed to arrive), and the view or action that made the call, when the browser recording
- * marked it.
- */
-export interface Answer {
-  status?: number | undefined;
-  page?: string | undefined;
-}
-
-/**
- * What follows the page's requests: each as it starts, and as it ends with what its answer said (null: untraced, with
- * what is known of it).
- */
-interface Watcher {
-  start(flight: Flight): void;
-  end(flight: Flight, info: TraceInfo | null, answer?: Answer): void;
-}
-
-/**
- * fetch/XHR are wrapped as soon as widget.min.js runs, at the top of <head>: pages that keep a reference to fetch while
- * loading (GraphiQL, Swagger, SPA clients) still go through the wrapper. Requests seen before the badge exists wait
- * here and show up when it mounts; those still in flight then show as they are.
- */
-const pending: TraceInfo[] = [];
-const flying = new Set<Flight>();
-// The widget's own calls to the console go around the wrapper: they are not the page's requests.
-const nativeFetch = window.fetch.bind(window);
-let watcher: Watcher | null = null;
-let listening = false;
-let flights = 0;
-// Flights are numbered per page load: a row the panel kept from an earlier page never shares its key with a new one.
-const LOAD = Math.random().toString(36).slice(2, 8);
-
-function listen(): void {
-  if (listening) return;
-  listening = true;
-  watchHtmx();
-  intercept({
-    start: (flight) => {
-      flying.add(flight);
-      watcher?.start(flight);
-    },
-    end: (flight, info, answer) => {
-      flying.delete(flight);
-      const landed = info && waited(flight, namedAsItFlew(flight, info));
-      if (watcher) watcher.end(flight, landed, answer);
-      else if (landed) pending.push(landed);
-    },
-  });
-}
-
-/**
- * A request that flew, as the page waited for it: its time from the call to its answer, as the browser timed it (a
- * call the browser queued behind others waited longer than its server took), never less than its server's own time.
- * The pill, its card and the panel's list say this one time while it runs, once it answers and once it is stored.
- */
-function waited(flight: Flight, info: TraceInfo): TraceInfo {
-  if (!flight.id) return info;
-  const clock = { start: flight.start, end: flight.end ?? Date.now() };
-  return { ...info, flight: flight.id, clock, span: flight.span, totalMs: waitedMs(clock, info.totalMs) };
-}
-
-/** The time the page waited for a request (ms): its clock's, or its server's when that says more. */
-function waitedMs(clock: TraceInfo["clock"], server: number | undefined): number | undefined {
-  if (!clock) return server;
-  return Math.max(clock.end - clock.start, server ?? 0);
-}
-
-/**
- * A request keeps the name it ran under once it answers: the GraphQL operation its body carried, where the answer
- * names none (its server answered before the operation ran, a 503), as the agent names its trace (lib/graphql).
- */
-function namedAsItFlew(flight: Flight, info: TraceInfo): TraceInfo {
-  return flight.name && !namesOperation(info.name) ? { ...info, name: flight.name } : info;
-}
-
-/** The console's own calls (the panel's, the browser recording's) are not the page's requests. */
-function ownCall(url: string): boolean {
-  return url.includes("/__tracepanel__/");
-}
-
-/** A request the page just made, in flight; null for the console's own. */
-function takeOff(method: string, url: string, body: unknown, traceparent?: string | null): Flight | null {
-  const absolute = new URL(url, location.href).href;
-  if (ownCall(absolute)) return null;
-  flights += 1;
-  return {
-    id: `~${LOAD}-${flights}`,
-    method: method.toUpperCase(),
-    url: absolute,
-    name: graphqlName(body),
-    start: Date.now(),
-    span: spanOf(traceparent),
-  };
-}
-
-/** The span id a W3C traceparent names ("00-<trace>-<span>-01"); none for no header or another shape. */
-function spanOf(traceparent: string | null | undefined): string | undefined {
-  return /^[\da-f]{2}-[\da-f]{32}-([\da-f]{16})-[\da-f]{2}$/i.exec(traceparent?.trim() ?? "")?.[1]?.toLowerCase();
-}
-
-/** The traceparent a fetch carries: on its Request, or in its init's headers. */
-function traceparentOf(input: globalThis.RequestInfo | URL, init: RequestInit | undefined): string | null {
-  if (init?.headers) return new Headers(init.headers).get("traceparent");
-  return input instanceof Request ? input.headers.get("traceparent") : null;
-}
-
-/** Runs `use` once the Response can carry its mark: now when it has it, else in the next task. */
-function afterMark(response: Response, use: () => void): void {
-  if (pageOf(response) !== undefined) {
-    use();
-    return;
-  }
-  window.setTimeout(() => {
-    try {
-      use();
-    } catch {
-      // Never break the page because of the widget.
-    }
-  });
-}
-
-/** Starts following a request: never breaks the page. */
-function safely<T>(work: () => T, fallback: T): T {
-  try {
-    return work();
-  } catch {
-    return fallback;
-  }
-}
-
-function intercept(watch: Watcher): void {
-  const originalFetch = window.fetch;
-  window.fetch = async function (this: unknown, input: globalThis.RequestInfo | URL, init?: RequestInit) {
-    const method = safely(
-      () => (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase(),
-      "GET",
-    );
-    const flight = safely(() => {
-      const url = input instanceof Request ? input.url : String(input);
-      const started = takeOff(method, url, init?.body, traceparentOf(input, init));
-      if (started) watch.start(started);
-      return started;
-    }, null);
-    const land = (info: TraceInfo | null, answer?: Answer) =>
-      flight && safely(() => watch.end(flight, info, answer), undefined);
-    let response: Response;
-    try {
-      response = await originalFetch.call(this, input, init);
-    } catch (error) {
-      if (flight) flight.end = Date.now();
-      land(null, {});
-      throw error;
-    }
-    if (flight) flight.end = Date.now();
-    try {
-      const info = fromResponse(method, response.url, response.status, (name) => response.headers.get(name));
-      // A recording that wrapped fetch after the widget (one started by the app's code, once the widget loaded)
-      // marks the Response only once this call has returned to it: read the mark after that, in the next task.
-      if (info)
-        afterMark(response, () =>
-          flight
-            ? land({ ...info, page: pageOf(response) })
-            : watch.end(NO_FLIGHT, { ...info, page: pageOf(response) }),
-        );
-      else afterMark(response, () => land(null, { status: response.status, page: pageOf(response) }));
-    } catch {
-      // Never break the page because of the widget.
-      land(null);
-    }
-    return response;
-  } as typeof window.fetch;
-
-  const originalOpen = XMLHttpRequest.prototype.open;
-  const originalSend = XMLHttpRequest.prototype.send;
-  const originalSetHeader = XMLHttpRequest.prototype.setRequestHeader;
-  // The traceparent each one carries (the browser recording sets it before its send reaches this one).
-  const traceparents = new WeakMap<XMLHttpRequest, string>();
-  XMLHttpRequest.prototype.setRequestHeader = function (this: XMLHttpRequest, name: string, value: string) {
-    safely(() => {
-      if (name.toLowerCase() === "traceparent") traceparents.set(this, value);
-    }, undefined);
-    return originalSetHeader.call(this, name, value);
-  };
-  // In flight from its send: the request it opened, with its body.
-  const opened = new WeakMap<XMLHttpRequest, { method: string; url: string }>();
-  const sent = new WeakMap<XMLHttpRequest, Flight>();
-  XMLHttpRequest.prototype.open = function (
-    this: XMLHttpRequest,
-    method: string,
-    url: string | URL,
-    ...rest: unknown[]
-  ) {
-    opened.set(this, { method, url: String(url) });
-    this.addEventListener("loadend", () => {
-      const flight = sent.get(this) ?? NO_FLIGHT;
-      sent.delete(this);
-      if (flight !== NO_FLIGHT) flight.end = Date.now();
-      safely(
-        () =>
-          watch.end(flight, xhrInfo(this, method, String(url)), {
-            status: this.status || undefined,
-            page: pageOf(this),
-          }),
-        undefined,
-      );
-    });
-    return (originalOpen as (...args: unknown[]) => void).call(this, method, url, ...rest);
-  } as typeof XMLHttpRequest.prototype.open;
-  XMLHttpRequest.prototype.send = function (this: XMLHttpRequest, body?: Document | XMLHttpRequestBodyInit | null) {
-    safely(() => {
-      const request = opened.get(this);
-      const flight = request ? takeOff(request.method, request.url, body, traceparents.get(this)) : null;
-      if (flight) {
-        sent.set(this, flight);
-        watch.start(flight);
-      }
-    }, undefined);
-    return originalSend.call(this, body);
-  };
-}
-
-/** What an XMLHttpRequest's answer says, as the pill shows it; null for one tracepanel didn't see. */
-function xhrInfo(xhr: XMLHttpRequest, method: string, url: string): TraceInfo | null {
-  const info = fromResponse(method.toUpperCase(), xhr.responseURL || url, xhr.status, (name) =>
-    xhr.getResponseHeader(name),
-  );
-  return info ? { ...info, htmx: htmxRequests.get(xhr), page: pageOf(xhr) } : null;
-}
-
-/** For a request that answered with no flight followed (the console's own address, read again): nothing to land. */
-const NO_FLIGHT: Flight = { id: "", method: "", url: "", start: 0 };
-
-/** The request as people know it: the GraphQL operation, else the method and the actual path. */
-function title(info: TraceInfo): string {
-  if (info.name) return info.name;
-  const path = info.url ? new URL(info.url, location.href).pathname : location.pathname;
-  return `${info.method ?? "GET"} ${path}`;
-}
-
-/** " · 5 failed, 2 issues in its tasks", or nothing when its tasks all went well. */
-function tasksPart(info: TraceInfo): string {
-  const parts = [
-    info.taskFailed ? `${info.taskFailed} failed` : "",
-    info.taskIssues ? plural(info.taskIssues, "issue", "issues") : "",
-  ].filter(Boolean);
-  return parts.length ? ` · ${parts.join(", ")} in its tasks` : "";
-}
-
-function line(info: TraceInfo, counted: Counted): string {
-  const issues = counted.issues ? ` · ${counted.issues} issue${counted.issues === 1 ? "" : "s"}` : "";
-  const queries = counted.queries === null ? "queries not known yet" : `${counted.queries} q`;
-  return `${title(info)} → ${info.status ?? "?"} · ${duration((info.totalMs ?? 0) * 1000)} · ${queries}${issues}${tasksPart(info)}`;
-}
-
-/** Its own findings, or its tasks': either wants a look. */
-function wantsLook(info: TraceInfo): boolean {
-  return Boolean(info.issues || info.taskIssues);
-}
-
-/** A finding in its tasks wants a look too: the ring is amber, the request's own count stays its own. */
-function state(info: TraceInfo): "ok" | "warn" | "error" {
-  if (broke(info)) return "error";
-  return wantsLook(info) ? "warn" : "ok";
-}
-
-/** It failed, or one of its tasks did. */
-function broke(info: TraceInfo): boolean {
-  return (info.status ?? 200) >= 500 || Boolean(info.taskFailed);
-}
-
-const SEVERITY = { ok: 0, warn: 1, error: 2 } as const;
-
-const ICONS = {
-  db: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>',
-  clock:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
-  // The sidebar's Tasks icon (lucide list-checks).
-  tasks:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 5h8M13 12h8M13 19h8M3 17l2 2 4-4M3 7l2 2 4-4"/></svg>',
-  layers:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg>',
-  failed:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>',
-  alert:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 21h20L12 3Z"/><path d="M12 10v4M12 17.5h.01"/></svg>',
-  // The panel's HTTP calls tab's (lucide arrow-up-right).
-  calls:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>',
-  // Something with no answer yet (lucide hourglass), as the panel's.
-  hourglass:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 22h14"/><path d="M5 2h14"/><path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"/><path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"/></svg>',
-  // The corner its task runs hang from in the panel's list.
-  below:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 10 5 5-5 5"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/></svg>',
-} as const;
-
-function segment(parent: HTMLElement): HTMLSpanElement {
-  const span = document.createElement("span");
-  span.className = "seg";
-  parent.append(span);
-  return span;
-}
-
-function addStatus(parent: HTMLElement, status: number | null | undefined): void {
-  if (status === null || status === undefined) return;
-  const chip = document.createElement("span");
-  chip.className = "status";
-  chip.textContent = String(status);
-  if (status >= 500) chip.dataset["tone"] = "server";
-  else if (status >= 400) chip.dataset["tone"] = "client";
-  else if (status >= 300) chip.dataset["tone"] = "redirect";
-  segment(parent).append(chip);
-}
-
-/**
- * Time, colored by how it feels in development: under 300 ms fine, under 1 s slow, beyond very slow. A time where a
- * trace was cut (`cut`) isn't how slow it was: never colored.
- */
-function addTime(parent: HTMLElement, ms: number, cut = false): void {
-  const seg = segment(parent);
-  const speed = cut ? undefined : speedOf(ms);
-  if (speed) seg.dataset["speed"] = speed;
-  seg.innerHTML = ICONS.clock;
-  seg.append(...timeParts(ms));
-}
-
-/** As on the panel's list: under 300 ms fine, under a second slow, beyond very slow. */
-function speedOf(ms: number): "slow" | "very-slow" | undefined {
-  if (ms >= 1000) return "very-slow";
-  return ms >= 300 ? "slow" : undefined;
-}
-
-/** A time as the panel's list and the card say it ("0.5 ms", "88 ms", "1.2 s"): its number bold, its unit after. */
-function timeParts(ms: number): HTMLElement[] {
-  const [number = "", word = ""] = duration(ms * 1000).split(" ");
-  const value = document.createElement("b");
-  value.textContent = number;
-  const unit = document.createElement("span");
-  unit.className = "unit";
-  unit.textContent = word;
-  return [value, unit];
-}
-
-/**
- * A running thing's time so far (from `start`, epoch ms) as the pill writes a time: PENDING on its first frame;
- * stopped at `until` (epoch µs: lib/live clockOf).
- */
-function runningParts(start: number, until: number | undefined): HTMLElement[] {
-  const now = clockOf(until);
-  const time = runningTime(start * 1000, now);
-  if (time !== PENDING) return timeParts(Math.max(0, now - start));
-  const value = document.createElement("b");
-  value.textContent = PENDING;
-  return [value];
-}
-
-/** In flight: the ring and the time so far (from `start`, epoch ms), ticking as the pill draws again, up to `until`. */
-function addRunning(parent: HTMLElement, start: number, until?: number): void {
-  const seg = segment(parent);
-  seg.dataset["state"] = "running";
-  const ring = document.createElement("span");
-  ring.className = "running";
-  ring.setAttribute("aria-hidden", "true");
-  seg.append(ring, ...runningParts(start, until));
-  seg.title = runningLabel(start * 1000, clockOf(until));
-}
-
-/** Cut with a call unanswered: the hourglass and "no answer yet", its note in the tooltip. */
-function addNoAnswer(parent: HTMLElement, at: number | null): void {
-  const seg = segment(parent);
-  seg.append(noAnswer(at));
-}
-
-/** The hourglass and "no answer yet": the pill's and the card's. */
-export function noAnswer(at: number | null): HTMLElement {
-  const mark = document.createElement("span");
-  mark.className = "no-answer";
-  mark.dataset["state"] = "cut";
-  mark.innerHTML = ICONS.hourglass;
-  mark.append(NO_ANSWER);
-  mark.title = cutNote(at);
-  return mark;
-}
-
-/** Its queries, "…" while they aren't known (its chain not counted yet). */
-function addQueries(parent: HTMLElement, queries: number | null): void {
-  const seg = segment(parent);
-  seg.innerHTML = ICONS.db;
-  const value = document.createElement("b");
-  if (queries === null) {
-    value.className = "pending";
-    value.textContent = PENDING;
-    seg.append(value);
-    seg.title = "SQL queries: not known yet";
-    return;
-  }
-  value.textContent = String(queries);
-  seg.append(value);
-  seg.title = `${queries} SQL ${queries === 1 ? "query" : "queries"}`;
-}
-
-/** A view's calls down its chain: the panel's HTTP calls tab's count, under its icon; its own among them in its title. */
-function addCalls(parent: HTMLElement, calls: number, own: number): void {
-  const seg = segment(parent);
-  seg.innerHTML = ICONS.calls;
-  const value = document.createElement("b");
-  value.textContent = String(calls);
-  seg.append(value);
-  seg.title = chainScope("http", calls, own, "this view");
-}
-
-function addIssues(parent: HTMLElement, issues: number, tone: "warn" | "error"): void {
-  const pill = document.createElement("span");
-  pill.className = "issues";
-  pill.dataset["tone"] = tone;
-  pill.innerHTML = ICONS.alert;
-  pill.append(`${issues} ${issues === 1 ? "issue" : "issues"}`);
-  segment(parent).append(pill);
-}
-
-/**
- * What its tasks ran into, apart from its own: the Tasks icon, as each segment has its own, then the chips its own
- * failures and issues have, red ones first. The tooltip says whose they are.
- */
-function addTaskIssues(parent: HTMLElement, info: TraceInfo): void {
-  const chips = [
-    info.taskFailed ? chip("failed", ICONS.failed, `${info.taskFailed} failed`) : null,
-    info.taskIssues ? chip("issues", ICONS.alert, plural(info.taskIssues, "issue", "issues")) : null,
-  ].filter((item) => item !== null);
-  if (!chips.length) return;
-  const seg = segment(parent);
-  seg.className = "seg tasks";
-  seg.innerHTML = ICONS.tasks;
-  seg.append(...chips);
-  seg.title = `${tasksPart(info).slice(3)}, the ones this request enqueued: open the panel to see them`;
-}
-
-function chip(className: string, icon: string, text: string): HTMLElement {
-  const element = document.createElement("span");
-  element.className = className;
-  element.innerHTML = icon;
-  element.append(text);
-  return element;
-}
-
-/**
- * The rest of the page, after the latest request's numbers: how many requests it made (`count`, as the panel's list
- * has them: traced, untraced and in flight), in the same neutral style as the other numbers, and how many of the
- * others failed in red, as their own chip, so "16" never reads as 16 failures. No tooltip: the hover card lists them.
- */
-function addPage(parent: HTMLElement, all: readonly TraceInfo[], count: number): void {
-  const failed = othersFailed(all);
-  const more = isFailure(all.at(-1));
-  const seg = segment(parent);
-  seg.className = "seg page";
-  seg.innerHTML = ICONS.layers;
-  const value = document.createElement("b");
-  value.textContent = String(count);
-  const unit = document.createElement("span");
-  unit.className = "unit";
-  unit.textContent = "requests";
-  seg.append(value, unit);
-  if (failed) {
-    const chip = document.createElement("span");
-    chip.className = "failed";
-    chip.innerHTML = ICONS.failed;
-    // Next to a red status: "1 more failed", so it isn't read as that one again.
-    chip.append(more ? `${failed} more failed` : `${failed} failed`);
-    seg.append(chip);
-  }
-}
-
-function isFailure(info: TraceInfo | undefined): boolean {
-  return (info?.status ?? 200) >= 500;
-}
-
-/** The shown (latest) request's failure is already its status: the page count names the others' failures. */
-function othersFailed(all: readonly TraceInfo[]): number {
-  return all.slice(0, -1).filter(isFailure).length;
-}
-
-/** "5 requests on this page, 1 other one failed", or nothing for a page alone. */
-function pageLine(all: readonly TraceInfo[], count: number, flights: number): string[] {
-  if (count < 2) return [];
-  const failed = othersFailed(all);
-  return [
-    `${count} requests on this page${flights ? `, ${flights} in flight` : ""}${failed ? `, ${plural(failed, "other one", "other ones")} failed` : ""}`,
-  ];
-}
-
-/** The pill read aloud: the shown request (one in flight first), the page's count, the runtime. */
-function pillLabel(
-  all: readonly TraceInfo[],
-  flights: readonly Flight[],
-  count: number,
-  runtime: string | undefined,
-  counted: (info: TraceInfo) => Counted,
-): string {
-  const flight = flights.at(-1);
-  const shown = all.at(-1) ?? {};
-  const head = flight
-    ? `${title(flightInfo(flight))}, ${runningLabel(flight.start * 1000)}`
-    : line(shown, counted(shown));
-  const summary = [head, ...pageLine(all, count, flights.length), ...(runtime ? [`Served by ${runtime}`] : [])];
-  return `tracepanel: ${summary.join(". ")}`;
-}
-
-/** The worst state of the page's requests: an error, else a finding, else ok. */
-function verdict(all: readonly TraceInfo[], counted: (info: TraceInfo) => Counted): "ok" | "warn" | "error" {
-  return all
-    .map((info) => state({ ...info, issues: counted(info).issues }))
-    .reduce((a, b) => (SEVERITY[b] > SEVERITY[a] ? b : a), "ok");
-}
-
-/**
- * A request's numbers as the pill says them, the panel's list's: its whole chain's once counted (a BFF's request ran no
- * query itself, the services it called did), its own where it called no app; queries null while not known yet.
- */
-export interface Counted {
-  queries: number | null;
-  issues: number;
-}
-
-/** One request's segments: its name, status, time, queries and findings. */
-function addRequest(parent: HTMLElement, shown: TraceInfo, pulse: boolean, counted: Counted): void {
-  addName(parent, shown, pulse);
-  addStatus(parent, shown.status);
-  addTime(parent, shown.totalMs ?? 0);
-  addQueries(parent, counted.queries);
-  // Findings are amber whatever else happened: a failure says so in its status, and in the page's count.
-  if (counted.issues) addIssues(parent, counted.issues, "warn");
-  addTaskIssues(parent, shown);
-}
-
-/** A request still in flight: its name, the ring and its time so far; no status, its numbers pending. */
-function addFlight(parent: HTMLElement, flight: Flight): void {
-  addName(parent, flightInfo(flight), false);
-  addRunning(parent, flight.start);
-  addQueries(parent, null);
-}
-
-/** A request in flight as a request is named: its GraphQL operation, else its method and path. */
-export function flightInfo(flight: Flight): TraceInfo {
-  return { name: flight.name, method: flight.method, url: flight.url };
-}
-
-function addName(parent: HTMLElement, info: TraceInfo, pulse: boolean): void {
-  const name = document.createElement("span");
-  name.className = "name";
-  // A request's method in its badge, as in the console's lists; a GraphQL operation by its name.
-  name.append(...nameWithMethod(title(info)));
-  name.title = title(info);
-  if (pulse) name.dataset["pulse"] = "";
-  segment(parent).append(name);
-}
-
-/**
- * The tab's list with this view or action in it: a new row (an empty view of the same page leaves, and so does a view
- * the SPA redirected from at once, the new one saying so), or its own updated. `load`: the page's first view.
- */
-function withPage(
-  tab: TabEntry[],
-  announced: PageAnnouncement,
-  load: string | null,
-  called: ReadonlySet<string>,
-): TabEntry[] {
-  const entry = pageEntry(announced);
-  const at = tab.findIndex((item) => item.id === announced.id);
-  if (at === -1) return foldRedirect(dropEmptyView(tab, announced.name, called), entry, { load, called });
-  const from = tab[at]?.summary?.redirectedFrom;
-  if (from && entry.summary) entry.summary.redirectedFrom = from;
-  return tab.map((item, index) => (index === at ? entry : item));
-}
-
-/**
- * A new view after one the SPA redirected from at once: that one leaves the list, the new one says where it came from
- * (the first of a chain of redirects). Such a view ended, made no call and failed nothing, and the new one started
- * as it ended, within REDIRECT_MS of its start; the page's load (`load`, which has the load's time) and a view that
- * did anything stay.
- * The agent folds it in the store by the same measure.
- */
-function foldRedirect(
-  tab: TabEntry[],
-  entry: TabEntry,
-  { load, called }: { load: string | null; called: ReadonlySet<string> },
-): TabEntry[] {
-  const last = tab.at(-1);
-  const before = last?.summary;
-  const next = entry.summary;
-  if (!(last && before && next && isView(last) && isView(entry) && last.id !== load)) return [...tab, entry];
-  const empty = !(before.open || before.failed) && !madeCalls(tab, last.id, called);
-  const atOnce = next.start - before.start <= REDIRECT_MS * 1000 && before.start + before.duration <= next.start;
-  if (!(empty && atOnce)) return [...tab, entry];
-  next.redirectedFrom = before.redirectedFrom ?? before.name;
-  return [...tab.slice(0, -1), entry];
-}
-
-/** A view or an action as the tab's list has it: a row of its own, running while open. */
-function pageEntry(announced: PageAnnouncement): TabEntry {
-  return {
-    id: announced.id,
-    parent: null,
-    summary: {
-      name: announced.name,
-      status: null,
-      start: announced.start,
-      duration: announced.duration,
-      queries: 0,
-      issues: 0,
-      kind: "page",
-      failed: announced.status === "error",
-      open: announced.open || undefined,
-    },
-  };
-}
-
-/**
- * A request's numbers by what its chain says (`facts`): pending while it isn't counted yet (undefined), its findings
- * with them; its own where it called no app or the console can't say ("own"); else its whole chain's.
- */
-function countedBy(info: TraceInfo, facts: ChainFacts | "own" | undefined): Counted {
-  if (facts === undefined || (facts !== "own" && facts.counts === null)) return { queries: null, issues: 0 };
-  if (facts === "own" || facts.counts === null || facts.counts.traces < 2) return ownCounts(info);
-  return { queries: facts.counts.queries, issues: facts.counts.issues };
-}
-
-/** A request's own numbers, as its Server-Timing says them. */
-function ownCounts(info: TraceInfo): Counted {
-  return { queries: info.queries ?? 0, issues: info.issues ?? 0 };
-}
-
-/** A request in flight as the panel lists it: under this page, its time ticking, until its answer names its trace. */
-function flightEntry(flight: Flight, parent: string | null): TabEntry {
-  return {
-    id: flight.id,
-    parent,
-    summary: {
-      name: title(flightInfo(flight)),
-      status: null,
-      start: flight.start * 1000,
-      duration: 0,
-      queries: 0,
-      issues: 0,
-      open: true,
-      host: hostOf(flight.url),
-      span: flight.span,
-    },
-  };
-}
-
-function summaryOf(info: TraceInfo): EntrySummary {
-  const duration = Math.round((info.totalMs ?? 0) * 1000);
-  // A request that flew starts where the page made it (a queued one before its server saw it); else it just ended.
-  const clock = info.clock && { start: info.clock.start * 1000, end: info.clock.end * 1000 };
-  return {
-    name: title(info),
-    status: info.status ?? null,
-    start: clock?.start ?? Date.now() * 1000 - duration,
-    duration,
-    queries: info.queries ?? 0,
-    issues: info.issues ?? 0,
-    htmx: info.htmx,
-    key: info.flight,
-    host: hostOf(info.url),
-    clock,
-    span: info.span,
-  };
-}
-
-/** The host a URL names, with its port ("127.0.0.1:8043"); none for no URL. */
-function hostOf(url: string | undefined): string | undefined {
-  if (!url) return undefined;
-  try {
-    return new URL(url, location.href).host;
-  } catch {
-    return undefined;
-  }
-}
-
-/**
- * A call that answered untraced (Answer), as the panel lists it under the view or action that made it: its name, its
- * status, its time; its numbers come with the view's trace.
- */
-function landedEntry(call: Landed): TabEntry {
-  const end = call.flight.end ?? call.end;
-  return {
-    id: call.flight.id,
-    parent: call.parent,
-    summary: {
-      name: title(flightInfo(call.flight)),
-      status: call.status ?? null,
-      start: call.flight.start * 1000,
-      duration: Math.max(0, end - call.flight.start) * 1000,
-      queries: 0,
-      issues: 0,
-      failed: call.status === undefined || call.status >= 500,
-      untraced: true,
-      host: hostOf(call.flight.url),
-      clock: { start: call.flight.start * 1000, end: end * 1000 },
-      span: call.flight.span,
-    },
-  };
-}
-
-/** A call that answered untraced or not at all, as the hover card lists it among the page's other requests. */
-function untracedCall(call: Landed): UntracedCall {
-  const end = call.flight.end ?? call.end;
-  return {
-    info: { ...flightInfo(call.flight), status: call.status, totalMs: Math.max(0, end - call.flight.start) },
-    parent: call.parent,
-    failed: call.status === undefined,
-  };
-}
-
-/** A call of a view or an action that answered untraced: where it is listed, when it ended (epoch ms), its status. */
-interface Landed {
-  flight: Flight;
-  parent: string;
-  end: number;
-  status: number | undefined;
-}
-
-/** How long a call that answered untraced stays listed after it ended, its view closed: its trace has it by then. */
-const LANDED_KEEP_MS = 120_000;
-/** The most of them kept. */
-const LANDED_MAX = 200;
-
-const PANEL_KEY = "tracepanel:panel";
-
-/** Where the panel sits, like browser devtools: along the bottom (the default) or along the right edge. */
-type Dock = "right" | "bottom";
-
-interface PanelState {
-  open: boolean;
-  dock: Dock;
-  /** Width in px chosen by dragging the panel edge (docked right). */
-  width?: number | undefined;
-  /** Height in px chosen by dragging the panel edge (docked at the bottom). */
-  height?: number | undefined;
-}
-
-const DEFAULT_WIDTH = 600;
-const MIN_WIDTH = 360;
-const DEFAULT_HEIGHT = 360;
-const MIN_HEIGHT = 200;
-
-/** Panel state survives navigations within the browser tab. */
-function loadPanel(): PanelState {
-  try {
-    const parsed: unknown = JSON.parse(sessionStorage.getItem(PANEL_KEY) ?? "{}");
-    if (typeof parsed === "object" && parsed !== null) {
-      const width = "width" in parsed && typeof parsed.width === "number" ? parsed.width : undefined;
-      const height = "height" in parsed && typeof parsed.height === "number" ? parsed.height : undefined;
-      return {
-        open: "open" in parsed && parsed.open === true,
-        dock: "dock" in parsed && parsed.dock === "right" ? "right" : "bottom",
-        width,
-        height,
-      };
-    }
-  } catch {
-    // Unreadable storage: start closed.
-  }
-  return { open: false, dock: "bottom" };
-}
-
-function savePanel(state: PanelState): void {
-  try {
-    sessionStorage.setItem(PANEL_KEY, JSON.stringify(state));
-  } catch {
-    // Storage can be blocked: the state then lasts only for this page.
-  }
-}
-
-/** How long a just-finished fetch/XHR stays on the badge. */
-
-const TAB_KEY = "tracepanel:tab";
-const TAB_LIMIT = 200;
-
-function isEntry(value: unknown): value is TabEntry {
-  if (typeof value !== "object" || value === null) return false;
-  const entry = value as { id?: unknown; parent?: unknown };
-  return typeof entry.id === "string" && (entry.parent === null || typeof entry.parent === "string");
-}
-
-const RUNTIME_KEY = "tracepanel:runtime";
-
-/**
- * What served the page: as its server says, else what answered this tab's calls, learned from the first one's trace
- * (an SPA) and kept for the tab, so a reload shows the mark before its first request.
- */
-function learnedRuntime(given: string | undefined): string | undefined {
-  if (given) return given;
-  try {
-    return sessionStorage.getItem(RUNTIME_KEY) ?? undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function learnRuntime(label: string | undefined): void {
-  try {
-    if (label) sessionStorage.setItem(RUNTIME_KEY, label);
-  } catch {
-    // Storage blocked: the next page learns it again.
-  }
-}
-
-/** Tab history lives in sessionStorage: per browser tab, survives navigations, gone when the tab closes. */
-// The requests that answered with a redirect on the way to this page (a form's POST, then 302): the app names them in
-// this cookie, as the page they led to is the first this widget sees.
-const REDIRECTS = "tracepanel_redirect";
-
-/** The ids the redirect cookie names, the cookie gone once read: each request shows once. */
-function takeRedirects(): string[] {
-  const pair = document.cookie.split("; ").find((item) => item.startsWith(`${REDIRECTS}=`));
-  if (!pair) return [];
-  document.cookie = `${REDIRECTS}=; Max-Age=0; Path=/; SameSite=Lax`;
-  return decodeURIComponent(pair.slice(REDIRECTS.length + 1))
-    .split(",")
-    .filter((id) => /^[0-9A-HJKMNP-TV-Z]{26}$/.test(id));
-}
-
-/** The tab's requests with those that redirected to this page, in the order they came, before it. */
-function withRedirects(entries: TabEntry[]): TabEntry[] {
-  const known = new Set(entries.map((entry) => entry.id));
-  const added = takeRedirects().filter((id) => !known.has(id));
-  if (!added.length) return entries;
-  const next = [...entries, ...added.map((id) => ({ id, parent: null }))];
-  saveTab(next);
-  return next;
-}
-
-function loadTab(): TabEntry[] {
-  try {
-    const parsed: unknown = JSON.parse(sessionStorage.getItem(TAB_KEY) ?? "[]");
-    return Array.isArray(parsed) ? parsed.filter(isEntry) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveTab(entries: readonly TabEntry[]): void {
-  try {
-    sessionStorage.setItem(TAB_KEY, JSON.stringify(entries.slice(-TAB_LIMIT)));
-  } catch {
-    // Storage can be full or blocked: the history then lasts only for this page.
-  }
-}
 
 const SVG = "http://www.w3.org/2000/svg";
 
@@ -1478,6 +367,10 @@ function svgOf(markup: string): Element {
   template.innerHTML = markup;
   return template.content.firstElementChild as Element;
 }
+
+export { type Answer, type Flight, parseServerTiming } from "./network";
+export type { Counted } from "./pill";
+export { flightInfo, noAnswer } from "./pill";
 
 export function mount(options: WidgetOptions = {}): Widget {
   const host = document.createElement("tracepanel-widget");
@@ -1887,7 +780,7 @@ export function mount(options: WidgetOptions = {}): Widget {
   }
 
   /** A request of the page left: it takes off, or lands with what its answer said. */
-  watcher = {
+  setWatcher({
     start: (flight) => {
       inFlight.push(flight);
       noteWhere(flight);
@@ -1905,7 +798,7 @@ export function mount(options: WidgetOptions = {}): Widget {
         sendTab();
       }
     },
-  };
+  });
 
   /** A page htmx loaded (a boosted link or form): it heads the list, and what follows is its requests. */
   function navigate(info: TraceInfo): void {
@@ -2296,12 +1189,13 @@ export function mount(options: WidgetOptions = {}): Widget {
   return { record, open, close };
 }
 
-function number(value: string | undefined): number | undefined {
+export function number(value: string | undefined): number | undefined {
   return value === undefined ? undefined : Number(value);
 }
 
 // Auto-mount when loaded via <script data-tracepanel-api="..."> (data-tracepanel-* carries the page's own request).
 const script = document.currentScript as HTMLScriptElement | null;
+
 // Once per page, even if the script runs again (a page swapped in by htmx that carries it).
 const mounted = "__tracepanel" in window;
 if (script && !mounted) {

@@ -134,9 +134,12 @@ fn server(span: &Span) -> Option<Peer> {
             None,
             None,
         )),
-        "task.enqueue" | "channel.send" if truthy(attrs.get("messaging.system")) => {
-            Some(new("queue", py_str(&attrs["messaging.system"]), None, None))
-        }
+        "task.enqueue" | "channel.send" if truthy(attrs.get("messaging.system")) => Some(new(
+            "queue",
+            py_str(attrs.get("messaging.system")),
+            None,
+            None,
+        )),
         // A message sent to a broker an OpenTelemetry instrumentation saw: Kafka, RabbitMQ, SQS, or any other
         // (`messaging`, its system named in messaging.system).
         "kafka" | "rabbitmq" | "sqs" | "messaging" => Some(new(
@@ -204,7 +207,7 @@ pub(crate) fn dependencies(trace: &Trace) -> Vec<((Peer, &'static str), Usage)> 
         item.errors += i64::from(span.status == "error");
     }
     if trace.kind == "task" && truthy(trace.attrs.get("messaging.system")) {
-        let system = py_str(&trace.attrs["messaging.system"]);
+        let system = py_str(trace.attrs.get("messaging.system"));
         let broker = Peer {
             kind: "queue",
             cloud_service: broker_on_aws(&system),

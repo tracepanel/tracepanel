@@ -337,6 +337,20 @@ pub(crate) fn write_trace(
     if known {
         forget(db, fts, &trace.id)?;
     }
+    write_row(db, trace, doc)?;
+    write_logs(db, fts, trace)?;
+    write_calls(db, trace)?;
+    write_peers(db, trace)?;
+    write_links(db, trace)?;
+    link_tasks(db, trace)?;
+    index_workflow(db, trace)?;
+    link_calls(db, trace)?;
+    write_mails(db, trace)?;
+    write_issues(db, trace)
+}
+
+/// The trace's row in `traces`, with what the lists filter and show.
+fn write_row(db: &Connection, trace: &Trace, doc: &str) -> rusqlite::Result<()> {
     let attrs = &trace.attrs;
     let sql_spans: Vec<&Span> = trace
         .spans
@@ -359,7 +373,7 @@ pub(crate) fn write_trace(
         .map(|span| or_default(&span.attrs, "cache.alias", "default"))
         .collect();
     let task_state = if truthy(attrs.get("task.state")) {
-        Sql::Text(py_str(&attrs["task.state"]).to_lowercase())
+        Sql::Text(py_str(attrs.get("task.state")).to_lowercase())
     } else {
         Sql::Null
     };
@@ -412,6 +426,11 @@ pub(crate) fn write_trace(
             doc,
         ],
     )?;
+    Ok(())
+}
+
+/// The trace's logs, and their words where the store has full-text search.
+fn write_logs(db: &Connection, fts: bool, trace: &Trace) -> rusqlite::Result<()> {
     let context = Context::of(trace);
     for log in &trace.logs {
         let level = LEVELS
@@ -439,6 +458,11 @@ pub(crate) fn write_trace(
                 .execute(params![db.last_insert_rowid(), log.message, log.logger])?;
         }
     }
+    Ok(())
+}
+
+/// The spans that call another system in `calls`, by name the others in `spans`, for `span:`.
+fn write_calls(db: &Connection, trace: &Trace) -> rusqlite::Result<()> {
     for span in &trace.spans {
         let operation = tracepanel_analysis::calls::operation(trace, span);
         if tracepanel_analysis::aws::is_call(span) {
@@ -485,6 +509,12 @@ pub(crate) fn write_trace(
             ],
         )?;
     }
+    Ok(())
+}
+
+/// The systems and apps the trace called, for the service map.
+fn write_peers(db: &Connection, trace: &Trace) -> rusqlite::Result<()> {
+    let attrs = &trace.attrs;
     let service = or_default(attrs, "service.name", "");
     let role = or_default(attrs, "service.role", &trace.kind);
     for ((peer, direction), usage) in dependencies(trace) {
@@ -515,21 +545,28 @@ pub(crate) fn write_trace(
             ],
         )?;
     }
+    Ok(())
+}
+
+/// The links the trace was sent with.
+fn write_links(db: &Connection, trace: &Trace) -> rusqlite::Result<()> {
     for link in &trace.links {
         db.prepare_cached(
             "INSERT INTO links (trace_id, kind, linked_trace, linked_span) VALUES (?1, ?2, ?3, ?4)",
         )?
         .execute(params![trace.id, link.kind, link.trace_id, link.span_id])?;
     }
-    link_tasks(db, trace)?;
-    index_workflow(db, trace)?;
-    link_calls(db, trace)?;
+    Ok(())
+}
+
+/// The mails the trace sent.
+fn write_mails(db: &Connection, trace: &Trace) -> rusqlite::Result<()> {
     for span in trace.spans.iter().filter(|span| span.kind == "mail") {
         let recipients: BTreeSet<String> = ["mail.to", "mail.cc"]
             .iter()
             .filter_map(|key| span.attrs.get(*key).and_then(Value::as_array))
             .flatten()
-            .map(py_str)
+            .map(|id| py_str(Some(id)))
             .collect();
         db.prepare_cached(
             "INSERT INTO mails (trace_id, span_id, time, subject, sender, recipients, sent, html)
@@ -547,6 +584,11 @@ pub(crate) fn write_trace(
             !matches!(span.attrs.get("mail.html"), None | Some(Value::Null)),
         ])?;
     }
+    Ok(())
+}
+
+/// The trace's issues: each one's group and its occurrence in this trace.
+fn write_issues(db: &Connection, trace: &Trace) -> rusqlite::Result<()> {
     for issue in &trace.issues {
         db.prepare_cached(
             "INSERT INTO issues (fingerprint, fingerprint_version, kind, title, culprit, hint,
@@ -632,12 +674,16 @@ pub(crate) fn link_tasks(db: &Connection, trace: &Trace) -> rusqlite::Result<()>
         db.prepare_cached(
             "INSERT INTO task_enqueues (task_id, trace_id, span_id) VALUES (?1, ?2, ?3)",
         )?
-        .execute(params![py_str(&span.attrs["task.id"]), trace.id, span.id])?;
+        .execute(params![
+            py_str(span.attrs.get("task.id")),
+            trace.id,
+            span.id
+        ])?;
     }
     let enqueued_by = trace.links.iter().any(|link| link.kind == "enqueued_by");
     if trace.kind == "task" && truthy(trace.attrs.get("task.id")) && !enqueued_by {
         db.prepare_cached("INSERT INTO task_runs (task_id, trace_id) VALUES (?1, ?2)")?
-            .execute(params![py_str(&trace.attrs["task.id"]), trace.id])?;
+            .execute(params![py_str(trace.attrs.get("task.id")), trace.id])?;
     }
     db.prepare_cached(
         "INSERT INTO links (trace_id, kind, linked_trace, linked_span)
@@ -661,14 +707,14 @@ pub(crate) fn index_workflow(db: &Connection, trace: &Trace) -> rusqlite::Result
     let attrs = &trace.attrs;
     let one = |key: &str| {
         truthy(attrs.get(key))
-            .then(|| py_str(&attrs[key]))
+            .then(|| py_str(attrs.get(key)))
             .into_iter()
     };
     let depends_on = match attrs.get("task.depends_on") {
         Some(Value::Array(ids)) => ids
             .iter()
             .filter(|id| truthy(Some(id)))
-            .map(py_str)
+            .map(|id| py_str(Some(id)))
             .collect(),
         _ => one("task.depends_on").collect::<Vec<_>>(),
     };

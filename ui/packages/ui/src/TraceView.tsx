@@ -19,7 +19,8 @@ import {
 import { type ComponentProps, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppDetails, appSaidAnything } from "./AppDetails";
 import { appWarnings, warningsTone } from "./AppWarnings";
-import { CallMap, type ProfilesIn, type TraceProfileOpener } from "./CallMap";
+import { CallMap } from "./CallMap";
+import type { ProfilesIn, TraceProfileOpener } from "./CallRows";
 import type { Explain, ExplainOf } from "./CallTable";
 import { ScopedCalls, ScopedIssues } from "./ChainTabs";
 import { Button } from "./components/ui/button";

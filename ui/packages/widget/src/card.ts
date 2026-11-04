@@ -7,7 +7,9 @@ import { percent } from "@tracepanel/ui/lib/percent";
 import { plural } from "@tracepanel/ui/lib/plural";
 import { WAITED_SHARE, withWaiting } from "@tracepanel/ui/lib/waitingShare";
 import type { Issue, Trace } from "@tracepanel/ui/types";
-import type { Counted, Flight, TraceInfo } from "./index";
+import type { TraceInfo } from "./index";
+import type { Flight } from "./network";
+import type { Counted } from "./pill";
 import type { ChainFacts } from "./viewChain";
 
 /** How long the pointer rests on the pill before the card shows, and how long it may leave before it hides. */

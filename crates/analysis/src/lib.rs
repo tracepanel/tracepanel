@@ -31,7 +31,9 @@ const DUPLICATES_MIN: usize = 2;
 const SPAN_IDS: usize = 50;
 const TITLE_LIMIT: usize = 200;
 
-static WHITESPACE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s+").unwrap());
+pub(crate) use tracepanel_protocol::values::{or_default, py_str, truthy};
+
+pub(crate) static WHITESPACE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s+").unwrap());
 /// A placeholder, as each driver writes it: %s and %(name)s (Python), ? and ?1 (JDBC, ODBC, SQLite), $1
 /// (PostgreSQL), @P1 and @name (SQL Server), :1 and :name (Oracle, SQLAlchemy). ASCII classes, not Unicode's `\w`:
 /// a placeholder is always ASCII, and the regexes compile several times faster.
@@ -265,48 +267,8 @@ fn in_transaction(kind: &str) -> Option<(&'static str, &'static str, &'static st
     }
 }
 
-// ---------- Python's view of values ----------
-
-fn truthy(value: Option<&Value>) -> bool {
-    match value {
-        None | Some(Value::Null) => false,
-        Some(Value::Bool(flag)) => *flag,
-        Some(Value::Number(number)) => number.as_f64() != Some(0.0),
-        Some(Value::String(text)) => !text.is_empty(),
-        Some(Value::Array(items)) => !items.is_empty(),
-        Some(Value::Object(map)) => !map.is_empty(),
-    }
-}
-
-fn py_str(value: Option<&Value>) -> String {
-    match value {
-        None | Some(Value::Null) => "None".into(),
-        Some(Value::String(text)) => text.clone(),
-        Some(Value::Bool(true)) => "True".into(),
-        Some(Value::Bool(false)) => "False".into(),
-        Some(Value::Number(number)) => match (number.as_i64(), number.as_f64()) {
-            (Some(int), _) => int.to_string(),
-            (None, Some(float)) if float.fract() == 0.0 && float.abs() < 1e16 => {
-                format!("{float:.1}")
-            }
-            _ => number.to_string(),
-        },
-        Some(other) => other.to_string(),
-    }
-}
-
 fn text(attrs: &Attrs, key: &str) -> Option<String> {
     attrs.get(key).and_then(Value::as_str).map(str::to_owned)
-}
-
-/// `str(attrs.get(key) or default)`.
-fn or_default(attrs: &Attrs, key: &str, default: &str) -> String {
-    let value = attrs.get(key);
-    if truthy(value) {
-        py_str(value)
-    } else {
-        default.into()
-    }
 }
 
 /// Python's `f"{microseconds / 1000:.0f}"`: milliseconds, half to even.

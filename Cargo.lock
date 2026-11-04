@@ -2173,6 +2173,7 @@ dependencies = [
  "flate2",
  "jsonschema",
  "mime_guess",
+ "rusqlite",
  "rust-embed",
  "serde_json",
  "tokio",

@@ -1,4 +1,5 @@
 import { type Counts, type DataSource, type ServiceApp, serviceRuntime } from "@tracepanel/ui";
+import { readItem, writeItem } from "@tracepanel/ui/lib/storage";
 import { createContext, type ReactNode, useCallback, useContext, useMemo, useRef, useState } from "react";
 import { useSearch } from "./data";
 
@@ -27,24 +28,8 @@ const ScopeContext = createContext<Scope>({
   switched: null,
 });
 
-function read(): string {
-  try {
-    return localStorage.getItem(KEY) ?? "";
-  } catch {
-    return "";
-  }
-}
-
-function store(service: string): void {
-  try {
-    localStorage.setItem(KEY, service);
-  } catch {
-    // Blocked storage: the choice lasts until reload.
-  }
-}
-
 export function ScopeProvider({ source, children }: { source: DataSource; children: ReactNode }) {
-  const [service, setServiceState] = useState(read);
+  const [service, setServiceState] = useState(() => readItem(KEY) ?? "");
   const [pending, setPending] = useState<string | null>(null);
   const [switched, setSwitched] = useState<Scope["switched"]>(null);
   // Only the last choice switches: one made quickly after another doesn't end on the earlier one's answer.
@@ -55,7 +40,7 @@ export function ScopeProvider({ source, children }: { source: DataSource; childr
       setPending(next);
       const commit = (counts: Counts | undefined) => {
         if (id !== latest.current) return;
-        store(next);
+        writeItem(KEY, next);
         setSwitched({ service: next, counts });
         setServiceState(next);
         setPending(null);

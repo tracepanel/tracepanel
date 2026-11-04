@@ -10,7 +10,7 @@
 //! `http.request.method`…). A call to a model (the GenAI conventions' `gen_ai.*`) is an `llm` span. Whatever else
 //! isn't recognized (a consumer's work, a server span) stays a `function`.
 
-use crate::PLACEHOLDER;
+use crate::{PLACEHOLDER, WHITESPACE};
 use regex::Regex;
 use serde_json::{Map, Value};
 use sha1::{Digest, Sha1};
@@ -21,7 +21,6 @@ use tracepanel_protocol::{Attrs, Received};
 /// The span kind an SDK sends an OpenTelemetry span under.
 pub const KIND: &str = "otel";
 
-static WHITESPACE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s+").unwrap());
 // A comment (`-- a note` to the line's end, `/* sqlcommenter's tags */`), or a string or quoted name, whose `--` and
 // `/*` are its text: matched so a comment is told from a string that looks like one.
 static COMMENT: LazyLock<Regex> = LazyLock::new(|| {

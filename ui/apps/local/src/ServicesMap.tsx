@@ -9,6 +9,7 @@ import {
   systemName,
 } from "@tracepanel/ui";
 import { Badge } from "@tracepanel/ui/components/ui/badge";
+import { readItem, writeItem } from "@tracepanel/ui/lib/storage";
 import { cn } from "@tracepanel/ui/lib/utils";
 import {
   CheckIcon,
@@ -67,22 +68,13 @@ function clampZoom(k: number): number {
 
 /** The zoom chosen on an earlier visit, or null: none chosen yet. */
 function storedZoom(): number | null {
-  try {
-    const zoom = Number(localStorage.getItem(ZOOM_KEY));
-    return zoom >= MIN_ZOOM && zoom <= MAX_ZOOM ? zoom : null;
-  } catch {
-    return null;
-  }
+  const zoom = Number(readItem(ZOOM_KEY));
+  return zoom >= MIN_ZOOM && zoom <= MAX_ZOOM ? zoom : null;
 }
 
 /** A zoom the user chose, kept for the next visit; null forgets it: the map opens fitted again. */
 function storeZoom(k: number | null): void {
-  try {
-    if (k === null) localStorage.removeItem(ZOOM_KEY);
-    else localStorage.setItem(ZOOM_KEY, String(k));
-  } catch {
-    // Blocked storage: the zoom lasts until the page reloads.
-  }
+  writeItem(ZOOM_KEY, k === null ? null : String(k));
 }
 
 /**
