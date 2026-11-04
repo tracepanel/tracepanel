@@ -415,48 +415,48 @@
       "split": {
         "of": "4 traces",
         "windows": null,
-        "total": 1250000,
-        "time": "1,250 ms",
+        "total": 1300000,
+        "time": "1.3 s",
         "shares": [
           [
             "External calls",
-            510000,
-            "510 ms",
+            500000,
+            "0.5 s",
             "41%"
           ],
           [
             "Not profiled",
             300000,
-            "300 ms",
+            "0.3 s",
             "24%"
           ],
           [
             "Database",
-            220000,
-            "220 ms",
+            200000,
+            "0.2 s",
             "17%"
           ],
           [
             "Redis",
-            60000,
-            "60 ms",
+            100000,
+            "0.1 s",
             "5%"
           ],
           [
             "Your code",
-            20000,
-            "20 ms",
+            0,
+            "<0.1 s",
             "2%"
           ],
           [
             "Waiting",
-            140000,
-            "140 ms",
+            200000,
+            "0.2 s",
             "11%"
           ]
         ],
-        "profiled": 950000,
-        "covered": "950 ms",
+        "profiled": 1000000,
+        "covered": "1.0 s",
         "samples": 93,
         "sampled": "93 samples, one every 10 ms"
       }
@@ -2247,44 +2247,40 @@
     "waits": [
       [
         "SQL postgresql",
-        1800
-      ],
-      [
-        "Not profiled",
-        600
+        2000
       ]
     ],
     "shares": [
       [
         "Database",
-        1800
+        2000
       ],
       [
         "Not profiled",
-        600
+        0
       ]
     ],
     "split": {
       "of": "the whole trace",
       "windows": null,
-      "total": 2400,
-      "time": "2.4 ms",
+      "total": 2000,
+      "time": "2 ms",
       "shares": [
         [
           "Database",
-          1800,
-          "1.8 ms",
+          2000,
+          "2 ms",
           "75%"
         ],
         [
           "Not profiled",
-          600,
-          "0.6 ms",
+          0,
+          "<1 ms",
           "25%"
         ]
       ],
-      "profiled": 1800,
-      "covered": "1.8 ms",
+      "profiled": 2000,
+      "covered": "2 ms",
       "samples": 0,
       "sampled": "0 samples, one every 1 ms"
     },
@@ -2528,7 +2524,7 @@
     "waits": [
       [
         "waiting · select",
-        48250
+        48000
       ],
       [
         "SQL postgresql",
@@ -2536,21 +2532,17 @@
       ],
       [
         "GC",
-        19973
+        20000
       ],
       [
         "Framework & middleware",
-        5950
-      ],
-      [
-        "Not profiled",
-        27
+        6000
       ]
     ],
     "shares": [
       [
         "Waiting",
-        48250
+        48000
       ],
       [
         "Database",
@@ -2558,66 +2550,66 @@
       ],
       [
         "GC",
-        19973
+        20000
       ],
       [
         "Framework & middleware",
-        5950
+        6000
       ],
       [
         "Your code",
-        1800
+        2000
       ],
       [
         "Not profiled",
-        27
+        0
       ]
     ],
     "split": {
       "of": "the whole trace",
       "windows": null,
       "total": 123000,
-      "time": "123.000 ms",
+      "time": "123 ms",
       "shares": [
         [
           "Database",
           47000,
-          "47.000 ms",
+          "47 ms",
           "38%"
         ],
         [
           "GC",
-          19973,
-          "19.973 ms",
+          20000,
+          "20 ms",
           "16%"
         ],
         [
           "Framework & middleware",
-          5950,
-          "5.950 ms",
+          6000,
+          "6 ms",
           "5%"
         ],
         [
           "Your code",
-          1800,
-          "1.800 ms",
+          2000,
+          "2 ms",
           "2%"
         ],
         [
           "Not profiled",
-          27,
-          "0.027 ms",
+          0,
+          "<1 ms",
           "<1%"
         ],
         [
           "Waiting",
-          48250,
-          "48.250 ms",
+          48000,
+          "48 ms",
           "39%"
         ]
       ],
-      "profiled": 122973,
-      "covered": "122.973 ms",
+      "profiled": 123000,
+      "covered": "123 ms",
       "samples": 112,
       "sampled": "112 samples, one every 1 ms"
     },
@@ -2902,34 +2894,34 @@
       "time": "15 ms",
       "shares": [
         [
-          "Your code",
-          5000,
-          "5 ms",
-          "33%"
-        ],
-        [
           "Database",
           5000,
           "5 ms",
-          "33%"
+          "36%"
+        ],
+        [
+          "Your code",
+          5000,
+          "5 ms",
+          "31%"
         ],
         [
           "Framework & middleware",
           2000,
           "2 ms",
-          "14%"
+          "13%"
         ],
         [
           "GC",
           1000,
           "1 ms",
-          "7%"
+          "4%"
         ],
         [
           "Waiting",
           2000,
           "2 ms",
-          "13%"
+          "16%"
         ]
       ],
       "profiled": 15000,
@@ -2968,13 +2960,13 @@
               "Your code",
               3000,
               "3 ms",
-              "75%"
+              "78%"
             ],
             [
               "Framework & middleware",
               1000,
               "1 ms",
-              "25%"
+              "22%"
             ]
           ],
           "profiled": 4000,
@@ -3005,13 +2997,13 @@
               "Your code",
               2000,
               "2 ms",
-              "50%"
+              "44%"
             ],
             [
               "Waiting",
               2000,
               "2 ms",
-              "50%"
+              "56%"
             ]
           ],
           "profiled": 4000,
@@ -3535,19 +3527,19 @@
           "Your code",
           3000,
           "3 ms",
-          "60%"
+          "63%"
         ],
         [
           "Framework & middleware",
           1000,
           "1 ms",
-          "20%"
+          "15%"
         ],
         [
           "Waiting",
           1000,
           "1 ms",
-          "20%"
+          "22%"
         ]
       ],
       "profiled": 5000,
@@ -3578,19 +3570,19 @@
               "Your code",
               3000,
               "3 ms",
-              "60%"
+              "63%"
             ],
             [
               "Framework & middleware",
               1000,
               "1 ms",
-              "20%"
+              "15%"
             ],
             [
               "Waiting",
               1000,
               "1 ms",
-              "20%"
+              "22%"
             ]
           ],
           "profiled": 5000,

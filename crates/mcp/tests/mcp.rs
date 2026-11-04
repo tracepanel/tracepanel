@@ -1083,7 +1083,7 @@ allocation sites at the end (1 of 1, 3.0 MB in all, largest first; ×: allocatio
         tool(&server, "get_profile", json!({"id": JS})).await.0,
         "01M4PR0F11E0000000000000J0  GET /reports/sales → 200 · 14.0 ms
 CPU profile: 14 ms profiled of the trace's 14 ms · 12 samples, one every 1 ms
-time by share (as the time strip says it): Your code 13 ms (93%) · GC 1 ms (7%)
+time by share (as the time strip says it): Your code 13 ms (89%) · GC 1 ms (11%)
 GC: 1 collection, 1.5 ms paused
 note: a sample every 1 ms: a function that ran for less may be missed or miscounted. Its memory was counted too, which slows the code down: these times are higher than without it.
 
@@ -1464,8 +1464,8 @@ this trace: no cpu profile; those of its chain follow.
 chain: cpu profiles of 2 traces down its calls, each app's apart (never one profile across apps):
 
 library-api · 2 traces added up · {api1}, {api2}
-CPU profile: 220 µs profiled of the traces' 220 µs · 40 samples, one every 1 ms
-time by share (as the time strip says it): Database 200 µs (91%) · Your code 20 µs (9%)
+CPU profile: 0.2 ms profiled of the traces' 0.2 ms · 40 samples, one every 1 ms
+time by share (as the time strip says it): Database 0.2 ms (91%) · Your code <0.1 ms (9%)
 note: a sample every 1 ms: a function that ran for less may be missed or miscounted. Its memory was counted too, which slows the code down: these times are higher than without it.
 
 functions by self time (your code: library calls counted to the function of yours that made them):

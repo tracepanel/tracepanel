@@ -22,18 +22,18 @@ test("the Profile tab says how much it sampled, what it couldn't, and waiting as
 
   await expect(page.getByText("Profile of the whole trace")).toBeVisible();
   // In the trace's own time, as the strip says it: the time not sampled filled in from the samples around it.
-  // Its times written at one step, the one that keeps its 2 ms share: they add up as read.
-  await expect(page.getByText("profiled of the trace's 1,600 ms")).toBeVisible();
+  // Its times written at the step its total is (0.1 s), adding up as read; a share under it reads "<0.1 s".
+  await expect(page.getByText("profiled of the trace's 1.6 s")).toBeVisible();
   await expect(page.getByText("110 samples, one every 10 ms")).toBeVisible();
   await expect(
     page.getByText("500 ms not sampled: other traces ran on the same thread, filled in from the samples around it"),
   ).toBeVisible();
   // Each share said, the smallest too: the query's 18 ms and the 2 ms before the first sample.
   await expect(page.getByRole("region", { name: "Time by package" }).getByRole("button")).toHaveText([
-    /^Your code\s*100 ms\s*6%$/,
-    /^Database\s*18 ms\s*1%$/,
-    /^Not profiled\s*2 ms\s*<1%$/,
-    /^Waiting\s*1,480 ms\s*93%$/,
+    /^Your code\s*0\.1 s\s*6%$/,
+    /^Database\s*<0\.1 s\s*1%$/,
+    /^Not profiled\s*<0\.1 s\s*<1%$/,
+    /^Waiting\s*1\.5 s\s*93%$/,
   ]);
 });
 
@@ -47,8 +47,8 @@ test("the strip and its share's numbers split the code's own time; a click on th
 
   // The legend splits the wait out of the code's time as the Profile tab does: a share of its own, the last.
   const legend = page.getByRole("list", { name: /^Where the time went/ });
-  await expect(legend.locator(":scope > li").first()).toContainText(/^Your code\s*\d+ ms/);
-  await expect(legend.locator('[data-category="waiting"]')).toHaveText(/^Waiting\s*1,480 ms\s*\d+%$/);
+  await expect(legend.locator(":scope > li").first()).toContainText(/^Your code\s*0\.1 s/);
+  await expect(legend.locator('[data-category="waiting"]')).toHaveText(/^Waiting\s*1\.5 s\s*\d+%$/);
   await expect(legend.locator('[data-category="code"]')).not.toContainText("1.5 s");
 
   const middle = await centre(waiting);
@@ -157,7 +157,7 @@ test("a few ms of code beside a long wait is part of the wait: one row, all of t
   await page.goto(`/#/t/${id}?tab=tree`);
 
   await expect(page.locator('.dt-map-row[data-kind="code"]')).toHaveCount(1);
-  await expect(codeRow(page, "wait").locator(".dt-map-time")).toHaveText(/^1,\d{3} ms$/);
+  await expect(codeRow(page, "wait").locator(".dt-map-time")).toHaveText(/^1\.\d s$/);
 });
 
 test("All frames says which of its functions waited, as Your code does: their time is waiting's share", async ({
@@ -169,10 +169,10 @@ test("All frames says which of its functions waited, as Your code does: their ti
 
   // Each share said, the smallest too: the query's 18 ms and the 2 ms before the first sample.
   await expect(page.getByRole("region", { name: "Time by package" }).getByRole("button")).toHaveText([
-    /^Your code\s*100 ms\s*6%$/,
-    /^Database\s*18 ms\s*1%$/,
-    /^Not profiled\s*2 ms\s*<1%$/,
-    /^Waiting\s*1,480 ms\s*93%$/,
+    /^Your code\s*0\.1 s\s*6%$/,
+    /^Database\s*<0\.1 s\s*1%$/,
+    /^Not profiled\s*<0\.1 s\s*<1%$/,
+    /^Waiting\s*1\.5 s\s*93%$/,
   ]);
   await expect(functions.getByText(/^waiting · sleep$/)).toBeVisible();
   await expect(functions.getByText(/^render_digest$/)).toBeVisible();

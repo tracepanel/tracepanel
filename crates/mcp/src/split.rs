@@ -44,6 +44,9 @@ pub(crate) struct Split {
     pub(crate) sampled: Option<String>,
     /// The step its times are rounded to (µs): the one its smallest share is said in.
     pub(crate) step: f64,
+    /// Its time before it is said (µs): its total is written as the console's duration writes this.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) exact: f64,
 }
 
 impl Split {
@@ -252,97 +255,110 @@ fn raw_of(doc: &Value, windows: Option<&[(f64, f64)]>) -> Raw {
     }
 }
 
-/// The steps a split's times can be said at (µs): a tenth of a second, a millisecond, a tenth of one, a µs.
-const STEPS: [f64; 4] = [100_000.0, 1000.0, 100.0, 1.0];
-
-/// `1,204`: a whole number with its thousands apart.
-fn thousands(value: i64) -> String {
-    let digits = value.to_string();
-    let mut out = String::new();
-    for (at, digit) in digits.chars().enumerate() {
-        if at > 0 && (digits.len() - at).is_multiple_of(3) {
-            out.push(',');
-        }
-        out.push(digit);
+/// The step a time is written at by the console's duration: a µs under 0.1 ms, a tenth of a millisecond under one,
+/// a millisecond under a second, else a tenth of a second.
+pub(crate) fn display_step(us: f64) -> f64 {
+    let ms = us / 1000.0;
+    if ms < 0.1 {
+        1.0
+    } else if ms < 1.0 {
+        100.0
+    } else if ms < 1000.0 {
+        1000.0
+    } else {
+        100_000.0
     }
-    out
 }
 
-/// A time (µs, a whole number of `step`s) written at the step, so the times of one split read in one precision and
-/// add up as written (the console's `writtenAt`): `1.6 s`, `3 ms`, `0.8 ms`, `27 µs`, `47.059 ms`.
-pub(crate) fn written_at(us: f64, step: f64, total: f64) -> String {
+/// A time (µs, a whole number of `step`s) written at a split's step, as the console's duration writes its total
+/// (the console's `writtenAt`): `1.6 s`, `0.2 s`, `3 ms`, `0.8 ms`, `27 µs`.
+pub(crate) fn written_at(us: f64, step: f64) -> String {
     let whole = us.round() as i64;
     if step >= 100_000.0 {
         format!(
             "{}.{} s",
-            thousands(whole / 1_000_000),
+            whole / 1_000_000,
             ((whole % 1_000_000) as f64 / 100_000.0).round()
         )
     } else if step >= 1000.0 {
-        format!("{} ms", thousands((whole as f64 / 1000.0).round() as i64))
+        format!("{} ms", (whole as f64 / 1000.0).round())
     } else if step >= 100.0 {
         format!(
             "{}.{} ms",
-            thousands(whole / 1000),
+            whole / 1000,
             ((whole % 1000) as f64 / 100.0).round()
         )
-    } else if total < 1000.0 {
-        format!("{whole} µs")
     } else {
-        format!("{}.{:03} ms", thousands(whole / 1000), whole % 1000)
+        format!("{whole} µs")
     }
 }
 
-/// The times rounded at the coarsest step (from the one their total is said in) that loses none of them.
-fn rounded_at(exact: &[f64]) -> (f64, Vec<f64>) {
-    let sum = exact.iter().fold(0.0, |all, us| all + us);
-    let from = shares::display_step(sum);
-    for step in STEPS.into_iter().filter(|step| *step <= from) {
-        let rounded = shares::apportion(exact, step, (sum / step).round() as i64);
-        if step == 1.0 || rounded.iter().all(|us| *us > 0.0) {
-            return (step, rounded);
-        }
+/// How many steps a time is as the console's duration writes it (the console's `stepsOf`): its tenths rounded as
+/// toFixed rounds them, its whole ms and µs as Math.round does.
+fn steps_of(us: f64, step: f64) -> i64 {
+    let tenths =
+        |value: f64| (to_fixed(value, 1).parse::<f64>().unwrap_or(0.0) * 10.0).round() as i64;
+    if step >= 100_000.0 {
+        tenths(us / 1_000_000.0)
+    } else if step >= 1000.0 {
+        (us / 1000.0).round() as i64
+    } else if step >= 100.0 {
+        tenths(us / 1000.0)
+    } else {
+        us.round() as i64
     }
-    (1.0, exact.to_vec())
 }
 
-/// The raw times said: rounded at one step, the coarsest that keeps every share, adding up to their total rounded to
-/// it, and written at it, so the times as read add up too; percents of that total, largest remainder, adding up to
-/// 100%.
+/// A share's time written at the split's step; one too short to round to a step, under it: `<0.1 s`, `<1 ms`,
+/// `<0.1 ms`, `<1 µs`.
+fn share_time(us: f64, step: f64) -> String {
+    if us.round() > 0.0 {
+        return written_at(us, step);
+    }
+    if step >= 100_000.0 {
+        "<0.1 s"
+    } else if step >= 1000.0 {
+        "<1 ms"
+    } else if step >= 100.0 {
+        "<0.1 ms"
+    } else {
+        "<1 µs"
+    }
+    .to_owned()
+}
+
+/// The raw times said (the console's `said`). The total is said at the step the console says it in, as the page's
+/// header says it; the shares are rounded to that step by largest remainder, so as written they add up to the total
+/// as written. A share with time that rounds to none still shows: `<1 ms`. Percents of the time before it is
+/// rounded, largest remainder, adding up to 100% (`<1%` a share too small for one).
 fn said(raw: Raw, of: String, windows: Option<Windows>) -> Split {
-    let entries: Vec<(&'static str, f64)> =
-        raw.times.into_iter().filter(|(_, us)| *us > 0.0).collect();
+    // Time less than half a µs is the arithmetic's, no share's. Waiting last, the rest largest first, those as long
+    // as the trace had them (a stable sort).
+    let mut entries: Vec<(&'static str, f64)> =
+        raw.times.into_iter().filter(|(_, us)| *us >= 0.5).collect();
+    entries.sort_by(|a, b| {
+        (a.0 == WAITING)
+            .cmp(&(b.0 == WAITING))
+            .then(b.1.total_cmp(&a.1))
+    });
     let exact: Vec<f64> = entries.iter().map(|(_, us)| *us).collect();
-    let (step, rounded) = rounded_at(&exact);
-    let mut shares: Vec<SaidShare> = entries
+    let sum = exact.iter().fold(0.0, |all, us| all + us);
+    let step = display_step(sum);
+    let rounded = shares::apportion(&exact, step, steps_of(sum, step));
+    let total = rounded.iter().fold(0.0, |all, us| all + us);
+    let percents = shares::percents(&exact, sum);
+    let shares: Vec<SaidShare> = entries
         .iter()
         .zip(rounded)
-        .filter(|(_, us)| *us > 0.0)
-        .map(|(&(share, _), us)| SaidShare {
+        .zip(percents)
+        .map(|((&(share, _), us), percent)| SaidShare {
             share,
             label: shares::label(share),
             us,
-            time: String::new(),
-            percent: String::new(),
+            time: share_time(us, step),
+            percent,
         })
         .collect();
-    let total = shares.iter().fold(0.0, |sum, share| sum + share.us);
-    for share in &mut shares {
-        share.time = written_at(share.us, step, total);
-    }
-    // Waiting last, the rest largest first, those as long in the order the trace first had them (a stable sort).
-    shares.sort_by(|a, b| {
-        (a.share == WAITING)
-            .cmp(&(b.share == WAITING))
-            .then(b.us.total_cmp(&a.us))
-    });
-    let percents = shares::percents(
-        &shares.iter().map(|share| share.us).collect::<Vec<_>>(),
-        total,
-    );
-    for (share, percent) in shares.iter_mut().zip(percents) {
-        share.percent = percent;
-    }
     let unprofiled = shares
         .iter()
         .find(|share| share.share == NOT_PROFILED)
@@ -351,13 +367,14 @@ fn said(raw: Raw, of: String, windows: Option<Windows>) -> Split {
         of,
         windows,
         total,
-        time: written_at(total, step, total),
+        time: written_at(total, step),
         shares,
         profiled: total - unprofiled,
-        covered: written_at(total - unprofiled, step, total),
+        covered: written_at(total - unprofiled, step),
         samples: raw.samples.as_ref().map_or(0, |samples| samples.all),
         sampled: raw.samples.as_ref().map(sampled_line),
         step,
+        exact: sum,
     }
 }
 
@@ -685,6 +702,10 @@ pub(crate) mod tests {
 
     /// A time as written (`1,204.5 ms`, `27 µs`, `1.6 s`) back in whole µs.
     fn read(text: &str) -> i64 {
+        // A share under the split's step (`<1 ms`) counts as none.
+        if text.starts_with('<') {
+            return 0;
+        }
         let text = text.replace(',', "");
         let (value, unit) = text.split_once(' ').unwrap_or((&text, "µs"));
         let scale = match unit {
@@ -716,7 +737,7 @@ pub(crate) mod tests {
         check(total == split.total, "times add up to the total");
         check(
             split.shares.iter().all(|share| {
-                share.us > 0.0
+                share.us >= 0.0
                     && (share.us / split.step - (share.us / split.step).round()).abs() < 1e-9
             }),
             "each share a whole number of steps",
@@ -744,11 +765,15 @@ pub(crate) mod tests {
             "covered as read",
         );
         check(
-            split
-                .shares
-                .iter()
-                .all(|share| decimals(&share.time) == decimals(&split.time)),
+            split.shares.iter().all(|share| {
+                share.time.starts_with('<') || decimals(&share.time) == decimals(&split.time)
+            }),
             "one precision for the shares and the total",
+        );
+        // The total as the console writes a duration everywhere (the page's header).
+        check(
+            split.shares.is_empty() || split.time == duration(split.exact),
+            "the total as duration writes it",
         );
         let unprofiled = split
             .shares

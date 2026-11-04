@@ -392,20 +392,6 @@ pub(crate) fn share_frame(segment: &Segment) -> Option<(String, &'static str)> {
     Some((function, share))
 }
 
-/// The step a time is said in (the console's duration): a tenth of a second from a second on, a millisecond from
-/// one, a tenth of one, else a microsecond.
-pub(crate) fn display_step(us: f64) -> f64 {
-    if (us / 1000.0).round() >= 1000.0 {
-        100_000.0
-    } else if us >= 1000.0 {
-        1000.0
-    } else if us >= 100.0 {
-        100.0
-    } else {
-        1.0
-    }
-}
-
 /// Times rounded to `step` so they add up to `target` steps: each rounded down, the steps left to those that lost
 /// most (largest remainder), the first of them on a tie.
 pub(crate) fn apportion(values: &[f64], step: f64, target: i64) -> Vec<f64> {

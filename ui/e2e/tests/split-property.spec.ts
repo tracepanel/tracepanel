@@ -4,6 +4,7 @@
 // all), what the profile covers is the total less its Not profiled; the legend and the Profile tab's bar say the
 // split's shares, a code row's time is the time of the stretch it opens, a stretch's title tells its ends apart. The
 // MCP server's split.rs has the same property test (crates/mcp/src/split.rs).
+import { duration } from "../../packages/ui/src/format.ts";
 import { WAITING } from "../../packages/ui/src/lib/profile.ts";
 import { parseStretch, stretchText, type Windows } from "../../packages/ui/src/lib/slice.ts";
 import { appSplit, type Split, splitOf, wholeWindows } from "../../packages/ui/src/lib/split.ts";
@@ -140,6 +141,8 @@ function said(percent: string): number {
 
 /** A time as written ("1,204.5 ms", "27 µs", "1.6 s") back in whole µs. */
 function read(text: string): number {
+  // A share under the split's step ("<1 ms") counts as none.
+  if (text.startsWith("<")) return 0;
   const [value = "0", unit = "µs"] = text.replaceAll(",", "").split(" ");
   return Math.round(Number(value) * (unit === "s" ? 1_000_000 : unit === "ms" ? 1000 : 1));
 }
@@ -159,7 +162,7 @@ function broken(split: Split): string[] {
   check(split.shares.reduce((sum, share) => sum + share.us, 0) === split.total, "times add up to the total");
   check(
     split.shares.every(
-      (share) => share.us > 0 && Math.abs(share.us / split.step - Math.round(share.us / split.step)) < 1e-9,
+      (share) => share.us >= 0 && Math.abs(share.us / split.step - Math.round(share.us / split.step)) < 1e-9,
     ),
     "each share a whole number of steps",
   );
@@ -173,9 +176,11 @@ function broken(split: Split): string[] {
   const notProfiled = split.shares.find((share) => share.share === NOT_PROFILED)?.time;
   check(read(split.covered) === read(split.time) - (notProfiled ? read(notProfiled) : 0), "covered as read");
   check(
-    split.shares.every((share) => decimals(share.time) === decimals(split.time)),
+    split.shares.every((share) => share.time.startsWith("<") || decimals(share.time) === decimals(split.time)),
     "one precision for the shares and the total",
   );
+  // The total as the console writes a duration everywhere (the page's header).
+  check(split.shares.length === 0 || split.time === duration(split.exact), `the total as duration writes it`);
   const unprofiled = split.shares.find((share) => share.share === NOT_PROFILED)?.us ?? 0;
   check(split.profiled === split.total - unprofiled, "covered is the total less Not profiled");
   const rest = split.shares.filter((share) => share.share !== WAITING).map((share) => share.us);
