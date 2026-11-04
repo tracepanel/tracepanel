@@ -3184,3 +3184,166 @@ button.wf-crumb:hover {
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3'/%3E%3Cpath d='M12 9v4'/%3E%3Cpath d='M12 17h.01'/%3E%3C/svg%3E")
     center / contain no-repeat;
 }
+/* ---------- round 7: durations on the timeline, the band as the tab's overview, kinds as text tabs ---------- */
+
+/* Two columns: the names, and the timeline (a row's time after its bar's end). */
+.wf-panel {
+  --wf-cols: minmax(0, min(var(--wf-names, 38%), calc(100% - 14rem))) minmax(12rem, 1fr);
+}
+.wf-panel[data-dock="right"] {
+  --wf-cols: minmax(0, var(--wf-names, 52%)) minmax(8rem, 1fr);
+}
+.dt-map[data-waterfall] .dt-map-row {
+  position: relative;
+  padding-right: 0;
+}
+.dt-map[data-waterfall] .dt-map-row > .dt-map-time {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: start;
+  margin-left: calc((100% - 2 * var(--wf-track-pad)) * var(--bar-end, 0) / 100 + var(--wf-track-pad) + 6px);
+  font-size: 11.5px;
+  text-align: left;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.dt-map[data-waterfall] .dt-map-row[data-flip] > .dt-map-time {
+  justify-self: end;
+  margin-left: 0;
+  margin-right: calc((100% - 2 * var(--wf-track-pad)) * (100 - var(--bar-start, 0)) / 100 + var(--wf-track-pad) + 6px);
+}
+.wf-head.wf-grid > :last-child {
+  text-align: left;
+}
+.wf-ticks {
+  margin-right: var(--wf-track-pad);
+}
+
+/* The band: the tab's every page and request on one axis, named inline where the name fits; full width. */
+.wf-band {
+  height: auto;
+  padding: 8px 12px 4px;
+  border-bottom: 1px solid var(--dt-border);
+}
+.wf-band-track {
+  position: relative;
+  height: calc(var(--wf-lanes, 1) * 20px + 14px);
+  margin: 0;
+  background: none;
+}
+.wf-band-block {
+  top: 0;
+  height: 16px;
+  overflow: hidden;
+  padding: 0 6px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--dt-k-http) 22%, transparent);
+  box-shadow: inset 2px 0 0 var(--dt-k-http);
+  color: var(--dt-text);
+  font: 500 10.5px / 16px var(--dt-mono);
+  text-align: left;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  opacity: 1;
+}
+.wf-band-block[data-depth="0"] {
+  top: 0;
+  height: 16px;
+  background: color-mix(in srgb, var(--dt-k-view) 20%, transparent);
+  box-shadow: inset 2px 0 0 var(--dt-k-view);
+}
+.wf-band-block[data-failed] {
+  background: color-mix(in srgb, var(--dt-error) 20%, transparent);
+  box-shadow: inset 2px 0 0 var(--dt-error);
+}
+.wf-band-block:hover {
+  filter: brightness(1.3);
+}
+.wf-band-block[aria-current="true"] {
+  outline: 1.5px solid var(--dt-accent);
+  outline-offset: 0;
+}
+.wf-band-ticks {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 12px;
+  border-top: 1px solid var(--dt-border);
+  pointer-events: none;
+}
+.wf-band-ticks > span {
+  position: absolute;
+  top: 1px;
+  padding-left: 3px;
+  border-left: 1px solid var(--dt-border-strong);
+  color: var(--dt-text-3);
+  font-size: 9.5px;
+  line-height: 10px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Kinds: plain text tabs on the head's baseline; the active one in the text's colour, underlined with the accent. */
+.wf-call-head > .wf-kinds {
+  height: 100%;
+  align-self: stretch;
+  padding: 0;
+  gap: 14px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+.wf-call-head > .wf-kinds .wf-kind {
+  position: relative;
+  height: 100%;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--dt-text-3);
+  font-size: 12px;
+}
+.wf-call-head > .wf-kinds .wf-kind:hover {
+  color: var(--dt-text-2);
+}
+.wf-call-head > .wf-kinds .wf-kind[aria-checked="true"] {
+  background: none;
+  color: var(--dt-text);
+}
+.wf-call-head > .wf-kinds .wf-kind[aria-checked="true"]::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--dt-accent);
+}
+.wf-head {
+  align-items: stretch;
+}
+.wf-call-head {
+  align-self: stretch;
+}
+/* Every part of a row in its cell: the name in the first, the bar and its time over each other in the second. */
+.dt-map[data-waterfall] .dt-map-row > .dt-map-name {
+  grid-column: 1;
+  grid-row: 1;
+}
+.dt-map[data-waterfall] .dt-map-row > .dt-map-track {
+  grid-column: 2;
+  grid-row: 1;
+}
+.dt-map[data-waterfall] .dt-map-row[data-inside] > .dt-map-time {
+  justify-self: end;
+  margin: 0 calc((100% - 2 * var(--wf-track-pad)) * (100 - var(--bar-end, 100)) / 100 + var(--wf-track-pad) + 4px) 0 0;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--dt-panel) 78%, transparent);
+  color: var(--dt-text);
+}
+/* The band: three lanes at most, 14px each. */
+.wf-band-track {
+  height: calc(min(var(--wf-lanes, 1), 4) * 18px + 14px);
+}

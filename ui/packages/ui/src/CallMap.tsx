@@ -193,6 +193,12 @@ function waterfallMarks(tree: readonly Node[], host: WaterfallHost): Map<string,
   return marks;
 }
 
+/** A row's profile in its details: its trace's (a root, a function, a handler), or a call's callee's. */
+function profileFor(node: Node, trace: Trace, profileOf: ((trace: Trace) => ReactNode) | undefined): ReactNode {
+  if (node.type === "span" && node.served?.whole?.profile) return profileOf?.(node.served.whole);
+  return trace.profile && profiled(node) ? profileOf?.(trace) : undefined;
+}
+
 /** The rows whose details have the profile: a request's root, a function's, a handler's. */
 function profiled(node: Node): boolean {
   if (node.type !== "span") return false;
@@ -241,7 +247,7 @@ function WaterfallRows({
               node={found.node}
               trace={found.trace}
               totals={found.node.type === "span" && found.node.span.parent_id === null ? facts : undefined}
-              profile={found.trace.profile && profiled(found.node) ? profileOf?.(found.trace) : undefined}
+              profile={profileFor(found.node, found.trace, profileOf)}
               onOpen={
                 found.node.type === "span" &&
                 found.node.served &&

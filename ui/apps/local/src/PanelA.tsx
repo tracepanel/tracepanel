@@ -77,6 +77,44 @@ function pageAxis(rows: readonly TraceRow[]): Axis | null {
   return { start, duration: Math.max(end - start, 1) };
 }
 
+/**
+ * Each row's time is said on the timeline, after its bar's end (before its start near the right edge): the row's
+ * bars' extent goes to its style for the time to be placed by (there is no time column).
+ */
+function useBarLabels(scroll: RefObject<HTMLDivElement | null>): void {
+  useEffect(() => {
+    const root = scroll.current?.querySelector<HTMLElement>(".wf-rows");
+    if (!root) return;
+    const place = () => {
+      for (const row of root.querySelectorAll<HTMLElement>(".dt-map-row")) {
+        let start = 100;
+        let end = 0;
+        for (const bar of row.querySelectorAll<HTMLElement>(":scope > .dt-map-track .dt-map-bar")) {
+          const left = Number.parseFloat(bar.style.left) || 0;
+          const width = Number.parseFloat(bar.style.width) || 0;
+          start = Math.min(start, left);
+          end = Math.max(end, left + width);
+        }
+        if (start > end) start = end;
+        // Near the right edge the time goes before the bar; a bar across most of the axis carries it inside.
+        const flip = end > 82 && start > 18;
+        const inside = end > 82 && !flip;
+        const want = `${end.toFixed(2)}|${start.toFixed(2)}|${flip}|${inside}`;
+        if (row.dataset["bars"] === want) continue;
+        row.dataset["bars"] = want;
+        row.style.setProperty("--bar-end", end.toFixed(2));
+        row.style.setProperty("--bar-start", start.toFixed(2));
+        row.toggleAttribute("data-flip", flip);
+        row.toggleAttribute("data-inside", inside);
+      }
+    };
+    place();
+    const observer = new MutationObserver(place);
+    observer.observe(root, { subtree: true, childList: true, attributes: true, attributeFilter: ["style"] });
+    return () => observer.disconnect();
+  });
+}
+
 /** The room the break mark takes at the axis's start (px): no tick label under it. */
 const BREAK_ROOM = 72;
 
@@ -249,7 +287,6 @@ function AxisHead({
           </span>
         ))}
       </span>
-      <span>Time</span>
     </div>
   );
 }
@@ -575,6 +612,7 @@ export function PanelA({ route }: { route: Route }) {
   const firstWork = Math.min(...[...host.facts.values()].map((each) => each.work));
   useEffect(() => setWorks(Number.isFinite(firstWork) ? firstWork : null), [firstWork]);
   useTreeKeys(scrollRef);
+  useBarLabels(scrollRef);
   const [shortcuts, setShortcuts] = useState(false);
   usePanelKeys(
     { range: host.range, kind: host.kind, selected: host.selected, shortcuts },
@@ -789,16 +827,22 @@ function onOneClock(rows: readonly TraceRow[]): TraceRow[] {
  * is; a click opens it below (its own axis); the open one is outlined.
  */
 function TabTimeline({ rows, openId }: { rows: readonly TraceRow[]; openId: string | null }) {
+  const track = useRef<HTMLDivElement>(null);
+  const width = useWidth(track);
   const all = onOneClock(rows);
   const axis = pageAxis(all);
-  if (!axis || all.length === 0) return null;
+  if (!axis || all.length < 2) return null;
+  const px = (us: number) => (us / axis.duration) * width;
+  const lanes = packLanes(all, axis, px);
+  const laneCount = Math.max(...lanes.values(), 0) + 1;
   return (
-    <div className="wf-band wf-grid">
-      <span className="wf-band-label">Tab</span>
-      <span className="wf-band-track">
+    <div className="wf-band" style={{ "--wf-lanes": laneCount } as React.CSSProperties}>
+      <div className="wf-band-track" ref={track}>
         {all.map((row) => {
           const left = ((row.trace.start - axis.start) / axis.duration) * 100;
-          const width = Math.max((row.trace.duration / axis.duration) * 100, 0.3);
+          const share = Math.max((row.trace.duration / axis.duration) * 100, 0.3);
+          const label = `${shortName(row)} ${duration(row.trace.duration)}`;
+          const fits = px(row.trace.duration) >= labelWidth(label);
           const issues = row.trace.issues
             ? ` · ${row.trace.issues} ${row.trace.issues === 1 ? "issue" : "issues"}`
             : "";
@@ -815,15 +859,53 @@ function TabTimeline({ rows, openId }: { rows: readonly TraceRow[]; openId: stri
               aria-label={`Open ${row.trace.name}`}
               title={`${row.trace.name}${status} · ${duration(row.trace.duration)}${issues}`}
               tabIndex={-1}
-              style={{ left: `${Math.min(left, 99.7)}%`, width: `${width}%` }}
+              style={{
+                left: `${Math.min(left, 99.7)}%`,
+                width: `${share}%`,
+                top: `${(lanes.get(row) ?? 0) * 18}px`,
+              }}
               onClick={() => go({ name: "trace", id: row.trace.id })}
-            />
+            >
+              {fits ? label : null}
+            </button>
           );
         })}
-      </span>
-      <span className="wf-band-total">{duration(axis.duration)}</span>
+        <span className="wf-band-ticks" aria-hidden="true">
+          {ticks(axis).map((tick) => (
+            <span key={tick.at} style={{ left: `${tick.at * 100}%` }}>
+              {tick.label}
+            </span>
+          ))}
+        </span>
+      </div>
     </div>
   );
+}
+
+/** A block's short name: a request's method and path, a page's name. */
+function shortName(row: TraceRow): string {
+  if (row.trace.kind === "page") return row.trace.name;
+  return `${row.trace.method ?? ""} ${row.trace.path ?? row.trace.name}`.trim();
+}
+
+/** About how wide a label is in the band's 10.5px type (px). */
+function labelWidth(label: string): number {
+  return label.length * 6 + 12;
+}
+
+/** Lanes for the band's blocks: a block goes on the first lane where nothing overlaps it (its label included). */
+function packLanes(rows: readonly TraceRow[], axis: Axis, px: (us: number) => number): Map<TraceRow, number> {
+  const ends: number[] = [];
+  const lanes = new Map<TraceRow, number>();
+  for (const row of [...rows].sort((a, b) => a.trace.start - b.trace.start)) {
+    const start = px(row.trace.start - axis.start);
+    const end = start + Math.max(px(row.trace.duration), 4);
+    const lane = ends.findIndex((each) => each <= start);
+    const at = lane === -1 ? ends.length : lane;
+    ends[at] = end + 2;
+    lanes.set(row, Math.min(at, 3));
+  }
+  return lanes;
 }
 
 /** A page or request of the tab, folded to one line (name, status, time): a click opens it here, on its own time. */

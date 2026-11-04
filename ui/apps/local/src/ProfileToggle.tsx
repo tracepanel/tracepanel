@@ -110,7 +110,7 @@ export function ProfileToggle({ source, labeled = false }: { source: DataSource;
 /** Where no connected app profiles on request: the icon still there, off, saying why. */
 function ProfileUnavailable() {
   return (
-    <Hint title="Profiling isn't available for this app">
+    <Hint title="Profile: not available" detail="No app connected here profiles requests on demand.">
       <button type="button" className="icon-button" aria-disabled="true" aria-label="Profiling isn't available">
         <FlameIcon className="size-4" />
       </button>
@@ -202,7 +202,7 @@ function hint(mode: Mode, next: Mode | null, floor: Mode, elsewhere: boolean): {
   const forced = floor !== "off";
   const name = forced && mode === floor ? FORCED[floor] : NAMES[mode];
   if (!next) return { title: name, detail: SETTINGS };
-  if (mode === "off") return { title: "Profile next requests" };
+  if (mode === "off") return { title: "Profile: off", detail: "Click to profile the next requests from this browser." };
   return { title: `${name} · click: ${forced && next === floor ? BACK : CLICKS[next]}` };
 }
 
