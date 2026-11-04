@@ -982,7 +982,7 @@ async fn a_cpu_profile_by_function_and_path() {
         (
             "01M4PR0F11E0000000000000S0  GET /reports/sales → 200 · 200 ms
 CPU profile: 200 ms profiled of the trace's 200 ms · 190 samples, one every 1.0 ms
-time by share (as the time strip says it): Your code 147 ms (74%) · GC 3.0 ms (2%) · Waiting 50.0 ms (25%)
+time by share (as the time strip says it): Your code 147 ms (74%) · GC 3.0 ms (1%) · Waiting 50.0 ms (25%)
 waiting (a sleep, a socket, a lock, the event loop: not computing): 50.0 ms (25%), most in asyncio.sleep in sales at reports/views.py:24
 not sampled: 10.0 ms (other traces ran on the same thread), filled in from the samples around it
 GC: 2 collections, 3.0 ms paused

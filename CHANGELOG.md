@@ -105,6 +105,11 @@
   opened on All frames. The profiles of a chain say where most of an
   app's time went as Your code's list does ("HTTP GET 127.0.0.1"), not a
   runtime function of 1 ms ("defaultPrepareStackTrace").
+- The percentages of a trace's time add up to 100%: in the strip's
+  legend, the Profile tab's bar, the widget's card and get_profile, each
+  share's is rounded by largest remainder, as their times are. A Node
+  task's legend read 5% + 2% + 1% + 91% = 99% for 7, 3, 2 and 125 ms of
+  137 ms. It reads 5%, 2%, 2%, 91%.
 
 ## 0.13.1 (2026-11-03)
 

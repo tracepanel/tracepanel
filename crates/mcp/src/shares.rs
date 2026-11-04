@@ -352,6 +352,37 @@ pub(crate) fn apportion(values: &[f64], step: f64, target: i64) -> Vec<f64> {
         .collect()
 }
 
+/// The shares of `whole` that `parts` are, as whole percents that add up as the parts do (100% for parts that make
+/// the whole), rounded by largest remainder as the console's legend says them: 7, 3, 2 and 125 ms of 137 read 5%,
+/// 2%, 2%, 91%. A share neither none nor all never reads either: `<1%`, `>99%`.
+pub(crate) fn percents(parts: &[f64], whole: f64) -> Vec<String> {
+    if whole <= 0.0 {
+        return parts.iter().map(|_| "0%".to_owned()).collect();
+    }
+    let exact: Vec<f64> = parts
+        .iter()
+        .map(|part| part.max(0.0) * 100.0 / whole)
+        .collect();
+    let said = apportion(&exact, 1.0, exact.iter().sum::<f64>().round() as i64);
+    parts
+        .iter()
+        .zip(said)
+        .map(|(&part, said)| {
+            if part <= 0.0 {
+                "0%".to_owned()
+            } else if part >= whole {
+                "100%".to_owned()
+            } else if said <= 0.0 {
+                "<1%".to_owned()
+            } else if said >= 100.0 {
+                ">99%".to_owned()
+            } else {
+                format!("{said:.0}%")
+            }
+        })
+        .collect()
+}
+
 /// Times as said: rounded to the step their total is said in, adding up to that total as said.
 pub(crate) fn rounded<K: Clone>(times: &[(K, f64)]) -> Vec<(K, f64)> {
     let total: f64 = times.iter().map(|(_, us)| us).sum();
@@ -380,7 +411,17 @@ pub(crate) fn share_times(segments: &[Segment]) -> Vec<(&'static str, f64)> {
 
 #[cfg(test)]
 mod tests {
-    use super::{apportion, rounded};
+    use super::{apportion, percents, rounded};
+
+    #[test]
+    fn percents_said_add_up_to_100() {
+        // A Node task's legend: 7, 3, 2 and 125 ms of 137 ms read 5%, 2%, 1%, 91% rounded each (99% in all).
+        assert_eq!(
+            percents(&[7_000.0, 3_000.0, 2_000.0, 125_000.0], 137_000.0),
+            ["5%", "2%", "2%", "91%"]
+        );
+        assert_eq!(percents(&[1.0, 388.0], 389.0), ["<1%", ">99%"]);
+    }
 
     #[test]
     fn parts_said_add_up_to_the_total_said() {

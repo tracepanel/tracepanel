@@ -14,7 +14,7 @@ import {
   scopedProfiles,
 } from "./lib/chainProfile";
 import { type Memory, memoryProfile, type SitePlace, sitePlaces } from "./lib/memory";
-import { percent } from "./lib/percent";
+import { percent, percents } from "./lib/percent";
 import { plural } from "./lib/plural";
 import {
   allFrames,
@@ -723,6 +723,11 @@ function Packages({
   onClear: () => void;
 }) {
   const ordered = largestFirst(shares, (share) => share.samples, rankOf);
+  // Said as the strip's legend says them: percents that add up to 100%.
+  const said = percents(
+    ordered.map((share) => share.samples),
+    total,
+  );
   const parts = ordered.map(({ name, samples }) => ({
     key: name,
     size: samples,
@@ -735,7 +740,7 @@ function Packages({
     <section className="grid gap-3" aria-label={`${noun} by package`} {...litScope}>
       <ShareBar parts={parts} total={total} />
       <ul className="dt-breakdown-legend">
-        {ordered.map(({ name, samples }) => (
+        {ordered.map(({ name, samples }, at) => (
           <li key={name}>
             <button
               type="button"
@@ -748,7 +753,7 @@ function Packages({
                 swatch={<span className={cn("dt-dot", toneOf(palette, name).dot)} />}
                 name={shareName(name)}
                 value={time(samples)}
-                share={percent(samples, total)}
+                share={said[at] ?? "0%"}
               />
             </button>
           </li>

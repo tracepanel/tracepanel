@@ -4,10 +4,10 @@
 // tree's code rows all read it: for the same stretch they say the same shares, a code row's time is its profile's.
 
 import { duration } from "../../packages/ui/src/format.ts";
+import { apportion } from "../../packages/ui/src/lib/percent.ts";
 import { allFrames, functions, ownCode, type Profile, packageTimes } from "../../packages/ui/src/lib/profile.ts";
 import { parseStretch, stretchText, type Windows, windowsLabel } from "../../packages/ui/src/lib/slice.ts";
 import {
-  apportion,
   type Shared,
   shareTimes,
   spanSegments,

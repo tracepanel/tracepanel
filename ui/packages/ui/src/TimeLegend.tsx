@@ -5,7 +5,7 @@ import { duration } from "./format";
 import { CloseIcon } from "./icons";
 import { type Category, categoryLabel, spanCategories } from "./lib/breakdown";
 import { GC } from "./lib/memory";
-import { percent } from "./lib/percent";
+import { percents } from "./lib/percent";
 import { plural } from "./lib/plural";
 import { cleared, isShown, rangeLabel, type Slice, togglePart } from "./lib/slice";
 import { timeParts, WAITED_SHARE } from "./lib/waitingShare";
@@ -22,6 +22,8 @@ export interface ShareOf {
   category: ShareKind;
   value: number;
   total: number;
+  /** Its percent of the total, as said: the legend's add up to 100% (percents). */
+  percent: string;
   /** How many spans count in it; the collector's, how many times it ran; none for waiting. */
   calls: number;
   label: string;
@@ -29,7 +31,7 @@ export interface ShareOf {
 
 /** "26 ms · 96% · 12 calls": how long, of the whole, how many spans (the collector's runs); waiting, how long. */
 function shareNumbers(share: ShareOf): string {
-  const numbers = `${duration(share.value)} · ${percent(share.value, share.total)}`;
+  const numbers = `${duration(share.value)} · ${share.percent}`;
   if (share.category === WAITED_SHARE) return `${numbers} · not computing: a sleep, a timer, a socket, a lock`;
   const counted =
     share.category === GC ? plural(share.calls, "collection", "collections") : plural(share.calls, "call", "calls");
@@ -66,10 +68,15 @@ export function sharesOf(trace: Trace): ShareOf[] {
   const categories = spanCategories(trace);
   const calls = addUp<ShareKind>([...categories.values()].map((category) => [category, 1]));
   calls.set(GC, trace.profile?.gc?.collections ?? 0);
-  const shares = parts.map(([category, value]) => ({
+  const said = percents(
+    parts.map(([, value]) => value),
+    total,
+  );
+  const shares = parts.map(([category, value], at) => ({
     category,
     value,
     total,
+    percent: said[at] ?? "0%",
     calls: calls.get(category) ?? 0,
     label: shareLabel(category),
   }));
@@ -141,7 +148,7 @@ function FixedShare({ share }: { share: ShareOf }) {
               swatch={<span className={swatchClass(share)} />}
               name={share.label}
               value={duration(share.value)}
-              share={percent(share.value, share.total)}
+              share={share.percent}
             />
           </span>
         </TooltipTrigger>
@@ -171,7 +178,7 @@ function Share({ share, filters }: { share: SpanShare; filters: SliceState }) {
               swatch={<span className="dt-swatch" />}
               name={share.label}
               value={duration(share.value)}
-              share={percent(share.value, share.total)}
+              share={share.percent}
             />
           </button>
         </TooltipTrigger>

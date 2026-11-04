@@ -6,6 +6,7 @@
 import type { Span, Trace } from "../types";
 import { type Category, categoryLabel, stretches } from "./breakdown";
 import { cutByPauses, GC, gcPauses } from "./memory";
+import { apportion } from "./percent";
 import { type Frame, type Profile, runsYours, type ShareFrame, type Stack, WAITING } from "./profile";
 import type { TimeRange, Windows } from "./slice";
 import { callLabel, waitFrame } from "./waitCalls";
@@ -153,30 +154,6 @@ export function displayStep(us: number): number {
   if (Math.round(us / 1000) >= 1000) return 100_000;
   if (us >= 1000) return 1000;
   return us >= 100 ? 100 : 1;
-}
-
-/**
- * Times rounded to `step` so they add up to `target` steps: each rounded down, the steps left given to those that
- * lost most (largest remainder), the first of them on a tie. What parts of a total are said as, so the parts said add
- * up to the total said.
- */
-export function apportion(values: readonly number[], step: number, target: number): number[] {
-  const floors = values.map((value) => Math.floor(value / step + 1e-9));
-  let left = target - floors.reduce((sum, steps) => sum + steps, 0);
-  const order = values
-    .map((_, at) => at)
-    .sort((a, b) => remainder(values, b, step) - remainder(values, a, step) || a - b);
-  for (const at of order) {
-    if (left <= 0) break;
-    floors[at] = (floors[at] ?? 0) + 1;
-    left -= 1;
-  }
-  return floors.map((steps) => steps * step);
-}
-
-function remainder(values: readonly number[], at: number, step: number): number {
-  const value = (values[at] ?? 0) / step;
-  return value - Math.floor(value + 1e-9);
 }
 
 /** Times as said: rounded to the step their total is said in, adding up to that total as said. */

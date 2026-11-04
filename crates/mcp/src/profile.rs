@@ -1021,6 +1021,7 @@ fn cpu(profile: &Profile, duration: i64, top: usize, merged: bool) -> String {
     } else {
         total
     };
+    let mut waiting_said = None;
     let mut out = vec![format!(
         "CPU profile: {} {} of the {} {} · {}, one every {}",
         us(profiled),
@@ -1043,10 +1044,19 @@ fn cpu(profile: &Profile, duration: i64, top: usize, merged: bool) -> String {
                 .cmp(&(b.0 == "Waiting"))
                 .then(b.1.total_cmp(&a.1))
         });
+        said.retain(|(_, us)| *us > 0.0);
+        // Of what they add up to, as the legend says them: percents that add up to 100%.
+        let whole: f64 = said.iter().map(|(_, us)| us).sum();
+        let percents = shares::percents(&said.iter().map(|(_, us)| *us).collect::<Vec<_>>(), whole);
         let parts: Vec<String> = said
             .iter()
-            .filter(|(_, us)| *us > 0.0)
-            .map(|(name, time)| format!("{name} {} ({})", us(*time), share(*time, of)))
+            .zip(percents)
+            .map(|((name, time), percent)| {
+                if *name == "Waiting" {
+                    waiting_said = Some(percent.clone());
+                }
+                format!("{name} {} ({percent})", us(*time))
+            })
             .collect();
         out.push(format!(
             "time by share (as the time strip says it): {}",
@@ -1065,7 +1075,9 @@ fn cpu(profile: &Profile, duration: i64, top: usize, merged: bool) -> String {
         } else {
             " (a sleep, a socket, a lock, the event loop: not computing)"
         };
-        let mut line = format!("waiting{what}: {} ({})", us(waited), share(waited, of));
+        // Its percent as its share says it, where it has one.
+        let percent = waiting_said.unwrap_or_else(|| share(waited, of));
+        let mut line = format!("waiting{what}: {} ({percent})", us(waited));
         if let Some(name) = profile.wait_name().filter(|_| profile.on_cpu.is_none()) {
             line.push_str(&format!(", most in {name}"));
         }
@@ -1609,8 +1621,8 @@ allocation sites at the peak (1 of 1, 2.0 MB in all, largest first; ×: allocati
             [
                 "CPU profile: 99.0 ms profiled of the trace's 99.0 ms · 99 samples, one every 1.0 ms",
                 "spread: its 30 samples are CPU time, placed by the agent evenly over the project's code's time (its profiler keeps no sample's time); the rest of that time is waiting off the CPU, not sampled",
-                "time by share (as the time strip says it): Your code 28.0 ms (28%) · Database 20.0 ms (20%) · External calls 10.0 ms (10%) · Waiting 41.0 ms (41%)",
-                "waiting, off the CPU (a lock, a channel, a timer, a call; not sampled): 41.0 ms (41%)",
+                "time by share (as the time strip says it): Your code 28.0 ms (28%) · Database 20.0 ms (20%) · External calls 10.0 ms (10%) · Waiting 41.0 ms (42%)",
+                "waiting, off the CPU (a lock, a channel, a timer, a call; not sampled): 41.0 ms (42%)",
             ]
         );
     }
@@ -1630,7 +1642,7 @@ allocation sites at the peak (1 of 1, 2.0 MB in all, largest first; ×: allocati
             lines,
             [
                 "CPU profile: 5.0 ms profiled of the trace's 34.7 ms · 1 sample, one every 1.0 ms",
-                "time by share (as the time strip says it): External calls 28.0 ms (81%) · Your code 3.0 ms (9%) · Framework & middleware 3.0 ms (9%) · GC 1.0 ms (3%)",
+                "time by share (as the time strip says it): External calls 28.0 ms (80%) · Your code 3.0 ms (9%) · Framework & middleware 3.0 ms (8%) · GC 1.0 ms (3%)",
             ]
         );
     }
