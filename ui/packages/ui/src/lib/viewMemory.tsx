@@ -20,7 +20,7 @@ export const VIEW_KEYS = {
   profileKind: "profile",
   /** The Profile tab's flame: `own` (your code) or `all` (all frames). */
   frames: "frames",
-  /** The stretch the Profile tab was opened at, `from-to` in µs since the trace started. */
+  /** The stretches the Profile tab was opened at, `from-to` in µs since the trace started, comma-separated. */
   stretch: "at",
 } as const;
 

@@ -8,6 +8,12 @@ import { isDump } from "./dump";
 /** A stretch of the trace's time, in microseconds since it started. */
 export type TimeRange = readonly [number, number];
 
+/**
+ * Stretches of the trace's time, in order and apart: what a profile is taken over (a code row's own time is its
+ * pieces between the calls inside, not the calls).
+ */
+export type Windows = readonly TimeRange[];
+
 export interface Slice {
   /** The kinds picked: a filter's id (sql, cache, template…) or a share of the time's own (django, code). */
   parts: readonly string[];
@@ -114,15 +120,39 @@ export function sliceKey(slice: Slice): string {
 
 const STRETCH = /^(\d+)-(\d+)$/;
 
-/** A stretch as a link and Back carry it: `from-to`, in whole µs since the trace started. */
-export function stretchText(range: TimeRange): string {
-  return `${Math.round(range[0])}-${Math.round(range[1])}`;
+/** Stretches as a link and Back carry them: `from-to`, comma-separated, in whole µs since the trace started. */
+export function stretchText(windows: Windows): string {
+  return windows.map(([from, to]) => `${Math.round(from)}-${Math.round(to)}`).join(",");
 }
 
-/** A stretch from its text (stretchText); undefined where it isn't one. */
-export function parseStretch(value: string): TimeRange | undefined {
-  const found = STRETCH.exec(value);
-  if (!found) return undefined;
-  const [from, to] = [Number(found[1]), Number(found[2])];
-  return to > from ? [from, to] : undefined;
+/** Stretches from their text (stretchText), in order and apart; undefined where it isn't that. */
+export function parseStretch(value: string): Windows | undefined {
+  const windows: TimeRange[] = [];
+  for (const part of value.split(",")) {
+    const found = STRETCH.exec(part);
+    if (!found) return undefined;
+    const [from, to] = [Number(found[1]), Number(found[2])];
+    if (!(to > from) || from < (windows.at(-1)?.[1] ?? 0)) return undefined;
+    windows.push([from, to]);
+  }
+  return windows.length ? windows : undefined;
+}
+
+/** How long stretches are in all (µs): a code row's time, and what its profile is profiled of. */
+export function windowsTime(windows: Windows): number {
+  return windows.reduce((sum, [from, to]) => sum + to - from, 0);
+}
+
+/** How many stretches a title names one by one; more read as their time and where they lie. */
+const NAMED_WINDOWS = 3;
+
+/**
+ * "93 ms – 100 ms", "0 – 38 ms, 97 ms – 100 ms", "46 ms in 5 stretches of 0 – 100 ms": the stretches a profile is
+ * of, as its title says them.
+ */
+export function windowsLabel(windows: Windows): string {
+  if (windows.length <= NAMED_WINDOWS) return windows.map(rangeLabel).join(", ");
+  const first = windows[0] as TimeRange;
+  const last = windows.at(-1) as TimeRange;
+  return `${duration(windowsTime(windows))} in ${windows.length} stretches of ${rangeLabel([first[0], last[1]])}`;
 }

@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- A profile's time follows one rule everywhere: each 10 ms stretch of
+  the trace (as the SDK records when it saw each stack) is shared among
+  the stacks seen in it, a stretch without samples as the one before it,
+  and a profile of part of the trace counts only as much of each stretch
+  as the part covers. The Profile tab's total, its bar of your code and
+  waiting, its list and the call tree's code rows all read it, so they
+  add up and agree: a call tree row of 7 ms opens "Profile of 93 ms –
+  100 ms" saying 7 ms profiled of the stretch's 7 ms, not 10 ms (the
+  whole 10 ms stretch it touched). A code row whose code ran in pieces
+  between calls opens the profile of those pieces, not of everything
+  from its first to its last ("Profile of 34 µs – 38 ms, 100 ms – 108
+  ms", 46 ms, the row's 46 ms), and a link keeps the pieces. A wait row
+  that holds several waits says so ("waiter.acquire and 1 more wait in
+  get_author"): its time is all of them, while the Profile tab's list
+  has each wait on its own, over the whole trace.
+
 ## 0.13.1 (2026-11-03)
 
 ### Added

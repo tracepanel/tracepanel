@@ -53,7 +53,7 @@ function waitedBy(trace: Trace, parts: readonly (readonly [string, number])[]): 
 }
 
 function waitsOf(trace: Trace, quiet: Quiet): number {
-  return waitedIn(trace.profile, quiet.gaps, trace.start);
+  return waitedIn(trace.profile, trace.duration, quiet.gaps, trace.start);
 }
 
 /**

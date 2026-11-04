@@ -90,7 +90,7 @@ interface Lane {
 
 /** A quiet stretch in its pieces: waited in, computed in (one, computed, where the profile can't say). */
 function piecesOfStretch(trace: Trace, stretch: Stretch): Drawn[] {
-  return quietPieces(trace.profile, stretch.from, stretch.to).map((piece) => ({
+  return quietPieces(trace.profile, trace.duration, stretch.from, stretch.to).map((piece) => ({
     stretch: { ...stretch, from: piece.from, to: piece.to },
     quiet: true,
     waiting: piece.waiting,

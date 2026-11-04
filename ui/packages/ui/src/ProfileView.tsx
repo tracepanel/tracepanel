@@ -37,7 +37,7 @@ import {
   YOUR_CODE,
 } from "./lib/profile";
 import { serviceRuntime, traceRuntime } from "./lib/runtime";
-import { rangeLabel, type TimeRange } from "./lib/slice";
+import { type Windows, windowsLabel, windowsTime } from "./lib/slice";
 import { cn } from "./lib/utils";
 import { useRemembered, VIEW_KEYS } from "./lib/viewMemory";
 import { namedWaits, type WaitFrame } from "./lib/waitCalls";
@@ -377,13 +377,13 @@ function MemoryNotes({ memory, what }: { memory: Memory; what: MemoryWhat }) {
   );
 }
 
-/** The stretch the tab was opened at (its own, gone once it closes), else the call tree's range. */
-function useProfileRange(open: boolean): TimeRange | null {
+/** The stretches the tab was opened at (its own, gone once it closes), else the call tree's range. */
+function useProfileRange(open: boolean): Windows | null {
   const { slice, stretch, profileAt } = useHeldSlice();
   useEffect(() => {
     if (!open) profileAt(null);
   }, [open, profileAt]);
-  return stretch ?? slice.range;
+  return useMemo(() => stretch ?? (slice.range ? [slice.range] : null), [stretch, slice.range]);
 }
 
 /** What the tab profiles: a stretch picked (when the profile says when its stacks were seen), else the whole trace. */
@@ -392,6 +392,8 @@ interface Scope {
   /** What Your code reads: its waits named by what was in flight (lib/waitCalls); All frames keeps the frames. */
   own: Profile;
   title: string;
+  /** The stretches it is of (a code row's, a range picked), where the profile says when; none: the whole trace. */
+  windows: Windows | null;
   /** Why a stretch picked isn't what it shows: the profile doesn't say when. */
   note: string | null;
   /** In the trace's own time (the profile says when its samples were taken), not in samples. */
@@ -403,19 +405,28 @@ interface Scope {
 /** A trace as its profile's scope reads it: its clock, its calls (who waited), its SDK's language. */
 type Profiled = Pick<Trace, "start" | "duration" | "spans" | "attrs">;
 
-function scopeOf(profile: Profile, range: TimeRange | null, trace: Profiled): Scope {
-  // Timed, it reads in the trace's own time, as the time strip does; a range narrows it.
+function scopeOf(profile: Profile, range: Windows | null, trace: Profiled): Scope {
+  // Timed, it reads in the trace's own time, as the time strip and the call tree do (lib/waiting's stackTimes):
+  // stretches narrow it to their time.
   if (timed(profile)) {
-    const title = range ? `Profile of ${rangeLabel(range)}` : "Profile of the whole trace";
+    const title = range ? `Profile of ${windowsLabel(range)}` : "Profile of the whole trace";
     const shown = wallClock(profile, trace.duration, range);
-    return { profile: shown, own: namedWaits(shown, trace), title, note: null, timed: true, cpu: false };
+    return {
+      profile: shown,
+      own: namedWaits(shown, trace),
+      title,
+      windows: range,
+      note: null,
+      timed: true,
+      cpu: false,
+    };
   }
   const note = range ? "Its samples aren't timed: the range picked can't narrow it." : null;
   // On the trace's clock: the time off the CPU waited, under the function of yours that made each call waited for.
   const cpu = onCpuOnly(trace);
   // Its waits named so already (lib/offCpu): Your code and All frames read the same.
   const shown = cpu ? withOffCpu(profile, trace) : profile;
-  return { profile: shown, own: shown, title: "Profile of the whole trace", note, timed: false, cpu };
+  return { profile: shown, own: shown, title: "Profile of the whole trace", windows: null, note, timed: false, cpu };
 }
 
 /**
@@ -439,6 +450,15 @@ function about(profile: Profile): string {
 function profiledWord(scope: Scope): string {
   if (scope.cpu) return "on the CPU";
   return scope.timed ? "profiled" : "sampled";
+}
+
+/**
+ * What the big number is a part of: the stretches' time (a code row's, which the row says too), else the trace's.
+ */
+function ofWhat(scope: Scope, trace: Trace): string {
+  if (!scope.windows) return `the trace's ${duration(trace.duration)}`;
+  const time = duration(windowsTime(scope.windows));
+  return scope.windows.length > 1 ? `these stretches' ${time}` : `the stretch's ${time}`;
 }
 
 /** A line of the head in small print, when there is something to say. */
@@ -476,7 +496,7 @@ function ProfileHead({ whole, shown, trace, scope }: { whole: Profile; shown: Pr
         {about(whole)}
         {time(scope.cpu ? whole.samples : shown.samples)}
         <span className="ml-2 text-sm font-normal text-muted-foreground">
-          {profiledWord(scope)} of the trace's {duration(trace.duration)}
+          {profiledWord(scope)} of {ofWhat(scope, trace)}
         </span>
       </span>
       <span className="text-xs text-muted-foreground">{scope.note ?? samplesLine(whole, scope.cpu)}</span>
@@ -1090,7 +1110,7 @@ export function ProfileTab({
   onShowRow?: ((row: string) => void) | undefined;
 }) {
   const profiles = useMemo(() => scopedProfiles(chain.members, chain.scope), [chain.members, chain.scope]);
-  const own = profiles.length === 1 && profiles[0]?.member.id === trace.id && profiles[0].range === null;
+  const own = profiles.length === 1 && profiles[0]?.member.id === trace.id && profiles[0].windows === null;
   if (own || (profiles.length === 0 && !chain.scope))
     return <ProfilePane trace={trace} open={open} onShowRow={onShowRow} />;
   if (!open) return null;
@@ -1188,7 +1208,7 @@ function appMemory(app: AppProfile): AppMemory | undefined {
   const merged = mergeMemories(measured.map((each) => each.profile));
   if (!merged) return undefined;
   const title = measured.length > 1 ? `Memory of ${measured.length} traces` : "Memory of the whole trace";
-  const narrowed = measured.some((each) => each.range !== null);
+  const narrowed = measured.some((each) => each.windows !== null);
   const note = narrowed ? "Its memory isn't timed: the stretch picked can't narrow it." : null;
   return { ...merged, app: app.app, traces: measured.length, title, note };
 }
@@ -1203,13 +1223,14 @@ function appRuntime(app: AppProfile): string | undefined {
  * was in flight in each trace, as a trace's own Profile tab names them.
  */
 function appView(app: AppProfile): Scope {
-  const scopes = app.traces.map((each) => scopeOf(each.profile, each.range, each.member.trace));
+  const scopes = app.traces.map((each) => scopeOf(each.profile, each.windows, each.member.trace));
   const [one] = scopes;
   if (scopes.length === 1 && one) return one;
   return {
     profile: mergeProfiles(scopes.map((each) => each.profile)),
     own: mergeProfiles(scopes.map((each) => each.own)),
     title: `Profile of ${app.traces.length} traces`,
+    windows: null,
     note: null,
     timed: false,
     cpu: false,
