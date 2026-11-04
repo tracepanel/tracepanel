@@ -321,7 +321,7 @@ async function headerBroken(page, trace, strip) {
  * as written, its "Most time" the strip's largest share, its time as the strip writes it, of the time the header says.
  * What's wrong, if anything.
  */
-async function cardBroken(page, base, id, strip, header) {
+async function cardBroken(page, base, { id, spanned }, strip, header) {
   const total = us(header) / 1000;
   const tag = `data-tracepanel-id="${id}" data-tracepanel-method="GET" data-tracepanel-status="200" data-tracepanel-total="${total}" data-tracepanel-queries="0"`;
   const html = `<!doctype html><html><head><script src="/widget.min.js" data-tracepanel-api="/" ${tag}></script><title>app</title></head><body></body></html>`;
@@ -354,7 +354,10 @@ async function cardBroken(page, base, id, strip, header) {
   if (!(found && named)) problems.push(`card "${line}" names no share of the strip's`);
   else if (named.value !== found[2]) problems.push(`card "${line}", the strip's ${named.name} ${named.value}`);
   else if (us(named.value) < longest) problems.push(`card "${line}" isn't the strip's longest`);
-  else if (found[3] !== header) problems.push(`card "${line}" of ${found[3]}, the header's ${header}`);
+  // Of the trace's time as its header says it, where its spans cover the trace (a made-up trace's may not: its
+  // split is of its spans' time, said, not counted).
+  else if (found[3] !== header && spanned) problems.push(`card "${line}" of ${found[3]}, the header's ${header}`);
+  else if (found[3] !== header) SKIPPED.push(`${id}: its spans don't cover its time, so its card says ${line}`);
   return problems;
 }
 
@@ -408,7 +411,7 @@ async function sweep(page, base, { id, profiled, readable, spanned }, mcp) {
   for (const each of await headerBroken(page, doc, strip)) problem(each);
   const header = (await page.locator(".dt-trace-time").first().textContent())?.trim() ?? "";
   if (strip.length > 0 && doc.kind !== "page") {
-    for (const each of await cardBroken(page, base, id, strip, header)) problem(each);
+    for (const each of await cardBroken(page, base, { id, spanned }, strip, header)) problem(each);
     if (!(await open())) problem("the console doesn't open it again");
   }
   if (!profiled) return problems;
