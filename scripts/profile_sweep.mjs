@@ -3,7 +3,9 @@
 // strip's legend, the Profile tab's head and bar (the trace's own, and each app's in a chain), each code and wait row
 // and the stretch it opens, against the MCP server's get_profile. One computed result says them all (lib/split.ts,
 // crates/mcp/src/split.rs); this reads what a person and an AI agent are shown, the console in Chromium and the MCP
-// server over stdio, and lists every place they disagree, or a share's percents don't add up to 100%.
+// server over stdio, and lists every place they disagree, or a share's percents don't add up to 100%. One fact, one
+// written value: the header's queries, Redis and GC, the DB tab's time and the hover card's are the strip's text, to
+// the letter.
 //
 // It copies the store first and runs its own agent on the copy (the store passed in is never written to), on ports
 // of its own, OTLP off. CI runs it on the e2e store after the e2e tests (.github/workflows/ci.yml).
@@ -134,11 +136,26 @@ function us(text) {
   return found ? Math.round(Number(found[1].replaceAll(",", "")) * UNITS[found[2]]) : Number.NaN;
 }
 
-/** Shares whose times, as written, don't add up to the total written: what's wrong, if anything. */
+/** The step a time is written at, from how it reads: "1.6 s" a tenth of a second, "8 ms" a ms, "0.8 ms", "27 µs". */
+function stepOf(text) {
+  if (/ s$/.test(text)) return 100_000;
+  if (/ µs$/.test(text)) return 1;
+  return /\.\d ms$/.test(text) ? 100 : 1000;
+}
+
+/**
+ * Shares whose times, as written, don't add up to the total written: what's wrong, if anything. A share written finer
+ * than the total ("0.6 ms" of 310 ms, as the console writes its time anywhere) is within one of the total's steps of
+ * what it rounds to with the rest.
+ */
 function addsUp(shares, total) {
-  // A share under the split's step ("<1 ms") counts as none.
+  const step = stepOf(total);
+  // A share under a µs ("<1 µs") counts as none.
   const sum = shares.reduce((all, share) => all + (share.value.startsWith("<") ? 0 : us(share.value)), 0);
-  return shares.length === 0 || sum === us(total) ? null : `times as written add up to ${sum} µs, not ${total}`;
+  const slack = shares.filter((share) => stepOf(share.value) < step).length * step;
+  return shares.length === 0 || Math.abs(sum - us(total)) < slack + 1e-6
+    ? null
+    : `times as written add up to ${sum} µs, not ${total}`;
 }
 
 /** "Database 47 ms (38%) · Waiting 45 ms (37%)": get_profile's time by share. */
@@ -152,9 +169,8 @@ function mcpShares(line) {
 
 /** A block of get_profile: its head (what it profiled of what, its samples) and its time by share. */
 function mcpBlock(text) {
-  const head = /CPU profile: (≈ )?(\S+ (?:µs|ms|s)) profiled of (the trace's|the traces') (\S+ (?:µs|ms|s)) · (.*)/.exec(
-    text,
-  );
+  const head =
+    /CPU profile: (≈ )?(\S+ (?:µs|ms|s)) profiled of (the trace's|the traces') (\S+ (?:µs|ms|s)) · (.*)/.exec(text);
   const shares = /time by share \(as the time strip says it\): (.*)/.exec(text);
   return head
     ? {
@@ -227,19 +243,17 @@ const ROW = 'button.dt-map-row[data-kind="code"]';
 
 const said = (shares) => JSON.stringify(shares.map((share) => [share.name, share.value, share.percent]));
 
-/** The step a time is written at, from how it reads: "1.6 s" a tenth of a second, "8 ms" a ms, "0.8 ms", "27 µs". */
-function stepOf(text) {
-  if (/ s$/.test(text)) return 100_000;
-  if (/ µs$/.test(text)) return 1;
-  return /\.\d ms$/.test(text) ? 100 : 1000;
+/** The trace as the API serves it: its spans. */
+async function traceDoc(base, id) {
+  return (await fetch(new URL(`api/traces/${id}`, base))).json();
 }
 
 /**
- * Database is the time in queries, as the DB tab adds it up. Where each query runs alone (none beside it, none inside
- * it: concurrent queries add up past the time they took), the strip's Database and the DB tab's time are one time,
- * each written at its own step. What's wrong, if anything.
+ * Database is the time in queries, written once: the DB tab's time is the strip's Database to the letter, queries side
+ * by side or not, where the tab lists the trace's own queries (not a chain's) and a driver's own calls aren't apart
+ * from them. What's wrong, if anything.
  */
-async function databaseBroken(page, base, id, strip) {
+async function databaseBroken(page, trace, strip) {
   const tab = page.getByRole("tab", { name: /^DB\b/ });
   if ((await tab.count()) === 0) return null;
   // Its time is the tab's last piece of text ("DB", its count, then its time): read apart, not run together.
@@ -251,38 +265,101 @@ async function databaseBroken(page, base, id, strip) {
         .map((each) => each.textContent?.trim() ?? ""),
     );
   const said = pieces.filter((piece) => /^[\d.,]+ (?:µs|ms|s)$/.test(piece)).at(-1);
+  const count = Number(pieces.find((piece) => /^\d+$/.test(piece)) ?? Number.NaN);
+  const queries = (trace.spans ?? []).filter((span) => span.kind === "sql");
   const share = strip.find((each) => each.name === "Database");
-  if (!said) return null;
-  const trace = await (await fetch(new URL(`api/traces/${id}`, base))).json();
+  if (!(said && share) || count !== queries.length || !ownQueries(trace)) return null;
+  READ.databases += 1;
+  return share.value === said ? null : `the strip's Database ${share.value}, the DB tab's ${said}`;
+}
+
+/** Whether the trace's Database is its queries' alone: no driver's call apart from them (under a connection's span). */
+function ownQueries(trace) {
   const spans = trace.spans ?? [];
   const byId = new Map(spans.map((span) => [span.id, span]));
-  const above = (span, other) => {
-    for (let at = byId.get(span.parent_id); at; at = byId.get(at.parent_id)) if (at === other) return true;
-    return false;
+  return !spans.some((span) => span.kind === "http.client" && byId.get(span.parent_id)?.kind === "sql.connect");
+}
+
+/** Whether a Redis command is a cache's: its time is then the cache's share, not Redis'. */
+function cachesRedis(trace) {
+  const spans = trace.spans ?? [];
+  const byId = new Map(spans.map((span) => [span.id, span]));
+  return spans.some((span) => span.kind === "redis" && byId.get(span.parent_id)?.kind === "cache");
+}
+
+/**
+ * The header's facts against the strip: its queries' time is the strip's Database, its Redis commands' its Redis, its
+ * GC's its GC, to the letter. What's wrong, if anything.
+ */
+async function headerBroken(page, trace, strip) {
+  const facts = (
+    (await page
+      .locator(".dt-trace-facts")
+      .first()
+      .textContent({ timeout: 2000 })
+      .catch(() => "")) ?? ""
+  )
+    .split("·")
+    .map((fact) => fact.trim());
+  const problems = [];
+  const against = (pattern, name, when) => {
+    const fact = facts.find((each) => pattern.test(each));
+    const share = strip.find((each) => each.name === name);
+    if (!(fact && share && when)) return;
+    READ.headers += 1;
+    const time = /(\S+ (?:µs|ms|s))$/.exec(fact)?.[1];
+    if (time !== share.value) problems.push(`the header's "${fact}", the strip's ${name} ${share.value}`);
   };
-  const queries = spans.filter((span) => span.kind === "sql" && span.duration > 0);
-  const alone = queries.every(
-    (query) =>
-      !spans.some(
-        (other) =>
-          other.parent_id === query.id ||
-          (other !== query &&
-            !above(query, other) &&
-            other.start < query.start + query.duration &&
-            query.start < other.start + other.duration),
-      ),
-  );
-  if (!(alone && queries.length)) return null;
-  READ.databases += 1;
-  if (!share) return `the DB tab says ${said}, the strip has no Database`;
-  const value = share.value.startsWith("<") ? 0 : us(share.value);
-  // Each written at its own step: the tab's rounds to the nearest; the share, by largest remainder, within one of its.
-  const within = stepOf(share.value.replace(/^</, "")) + stepOf(said) / 2;
-  return Math.abs(value - us(said)) <= within ? null : `the strip's Database ${share.value}, the DB tab's ${said}`;
+  against(/^\d+ quer(?:y|ies) /, "Database", ownQueries(trace));
+  against(/^\d+ Redis commands? /, "Redis", !cachesRedis(trace));
+  against(/^GC \d+× /, "GC", true);
+  return problems;
+}
+
+/**
+ * The hover card over the widget's pill, on an app's page made for the trace: its bar's pieces are the strip's shares
+ * as written, its "Most time" the strip's largest share, its time as the strip writes it, of the time the header says.
+ * What's wrong, if anything.
+ */
+async function cardBroken(page, base, id, strip, header) {
+  const total = us(header) / 1000;
+  const tag = `data-tracepanel-id="${id}" data-tracepanel-method="GET" data-tracepanel-status="200" data-tracepanel-total="${total}" data-tracepanel-queries="0"`;
+  const html = `<!doctype html><html><head><script src="/widget.min.js" data-tracepanel-api="/" ${tag}></script><title>app</title></head><body></body></html>`;
+  await page.route("**/sweep-app/", (route) => route.fulfill({ contentType: "text/html; charset=utf-8", body: html }));
+  await page.goto(new URL("sweep-app/", base).href);
+  const pill = page.getByRole("button", { name: /^tracepanel:/ });
+  await pill.hover();
+  const card = page.getByRole("dialog", { name: "This request at a glance" });
+  const most = card.locator(".card-most");
+  if (
+    !(await most.waitFor({ timeout: 5000 }).then(
+      () => true,
+      () => false,
+    ))
+  ) {
+    await page.unroute("**/sweep-app/");
+    return [`the card shows no "Most time"`];
+  }
+  const line = (await most.textContent())?.trim() ?? "";
+  const pieces = await card.locator(".card-bar span").evaluateAll((spans) => spans.map((span) => span.title));
+  await page.unroute("**/sweep-app/");
+  READ.cards += 1;
+  const problems = [];
+  const shares = strip.map((share) => `${share.name} ${share.value}`);
+  if (JSON.stringify(pieces) !== JSON.stringify(shares))
+    problems.push(`card bar ${JSON.stringify(pieces)} != strip ${JSON.stringify(shares)}`);
+  const found = /^Most time: (.+) (\S+ (?:µs|ms|s)) of (?:the server's )?(\S+ (?:µs|ms|s))$/.exec(line);
+  const named = found && strip.find((share) => share.name === found[1]);
+  const longest = Math.max(...strip.map((share) => (share.value.startsWith("<") ? 0 : us(share.value))));
+  if (!(found && named)) problems.push(`card "${line}" names no share of the strip's`);
+  else if (named.value !== found[2]) problems.push(`card "${line}", the strip's ${named.name} ${named.value}`);
+  else if (us(named.value) < longest) problems.push(`card "${line}" isn't the strip's longest`);
+  else if (found[3] !== header) problems.push(`card "${line}" of ${found[3]}, the header's ${header}`);
+  return problems;
 }
 
 /** What the sweep read: traces, Profile heads, code and wait rows. */
-const READ = { heads: 0, rows: 0, apart: 0, databases: 0 };
+const READ = { heads: 0, rows: 0, apart: 0, databases: 0, headers: 0, cards: 0 };
 /** Traces not read, each with why: none is left out silently. */
 const SKIPPED = [];
 
@@ -325,8 +402,15 @@ async function sweep(page, base, { id, profiled, readable, spanned }, mcp) {
   );
   const wrong = hundred(strip);
   if (wrong) problem(`strip: ${wrong} ${said(strip)}`);
-  const database = await databaseBroken(page, base, id, strip);
+  const doc = await traceDoc(base, id);
+  const database = await databaseBroken(page, doc, strip);
   if (database) problem(database);
+  for (const each of await headerBroken(page, doc, strip)) problem(each);
+  const header = (await page.locator(".dt-trace-time").first().textContent())?.trim() ?? "";
+  if (strip.length > 0 && doc.kind !== "page") {
+    for (const each of await cardBroken(page, base, id, strip, header)) problem(each);
+    if (!(await open())) problem("the console doesn't open it again");
+  }
   if (!profiled) return problems;
   const rows = readable
     ? await page
@@ -341,7 +425,6 @@ async function sweep(page, base, { id, profiled, readable, spanned }, mcp) {
   }
   await tab.first().click();
   const shown = await heads(page);
-  const header = (await page.locator(".dt-trace-time").first().textContent())?.trim() ?? "";
   if (shown.length === 0) problem("the Profile tab shows no profile");
   const answer = mcpParts(id, mcp.get(id) ?? "");
   if (/\n {2}\S.*Not profiled/.test(answer.text.split("\nfunctions by self time").slice(1).join("")))
@@ -358,7 +441,12 @@ async function sweep(page, base, { id, profiled, readable, spanned }, mcp) {
     if (sum) problem(`${what} bar: ${sum} ${said(head.bar)}`);
     // The whole trace's time as its page's header says it.
     // Its spans' time, where they cover the trace (a made-up trace's may not: said, not counted).
-    if (cover && head.title === "Profile of the whole trace" && idsKey(head.traces ?? [id]) === id && cover[2] !== header) {
+    if (
+      cover &&
+      head.title === "Profile of the whole trace" &&
+      idsKey(head.traces ?? [id]) === id &&
+      cover[2] !== header
+    ) {
       const says = `head says ${cover[2]} of the trace, its page's header ${header}`;
       if (spanned) problem(`${what} ${says}`);
       else SKIPPED.push(`${id}: its spans don't cover its time, so its ${says} (not counted)`);
@@ -430,7 +518,7 @@ try {
   }
   const profiled = traces.filter((trace) => trace.profiled).length;
   console.log(
-    `${traces.length} traces (${profiled} profiled), ${READ.heads} profile heads (${READ.apart} of a chain's traces get_profile doesn't add up together), ${READ.rows} code and wait rows, ${READ.databases} Database shares against their DB tab: ${problems.length} disagreements`,
+    `${traces.length} traces (${profiled} profiled), ${READ.heads} profile heads (${READ.apart} of a chain's traces get_profile doesn't add up together), ${READ.rows} code and wait rows, ${READ.databases} Database shares against their DB tab, ${READ.headers} header facts and ${READ.cards} hover cards against their strip: ${problems.length} disagreements`,
   );
   if (SKIPPED.length) console.log(`${SKIPPED.length} not compared:`);
   for (const skipped of SKIPPED) console.log(`  not compared: ${skipped}`);

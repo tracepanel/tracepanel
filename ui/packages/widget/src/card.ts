@@ -325,22 +325,16 @@ function timeCell(info: TraceInfo): HTMLElement {
   return time;
 }
 
-/** "Most time: Your code 4.6 ms · 78%": the bar's biggest part in words. */
 /**
- * "Most time: Database 40 ms · 67%": the largest share and its percent of the time the card's head says. Where the
- * head says the browser's time (it waited longer than the server took), what the percent is of: "67% of the
- * server's 60 ms".
+ * "Most time: Database 40 ms of 60 ms": the largest share as the strip says it, and the time the split is of. Where
+ * the card's head says the browser's time (it waited longer than the server took), whose: "of the server's 60 ms".
+ * No percent: a share's time and its percent are each rounded, so one sentence can't say both and stay true to each.
  */
 function mostLine(share: SaidShare, head: string, server: string): HTMLElement {
   const line = element("p", "card-most");
   line.dataset["category"] = share.share;
-  const of = head === server ? "" : ` of the server's ${server}`;
-  line.append(
-    element("i"),
-    `Most time: ${share.label} `,
-    element("b", undefined, share.time),
-    ` · ${share.percent}${of}`,
-  );
+  const of = head === server ? `of ${server}` : `of the server's ${server}`;
+  line.append(element("i"), `Most time: ${share.label} `, element("b", undefined, share.time), ` ${of}`);
   return line;
 }
 
@@ -457,7 +451,8 @@ export function mountCard(
       piece.title = `${share.label} ${share.time}`;
       bar.append(piece);
     }
-    const top = [...split.shares].sort((a, b) => b.us - a.us)[0];
+    // The largest by its time before it was said: shares written the same ("5 ms") are told apart one way, always.
+    const top = [...split.shares].sort((a, b) => b.exact - a.exact)[0];
     if (!top) return [bar];
     bar.setAttribute("aria-label", `Most time: ${top.label}, ${top.time}`);
     // A failed request's story is its error (under Fix first), not where its time went.

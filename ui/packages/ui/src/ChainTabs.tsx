@@ -8,10 +8,11 @@ import type { Explain } from "./CallTable";
 import { duration } from "./format";
 import type { TraceScope } from "./hooks/useTraceChain";
 import { IssueList } from "./IssueList";
-import { callTemplate, onTheClock } from "./lib/calls";
+import { addedUp, callTemplate, onTheClock } from "./lib/calls";
 import { CALL_TABS, callsOfTab } from "./lib/callTabs";
 import { plural } from "./lib/plural";
-import { type ScopedIssue, type ScopedSpan, scopedIssues, scopedSpans } from "./lib/scope";
+import { type Member, type ScopedIssue, type ScopedSpan, scopedIssues, scopedSpans } from "./lib/scope";
+import { callsTime } from "./lib/split";
 import type { TraceLinks } from "./links";
 import { AppChip } from "./primitives";
 import { CountChip, countBy, IssuePick, ScopeHeader, useChainApps } from "./ScopeBar";
@@ -106,18 +107,40 @@ function RepeatChips({
 }
 
 /**
- * A list's calls at a glance, one line: how many, how many unique, their time on the clock (overlaps once, the sum
- * on hover), the slowest.
+ * The calls' time on the clock as every place says it: one trace's calls that are all of a share of its time (its
+ * queries, its Database), as its strip says it (callsTime); a chain's, or some picked, as the console's duration does.
  */
-function CallStats({ tab, spans, noun }: { tab: string; spans: readonly ScopedSpan[]; noun: [string, string] }) {
+function clockText(spans: readonly ScopedSpan[], members: readonly Member[]): string {
+  const [first] = spans;
+  const one = first && spans.every((span) => span.traceId === first.traceId);
+  const member = one ? members.find((each) => each.id === first.traceId) : undefined;
+  return member ? callsTime(member.trace, spans) : duration(onTheClock(spans));
+}
+
+/**
+ * A list's calls at a glance, one line: how many, how many unique, their time on the clock (overlaps once), what they
+ * add up to where they ran side by side (said as a sum, apart), the slowest.
+ */
+function CallStats({
+  tab,
+  spans,
+  clock,
+  noun,
+}: {
+  tab: string;
+  spans: readonly ScopedSpan[];
+  clock: string;
+  noun: [string, string];
+}) {
   if (spans.length === 0) return null;
   const total = spans.reduce((sum, span) => sum + span.duration, 0);
+  const sum = addedUp(total, onTheClock(spans));
   const slowest = Math.max(...spans.map((span) => span.duration));
   const unique = new Set(spans.map((span) => (tab === "sql" ? sqlKey(span) : callTemplate(span)))).size;
   return (
     <>
-      {spans.length} {spans.length === 1 ? noun[0] : noun[1]} · {unique} unique ·{" "}
-      <span title={`${duration(total)} total`}>{duration(onTheClock(spans))}</span> on the clock · slowest{" "}
+      {spans.length} {spans.length === 1 ? noun[0] : noun[1]} · {unique} unique · {clock} on the clock
+      {sum && duration(total) !== clock ? <span title={sum}> · {duration(total)} added up</span> : null} · slowest{" "}
       {duration(slowest)}
     </>
   );
@@ -138,12 +161,15 @@ function CallsHeader({
   onPick,
   noun,
   end,
+  clock,
 }: {
   chain: TraceScope;
   tab: string;
   spans: readonly ScopedSpan[];
   inApp: readonly ScopedSpan[];
   shown: readonly ScopedSpan[];
+  /** The shown calls' time on the clock, as the header and the tab write it. */
+  clock: string;
   repeats: readonly ScopedIssue[];
   picks: CallPicks;
   onPick: (picks: CallPicks) => void;
@@ -157,7 +183,7 @@ function CallsHeader({
       scope={chain.scope}
       onScope={chain.setScope}
       apps={{ apps, runtimes, counts: appCounts, picked: picks.app, onPick: (app) => onPick({ ...picks, app }) }}
-      summary={<CallStats tab={tab} spans={shown} noun={noun} />}
+      summary={<CallStats tab={tab} spans={shown} clock={clock} noun={noun} />}
       end={shown.length > 0 ? end : null}
       filtersLabel="What the calls add up to"
       // A trace with no traces down its calls, nothing under a row asked for: its list as it always was, its line.
@@ -226,6 +252,7 @@ export function ScopedCalls({
     [spans, picks.app, repeats],
   );
   const shown = useMemo(() => pickedCalls(spans, picks, repeats), [spans, picks, repeats]);
+  const clock = useMemo(() => clockText(shown, chain.members), [shown, chain.members]);
   const [mode, setMode] = useState<SqlMode>("grouped");
   const sql = tab === "sql";
   return (
@@ -240,6 +267,7 @@ export function ScopedCalls({
         picks={picks}
         onPick={setPicks}
         noun={of.noun}
+        clock={clock}
         end={sql ? <Segmented label="Queries shown" segments={SQL_MODES} value={mode} onChange={setMode} /> : null}
       />
       <CallsOf spans={shown} empty={emptyCalls(of.empty, chain.scope !== null)}>
@@ -251,9 +279,10 @@ export function ScopedCalls({
             onExplain={onExplain}
             links={links}
             mode={mode}
+            clock={clock}
           />
         ) : (
-          <CallsList spans={shown} issueBySpan={issueBySpan} focus={focus} table={`trace-${tab}`} />
+          <CallsList spans={shown} issueBySpan={issueBySpan} focus={focus} table={`trace-${tab}`} clock={clock} />
         )}
       </CallsOf>
     </>

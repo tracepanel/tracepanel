@@ -14,13 +14,19 @@ pub(crate) type Windows = Vec<(f64, f64)>;
 /// One of an app's traces in a chain, and the stretches of it taken (none: all of it).
 pub(crate) type Part<'a> = (&'a Value, Option<&'a [(f64, f64)]>);
 
-/// A share of the time as said: its time (µs, rounded with the rest), that time written, its percent.
+/// A share of the time as said: its time (µs, rounded at its step), that time written, its percent; its time before
+/// it was rounded, and the step it is rounded to and written at (the split's, or a finer one for a share shorter
+/// than it).
 pub(crate) struct SaidShare {
     pub(crate) share: &'static str,
     pub(crate) label: &'static str,
     pub(crate) us: f64,
     pub(crate) time: String,
     pub(crate) percent: String,
+    // The share's time unrounded: what the console's card picks its largest by; the shared cases' property test reads it.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) exact: f64,
+    pub(crate) step: f64,
 }
 
 /// Where the time of a trace (or of stretches of it, or of an app's traces) went, as every view says it.
@@ -309,28 +315,21 @@ fn steps_of(us: f64, step: f64) -> i64 {
     }
 }
 
-/// A share's time written at the split's step; one too short to round to a step, under it: `<0.1 s`, `<1 ms`,
-/// `<0.1 ms`, `<1 µs`.
+/// A share's time written at its step; one too short to round to a µs (under a µs of a trace said in µs), under it.
 fn share_time(us: f64, step: f64) -> String {
     if us.round() > 0.0 {
-        return written_at(us, step);
-    }
-    if step >= 100_000.0 {
-        "<0.1 s"
-    } else if step >= 1000.0 {
-        "<1 ms"
-    } else if step >= 100.0 {
-        "<0.1 ms"
+        written_at(us, step)
     } else {
-        "<1 µs"
+        "<1 µs".to_owned()
     }
-    .to_owned()
 }
 
 /// The raw times said (the console's `said`). The total is said at the step the console says it in, as the page's
-/// header says it; the shares are rounded to that step by largest remainder, so as written they add up to the total
-/// as written. A share with time that rounds to none still shows: `<1 ms`. Percents of the time before it is
-/// rounded, largest remainder, adding up to 100% (`<1%` a share too small for one).
+/// header says it. A share the console would write at a finer step on its own (`0.6 ms` of a 310 ms trace, `300 ms`
+/// of a 2.1 s one) is written so, as every other place that says its time writes it: one time, one text. All are
+/// rounded to the split's step by largest remainder, so they add up to the total, and the others are said so: as
+/// written they add up to it but for the finer shares' own rounding. Percents of the time before it is rounded, largest remainder, adding
+/// up to 100% (`<1%` a share too small for one).
 fn said(raw: Raw, of: String, windows: Option<Windows>) -> Split {
     // Time less than half a µs is the arithmetic's, no share's. Waiting last, the rest largest first, those as long
     // as the trace had them (a stable sort).
@@ -344,25 +343,38 @@ fn said(raw: Raw, of: String, windows: Option<Windows>) -> Split {
     let exact: Vec<f64> = entries.iter().map(|(_, us)| *us).collect();
     let sum = exact.iter().fold(0.0, |all, us| all + us);
     let step = display_step(sum);
+    let steps: Vec<f64> = exact.iter().map(|&us| step.min(display_step(us))).collect();
+    let finer: Vec<Option<f64>> = exact
+        .iter()
+        .zip(&steps)
+        .map(|(&us, &own)| (own < step).then(|| steps_of(us, own) as f64 * own))
+        .collect();
     let rounded = shares::apportion(&exact, step, steps_of(sum, step));
     let total = rounded.iter().fold(0.0, |all, us| all + us);
     let percents = shares::percents(&exact, sum);
     let shares: Vec<SaidShare> = entries
         .iter()
-        .zip(rounded)
         .zip(percents)
-        .map(|((&(share, _), us), percent)| SaidShare {
-            share,
-            label: shares::label(share),
-            us,
-            time: share_time(us, step),
-            percent,
+        .enumerate()
+        .map(|(at, (&(share, us), percent))| {
+            let own = steps[at];
+            let said = finer[at].unwrap_or(rounded[at]);
+            SaidShare {
+                share,
+                label: shares::label(share),
+                us: said,
+                time: share_time(said, own),
+                percent,
+                exact: us,
+                step: own,
+            }
         })
         .collect();
+    // What the profile covers, at the split's step: the total less Not profiled as it rounds with the rest.
     let unprofiled = shares
         .iter()
-        .find(|share| share.share == NOT_PROFILED)
-        .map_or(0.0, |share| share.us);
+        .position(|share| share.share == NOT_PROFILED)
+        .map_or(0.0, |at| rounded[at]);
     Split {
         of,
         windows,
@@ -704,7 +716,7 @@ pub(crate) mod tests {
 
     /// A time as written (`1,204.5 ms`, `27 µs`, `1.6 s`) back in whole µs.
     fn read(text: &str) -> i64 {
-        // A share under the split's step (`<1 ms`) counts as none.
+        // A share under a µs (`<1 µs`) counts as none.
         if text.starts_with('<') {
             return 0;
         }
@@ -735,14 +747,34 @@ pub(crate) mod tests {
                 problems.push(format!("{what}: {}", split.json()));
             }
         };
-        let total: f64 = split.shares.iter().fold(0.0, |sum, share| sum + share.us);
-        check(total == split.total, "times add up to the total");
+        // A share the console writes at a finer step on its own (`0.6 ms` of a 310 ms trace) is written so: the
+        // header's and the DB tab's text. The rest are whole steps of the split's, rounded with every share to add
+        // up to the total.
+        let finer: Vec<&super::SaidShare> = split
+            .shares
+            .iter()
+            .filter(|share| share.step < split.step)
+            .collect();
+        check(
+            finer
+                .iter()
+                .all(|share| share.time == duration(share.exact)),
+            "a share finer than the split written as duration writes it",
+        );
         check(
             split.shares.iter().all(|share| {
                 share.us >= 0.0
-                    && (share.us / split.step - (share.us / split.step).round()).abs() < 1e-9
+                    && share.step <= split.step
+                    && (share.us / share.step - (share.us / share.step).round()).abs() < 1e-9
             }),
-            "each share a whole number of steps",
+            "each share a whole number of its steps",
+        );
+        // Each finer share is within one of the split's steps of what it rounds to with the rest.
+        let slack = finer.len() as f64 * split.step;
+        let total: f64 = split.shares.iter().fold(0.0, |sum, share| sum + share.us);
+        check(
+            (total - split.total).abs() < slack + 1e-6,
+            "times add up to the total",
         );
         check(
             split.shares.is_empty()
@@ -754,37 +786,46 @@ pub(crate) mod tests {
                     == 100,
             "percents add up to 100%",
         );
-        // As read: the shares' times written add up to the total written, in one precision.
+        // As read: the shares' times written add up to the total written, what it covers to the total less Not
+        // profiled, but for the finer shares' own rounding.
         let written: i64 = split.shares.iter().map(|share| read(&share.time)).sum();
-        check(written == read(&split.time), "times as read add up");
+        check(
+            ((written - read(&split.time)) as f64).abs() < slack + 1e-6,
+            "times as read add up",
+        );
         let not_profiled = split
             .shares
             .iter()
-            .find(|share| share.share == NOT_PROFILED)
-            .map_or(0, |share| read(&share.time));
+            .find(|share| share.share == NOT_PROFILED);
+        let off = not_profiled.map_or(0, |share| read(&share.time));
+        let room = not_profiled.map_or(0.0, |share| {
+            if share.step < split.step {
+                split.step
+            } else {
+                0.0
+            }
+        });
         check(
-            read(&split.covered) == read(&split.time) - not_profiled,
+            ((read(&split.covered) - (read(&split.time) - off)) as f64).abs() < room + 1e-6,
             "covered as read",
         );
         check(
             split.shares.iter().all(|share| {
-                share.time.starts_with('<') || decimals(&share.time) == decimals(&split.time)
+                share.step < split.step
+                    || share.time.starts_with('<')
+                    || decimals(&share.time) == decimals(&split.time)
             }),
-            "one precision for the shares and the total",
+            "one precision for the total and the shares at its step",
         );
         // The total as the console writes a duration everywhere (the page's header).
         check(
             split.shares.is_empty() || split.time == duration(split.exact),
             "the total as duration writes it",
         );
-        let unprofiled = split
-            .shares
-            .iter()
-            .find(|share| share.share == NOT_PROFILED)
-            .map_or(0.0, |share| share.us);
         check(
-            split.profiled == split.total - unprofiled,
-            "covered is the total less Not profiled",
+            split.profiled % split.step == 0.0
+                && split.covered == super::written_at(split.profiled, split.step),
+            "covered at the split's step",
         );
         let rest: Vec<f64> = split
             .shares

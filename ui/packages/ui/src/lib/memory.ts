@@ -9,16 +9,17 @@ export type Memory = NonNullable<Profile["memory"]>;
 export type Site = NonNullable<Memory["sites"]>[number];
 
 /** "↑ 42 MB peak", "GC 3× 12 ms": what the header says of a profile's memory and collections, the parts it has. */
-export function memoryFacts(profile: Profile | undefined): string[] {
-  return [peakFact(profile?.memory), gcFact(profile?.gc)].filter((fact) => fact !== null);
+export function memoryFacts(profile: Profile | undefined, gcTime?: string): string[] {
+  return [peakFact(profile?.memory), gcFact(profile?.gc, gcTime)].filter((fact) => fact !== null);
 }
 
 function peakFact(memory: Memory | undefined): string | null {
   return memory ? `↑ ${bytes(memory.peak)} peak` : null;
 }
 
-function gcFact(gc: Profile["gc"]): string | null {
-  return gc?.collections ? `GC ${gc.collections}× ${duration(gc.pause_us)}` : null;
+/** "GC 3× 12 ms": the pauses' time as the strip's GC says it (`said`), where it has one. */
+function gcFact(gc: Profile["gc"], said: string | undefined): string | null {
+  return gc?.collections ? `GC ${gc.collections}× ${said ?? duration(gc.pause_us)}` : null;
 }
 
 /**

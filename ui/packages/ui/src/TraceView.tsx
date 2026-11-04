@@ -39,7 +39,7 @@ import { type TraceScope, useTraceScope } from "./hooks/useTraceChain";
 import { IssueList } from "./IssueList";
 import { RunningMark } from "./LiveMarks";
 import { LogsPane } from "./LogList";
-import { groupNoun, onTheClock } from "./lib/calls";
+import { addedUp, groupNoun, onTheClock } from "./lib/calls";
 import { chainScope, whoseOwn } from "./lib/chainCounts";
 import type { ChainWaiting } from "./lib/chainRows";
 import { isTyping } from "./lib/keys";
@@ -47,6 +47,7 @@ import { pageParts, redirectedFrom, redirectNote } from "./lib/page";
 import { plural } from "./lib/plural";
 import { type Member, scopedIssues, scopedSpans } from "./lib/scope";
 import { type Slice, stretchText } from "./lib/slice";
+import { callsTime } from "./lib/split";
 import { useViewMemory, VIEW_KEYS, type ViewMemory, type ViewMemoryHeld, ViewMemoryScope } from "./lib/viewMemory";
 import { linkProps, opensTraces, openTraceAt, type TraceLinks } from "./links";
 import { ProfileTab } from "./ProfileView";
@@ -260,8 +261,9 @@ function callsTabs(calls: Partial<Record<CallsTabId, SystemCalls>>, trace: Trace
     const of = calls[id];
     if (!of) return [];
     const timed = of.total > 0;
-    const detail = timed ? duration(onTheClock(of.spans)) : undefined;
-    const detailTitle = timed ? `${duration(of.total)} total` : undefined;
+    // Its time on the clock as the strip says it (the trace's queries are its Database), what they add up to apart.
+    const detail = timed ? callsTime(trace, of.spans) : undefined;
+    const detailTitle = timed ? addedUp(of.total, onTheClock(of.spans)) : undefined;
     const mine = own[id]?.spans.length ?? 0;
     const hint = mine < of.spans.length ? chainScope(id, of.spans.length, mine, whoseOwn(trace.kind)) : undefined;
     return [{ id, label, icon: <Icon />, count: of.spans.length, detail, detailTitle, hint }];

@@ -5,13 +5,15 @@ import {
   CallTable,
   DetailsTitle,
   groupTitle,
+  type ListTime,
+  listTime,
   type RowTime,
   rowTime,
   timeColumns,
 } from "./CallTable";
 import type { DataColumn } from "./DataTable";
 import { callAnswer, type GroupAnswer, groupAnswer } from "./lib/callAnswer";
-import { callTemplate, groupNoun, onTheClock } from "./lib/calls";
+import { callTemplate, groupNoun } from "./lib/calls";
 import { GroupStatus, IssueChip, MethodBadge, SectionHeading, StatusBadge, Times } from "./primitives";
 import type { IssueKind, Span } from "./types";
 import { GroupNotTraced, NotTraced } from "./Untraced";
@@ -25,6 +27,8 @@ export interface CallsListProps {
   focus?: ReadonlySet<string> | undefined;
   /** Where the reader's columns are kept: one key per tab (`trace-cache`, `trace-http`). */
   table?: string | undefined;
+  /** The calls' time on the clock, as the header and the tab write it. */
+  clock: string;
 }
 
 interface Group {
@@ -134,10 +138,10 @@ function GroupName({ group }: { group: Group }) {
   );
 }
 
-function columns(scope: number, noun: readonly [string, string]): DataColumn<Group>[] {
+function columns(groups: readonly Group[], scope: ListTime, noun: readonly [string, string]): DataColumn<Group>[] {
   return [
     { id: "call", label: "Call", required: true, cell: (group) => <GroupName group={group} /> },
-    ...timeColumns<Group>((group) => group.time, scope, noun),
+    ...timeColumns<Group>((group) => group.time, groups, scope, noun),
   ];
 }
 
@@ -164,14 +168,14 @@ function GroupDetails({ group, focus }: { group: Group; focus: ReadonlySet<strin
 }
 
 /** One system's calls, grouped by what they repeat (an endpoint, a key pattern) like queries by statement. */
-export function CallsList({ spans, issueBySpan, focus, table = "trace-calls" }: CallsListProps) {
+export function CallsList({ spans, issueBySpan, focus, table = "trace-calls", clock }: CallsListProps) {
   const groups = useMemo(() => groupCalls(spans, issueBySpan), [spans, issueBySpan]);
-  const scope = useMemo(() => onTheClock(spans), [spans]);
+  const scope = useMemo(() => listTime(spans, clock), [spans, clock]);
   if (spans.length === 0) return <p className="dt-note">No calls of this kind in this request.</p>;
   return (
     <CallTable
       table={table}
-      columns={columns(scope, nounOf(spans[0]))}
+      columns={columns(groups, scope, nounOf(spans[0]))}
       items={groups}
       focus={focus}
       row={{

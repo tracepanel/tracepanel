@@ -6,7 +6,7 @@ import { traceId } from "../app.ts";
 import { chain, fanout } from "../chain.ts";
 import { expect, test } from "../fixtures.ts";
 
-test("a group of calls that ran side by side: its time on the clock, the sum on hover, its share of the header's", async ({
+test("a group of calls that ran side by side: its time on the clock, the sum on hover, its share of their sum", async ({
   page,
 }) => {
   // /books alone (0–0.9 ms), then three authors overlapping (1.0–1.9, 1.1–2.0, 1.2–2.1 ms): 1.1 ms on the clock,
@@ -24,18 +24,21 @@ test("a group of calls that ran side by side: its time on the clock, the sum on 
   const time = (row: Locator) => row.locator("td").nth(1).locator("span");
   const share = (row: Locator) => row.locator("td").nth(2).locator("span");
 
+  // Side by side, what they add up to is said apart from their time on the clock, as a sum.
   await expect(page.locator(".dt-scope-summary-text")).toHaveText(
-    "4 HTTP calls · 2 unique · 2 ms on the clock · slowest 0.9 ms",
+    "4 HTTP calls · 2 unique · 2 ms on the clock · 4 ms added up · slowest 0.9 ms",
   );
 
   await expect(time(authors)).toHaveText("1 ms");
   await expect(time(authors)).toHaveAttribute("title", "3 ms total, 3 HTTP calls");
-  await expect(share(authors)).toHaveText("55%");
-  await expect(share(authors)).toHaveAttribute("title", /^Of the 2 ms on the clock/);
+  // A share of the sum (2.7 of 3.6 ms), said so: the percents add up to 100%.
+  await expect(page.getByRole("columnheader", { name: "Share of sum" })).toBeVisible();
+  await expect(share(authors)).toHaveText("75%");
+  await expect(share(authors)).toHaveAttribute("title", /^Of the 4 ms the HTTP calls add up to, each its own time/);
 
   await expect(time(books)).toHaveText("0.9 ms");
   await expect(time(books)).not.toHaveAttribute("title");
-  await expect(share(books)).toHaveText("45%");
+  await expect(share(books)).toHaveText("25%");
 
   // The longest on the clock first, as the column shows it: the group (3 ms added up), then /books.
   await expect(rows.locator("td:first-child")).toHaveText([/\/authors\/\{id\}/, /\/books/]);

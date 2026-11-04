@@ -6,19 +6,27 @@
 // stretch's profile, and the MCP server's get_profile (crates/mcp/src/shares.rs, the same rule, its cases in
 // schema/waits.json) say this and nothing they work out themselves. Plain data, no React.
 import { duration } from "../format";
+import type { Span, Trace } from "../types";
+import { type Category, spanCategories } from "./breakdown";
+import { onTheClock } from "./calls";
 import { apportion, percents } from "./percent";
 import type { Profile } from "./profile";
 import { type TimeRange, type Windows, windowsLabel } from "./slice";
 import { NOT_PROFILED, type Share, type Shared, segmentsOf, shareLabel } from "./timeShares";
 import { type Timed, timed } from "./waiting";
 
-/** A share of the time as said: its time (µs, rounded with the rest), that time written, its percent. */
+/**
+ * A share of the time as said: its time (µs, rounded at its step), that time written, its percent; its time before it
+ * was rounded, and the step it is rounded to and written at (the split's, or a finer one for a share shorter than it).
+ */
 export interface SaidShare {
   share: Share;
   label: string;
   us: number;
   time: string;
   percent: string;
+  exact: number;
+  step: number;
 }
 
 /** Where the time of a trace (or of stretches of it, or of an app's traces) went, as every view says it. */
@@ -176,12 +184,9 @@ function stepsOf(us: number, step: number): number {
   return Math.round(us);
 }
 
-/** Less than a step, as a share with some time that rounds to none reads: "<0.1 s", "<1 ms", "<0.1 ms", "<1 µs". */
-const UNDER: Readonly<Record<number, string>> = { 100000: "<0.1 s", 1000: "<1 ms", 100: "<0.1 ms", 1: "<1 µs" };
-
-/** A share's time written at the split's step; one too short to round to a step, under it. */
+/** A share's time written at its step; one too short to round to a µs (under a µs of a trace said in µs), under it. */
 function shareTime(us: number, step: number): string {
-  return Math.round(us) > 0 ? writtenAt(us, step) : (UNDER[step] ?? "<1 µs");
+  return Math.round(us) > 0 ? writtenAt(us, step) : "<1 µs";
 }
 
 /** Waiting after the rest, the rest by their time before it is said, largest first (as long: as the trace had them). */
@@ -192,8 +197,10 @@ function byTime(a: [Share, number], b: [Share, number]): number {
 
 /**
  * The raw times said. The total is said at the step the console says it in (displayStep), as the page's header says
- * it; the shares are rounded to that step by largest remainder, so as written they add up to the total as written. A
- * share with time that rounds to none still shows: "<1 ms". Percents of the time before it is rounded, largest
+ * it. A share the console would write at a finer step on its own ("0.6 ms" of a 310 ms trace, "300 ms" of a 2.1 s
+ * one) is written so, as every other place that says its time writes it (the header's queries, the DB tab): one time,
+ * one text. All are rounded to the split's step by largest remainder, so they add up to the total, and the others are
+ * said so: as written they add up to it but for the finer shares' own rounding. Percents of the time before it is rounded, largest
  * remainder, adding up to 100% ("<1%" a share too small for one).
  */
 function said(raw: Raw, of: string, windows: Windows | null): Split {
@@ -202,19 +209,29 @@ function said(raw: Raw, of: string, windows: Windows | null): Split {
   const exact = entries.map(([, us]) => us);
   const sum = exact.reduce((all, us) => all + us, 0);
   const step = displayStep(sum);
+  const steps = exact.map((us) => Math.min(step, displayStep(us)));
+  const finer = exact.map((us, at) => {
+    const own = steps[at] ?? step;
+    return own < step ? stepsOf(us, own) * own : null;
+  });
   const rounded = apportion(exact, step, stepsOf(sum, step));
   const total = rounded.reduce((all, us) => all + us, 0);
   const percent = percents(exact, sum);
-  const shares = entries.map(
-    ([share], at): SaidShare => ({
+  const shares = entries.map(([share, us], at): SaidShare => {
+    const own = steps[at] ?? step;
+    const said = finer[at] ?? rounded[at] ?? 0;
+    return {
       share,
       label: shareLabel(share),
-      us: rounded[at] ?? 0,
-      time: shareTime(rounded[at] ?? 0, step),
+      us: said,
+      time: shareTime(said, own),
       percent: percent[at] ?? "0%",
-    }),
-  );
-  const unprofiled = shares.find((share) => share.share === NOT_PROFILED)?.us ?? 0;
+      exact: us,
+      step: own,
+    };
+  });
+  // What the profile covers, at the split's step: the total less Not profiled as it rounds with the rest.
+  const unprofiled = rounded[entries.findIndex(([share]) => share === NOT_PROFILED)] ?? 0;
   return {
     of,
     windows,
@@ -282,6 +299,46 @@ function added(sum: Samples | null, more: Samples | null): Samples | null {
 /** A share's said time and percent, where the split has it. */
 export function shareIn(split: Split, share: Share): SaidShare | undefined {
   return split.shares.find((each) => each.share === share);
+}
+
+const CATEGORIES = new WeakMap<object, Map<string, Category>>();
+
+/** Each of the trace's spans' share of the time (lib/breakdown), worked out once per trace. */
+function categoriesOf(trace: Shared): Map<string, Category> {
+  const known = CATEGORIES.get(trace) ?? spanCategories(trace as Trace);
+  CATEGORIES.set(trace, known);
+  return known;
+}
+
+/**
+ * The share calls are all of, where they are all of its time: each of them of it, and every other span of it inside
+ * one of them (a driver's HTTP request in its query). The trace's queries are its Database; Redis commands a cache
+ * made are its Cache's, not all of it.
+ */
+function shareOfCalls(trace: Shared, spans: readonly Pick<Span, "id">[]): Share | null {
+  const categories = categoriesOf(trace);
+  const [first] = spans;
+  const category = first ? categories.get(first.id) : undefined;
+  if (!category || spans.some((span) => categories.get(span.id) !== category)) return null;
+  const ids = new Set(spans.map((span) => span.id));
+  const parents = new Map(trace.spans.map((span) => [span.id, span.parent_id]));
+  const inside = (id: string): boolean => {
+    for (let at = parents.get(id); at; at = parents.get(at)) if (ids.has(at)) return true;
+    return false;
+  };
+  const rest = trace.spans.filter((span) => !ids.has(span.id) && categories.get(span.id) === category);
+  return rest.every((span) => inside(span.id)) ? category : null;
+}
+
+/**
+ * Calls' time on the clock (side by side counted once), as every place says it: where they are all of one share's
+ * spans (the trace's queries, its Database), the split's text, the strip's; one fact, one written value. Others (a
+ * chain's calls, some of them picked), as the console's duration writes it.
+ */
+export function callsTime(trace: Shared, spans: readonly Pick<Span, "id" | "start" | "duration">[]): string {
+  const share = shareOfCalls(trace, spans);
+  const said = share ? shareIn(splitOf(trace), share) : undefined;
+  return said?.time ?? duration(onTheClock(spans));
 }
 
 /**

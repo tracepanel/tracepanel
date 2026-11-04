@@ -5,9 +5,12 @@
 // split's shares, a code row's time is the time of the stretch it opens, a stretch's title tells its ends apart. The
 // MCP server's split.rs has the same property test (crates/mcp/src/split.rs).
 import { duration } from "../../packages/ui/src/format.ts";
+import { headFacts } from "../../packages/ui/src/HeadFacts.tsx";
+import { GC } from "../../packages/ui/src/lib/memory.ts";
+import { plural } from "../../packages/ui/src/lib/plural.ts";
 import { WAITING } from "../../packages/ui/src/lib/profile.ts";
 import { parseStretch, stretchText, type Windows } from "../../packages/ui/src/lib/slice.ts";
-import { appSplit, type Split, splitOf, wholeWindows } from "../../packages/ui/src/lib/split.ts";
+import { appSplit, callsTime, type Split, splitOf, wholeWindows, writtenAt } from "../../packages/ui/src/lib/split.ts";
 import {
   NOT_PROFILED,
   type Shared,
@@ -157,7 +160,7 @@ function said(percent: string): number {
 
 /** A time as written ("1,204.5 ms", "27 µs", "1.6 s") back in whole µs. */
 function read(text: string): number {
-  // A share under the split's step ("<1 ms") counts as none.
+  // A share under a µs ("<1 µs") counts as none.
   if (text.startsWith("<")) return 0;
   const [value = "0", unit = "µs"] = text.replaceAll(",", "").split(" ");
   return Math.round(Number(value) * (unit === "s" ? 1_000_000 : unit === "ms" ? 1000 : 1));
@@ -175,30 +178,54 @@ function broken(split: Split): string[] {
   const check = (ok: boolean, what: string) => {
     if (!ok) problems.push(`${what}: ${JSON.stringify(split)}`);
   };
-  check(split.shares.reduce((sum, share) => sum + share.us, 0) === split.total, "times add up to the total");
+  // A share the console writes at a finer step on its own ("0.6 ms" of a 310 ms trace) is written so: the header's
+  // and the DB tab's text. The rest are whole steps of the split's, rounded with every share to add up to the total.
+  const finer = split.shares.filter((share) => share.step < split.step);
+  check(
+    finer.every((share) => share.time === duration(share.exact)),
+    "a share finer than the split written as duration writes it",
+  );
   check(
     split.shares.every(
-      (share) => share.us >= 0 && Math.abs(share.us / split.step - Math.round(share.us / split.step)) < 1e-9,
+      (share) =>
+        share.us >= 0 &&
+        share.step <= split.step &&
+        Math.abs(share.us / share.step - Math.round(share.us / share.step)) < 1e-9,
     ),
-    "each share a whole number of steps",
+    "each share a whole number of its steps",
+  );
+  // Each finer share is within one of the split's steps of what it rounds to with the rest.
+  const slack = finer.length * split.step;
+  check(
+    Math.abs(split.shares.reduce((sum, share) => sum + share.us, 0) - split.total) < slack + 1e-6,
+    "times add up to the total",
   );
   check(
     split.shares.length === 0 || split.shares.reduce((sum, share) => sum + said(share.percent), 0) === 100,
     "percents add up to 100%",
   );
-  // As read: the shares' times written add up to the total written, what it covers to the total less Not profiled.
+  // As read: the shares' times written add up to the total written, what it covers to the total less Not profiled,
+  // but for the finer shares' own rounding.
   const written = split.shares.reduce((sum, share) => sum + read(share.time), 0);
-  check(written === read(split.time), `times as read add up (${written} of ${split.time})`);
-  const notProfiled = split.shares.find((share) => share.share === NOT_PROFILED)?.time;
-  check(read(split.covered) === read(split.time) - (notProfiled ? read(notProfiled) : 0), "covered as read");
+  check(Math.abs(written - read(split.time)) < slack + 1e-6, `times as read add up (${written} of ${split.time})`);
+  const notProfiled = split.shares.find((share) => share.share === NOT_PROFILED);
   check(
-    split.shares.every((share) => share.time.startsWith("<") || decimals(share.time) === decimals(split.time)),
-    "one precision for the shares and the total",
+    Math.abs(read(split.covered) - (read(split.time) - (notProfiled ? read(notProfiled.time) : 0))) <
+      (notProfiled && notProfiled.step < split.step ? split.step : 0) + 1e-6,
+    "covered as read",
+  );
+  check(
+    split.shares.every(
+      (share) => share.step < split.step || share.time.startsWith("<") || decimals(share.time) === decimals(split.time),
+    ),
+    "one precision for the total and the shares at its step",
   );
   // The total as the console writes a duration everywhere (the page's header).
   check(split.shares.length === 0 || split.time === duration(split.exact), `the total as duration writes it`);
-  const unprofiled = split.shares.find((share) => share.share === NOT_PROFILED)?.us ?? 0;
-  check(split.profiled === split.total - unprofiled, "covered is the total less Not profiled");
+  check(
+    split.profiled % split.step === 0 && split.covered === writtenAt(split.profiled, split.step),
+    "covered at the split's step",
+  );
   const rest = split.shares.filter((share) => share.share !== WAITING).map((share) => share.us);
   check(JSON.stringify(rest) === JSON.stringify([...rest].sort((a, b) => b - a)), "largest first");
   const waiting = split.shares.findIndex((share) => share.share === WAITING);
@@ -221,7 +248,8 @@ function broken(split: Split): string[] {
  */
 const QUERIES = { checked: 0 };
 
-function queriesBroken(trace: Trace): string[] {
+/** Whether each of the trace's queries runs alone: no span of its own inside, none beside it but those it runs under. */
+function queriesAlone(trace: Trace): boolean {
   const spans = trace.spans;
   const byId = new Map(spans.map((span) => [span.id, span]));
   const above = (span: Span, other: Span): boolean => {
@@ -230,19 +258,26 @@ function queriesBroken(trace: Trace): string[] {
     return false;
   };
   const queries = spans.filter((span) => span.kind === "sql" && span.duration > 0);
-  const alone = queries.every(
-    (query) =>
-      !spans.some((other) => other.parent_id === query.id) &&
-      !spans.some(
-        (other) =>
-          other !== query &&
-          !above(query, other) &&
-          other.start < query.start + query.duration &&
-          query.start < other.start + other.duration,
-      ),
+  return (
+    queries.length > 0 &&
+    queries.every(
+      (query) =>
+        !spans.some((other) => other.parent_id === query.id) &&
+        !spans.some(
+          (other) =>
+            other !== query &&
+            !above(query, other) &&
+            other.start < query.start + query.duration &&
+            query.start < other.start + other.duration,
+        ),
+    )
   );
-  if (!(alone && queries.length)) return [];
+}
+
+function queriesBroken(trace: Trace): string[] {
+  if (!queriesAlone(trace)) return [];
   QUERIES.checked += 1;
+  const queries = trace.spans.filter((span) => span.kind === "sql" && span.duration > 0);
   const expected = queries.reduce(
     (sum, query) =>
       sum + Math.max(Math.min(query.start + query.duration, trace.duration) - Math.max(query.start, 0), 0),
@@ -252,6 +287,36 @@ function queriesBroken(trace: Trace): string[] {
     .filter((segment) => segment.share === "sql")
     .reduce((sum, segment) => sum + segment.to - segment.from, 0);
   return Math.abs(database - expected) < 1e-6 ? [] : [`Database ${database} µs, its queries ${expected} µs`];
+}
+
+/**
+ * One fact, one written value: the header's queries and the DB tab say their time as the strip's Database does, the
+ * header's GC as the strip's GC; where the queries run alone, to the letter. What breaks that, if anything.
+ */
+const HEADERS = { checked: 0 };
+
+function headerBroken(trace: Trace): string[] {
+  const split = splitOf(trace);
+  const facts = headFacts(trace);
+  const problems: string[] = [];
+  const queries = trace.spans.filter((span) => span.kind === "sql");
+  const database = split.shares.find((share) => share.share === "sql");
+  const fact = facts.find((each) => / quer(?:y|ies) /.test(each));
+  // The header and the tab say the same text, whatever the queries.
+  if (fact && !fact.startsWith(`${plural(queries.length, "query", "queries")} ${callsTime(trace, queries)}`))
+    problems.push(`header "${fact}", the DB tab ${callsTime(trace, queries)}`);
+  if (database && queriesAlone(trace)) {
+    HEADERS.checked += 1;
+    if (callsTime(trace, queries) !== database.time)
+      problems.push(`the DB tab says ${callsTime(trace, queries)}, the strip's Database ${database.time}`);
+    if (!fact?.startsWith(`${plural(queries.length, "query", "queries")} ${database.time}`))
+      problems.push(`the header says "${fact}", the strip's Database ${database.time}`);
+  }
+  const gc = split.shares.find((share) => share.share === GC);
+  const collections = trace.profile?.gc?.collections ?? 0;
+  if (gc && collections && !facts.includes(`GC ${collections}× ${gc.time}`))
+    problems.push(`the header says ${JSON.stringify(facts)}, the strip's GC ${gc.time}`);
+  return problems;
 }
 
 /** A span's own stretches as its code row opens them: in whole µs, as the link carries them. */
@@ -265,7 +330,7 @@ test("any trace's split adds up: times to the total, percents to 100%, what is c
   for (let run = 0; run < 400; run++) {
     const trace = traceOf(next);
     const split = splitOf(trace);
-    problems.push(...broken(split), ...queriesBroken(trace));
+    problems.push(...broken(split), ...queriesBroken(trace), ...headerBroken(trace));
 
     // The legend and the Profile tab's bar: the split's shares, as it says them.
     const legend = sharesOf(trace).map((share) => [share.label, share.time, share.percent]);
@@ -277,7 +342,9 @@ test("any trace's split adds up: times to the total, percents to 100%, what is c
       // The flame and the list add up to the split.
       const profile = windowProfile(trace, null, true);
       const flame = Math.round(profile.stacks.reduce((sum, stack) => sum + stack.count * profile.interval_us, 0));
-      if (flame !== split.total) problems.push(`flame ${flame} of ${split.total}`);
+      // Each share's as the split says it: a finer one's at its own step.
+      const said = split.shares.reduce((sum, share) => sum + share.us, 0);
+      if (flame !== said) problems.push(`flame ${flame} of ${said}`);
     }
 
     // A code row's time is its stretch's, however the link carries the stretch.
@@ -293,8 +360,9 @@ test("any trace's split adds up: times to the total, percents to 100%, what is c
   }
 
   expect(problems).toEqual([]);
-  // Enough traces whose queries run alone for the Database rule to be read.
+  // Enough traces whose queries run alone for the Database rule to be read, and the header's against it.
   expect(QUERIES.checked).toBeGreaterThan(5);
+  expect(HEADERS.checked).toBeGreaterThan(5);
 });
 
 test("an app's traces in a chain add up before they are said: its shares to its total, its percents to 100%", () => {

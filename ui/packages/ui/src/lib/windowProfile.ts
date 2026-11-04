@@ -83,11 +83,13 @@ export function sayProfile(profile: Profile, split: Split): Profile {
   }
   const interval = profile.interval_us;
   const stacks = [...byShare].flatMap(([share, list]) => {
-    const target = shareIn(split, share)?.us ?? 0;
+    // At the share's own step: a share said finer than the split ("0.6 ms") keeps its rows, said as it is.
+    const said = shareIn(split, share);
+    const step = said?.step ?? split.step;
     const parts = apportion(
       list.map((each) => each.count * interval),
-      split.step,
-      Math.round(target / split.step),
+      step,
+      Math.round((said?.us ?? 0) / step),
     );
     return list.flatMap((each, at): Stack[] => {
       const us = parts[at] ?? 0;

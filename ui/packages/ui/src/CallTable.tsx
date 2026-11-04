@@ -9,7 +9,7 @@ import { StatementPlan } from "./ExplainView";
 import { duration } from "./format";
 import { focusMark, useScrollToFocus } from "./hooks/useScrollToFocus";
 import { onTheClock } from "./lib/calls";
-import { percent } from "./lib/percent";
+import { percents } from "./lib/percent";
 import { plural } from "./lib/plural";
 import { cn } from "./lib/utils";
 import type { ExplainPlan, Span, Trace } from "./types";
@@ -132,17 +132,45 @@ function timeTitle(time: RowTime, noun: readonly [string, string]): string | und
   return `${duration(time.total)} total, ${plural(time.count, ...noun)}`;
 }
 
+/** What a table's calls take, as its Share column says it is of: their time on the clock (as the header and the tab say it). */
+export interface ListTime {
+  /** Their time on the clock, written as the header writes it (the strip's Database for the trace's queries). */
+  clock: string;
+  /** Whether they ran side by side: what they add up to is then more than their time on the clock. */
+  parallel: boolean;
+}
+
+/** A list of calls' time: on the clock as `clock` writes it, and whether they ran side by side. */
+export function listTime(spans: readonly Pick<Span, "start" | "duration">[], clock: string): ListTime {
+  return { clock, parallel: spans.reduce((sum, span) => sum + span.duration, 0) > onTheClock(spans) };
+}
+
+/** What the Share column says it is of, on hover: the calls' time, or, side by side, what they add up to. */
+function shareTitle(sum: number, scope: ListTime, noun: readonly [string, string]): string {
+  if (!scope.parallel) return `Of the ${scope.clock} the ${noun[1]} took`;
+  return `Of the ${duration(sum)} the ${noun[1]} add up to, each its own time (side by side they took ${scope.clock} on the clock)`;
+}
+
 /**
  * The columns every such table ends with. Time: the row's time on the clock, as the header says the scope's (calls
- * side by side once), what they add up to on hover. Share: that time's share of the scope's time on the clock
- * (`scope`), the header's number; rows that ran side by side each count their own, so the shares can add up to more
- * than 100%, as two people's hours in one meeting do.
+ * side by side once), what they add up to on hover. Share: the row's part of what the calls add up to, each its own
+ * time, as whole percents that add up to 100% (largest remainder, as the strip's); where calls ran side by side, so
+ * named: a share of their sum, not of the time on the clock.
  */
 export function timeColumns<T>(
   time: (item: T) => RowTime,
-  scope: number,
+  items: readonly T[],
+  scope: ListTime,
   noun: readonly [string, string] = ["call", "calls"],
 ): DataColumn<T>[] {
+  const totals = items.map((item) => time(item).total);
+  const sum = totals.reduce((all, each) => all + each, 0);
+  const said = percents(totals, sum);
+  const shares = new Map(items.map((item, at) => [item, said[at] ?? "0%"]));
+  const title = shareTitle(sum, scope, noun);
+  // A row of all the calls says their time as the header does: one time, one text.
+  const count = items.reduce((all, item) => all + time(item).count, 0);
+  const clock = (row: RowTime) => (row.count === count ? scope.clock : duration(row.clock));
   return [
     {
       id: "time",
@@ -152,22 +180,18 @@ export function timeColumns<T>(
       num: true,
       cell: (item) => (
         <span className="dt-row-time" title={timeTitle(time(item), noun)}>
-          {duration(time(item).clock)}
+          {clock(time(item))}
         </span>
       ),
     },
     {
       id: "share",
-      label: "Share",
-      width: 5.5,
+      label: scope.parallel ? "Share of sum" : "Share",
+      width: scope.parallel ? 7.5 : 5.5,
       num: true,
       drop: 1,
       className: "text-muted-foreground",
-      cell: (item) => (
-        <span title={`Of the ${duration(scope)} on the clock; rows that ran side by side each count theirs`}>
-          {percent(time(item).clock, scope)}
-        </span>
-      ),
+      cell: (item) => <span title={title}>{shares.get(item) ?? "0%"}</span>,
     },
   ];
 }

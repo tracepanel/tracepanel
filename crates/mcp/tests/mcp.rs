@@ -1465,7 +1465,7 @@ chain: cpu profiles of 2 traces down its calls, each app's apart (never one prof
 
 library-api · 2 traces added up · {api1}, {api2}
 CPU profile: 0.2 ms profiled of the traces' 0.2 ms · 40 samples, one every 1 ms
-time by share (as the time strip says it): Database 0.2 ms (91%) · Your code <0.1 ms (9%)
+time by share (as the time strip says it): Database 0.2 ms (91%) · Your code 20 µs (9%)
 note: a sample every 1 ms: a function that ran for less may be missed or miscounted. Its memory was counted too, which slows the code down: these times are higher than without it.
 
 functions by self time (your code: library calls counted to the function of yours that made them):

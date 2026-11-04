@@ -240,11 +240,15 @@ test("the parts said add up to the total said: shares, the list's own times, the
     const profile = windowProfile(traced, windows, true);
     const split = splitOf(traced, windows);
     const whole = Math.round(profile.samples * profile.interval_us);
+    // The shares as said: those a step or more long rounded with the rest to the total, a shorter one as the console
+    // writes its time anywhere ("0.5 ms" of 10 ms), within a step of what it rounds to.
+    const said = split.shares.reduce((sum, share) => sum + share.us, 0);
+    const finer = split.shares.filter((share) => share.step < split.step).length;
 
-    expect(whole).toBe(split.total);
-    expect(total(bar(profile))).toBe(split.total);
-    expect(total(list(profile))).toBe(split.total);
-    expect(split.shares.reduce((sum, share) => sum + share.us, 0)).toBe(split.total);
+    expect(whole).toBe(said);
+    expect(total(bar(profile))).toBe(said);
+    expect(total(list(profile))).toBe(said);
+    expect(Math.abs(said - split.total)).toBeLessThan(finer * split.step + 1e-6);
   }
 });
 
