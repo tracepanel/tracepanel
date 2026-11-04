@@ -170,3 +170,11 @@ test("a profile of the trace's last 5 ms says so, its shares of the trace's time
   await expect(page.getByText("profiled of the trace's 35 ms")).toBeVisible();
   await expect(legend(page)).toHaveText([/^Framework & middleware\s*3 ms\s*9%$/, /^External calls\s*2 ms\s*6%$/]);
 });
+
+test("over a chain, a code row's stretches open the BFF's profile of them, not the whole trace's", async ({ page }) => {
+  // The request's own time around its call, as its code row's link has it.
+  await page.goto(`/#/t/${BFF}?tab=profile&at=0-20000%2C80000-100000`);
+
+  await expect(page.getByText("profiled of these stretches' 40 ms")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Profile of library-api", exact: true })).toHaveCount(0);
+});

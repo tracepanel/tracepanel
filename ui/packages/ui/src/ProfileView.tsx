@@ -1248,7 +1248,11 @@ export function ProfileTab({
   onShowRow?: ((row: string) => void) | undefined;
 }) {
   const profiles = useMemo(() => scopedProfiles(chain.members, chain.scope), [chain.members, chain.scope]);
-  const own = profiles.length === 1 && profiles[0]?.member.id === trace.id && profiles[0].windows === null;
+  // A code or wait row's stretches (the link's `at`) are this trace's: its own profile of them, in a chain too.
+  const { stretch } = useHeldSlice();
+  const own =
+    (stretch !== null && trace.profile !== undefined) ||
+    (profiles.length === 1 && profiles[0]?.member.id === trace.id && profiles[0].windows === null);
   if (own || (profiles.length === 0 && !chain.scope))
     return <ProfilePane trace={trace} open={open} onShowRow={onShowRow} />;
   if (!open) return null;

@@ -93,6 +93,9 @@
   now reads "3 ms 9%", get_profile "28.0 ms (81%)", and an app's profile
   over a chain says "5 ms profiled of the trace's 35 ms" as the trace's
   own Profile tab does.
+- A code or wait row of a trace that calls other apps opens the profile
+  of its own stretches, as in a trace of one app: a Node BFF's "event
+  loop" wait row of 70 ms opened the whole trace's 176 ms, each app's.
 
 ## 0.13.1 (2026-11-03)
 
