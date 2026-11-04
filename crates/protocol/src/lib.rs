@@ -11,6 +11,7 @@
 pub mod about;
 pub mod live;
 pub mod local;
+pub mod values;
 
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;

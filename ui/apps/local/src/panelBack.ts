@@ -4,6 +4,7 @@
 // the browser tab's session: the panel reloads (a user switched), the stack is still there.
 
 import type { TabId, TraceAt, ViewMemory } from "@tracepanel/ui";
+import { readJson, writeItem } from "@tracepanel/ui/lib/storage";
 import { useSyncExternalStore } from "react";
 import { go, type Route } from "./routes";
 
@@ -33,12 +34,8 @@ const KEY = "tracepanel:panel-back";
 const DEPTH = 20;
 
 function load(): Step[] {
-  try {
-    const steps: unknown = JSON.parse(sessionStorage.getItem(KEY) ?? "[]");
-    return Array.isArray(steps) ? (steps as Step[]).filter((step) => step?.from?.route?.id && step.to) : [];
-  } catch {
-    return [];
-  }
+  const saved = readJson(KEY, "sessionStorage");
+  return Array.isArray(saved) ? (saved as Step[]).filter((step) => step?.from?.route?.id && step.to) : [];
 }
 
 let steps: Step[] = load();
@@ -46,11 +43,7 @@ const listeners = new Set<() => void>();
 
 function save(next: Step[]): void {
   steps = next.slice(-DEPTH);
-  try {
-    sessionStorage.setItem(KEY, JSON.stringify(steps));
-  } catch {
-    // Storage can be blocked: the way back then lasts for this panel only.
-  }
+  writeItem(KEY, JSON.stringify(steps), "sessionStorage");
   for (const listener of listeners) listener();
 }
 

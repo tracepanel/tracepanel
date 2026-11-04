@@ -4,6 +4,9 @@
 
 ### Fixed
 
+- A failed read of the store or a broken trace now answers with an error in
+  the panel and the console. It read as no trace, so a call could say "not
+  traced".
 - A trace's time is split one way everywhere: the time strip and its
   legend, the call tree's code rows and the Profile tab's bar, flame and
   list read the same split, so for the same stretch they say the same

@@ -1,5 +1,5 @@
 import { type FocusEvent, type ReactNode, useMemo } from "react";
-import { buildTree, chipCounts, FILTERS, type FilterId, partOfCategory, withShownLogs } from "./CallMap";
+import { buildTree, chipCounts, FILTERS, type FilterId, partOfCategory, withShownLogs } from "./callTree";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./components/ui/tooltip";
 import { duration } from "./format";
 import { CloseIcon } from "./icons";

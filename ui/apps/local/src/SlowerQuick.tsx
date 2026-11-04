@@ -30,7 +30,7 @@ const AFTER: readonly number[] = [1000, 5000];
 const MOST_MS = 86_400_000;
 
 /** The page's slow time first ("Slow (over 100 ms)"), then 1 s and 5 s; without one, 100 ms, 1 s, 5 s. */
-export function presets(limit: SlowLimit | undefined): Preset[] {
+function presets(limit: SlowLimit | undefined): Preset[] {
   if (!limit) return WITHOUT.map((ms) => ({ label: msText(ms), ms }));
   const slow = {
     label: limit.mixed ? `Over ${msText(limit.ms)} (default)` : `Slow (over ${msText(limit.ms)})`,
@@ -40,7 +40,7 @@ export function presets(limit: SlowLimit | undefined): Preset[] {
 }
 
 /** A typed time in milliseconds, or null: a positive number up to a day. */
-export function typedMs(text: string): number | null {
+function typedMs(text: string): number | null {
   const value = text.trim();
   if (!/^\d+(\.\d+)?$/.test(value)) return null;
   const ms = Number(value);

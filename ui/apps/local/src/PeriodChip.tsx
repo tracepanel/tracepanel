@@ -1,7 +1,7 @@
 import { parseAbsolute, shortTime } from "./time";
 
 /** "since 15:27:14 until 15:42:00", or "the last 1h": a period as people read it. */
-export function describePeriod(period: string): string {
+function describePeriod(period: string): string {
   return period
     .split(" ")
     .map((term) => {

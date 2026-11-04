@@ -1,3 +1,4 @@
+import { readItem, writeItem } from "@tracepanel/ui/lib/storage";
 import { useEffect, useState } from "react";
 
 export type ThemeChoice = "system" | "light" | "dark";
@@ -14,13 +15,8 @@ export function defaultTheme(choice: ThemeChoice): void {
 }
 
 function read(): ThemeChoice {
-  try {
-    const value = localStorage.getItem(KEY);
-    return value === "light" || value === "system" || value === "dark" ? value : fallback;
-  } catch {
-    // A file opened where storage is blocked: the choice lasts until reload.
-    return fallback;
-  }
+  const value = readItem(KEY);
+  return value === "light" || value === "system" || value === "dark" ? value : fallback;
 }
 
 /**
@@ -48,11 +44,7 @@ export function useTheme(): [ThemeChoice, (choice: ThemeChoice) => void] {
   const [choice, setChoice] = useState(read);
   useEffect(() => applyTheme(choice), [choice]);
   const set = (next: ThemeChoice) => {
-    try {
-      localStorage.setItem(KEY, next);
-    } catch {
-      // Private mode: the choice lasts until reload.
-    }
+    writeItem(KEY, next);
     setChoice(next);
   };
   return [choice, set];

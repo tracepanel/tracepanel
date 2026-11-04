@@ -1,5 +1,5 @@
 import { type CSSProperties, type PointerEvent, useMemo, useState } from "react";
-import { partOfCategory } from "./CallMap";
+import { partOfCategory } from "./callTree";
 import { duration } from "./format";
 import type { Category, Stretch } from "./lib/breakdown";
 import { GC } from "./lib/memory";

@@ -24,4 +24,5 @@ ureq = { version = "3.4.2", default-features = false, features = ["json"] }
 
 [dev-dependencies]
 jsonschema = { version = "0.58.6", default-features = false }
+rusqlite.workspace = true
 tower = { version = "0.5.3", features = ["util"] }

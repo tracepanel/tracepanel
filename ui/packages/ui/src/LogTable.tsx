@@ -128,7 +128,7 @@ function Message({ log, terms }: { log: LogLike; terms: readonly string[] }) {
 }
 
 /** The text with what the search's words found in it marked, case aside. */
-export function Marked({ text, terms }: { text: string; terms: readonly string[] }) {
+function Marked({ text, terms }: { text: string; terms: readonly string[] }) {
   const words = terms.filter(Boolean).map((term) => term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
   if (words.length === 0) return text;
   // Split on a capturing group: the found words land at the odd places.

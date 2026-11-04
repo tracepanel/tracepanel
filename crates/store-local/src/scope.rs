@@ -79,14 +79,17 @@ pub struct Served {
 
 /// Other projects' traces for the calls of a trace no trace here answered. Only the console asks other agents;
 /// elsewhere none.
-pub type Remote<'a> = &'a dyn Fn(&str) -> Vec<Served>;
+pub type Remote<'a> = &'a dyn Fn(&str) -> ServedCalls;
+
+/// What `Remote` answers: a failed read of the store fails the chain, it doesn't look like no calls.
+pub type ServedCalls = rusqlite::Result<Vec<Served>>;
 
 /// A trace found for a call: the call's span id, the trace, and for another project's its name and row.
 type Found = (String, Value, Option<(String, Value)>);
 
 /// No other agents to ask.
-pub fn no_remote(_: &str) -> Vec<Served> {
-    Vec::new()
+pub fn no_remote(_: &str) -> ServedCalls {
+    Ok(Vec::new())
 }
 
 /// Where a span starts and ends.
@@ -185,7 +188,7 @@ impl Reader {
                     found.push((via, doc, None));
                 }
             }
-            for served in remote(&owner) {
+            for served in remote(&owner)? {
                 found.push((served.via, served.doc, Some((served.project, served.row))));
             }
             for (via, doc, remote) in found {

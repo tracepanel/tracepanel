@@ -75,7 +75,7 @@ const TERM = /^([a-z][\w.]*)(:|>=|<=|!=|>|<)/;
  * languages (`type:mutation` vs `operation:mutation*`), so a term goes along when the other view knows its key, in
  * that view's words. Time, free text and shared filters carry over: a range picked on the overview stays.
  */
-export function carryQuery(q: string, target: ReadonlySet<string> | null, toCalls: boolean): string {
+function carryQuery(q: string, target: ReadonlySet<string> | null, toCalls: boolean): string {
   return q
     .split(/\s+/)
     .filter(Boolean)
