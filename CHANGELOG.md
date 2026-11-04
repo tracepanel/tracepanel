@@ -19,6 +19,12 @@
   that holds several waits says so ("waiter.acquire and 1 more wait in
   get_author"): its time is all of them, while the Profile tab's list
   has each wait on its own, over the whole trace.
+- The Profile tab's All frames list says which of its functions waited,
+  as Your code's list does ("waiting ·
+  AsyncIOBackend.run_sync_in_worker_thread", muted): their time is the
+  bar's waiting, not a package's. A FastAPI sync endpoint's event loop
+  waiting for its worker thread read as a library function of 13 ms
+  beside "psycopg 28 ms · waiting 80 ms", in neither share at a glance.
 
 ## 0.13.1 (2026-11-03)
 

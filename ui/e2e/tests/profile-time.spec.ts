@@ -3,7 +3,14 @@
 // sampler missed, a bucket the cleanup alone was seen in. Every number the Profile tab and the call tree say reads
 // it: a stretch's profile is the stretch's time, the shares and the functions add up to it, a code row's time is the
 // profile it opens.
-import { functions, ownCode, type Profile, packageOf, packageTimes } from "../../packages/ui/src/lib/profile.ts";
+import {
+  allFrames,
+  functions,
+  ownCode,
+  type Profile,
+  packageOf,
+  packageTimes,
+} from "../../packages/ui/src/lib/profile.ts";
 import { parseStretch, stretchText, windowsLabel, windowsTime } from "../../packages/ui/src/lib/slice.ts";
 import { namedWaits } from "../../packages/ui/src/lib/waitCalls.ts";
 import { piecesOf, stackTimes, type Timed, waitName, wallClock, windowsOf } from "../../packages/ui/src/lib/waiting.ts";
@@ -132,6 +139,20 @@ test("the whole trace's shares and functions add up to its time, each function i
     "waiting · _AsyncGeneratorContextManager.__aexit__",
     "waiting · waiter.acquire",
   ]);
+});
+
+test("every frame's own time is in one of All frames' shares, the waits' in waiting's, adding up to the trace", () => {
+  const all = allFrames(wallClock(PROFILE, DURATION, null));
+  const shares = Object.fromEntries(packageTimes(all).map((share) => [share.name, Math.round(share.samples * 1000)]));
+  const byShare: Record<string, number> = {};
+  for (const row of functions(all).filter((each) => each.self > 0)) {
+    const share = packageOf(row.frame);
+    byShare[share] = (byShare[share] ?? 0) + Math.round(row.self * 1000);
+  }
+
+  // The loop's wait for the worker thread (run_sync_in_worker_thread) is waiting's, as waiter.acquire is.
+  expect(shares).toEqual({ psycopg: 34_088, waiting: 73_912 });
+  expect(byShare).toEqual(shares);
 });
 
 test("a code row's time is the time of the profile it opens, its waiting and your code's adding up to it", () => {

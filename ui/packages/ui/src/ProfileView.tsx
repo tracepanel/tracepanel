@@ -824,8 +824,9 @@ function Functions({
       <ol className="m-0 list-none p-0">
         {named.map(({ frame, self, total }) => (
           <ListLine
-            key={`${frame.file}:${frame.line}:${frame.function}`}
+            key={`${frame.file}:${frame.line}:${frame.function}:${frame.waiting === true}`}
             name={frame.function}
+            waited={packageOf(frame) === WAITING}
             place={where(frame)}
             tone={toneOf(palette, packageOf(frame))}
             amount={self}
@@ -953,8 +954,11 @@ function ListLine({
   value,
   other,
   title,
+  waited = false,
 }: {
   name: string;
+  /** A frame that waited (All frames lists them): said as waiting's share says it, as Your code's waits are. */
+  waited?: boolean;
   place: string;
   tone: Tone;
   amount: number;
@@ -968,7 +972,9 @@ function ListLine({
       <div className="flex min-w-0 items-start gap-2">
         <span className={cn("mt-1 size-2 shrink-0 rounded-sm", tone.dot)} />
         <div className="grid min-w-0 gap-0.5">
-          <span className="font-mono text-xs [overflow-wrap:anywhere]">{name}</span>
+          <span className={cn("font-mono text-xs [overflow-wrap:anywhere]", waited && "text-muted-foreground italic")}>
+            {waited ? `${WAITING} · ${name}` : name}
+          </span>
           <span className="font-mono text-[11px] text-muted-foreground [overflow-wrap:anywhere]">{place}</span>
         </div>
       </div>

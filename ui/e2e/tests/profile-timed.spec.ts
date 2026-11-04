@@ -155,3 +155,18 @@ test("a few ms of code beside a long wait is part of the wait: one row, all of t
   await expect(page.locator('.dt-map-row[data-kind="code"]')).toHaveCount(1);
   await expect(codeRow(page, "wait").locator(".dt-map-time")).toHaveText(/^1\.\d+ s$/);
 });
+
+test("All frames says which of its functions waited, as Your code does: their time is waiting's share", async ({
+  page,
+}) => {
+  await page.goto(`/#/t/${await traceId(DIGEST)}?tab=profile`);
+  await page.getByRole("tab", { name: "All frames" }).click();
+  const functions = page.getByRole("region", { name: "Functions" });
+
+  await expect(page.getByRole("region", { name: "Time by package" }).getByRole("button")).toHaveText([
+    /^your code\s*100 ms\s*6%$/,
+    /^waiting\s*1\.5 s\s*94%$/,
+  ]);
+  await expect(functions.getByText(/^waiting · sleep$/)).toBeVisible();
+  await expect(functions.getByText(/^render_digest$/)).toBeVisible();
+});
