@@ -77,6 +77,11 @@
   its event loop for 91% of its time opened on All frames ("node:internal
   1 ms, node:net 1 ms"), so its bar didn't read as the strip's until
   switched.
+- The widget's hover card says where the time went as the strip's legend
+  does: the collector's pauses are GC's own share there too, with the
+  same names and the same rounding. A Django page's card read "Most
+  time: Your code 157 ms · 53%" where its strip and Profile tab read
+  "Your code 154 ms · 52%" and "GC 2 ms".
 
 ## 0.13.1 (2026-11-03)
 

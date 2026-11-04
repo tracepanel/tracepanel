@@ -3,12 +3,12 @@ import { buildTree, chipCounts, FILTERS, type FilterId, partOfCategory, withShow
 import { Tooltip, TooltipContent, TooltipTrigger } from "./components/ui/tooltip";
 import { duration } from "./format";
 import { CloseIcon } from "./icons";
-import { breakdown, type Category, categoryLabel, spanCategories, stretches } from "./lib/breakdown";
-import { cutByPauses, GC, gcPauses } from "./lib/memory";
+import { type Category, categoryLabel, spanCategories } from "./lib/breakdown";
+import { GC } from "./lib/memory";
 import { percent } from "./lib/percent";
 import { plural } from "./lib/plural";
 import { cleared, isShown, rangeLabel, type Slice, togglePart } from "./lib/slice";
-import { WAITED_SHARE, withWaiting } from "./lib/waitingShare";
+import { timeParts, WAITED_SHARE } from "./lib/waitingShare";
 import { litKey } from "./lit";
 import { largestFirst, ShareFace } from "./Shares";
 import { useHeldSlice } from "./TimeSlice";
@@ -41,30 +41,6 @@ function addUp<K>(items: readonly [K, number][]): Map<K, number> {
   const sums = new Map<K, number>();
   for (const [category, value] of items) sums.set(category, (sums.get(category) ?? 0) + value);
   return sums;
-}
-
-/**
- * Where the wall-clock time went, per share: the stretches added up, the collector's pauses (a profile's) taken out
- * of the shares they stopped and counted as their own, and the code's waits out of its own shares (withWaiting).
- */
-function timeParts(trace: Trace): [ShareKind, number][] {
-  return withWaiting<Category | typeof GC>(trace, byPause(trace));
-}
-
-/** The stretches added up, the collector's pauses taken out of the shares they stopped and counted as their own. */
-function byPause(trace: Trace): [Category | typeof GC, number][] {
-  const pauses = gcPauses(trace.profile, trace.duration);
-  if (pauses.length === 0) return breakdown(trace);
-  return [
-    ...addUp(
-      stretches(trace).flatMap(({ from, to, category }) =>
-        cutByPauses(from, to, pauses).map(({ range, gc }): [Category | typeof GC, number] => [
-          gc ? GC : category,
-          range[1] - range[0],
-        ]),
-      ),
-    ),
-  ];
 }
 
 /** A share of spans' time: one that picks its rows. */
