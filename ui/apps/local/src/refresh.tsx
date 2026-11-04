@@ -7,6 +7,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@tracepanel/ui/components/ui/dropdown-menu";
+import { readItem, writeItem } from "@tracepanel/ui/lib/storage";
 import { cn } from "@tracepanel/ui/lib/utils";
 import { ChevronDownIcon, RefreshCwIcon } from "lucide-react";
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useState, useSyncExternalStore } from "react";
@@ -46,12 +47,9 @@ const EVERY = new Map(CHOICES.filter(([ms]) => ms && ms !== LIVE_MS).map(([ms, t
 const DEFAULT_MS = 15000;
 
 function read(): number {
-  try {
-    const value = Number(localStorage.getItem(KEY));
-    return CHOICES.some(([ms]) => ms === value) && localStorage.getItem(KEY) !== null ? value : DEFAULT_MS;
-  } catch {
-    return DEFAULT_MS;
-  }
+  const stored = readItem(KEY);
+  const value = Number(stored);
+  return stored !== null && CHOICES.some(([ms]) => ms === value) ? value : DEFAULT_MS;
 }
 
 const RefreshContext = createContext<Refresh>({
@@ -180,11 +178,7 @@ export function RefreshProvider({ children }: { children: ReactNode }) {
     () => ({
       interval,
       setInterval: (ms) => {
-        try {
-          localStorage.setItem(KEY, String(ms));
-        } catch {
-          // Blocked storage: the choice lasts until reload.
-        }
+        writeItem(KEY, String(ms));
         setIntervalState(ms);
       },
       tick,

@@ -42,7 +42,7 @@ export interface OverviewScope {
   groupBy?: "operation" | "endpoint";
 }
 
-export const ALL_TRACES: OverviewScope = { filter: "", noun: "trace", group: "operations" };
+const ALL_TRACES: OverviewScope = { filter: "", noun: "trace", group: "operations" };
 export const HTTP_REQUESTS: OverviewScope = {
   filter: "kind:http",
   noun: "request",

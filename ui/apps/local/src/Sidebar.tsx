@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@tracepanel/ui/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@tracepanel/ui/components/ui/tooltip";
+import { readItem, writeItem } from "@tracepanel/ui/lib/storage";
 import { type Family, isAwsSystem, systemOfPage } from "@tracepanel/ui/lib/systems";
 import { cn, rem } from "@tracepanel/ui/lib/utils";
 import {
@@ -847,21 +848,13 @@ function clampWidth(width: number): number {
 /** The sidebar's width, dragged by its edge and remembered in this browser. */
 export function useSidebarWidth(): { width: number; resize: (width: number) => void } {
   const [width, setWidth] = useState(() => {
-    try {
-      const saved = Number(localStorage.getItem(WIDTH_KEY));
-      return saved ? clampWidth(saved) : DEFAULT_WIDTH();
-    } catch {
-      return DEFAULT_WIDTH();
-    }
+    const saved = Number(readItem(WIDTH_KEY));
+    return saved ? clampWidth(saved) : DEFAULT_WIDTH();
   });
   const resize = (next: number) => {
     const clamped = clampWidth(next);
     setWidth(clamped);
-    try {
-      localStorage.setItem(WIDTH_KEY, String(clamped));
-    } catch {
-      // Blocked storage: the width lasts until reload.
-    }
+    writeItem(WIDTH_KEY, String(clamped));
   };
   return { width, resize };
 }
@@ -935,12 +928,8 @@ function useMedia(query: string): boolean {
 
 /** The choice stored under `key`: collapsed, open, or none made yet. */
 function storedChoice(key: string): boolean | undefined {
-  try {
-    const value = localStorage.getItem(key);
-    return value === null ? undefined : value === "1";
-  } catch {
-    return undefined;
-  }
+  const value = readItem(key);
+  return value === null ? undefined : value === "1";
 }
 
 /**
@@ -964,11 +953,7 @@ export function useSidebarCollapsed(): {
   const collapse = (next: boolean) => {
     setMoving(true);
     setChoices((current) => ({ ...current, [key]: next }));
-    try {
-      localStorage.setItem(key, next ? "1" : "0");
-    } catch {
-      // Blocked storage: the choice lasts until reload.
-    }
+    writeItem(key, next ? "1" : "0");
   };
   useEffect(() => {
     if (!moving) return;

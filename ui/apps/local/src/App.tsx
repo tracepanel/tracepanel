@@ -45,6 +45,7 @@ import { useCloseOnBlur } from "@tracepanel/ui/hooks/useCloseOnBlur";
 import { type ChainCounts, chainCounts } from "@tracepanel/ui/lib/chainCounts";
 import { chainCutAt } from "@tracepanel/ui/lib/live";
 import { traceRuntime } from "@tracepanel/ui/lib/runtime";
+import { readItem, readJson, writeItem } from "@tracepanel/ui/lib/storage";
 import { rem } from "@tracepanel/ui/lib/utils";
 import {
   type ReactNode,
@@ -124,12 +125,8 @@ const MIN_TRACE_WIDTH = () => Math.round(rem(22.5));
 
 /** The width the reader dragged the list to, kept in this browser; null where they never did. */
 function storedListWidth(): number | null {
-  try {
-    const value = Number(localStorage.getItem(LIST_WIDTH_KEY));
-    return value >= MIN_LIST_WIDTH() ? value : null;
-  } catch {
-    return null;
-  }
+  const value = Number(readItem(LIST_WIDTH_KEY));
+  return value >= MIN_LIST_WIDTH() ? value : null;
 }
 
 /**
@@ -169,11 +166,7 @@ function SplitHandle({ container }: { container: RefObject<HTMLDivElement | null
       container.current?.style.setProperty("--list-width", `${next}px`);
       if (!save) return;
       setWidth(next);
-      try {
-        localStorage.setItem(LIST_WIDTH_KEY, String(next));
-      } catch {
-        // Storage can be blocked: the width then lasts for this panel only.
-      }
+      writeItem(LIST_WIDTH_KEY, String(next));
     },
     [container, setWidth],
   );
@@ -1113,27 +1106,20 @@ function useKeptChains() {
 }
 
 function readChains(): ReadonlyMap<string, KeptChain> {
-  try {
-    const saved: unknown = JSON.parse(sessionStorage.getItem(CHAINS_KEY) ?? "[]");
-    return new Map(Array.isArray(saved) ? (saved as [string, KeptChain][]) : []);
-  } catch {
-    return new Map();
-  }
+  const saved = readJson(CHAINS_KEY, "sessionStorage");
+  return new Map(Array.isArray(saved) ? (saved.filter(Array.isArray) as [string, KeptChain][]) : []);
 }
 
 function saveChains(chains: ReadonlyMap<string, KeptChain>): void {
-  try {
-    const kept = [...chains].slice(-CHAINS_KEPT);
-    let text = JSON.stringify(kept);
-    // Too big: the newest that fit.
-    while (text.length > CHAINS_ROOM && kept.length > 0) {
-      kept.shift();
-      text = JSON.stringify(kept);
-    }
-    sessionStorage.setItem(CHAINS_KEY, text);
-  } catch {
-    // Storage can be blocked or full: the rows then load their chains again, "…" until then.
+  const kept = [...chains].slice(-CHAINS_KEPT);
+  let text = JSON.stringify(kept);
+  // Too big: the newest that fit.
+  while (text.length > CHAINS_ROOM && kept.length > 0) {
+    kept.shift();
+    text = JSON.stringify(kept);
   }
+  // Where it can't be kept, the rows load their chains again, "…" until then.
+  writeItem(CHAINS_KEY, text, "sessionStorage");
 }
 
 /**
@@ -1276,22 +1262,14 @@ const CHAIN_OPEN_KEY = "tracepanel:chain-toggled";
 /** The chain rows open in the list: kept for the browser tab's session, as the panel reloads with each page. */
 function useChainOpen(): [ReadonlySet<string>, (key: string) => void] {
   const [open, setOpen] = useState<ReadonlySet<string>>(() => {
-    try {
-      const saved: unknown = JSON.parse(sessionStorage.getItem(CHAIN_OPEN_KEY) ?? "[]");
-      return new Set(Array.isArray(saved) ? saved.filter((each) => typeof each === "string") : []);
-    } catch {
-      return new Set();
-    }
+    const saved = readJson(CHAIN_OPEN_KEY, "sessionStorage");
+    return new Set(Array.isArray(saved) ? saved.filter((each) => typeof each === "string") : []);
   });
   const toggle = useCallback((key: string) => {
     setOpen((current) => {
       const next = new Set(current);
       if (!next.delete(key)) next.add(key);
-      try {
-        sessionStorage.setItem(CHAIN_OPEN_KEY, JSON.stringify([...next]));
-      } catch {
-        // Storage can be blocked: the rows then stay open for this panel only.
-      }
+      writeItem(CHAIN_OPEN_KEY, JSON.stringify([...next]), "sessionStorage");
       return next;
     });
   }, []);
@@ -1671,19 +1649,11 @@ const FOLLOW_KEY = "tracepanel:follow";
 
 /** On unless turned off: the newest request is usually the one to look at, as in the browser's Network tab. */
 function readFollow(): boolean {
-  try {
-    return localStorage.getItem(FOLLOW_KEY) !== "0";
-  } catch {
-    return true;
-  }
+  return readItem(FOLLOW_KEY) !== "0";
 }
 
 function writeFollow(value: boolean): void {
-  try {
-    localStorage.setItem(FOLLOW_KEY, value ? "1" : "0");
-  } catch {
-    // Storage can be blocked; the toggle then lasts for this panel only.
-  }
+  writeItem(FOLLOW_KEY, value ? "1" : "0");
 }
 
 /** Close enough to the end to count as reading the newest requests. */

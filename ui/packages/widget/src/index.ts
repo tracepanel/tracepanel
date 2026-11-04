@@ -15,6 +15,7 @@ import {
   runtimeName,
   traceRuntime,
 } from "@tracepanel/ui/lib/runtime";
+import { readItem, readJson, writeItem } from "@tracepanel/ui/lib/storage";
 import type { EntrySummary, HtmxInfo, TabEntry } from "@tracepanel/ui/lib/tabEntry";
 import { CARD_STYLE, mountCard, nameWithMethod, type UntracedCall } from "./card";
 import { type ChainFacts, factsKey, followChain } from "./viewChain";
@@ -206,23 +207,14 @@ const DARK = "(prefers-color-scheme: dark)";
 
 /** The panel's theme choice ("light", "dark", "system"), kept in this page's storage for the badge. */
 function storeTheme(choice: string): void {
-  try {
-    if (choice === "light" || choice === "dark" || choice === "system") localStorage.setItem(THEME_KEY, choice);
-  } catch {
-    // Blocked storage: the badge stays dark.
-  }
+  if (choice === "light" || choice === "dark" || choice === "system") writeItem(THEME_KEY, choice);
 }
 
 /** Follows the console's theme choice (dark when there is none), or the OS when it is Auto. */
 
 function watchTheme(host: HTMLElement): () => void {
   const apply = () => {
-    let choice: string | null = null;
-    try {
-      choice = localStorage.getItem(THEME_KEY);
-    } catch {
-      // Blocked storage: dark.
-    }
+    const choice = readItem(THEME_KEY);
     const light = choice === "light" || (choice === "system" && !window.matchMedia(DARK).matches);
     host.dataset["theme"] = light ? "light" : "dark";
   };
@@ -1262,30 +1254,18 @@ const MIN_HEIGHT = 200;
 
 /** Panel state survives navigations within the browser tab. */
 function loadPanel(): PanelState {
-  try {
-    const parsed: unknown = JSON.parse(sessionStorage.getItem(PANEL_KEY) ?? "{}");
-    if (typeof parsed === "object" && parsed !== null) {
-      const width = "width" in parsed && typeof parsed.width === "number" ? parsed.width : undefined;
-      const height = "height" in parsed && typeof parsed.height === "number" ? parsed.height : undefined;
-      return {
-        open: "open" in parsed && parsed.open === true,
-        dock: "dock" in parsed && parsed.dock === "right" ? "right" : "bottom",
-        width,
-        height,
-      };
-    }
-  } catch {
-    // Unreadable storage: start closed.
-  }
-  return { open: false, dock: "bottom" };
+  const parsed = readJson(PANEL_KEY, "sessionStorage");
+  if (typeof parsed !== "object" || parsed === null) return { open: false, dock: "bottom" };
+  return {
+    open: "open" in parsed && parsed.open === true,
+    dock: "dock" in parsed && parsed.dock === "right" ? "right" : "bottom",
+    width: "width" in parsed && typeof parsed.width === "number" ? parsed.width : undefined,
+    height: "height" in parsed && typeof parsed.height === "number" ? parsed.height : undefined,
+  };
 }
 
 function savePanel(state: PanelState): void {
-  try {
-    sessionStorage.setItem(PANEL_KEY, JSON.stringify(state));
-  } catch {
-    // Storage can be blocked: the state then lasts only for this page.
-  }
+  writeItem(PANEL_KEY, JSON.stringify(state), "sessionStorage");
 }
 
 /** How long a just-finished fetch/XHR stays on the badge. */
@@ -1306,20 +1286,11 @@ const RUNTIME_KEY = "tracepanel:runtime";
  * (an SPA) and kept for the tab, so a reload shows the mark before its first request.
  */
 function learnedRuntime(given: string | undefined): string | undefined {
-  if (given) return given;
-  try {
-    return sessionStorage.getItem(RUNTIME_KEY) ?? undefined;
-  } catch {
-    return undefined;
-  }
+  return given || (readItem(RUNTIME_KEY, "sessionStorage") ?? undefined);
 }
 
 function learnRuntime(label: string | undefined): void {
-  try {
-    if (label) sessionStorage.setItem(RUNTIME_KEY, label);
-  } catch {
-    // Storage blocked: the next page learns it again.
-  }
+  if (label) writeItem(RUNTIME_KEY, label, "sessionStorage");
 }
 
 /** Tab history lives in sessionStorage: per browser tab, survives navigations, gone when the tab closes. */
@@ -1348,20 +1319,12 @@ function withRedirects(entries: TabEntry[]): TabEntry[] {
 }
 
 function loadTab(): TabEntry[] {
-  try {
-    const parsed: unknown = JSON.parse(sessionStorage.getItem(TAB_KEY) ?? "[]");
-    return Array.isArray(parsed) ? parsed.filter(isEntry) : [];
-  } catch {
-    return [];
-  }
+  const parsed = readJson(TAB_KEY, "sessionStorage");
+  return Array.isArray(parsed) ? parsed.filter(isEntry) : [];
 }
 
 function saveTab(entries: readonly TabEntry[]): void {
-  try {
-    sessionStorage.setItem(TAB_KEY, JSON.stringify(entries.slice(-TAB_LIMIT)));
-  } catch {
-    // Storage can be full or blocked: the history then lasts only for this page.
-  }
+  writeItem(TAB_KEY, JSON.stringify(entries.slice(-TAB_LIMIT)), "sessionStorage");
 }
 
 const SVG = "http://www.w3.org/2000/svg";

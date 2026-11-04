@@ -9,7 +9,7 @@ export function levelsFrom(from: string): string[] {
 }
 
 /** The lowest level of a pick that is a level and every one above it, more than one; else undefined. */
-export function rangeStart(levels: Iterable<string>): string | undefined {
+function rangeStart(levels: Iterable<string>): string | undefined {
   const picked = new Set(levels);
   const from = LEVELS.find((level) => picked.has(level));
   if (!from || picked.size < 2) return;

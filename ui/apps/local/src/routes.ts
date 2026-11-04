@@ -1,4 +1,5 @@
 import type { TraceAt, TraceLinks } from "@tracepanel/ui";
+import { readJson, writeItem } from "@tracepanel/ui/lib/storage";
 import { useEffect, useState } from "react";
 
 /** Where work comes in: each has an overview of its groups and a list of its calls. */
@@ -294,12 +295,8 @@ const TRAIL_KEY = "tracepanel:trail";
 let entry = -1;
 
 function readTrail(): string[] {
-  try {
-    const trail: unknown = JSON.parse(sessionStorage.getItem(TRAIL_KEY) ?? "[]");
-    return Array.isArray(trail) ? trail.map((each) => (typeof each === "string" ? each : "")) : [];
-  } catch {
-    return [];
-  }
+  const trail = readJson(TRAIL_KEY, "sessionStorage");
+  return Array.isArray(trail) ? trail.map((each) => (typeof each === "string" ? each : "")) : [];
 }
 
 /** Numbers the entry on screen, if it is new, and notes its address (a tab switch replaces it in place). */
@@ -315,11 +312,8 @@ function noteEntry(): void {
     history.replaceState({ ...state, entry }, "");
   }
   trail[entry] = location.hash;
-  try {
-    sessionStorage.setItem(TRAIL_KEY, JSON.stringify(trail));
-  } catch {
-    // Storage can be blocked: Back then always goes to its address.
-  }
+  // Where it can't be kept, Back always goes to its address.
+  writeItem(TRAIL_KEY, JSON.stringify(trail), "sessionStorage");
 }
 
 /**

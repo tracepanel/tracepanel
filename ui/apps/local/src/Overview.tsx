@@ -1,4 +1,5 @@
 import { dayTime, duration, Stat } from "@tracepanel/ui";
+import { readItem, writeItem } from "@tracepanel/ui/lib/storage";
 // The Overview at the top of a page's list, one look wherever it is (an entry point's page, Logs): a heading that
 // folds it, its time range while open, its numbers on one line while folded. Folded or not, as this browser left it, or as the page
 // opens it until then.
@@ -9,12 +10,8 @@ const STORAGE_KEY = "tracepanel:overview";
 
 /** The reader's own choice, open or folded; null until they made one. */
 function readChoice(): boolean | null {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return stored === null ? null : stored !== "closed";
-  } catch {
-    return null;
-  }
+  const stored = readItem(STORAGE_KEY);
+  return stored === null ? null : stored !== "closed";
 }
 
 /**
@@ -26,11 +23,7 @@ export function useOverviewOpen(fallback = true): [boolean, () => void] {
   const open = choice ?? fallback;
   const toggle = () => {
     setChoice(!open);
-    try {
-      localStorage.setItem(STORAGE_KEY, open ? "closed" : "open");
-    } catch {
-      // Private mode: the choice lasts until reload.
-    }
+    writeItem(STORAGE_KEY, open ? "closed" : "open");
   };
   return [open, toggle];
 }
